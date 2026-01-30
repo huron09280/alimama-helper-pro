@@ -7,8 +7,8 @@
 // @match        *://alimama.com/*
 // @match        *://*.alimama.com/*
 // @grant        GM_setClipboard
-// @downloadURL https://raw.githubusercontent.com/huron09280/alimama-helper-pro/main/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js
-// @updateURL https://raw.githubusercontent.com/huron09280/alimama-helper-pro/main/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js
+// @downloadURL https://raw.githubusercontent.com/huron09280/alimama-helper-pro/refs/heads/main/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js?token=GHSAT0AAAAAADS5OSUP45JVP52F3UJ4ECPO2L4CJDQ
+// @updateURL https://raw.githubusercontent.com/huron09280/alimama-helper-pro/refs/heads/main/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js?token=GHSAT0AAAAAADS5OSUP45JVP52F3UJ4ECPO2L4CJDQ
 // ==/UserScript==
 
 (function () {
