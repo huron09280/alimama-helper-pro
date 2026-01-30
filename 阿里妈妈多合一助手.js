@@ -1,14 +1,12 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.10
-// @description  交互优化版：增加加购成本计算、花费占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。更新github
+// @version      5.02
+// @description  交互优化版：增加加购成本计算、花费占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。
 // @author       Gemini
 // @match        *://alimama.com/*
 // @match        *://*.alimama.com/*
 // @grant        GM_setClipboard
-// @downloadURL https://raw.githubusercontent.com/huron09280/alimama-helper-pro/refs/heads/main/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js?token=GHSAT0AAAAAADS5OSUP45JVP52F3UJ4ECPO2L4CJDQ
-// @updateURL https://raw.githubusercontent.com/huron09280/alimama-helper-pro/refs/heads/main/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js?token=GHSAT0AAAAAADS5OSUP45JVP52F3UJ4ECPO2L4CJDQ
 // ==/UserScript==
 
 (function () {
