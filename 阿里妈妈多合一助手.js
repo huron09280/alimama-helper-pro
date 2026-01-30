@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      4.11
-// @description  交互优化版：增加加购成本计算、花费占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。
+// @version      5.10
+// @description  交互优化版：增加加购成本计算、花费占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。更新github
 // @author       Gemini
 // @match        *://alimama.com/*
 // @match        *://*.alimama.com/*
