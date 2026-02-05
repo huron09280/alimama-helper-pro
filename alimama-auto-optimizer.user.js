@@ -13,9 +13,7 @@
 // @connect      ai.alimama.com
 // @connect      *.alimama.com
 // @connect      one.alimama.com
-// @downloadURL https://update.greasyfork.org/scripts/564414/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E4%B8%87%E7%9B%B8%E5%8F%B0%E8%87%AA%E5%8A%A8%E7%AE%97%E6%B3%95%E6%8A%A4%E8%88%AA%E5%8A%A9%E6%89%8B%20%28API%E7%89%88%29.user.js
-// @updateURL https://update.greasyfork.org/scripts/564414/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E4%B8%87%E7%9B%B8%E5%8F%B0%E8%87%AA%E5%8A%A8%E7%AE%97%E6%B3%95%E6%8A%A4%E8%88%AA%E5%8A%A9%E6%89%8B%20%28API%E7%89%88%29.meta.js
-// ==/UserScript==
+// // ==/UserScript==
 
 /**
  * v2.4 (2026-02-06)
