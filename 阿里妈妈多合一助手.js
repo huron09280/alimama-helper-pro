@@ -72,7 +72,8 @@
             const saved = JSON.parse(localStorage.getItem(CONSTANTS.STORAGE_KEY)) ||
                 JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V5_14')) ||
                 JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V5_13'));
-            return { ...DEFAULT_CONFIG, ...saved };
+            // 强制 panelOpen 默认为 false，确保 UI 每次加载时都是缩小状态
+            return { ...DEFAULT_CONFIG, ...saved, panelOpen: false };
         } catch {
             return DEFAULT_CONFIG;
         }
@@ -416,11 +417,11 @@
                                 const span = document.createElement('span');
                                 span.className = 'am-helper-tag budget-base-tag';
                                 span.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
-                                span.textContent = `占比: ${basePercent}%`;
+                                span.textContent = `${basePercent}%`;
                                 baseDiv.after(span);
                                 updatedCount++;
-                            } else if (existingTag.textContent !== `占比: ${basePercent}%`) {
-                                existingTag.textContent = `占比: ${basePercent}%`;
+                            } else if (existingTag.textContent !== `${basePercent}%`) {
+                                existingTag.textContent = `${basePercent}%`;
                                 existingTag.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
                                 updatedCount++;
                             }
@@ -437,11 +438,11 @@
                                 const span = document.createElement('span');
                                 span.className = 'am-helper-tag budget-multi-tag';
                                 span.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
-                                span.textContent = `占比: ${multiPercent}%`;
+                                span.textContent = `${multiPercent}%`;
                                 multiDiv.after(span);
                                 updatedCount++;
-                            } else if (existingTag.textContent !== `占比: ${multiPercent}%`) {
-                                existingTag.textContent = `占比: ${multiPercent}%`;
+                            } else if (existingTag.textContent !== `${multiPercent}%`) {
+                                existingTag.textContent = `${multiPercent}%`;
                                 existingTag.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
                                 updatedCount++;
                             }
