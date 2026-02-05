@@ -1,20 +1,18 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.15
-// @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。
+// @version      5.13
+// @description  交互优化版：增加加购成本计算、花费占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。
 // @author       Gemini
 // @match        *://alimama.com/*
 // @match        *://*.alimama.com/*
 // @grant        GM_setClipboard
+// @downloadURL https://update.greasyfork.org/scripts/560594/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B%20%28Pro%E7%89%88%29.user.js
+// @updateURL https://update.greasyfork.org/scripts/560594/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B%20%28Pro%E7%89%88%29.meta.js
 // ==/UserScript==
 
 /**
  * 更新日志
- * 
- * v5.15 (2026-02-05)
- * - ✨ 新增预算分类占比显示（基础预算占比 + 多目标预算占比）
- * - ✨ 预算列现在会分别显示两种预算的消耗占比
  * 
  * v5.13 (2026-01-31)
  * - ✨ 新增 Tab 切换监听（关键词、人群、创意等）
@@ -42,14 +40,13 @@
     // 1. 配置与状态管理
     // ==========================================
     const CONSTANTS = {
-        STORAGE_KEY: 'AM_HELPER_CONFIG_V5_15',
-        TAG_BASE_STYLE: 'align-items:center;border:0 none;border-radius:var(--mx-effects-tag-border-radius,8px);display:inline-flex;font-size:9px;font-weight:800;height:var(--mx-effects-tag-height,16px);justify-content:center;padding:0 var(--mx-effects-tag-h-gap,1px);position:relative;transition:background-color var(--duration),color var(--duration),border var(--duration),opacity var(--duration);-webkit-user-select:none;-moz-user-select:none;user-select:none;width:100%;margin-top:2px;',
+        STORAGE_KEY: 'AM_HELPER_CONFIG_V5_13',
         STYLES: {
-            cost: 'background-color:rgba(255,0,106,0.1);color:#ff006a;',
-            cart: 'background-color:rgba(114,46,209,0.1);color:#722ed1;',
-            percent: 'background-color:rgba(24,144,255,0.1);color:#1890ff;',
-            ratio: 'background-color:rgba(250,140,22,0.1);color:#fa8c16;',
-            budget: 'color:#52c41a;transition:all 0.3s;'
+            cost: 'align-items: center; background-color: rgba(255, 0, 106, 0.1); border: 0 none; border-radius: var(--mx-effects-tag-border-radius,8px); color: #ff006a; display: inline-flex; font-size: 9px; font-weight: 800; height: var(--mx-effects-tag-height,16px); justify-content: center; padding: 0 var(--mx-effects-tag-h-gap,1px); position: relative; transition: background-color var(--duration),color var(--duration),border var(--duration),opacity var(--duration); -webkit-user-select: none; -moz-user-select: none; user-select: none; width: 100%; margin-top: 2px;',
+            cart: 'align-items: center; background-color: rgba(114, 46, 209, 0.1); border: 0 none; border-radius: var(--mx-effects-tag-border-radius,8px); color: #722ed1; display: inline-flex; font-size: 9px; font-weight: 800; height: var(--mx-effects-tag-height,16px); justify-content: center; padding: 0 var(--mx-effects-tag-h-gap,1px); position: relative; transition: background-color var(--duration),color var(--duration),border var(--duration),opacity var(--duration); -webkit-user-select: none; -moz-user-select: none; user-select: none; width: 100%; margin-top: 2px;',
+            percent: 'align-items: center; background-color: rgba(24, 144, 255, 0.1); border: 0 none; border-radius: var(--mx-effects-tag-border-radius,8px); color: #1890ff; display: inline-flex; font-size: 9px; font-weight: 800; height: var(--mx-effects-tag-height,16px); justify-content: center; padding: 0 var(--mx-effects-tag-h-gap,1px); position: relative; transition: background-color var(--duration),color var(--duration),border var(--duration),opacity var(--duration); -webkit-user-select: none; -moz-user-select: none; user-select: none; width: 100%; margin-top: 2px;',
+            ratio: 'align-items: center; background-color: rgba(250, 140, 22, 0.1); border: 0 none; border-radius: var(--mx-effects-tag-border-radius,8px); color: #fa8c16; display: inline-flex; font-size: 9px; font-weight: 800; height: var(--mx-effects-tag-height,16px); justify-content: center; padding: 0 var(--mx-effects-tag-h-gap,1px); position: relative; transition: background-color var(--duration),color var(--duration),border var(--duration),opacity var(--duration); -webkit-user-select: none; -moz-user-select: none; user-select: none; width: 100%; margin-top: 2px;',
+            budget: 'align-items: center; border: 0 none; border-radius: var(--mx-effects-tag-border-radius,8px); color: #52c41a; display: inline-flex; font-size: 9px; font-weight: 800; height: var(--mx-effects-tag-height,16px); justify-content: center; padding: 0 var(--mx-effects-tag-h-gap,1px); position: relative; transition: all 0.3s; -webkit-user-select: none; -moz-user-select: none; user-select: none; width: 100%; margin-top: 2px;'
         },
         KEYWORDS: ['查询', '搜索', '确定', '今天', '昨天', '过去', '本月', '上月', '计划', '单元', '创意', '推广'],
         DL_KEYWORDS: ["oss-accelerate", "aliyuncs.com", "download"]
@@ -67,11 +64,12 @@
         logExpanded: true
     };
 
+    // 兼容旧版配置读取
     const loadConfig = () => {
         try {
             const saved = JSON.parse(localStorage.getItem(CONSTANTS.STORAGE_KEY)) ||
-                JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V5_14')) ||
-                JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V5_13'));
+                JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V5_12')) ||
+                JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V4_12'));
             return { ...DEFAULT_CONFIG, ...saved };
         } catch {
             return DEFAULT_CONFIG;
@@ -192,19 +190,20 @@
             return match ? parseFloat(match[1]) : 0;
         },
 
-        renderTag(cell, type, text, extraStyle) {
-            const fullStyle = CONSTANTS.TAG_BASE_STYLE + extraStyle;
+        // 渲染标签 (DOM 操作优化)
+        renderTag(cell, type, text, style) {
+            // 检查是否已存在相同内容的标签
             const existing = cell.querySelector(`.am-helper-tag.${type}`);
             if (existing) {
                 if (existing.textContent === text) return false;
-                existing.textContent = text;
-                existing.style.cssText = fullStyle;
+                existing.textContent = text; // 直接更新文本，不移除重建
+                existing.style.cssText = style;
                 return true;
             }
 
             const span = document.createElement('span');
             span.className = `am-helper-tag ${type}`;
-            span.style.cssText = fullStyle;
+            span.style.cssText = style;
             span.textContent = text;
             cell.appendChild(span);
             return true;
@@ -377,84 +376,14 @@
                     const cCost = getCell(curMap.cost);
                     const cBudget = getCell(curMap.budget);
                     if (cCost && cBudget) {
-                        // 解析花费单元格：获取总花费和基础花费
-                        const costText = cCost.textContent || '';
-                        const baseCostMatch = costText.match(/基础([\d,.]+)/);
-                        const totalCostVal = this.parseValue(cCost);
-                        const baseCost = baseCostMatch ? parseFloat(baseCostMatch[1].replace(/,/g, '')) : 0;
-                        const multiCost = totalCostVal - baseCost;
-
-                        // 在预算单元格中查找包含"基础"和"多目标"的div
-                        const budgetDivs = cBudget.querySelectorAll('div');
-                        let baseDiv = null;
-                        let multiDiv = null;
-
-                        budgetDivs.forEach(div => {
-                            const text = div.textContent || '';
-                            if (text.includes('基础') && !div.classList.contains('am-helper-tag')) {
-                                baseDiv = div;
-                            } else if (text.includes('多目标') && !div.classList.contains('am-helper-tag')) {
-                                multiDiv = div;
-                            }
-                        });
-
-                        // 解析预算值
-                        const budgetText = cBudget.textContent || '';
-                        const baseBudgetMatch = budgetText.match(/基础[：:]\s*([\d,]+)/);
-                        const multiBudgetMatch = budgetText.match(/多目标[：:]\s*([\d,]+)/);
-                        const baseBudget = baseBudgetMatch ? parseFloat(baseBudgetMatch[1].replace(/,/g, '')) : 0;
-                        const multiBudget = multiBudgetMatch ? parseFloat(multiBudgetMatch[1].replace(/,/g, '')) : 0;
-
-                        // 在"基础"div后添加基础占比标签
-                        if (baseDiv && baseBudget > 0) {
-                            const basePercent = Math.min(100, (baseCost / baseBudget) * 100).toFixed(1);
-                            const bgStyle = `background:linear-gradient(90deg,rgba(82,196,26,0.25) ${basePercent}%,rgba(82,196,26,0.05) ${basePercent}%);`;
-
-                            // 检查是否已存在标签
-                            let existingTag = baseDiv.parentElement.querySelector('.am-helper-tag.budget-base-tag');
-                            if (!existingTag) {
-                                const span = document.createElement('span');
-                                span.className = 'am-helper-tag budget-base-tag';
-                                span.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
-                                span.textContent = `占比: ${basePercent}%`;
-                                baseDiv.after(span);
-                                updatedCount++;
-                            } else if (existingTag.textContent !== `占比: ${basePercent}%`) {
-                                existingTag.textContent = `占比: ${basePercent}%`;
-                                existingTag.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
-                                updatedCount++;
-                            }
-                        }
-
-                        // 在"多目标"div后添加多目标占比标签
-                        if (multiDiv && multiBudget > 0 && multiCost >= 0) {
-                            const multiPercent = Math.min(100, (multiCost / multiBudget) * 100).toFixed(1);
-                            const bgStyle = `background:linear-gradient(90deg,rgba(82,196,26,0.25) ${multiPercent}%,rgba(82,196,26,0.05) ${multiPercent}%);`;
-
-                            // 检查是否已存在标签
-                            let existingTag = multiDiv.parentElement.querySelector('.am-helper-tag.budget-multi-tag');
-                            if (!existingTag) {
-                                const span = document.createElement('span');
-                                span.className = 'am-helper-tag budget-multi-tag';
-                                span.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
-                                span.textContent = `占比: ${multiPercent}%`;
-                                multiDiv.after(span);
-                                updatedCount++;
-                            } else if (existingTag.textContent !== `占比: ${multiPercent}%`) {
-                                existingTag.textContent = `占比: ${multiPercent}%`;
-                                existingTag.style.cssText = CONSTANTS.TAG_BASE_STYLE + CONSTANTS.STYLES.budget + bgStyle;
-                                updatedCount++;
-                            }
-                        }
-
-                        // 如果没有找到分类div，使用原来的总体预算进度显示
-                        if (!baseDiv && !multiDiv) {
-                            const totalBudget = this.parseValue(cBudget);
-                            if (totalBudget > 0) {
-                                const percent = Math.min(100, (totalCostVal / totalBudget) * 100).toFixed(1);
-                                const bgStyle = `background:linear-gradient(90deg,rgba(82,196,26,0.25) ${percent}%,rgba(82,196,26,0.05) ${percent}%);`;
-                                if (this.renderTag(cBudget, 'budget-tag', `${percent}%`, CONSTANTS.STYLES.budget + bgStyle)) updatedCount++;
-                            }
+                        const cost_val = this.parseValue(cCost);
+                        const budget_val = this.parseValue(cBudget);
+                        if (budget_val > 0) {
+                            const percent = Math.min(100, (cost_val / budget_val) * 100).toFixed(1);
+                            const bgStyle = `background: linear-gradient(90deg, rgba(82, 196, 26, 0.25) ${percent}%, rgba(82, 196, 26, 0.05) ${percent}%);`;
+                            const fullStyle = CONSTANTS.STYLES.budget + bgStyle;
+                            const text = `${percent}%`;
+                            if (this.renderTag(cBudget, 'budget-tag', text, fullStyle)) updatedCount++;
                         }
                     }
                 }
@@ -462,12 +391,6 @@
 
             if (updatedCount > 0) Logger.log(`✅ 更新 ${updatedCount} 项数据`);
         }
-    };
-
-    const resetSortState = (reason) => {
-        Core._sortedByCharge = false;
-        Core._lastTotalCost = null;
-        Logger.log(`📍 ${reason}，重置排序`);
     };
 
     // ==========================================
@@ -600,7 +523,7 @@
                         <span class="am-title">
                             <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor" style="margin-right:4px;"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
                             阿里助手 Pro
-                            <span class="am-version">v5.15</span>
+                            <span class="am-version">v5.13</span>
                         </span>
                         <div class="am-close-btn" title="最小化">−</div>
                     </div>
@@ -710,11 +633,16 @@
                     }
                 }
 
+                // 检测 Tab 切换（关键词、人群、创意等），重置排序状态
                 const tabTexts = ['关键词', '人群', '创意', '资源位', '地域', '时段'];
                 const clickedText = e.target.textContent || '';
                 const isTabClick = tabTexts.some(t => clickedText.includes(t)) &&
                     (e.target.closest('a[mx-click]') || e.target.closest('[class*="tab"]'));
-                if (isTabClick) resetSortState('Tab 切换');
+                if (isTabClick) {
+                    Core._sortedByCharge = false;
+                    Core._lastTotalCost = null;
+                    Logger.log('📑 Tab 切换，重置排序');
+                }
 
                 // 触发更新
                 const updateKeywords = ['查询', '搜索', '确定', '翻页', '分页'];
@@ -869,29 +797,39 @@
         UI.init();
         Interceptor.init();
 
-        Logger.log('🚀 阿里助手 Pro v5.15 已启动');
+        Logger.log('🚀 阿里助手 Pro v5.13 已启动');
 
+        // 监听 URL 变化（切换页面/点击计划时），重置排序状态
         let lastUrl = window.location.href;
         const checkUrlChange = () => {
             if (window.location.href !== lastUrl) {
                 lastUrl = window.location.href;
-                resetSortState('页面切换');
+                Core._sortedByCharge = false; // 重置排序状态
+                Core._lastTotalCost = null;   // 重置总花费缓存
+                Logger.log('📍 页面切换，重置排序');
             }
         };
         window.addEventListener('hashchange', checkUrlChange);
         window.addEventListener('popstate', checkUrlChange);
+        // 定时检查（处理 SPA 内部跳转）
+        setInterval(checkUrlChange, 1000);
 
+        // 使用 MutationObserver 监听 DOM 变化，但限制频率
         let timer;
         const observer = new MutationObserver((mutations) => {
-            if (timer) return;
+            if (timer) return; // 节流
             timer = setTimeout(() => {
                 Core.run();
                 timer = null;
-            }, 1000);
+            }, 800); // 调整为 800ms，降低频率
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
 
+        // 兜底轮询 (降低频率到 5s)
+        setInterval(() => Core.run(), 5000);
+
+        // 初始运行
         setTimeout(() => Core.run(), 1000);
     }
 
