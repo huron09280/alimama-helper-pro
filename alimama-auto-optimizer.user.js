@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈万相台自动算法护航助手 (API版)
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.4.1
 // @description  自动扫描推广计划中的"拿量可调优"建议，并通过后台接口直接提交"算法护航"优化
 // @author       Liangchao
 // @match        https://one.alimama.com/*
@@ -13,9 +13,20 @@
 // @connect      ai.alimama.com
 // @connect      *.alimama.com
 // @connect      one.alimama.com
-// // ==/UserScript==
+// @downloadURL https://update.greasyfork.org/scripts/564414/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E4%B8%87%E7%9B%B8%E5%8F%B0%E8%87%AA%E5%8A%A8%E7%AE%97%E6%B3%95%E6%8A%A4%E8%88%AA%E5%8A%A9%E6%89%8B%20%28API%E7%89%88%29.user.js
+// @updateURL https://update.greasyfork.org/scripts/564414/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E4%B8%87%E7%9B%B8%E5%8F%B0%E8%87%AA%E5%8A%A8%E7%AE%97%E6%B3%95%E6%8A%A4%E8%88%AA%E5%8A%A9%E6%89%8B%20%28API%E7%89%88%29.meta.js
+// ==/UserScript==
 
 /**
+ * v2.4.1 (2026-02-06)
+ * - 🐛 修复 actionInfo 兼容性崩溃
+ * - ✨ 支持请求取消与重复运行保护
+ * - ✨ SSE 流式解析更稳健
+ * - ✨ UI 输出统一转义，防 XSS
+ * - ✨ 去除内联事件，提升 CSP 兼容
+ * - 🔧 本地日期提交，避免 UTC 跨日偏移
+ * - 🔧 放宽 campaignId 识别范围
+ *
  * v2.4 (2026-02-06)
  * - ✨ 并发执行：支持同时处理多个计划，并发数可配置
  * - ✨ 日志分组：每个计划独立卡片显示，支持折叠
@@ -40,7 +51,7 @@
     // ==================== 配置模块 ====================
     const CONFIG = {
         UI_ID: 'alimama-escort-helper-ui',
-        VERSION: '2.4',
+        VERSION: '2.4.1',
         DEFAULT: {
             bizCode: 'universalBP',
             customPrompt: '帮我进行深度诊断',
@@ -62,12 +73,24 @@
     // ==================== 状态管理 ====================
     const State = {
         tokens: { dynamicToken: '', loginPointId: '', csrfID: '' },
-        currentRunId: 0
+        currentRunId: 0,
+        runAbortController: null
     };
 
     // ==================== 工具函数模块 ====================
     const Utils = {
         delay: (ms) => new Promise(r => setTimeout(r, ms)),
+        escapeHtml: (value) => {
+            const str = value === null || value === undefined ? '' : String(value);
+            return str.replace(/[&<>"']/g, ch => {
+                const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+                return map[ch] || ch;
+            });
+        },
+        toLocalYMD: (date = new Date()) => {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        },
 
         // 并发限制执行器
         concurrentLimit: async (tasks, limit = 3) => {
@@ -270,7 +293,7 @@
          * NOTE: 由于 GM_xmlhttpRequest 在某些油猴管理器中存在跨域问题，
          * 这里改用页面原生的 fetch API。阿里妈妈网站本身应该已配置 CORS 允许子域请求。
          */
-        _singleRequest: async (url, data, timeout = 30000) => {
+        _singleRequest: async (url, data, timeout = 30000, signal) => {
             const startTime = Date.now();
             const reqId = Math.random().toString(36).substring(2, 8);
 
@@ -279,7 +302,15 @@
 
             // 创建 AbortController 用于超时控制
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            let timedOut = false;
+            const timeoutId = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, timeout);
+            if (signal) {
+                if (signal.aborted) controller.abort();
+                else signal.addEventListener('abort', () => controller.abort(), { once: true });
+            }
 
             try {
                 Logger.debug(`[${reqId}] 使用原生 fetch 发送请求...`);
@@ -307,6 +338,43 @@
                 if (!response.ok) {
                     const errorText = await response.text().catch(() => '');
                     throw new Error(`HTTP ${response.status}: ${response.statusText}${errorText ? ` - ${errorText.substring(0, 200)}` : ''}`);
+                }
+
+                const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                if (contentType.includes('text/event-stream') && response.body?.getReader) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    const chunks = [];
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+
+                        const lines = buffer.split(/\r?\n/);
+                        buffer = lines.pop() || '';
+                        lines.forEach(line => {
+                            const trimmed = line.trim();
+                            if (!trimmed.startsWith('data:')) return;
+                            const payload = trimmed.substring(5).trim();
+                            if (!payload) return;
+                            try { chunks.push(JSON.parse(payload)); } catch { }
+                        });
+                    }
+
+                    if (buffer.trim().startsWith('data:')) {
+                        const payload = buffer.trim().substring(5).trim();
+                        if (payload) {
+                            try { chunks.push(JSON.parse(payload)); } catch { }
+                        }
+                    }
+
+                    if (chunks.length) {
+                        Logger.debug(`[${reqId}] SSE 流解析: ${chunks.length} 条数据 (${Date.now() - startTime}ms)`);
+                        return { isStream: true, chunks };
+                    }
+                    throw new Error('SSE 响应为空');
                 }
 
                 const responseText = await response.text();
@@ -341,8 +409,13 @@
                 const elapsed = Date.now() - startTime;
 
                 if (err.name === 'AbortError') {
-                    Logger.error(`[${reqId}] 请求超时 (${elapsed}ms, 配置${timeout}ms)`);
-                    throw new Error(`请求超时 (>${timeout}ms)`);
+                    if (timedOut) {
+                        Logger.error(`[${reqId}] 请求超时 (${elapsed}ms, 配置${timeout}ms)`);
+                        throw new Error(`请求超时 (>${timeout}ms)`);
+                    }
+                    const abortErr = new Error('请求已取消');
+                    abortErr.name = 'AbortError';
+                    throw abortErr;
                 }
 
                 Logger.error(`[${reqId}] 请求失败 (${elapsed}ms):`, {
@@ -356,18 +429,19 @@
 
         // 带重试的请求
         request: async (url, data, options = {}) => {
-            const { maxRetries = 3, timeout = 30000, retryDelay = 2000 } = options;
+            const { maxRetries = 3, timeout = 30000, retryDelay = 2000, signal } = options;
             let lastError = null;
 
             Logger.info(`📡 API请求: ${url.split('/').pop()}`, { maxRetries, timeout });
 
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
-                    const result = await API._singleRequest(url, data, timeout);
+                    const result = await API._singleRequest(url, data, timeout, signal);
                     Logger.info(`✓ 请求成功 (第${attempt}次)`);
                     return result;
                 } catch (err) {
                     lastError = err;
+                    if (err.name === 'AbortError') throw err;
                     Logger.warn(`✗ 请求失败 (第${attempt}/${maxRetries}次): ${err.message}`);
 
                     if (attempt < maxRetries) {
@@ -398,7 +472,14 @@
 
             const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
             const line = document.createElement('div');
-            line.innerHTML = `<span style="color:#666;margin-right:4px;">[${time}]</span><span style="color:${color}">${text}</span>`;
+            const timeSpan = document.createElement('span');
+            timeSpan.style.cssText = 'color:#666;margin-right:4px;';
+            timeSpan.textContent = `[${time}]`;
+            const textSpan = document.createElement('span');
+            textSpan.style.color = color;
+            textSpan.textContent = text;
+            line.appendChild(timeSpan);
+            line.appendChild(textSpan);
             container.appendChild(line);
 
             while (container.children.length > 50) container.removeChild(container.firstChild);
@@ -411,6 +492,8 @@
             if (!container) return null;
 
             const cardId = `${CONFIG.UI_ID}-card-${campaignId}`;
+            const safeCampaignName = Utils.escapeHtml(campaignName);
+            const safeCampaignId = Utils.escapeHtml(campaignId);
             const card = document.createElement('div');
             card.id = cardId;
             card.style.cssText = `
@@ -421,16 +504,15 @@
                 <div class="card-header" style="
                     padding:8px 12px;background:#fafafa;border-bottom:1px solid #e8e8e8;
                     display:flex;justify-content:space-between;align-items:center;cursor:pointer;
-                " onclick="this.parentElement.querySelector('.card-body').classList.toggle('collapsed');
-                           this.querySelector('.arrow').classList.toggle('rotated');">
+                ">
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="
                             display:inline-block;min-width:24px;height:18px;line-height:18px;
                             background:#1890ff;color:#fff;border-radius:9px;text-align:center;font-size:10px;
                         ">${index}/${total}</span>
                         <span style="font-weight:500;color:#333;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                              title="${campaignName}">${campaignName}</span>
-                        <span style="color:#999;font-size:10px;">(${campaignId})</span>
+                              title="${safeCampaignName}">${safeCampaignName}</span>
+                        <span style="color:#999;font-size:10px;">(${safeCampaignId})</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span class="status-badge" style="
@@ -454,14 +536,38 @@
             container.appendChild(card);
             container.parentElement.scrollTop = container.parentElement.scrollHeight;
 
+            const header = card.querySelector('.card-header');
+            const body = card.querySelector('.card-body');
+            const arrow = card.querySelector('.arrow');
+            if (header && body && arrow) {
+                header.addEventListener('click', () => {
+                    body.classList.toggle('collapsed');
+                    arrow.classList.toggle('rotated');
+                });
+            }
+
             // 返回卡片操作对象
             return {
-                log: (text, color = '#555') => {
+                log: (text, color = '#555', options = {}) => {
                     const logContent = card.querySelector('.log-content');
                     if (!logContent) return;
                     const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
                     const line = document.createElement('div');
-                    line.innerHTML = `<span style="color:#aaa;margin-right:4px;font-size:10px;">${time}</span><span style="color:${color}">${text}</span>`;
+                    const timeSpan = document.createElement('span');
+                    timeSpan.style.cssText = 'color:#aaa;margin-right:4px;font-size:10px;';
+                    timeSpan.textContent = time;
+                    line.appendChild(timeSpan);
+                    if (options.html) {
+                        const htmlWrap = document.createElement('div');
+                        htmlWrap.style.color = color;
+                        htmlWrap.innerHTML = text;
+                        line.appendChild(htmlWrap);
+                    } else {
+                        const textSpan = document.createElement('span');
+                        textSpan.style.color = color;
+                        textSpan.textContent = text;
+                        line.appendChild(textSpan);
+                    }
                     logContent.appendChild(line);
                     card.querySelector('.card-body').scrollTop = card.querySelector('.card-body').scrollHeight;
                 },
@@ -507,12 +613,13 @@
 
                 html += `<tr style="${rowStyle}">${columns.map((c, i) => {
                     const val = typeof c.render === 'function' ? c.render(row, idx) : row[c.key];
-                    return `<td style="${td}${i === 1 ? nameStyle : ''}">${val ?? '-'}</td>`;
+                    const safeVal = Utils.escapeHtml(val ?? '-');
+                    return `<td style="${td}${i === 1 ? nameStyle : ''}">${safeVal}</td>`;
                 }).join('')}</tr>`;
             });
 
             html += '</tbody></table>';
-            cardLogger.log(html);
+            cardLogger.log(html, '#555', { html: true });
         },
 
         // 渲染所有原始方案表格（到卡片）
@@ -566,6 +673,10 @@
             ];
             if (!data.length) return;
 
+            // 移除旧结果弹窗
+            const prevOverlay = document.getElementById(`${CONFIG.UI_ID}-result-overlay`);
+            if (prevOverlay) prevOverlay.remove();
+
             // 创建模态遮罩层
             const overlay = document.createElement('div');
             overlay.id = `${CONFIG.UI_ID}-result-overlay`;
@@ -581,6 +692,21 @@
             const failCount = failList.length;
             const totalCount = successCount + failCount;
             const isAllSuccess = failCount === 0;
+
+            const rowsHtml = data.map((row, i) => {
+                const safeName = Utils.escapeHtml(row.name ?? '-');
+                return `
+                                    <tr style="${row.success ? '' : 'background:#fff1f0;'}">
+                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#666;">${i + 1}</td>
+                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;${row.success ? '' : 'color:#ff4d4f;'}">${safeName}</td>
+                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:center;">
+                                            ${row.success
+                        ? '<span style="color:#52c41a;font-weight:600;">✓ 成功</span>'
+                        : '<span style="color:#ff4d4f;font-weight:600;">✗ 失败</span>'}
+                                        </td>
+                                    </tr>
+                `;
+            }).join('');
 
             overlay.innerHTML = `
                 <style>
@@ -611,17 +737,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${data.map((row, i) => `
-                                    <tr style="${row.success ? '' : 'background:#fff1f0;'}">
-                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#666;">${i + 1}</td>
-                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;${row.success ? '' : 'color:#ff4d4f;'}">${row.name}</td>
-                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:center;">
-                                            ${row.success
-                    ? '<span style="color:#52c41a;font-weight:600;">✓ 成功</span>'
-                    : '<span style="color:#ff4d4f;font-weight:600;">✗ 失败</span>'}
-                                        </td>
-                                    </tr>
-                                `).join('')}
+                                ${rowsHtml}
                             </tbody>
                         </table>
                     </div>
@@ -630,9 +746,7 @@
                             padding:10px 32px;background:linear-gradient(135deg,#1890ff,#0050b3);color:#fff;
                             border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;
                             transition:transform 0.2s,box-shadow 0.2s;
-                        " onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 4px 12px rgba(24,144,255,0.4)'"
-                           onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none'"
-                        >关闭</button>
+                        ">关闭</button>
                     </div>
                 </div>
             `;
@@ -640,7 +754,18 @@
             document.body.appendChild(overlay);
 
             // 绑定关闭事件
-            document.getElementById(`${CONFIG.UI_ID}-result-close`).onclick = () => {
+            const closeBtn = document.getElementById(`${CONFIG.UI_ID}-result-close`);
+            if (closeBtn) {
+                closeBtn.addEventListener('mouseenter', () => {
+                    closeBtn.style.transform = 'scale(1.05)';
+                    closeBtn.style.boxShadow = '0 4px 12px rgba(24,144,255,0.4)';
+                });
+                closeBtn.addEventListener('mouseleave', () => {
+                    closeBtn.style.transform = 'scale(1)';
+                    closeBtn.style.boxShadow = 'none';
+                });
+            }
+            if (closeBtn) closeBtn.onclick = () => {
                 overlay.style.opacity = '0';
                 overlay.style.transition = 'opacity 0.3s ease';
                 setTimeout(() => overlay.remove(), 300);
@@ -702,11 +827,11 @@
                 <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,#1890ff,#0050b3);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
                     <label style="color:#666;font-size:10px;white-space:nowrap;">诊断话术:</label>
-                    <input id="${CONFIG.UI_ID}-prompt" type="text" value="${userConfig.customPrompt}" style="flex:1;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:10px;" placeholder="例: 帮我进行深度诊断" />
+                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:10px;" placeholder="例: 帮我进行深度诊断" />
                 </div>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
                     <label style="color:#666;font-size:10px;white-space:nowrap;">同时执行:</label>
-                    <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" value="${userConfig.concurrency || 3}" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:10px;text-align:center;" />
+                    <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:10px;text-align:center;" />
                     <span style="color:#999;font-size:10px;">个计划 (1-10)</span>
                 </div>
                 <div style="margin-top:10px;font-size:10px;color:#666;display:flex;justify-content:space-between;">
@@ -717,6 +842,11 @@
 
             document.body.appendChild(panel);
             document.body.appendChild(miniBtn);
+
+            const promptInput = document.getElementById(`${CONFIG.UI_ID}-prompt`);
+            if (promptInput) promptInput.value = userConfig.customPrompt || CONFIG.DEFAULT.customPrompt;
+            const concurrencyInput = document.getElementById(`${CONFIG.UI_ID}-concurrency`);
+            if (concurrencyInput) concurrencyInput.value = userConfig.concurrency || 3;
 
             // 事件绑定
             document.getElementById(`${CONFIG.UI_ID}-close`).onclick = () => {
@@ -908,6 +1038,7 @@
             card.setStatus('诊断中', 'info');
 
             try {
+                const today = Utils.toLocalYMD();
                 // 构造请求数据
                 const talkData = {
                     fromPage: '/manage/search-detail',
@@ -916,8 +1047,8 @@
                     contextParam: {
                         mx_bizCode: 'onebpSearch',
                         bizCode: 'onebpSearch',
-                        startTime: new Date().toISOString().split('T')[0],
-                        endTime: new Date().toISOString().split('T')[0],
+                        startTime: today,
+                        endTime: today,
                         campaignGroupId: Utils.getCampaignGroupId(),
                         newUi: true,
                         bizQueryReference: 'escort',
@@ -945,7 +1076,9 @@
                 };
 
                 card.log('请求诊断接口...', 'orange');
-                const talkRes = await API.request('https://ai.alimama.com/ai/chat/talk.json', talkData);
+                const talkRes = await API.request('https://ai.alimama.com/ai/chat/talk.json', talkData, {
+                    signal: State.runAbortController?.signal
+                });
 
                 // 收集所有 actionList
                 const allActionLists = [];
@@ -958,7 +1091,12 @@
                         return;
                     }
                     if (Array.isArray(obj.actionList) && obj.actionList.length) {
-                        const key = obj.actionList.map(i => `${i.actionText}::${(i.actionInfo || '').substring(0, 100)}`).join('|||');
+                        const key = obj.actionList.map(i => {
+                            const infoStr = typeof i.actionInfo === 'string'
+                                ? i.actionInfo
+                                : JSON.stringify(i.actionInfo ?? '');
+                            return `${i.actionText}::${(infoStr || '').substring(0, 100)}`;
+                        }).join('|||');
                         if (!seenKeys.has(key)) {
                             seenKeys.add(key);
                             allActionLists.push(obj.actionList);
@@ -1027,6 +1165,8 @@
                     timeStr: Date.now(),
                     bizCode: userConfig.bizCode,
                     ...State.tokens
+                }, {
+                    signal: State.runAbortController?.signal
                 });
 
                 const success = openRes?.success || openRes?.ok || openRes?.info?.ok;
@@ -1038,6 +1178,12 @@
                 return { success, msg };
 
             } catch (e) {
+                if (e?.name === 'AbortError') {
+                    card.log('已取消', '#999');
+                    card.setStatus('已取消', 'warning');
+                    card.collapse();
+                    return { success: false, msg: '已取消' };
+                }
                 card.log(`异常: ${e.message}`, 'red');
                 card.setStatus('异常', 'error');
                 card.collapse();
@@ -1048,7 +1194,7 @@
         // 扫描页面计划（单次 DOM 遍历）
         scanCampaigns: () => {
             const tasks = new Map();
-            const campaignIdRegex = /campaignId=(\d{10,})/;
+            const campaignIdRegex = /campaignId=(\d{6,})/;
 
             document.querySelectorAll('a[href*="campaignId="], input[type="checkbox"][value]').forEach(el => {
                 if (el.tagName === 'A') {
@@ -1056,7 +1202,7 @@
                     if (m && !tasks.has(m[1])) {
                         tasks.set(m[1], el.innerText.trim() || '未知计划');
                     }
-                } else if (/^\d{10,}$/.test(el.value) && !el.closest('div[mx-view*="user-pop"]')) {
+                } else if (/^\d{6,}$/.test(el.value) && !el.closest('div[mx-view*="user-pop"]')) {
                     if (!tasks.has(el.value)) {
                         const row = el.closest('tr');
                         const name = row?.querySelector('a[title]')?.getAttribute('title') || '未知计划';
@@ -1072,6 +1218,8 @@
         run: async () => {
             State.currentRunId++;
             const runId = State.currentRunId;
+            if (State.runAbortController) State.runAbortController.abort();
+            State.runAbortController = new AbortController();
 
             // 清空日志
             const log = document.getElementById(`${CONFIG.UI_ID}-log`);
