@@ -1,6 +1,6 @@
 # 阿里妈妈多合一助手 - 技术知识库 (Knowledge Base)
 
-本文档记录当前 `v5.23` 版本的关键实现，供维护和扩展时快速对齐。
+本文档记录当前 `v5.24` 版本的关键实现，供维护和扩展时快速对齐。
 
 ## 1. 项目架构 (Architecture)
 
@@ -73,7 +73,16 @@
 ```js
 const CURRENT_VERSION = typeof GM_info !== 'undefined'
   ? GM_info.script.version
-  : '5.23';
+  : '5.24';
 ```
 
 主面板、护航面板与启动日志均引用该值进行展示。
+
+## 7. 多表格上下文选择与排序稳定性
+
+主助手模块新增表格上下文选择策略，用于在复杂页面中准确命中目标报表：
+
+- 通过 `resolveTableContext()` 汇总候选表格，按“可见性 + 列能力评分 + 行列规模”排序择优。
+- `getTableHeaders()` / `resolveStickyHeaderWrapper()` 适配 Sticky Table 双表头结构，避免表头错位。
+- 花费排序按钮通过 `resolveChargeHeader(table)` 进行作用域内定位，降低跨区域误触发。
+- URL 变化重置增加短间隔节流，首次执行增加去重，减少高频 DOM 变更下的重复计算。

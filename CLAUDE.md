@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 这是一个运行在 Tampermonkey/Greasemonkey 的阿里妈妈增强脚本。
 
-- **当前版本**: `v5.23`
+- **当前版本**: `v5.24`
 - **主文件**: `阿里妈妈多合一助手.js`
 - **架构**: 双 IIFE（主助手 + 算法护航）
 
@@ -22,6 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. 交互与自动化
 - 主助手面板开关与状态持久化
 - 自动花费降序排序（Tab/页面切换后自动重置状态）
+- 多表格上下文识别（优先可见且列结构匹配的目标表）
 - 弹窗自动关闭
 - 报表下载直连捕获与复制
 - 算法护航入口（调用 `window.__ALIMAMA_OPTIMIZER_TOGGLE__`）

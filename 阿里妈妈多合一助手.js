@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.23
+// @version      5.24
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,13 @@
 // ==/UserScript==
 /**
  * 更新日志
+ * 
+ * v5.24 (2026-02-12)
+ * - ✨ 新增多表格上下文识别与能力评分，优先处理当前可见且列结构匹配的数据表
+ * - ✨ 兼容 Sticky Table 双表头定位，提升表头映射稳定性
+ * - 🔧 花费排序改为作用域定位，减少跨模块误触发排序的问题
+ * - 🔧 路由变化重置增加节流保护，避免短时间重复重置
+ * - 🔧 首次执行增加去重保护，降低 MutationObserver 高频更新下的重复计算
  * 
  * v5.23 (2026-02-08)
  * - 🐛 修复作用域引用错误导致的算法护航模块加载失败问题
@@ -51,7 +58,7 @@
     'use strict';
 
     // 全局版本管理
-    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.23';
+    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.24';
 
     // ==========================================
     // 1. 配置与状态管理
@@ -368,7 +375,7 @@
 
         getColumnIndexMap(headers) {
             // 生成 Header 签名以决定是否更新 Map
-            const signature = Array.from(headers).map(h => h.textContent.substring(0, 5)).join('');
+            const signature = Array.from(headers).map(h => (h.textContent || '').replace(/\s+/g, '')).join('|');
             if (this.colMapCache.signature === signature && this.colMapCache.map) {
                 return this.colMapCache.map;
             }
@@ -390,10 +397,170 @@
             return map;
         },
 
+        isElementVisible(el) {
+            if (!el) return false;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            return el.getClientRects().length > 0;
+        },
+
+        resolveStickyHeaderWrapper(stickyBodyWrapper) {
+            if (!stickyBodyWrapper) return null;
+            const parent = stickyBodyWrapper.parentElement;
+            if (!parent) return null;
+
+            const directBodies = Array.from(parent.children).filter(el => el.matches('[mx-stickytable-wrapper="body"]'));
+            const directHeads = Array.from(parent.children).filter(el => el.matches('[mx-stickytable-wrapper="head"]'));
+            if (directBodies.length > 0 && directBodies.length === directHeads.length) {
+                const idx = directBodies.indexOf(stickyBodyWrapper);
+                if (idx > -1) return directHeads[idx];
+            }
+
+            const prev = stickyBodyWrapper.previousElementSibling;
+            if (prev?.matches('[mx-stickytable-wrapper="head"]')) return prev;
+            const next = stickyBodyWrapper.nextElementSibling;
+            if (next?.matches('[mx-stickytable-wrapper="head"]')) return next;
+
+            return parent.querySelector('[mx-stickytable-wrapper="head"]');
+        },
+
+        getTableHeaders(table) {
+            if (!table) return null;
+
+            const stickyBodyWrapper = table.closest('[mx-stickytable-wrapper="body"]');
+            const stickyHeaderWrapper = this.resolveStickyHeaderWrapper(stickyBodyWrapper);
+            if (stickyHeaderWrapper) {
+                const stickyHeaders = stickyHeaderWrapper.querySelectorAll('th');
+                if (stickyHeaders.length > 0) return stickyHeaders;
+            }
+
+            const headers = table.querySelectorAll('thead th');
+            return headers.length > 0 ? headers : null;
+        },
+
+        getTableScore(colMap) {
+            let score = 0;
+            if (colMap.cost > -1) score += 8;
+            if (colMap.wang > -1) score += 4;
+            if (colMap.carts.length > 0) score += 2;
+            if (colMap.guide > -1 && colMap.click > -1) score += 2;
+            if (colMap.budget > -1) score += 1;
+            return score;
+        },
+
+        getTableMaxCells(table, maxScanRows = 30) {
+            if (!table) return 0;
+
+            const rows = table.rows;
+            let maxCells = 0;
+            let scanned = 0;
+            for (let i = 0; i < rows.length && scanned < maxScanRows; i++) {
+                const row = rows[i];
+                if (!row || row.parentElement?.tagName === 'THEAD') continue;
+                scanned++;
+                if (row.cells && row.cells.length > maxCells) {
+                    maxCells = row.cells.length;
+                }
+            }
+            return maxCells;
+        },
+
+        getTableCapabilityScore(colMap, headerCount, maxCells) {
+            if (!colMap || headerCount <= 0 || maxCells <= 0) return 0;
+
+            const offset = Math.max(0, headerCount - maxCells);
+            const toBodyIdx = (idx) => (idx > -1 ? idx - offset : -1);
+            const hasCell = (idx) => idx > -1 && idx < maxCells;
+
+            const costIdx = toBodyIdx(colMap.cost);
+            const wangIdx = toBodyIdx(colMap.wang);
+            const guideIdx = toBodyIdx(colMap.guide);
+            const clickIdx = toBodyIdx(colMap.click);
+            const budgetIdx = toBodyIdx(colMap.budget);
+            const cartIdxList = (colMap.carts || []).map(toBodyIdx);
+
+            let score = 0;
+            if (hasCell(costIdx)) score += 12;
+            if (hasCell(wangIdx)) score += 6;
+            if (cartIdxList.some(hasCell)) score += 4;
+            if (hasCell(guideIdx) && hasCell(clickIdx)) score += 3;
+            if (hasCell(budgetIdx)) score += 2;
+            score += Math.min(5, Math.floor(maxCells / 5));
+
+            return score;
+        },
+
+        resolveTableContext() {
+            const tableList = document.querySelectorAll('div[mx-stickytable-wrapper="body"] table, table');
+            if (!tableList || tableList.length === 0) return null;
+
+            const contexts = [];
+            const seen = new Set();
+
+            tableList.forEach(table => {
+                if (!table || seen.has(table)) return;
+                seen.add(table);
+
+                const headers = this.getTableHeaders(table);
+                if (!headers || headers.length === 0) return;
+
+                const colMap = this.getColumnIndexMap(headers);
+                const stickyBodyWrapper = table.closest('[mx-stickytable-wrapper="body"]');
+                const visible = this.isElementVisible(stickyBodyWrapper || table);
+                const rowCount = table.tBodies?.[0]?.rows?.length || table.rows.length || 0;
+                const maxCells = this.getTableMaxCells(table);
+                const baseScore = this.getTableScore(colMap);
+                const capabilityScore = this.getTableCapabilityScore(colMap, headers.length, maxCells);
+
+                if (rowCount <= 0 || maxCells <= 0) return;
+                if (capabilityScore <= 0 && baseScore <= 0) return;
+
+                contexts.push({
+                    table,
+                    headers,
+                    colMap,
+                    score: baseScore,
+                    capabilityScore,
+                    visible,
+                    rowCount,
+                    maxCells
+                });
+            });
+
+            if (contexts.length === 0) return null;
+
+            contexts.sort((a, b) => {
+                const visibleDelta = Number(b.visible) - Number(a.visible);
+                if (visibleDelta !== 0) return visibleDelta;
+                const capabilityDelta = b.capabilityScore - a.capabilityScore;
+                if (capabilityDelta !== 0) return capabilityDelta;
+                const scoreDelta = b.score - a.score;
+                if (scoreDelta !== 0) return scoreDelta;
+                const cellDelta = b.maxCells - a.maxCells;
+                if (cellDelta !== 0) return cellDelta;
+                return b.rowCount - a.rowCount;
+            });
+
+            return contexts[0];
+        },
+
+        resolveChargeHeader(table) {
+            const stickyBodyWrapper = table?.closest?.('[mx-stickytable-wrapper="body"]');
+            const stickyHeaderWrapper = this.resolveStickyHeaderWrapper(stickyBodyWrapper);
+            const scopedHeader = stickyHeaderWrapper?.querySelector('[mx-stickytable-sort="charge"]');
+            if (scopedHeader) return scopedHeader;
+            const scope = stickyBodyWrapper?.parentElement || document;
+            return scope.querySelector('[mx-stickytable-sort="charge"]') || document.querySelector('[mx-stickytable-sort="charge"]');
+        },
+
         run() {
+            const tableContext = this.resolveTableContext();
+            if (!tableContext) return;
+            const { table, headers, colMap } = tableContext;
+
             // 自动点击花费列降序排序（需要开启配置，且未排序时）
             if (State.config.autoSortCharge && !this._sortedByCharge) {
-                const chargeHeader = document.querySelector('[mx-stickytable-sort="charge"]');
+                const chargeHeader = this.resolveChargeHeader(table);
                 if (chargeHeader) {
                     // 检查当前是否已经是降序
                     const currentOrder = chargeHeader.getAttribute('mx-stickytable-sort-order');
@@ -411,21 +578,6 @@
                     }
                 }
             }
-
-            const table = document.querySelector('div[mx-stickytable-wrapper="body"] table') || document.querySelector('table');
-            if (!table) return;
-
-            // 获取表头 (处理 Sticky Table 结构)
-            let headers;
-            const stickyHeaderWrapper = table.closest('[mx-stickytable-wrapper="body"]')?.parentElement?.querySelector('[mx-stickytable-wrapper="head"]');
-            if (stickyHeaderWrapper) {
-                headers = stickyHeaderWrapper.querySelectorAll('th');
-            } else {
-                headers = table.querySelectorAll('thead th');
-            }
-            if (!headers || headers.length === 0) return;
-
-            const colMap = this.getColumnIndexMap(headers);
             const { showCost, showCartCost, showPercent, showCostRatio, showBudget } = State.config;
 
             // 检查是否需要执行
@@ -1152,9 +1304,13 @@
         Logger.log(`🚀 阿里助手 Pro v${CURRENT_VERSION} 已启动`);
 
         let lastUrl = window.location.href;
+        let lastUrlResetAt = 0;
         const checkUrlChange = () => {
             if (window.location.href !== lastUrl) {
                 lastUrl = window.location.href;
+                const now = Date.now();
+                if (now - lastUrlResetAt < 300) return;
+                lastUrlResetAt = now;
                 resetSortState('页面切换');
             }
         };
@@ -1162,17 +1318,25 @@
         window.addEventListener('popstate', checkUrlChange);
 
         let timer;
+        let hasExecuted = false;
+        const runCore = () => {
+            Core.run();
+            hasExecuted = true;
+        };
         const observer = new MutationObserver((mutations) => {
             if (timer) return;
             timer = setTimeout(() => {
-                Core.run();
+                runCore();
                 timer = null;
             }, 1000);
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
 
-        setTimeout(() => Core.run(), 1000);
+        setTimeout(() => {
+            if (hasExecuted || timer) return;
+            runCore();
+        }, 1000);
     }
 
     main();
@@ -1214,12 +1378,12 @@
     'use strict';
 
     // 局部版本管理 (确保该模块也能读取到正确版本号)
-    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.23';
+    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.24';
 
     // ==================== 配置模块 ====================
     const CONFIG = {
         UI_ID: 'alimama-escort-helper-ui',
-        VERSION: CURRENT_VERSION || '5.23',
+        VERSION: CURRENT_VERSION || '5.24',
         DEFAULT: {
             bizCode: 'universalBP',
             customPrompt: '帮我进行深度诊断',
