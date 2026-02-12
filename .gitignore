@@ -2,3 +2,6 @@
 *.backup_*
 备份.js
 alimama-helper-pro/
+node_modules/
+dist/
+.keys/

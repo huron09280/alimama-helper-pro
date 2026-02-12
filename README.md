@@ -1,69 +1,99 @@
 # 阿里妈妈多合一助手 (Pro版)
 
-[![Version](https://img.shields.io/badge/version-5.24-blue.svg)](./阿里妈妈多合一助手.js)
-[![Platform](https://img.shields.io/badge/platform-Tampermonkey-orange.svg)](https://www.tampermonkey.net/)
+[![Version](https://img.shields.io/badge/version-5.24.0-blue.svg)](./package.json)
+[![Build](https://img.shields.io/badge/build-GitHub_Actions-black.svg)](./.github/workflows/ci.yml)
 
-这是一个为 **阿里妈妈 (Alimama)** 广告投放平台量身定制的浏览器用户脚本（UserScript）。通过多项自动化计算和 UI 优化功能，帮助广告主更高效地进行数据分析和计划优化。
+阿里妈妈投放平台增强工具，现支持两种交付形态：
 
-## 🚀 核心功能
+- 浏览器扩展（Chrome / Edge / Firefox）
+- Tampermonkey 用户脚本（并行维护）
 
-### 1. 实时数据计算
+本仓库以 GitHub 为唯一源码，自动发布流程为：
 
-在原生广告报表中直接插入计算结果，无需手动导出：
+`GitHub Tag -> GitHub Actions -> 商店发布 -> 浏览器自动更新`
 
-- **询单成本**: 花费 / 旺旺咨询量。
-- **加购成本**: 花费 / 总购物车数。
-- **潜客占比**: 引导访问潜客数 / 点击量。
-- **花费占比**: 当前项花费占总花费的百分比。
-- **预算进度**: 实时显示预算消耗百分比，并配有直观的渐变进度条。支持基础+多目标预算分类显示。
+## 功能概览
 
-### 2. 交互与自动化
+- 实时指标增强：询单成本、加购成本、潜客占比、花费占比、预算进度
+- 交互增强：自动按花费排序、Tab 切换重排、弹窗速闭
+- 下载增强：报表直链捕获、复制与一键下载
+- 算法护航：主面板一键调起，保留 `window.__ALIMAMA_OPTIMIZER_TOGGLE__`
+- 日志系统：按日期分组、可折叠、可清空
 
-- **全 UI 版本同步**: 确保所有界面和日志均显示最新版本。
-- **自动排序**: 可一键开启按花费降序排列表格，支持切换 Tab 或计划时自动重排。
-- **多表格识别**: 自动识别当前可见且可计算的数据表，减少跨区域误算和误排序。
-- **弹窗速闭**: 自动识别并拦截页面中烦人的广告或通知弹窗。
-- **直连下载**: 劫持网络请求，自动提取报表下载直连，支持点击下载或复制链接。
-- **智能护航**: 集成「算法护航」功能，一键调出优化模块，且点击后助手面板自动最小化以腾出空间。
+## 安装方式（推荐顺序）
 
-### 3. 品质 UI 体验
+### 1. 浏览器扩展（推荐）
 
-- **现代灰色系设计**: 简约而不失专业感的灰色系配色。
-- **灵活布局**: 悬浮球入口，面板支持点击外部自动收起，左侧边缘可自由拖拽调整宽度。
-- **运行日志**: 详细记录每一次关键操作，支持按日期分组、折叠隐藏及一键清空。
+- Chrome 商店：待补充上架链接
+- Edge Add-ons：待补充上架链接
+- Firefox Add-ons：待补充上架链接
 
-## 🛠️ 安装步骤
+安装一次后，后续版本由浏览器通过商店自动更新。
 
-1. 安装浏览器扩展 [Tampermonkey](https://www.tampermonkey.net/) (推荐) 或 Greasemonkey。
-2. 打开仓库中的 `阿里妈妈多合一助手.js`，复制脚本内容并在 Tampermonkey 中新建脚本保存。
-3. 刷新阿里妈妈页面（如 `*.alimama.com`），右侧会出现⚡悬浮球。
+### 2. Tampermonkey（并行渠道）
 
-## 📖 使用指南
+- 安装链接（Release 资产）：
+  - `https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.user.js`
+- 更新元信息：
+  - `https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.meta.js`
 
-- **面板控制**: 点击⚡悬浮球展开控制面板。
-- **功能开关**: 面板顶部设有八个主要功能开关（含算法护航入口），点击即可实时切换显示效果。
-- **日志查看**: 底部显示脚本运行状态，点击「隐藏/显示」可切换日志区域。
-- **调整宽度**: 鼠标悬停在面板左侧边缘，出现双向箭头后即可拖拽。
+脚本内已包含 `@downloadURL` / `@updateURL`，可自动提示更新。
 
-## 🏗️ 技术架构
+## 项目结构
 
-- **核心**: 原生 JavaScript (ES6+)。
-- **样式**: Vanilla CSS。
-- **性能优化**:
-  - 使用 `MutationObserver` 监听 DOM 变化。
-  - `requestAnimationFrame` 批量处理日志渲染。
-  - `XPath` 快速精准定位关键数值。
-  - 列索引缓存机制，减少重复计算。
-  - 统一网络 Hook 与响应解析门槛（按 content-type 和大小限制），降低大响应卡顿风险。
+```text
+src/
+  core/alimama-helper-core.js          # 核心业务逻辑（无 userscript 头）
+  platform/gm-shim.js                  # 扩展环境下 GM 兼容层
+  userscript/header.template.txt       # userscript 头模板
+extension/
+  common/content-injector.js           # 内容注入器（页面上下文）
+  common/icons/                        # 扩展图标（沿用悬浮球风格）
+  chrome/manifest.json                 # Chromium 模板清单
+  firefox/manifest.json                # Firefox 模板清单
+build/
+  build.mjs                            # 生成 dist/extension + dist/userscript
+  package.mjs                          # 生成 zip/xpi/release 资产
+  check-syntax.mjs                     # 语法检查
+scripts/
+  publish-chrome.mjs                   # Chrome 商店发布
+  publish-edge.mjs                     # Edge 商店发布
+  publish-firefox.mjs                  # Firefox 商店发布
+.github/workflows/
+  ci.yml
+  release.yml
+```
 
-## 📅 版本历史 (近期)
+## 本地开发
 
-- **v5.24**: 优化多表格识别与 Sticky 表头映射，增强花费排序定位与路由切换重置稳定性。
-- **v5.23**: 修复作用域引用错误，实现全 UI 版本同步，优化面板层级与护航集成。
-- **v5.15**: 支持多 Tab 切换监听和自动重排序。
-- **v5.12**: 新增「花费排序」开关。
-- **v4.11**: UI 重构为灰色系主题，支持宽度缩放与侧边拖拽。
+```bash
+npm ci
+npm run check:syntax
+npm run build
+npm run package
+```
 
----
+构建产物：
 
-*注意：本脚本仅用于辅助数据分析，不会收集或上传任何用户个人隐私信息。*
+- `dist/extension/chrome`
+- `dist/extension/firefox`
+- `dist/userscript/alimama-helper-pro.user.js`
+- `dist/userscript/alimama-helper-pro.meta.js`
+- `dist/packages/*`
+- 其中包含 `alimama-helper-pro.crx`（用于本地分发安装）
+
+## 版本规则
+
+- 单一版本源：`package.json#version`
+- 构建时注入：`__AM_VERSION__`
+- 发布触发：推送 tag `vX.Y.Z`
+
+## 兼容策略
+
+- Chrome / Edge：首发功能完整
+- Firefox：首版以“核心功能可用”为目标，允许少量高级行为后续补齐
+
+## 说明
+
+- 当前仓库存在历史用户脚本文件与文档，迁移到扩展形态时保持核心逻辑一致，避免业务行为回归。
+- 若商店 API 密钥缺失，对应发布任务会失败，但不阻断其他商店渠道。
