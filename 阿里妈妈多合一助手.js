@@ -10,7 +10,6 @@
 // @grant        GM_setClipboard
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_xmlhttpRequest
 // @connect      alimama.com
 // @connect      ai.alimama.com
 // @connect      *.alimama.com
@@ -58,7 +57,8 @@
     // 1. 配置与状态管理
     // ==========================================
     const CONSTANTS = {
-        STORAGE_KEY: 'AM_HELPER_CONFIG_V5_15',
+        STORAGE_KEY: 'AM_HELPER_CONFIG',
+        LEGACY_STORAGE_KEYS: ['AM_HELPER_CONFIG_V5_15', 'AM_HELPER_CONFIG_V5_14', 'AM_HELPER_CONFIG_V5_13'],
         TAG_BASE_STYLE: 'align-items:center;border:0 none;border-radius:var(--mx-effects-tag-border-radius,8px);display:inline-flex;font-size:9px;font-weight:800;height:var(--mx-effects-tag-height,16px);justify-content:center;padding:0 var(--mx-effects-tag-h-gap,1px);position:relative;transition:background-color var(--duration),color var(--duration),border var(--duration),opacity var(--duration);-webkit-user-select:none;-moz-user-select:none;user-select:none;width:100%;margin-top:2px;',
         STYLES: {
             cost: 'background-color:rgba(255,0,106,0.1);color:#ff006a;',
@@ -83,16 +83,129 @@
         logExpanded: true
     };
 
-    const loadConfig = () => {
+    const createHookManager = () => {
+        if (window.__AM_HOOK_MANAGER__) return window.__AM_HOOK_MANAGER__;
+
+        const manager = {
+            installed: false,
+            fetchHandlers: [],
+            xhrOpenHandlers: [],
+            xhrSendHandlers: [],
+            xhrLoadHandlers: [],
+
+            registerFetch(handler) {
+                if (typeof handler === 'function') this.fetchHandlers.push(handler);
+            },
+
+            registerXHROpen(handler) {
+                if (typeof handler === 'function') this.xhrOpenHandlers.push(handler);
+            },
+
+            registerXHRSend(handler) {
+                if (typeof handler === 'function') this.xhrSendHandlers.push(handler);
+            },
+
+            registerXHRLoad(handler) {
+                if (typeof handler === 'function') this.xhrLoadHandlers.push(handler);
+            },
+
+            install() {
+                if (this.installed || window.__AM_HOOKS_INSTALLED__) return;
+
+                const originalFetch = window.fetch;
+                if (typeof originalFetch === 'function') {
+                    window.fetch = async function (...args) {
+                        const response = await originalFetch.apply(this, args);
+                        manager.fetchHandlers.forEach(handler => {
+                            try {
+                                handler({ args, response });
+                            } catch { }
+                        });
+                        return response;
+                    };
+                }
+
+                const originalOpen = XMLHttpRequest.prototype.open;
+                const originalSend = XMLHttpRequest.prototype.send;
+
+                XMLHttpRequest.prototype.open = function (...args) {
+                    const [method, url] = args;
+                    this.__amHookMethod = method;
+                    this.__amHookUrl = url;
+
+                    manager.xhrOpenHandlers.forEach(handler => {
+                        try {
+                            handler({ xhr: this, method, url, args });
+                        } catch { }
+                    });
+
+                    return originalOpen.apply(this, args);
+                };
+
+                XMLHttpRequest.prototype.send = function (...args) {
+                    const [data] = args;
+                    const xhr = this;
+
+                    manager.xhrSendHandlers.forEach(handler => {
+                        try {
+                            handler({
+                                xhr,
+                                data,
+                                method: xhr.__amHookMethod,
+                                url: xhr.__amHookUrl,
+                                args
+                            });
+                        } catch { }
+                    });
+
+                    xhr.addEventListener('load', function () {
+                        manager.xhrLoadHandlers.forEach(handler => {
+                            try {
+                                handler({
+                                    xhr: this,
+                                    method: this.__amHookMethod,
+                                    url: this.__amHookUrl
+                                });
+                            } catch { }
+                        });
+                    });
+
+                    return originalSend.apply(xhr, args);
+                };
+
+                this.installed = true;
+                window.__AM_HOOKS_INSTALLED__ = true;
+            }
+        };
+
+        window.__AM_HOOK_MANAGER__ = manager;
+        return manager;
+    };
+
+    const safeParseJSON = (raw) => {
+        if (!raw) return null;
         try {
-            const saved = JSON.parse(localStorage.getItem(CONSTANTS.STORAGE_KEY)) ||
-                JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V5_14')) ||
-                JSON.parse(localStorage.getItem('AM_HELPER_CONFIG_V5_13'));
-            // 强制 panelOpen 默认为 false，确保 UI 每次加载时都是缩小状态
-            return { ...DEFAULT_CONFIG, ...saved, panelOpen: false };
+            return JSON.parse(raw);
         } catch {
-            return DEFAULT_CONFIG;
+            return null;
         }
+    };
+
+    const loadConfig = () => {
+        const current = safeParseJSON(localStorage.getItem(CONSTANTS.STORAGE_KEY));
+        if (current && typeof current === 'object') {
+            return { ...DEFAULT_CONFIG, ...current, panelOpen: false };
+        }
+
+        for (const legacyKey of CONSTANTS.LEGACY_STORAGE_KEYS) {
+            const legacy = safeParseJSON(localStorage.getItem(legacyKey));
+            if (legacy && typeof legacy === 'object') {
+                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(legacy));
+                return { ...DEFAULT_CONFIG, ...legacy, panelOpen: false };
+            }
+        }
+
+        return DEFAULT_CONFIG;
     };
 
     const State = {
@@ -144,14 +257,21 @@
                     dateDiv.className = 'am-log-date-header';
                     dateDiv.dataset.date = today;
                     dateDiv.style.cssText = 'color:#888;font-size:10px;text-align:center;margin:8px 0;border-bottom:1px solid #eee;position:relative;';
-                    dateDiv.innerHTML = `<span style="background:#fff;padding:0 8px;position:relative;top:8px;">${today}</span>`;
+                    const dateText = document.createElement('span');
+                    dateText.style.cssText = 'background:#fff;padding:0 8px;position:relative;top:8px;';
+                    dateText.textContent = today;
+                    dateDiv.appendChild(dateText);
                     fragment.appendChild(dateDiv);
                     this.lastFlushedDate = today;
                 }
 
                 const div = document.createElement('div');
                 div.className = 'am-log-line';
-                div.innerHTML = `<span class="am-log-time">[${time}]</span>${msg}`;
+                const timeNode = document.createElement('span');
+                timeNode.className = 'am-log-time';
+                timeNode.textContent = `[${time}]`;
+                div.appendChild(timeNode);
+                div.appendChild(document.createTextNode(msg));
                 if (isError) div.style.color = '#ff4d4f';
                 fragment.appendChild(div);
             });
@@ -824,11 +944,14 @@
     const Interceptor = {
         panel: null,
         keywords: CONSTANTS.DL_KEYWORDS,
+        hooksRegistered: false,
+        maxParseBytes: 1024 * 1024,
+        parsableTypeHints: ['json', 'text', 'javascript', 'xml', 'html', 'csv', 'plain', 'event-stream'],
+        debugHints: new Set(),
 
         init() {
             this.createPanel();
-            this.hookFetch();
-            this.hookXHR();
+            this.registerHooks();
         },
 
         createPanel() {
@@ -838,32 +961,121 @@
             this.panel = div;
         },
 
+        debugOnce(key, msg) {
+            if (this.debugHints.has(key)) return;
+            this.debugHints.add(key);
+            console.debug(`[AM][Interceptor] ${msg}`);
+        },
+
+        sanitizeUrl(url) {
+            if (typeof url !== 'string') return '';
+            try {
+                const parsed = new URL(url, window.location.origin);
+                if (!/^https?:$/.test(parsed.protocol)) return '';
+                return parsed.href;
+            } catch {
+                return '';
+            }
+        },
+
+        shouldParseResponse(meta = {}) {
+            const source = meta.source || 'Unknown';
+            const responseType = String(meta.responseType || '');
+            if (responseType && responseType !== 'text') {
+                this.debugOnce(`${source}:responseType:${responseType}`, `${source} 跳过解析: responseType=${responseType}`);
+                return false;
+            }
+
+            const contentType = String(meta.contentType || '').toLowerCase();
+            if (!contentType) {
+                this.debugOnce(`${source}:contentType:empty`, `${source} 跳过解析: content-type 为空`);
+                return false;
+            }
+            if (!this.parsableTypeHints.some(type => contentType.includes(type))) {
+                this.debugOnce(`${source}:contentType:${contentType}`, `${source} 跳过解析: content-type=${contentType}`);
+                return false;
+            }
+
+            const contentLength = Number.parseInt(String(meta.contentLength || ''), 10);
+            if (Number.isFinite(contentLength) && contentLength > this.maxParseBytes) {
+                this.debugOnce(`${source}:contentLength`, `${source} 跳过解析: content-length=${contentLength} 超过限制 ${this.maxParseBytes}`);
+                return false;
+            }
+
+            if (typeof meta.textLength === 'number' && meta.textLength > this.maxParseBytes) {
+                this.debugOnce(`${source}:textLength`, `${source} 跳过解析: 响应文本长度 ${meta.textLength} 超过限制 ${this.maxParseBytes}`);
+                return false;
+            }
+
+            return true;
+        },
+
         show(url, source) {
-            if (this.panel.dataset.lastUrl === url && this.panel.style.display === 'block') return;
-            this.panel.dataset.lastUrl = url;
+            const safeUrl = this.sanitizeUrl(url);
+            if (!safeUrl) {
+                this.debugOnce('invalid-url', '检测到非法协议 URL，已忽略下载弹窗渲染');
+                return;
+            }
+
+            if (this.panel.dataset.lastUrl === safeUrl && this.panel.style.display === 'block') return;
+            this.panel.dataset.lastUrl = safeUrl;
 
             Logger.log(`📂 捕获报表: ${source}`, true);
 
-            this.panel.innerHTML = `
-                <div style="margin-bottom:10px; font-weight:bold; color:#00ff9d; display:flex; justify-content:space-between;">
-                    <span>✅ 捕获报表</span><span style="color:#888;font-size:10px">${source}</span>
-                </div>
-                <div style="background:#222; padding:8px; border-radius:4px; margin-bottom:12px; word-break:break-all; font-size:11px; color:#aaa; max-height:50px; overflow:hidden;">${url}</div>
-                <div style="display:flex; gap:10px;">
-                    <a href="${url}" target="_blank" style="background:#28a745; color:white; text-decoration:none; padding:8px 0; text-align:center; border-radius:4px; flex:2;">⚡ 直连下载</a>
-                    <button id="am-cp-btn" style="background:#17a2b8; color:white; border:none; border-radius:4px; flex:1; cursor:pointer;">复制</button>
-                    <button id="am-cl-btn" style="background:#555; color:white; border:none; border-radius:4px; flex:0.5; cursor:pointer;">X</button>
-                </div>
-                <div style="margin-top:8px; font-size:10px; color:#aaa;">提示：如果下载的文件名无后缀，请手动添加 .xlsx</div>
-            `;
+            this.panel.textContent = '';
+
+            const header = document.createElement('div');
+            header.style.cssText = 'margin-bottom:10px; font-weight:bold; color:#00ff9d; display:flex; justify-content:space-between;';
+            const headerTitle = document.createElement('span');
+            headerTitle.textContent = '✅ 捕获报表';
+            const headerSource = document.createElement('span');
+            headerSource.style.cssText = 'color:#888;font-size:10px';
+            headerSource.textContent = source;
+            header.appendChild(headerTitle);
+            header.appendChild(headerSource);
+
+            const urlBox = document.createElement('div');
+            urlBox.style.cssText = 'background:#222; padding:8px; border-radius:4px; margin-bottom:12px; word-break:break-all; font-size:11px; color:#aaa; max-height:50px; overflow:hidden;';
+            urlBox.textContent = safeUrl;
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex; gap:10px;';
+
+            const dlLink = document.createElement('a');
+            dlLink.href = safeUrl;
+            dlLink.target = '_blank';
+            dlLink.rel = 'noopener noreferrer';
+            dlLink.style.cssText = 'background:#28a745; color:white; text-decoration:none; padding:8px 0; text-align:center; border-radius:4px; flex:2;';
+            dlLink.textContent = '⚡ 直连下载';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.style.cssText = 'background:#17a2b8; color:white; border:none; border-radius:4px; flex:1; cursor:pointer;';
+            copyBtn.textContent = '复制';
+
+            const closeBtn = document.createElement('button');
+            closeBtn.style.cssText = 'background:#555; color:white; border:none; border-radius:4px; flex:0.5; cursor:pointer;';
+            closeBtn.textContent = 'X';
+
+            actions.appendChild(dlLink);
+            actions.appendChild(copyBtn);
+            actions.appendChild(closeBtn);
+
+            const hint = document.createElement('div');
+            hint.style.cssText = 'margin-top:8px; font-size:10px; color:#aaa;';
+            hint.textContent = '提示：如果下载的文件名无后缀，请手动添加 .xlsx';
+
+            this.panel.appendChild(header);
+            this.panel.appendChild(urlBox);
+            this.panel.appendChild(actions);
+            this.panel.appendChild(hint);
             this.panel.style.display = 'block';
 
-            document.getElementById('am-cp-btn').onclick = function () {
-                GM_setClipboard(url);
+            copyBtn.onclick = function () {
+                GM_setClipboard(safeUrl);
                 this.innerText = '已复制';
                 setTimeout(() => this.innerText = '复制', 1500);
             };
-            document.getElementById('am-cl-btn').onclick = () => this.panel.style.display = 'none';
+            closeBtn.onclick = () => this.panel.style.display = 'none';
         },
 
         // --- 递归解析 JSON (Restored Original Logic) ---
@@ -884,7 +1096,10 @@
             }
         },
 
-        handleResponse(text, source) {
+        handleResponse(text, source, meta = {}) {
+            if (typeof text !== 'string' || !text) return;
+            if (!this.shouldParseResponse({ ...meta, source, textLength: text.length })) return;
+
             try {
                 const json = JSON.parse(text);
                 this.findUrlInObject(json, `JSON:${source}`);
@@ -898,26 +1113,32 @@
             }
         },
 
-        hookFetch() {
-            const originalFetch = window.fetch;
-            const self = this;
-            window.fetch = async (...args) => {
-                const response = await originalFetch(...args);
-                const clone = response.clone();
-                clone.text().then(text => self.handleResponse(text, 'Fetch')).catch(() => { });
-                return response;
-            };
-        },
+        registerHooks() {
+            if (this.hooksRegistered) return;
+            const hooks = createHookManager();
 
-        hookXHR() {
-            const originalSend = XMLHttpRequest.prototype.send;
-            const self = this;
-            XMLHttpRequest.prototype.send = function () {
-                this.addEventListener('load', function () {
-                    self.handleResponse(this.responseText, 'XHR');
-                });
-                return originalSend.apply(this, arguments);
-            };
+            hooks.registerFetch(({ response }) => {
+                const contentType = response?.headers?.get('content-type') || '';
+                const contentLength = response?.headers?.get('content-length') || '';
+                if (!this.shouldParseResponse({ source: 'Fetch', contentType, contentLength })) return;
+
+                const clone = response.clone();
+                clone.text()
+                    .then(text => this.handleResponse(text, 'Fetch', { contentType, contentLength }))
+                    .catch(() => { });
+            });
+
+            hooks.registerXHRLoad(({ xhr }) => {
+                const contentType = xhr.getResponseHeader?.('content-type') || '';
+                const contentLength = xhr.getResponseHeader?.('content-length') || '';
+                const responseType = xhr.responseType || '';
+                const text = typeof xhr.responseText === 'string' ? xhr.responseText : '';
+
+                this.handleResponse(text, 'XHR', { contentType, contentLength, responseType });
+            });
+
+            hooks.install();
+            this.hooksRegistered = true;
         }
     };
 
@@ -1147,41 +1368,51 @@
 
     // ==================== Token 管理模块 ====================
     const TokenManager = {
+        hookReady: false,
+
         // Hook XHR 捕获 Token
         hookXHR: () => {
-            const originalOpen = XMLHttpRequest.prototype.open;
-            const originalSend = XMLHttpRequest.prototype.send;
+            if (TokenManager.hookReady) return;
+            const hooks = window.__AM_HOOK_MANAGER__;
+            if (!hooks) {
+                Logger.warn('统一 Hook 管理器不可用，已跳过 Token Hook 注入');
+                return;
+            }
 
-            XMLHttpRequest.prototype.open = function (method, url) {
-                this._url = url;
-                return originalOpen.apply(this, arguments);
-            };
-
-            XMLHttpRequest.prototype.send = function (data) {
+            const syncFromUrl = (rawUrl) => {
                 try {
-                    const url = this._url;
-                    if (url?.includes('dynamicToken') || url?.includes('loginPointId')) {
-                        const urlObj = new URL(url, window.location.origin);
-                        State.tokens.dynamicToken = urlObj.searchParams.get('dynamicToken') || State.tokens.dynamicToken;
-                        State.tokens.loginPointId = urlObj.searchParams.get('loginPointId') || State.tokens.loginPointId;
-                    }
-
-                    if (data && typeof data === 'string') {
-                        try {
-                            const json = JSON.parse(data);
-                            State.tokens.dynamicToken = json.dynamicToken || State.tokens.dynamicToken;
-                            State.tokens.loginPointId = json.loginPointId || State.tokens.loginPointId;
-                        } catch {
-                            const params = new URLSearchParams(data);
-                            State.tokens.dynamicToken = params.get('dynamicToken') || State.tokens.dynamicToken;
-                            State.tokens.loginPointId = params.get('loginPointId') || State.tokens.loginPointId;
-                        }
-                    }
+                    if (!rawUrl || (!rawUrl.includes('dynamicToken') && !rawUrl.includes('loginPointId'))) return;
+                    const urlObj = new URL(rawUrl, window.location.origin);
+                    State.tokens.dynamicToken = urlObj.searchParams.get('dynamicToken') || State.tokens.dynamicToken;
+                    State.tokens.loginPointId = urlObj.searchParams.get('loginPointId') || State.tokens.loginPointId;
                 } catch { }
-                return originalSend.apply(this, arguments);
             };
 
-            Logger.info('XHR Hook 已注入');
+            const syncFromBody = (body) => {
+                if (!body || typeof body !== 'string') return;
+                try {
+                    const json = JSON.parse(body);
+                    State.tokens.dynamicToken = json.dynamicToken || State.tokens.dynamicToken;
+                    State.tokens.loginPointId = json.loginPointId || State.tokens.loginPointId;
+                } catch {
+                    const params = new URLSearchParams(body);
+                    State.tokens.dynamicToken = params.get('dynamicToken') || State.tokens.dynamicToken;
+                    State.tokens.loginPointId = params.get('loginPointId') || State.tokens.loginPointId;
+                }
+            };
+
+            hooks.registerXHROpen(({ xhr, url }) => {
+                xhr._url = url;
+                syncFromUrl(url);
+            });
+
+            hooks.registerXHRSend(({ data, url }) => {
+                syncFromUrl(url);
+                syncFromBody(data);
+            });
+
+            TokenManager.hookReady = true;
+            Logger.info('XHR Hook 已接入统一管理器');
         },
 
         // 深度搜索全局变量

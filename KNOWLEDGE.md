@@ -1,80 +1,79 @@
 # 阿里妈妈多合一助手 - 技术知识库 (Knowledge Base)
 
-本文档记录了本项目的核心技术实现、业务逻辑与 API 交互流程，作为未来开发与维护的深度参考。
+本文档记录当前 `v5.23` 版本的关键实现，供维护和扩展时快速对齐。
 
 ## 1. 项目架构 (Architecture)
 
-本项目由两个主要的 IIFE（立即调用函数表达式）组成，分别负责不同的核心功能：
+项目由两个 IIFE 组成：
 
-- **IIFE 1: 助手主模块 (Main Helper)**：负责表格增强（加购成本、消耗占比）、日志系统、UI 基础框架及数据抓取拦截。
-- **IIFE 2: 算法护航模块 (Escort Module)**：集成自 `alimama-auto-optimizer`，专门负责针对特定计划的 AI 诊断与护航建议提交。
+- **IIFE 1: 主助手模块**：表格增强计算、主面板 UI、日志系统、报表下载拦截。
+- **IIFE 2: 算法护航模块**：计划扫描、Token 获取、AI 诊断与护航方案提交。
 
-两个模块通过 `window.__ALIMAMA_OPTIMIZER_TOGGLE__` 全局函数进行通信。
+模块间通信保持不变：通过 `window.__ALIMAMA_OPTIMIZER_TOGGLE__` 由主面板唤起护航面板。
 
-## 2. 身份验证与令牌 (Authentication & Tokens)
+## 2. 统一 Hook 机制 (Network Hooking)
 
-脚本通过三种方式动态获取阿里妈妈 API 所需的令牌：
+为避免双模块重复 monkey patch，脚本通过全局 Hook 管理器统一注入：
 
-- **XHR Hook**：拦截页面自身的 API 请求，从中提取 `dynamicToken` 和 `loginPointId`。
-- **全局搜索 (Deep Search)**：在 `window` 对象下的 `g_config`, `PageConfig`, `mm`, `__magix_data__` 等知名变量中深度遍历查找。
-- **Magix Vframe 提取**：遍历 `window.Magix.Vframe.all()`，从各视图的 `accessInfo` 中获取最新的 `csrfID` 和令牌。
+- 全局对象：`window.__AM_HOOK_MANAGER__`
+- 幂等标记：`window.__AM_HOOKS_INSTALLED__`
+- 统一 patch：一次性接管 `window.fetch` 与 `XMLHttpRequest.prototype.open/send`
+- 分发能力：按事件将数据派发给下载拦截与 Token 捕获逻辑
 
-**关键令牌：**
-- `dynamicToken`: API 请求必传参数。
-- `loginPointId`: 身份标识。
-- `_tb_token_ (csrfID)`: 从 Cookie 或 Magix 获取，用于防御 CSRF。
+这保证了两个 IIFE 共存时不会出现链式重复包裹。
 
-## 3. 核心 API 流程 (API Flow)
+## 3. 配置与状态 (State)
 
-### 3.1 诊断与对话 (Chat/Talk)
+主助手配置存储在 `localStorage`：
 
-* **Endpoint**: `ai.alimama.com/ai/chat/talk.json`
-- **Method**: POST
-- **Payload**: 包含 `bizCode: "universalBP"` 和 `customPrompt`。
-- **响应格式**: SSE (Server-Sent Events) 流。
-- **解析逻辑**: 脚本实现了 `_parseSSEChuncks`，逐块解析 JSON 数据，从中提取 `actionList`（改进建议列表）。
+- 当前 key：`AM_HELPER_CONFIG`
+- 兼容迁移：启动时自动读取旧 key（`AM_HELPER_CONFIG_V5_15`、`AM_HELPER_CONFIG_V5_14`、`AM_HELPER_CONFIG_V5_13`）并迁移到新 key
 
-### 3.2 方案开启 (Escort Open)
+护航配置通过油猴 API 保存：
 
-* **Endpoint**: `ai.alimama.com/ai/escort/open.json`
-- **Method**: POST
-- **功能**: 提交并确认执行 AI 建议的方案。
+- `GM_getValue('config')`
+- `GM_setValue('config', userConfig)`
 
-## 4. UI 与交互逻辑 (UI & Interactions)
+## 4. 核心 API 流程 (Escort API Flow)
 
-### 4.1 样式系统 (CSS)
+护航模块主要调用：
 
-* 采用动态注入 `<style>` 标签的方式。
-- 整体风格为“灰色系 (Vibrant Grey)”，使用线性渐变（如 `#fafafa` 到 `#f5f5f5`）提升质感。
+1. `POST https://ai.alimama.com/ai/chat/talk.json`
+2. `POST https://ai.alimama.com/ai/escort/open.json`
 
-### 4.2 状态管理 (State Management)
+请求支持：
 
-* 核心配置通过 `localStorage` (以 `am-helper-state` 为键) 进行本地存储。
-- 功能开关（如“询单成本”、“花费排序”）在刷新后依然保持用户之前的选择。
+- 超时控制（AbortController）
+- 失败重试
+- SSE/JSON 兼容解析
+- 并发限制（`Utils.concurrentLimit`）
 
-### 4.3 表格增强
+## 5. 安全与性能策略 (Security & Performance)
 
-* 使用 `MutationObserver` 监听 DOM 变化。
-- 自动识别表格中的“基础预算”与“多目标预算”行，利用正则匹配数值并计算消耗占比。
-- 解析逻辑考虑了数值中的千分位（如 `1,234.56`）。
+### 5.1 DOM 安全
 
-## 5. 性能与安全性 (Optimization & Security)
+- 日志与下载弹窗的动态内容使用 `textContent` 与 DOM API 组装，避免未转义 `innerHTML` 注入。
+- 下载链接通过 `sanitizeUrl(url)` 严格限制为 `http/https` 协议。
+- 外链统一设置 `rel="noopener noreferrer"`。
 
-### 5.1 并发控制
+### 5.2 解析门槛
 
-* `Utils.concurrentLimit`：限制同时进行的 API 请求数量（默认 3），防止由于并发过高导致触发阿里妈妈的 WAF 防护或请求超时。
+下载拦截仅在以下条件满足时解析响应体：
 
-### 5.2 容错机制
+- `content-type` 属于文本/JSON 类可解析内容
+- `content-length` 未超过 1MB（默认阈值）
+- `XHR.responseType` 为文本类型
 
-* **重试逻辑**: API 请求失败时支持自动指数级退避重试（最高 3 次）。
-- **超时控制**: 默认 30 秒超时，使用 `AbortController` 强制终止挂起的请求。
-
-### 5.3 防 XSS
-
-* 所有的 UI 输出（特别是日志和提取的建议文本）均通过 `Utils.escapeHtml` 进行转义。
+超限或类型不匹配会跳过解析，并仅输出一次 debug 提示，减少页面卡顿。
 
 ## 6. 版本同步机制 (Version Sync)
 
-通过 `const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : 'X.X';` 实现。
-- 该变量在两个 IIFE 内部各声明一次。
-- 全局 UI（主面板、护航面板、日志）通过该变量统一显示版本，确保版本一致性。
+两个 IIFE 均通过以下方式读取版本，避免硬编码漂移：
+
+```js
+const CURRENT_VERSION = typeof GM_info !== 'undefined'
+  ? GM_info.script.version
+  : '5.23';
+```
+
+主面板、护航面板与启动日志均引用该值进行展示。

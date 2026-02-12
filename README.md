@@ -1,6 +1,6 @@
 # 阿里妈妈多合一助手 (Pro版)
 
-[![Version](https://img.shields.io/badge/version-5.23-blue.svg)](file:///Users/liangchao/Downloads/合美/资料/产品/洗碗机资料/08_工具脚本/小工具/阿里妈妈多合一助手 (Pro版 )/alimama-helper-pro/阿里妈妈多合一助手.js)
+[![Version](https://img.shields.io/badge/version-5.23-blue.svg)](./阿里妈妈多合一助手.js)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey-orange.svg)](https://www.tampermonkey.net/)
 
 这是一个为 **阿里妈妈 (Alimama)** 广告投放平台量身定制的浏览器用户脚本（UserScript）。通过多项自动化计算和 UI 优化功能，帮助广告主更高效地进行数据分析和计划优化。
@@ -34,13 +34,13 @@
 ## 🛠️ 安装步骤
 
 1. 安装浏览器扩展 [Tampermonkey](https://www.tampermonkey.net/) (推荐) 或 Greasemonkey。
-2. [点击此处](file:///Users/liangchao/Downloads/合美/资料/产品/洗碗机资料/08_工具脚本/小工具/阿里妈妈多合一助手 (Pro版 )/alimama-helper-pro/阿里妈妈多合一助手.js) 运行或将脚本代码复制并新建到扩展中。
+2. 打开仓库中的 `阿里妈妈多合一助手.js`，复制脚本内容并在 Tampermonkey 中新建脚本保存。
 3. 刷新阿里妈妈页面（如 `*.alimama.com`），右侧会出现⚡悬浮球。
 
 ## 📖 使用指南
 
 - **面板控制**: 点击⚡悬浮球展开控制面板。
-- **功能开关**: 面板顶部设有六个主要功能开关，点击即可实时切换显示效果。
+- **功能开关**: 面板顶部设有八个主要功能开关（含算法护航入口），点击即可实时切换显示效果。
 - **日志查看**: 底部显示脚本运行状态，点击「隐藏/显示」可切换日志区域。
 - **调整宽度**: 鼠标悬停在面板左侧边缘，出现双向箭头后即可拖拽。
 
@@ -53,6 +53,7 @@
   - `requestAnimationFrame` 批量处理日志渲染。
   - `XPath` 快速精准定位关键数值。
   - 列索引缓存机制，减少重复计算。
+  - 统一网络 Hook 与响应解析门槛（按 content-type 和大小限制），降低大响应卡顿风险。
 
 ## 📅 版本历史 (近期)
 
