@@ -1,6 +1,6 @@
 # 阿里妈妈多合一助手 (Pro版)
 
-[![Version](https://img.shields.io/badge/version-5.24.0-blue.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-5.26.0-blue.svg)](./package.json)
 [![Build](https://img.shields.io/badge/build-GitHub_Actions-black.svg)](./.github/workflows/ci.yml)
 
 阿里妈妈投放平台增强工具，现支持两种交付形态：
@@ -15,10 +15,12 @@
 ## 功能概览
 
 - 实时指标增强：询单成本、加购成本、潜客占比、花费占比、预算进度
-- 交互增强：自动按花费排序、Tab 切换重排、弹窗速闭
-- 下载增强：报表直链捕获、复制与一键下载
-- 算法护航：主面板一键调起，保留 `window.__ALIMAMA_OPTIMIZER_TOGGLE__`
-- 日志系统：按日期分组、可折叠、可清空
+- 智能识别：自动扫描计划 ID，注入「万能查数」快捷图标
+- UI/UX：iPhone 级圆角 (18px)、磨砂玻璃质感、标准化 SVG 图标、沉浸式交互
+- 交互增强：自动按花费排序、Tab 切换重排、弹窗速闭、面板最大化/居中
+- 下载增强：报表直连捕获、复制与一键下载
+- 算法护航：主面板一键调起，支持 API 级深度诊断与优化
+- 日志系统：按日期分组、可折叠、可清空、自动高度适配
 
 ## 安装方式（推荐顺序）
 

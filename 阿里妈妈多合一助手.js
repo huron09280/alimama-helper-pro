@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.24
+// @version      5.26
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,23 @@
 // ==/UserScript==
 /**
  * 更新日志
+ * 
+ * v5.26 (2026-02-13)
+ * - ✨ 新增「计划ID识别」模块：自动扫描并为页面 ID 注入「万能查数」快捷入口
+ * - ✨ UI 视觉标准升级：统一 iPhone 级圆角规范（18px/12px/10px），视觉更感性
+ * - ✨ 深度精装修：全面引入 Glassmorphism 磨砂玻璃质感，优化表格配色与层级感
+ * - ✨ 图标体系标准化：全量使用高质量 SVG 替换 Unicode，视觉比重、大小及颜色表现对齐
+ * - ✨ 算法护航体验增强：支持面板居中、最大化展示，优化长日志自动高度计算
+ * - 🔧 界面微调：精简算法护航标题栏结构，优化数据表格背景配色与各级图标显示比例
+ * - 🔧 细节修复：调优刷新图标展示效果，修复日志输出空格格式，提升极致稳定性
+ * - 🔧 性能优化：优化 MutationObserver 监听频率，减少扫描开销
+ * 
+ * v5.25 (2026-02-13)
+ * - ✨ 修复样式注入缓存机制，通过动态 ID 强制刷新样式
+ * - ✨ 优化触发器 UI 样式，提升原生视觉融合度
+ * - 🔧 修复日志系统在特定场景下的引用错误
+ * - 🔧 增强数据抓取稳定性，优化 API 注入逻辑
+ * - ✨ 关键词推广页面新增「全能数据查」快捷入口
  * 
  * v5.24 (2026-02-12)
  * - ✨ 新增多表格上下文识别与能力评分，优先处理当前可见且列结构匹配的数据表
@@ -58,7 +75,7 @@
     'use strict';
 
     // 全局版本管理
-    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.24';
+    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.26';
 
     // ==========================================
     // 1. 配置与状态管理
@@ -87,7 +104,9 @@
         showBudget: true,
         autoClose: true,
         autoSortCharge: true,  // 花费降序排序
-        logExpanded: true
+        autoSortCharge: true,  // 花费降序排序
+        logExpanded: true,
+        magicReportOpen: false
     };
 
     const createHookManager = () => {
@@ -787,29 +806,77 @@
         },
 
         injectStyles() {
+            // 强制更新样式：如果存在旧 ID 的样式标签，先移除
+            const oldStyle = document.getElementById('am-helper-mac26-style');
+            if (oldStyle) oldStyle.remove();
+
+            if (document.getElementById('am-helper-pro-v26-style')) return;
             const css = `
-                /* 悬浮球（最小化按钮） - 40px SVG图标 灰色系 */
+                :root {
+                    --am26-font: "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+                    --am26-mono: "SF Mono", "JetBrains Mono", "Menlo", "Monaco", "Consolas", monospace;
+                    --am26-text: #1b2438;
+                    --am26-text-soft: #505a74;
+                    --am26-border: rgba(255, 255, 255, 0.4); 
+                    --am26-border-strong: rgba(255, 255, 255, 0.6);
+                    --am26-surface: rgba(255, 255, 255, 0.25);
+                    --am26-surface-strong: rgba(255, 255, 255, 0.45);
+                    --am26-panel: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+                    --am26-panel-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2));
+                    --am26-primary: rgba(69, 84, 229, 1);
+                    --am26-primary-strong: #1d3fcf;
+                    --am26-primary-soft: rgba(42, 91, 255, 0.15);
+                    --am26-success: #0ea86f;
+                    --am26-warning: #e8a325;
+                    --am26-danger: #ea4f4f;
+                    --am26-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+                    --am26-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+                    --mx-number-report-brand-color: rgba(69,84,229,1);
+                    --mx-number-report-brand-color50: rgba(69,84,229,0.5);
+                    --mx-number-report-brand-color10: rgba(69,84,229,0.1);
+                    --mx-number-report-brand-color1: rgba(69,84,229,0.01);
+                }
+
+                #am-helper-panel,
+                #am-magic-report-popup,
+                #alimama-escort-helper-ui,
+                #am-report-capture-panel,
+                #alimama-escort-helper-ui-result-overlay > div {
+                    font-family: var(--am26-font) !important;
+                    color: var(--am26-text) !important;
+                    backdrop-filter: blur(20px);
+                    -webkit-backdrop-filter: blur(20px);
+                    box-shadow: var(--am26-shadow) !important;
+                    border: 1px solid var(--am26-border) !important;
+                }
+
+                /* 悬浮球（最小化按钮） */
                 #am-helper-icon {
                     position: fixed; top: 120px; right: 20px; z-index: 999999;
-                    width: 40px; height: 40px; background: #fff; border-radius: 50%;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); cursor: pointer;
+                    width: 40px; height: 40px; border-radius: 50%;
+                    border: 1px solid var(--am26-border);
+                    background: var(--am26-surface-strong);
+                    backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
+                    box-shadow: var(--am26-shadow), var(--am26-glow);
+                    cursor: pointer;
                     display: flex; align-items: center; justify-content: center;
-                    color: #555; border: 1px solid #d9d9d9;
+                    color: var(--am26-primary);
                     transition: all 0.3s ease;
                 }
                 #am-helper-icon:hover { 
-                    transform: scale(1.1); 
-                    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-                    color: #333;
+                    transform: translateY(-1px) scale(1.08);
+                    border-color: var(--am26-border-strong);
+                    color: var(--am26-primary-strong);
+                    background: rgba(255,255,255,0.6);
                 }
 
-                /* 主面板 - 位置对齐悬浮球 灰色系 */
+                /* 主面板 */
                 #am-helper-panel {
                     position: fixed; top: 120px; right: 20px; z-index: 999999;
-                    background: #fff; border-radius: 8px; width: 280px; min-width: 250px; max-width: 500px;
-                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-                    font-family: -apple-system, system-ui, sans-serif; 
-                    border: 1px solid #d9d9d9;
+                    background: var(--am26-panel);
+                    border-radius: 18px;
+                    width: 280px; min-width: 250px; max-width: 500px;
                     opacity: 1; transform: scale(1); transform-origin: top right;
                     transition: opacity 0.3s ease, transform 0.3s ease, width 0.5s ease;
                     overflow: hidden;
@@ -818,77 +885,860 @@
                     opacity: 0; transform: scale(0.8); pointer-events: none;
                 }
 
-                /* 头部 灰色系 */
+                /* 头部 */
                 .am-header { 
-                    padding: 12px 15px; 
-                    border-bottom: 1px solid #e8e8e8; 
-                    background: linear-gradient(135deg, #fafafa, #f5f5f5);
+                    padding: 14px 18px; 
+                    border-bottom: 1px solid var(--am26-border); 
+                    background: rgba(255, 255, 255, 0.1);
                     display: flex; justify-content: space-between; align-items: center; 
                 }
                 .am-title { 
-                    font-weight: 600; font-size: 14px; color: #333;
-                    display: flex; align-items: center; gap: 6px;
+                    font-weight: 600; font-size: 15px; color: var(--am26-text);
+                    display: flex; align-items: center; gap: 8px;
+                    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
                 }
                 .am-version {
-                    font-size: 10px; color: #999; font-weight: normal;
+                    font-size: 10px; color: var(--am26-text-soft); font-weight: normal;
+                    background: rgba(255,255,255,0.3); padding: 1px 4px; border-radius: 6px;
                 }
+                .am-icon-btn { 
+                    cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
+                    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+                    border-radius: 8px; transition: all 0.2s;
+                }
+                .am-icon-btn:hover { background: rgba(255, 255, 255, 0.3); color: var(--am26-text); }
+                .am-icon-btn.danger:hover { background: rgba(234, 79, 79, 0.15); color: var(--am26-danger); }
+                
                 .am-close-btn { 
-                    cursor: pointer; color: #999; font-size: 14px; font-weight: bold;
-                    width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
-                    border-radius: 4px; transition: all 0.2s;
+                    cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
+                    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+                    border-radius: 8px; transition: all 0.2s;
                 }
-                .am-close-btn:hover { color: #ff4d4f; background: rgba(255,77,79,0.1); }
+                .am-close-btn:hover { background: rgba(255, 255, 255, 0.3); color: var(--am26-danger); }
 
-                /* 内容区 灰色系 */
-                .am-body { padding: 15px; }
-                .am-btn-group { 
-                    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; 
+                /* 内容区 */
+                .am-body { padding: 18px; }
+
+
+
+                .am-tools-row { display: flex; gap: 8px; margin-bottom: 8px; }
+                .am-tool-btn {
+                    flex: 1; text-align: center; padding: 12px 0; border-radius: 10px;
+                    background: var(--mx-number-report-brand-color1); 
+                    border: 1px solid rgba(0, 0, 0, 0.1);
+                    color: var(--am26-text-soft); font-size: 13px; font-weight: 500;
+                    cursor: pointer; transition: all 0.3s;
+                    display: flex; align-items: center; justify-content: center; gap: 6px;
                 }
-                .am-toggle-btn {
-                    text-align: center; font-size: 11px; padding: 8px 4px; border-radius: 6px; cursor: pointer;
-                    border: 1px solid #d9d9d9; background: #fff; color: #666; 
-                    transition: all 0.2s; font-weight: 500;
-                }
-                .am-toggle-btn:hover { border-color: #888; color: #333; }
-                .am-toggle-btn.active { 
-                    background: linear-gradient(135deg, #f0f0f0, #e8e8e8); 
-                    border-color: #666; color: #333; font-weight: 600; 
+                .am-tool-btn:hover {
+                    background: var(--mx-number-report-brand-color10); 
+                    border-color: var(--mx-number-report-brand-color);
+                    color: var(--mx-number-report-brand-color);
+                    box-shadow: 0 0 10px var(--mx-number-report-brand-color50); /* 亮灯效果 */
+                    transform: translateY(-1px);
                 }
 
-                /* 日志区 灰色系 */
-                .am-log-section { margin-top: 12px; }
+                .am-switches-grid {
+                    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+                }
+                .am-switch-btn {
+                    height: 36px; /* 固定高度 */
+                    text-align: center; font-size: 12px; border-radius: 10px;
+                    border: 1px solid #e0e0e0; /* 默认浅灰色边框 */
+                    background: rgba(255, 255, 255, 0.4);
+                    color: var(--am26-text-soft); cursor: pointer; transition: all 0.3s;
+                    display: flex; align-items: center; justify-content: center;
+                }
+                .am-switch-btn:hover {
+                    background: rgba(255, 255, 255, 0.8); 
+                    border-color: var(--mx-number-report-brand-color);
+                    box-shadow: 0 0 8px var(--mx-number-report-brand-color10); /* 亮灯效果 */
+                }
+                .am-switch-btn.active {
+                    background: var(--mx-number-report-brand-color10); 
+                    border-color: var(--mx-number-report-brand-color);
+                    color: var(--mx-number-report-brand-color); font-weight: 600;
+                    box-shadow: inset 0 0 4px var(--mx-number-report-brand-color10);
+                }
+
+                .am-campaign-id-token {
+                    display: inline;
+                }
+                .am-campaign-search-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-left: 2px;
+                    -webkit-appearance: none;
+                    appearance: none;
+                    border: 0;
+                    background: transparent;
+                    color: #a3adb8;
+                    line-height: 1;
+                    cursor: pointer;
+                    user-select: none;
+                    vertical-align: middle;
+                    padding: 0;
+                }
+                .am-campaign-search-btn svg {
+                    width: 11px;
+                    height: 11px;
+                    display: block;
+                    fill: currentColor;
+                    pointer-events: none;
+                }
+                
+                /* 算法护航弹窗居中 */
+                #alimama-escort-helper-ui {
+                    top: 50% !important; left: 50% !important;
+                    transform: translate(-50%, -50%) !important;
+                    max-height: 90vh; overflow-y: auto;
+                }
+
+                /* 日志区 */
+                .am-log-section { margin-top: 16px; }
                 .am-log-header { 
                     display: flex; justify-content: space-between; align-items: center;
-                    font-size: 11px; color: #666; margin-bottom: 6px; padding: 0 2px;
+                    font-size: 12px; color: var(--am26-text-soft); margin-bottom: 8px; padding: 0 4px;
                 }
                 .am-action-btn { 
-                    cursor: pointer; color: #666; margin-left: 10px; 
-                    padding: 2px 6px; border-radius: 4px; transition: all 0.2s;
+                    cursor: pointer; color: var(--am26-text-soft); margin-left: 10px; 
+                    padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
+                    background: rgba(255,255,255,0.2);
                 }
-                .am-action-btn:hover { background: #f0f0f0; color: #333; }
+                .am-action-btn:hover { background: rgba(255, 255, 255, 0.5); color: var(--am26-primary-strong); }
                 #am-log-content {
                     height: 100px; overflow-y: auto; 
-                    background: #fafafa; border: 1px solid #e8e8e8;
-                    border-radius: 6px; padding: 8px; font-size: 10px; color: #555;
-                    font-family: 'Monaco', 'Consolas', monospace;
+                    background: rgba(0, 0, 0, 0.03);
+                    border: 1px solid inset rgba(0,0,0,0.05);
+                    border-radius: 10px;
+                    padding: 10px;
+                    font-size: 11px;
+                    color: var(--am26-text);
+                    font-family: var(--am26-mono);
+                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
                     transition: all 0.3s ease;
                 }
                 #am-log-content.collapsed { height: 0; padding: 0; border: none; opacity: 0; }
                 .am-log-line { 
-                    padding: 2px 0; line-height: 1.5; 
-                    border-bottom: 1px dashed #e8e8e8;
+                    padding: 3px 0; line-height: 1.5; 
+                    border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
                 }
                 .am-log-line:last-child { border-bottom: none; }
-                .am-log-time { color: #999; margin-right: 6px; }
+                .am-log-time { color: rgba(0,0,0,0.4); margin-right: 6px; }
 
-                /* 拖拽调整宽度 灰色系 */
+                /* 拖拽调整宽度 */
                 .am-resizer-left {
                     position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
                     cursor: ew-resize; z-index: 10; transition: background 0.2s;
                 }
-                .am-resizer-left:hover { background: rgba(0, 0, 0, 0.1); }
+                .am-resizer-left:hover { background: rgba(42, 91, 255, 0.22); }
+
+                /* 报表捕获弹窗 */
+                #am-report-capture-panel {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    width: 340px;
+                    padding: 14px;
+                    border-radius: 12px;
+                    border: 1px solid var(--am26-border);
+                    background: var(--am26-panel-strong);
+                    color: var(--am26-text);
+                    z-index: 2147483647;
+                    display: none;
+                }
+                #am-report-capture-panel .am-download-header {
+                    margin-bottom: 10px;
+                    font-weight: 600;
+                    color: var(--am26-primary-strong);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                #am-report-capture-panel .am-download-source {
+                    color: var(--am26-text-soft);
+                    font-size: 10px;
+                }
+                #am-report-capture-panel .am-download-url {
+                    background: rgba(255, 255, 255, 0.60);
+                    border: 1px solid var(--am26-border);
+                    border-radius: 8px;
+                    margin-bottom: 12px;
+                    padding: 8px;
+                    word-break: break-all;
+                    font-size: 11px;
+                    color: var(--am26-text-soft);
+                    max-height: 56px;
+                    overflow: hidden;
+                }
+                #am-report-capture-panel .am-download-actions {
+                    display: flex;
+                    gap: 10px;
+                }
+                #am-report-capture-panel .am-download-link,
+                #am-report-capture-panel .am-download-btn {
+                    border: 1px solid transparent;
+                    border-radius: 8px;
+                    padding: 8px 0;
+                    text-align: center;
+                    cursor: pointer;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                }
+                #am-report-capture-panel .am-download-link {
+                    flex: 2;
+                    text-decoration: none;
+                    background: linear-gradient(135deg, var(--am26-primary), var(--am26-primary-strong));
+                    color: #fff;
+                }
+                #am-report-capture-panel .am-download-btn {
+                    background: rgba(255, 255, 255, 0.72);
+                    border-color: var(--am26-border);
+                    color: var(--am26-text-soft);
+                }
+                #am-report-capture-panel .am-download-btn:hover,
+                #am-report-capture-panel .am-download-link:hover {
+                    transform: translateY(-1px);
+                }
+                #am-report-capture-panel .am-download-copy { flex: 1; }
+                #am-report-capture-panel .am-download-close { flex: 0.5; }
+                #am-report-capture-panel .am-download-hint {
+                    margin-top: 8px;
+                    font-size: 10px;
+                    color: var(--am26-text-soft);
+                }
+
+                #am-magic-report-popup {
+                    background: var(--am26-panel-strong) !important;
+                }
+                #am-magic-report-popup .am-magic-header {
+                    background: rgba(255, 255, 255, 0.3) !important;
+                }
+
+                #alimama-escort-helper-ui [id$="-log-wrapper"] {
+                    background: rgba(255, 255, 255, 0.4) !important;
+                }
+                #alimama-escort-helper-ui input {
+                    background: rgba(255, 255, 255, 0.5) !important;
+                }
+                #alimama-escort-helper-ui .card-header {
+                    background: rgba(255, 255, 255, 0.4) !important;
+                }
+                #alimama-escort-helper-ui .card-body {
+                    background: rgba(255, 255, 255, 0.2) !important;
+                }
+
+                /* Mobile/Small screen adaptations */
+                @media (max-width: 1080px) {
+                    #am-magic-report-popup {
+                        width: min(96vw, 900px) !important;
+                        left: 50% !important;
+                        transform: translateX(-50%) !important;
+                    }
+                    #am-helper-panel,
+                    #alimama-escort-helper-ui {
+                        max-width: calc(100vw - 24px) !important;
+                    }
+                }
+
+                /* Native Style for Optimizer Trigger */
+                #am-trigger-optimizer {
+                    --line-height: 1.5;
+                    --font-size: 12px;
+                    --font-family: PingFangSC-Regular,PingFang SC,"Microsoft Yahei","SimHei",sans-serif;
+                    --font-number: Tahoma;
+                    --font-color: #333;
+                    --font-color-hover: #333;
+                    --font-color-active: var(--color-brand);
+                    --font-color-secondary: #666;
+                    --font-color-tip: #999;
+                    --anchor-font-color: #333;
+                    --app-nav-bg: #303a58;
+                    --app-bg: #f9f9f9;
+                    --app-min-width: 1418px;
+                    --color-brand: #4554e5;
+                    --color-brand-gradient: #4554e5;
+                    --color-brand-hover: #3325d4;
+                    --color-brand-hover-gradient: #3325d4;
+                    --color-brand-vs: #f5714d;
+                    --color-brand-light: rgba(69,84,229,.2);
+                    --color-brand-opacity: rgba(69,84,229,.1);
+                    --color-brand-text: #fff;
+                    --color-brand-text-hover: #fff;
+                    --color-brand-opacity5: rgba(69,84,229,.05);
+                    --color-brand-opacity10: rgba(69,84,229,.1);
+                    --color-brand-opacity20: rgba(69,84,229,.2);
+                    --color-brand-opacity50: rgba(69,84,229,.5);
+                    --color-bg: #f8f9fa;
+                    --color-bg-hover: var(--color-brand-opacity);
+                    --color-bg-active: var(--color-brand-opacity);
+                    --input-v-gap: 8px;
+                    --input-h-gap: 8px;
+                    --input-min-width: 64px;
+                    --input-height: 32px;
+                    --input-font-size: var(--font-size);
+                    --input-icon-size: 16px;
+                    --input-icon-gap: 4px;
+                    --border-radius: 8px;
+                    --input-small-v-gap: 8px;
+                    --input-small-h-gap: 8px;
+                    --input-small-min-width: 48px;
+                    --input-small-height: 24px;
+                    --input-small-font-size: var(--font-size);
+                    --input-small-icon-size: 12px;
+                    --input-small-icon-gap: 4px;
+                    --border-small-radius: 6px;
+                    --input-large-v-gap: 8px;
+                    --input-large-h-gap: 8px;
+                    --input-large-min-width: 80px;
+                    --input-large-height: 40px;
+                    --input-large-font-size: calc(var(--font-size) + 2px);
+                    --input-large-icon-size: 20px;
+                    --input-large-icon-gap: 4px;
+                    --border-large-radius: 10px;
+                    --input-gap-border: #e4e7f0;
+                    --bg-highlight: #f0f2f5;
+                    --border-highlight: #f0f2f5;
+                    --border-highlight-shadow: none;
+                    --bg-highlight-hover: #e4e7f0;
+                    --border-highlight-hover: #e4e7f0;
+                    --border-highlight-shadow-hover: none;
+                    --bg-highlight-active: #fff;
+                    --border-highlight-active-opacity: 0.5;
+                    --border-highlight-active: rgba(69,84,229,var(--border-highlight-active-opacity));
+                    --border-highlight-shadow-active-h: 0px;
+                    --border-highlight-shadow-active-v: 2px;
+                    --border-highlight-shadow-active-blur: 4px;
+                    --border-highlight-shadow-active-opacity: 0.2;
+                    --border-highlight-shadow-active: var(--border-highlight-shadow-active-h) var(--border-highlight-shadow-active-v) var(--border-highlight-shadow-active-blur) 0 rgba(69,84,229,var(--border-highlight-shadow-active-opacity));
+                    --output-bg: #fff;
+                    --output-color: var(--font-color,#333);
+                    --output-color-hover: var(--font-color-hover,#333);
+                    --output-color-active: var(--font-color-active,var(--color-brand));
+                    --output-small-v-gap: 8px;
+                    --output-small-h-gap: 16px;
+                    --output-small-border-radius: 8px;
+                    --output-v-gap: 16px;
+                    --output-h-gap: 24px;
+                    --output-border-radius: 24px;
+                    --output-large-v-gap: 24px;
+                    --output-large-h-gap: 24px;
+                    --output-large-border-radius: 16px;
+                    --output-small-offset: 8px;
+                    --output-small-item-max-height: 244px;
+                    --output-small-item-height: var(--input-small-height);
+                    --output-small-item-fontsize: 12px;
+                    --output-offset: 8px;
+                    --output-item-max-height: 312px;
+                    --output-item-height: var(--input-height);
+                    --output-item-fontsize: 12px;
+                    --output-large-offset: 8px;
+                    --output-large-item-max-height: 380px;
+                    --output-large-item-height: var(--input-large-height);
+                    --output-large-item-fontsize: 14px;
+                    --btn-brand: var(--color-brand);
+                    --btn-brand-gradient: var(--color-brand-gradient);
+                    --btn-brand-shadow: none;
+                    --btn-brand-text: var(--color-brand-text);
+                    --btn-brand-hover: var(--color-brand-hover);
+                    --btn-brand-gradient-hover: var(--color-brand-hover-gradient);
+                    --btn-brand-shadow-hover-h: 0px;
+                    --btn-brand-shadow-hover-v: 2px;
+                    --btn-brand-shadow-hover-blur: 10px;
+                    --btn-brand-shadow-hover-opacity: 0.4;
+                    --btn-brand-shadow-hover: var(--btn-brand-shadow-hover-h,0px) var(--btn-brand-shadow-hover-v,2px) var(--btn-brand-shadow-hover-blur,10px) 0 rgba(69,84,229,var(--btn-brand-shadow-hover-opacity,0.4));
+                    --btn-brand-text-hover: var(--color-brand-text-hover);
+                    --btn-border: #e4e7f0;
+                    --btn-bg: #fff;
+                    --btn-text: #333;
+                    --btn-border-hover: rgba(69,84,229,.5);
+                    --btn-bg-hover: #fff;
+                    --btn-text-hover: var(--color-brand);
+                    --btn-h-gap: 12px;
+                    --btn-min-width: var(--input-min-width);
+                    --btn-font-size: var(--input-font-size);
+                    --btn-border-radius: 500px;
+                    --btn-small-h-gap: 12px;
+                    --btn-small-min-width: var(--input-small-min-width);
+                    --btn-small-font-size: var(--input-small-font-size);
+                    --btn-small-border-radius: 500px;
+                    --btn-large-h-gap: 12px;
+                    --btn-large-min-width: var(--input-large-min-width);
+                    --btn-large-font-size: var(--input-large-font-size);
+                    --btn-large-border-radius: 500px;
+                    --btn-font-weight: normal;
+                    --btn-small-font-weight: normal;
+                    --btn-large-font-weight: normal;
+                    --color-border: #e4e7f0;
+                    --color-warn: #ffa53d;
+                    --color-red: #ff4d4d;
+                    --color-green: #08bf81;
+                    --color-blue: #6a76ea;
+                    --duration: 0.2s;
+                    --mx-text-placeholder: #999;
+                    --mx-trigger-color: var(--font-color,#333);
+                    --mx-trigger-color-hover: var(--font-color,#333);
+                    --mx-trigger-color-active: var(--font-color,#333);
+                    --mx-trigger-tag-bg: #fff;
+                    --mx-trigger-tag-color: #333;
+                    --mx-trigger-tag-arrow-color: #999;
+                    --mx-trigger-tag-bg-hover: #fff;
+                    --mx-trigger-tag-color-hover: #333;
+                    --mx-trigger-tag-arrow-color-hover: #999;
+                    --mx-trigger-tag-bg-active: var(--color-brand-opacity);
+                    --mx-trigger-tag-color-active: #333;
+                    --mx-trigger-tag-arrow-color-active: #999;
+                    --mx-trigger-tag-height: calc(var(--input-height) - 8px);
+                    --mx-trigger-arrow-size: 16px;
+                    --mx-trigger-arrow-color: #999;
+                    --mx-trigger-arrow-color-hover: #666;
+                    --mx-trigger-arrow-color-active: #666;
+                    --mx-trigger-prefix-icon: #666;
+                    --mx-trigger-prefix-text: #666;
+                    --mx-comp-disabled-opacity: 0.4;
+                    --mx-comp-expand-amin-color: var(--color-brand);
+                    --mx-comp-expand-amin-timer: 300ms;
+                    --mx-comp-expand-amin-ease: ease-out;
+                    --mx-grid-bg: #fff;
+                    --mx-grid-body-v-top: var(--output-v-gap,16px);
+                    --mx-grid-body-v-bottom: var(--output-v-gap,16px);
+                    --mx-grid-border-radius: var(--output-border-radius,24px);
+                    --mx-grid-h-gap: var(--output-h-gap,24px);
+                    --mx-grid-title-bg: transparent;
+                    --mx-grid-title-v-gap: 16px;
+                    --mx-grid-title-font-size: 16px;
+                    --mx-grid-title-font-weight: bold;
+                    --mx-grid-title-color-border: var(--color-border);
+                    --mx-grid-title-link-font-size: 12px;
+                    --mx-grid-title-link-color: var(--color-brand);
+                    --mx-grid-title-link-color-hover: var(--color-brand-hover);
+                    --mx-grid-shadow: 0 4px 10px 0 hsla(16,7%,67%,.2);
+                    --mx-grid-gap: 16px;
+                    --mx-checkbox-size: 14px;
+                    --mx-checkbox-border-radius: 4px;
+                    --mx-checkbox-border: #dde1eb;
+                    --mx-checkbox-bg: #fff;
+                    --mx-checkbox-shadow: none;
+                    --mx-checkbox-border-hover: #dde1eb;
+                    --mx-checkbox-shadow-hover: 0 0 4px 0 rgba(0,0,0,.16);
+                    --mx-checkbox-bg-hover: #fff;
+                    --mx-table-font-size: var(--font-size);
+                    --mx-table-ceil-h-gap: 8px;
+                    --mx-table-ceil-v-gap: 12px;
+                    --mx-table-ceil-small-h-gap: 4px;
+                    --mx-table-ceil-small-v-gap: 4px;
+                    --mx-table-ceil-large-h-gap: 24px;
+                    --mx-table-ceil-large-v-gap: 24px;
+                    --mx-table-ceil-text-align: left;
+                    --mx-table-ceil-vertical-align: middle;
+                    --mx-table-ceil-font-color: #333;
+                    --mx-table-head-line-number: 2;
+                    --mx-table-head-border: 1px solid var(--color-border);
+                    --mx-table-head-height: 60px;
+                    --mx-table-head-small-height: 40px;
+                    --mx-table-head-large-height: 80px;
+                    --mx-table-head-group-height: 80px;
+                    --mx-table-head-bg: #fff;
+                    --mx-table-head-font-size: 12px;
+                    --mx-table-head-font-color: #333;
+                    --mx-table-head-font-weight: bold;
+                    --mx-table-hover-bg: #f8f9fa;
+                    --mx-table-hover-oper-bg: #e4e7f0;
+                    --mx-table-scrollbar-bg: #333;
+                    --mx-effects-card-color-bg: #fff;
+                    --mx-effects-card-title-font-size: 18px;
+                    --mx-effects-card-sub-title-font-size: 14px;
+                    --mx-effects-card-tip-font-size: 12px;
+                    --mx-effects-card-color-border: var(--color-border);
+                    --mx-effects-card-shadow: 0 1px 4px 0 hsla(0,0%,73%,.5);
+                    --mx-effects-tag-mode: opacity;
+                    --mx-effects-tag-height: 16px;
+                    --mx-effects-tag-border-radius: calc(var(--mx-effects-tag-height, 16px)/2);
+                    --mx-effects-tag-h-gap: 6px;
+                    --mx-effects-tag-font-size: 20px;
+                    --mx-effects-tag-font-scale: 0.5;
+                    --mx-effects-large-tag-height: 18px;
+                    --mx-effects-large-tag-border-radius: calc(var(--mx-effects-large-tag-height, 16px)/2);
+                    --mx-effects-large-tag-h-gap: 8px;
+                    --mx-effects-large-tag-font-size: 12px;
+                    --mx-effects-large-tag-font-scale: 1;
+                    --mx-effects-notice-border-radius: var(--border-radius);
+                    --mx-effects-notice-v-gap: 8px;
+                    --mx-effects-notice-h-gap: var(--output-h-gap,24px);
+                    --mx-effects-notice-fontsize: 12px;
+                    --mx-effects-notice-line-height: 20px;
+                    --mx-effects-notice-round-height: 40px;
+                    --mx-effects-progress-height: 6px;
+                    --mx-effects-progress-num-height: 24px;
+                    --mx-effects-progress-bg: #e4e7f0;
+                    --mx-dialog-text-align: left;
+                    --mx-dialog-color-bg: #e8ebf2;
+                    --mx-dialog-shadow: 0 2px 10px 0 rgba(0,0,0,.16);
+                    --mx-dialog-body-border-color: 0 none;
+                    --mx-tabs-line-item-gap: 16px;
+                    --mx-tabs-line-v-gap: var(--mx-grid-title-v-gap);
+                    --mx-tabs-line-h-gap: 12px;
+                    --mx-tabs-line-font-size: var(--mx-grid-title-font-size,16px);
+                    --mx-tabs-line-font-weight: 500;
+                    --mx-tabs-line-small-v-gap: calc(var(--mx-grid-title-v-gap)/2);
+                    --mx-tabs-line-small-h-gap: 12px;
+                    --mx-tabs-line-small-font-size: 12px;
+                    --mx-tabs-line-small-font-weight: 500;
+                    --mx-tabs-line-border-color: var(--color-border);
+                    --mx-tabs-line-color: #333;
+                    --mx-tabs-line-color-hover: var(--color-brand);
+                    --mx-tabs-line-color-active: var(--color-brand);
+                    --mx-tabs-line-bg-hover: var(--color-brand-opacity);
+                    --mx-tabs-box-bg: var(--bg-highlight);
+                    --mx-tabs-box-bg-hover: var(--bg-highlight-hover);
+                    --mx-tabs-box-bg-active: var(--color-brand-opacity);
+                    --mx-tabs-box-border: var(--border-highlight);
+                    --mx-tabs-box-border-hover: var(--border-highlight-hover);
+                    --mx-tabs-box-border-active: var(--border-highlight-active);
+                    --mx-tabs-box-color: #666;
+                    --mx-tabs-box-color-hover: #333;
+                    --mx-tabs-box-color-active: var(--color-brand);
+                    --mx-tabs-box-arrow: #999;
+                    --mx-tabs-box-arrow-hover: #666;
+                    --mx-tabs-box-arrow-active: var(--color-brand);
+                    --mx-tabs-box-discrete-gap: 8px;
+                    --mx-large-block-outer-gap: 16px;
+                    --mx-large-block-v-gap: 12px;
+                    --mx-large-block-h-gap: 12px;
+                    --mx-large-block-line-height: 18px;
+                    --mx-large-block-bg: transparent;
+                    --mx-large-block-bg-hover: transparent;
+                    --mx-large-block-bg-active: var(--color-brand-opacity5,var(--color-brand-opacity));
+                    --mx-large-block-border: var(--color-border);
+                    --mx-large-block-border-hover: var(--border-highlight-active);
+                    --mx-large-block-border-active: var(--border-highlight-active);
+                    --mx-tabs-menu-line-color: #c3c9d9;
+                    --mx-tabs-menu-width: 160px;
+                    --mx-tabs-menu-height: var(--input-height);
+                    --mx-tabs-menu-padding-gap: 12px;
+                    --mx-tabs-menu-margin-gap: 8px;
+                    --mx-tabs-menu-icon-size: 16px;
+                    --mx-tabs-menu-hover-color: var(--color-brand);
+                    --mx-tabs-menu-hover-bg: var(--color-brand-opacity);
+                    --mx-tabs-menu-hover-shadow: 0 none;
+                    --mx-tabs-menu-selected-color: #fff;
+                    --mx-tabs-menu-selected-bg: var(--color-brand);
+                    --mx-tabs-menu-selected-shadow: var(--border-highlight-shadow-active);
+                    --mx-popover-v-gap: var(--input-v-gap);
+                    --mx-popover-h-gap: var(--input-h-gap);
+                    --mx-popover-arrow-size: 8px;
+                    --mx-popover-arrow-gap: 24px;
+                    --mx-popover-bg: var(--output-bg,#fff);
+                    --mx-popover-color: var(--output-color,var(--font-color,#333));
+                    --mx-popover-color-border: var(--color-border);
+                    --mx-popover-shaodow: 0 4px 8px 0 rgba(0,0,0,.06);
+                    --mx-pagination-align: left;
+                    --mx-switch-width: 36px;
+                    --mx-switch-height: 20px;
+                    --mx-switch-icon-size: 14px;
+                    --mx-switch-border-radius: 10px;
+                    --mx-header-other-height: 48px;
+                    --mx-header-menu-height: 58px;
+                    --mx-carousel-zindex: 3;
+                    --mx-carousel-triggers-size: 24px;
+                    --mx-carousel-triggers-fontsize: 16px;
+                    --mx-carousel-trigger-color: #fff;
+                    --mx-carousel-trigger-bg: #dde1eb;
+                    --mx-carousel-trigger-gap: 8px;
+                    --mx-carousel-line-size: 16px;
+                    --mx-carousel-dot-size: 8px;
+                    --mx-main-nav-v-gap: 16px;
+                    --mx-main-nav-h-gap: 16px;
+                    --mx-main-nav-footer-height: 80px;
+                    --mx-main-nav-info-width: 240px;
+                    --mx-grey-box-border: #e4e7f0;
+                    --mx-grey-box-bg: #f8f9fa;
+                    --mx-grey-box-border-hover: var(--color-brand-opacity50,var(--color-brand));
+                    --mx-grey-box-bg-hover: #f0f2f5;
+                    --mx-market-color: #f257a8;
+                    --mx-market-color-gradient: #ff0036;
+                    --mx-market-color-border: #fcd5e5;
+                    --mx-market-color-bg: #fff5f8;
+                    --mx-market-color-hover: #df2e8b;
+                    --mx-market-color-hover-gradient: #e80c20;
+                    --mx-market-color-hover-border: #fcd5e5;
+                    --mx-market-color-hover-bg: #fee3eb;
+                    --mx-market-color-bg5: linear-gradient(135deg,#fff2f5,#fef6fa);
+                    --mx-market-color-bg10: linear-gradient(135deg,#ffe6eb,#fdeef6);
+                    --mx-mask-black: rgba(0,0,0,.6);
+                    --mx-mask-white: hsla(0,0%,100%,.6);
+                    --mx-mask-backdrop-filter: blur(2px);
+                    --mx-ai-color: #33f;
+                    --mx-ai-color-gradient: #93f;
+                    --mx-ai-color-anim: #3cf;
+                    --mx-ai-color-hover: #0c0cff;
+                    --mx-ai-color-hover-gradient: #850cff;
+                    --mx-ai-color-hover-anim: #0cc2ff;
+                    --mx-ai-color-line-width-number: 2;
+                    --mx-ai-color100: #33f;
+                    --mx-ai-color90: #4747ff;
+                    --mx-ai-color80: #5b5bff;
+                    --mx-ai-color70: #7070ff;
+                    --mx-ai-color60: #8484ff;
+                    --mx-ai-color50: #99f;
+                    --mx-ai-color40: #adadff;
+                    --mx-ai-color30: #c1c1ff;
+                    --mx-ai-color20: #d6d6ff;
+                    --mx-ai-color10: #eaeaff;
+                    --mx-ai-color5: #f4f4ff;
+                    --mx-ai-color-gradient100: #93f;
+                    --mx-ai-color-gradient90: #a347ff;
+                    --mx-ai-color-gradient80: #ad5bff;
+                    --mx-ai-color-gradient70: #b770ff;
+                    --mx-ai-color-gradient60: #c184ff;
+                    --mx-ai-color-gradient50: #c9f;
+                    --mx-ai-color-gradient40: #d6adff;
+                    --mx-ai-color-gradient30: #e0c1ff;
+                    --mx-ai-color-gradient20: #ead6ff;
+                    --mx-ai-color-gradient10: #f4eaff;
+                    --mx-ai-color-gradient5: #f9f4ff;
+                    --mx-ai-color-anim100: #3cf;
+                    --mx-ai-color-anim90: #47d1ff;
+                    --mx-ai-color-anim80: #5bd6ff;
+                    --mx-ai-color-anim70: #70dbff;
+                    --mx-ai-color-anim60: #84e0ff;
+                    --mx-ai-color-anim50: #99e5ff;
+                    --mx-ai-color-anim40: #adeaff;
+                    --mx-ai-color-anim30: #c1efff;
+                    --mx-ai-color-anim20: #d6f4ff;
+                    --mx-ai-color-anim10: #eaf9ff;
+                    --mx-ai-color-anim5: #f4fcff;
+                    --mx-ai-color-line: linear-gradient(135deg,#33f,#3cf,#93f);
+                    --mx-ai-color-line100: linear-gradient(135deg,#33f,#3cf,#93f);
+                    --mx-ai-color-line90: linear-gradient(135deg,#4747ff,#47d1ff,#a347ff);
+                    --mx-ai-color-line80: linear-gradient(135deg,#5b5bff,#5bd6ff,#ad5bff);
+                    --mx-ai-color-line70: linear-gradient(135deg,#7070ff,#70dbff,#b770ff);
+                    --mx-ai-color-line60: linear-gradient(135deg,#8484ff,#84e0ff,#c184ff);
+                    --mx-ai-color-line50: linear-gradient(135deg,#99f,#99e5ff,#c9f);
+                    --mx-ai-color-line40: linear-gradient(135deg,#adadff,#adeaff,#d6adff);
+                    --mx-ai-color-line30: linear-gradient(135deg,#c1c1ff,#c1efff,#e0c1ff);
+                    --mx-ai-color-line20: linear-gradient(135deg,#d6d6ff,#d6f4ff,#ead6ff);
+                    --mx-ai-color-line10: linear-gradient(135deg,#eaeaff,#eaf9ff,#f4eaff);
+                    --mx-ai-color-line5: linear-gradient(135deg,#f4f4ff,#f4fcff,#f9f4ff);
+                    --mx-ai-color-bg: linear-gradient(135deg,#33f,#3cf,#93f);
+                    --mx-ai-color-bg100: linear-gradient(135deg,#33f,#3cf,#93f);
+                    --mx-ai-color-bg90: linear-gradient(135deg,#4747ff,#47d1ff,#a347ff);
+                    --mx-ai-color-bg80: linear-gradient(135deg,#5b5bff,#5bd6ff,#ad5bff);
+                    --mx-ai-color-bg70: linear-gradient(135deg,#7070ff,#70dbff,#b770ff);
+                    --mx-ai-color-bg60: linear-gradient(135deg,#8484ff,#84e0ff,#c184ff);
+                    --mx-ai-color-bg50: linear-gradient(135deg,#99f,#99e5ff,#c9f);
+                    --mx-ai-color-bg40: linear-gradient(135deg,#adadff,#adeaff,#d6adff);
+                    --mx-ai-color-bg30: linear-gradient(135deg,#c1c1ff,#c1efff,#e0c1ff);
+                    --mx-ai-color-bg20: linear-gradient(135deg,#d6d6ff,#d6f4ff,#ead6ff);
+                    --mx-ai-color-bg10: linear-gradient(135deg,#eaeaff,#eaf9ff,#f4eaff);
+                    --mx-ai-color-bg5: linear-gradient(135deg,#f4f4ff,#f4fcff,#f9f4ff);
+                    --mx-ai-color-bg-primary: linear-gradient(135deg,#eaeaff,#eaf9ff,#f4eaff);
+                    --mx-ai-color-bg-secondary: linear-gradient(135deg,#f4f4ff,#f4fcff,#f9f4ff);
+                    --mx-ai-color-line-primary: linear-gradient(135deg,#33f,#3cf,#93f);
+                    --mx-ai-color-line-secondary: linear-gradient(135deg,#d6d6ff,#d6f4ff,#ead6ff);
+                    --mx-ai-color-line-width: 2px;
+                    --app-brand: var(--color-brand);
+                    --app-brand-gradient: var(--color-brand-gradient);
+                    --mx-grid-shadow-hover: var(--mx-grid-shadow);
+                    --mx-checkbox-color: var(--mx-checkbox-border);
+                    --mx-checkbox-hover-color: var(--mx-checkbox-border-hover);
+                    --mx-checkbox-hover-shadow: var(--mx-checkbox-shadow-hover);
+                    --mx-tag-mode: var(--mx-effects-tag-mode);
+                    --mx-tag-height: var(--mx-effects-tag-height);
+                    --mx-tag-border-radius: var(--mx-effects-tag-border-radius);
+                    --mx-tag-h-gap: var(--mx-effects-tag-h-gap);
+                    --mx-tag-font-size: var(--mx-effects-tag-font-size);
+                    --mx-tag-font-scale: var(--mx-effects-tag-font-scale);
+                    --mx-input-gap-border: var(--input-gap-border);
+                    --mx-effects-card-v-gap: var(--output-large-v-gap);
+                    --mx-effects-card-h-gap: var(--output-large-h-gap);
+                    --mx-effects-card-radius: var(--output-large-border-radius);
+                    --mx-tab-box-gap-border: var(--input-gap-border);
+                    --mx-tab-box-bg: var(--mx-tabs-box-bg);
+                    --mx-tab-box-bg-active: var(--mx-tabs-box-bg-active);
+                    --mx-tab-box-border: var(--mx-tabs-box-border);
+                    --mx-tab-box-border-active: var(--mx-tabs-box-border-active);
+                    --mx-tab-box-color: var(--mx-tabs-box-color);
+                    --mx-tab-box-color-hover: var(--mx-tabs-box-color-hover);
+                    --mx-tab-box-color-active: var(--mx-tabs-box-color-active);
+                    --mx-tab-v-gap: var(--mx-tabs-line-v-gap);
+                    --mx-tab-h-gap: var(--mx-tabs-line-h-gap);
+                    --mx-tab-first-h-gap: var(--mx-grid-h-gap,24px);
+                    --mx-tab-font-size: var(--mx-tabs-line-font-size);
+                    --mx-tab-font-weight: var(--mx-tabs-line-font-weight);
+                    --mx-tab-border-color: var(--mx-tabs-line-border-color);
+                    --mx-tab-color: var(--mx-tabs-line-color);
+                    --mx-tab-color-hover: var(--mx-tabs-line-color-hover);
+                    --mx-tab-color-active: var(--mx-tabs-line-color-active);
+                    --mx-tab-box-arrow-bg: var(--mx-tabs-box-arrow);
+                    --mx-tab-box-arrow-bg-hover: var(--mx-tabs-box-arrow-hover);
+                    --mx-tab-box-arrow-bg-active: var(--mx-tabs-box-arrow-active);
+                    --mx-trigger-v-gap: var(--input-v-gap);
+                    --mx-trigger-h-gap: var(--input-h-gap);
+                    --mx-trigger-min-width: var(--input-min-width);
+                    --mx-trigger-font-size: var(--input-font-size);
+                    --mx-trigger-small-v-gap: var(--input-small-v-gap);
+                    --mx-trigger-small-h-gap: var(--input-small-h-gap);
+                    --mx-trigger-small-min-width: var(--input-small-min-width);
+                    --mx-trigger-small-font-size: var(--input-small-font-size);
+                    --mx-trigger-large-v-gap: var(--input-large-v-gap);
+                    --mx-trigger-large-h-gap: var(--input-large-h-gap);
+                    --mx-trigger-large-min-width: var(--input-large-min-width);
+                    --mx-trigger-large-font-size: var(--input-large-font-size);
+                    --mx-trigger-output-gap: var(--output-offset);
+                    --mx-trigger-output-height: var(--output-item-height);
+                    --mx-comp-v-gap: var(--output-v-gap);
+                    --mx-comp-h-gap: var(--output-h-gap);
+                    --mx-comp-shadow: var(--mx-dialog-shadow);
+                    --mx-custom-layout-width: 80px;
+                    --mx-custom-layout-h-gap: 16px;
+                    --mx-custom-layout-v-gap: 16px;
+                    --mx-custom-layout-icon-width: 32px;
+                    --mx-custom-layout-icon-height: 32px;
+                    --am26-font: "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+                    --am26-mono: "SF Mono", "JetBrains Mono", "Menlo", "Monaco", "Consolas", monospace;
+                    --am26-text: #1b2438;
+                    --am26-text-soft: #505a74;
+                    --am26-border: rgba(255, 255, 255, 0.4);
+                    --am26-border-strong: rgba(255, 255, 255, 0.6);
+                    --am26-surface: rgba(255, 255, 255, 0.25);
+                    --am26-surface-strong: rgba(255, 255, 255, 0.45);
+                    --am26-panel: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+                    --am26-panel-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2));
+                    --am26-primary: #2a5bff;
+                    --am26-primary-strong: #1d3fcf;
+                    --am26-primary-soft: rgba(42, 91, 255, 0.15);
+                    --am26-success: #0ea86f;
+                    --am26-warning: #e8a325;
+                    --am26-danger: #ea4f4f;
+                    --am26-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+                    --am26-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+                    --mux-comp-disabled-opacity: 0.4;
+                    --mux-comp-v-gap: 16px;
+                    --mux-comp-h-gap: 24px;
+                    --mux-comp-shadow: 0 2px 10px 0 rgba(0,0,0,0.16);
+                    --mux-comp-shadow-border: 0 none;
+                    --mux-comp-btn-gap: 8px;
+                    --mux-trigger-tag-gap: 2px;
+                    --mux-trigger-tag-height: calc(var(--input-height) - var(--mux-trigger-tag-gap)*4 - 2px);
+                    --mux-trigger-tag-bg: #fff;
+                    --mux-trigger-tag-bg-hover: #fff;
+                    --mux-trigger-tag-bg-active: var(--color-brand-opacity);
+                    --mux-trigger-tag-arrow-color: #999;
+                    --mux-trigger-tag-arrow-color-hover: #666;
+                    --mux-trigger-input-placeholder-color: #999;
+                    --mux-trigger-prefix-icon: #666;
+                    --mux-trigger-prefix-text: #666;
+                    --mux-trigger-arrow-size: 16px;
+                    --mux-trigger-arrow-color: #333;
+                    --mux-trigger-arrow-color-hover: #333;
+                    --mux-trigger-v-gap: 8px;
+                    --mux-trigger-h-gap: 8px;
+                    --mux-trigger-min-width: var(--btn-min-width);
+                    --mux-trigger-font-size: var(--btn-font-size);
+                    --mux-trigger-small-v-gap: 8px;
+                    --mux-trigger-small-h-gap: 8px;
+                    --mux-trigger-small-min-width: var(--btn-small-min-width);
+                    --mux-trigger-small-font-size: var(--btn-small-font-size);
+                    --mux-trigger-large-v-gap: 8px;
+                    --mux-trigger-large-h-gap: 12px;
+                    --mux-trigger-large-min-width: var(--btn-large-min-width);
+                    --mux-trigger-large-font-size: var(--btn-large-font-size);
+                    --mux-table-hover-color: #f5f6f8;
+                    --mux-table-hover-expanded-row-bg: #eaecf1;
+                    --mux-table-border-color: #dfdfdf;
+                    --mux-table-size--large: 100px;
+                    --mux-table-size--normal: 60px;
+                    --mux-table-size--small: 40px;
+                    --mux-table-expanded-row-height: 40px;
+                    --mux-table-header-height--small: 50px;
+                    --mux-table-header-background: #fff;
+                    --mux-radio-color: #dadadb;
+                    --mux-radio-shadow-color: rgba(0,0,0,0.16);
+                    --mux-radio-gap: 8px;
+                    --mux-checkbox-color: #9095a1;
+                    --mux-checkbox-size: calc(var(--font-size) + 2px);
+                    --mux-checkbox-border-radius: 4px;
+                    --mux-tag-font-scale: 0.84;
+                    --mux-nav-icon-gap: 12px;
+                    --mux-nav-h-gap: 24px;
+                    --mux-mask-bg: rgba(0,0,0,0.6);
+                    --mux-mask-light-bg: hsla(0,0%,100%,0.6);
+                    --mux-statistic-font-size-integer: 20px;
+                    --mux-statistic-font-size-decimal: 14px;
+                    --mux-field-color-error: var(--color-red);
+                    --mux-field-color-warning: var(--color-warn);
+                    --mux-field-color-success: var(--color-green);
+                    --mux-field-color-highlight: var(--color-brand);
+                    --mux-field-color-initial: transparent;
+                    --mux-common-bg: transparent;
+                    --mux-btn-h-gap: 12px;
+                    --mux-process-color-success: var(--color-green);
+                    --mux-process-color-suspend: var(--color-warn);
+                    --mux-process-color-error: var(--color-red);
+                    --color-brand-alpha-10: rgba(62,62,255,0.1);
+                    --color-brand-alpha-50: rgba(62,62,255,0.5);
+                    --color-brand-btn-shadow-hover: 0 2px 10px 0 rgba(62,62,255,0.4);
+                    --border-huge-radius: 16px;
+                    --border-highlight-active-error: rgba(237,0,0,0.5);
+                    --border-highlight-shadow-active-error: 0 2px 4px 0 rgba(237,0,0,0.2);
+                    --border-highlight-active-warning: rgba(255,136,0,0.5);
+                    --border-highlight-shadow-active-warning: 0 2px 4px 0 rgba(255,136,0,0.2);
+                    --border-highlight-active-success: rgba(0,175,116,0.5);
+                    --border-highlight-shadow-active-success: 0 2px 4px 0 rgba(0,175,116,0.2);
+                    --btn-error: #f44;
+                    --btn-error-gradient: #f44;
+                    --btn-error-text: #fff;
+                    --btn-error-hover: #cc0909;
+                    --btn-error-gradient-hover: #cc0909;
+                    --btn-error-shadow-hover: 0 2px 10px 0 rgba(255,68,68,0.4);
+                    --btn-error-text-hover: #fff;
+                    --btn-error-border: #cf1c1c;
+                    --btn-error-bg: #ffecec;
+                    --btn-error-border-hover: #fd9b9b;
+                    --btn-error-bg-hover: #fedadb;
+                    --color-orange: #f50;
+                    --color-gray: rgba(0,0,0,0.25);
+                    --color-red-weaken: #c9817b;
+                    --mux-ai-brand--color: #ae5cff;
+                    --mux-ai-brand-gradient-color: #5c5cff;
+                    --mux-ai-brand-gradient-tl-br: linear-gradient(135deg,#5c5cff,#ae5cff 95%);
+                    --mux-ai-brand-gradient-tl-br-dark: linear-gradient(135deg,#3e3eff,#93f 95%);
+                    --mux-ai-brand-gradient-tl-br-light: linear-gradient(135deg,#ebd7ff,#d7d7ff);
+                    --mux-ai-brand-gradient-tl-br-slight: linear-gradient(117deg,#ececff,#e9fbff 48%,#f4eaff);
+                    --mux-ai-brand-gradient-tl-br-lighter: linear-gradient(135deg,#f5f5ff,#f5fdff 50%,#faf5ff);
+                    --mux-ai-brand-gradient-l-r-dark: linear-gradient(90deg,#3e3eff 5%,#93f 95%);
+                    --mux-ai-brand-gradient-line: linear-gradient(135deg,#3e3eff,#1dd3ff,#8e28ff);
+                    --mux-marketing-brand-color: #ff0036;
+                    --mux-marketing-brand-gradient-color: #f257a8;
+                    --mux-marketing-brand-gradient-t-b: linear-gradient(180deg,#f257a8 0,#ff0036);
+                    --mux-marketing-brand-gradient-t-b-dark: linear-gradient(180deg,#df2e8b 0,#e80c20);
+                    --mux-marketing-brand-gradient-t-b-light: linear-gradient(180deg,#fff,#ffccd7);
+                    --mux-marketing-brand-gradient-t-b-lighter: linear-gradient(180deg,#fff,#ffe6eb);
+                    --mux-marketing-brand-gradient-l-r: linear-gradient(90deg,#f257a8 0,#ff0036);
+                    --mux-marketing-brand-gradient-l-r-dark: linear-gradient(90deg,#df2e8b 0,#e80c20);
+                    --mux-marketing-brand-gradient-tl-br-light: linear-gradient(135deg,#ffe6eb,#fdeef6);
+                    --mux-marketing-brand-gradient-tl-br-lighter: linear-gradient(135deg,#fff2f5,#fef6fa);
+                    --mx-color-width: 224px;
+                    --mx-color-slider-width: 18px;
+                    --mx-color-picker-width: calc(var(--mx-color-width) - var(--mx-color-slider-width) - 10px);
+                    -webkit-font-smoothing: antialiased;
+                    color: var(--font-color,#333);
+                    font-family: var(--font-family);
+                    font-size: var(--font-size);
+                    line-height: var(--line-height);
+                    box-sizing: inherit;
+                    -webkit-appearance: none;
+                    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+                    outline: none;
+                    bottom: 0;
+                    position: relative;
+                    width: 100%;
+                }
             `;
             const style = document.createElement('style');
+            style.id = 'am-helper-pro-v26-style';
             style.textContent = css;
             document.head.appendChild(style);
         },
@@ -900,39 +1750,53 @@
                     <svg viewBox="0 0 1024 1024" width="22" height="22" fill="currentColor"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
                 </div>
                 <div id="am-helper-panel">
-                    <div class="am-resizer-left"></div>
-                    <div class="am-header">
-                        <span class="am-title">
-                            <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor" style="margin-right:4px;"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
-                            阿里助手 Pro
-                            <span class="am-version">v${CURRENT_VERSION}</span>
-                        </span>
-                        <div class="am-close-btn" title="最小化">−</div>
+            <div class="am-resizer-left"></div>
+            <div class="am-header">
+                <span class="am-title">
+                    <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor" style="margin-right:4px;"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
+                    阿里助手 Pro
+                    <span class="am-version">v${CURRENT_VERSION}</span>
+                </span>
+                <div class="am-close-btn" title="最小化">
+                    <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                </div>
+            </div>
+            <div class="am-body">
+                <!-- Section 1: Tools -->
+                <div class="am-tools-row">
+                    <div class="am-tool-btn" id="am-trigger-optimizer">
+                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M907.8 770.1c-60-96.1-137.9-178.6-227.1-241.6 8.3-43.1 7.1-88.9-5-131-29.2-101.5-121.1-177.3-227.5-188.9-10.4-1.2-18.7 8.3-15.3 18.2 24.5 70.3 5.4 152.1-51.5 209-56.9 56.9-138.7 76-209 51.5-9.9-3.4-19.4 4.8-18.2 15.3 11.6 106.4 87.4 198.3 188.9 227.5 42.1 12.1 87.9 13.3 131 5 63.1 89.2 145.5 167.1 241.6 227.1 21.6 13.5 49.3-3.9 46.2-28.7l-12.7-106.3c10.3 3.6 21 6.1 31.9 7.4 35.7 4.2 71.3-7.5 99.2-35.4 27.9-27.9 39.6-63.5 35.4-99.2-1.3-10.9-3.8-21.6-7.4-31.9l106.3 12.7c24.9 3.1 42.3-24.6 28.7-46.2zM512 512c-23.7 0-46.3-5-67.4-14.1-18.4-7.9-19-33.3-1-42.3 22.1-11 47.9-16.1 74.5-13.2 59.8 6.5 106.9 53.6 113.4 113.4 2.9 26.6-2.2 52.4-13.2 74.5-9 18-34.4 17.4-42.3-1-9.1-21.1-14.1-43.7-14.1-67.4z"></path></svg>
+                        算法护航
                     </div>
-                    <div class="am-body">
-                        <div class="am-btn-group">
-                            <div class="am-toggle-btn" data-key="showCost">询单成本</div>
-                            <div class="am-toggle-btn" data-key="showCartCost">加购成本</div>
-                            <div class="am-toggle-btn" data-key="showPercent">潜客占比</div>
-                            <div class="am-toggle-btn" data-key="showCostRatio">花费占比</div>
-                            <div class="am-toggle-btn" data-key="showBudget">预算进度</div>
-                            <div class="am-toggle-btn" data-key="autoSortCharge">花费排序</div>
-                            <div class="am-toggle-btn" data-key="autoClose">弹窗速闭</div>
-                            <div class="am-toggle-btn" id="am-trigger-optimizer" style="background:#f0f5ff;color:#2f54eb;border:1px solid #adc6ff;">算法护航</div>
-                        </div>
-                        <div class="am-log-section">
-                            <div class="am-log-header">
-                                <span>📋 运行日志</span>
-                                <div>
-                                    <span class="am-action-btn" id="am-log-clear">清空</span>
-                                    <span class="am-action-btn" id="am-log-toggle">隐藏</span>
-                                </div>
-                            </div>
-                            <div id="am-log-content"></div>
-                        </div>
+                    <div class="am-tool-btn" data-key="magicReportOpen">
+                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 128h768v768H128z m60.8 60.8V835.2h646.4V188.8H188.8z M256 384h128v320H256V384z m192-128h128v448H448V256z m192 192h128v256H640V448z"></path></svg>
+                        万能查数
                     </div>
                 </div>
-            `;
+
+                <!-- Section 2: Settings -->
+                <div class="am-switches-grid">
+                    <div class="am-switch-btn" data-key="showCost">询单成本</div>
+                    <div class="am-switch-btn" data-key="showCartCost">加购成本</div>
+                    <div class="am-switch-btn" data-key="showPercent">潜客占比</div>
+                    <div class="am-switch-btn" data-key="showCostRatio">花费占比</div>
+                    <div class="am-switch-btn" data-key="showBudget">预算进度</div>
+                    <div class="am-switch-btn" data-key="autoSortCharge">花费排序</div>
+                    <!-- <div class="am-switch-btn" data-key="autoClose">弹窗速闭</div> -->
+                </div>
+                <div class="am-log-section">
+                    <div class="am-log-header">
+                        <span>📋 运行日志</span>
+                        <div>
+                            <span class="am-action-btn" id="am-log-clear">清空</span>
+                            <span class="am-action-btn" id="am-log-toggle">隐藏</span>
+                        </div>
+                    </div>
+                    <div id="am-log-content"></div>
+                </div>
+            </div>
+        </div>
+    `;
             document.body.appendChild(root);
             Logger.el = document.getElementById('am-log-content');
         },
@@ -942,41 +1806,79 @@
             const panel = document.getElementById('am-helper-panel');
             const closeBtn = panel.querySelector('.am-close-btn');
             const resizer = panel.querySelector('.am-resizer-left');
+            let hoverOpenBlockedUntil = 0;
+            let autoHideTimer = null;
+
+            const clearAutoHideTimer = () => {
+                if (!autoHideTimer) return;
+                clearTimeout(autoHideTimer);
+                autoHideTimer = null;
+            };
 
             // 展开/收起动画
-            icon.onclick = () => {
+            const openPanel = (force = false) => {
+                clearAutoHideTimer();
+                if (!force && Date.now() < hoverOpenBlockedUntil) return;
+                if (State.config.panelOpen) return;
                 State.config.panelOpen = true;
                 State.save();
                 this.updateState();
             };
-            closeBtn.onclick = (e) => {
-                e.stopPropagation();
+            const closePanel = (blockHoverOpen = false) => {
+                clearAutoHideTimer();
+                if (blockHoverOpen) hoverOpenBlockedUntil = Date.now() + 800;
+                if (!State.config.panelOpen) return;
                 State.config.panelOpen = false;
                 State.save();
                 this.updateState();
+            };
+            const scheduleAutoHide = (delay = 180) => {
+                clearAutoHideTimer();
+                autoHideTimer = setTimeout(() => {
+                    autoHideTimer = null;
+                    if (!State.config.panelOpen) return;
+                    if (panel.matches(':hover') || icon.matches(':hover')) return;
+                    closePanel(false);
+                }, delay);
+            };
+
+            icon.onclick = () => openPanel(true);
+            // 鼠标移入悬浮球时自动展开
+            icon.onmouseenter = () => openPanel(false);
+            panel.onmouseenter = clearAutoHideTimer;
+            panel.onmouseleave = () => scheduleAutoHide();
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                closePanel(true);
             };
 
             // 点击面板外部自动最小化
             document.addEventListener('click', (e) => {
                 if (State.config.panelOpen && !panel.contains(e.target) && !icon.contains(e.target)) {
-                    State.config.panelOpen = false;
-                    State.save();
-                    this.updateState();
+                    closePanel(false);
                 }
             });
 
             // 功能按钮
-            document.querySelectorAll('.am-toggle-btn').forEach(btn => {
-                if (btn.id === 'am-trigger-optimizer') return;
+            // 功能开关 (Settings)
+            document.querySelectorAll('.am-switch-btn').forEach(btn => {
                 btn.onclick = () => {
                     const key = btn.dataset.key;
                     State.config[key] = !State.config[key];
                     State.save();
                     this.updateState();
-                    Logger.log(`${btn.textContent} ${State.config[key] ? '✅' : '❌'}`);
+                    Logger.log(`${btn.textContent.trim()} ${State.config[key] ? '✅' : '❌'} `);
                     if (key !== 'autoClose') Core.run();
                 };
             });
+
+            // 工具按钮 (Tools) - 万能查数
+            const magicBtn = document.querySelector('.am-tool-btn[data-key="magicReportOpen"]');
+            if (magicBtn) {
+                magicBtn.onclick = () => {
+                    MagicReport.toggle(true);
+                };
+            }
 
             // 算法护航按钮
             const optBtn = document.getElementById('am-trigger-optimizer');
@@ -1072,8 +1974,8 @@
                 setTimeout(() => { icon.style.display = 'flex'; }, 300);
             }
 
-            // 功能按钮状态
-            document.querySelectorAll('.am-toggle-btn').forEach(btn => {
+            // 功能开关状态
+            document.querySelectorAll('.am-switch-btn').forEach(btn => {
                 const key = btn.dataset.key;
                 if (State.config[key]) btn.classList.add('active');
                 else btn.classList.remove('active');
@@ -1108,7 +2010,9 @@
 
         createPanel() {
             const div = document.createElement('div');
-            div.style.cssText = "position:fixed; bottom:20px; right:20px; background:rgba(0,0,0,0.9); color:#fff; padding:15px; z-index:2147483647; border-radius:8px; font-size:13px; display:none; width:340px; box-shadow:0 4px 20px rgba(0,0,0,0.6); border:1px solid #444;";
+            div.id = 'am-report-capture-panel';
+            // Inline fallback: even if style injection fails, ensure popup is visible and clickable.
+            div.style.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;z-index:2147483647;display:none;';
             document.body.appendChild(div);
             this.panel = div;
         },
@@ -1116,7 +2020,7 @@
         debugOnce(key, msg) {
             if (this.debugHints.has(key)) return;
             this.debugHints.add(key);
-            console.debug(`[AM][Interceptor] ${msg}`);
+            console.debug(`[AM][Interceptor] ${msg} `);
         },
 
         sanitizeUrl(url) {
@@ -1130,32 +2034,52 @@
             }
         },
 
+        isImageUrl(url) {
+            if (typeof url !== 'string') return false;
+            const clean = url.split('#')[0].split('?')[0].toLowerCase();
+            return /\.(jpg|png|gif|jpeg|webp|svg|bmp)$/i.test(clean);
+        },
+
+        isDownloadUrl(url) {
+            const safeUrl = this.sanitizeUrl(url);
+            if (!safeUrl) return false;
+            const lowerUrl = safeUrl.toLowerCase();
+            const hasKeyword = this.keywords.some(k => lowerUrl.includes(String(k).toLowerCase()));
+            const hasFileExt = /\.(xlsx|xls|csv|zip|txt)(?:$|[?#])/i.test(lowerUrl);
+            return (hasKeyword || hasFileExt) && !this.isImageUrl(lowerUrl);
+        },
+
+        inspectUrl(url, source) {
+            if (!this.isDownloadUrl(url)) return;
+            this.show(url, source);
+        },
+
         shouldParseResponse(meta = {}) {
             const source = meta.source || 'Unknown';
             const responseType = String(meta.responseType || '');
             if (responseType && responseType !== 'text') {
-                this.debugOnce(`${source}:responseType:${responseType}`, `${source} 跳过解析: responseType=${responseType}`);
+                this.debugOnce(`${source}: responseType:${responseType} `, `${source} 跳过解析: responseType = ${responseType} `);
                 return false;
             }
 
             const contentType = String(meta.contentType || '').toLowerCase();
             if (!contentType) {
-                this.debugOnce(`${source}:contentType:empty`, `${source} 跳过解析: content-type 为空`);
+                this.debugOnce(`${source}: contentType: empty`, `${source} 跳过解析: content - type 为空`);
                 return false;
             }
             if (!this.parsableTypeHints.some(type => contentType.includes(type))) {
-                this.debugOnce(`${source}:contentType:${contentType}`, `${source} 跳过解析: content-type=${contentType}`);
+                this.debugOnce(`${source}: contentType:${contentType} `, `${source} 跳过解析: content - type=${contentType} `);
                 return false;
             }
 
             const contentLength = Number.parseInt(String(meta.contentLength || ''), 10);
             if (Number.isFinite(contentLength) && contentLength > this.maxParseBytes) {
-                this.debugOnce(`${source}:contentLength`, `${source} 跳过解析: content-length=${contentLength} 超过限制 ${this.maxParseBytes}`);
+                this.debugOnce(`${source}: contentLength`, `${source} 跳过解析: content - length=${contentLength} 超过限制 ${this.maxParseBytes} `);
                 return false;
             }
 
             if (typeof meta.textLength === 'number' && meta.textLength > this.maxParseBytes) {
-                this.debugOnce(`${source}:textLength`, `${source} 跳过解析: 响应文本长度 ${meta.textLength} 超过限制 ${this.maxParseBytes}`);
+                this.debugOnce(`${source}: textLength`, `${source} 跳过解析: 响应文本长度 ${meta.textLength} 超过限制 ${this.maxParseBytes} `);
                 return false;
             }
 
@@ -1172,40 +2096,40 @@
             if (this.panel.dataset.lastUrl === safeUrl && this.panel.style.display === 'block') return;
             this.panel.dataset.lastUrl = safeUrl;
 
-            Logger.log(`📂 捕获报表: ${source}`, true);
+            Logger.log(`📂 捕获报表: ${source} `, true);
 
             this.panel.textContent = '';
 
             const header = document.createElement('div');
-            header.style.cssText = 'margin-bottom:10px; font-weight:bold; color:#00ff9d; display:flex; justify-content:space-between;';
+            header.className = 'am-download-header';
             const headerTitle = document.createElement('span');
             headerTitle.textContent = '✅ 捕获报表';
             const headerSource = document.createElement('span');
-            headerSource.style.cssText = 'color:#888;font-size:10px';
+            headerSource.className = 'am-download-source';
             headerSource.textContent = source;
             header.appendChild(headerTitle);
             header.appendChild(headerSource);
 
             const urlBox = document.createElement('div');
-            urlBox.style.cssText = 'background:#222; padding:8px; border-radius:4px; margin-bottom:12px; word-break:break-all; font-size:11px; color:#aaa; max-height:50px; overflow:hidden;';
+            urlBox.className = 'am-download-url';
             urlBox.textContent = safeUrl;
 
             const actions = document.createElement('div');
-            actions.style.cssText = 'display:flex; gap:10px;';
+            actions.className = 'am-download-actions';
 
             const dlLink = document.createElement('a');
             dlLink.href = safeUrl;
             dlLink.target = '_blank';
             dlLink.rel = 'noopener noreferrer';
-            dlLink.style.cssText = 'background:#28a745; color:white; text-decoration:none; padding:8px 0; text-align:center; border-radius:4px; flex:2;';
+            dlLink.className = 'am-download-link';
             dlLink.textContent = '⚡ 直连下载';
 
             const copyBtn = document.createElement('button');
-            copyBtn.style.cssText = 'background:#17a2b8; color:white; border:none; border-radius:4px; flex:1; cursor:pointer;';
+            copyBtn.className = 'am-download-btn am-download-copy';
             copyBtn.textContent = '复制';
 
             const closeBtn = document.createElement('button');
-            closeBtn.style.cssText = 'background:#555; color:white; border:none; border-radius:4px; flex:0.5; cursor:pointer;';
+            closeBtn.className = 'am-download-btn am-download-close';
             closeBtn.textContent = 'X';
 
             actions.appendChild(dlLink);
@@ -1213,7 +2137,7 @@
             actions.appendChild(closeBtn);
 
             const hint = document.createElement('div');
-            hint.style.cssText = 'margin-top:8px; font-size:10px; color:#aaa;';
+            hint.className = 'am-download-hint';
             hint.textContent = '提示：如果下载的文件名无后缀，请手动添加 .xlsx';
 
             this.panel.appendChild(header);
@@ -1254,13 +2178,13 @@
 
             try {
                 const json = JSON.parse(text);
-                this.findUrlInObject(json, `JSON:${source}`);
+                this.findUrlInObject(json, `JSON:${source} `);
             } catch (e) {
                 // Fallback Regex from original code
                 if (text && this.keywords.some(k => text.includes(k))) {
                     const regex = /https?:\/\/[^"'\s\\]+(?:xlsx|csv|MAIN)[^"'\s\\]*/g;
                     const matches = text.match(regex);
-                    if (matches) matches.forEach(m => this.show(m, `Regex:${source}`));
+                    if (matches) matches.forEach(m => this.show(m, `Regex:${source} `));
                 }
             }
         },
@@ -1269,7 +2193,12 @@
             if (this.hooksRegistered) return;
             const hooks = createHookManager();
 
-            hooks.registerFetch(({ response }) => {
+            hooks.registerFetch(({ args, response }) => {
+                const requestUrl = typeof args?.[0] === 'string' ? args[0] : args?.[0]?.url;
+                const responseUrl = response?.url || '';
+                this.inspectUrl(requestUrl, 'Fetch:RequestURL');
+                this.inspectUrl(responseUrl, 'Fetch:ResponseURL');
+
                 const contentType = response?.headers?.get('content-type') || '';
                 const contentLength = response?.headers?.get('content-length') || '';
                 if (!this.shouldParseResponse({ source: 'Fetch', contentType, contentLength })) return;
@@ -1280,14 +2209,38 @@
                     .catch(() => { });
             });
 
+            hooks.registerXHROpen(({ url }) => {
+                this.inspectUrl(url, 'XHR:OpenURL');
+            });
+
             hooks.registerXHRLoad(({ xhr }) => {
+                this.inspectUrl(xhr.responseURL || xhr.__amHookUrl, 'XHR:ResponseURL');
+
                 const contentType = xhr.getResponseHeader?.('content-type') || '';
                 const contentLength = xhr.getResponseHeader?.('content-length') || '';
                 const responseType = xhr.responseType || '';
                 const text = typeof xhr.responseText === 'string' ? xhr.responseText : '';
 
+                if (responseType === 'json' && xhr.response && typeof xhr.response === 'object') {
+                    this.findUrlInObject(xhr.response, 'JSON:XHR(response)');
+                }
+
                 this.handleResponse(text, 'XHR', { contentType, contentLength, responseType });
             });
+
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+
+                const isExitModeBtn = !!target.closest('#mx_2517 > button');
+                const textBtn = target.closest('button');
+                const text = (textBtn?.textContent || '').trim();
+                const isExitModeText = text.includes('退出模式');
+
+                if (isExitModeBtn || isExitModeText) {
+                    if (this.panel) this.panel.style.display = 'none';
+                }
+            }, true);
 
             hooks.install();
             this.hooksRegistered = true;
@@ -1295,11 +2248,1003 @@
     };
 
     // ==========================================
-    // 6. 启动程序
+    // 6. 万能查数 (Magic Report) - iframe 嵌入方案
+    // ==========================================
+    const MagicReport = {
+        popup: null,
+        header: null,
+        iframe: null,
+        lastCampaignId: '',
+        BASE_URL: 'https://one.alimama.com/index.html#!/report/ai-report',
+        QUICK_PROMPTS: [
+            { label: '🆔 获取计划ID', value: '当前计划ID：{campaignId}', type: 'action', autoSubmit: false, requireCampaignId: true },
+            { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { label: '🛒 加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true }
+        ],
+
+        // NOTE: iframe 加载后通过 JS 清理页面，只保留万能查数核心内容区
+        CLEANUP_CSS: `
+            body { overflow: auto!important; margin: 0!important; padding: 0!important; }
+            #universalBP_common_layout_main_content {
+                margin: 0!important;
+                padding: 16px!important;
+                width: 100%!important;
+                max-width: 100%!important;
+            }
+            div#app { min-width: 0!important; }
+            /* 隐藏瀑布流推荐区域和 Magix 弹出层 */
+            #mx_155 > div.waterfall-masonry,
+            .waterfall-masonry,
+            [id^="popover_mx_"] { display: none!important; }
+            /* 查询结果容器不限制高度 */
+            [id$="_query_result_container"] { max-height: none!important; }
+            /* 搜索栏和查询弹层宽度统一 100% */
+            #ai-input-magic-report,
+            .query-pop { width: 100%!important; }
+    `,
+
+        getIframeDoc() {
+            if (!this.iframe) return null;
+            try {
+                return this.iframe.contentDocument || this.iframe.contentWindow?.document || null;
+            } catch {
+                return null;
+            }
+        },
+
+        buildIframeUrl(forceReload = false) {
+            const rawUrl = this.iframe?.getAttribute('src') || this.BASE_URL;
+            const url = new URL(rawUrl, window.location.href);
+            if (forceReload) {
+                url.searchParams.set('_am_refresh_ts', String(Date.now()));
+            }
+            return url.toString();
+        },
+
+        extractCampaignId(rawText) {
+            const text = String(rawText || '').trim();
+            if (!text) return '';
+
+            const normalized = [];
+            normalized.push(text);
+            try {
+                normalized.push(decodeURIComponent(text));
+            } catch { }
+
+            const patterns = [
+                /(?:^|[?&#])campaignId=(\d{6,})/i,
+                /(?:^|[?&#])campaign_id=(\d{6,})/i,
+                /campaignId[：:\s=]+(\d{6,})/i,
+                /campaign_id[：:\s=]+(\d{6,})/i,
+                /计划(?:ID|id)?[：:\s]+(\d{6,})/i
+            ];
+
+            for (const source of normalized) {
+                for (const reg of patterns) {
+                    const match = source.match(reg);
+                    if (match?.[1]) return match[1];
+                }
+            }
+            return '';
+        },
+
+        extractCampaignIdFromElement(el) {
+            if (!(el instanceof Element)) return '';
+
+            const candidates = [
+                el.getAttribute('data-campaign-id'),
+                el.getAttribute('campaignid'),
+                el.getAttribute('data-id'),
+                el.getAttribute('href'),
+                el.getAttribute('mx-href'),
+                el.id
+            ];
+            if (el instanceof HTMLInputElement) candidates.push(el.value);
+
+            for (const item of candidates) {
+                const id = this.extractCampaignId(item);
+                if (id) return id;
+            }
+
+            const nearestLink = el.closest('a[href*="campaignId="], a[href*="campaign_id="]') || el.querySelector?.('a[href*="campaignId="], a[href*="campaign_id="]');
+            if (nearestLink) {
+                const id = this.extractCampaignId(nearestLink.getAttribute('href') || nearestLink.href);
+                if (id) return id;
+            }
+
+            return '';
+        },
+
+        getCurrentCampaignId() {
+            const sourceCandidates = [
+                window.location.href,
+                window.location.hash,
+                window.location.search
+            ];
+            for (const source of sourceCandidates) {
+                const id = this.extractCampaignId(source);
+                if (id) {
+                    this.lastCampaignId = id;
+                    return id;
+                }
+            }
+
+            const checkedBox = document.querySelector('input[type="checkbox"][value]:checked');
+            if (checkedBox) {
+                const id = this.extractCampaignIdFromElement(checkedBox);
+                if (id) {
+                    this.lastCampaignId = id;
+                    return id;
+                }
+            }
+
+            const selectedSelectors = [
+                'tr[class*="selected"]',
+                'tr[class*="active"]',
+                'tr[class*="current"]',
+                '[class*="selected"][role="row"]',
+                '[class*="active"][role="row"]',
+                '[aria-current="true"]'
+            ];
+            for (const selector of selectedSelectors) {
+                const selectedEl = document.querySelector(selector);
+                if (!selectedEl) continue;
+                const id = this.extractCampaignIdFromElement(selectedEl);
+                if (id) {
+                    this.lastCampaignId = id;
+                    return id;
+                }
+            }
+
+            const allCampaignIds = new Set();
+            document.querySelectorAll('a[href*="campaignId="], a[href*="campaign_id="], input[type="checkbox"][value]').forEach(el => {
+                const id = this.extractCampaignIdFromElement(el);
+                if (id) allCampaignIds.add(id);
+            });
+            if (allCampaignIds.size === 1) {
+                const [id] = Array.from(allCampaignIds);
+                this.lastCampaignId = id;
+                return id;
+            }
+
+            return this.lastCampaignId || '';
+        },
+
+        resolvePromptText(promptItem) {
+            const template = String(promptItem?.value || '').trim();
+            if (!template) return '';
+
+            if (!template.includes('{campaignId}')) return template;
+
+            const campaignId = this.getCurrentCampaignId();
+            if (!campaignId) {
+                Logger.log('⚠️ 未识别到当前计划ID，请先进入计划详情页或勾选计划后重试', true);
+                return '';
+            }
+
+            return template.replace(/\{campaignId\}/g, campaignId);
+        },
+
+        isEditablePromptElement(el) {
+            if (!el) return false;
+            if (el instanceof HTMLTextAreaElement) return true;
+            if (el instanceof HTMLInputElement) {
+                const t = (el.type || 'text').toLowerCase();
+                return t === 'text' || t === 'search';
+            }
+            return !!el.isContentEditable;
+        },
+
+        isVisibleElement(el) {
+            if (!(el instanceof Element)) return false;
+            const style = el.ownerDocument?.defaultView?.getComputedStyle(el);
+            if (!style) return true;
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        },
+
+        findPromptInput(iframeDoc) {
+            const selectors = [
+                '#ai-input-magic-report textarea',
+                '#ai-input-magic-report input[type="text"]',
+                '#ai-input-magic-report input[type="search"]',
+                '#ai-input-magic-report [contenteditable="true"]',
+                'textarea#ai-input-magic-report',
+                'input#ai-input-magic-report[type="text"]',
+                'input#ai-input-magic-report[type="search"]',
+                '[id="ai-input-magic-report"][contenteditable="true"]'
+            ];
+
+            for (const selector of selectors) {
+                const el = iframeDoc.querySelector(selector);
+                if (this.isEditablePromptElement(el)) return el;
+            }
+
+            const fallback = Array.from(iframeDoc.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
+                .find(el => {
+                    const id = (el.id || '').toLowerCase();
+                    const cls = (el.className || '').toLowerCase();
+                    const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+                    const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+                    return (id.includes('magic') || cls.includes('magic') || placeholder.includes('提问') || placeholder.includes('输入') || ariaLabel.includes('输入'))
+                        && this.isEditablePromptElement(el)
+                        && this.isVisibleElement(el);
+                });
+
+            if (fallback) return fallback;
+
+            return Array.from(iframeDoc.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
+                .find(el => this.isEditablePromptElement(el) && this.isVisibleElement(el)) || null;
+        },
+
+        setPromptInputValue(inputEl, promptText) {
+            if (!this.isEditablePromptElement(inputEl)) return false;
+
+            inputEl.focus();
+            if (inputEl.isContentEditable) {
+                inputEl.textContent = '';
+                inputEl.textContent = promptText;
+                inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
+                inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+
+            const proto = inputEl instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const valueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            if (valueSetter) {
+                valueSetter.call(inputEl, promptText);
+            } else {
+                inputEl.value = promptText;
+            }
+
+            inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
+            inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+            return (inputEl.value || '').trim() === promptText.trim();
+        },
+
+        triggerClick(el) {
+            if (!(el instanceof Element)) return;
+            const mouseOpts = { bubbles: true, cancelable: true, view: window };
+            ['mousedown', 'mouseup', 'click'].forEach(type => {
+                el.dispatchEvent(new MouseEvent(type, mouseOpts));
+            });
+            if (typeof el.click === 'function') el.click();
+        },
+
+        findQueryTrigger(iframeDoc, inputEl) {
+            const roots = [];
+            const nearest = inputEl?.closest('[id*="magic"], [class*="magic"], [class*="query"], form');
+            if (nearest) roots.push(nearest);
+            roots.push(iframeDoc);
+
+            const triggerSelectors = [
+                'button[type="submit"]',
+                'button[mx-click*="query"]',
+                'button[mx-click*="search"]',
+                'button[mx-click*="send"]',
+                '[role="button"][mx-click*="query"]',
+                '[role="button"][mx-click*="search"]',
+                '[role="button"][mx-click*="send"]',
+                '[mx-click*="query"]',
+                '[mx-click*="search"]',
+                '[mx-click*="send"]',
+                'button[class*="query"]',
+                'button[class*="search"]',
+                'button[class*="send"]',
+                '.next-btn-primary',
+                '.next-btn'
+            ];
+
+            const seen = new Set();
+            const candidates = [];
+            roots.forEach(root => {
+                triggerSelectors.forEach(selector => {
+                    root.querySelectorAll(selector).forEach(el => {
+                        if (seen.has(el) || !this.isVisibleElement(el)) return;
+                        if (el.hasAttribute('disabled')) return;
+                        if (el.getAttribute('aria-disabled') === 'true') return;
+                        seen.add(el);
+                        candidates.push(el);
+                    });
+                });
+            });
+            if (!candidates.length) return null;
+
+            const scoreOf = (el) => {
+                const text = (el.textContent || '').trim();
+                const title = (el.getAttribute('title') || '').trim();
+                const aria = (el.getAttribute('aria-label') || '').trim();
+                const mx = (el.getAttribute('mx-click') || '').trim();
+                const cls = (el.className || '').toString();
+                const id = (el.id || '').trim();
+                const merged = `${text} ${title} ${aria} ${mx} ${cls} ${id} `;
+                let score = 0;
+
+                if (text === '查询' || text === '发送' || text === '提问' || text === '立即查询') score += 100;
+                if (text.includes('查询')) score += 90;
+                if (text.includes('发送') || text.includes('提问')) score += 80;
+                if (/query|search|send|submit/i.test(merged)) score += 40;
+                if (/next-btn-primary/.test(cls)) score += 15;
+                if (inputEl?.form && el.closest('form') === inputEl.form) score += 20;
+                return score;
+            };
+
+            return candidates
+                .map(el => ({ el, score: scoreOf(el) }))
+                .sort((a, b) => b.score - a.score)[0]?.el || null;
+        },
+
+        trySubmitPrompt(promptText) {
+            const iframeDoc = this.getIframeDoc();
+            if (!iframeDoc) return { ok: false, reason: 'iframe-not-ready' };
+
+            const inputEl = this.findPromptInput(iframeDoc);
+            if (!inputEl) return { ok: false, reason: 'input-not-found' };
+
+            if (!this.setPromptInputValue(inputEl, promptText)) {
+                return { ok: false, reason: 'input-set-failed' };
+            }
+
+            const trigger = this.findQueryTrigger(iframeDoc, inputEl);
+            if (trigger && typeof trigger.click === 'function') {
+                this.triggerClick(trigger);
+                return { ok: true, method: 'button' };
+            }
+
+            if (inputEl.form && typeof inputEl.form.requestSubmit === 'function') {
+                inputEl.form.requestSubmit();
+                return { ok: true, method: 'form-submit' };
+            }
+
+            const keyOptions = { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true, cancelable: true };
+            inputEl.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
+            inputEl.dispatchEvent(new KeyboardEvent('keypress', keyOptions));
+            inputEl.dispatchEvent(new KeyboardEvent('keyup', keyOptions));
+            return { ok: true, method: 'enter-fallback', uncertain: true };
+        },
+
+        runQuickPrompt(promptText) {
+            const maxRetries = 16;
+            const tryRun = (retriesLeft) => {
+                const result = this.trySubmitPrompt(promptText);
+                if (result.ok) {
+                    if (result.uncertain) {
+                        Logger.log(`🔮 已回车尝试提交：${promptText} `);
+                    } else {
+                        Logger.log(`🔮 快捷查询已执行：${promptText} `);
+                    }
+                    return;
+                }
+                if (retriesLeft <= 0) {
+                    if (result.reason === 'input-not-found' || result.reason === 'iframe-not-ready') {
+                        Logger.log('⚠️ 万能查数尚未加载完成，请稍后重试', true);
+                    } else {
+                        Logger.log('⚠️ 未识别到可用查询按钮，请手动点一次查询后重试', true);
+                    }
+                    return;
+                }
+                setTimeout(() => tryRun(retriesLeft - 1), 500);
+            };
+            tryRun(maxRetries);
+        },
+
+        buildPromptByCampaignId(campaignId, promptType = 'click') {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return '';
+
+            const prompts = {
+                'click': `计划ID：${id} 点击人群分析`,
+                'conversion': `计划ID：${id} 转化人群分析`,
+                'diagnose': `计划ID：${id} 深度诊断`
+            };
+
+            return prompts[promptType] || prompts['click'];
+        },
+
+        trySubmitPromptInDocument(doc, promptText) {
+            if (!doc || typeof doc.querySelector !== 'function') {
+                return { ok: false, reason: 'doc-not-ready' };
+            }
+
+            const inputEl = this.findPromptInput(doc);
+            if (!inputEl) return { ok: false, reason: 'input-not-found' };
+
+            if (!this.setPromptInputValue(inputEl, promptText)) {
+                return { ok: false, reason: 'input-set-failed' };
+            }
+
+            const trigger = this.findQueryTrigger(doc, inputEl);
+            if (trigger && typeof trigger.click === 'function') {
+                this.triggerClick(trigger);
+                return { ok: true, method: 'button' };
+            }
+
+            if (inputEl.form && typeof inputEl.form.requestSubmit === 'function') {
+                inputEl.form.requestSubmit();
+                return { ok: true, method: 'form-submit' };
+            }
+
+            const eventView = doc.defaultView || window;
+            const keyOptions = { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true, cancelable: true, view: eventView };
+            inputEl.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
+            inputEl.dispatchEvent(new KeyboardEvent('keypress', keyOptions));
+            inputEl.dispatchEvent(new KeyboardEvent('keyup', keyOptions));
+            return { ok: true, method: 'enter-fallback', uncertain: true };
+        },
+
+        async openNativeAndSubmit(campaignId, promptText) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return false;
+
+            const pickNativeEntry = () => {
+                const selectors = ['button', 'a', '[role="button"]', '[mx-click]'];
+                const nodes = document.querySelectorAll(selectors.join(','));
+                const candidates = [];
+                const seen = new Set();
+
+                nodes.forEach(el => {
+                    if (!(el instanceof Element) || seen.has(el)) return;
+                    if (el.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel')) return;
+                    if (!this.isVisibleElement(el)) return;
+                    if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return;
+
+                    const text = (el.textContent || '').trim();
+                    const title = (el.getAttribute('title') || '').trim();
+                    const aria = (el.getAttribute('aria-label') || '').trim();
+                    const mx = (el.getAttribute('mx-click') || '').trim();
+                    const cls = (el.className || '').toString();
+                    const idText = (el.id || '').trim();
+                    const merged = `${text} ${title} ${aria} ${mx} ${cls} ${idText}`.toLowerCase();
+
+                    let score = 0;
+                    if (merged.includes('万象查数')) score += 400;
+                    else if (merged.includes('万能查数')) score += 300;
+                    else if (merged.includes('全能数据查')) score += 200;
+                    else if (merged.includes('查数')) score += 120;
+                    else return;
+
+                    if (merged.includes('万象')) score += 40;
+                    if (merged.includes('report')) score += 10;
+                    if (el.tagName === 'BUTTON') score += 6;
+                    if (merged.includes('ai')) score += 4;
+
+                    seen.add(el);
+                    candidates.push({ el, score });
+                });
+
+                return candidates.sort((a, b) => b.score - a.score)[0]?.el || null;
+            };
+
+            const entry = pickNativeEntry();
+            if (!entry) return false;
+
+            this.triggerClick(entry);
+
+            for (let i = 0; i < 12; i++) {
+                const result = this.trySubmitPromptInDocument(document, promptText);
+                if (result.ok) {
+                    Logger.log(`🔍 原生查数已执行：${promptText}`);
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 350));
+            }
+
+            return false;
+        },
+
+        async openWithCampaignId(campaignId, options = {}) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) {
+                Logger.log(`⚠️ 计划ID无效，已忽略快捷查数：${id || '-'} `, true);
+                return false;
+            }
+
+            this.lastCampaignId = id;
+            const promptText = this.buildPromptByCampaignId(id, options.promptType || 'click');
+            if (!promptText) {
+                Logger.log(`⚠️ 计划ID无效，已忽略快捷查数：${id} `, true);
+                return false;
+            }
+
+            const preferNative = options.preferNative !== false;
+            if (preferNative) {
+                try {
+                    const nativeOk = await this.openNativeAndSubmit(id, promptText);
+                    if (nativeOk) return true;
+                } catch {
+                    // ignore and fallback
+                }
+                Logger.log('⚠️ 原生万象查数不可用，已回退万能查数', true);
+            }
+
+            this.toggle(true);
+            this.runQuickPrompt(promptText);
+            return true;
+        },
+
+        /**
+         * 在 iframe 中清理非核心元素
+         * 策略：找到目标元素，沿父级链向上，隐藏每一层的兄弟节点
+         */
+        cleanupIframe(iframeDoc) {
+            const target = iframeDoc.getElementById('universalBP_common_layout_main_content');
+            if (!target) {
+                Logger.warn('🔮 未找到 #universalBP_common_layout_main_content，跳过清理');
+                return;
+            }
+
+            // 沿父级链向上，隐藏每一级的兄弟节点
+            let current = target;
+            while (current && current !== iframeDoc.body) {
+                const parent = current.parentElement;
+                if (parent) {
+                    Array.from(parent.children).forEach(child => {
+                        if (child !== current && child.tagName !== 'SCRIPT' && child.tagName !== 'STYLE' && child.tagName !== 'LINK') {
+                            child.style.setProperty('display', 'none', 'important');
+                        }
+                    });
+                }
+                current = parent;
+            }
+
+            // 注入基础 CSS
+            const style = iframeDoc.createElement('style');
+            style.id = 'am-cleanup-css';
+            style.textContent = MagicReport.CLEANUP_CSS;
+            iframeDoc.head.appendChild(style);
+
+            Logger.info('🔮 万能查数 iframe 清理完成');
+        },
+
+        createPopup() {
+            if (this.popup) return;
+
+            const div = document.createElement('div');
+            div.id = 'am-magic-report-popup';
+            div.style.cssText = `
+                position: fixed; top: 30px; left: 50%; transform: translateX(-50%);
+                z-index: 1000001; border-radius: 18px;
+                width: 900px; height: 85vh;
+                display: none; overflow: hidden;
+                flex-direction: column;
+                font-family: var(--am26-font);
+            `;
+
+            const style = document.createElement('style');
+            style.textContent = `
+                #am-magic-report-popup .am-magic-header {
+                    padding: 10px 20px 8px;
+                    display: flex; flex-direction: column; gap: 8px;
+                    cursor: move; border-bottom: 1px solid var(--am26-border);
+                    flex-shrink: 0;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-header-main {
+                    display: flex; justify-content: space-between; align-items: center;
+                    width: 100%;
+                }
+                #am-magic-report-popup .am-magic-header .am-title-area {
+                    display: flex; align-items: center;
+                }
+                #am-magic-report-popup .am-magic-header .am-btn-group {
+                    display: flex; align-items: center; gap: 4px; border-left: 1px solid rgba(0,0,0,0.06); padding-left: 12px;
+                }
+                #am-magic-report-popup .am-magic-header .am-btn-group span {
+                    width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+                    border-radius: 8px; color: #666; font-size: 18px; transition: all 0.2s;
+                }
+                #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-refresh {
+                    font-size: 20px; font-weight: bold;
+                }
+                #am-magic-report-popup .am-magic-header .am-btn-group span:hover {
+                    background: rgba(0,0,0,0.05); color: var(--am26-primary);
+                }
+                #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-close:hover {
+                    background: rgba(234, 79, 79, 0.1); color: var(--am26-danger);
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompts {
+                    display: flex; flex-wrap: wrap; gap: 6px; cursor: default;
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt {
+                    border: 1px solid var(--am26-border); background: var(--am26-surface); color: var(--am26-text-soft);
+                    border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 500;
+                    line-height: 1.4; cursor: pointer; transition: all 0.2s;
+                    max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                    display: flex; align-items: center; gap: 4px;
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt:hover {
+                    background: rgba(42, 91, 255, 0.12); border-color: rgba(42, 91, 255, 0.34); color: var(--am26-primary);
+                    transform: translateY(-1px);
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt.type-action {
+                    background: rgba(255, 159, 24, 0.1); border-color: rgba(255, 159, 24, 0.3); color: #d48806;
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt.type-action:hover {
+                    background: rgba(255, 159, 24, 0.2); border-color: rgba(255, 159, 24, 0.5); color: #ad6800;
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt.active {
+                    background: rgba(42, 91, 255, 0.16); border-color: rgba(42, 91, 255, 0.44); color: var(--am26-primary-strong);
+                }
+                #am-magic-report-popup .am-magic-content {
+                    position: relative; flex: 1; min-height: 0;
+                    background: rgba(255, 255, 255, 0.4);
+                    backdrop-filter: blur(10px);
+                }
+                #am-magic-report-popup .am-iframe-loading {
+                    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    display: flex; flex-direction: column; align-items: center; gap: 12px;
+                    color: var(--am26-primary); font-size: 14px;
+                }
+                #am-magic-report-popup .am-iframe-loading .am-spinner {
+                    width: 32px; height: 32px; border: 3px solid rgba(42, 91, 255, 0.18);
+                    border-top-color: var(--am26-primary); border-radius: 50%;
+                    animation: am-spin 0.8s linear infinite;
+                }
+                @keyframes am-spin { to { transform: rotate(360deg); } }
+            `;
+            document.head.appendChild(style);
+
+            const quickPromptHtml = this.QUICK_PROMPTS
+                .map((item, idx) => {
+                    const typeClass = item.type === 'action' ? 'type-action' : 'type-query';
+                    return `<button type="button" class="am-quick-prompt ${typeClass}" data-index="${idx}" title="${item.value}">${item.label}</button>`;
+                })
+                .join('');
+
+            div.innerHTML = `
+                <div class="am-magic-header">
+                    <div class="am-magic-header-main">
+                        <div class="am-title-area">
+                            <span style="font-size: 16px; margin-right: 8px;">🔮</span>
+                            <div>
+                                <div style="font-weight: 600; color: #333; font-size: 14px;">万能查数</div>
+                                <div style="font-size: 11px; color: #888; margin-top: 1px;">原生渲染 · 支持图表/表格/交互</div>
+                            </div>
+                        </div>
+                        <div class="am-btn-group">
+                            <span id="am-magic-refresh" title="刷新">
+                                <svg viewBox="0 0 1024 1024" style="width:0.65em;height:0.65em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M959.667298 800.651143l-33.843806-157.556409c-0.064468-0.224104 0-0.388856-0.029676-0.587378l-2.611477-10.637268c-1.434675-5.9055-5.15644-10.539031-9.918907-13.248745-4.767584-2.804882-10.638291-3.686972-16.416901-1.956561l-10.538007 3.067872c-0.164752 0.029676-0.328481 0.163729-0.557702 0.25992L729.110271 669.726278c-11.618619 3.362584-18.664082 15.634072-15.829524 27.412326l2.64627 8.879228c2.838651 11.743462 17.358343 15.370059 28.976962 12.006452l100.167351-32.18912c-2.316765 4.496407-4.728698 8.943696-7.227612 13.325493-50.845015 89.318258-137.646963 153.181775-238.125399 175.209464-94.868671 20.790512-225.597061 3.428076-307.410392-48.981574-81.779561-52.344159-137.517003-136.410809-158.308539-231.274364-3.551896-16.152888-19.510356-26.4013-35.668361-22.844288-16.152888 3.527336-26.400277 19.515473-22.809495 35.669384 24.178679 110.532419 89.252767 207.876468 184.510294 268.90031 95.257527 60.993143 242.041592 81.256652 352.540242 57.046251 116.955712-25.683962 218.022549-100.089579 277.32212-204.126051 0.652869-1.154289 1.288343-2.320858 1.932002-3.479241l18.071587 85.813434c2.870374 11.782348 14.618952 18.568914 26.237571 15.140839l8.384971-0.876973C956.17373 821.927725 962.502879 812.369022 959.667298 800.651143zM96.961844 395.962194l2.610454 10.654664c1.439792 5.90857 5.15644 10.525728 9.924024 13.252839 4.76349 2.787486 10.637268 3.669576 16.412808 1.957585l10.507308-3.086291c0.199545-0.029676 0.358157-0.177032 0.557702-0.2415l156.64055-49.751101c11.618619-3.393283 18.697851-15.634072 15.859199-27.41335l-2.871397-7.978718c-2.870374-11.747555-17.134239-16.300244-28.717042-12.906961l-100.582813 32.301683c5.130857-11.68411 10.870582-23.094998 17.173125-34.111912 50.90539-89.366354 136.895857-150.277632 237.309824-172.304298 94.863555-20.790512 225.595015-3.41068 307.374576 48.997947 81.814354 52.361555 138.299833 133.48927 159.121044 228.386594 3.558036 16.153912 19.48068 26.350135 35.668361 22.810518 11.294231-2.482541 19.709901-11.048637 22.485107-21.50478 1.206478-4.473895 1.404999-9.30083 0.323365-14.164604-24.213471-110.51093-90.030479-204.973348-185.288007-265.961374-95.291297-61.011562-242.045685-81.261769-352.543312-57.029878-116.891244 25.618471-217.210044 97.05036-276.470729 201.085808-4.179183 7.325849-8.151657 14.809287-11.908214 22.416546l-17.690918-84.010369c-2.905166-11.765975-13.900591-21.262256-25.51921-17.868973l-8.385994 0.916882c-11.618619 3.429099-18.697851 15.69547-15.859199 27.412326l33.805944 157.552316C96.996636 395.58664 96.896352 395.767765 96.961844 395.962194z"></path></svg>
+                            </span>
+                            <span id="am-magic-close" title="关闭">
+                                <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="am-quick-prompts" id="am-magic-quick-prompts">
+                        ${quickPromptHtml}
+                    </div>
+                </div>
+                <div class="am-magic-content">
+                    <div class="am-iframe-loading" id="am-magic-loading">
+                        <div class="am-spinner"></div>
+                        <span>正在加载万能查数...</span>
+                    </div>
+                    <iframe id="am-magic-iframe"
+                        src="${this.buildIframeUrl(false)}"
+                        style="width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.3s;"
+                        allow="clipboard-write"
+                    ></iframe>
+                </div>
+            `;
+
+            document.body.appendChild(div);
+            this.popup = div;
+            this.header = div.querySelector('.am-magic-header');
+            this.iframe = div.querySelector('#am-magic-iframe');
+
+            // iframe 加载完成后尝试清理并显示
+            this.iframe.onload = () => {
+                const loading = div.querySelector('#am-magic-loading');
+                if (loading) loading.style.display = 'none';
+
+                // 尝试清理（同源才能成功，失败也不影响使用）
+                try {
+                    const iframeDoc = this.iframe.contentDocument || this.iframe.contentWindow.document;
+                    // SPA 延迟加载，多次尝试
+                    const tryCleanup = (retries = 0) => {
+                        const target = iframeDoc.getElementById('universalBP_common_layout_main_content');
+                        if (target) {
+                            this.cleanupIframe(iframeDoc);
+                        } else if (retries < 10) {
+                            setTimeout(() => tryCleanup(retries + 1), 1000);
+                        }
+                    };
+                    tryCleanup();
+                } catch (e) {
+                    // 跨域无法清理，不影响核心功能
+                }
+
+                // 直接显示 iframe（不等清理完成）
+                this.iframe.style.opacity = '1';
+            };
+            this.iframe.onerror = () => {
+                const loading = div.querySelector('#am-magic-loading');
+                if (loading) loading.style.display = 'none';
+                this.iframe.style.opacity = '1';
+                Logger.warn('⚠️ 万能查数刷新失败，请检查登录状态或网络后重试');
+            };
+
+            // 关闭按钮
+            div.querySelector('#am-magic-close').onclick = () => this.toggle(false);
+
+            // 刷新按钮
+            div.querySelector('#am-magic-refresh').onclick = () => {
+                const loading = div.querySelector('#am-magic-loading');
+                if (loading) loading.style.display = 'flex';
+                this.iframe.style.opacity = '0';
+                this.iframe.src = this.buildIframeUrl(true);
+            };
+
+            // 头部快捷话术
+            const quickPrompts = div.querySelector('#am-magic-quick-prompts');
+            if (quickPrompts) {
+                quickPrompts.addEventListener('click', (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const btn = target.closest('.am-quick-prompt');
+                    if (!btn) return;
+                    e.stopPropagation();
+
+                    const promptItem = this.QUICK_PROMPTS[Number(btn.dataset.index)];
+                    if (!promptItem) return;
+
+                    quickPrompts.querySelectorAll('.am-quick-prompt').forEach(node => node.classList.remove('active'));
+                    btn.classList.add('active');
+                    setTimeout(() => btn.classList.remove('active'), 1200);
+
+                    const promptText = this.resolvePromptText(promptItem);
+                    if (!promptText) return;
+
+                    if (promptItem.autoSubmit) {
+                        this.runQuickPrompt(promptText);
+                    } else {
+                        // 只填充不提交
+                        const iframeDoc = this.getIframeDoc();
+                        if (iframeDoc) {
+                            const inputEl = this.findPromptInput(iframeDoc);
+                            if (inputEl) {
+                                this.setPromptInputValue(inputEl, promptText);
+                                inputEl.focus();
+                                if (promptItem.requireCampaignId) {
+                                    const id = this.extractCampaignId(promptText);
+                                    if (id) Logger.log(`🆔 当前计划ID: ${id} `);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 拖拽逻辑
+            let isDragging = false;
+            let startX, startY, initialLeft, initialTop;
+
+            this.header.onmousedown = (e) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+                if (target.closest('.am-btn-group') || target.closest('.am-quick-prompts')) return;
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                // 首次拖拽时移除 transform 定位，切换为 left/top
+                if (div.style.transform) {
+                    const rect = div.getBoundingClientRect();
+                    div.style.left = `${rect.left}px`;
+                    div.style.top = `${rect.top}px`;
+                    div.style.transform = 'none';
+                }
+                initialLeft = div.offsetLeft;
+                initialTop = div.offsetTop;
+                div.style.transition = 'none';
+                document.body.style.userSelect = 'none';
+            };
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                div.style.left = `${initialLeft + e.clientX - startX}px`;
+                div.style.top = `${initialTop + e.clientY - startY}px`;
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    div.style.transition = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        },
+
+        toggle(show) {
+            if (this.popup) {
+                this.popup.style.display = show ? 'flex' : 'none';
+            } else if (show) {
+                this.createPopup();
+                this.popup.style.display = 'flex';
+            }
+
+            State.config.magicReportOpen = show;
+            State.save();
+            UI.updateState();
+        }
+    };
+
+    const CampaignIdQuickEntry = {
+        initialized: false,
+        IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel',
+        TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
+        ICON_SVG: `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M770.99008 637.242027c14.86848 14.199467 31.3344 29.463893 47.26784 45.335893 57.869653 57.603413 115.602773 115.397973 173.267627 173.19936 41.53344 41.601707 43.39712 100.27008 4.601173 139.4688-39.130453 39.601493-98.399573 37.730987-140.663467-4.46464-69.864107-69.864107-139.933013-139.598507-209.46944-209.865387-8.669867-8.731307-14.199467-9.332053-25.197227-3.331413-248.66816 136.997547-548.870827 1.467733-611.068587-275.531093-50.333013-224.13312 99.997013-449.733973 329.40032-494.26432 236.264107-45.800107 464.800427 123.467093 490.134187 362.530133 9.530027 90.002773-8.198827 173.93664-52.736 252.463787-1.467733 2.60096-2.935467 5.133653-4.1984 7.80288C771.857067 631.637333 771.857067 632.838827 770.99008 637.242027zM415.39584 703.904427c161.000107-1.201493 289.532587-129.80224 288.802133-289.068373-0.730453-159.136427-131.66592-287.798613-291.403093-286.53568C254.859947 129.6384 127.720107 260.23936 128.587093 420.174507 129.39264 575.03744 260.85376 705.10592 415.39584 703.904427zM193.1264 415.17056c0.197973-132.068693 113.937067-226.269867 222.405973-221.463893 0.26624 5.065387 0.79872 10.267307 0.79872 15.40096 0.136533 15.264427 0.068267 30.53568 0.068267 45.602133-103.99744 8.997547-156.071253 79.598933-161.000107 160.467627C235.055787 415.17056 214.657707 415.17056 193.1264 415.17056z"></path>
+            </svg>
+        `,
+
+        init() {
+            if (window.top !== window.self) return;
+            if (this.initialized) return;
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+
+                const btn = target.closest('.am-campaign-search-btn[data-am-campaign-quick="1"]');
+                if (!btn) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                const id = this.normalizeCampaignId(btn.getAttribute('data-campaign-id') || btn.dataset.campaignId);
+                if (!id) {
+                    Logger.log('⚠️ 计划ID无效，已忽略快捷查数', true);
+                    return;
+                }
+
+                MagicReport.openWithCampaignId(id, { preferNative: true, promptType: 'click' }).catch((err) => {
+                    Logger.log(`⚠️ 快捷查数失败：${err?.message || '未知错误'} `, true);
+                });
+            }, true);
+
+            this.initialized = true;
+        },
+
+        normalizeCampaignId(rawId) {
+            const id = String(rawId || '').trim();
+            return /^\d{6,}$/.test(id) ? id : '';
+        },
+
+        isInIgnoredArea(el) {
+            if (!(el instanceof Element)) return true;
+            return !!el.closest(this.IGNORE_SELECTOR);
+        },
+
+        createButton(campaignId) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return null;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'am-campaign-search-btn';
+            btn.setAttribute('data-am-campaign-quick', '1');
+            btn.setAttribute('data-campaign-id', id);
+            btn.dataset.campaignId = id;
+            btn.title = `查数计划ID：${id}`;
+            btn.setAttribute('aria-label', `查数计划ID：${id}`);
+            btn.innerHTML = this.ICON_SVG.trim();
+            return btn;
+        },
+
+        run() {
+            if (window.top !== window.self) return;
+            if (!document.body) return;
+            this.enhanceTextNodes();
+            this.enhanceLinkNodes();
+        },
+
+        enhanceTextNodes() {
+            const walker = document.createTreeWalker(
+                document.body,
+                NodeFilter.SHOW_TEXT,
+                {
+                    acceptNode: (node) => {
+                        const parent = node.parentElement;
+                        if (!parent) return NodeFilter.FILTER_REJECT;
+                        if (this.isInIgnoredArea(parent)) return NodeFilter.FILTER_REJECT;
+                        if (parent.closest('.am-campaign-id-token, .am-campaign-search-btn')) return NodeFilter.FILTER_REJECT;
+                        if (parent.closest('a, button, [role="button"], [mx-click]')) return NodeFilter.FILTER_REJECT;
+                        const tag = parent.tagName;
+                        if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(tag)) return NodeFilter.FILTER_REJECT;
+                        const text = node.nodeValue || '';
+                        if (!text || !text.includes('计划')) return NodeFilter.FILTER_REJECT;
+                        if (!/计划\s*(?:ID|id)?\s*[：:]\s*\d{6,}/.test(text)) return NodeFilter.FILTER_REJECT;
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                }
+            );
+
+            const textNodes = [];
+            let node = walker.nextNode();
+            while (node) {
+                textNodes.push(node);
+                node = walker.nextNode();
+            }
+
+            textNodes.forEach((textNode) => {
+                const rawText = textNode.nodeValue || '';
+                const regex = new RegExp(this.TEXT_PATTERN.source, 'g');
+                let match;
+                let cursor = 0;
+                let hasMatch = false;
+                const frag = document.createDocumentFragment();
+
+                while ((match = regex.exec(rawText))) {
+                    const fullText = match[0];
+                    const campaignId = this.normalizeCampaignId(match[1]);
+                    const start = match.index;
+
+                    if (start > cursor) {
+                        frag.appendChild(document.createTextNode(rawText.slice(cursor, start)));
+                    }
+
+                    if (campaignId) {
+                        const token = document.createElement('span');
+                        token.className = 'am-campaign-id-token';
+                        token.textContent = fullText;
+                        frag.appendChild(token);
+
+                        const btn = this.createButton(campaignId);
+                        if (btn) frag.appendChild(btn);
+                        hasMatch = true;
+                    } else {
+                        frag.appendChild(document.createTextNode(fullText));
+                    }
+
+                    cursor = start + fullText.length;
+                }
+
+                if (!hasMatch) return;
+                if (cursor < rawText.length) {
+                    frag.appendChild(document.createTextNode(rawText.slice(cursor)));
+                }
+                textNode.parentNode?.replaceChild(frag, textNode);
+            });
+        },
+
+        enhanceLinkNodes() {
+            const selector = [
+                'a[href*="campaignId="]',
+                'a[href*="campaign_id="]',
+                '[mx-href*="campaignId="]',
+                '[mx-href*="campaign_id="]'
+            ].join(',');
+
+            document.querySelectorAll(selector).forEach((el) => {
+                if (!(el instanceof Element) || this.isInIgnoredArea(el)) return;
+                if (el.closest('.am-campaign-id-token')) return;
+
+                const raw = el.getAttribute('href') || el.getAttribute('mx-href') || '';
+                const id = this.normalizeCampaignId(MagicReport.extractCampaignId(raw));
+                if (!id) return;
+
+                const next = el.nextElementSibling;
+                if (next?.matches?.('.am-campaign-search-btn[data-am-campaign-quick="1"]') &&
+                    next.getAttribute('data-campaign-id') === id) {
+                    return;
+                }
+
+                const btn = this.createButton(id);
+                if (!btn) return;
+                el.insertAdjacentElement('afterend', btn);
+            });
+        }
+    };
+
+    // ==========================================
+    // 7. 启动程序
     // ==========================================
     function main() {
         UI.init();
         Interceptor.init();
+        CampaignIdQuickEntry.init();
+        // NOTE: MagicReport 采用 iframe 方案，无需 init，按需创建
 
         Logger.log(`🚀 阿里助手 Pro v${CURRENT_VERSION} 已启动`);
 
@@ -1321,6 +3266,7 @@
         let hasExecuted = false;
         const runCore = () => {
             Core.run();
+            CampaignIdQuickEntry.run();
             hasExecuted = true;
         };
         const observer = new MutationObserver((mutations) => {
@@ -1378,12 +3324,12 @@
     'use strict';
 
     // 局部版本管理 (确保该模块也能读取到正确版本号)
-    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.24';
+    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.26';
 
     // ==================== 配置模块 ====================
     const CONFIG = {
         UI_ID: 'alimama-escort-helper-ui',
-        VERSION: CURRENT_VERSION || '5.24',
+        VERSION: CURRENT_VERSION || '5.26',
         DEFAULT: {
             bizCode: 'universalBP',
             customPrompt: '帮我进行深度诊断',
@@ -1802,9 +3748,9 @@
     const UI = {
         // 公共样式
         styles: {
-            table: `width:100%;border-collapse:collapse;font-size:10px;margin:4px 0 8px;border-radius:4px;overflow:hidden;`,
-            th: `padding:5px 6px;text-align:left;font-weight:600;border-bottom:1px solid;`,
-            td: `padding:4px 6px;border-bottom:1px solid #f0f0f0;color:#555;`
+            table: `width:100%;border-collapse:collapse;font-size:10px;margin:4px 0 8px;border-radius:12px;overflow:hidden;border:1px solid var(--am26-border,rgba(255,255,255,.4));background:rgb(227 227 227 / 20%);`,
+            th: `padding:5px 6px;text-align:left;font-weight:600;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.4));background:rgba(255,255,255,.14);color:var(--am26-text,#1b2438);`,
+            td: `padding:4px 6px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.28));color:var(--am26-text-soft,#505a74);`
         },
 
         // 全局状态日志（用于非计划相关的消息）
@@ -1839,35 +3785,37 @@
             const card = document.createElement('div');
             card.id = cardId;
             card.style.cssText = `
-                background:#fff;border:1px solid #e8e8e8;border-radius:6px;margin-bottom:8px;
-                overflow:hidden;transition:all 0.3s ease;
+                background:var(--am26-surface,rgba(255,255,255,.25));
+                border:1px solid var(--am26-border,rgba(255,255,255,.4));
+                border-radius:12px;margin-bottom:8px;overflow:hidden;transition:all 0.3s ease;
+                backdrop-filter:blur(6px);
             `;
             card.innerHTML = `
                 <div class="card-header" style="
-                    padding:8px 12px;background:#fafafa;border-bottom:1px solid #e8e8e8;
+                    padding:8px 12px;background:rgba(255,255,255,.22);border-bottom:1px solid var(--am26-border,rgba(255,255,255,.4));
                     display:flex;justify-content:space-between;align-items:center;cursor:pointer;
                 ">
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="
                             display:inline-block;min-width:24px;height:18px;line-height:18px;
-                            background:#1890ff;color:#fff;border-radius:9px;text-align:center;font-size:10px;
+                            background:var(--am26-primary,#2a5bff);color:#fff;border-radius:9px;text-align:center;font-size:10px;
                         ">${index}/${total}</span>
-                        <span style="font-weight:500;color:#333;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                        <span style="font-weight:500;color:var(--am26-text,#1b2438);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                               title="${safeCampaignName}">${safeCampaignName}</span>
-                        <span style="color:#999;font-size:10px;">(${safeCampaignId})</span>
+                        <span style="color:var(--am26-text-soft,#505a74);font-size:10px;">(${safeCampaignId})</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span class="status-badge" style="
                             padding:2px 8px;border-radius:10px;font-size:10px;
-                            background:#e6f7ff;color:#1890ff;
+                            background:rgba(42,91,255,.12);color:var(--am26-primary,#2a5bff);border:1px solid rgba(42,91,255,.28);
                         ">处理中</span>
                         <span class="arrow" style="
                             display:inline-block;transition:transform 0.2s;
-                            font-size:10px;color:#999;
+                            font-size:10px;color:var(--am26-text-soft,#505a74);
                         ">▼</span>
                     </div>
                 </div>
-                <div class="card-body" style="padding:8px 12px;font-size:11px;max-height:150px;overflow-y:auto;">
+                <div class="card-body" style="padding:8px 12px;font-size:11px;max-height:150px;overflow-y:auto;background:rgba(255,255,255,.12);">
                     <div class="log-content" style="display:flex;flex-direction:column;gap:2px;"></div>
                 </div>
                 <style>
@@ -1881,6 +3829,10 @@
             const header = card.querySelector('.card-header');
             const body = card.querySelector('.card-body');
             const arrow = card.querySelector('.arrow');
+            if (header) {
+                header.style.setProperty('border', '0', 'important');
+                header.style.setProperty('border-bottom', '0', 'important');
+            }
             if (header && body && arrow) {
                 header.addEventListener('click', () => {
                     body.classList.toggle('collapsed');
@@ -1917,17 +3869,28 @@
                     const badge = card.querySelector('.status-badge');
                     if (!badge) return;
                     const styles = {
-                        info: 'background:#e6f7ff;color:#1890ff;',
-                        success: 'background:#f6ffed;color:#52c41a;',
-                        warning: 'background:#fffbe6;color:#faad14;',
-                        error: 'background:#fff1f0;color:#ff4d4f;'
+                        info: 'background:rgba(42,91,255,.12);color:var(--am26-primary,#2a5bff);border:1px solid rgba(42,91,255,.28);',
+                        success: 'background:rgba(14,168,111,.12);color:var(--am26-success,#0ea86f);border:1px solid rgba(14,168,111,.28);',
+                        warning: 'background:rgba(232,163,37,.12);color:var(--am26-warning,#e8a325);border:1px solid rgba(232,163,37,.28);',
+                        error: 'background:rgba(234,79,79,.12);color:var(--am26-danger,#ea4f4f);border:1px solid rgba(234,79,79,.28);'
                     };
                     badge.style.cssText = `padding:2px 8px;border-radius:10px;font-size:10px;${styles[type] || styles.info}`;
                     badge.textContent = status;
 
                     // 同时更新卡片边框颜色
-                    const borderColors = { info: '#e8e8e8', success: '#b7eb8f', warning: '#ffe58f', error: '#ffa39e' };
-                    card.style.borderColor = borderColors[type] || borderColors.info;
+                    const borderColors = {
+                        info: 'rgba(42,91,255,.32)',
+                        success: 'rgba(14,168,111,.35)',
+                        warning: 'rgba(232,163,37,.35)',
+                        error: 'rgba(234,79,79,.35)'
+                    };
+                    const borderColor = borderColors[type] || borderColors.info;
+                    card.style.borderColor = borderColor;
+                    const headerEl = card.querySelector('.card-header');
+                    if (headerEl) {
+                        headerEl.style.setProperty('border', '0', 'important');
+                        headerEl.style.setProperty('border-bottom', '0', 'important');
+                    }
                 },
                 collapse: () => {
                     card.querySelector('.card-body')?.classList.add('collapsed');
@@ -1940,18 +3903,18 @@
         renderTableToCard: (cardLogger, data, columns, options = {}) => {
             if (!data.length) return;
 
-            const { headerBg = '#fafafa', headerColor = '#333', highlight } = options;
+            const { headerBg = 'rgba(255,255,255,.14)', headerColor = 'var(--am26-text,#1b2438)', highlight } = options;
             const { table, th, td } = UI.styles;
 
-            let html = `<table style="${table}border:1px solid #e8e8e8;background:#fff;margin-top:4px;">
+            let html = `<table style="${table}margin-top:4px;">
                 <thead><tr>${columns.map(c =>
-                `<th style="${th}background:${headerBg};color:${headerColor};border-color:#e0e0e0;${c.width ? `width:${c.width};` : ''}">${c.title}</th>`
+                `<th style="${th}background:${headerBg};color:${headerColor};${c.width ? `width:${c.width};` : ''}">${c.title}</th>`
             ).join('')}</tr></thead><tbody>`;
 
             data.forEach((row, idx) => {
-                const isHighlight = highlight?.(row);
-                const rowStyle = isHighlight ? 'background:#e6f7ff;' : '';
-                const nameStyle = isHighlight ? 'color:#1890ff;font-weight:600;' : '';
+                const isHighlight = !!highlight?.(row);
+                const rowStyle = isHighlight ? 'background:rgba(42,91,255,.08);' : '';
+                const nameStyle = isHighlight ? 'color:var(--am26-primary,#2a5bff);font-weight:600;' : '';
 
                 html += `<tr style="${rowStyle}">${columns.map((c, i) => {
                     const val = typeof c.render === 'function' ? c.render(row, idx) : row[c.key];
@@ -2004,7 +3967,7 @@
                         } catch { return '-'; }
                     }
                 }
-            ], { headerBg: '#e6f7ff', headerColor: '#1890ff' });
+            ], { headerBg: 'rgba(42,91,255,.12)', headerColor: 'var(--am26-primary,#2a5bff)' });
         },
 
         // 渲染执行结果（全屏模态弹窗）
@@ -2024,7 +3987,7 @@
             overlay.id = `${CONFIG.UI_ID}-result-overlay`;
             overlay.style.cssText = `
                 position:fixed;top:0;left:0;right:0;bottom:0;
-                background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);
+                background:rgba(15,23,42,0.42);backdrop-filter:blur(6px);
                 z-index:1000002;display:flex;align-items:center;justify-content:center;
                 animation:fadeIn 0.3s ease;
             `;
@@ -2038,13 +4001,13 @@
             const rowsHtml = data.map((row, i) => {
                 const safeName = Utils.escapeHtml(row.name ?? '-');
                 return `
-                                    <tr style="${row.success ? '' : 'background:#fff1f0;'}">
-                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#666;">${i + 1}</td>
-                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;${row.success ? '' : 'color:#ff4d4f;'}">${safeName}</td>
-                                        <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:center;">
+                                    <tr style="${row.success ? '' : 'background:rgba(234,79,79,.08);'}">
+                                        <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));color:var(--am26-text-soft,#505a74);">${i + 1}</td>
+                                        <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));${row.success ? 'color:var(--am26-text,#1b2438);' : 'color:var(--am26-danger,#ea4f4f);'}">${safeName}</td>
+                                        <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));text-align:center;">
                                             ${row.success
-                        ? '<span style="color:#52c41a;font-weight:600;">✓ 成功</span>'
-                        : '<span style="color:#ff4d4f;font-weight:600;">✗ 失败</span>'}
+                        ? '<span style="color:var(--am26-success,#0ea86f);font-weight:600;">✓ 成功</span>'
+                        : '<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;">✗ 失败</span>'}
                                         </td>
                                     </tr>
                 `;
@@ -2056,26 +4019,29 @@
                     @keyframes slideUp { from { transform:translateY(20px);opacity:0; } to { transform:translateY(0);opacity:1; } }
                 </style>
                 <div style="
-                    background:#fff;border-radius:12px;padding:24px 32px;min-width:400px;max-width:600px;
-                    box-shadow:0 20px 60px rgba(0,0,0,0.3);animation:slideUp 0.4s ease;
-                    font-family:-apple-system,system-ui,sans-serif;
+                    background:var(--am26-panel-strong,rgba(255,255,255,.45));
+                    border:1px solid var(--am26-border,rgba(255,255,255,.4));
+                    border-radius:18px;padding:24px 32px;min-width:400px;max-width:600px;
+                    box-shadow:0 20px 60px rgba(17,24,39,0.28);animation:slideUp 0.4s ease;
+                    color:var(--am26-text,#1b2438);font-family:var(--am26-font,-apple-system,system-ui,sans-serif);
+                    backdrop-filter:blur(16px);
                 ">
                     <div style="text-align:center;margin-bottom:20px;">
                         <div style="font-size:48px;margin-bottom:12px;">${isAllSuccess ? '🎉' : '⚠️'}</div>
-                        <div style="font-size:20px;font-weight:600;color:#333;">执行完成</div>
-                        <div style="font-size:14px;color:#666;margin-top:8px;">
+                        <div style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
+                        <div style="font-size:14px;color:var(--am26-text-soft,#505a74);margin-top:8px;">
                             共 ${totalCount} 个计划，
-                            <span style="color:#52c41a;font-weight:600;">${successCount} 成功</span>
-                            ${failCount > 0 ? `，<span style="color:#ff4d4f;font-weight:600;">${failCount} 失败</span>` : ''}
+                            <span style="color:var(--am26-success,#0ea86f);font-weight:600;">${successCount} 成功</span>
+                            ${failCount > 0 ? `，<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;">${failCount} 失败</span>` : ''}
                         </div>
                     </div>
-                    <div style="max-height:300px;overflow-y:auto;border:1px solid #e8e8e8;border-radius:8px;">
+                    <div style="max-height:300px;overflow-y:auto;border:1px solid var(--am26-border,rgba(255,255,255,.4));border-radius:12px;">
                         <table style="width:100%;border-collapse:collapse;font-size:13px;">
                             <thead>
-                                <tr style="background:#fafafa;">
-                                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #e8e8e8;width:40px;">#</th>
-                                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #e8e8e8;">计划名称</th>
-                                    <th style="padding:10px 12px;text-align:center;border-bottom:1px solid #e8e8e8;width:80px;">状态</th>
+                                <tr style="background:rgba(255,255,255,.16);">
+                                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));width:40px;">#</th>
+                                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));">计划名称</th>
+                                    <th style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));width:80px;">状态</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2085,8 +4051,8 @@
                     </div>
                     <div style="text-align:center;margin-top:20px;">
                         <button id="${CONFIG.UI_ID}-result-close" style="
-                            padding:10px 32px;background:linear-gradient(135deg,#1890ff,#0050b3);color:#fff;
-                            border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;
+                            padding:10px 32px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;
+                            border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;
                             transition:transform 0.2s,box-shadow 0.2s;
                         ">关闭</button>
                     </div>
@@ -2100,7 +4066,7 @@
             if (closeBtn) {
                 closeBtn.addEventListener('mouseenter', () => {
                     closeBtn.style.transform = 'scale(1.05)';
-                    closeBtn.style.boxShadow = '0 4px 12px rgba(24,144,255,0.4)';
+                    closeBtn.style.boxShadow = '0 4px 12px rgba(42,91,255,0.35)';
                 });
                 closeBtn.addEventListener('mouseleave', () => {
                     closeBtn.style.transform = 'scale(1)';
@@ -2132,9 +4098,10 @@
             panel.id = CONFIG.UI_ID;
             panel.style.cssText = `
                 position:fixed;top:20px;right:20px;width:250px;min-width:250px;max-width:600px;
-                padding:15px;background:#fff;color:#333;border-radius:8px;z-index:1000001;
-                font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,0.15);border:1px solid #e0e0e0;
-                font-family:-apple-system,system-ui,sans-serif;
+                padding:15px;background:var(--am26-panel-strong,rgba(255,255,255,.45));
+                color:var(--am26-text,#1b2438);border-radius:18px;z-index:1000001;
+                font-size:13px;box-shadow:var(--am26-shadow,0 8px 32px rgba(31,38,135,.15));border:1px solid var(--am26-border,rgba(255,255,255,.4));
+                font-family:var(--am26-font,-apple-system,system-ui,sans-serif);
                 opacity:0;transform:scale(0.8);transform-origin:top right;pointer-events:none;
                 transition:opacity 0.3s ease, transform 0.3s ease, width 0.8s cubic-bezier(0.4,0,0.2,1);
                 overflow:hidden;
@@ -2142,29 +4109,35 @@
 
 
             panel.innerHTML = `
-                <div style="font-weight:bold;margin-bottom:12px;border-bottom:1px solid #eee;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="color:#1890ff;">🛡️ 算法护航 v${CONFIG.VERSION}</span>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="font-size:10px;color:#999;margin-right:4px;">API版</span>
-                        <span id="${CONFIG.UI_ID}-center" style="cursor:pointer;color:#999;font-size:14px;transition:color 0.2s;" title="居中">⊙</span>
-                        <span id="${CONFIG.UI_ID}-maximize" style="cursor:pointer;color:#999;font-size:14px;transition:color 0.2s;" title="最大化">□</span>
-                        <span id="${CONFIG.UI_ID}-close" style="cursor:pointer;color:#999;font-size:18px;font-weight:bold;transition:color 0.2s;" title="关闭">×</span>
+                <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:var(--am26-primary,#2a5bff);">🛡️ 算法护航 v${CONFIG.VERSION}</span>
+                    <div style="display:flex;align-items:center;gap:2px;">
+                        <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
+                        <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
+                            <svg viewBox="0 0 1024 1024" style="width:0.8em;height:0.8em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M838 314H197c-19.9 0-36-16.1-36-36s16.1-36 36-36h641c19.9 0 36 16.1 36 36s-16.1 36-36 36zM745 468H290c-19.9 0-36-16.1-36-36s16.1-36 36-36h455c19.9 0 36 16.1 36 36s-16.1 36-36 36zM838 621H197c-19.9 0-36-16.1-36-36s16.1-36 36-36h641c19.9 0 36 16.1 36 36s-16.1 36-36 36zM745 775H290c-19.9 0-36-16.1-36-36s16.1-36 36-36h455c19.9 0 36 16.1 36 36s-16.1 36-36 36z"></path></svg>
+                        </span>
+                        <span id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" title="最大化">
+                            <svg viewBox="0 0 1024 1024" style="width:0.8em;height:1.0em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M444.3 539.9L202 782.2 199.8 563c0-16.5-13.5-30-30-30s-30 13.5-30 30l2.2 285.1c0 8.8 3.8 16.7 9.8 22.2 5.5 6 13.4 9.8 22.2 9.8h295.6c16.5 0 30-13.5 30-30s-13.5-30-30-30H248.9l237.8-237.8c11.7-11.7 11.7-30.8 0-42.4-11.6-11.6-30.7-11.6-42.4 0zM578.1 488l242.3-242.3 2.2 219.2c0 16.5 13.5 30 30 30s30-13.5 30-30l-2.2-285.1c0-8.8-3.8-16.7-9.8-22.2-5.5-6-13.4-9.8-22.2-9.8H552.8c-16.5 0-30 13.5-30 30s13.5 30 30 30h220.7L535.7 445.6c-11.7 11.7-11.7 30.8 0 42.4 11.7 11.7 30.8 11.7 42.4 0z"></path></svg>
+                        </span>
+                        <span id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" title="关闭">
+                            <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                        </span>
                     </div>
                 </div>
-                <div id="${CONFIG.UI_ID}-log-wrapper" style="background:#f5f7fa;padding:0;border-radius:6px;font-size:11px;height:0;max-height:500px;overflow:hidden;margin-bottom:0;border:1px solid #e8e8e8;font-family:Monaco,Consolas,monospace;opacity:0;transform:scaleY(0.8);transform-origin:top;transition:all 0.6s ease-out;">
-                    <div id="${CONFIG.UI_ID}-log" style="color:#555;display:flex;flex-direction:column;gap:3px;line-height:1.5;padding:10px;"></div>
+                <div id="${CONFIG.UI_ID}-log-wrapper" style="background:rgba(255,255,255,.22);padding:0;border-radius:12px;font-size:11px;height:0;max-height:500px;overflow:hidden;margin-bottom:0;border:1px solid var(--am26-border,rgba(255,255,255,.35));font-family:Monaco,Consolas,monospace;opacity:0;transform:scaleY(0.8);transform-origin:top;transition:all 0.6s ease-out;">
+                    <div id="${CONFIG.UI_ID}-log" style="color:var(--am26-text-soft,#505a74);display:flex;flex-direction:column;gap:3px;line-height:1.5;padding:10px;"></div>
                 </div>
-                <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,#1890ff,#0050b3);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
+                <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
-                    <label style="color:#666;font-size:10px;white-space:nowrap;">诊断话术:</label>
-                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:10px;" placeholder="例: 帮我进行深度诊断" />
+                    <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">诊断话术:</label>
+                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" placeholder="例: 帮我进行深度诊断" />
                 </div>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
-                    <label style="color:#666;font-size:10px;white-space:nowrap;">同时执行:</label>
-                    <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:10px;text-align:center;" />
-                    <span style="color:#999;font-size:10px;">个计划 (1-10)</span>
+                    <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">同时执行:</label>
+                    <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" style="width:50px;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;text-align:center;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" />
+                    <span style="color:var(--am26-text-soft,#505a74);font-size:10px;">个计划 (1-10)</span>
                 </div>
-                <div style="margin-top:10px;font-size:10px;color:#666;display:flex;justify-content:space-between;">
+                <div style="margin-top:10px;font-size:10px;color:var(--am26-text-soft,#505a74);display:flex;justify-content:space-between;">
                     <span id="${CONFIG.UI_ID}-user" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
                     <span id="${CONFIG.UI_ID}-token" style="cursor:help;" title="Token状态">● Token</span>
                 </div>
@@ -2178,6 +4151,13 @@
             if (concurrencyInput) concurrencyInput.value = userConfig.concurrency || 3;
 
             // 事件绑定
+            ['center', 'maximize', 'close'].forEach(key => {
+                const el = document.getElementById(`${CONFIG.UI_ID}-${key}`);
+                if (!el) return;
+                el.addEventListener('mouseenter', () => { el.style.color = 'var(--am26-primary,#2a5bff)'; });
+                el.addEventListener('mouseleave', () => { el.style.color = 'var(--am26-text-soft,#505a74)'; });
+            });
+
             document.getElementById(`${CONFIG.UI_ID}-close`).onclick = () => {
                 panel.style.opacity = '0';
                 panel.style.transform = 'scale(0.8)';
@@ -2228,8 +4208,8 @@
                     panel.style.height = `${screenHeight - 40}px`;  // 上下各留 20px 边距
                     if (wrapper) {
                         wrapper.dataset.expanded = 'true';
-                        // 计算日志区域可用高度：面板高度 - 其他元素高度（约 200px）
-                        const availableHeight = screenHeight - 40 - 200;
+                        // 计算日志区域可用高度：额外预留 100px 给下方配置区，避免遮挡
+                        const availableHeight = screenHeight - 40 - 300;
                         wrapper.style.height = `${Math.max(200, availableHeight)}px`;
                         wrapper.style.maxHeight = 'none';
                         wrapper.style.opacity = '1';
@@ -2250,7 +4230,7 @@
                     panel.style.height = `${screenHeight - 40}px`;
                     panel.style.width = '600px';
                     wrapper.dataset.expanded = 'true';
-                    const availableHeight = screenHeight - 40 - 200;
+                    const availableHeight = screenHeight - 40 - 300;
                     wrapper.style.height = `${Math.max(200, availableHeight)}px`;
                     wrapper.style.maxHeight = 'none';
                     wrapper.style.opacity = '1';
@@ -2276,21 +4256,21 @@
             // 左侧拖拽条（调整宽度）
             const resizerLeft = document.createElement('div');
             resizerLeft.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:10;';
-            resizerLeft.onmouseenter = () => resizerLeft.style.background = 'rgba(24,144,255,0.3)';
+            resizerLeft.onmouseenter = () => resizerLeft.style.background = 'rgba(42,91,255,0.28)';
             resizerLeft.onmouseleave = () => resizerLeft.style.background = 'transparent';
             panel.appendChild(resizerLeft);
 
             // 底部拖拽条（调整高度）
             const resizerBottom = document.createElement('div');
             resizerBottom.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize;z-index:10;';
-            resizerBottom.onmouseenter = () => resizerBottom.style.background = 'rgba(24,144,255,0.3)';
+            resizerBottom.onmouseenter = () => resizerBottom.style.background = 'rgba(42,91,255,0.28)';
             resizerBottom.onmouseleave = () => resizerBottom.style.background = 'transparent';
             panel.appendChild(resizerBottom);
 
             // 左下角（同时调整宽高）
             const resizerCorner = document.createElement('div');
             resizerCorner.style.cssText = 'position:absolute;left:0;bottom:0;width:12px;height:12px;cursor:nesw-resize;z-index:11;';
-            resizerCorner.onmouseenter = () => resizerCorner.style.background = 'rgba(24,144,255,0.5)';
+            resizerCorner.onmouseenter = () => resizerCorner.style.background = 'rgba(42,91,255,0.42)';
             resizerCorner.onmouseleave = () => resizerCorner.style.background = 'transparent';
             panel.appendChild(resizerCorner);
 
@@ -2348,13 +4328,17 @@
         // 处理单个计划（使用独立卡片日志）
         processCampaign: async (campaignId, campaignName, index, total) => {
             // 创建该计划的独立卡片
-            const card = UI.createCampaignCard(campaignId, campaignName, index, total);
+            // 如果没有 ID，使用通用 ID "GLOBAL"
+            const realId = campaignId || '0';
+            const realName = campaignId ? campaignName : '通用问答';
+
+            const card = UI.createCampaignCard(realId, realName, index, total);
             if (!card) {
-                Logger.error(`无法创建卡片: ${campaignId}`);
+                Logger.error(`无法创建卡片: ${realId}`);
                 return { success: false, msg: '创建卡片失败' };
             }
 
-            Logger.info(`[${index}/${total}] ${campaignName}(${campaignId}) 开始处理...`);
+            Logger.info(`[${index}/${total}] ${realName}(${realId}) 开始处理...`);
             card.log('开始处理...', '#1890ff');
             card.setStatus('诊断中', 'info');
 
@@ -2590,12 +4574,14 @@
             UI.updateStatus('--------------------------------', '#999');
             UI.updateStatus(`执行完成。成功: ${successList.length}, 失败: ${failList.length}`,
                 successList.length ? 'green' : 'red');
-            UI.renderResults(successList, failList);
         }
     };
 
     // ==================== 初始化 ====================
     TokenManager.hookXHR();
+
+    // NOTE: 将 Token 引用暴露到全局，供万能查数弹窗等模块跨作用域读取
+    window.__AM_TOKENS__ = State.tokens;
 
     // [INTEGRATED] Expose toggle function
     window.__ALIMAMA_OPTIMIZER_TOGGLE__ = () => {
@@ -2619,6 +4605,39 @@
                 panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
                 setTimeout(() => panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)', 500);
             }
+        }
+    };
+
+    // [INTEGRATED] Expose run campaign function for MagicReport
+    window.__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__ = async (campaignId, customPrompt) => {
+        // 覆盖配置
+        userConfig.customPrompt = customPrompt || userConfig.customPrompt;
+
+        // 确保 Token 就绪
+        TokenManager.refresh();
+        if (!State.tokens.loginPointId || !State.tokens.dynamicToken) {
+            return { success: false, msg: 'Token 未就绪，请先在页面点击任意处' };
+        }
+
+        // 调用处理逻辑
+        // 我们利用 ProcessCampaign，但把 UI 部分剥离或复用？
+        // processCampaign 依赖 UI.createCampaignCard。
+        // 为了 Magic Report，我们希望它仅仅返回结果，或者我们可以让 Logic 自己处理 UI。
+        // 这里简单地调用 processCampaign，它会把日志输出到 Escort 面板。
+        // 如果我们想要 Magic Report 独立显示，我们需要修改 Core.processCampaign 
+        // 但为了最小化修改，我们暂时让它在后台跑，并返回结果。
+
+        // 确保 ESCORT UI 存在（因为 ProcessCampaign 依赖 UI 创建卡片）
+        if (!document.getElementById(CONFIG.UI_ID)) UI.create();
+
+        // 强制展开 Escort 面板 (可选)
+        // window.__ALIMAMA_OPTIMIZER_TOGGLE__();
+
+        try {
+            const res = await Core.processCampaign(campaignId, '万能查数任务', 1, 1);
+            return res;
+        } catch (e) {
+            return { success: false, msg: e.message };
         }
     };
 })();

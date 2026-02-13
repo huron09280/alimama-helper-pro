@@ -1,6 +1,6 @@
 # 阿里妈妈多合一助手 - 技术知识库 (Knowledge Base)
 
-本文档记录当前 `v5.24` 版本的关键实现，供维护和扩展时快速对齐。
+本文档记录当前 `v5.26` 版本的关键实现，供维护和扩展时快速对齐。
 
 ## 1. 项目架构 (Architecture)
 
@@ -73,7 +73,7 @@
 ```js
 const CURRENT_VERSION = typeof GM_info !== 'undefined'
   ? GM_info.script.version
-  : '5.24';
+  : '5.26';
 ```
 
 主面板、护航面板与启动日志均引用该值进行展示。
@@ -86,3 +86,20 @@ const CURRENT_VERSION = typeof GM_info !== 'undefined'
 - `getTableHeaders()` / `resolveStickyHeaderWrapper()` 适配 Sticky Table 双表头结构，避免表头错位。
 - 花费排序按钮通过 `resolveChargeHeader(table)` 进行作用域内定位，降低跨区域误触发。
 - URL 变化重置增加短间隔节流，首次执行增加去重，减少高频 DOM 变更下的重复计算。
+
+## 8. 计划 ID 识别与快捷入口 (Campaign ID Discovery)
+
+`v5.26` 引入了 `CampaignIdQuickEntry` 模块，极大提升了查数效率：
+
+- **自动化扫描**：使用高效的选择器扫描页面中的计划名称、ID 文本。
+- **智能注入**：在识别出的 ID 后动态注入「万能查数」SVG 图标。
+- **原生回退机制**：点击图标优先尝试唤起页面原生的查数组件；若失败，则平滑降级至内置的 iframe 万能查数。
+
+## 9. 界面标准规范 (UI/UX Standards)
+
+为达成 Premium 视觉感，项目遵循以下硬性标准：
+
+- **圆角体系**：外层容器统一使用 `18px`，内容卡片 `12px`，交互组件 `10px`。
+- **视觉风格**：全量使用 `backdrop-filter: blur(16px)` 实现磨砂玻璃质感，配合 `rgba` 柔和边框。
+- **图标标准**：摒弃 Unicode 字符，全量切换为标准化补齐比重的 SVG 矢量图标。
+- **响应式布局**：算法护航面板支持自适应高度计算，确保在日志展开时不会遮挡下方的配置控制区。
