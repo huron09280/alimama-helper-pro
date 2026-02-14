@@ -104,7 +104,6 @@
         showBudget: true,
         autoClose: true,
         autoSortCharge: true,  // 花费降序排序
-        autoSortCharge: true,  // 花费降序排序
         logExpanded: true,
         magicReportOpen: false
     };
@@ -249,6 +248,18 @@
         buffer: [],
         timer: null,
 
+        info(msg) {
+            this.log(msg, false);
+        },
+
+        warn(msg) {
+            this.log(msg, true);
+        },
+
+        error(msg) {
+            this.log(msg, true);
+        },
+
         log(msg, isError = false) {
             const now = new Date();
             const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
@@ -268,7 +279,10 @@
         },
 
         flush() {
-            if (!this.el || this.buffer.length === 0) return;
+            if (!this.el || this.buffer.length === 0) {
+                this.timer = null;
+                return;
+            }
 
             const fragment = document.createDocumentFragment();
             const today = new Date().toLocaleDateString('zh-CN');
