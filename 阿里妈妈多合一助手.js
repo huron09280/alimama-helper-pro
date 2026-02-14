@@ -248,28 +248,39 @@
         buffer: [],
         timer: null,
 
-        info(msg) {
-            this.log(msg, false);
+        info(msg, ...args) {
+            this.log(msg, false, ...args);
         },
 
-        warn(msg) {
-            this.log(msg, true);
+        warn(msg, ...args) {
+            this.log(msg, true, ...args);
         },
 
-        error(msg) {
-            this.log(msg, true);
+        error(msg, ...args) {
+            this.log(msg, true, ...args);
         },
 
-        log(msg, isError = false) {
+        log(msg, isError = false, ...args) {
             const now = new Date();
             const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
+            const toText = (value) => {
+                if (typeof value === 'string') return value;
+                if (value === null || value === undefined) return String(value ?? '');
+                try {
+                    return JSON.stringify(value);
+                } catch {
+                    return String(value);
+                }
+            };
+            const fullMsg = [msg, ...args].map(toText).filter(Boolean).join(' ');
+
             // Console output
             const logStyle = isError ? 'color: #ff4d4f' : 'color: #1890ff';
-            console.log(`%c[AM] ${msg}`, logStyle);
+            console.log(`%c[AM] ${fullMsg}`, logStyle);
 
             // Buffer for UI update
-            this.buffer.push({ time, msg, isError });
+            this.buffer.push({ time, msg: fullMsg, isError });
             this.scheduleFlush();
         },
 
