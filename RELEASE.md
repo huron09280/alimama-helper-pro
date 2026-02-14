@@ -28,7 +28,7 @@
 
 ## 2. 发版流程
 
-1. 确认 `package.json` 版本号（例如 `5.25.0`）
+1. 确认脚本头 `@version` 与更新日志一致（例如 `5.27`）
 2. 本地验证：
 
 ```bash
@@ -39,8 +39,8 @@ npm run verify
 3. 提交并打 tag：
 
 ```bash
-git tag v5.25.0
-git push origin v5.25.0
+git tag v5.27
+git push origin v5.27
 ```
 
 4. GitHub Actions 自动执行：

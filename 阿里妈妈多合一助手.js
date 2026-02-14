@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.26
+// @version      5.27
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,11 @@
 // ==/UserScript==
 /**
  * 更新日志
+ * 
+ * v5.27 (2026-02-14)
+ * - ✨ 版本号改为动态解析：统一从 GM_info / GM.info 读取，移除硬编码版本 fallback
+ * - ✨ 双 IIFE 共用同一版本解析器，主面板、护航面板与启动日志版本保持一致
+ * - 📝 文档同步：README 徽章改为 GitHub Release 动态版本显示
  * 
  * v5.26 (2026-02-13)
  * - ✨ 新增「计划ID识别」模块：自动扫描并为页面 ID 注入「万能查数」快捷入口
@@ -71,11 +76,38 @@
  * - ✨ 缩放动画效果
  */
 
+const resolveScriptVersion = () => {
+    const fromGMInfo = typeof GM_info !== 'undefined'
+        && GM_info
+        && GM_info.script
+        && GM_info.script.version;
+    if (typeof fromGMInfo === 'string' && fromGMInfo.trim()) {
+        return fromGMInfo.trim();
+    }
+
+    const fromGM = typeof GM !== 'undefined'
+        && GM
+        && GM.info
+        && GM.info.script
+        && GM.info.script.version;
+    if (typeof fromGM === 'string' && fromGM.trim()) {
+        return fromGM.trim();
+    }
+
+    return 'dev';
+};
+
+if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ !== 'function') {
+    globalThis.__AM_GET_SCRIPT_VERSION__ = resolveScriptVersion;
+}
+
 (function () {
     'use strict';
 
     // 全局版本管理
-    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.26';
+    const CURRENT_VERSION = typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ === 'function'
+        ? globalThis.__AM_GET_SCRIPT_VERSION__()
+        : resolveScriptVersion();
 
     // ==========================================
     // 1. 配置与状态管理
@@ -2023,6 +2055,10 @@
     const Interceptor = {
         panel: null,
         keywords: CONSTANTS.DL_KEYWORDS,
+        excludePatterns: [
+            /videocloud\.cn-hangzhou\.log\.aliyuncs\.com\/logstores\/newplayer\/track(?:[/?#]|$)/i,
+            /\/logstores\/[^/?#]+\/track(?:[/?#]|$)/i
+        ],
         hooksRegistered: false,
         maxParseBytes: 1024 * 1024,
         parsableTypeHints: ['json', 'text', 'javascript', 'xml', 'html', 'csv', 'plain', 'event-stream'],
@@ -2065,10 +2101,19 @@
             return /\.(jpg|png|gif|jpeg|webp|svg|bmp)$/i.test(clean);
         },
 
+        isExcludedUrl(url) {
+            if (typeof url !== 'string') return false;
+            return this.excludePatterns.some(pattern => pattern.test(url));
+        },
+
         isDownloadUrl(url) {
             const safeUrl = this.sanitizeUrl(url);
             if (!safeUrl) return false;
             const lowerUrl = safeUrl.toLowerCase();
+            if (this.isExcludedUrl(lowerUrl)) {
+                this.debugOnce('exclude-non-download-url', `过滤非下载地址: ${safeUrl} `);
+                return false;
+            }
             const hasKeyword = this.keywords.some(k => lowerUrl.includes(String(k).toLowerCase()));
             const hasFileExt = /\.(xlsx|xls|csv|zip|txt)(?:$|[?#])/i.test(lowerUrl);
             return (hasKeyword || hasFileExt) && !this.isImageUrl(lowerUrl);
@@ -2183,10 +2228,8 @@
         findUrlInObject(obj, source) {
             if (!obj) return;
             if (typeof obj === 'string') {
-                if (obj.startsWith('http') && this.keywords.some(k => obj.includes(k))) {
-                    if (!obj.match(/\.(jpg|png|gif|jpeg)$/i)) {
-                        this.show(obj, source); // Modified to call this.show
-                    }
+                if (obj.startsWith('http') && this.isDownloadUrl(obj)) {
+                    this.show(obj, source);
                 }
                 return;
             }
@@ -2209,7 +2252,9 @@
                 if (text && this.keywords.some(k => text.includes(k))) {
                     const regex = /https?:\/\/[^"'\s\\]+(?:xlsx|csv|MAIN)[^"'\s\\]*/g;
                     const matches = text.match(regex);
-                    if (matches) matches.forEach(m => this.show(m, `Regex:${source} `));
+                    if (matches) matches.forEach(m => {
+                        if (this.isDownloadUrl(m)) this.show(m, `Regex:${source} `);
+                    });
                 }
             }
         },
@@ -3349,12 +3394,14 @@
     'use strict';
 
     // 局部版本管理 (确保该模块也能读取到正确版本号)
-    const CURRENT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.26';
+    const CURRENT_VERSION = typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ === 'function'
+        ? globalThis.__AM_GET_SCRIPT_VERSION__()
+        : resolveScriptVersion();
 
     // ==================== 配置模块 ====================
     const CONFIG = {
         UI_ID: 'alimama-escort-helper-ui',
-        VERSION: CURRENT_VERSION || '5.26',
+        VERSION: CURRENT_VERSION,
         DEFAULT: {
             bizCode: 'universalBP',
             customPrompt: '帮我进行深度诊断',

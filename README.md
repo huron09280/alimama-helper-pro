@@ -1,6 +1,6 @@
 # 阿里妈妈多合一助手 (Pro版)
 
-[![Version](https://img.shields.io/badge/version-5.26-blue.svg)](./阿里妈妈多合一助手.js)
+[![Version](https://img.shields.io/github/v/release/huron09280/alimama-helper-pro?sort=semver&label=version)](https://github.com/huron09280/alimama-helper-pro/releases/latest)
 
 阿里妈妈投放平台增强工具，当前仓库以 **Tampermonkey 用户脚本** 为主。
 

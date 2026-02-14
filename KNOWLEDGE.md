@@ -1,6 +1,6 @@
 # 阿里妈妈多合一助手 - 技术知识库 (Knowledge Base)
 
-本文档记录当前 `v5.26` 版本的关键实现，供维护和扩展时快速对齐。
+本文档记录当前 `v5.27` 版本的关键实现，供维护和扩展时快速对齐。
 
 ## 1. 项目架构 (Architecture)
 
@@ -68,15 +68,13 @@
 
 ## 6. 版本同步机制 (Version Sync)
 
-两个 IIFE 均通过以下方式读取版本，避免硬编码漂移：
+两个 IIFE 均通过统一解析函数读取版本，避免硬编码漂移：
 
 ```js
-const CURRENT_VERSION = typeof GM_info !== 'undefined'
-  ? GM_info.script.version
-  : '5.26';
+const CURRENT_VERSION = globalThis.__AM_GET_SCRIPT_VERSION__();
 ```
 
-主面板、护航面板与启动日志均引用该值进行展示。
+解析函数优先读取 `GM_info.script.version`，其次读取 `GM.info.script.version`，最后回退到 `dev`。主面板、护航面板与启动日志均引用该值进行展示。
 
 ## 7. 多表格上下文选择与排序稳定性
 
