@@ -52,6 +52,24 @@ node --check "阿里妈妈多合一助手.js"
 
 建议配合 Tampermonkey 加载脚本后，在阿里妈妈页面执行手工回归（见 `SMOKE_TEST_CHECKLIST.md`）。
 
+### 刷新即生效（Dev Loader）
+
+如果你不想每次复制粘贴脚本到 Tampermonkey，可以用仓库自带开发加载器：
+
+1. 在项目根目录启动本地静态服务：
+
+```bash
+python3 -m http.server 5173
+```
+
+2. 打开 Tampermonkey，创建新脚本，把 `dev/dev-loader.user.js` 的内容完整粘贴进去并保存。
+3. 禁用线上版脚本（`阿里妈妈多合一助手 (Pro版)`），只保留 `Dev Loader` 启用，避免重复执行。
+4. 之后你每次修改 `阿里妈妈多合一助手.js`，只需刷新阿里妈妈页面即可加载最新代码。
+
+说明：
+- Dev Loader 默认从 `http://127.0.0.1:5173/阿里妈妈多合一助手.js` 拉取脚本，并附加时间戳避免缓存。
+- 若端口不同，改 `dev/dev-loader.user.js` 里的 `DEV_ENTRY_URL` 即可。
+
 ## 兼容策略
 
 - Chrome / Edge：首发功能完整
