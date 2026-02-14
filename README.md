@@ -1,16 +1,8 @@
 # 阿里妈妈多合一助手 (Pro版)
 
-[![Version](https://img.shields.io/badge/version-5.26.0-blue.svg)](./package.json)
-[![Build](https://img.shields.io/badge/build-GitHub_Actions-black.svg)](./.github/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-5.26-blue.svg)](./阿里妈妈多合一助手.js)
 
-阿里妈妈投放平台增强工具，现支持两种交付形态：
-
-- 浏览器扩展（Chrome / Edge / Firefox）
-- Tampermonkey 用户脚本（并行维护）
-
-本仓库以 GitHub 为唯一源码，自动发布流程为：
-
-`GitHub Tag -> GitHub Actions -> 商店发布 -> 浏览器自动更新`
+阿里妈妈投放平台增强工具，当前仓库以 **Tampermonkey 用户脚本** 为主。
 
 ## 功能概览
 
@@ -41,54 +33,24 @@
 
 脚本内已包含 `@downloadURL` / `@updateURL`，可自动提示更新。
 
-## 项目结构
+## 项目结构（当前仓库）
 
 ```text
-src/
-  core/alimama-helper-core.js          # 核心业务逻辑（无 userscript 头）
-  platform/gm-shim.js                  # 扩展环境下 GM 兼容层
-  userscript/header.template.txt       # userscript 头模板
-extension/
-  common/content-injector.js           # 内容注入器（页面上下文）
-  common/icons/                        # 扩展图标（沿用悬浮球风格）
-  chrome/manifest.json                 # Chromium 模板清单
-  firefox/manifest.json                # Firefox 模板清单
-build/
-  build.mjs                            # 生成 dist/extension + dist/userscript
-  package.mjs                          # 生成 zip/xpi/release 资产
-  check-syntax.mjs                     # 语法检查
-scripts/
-  publish-chrome.mjs                   # Chrome 商店发布
-  publish-edge.mjs                     # Edge 商店发布
-  publish-firefox.mjs                  # Firefox 商店发布
-.github/workflows/
-  ci.yml
-  release.yml
+阿里妈妈多合一助手.js                     # 主 UserScript（主助手 + 算法护航）
+README.md                               # 项目说明
+PROJECT_RULES.md                        # 工程规则
+SMOKE_TEST_CHECKLIST.md                 # 回归验收清单
+KNOWLEDGE.md                            # 架构与实现知识库
+RELEASE.md                              # 发布说明
 ```
 
 ## 本地开发
 
 ```bash
-npm ci
-npm run check:syntax
-npm run build
-npm run package
+node --check "阿里妈妈多合一助手.js"
 ```
 
-构建产物：
-
-- `dist/extension/chrome`
-- `dist/extension/firefox`
-- `dist/userscript/alimama-helper-pro.user.js`
-- `dist/userscript/alimama-helper-pro.meta.js`
-- `dist/packages/*`
-- 其中包含 `alimama-helper-pro.crx`（用于本地分发安装）
-
-## 版本规则
-
-- 单一版本源：`package.json#version`
-- 构建时注入：`__AM_VERSION__`
-- 发布触发：推送 tag `vX.Y.Z`
+建议配合 Tampermonkey 加载脚本后，在阿里妈妈页面执行手工回归（见 `SMOKE_TEST_CHECKLIST.md`）。
 
 ## 兼容策略
 

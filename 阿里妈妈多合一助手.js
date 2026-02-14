@@ -104,7 +104,6 @@
         showBudget: true,
         autoClose: true,
         autoSortCharge: true,  // 花费降序排序
-        autoSortCharge: true,  // 花费降序排序
         logExpanded: true,
         magicReportOpen: false
     };
@@ -249,16 +248,39 @@
         buffer: [],
         timer: null,
 
-        log(msg, isError = false) {
+        info(msg, ...args) {
+            this.log(msg, false, ...args);
+        },
+
+        warn(msg, ...args) {
+            this.log(msg, true, ...args);
+        },
+
+        error(msg, ...args) {
+            this.log(msg, true, ...args);
+        },
+
+        log(msg, isError = false, ...args) {
             const now = new Date();
             const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
+            const toText = (value) => {
+                if (typeof value === 'string') return value;
+                if (value === null || value === undefined) return String(value ?? '');
+                try {
+                    return JSON.stringify(value);
+                } catch {
+                    return String(value);
+                }
+            };
+            const fullMsg = [msg, ...args].map(toText).filter(Boolean).join(' ');
+
             // Console output
             const logStyle = isError ? 'color: #ff4d4f' : 'color: #1890ff';
-            console.log(`%c[AM] ${msg}`, logStyle);
+            console.log(`%c[AM] ${fullMsg}`, logStyle);
 
             // Buffer for UI update
-            this.buffer.push({ time, msg, isError });
+            this.buffer.push({ time, msg: fullMsg, isError });
             this.scheduleFlush();
         },
 
@@ -268,7 +290,10 @@
         },
 
         flush() {
-            if (!this.el || this.buffer.length === 0) return;
+            if (!this.el || this.buffer.length === 0) {
+                this.timer = null;
+                return;
+            }
 
             const fragment = document.createDocumentFragment();
             const today = new Date().toLocaleDateString('zh-CN');
