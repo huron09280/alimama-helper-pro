@@ -28,39 +28,32 @@
 
 ## 2. 发版流程
 
-1. 确认脚本头 `@version` 与更新日志一致（例如 `5.27`）
+1. 确认脚本头 `@version` 与更新日志一致（例如 `5.29`）
 2. 本地验证：
 
 ```bash
-npm ci
-npm run verify
+node --check "阿里妈妈多合一助手.js"
+node --test tests/logger-api.test.mjs
 ```
 
 3. 提交并打 tag：
 
 ```bash
-git tag v5.27
-git push origin v5.27
+git tag v5.29
+git push origin v5.29
 ```
 
 4. GitHub Actions 自动执行：
-- 构建扩展和 userscript 产物
-- 打包 zip/xpi
+- 运行脚本语法检查与测试
+- 生成 userscript 发布资产
 - 创建 GitHub Release 并上传资产
-- 发布到 Chrome / Edge / Firefox（各渠道独立，失败互不阻断）
 
 ## 3. 产物清单
 
 `release.yml` 会上传以下资产：
 
-- `alimama-helper-pro.crx`
-- `alimama-helper-pro-chrome.zip`
-- `alimama-helper-pro-edge.zip`
-- `alimama-helper-pro-firefox.xpi`
 - `alimama-helper-pro.user.js`
 - `alimama-helper-pro.meta.js`
-
-> `crx` 打包默认使用本地 `.keys/alimama-helper-pro.pem`。如需指定固定私钥，可设置 `CHROME_CRX_KEY_PATH`。
 
 ## 4. 回滚策略
 
