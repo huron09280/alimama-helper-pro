@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.29
+// @version      5.30
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,12 @@
 // ==/UserScript==
 /**
  * 更新日志
+ * 
+ * v5.30 (2026-02-15)
+ * - ✅ 新增代码检查团队机制：补充团队职责文档与 PR 检查清单
+ * - ✅ 新增一键审查脚本：`scripts/review-team.sh` 统一架构/安全/测试/版本校验
+ * - 🔧 CI/Release 流程统一：发布前检查改为复用同一套团队检查入口
+ * - 🔧 审查责任自动分配：新增 `.github/CODEOWNERS`
  * 
  * v5.29 (2026-02-15)
  * - ✨ 主面板工具区重构：新增「辅助显示」入口，与「算法护航」「万能查数」形成三入口布局
