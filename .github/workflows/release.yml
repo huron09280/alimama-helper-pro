@@ -22,9 +22,7 @@ jobs:
           node-version: '22'
 
       - name: Verify script
-        run: |
-          node --check "阿里妈妈多合一助手.js"
-          node --test tests/logger-api.test.mjs
+        run: bash scripts/review-team.sh
 
       - name: Build userscript assets
         run: |

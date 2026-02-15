@@ -46,8 +46,12 @@
 dev/dev-loader.user.js                    # 本地开发加载器（刷新即生效）
 dev/smoke-harness.html                    # 本地烟测页面
 tests/logger-api.test.mjs                 # 关键 API 回归测试
+scripts/review-team.sh                    # 团队自动化检查入口
 .github/workflows/ci.yml                  # CI 检查
 .github/workflows/release.yml             # Tag 发布流程
+.github/pull_request_template.md          # PR 团队检查清单
+.github/CODEOWNERS                        # 审查责任人自动分配
+CODE_REVIEW_TEAM.md                       # 代码检查团队职责说明
 README.md                               # 项目说明
 PROJECT_RULES.md                        # 工程规则
 SMOKE_TEST_CHECKLIST.md                 # 回归验收清单
@@ -63,6 +67,17 @@ node --test tests/logger-api.test.mjs
 ```
 
 建议配合 Tampermonkey 加载脚本后，在阿里妈妈页面执行手工回归（见 `SMOKE_TEST_CHECKLIST.md`）。
+
+## 代码检查团队（Review Team）
+
+仓库内置“5 角色检查团队”机制（架构、安全、测试、UI/交互、发布），用于统一代码审查口径。
+
+```bash
+bash scripts/review-team.sh
+```
+
+- 团队职责说明：`CODE_REVIEW_TEAM.md`
+- PR 勾选清单：`.github/pull_request_template.md`
 
 ### 刷新即生效（Dev Loader）
 
