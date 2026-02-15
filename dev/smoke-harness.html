@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AM Helper Smoke Harness</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .muted { color: #666; font-size: 13px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f6f7f9; }
+  </style>
+</head>
+<body>
+  <h1>阿里妈妈多合一助手 - 本地烟测页</h1>
+  <div class="card">
+    <div class="muted">计划ID文本节点增强：</div>
+    <p>计划ID：123456789（应自动出现查数按钮）</p>
+    <p>推广计划 ID: 987654321（应自动出现查数按钮）</p>
+    <a href="https://example.com/path?campaignId=1122334455">带 campaignId 链接（后面应追加查数按钮）</a>
+  </div>
+
+  <div class="card">
+    <div class="muted">简化数据表（用于触发基础扫描逻辑，不保证完整业务指标）：</div>
+    <table>
+      <thead>
+        <tr>
+          <th>计划名称</th>
+          <th>花费</th>
+          <th>询单</th>
+          <th>加购</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>计划A</td><td>¥100</td><td>5</td><td>10</td></tr>
+        <tr><td>计划B</td><td>¥300</td><td>6</td><td>9</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // Tampermonkey API stubs for local smoke page
+    window.GM_info = { script: { version: 'smoke-local' } };
+    window.GM = { info: { script: { version: 'smoke-local' } } };
+    window.GM_getValue = window.GM_getValue || function (_k, defVal) { return defVal; };
+    window.GM_setValue = window.GM_setValue || function () {};
+    window.GM_setClipboard = window.GM_setClipboard || function (txt) {
+      try { navigator.clipboard?.writeText?.(txt); } catch (_) {}
+    };
+  </script>
+  <script src="../阿里妈妈多合一助手.js"></script>
+</body>
+</html>

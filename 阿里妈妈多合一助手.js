@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.28
+// @version      5.29
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -18,6 +18,13 @@
 /**
  * 更新日志
  * 
+ * v5.29 (2026-02-15)
+ * - ✨ 主面板工具区重构：新增「辅助显示」入口，与「算法护航」「万能查数」形成三入口布局
+ * - ✨ 辅助显示体验优化：开关区改为主面板内联展开/收起，加入过渡动画并默认收起
+ * - 🔧 配置版本化迁移：新增 `configRevision`，升级时自动修正默认配置并持久化
+ * - 🔧 默认行为修订：日志区默认折叠，首次打开更聚焦核心操作区
+ * - ✅ 冒烟与回归增强：补充辅助显示与配置迁移相关检查，新增本地烟测页 `dev/smoke-harness.html`
+ * 
  * v5.28 (2026-02-15)
  * - ✨ 万能查数弹窗头部全量重构：替换为新版品牌头图与文案，统一布局与视觉层级
  * - ✨ 弹窗首屏体验优化：iframe 先隐藏后清理再展示，减少前 1 秒整页闪现
@@ -28,6 +35,7 @@
  * - 🔧 版本号同步机制增强：统一动态读取 `GM_info/GM.info`，双 IIFE 版本展示保持一致
  * - 🐛 日志系统稳定性修复：`Logger.flush` 早退分支重置 timer，避免日志刷新锁死
  * - 🔧 自动化质量加固：补充 Logger API 回归测试，CI/Release 工作流适配 userscript 仓库
+ * - 🔧 主面板三入口排版修复：按钮文案强制单行显示，避免“万能查数/辅助显示”在窄宽度下换行
  * 
  * v5.27 (2026-02-14)
  * - ✨ 版本号改为动态解析：统一从 GM_info / GM.info 读取，移除硬编码版本 fallback
@@ -125,6 +133,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     // ==========================================
     const CONSTANTS = {
         STORAGE_KEY: 'AM_HELPER_CONFIG',
+        CONFIG_REVISION: 2,
         LEGACY_STORAGE_KEYS: ['AM_HELPER_CONFIG_V5_15', 'AM_HELPER_CONFIG_V5_14', 'AM_HELPER_CONFIG_V5_13'],
         TAG_BASE_STYLE: 'align-items:center;border:0 none;border-radius:var(--mx-effects-tag-border-radius,8px);display:inline-flex;font-size:9px;font-weight:800;height:var(--mx-effects-tag-height,16px);justify-content:center;padding:0 var(--mx-effects-tag-h-gap,1px);position:relative;transition:background-color var(--duration),color var(--duration),border var(--duration),opacity var(--duration);-webkit-user-select:none;-moz-user-select:none;user-select:none;width:100%;margin-top:2px;',
         STYLES: {
@@ -147,8 +156,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         showBudget: true,
         autoClose: true,
         autoSortCharge: true,  // 花费降序排序
-        logExpanded: true,
-        magicReportOpen: false
+        logExpanded: false,
+        magicReportOpen: false,
+        configRevision: CONSTANTS.CONFIG_REVISION
     };
 
     const createHookManager = () => {
@@ -259,21 +269,42 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         }
     };
 
+    const normalizeConfig = (rawConfig) => {
+        const parsedRevision = Number(rawConfig?.configRevision);
+        const hasValidRevision = Number.isFinite(parsedRevision);
+        const needsRevisionUpgrade = !hasValidRevision || parsedRevision < CONSTANTS.CONFIG_REVISION;
+        const nextConfig = { ...DEFAULT_CONFIG, ...rawConfig, panelOpen: false };
+
+        if (needsRevisionUpgrade) {
+            nextConfig.logExpanded = false;
+            nextConfig.configRevision = CONSTANTS.CONFIG_REVISION;
+        } else {
+            nextConfig.configRevision = parsedRevision;
+        }
+
+        return { config: nextConfig, migrated: needsRevisionUpgrade };
+    };
+
     const loadConfig = () => {
         const current = safeParseJSON(localStorage.getItem(CONSTANTS.STORAGE_KEY));
         if (current && typeof current === 'object') {
-            return { ...DEFAULT_CONFIG, ...current, panelOpen: false };
+            const { config, migrated } = normalizeConfig(current);
+            if (migrated) {
+                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
+            }
+            return config;
         }
 
         for (const legacyKey of CONSTANTS.LEGACY_STORAGE_KEYS) {
             const legacy = safeParseJSON(localStorage.getItem(legacyKey));
             if (legacy && typeof legacy === 'object') {
-                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(legacy));
-                return { ...DEFAULT_CONFIG, ...legacy, panelOpen: false };
+                const { config } = normalizeConfig(legacy);
+                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
+                return config;
             }
         }
 
-        return DEFAULT_CONFIG;
+        return { ...DEFAULT_CONFIG };
     };
 
     const State = {
@@ -866,6 +897,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     // 4. UI 界面 (View) - 参考算法护航脚本样式
     // ==========================================
     const UI = {
+        runtime: {
+            assistExpanded: false
+        },
+
         init() {
             this.injectStyles();
             this.createElements();
@@ -989,14 +1024,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
 
 
-                .am-tools-row { display: flex; gap: 8px; margin-bottom: 8px; }
+                .am-tools-row {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 8px;
+                    margin-bottom: 0;
+                }
                 .am-tool-btn {
                     flex: 1; text-align: center; padding: 12px 0; border-radius: 10px;
                     background: var(--mx-number-report-brand-color1); 
                     border: 1px solid rgba(0, 0, 0, 0.1);
-                    color: var(--am26-text-soft); font-size: 13px; font-weight: 500;
+                    color: var(--am26-text-soft); font-size: 12px; font-weight: 500;
                     cursor: pointer; transition: all 0.3s;
-                    display: flex; align-items: center; justify-content: center; gap: 6px;
+                    display: flex; align-items: center; justify-content: center; gap: 4px;
+                    white-space: nowrap;
+                    word-break: keep-all;
+                    flex-wrap: nowrap;
+                    line-height: 1.2;
+                }
+                .am-tool-btn svg {
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
                 }
                 .am-tool-btn:hover {
                     background: var(--mx-number-report-brand-color10); 
@@ -1004,6 +1053,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: var(--mx-number-report-brand-color);
                     box-shadow: 0 0 10px var(--mx-number-report-brand-color50); /* 亮灯效果 */
                     transform: translateY(-1px);
+                }
+                .am-tool-btn.active {
+                    background: linear-gradient(135deg, var(--mx-number-report-brand-color10), rgba(69, 84, 229, 0.2));
+                    border-color: var(--mx-number-report-brand-color);
+                    color: var(--mx-number-report-brand-color);
+                    box-shadow: inset 0 0 0 1px var(--mx-number-report-brand-color10), 0 0 10px var(--mx-number-report-brand-color50);
+                }
+
+                #am-assist-switches {
+                    max-height: 0;
+                    opacity: 0;
+                    transform: translateY(-6px);
+                    overflow: hidden;
+                    pointer-events: none;
+                    margin-top: 0;
+                    padding: 0 10px;
+                    border-radius: 12px;
+                    border: 1px solid transparent;
+                    background: linear-gradient(135deg, rgba(69, 84, 229, 0.14), rgba(69, 84, 229, 0.04) 55%, rgba(255, 255, 255, 0.24));
+                    transition: max-height 0.32s ease, opacity 0.24s ease, transform 0.32s ease, margin-top 0.32s ease, padding 0.32s ease, border-color 0.32s ease;
+                }
+                #am-assist-switches.open {
+                    max-height: 220px;
+                    opacity: 1;
+                    transform: translateY(0);
+                    pointer-events: auto;
+                    margin-top: 10px;
+                    padding: 12px 10px;
+                    border-color: rgba(69, 84, 229, 0.22);
                 }
 
                 .am-switches-grid {
@@ -1836,28 +1914,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M907.8 770.1c-60-96.1-137.9-178.6-227.1-241.6 8.3-43.1 7.1-88.9-5-131-29.2-101.5-121.1-177.3-227.5-188.9-10.4-1.2-18.7 8.3-15.3 18.2 24.5 70.3 5.4 152.1-51.5 209-56.9 56.9-138.7 76-209 51.5-9.9-3.4-19.4 4.8-18.2 15.3 11.6 106.4 87.4 198.3 188.9 227.5 42.1 12.1 87.9 13.3 131 5 63.1 89.2 145.5 167.1 241.6 227.1 21.6 13.5 49.3-3.9 46.2-28.7l-12.7-106.3c10.3 3.6 21 6.1 31.9 7.4 35.7 4.2 71.3-7.5 99.2-35.4 27.9-27.9 39.6-63.5 35.4-99.2-1.3-10.9-3.8-21.6-7.4-31.9l106.3 12.7c24.9 3.1 42.3-24.6 28.7-46.2zM512 512c-23.7 0-46.3-5-67.4-14.1-18.4-7.9-19-33.3-1-42.3 22.1-11 47.9-16.1 74.5-13.2 59.8 6.5 106.9 53.6 113.4 113.4 2.9 26.6-2.2 52.4-13.2 74.5-9 18-34.4 17.4-42.3-1-9.1-21.1-14.1-43.7-14.1-67.4z"></path></svg>
                         算法护航
                     </div>
-                    <div class="am-tool-btn" data-key="magicReportOpen">
+                    <div class="am-tool-btn" id="am-trigger-magic-report">
                         <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 128h768v768H128z m60.8 60.8V835.2h646.4V188.8H188.8z M256 384h128v320H256V384z m192-128h128v448H448V256z m192 192h128v256H640V448z"></path></svg>
                         万能查数
+                    </div>
+                    <div class="am-tool-btn" id="am-toggle-assist-display">
+                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M512 208c219.8 0 401.4 124.4 472 302.2a23.7 23.7 0 0 1 0 17.6C913.4 705.6 731.8 830 512 830S110.6 705.6 40 527.8a23.7 23.7 0 0 1 0-17.6C110.6 332.4 292.2 208 512 208zm0 104c-110.6 0-200 89.4-200 200s89.4 200 200 200 200-89.4 200-200-89.4-200-200-200zm0 88a112 112 0 1 1 0 224 112 112 0 0 1 0-224z"></path></svg>
+                        辅助显示
                     </div>
                 </div>
 
                 <!-- Section 2: Settings -->
-                <div class="am-switches-grid">
-                    <div class="am-switch-btn" data-key="showCost">询单成本</div>
-                    <div class="am-switch-btn" data-key="showCartCost">加购成本</div>
-                    <div class="am-switch-btn" data-key="showPercent">潜客占比</div>
-                    <div class="am-switch-btn" data-key="showCostRatio">花费占比</div>
-                    <div class="am-switch-btn" data-key="showBudget">预算进度</div>
-                    <div class="am-switch-btn" data-key="autoSortCharge">花费排序</div>
-                    <!-- <div class="am-switch-btn" data-key="autoClose">弹窗速闭</div> -->
+                <div id="am-assist-switches">
+                    <div class="am-switches-grid">
+                        <div class="am-switch-btn" data-key="showCost">询单成本</div>
+                        <div class="am-switch-btn" data-key="showCartCost">加购成本</div>
+                        <div class="am-switch-btn" data-key="showPercent">潜客占比</div>
+                        <div class="am-switch-btn" data-key="showCostRatio">花费占比</div>
+                        <div class="am-switch-btn" data-key="showBudget">预算进度</div>
+                        <div class="am-switch-btn" data-key="autoSortCharge">花费排序</div>
+                        <!-- <div class="am-switch-btn" data-key="autoClose">弹窗速闭</div> -->
+                    </div>
                 </div>
                 <div class="am-log-section">
                     <div class="am-log-header">
                         <span>📋 运行日志</span>
                         <div>
                             <span class="am-action-btn" id="am-log-clear">清空</span>
-                            <span class="am-action-btn" id="am-log-toggle">隐藏</span>
+                            <span class="am-action-btn" id="am-log-toggle">展开</span>
                         </div>
                     </div>
                     <div id="am-log-content"></div>
@@ -1941,10 +2025,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
 
             // 工具按钮 (Tools) - 万能查数
-            const magicBtn = document.querySelector('.am-tool-btn[data-key="magicReportOpen"]');
+            const magicBtn = document.getElementById('am-trigger-magic-report');
             if (magicBtn) {
                 magicBtn.onclick = () => {
                     MagicReport.toggle(true);
+                };
+            }
+
+            const assistToggleBtn = document.getElementById('am-toggle-assist-display');
+            if (assistToggleBtn) {
+                assistToggleBtn.onclick = () => {
+                    this.runtime.assistExpanded = !this.runtime.assistExpanded;
+                    this.updateState();
                 };
             }
 
@@ -2032,6 +2124,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const panel = document.getElementById('am-helper-panel');
             const logContent = document.getElementById('am-log-content');
             const logToggle = document.getElementById('am-log-toggle');
+            const assistPanel = document.getElementById('am-assist-switches');
+            const assistToggleBtn = document.getElementById('am-toggle-assist-display');
 
             // 面板显示/隐藏动画
             if (panelOpen) {
@@ -2048,6 +2142,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (State.config[key]) btn.classList.add('active');
                 else btn.classList.remove('active');
             });
+
+            if (assistPanel) {
+                assistPanel.classList.toggle('open', this.runtime.assistExpanded);
+            }
+            if (assistToggleBtn) {
+                assistToggleBtn.classList.toggle('active', this.runtime.assistExpanded);
+            }
 
             // 日志展开/折叠
             if (logExpanded) {
