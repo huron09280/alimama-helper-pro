@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.27
+// @version      5.28
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,17 @@
 // ==/UserScript==
 /**
  * 更新日志
+ * 
+ * v5.28 (2026-02-15)
+ * - ✨ 万能查数弹窗头部全量重构：替换为新版品牌头图与文案，统一布局与视觉层级
+ * - ✨ 弹窗首屏体验优化：iframe 先隐藏后清理再展示，减少前 1 秒整页闪现
+ * - 🔧 样式规则改为动态选择器：兼容动态 `mx_*` 节点，补齐 `mb16` 隐藏与 `top` 定位
+ * - 🔧 快捷查数文案升级：由“获取计划ID”改为“计划名：{对应计划名}”
+ * - 🐛 计划名识别修复：优先匹配计划区块 `a[title]`，规避误取商品标题/平台推荐等噪音
+ * - ✨ 新增开发加载器脚本：`dev/dev-loader.user.js` 支持本地脚本自动加载与执行，便于快速联调
+ * - 🔧 版本号同步机制增强：统一动态读取 `GM_info/GM.info`，双 IIFE 版本展示保持一致
+ * - 🐛 日志系统稳定性修复：`Logger.flush` 早退分支重置 timer，避免日志刷新锁死
+ * - 🔧 自动化质量加固：补充 Logger API 回归测试，CI/Release 工作流适配 userscript 仓库
  * 
  * v5.27 (2026-02-14)
  * - ✨ 版本号改为动态解析：统一从 GM_info / GM.info 读取，移除硬编码版本 fallback
@@ -2325,9 +2336,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         header: null,
         iframe: null,
         lastCampaignId: '',
+        lastCampaignName: '',
         BASE_URL: 'https://one.alimama.com/index.html#!/report/ai-report',
         QUICK_PROMPTS: [
-            { label: '🆔 获取计划ID', value: '当前计划ID：{campaignId}', type: 'action', autoSubmit: false, requireCampaignId: true },
+            { label: '📛 计划名：{campaignName}', value: '计划名：{campaignName}', type: 'action', autoSubmit: false, requireCampaignName: true },
             { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '🛒 加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true }
@@ -2344,7 +2356,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             div#app { min-width: 0!important; }
             /* 隐藏瀑布流推荐区域和 Magix 弹出层 */
-            #mx_155 > div.waterfall-masonry,
+            [id^="mx_"] > div.waterfall-masonry,
+            [id^="mx_"] > div.mb16,
             .waterfall-masonry,
             [id^="popover_mx_"] { display: none!important; }
             /* 查询结果容器不限制高度 */
@@ -2352,6 +2365,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             /* 搜索栏和查询弹层宽度统一 100% */
             #ai-input-magic-report,
             .query-pop { width: 100%!important; }
+            [id^="mx_"] > div.ivthphqCKy.search-bar-selected.mb8 > div.query-pop { top: 128px!important; }
+            .bXMILLeECt,
+            .bXMILLeECu { top: -135px!important; }
+            #universalBP_common_layout > div.bXMILLeECt > div.bXMILLeECs { top: -150px!important; }
     `,
 
         getIframeDoc() {
@@ -2399,6 +2416,302 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return '';
         },
 
+        sanitizeCampaignName(rawName) {
+            const normalized = String(rawName || '')
+                .replace(/\s+/g, ' ')
+                .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
+                .trim();
+            if (!normalized) return '';
+
+            const stripped = normalized
+                .replace(/^计划(?:名|名称)\s*[：:]\s*/i, '')
+                .trim();
+            if (!stripped) return '';
+            if (/^\d{6,}$/.test(stripped)) return '';
+            return stripped;
+        },
+
+        escapeRegExp(rawText) {
+            return String(rawText || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        },
+
+        isLikelyCampaignName(rawName) {
+            const name = this.sanitizeCampaignName(rawName);
+            if (!name) return false;
+            if (name.length < 2 || name.length > 120) return false;
+            if (/^\d+$/.test(name)) return false;
+            if (/(?:查数计划ID|计划\s*(?:ID|id)|当前计划ID|campaign[_\s-]*id)/i.test(name)) return false;
+            if (!/[\u4e00-\u9fa5A-Za-z]/.test(name)) return false;
+            if (/^(?:计划|计划id|计划名称|计划名|状态|预算|日限额|操作|查数|获取计划名|阿里妈妈|万象查数|万能查数)$/i.test(name)) return false;
+            if (/^(?:平台推荐|护航已结束|直接成交|计划组|投放调优.*)$/i.test(name)) return false;
+            return true;
+        },
+
+        extractCampaignNameFromCompositeText(rawText, campaignId = '') {
+            let text = String(rawText || '').replace(/\s+/g, ' ').trim();
+            if (!text) return '';
+
+            const directMatch = text.match(/计划(?:名|名称)\s*[：:]\s*([^\n\r|,，;；]+)/i);
+            if (directMatch?.[1]) {
+                const directName = this.sanitizeCampaignName(directMatch[1]);
+                if (this.isLikelyCampaignName(directName)) return directName;
+            }
+
+            if (campaignId) {
+                const idPattern = this.escapeRegExp(campaignId);
+                text = text
+                    .replace(new RegExp(`计划\\s*(?:ID|id)?\\s*[：:]?\\s*${idPattern}`, 'ig'), ' ')
+                    .replace(new RegExp(idPattern, 'g'), ' ');
+            }
+
+            text = text
+                .replace(/查数计划ID|计划ID|获取计划名|点击分析|加购分析|成交分析|查数|计划名|计划名称/gi, ' ')
+                .replace(/[()[\]{}<>【】]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!text) return '';
+
+            const segments = text.split(/[|｜/，,；;>»→]/).map(s => s.trim()).filter(Boolean);
+            const candidates = segments.length ? segments : [text];
+            const valid = candidates
+                .map(s => this.sanitizeCampaignName(s))
+                .filter(name => this.isLikelyCampaignName(name))
+                .sort((a, b) => b.length - a.length);
+            return valid[0] || '';
+        },
+
+        guessCampaignNameById(campaignId, seedElement = null) {
+            const id = String(campaignId || '').trim();
+            const idPattern = id ? this.escapeRegExp(id) : '';
+            const textCandidates = [];
+
+            const pushText = (raw) => {
+                const text = String(raw || '').replace(/\s+/g, ' ').trim();
+                if (!text) return;
+                if (text.length > 600) return;
+                const compact = text.replace(/\s+/g, '');
+                const hasPlanHint = /计划[:：]|计划名|计划名称|campaign[_\s-]*name|campaign[_\s-]*id/i.test(compact);
+                if (!hasPlanHint && compact.length > 36) return;
+                if (!hasPlanHint && /(?:宝贝ID|计划组[:：]|投放调优|护航已结束|平台推荐)/i.test(compact)) return;
+                textCandidates.push(text);
+            };
+
+            const pickNameByPlanPrefix = (root) => {
+                if (!(root instanceof Element)) return '';
+                const strictAnchors = Array.from(root.querySelectorAll('span + a[title]'));
+                for (const anchor of strictAnchors) {
+                    if (!(anchor instanceof HTMLAnchorElement)) continue;
+                    const prevRaw = (anchor.previousElementSibling?.textContent || '').replace(/\s+/g, '');
+                    if (!/^计划[:：]?$/.test(prevRaw)) continue;
+                    const strictName = this.sanitizeCampaignName(anchor.getAttribute('title'));
+                    if (this.isLikelyCampaignName(strictName)) return strictName;
+                }
+
+                const anchors = Array.from(root.querySelectorAll('a[title]'));
+                for (const anchor of anchors) {
+                    const titleName = this.sanitizeCampaignName(anchor.getAttribute('title'));
+                    if (!this.isLikelyCampaignName(titleName)) continue;
+
+                    const prevRaw = (anchor.previousElementSibling?.textContent || '').replace(/\s+/g, '');
+                    const parentRaw = (anchor.parentElement?.textContent || '').replace(/\s+/g, '');
+                    const nearRaw = (anchor.closest('.asiYysqLgo, .asiYysqLgr, .ellipsis, div, span, td, li')?.textContent || '').replace(/\s+/g, '');
+                    const planWithName = `计划：${titleName}`;
+                    const planWithNameAlt = `计划:${titleName}`;
+                    if (
+                        /^计划[:：]?$/.test(prevRaw) ||
+                        parentRaw.includes(planWithName) ||
+                        parentRaw.includes(planWithNameAlt) ||
+                        nearRaw.includes(planWithName) ||
+                        nearRaw.includes(planWithNameAlt)
+                    ) {
+                        return titleName;
+                    }
+                }
+                return '';
+            };
+
+            const scoreAnchor = (anchor) => {
+                if (!(anchor instanceof HTMLAnchorElement)) return { name: '', score: -999 };
+                const titleName = this.sanitizeCampaignName(anchor.getAttribute('title'));
+                if (!this.isLikelyCampaignName(titleName)) return { name: '', score: -999 };
+
+                const href = (anchor.getAttribute('href') || anchor.getAttribute('mx-href') || '').trim();
+                const text = (anchor.textContent || '').trim();
+                const cls = (anchor.className || '').toString();
+                const prevText = (anchor.previousElementSibling?.textContent || '').replace(/\s+/g, '');
+                const parentText = (anchor.parentElement?.textContent || '').replace(/\s+/g, '');
+                const nearText = (anchor.closest('div,span,td,li')?.textContent || '').replace(/\s+/g, '');
+                const exactPlanPattern = new RegExp(`计划[:：]${this.escapeRegExp(titleName)}`);
+
+                let score = 0;
+                if (text && text === titleName) score += 15;
+                if (id && idPattern && new RegExp(`(?:campaignId|campaign_id)=${idPattern}`).test(href)) score += 100;
+                if (href.startsWith('javascript:')) score += 8;
+                if (/^计划[:：]?$/.test(prevText)) score += 140;
+                if (exactPlanPattern.test(parentText)) score += 120;
+                if (exactPlanPattern.test(nearText)) score += 100;
+                if (/计划[:：]/.test(parentText) || /计划[:：]/.test(nearText)) score += 30;
+                if (/wO_WXndakU/.test(cls)) score += 60;
+                if (/wO_WXndw/.test(cls)) score -= 220;
+                if (/平台推荐|护航已结束|投放调优|直接成交|计划组|宝贝ID/i.test(parentText + nearText)) score -= 60;
+
+                return { name: titleName, score };
+            };
+
+            const pickBestNameFromRoot = (root, minScore = 110) => {
+                if (!(root instanceof Element)) return '';
+                const anchors = Array.from(root.querySelectorAll('a[title]'));
+                let best = { name: '', score: -999 };
+                anchors.forEach((anchor) => {
+                    const current = scoreAnchor(anchor);
+                    if (current.score > best.score) best = current;
+                });
+                return best.score >= minScore ? best.name : '';
+            };
+
+            const pickNameNearElement = (el) => {
+                if (!(el instanceof Element)) return '';
+                let cursor = el;
+                for (let depth = 0; cursor && depth < 10; depth++) {
+                    const strictName = pickNameByPlanPrefix(cursor);
+                    if (strictName) return strictName;
+                    const name = pickBestNameFromRoot(cursor, 120);
+                    if (name) return name;
+                    cursor = cursor.parentElement;
+                }
+                return '';
+            };
+
+            if (seedElement instanceof Element) {
+                const nearName = pickNameNearElement(seedElement);
+                if (nearName) return nearName;
+            }
+
+            const collectFromElement = (el) => {
+                if (!(el instanceof Element)) return;
+                pushText(el.getAttribute('data-campaign-name'));
+                pushText(el.getAttribute('campaignname'));
+                pushText(el.getAttribute('title'));
+                pushText(el.getAttribute('aria-label'));
+                const text = String(el.textContent || '').trim();
+                if (/计划[:：]|计划名|计划名称|campaign[_\s-]*name|campaign[_\s-]*id/i.test(text)) {
+                    pushText(text);
+                }
+            };
+
+            const collectAround = (el) => {
+                if (!(el instanceof Element)) return;
+                collectFromElement(el);
+                collectFromElement(el.previousElementSibling);
+                collectFromElement(el.nextElementSibling);
+                collectFromElement(el.parentElement);
+                const row = el.closest('tr, [role="row"], li, [class*="row"], [class*="item"]');
+                if (row) {
+                    collectFromElement(row);
+                    row.querySelectorAll('[data-campaign-name], [campaignname], [title]').forEach(node => collectFromElement(node));
+                }
+            };
+
+            if (seedElement) collectAround(seedElement);
+
+            if (id) {
+                const strictByButton = Array.from(document.querySelectorAll(`.am-campaign-search-btn[data-campaign-id="${id}"]`))
+                    .map(btn => btn.closest('div[mxa*="wO_WXndqs:l"], .flex-1.min-width-0, [class*="wO_WXnd"]'))
+                    .filter(Boolean);
+                for (const root of strictByButton) {
+                    if (!(root instanceof Element)) continue;
+                    const exactNode = root.querySelector('span.wO_WXndakU + a[title].wO_WXndakU, span[class*="wO_WXndakU"] + a[title][href="javascript:;"], .asiYysqLgo .ellipsis a[title][href="javascript:;"]');
+                    if (exactNode instanceof HTMLAnchorElement) {
+                        const exactName = this.sanitizeCampaignName(exactNode.getAttribute('title'));
+                        if (this.isLikelyCampaignName(exactName)) return exactName;
+                    }
+                }
+
+                const selectors = [
+                    `.am-campaign-search-btn[data-campaign-id="${id}"]`,
+                    `[data-campaign-id="${id}"]`,
+                    `[campaignid="${id}"]`,
+                    `a[href*="campaignId=${id}"]`,
+                    `a[href*="campaign_id=${id}"]`,
+                    `input[type="checkbox"][value="${id}"]`
+                ];
+                selectors.forEach((selector) => {
+                    document.querySelectorAll(selector).forEach(node => {
+                        const rowRoot = node.closest('tr, [role="row"], li, [class*="row"], [class*="item"], [mxa*="wO_WXndqs"]') || node.parentElement;
+                        const strictName = pickNameByPlanPrefix(rowRoot);
+                        if (strictName) {
+                            textCandidates.push(`计划名：${strictName}`);
+                            return;
+                        }
+
+                        const nearName = pickNameNearElement(node) || pickBestNameFromRoot(rowRoot, 100);
+                        if (nearName) {
+                            textCandidates.push(`计划名：${nearName}`);
+                            return;
+                        }
+                        collectAround(node);
+                    });
+                });
+
+                const allTitleAnchors = Array.from(document.querySelectorAll(`a[href*="campaignId=${id}"][title], a[href*="campaign_id=${id}"][title], a[mx-href*="campaignId=${id}"][title], a[mx-href*="campaign_id=${id}"][title]`));
+                if (allTitleAnchors.length) {
+                    const best = allTitleAnchors
+                        .map(anchor => scoreAnchor(anchor))
+                        .sort((a, b) => b.score - a.score)[0];
+                    if (best && best.score >= 80 && this.isLikelyCampaignName(best.name)) {
+                        return best.name;
+                    }
+                }
+            }
+
+            for (const candidateText of textCandidates) {
+                const fromPattern = this.extractCampaignName(candidateText);
+                if (this.isLikelyCampaignName(fromPattern)) return fromPattern;
+
+                const fromComposite = this.extractCampaignNameFromCompositeText(candidateText, id);
+                if (this.isLikelyCampaignName(fromComposite)) return fromComposite;
+            }
+
+            const titleName = this.extractCampaignNameFromCompositeText(document.title, id);
+            if (this.isLikelyCampaignName(titleName)) return titleName;
+
+            return '';
+        },
+
+        extractCampaignName(rawText) {
+            const text = String(rawText || '').trim();
+            if (!text) return '';
+
+            const sources = [text];
+            try {
+                sources.push(decodeURIComponent(text));
+            } catch { }
+
+            const patterns = [
+                /(?:^|[?&#])campaignName=([^&#]+)/i,
+                /(?:^|[?&#])campaign_name=([^&#]+)/i,
+                /计划[：:]\s*([^\n\r|,，;；]+)/i,
+                /计划(?:名|名称)[：:\s]+([^\n\r;；|]+)/i
+            ];
+
+            for (const source of sources) {
+                for (const reg of patterns) {
+                    const match = source.match(reg);
+                    if (!match?.[1]) continue;
+                    const raw = String(match[1] || '').trim();
+                    if (!raw) continue;
+                    let decoded = raw;
+                    try {
+                        decoded = decodeURIComponent(raw);
+                    } catch { }
+                    const name = this.sanitizeCampaignName(decoded);
+                    if (name) return name;
+                }
+            }
+
+            return '';
+        },
+
         extractCampaignIdFromElement(el) {
             if (!(el instanceof Element)) return '';
 
@@ -2421,6 +2734,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (nearestLink) {
                 const id = this.extractCampaignId(nearestLink.getAttribute('href') || nearestLink.href);
                 if (id) return id;
+            }
+
+            return '';
+        },
+
+        extractCampaignNameFromElement(el) {
+            if (!(el instanceof Element)) return '';
+            const classText = (el.className || '').toString();
+            if (/wO_WXndw/.test(classText)) return '';
+
+            const candidates = [
+                el.getAttribute('data-campaign-name'),
+                el.getAttribute('campaignname'),
+                el.getAttribute('data-name'),
+                el.getAttribute('title'),
+                el.getAttribute('aria-label'),
+                el.getAttribute('placeholder')
+            ];
+            if (el instanceof HTMLInputElement) candidates.push(el.value);
+
+            for (const item of candidates) {
+                const name = this.extractCampaignName(item);
+                if (this.isLikelyCampaignName(name)) return name;
+                const plainName = this.sanitizeCampaignName(item);
+                if (this.isLikelyCampaignName(plainName)) return plainName;
+            }
+
+            const ownText = this.sanitizeCampaignName(el.textContent);
+            const hasPlanContext = /计划[:：]|计划名|计划名称/.test(String(el.textContent || ''))
+                || /wO_WXndakU|campaign-name|campaignName|plan-name|planName/.test(classText);
+            if (ownText && this.isLikelyCampaignName(ownText) && ownText.length <= 80 && hasPlanContext) {
+                return ownText;
             }
 
             return '';
@@ -2481,19 +2826,178 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return this.lastCampaignId || '';
         },
 
+        getCurrentCampaignName() {
+            const sourceCandidates = [
+                window.location.href,
+                window.location.hash,
+                window.location.search
+            ];
+            for (const source of sourceCandidates) {
+                const name = this.extractCampaignName(source);
+                if (name) {
+                    this.lastCampaignName = name;
+                    return name;
+                }
+            }
+
+            const currentCampaignId = this.getCurrentCampaignId();
+            if (currentCampaignId) {
+                const guessedFirst = this.guessCampaignNameById(currentCampaignId);
+                if (guessedFirst) {
+                    this.lastCampaignName = guessedFirst;
+                    return guessedFirst;
+                }
+            }
+
+            const checkedBox = document.querySelector('input[type="checkbox"][value]:checked');
+            if (checkedBox) {
+                const row = checkedBox.closest('tr, [role="row"], li, [class*="row"], [class*="item"]');
+                if (row) {
+                    const strictNameNode = row.querySelector('span.wO_WXndakU + a[title].wO_WXndakU, span[class*="wO_WXndakU"] + a[title][href="javascript:;"], .asiYysqLgo .ellipsis a[title][href="javascript:;"]');
+                    if (strictNameNode) {
+                        const strictName = this.extractCampaignNameFromElement(strictNameNode);
+                        if (strictName) {
+                            this.lastCampaignName = strictName;
+                            return strictName;
+                        }
+                    }
+
+                    const nameNode = row.querySelector('[data-campaign-name], [campaignname], [class*="campaign-name"], [class*="campaignName"], [class*="plan-name"], [class*="planName"], a[title][href="javascript:;"], span[title], div[title]');
+                    if (nameNode) {
+                        const name = this.extractCampaignNameFromElement(nameNode);
+                        if (name) {
+                            this.lastCampaignName = name;
+                            return name;
+                        }
+                    }
+                }
+            }
+
+            const selectedSelectors = [
+                'tr[class*="selected"]',
+                'tr[class*="active"]',
+                'tr[class*="current"]',
+                '[class*="selected"][role="row"]',
+                '[class*="active"][role="row"]',
+                '[aria-current="true"]',
+                '[data-campaign-name]',
+                '[campaignname]'
+            ];
+            for (const selector of selectedSelectors) {
+                const selectedEl = document.querySelector(selector);
+                if (!selectedEl) continue;
+                const name = this.extractCampaignNameFromElement(selectedEl);
+                if (name) {
+                    this.lastCampaignName = name;
+                    return name;
+                }
+            }
+
+            if (currentCampaignId) {
+                const byIdSelectors = [
+                    `[data-campaign-id="${currentCampaignId}"]`,
+                    `[campaignid="${currentCampaignId}"]`,
+                    `a[href*="campaignId=${currentCampaignId}"]`,
+                    `a[href*="campaign_id=${currentCampaignId}"]`,
+                    `input[type="checkbox"][value="${currentCampaignId}"]`
+                ];
+                for (const selector of byIdSelectors) {
+                    const node = document.querySelector(selector);
+                    if (!node) continue;
+
+                    const directName = this.extractCampaignNameFromElement(node);
+                    if (directName && directName !== currentCampaignId) {
+                        this.lastCampaignName = directName;
+                        return directName;
+                    }
+
+                    const row = node.closest('tr, [role="row"], li, [class*="row"], [class*="item"]');
+                    if (row) {
+                        const candidates = row.querySelectorAll('[data-campaign-name], [campaignname], [class*="campaign-name"], [class*="campaignName"], [class*="plan-name"], [class*="planName"], a, span, div');
+                        for (const candidate of candidates) {
+                            const name = this.extractCampaignNameFromElement(candidate);
+                            if (!name) continue;
+                            if (name === currentCampaignId) continue;
+                            if (name.includes('计划ID') || name.includes('查数')) continue;
+                            this.lastCampaignName = name;
+                            return name;
+                        }
+                    }
+                }
+            }
+
+            if (currentCampaignId) {
+                const guessed = this.guessCampaignNameById(currentCampaignId);
+                if (guessed) {
+                    this.lastCampaignName = guessed;
+                    return guessed;
+                }
+            }
+
+            const titleGuess = this.guessCampaignNameById('', null);
+            if (titleGuess) {
+                this.lastCampaignName = titleGuess;
+                return titleGuess;
+            }
+
+            return this.lastCampaignName || '';
+        },
+
+        resolvePromptLabel(promptItem) {
+            const template = String(promptItem?.label || '').trim();
+            if (!template) return '';
+
+            let resolved = template;
+            if (resolved.includes('{campaignName}')) {
+                const campaignName = this.getCurrentCampaignName() || this.lastCampaignName;
+                resolved = resolved.replace(/\{campaignName\}/g, campaignName || '未识别');
+            }
+            if (resolved.includes('{campaignId}')) {
+                const campaignId = this.getCurrentCampaignId() || this.lastCampaignId;
+                resolved = resolved.replace(/\{campaignId\}/g, campaignId || '--');
+            }
+            return resolved;
+        },
+
+        refreshQuickPromptLabels() {
+            if (!this.popup) return;
+            const quickPrompts = this.popup.querySelector('#am-magic-quick-prompts');
+            if (!quickPrompts) return;
+
+            quickPrompts.querySelectorAll('.am-quick-prompt').forEach((btn) => {
+                if (!(btn instanceof HTMLElement)) return;
+                const idx = Number(btn.dataset.index);
+                const item = this.QUICK_PROMPTS[idx];
+                if (!item) return;
+                btn.textContent = this.resolvePromptLabel(item);
+            });
+        },
+
         resolvePromptText(promptItem) {
             const template = String(promptItem?.value || '').trim();
             if (!template) return '';
 
-            if (!template.includes('{campaignId}')) return template;
+            let resolved = template;
 
-            const campaignId = this.getCurrentCampaignId();
-            if (!campaignId) {
-                Logger.log('⚠️ 未识别到当前计划ID，请先进入计划详情页或勾选计划后重试', true);
-                return '';
+            if (resolved.includes('{campaignId}')) {
+                const campaignId = this.getCurrentCampaignId();
+                if (!campaignId) {
+                    Logger.log('⚠️ 未识别到当前计划ID，请先进入计划详情页或勾选计划后重试', true);
+                    return '';
+                }
+                resolved = resolved.replace(/\{campaignId\}/g, campaignId);
             }
 
-            return template.replace(/\{campaignId\}/g, campaignId);
+            if (resolved.includes('{campaignName}')) {
+                const campaignName = this.getCurrentCampaignName();
+                if (!campaignName) {
+                    Logger.log('⚠️ 未识别到当前计划名称，请先进入计划详情页或勾选计划后重试', true);
+                    return '';
+                }
+                resolved = resolved.replace(/\{campaignName\}/g, campaignName);
+            }
+
+            return resolved;
         },
 
         isEditablePromptElement(el) {
@@ -2897,6 +3401,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-magic-header .am-title-area {
                     display: flex; align-items: center;
                 }
+                #am-magic-report-popup .am-magic-header .am-title-area .asiYysqLCh {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    max-width: 560px;
+                }
+                #am-magic-report-popup .am-magic-header .am-title-area .asiYysqLCt {
+                    width: 18px;
+                    height: 18px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 0;
+                    flex-shrink: 0;
+                }
+                #am-magic-report-popup .am-magic-header .am-title-area .asiYysqLCt img {
+                    position: relative;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    height: 100%;
+                    display: block;
+                    object-fit: contain;
+                }
+                #am-magic-report-popup .am-magic-header .am-title-area .asiYysqLCj {
+                    color: #333;
+                    font-size: 13px;
+                    font-weight: 600;
+                    line-height: 1.45;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
                 #am-magic-report-popup .am-magic-header .am-btn-group {
                     display: flex; align-items: center; gap: 4px; border-left: 1px solid rgba(0,0,0,0.06); padding-left: 12px;
                 }
@@ -2958,7 +3495,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const quickPromptHtml = this.QUICK_PROMPTS
                 .map((item, idx) => {
                     const typeClass = item.type === 'action' ? 'type-action' : 'type-query';
-                    return `<button type="button" class="am-quick-prompt ${typeClass}" data-index="${idx}" title="${item.value}">${item.label}</button>`;
+                    return `<button type="button" class="am-quick-prompt ${typeClass}" data-index="${idx}" title="${item.value}">${this.resolvePromptLabel(item)}</button>`;
                 })
                 .join('');
 
@@ -2966,10 +3503,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 <div class="am-magic-header">
                     <div class="am-magic-header-main">
                         <div class="am-title-area">
-                            <span style="font-size: 16px; margin-right: 8px;">🔮</span>
-                            <div>
-                                <div style="font-weight: 600; color: #333; font-size: 14px;">万能查数</div>
-                                <div style="font-size: 11px; color: #888; margin-top: 1px;">原生渲染 · 支持图表/表格/交互</div>
+                            <div mxv="" class="asiYysqLCh mxgc-highlight-texts" style="--mx-title-shadow-color: var(--mx-ai-color); --mx-title-shadow-color-gradient: var(--mx-ai-color-gradient);">
+                                <span mxs="asiYysqLa:_" class="asiYysqLCt">
+                                    <img src="https://img.alicdn.com/imgextra/i4/O1CN015N7XhL24rrnhJGD58_!!6000000007445-2-tps-1040-1040.png" alt="万能查数">
+                                </span>
+                                <span class="asiYysqLCj asiYysqLCl font-special asiYysqLCm">万能查数输入您想要了解的数据，小万帮您收集</span>
                             </div>
                         </div>
                         <div class="am-btn-group">
@@ -3002,31 +3540,56 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.popup = div;
             this.header = div.querySelector('.am-magic-header');
             this.iframe = div.querySelector('#am-magic-iframe');
+            this.refreshQuickPromptLabels();
 
-            // iframe 加载完成后尝试清理并显示
+            // iframe 加载完成后先清理，再显示，避免首屏闪现整页内容
             this.iframe.onload = () => {
                 const loading = div.querySelector('#am-magic-loading');
-                if (loading) loading.style.display = 'none';
+                this.iframe.style.opacity = '0';
+
+                const revealIframe = () => {
+                    if (loading) loading.style.display = 'none';
+                    this.iframe.style.opacity = '1';
+                };
 
                 // 尝试清理（同源才能成功，失败也不影响使用）
                 try {
                     const iframeDoc = this.iframe.contentDocument || this.iframe.contentWindow.document;
-                    // SPA 延迟加载，多次尝试
+                    const rootEl = iframeDoc.documentElement || iframeDoc.body;
+                    if (rootEl) rootEl.style.setProperty('visibility', 'hidden', 'important');
+
+                    // SPA 延迟加载：缩短轮询间隔，最大约 2.4 秒，避免卡住
+                    const maxRetries = 20;
+                    const retryInterval = 120;
                     const tryCleanup = (retries = 0) => {
-                        const target = iframeDoc.getElementById('universalBP_common_layout_main_content');
-                        if (target) {
-                            this.cleanupIframe(iframeDoc);
-                        } else if (retries < 10) {
-                            setTimeout(() => tryCleanup(retries + 1), 1000);
+                        try {
+                            const target = iframeDoc.getElementById('universalBP_common_layout_main_content');
+                            if (target) {
+                                this.cleanupIframe(iframeDoc);
+                                if (rootEl) rootEl.style.removeProperty('visibility');
+                                revealIframe();
+                                return;
+                            }
+                        } catch {
+                            if (rootEl) rootEl.style.removeProperty('visibility');
+                            revealIframe();
+                            return;
                         }
+
+                        if (retries >= maxRetries) {
+                            if (rootEl) rootEl.style.removeProperty('visibility');
+                            revealIframe();
+                            return;
+                        }
+
+                        setTimeout(() => tryCleanup(retries + 1), retryInterval);
                     };
+
                     tryCleanup();
                 } catch (e) {
                     // 跨域无法清理，不影响核心功能
+                    revealIframe();
                 }
-
-                // 直接显示 iframe（不等清理完成）
-                this.iframe.style.opacity = '1';
             };
             this.iframe.onerror = () => {
                 const loading = div.querySelector('#am-magic-loading');
@@ -3059,6 +3622,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const promptItem = this.QUICK_PROMPTS[Number(btn.dataset.index)];
                     if (!promptItem) return;
 
+                    this.refreshQuickPromptLabels();
+
                     quickPrompts.querySelectorAll('.am-quick-prompt').forEach(node => node.classList.remove('active'));
                     btn.classList.add('active');
                     setTimeout(() => btn.classList.remove('active'), 1200);
@@ -3079,6 +3644,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 if (promptItem.requireCampaignId) {
                                     const id = this.extractCampaignId(promptText);
                                     if (id) Logger.log(`🆔 当前计划ID: ${id} `);
+                                }
+                                if (promptItem.requireCampaignName) {
+                                    const name = this.extractCampaignName(promptText);
+                                    if (name) Logger.log(`📛 当前计划名: ${name} `);
                                 }
                             }
                         }
@@ -3133,6 +3702,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.popup.style.display = 'flex';
             }
 
+            if (show) {
+                this.refreshQuickPromptLabels();
+            }
+
             State.config.magicReportOpen = show;
             State.save();
             UI.updateState();
@@ -3166,6 +3739,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (!id) {
                     Logger.log('⚠️ 计划ID无效，已忽略快捷查数', true);
                     return;
+                }
+
+                const guessedName = MagicReport.guessCampaignNameById(id, btn);
+                if (guessedName) {
+                    MagicReport.lastCampaignName = guessedName;
                 }
 
                 MagicReport.openWithCampaignId(id, { preferNative: true, promptType: 'click' }).catch((err) => {
