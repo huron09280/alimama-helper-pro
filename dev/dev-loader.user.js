@@ -19,10 +19,12 @@
 (function () {
     'use strict';
 
-    const DEV_ENTRY_URL = 'http://127.0.0.1:5173/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js';
-    const requestUrl = `${DEV_ENTRY_URL}?t=${Date.now()}`;
+    const DEV_ENTRY_CANDIDATES = [
+        'http://127.0.0.1:5173/.codex/worktrees/cb4b/alimama-helper-pro/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js',
+        'http://127.0.0.1:5173/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js'
+    ];
 
-    const loadByGMRequest = () => new Promise((resolve, reject) => {
+    const loadByGMRequest = (requestUrl) => new Promise((resolve, reject) => {
         if (typeof GM_xmlhttpRequest !== 'function') {
             reject(new Error('GM_xmlhttpRequest is not available'));
             return;
@@ -43,7 +45,7 @@
         });
     });
 
-    const loadByFetch = () => fetch(requestUrl, { cache: 'no-store' })
+    const loadByFetch = (requestUrl) => fetch(requestUrl, { cache: 'no-store' })
         .then((response) => {
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -51,9 +53,28 @@
             return response.text();
         });
 
-    loadByGMRequest()
-        .catch(() => loadByFetch())
-        .then((code) => {
+    const loadFromCandidates = async () => {
+        for (let i = 0; i < DEV_ENTRY_CANDIDATES.length; i += 1) {
+            const baseUrl = DEV_ENTRY_CANDIDATES[i];
+            const requestUrl = `${baseUrl}?t=${Date.now()}`;
+            try {
+                const code = await loadByGMRequest(requestUrl);
+                return { code, baseUrl };
+            } catch {
+                try {
+                    const code = await loadByFetch(requestUrl);
+                    return { code, baseUrl };
+                } catch {
+                    // 继续尝试下一个候选地址
+                }
+            }
+        }
+        throw new Error('All candidate URLs failed');
+    };
+
+    loadFromCandidates()
+        .then(({ code, baseUrl }) => {
+            console.info('[AM Dev Loader] Loaded from:', baseUrl);
             // 直接在 userscript 沙箱内执行，保留 GM_* API 能力。
             eval(`${code}\n//# sourceURL=alimama-helper-pro.dev.js`);
         })

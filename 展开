@@ -1,0 +1,23 @@
+128:        CONFIG_REVISION: 2,
+151:        logExpanded: false,
+153:        configRevision: CONSTANTS.CONFIG_REVISION
+264:    const normalizeConfig = (rawConfig) => {
+267:        const needsRevisionUpgrade = !hasValidRevision || parsedRevision < CONSTANTS.CONFIG_REVISION;
+272:            nextConfig.configRevision = CONSTANTS.CONFIG_REVISION;
+283:            const { config, migrated } = normalizeConfig(current);
+293:                const { config } = normalizeConfig(legacy);
+891:    const UI = {
+893:            assistExpanded: false
+1900:                    <div class="am-tool-btn" id="am-trigger-magic-report">
+1904:                    <div class="am-tool-btn" id="am-toggle-assist-display">
+1911:                <div id="am-assist-switches">
+1927:                            <span class="am-action-btn" id="am-log-toggle">展开</span>
+2011:            const magicBtn = document.getElementById('am-trigger-magic-report');
+2018:            const assistToggleBtn = document.getElementById('am-toggle-assist-display');
+2021:                    this.runtime.assistExpanded = !this.runtime.assistExpanded;
+2052:            document.getElementById('am-log-toggle').onclick = () => {
+2109:            const logToggle = document.getElementById('am-log-toggle');
+2111:            const assistToggleBtn = document.getElementById('am-toggle-assist-display');
+2130:                assistPanel.classList.toggle('open', this.runtime.assistExpanded);
+2133:                assistToggleBtn.classList.toggle('active', this.runtime.assistExpanded);
+4482:    const UI = {
