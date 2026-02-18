@@ -16399,7 +16399,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const failedCases = Math.max(0, toNumber(state.failedCases, 0));
             const deletedCount = Math.max(0, toNumber(state.deletedCount, 0));
             const stoppedCount = Math.max(0, toNumber(state.stoppedCount, 0));
-            return `scene=${sceneText} case=${caseIndex}/${caseTotal} pass=${passCases} repaired=${repairedCases} failed=${failedCases} deleted=${deletedCount} stopped=${stoppedCount}`;
+            return `场景=${sceneText} 用例=${caseIndex}/${caseTotal} 通过=${passCases} 修复=${repairedCases} 失败=${failedCases} 删除=${deletedCount} 停止=${stoppedCount}`;
         };
         const normalizeRepairItemId = (value = '') => {
             const text = String(value || '').trim();
@@ -20653,7 +20653,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 { source: 'scene_switch_sync' }
                             );
                             appendWizardLog(
-                                `场景接口已同步：${targetScene} endpoint=${rememberedContract?.endpoint || row.submitEndpoint || '-'} requestKeys=${toNumber(rememberedContract?.requestKeys?.length, 0)}`,
+                                `场景接口已同步：${targetScene} 接口=${rememberedContract?.endpoint || row.submitEndpoint || '-'} 请求字段数=${toNumber(rememberedContract?.requestKeys?.length, 0)}`,
                                 'success'
                             );
                         } else {
@@ -20940,6 +20940,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.els.runQuickBtn.disabled = true;
                 const onRunProgress = ({ event, ...payload }) => {
                     const sceneTag = payload.sceneName ? `【${payload.sceneName}】` : '';
+                    const fallbackPolicyText = ({
+                        auto: '自动',
+                        confirm: '确认',
+                        none: '不降级'
+                    })[String(payload.policy || '').trim()] || String(payload.policy || '-');
                     if (event === 'scene_runtime_sync_start') {
                         appendWizardLog(`${sceneTag}场景运行时同步：${payload.currentBizCode || '-'} -> ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`);
                     } else if (event === 'scene_runtime_synced') {
@@ -20968,11 +20973,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     } else if (event === 'build_solution_item') {
                         appendWizardLog(`${sceneTag}组装计划：${payload.planName} (${payload.index}/${payload.total})`);
                     } else if (event === 'submit_batch_start') {
-                        appendWizardLog(`${sceneTag}提交批次 ${payload.batchIndex}/${payload.batchTotal}，数量 ${payload.size}${payload.endpoint ? `，endpoint=${payload.endpoint}` : ''}`);
+                        appendWizardLog(`${sceneTag}提交批次 ${payload.batchIndex}/${payload.batchTotal}，数量 ${payload.size}${payload.endpoint ? `，接口=${payload.endpoint}` : ''}`);
                     } else if (event === 'submit_payload_snapshot') {
                         const campaignKeys = Array.isArray(payload.campaignKeys) ? payload.campaignKeys.join(',') : '';
                         const adgroupKeys = Array.isArray(payload.adgroupKeys) ? payload.adgroupKeys.join(',') : '';
-                        appendWizardLog(`${sceneTag}提交预览：scene=${payload.sceneName || '-'} goal=${payload.marketingGoal || '-'} promotionScene=${payload.promotionScene || '-'} bidType=${payload.bidTypeV2 || '-'} bidTarget=${payload.bidTargetV2 || '-'} optimizeTarget=${payload.optimizeTarget || '-'} bidMode=${payload.bidMode || '-'} endpoint=${payload.submitEndpoint || '-'} materialId=${payload.materialId || '-'} wordList=${payload.wordListCount || 0} wordPackage=${payload.wordPackageCount || 0} fallbackTriggered=${payload.fallbackTriggered ? 'yes' : 'no'} goalFallback=${payload.goalFallbackUsed ? 'yes' : 'no'} campaignKeys=[${campaignKeys}] adgroupKeys=[${adgroupKeys}]`);
+                        appendWizardLog(`${sceneTag}提交预览：场景=${payload.sceneName || '-'} 目标=${payload.marketingGoal || '-'} 推广场景=${payload.promotionScene || '-'} 出价类型=${payload.bidTypeV2 || '-'} 出价目标=${payload.bidTargetV2 || '-'} 优化目标=${payload.optimizeTarget || '-'} 出价模式=${payload.bidMode || '-'} 提交接口=${payload.submitEndpoint || '-'} 商品ID=${payload.materialId || '-'} 关键词数=${payload.wordListCount || 0} 词包数=${payload.wordPackageCount || 0} 是否触发降级=${payload.fallbackTriggered ? '是' : '否'} 是否目标回退=${payload.goalFallbackUsed ? '是' : '否'} 计划字段=[${campaignKeys}] 单元字段=[${adgroupKeys}]`);
                     } else if (event === 'submit_batch_retry') {
                         appendWizardLog(`${sceneTag}批次重试 #${payload.attempt}：${payload.error}`, 'error');
                     } else if (event === 'submit_batch_success') {
@@ -20985,7 +20990,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const pendingText = payload.policy === 'auto'
                             ? '检测到词包校验失败，准备自动降级重试'
                             : '检测到词包校验失败，等待降级确认';
-                        appendWizardLog(`${sceneTag}${pendingText}（批次 ${payload.batchIndex}，失败 ${payload.count}，策略=${payload.policy}）`, 'error');
+                        appendWizardLog(`${sceneTag}${pendingText}（批次 ${payload.batchIndex}，失败 ${payload.count}，策略=${fallbackPolicyText}）`, 'error');
                     } else if (event === 'fallback_downgrade_confirmed') {
                         appendWizardLog(`${sceneTag}用户确认降级重试（批次 ${payload.batchIndex}，数量 ${payload.count}${payload.auto ? '，自动策略' : ''}）`, 'success');
                     } else if (event === 'fallback_downgrade_canceled') {
@@ -20995,13 +21000,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     } else if (event === 'submit_batch_fallback_single') {
                         appendWizardLog(`${sceneTag}${payload.fallbackTriggered ? '批次降级单计划重试' : '批次单计划重试'}：${payload.error}`, 'error');
                     } else if (event === 'conflict_resolve_start') {
-                        appendWizardLog(`${sceneTag}检测到在投冲突，开始自动处理：plan=${payload.planName || '-'} itemId=${payload.itemId || '-'}（${payload.error || '冲突' }）`);
+                        appendWizardLog(`${sceneTag}检测到在投冲突，开始自动处理：计划=${payload.planName || '-'} 商品ID=${payload.itemId || '-'}（${payload.error || '冲突' }）`);
                     } else if (event === 'conflict_resolve_done') {
                         if (payload.resolved) {
-                            const oneClickHint = payload.oneClickUsed ? '（oneClick）' : '';
+                            const oneClickHint = payload.oneClickUsed ? '（一键处理）' : '';
                             appendWizardLog(`${sceneTag}冲突处理完成${oneClickHint}：已停用 ${payload.stoppedCount || 0} 个冲突计划，继续重试创建`, 'success');
                         } else {
-                            const extra = payload.oneClickError ? `；oneClick=${payload.oneClickError}` : '';
+                            const extra = payload.oneClickError ? `；一键处理=${payload.oneClickError}` : '';
                             appendWizardLog(`${sceneTag}冲突处理失败：已处理 ${payload.stoppedCount || 0}，未解决 ${payload.unresolvedCount || 0}${payload.error ? `（${payload.error}${extra}）` : (extra ? `（${extra.slice(1)}）` : '')}`, 'error');
                         }
                     }
@@ -21122,7 +21127,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.repairStopRequested = false;
                 wizardState.repairLastSummary = null;
                 setRepairControlState(false);
-                setRepairStatusText('scene=- case=0/0 pass=0 repaired=0 failed=0 deleted=0 stopped=0');
+                setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
                 fillUIFromDraft();
                 renderStrategyList();
                 renderAddedList();
@@ -21200,7 +21205,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             wizardState.buildRequest = buildRequestFromWizard;
             wizardState.refreshSceneProfileFromSpec = refreshSceneProfileFromSpec;
             setRepairControlState(false);
-            setRepairStatusText('scene=- case=0/0 pass=0 repaired=0 failed=0 deleted=0 stopped=0');
+            setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
             wizardState.mounted = true;
         };
 
@@ -21272,10 +21277,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     stoppedCount: toNumber(wizardState.repairLastSummary.stoppedCount, 0)
                 }));
             } else {
-                setRepairStatusText('scene=- case=0/0 pass=0 repaired=0 failed=0 deleted=0 stopped=0');
+                setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
             }
-            wizardState.appendWizardLog(`向导已就绪（build ${BUILD_VERSION}），支持双列表选品与批量创建`);
-            wizardState.appendWizardLog('正在后台通过API初始化运行时和商品列表...');
+            wizardState.appendWizardLog(`向导已就绪（构建 ${BUILD_VERSION}），支持双列表选品与批量创建`);
+            wizardState.appendWizardLog('正在后台通过接口初始化运行时和商品列表...');
 
             wizardState.els.overlay.classList.add('open');
             wizardState.visible = true;
