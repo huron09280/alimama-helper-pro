@@ -20221,6 +20221,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 setDetailVisible(true);
                 syncDraftFromUI();
                 renderStrategyList();
+                maybeAutoLoadManualKeywords(strategy);
             };
             const addNewStrategy = () => {
                 const editing = getStrategyById(wizardState.editingStrategyId);
@@ -20272,6 +20273,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.renderPreview(wizardState.buildRequest());
                 }
                 appendWizardLog(`已新建计划：${next.name}`, 'success');
+                maybeAutoLoadManualKeywords(next, { delayMs: 320 });
             };
             const resolveKeywordGoalRuntime = (goalLabel = '') => {
                 const normalizedGoal = detectKeywordGoalFromText(goalLabel) || normalizeGoalCandidateLabel(goalLabel);
@@ -21232,12 +21234,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const loadRecommendedKeywords = async () => {
                 if (!wizardState.addedItems.length) {
                     appendWizardLog('请先添加商品，再加载推荐关键词', 'error');
-                    return;
+                    return false;
                 }
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId) || wizardState.strategyList.find(item => item.enabled) || wizardState.strategyList[0];
                 if (!editingStrategy) {
                     appendWizardLog('请先选择一个策略并点击“编辑计划”', 'error');
-                    return;
+                    return false;
                 }
                 const targetItem = wizardState.addedItems[0];
                 const recommendCount = Math.max(1, toNumber(wizardState.els.recommendCountInput.value.trim(), DEFAULTS.recommendCount));
@@ -21265,7 +21267,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .slice(0, recommendCount);
                     if (!normalizedRecommend.length) {
                         appendWizardLog('未获取到推荐关键词，请稍后重试', 'error');
-                        return;
+                        return false;
                     }
 
                     const manualWords = parseKeywords(wizardState.els.manualInput.value || '', keywordDefaults)
@@ -21285,9 +21287,44 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         wizardState.renderPreview(wizardState.buildRequest());
                     }
                     appendWizardLog(`推荐关键词已加载 ${normalizedRecommend.length} 条（合并后 ${mergedWords.length} 条）`, 'success');
+                    return true;
                 } catch (err) {
                     appendWizardLog(`加载推荐关键词失败：${err?.message || err}`, 'error');
+                    return false;
                 }
+            };
+
+            const maybeAutoLoadManualKeywords = (strategy = null, options = {}) => {
+                const targetStrategy = strategy || getStrategyById(wizardState.editingStrategyId);
+                if (!isPlainObject(targetStrategy)) return;
+                if (!wizardState.detailVisible) return;
+                if (String(targetStrategy.sceneName || '').trim() !== '关键词推广') return;
+                if (!wizardState.addedItems.length) return;
+                const manualText = String(wizardState.els.manualInput?.value || targetStrategy.manualKeywords || '').trim();
+                if (manualText) return;
+                const materialId = String(wizardState.addedItems[0]?.materialId || wizardState.addedItems[0]?.itemId || '').trim();
+                const strategyId = String(targetStrategy.id || '').trim();
+                if (!materialId || !strategyId) return;
+                wizardState.autoKeywordLoadMap = isPlainObject(wizardState.autoKeywordLoadMap) ? wizardState.autoKeywordLoadMap : {};
+                const autoLoadKey = `${strategyId}::${materialId}`;
+                const currentStatus = String(wizardState.autoKeywordLoadMap[autoLoadKey] || '').trim();
+                if (currentStatus === 'pending' || currentStatus === 'done') return;
+                wizardState.autoKeywordLoadMap[autoLoadKey] = 'pending';
+                appendWizardLog('检测到手动关键词为空，自动加载推荐关键词...');
+                const delayMs = Math.max(120, toNumber(options.delayMs, 240));
+                window.setTimeout(async () => {
+                    const latestStrategy = getStrategyById(strategyId);
+                    if (!latestStrategy || wizardState.editingStrategyId !== strategyId || !wizardState.detailVisible) {
+                        delete wizardState.autoKeywordLoadMap[autoLoadKey];
+                        return;
+                    }
+                    const loadOk = await loadRecommendedKeywords();
+                    if (!loadOk) {
+                        delete wizardState.autoKeywordLoadMap[autoLoadKey];
+                        return;
+                    }
+                    wizardState.autoKeywordLoadMap[autoLoadKey] = 'done';
+                }, delayMs);
             };
 
             const loadRecommendedCrowds = async () => {
