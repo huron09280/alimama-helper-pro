@@ -4871,6 +4871,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             repairRunning: false,
             repairStopRequested: false,
             repairLastSummary: null,
+            manualKeywordDelegatedBound: false,
+            keywordMetricMap: {},
             els: {}
         };
 
@@ -16193,6 +16195,123 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: #64748b;
                     font-size: 12px;
                 }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-panel {
+                    border: 1px solid rgba(148,163,184,0.28);
+                    border-radius: 10px;
+                    background: #fff;
+                    overflow: hidden;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-head,
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item {
+                    display: grid;
+                    grid-template-columns: minmax(200px, 1.6fr) 1fr 1fr 1fr minmax(140px, 1fr);
+                    gap: 8px;
+                    align-items: center;
+                    padding: 8px 10px;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-head {
+                    background: #f8fafc;
+                    border-bottom: 1px solid rgba(148,163,184,0.22);
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #334155;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-head .keyword-col,
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-col {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-main {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-text {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 13px;
+                    color: #1f2937;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-submeta {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    min-width: 0;
+                    color: #94a3b8;
+                    font-size: 12px;
+                    line-height: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-submeta-text {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    min-width: 0;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-relevance {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0 7px;
+                    min-width: 22px;
+                    height: 18px;
+                    border-radius: 10px;
+                    background: #e7efff;
+                    color: #4f65ff;
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 18px;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-relevance-mid {
+                    background: #fef3c7;
+                    color: #92400e;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .keyword-relevance-low {
+                    background: #fee2e2;
+                    color: #b91c1c;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item {
+                    border-top: 1px solid rgba(148,163,184,0.16);
+                    font-size: 12px;
+                    color: #475569;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item:first-child {
+                    border-top: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-list {
+                    max-height: 240px;
+                    overflow: auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .metric-muted {
+                    color: #94a3b8;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .bid-value {
+                    color: #334155;
+                    font-weight: 600;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-actions {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    padding: 8px 10px;
+                    border-top: 1px solid rgba(148,163,184,0.22);
+                    background: #f8fafc;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-actions .tips {
+                    font-size: 11px;
+                    color: #64748b;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-empty {
+                    padding: 12px 10px;
+                    font-size: 12px;
+                    color: #94a3b8;
+                }
                 #am-wxt-keyword-modal .am-wxt-config textarea {
                     width: 100%;
                     min-height: 76px;
@@ -16350,6 +16469,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #am-wxt-keyword-modal .am-wxt-site-optimize-config input {
                         width: min(220px, 100%);
                         flex: 1 1 auto;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-manual-keyword-head,
+                    #am-wxt-keyword-modal .am-wxt-manual-keyword-item {
+                        grid-template-columns: minmax(180px, 1.4fr) 1fr 1fr 1fr;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-manual-keyword-head > :last-child,
+                    #am-wxt-keyword-modal .am-wxt-manual-keyword-item > :last-child {
+                        grid-column: 1 / -1;
                     }
                 }
             `;
@@ -16704,6 +16831,57 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const bid = toNumber(word?.bidPrice, 1);
                 const matchText = parseMatchScope(word?.matchScope, DEFAULTS.matchScope) === 1 ? '精准' : '广泛';
                 return `${String(word?.word || '').trim()},${bid.toFixed(2)},${matchText}`;
+            };
+            const keywordMetricKey = (value = '') => String(value || '').trim().toLowerCase();
+            const formatRatePercent = (value) => {
+                const num = Number(value);
+                if (!Number.isFinite(num)) return '-';
+                return `${(num * 100).toFixed(2)}%`;
+            };
+            const formatMetricBid = (value) => {
+                const num = Number(value);
+                if (!Number.isFinite(num)) return '-';
+                return String(num.toFixed(4)).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+            };
+            const resolveKeywordRelevanceMeta = (value) => {
+                const num = toNumber(value, 3);
+                if (num <= 1) return { text: '低', className: 'keyword-relevance keyword-relevance-low' };
+                if (num === 2) return { text: '中', className: 'keyword-relevance keyword-relevance-mid' };
+                return { text: '好', className: 'keyword-relevance' };
+            };
+            const buildKeywordMetricEntry = (rawWord = {}) => {
+                if (!isPlainObject(rawWord)) return null;
+                const word = String(rawWord.word || rawWord.keyword || '').trim();
+                if (!word) return null;
+                const relevanceMeta = resolveKeywordRelevanceMeta(rawWord.relevanceType);
+                const searchIndex = Number(rawWord.searchIndex);
+                const marketAverageBid = Number(rawWord.marketAverageBid);
+                return {
+                    word,
+                    searchIndexText: Number.isFinite(searchIndex) ? String(Math.max(0, Math.round(searchIndex))) : '-',
+                    marketClickRateText: formatRatePercent(rawWord.marketClickRate),
+                    marketClickConversionRateText: formatRatePercent(rawWord.marketClickConversionRate),
+                    marketAverageBidText: formatMetricBid(marketAverageBid),
+                    relevanceText: relevanceMeta.text,
+                    relevanceClassName: relevanceMeta.className
+                };
+            };
+            const mergeKeywordMetricMap = (wordList = []) => {
+                if (!Array.isArray(wordList) || !wordList.length) return;
+                const nextMap = { ...(isPlainObject(wizardState.keywordMetricMap) ? wizardState.keywordMetricMap : {}) };
+                wordList.forEach(rawWord => {
+                    const metricEntry = buildKeywordMetricEntry(rawWord);
+                    if (!metricEntry) return;
+                    const key = keywordMetricKey(metricEntry.word);
+                    if (!key) return;
+                    nextMap[key] = metricEntry;
+                });
+                wizardState.keywordMetricMap = nextMap;
+            };
+            const getKeywordMetricByWord = (word = '') => {
+                const key = keywordMetricKey(word);
+                if (!key) return null;
+                return isPlainObject(wizardState.keywordMetricMap) ? wizardState.keywordMetricMap[key] || null : null;
             };
 
             const getCrowdDisplayName = (crowdItem = {}) => {
@@ -18681,6 +18859,91 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         </div>
                     </div>
                 `;
+                const buildManualKeywordDesignerRow = (label = '手动关键词') => {
+                    const fallbackBid = toNumber(wizardState.els.bidInput?.value, 1);
+                    const keywordDefaults = {
+                        bidPrice: Number.isFinite(fallbackBid) ? fallbackBid : 1,
+                        matchScope: DEFAULTS.matchScope,
+                        onlineStatus: DEFAULTS.keywordOnlineStatus
+                    };
+                    const rawManualText = String(wizardState.els.manualInput?.value || '').trim();
+                    const keywordList = parseKeywords(rawManualText, keywordDefaults).slice(0, 200);
+                    const normalizedManualText = keywordList.map(item => formatKeywordLine(item)).join('\n');
+                    const formatBidDisplay = (value) => {
+                        const num = toNumber(value, Number.isFinite(fallbackBid) ? fallbackBid : 1);
+                        if (!Number.isFinite(num)) return '1';
+                        return String(Math.max(0, num).toFixed(4)).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+                    };
+                    const keywordRows = keywordList.map((item, idx) => {
+                        const matchScope = parseMatchScope(item.matchScope, DEFAULTS.matchScope);
+                        const isExact = matchScope === 1;
+                        const bidText = formatBidDisplay(item.bidPrice);
+                        const metricEntry = getKeywordMetricByWord(item.word) || {};
+                        const searchIndexText = String(metricEntry.searchIndexText || '-');
+                        const clickRateText = String(metricEntry.marketClickRateText || '-');
+                        const conversionRateText = String(metricEntry.marketClickConversionRateText || '-');
+                        const marketAverageBidText = String(metricEntry.marketAverageBidText || bidText || '-');
+                        const relevanceText = String(metricEntry.relevanceText || '好');
+                        const relevanceClassName = String(metricEntry.relevanceClassName || 'keyword-relevance');
+                        return `
+                            <div
+                                class="am-wxt-manual-keyword-item"
+                                data-manual-keyword-row="1"
+                                data-manual-keyword-word="${Utils.escapeHtml(item.word)}"
+                                data-manual-keyword-bid="${Utils.escapeHtml(bidText)}"
+                                data-manual-keyword-match="${isExact ? '1' : '4'}"
+                            >
+                                <label class="keyword-col">
+                                    <input type="checkbox" data-manual-keyword-enable="1" checked />
+                                    <span class="keyword-main">
+                                        <span class="keyword-text">${Utils.escapeHtml(item.word)}</span>
+                                        <span class="keyword-submeta">
+                                            <span class="keyword-submeta-text">搜索指数：${Utils.escapeHtml(searchIndexText)}</span>
+                                            <span class="keyword-submeta-text">相关性：<span class="${Utils.escapeHtml(relevanceClassName)}">${Utils.escapeHtml(relevanceText)}</span></span>
+                                        </span>
+                                    </span>
+                                </label>
+                                <span class="${clickRateText === '-' ? 'metric-muted' : ''}">${Utils.escapeHtml(clickRateText)}</span>
+                                <span class="${conversionRateText === '-' ? 'metric-muted' : ''}">${Utils.escapeHtml(conversionRateText)}</span>
+                                <span class="bid-value">${Utils.escapeHtml(marketAverageBidText)}</span>
+                                <div class="am-wxt-option-line segmented">
+                                    <button type="button" class="am-wxt-option-chip ${isExact ? '' : 'active'}" data-manual-keyword-match="4">广泛</button>
+                                    <button type="button" class="am-wxt-option-chip ${isExact ? 'active' : ''}" data-manual-keyword-match="1">精准</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    return `
+                        <div class="am-wxt-scene-setting-row">
+                            <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
+                            <div class="am-wxt-setting-control">
+                                <textarea class="am-wxt-hidden-control" data-proxy-input-target="am-wxt-keyword-manual" data-manual-keyword-hidden="1">${Utils.escapeHtml(normalizedManualText || rawManualText)}</textarea>
+                                <div class="am-wxt-manual-keyword-panel" data-manual-keyword-panel="1">
+                                    <div class="am-wxt-manual-keyword-head">
+                                        <label class="keyword-col">
+                                            <input type="checkbox" data-manual-keyword-check-all="1" ${keywordList.length ? 'checked' : ''} />
+                                            <span>关键词 (${keywordList.length}/200)</span>
+                                        </label>
+                                        <span>市场点击率</span>
+                                        <span>市场转化率</span>
+                                        <span>市场平均出价</span>
+                                        <span>匹配方案</span>
+                                    </div>
+                                    <div class="am-wxt-manual-keyword-list">
+                                        ${keywordRows || '<div class="am-wxt-manual-keyword-empty">暂无手动关键词，点击“添加关键词”录入</div>'}
+                                    </div>
+                                    <div class="am-wxt-manual-keyword-actions">
+                                        <span class="tips">参考原网页样式：支持广泛/精准切换</span>
+                                        <div>
+                                            <button class="am-wxt-btn" type="button" data-manual-keyword-add="1">添加关键词</button>
+                                            <button class="am-wxt-btn" type="button" data-manual-keyword-clear="1">清空</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                };
 
                 const sceneFieldText = uniqueBy((profile.requiredFields || []).concat(metaFieldLabels), item => normalizeSceneLabelToken(item)).join(' ');
                 const hasSceneField = (pattern) => pattern.test(sceneFieldText);
@@ -18958,12 +19221,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             </div>
                         </div>
                     `);
-                    staticRows.push(buildProxyTextareaRow(
-                        '手动关键词',
-                        'am-wxt-keyword-manual',
-                        wizardState.els.manualInput?.value || '',
-                        '手动关键词，每行一个，支持：关键词,出价,匹配方式（广泛/精准）'
-                    ));
+                    staticRows.push(buildManualKeywordDesignerRow('手动关键词'));
                 }
                 const staticGridHtml = staticRows.join('');
                 const API_SCENE_FIELD_LABEL_MAP = {
@@ -19281,6 +19539,106 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     control.addEventListener('change', onChange);
                 });
             };
+            const collectManualKeywordRowsFromPanel = (panel) => (
+                Array.from(panel?.querySelectorAll?.('[data-manual-keyword-row]') || [])
+                    .map(row => {
+                        const word = String(row?.getAttribute?.('data-manual-keyword-word') || '').trim();
+                        if (!word) return null;
+                        const bidPrice = toNumber(row?.getAttribute?.('data-manual-keyword-bid'), toNumber(wizardState.els.bidInput?.value, 1));
+                        const matchScope = parseMatchScope(row?.getAttribute?.('data-manual-keyword-match'), DEFAULTS.matchScope);
+                        const enabledInput = row?.querySelector?.('input[data-manual-keyword-enable]');
+                        const enabled = !enabledInput || enabledInput.checked !== false;
+                        return {
+                            word,
+                            bidPrice: Number.isFinite(bidPrice) ? bidPrice : 1,
+                            matchScope,
+                            onlineStatus: DEFAULTS.keywordOnlineStatus,
+                            enabled
+                        };
+                    })
+                    .filter(Boolean)
+            );
+            const resolveManualKeywordHiddenInput = (panel) => {
+                const scope = panel?.closest?.('.am-wxt-setting-control')
+                    || panel?.parentElement
+                    || wizardState.els?.sceneDynamic
+                    || null;
+                return scope?.querySelector?.('textarea[data-manual-keyword-hidden]') || null;
+            };
+            const applyManualKeywordRowsFromPanel = (panel, rows = []) => {
+                const hidden = resolveManualKeywordHiddenInput(panel);
+                if (!hidden) return;
+                const enabledRows = rows.filter(item => item?.enabled !== false);
+                const nextRows = uniqueBy(enabledRows, item => String(item?.word || '').trim()).slice(0, 200);
+                const nextText = nextRows.map(item => formatKeywordLine(item)).join('\n');
+                if (hidden.value !== nextText) hidden.value = nextText;
+                hidden.dispatchEvent(new Event('input', { bubbles: true }));
+                hidden.dispatchEvent(new Event('change', { bubbles: true }));
+                renderSceneDynamicConfig();
+            };
+            const ensureManualKeywordPanelDelegates = () => {
+                if (wizardState.manualKeywordDelegatedBound) return;
+                if (!(wizardState.els?.sceneDynamic instanceof HTMLElement)) return;
+                wizardState.manualKeywordDelegatedBound = true;
+
+                wizardState.els.sceneDynamic.addEventListener('click', (event) => {
+                    const target = event.target instanceof Element ? event.target.closest('button') : null;
+                    if (!(target instanceof Element)) return;
+                    const panel = target.closest('[data-manual-keyword-panel]');
+                    if (!(panel instanceof Element)) return;
+
+                    if (target.matches('button[data-manual-keyword-match]')) {
+                        const row = target.closest('[data-manual-keyword-row]');
+                        if (!(row instanceof Element)) return;
+                        const nextMatch = parseMatchScope(target.getAttribute('data-manual-keyword-match'), DEFAULTS.matchScope);
+                        row.setAttribute('data-manual-keyword-match', String(nextMatch));
+                        applyManualKeywordRowsFromPanel(panel, collectManualKeywordRowsFromPanel(panel));
+                        return;
+                    }
+
+                    if (target.matches('button[data-manual-keyword-add]')) {
+                        const addedText = window.prompt('请输入关键词，每行一个，支持：关键词,出价,匹配方式（广泛/精准）', '') || '';
+                        const inputText = String(addedText || '').trim();
+                        if (!inputText) return;
+                        const existingRows = collectManualKeywordRowsFromPanel(panel).filter(item => item?.enabled !== false);
+                        const parsedRows = parseKeywords(inputText, {
+                            bidPrice: toNumber(wizardState.els.bidInput?.value, 1),
+                            matchScope: DEFAULTS.matchScope,
+                            onlineStatus: DEFAULTS.keywordOnlineStatus
+                        });
+                        applyManualKeywordRowsFromPanel(
+                            panel,
+                            existingRows.concat(parsedRows).map(item => ({ ...item, enabled: true }))
+                        );
+                        return;
+                    }
+
+                    if (target.matches('button[data-manual-keyword-clear]')) {
+                        applyManualKeywordRowsFromPanel(panel, []);
+                    }
+                });
+
+                wizardState.els.sceneDynamic.addEventListener('change', (event) => {
+                    const target = event.target instanceof Element ? event.target : null;
+                    if (!(target instanceof Element)) return;
+                    const panel = target.closest('[data-manual-keyword-panel]');
+                    if (!(panel instanceof Element)) return;
+
+                    if (target.matches('input[data-manual-keyword-check-all]')) {
+                        const checkAll = !!target.checked;
+                        panel.querySelectorAll('input[data-manual-keyword-enable]').forEach(input => {
+                            input.checked = checkAll;
+                        });
+                        applyManualKeywordRowsFromPanel(panel, collectManualKeywordRowsFromPanel(panel));
+                        return;
+                    }
+
+                    if (target.matches('input[data-manual-keyword-enable]')) {
+                        applyManualKeywordRowsFromPanel(panel, collectManualKeywordRowsFromPanel(panel));
+                    }
+                });
+            };
+            ensureManualKeywordPanelDelegates();
 
             const normalizeStrategyList = (rawList, fallbackBudget = '') => {
                 const fallback = getDefaultStrategyList();
@@ -20525,6 +20883,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         defaults: runtime,
                         source: 'auto'
                     });
+                    mergeKeywordMetricMap(recommendedWords);
                     const normalizedRecommend = recommendedWords
                         .map(word => applyKeywordDefaults(word, keywordDefaults))
                         .filter(word => word.word)
@@ -21121,6 +21480,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.addedItems = [];
                 wizardState.crowdList = [];
                 wizardState.candidates = [];
+                wizardState.keywordMetricMap = {};
                 wizardState.repairRunToken = toNumber(wizardState.repairRunToken, 0) + 1;
                 wizardState.repairRunning = false;
                 wizardState.repairStopRequested = false;
