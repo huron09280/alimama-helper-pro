@@ -15962,8 +15962,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-right: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip.active {
-                    background: #4f68ff;
-                    color: #fff;
+                    background: rgba(79,104,255,0.14);
+                    color: #3f5efb;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-toggle.am-wxt-site-toggle-wide {
                     flex-wrap: nowrap;
@@ -16131,8 +16131,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-right: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-option-line.segmented .am-wxt-option-chip.active {
-                    background: #4f68ff;
-                    color: #fff;
+                    background: rgba(79,104,255,0.14);
+                    color: #3f5efb;
                     font-weight: 600;
                     box-shadow: none;
                 }
