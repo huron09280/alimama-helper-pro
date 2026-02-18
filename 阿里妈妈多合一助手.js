@@ -18970,7 +18970,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const handleRun = async () => {
                 const req = buildRequestFromWizard();
                 const pageItemIds = extractPageAddedItemIds();
-                if (!req.plans.length && !pageItemIds.length) {
+                if (!req.plans.length && pageItemIds.length) {
+                    const normalizedPageItemIds = uniqueBy(
+                        pageItemIds.map(id => String(id || '').trim()).filter(Boolean),
+                        id => id
+                    ).slice(0, WIZARD_MAX_ITEMS);
+                    if (normalizedPageItemIds.length) {
+                        const itemSearch = isPlainObject(req.itemSearch) ? req.itemSearch : {};
+                        const existingItemIdList = Array.isArray(itemSearch.itemIdList)
+                            ? itemSearch.itemIdList.map(id => String(id || '').trim()).filter(Boolean)
+                            : [];
+                        const mergedItemIdList = uniqueBy(
+                            existingItemIdList.concat(normalizedPageItemIds),
+                            id => id
+                        ).slice(0, WIZARD_MAX_ITEMS);
+                        req.itemSearch = {
+                            ...itemSearch,
+                            itemIdList: mergedItemIdList,
+                            pageSize: Math.max(40, toNumber(itemSearch.pageSize, 0), mergedItemIdList.length)
+                        };
+                        appendWizardLog(`本地未选商品，已自动读取页面已添加商品 ${mergedItemIdList.length} 条继续创建`);
+                    }
+                }
+                const fallbackItemCount = Array.isArray(req.itemSearch?.itemIdList)
+                    ? req.itemSearch.itemIdList.map(id => String(id || '').trim()).filter(Boolean).length
+                    : 0;
+                if (!req.plans.length && !fallbackItemCount) {
                     appendWizardLog('请先添加商品并勾选策略后再创建', 'error');
                     return;
                 }
@@ -19001,11 +19026,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     return;
                 }
-                if (!req.plans.length && pageItemIds.length) {
-                    appendWizardLog(`本地未选商品，已自动读取页面已添加商品 ${pageItemIds.length} 条继续创建`);
-                }
+                const runCount = req.plans.length || fallbackItemCount || pageItemIds.length || 0;
                 renderPreview(req);
-                appendWizardLog(`开始批量创建 ${req.plans.length || pageItemIds.length || 0} 个计划...`);
+                appendWizardLog(`开始批量创建 ${runCount} 个计划...`);
                 wizardState.els.runBtn.disabled = true;
                 wizardState.els.runQuickBtn.disabled = true;
                 try {
