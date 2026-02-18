@@ -19297,9 +19297,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const sceneRequest = nextScene ? withSceneRequest(nextScene, request) : mergeDeep({}, request);
             const normalizedOptions = isPlainObject(options) ? mergeDeep({}, options) : {};
             if (WIZARD_FORCE_API_ONLY_SCENE_CONFIG) {
-                if (!hasOwn(normalizedOptions, 'syncSceneRuntime')) normalizedOptions.syncSceneRuntime = false;
-                if (!hasOwn(normalizedOptions, 'applySceneSpec')) normalizedOptions.applySceneSpec = false;
-                if (!hasOwn(normalizedOptions, 'strictSceneRuntimeMatch')) normalizedOptions.strictSceneRuntimeMatch = false;
+                normalizedOptions.syncSceneRuntime = false;
+                normalizedOptions.applySceneSpec = false;
+                normalizedOptions.strictSceneRuntimeMatch = false;
+                return createPlansBatch(sceneRequest, normalizedOptions);
             }
             if (normalizedOptions?.applySceneSpec === false) {
                 return createPlansBatch(sceneRequest, normalizedOptions);
