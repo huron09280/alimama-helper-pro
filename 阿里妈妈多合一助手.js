@@ -12302,7 +12302,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (enableKeywordsOverride === true || enableKeywordsOverride === false) {
                 enableKeywords = !!enableKeywordsOverride;
             } else {
-                enableKeywords = /(关键词推广|线索推广)/.test(normalizedScene) || hasWordList || hasWordPackageList;
+                // `wordPackageList` 在非关键词场景可能仅是模板残留字段，不能直接判定为“启用关键词”。
+                enableKeywords = /(关键词推广|线索推广)/.test(normalizedScene) || hasWordList;
             }
 
             // 关键词推广必须按“商品 + 关键词单元”提交，不能依赖模板是否返回这些字段。
