@@ -16201,10 +16201,137 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: #fff;
                     overflow: hidden;
                 }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    padding: 8px 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                    background: #f8fafc;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-match-menu {
+                    position: relative;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-match-pop {
+                    position: absolute;
+                    top: calc(100% + 4px);
+                    left: 0;
+                    min-width: 136px;
+                    z-index: 3;
+                    padding: 6px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(148,163,184,0.35);
+                    background: #fff;
+                    box-shadow: 0 8px 24px rgba(15,23,42,0.14);
+                    display: none;
+                    gap: 6px;
+                    flex-direction: column;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-match-menu.open .am-wxt-manual-keyword-match-pop {
+                    display: flex;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar .tips {
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-layout {
+                    display: grid;
+                    grid-template-columns: minmax(220px, 0.44fr) minmax(0, 1fr);
+                    gap: 10px;
+                    padding: 10px;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-left {
+                    border: 1px solid rgba(148,163,184,0.22);
+                    border-radius: 8px;
+                    background: #fff;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-left-head,
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-left-item {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 92px;
+                    gap: 8px;
+                    align-items: center;
+                    padding: 10px 10px;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-left-head {
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #334155;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-left-list {
+                    min-height: 0;
+                    max-height: 360px;
+                    overflow: auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-left-item {
+                    border-top: 1px solid rgba(148,163,184,0.14);
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-left-item:first-child {
+                    border-top: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-left-check {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    min-width: 0;
+                    color: #334155;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-left-check span {
+                    min-width: 0;
+                    line-height: 1.25;
+                    word-break: break-word;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-left-title {
+                    color: #334155;
+                    font-size: 13px;
+                    font-weight: 600;
+                    line-height: 1.4;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-left-meta {
+                    margin-top: 2px;
+                    font-size: 12px;
+                    color: #94a3b8;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-left-meta.status {
+                    color: #10b981;
+                    font-weight: 600;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-left-bid {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 4px;
+                    font-size: 13px;
+                    color: #475569;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 10px;
+                    height: 36px;
+                    background: #f8fafc;
+                    width: 92px;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-right {
+                    min-width: 0;
+                    border: 1px solid rgba(148,163,184,0.22);
+                    border-radius: 8px;
+                    overflow: hidden;
+                    background: #fff;
+                }
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-head,
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-item {
                     display: grid;
-                    grid-template-columns: minmax(200px, 1.6fr) 1fr 1fr 1fr minmax(140px, 1fr);
+                    grid-template-columns: minmax(220px, 1.9fr) 0.9fr 0.9fr 1fr minmax(160px, 1fr) minmax(130px, 0.95fr);
                     gap: 8px;
                     align-items: center;
                     padding: 8px 10px;
@@ -16284,7 +16411,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-top: 0;
                 }
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-list {
-                    max-height: 240px;
+                    max-height: 360px;
                     overflow: auto;
                 }
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-item .metric-muted {
@@ -16311,6 +16438,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 12px 10px;
                     font-size: 12px;
                     color: #94a3b8;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .am-wxt-bid-edit {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 6px;
+                    border: 1px solid rgba(148,163,184,0.3);
+                    border-radius: 10px;
+                    padding: 0 8px;
+                    height: 36px;
+                    background: #fff;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .am-wxt-bid-edit input {
+                    width: 64px;
+                    border: 0;
+                    outline: none;
+                    font-size: 13px;
+                    color: #1f2937;
+                    background: transparent;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .am-wxt-bid-edit span {
+                    color: #64748b;
+                    font-size: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-config textarea {
                     width: 100%;
@@ -16470,9 +16620,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         width: min(220px, 100%);
                         flex: 1 1 auto;
                     }
+                    #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-manual-keyword-layout {
+                        grid-template-columns: 1fr;
+                    }
                     #am-wxt-keyword-modal .am-wxt-manual-keyword-head,
                     #am-wxt-keyword-modal .am-wxt-manual-keyword-item {
-                        grid-template-columns: minmax(180px, 1.4fr) 1fr 1fr 1fr;
+                        grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr 1fr;
                     }
                     #am-wxt-keyword-modal .am-wxt-manual-keyword-head > :last-child,
                     #am-wxt-keyword-modal .am-wxt-manual-keyword-item > :last-child {
@@ -16856,6 +17013,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const relevanceMeta = resolveKeywordRelevanceMeta(rawWord.relevanceType);
                 const searchIndex = Number(rawWord.searchIndex);
                 const marketAverageBid = Number(rawWord.marketAverageBid);
+                const reasonTagList = Array.isArray(rawWord.reasonTagList)
+                    ? rawWord.reasonTagList.map(item => String(item?.name || '').trim()).filter(Boolean)
+                    : [];
+                const predictClick = Number(rawWord.predictClick);
                 return {
                     word,
                     searchIndexText: Number.isFinite(searchIndex) ? String(Math.max(0, Math.round(searchIndex))) : '-',
@@ -16863,7 +17024,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     marketClickConversionRateText: formatRatePercent(rawWord.marketClickConversionRate),
                     marketAverageBidText: formatMetricBid(marketAverageBid),
                     relevanceText: relevanceMeta.text,
-                    relevanceClassName: relevanceMeta.className
+                    relevanceClassName: relevanceMeta.className,
+                    reasonTagList,
+                    predictClickText: Number.isFinite(predictClick) ? String(Math.max(0, predictClick).toFixed(2)) : '-'
                 };
             };
             const mergeKeywordMetricMap = (wordList = []) => {
@@ -18874,6 +19037,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (!Number.isFinite(num)) return '1';
                         return String(Math.max(0, num).toFixed(4)).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
                     };
+                    const keywordComboMap = new Map();
+                    keywordList.forEach(item => {
+                        const metricEntry = getKeywordMetricByWord(item.word) || {};
+                        const reasonTag = Array.isArray(metricEntry.reasonTagList) && metricEntry.reasonTagList.length
+                            ? String(metricEntry.reasonTagList[0] || '').trim()
+                            : '';
+                        if (!reasonTag) return;
+                        const comboKey = reasonTag;
+                        if (!keywordComboMap.has(comboKey)) {
+                            keywordComboMap.set(comboKey, {
+                                name: reasonTag,
+                                wordCount: 0,
+                                bidTotal: 0,
+                                predictClickTotal: 0
+                            });
+                        }
+                        const target = keywordComboMap.get(comboKey);
+                        target.wordCount += 1;
+                        target.bidTotal += toNumber(metricEntry.marketAverageBidText, 0);
+                        target.predictClickTotal += toNumber(metricEntry.predictClickText, 0);
+                    });
+                    const keywordComboList = Array.from(keywordComboMap.values())
+                        .map(item => ({
+                            ...item,
+                            avgBidText: item.wordCount > 0
+                                ? String((item.bidTotal / item.wordCount).toFixed(2)).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1')
+                                : '1',
+                            displayText: item.predictClickTotal > 0
+                                ? `预估展现：${Math.max(1, Math.round(item.predictClickTotal * 100))}`
+                                : `预估展现：${Math.max(1, item.wordCount * 80)}`
+                        }))
+                        .sort((a, b) => b.wordCount - a.wordCount)
+                        .slice(0, 8);
+                    const comboRows = keywordComboList.map(item => `
+                        <div class="am-wxt-manual-keyword-left-item">
+                            <label class="am-wxt-manual-left-check">
+                                <input type="checkbox" data-manual-package-enable="1" checked />
+                                <span>
+                                    <span class="am-wxt-manual-left-title">#${Utils.escapeHtml(item.name)}#</span>
+                                    <span class="am-wxt-manual-left-meta">${Utils.escapeHtml(item.displayText)}</span>
+                                </span>
+                            </label>
+                            <span class="am-wxt-manual-left-bid">${Utils.escapeHtml(item.avgBidText)} 元</span>
+                        </div>
+                    `).join('');
                     const keywordRows = keywordList.map((item, idx) => {
                         const matchScope = parseMatchScope(item.matchScope, DEFAULTS.matchScope);
                         const isExact = matchScope === 1;
@@ -18910,6 +19118,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     <button type="button" class="am-wxt-option-chip ${isExact ? '' : 'active'}" data-manual-keyword-match="4">广泛</button>
                                     <button type="button" class="am-wxt-option-chip ${isExact ? 'active' : ''}" data-manual-keyword-match="1">精准</button>
                                 </div>
+                                <label class="am-wxt-bid-edit">
+                                    <input type="text" data-manual-keyword-bid-input="1" value="${Utils.escapeHtml(bidText)}" />
+                                    <span>元</span>
+                                </label>
                             </div>
                         `;
                     }).join('');
@@ -18919,23 +19131,71 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div class="am-wxt-setting-control">
                                 <textarea class="am-wxt-hidden-control" data-proxy-input-target="am-wxt-keyword-manual" data-manual-keyword-hidden="1">${Utils.escapeHtml(normalizedManualText || rawManualText)}</textarea>
                                 <div class="am-wxt-manual-keyword-panel" data-manual-keyword-panel="1">
-                                    <div class="am-wxt-manual-keyword-head">
-                                        <label class="keyword-col">
-                                            <input type="checkbox" data-manual-keyword-check-all="1" ${keywordList.length ? 'checked' : ''} />
-                                            <span>关键词 (${keywordList.length}/200)</span>
-                                        </label>
-                                        <span>市场点击率</span>
-                                        <span>市场转化率</span>
-                                        <span>市场平均出价</span>
-                                        <span>匹配方案</span>
+                                    <div class="am-wxt-manual-keyword-toolbar">
+                                        <div class="am-wxt-manual-keyword-toolbar-left">
+                                            <button class="am-wxt-btn primary" type="button" data-manual-keyword-add="1">+更多关键词</button>
+                                            <button class="am-wxt-btn" type="button" data-manual-keyword-batch-bid="1">批量修改出价</button>
+                                            <div class="am-wxt-manual-keyword-match-menu" data-manual-keyword-match-menu="1">
+                                                <button class="am-wxt-btn" type="button" data-manual-keyword-menu-toggle="1">修改匹配方案 ▾</button>
+                                                <div class="am-wxt-manual-keyword-match-pop">
+                                                    <button class="am-wxt-btn" type="button" data-manual-keyword-batch-match="4">批量设为广泛</button>
+                                                    <button class="am-wxt-btn" type="button" data-manual-keyword-batch-match="1">批量设为精准</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <span class="tips">已设置：开启流量智选，关键词组合 ${keywordComboList.length} 个、自选词 ${keywordList.length} 个</span>
                                     </div>
-                                    <div class="am-wxt-manual-keyword-list">
-                                        ${keywordRows || '<div class="am-wxt-manual-keyword-empty">暂无手动关键词，点击“添加关键词”录入</div>'}
+                                    <div class="am-wxt-manual-keyword-layout">
+                                        <div class="am-wxt-manual-keyword-left">
+                                            <div class="am-wxt-manual-keyword-left-head">
+                                                <label class="am-wxt-manual-left-check">
+                                                    <input type="checkbox" data-manual-package-check-all="1" ${keywordComboList.length ? 'checked' : ''} />
+                                                    <span>词包 (${keywordComboList.length}/100)<br />/预估展现量</span>
+                                                </label>
+                                                <span>基础出价</span>
+                                            </div>
+                                            <div class="am-wxt-manual-keyword-left-list">
+                                                <div class="am-wxt-manual-keyword-left-item">
+                                                    <label class="am-wxt-manual-left-check">
+                                                        <input type="checkbox" data-manual-package-enable="1" checked />
+                                                        <span>
+                                                            <span class="am-wxt-manual-left-title">流量智选</span>
+                                                            <span class="am-wxt-manual-left-meta status">生效中</span>
+                                                        </span>
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        class="am-wxt-site-switch is-on"
+                                                        data-manual-keyword-flow-toggle="1"
+                                                        aria-pressed="true"
+                                                    >
+                                                        <span class="am-wxt-site-switch-handle"></span>
+                                                        <span class="am-wxt-site-switch-state">开</span>
+                                                    </button>
+                                                </div>
+                                                ${comboRows || '<div class="am-wxt-manual-keyword-empty">暂无关键词组合</div>'}
+                                            </div>
+                                        </div>
+                                        <div class="am-wxt-manual-keyword-right">
+                                            <div class="am-wxt-manual-keyword-head">
+                                                <label class="keyword-col">
+                                                    <input type="checkbox" data-manual-keyword-check-all="1" ${keywordList.length ? 'checked' : ''} />
+                                                    <span>关键词 (${keywordList.length}/200)</span>
+                                                </label>
+                                                <span>市场点击率</span>
+                                                <span>市场转化率</span>
+                                                <span>市场平均出价</span>
+                                                <span>匹配方案</span>
+                                                <span>基础出价</span>
+                                            </div>
+                                            <div class="am-wxt-manual-keyword-list">
+                                                ${keywordRows || '<div class="am-wxt-manual-keyword-empty">暂无手动关键词，点击“+更多关键词”录入</div>'}
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="am-wxt-manual-keyword-actions">
-                                        <span class="tips">参考原网页样式：支持广泛/精准切换</span>
+                                        <span class="tips">支持批量改价、批量修改匹配方案</span>
                                         <div>
-                                            <button class="am-wxt-btn" type="button" data-manual-keyword-add="1">添加关键词</button>
                                             <button class="am-wxt-btn" type="button" data-manual-keyword-clear="1">清空</button>
                                         </div>
                                     </div>
@@ -19576,6 +19836,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 hidden.dispatchEvent(new Event('change', { bubbles: true }));
                 renderSceneDynamicConfig();
             };
+            const normalizeManualKeywordBidValue = (value, fallback = 1) => {
+                const num = toNumber(value, fallback);
+                const safeNum = Number.isFinite(num) ? Math.max(0, num) : Math.max(0, fallback);
+                return String(safeNum.toFixed(4)).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+            };
             const ensureManualKeywordPanelDelegates = () => {
                 if (wizardState.manualKeywordDelegatedBound) return;
                 if (!(wizardState.els?.sceneDynamic instanceof HTMLElement)) return;
@@ -19586,6 +19851,64 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!(target instanceof Element)) return;
                     const panel = target.closest('[data-manual-keyword-panel]');
                     if (!(panel instanceof Element)) return;
+                    if (!target.matches('button[data-manual-keyword-menu-toggle]') && !target.matches('button[data-manual-keyword-batch-match]')) {
+                        panel.querySelectorAll('[data-manual-keyword-match-menu].open').forEach(menu => menu.classList.remove('open'));
+                    }
+
+                    if (target.matches('button[data-manual-keyword-menu-toggle]')) {
+                        const menu = target.closest('[data-manual-keyword-match-menu]');
+                        if (!(menu instanceof Element)) return;
+                        menu.classList.toggle('open');
+                        return;
+                    }
+
+                    if (target.matches('button[data-manual-keyword-flow-toggle]')) {
+                        const nextOn = !target.classList.contains('is-on');
+                        target.classList.toggle('is-on', nextOn);
+                        target.classList.toggle('is-off', !nextOn);
+                        target.setAttribute('aria-pressed', nextOn ? 'true' : 'false');
+                        const state = target.querySelector('.am-wxt-site-switch-state');
+                        if (state) state.textContent = nextOn ? '开' : '关';
+                        return;
+                    }
+
+                    if (target.matches('button[data-manual-keyword-batch-bid]')) {
+                        const selectedRows = Array.from(panel.querySelectorAll('[data-manual-keyword-row]')).filter(row => (
+                            row.querySelector('input[data-manual-keyword-enable]')?.checked !== false
+                        ));
+                        if (!selectedRows.length) {
+                            appendWizardLog('请先勾选关键词，再批量修改出价', 'error');
+                            return;
+                        }
+                        const defaultBid = selectedRows[0]?.getAttribute('data-manual-keyword-bid') || String(toNumber(wizardState.els.bidInput?.value, 1));
+                        const bidText = window.prompt('请输入批量基础出价（单位：元）', defaultBid) || '';
+                        const inputText = String(bidText || '').trim();
+                        if (!inputText) return;
+                        const normalizedBid = normalizeManualKeywordBidValue(inputText, toNumber(defaultBid, toNumber(wizardState.els.bidInput?.value, 1)));
+                        selectedRows.forEach(row => {
+                            row.setAttribute('data-manual-keyword-bid', normalizedBid);
+                            const bidInput = row.querySelector('input[data-manual-keyword-bid-input]');
+                            if (bidInput instanceof HTMLInputElement) bidInput.value = normalizedBid;
+                        });
+                        applyManualKeywordRowsFromPanel(panel, collectManualKeywordRowsFromPanel(panel));
+                        return;
+                    }
+
+                    if (target.matches('button[data-manual-keyword-batch-match]')) {
+                        const nextMatch = parseMatchScope(target.getAttribute('data-manual-keyword-batch-match'), DEFAULTS.matchScope);
+                        const selectedRows = Array.from(panel.querySelectorAll('[data-manual-keyword-row]')).filter(row => (
+                            row.querySelector('input[data-manual-keyword-enable]')?.checked !== false
+                        ));
+                        if (!selectedRows.length) {
+                            appendWizardLog('请先勾选关键词，再批量修改匹配方案', 'error');
+                            return;
+                        }
+                        selectedRows.forEach(row => {
+                            row.setAttribute('data-manual-keyword-match', String(nextMatch));
+                        });
+                        applyManualKeywordRowsFromPanel(panel, collectManualKeywordRowsFromPanel(panel));
+                        return;
+                    }
 
                     if (target.matches('button[data-manual-keyword-match]')) {
                         const row = target.closest('[data-manual-keyword-row]');
@@ -19633,7 +19956,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         return;
                     }
 
+                    if (target.matches('input[data-manual-package-check-all]')) {
+                        const checkAll = !!target.checked;
+                        panel.querySelectorAll('input[data-manual-package-enable]').forEach(input => {
+                            input.checked = checkAll;
+                        });
+                        return;
+                    }
+
+                    if (target.matches('input[data-manual-package-enable]')) {
+                        const packageInputs = Array.from(panel.querySelectorAll('input[data-manual-package-enable]'));
+                        const allChecked = packageInputs.length > 0 && packageInputs.every(input => !!input.checked);
+                        const checkAllInput = panel.querySelector('input[data-manual-package-check-all]');
+                        if (checkAllInput instanceof HTMLInputElement) {
+                            checkAllInput.checked = allChecked;
+                        }
+                        return;
+                    }
+
                     if (target.matches('input[data-manual-keyword-enable]')) {
+                        applyManualKeywordRowsFromPanel(panel, collectManualKeywordRowsFromPanel(panel));
+                        return;
+                    }
+
+                    if (target.matches('input[data-manual-keyword-bid-input]')) {
+                        const row = target.closest('[data-manual-keyword-row]');
+                        if (!(row instanceof Element)) return;
+                        const normalizedBid = normalizeManualKeywordBidValue(
+                            target.value,
+                            toNumber(row.getAttribute('data-manual-keyword-bid'), toNumber(wizardState.els.bidInput?.value, 1))
+                        );
+                        target.value = normalizedBid;
+                        row.setAttribute('data-manual-keyword-bid', normalizedBid);
                         applyManualKeywordRowsFromPanel(panel, collectManualKeywordRowsFromPanel(panel));
                     }
                 });
@@ -20905,6 +21259,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     pullDetailFormToStrategy(editingStrategy);
                     syncDraftFromUI();
                     renderStrategyList();
+                    renderSceneDynamicConfig();
                     if (typeof wizardState.buildRequest === 'function') {
                         wizardState.renderPreview(wizardState.buildRequest());
                     }
@@ -21503,6 +21858,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     el.addEventListener('input', syncDraftFromUI);
                     el.addEventListener('change', syncDraftFromUI);
                 });
+            if (wizardState.els.manualInput) {
+                const syncManualPanelIfStale = () => {
+                    if (!wizardState.detailVisible) return;
+                    if (getCurrentEditorSceneName() !== '关键词推广') return;
+                    const panel = wizardState.els.sceneDynamic?.querySelector?.('[data-manual-keyword-panel]');
+                    if (!(panel instanceof Element)) return;
+                    const hiddenInput = resolveManualKeywordHiddenInput(panel);
+                    const manualText = String(wizardState.els.manualInput.value || '').trim();
+                    const hiddenText = String(hiddenInput?.value || '').trim();
+                    if (manualText === hiddenText) return;
+                    renderSceneDynamicConfig();
+                };
+                wizardState.els.manualInput.addEventListener('input', syncManualPanelIfStale);
+                wizardState.els.manualInput.addEventListener('change', syncManualPanelIfStale);
+            }
             if (wizardState.els.prefixInput) {
                 const syncPlanNameToStrategyList = () => {
                     syncDraftFromUI();
