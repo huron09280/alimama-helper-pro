@@ -4809,7 +4809,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const API_ONLY_CREATE_OPTIONS = Object.freeze({
             syncSceneRuntime: false,
             applySceneSpec: false,
-            strictSceneRuntimeMatch: false
+            strictSceneRuntimeMatch: false,
+            conflictPolicy: 'auto_stop_retry',
+            stopScope: 'same_item_only'
         });
         const SCENE_DEFAULT_PROMOTION_SCENE = {
             '货品全站推广': 'promotion_scene_site',
@@ -14481,6 +14483,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 options?.fallbackPolicy || mergedRequest?.fallbackPolicy || 'confirm',
                 'confirm'
             );
+            const conflictPolicy = String(
+                options?.conflictPolicy
+                || mergedRequest?.conflictPolicy
+                || REPAIR_DEFAULTS.conflictPolicy
+                || 'auto_stop_retry'
+            ).trim() || 'auto_stop_retry';
+            const stopScope = String(
+                options?.stopScope
+                || mergedRequest?.stopScope
+                || REPAIR_DEFAULTS.stopScope
+                || 'same_item_only'
+            ).trim() || 'same_item_only';
             mergedRequest.fallbackPolicy = fallbackPolicy;
             if (!isPlainObject(mergedRequest.common)) {
                 mergedRequest.common = {};
@@ -15257,20 +15271,78 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 let downgradeRetrySuccessCount = 0;
                 let downgradeRetryFailCount = 0;
                 for (const entry of singleRetryEntries) {
-                    try {
+                    const entrySceneName = String(sceneCapabilities.sceneName || mergedRequest.sceneName || '').trim();
+                    const entryItemId = toPositiveIdText(entry?.meta?.item?.materialId || entry?.meta?.item?.itemId || '');
+                    const submitSingleEntry = async () => {
                         const singleEndpoint = resolveEntrySubmitEndpoint(entry);
                         const res = await requestOne(singleEndpoint, runtime.bizCode, {
                             bizCode: runtime.bizCode,
                             solutionList: [entry.solution]
                         }, options.requestOptions || {});
                         rawResponses.push(res);
-                        const outcome = parseAddListOutcome(res, [entry]);
+                        return parseAddListOutcome(res, [entry]);
+                    };
+                    try {
+                        let outcome = await submitSingleEntry();
                         if (outcome.successes.length) {
                             successes.push(...outcome.successes);
                             if (entry?.meta?.fallbackDowngraded) downgradeRetrySuccessCount += outcome.successes.length;
                         } else {
-                            failures.push(...outcome.failures);
-                            if (entry?.meta?.fallbackDowngraded) downgradeRetryFailCount += outcome.failures.length;
+                            const primaryFailure = outcome.failures[0] || buildFailureFromEntry(entry, 'single_retry_failed');
+                            const classification = classifyCreateFailure(primaryFailure?.error || '');
+                            let conflictRetried = false;
+                            if (classification === 'conflict' && conflictPolicy === 'auto_stop_retry' && entryItemId) {
+                                const conflictText = String(primaryFailure?.error || '').trim();
+                                const conflictSceneName = /(onebpsite|全站|site)/i.test(conflictText)
+                                    ? '货品全站推广'
+                                    : (entrySceneName || mergedRequest.sceneName || '');
+                                emitProgress(options, 'conflict_resolve_start', {
+                                    sceneName: entrySceneName || conflictSceneName || '',
+                                    conflictSceneName: conflictSceneName || '',
+                                    planName: entry?.meta?.planName || '',
+                                    itemId: entryItemId,
+                                    error: conflictText
+                                });
+                                const resolved = await resolveCreateConflicts(primaryFailure, {
+                                    sceneName: conflictSceneName || entrySceneName || mergedRequest.sceneName || '',
+                                    entrySceneName: entrySceneName || mergedRequest.sceneName || '',
+                                    itemId: entryItemId,
+                                    bizCode: runtime.bizCode,
+                                    requestOptions: options.requestOptions || {},
+                                    conflictPolicy,
+                                    stopScope,
+                                    capture: options.captureConflictLifecycle !== false,
+                                    conflictDeleteFallback: options.conflictDeleteFallback !== false,
+                                    oneClickConflictResolve: options.oneClickConflictResolve !== false
+                                });
+                                emitProgress(options, 'conflict_resolve_done', {
+                                    sceneName: entrySceneName || conflictSceneName || '',
+                                    conflictSceneName: conflictSceneName || '',
+                                    planName: entry?.meta?.planName || '',
+                                    itemId: entryItemId,
+                                    handled: !!resolved?.handled,
+                                    resolved: !!resolved?.ok,
+                                    stoppedCount: Array.isArray(resolved?.stoppedCampaignIds) ? resolved.stoppedCampaignIds.length : 0,
+                                    unresolvedCount: Array.isArray(resolved?.unresolvedCampaignIds) ? resolved.unresolvedCampaignIds.length : 0,
+                                    oneClickUsed: !!resolved?.oneClickResult,
+                                    oneClickError: resolved?.oneClickResult?.error || '',
+                                    error: resolved?.error || ''
+                                });
+                                if (resolved?.handled && resolved?.ok) {
+                                    conflictRetried = true;
+                                    outcome = await submitSingleEntry();
+                                }
+                            }
+                            if (outcome.successes.length) {
+                                successes.push(...outcome.successes);
+                                if (entry?.meta?.fallbackDowngraded) downgradeRetrySuccessCount += outcome.successes.length;
+                            } else {
+                                const finalFailures = Array.isArray(outcome.failures) && outcome.failures.length
+                                    ? outcome.failures
+                                    : [buildFailureFromEntry(entry, conflictRetried ? 'conflict_resolve_retry_failed' : 'single_retry_failed')];
+                                failures.push(...finalFailures);
+                                if (entry?.meta?.fallbackDowngraded) downgradeRetryFailCount += finalFailures.length;
+                            }
                         }
                     } catch (err) {
                         failures.push({
@@ -15318,6 +15390,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     : [],
                 submitEndpoint: mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK,
                 fallbackPolicy,
+                conflictPolicy,
+                stopScope,
                 successCount: successes.length,
                 failCount: failures.length,
                 successes,
@@ -18075,10 +18149,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .map(label => normalizeSceneFieldKey(label))
                         .filter(Boolean)
                 );
+                const hiddenSceneSettingKeySet = new Set(
+                    [
+                        normalizeSceneFieldKey('campaign.bidTargetV2'),
+                        normalizeSceneFieldKey('campaign.optimizeTarget')
+                    ].filter(Boolean)
+                );
 
                 const sceneSettings = {};
                 Object.keys(bucket || {}).forEach(rawKey => {
                     const key = normalizeText(rawKey).replace(/[：:]/g, '').trim();
+                    if (hiddenSceneSettingKeySet.has(key)) return;
                     if (skippedDynamicKeySet.has(key) && !preserveDynamicKeySet.has(key)) return;
                     const value = normalizeSceneSettingValue(bucket[rawKey]);
                     if (!key || !value) return;
@@ -18266,8 +18347,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (sceneName === '关键词推广' && activeMarketingGoal) {
                     syncGoalRuntimeBucket('campaign.promotionScene', keywordGoalRuntime.promotionScene || '');
                     syncGoalRuntimeBucket('campaign.itemSelectedMode', keywordGoalRuntime.itemSelectedMode || '');
-                    syncGoalRuntimeBucket('campaign.bidTargetV2', keywordGoalRuntime.bidTargetV2 || '');
-                    syncGoalRuntimeBucket('campaign.optimizeTarget', keywordGoalRuntime.optimizeTarget || keywordGoalRuntime.bidTargetV2 || '');
                 }
                 const sceneGoalSpecs = getSceneCachedGoalSpecs(sceneName);
                 const fallbackGoalRows = getSceneGoalFieldRowFallback(sceneName, activeMarketingGoal);
@@ -18296,9 +18375,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (sceneName === '关键词推广') {
                     activeGoalFieldLabels.push(
                         'campaign.promotionScene',
-                        'campaign.itemSelectedMode',
-                        'campaign.bidTargetV2',
-                        'campaign.optimizeTarget'
+                        'campaign.itemSelectedMode'
                     );
                 }
                 const extraSceneFields = sceneName === '货品全站推广'
@@ -19287,10 +19364,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (wizardState.els.modeSelect) wizardState.els.modeSelect.value = strategy.keywordMode || wizardState.draft?.keywordMode || DEFAULTS.keywordMode;
                 if (wizardState.els.recommendCountInput) wizardState.els.recommendCountInput.value = strategy.recommendCount || wizardState.draft?.recommendCount || String(DEFAULTS.recommendCount);
                 if (wizardState.els.manualInput) wizardState.els.manualInput.value = strategy.manualKeywords || '';
+                const visiblePlanName = getStrategyMainLabel(strategy);
                 if (!String(strategy.autoPlanPrefix || '').trim()) {
-                    strategy.autoPlanPrefix = stripAutoPlanSerialSuffix(getStrategyMainLabel(strategy));
+                    strategy.autoPlanPrefix = stripAutoPlanSerialSuffix(visiblePlanName);
                 }
-                if (wizardState.els.prefixInput) wizardState.els.prefixInput.value = strategy.planName || strategy.autoPlanPrefix || wizardState.draft?.planNamePrefix || '';
+                if (wizardState.els.prefixInput) {
+                    wizardState.els.prefixInput.value = visiblePlanName || strategy.autoPlanPrefix || wizardState.draft?.planNamePrefix || '';
+                }
                 if (wizardState.els.singleCostEnableInput) wizardState.els.singleCostEnableInput.checked = bidMode === 'smart' && !!strategy.setSingleCostV2;
                 if (wizardState.els.singleCostInput) {
                     wizardState.els.singleCostInput.value = strategy.singleCostV2 || '';
@@ -19900,13 +19980,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const buildRequestFromWizard = () => {
                 syncDraftFromUI();
                 const selectedSceneName = SCENE_OPTIONS.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '关键词推广';
-                const sceneSettings = buildSceneSettingsPayload(selectedSceneName);
-                const sceneGoalFromSettings = normalizeGoalLabel(resolveKeywordGoalFromSceneSettings(sceneSettings));
+                const selectedSceneSettings = buildSceneSettingsPayload(selectedSceneName);
+                const selectedSceneGoalFromSettings = normalizeGoalLabel(resolveKeywordGoalFromSceneSettings(selectedSceneSettings));
                 const prefix = wizardState.draft.planNamePrefix || buildSceneTimePrefix(selectedSceneName);
                 const dayAverageBudget = wizardState.draft.dayAverageBudget;
-                const isKeywordScene = selectedSceneName === '关键词推广';
+                const isSelectedKeywordScene = selectedSceneName === '关键词推广';
                 const enabledStrategies = (wizardState.strategyList || []).filter(item => item.enabled);
-                const strategyGoalSet = new Set();
+                const strategyGoalSetByScene = new Map();
+                const sceneSettingsCache = new Map();
+                const getSceneSettingsForRequest = (sceneName = '') => {
+                    const targetScene = SCENE_OPTIONS.includes(String(sceneName || '').trim())
+                        ? String(sceneName).trim()
+                        : selectedSceneName;
+                    if (targetScene === '关键词推广') return {};
+                    if (!sceneSettingsCache.has(targetScene)) {
+                        sceneSettingsCache.set(targetScene, buildSceneSettingsPayload(targetScene));
+                    }
+                    return sceneSettingsCache.get(targetScene) || {};
+                };
                 const plans = [];
                 const usedPlanNameInRequest = new Set();
                 const ensureUniquePlanNameInRequest = (rawName = '') => {
@@ -19920,9 +20011,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     usedPlanNameInRequest.add(candidate);
                     return candidate;
                 };
-                let seq = 0;
                 wizardState.addedItems.forEach((item, itemIdx) => {
                     enabledStrategies.forEach((strategy, strategyIdx) => {
+                        const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
+                            ? String(strategy.sceneName).trim()
+                            : selectedSceneName;
+                        const isKeywordScene = strategySceneName === '关键词推广';
+                        const strategySceneSettings = getSceneSettingsForRequest(strategySceneName);
                         const strategyBidMode = normalizeBidMode(strategy.bidMode || wizardState.draft.bidMode || 'smart', 'smart');
                         const strategyKeywordMode = strategy.keywordMode || wizardState.draft.keywordMode || DEFAULTS.keywordMode;
                         const strategyUseWordPackage = strategy.useWordPackage !== false && wizardState.draft.useWordPackage !== false;
@@ -19933,7 +20028,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             matchScope: DEFAULTS.matchScope,
                             onlineStatus: DEFAULTS.keywordOnlineStatus
                         });
-                        seq += 1;
                         const explicitPlanName = String(strategy.planName || '').trim();
                         const autoStrategyPlanName = getStrategyMainLabel(strategy);
                         const autoPlanName = wizardState.addedItems.length > 1
@@ -19944,13 +20038,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             || autoPlanName
                             || `${prefix}_${String(strategyIdx + 1).padStart(2, '0')}`
                         );
-                        const strategyMarketingGoal = isKeywordScene
-                            ? resolveStrategyMarketingGoal(strategy, sceneSettings, selectedSceneName)
-                            : '';
+                        const strategyMarketingGoal = normalizeGoalLabel(
+                            resolveStrategyMarketingGoal(strategy, strategySceneSettings, strategySceneName)
+                        );
                         if (strategyMarketingGoal) {
-                            strategyGoalSet.add(strategyMarketingGoal);
+                            if (!strategyGoalSetByScene.has(strategySceneName)) {
+                                strategyGoalSetByScene.set(strategySceneName, new Set());
+                            }
+                            strategyGoalSetByScene.get(strategySceneName).add(strategyMarketingGoal);
                         }
                         const plan = {
+                            sceneName: strategySceneName,
                             planName: finalPlanName,
                             item,
                             bidMode: strategyBidMode,
@@ -20019,7 +20117,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     keywordMode: commonKeywordMode,
                     recommendCount: commonRecommendCount
                 };
-                if (isKeywordScene) {
+                if (isSelectedKeywordScene) {
                     common.bidMode = commonBidMode;
                 }
                 if (wizardState.crowdList.length) {
@@ -20034,17 +20132,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const requestPromotionScene = requestBizCode === DEFAULTS.bizCode
                     ? requestPromotionSceneDefault
                     : (wizardState.draft.promotionScene || '');
+                const selectedSceneGoalSet = strategyGoalSetByScene.get(selectedSceneName) || new Set();
                 const sceneMarketingGoal = (() => {
-                    if (!isKeywordScene) {
+                    if (!isSelectedKeywordScene) {
                         return normalizeGoalLabel(
-                            sceneSettings.营销目标
-                            || sceneSettings.优化目标
+                            selectedSceneSettings.营销目标
+                            || selectedSceneSettings.优化目标
                             || ''
                         );
                     }
-                    if (sceneGoalFromSettings) return sceneGoalFromSettings;
-                    if (strategyGoalSet.size === 1) return Array.from(strategyGoalSet)[0] || '';
-                    if (strategyGoalSet.size > 1) return Array.from(strategyGoalSet)[0] || '';
+                    if (selectedSceneGoalFromSettings) return selectedSceneGoalFromSettings;
+                    if (selectedSceneGoalSet.size === 1) return Array.from(selectedSceneGoalSet)[0] || '';
+                    if (selectedSceneGoalSet.size > 1) return Array.from(selectedSceneGoalSet)[0] || '';
                     return normalizeBidMode(commonBidMode, 'smart') === 'manual' ? '自定义推广' : '趋势明星';
                 })();
 
@@ -20053,11 +20152,80 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     promotionScene: requestPromotionScene,
                     sceneName: selectedSceneName,
                     marketingGoal: sceneMarketingGoal || undefined,
-                    sceneSettings,
+                    sceneSettings: selectedSceneSettings,
                     fallbackPolicy: normalizeWizardFallbackPolicy(wizardState.draft.fallbackPolicy),
                     plans,
                     common
                 };
+            };
+
+            const buildSceneRequestsFromWizard = (request = {}) => {
+                const selectedSceneName = SCENE_OPTIONS.includes(String(request?.sceneName || '').trim())
+                    ? String(request.sceneName).trim()
+                    : '关键词推广';
+                const planList = Array.isArray(request?.plans) ? request.plans : [];
+                const groupedPlans = new Map();
+                planList.forEach(plan => {
+                    const planSceneName = SCENE_OPTIONS.includes(String(plan?.sceneName || '').trim())
+                        ? String(plan.sceneName).trim()
+                        : selectedSceneName;
+                    if (!groupedPlans.has(planSceneName)) groupedPlans.set(planSceneName, []);
+                    const nextPlan = mergeDeep({}, plan);
+                    delete nextPlan.sceneName;
+                    groupedPlans.get(planSceneName).push(nextPlan);
+                });
+                if (!groupedPlans.size) {
+                    groupedPlans.set(selectedSceneName, []);
+                }
+                const fallbackPolicy = normalizeWizardFallbackPolicy(request?.fallbackPolicy || wizardState.draft?.fallbackPolicy);
+                const sceneRequests = [];
+                groupedPlans.forEach((plans, sceneName) => {
+                    const sceneSettings = buildSceneSettingsPayload(sceneName);
+                    const sceneBizCodeHint = resolveSceneBizCodeHint(sceneName);
+                    const bizCode = sceneBizCodeHint || request?.bizCode || wizardState.draft?.bizCode || DEFAULTS.bizCode;
+                    const promotionSceneDefault = resolveSceneDefaultPromotionScene(
+                        sceneName,
+                        request?.promotionScene || wizardState.draft?.promotionScene || DEFAULTS.promotionScene
+                    );
+                    const promotionScene = bizCode === DEFAULTS.bizCode
+                        ? promotionSceneDefault
+                        : (request?.promotionScene || wizardState.draft?.promotionScene || '');
+                    const sceneGoalFromSettings = normalizeGoalLabel(
+                        sceneName === '关键词推广'
+                            ? resolveKeywordGoalFromSceneSettings(sceneSettings)
+                            : (sceneSettings.营销目标 || sceneSettings.优化目标 || '')
+                    );
+                    const scenePlanGoals = uniqueBy(
+                        plans.map(plan => normalizeGoalLabel(plan?.marketingGoal || '')).filter(Boolean),
+                        item => item
+                    );
+                    const sceneMarketingGoal = sceneGoalFromSettings
+                        || scenePlanGoals[0]
+                        || (sceneName === '关键词推广'
+                            ? (normalizeBidMode(request?.common?.bidMode || 'smart', 'smart') === 'manual' ? '自定义推广' : '趋势明星')
+                            : normalizeGoalLabel(request?.marketingGoal || ''));
+                    const sceneCommon = mergeDeep({}, request?.common || {});
+                    if (sceneName === '关键词推广') {
+                        const keywordBidMode = normalizeBidMode(
+                            sceneCommon.bidMode || plans[0]?.bidMode || request?.common?.bidMode || 'smart',
+                            'smart'
+                        );
+                        sceneCommon.bidMode = keywordBidMode;
+                    } else {
+                        delete sceneCommon.bidMode;
+                    }
+                    sceneRequests.push({
+                        bizCode,
+                        promotionScene,
+                        sceneName,
+                        marketingGoal: sceneMarketingGoal || undefined,
+                        sceneSettings,
+                        fallbackPolicy,
+                        plans,
+                        common: sceneCommon
+                    });
+                });
+                return sceneRequests;
             };
 
             const normalizePlanNameForCompare = (rawName = '') => {
@@ -20150,6 +20318,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const budget = isPlainObject(plan.budget) ? plan.budget : null;
                 const campaignOverride = isPlainObject(plan.campaignOverride) ? plan.campaignOverride : null;
                 return {
+                    sceneName: String(plan.sceneName || '').trim(),
                     planName: plan.planName || '',
                     marketingGoal: normalizeGoalLabel(plan.marketingGoal || ''),
                     bidMode: normalizeBidMode(plan.bidMode || '', 'smart'),
@@ -20165,10 +20334,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const renderPreview = (request) => {
+                const scenePlanGroups = Array.isArray(request?.plans)
+                    ? uniqueBy(
+                        request.plans.map(plan => String(plan?.sceneName || request?.sceneName || '').trim()).filter(Boolean),
+                        item => item
+                    ).map(sceneName => ({
+                        sceneName,
+                        count: request.plans.filter(plan => String(plan?.sceneName || request?.sceneName || '').trim() === sceneName).length
+                    }))
+                    : [];
                 const preview = {
                     bizCode: request.bizCode,
                     promotionScene: request.promotionScene,
                     sceneName: request.sceneName || wizardState.draft?.sceneName || '',
+                    scenePlanGroups,
                     sceneSettingCount: isPlainObject(request.sceneSettings) ? Object.keys(request.sceneSettings).filter(key => String(request.sceneSettings[key] || '').trim() !== '').length : 0,
                     planCount: request.plans.length,
                     strategyCount: (wizardState.strategyList || []).filter(item => item.enabled).length,
@@ -20358,8 +20537,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.draft = wizardState.draft || wizardDefaultDraft();
                 const prevScene = wizardState.draft.sceneName;
                 const prevPrefix = String(wizardState.draft.planNamePrefix || '').trim();
-                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
-                const applyToAllStrategies = !wizardState.detailVisible || !editingStrategy;
+                const editingStrategy = getStrategyById(wizardState.editingStrategyId)
+                    || wizardState.strategyList[0]
+                    || null;
+                if (!wizardState.editingStrategyId && editingStrategy?.id) {
+                    wizardState.editingStrategyId = editingStrategy.id;
+                }
+                const applyToAllStrategies = !editingStrategy;
                 wizardState.draft.sceneName = nextScene;
                 const sceneBizCodeHint = resolveSceneBizCodeHint(nextScene);
                 if (sceneBizCodeHint) wizardState.draft.bizCode = sceneBizCodeHint;
@@ -20603,72 +20787,170 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     return;
                 }
+                const sceneRequests = buildSceneRequestsFromWizard(req)
+                    .filter(sceneReq => Array.isArray(sceneReq?.plans) && sceneReq.plans.length);
+                if (!sceneRequests.length) {
+                    appendWizardLog('未识别到可提交的场景计划，请检查策略场景设置', 'error');
+                    return;
+                }
                 const runCount = req.plans.length || 0;
                 renderPreview(req);
-                appendWizardLog(`开始批量创建 ${runCount} 个计划...`);
+                const sceneSummaryText = sceneRequests.map(item => `${item.sceneName}×${item.plans.length}`).join('、');
+                appendWizardLog(`开始批量创建 ${runCount} 个计划（${sceneSummaryText}）...`);
                 wizardState.els.runBtn.disabled = true;
                 wizardState.els.runQuickBtn.disabled = true;
+                const onRunProgress = ({ event, ...payload }) => {
+                    const sceneTag = payload.sceneName ? `【${payload.sceneName}】` : '';
+                    if (event === 'scene_runtime_sync_start') {
+                        appendWizardLog(`${sceneTag}场景运行时同步：${payload.currentBizCode || '-'} -> ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`);
+                    } else if (event === 'scene_runtime_synced') {
+                        if (payload.matched === false) {
+                            appendWizardLog(`${sceneTag}场景运行时同步结果不匹配：当前 ${payload.currentBizCode || '-'}，期望 ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`, 'error');
+                        } else {
+                            appendWizardLog(`${sceneTag}场景运行时已同步：${payload.currentBizCode || '-'}（${payload.sceneName || '未命名场景'}）`, 'success');
+                        }
+                    } else if (event === 'scene_runtime_sync_failed') {
+                        appendWizardLog(`${sceneTag}场景运行时同步失败：${payload.error || '未知错误'}`, 'error');
+                    } else if (event === 'scene_runtime_sync_abort') {
+                        if (payload.error) {
+                            appendWizardLog(`${sceneTag}场景运行时同步中止：${payload.error}`, 'error');
+                        } else {
+                            appendWizardLog(`${sceneTag}场景运行时同步中止：当前 ${payload.currentBizCode || '-'}，期望 ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`, 'error');
+                        }
+                    } else if (event === 'scene_runtime_sync_bypass') {
+                        appendWizardLog(`${sceneTag}场景运行时不匹配，已按纯API模式继续：当前 ${payload.currentBizCode || '-'}，期望 ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`);
+                    } else if (event === 'goal_resolution_warning') {
+                        const warningList = Array.isArray(payload.warnings) ? payload.warnings : [];
+                        if (warningList.length) {
+                            warningList.slice(0, 5).forEach(msg => {
+                                appendWizardLog(`${sceneTag}营销目标告警：${msg}`, 'error');
+                            });
+                        }
+                    } else if (event === 'build_solution_item') {
+                        appendWizardLog(`${sceneTag}组装计划：${payload.planName} (${payload.index}/${payload.total})`);
+                    } else if (event === 'submit_batch_start') {
+                        appendWizardLog(`${sceneTag}提交批次 ${payload.batchIndex}/${payload.batchTotal}，数量 ${payload.size}${payload.endpoint ? `，endpoint=${payload.endpoint}` : ''}`);
+                    } else if (event === 'submit_payload_snapshot') {
+                        const campaignKeys = Array.isArray(payload.campaignKeys) ? payload.campaignKeys.join(',') : '';
+                        const adgroupKeys = Array.isArray(payload.adgroupKeys) ? payload.adgroupKeys.join(',') : '';
+                        appendWizardLog(`${sceneTag}提交预览：scene=${payload.sceneName || '-'} goal=${payload.marketingGoal || '-'} promotionScene=${payload.promotionScene || '-'} bidType=${payload.bidTypeV2 || '-'} bidTarget=${payload.bidTargetV2 || '-'} optimizeTarget=${payload.optimizeTarget || '-'} bidMode=${payload.bidMode || '-'} endpoint=${payload.submitEndpoint || '-'} materialId=${payload.materialId || '-'} wordList=${payload.wordListCount || 0} wordPackage=${payload.wordPackageCount || 0} fallbackTriggered=${payload.fallbackTriggered ? 'yes' : 'no'} goalFallback=${payload.goalFallbackUsed ? 'yes' : 'no'} campaignKeys=[${campaignKeys}] adgroupKeys=[${adgroupKeys}]`);
+                    } else if (event === 'submit_batch_retry') {
+                        appendWizardLog(`${sceneTag}批次重试 #${payload.attempt}：${payload.error}`, 'error');
+                    } else if (event === 'submit_batch_success') {
+                        if (payload.failedCount > 0) {
+                            appendWizardLog(`${sceneTag}批次部分成功：成功 ${payload.createdCount}，失败 ${payload.failedCount}${payload.error ? `（${payload.error}）` : ''}`, 'error');
+                        } else {
+                            appendWizardLog(`${sceneTag}批次成功：${payload.createdCount} 个`, 'success');
+                        }
+                    } else if (event === 'fallback_downgrade_pending') {
+                        const pendingText = payload.policy === 'auto'
+                            ? '检测到词包校验失败，准备自动降级重试'
+                            : '检测到词包校验失败，等待降级确认';
+                        appendWizardLog(`${sceneTag}${pendingText}（批次 ${payload.batchIndex}，失败 ${payload.count}，策略=${payload.policy}）`, 'error');
+                    } else if (event === 'fallback_downgrade_confirmed') {
+                        appendWizardLog(`${sceneTag}用户确认降级重试（批次 ${payload.batchIndex}，数量 ${payload.count}${payload.auto ? '，自动策略' : ''}）`, 'success');
+                    } else if (event === 'fallback_downgrade_canceled') {
+                        appendWizardLog(`${sceneTag}用户取消降级（批次 ${payload.batchIndex}，数量 ${payload.count}）`, 'error');
+                    } else if (event === 'fallback_downgrade_result') {
+                        appendWizardLog(`${sceneTag}降级重试结果：成功${payload.successCount || 0}/失败${payload.failCount || 0}`, (payload.failCount || 0) > 0 ? 'error' : 'success');
+                    } else if (event === 'submit_batch_fallback_single') {
+                        appendWizardLog(`${sceneTag}${payload.fallbackTriggered ? '批次降级单计划重试' : '批次单计划重试'}：${payload.error}`, 'error');
+                    } else if (event === 'conflict_resolve_start') {
+                        appendWizardLog(`${sceneTag}检测到在投冲突，开始自动处理：plan=${payload.planName || '-'} itemId=${payload.itemId || '-'}（${payload.error || '冲突' }）`);
+                    } else if (event === 'conflict_resolve_done') {
+                        if (payload.resolved) {
+                            const oneClickHint = payload.oneClickUsed ? '（oneClick）' : '';
+                            appendWizardLog(`${sceneTag}冲突处理完成${oneClickHint}：已停用 ${payload.stoppedCount || 0} 个冲突计划，继续重试创建`, 'success');
+                        } else {
+                            const extra = payload.oneClickError ? `；oneClick=${payload.oneClickError}` : '';
+                            appendWizardLog(`${sceneTag}冲突处理失败：已处理 ${payload.stoppedCount || 0}，未解决 ${payload.unresolvedCount || 0}${payload.error ? `（${payload.error}${extra}）` : (extra ? `（${extra.slice(1)}）` : '')}`, 'error');
+                        }
+                    }
+                };
                 try {
-                    const result = await createPlansByScene(req.sceneName, req, {
-                        ...API_ONLY_CREATE_OPTIONS,
-                        onProgress: ({ event, ...payload }) => {
-                            if (event === 'scene_runtime_sync_start') {
-                                appendWizardLog(`场景运行时同步：${payload.currentBizCode || '-'} -> ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`);
-                            } else if (event === 'scene_runtime_synced') {
-                                if (payload.matched === false) {
-                                    appendWizardLog(`场景运行时同步结果不匹配：当前 ${payload.currentBizCode || '-'}，期望 ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`, 'error');
-                                } else {
-                                    appendWizardLog(`场景运行时已同步：${payload.currentBizCode || '-'}（${payload.sceneName || '未命名场景'}）`, 'success');
-                                }
-                            } else if (event === 'scene_runtime_sync_failed') {
-                                appendWizardLog(`场景运行时同步失败：${payload.error || '未知错误'}`, 'error');
-                            } else if (event === 'scene_runtime_sync_abort') {
-                                if (payload.error) {
-                                    appendWizardLog(`场景运行时同步中止：${payload.error}`, 'error');
-                                } else {
-                                    appendWizardLog(`场景运行时同步中止：当前 ${payload.currentBizCode || '-'}，期望 ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`, 'error');
-                                }
-                            } else if (event === 'scene_runtime_sync_bypass') {
-                                appendWizardLog(`场景运行时不匹配，已按纯API模式继续：当前 ${payload.currentBizCode || '-'}，期望 ${payload.expectedBizCode || '-'}（${payload.sceneName || '未命名场景'}）`);
-                            } else if (event === 'goal_resolution_warning') {
-                                const warningList = Array.isArray(payload.warnings) ? payload.warnings : [];
-                                if (warningList.length) {
-                                    warningList.slice(0, 5).forEach(msg => {
-                                        appendWizardLog(`营销目标告警：${msg}`, 'error');
+                    const result = {
+                        ok: true,
+                        partial: false,
+                        successCount: 0,
+                        failCount: 0,
+                        successes: [],
+                        failures: [],
+                        byScene: []
+                    };
+                    const sceneTasks = sceneRequests.map((sceneReq, sceneIdx) => (async () => {
+                        appendWizardLog(`场景分组并发提交 ${sceneIdx + 1}/${sceneRequests.length}：${sceneReq.sceneName}（${sceneReq.plans.length} 个）`);
+                        try {
+                            const sceneResult = await createPlansByScene(sceneReq.sceneName, sceneReq, {
+                                ...API_ONLY_CREATE_OPTIONS,
+                                onProgress: ({ event, ...payload }) => {
+                                    onRunProgress({
+                                        event,
+                                        ...payload,
+                                        sceneName: payload.sceneName || sceneReq.sceneName
                                     });
                                 }
-                            } else if (event === 'build_solution_item') {
-                                appendWizardLog(`组装计划：${payload.planName} (${payload.index}/${payload.total})`);
-                            } else if (event === 'submit_batch_start') {
-                                appendWizardLog(`提交批次 ${payload.batchIndex}/${payload.batchTotal}，数量 ${payload.size}${payload.endpoint ? `，endpoint=${payload.endpoint}` : ''}`);
-                            } else if (event === 'submit_payload_snapshot') {
-                                const campaignKeys = Array.isArray(payload.campaignKeys) ? payload.campaignKeys.join(',') : '';
-                                const adgroupKeys = Array.isArray(payload.adgroupKeys) ? payload.adgroupKeys.join(',') : '';
-                                appendWizardLog(`提交预览：scene=${payload.sceneName || '-'} goal=${payload.marketingGoal || '-'} promotionScene=${payload.promotionScene || '-'} bidType=${payload.bidTypeV2 || '-'} bidTarget=${payload.bidTargetV2 || '-'} optimizeTarget=${payload.optimizeTarget || '-'} bidMode=${payload.bidMode || '-'} endpoint=${payload.submitEndpoint || '-'} materialId=${payload.materialId || '-'} wordList=${payload.wordListCount || 0} wordPackage=${payload.wordPackageCount || 0} fallbackTriggered=${payload.fallbackTriggered ? 'yes' : 'no'} goalFallback=${payload.goalFallbackUsed ? 'yes' : 'no'} campaignKeys=[${campaignKeys}] adgroupKeys=[${adgroupKeys}]`);
-                            } else if (event === 'submit_batch_retry') {
-                                appendWizardLog(`批次重试 #${payload.attempt}：${payload.error}`, 'error');
-                            } else if (event === 'submit_batch_success') {
-                                if (payload.failedCount > 0) {
-                                    appendWizardLog(`批次部分成功：成功 ${payload.createdCount}，失败 ${payload.failedCount}${payload.error ? `（${payload.error}）` : ''}`, 'error');
-                                } else {
-                                    appendWizardLog(`批次成功：${payload.createdCount} 个`, 'success');
-                                }
-                            } else if (event === 'fallback_downgrade_pending') {
-                                const pendingText = payload.policy === 'auto'
-                                    ? '检测到词包校验失败，准备自动降级重试'
-                                    : '检测到词包校验失败，等待降级确认';
-                                appendWizardLog(`${pendingText}（批次 ${payload.batchIndex}，失败 ${payload.count}，策略=${payload.policy}）`, 'error');
-                            } else if (event === 'fallback_downgrade_confirmed') {
-                                appendWizardLog(`用户确认降级重试（批次 ${payload.batchIndex}，数量 ${payload.count}${payload.auto ? '，自动策略' : ''}）`, 'success');
-                            } else if (event === 'fallback_downgrade_canceled') {
-                                appendWizardLog(`用户取消降级（批次 ${payload.batchIndex}，数量 ${payload.count}）`, 'error');
-                            } else if (event === 'fallback_downgrade_result') {
-                                appendWizardLog(`降级重试结果：成功${payload.successCount || 0}/失败${payload.failCount || 0}`, (payload.failCount || 0) > 0 ? 'error' : 'success');
-                            } else if (event === 'submit_batch_fallback_single') {
-                                appendWizardLog(`${payload.fallbackTriggered ? '批次降级单计划重试' : '批次单计划重试'}：${payload.error}`, 'error');
-                            }
+                            });
+                            return {
+                                sceneIdx,
+                                sceneReq,
+                                sceneResult
+                            };
+                        } catch (sceneErr) {
+                            return {
+                                sceneIdx,
+                                sceneReq,
+                                sceneErrorText: sceneErr?.message || String(sceneErr)
+                            };
                         }
-                    });
+                    })());
+                    const sceneTaskResults = await Promise.all(sceneTasks);
+                    sceneTaskResults
+                        .sort((a, b) => toNumber(a?.sceneIdx, 0) - toNumber(b?.sceneIdx, 0))
+                        .forEach(taskResult => {
+                            const sceneReq = taskResult?.sceneReq || {};
+                            const sceneResult = taskResult?.sceneResult;
+                            const sceneErrorText = String(taskResult?.sceneErrorText || '').trim();
+                            if (sceneErrorText) {
+                                const fallbackFailCount = Math.max(1, sceneReq.plans?.length || 0);
+                                result.ok = false;
+                                result.failCount += fallbackFailCount;
+                                result.failures.push({
+                                    sceneName: sceneReq.sceneName,
+                                    error: sceneErrorText
+                                });
+                                result.byScene.push({
+                                    sceneName: sceneReq.sceneName,
+                                    planCount: sceneReq.plans?.length || 0,
+                                    ok: false,
+                                    successCount: 0,
+                                    failCount: fallbackFailCount
+                                });
+                                appendWizardLog(`场景 ${sceneReq.sceneName} 创建异常：${sceneErrorText}`, 'error');
+                                return;
+                            }
+                            result.byScene.push({
+                                sceneName: sceneReq.sceneName,
+                                planCount: sceneReq.plans?.length || 0,
+                                ok: !!sceneResult?.ok,
+                                successCount: toNumber(sceneResult?.successCount, 0),
+                                failCount: toNumber(sceneResult?.failCount, 0)
+                            });
+                            result.successCount += toNumber(sceneResult?.successCount, 0);
+                            result.failCount += toNumber(sceneResult?.failCount, 0);
+                            if (Array.isArray(sceneResult?.successes) && sceneResult.successes.length) {
+                                result.successes.push(...sceneResult.successes);
+                            }
+                            if (Array.isArray(sceneResult?.failures) && sceneResult.failures.length) {
+                                result.failures.push(...sceneResult.failures.map(item => ({
+                                    ...item,
+                                    sceneName: item?.sceneName || sceneReq.sceneName
+                                })));
+                            }
+                            if (!sceneResult?.ok) {
+                                result.ok = false;
+                            }
+                        });
+                    result.partial = result.successCount > 0 && result.failCount > 0;
                     appendWizardLog(`完成：成功 ${result.successCount}，失败 ${result.failCount}`, result.ok ? 'success' : 'error');
                     if (result.failures.length) {
                         result.failures.slice(0, 3).forEach(item => {
@@ -22503,7 +22785,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return result;
         };
 
-        const CREATE_FAILURE_CONFLICT_RE = /(onebpsite-existed|horizontal-onebpsite-existed|存在在投计划|在投计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i;
+        const CREATE_FAILURE_CONFLICT_RE = /(onebpsite-existed|horizontal-onebpsite-existed|daily-existed|crossaccount-existed|order-existed|diffbizcode-existed|存在在投计划|在投计划|持续推广计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i;
+        const CREATE_FAILURE_ONE_CLICK_CONFLICT_CODE_RE = /(crossaccount-existed|onebpsite-existed|horizontal-onebpsite-existed|order-existed|daily-existed|diffbizcode-existed)/i;
         const CREATE_FAILURE_PERMISSION_RE = /(csrf|403|无权限|权限不足|风控|登录失效|bizlogin|forbidden)/i;
         const CREATE_FAILURE_MAPPING_RE = /(不支持的出价类型|INVALID_PARAMETER|参数.*(非法|错误|校验失败)|字段.*(缺失|错误)|unsupported)/i;
 
@@ -22827,6 +23110,132 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         };
 
+        const extractConflictItemIdList = (failureEntry = {}, fallbackItemId = '') => {
+            const out = [];
+            const pushId = (value) => {
+                const id = toPositiveIdText(value);
+                if (!id) return;
+                out.push(id);
+            };
+            pushId(fallbackItemId);
+            if (isPlainObject(failureEntry?.detail)) {
+                pushId(failureEntry.detail.itemId || failureEntry.detail.materialId || failureEntry.detail.auctionId || '');
+            }
+            if (isPlainObject(failureEntry?.response)) {
+                pushId(failureEntry.response.itemId || failureEntry.response.materialId || failureEntry.response.auctionId || '');
+            }
+            const detailList = Array.isArray(failureEntry?.fullResponse?.data?.errorDetails)
+                ? failureEntry.fullResponse.data.errorDetails
+                : [];
+            detailList.forEach(detail => {
+                if (!isPlainObject(detail?.result)) return;
+                pushId(detail.result.itemId || detail.result.materialId || detail.result.auctionId || '');
+            });
+            return uniqueBy(out, item => item);
+        };
+
+        const resolveConflictByOneClick = async (failureEntry = {}, context = {}) => {
+            const failureCode = normalizeText(failureEntry?.code || '');
+            const failureError = normalizeText(failureEntry?.error || '');
+            const applicable = (failureCode && CREATE_FAILURE_ONE_CLICK_CONFLICT_CODE_RE.test(failureCode))
+                || (!failureCode && CREATE_FAILURE_ONE_CLICK_CONFLICT_CODE_RE.test(failureError));
+            if (!applicable) {
+                return {
+                    ok: false,
+                    handled: false,
+                    itemIdList: [],
+                    pauseCampaignList: [],
+                    stoppedCampaignIds: [],
+                    failedItems: [],
+                    conflictBizCode: '',
+                    fromBizCode: '',
+                    error: 'one_click_not_applicable'
+                };
+            }
+            const itemIdList = extractConflictItemIdList(failureEntry, context?.itemId || '');
+            if (!itemIdList.length) {
+                return {
+                    ok: false,
+                    handled: false,
+                    itemIdList: [],
+                    pauseCampaignList: [],
+                    stoppedCampaignIds: [],
+                    failedItems: [],
+                    conflictBizCode: '',
+                    fromBizCode: '',
+                    error: 'one_click_item_missing'
+                };
+            }
+            const detailBizCode = normalizeSceneBizCode(
+                failureEntry?.detail?.bizCode
+                || failureEntry?.response?.bizCode
+                || ''
+            );
+            const conflictBizCode = normalizeSceneBizCode(
+                context?.conflictBizCode
+                || detailBizCode
+                || resolveSceneBizCodeHint(context?.sceneName || '')
+                || 'onebpSite'
+            ) || 'onebpSite';
+            const fromBizCode = normalizeSceneBizCode(
+                context?.fromBizCode
+                || context?.entryBizCode
+                || context?.bizCode
+                || resolveSceneBizCodeHint(context?.entrySceneName || '')
+                || DEFAULTS.bizCode
+            ) || DEFAULTS.bizCode;
+            const errorExtInfo = isPlainObject(context?.errorExtInfo)
+                ? deepClone(context.errorExtInfo)
+                : (isPlainObject(failureEntry?.fullResponse?.data?.errorExtInfo)
+                    ? deepClone(failureEntry.fullResponse.data.errorExtInfo)
+                    : {});
+            const pauseCampaignList = [];
+            const failedItems = [];
+            for (let i = 0; i < itemIdList.length; i++) {
+                const itemId = itemIdList[i];
+                try {
+                    const response = await requestOne('/campaign/onebpSite/oneClick.json', conflictBizCode, {
+                        ...errorExtInfo,
+                        fromBizCode,
+                        itemIdList: [itemId],
+                        bizCode: conflictBizCode
+                    }, context?.requestOptions || {});
+                    const list = Array.isArray(response?.data?.list) ? response.data.list : [];
+                    if (list.length) pauseCampaignList.push(...list);
+                    const errorDetails = Array.isArray(response?.data?.errorDetails) ? response.data.errorDetails : [];
+                    if (errorDetails.length) {
+                        failedItems.push({
+                            itemId,
+                            error: errorDetails.map(detail => `${detail?.code || 'ERROR'}：${detail?.msg || 'one_click_failed'}`).join('；')
+                        });
+                    }
+                } catch (err) {
+                    failedItems.push({
+                        itemId,
+                        error: err?.message || String(err)
+                    });
+                }
+            }
+            const stoppedCampaignIds = uniqueBy(
+                pauseCampaignList
+                    .map(item => toPositiveIdText(item?.campaignId || item?.planId || item?.id || ''))
+                    .filter(Boolean),
+                item => item
+            );
+            const ok = failedItems.length === 0;
+            return {
+                ok,
+                handled: itemIdList.length > 0 && ok,
+                itemIdList,
+                pauseCampaignList,
+                stoppedCampaignIds,
+                failedItems,
+                conflictBizCode,
+                fromBizCode,
+                error: ok ? '' : 'one_click_partial_failed'
+            };
+        };
+
         const resolveCreateConflicts = async (failureEntry = {}, context = {}) => {
             const sceneName = String(context?.sceneName || '').trim();
             const itemId = toPositiveIdText(context?.itemId || '');
@@ -22858,6 +23267,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
             }
 
+            let oneClickResult = null;
+            if (context?.oneClickConflictResolve !== false) {
+                oneClickResult = await resolveConflictByOneClick(failureEntry, {
+                    ...context,
+                    sceneName,
+                    itemId
+                });
+                if (oneClickResult?.handled && oneClickResult?.ok) {
+                    const stoppedIds = Array.isArray(oneClickResult?.stoppedCampaignIds)
+                        ? oneClickResult.stoppedCampaignIds
+                        : [];
+                    return {
+                        ok: true,
+                        handled: true,
+                        classification,
+                        sceneName,
+                        itemId,
+                        stoppedCampaignIds: uniqueBy(stoppedIds, id => id),
+                        unresolvedCampaignIds: [],
+                        pauseConfirmedIds: uniqueBy(stoppedIds, id => id),
+                        deletedFallbackCampaignIds: [],
+                        oneClickResult,
+                        error: ''
+                    };
+                }
+            }
+
             let refs = extractConflictCampaignRefs(failureEntry, itemId);
             if (!refs.length) {
                 const queried = await queryConflictCampaignRefsByItem(sceneName, itemId, {
@@ -22879,7 +23315,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     itemId,
                     stoppedCampaignIds: [],
                     unresolvedCampaignIds: [],
-                    error: 'conflict_campaign_not_found'
+                    oneClickResult,
+                    error: oneClickResult?.error || 'conflict_campaign_not_found'
                 };
             }
 
@@ -22963,6 +23400,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 unresolvedCampaignIds: uniqueBy(unresolvedCampaignIds, id => id),
                 pauseConfirmedIds: uniqueBy(pauseConfirmedIds, id => id),
                 deletedFallbackCampaignIds: uniqueBy(deletedFallbackCampaignIds, id => id),
+                oneClickResult,
                 error: unresolvedCampaignIds.length ? 'pause_not_fully_confirmed' : ''
             };
         };
