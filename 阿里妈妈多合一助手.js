@@ -15948,20 +15948,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border: 1px solid rgba(148,163,184,0.28);
                     border-radius: 12px;
                     overflow: hidden;
-                    background: #eef2f7;
+                    background: #fff;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip {
                     border: none;
                     border-right: 1px solid rgba(148,163,184,0.2);
                     border-radius: 0;
                     padding: 8px 14px;
-                    background: transparent;
+                    background: #fff;
+                    color: #475569;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip:last-child {
                     border-right: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip.active {
-                    background: #fff;
+                    background: #4f68ff;
+                    color: #fff;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-toggle.am-wxt-site-toggle-wide {
                     flex-wrap: nowrap;
@@ -16092,7 +16094,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     overflow-x: auto;
                     border: 1px solid rgba(148,163,184,0.28);
                     border-radius: 14px;
-                    background: #eef2f7;
+                    background: #fff;
                 }
                 #am-wxt-keyword-modal .am-wxt-option-chip {
                     border: 1px solid rgba(148,163,184,0.5);
@@ -16120,8 +16122,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-right: 1px solid rgba(148,163,184,0.2);
                     border-radius: 0;
                     padding: 11px 16px;
-                    background: transparent;
-                    color: #4b5563;
+                    background: #fff;
+                    color: #64748b;
                     font-size: 13px;
                     line-height: 1.25;
                 }
@@ -16129,8 +16131,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-right: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-option-line.segmented .am-wxt-option-chip.active {
-                    background: #ffffff;
-                    color: #475569;
+                    background: #4f68ff;
+                    color: #fff;
                     font-weight: 600;
                     box-shadow: none;
                 }
