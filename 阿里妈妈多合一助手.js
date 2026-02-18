@@ -17162,6 +17162,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 return wizardState.draft.sceneSettingTouched[sceneName];
             };
+            const normalizeSceneSettingBucketValues = (rawValues = {}) => {
+                if (!isPlainObject(rawValues)) return {};
+                const out = {};
+                Object.keys(rawValues).forEach(rawKey => {
+                    const key = normalizeSceneFieldKey(rawKey);
+                    if (!key) return;
+                    const value = normalizeSceneSettingValue(rawValues[rawKey]);
+                    if (!value) return;
+                    out[key] = value;
+                });
+                return out;
+            };
+            const normalizeSceneSettingTouchedValues = (rawTouched = {}) => {
+                if (!isPlainObject(rawTouched)) return {};
+                const out = {};
+                Object.keys(rawTouched).forEach(rawKey => {
+                    const key = normalizeSceneFieldKey(rawKey);
+                    if (!key) return;
+                    if (rawTouched[rawKey] === true) out[key] = true;
+                });
+                return out;
+            };
 
             const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
             const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|发布日期|排期|投放地域|地域设置|起量时间地域设置|计划组|设置计划组|选品方式|选择推广商品|人群设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
@@ -19295,6 +19317,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const planName = String(item?.planName || '').trim();
                     const autoPlanPrefix = String(item?.autoPlanPrefix || '').trim();
                     const copyBatchCount = Math.min(99, Math.max(1, toNumber(item?.copyBatchCount ?? item?.copyCount, 1)));
+                    const sceneSettingValues = normalizeSceneSettingBucketValues(item?.sceneSettingValues || {});
+                    const sceneSettingTouched = normalizeSceneSettingTouchedValues(item?.sceneSettingTouched || {});
+                    const sceneSettings = normalizeSceneSettingsObject(item?.sceneSettings || {});
                     const marketingGoal = normalizeGoalLabel(resolveStrategyMarketingGoal({
                         ...item,
                         bidMode,
@@ -19320,7 +19345,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         singleCostV2,
                         planName,
                         autoPlanPrefix,
-                        copyBatchCount
+                        copyBatchCount,
+                        sceneSettingValues,
+                        sceneSettingTouched,
+                        sceneSettings
                     };
                 });
             };
@@ -19342,6 +19370,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.sceneSelect.value = strategyScene;
                 }
                 if (wizardState.draft) wizardState.draft.sceneName = strategyScene;
+                const strategySceneSettingValues = normalizeSceneSettingBucketValues(strategy.sceneSettingValues || {});
+                const strategySceneSettingTouched = normalizeSceneSettingTouchedValues(strategy.sceneSettingTouched || {});
+                if (!Object.keys(strategySceneSettingValues).length && isPlainObject(strategy.sceneSettings)) {
+                    const fromPayload = normalizeSceneSettingBucketValues(strategy.sceneSettings);
+                    if (Object.keys(fromPayload).length) {
+                        Object.assign(strategySceneSettingValues, fromPayload);
+                    }
+                }
+                if (Object.keys(strategySceneSettingValues).length) {
+                    wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                    if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
+                        wizardState.draft.sceneSettingValues = {};
+                    }
+                    wizardState.draft.sceneSettingValues[strategyScene] = mergeDeep({}, strategySceneSettingValues);
+                }
+                if (Object.keys(strategySceneSettingTouched).length) {
+                    wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                    if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
+                        wizardState.draft.sceneSettingTouched = {};
+                    }
+                    wizardState.draft.sceneSettingTouched[strategyScene] = mergeDeep({}, strategySceneSettingTouched);
+                }
                 const currentSceneName = getCurrentEditorSceneName();
                 if (currentSceneName === '关键词推广') {
                     const strategyGoal = normalizeGoalLabel(strategy.marketingGoal || resolveStrategyMarketingGoal(strategy, {}, currentSceneName));
@@ -19408,6 +19458,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (wizardState.els.singleCostEnableInput) strategy.setSingleCostV2 = bidMode === 'smart' && !!wizardState.els.singleCostEnableInput.checked;
                 if (wizardState.els.singleCostInput) strategy.singleCostV2 = wizardState.els.singleCostInput.value.trim();
                 strategy.marketingGoal = resolveStrategyMarketingGoal(strategy, sceneSettings, sceneName);
+                strategy.sceneSettingValues = mergeDeep({}, normalizeSceneSettingBucketValues(ensureSceneSettingBucket(sceneName)));
+                strategy.sceneSettingTouched = mergeDeep({}, normalizeSceneSettingTouchedValues(ensureSceneTouchedBucket(sceneName)));
+                strategy.sceneSettings = normalizeSceneSettingsObject(sceneSettings);
             };
 
             const setDetailVisible = (visible) => {
@@ -19472,7 +19525,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     setSingleCostV2: bidMode === 'smart' && !!wizardState.els.singleCostEnableInput?.checked,
                     singleCostV2: String(wizardState.els.singleCostInput?.value || '').trim(),
                     planName: ensureUniqueStrategyPlanName(rawPlanName || buildDefaultPlanPrefixByScene(sceneName)),
-                    copyBatchCount: 1
+                    copyBatchCount: 1,
+                    sceneSettingValues: mergeDeep({}, normalizeSceneSettingBucketValues(ensureSceneSettingBucket(sceneName))),
+                    sceneSettingTouched: mergeDeep({}, normalizeSceneSettingTouchedValues(ensureSceneTouchedBucket(sceneName))),
+                    sceneSettings: normalizeSceneSettingsObject(sceneSettings)
                 };
                 wizardState.strategyList.push(next);
                 wizardState.editingStrategyId = next.id;
@@ -19522,6 +19578,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return;
                 }
                 const seedStrategy = deepClone(editing || wizardState.strategyList[0] || {});
+                const seedSceneSettings = normalizeSceneSettingsObject(seedStrategy.sceneSettings || sceneSettings);
+                const seedSceneSettingValues = normalizeSceneSettingBucketValues(
+                    seedStrategy.sceneSettingValues || ensureSceneSettingBucket(sceneName)
+                );
+                const seedSceneSettingTouched = normalizeSceneSettingTouchedValues(
+                    seedStrategy.sceneSettingTouched || ensureSceneTouchedBucket(sceneName)
+                );
                 const usedNameSet = new Set(
                     (wizardState.strategyList || [])
                         .map(item => String(item?.name || '').trim())
@@ -19551,6 +19614,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             bidMode: normalizeBidMode(seedStrategy.bidMode || wizardState.draft?.bidMode || 'smart', 'smart'),
                             bidTargetV2: String(seedStrategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2
                         };
+                    const strategySceneSettings = mergeDeep({}, seedSceneSettings);
+                    if (runtime.marketingGoal) {
+                        if (sceneName === '关键词推广') {
+                            strategySceneSettings.营销目标 = runtime.marketingGoal;
+                            strategySceneSettings.选择卡位方案 = runtime.marketingGoal;
+                        } else if (!normalizeGoalLabel(strategySceneSettings.营销目标 || '')) {
+                            strategySceneSettings.营销目标 = runtime.marketingGoal;
+                        }
+                    }
+                    const strategySceneSettingValues = mergeDeep({}, seedSceneSettingValues);
+                    if (runtime.marketingGoal) {
+                        const goalFieldKey = normalizeSceneFieldKey('营销目标');
+                        if (goalFieldKey) strategySceneSettingValues[goalFieldKey] = runtime.marketingGoal;
+                        if (sceneName === '关键词推广') {
+                            const schemeFieldKey = normalizeSceneFieldKey('选择卡位方案');
+                            if (schemeFieldKey) strategySceneSettingValues[schemeFieldKey] = runtime.marketingGoal;
+                        }
+                    }
+                    const strategySceneSettingTouched = mergeDeep({}, seedSceneSettingTouched);
+                    if (runtime.marketingGoal) {
+                        const goalFieldKey = normalizeSceneFieldKey('营销目标');
+                        if (goalFieldKey) strategySceneSettingTouched[goalFieldKey] = true;
+                        if (sceneName === '关键词推广') {
+                            const schemeFieldKey = normalizeSceneFieldKey('选择卡位方案');
+                            if (schemeFieldKey) strategySceneSettingTouched[schemeFieldKey] = true;
+                        }
+                    }
                     const planNameSeed = String(
                         seedStrategy.planName
                         || wizardState.els.prefixInput?.value
@@ -19575,7 +19665,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         setSingleCostV2: runtime.bidMode === 'smart' && !!seedStrategy.setSingleCostV2,
                         singleCostV2: runtime.bidMode === 'smart' ? String(seedStrategy.singleCostV2 || '').trim() : '',
                         planName: ensureUniqueStrategyPlanName(`${planNameSeed}_${runtime.marketingGoal}`),
-                        copyBatchCount: 1
+                        copyBatchCount: 1,
+                        sceneSettingValues: strategySceneSettingValues,
+                        sceneSettingTouched: strategySceneSettingTouched,
+                        sceneSettings: strategySceneSettings
                     };
                     wizardState.strategyList.push(next);
                     created.push(next);
@@ -19621,7 +19714,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     strategy.sceneName = strategySceneName;
                     const bidMode = normalizeBidMode(strategy.bidMode || 'smart', 'smart');
                     strategy.bidMode = bidMode;
-                    const goalSceneSettings = getSceneSettingsFor(strategySceneName);
+                    const strategySceneSettings = normalizeSceneSettingsObject(strategy.sceneSettings || {});
+                    const goalSceneSettings = Object.keys(strategySceneSettings).length
+                        ? strategySceneSettings
+                        : getSceneSettingsFor(strategySceneName);
                     strategy.marketingGoal = resolveStrategyMarketingGoal(strategy, goalSceneSettings, strategySceneName);
                     const bidTargetLabel = BID_TARGET_OPTIONS.find(item => item.value === strategy.bidTargetV2)?.label || '获取成交量';
                     const bidModeLabel = bidMode === 'manual' ? '手动出价' : '智能出价';
@@ -19780,7 +19876,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.draft.debugVisible = !!wizardState.debugVisible;
                 wizardState.draft.itemSplitExpanded = wizardState.itemSplitExpanded === true;
                 wizardState.draft.candidateListExpanded = wizardState.candidateListExpanded === true;
-                wizardState.draft.strategyList = wizardState.strategyList.map(item => ({ ...item }));
+                wizardState.draft.strategyList = wizardState.strategyList.map(item => deepClone(item));
                 wizardState.draft.editingStrategyId = wizardState.editingStrategyId || '';
                 wizardState.draft.detailVisible = !!wizardState.detailVisible;
                 saveSessionDraft(wizardState.draft);
@@ -20017,7 +20113,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             ? String(strategy.sceneName).trim()
                             : selectedSceneName;
                         const isKeywordScene = strategySceneName === '关键词推广';
-                        const strategySceneSettings = getSceneSettingsForRequest(strategySceneName);
+                        const strategySceneSettings = normalizeSceneSettingsObject(
+                            strategy?.sceneSettings || getSceneSettingsForRequest(strategySceneName)
+                        );
                         const strategyBidMode = normalizeBidMode(strategy.bidMode || wizardState.draft.bidMode || 'smart', 'smart');
                         const strategyKeywordMode = strategy.keywordMode || wizardState.draft.keywordMode || DEFAULTS.keywordMode;
                         const strategyUseWordPackage = strategy.useWordPackage !== false && wizardState.draft.useWordPackage !== false;
@@ -20066,6 +20164,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         };
                         if (strategyMarketingGoal) {
                             plan.marketingGoal = strategyMarketingGoal;
+                        }
+                        if (Object.keys(strategySceneSettings).length) {
+                            plan.sceneSettings = mergeDeep({}, strategySceneSettings);
                         }
                         const strategyBudget = String(strategy.dayAverageBudget || '').trim();
                         const finalBudget = strategyBudget !== '' ? strategyBudget : dayAverageBudget;
@@ -20164,23 +20265,56 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ? String(request.sceneName).trim()
                     : '关键词推广';
                 const planList = Array.isArray(request?.plans) ? request.plans : [];
+                const requestSceneSettings = normalizeSceneSettingsObject(request?.sceneSettings || {});
+                const normalizeSceneSettingsForGroup = (rawSettings = {}) => {
+                    const normalized = normalizeSceneSettingsObject(rawSettings);
+                    const ordered = {};
+                    Object.keys(normalized).sort().forEach(key => {
+                        const value = normalizeSceneSettingValue(normalized[key]);
+                        if (!value) return;
+                        ordered[key] = value;
+                    });
+                    return ordered;
+                };
                 const groupedPlans = new Map();
                 planList.forEach(plan => {
                     const planSceneName = SCENE_OPTIONS.includes(String(plan?.sceneName || '').trim())
                         ? String(plan.sceneName).trim()
                         : selectedSceneName;
-                    if (!groupedPlans.has(planSceneName)) groupedPlans.set(planSceneName, []);
                     const nextPlan = mergeDeep({}, plan);
+                    const planSceneSettings = normalizeSceneSettingsForGroup(
+                        nextPlan.sceneSettings || requestSceneSettings
+                    );
                     delete nextPlan.sceneName;
-                    groupedPlans.get(planSceneName).push(nextPlan);
+                    delete nextPlan.sceneSettings;
+                    const groupKey = `${planSceneName}::${JSON.stringify(planSceneSettings)}`;
+                    if (!groupedPlans.has(groupKey)) {
+                        groupedPlans.set(groupKey, {
+                            sceneName: planSceneName,
+                            sceneSettings: planSceneSettings,
+                            plans: []
+                        });
+                    }
+                    groupedPlans.get(groupKey).plans.push(nextPlan);
                 });
                 if (!groupedPlans.size) {
-                    groupedPlans.set(selectedSceneName, []);
+                    const fallbackSceneSettings = normalizeSceneSettingsForGroup(requestSceneSettings);
+                    groupedPlans.set(`${selectedSceneName}::${JSON.stringify(fallbackSceneSettings)}`, {
+                        sceneName: selectedSceneName,
+                        sceneSettings: fallbackSceneSettings,
+                        plans: []
+                    });
                 }
                 const fallbackPolicy = normalizeWizardFallbackPolicy(request?.fallbackPolicy || wizardState.draft?.fallbackPolicy);
                 const sceneRequests = [];
-                groupedPlans.forEach((plans, sceneName) => {
-                    const sceneSettings = buildSceneSettingsPayload(sceneName);
+                groupedPlans.forEach(group => {
+                    const sceneName = SCENE_OPTIONS.includes(String(group?.sceneName || '').trim())
+                        ? String(group.sceneName).trim()
+                        : selectedSceneName;
+                    const plans = Array.isArray(group?.plans) ? group.plans : [];
+                    const sceneSettings = Object.keys(group?.sceneSettings || {}).length
+                        ? mergeDeep({}, group.sceneSettings)
+                        : normalizeSceneSettingsObject(buildSceneSettingsPayload(sceneName));
                     const sceneBizCodeHint = resolveSceneBizCodeHint(sceneName);
                     const bizCode = sceneBizCodeHint || request?.bizCode || wizardState.draft?.bizCode || DEFAULTS.bizCode;
                     const promotionSceneDefault = resolveSceneDefaultPromotionScene(
@@ -20207,7 +20341,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const sceneCommon = mergeDeep({}, request?.common || {});
                     if (sceneName === '关键词推广') {
                         const keywordBidMode = normalizeBidMode(
-                            sceneCommon.bidMode || plans[0]?.bidMode || request?.common?.bidMode || 'smart',
+                            sceneCommon.bidMode || request?.common?.bidMode || 'smart',
                             'smart'
                         );
                         sceneCommon.bidMode = keywordBidMode;
@@ -20580,6 +20714,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 targetStrategies.forEach(strategy => {
                     if (!isPlainObject(strategy)) return;
                     strategy.sceneName = nextScene;
+                    strategy.sceneSettings = {};
+                    strategy.sceneSettingValues = {};
+                    strategy.sceneSettingTouched = {};
                     if (shouldSyncAutoPlanName(strategy.planName || '')) {
                         strategy.planName = '';
                         strategy.autoPlanPrefix = nextPrefix;
