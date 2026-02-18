@@ -4776,6 +4776,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const TAG = '[KeywordPlanAPI]';
         const BUILD_VERSION = '2026-02-18 04:00';
         const SESSION_DRAFT_KEY = 'am.wxt.keyword_plan_wizard.draft';
+        const SESSION_DRAFT_SCHEMA_VERSION = 2;
         const WIZARD_MAX_ITEMS = 30;
         const DEFAULTS = {
             bizCode: 'onebpSearch',
@@ -4856,6 +4857,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             addedItems: [],
             crowdList: [],
             debugVisible: false,
+            itemSplitExpanded: false,
+            candidateListExpanded: false,
             strategyList: [],
             editingStrategyId: '',
             detailVisible: false,
@@ -5551,7 +5554,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '内容营销': true
         };
         const SCENE_SKIP_TEXT_RE = /^(上手指南|了解更多|了解详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开)$/;
-        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|计划名称|预算类型|出价方式|出价目标|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|收集销售线索|投放资源位\/投放地域\/投放时间|推广模式|投放策略|优化目标|投放日期|投放时间|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
+        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
         const SCENE_SECTION_ONLY_LABEL_RE = /^(营销场景与目标|营销场景|推广方案设置(?:-.+)?|推广方案设置|设置预算(?:及排期)?|设置基础信息|高级设置|创建完成|收集销售线索|行业解决方案|自定义方案)$/;
         const SCENE_LABEL_NOISE_RE = /[，。,！？!；;]/;
         const SCENE_LABEL_NOISE_PREFIX_RE = /^(请|建议|支持|算法|未添加|如有|当前|完成后|符合条件|在投商品|想探测|卡位客户都在玩|流量规模)/;
@@ -5639,8 +5642,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const SCENE_SPEC_FIELD_FALLBACK = {
             '货品全站推广': {
                 营销目标: '货品全站推广',
+                营销场景: '全域投放 · ROI确定交付',
                 选品方式: '自定义选品',
-                预算类型: '每日预算'
+                出价方式: '控投产比',
+                出价目标: '净目标投产比',
+                预算类型: '不限预算',
+                投放调优: '多目标优化',
+                投放时间: '长期投放',
+                投放地域: '全部地域',
+                计划组: '不设置计划组'
             },
             '关键词推广': {
                 营销目标: '自定义推广',
@@ -5712,10 +5722,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         ];
         const SCENE_GOAL_FIELD_ROW_FALLBACK = {
             '货品全站推广': [
+                { label: '营销场景', options: ['全域投放 · ROI确定交付'], defaultValue: '全域投放 · ROI确定交付' },
                 { label: '选品方式', options: ['自定义选品', '行业推荐选品'], defaultValue: '自定义选品' },
-                { label: '出价方式', options: ['最大化拿量', '控成本', '控投产比'], defaultValue: '最大化拿量' },
-                { label: '出价目标', options: ['获取成交量', '稳定投产比', '增加点击量', '增加收藏加购量', '提升市场渗透'], defaultValue: '获取成交量' },
-                { label: '预算类型', options: ['每日预算', '日均预算'], defaultValue: '每日预算' }
+                { label: '出价方式', options: ['控投产比', '控成本', '最大化拿量'], defaultValue: '控投产比' },
+                { label: '出价目标', options: ['净目标投产比', '稳定投产比', '获取成交量', '增加点击量', '增加收藏加购量', '提升市场渗透'], defaultValue: '净目标投产比' },
+                { label: '预算类型', options: ['不限预算', '每日预算', '日均预算'], defaultValue: '不限预算' },
+                { label: '投放调优', options: ['多目标优化', '日常优化'], defaultValue: '多目标优化' },
+                { label: '发布日期', options: ['长期投放', '立即投放'], defaultValue: '长期投放' },
+                { label: '投放时间', options: ['长期投放', '不限时段', '固定时段'], defaultValue: '长期投放' },
+                { label: '投放地域', options: ['全部地域'], defaultValue: '全部地域' },
+                { label: '计划组', options: ['不设置计划组'], defaultValue: '不设置计划组' }
             ],
             '关键词推广': {
                 __default: [
@@ -12632,6 +12648,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (/智能|自动/.test(value)) return 'smart';
             return '';
         };
+        const mapScenePromotionModelValue = (text = '') => {
+            const value = normalizeSceneSettingValue(text);
+            if (!value) {
+                return {
+                    promotionModel: '',
+                    promotionModelMarketing: ''
+                };
+            }
+            if (/^(order|daily)$/i.test(value)) {
+                return {
+                    promotionModel: value.toLowerCase(),
+                    promotionModelMarketing: /order/i.test(value) ? 'strategy' : ''
+                };
+            }
+            if (/多目标|多策略|起量|策略/.test(value)) {
+                return {
+                    promotionModel: 'order',
+                    promotionModelMarketing: 'strategy'
+                };
+            }
+            if (/日常|单目标|基础|普通/.test(value)) {
+                return {
+                    promotionModel: 'daily',
+                    promotionModelMarketing: ''
+                };
+            }
+            return {
+                promotionModel: '',
+                promotionModelMarketing: ''
+            };
+        };
 
         const mapScenePromotionStrategyValue = (sceneName = '', text = '', runtime = {}) => {
             const normalizedScene = String(sceneName || '').trim();
@@ -12963,6 +13010,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (itemModeEntry && itemModeCode) {
                 applyCampaign('itemSelectedMode', itemModeCode, itemModeEntry.key, itemModeEntry.value);
             }
+            const promotionSceneEntry = findSceneSettingEntry(entries, [/营销场景/]);
+            if (promotionSceneEntry) {
+                const explicitCode = normalizeSceneSettingValue(promotionSceneEntry.value || '');
+                const promotionSceneCode = /^promotion_scene_[a-z0-9_]+$/i.test(explicitCode)
+                    ? explicitCode
+                    : resolveSceneDefaultPromotionScene(
+                        normalizedSceneName,
+                        runtime?.storeData?.promotionScene || runtime?.promotionScene || DEFAULTS.promotionScene
+                    );
+                if (promotionSceneCode) {
+                    applyCampaign('promotionScene', promotionSceneCode, promotionSceneEntry.key, promotionSceneEntry.value);
+                }
+            }
+            const promotionModelEntry = findSceneSettingEntry(entries, [/投放调优/, /优化模式/, /多目标优化/]);
+            const promotionModelValue = mapScenePromotionModelValue(promotionModelEntry?.value || '');
+            if (promotionModelEntry && promotionModelValue.promotionModel) {
+                applyCampaign('promotionModel', promotionModelValue.promotionModel, promotionModelEntry.key, promotionModelEntry.value);
+                if (promotionModelValue.promotionModelMarketing) {
+                    applyCampaign('promotionModelMarketing', promotionModelValue.promotionModelMarketing, promotionModelEntry.key, promotionModelEntry.value);
+                }
+            }
+            const campaignGroupEntry = findSceneSettingEntry(entries, [/计划组/, /设置计划组/]);
+            if (campaignGroupEntry) {
+                const campaignGroupValue = normalizeSceneSettingValue(campaignGroupEntry.value || '');
+                if (campaignGroupValue && !/^(不设置计划组|不设置|默认|无|none|null)$/i.test(campaignGroupValue)) {
+                    if (/^\d{1,20}$/.test(campaignGroupValue)) {
+                        applyCampaign('campaignGroupId', campaignGroupValue, campaignGroupEntry.key, campaignGroupEntry.value);
+                    } else {
+                        applyCampaign('campaignGroupName', campaignGroupValue, campaignGroupEntry.key, campaignGroupEntry.value);
+                    }
+                }
+            }
 
             const budgetEntries = [
                 { patterns: [/每日预算(?!类型)/], field: 'dayBudget' },
@@ -13017,12 +13096,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 applyCampaign('creativeSetMode', creativeModeCode, creativeModeEntry.key, creativeModeEntry.value);
             }
 
-            const launchTimeEntry = findSceneSettingEntry(entries, [/投放时间/, /投放日期/, /排期/]);
+            const launchTimeEntry = findSceneSettingEntry(entries, [/投放时间/, /投放日期/, /发布日期/, /排期/]);
             if (launchTimeEntry && /(不限|长期|全天|24小时)/.test(launchTimeEntry.value)) {
                 applyCampaign('launchPeriodList', buildDefaultLaunchPeriodList(), launchTimeEntry.key, launchTimeEntry.value);
             }
 
-            const launchAreaEntry = findSceneSettingEntry(entries, [/投放地域/, /地域设置/]);
+            const launchAreaEntry = findSceneSettingEntry(entries, [/投放地域/, /地域设置/, /起量时间地域设置/, /投放时间地域设置/]);
             if (launchAreaEntry) {
                 if (/(全部|全国|不限|all)/i.test(launchAreaEntry.value)) {
                     applyCampaign('launchAreaStrList', ['all'], launchAreaEntry.key, launchAreaEntry.value);
@@ -14671,6 +14750,55 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     adgroupKeys: Object.keys(sampleAdgroup).slice(0, 80)
                 });
             }
+            if (options.dryRunOnly === true) {
+                const sampleEntry = builtList[0] || {};
+                const sampleSolution = sampleEntry?.solution || {};
+                const sampleCampaign = isPlainObject(sampleSolution.campaign) ? deepClone(sampleSolution.campaign) : {};
+                const sampleAdgroup = isPlainObject(sampleSolution.adgroupList?.[0]) ? deepClone(sampleSolution.adgroupList[0]) : {};
+                const sampleMeta = isPlainObject(sampleEntry?.meta) ? deepClone(sampleEntry.meta) : {};
+                return {
+                    ok: true,
+                    partial: false,
+                    dryRunOnly: true,
+                    validation,
+                    planCount: builtList.length,
+                    successCount: 0,
+                    failCount: 0,
+                    successes: [],
+                    failures: [],
+                    submitEndpoint: normalizeGoalCreateEndpoint(
+                        sampleMeta?.submitEndpoint
+                        || mergedRequest.submitEndpoint
+                        || SCENE_CREATE_ENDPOINT_FALLBACK
+                    ),
+                    submitPayloadSnapshot: {
+                        sceneName: mergedRequest.sceneName || '',
+                        marketingGoal: sampleMeta?.marketingGoal || mergedRequest.marketingGoal || '',
+                        promotionScene: sampleCampaign.promotionScene || runtime.promotionScene || '',
+                        bidTypeV2: sampleCampaign.bidTypeV2 || '',
+                        bidTargetV2: sampleCampaign.bidTargetV2 || '',
+                        optimizeTarget: sampleCampaign.optimizeTarget || '',
+                        bidMode: sampleMeta?.bidMode || '',
+                        submitEndpoint: normalizeGoalCreateEndpoint(
+                            sampleMeta?.submitEndpoint
+                            || mergedRequest.submitEndpoint
+                            || SCENE_CREATE_ENDPOINT_FALLBACK
+                        ),
+                        materialId: sampleAdgroup?.material?.materialId || '',
+                        wordListCount: Array.isArray(sampleAdgroup?.wordList) ? sampleAdgroup.wordList.length : 0,
+                        wordPackageCount: Array.isArray(sampleAdgroup?.wordPackageList) ? sampleAdgroup.wordPackageList.length : 0,
+                        fallbackTriggered: !!sampleMeta?.fallbackTriggered,
+                        goalFallbackUsed: !!sampleMeta?.goalFallbackUsed,
+                        campaignKeys: Object.keys(sampleCampaign).slice(0, 80),
+                        adgroupKeys: Object.keys(sampleAdgroup).slice(0, 80)
+                    },
+                    sample: {
+                        campaign: sampleCampaign,
+                        adgroup: sampleAdgroup,
+                        meta: sampleMeta
+                    }
+                };
+            }
 
             const chunkSize = Math.max(1, toNumber(options.chunkSize, toNumber(mergedRequest.chunkSize, DEFAULTS.chunkSize)));
             const batchRetry = Math.max(0, toNumber(options.batchRetry, DEFAULTS.batchRetry));
@@ -15153,12 +15281,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-modal .am-wxt-split.compact #am-wxt-keyword-added-list {
                     flex: 0 0 auto;
-                    height: 222px;
-                    max-height: 222px;
-                }
-                #am-wxt-keyword-modal .am-wxt-split.compact #am-wxt-keyword-candidate-list {
-                    height: 120px;
-                    max-height: 120px;
+                    height: 126px;
+                    max-height: 126px;
                 }
                 #am-wxt-keyword-modal .am-wxt-panel {
                     border: 1px solid rgba(148,163,184,0.35);
@@ -15229,6 +15353,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     flex: 0 0 auto;
                     height: 222px;
                     max-height: 222px;
+                }
+                #am-wxt-keyword-added-list {
+                    flex: 0 0 auto;
+                    height: 126px;
+                    max-height: 126px;
+                    transition: height .2s ease, max-height .2s ease;
+                }
+                #am-wxt-keyword-item-split.candidate-list-expanded #am-wxt-keyword-added-list {
+                    height: 222px;
+                    max-height: 222px;
+                }
+                #am-wxt-keyword-modal .am-wxt-toggle-candidate-list-btn.hidden {
+                    display: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-item {
                     border: 1px solid rgba(148,163,184,0.34);
@@ -15697,6 +15834,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         ]);
 
         const wizardDefaultDraft = () => ({
+            schemaVersion: SESSION_DRAFT_SCHEMA_VERSION,
             bizCode: DEFAULTS.bizCode,
             promotionScene: DEFAULTS.promotionScene,
             sceneName: '关键词推广',
@@ -15713,7 +15851,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             addedItems: [],
             crowdList: [],
             debugVisible: false,
-            itemSplitExpanded: true,
+            itemSplitExpanded: false,
+            candidateListExpanded: false,
             fallbackPolicy: normalizeWizardFallbackPolicy('auto'),
             strategyList: getDefaultStrategyList(),
             editingStrategyId: '',
@@ -15784,6 +15923,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div class="am-wxt-panel">
                                 <div class="am-wxt-toolbar">
                                     <span>已添加商品 <b id="am-wxt-keyword-added-count">0</b> / ${WIZARD_MAX_ITEMS}</span>
+                                    <button class="am-wxt-btn" id="am-wxt-keyword-toggle-candidate">添加商品</button>
+                                    <button class="am-wxt-btn am-wxt-toggle-candidate-list-btn hidden" id="am-wxt-keyword-toggle-candidate-list">展开更多</button>
                                     <button class="am-wxt-btn" id="am-wxt-keyword-clear-added">清空</button>
                                 </div>
                                 <div class="am-wxt-list" id="am-wxt-keyword-added-list"></div>
@@ -15961,6 +16102,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 candidateList: overlay.querySelector('#am-wxt-keyword-candidate-list'),
                 addedList: overlay.querySelector('#am-wxt-keyword-added-list'),
                 addedCount: overlay.querySelector('#am-wxt-keyword-added-count'),
+                toggleCandidateBtn: overlay.querySelector('#am-wxt-keyword-toggle-candidate'),
+                toggleCandidateListBtn: overlay.querySelector('#am-wxt-keyword-toggle-candidate-list'),
                 clearAddedBtn: overlay.querySelector('#am-wxt-keyword-clear-added'),
                 strategyList: overlay.querySelector('#am-wxt-keyword-strategy-list'),
                 strategyCount: overlay.querySelector('#am-wxt-keyword-strategy-count'),
@@ -16060,13 +16203,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         btn.textContent = wizardState.debugVisible ? '隐藏日志' : '打开日志';
                     });
             };
+            const refreshItemSplitButtons = () => {
+                const splitExpanded = wizardState.itemSplitExpanded === true;
+                const listExpanded = wizardState.candidateListExpanded === true;
+                if (wizardState.els.toggleCandidateBtn instanceof HTMLButtonElement) {
+                    wizardState.els.toggleCandidateBtn.textContent = splitExpanded ? '收起商品库' : '添加商品';
+                }
+                if (wizardState.els.toggleCandidateListBtn instanceof HTMLButtonElement) {
+                    wizardState.els.toggleCandidateListBtn.classList.remove('hidden');
+                    wizardState.els.toggleCandidateListBtn.textContent = listExpanded ? '收起已选' : '展开已选';
+                }
+            };
+            const setCandidateListExpanded = (expanded) => {
+                const nextExpanded = expanded === true;
+                wizardState.candidateListExpanded = nextExpanded;
+                wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                wizardState.draft.candidateListExpanded = nextExpanded;
+                if (wizardState.els.itemSplit) {
+                    wizardState.els.itemSplit.classList.toggle(
+                        'candidate-list-expanded',
+                        nextExpanded
+                    );
+                }
+                refreshItemSplitButtons();
+            };
             const setItemSplitExpanded = (expanded) => {
-                const nextExpanded = expanded !== false;
+                const nextExpanded = expanded === true;
+                wizardState.itemSplitExpanded = nextExpanded;
                 wizardState.draft = wizardState.draft || wizardDefaultDraft();
                 wizardState.draft.itemSplitExpanded = nextExpanded;
                 if (wizardState.els.itemSplit) {
                     wizardState.els.itemSplit.classList.toggle('compact', !nextExpanded);
+                    wizardState.els.itemSplit.classList.toggle(
+                        'candidate-list-expanded',
+                        wizardState.candidateListExpanded === true
+                    );
                 }
+                refreshItemSplitButtons();
             };
 
             const renderSelectOptionLine = (selectEl) => {
@@ -16308,7 +16481,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const SCENE_FIELD_OPTION_FALLBACK = [
                 { pattern: /(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式)/, options: [] },
-                { pattern: /(预算类型)/, options: ['每日预算', '日均预算', '总预算'] },
+                { pattern: /(营销场景)/, options: ['全域投放 · ROI确定交付'] },
+                { pattern: /(预算类型)/, options: ['不限预算', '每日预算', '日均预算', '总预算'] },
                 { pattern: /(出价方式)/, options: ['智能出价', '手动出价', '最大化拿量', '控成本', '控投产比'] },
                 { pattern: /(出价目标|优化目标)/, options: ['获取成交量', '稳定投产比', '增加点击量', '增加收藏加购量', '提升市场渗透', '优化留资获客成本', '拉新渗透', '扩大新客规模', '稳定新客投产比', '新客收藏加购', '增加净成交金额', '增加成交金额', '增加观看次数', '增加观看时长'] },
                 { pattern: /(关键词设置|核心词设置|设置词包)/, options: ['添加关键词', '系统推荐词', '手动自选词'] },
@@ -16317,15 +16491,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 { pattern: /(冷启加速)/, options: ['开启', '关闭'] },
                 { pattern: /(人群设置|种子人群|设置拉新人群|设置人群)/, options: ['智能人群', '添加种子人群', '设置优先投放客户'] },
                 { pattern: /(选品方式|选择推广商品)/, options: ['自定义选品', '行业推荐选品'] },
-                { pattern: /(投放时间|投放日期|排期)/, options: ['长期投放', '不限时段', '固定时段'] }
+                { pattern: /(投放调优|优化模式)/, options: ['多目标优化', '日常优化'] },
+                { pattern: /(投放地域|地域设置)/, options: ['全部地域'] },
+                { pattern: /(投放时间|投放日期|发布日期|排期)/, options: ['长期投放', '不限时段', '固定时段'] },
+                { pattern: /(计划组|设置计划组)/, options: ['不设置计划组'] }
             ];
             const SCENE_FALLBACK_OPTION_MAP = {
                 '货品全站推广': {
                     营销目标: ['货品全站推广'],
+                    营销场景: ['全域投放 · ROI确定交付'],
                     选品方式: ['自定义选品', '行业推荐选品'],
-                    出价方式: ['最大化拿量', '控成本', '控投产比'],
-                    出价目标: ['获取成交量', '稳定投产比', '增加点击量', '增加收藏加购量', '提升市场渗透'],
-                    预算类型: ['每日预算', '日均预算']
+                    出价方式: ['控投产比', '控成本', '最大化拿量'],
+                    出价目标: ['净目标投产比', '稳定投产比', '获取成交量', '增加点击量', '增加收藏加购量', '提升市场渗透'],
+                    预算类型: ['不限预算', '每日预算', '日均预算'],
+                    投放调优: ['多目标优化', '日常优化'],
+                    发布日期: ['长期投放', '立即投放'],
+                    投放时间: ['长期投放', '不限时段', '固定时段'],
+                    投放地域: ['全部地域'],
+                    设置计划组: ['不设置计划组'],
+                    计划组: ['不设置计划组']
                 },
                 '关键词推广': {
                     营销目标: ['搜索卡位', '趋势明星', '流量金卡', '自定义推广'],
@@ -16407,15 +16591,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
-            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式|卡位方式|选择方式|出价方式|出价目标|优化目标|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|排期|投放地域|地域设置|选品方式|选择推广商品|人群设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
+            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|优化目标|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|发布日期|排期|投放地域|地域设置|起量时间地域设置|计划组|设置计划组|选品方式|选择推广商品|人群设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
             const SCENE_RENDER_FIELD_ALIAS_RULES = [
                 { pattern: /^(关键词设置|核心词设置)$/, label: '核心词设置' },
                 { pattern: /^(开启冷启加速|冷启加速)$/, label: '冷启加速' },
                 { pattern: /^(设置创意|创意设置|创意模式)$/, label: '创意设置' },
                 { pattern: /^(设置拉新人群|设置人群|人群设置|种子人群)$/, label: '人群设置' },
                 { pattern: /^(投放日期|投放时间|排期)$/, label: '投放时间' },
+                { pattern: /^(发布日期|发布时间)$/, label: '投放时间' },
                 { pattern: /^(选择推广商品|选品方式)$/, label: '选品方式' },
-                { pattern: /^(方案选择|选择方案)$/, label: '选择方案' }
+                { pattern: /^(方案选择|选择方案)$/, label: '选择方案' },
+                { pattern: /^(设置计划组|计划组设置)$/, label: '计划组' }
             ];
             const normalizeSceneRenderFieldLabel = (fieldLabel = '') => {
                 const raw = normalizeText(fieldLabel).replace(/[：:]/g, '').trim();
@@ -16532,7 +16718,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (/(选品方式|选择推广商品|添加商品)/.test(token)) return 'itemMode';
                 if (/(关键词设置|核心词设置|设置词包|匹配方式)/.test(token)) return 'keyword';
                 if (/(人群设置|种子人群|设置拉新人群|设置人群)/.test(token)) return 'crowd';
-                if (/(投放时间|投放日期|排期|流量智选|冷启加速)/.test(token)) return 'schedule';
+                if (/(投放调优|优化模式)/.test(token)) return 'strategy';
+                if (/(投放时间|投放日期|发布日期|排期|投放地域|地域设置|流量智选|冷启加速)/.test(token)) return 'schedule';
                 return '';
             };
 
@@ -16978,6 +17165,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const currentSceneName = String(wizardState?.els?.sceneSelect?.value || wizardState?.draft?.sceneName || '关键词推广').trim() || '关键词推广';
                 const fallbackOptions = resolveSceneFallbackOptionSeed(currentSceneName, normalizedLabel);
                 const sceneDefaults = isPlainObject(SCENE_SPEC_FIELD_FALLBACK[currentSceneName]) ? SCENE_SPEC_FIELD_FALLBACK[currentSceneName] : {};
+                const hasVisibleNativeHint = (pattern) => {
+                    try {
+                        const re = pattern instanceof RegExp ? pattern : new RegExp(String(pattern || ''), 'i');
+                        if (!re) return false;
+                        const nodes = document.querySelectorAll('div,span,label,button,strong,p,li,a');
+                        for (let i = 0; i < nodes.length; i++) {
+                            const el = nodes[i];
+                            if (!(el instanceof Element)) continue;
+                            if (!isElementVisible(el)) continue;
+                            const text = normalizeText(getOwnText(el) || el.textContent || '');
+                            if (!text) continue;
+                            if (re.test(text)) return true;
+                        }
+                    } catch { }
+                    return false;
+                };
                 const pickByText = (candidate = '', fallbackRaw = false) => {
                     const mapped = pickSceneValueFromOptions(candidate, optionList);
                     if (mapped) return mapped;
@@ -16985,6 +17188,60 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return toShortSceneValue(candidate);
                 };
                 if (!normalizedLabel) return '';
+
+                if (currentSceneName === '货品全站推广') {
+                    if (/营销场景/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/全域投放\s*[·.]?\s*ROI确定交付/i)) {
+                            return pickByText('全域投放 · ROI确定交付', true)
+                                || pickByText('全域投放ROI确定交付', true);
+                        }
+                    }
+                    if (/预算类型/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/不限预算/)) {
+                            return pickByText('不限预算', true);
+                        }
+                    }
+                    if (/出价方式/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/控投产比投放|控投产比/)) {
+                            return pickByText('控投产比', true);
+                        }
+                        if (hasVisibleNativeHint(/控成本投放|控成本/)) {
+                            return pickByText('控成本', true);
+                        }
+                        if (hasVisibleNativeHint(/最大化拿量/)) {
+                            return pickByText('最大化拿量', true);
+                        }
+                    }
+                    if (/(出价目标|优化目标)/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/净目标投产比|目标投产比|ROI/i)) {
+                            return pickByText('净目标投产比', true)
+                                || pickByText('稳定投产比', true);
+                        }
+                    }
+                    if (/(投放调优|优化模式)/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/多目标优化|多目标/)) {
+                            return pickByText('多目标优化', true);
+                        }
+                        if (hasVisibleNativeHint(/日常优化/)) {
+                            return pickByText('日常优化', true);
+                        }
+                    }
+                    if (/(投放时间|投放日期|发布日期|排期)/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/长期投放|不限时段|全天|24小时/)) {
+                            return pickByText('长期投放', true) || pickByText('不限时段', true);
+                        }
+                    }
+                    if (/(投放地域|地域设置)/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/全部地域|全国|不限地域|全部地区/)) {
+                            return pickByText('全部地域', true);
+                        }
+                    }
+                    if (/(计划组|设置计划组)/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/设置计划组|计划组/)) {
+                            return pickByText('不设置计划组', true);
+                        }
+                    }
+                }
 
                 if (/预算类型/.test(normalizedLabel)) {
                     const budgetType = String(wizardState?.els?.budgetTypeSelect?.value || wizardState?.draft?.strategyList?.[0]?.budgetType || 'day_average').trim();
@@ -17168,6 +17425,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 let fillCount = 0;
                 missingFields.forEach(fieldLabel => {
                     const key = normalizeSceneFieldKey(fieldLabel);
+                    const options = resolveSceneFieldOptions(profile, fieldLabel);
+                    const scannedValue = normalizeSceneSettingValue(resolveSceneFieldDefaultValue({
+                        fieldLabel,
+                        options,
+                        schema
+                    }));
+                    if (scannedValue) {
+                        bucket[key] = scannedValue;
+                        fillCount += 1;
+                        return;
+                    }
                     const profileDefaultValue = normalizeSceneSettingValue(
                         profile?.fieldMeta?.[key]?.defaultValue
                         || profile?.fieldDefaults?.[key]
@@ -17178,15 +17446,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         fillCount += 1;
                         return;
                     }
-                    const options = resolveSceneFieldOptions(profile, fieldLabel);
-                    const defaultValue = normalizeSceneSettingValue(resolveSceneFieldDefaultValue({
-                        fieldLabel,
-                        options,
-                        schema
-                    }));
-                    if (!defaultValue) return;
-                    bucket[key] = defaultValue;
-                    fillCount += 1;
+                    if (options.length) {
+                        bucket[key] = options[0];
+                        fillCount += 1;
+                    }
                 });
                 return fillCount;
             };
@@ -17231,11 +17494,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .map(fieldLabel => normalizeSceneFieldKey(normalizeSceneRenderFieldLabel(fieldLabel)))
                         .filter(Boolean)
                 );
+                const preserveDynamicKeySet = new Set(
+                    ['营销场景', '投放调优', '发布日期', '投放时间', '投放地域', '计划组']
+                        .map(label => normalizeSceneFieldKey(label))
+                        .filter(Boolean)
+                );
 
                 const sceneSettings = {};
                 Object.keys(bucket || {}).forEach(rawKey => {
                     const key = normalizeText(rawKey).replace(/[：:]/g, '').trim();
-                    if (skippedDynamicKeySet.has(key)) return;
+                    if (skippedDynamicKeySet.has(key) && !preserveDynamicKeySet.has(key)) return;
                     const value = normalizeSceneSettingValue(bucket[rawKey]);
                     if (!key || !value) return;
                     const mappedLabel = labelMap[key] || normalizeSceneRenderFieldLabel(key) || key;
@@ -17443,6 +17711,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         'campaign.optimizeTarget'
                     );
                 }
+                const extraSceneFields = sceneName === '货品全站推广'
+                    ? ['营销场景', '投放调优', '发布日期', '投放时间', '投放地域', '计划组']
+                    : [];
                 const allSceneFields = dedupeSceneFieldLabelsForRender(
                     baseSceneFields.concat(
                         activeGoalFieldLabels.filter(label => {
@@ -17451,7 +17722,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             if (!token || SCENE_SECTION_ONLY_LABEL_RE.test(token)) return false;
                             if (SCENE_LABEL_NOISE_RE.test(token)) return false;
                             return true;
-                        })
+                        }),
+                        extraSceneFields
                     )
                 ).slice(0, 360);
                 const isLabelInGoalFieldSet = (label = '', set = []) => (
@@ -17489,6 +17761,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!isLabelInGoalFieldSet(fieldLabel, allGoalFieldLabels)) return true;
                     return isLabelInGoalFieldSet(fieldLabel, activeGoalFieldLabels);
                 });
+                if (sceneName === '货品全站推广' && !fields.some(fieldLabel => isSceneLabelMatch(fieldLabel, '营销场景'))) {
+                    fields.unshift('营销场景');
+                }
                 const autoFilledCount = autoFillSceneDefaults({
                     sceneName,
                     profile,
@@ -17679,6 +17954,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         bucket[key] = value;
                     }
                     if (options.length < 2 || isApiPathField) {
+                        const forceKeepInputField = /^(营销场景|投放地域|计划组|发布日期)$/.test(token);
                         const shouldKeepInputField = (
                             isApiPathField
                             || (
@@ -17690,6 +17966,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     normalizeSceneSettingValue(value) !== ''
                                     || fieldMeta?.requiredGuess === true
                                     || fieldMeta?.criticalGuess === true
+                                    || forceKeepInputField
                                 )
                             )
                         );
@@ -18300,6 +18577,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const syncDraftFromUI = () => {
                 wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                wizardState.draft.schemaVersion = SESSION_DRAFT_SCHEMA_VERSION;
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
                 const selectedScene = wizardState.els.sceneSelect?.value || wizardState.draft.sceneName || '关键词推广';
                 wizardState.draft.sceneName = SCENE_OPTIONS.includes(selectedScene) ? selectedScene : '关键词推广';
@@ -18327,7 +18605,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.draft.addedItems = wizardState.addedItems.map(item => ({ ...item }));
                 wizardState.draft.crowdList = wizardState.crowdList.map(item => deepClone(item));
                 wizardState.draft.debugVisible = !!wizardState.debugVisible;
-                wizardState.draft.itemSplitExpanded = true;
+                wizardState.draft.itemSplitExpanded = wizardState.itemSplitExpanded === true;
+                wizardState.draft.candidateListExpanded = wizardState.candidateListExpanded === true;
                 wizardState.draft.strategyList = wizardState.strategyList.map(item => ({ ...item }));
                 wizardState.draft.editingStrategyId = wizardState.editingStrategyId || '';
                 wizardState.draft.detailVisible = !!wizardState.detailVisible;
@@ -18343,6 +18622,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
                     wizardState.draft.sceneSettingTouched = {};
                 }
+                wizardState.draft.itemSplitExpanded = wizardState.draft.itemSplitExpanded === true;
+                wizardState.draft.candidateListExpanded = wizardState.draft.candidateListExpanded === true;
+                wizardState.itemSplitExpanded = wizardState.draft.itemSplitExpanded;
+                wizardState.candidateListExpanded = wizardState.draft.candidateListExpanded;
                 const sceneName = SCENE_OPTIONS.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '关键词推广';
                 wizardState.draft.sceneName = sceneName || '关键词推广';
                 wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
@@ -18369,7 +18652,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 applyStrategyToDetailForm(editingStrategy || wizardState.strategyList[0] || null);
                 updateBidModeControls(editingStrategy?.bidMode || wizardState.draft.bidMode || 'smart');
                 setDebugVisible(!!wizardState.draft.debugVisible);
-                setItemSplitExpanded(true);
+                setItemSplitExpanded(wizardState.itemSplitExpanded);
+                setCandidateListExpanded(wizardState.candidateListExpanded);
             };
 
             const setCandidateSource = (source = 'all') => {
@@ -18449,7 +18733,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.els.addedCount.textContent = String(wizardState.addedItems.length);
                 wizardState.els.addedList.innerHTML = '';
                 if (!wizardState.addedItems.length) {
-                    wizardState.els.addedList.innerHTML = '<div class="am-wxt-item"><div class="name">请先从左侧添加商品</div></div>';
+                    wizardState.els.addedList.innerHTML = '<div class="am-wxt-item"><div class="name">请点击上方“添加商品”按钮</div></div>';
                     return;
                 }
                 wizardState.addedItems.forEach((item, idx) => {
@@ -19056,6 +19340,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.searchBtn.click();
                 }
             });
+            wizardState.els.toggleCandidateBtn.onclick = () => {
+                const nextExpanded = wizardState.itemSplitExpanded !== true;
+                setItemSplitExpanded(nextExpanded);
+                if (nextExpanded) {
+                    if (!wizardState.candidates.length) {
+                        loadCandidates('', wizardState.candidateSource || 'all');
+                    }
+                    if (wizardState.els.searchInput instanceof HTMLInputElement) {
+                        wizardState.els.searchInput.focus();
+                    }
+                }
+                syncDraftFromUI();
+            };
+            wizardState.els.toggleCandidateListBtn.onclick = () => {
+                setCandidateListExpanded(wizardState.candidateListExpanded !== true);
+                syncDraftFromUI();
+            };
             wizardState.els.addAllBtn.onclick = () => {
                 if (!wizardState.candidates.length) return;
                 const room = Math.max(0, WIZARD_MAX_ITEMS - wizardState.addedItems.length);
@@ -19338,6 +19639,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             wizardState.loadRecommendedCrowds = loadRecommendedCrowds;
             wizardState.setCandidateSource = setCandidateSource;
             wizardState.setDebugVisible = setDebugVisible;
+            wizardState.setItemSplitExpanded = setItemSplitExpanded;
+            wizardState.setCandidateListExpanded = setCandidateListExpanded;
             wizardState.fillUIFromDraft = fillUIFromDraft;
             wizardState.appendWizardLog = appendWizardLog;
             wizardState.renderPreview = renderPreview;
@@ -19354,8 +19657,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const openToken = wizardState.openToken;
             const isStaleOpen = () => openToken !== wizardState.openToken;
 
-            wizardState.draft = mergeDeep(wizardDefaultDraft(), readSessionDraft() || {});
+            const storedDraft = readSessionDraft() || {};
+            wizardState.draft = mergeDeep(wizardDefaultDraft(), storedDraft);
+            const draftSchemaVersion = toNumber(storedDraft?.schemaVersion, 0);
+            if (draftSchemaVersion !== SESSION_DRAFT_SCHEMA_VERSION) {
+                wizardState.draft.sceneSettingValues = {};
+                wizardState.draft.sceneSettingTouched = {};
+                wizardState.draft.editingStrategyId = '';
+                wizardState.draft.detailVisible = false;
+            }
+            wizardState.draft.schemaVersion = SESSION_DRAFT_SCHEMA_VERSION;
             wizardState.draft.detailVisible = false;
+            wizardState.draft.itemSplitExpanded = false;
+            wizardState.draft.candidateListExpanded = false;
             wizardState.candidateSource = 'all';
             if (!SCENE_NAME_LIST.includes(wizardState.draft.sceneName)) {
                 const currentSceneName = inferCurrentSceneName();
@@ -20313,6 +20627,744 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             captureInterfaces: true,
             passMode: options.passMode || 'interface'
         });
+        const WIZARD_PARITY_REQUIRED_API_METHODS = [
+            'openWizard',
+            'getRuntimeDefaults',
+            'searchItems',
+            'createPlansBatch',
+            'createPlansByScene',
+            'createSitePlansBatch',
+            'createKeywordPlansBatch',
+            'createCrowdPlansBatch',
+            'createShopDirectPlansBatch',
+            'createContentPlansBatch',
+            'createLeadPlansBatch',
+            'suggestKeywords',
+            'suggestCrowds',
+            'getSessionDraft',
+            'clearSessionDraft',
+            'runSceneSmokeTests',
+            'runSceneGoalOptionTests',
+            'runSceneOptionSubmitSimulations',
+            'captureSceneCreateInterfaces',
+            'captureAllSceneCreateInterfaces',
+            'buildSceneParityCaseMatrix',
+            'collectWizardSubmitSnapshot',
+            'runWizardSceneParityTest',
+            'checkWizardApiCoverage'
+        ];
+        const checkWizardApiCoverage = () => {
+            const localApi = {
+                openWizard,
+                getRuntimeDefaults,
+                searchItems,
+                createPlansBatch,
+                createPlansByScene,
+                createSitePlansBatch,
+                createKeywordPlansBatch,
+                createCrowdPlansBatch,
+                createShopDirectPlansBatch,
+                createContentPlansBatch,
+                createLeadPlansBatch,
+                suggestKeywords,
+                suggestCrowds,
+                getSessionDraft,
+                clearSessionDraft,
+                runSceneSmokeTests,
+                runSceneGoalOptionTests,
+                runSceneOptionSubmitSimulations,
+                captureSceneCreateInterfaces,
+                captureAllSceneCreateInterfaces,
+                buildSceneParityCaseMatrix,
+                collectWizardSubmitSnapshot,
+                runWizardSceneParityTest,
+                checkWizardApiCoverage
+            };
+            const pageApi = (typeof window !== 'undefined' && isPlainObject(window.__AM_WXT_KEYWORD_API__))
+                ? window.__AM_WXT_KEYWORD_API__
+                : {};
+            const missingInLocal = WIZARD_PARITY_REQUIRED_API_METHODS
+                .filter(name => typeof localApi[name] !== 'function');
+            const missingInPage = WIZARD_PARITY_REQUIRED_API_METHODS
+                .filter(name => typeof pageApi[name] !== 'function');
+            return {
+                required: WIZARD_PARITY_REQUIRED_API_METHODS.slice(),
+                missingInLocal,
+                missingInPage,
+                ok: missingInLocal.length === 0 && missingInPage.length === 0
+            };
+        };
+        const buildSceneParityCaseMatrix = (sceneName = '', options = {}) => {
+            const targetScene = SCENE_NAME_LIST.includes(String(sceneName || '').trim())
+                ? String(sceneName || '').trim()
+                : '关键词推广';
+            const maxGoalCases = Math.max(1, Math.min(6, toNumber(options.maxGoalCases, 3)));
+            const maxDynamicCases = Math.max(0, Math.min(10, toNumber(options.maxDynamicCases, 4)));
+            const fallbackGoals = getSceneMarketingGoalFallbackList(targetScene);
+            const defaultGoal = fallbackGoals[0]
+                || (targetScene === '关键词推广' ? '趋势明星' : normalizeGoalLabel(targetScene));
+            const cases = [];
+            const pushCase = (entry = {}) => {
+                const caseId = String(entry.caseId || '').trim() || `case_${cases.length + 1}`;
+                if (cases.some(item => item.caseId === caseId)) return;
+                cases.push({
+                    caseId,
+                    label: String(entry.label || caseId).trim(),
+                    strategyPatch: isPlainObject(entry.strategyPatch) ? deepClone(entry.strategyPatch) : {},
+                    sceneSettingsPatch: isPlainObject(entry.sceneSettingsPatch) ? deepClone(entry.sceneSettingsPatch) : {}
+                });
+            };
+            pushCase({
+                caseId: 'base_default',
+                label: '默认配置',
+                strategyPatch: {
+                    marketingGoal: defaultGoal
+                },
+                sceneSettingsPatch: {
+                    营销目标: defaultGoal
+                }
+            });
+            fallbackGoals.slice(1, maxGoalCases).forEach((goalLabel, idx) => {
+                pushCase({
+                    caseId: `goal_${idx + 1}`,
+                    label: `营销目标-${goalLabel}`,
+                    strategyPatch: {
+                        marketingGoal: goalLabel
+                    },
+                    sceneSettingsPatch: {
+                        营销目标: goalLabel
+                    }
+                });
+            });
+            if (targetScene === '关键词推广') {
+                pushCase({
+                    caseId: 'kw_manual',
+                    label: '关键词-手动出价',
+                    strategyPatch: {
+                        bidMode: 'manual',
+                        marketingGoal: '自定义推广',
+                        bidTargetV2: 'conv',
+                        keywordMode: 'manual',
+                        manualKeywords: '测试词A,1.20,精准\n测试词B,1.10,广泛',
+                        setSingleCostV2: false,
+                        singleCostV2: ''
+                    },
+                    sceneSettingsPatch: {
+                        营销目标: '自定义推广',
+                        选择卡位方案: '自定义推广'
+                    }
+                });
+                pushCase({
+                    caseId: 'kw_smart_roi',
+                    label: '关键词-智能投产比',
+                    strategyPatch: {
+                        bidMode: 'smart',
+                        marketingGoal: defaultGoal === '自定义推广' ? '趋势明星' : defaultGoal,
+                        bidTargetV2: 'roi',
+                        keywordMode: 'recommend',
+                        recommendCount: '8',
+                        manualKeywords: '',
+                        setSingleCostV2: true,
+                        singleCostV2: '35'
+                    },
+                    sceneSettingsPatch: {}
+                });
+                pushCase({
+                    caseId: 'kw_day_budget',
+                    label: '关键词-日均预算',
+                    strategyPatch: {
+                        budgetType: 'day_budget',
+                        dayAverageBudget: '188'
+                    },
+                    sceneSettingsPatch: {
+                        预算类型: '日均预算'
+                    }
+                });
+            } else {
+                pushCase({
+                    caseId: 'scene_day_budget',
+                    label: '场景-日均预算',
+                    strategyPatch: {
+                        budgetType: 'day_budget',
+                        dayAverageBudget: '188'
+                    },
+                    sceneSettingsPatch: {
+                        预算类型: '日均预算'
+                    }
+                });
+                pushCase({
+                    caseId: 'scene_day_average',
+                    label: '场景-每日预算',
+                    strategyPatch: {
+                        budgetType: 'day_average',
+                        dayAverageBudget: '166'
+                    },
+                    sceneSettingsPatch: {
+                        预算类型: '每日预算'
+                    }
+                });
+            }
+            const sceneFallbackOptionMap = (typeof SCENE_FALLBACK_OPTION_MAP !== 'undefined' && isPlainObject(SCENE_FALLBACK_OPTION_MAP))
+                ? SCENE_FALLBACK_OPTION_MAP
+                : {};
+            const sceneOptionMap = isPlainObject(sceneFallbackOptionMap[targetScene])
+                ? sceneFallbackOptionMap[targetScene]
+                : {};
+            const DYNAMIC_FIELD_SKIP_RE = /(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式|卡位方式|选择方式|预算类型|计划名称|计划名|预算值|每日预算|日均预算|总预算)/;
+            let dynamicCursor = 0;
+            Object.keys(sceneOptionMap).forEach(label => {
+                if (dynamicCursor >= maxDynamicCases) return;
+                const text = normalizeGoalLabel(label);
+                if (!text || DYNAMIC_FIELD_SKIP_RE.test(text)) return;
+                const optionsList = uniqueBy(
+                    (Array.isArray(sceneOptionMap[label]) ? sceneOptionMap[label] : [])
+                        .map(item => normalizeGoalLabel(item))
+                        .filter(Boolean),
+                    item => item
+                );
+                if (optionsList.length < 2) return;
+                const optionValue = optionsList[1];
+                dynamicCursor += 1;
+                pushCase({
+                    caseId: `dynamic_${dynamicCursor}`,
+                    label: `${text}-${optionValue}`,
+                    strategyPatch: {},
+                    sceneSettingsPatch: {
+                        [text]: optionValue
+                    }
+                });
+            });
+            return {
+                sceneName: targetScene,
+                count: cases.length,
+                cases
+            };
+        };
+        const resolveParityTestItem = async (sceneName = '', options = {}) => {
+            const explicitItem = isPlainObject(options.item) ? options.item : null;
+            if (explicitItem && (explicitItem.materialId || explicitItem.itemId)) {
+                return deepClone(explicitItem);
+            }
+            const itemList = Array.isArray(options.items) ? options.items : [];
+            const firstFromList = itemList.find(item => isPlainObject(item) && (item.materialId || item.itemId));
+            if (firstFromList) return deepClone(firstFromList);
+            const existing = Array.isArray(wizardState.addedItems)
+                ? wizardState.addedItems.find(item => item && (item.materialId || item.itemId))
+                : null;
+            if (existing) return deepClone(existing);
+            const query = String(options.itemQuery || '').trim();
+            const runtime = await getRuntimeDefaults(false);
+            const bizCode = resolveSceneBizCodeHint(sceneName) || runtime.bizCode || DEFAULTS.bizCode;
+            const promotionScene = resolveSceneDefaultPromotionScene(
+                sceneName,
+                runtime.promotionScene || DEFAULTS.promotionScene
+            );
+            const searched = await searchItems({
+                bizCode,
+                promotionScene,
+                query,
+                pageSize: Math.max(20, toNumber(options.pageSize, 40)),
+                tagId: null,
+                channelKey: query ? '' : 'effect'
+            });
+            const candidate = Array.isArray(searched?.list) ? searched.list[0] : null;
+            return candidate ? deepClone(candidate) : null;
+        };
+        const buildParityStrategyTemplate = (sceneName = '', patch = {}) => {
+            const targetScene = String(sceneName || '').trim() || '关键词推广';
+            const fallbackGoals = getSceneMarketingGoalFallbackList(targetScene);
+            const defaultGoal = fallbackGoals[0]
+                || (targetScene === '关键词推广' ? '趋势明星' : normalizeGoalLabel(targetScene));
+            const base = {
+                id: `parity_${nowStampSeconds()}_${Math.floor(Math.random() * 90 + 10)}`,
+                name: `${targetScene}-校对`,
+                enabled: true,
+                bidMode: 'smart',
+                marketingGoal: defaultGoal,
+                dayAverageBudget: '100',
+                defaultBidPrice: '1',
+                keywordMode: DEFAULTS.keywordMode,
+                useWordPackage: true,
+                recommendCount: String(DEFAULTS.recommendCount),
+                manualKeywords: '',
+                bidTargetV2: DEFAULTS.bidTargetV2,
+                budgetType: 'day_average',
+                setSingleCostV2: false,
+                singleCostV2: '',
+                planName: `PARITY_${targetScene}_${nowStampSeconds()}`,
+                copyBatchCount: 1
+            };
+            const merged = mergeDeep({}, base, isPlainObject(patch) ? patch : {});
+            merged.bidMode = normalizeBidMode(merged.bidMode || 'smart', 'smart');
+            merged.marketingGoal = normalizeGoalLabel(merged.marketingGoal || defaultGoal || '');
+            merged.bidTargetV2 = String(merged.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
+            merged.dayAverageBudget = String(merged.dayAverageBudget || '100').trim() || '100';
+            merged.defaultBidPrice = String(merged.defaultBidPrice || '1').trim() || '1';
+            merged.keywordMode = String(merged.keywordMode || DEFAULTS.keywordMode).trim() || DEFAULTS.keywordMode;
+            merged.recommendCount = String(merged.recommendCount || DEFAULTS.recommendCount).trim() || String(DEFAULTS.recommendCount);
+            merged.planName = String(merged.planName || '').trim() || `PARITY_${targetScene}_${nowStampSeconds()}`;
+            merged.copyBatchCount = Math.max(1, Math.min(99, toNumber(merged.copyBatchCount, 1)));
+            if (targetScene !== '关键词推广') {
+                merged.manualKeywords = '';
+                merged.keywordMode = DEFAULTS.keywordMode;
+                merged.setSingleCostV2 = false;
+                merged.singleCostV2 = '';
+            }
+            return merged;
+        };
+        const pickBudgetValueFromObject = (obj = {}) => {
+            if (!isPlainObject(obj)) return 0;
+            const value = toNumber(
+                obj.dayAverageBudget
+                || obj.dayBudget
+                || obj.totalBudget
+                || obj.orderAmount
+                || obj.futureBudget,
+                0
+            );
+            return Number.isFinite(value) && value > 0 ? value : 0;
+        };
+        const collectWizardSubmitSnapshot = async (request = {}, options = {}) => {
+            const sceneName = String(request?.sceneName || options?.sceneName || '').trim();
+            if (!sceneName) {
+                return {
+                    ok: false,
+                    error: 'missing_scene_name',
+                    submitPayloadSnapshot: {},
+                    result: null,
+                    progressEvents: []
+                };
+            }
+            const progressEvents = [];
+            let submitPayloadSnapshot = null;
+            const userOnProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+            const runOptions = mergeDeep({
+                fallbackPolicy: 'none',
+                batchRetry: 0,
+                syncSceneRuntime: false,
+                strictSceneRuntimeMatch: false,
+                dryRunOnly: true
+            }, isPlainObject(options) ? options : {});
+            runOptions.onProgress = (payload = {}) => {
+                progressEvents.push(payload);
+                if (payload?.event === 'submit_payload_snapshot') {
+                    submitPayloadSnapshot = {
+                        ...payload
+                    };
+                    delete submitPayloadSnapshot.event;
+                }
+                if (userOnProgress) {
+                    try {
+                        userOnProgress(payload);
+                    } catch { }
+                }
+            };
+            const result = await createPlansByScene(sceneName, request, runOptions);
+            if (!submitPayloadSnapshot && isPlainObject(result?.submitPayloadSnapshot)) {
+                submitPayloadSnapshot = deepClone(result.submitPayloadSnapshot);
+            }
+            return {
+                ok: !!result?.ok,
+                error: result?.error || '',
+                submitPayloadSnapshot: submitPayloadSnapshot || {},
+                result,
+                progressEvents
+            };
+        };
+        const collectWizardParityUiSnapshot = (sceneName = '', strategy = {}, request = {}, caseInfo = {}) => {
+            const els = wizardState.els || {};
+            const firstPlan = Array.isArray(request?.plans) && request.plans.length ? request.plans[0] : {};
+            const manualKeywordCount = parseKeywords(
+                els?.manualInput?.value || strategy?.manualKeywords || '',
+                {
+                    bidPrice: toNumber(strategy?.defaultBidPrice, 1),
+                    matchScope: DEFAULTS.matchScope,
+                    onlineStatus: DEFAULTS.keywordOnlineStatus
+                }
+            ).length;
+            return {
+                caseId: String(caseInfo?.caseId || '').trim(),
+                label: String(caseInfo?.label || '').trim(),
+                sceneName: String(sceneName || '').trim(),
+                staticControls: {
+                    bidMode: String(els?.bidModeSelect?.value || strategy?.bidMode || '').trim(),
+                    bidTargetV2: String(els?.bidTargetSelect?.value || strategy?.bidTargetV2 || '').trim(),
+                    budgetType: String(els?.budgetTypeSelect?.value || strategy?.budgetType || '').trim(),
+                    budgetValue: String(els?.budgetInput?.value || strategy?.dayAverageBudget || '').trim(),
+                    keywordMode: String(els?.modeSelect?.value || strategy?.keywordMode || '').trim(),
+                    recommendCount: String(els?.recommendCountInput?.value || strategy?.recommendCount || '').trim(),
+                    planName: String(els?.prefixInput?.value || strategy?.planName || '').trim(),
+                    singleCostEnabled: !!els?.singleCostEnableInput?.checked,
+                    singleCostValue: String(els?.singleCostInput?.value || strategy?.singleCostV2 || '').trim(),
+                    manualKeywordCount
+                },
+                strategy: deepClone(strategy || {}),
+                requestPreview: {
+                    sceneName: request?.sceneName || '',
+                    marketingGoal: normalizeGoalLabel(firstPlan?.marketingGoal || request?.marketingGoal || ''),
+                    planName: String(firstPlan?.planName || '').trim(),
+                    bidMode: normalizeBidMode(firstPlan?.bidMode || strategy?.bidMode || 'smart', 'smart'),
+                    budgetValue: pickBudgetValueFromObject(firstPlan?.budget || {}),
+                    budget: deepClone(firstPlan?.budget || {}),
+                    sceneSettingCount: isPlainObject(request?.sceneSettings)
+                        ? Object.keys(request.sceneSettings).filter(key => String(request.sceneSettings[key] || '').trim() !== '').length
+                        : 0
+                },
+                sceneSettings: deepClone(request?.sceneSettings || {})
+            };
+        };
+        const applyWizardParityCase = async (sceneName = '', caseInfo = {}, options = {}) => {
+            const targetScene = SCENE_NAME_LIST.includes(String(sceneName || '').trim())
+                ? String(sceneName || '').trim()
+                : '关键词推广';
+            openWizard();
+            const item = await resolveParityTestItem(targetScene, options);
+            if (!item || !(item.materialId || item.itemId)) {
+                throw new Error(`场景「${targetScene}」未找到可用商品`);
+            }
+            const strategy = buildParityStrategyTemplate(targetScene, caseInfo?.strategyPatch || {});
+            const draft = mergeDeep(wizardDefaultDraft(), wizardState.draft || {});
+            const planPrefix = String(strategy.planName || caseInfo?.planNamePrefix || '').trim() || `PARITY_${targetScene}_${nowStampSeconds()}`;
+            draft.sceneName = targetScene;
+            draft.planNamePrefix = planPrefix;
+            draft.bidMode = normalizeBidMode(strategy.bidMode || draft.bidMode || 'smart', 'smart');
+            draft.keywordMode = strategy.keywordMode || draft.keywordMode || DEFAULTS.keywordMode;
+            draft.recommendCount = String(strategy.recommendCount || draft.recommendCount || DEFAULTS.recommendCount).trim() || String(DEFAULTS.recommendCount);
+            draft.defaultBidPrice = String(strategy.defaultBidPrice || draft.defaultBidPrice || '1').trim() || '1';
+            draft.dayAverageBudget = String(strategy.dayAverageBudget || draft.dayAverageBudget || '100').trim() || '100';
+            draft.manualKeywords = String(strategy.manualKeywords || '').trim();
+            draft.useWordPackage = strategy.useWordPackage !== false;
+            draft.fallbackPolicy = normalizeWizardFallbackPolicy(draft.fallbackPolicy || 'auto');
+            draft.addedItems = [deepClone(item)];
+            draft.strategyList = [deepClone(strategy)];
+            draft.editingStrategyId = strategy.id;
+            draft.detailVisible = false;
+            draft.sceneSettings = isPlainObject(draft.sceneSettings) ? draft.sceneSettings : {};
+            draft.sceneSettingTouched = isPlainObject(draft.sceneSettingTouched) ? draft.sceneSettingTouched : {};
+            const sceneSettingsPatch = mergeDeep({}, isPlainObject(caseInfo?.sceneSettingsPatch) ? caseInfo.sceneSettingsPatch : {});
+            if (strategy.marketingGoal) {
+                sceneSettingsPatch.营销目标 = sceneSettingsPatch.营销目标 || strategy.marketingGoal;
+                if (targetScene === '关键词推广') {
+                    sceneSettingsPatch.选择卡位方案 = sceneSettingsPatch.选择卡位方案 || strategy.marketingGoal;
+                }
+            }
+            draft.sceneSettings[targetScene] = mergeDeep({}, draft.sceneSettings[targetScene] || {}, sceneSettingsPatch);
+            draft.sceneSettingTouched[targetScene] = isPlainObject(draft.sceneSettingTouched[targetScene])
+                ? draft.sceneSettingTouched[targetScene]
+                : {};
+            Object.keys(sceneSettingsPatch).forEach(label => {
+                const key = typeof normalizeSceneFieldKey === 'function'
+                    ? normalizeSceneFieldKey(label)
+                    : String(label || '').trim();
+                if (!key) return;
+                draft.sceneSettingTouched[targetScene][key] = true;
+            });
+            wizardState.draft = draft;
+            wizardState.addedItems = [deepClone(item)];
+            wizardState.crowdList = Array.isArray(caseInfo?.crowdList) ? deepClone(caseInfo.crowdList) : [];
+            wizardState.strategyList = [deepClone(strategy)];
+            wizardState.editingStrategyId = strategy.id;
+            wizardState.detailVisible = false;
+            if (typeof wizardState.fillUIFromDraft === 'function') {
+                wizardState.fillUIFromDraft();
+            }
+            if (wizardState.els?.sceneSelect instanceof HTMLSelectElement && wizardState.els.sceneSelect.value !== targetScene) {
+                wizardState.els.sceneSelect.value = targetScene;
+                wizardState.els.sceneSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (typeof wizardState.renderStrategyList === 'function') {
+                wizardState.renderStrategyList();
+            }
+            if (typeof wizardState.buildRequest !== 'function') {
+                throw new Error('wizard_build_request_unavailable');
+            }
+            const request = wizardState.buildRequest();
+            const activeStrategy = deepClone((wizardState.strategyList || [])[0] || strategy);
+            const uiSnapshot = collectWizardParityUiSnapshot(targetScene, activeStrategy, request, caseInfo);
+            return {
+                sceneName: targetScene,
+                request,
+                strategy: activeStrategy,
+                item: deepClone(item),
+                uiSnapshot
+            };
+        };
+        const compareWizardParityCase = ({
+            sceneName = '',
+            request = {},
+            uiSnapshot = {},
+            submitPayloadSnapshot = {},
+            dryRunResult = {}
+        } = {}) => {
+            const targetScene = String(sceneName || request?.sceneName || '').trim();
+            const firstPlan = Array.isArray(request?.plans) && request.plans.length ? request.plans[0] : {};
+            const sampleCampaign = isPlainObject(dryRunResult?.sample?.campaign) ? dryRunResult.sample.campaign : {};
+            const expectedMarketingGoal = normalizeGoalLabel(
+                firstPlan?.marketingGoal
+                || request?.marketingGoal
+                || uiSnapshot?.strategy?.marketingGoal
+                || ''
+            );
+            const actualMarketingGoal = normalizeGoalLabel(
+                submitPayloadSnapshot?.marketingGoal
+                || dryRunResult?.sample?.meta?.marketingGoal
+                || ''
+            );
+            const diffs = [];
+            if (expectedMarketingGoal && actualMarketingGoal && expectedMarketingGoal !== actualMarketingGoal) {
+                diffs.push({
+                    field: 'marketingGoal',
+                    expected: expectedMarketingGoal,
+                    actual: actualMarketingGoal
+                });
+            }
+            const expectedPlanName = String(firstPlan?.planName || '').trim();
+            const actualPlanName = String(sampleCampaign?.campaignName || '').trim();
+            const isSiteScene = targetScene === '货品全站推广';
+            const expectedPlanNameLooksSiteSafe = /^[A-Za-z0-9]{2,64}$/.test(expectedPlanName);
+            const siteNameAutoNormalized = isSiteScene && actualPlanName && /^site\d{8,}$/.test(actualPlanName) && !expectedPlanNameLooksSiteSafe;
+            if (expectedPlanName && actualPlanName && expectedPlanName !== actualPlanName && !siteNameAutoNormalized) {
+                diffs.push({
+                    field: 'planName',
+                    expected: expectedPlanName,
+                    actual: actualPlanName
+                });
+            }
+            const expectedBudgetValue = pickBudgetValueFromObject(firstPlan?.budget || {});
+            const actualBudgetValue = pickBudgetValueFromObject(sampleCampaign || {});
+            const isLeadSceneBudgetAutoRaised = targetScene === '线索推广'
+                && expectedBudgetValue > 0
+                && actualBudgetValue >= 1500
+                && actualBudgetValue >= expectedBudgetValue;
+            if (!isLeadSceneBudgetAutoRaised && expectedBudgetValue > 0 && actualBudgetValue > 0 && Math.abs(expectedBudgetValue - actualBudgetValue) > 0.001) {
+                diffs.push({
+                    field: 'budgetValue',
+                    expected: expectedBudgetValue,
+                    actual: actualBudgetValue
+                });
+            } else if (!isLeadSceneBudgetAutoRaised && expectedBudgetValue > 0 && !(actualBudgetValue > 0)) {
+                diffs.push({
+                    field: 'budgetValue',
+                    expected: expectedBudgetValue,
+                    actual: actualBudgetValue
+                });
+            }
+            if (targetScene === '关键词推广') {
+                const expectedBidMode = normalizeBidMode(
+                    firstPlan?.bidMode
+                    || uiSnapshot?.strategy?.bidMode
+                    || request?.common?.bidMode
+                    || 'smart',
+                    'smart'
+                );
+                const actualBidMode = normalizeBidMode(
+                    submitPayloadSnapshot?.bidMode
+                    || dryRunResult?.sample?.meta?.bidMode
+                    || '',
+                    expectedBidMode
+                );
+                if (expectedBidMode !== actualBidMode) {
+                    diffs.push({
+                        field: 'bidMode',
+                        expected: expectedBidMode,
+                        actual: actualBidMode
+                    });
+                }
+                const expectedBidTarget = expectedBidMode === 'smart'
+                    ? String(firstPlan?.campaignOverride?.bidTargetV2 || '').trim()
+                    : '';
+                const actualBidTarget = String(
+                    submitPayloadSnapshot?.bidTargetV2
+                    || dryRunResult?.sample?.campaign?.bidTargetV2
+                    || ''
+                ).trim();
+                if (expectedBidTarget !== actualBidTarget) {
+                    diffs.push({
+                        field: 'bidTargetV2',
+                        expected: expectedBidTarget,
+                        actual: actualBidTarget
+                    });
+                }
+                const expectedManualKeywordCount = parseKeywords(
+                    uiSnapshot?.strategy?.manualKeywords || '',
+                    {
+                        bidPrice: toNumber(uiSnapshot?.strategy?.defaultBidPrice, 1),
+                        matchScope: DEFAULTS.matchScope,
+                        onlineStatus: DEFAULTS.keywordOnlineStatus
+                    }
+                ).length;
+                const actualWordListCount = toNumber(submitPayloadSnapshot?.wordListCount, 0);
+                if (expectedManualKeywordCount > 0 && actualWordListCount < expectedManualKeywordCount) {
+                    diffs.push({
+                        field: 'wordListCount',
+                        expected: `>=${expectedManualKeywordCount}`,
+                        actual: actualWordListCount
+                    });
+                }
+                if (expectedBidMode === 'manual' && toNumber(submitPayloadSnapshot?.wordPackageCount, 0) > 0) {
+                    diffs.push({
+                        field: 'wordPackageCount',
+                        expected: 0,
+                        actual: toNumber(submitPayloadSnapshot?.wordPackageCount, 0)
+                    });
+                }
+            }
+            return {
+                ok: diffs.length === 0,
+                diffs,
+                expected: {
+                    sceneName: targetScene,
+                    marketingGoal: expectedMarketingGoal,
+                    planName: expectedPlanName,
+                    budgetValue: expectedBudgetValue
+                },
+                actual: {
+                    sceneName: submitPayloadSnapshot?.sceneName || targetScene,
+                    marketingGoal: actualMarketingGoal,
+                    planName: actualPlanName,
+                    budgetValue: actualBudgetValue
+                }
+            };
+        };
+        const runWizardSceneParityTest = async (options = {}) => {
+            const rounds = Math.max(1, Math.min(10, toNumber(options.rounds, 1)));
+            const scenes = Array.isArray(options.scenes) && options.scenes.length
+                ? uniqueBy(options.scenes.map(item => String(item || '').trim()).filter(Boolean), item => item)
+                    .filter(scene => SCENE_NAME_LIST.includes(scene))
+                : SCENE_NAME_LIST.slice();
+            const maxCasesPerScene = Math.max(1, Math.min(24, toNumber(options.maxCasesPerScene, 8)));
+            const dryRunOnly = options.dryRunOnly !== false;
+            const rows = [];
+            const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+            const apiCoverage = checkWizardApiCoverage();
+            for (let round = 1; round <= rounds; round += 1) {
+                for (let sceneIdx = 0; sceneIdx < scenes.length; sceneIdx += 1) {
+                    const sceneName = scenes[sceneIdx];
+                    const matrix = buildSceneParityCaseMatrix(sceneName, options);
+                    const sceneCases = Array.isArray(matrix?.cases) ? matrix.cases.slice(0, maxCasesPerScene) : [];
+                    for (let caseIdx = 0; caseIdx < sceneCases.length; caseIdx += 1) {
+                        const caseInfo = sceneCases[caseIdx];
+                        const row = {
+                            round,
+                            sceneName,
+                            caseId: caseInfo?.caseId || '',
+                            caseLabel: caseInfo?.label || '',
+                            index: caseIdx + 1,
+                            total: sceneCases.length,
+                            ok: false,
+                            error: '',
+                            diffCount: 0,
+                            diffs: [],
+                            requestPreview: {},
+                            submitPayloadSnapshot: {},
+                            uiSnapshot: {}
+                        };
+                        if (onProgress) {
+                            try {
+                                onProgress({
+                                    event: 'wizard_parity_case_start',
+                                    round,
+                                    sceneName,
+                                    caseId: row.caseId,
+                                    caseLabel: row.caseLabel,
+                                    index: row.index,
+                                    total: row.total
+                                });
+                            } catch { }
+                        }
+                        try {
+                            const applied = await applyWizardParityCase(sceneName, caseInfo, options);
+                            row.uiSnapshot = deepClone(applied.uiSnapshot || {});
+                            row.requestPreview = {
+                                sceneName: applied.request?.sceneName || '',
+                                planName: applied.request?.plans?.[0]?.planName || '',
+                                marketingGoal: normalizeGoalLabel(
+                                    applied.request?.plans?.[0]?.marketingGoal
+                                    || applied.request?.marketingGoal
+                                    || ''
+                                )
+                            };
+                            const submit = await collectWizardSubmitSnapshot(applied.request, {
+                                ...options,
+                                dryRunOnly,
+                                onProgress: null
+                            });
+                            row.submitPayloadSnapshot = deepClone(submit?.submitPayloadSnapshot || {});
+                            const compare = compareWizardParityCase({
+                                sceneName,
+                                request: applied.request,
+                                uiSnapshot: applied.uiSnapshot,
+                                submitPayloadSnapshot: submit?.submitPayloadSnapshot || {},
+                                dryRunResult: submit?.result || {}
+                            });
+                            row.ok = !!compare.ok;
+                            row.diffCount = Array.isArray(compare?.diffs) ? compare.diffs.length : 0;
+                            row.diffs = Array.isArray(compare?.diffs) ? compare.diffs : [];
+                            if (!submit?.ok && !row.error) {
+                                row.error = submit?.error || (submit?.result?.error || '');
+                            }
+                        } catch (err) {
+                            row.ok = false;
+                            row.error = err?.message || String(err);
+                        }
+                        rows.push(row);
+                        if (onProgress) {
+                            try {
+                                onProgress({
+                                    event: 'wizard_parity_case_done',
+                                    round,
+                                    sceneName,
+                                    caseId: row.caseId,
+                                    caseLabel: row.caseLabel,
+                                    index: row.index,
+                                    total: row.total,
+                                    ok: row.ok,
+                                    diffCount: row.diffCount,
+                                    error: row.error || ''
+                                });
+                            } catch { }
+                        }
+                    }
+                }
+            }
+            const byScene = scenes.map(sceneName => {
+                const sceneRows = rows.filter(item => item.sceneName === sceneName);
+                return {
+                    sceneName,
+                    total: sceneRows.length,
+                    pass: sceneRows.filter(item => item.ok).length,
+                    fail: sceneRows.filter(item => !item.ok).length,
+                    diffCount: sceneRows.reduce((sum, item) => sum + toNumber(item.diffCount, 0), 0)
+                };
+            });
+            const byRound = Array.from({ length: rounds }).map((_, idx) => {
+                const round = idx + 1;
+                const roundRows = rows.filter(item => item.round === round);
+                return {
+                    round,
+                    total: roundRows.length,
+                    pass: roundRows.filter(item => item.ok).length,
+                    fail: roundRows.filter(item => !item.ok).length,
+                    diffCount: roundRows.reduce((sum, item) => sum + toNumber(item.diffCount, 0), 0)
+                };
+            });
+            const result = {
+                ok: rows.length > 0 && rows.every(item => item.ok),
+                dryRunOnly,
+                rounds,
+                scenes,
+                scannedAt: new Date().toISOString(),
+                count: rows.length,
+                successCount: rows.filter(item => item.ok).length,
+                failCount: rows.filter(item => !item.ok).length,
+                byScene,
+                byRound,
+                apiCoverage,
+                list: rows
+            };
+            window.__AM_WXT_WIZARD_PARITY_RESULT__ = result;
+            return result;
+        };
 
         const CREATE_FAILURE_CONFLICT_RE = /(onebpsite-existed|horizontal-onebpsite-existed|存在在投计划|在投计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i;
         const CREATE_FAILURE_PERMISSION_RE = /(csrf|403|无权限|权限不足|风控|登录失效|bizlogin|forbidden)/i;
@@ -21353,6 +22405,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             appendKeywords,
             suggestKeywords,
             suggestCrowds,
+            runSceneSmokeTests,
+            runSceneGoalOptionTests,
+            runSceneOptionSubmitSimulations,
+            captureSceneCreateInterfaces,
+            captureAllSceneCreateInterfaces,
+            buildSceneParityCaseMatrix,
+            collectWizardSubmitSnapshot,
+            runWizardSceneParityTest,
+            checkWizardApiCoverage,
             validate,
             getSessionDraft,
             clearSessionDraft
@@ -22219,6 +23280,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         'appendKeywords',
         'suggestKeywords',
         'suggestCrowds',
+        'runSceneSmokeTests',
+        'runSceneGoalOptionTests',
+        'runSceneOptionSubmitSimulations',
+        'captureSceneCreateInterfaces',
+        'captureAllSceneCreateInterfaces',
+        'buildSceneParityCaseMatrix',
+        'collectWizardSubmitSnapshot',
+        'runWizardSceneParityTest',
+        'checkWizardApiCoverage',
         'validate',
         'getSessionDraft',
         'clearSessionDraft'
