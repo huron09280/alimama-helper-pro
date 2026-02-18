@@ -15665,6 +15665,70 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-scene-inline-input input {
                     width: 120px;
                 }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-box {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    padding: 8px 10px;
+                    border: 1px solid rgba(148,163,184,0.28);
+                    border-radius: 12px;
+                    background: #f8fafc;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-item {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-main {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-title {
+                    min-width: 68px;
+                    font-size: 12px;
+                    color: #334155;
+                    font-weight: 600;
+                    line-height: 1.4;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-toggle {
+                    display: inline-flex;
+                    gap: 0;
+                    border: 1px solid rgba(148,163,184,0.28);
+                    border-radius: 12px;
+                    overflow: hidden;
+                    background: #eef2f7;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip {
+                    border: none;
+                    border-right: 1px solid rgba(148,163,184,0.2);
+                    border-radius: 0;
+                    padding: 8px 14px;
+                    background: transparent;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip:last-child {
+                    border-right: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip.active {
+                    background: #fff;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-link {
+                    font-size: 12px;
+                    color: #4f68ff;
+                    line-height: 1.2;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-config {
+                    display: flex;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-left: 78px;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-config input {
+                    width: 180px;
+                }
                 #am-wxt-keyword-modal .am-wxt-static-settings {
                     display: none;
                 }
@@ -15934,6 +15998,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         margin-left: 0;
                     }
                     #am-wxt-keyword-modal .am-wxt-scene-inline-input input {
+                        width: min(220px, 100%);
+                        flex: 1 1 auto;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-site-optimize-config {
+                        padding-left: 0;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-site-optimize-config input {
                         width: min(220px, 100%);
                         flex: 1 1 auto;
                     }
@@ -17689,7 +17760,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .filter(Boolean)
                 );
                 const preserveDynamicKeySet = new Set(
-                    ['营销场景', '投放调优', '发布日期', '投放时间', '投放地域', '计划组', '目标投产比']
+                    ['投放调优', '发布日期', '投放时间', '投放地域', '计划组', '目标投产比']
                         .map(label => normalizeSceneFieldKey(label))
                         .filter(Boolean)
                 );
@@ -17787,6 +17858,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 }
                 if (targetSceneName === '货品全站推广') {
+                    delete sceneSettings.营销场景;
                     const siteBidType = normalizeSceneSettingValue(sceneSettings.出价方式 || '');
                     if (/最大化拿量/.test(siteBidType)) {
                         delete sceneSettings.目标投产比;
@@ -17919,7 +17991,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     );
                 }
                 const extraSceneFields = sceneName === '货品全站推广'
-                    ? ['营销场景', '目标投产比', '投放调优', '发布日期', '投放时间', '投放地域', '计划组']
+                    ? ['目标投产比', '发布日期', '计划组']
                     : [];
                 const allSceneFields = dedupeSceneFieldLabelsForRender(
                     baseSceneFields.concat(
@@ -17939,6 +18011,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const staticFieldTokenSet = new Set(
                     [
                         '营销目标',
+                        '营销场景',
                         '场景名称',
                         '计划名称',
                         '计划名',
@@ -17960,6 +18033,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         '手动关键词'
                     ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                 }
+                if (sceneName === '货品全站推广') {
+                    ['投放调优', '投放时间', '投放地域', '地域设置', '起量时间地域设置']
+                        .forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                }
                 const liveBidTypeValue = normalizeSceneSettingValue(
                     wizardState.els.sceneDynamic?.querySelector('input[data-scene-field="出价方式"]')?.value || ''
                 );
@@ -17978,7 +18055,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (staticFieldTokenSet.has(fieldToken)) return false;
                     if (
                         sceneName === '货品全站推广'
-                        && /^(营销场景|目标投产比|投放调优|发布日期|投放时间|投放地域|计划组)$/.test(fieldToken)
+                        && /^(目标投产比|发布日期|计划组)$/.test(fieldToken)
                     ) {
                         return true;
                     }
@@ -17986,12 +18063,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!isLabelInGoalFieldSet(fieldLabel, allGoalFieldLabels)) return true;
                     return isLabelInGoalFieldSet(fieldLabel, activeGoalFieldLabels);
                 });
-                if (
-                    sceneName === '货品全站推广'
-                    && !fields.some(fieldLabel => normalizeSceneRenderFieldToken(fieldLabel) === normalizeSceneRenderFieldToken('营销场景'))
-                ) {
-                    fields.unshift('营销场景');
-                }
                 if (sceneName === '货品全站推广') {
                     const moveFieldAfter = (list = [], targetLabel = '', anchorLabel = '') => {
                         const targetToken = normalizeSceneRenderFieldToken(targetLabel);
@@ -18208,17 +18279,77 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
                 if (sceneName === '货品全站推广') {
-                    const marketingSceneKey = normalizeSceneFieldKey('营销场景');
-                    const marketingSceneValue = normalizeSceneSettingValue(
-                        bucket[marketingSceneKey]
-                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.营销场景
-                        || ''
+                    const optimizeModeKey = normalizeSceneFieldKey('投放调优');
+                    const launchTimeKey = normalizeSceneFieldKey('投放时间');
+                    const launchAreaKey = normalizeSceneFieldKey('投放地域');
+                    const optimizeModeValue = normalizeSceneSettingValue(
+                        bucket[optimizeModeKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.投放调优
+                        || '多目标优化'
                     );
+                    const launchTimeValue = normalizeSceneSettingValue(
+                        bucket[launchTimeKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.投放时间
+                        || '长期投放'
+                    );
+                    const launchAreaValue = normalizeSceneSettingValue(
+                        bucket[launchAreaKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.投放地域
+                        || '全部地域'
+                    );
+                    bucket[optimizeModeKey] = optimizeModeValue;
+                    bucket[launchTimeKey] = launchTimeValue;
+                    bucket[launchAreaKey] = launchAreaValue;
+                    const optimizeModeOn = !/日常|单目标|基础/.test(optimizeModeValue);
+                    const launchBoostOn = /长期|不限|24|全天/.test(launchTimeValue);
                     staticRows.push(`
                         <div class="am-wxt-scene-setting-row">
-                            <div class="am-wxt-scene-setting-label">营销场景</div>
-                            <div class="am-wxt-setting-control">
-                                <input data-scene-field="${Utils.escapeHtml(marketingSceneKey)}" value="${Utils.escapeHtml(marketingSceneValue)}" placeholder="请输入营销场景" />
+                            <div class="am-wxt-scene-setting-label">投放调优</div>
+                            <div class="am-wxt-setting-control am-wxt-site-optimize-box">
+                                <div class="am-wxt-site-optimize-item">
+                                    <div class="am-wxt-site-optimize-main">
+                                        <span class="am-wxt-site-optimize-title">多目标优化</span>
+                                        <div class="am-wxt-site-toggle" data-scene-toggle-group="optimize-mode">
+                                            <button
+                                                type="button"
+                                                class="am-wxt-option-chip ${optimizeModeOn ? 'active' : ''}"
+                                                data-scene-toggle-target="${Utils.escapeHtml(optimizeModeKey)}"
+                                                data-scene-toggle-value="多目标优化"
+                                            >开</button>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-option-chip ${!optimizeModeOn ? 'active' : ''}"
+                                                data-scene-toggle-target="${Utils.escapeHtml(optimizeModeKey)}"
+                                                data-scene-toggle-value="日常优化"
+                                            >关</button>
+                                        </div>
+                                    </div>
+                                    <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(optimizeModeKey)}" value="${Utils.escapeHtml(optimizeModeValue)}" />
+                                </div>
+                                <div class="am-wxt-site-optimize-item">
+                                    <div class="am-wxt-site-optimize-main">
+                                        <span class="am-wxt-site-optimize-title">一键起量</span>
+                                        <div class="am-wxt-site-toggle" data-scene-toggle-group="launch-boost">
+                                            <button
+                                                type="button"
+                                                class="am-wxt-option-chip ${launchBoostOn ? 'active' : ''}"
+                                                data-scene-toggle-target="${Utils.escapeHtml(launchTimeKey)}"
+                                                data-scene-toggle-value="长期投放"
+                                            >开</button>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-option-chip ${!launchBoostOn ? 'active' : ''}"
+                                                data-scene-toggle-target="${Utils.escapeHtml(launchTimeKey)}"
+                                                data-scene-toggle-value="固定时段"
+                                            >关</button>
+                                        </div>
+                                        <span class="am-wxt-site-optimize-link">起量时间地域设置</span>
+                                    </div>
+                                    <div class="am-wxt-site-optimize-config">
+                                        <input data-scene-field="${Utils.escapeHtml(launchTimeKey)}" value="${Utils.escapeHtml(launchTimeValue)}" placeholder="投放时间（如：长期投放）" />
+                                        <input data-scene-field="${Utils.escapeHtml(launchAreaKey)}" value="${Utils.escapeHtml(launchAreaValue)}" placeholder="投放地域（如：全部地域）" />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     `);
@@ -18446,6 +18577,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     };
                     proxy.addEventListener('input', syncProxyValue);
                     proxy.addEventListener('change', syncProxyValue);
+                });
+
+                const sceneToggleButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-toggle-target]');
+                sceneToggleButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        const fieldKey = String(button.getAttribute('data-scene-toggle-target') || '').trim();
+                        const nextValue = String(button.getAttribute('data-scene-toggle-value') || '').trim();
+                        if (!fieldKey) return;
+                        const targetControl = Array.from(wizardState.els.sceneDynamic.querySelectorAll('[data-scene-field]')).find(control => (
+                            String(control.getAttribute('data-scene-field') || '').trim() === fieldKey
+                        ));
+                        if (!(targetControl instanceof HTMLInputElement || targetControl instanceof HTMLTextAreaElement)) return;
+                        targetControl.value = nextValue;
+                        targetControl.dispatchEvent(new Event('input', { bubbles: true }));
+                        targetControl.dispatchEvent(new Event('change', { bubbles: true }));
+                        const toggleGroup = button.closest('[data-scene-toggle-group]');
+                        if (toggleGroup) {
+                            toggleGroup.querySelectorAll('[data-scene-toggle-target]').forEach(chip => {
+                                chip.classList.toggle('active', chip === button);
+                            });
+                        }
+                    });
                 });
 
                 const sceneOptionButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-option]');
