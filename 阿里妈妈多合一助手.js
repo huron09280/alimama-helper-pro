@@ -5554,7 +5554,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '内容营销': true
         };
         const SCENE_SKIP_TEXT_RE = /^(上手指南|了解更多|了解详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开)$/;
-        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
+        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
         const SCENE_SECTION_ONLY_LABEL_RE = /^(营销场景与目标|营销场景|推广方案设置(?:-.+)?|推广方案设置|设置预算(?:及排期)?|设置基础信息|高级设置|创建完成|收集销售线索|行业解决方案|自定义方案)$/;
         const SCENE_LABEL_NOISE_RE = /[，。,！？!；;]/;
         const SCENE_LABEL_NOISE_PREFIX_RE = /^(请|建议|支持|算法|未添加|如有|当前|完成后|符合条件|在投商品|想探测|卡位客户都在玩|流量规模)/;
@@ -5646,6 +5646,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 选品方式: '自定义选品',
                 出价方式: '控投产比',
                 出价目标: '净目标投产比',
+                目标投产比: '5',
                 预算类型: '不限预算',
                 投放调优: '多目标优化',
                 投放时间: '长期投放',
@@ -12919,7 +12920,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .filter(Boolean);
                 }
                 const numeric = parseNumberFromSceneValue(value);
-                if (Number.isFinite(numeric) && /(?:budget|cost|price|rate|switch|smartcreative|discount|singlecost)$/i.test(key)) {
+                if (Number.isFinite(numeric) && /(?:budget|cost|price|rate|switch|smartcreative|discount|singlecost|constraintvalue)$/i.test(key)) {
                     return numeric;
                 }
                 return value;
@@ -12929,6 +12930,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 ? [/出价目标/, /优化目标/, /营销目标/]
                 : [/出价目标/, /优化目标/];
             const targetEntry = findSceneSettingEntry(entries, targetPatterns);
+            const targetConstraintEntry = findSceneSettingEntry(entries, [
+                /目标投产比/,
+                /净目标投产比/,
+                /ROI目标值/i,
+                /出价目标值/,
+                /约束值/,
+                /目标值/
+            ]);
             const keywordGoalEntry = normalizedSceneName === '关键词推广'
                 ? findSceneSettingEntry(entries, [/营销目标/, /选择卡位方案/])
                 : null;
@@ -13003,6 +13012,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     targetKey: 'bidTypeV2/bidType',
                     reason: '当前场景未识别到可用出价类型字段'
                 });
+            }
+            const targetConstraintValue = parseNumberFromSceneValue(targetConstraintEntry?.value || '');
+            if (targetConstraintEntry && Number.isFinite(targetConstraintValue) && targetConstraintValue > 0) {
+                applyCampaign('constraintValue', targetConstraintValue, targetConstraintEntry.key, targetConstraintEntry.value);
+                const constraintTypeHint = [
+                    normalizedSceneName,
+                    targetEntry?.key || '',
+                    targetEntry?.value || '',
+                    bidTypeEntry?.value || '',
+                    bidTypeCode || '',
+                    targetConstraintEntry?.key || ''
+                ].join(' ');
+                let constraintTypeCode = '';
+                if (/roi_control/i.test(String(bidTypeCode || ''))) {
+                    constraintTypeCode = 'roi';
+                } else if (/控成本|成本|cpa/i.test(constraintTypeHint)) {
+                    constraintTypeCode = 'cost';
+                } else if (/投产比|ROI/i.test(constraintTypeHint) || normalizedSceneName === '货品全站推广') {
+                    constraintTypeCode = 'roi';
+                }
+                if (constraintTypeCode) {
+                    applyCampaign('constraintType', constraintTypeCode, targetConstraintEntry.key, targetConstraintEntry.value);
+                }
             }
 
             const itemModeEntry = findSceneSettingEntry(entries, [/选品方式/, /选择推广商品/]);
@@ -16503,6 +16535,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     选品方式: ['自定义选品', '行业推荐选品'],
                     出价方式: ['控投产比', '控成本', '最大化拿量'],
                     出价目标: ['净目标投产比', '稳定投产比', '获取成交量', '增加点击量', '增加收藏加购量', '提升市场渗透'],
+                    目标投产比: ['5'],
                     预算类型: ['不限预算', '每日预算', '日均预算'],
                     投放调优: ['多目标优化', '日常优化'],
                     发布日期: ['长期投放', '立即投放'],
@@ -16591,12 +16624,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
-            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|优化目标|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|发布日期|排期|投放地域|地域设置|起量时间地域设置|计划组|设置计划组|选品方式|选择推广商品|人群设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
+            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|优化目标|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|发布日期|排期|投放地域|地域设置|起量时间地域设置|计划组|设置计划组|选品方式|选择推广商品|人群设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
             const SCENE_RENDER_FIELD_ALIAS_RULES = [
                 { pattern: /^(关键词设置|核心词设置)$/, label: '核心词设置' },
                 { pattern: /^(开启冷启加速|冷启加速)$/, label: '冷启加速' },
                 { pattern: /^(设置创意|创意设置|创意模式)$/, label: '创意设置' },
                 { pattern: /^(设置拉新人群|设置人群|人群设置|种子人群)$/, label: '人群设置' },
+                { pattern: /^(净目标投产比|目标投产比|ROI目标值|出价目标值|约束值)$/, label: '目标投产比' },
                 { pattern: /^(投放日期|投放时间|排期)$/, label: '投放时间' },
                 { pattern: /^(发布日期|发布时间)$/, label: '投放时间' },
                 { pattern: /^(选择推广商品|选品方式)$/, label: '选品方式' },
@@ -17187,6 +17221,45 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!fallbackRaw) return '';
                     return toShortSceneValue(candidate);
                 };
+                const extractSceneConstraintValue = () => {
+                    const hasConstraintContext = (text = '') => /投产比|ROI|出价目标|净目标|约束|目标值/i.test(normalizeText(text));
+                    const normalizeNumericText = (raw = '') => {
+                        const num = parseNumberFromSceneValue(raw);
+                        if (!Number.isFinite(num) || num <= 0) return '';
+                        if (num > 9999) return '';
+                        return toShortSceneValue(String(num));
+                    };
+                    const tryContainerValue = (el) => {
+                        if (!(el instanceof Element)) return '';
+                        const container = el.closest('label,li,div,section') || el;
+                        const containerText = normalizeText(container?.textContent || '');
+                        if (!hasConstraintContext(containerText)) return '';
+                        const textValue = normalizeNumericText(container?.textContent || '');
+                        if (textValue) return textValue;
+                        const siblingInput = container?.querySelector?.('input:not([type="radio"]):not([type="checkbox"])');
+                        const inputValue = normalizeNumericText(siblingInput?.value || '');
+                        if (inputValue) return inputValue;
+                        return '';
+                    };
+                    try {
+                        const checkedRadios = Array.from(document.querySelectorAll('input[type="radio"]:checked,[role="radio"][aria-checked="true"]'));
+                        for (const radio of checkedRadios) {
+                            if (!(radio instanceof Element) || !isElementVisible(radio)) continue;
+                            const fromContainer = tryContainerValue(radio);
+                            if (fromContainer) return fromContainer;
+                        }
+                        const focusHints = Array.from(document.querySelectorAll('div,span,label,strong,p,li'))
+                            .filter(el => el instanceof Element && isElementVisible(el))
+                            .map(el => normalizeText(el.textContent || ''))
+                            .filter(Boolean)
+                            .filter(text => /投产比|ROI|出价目标|净目标/.test(text));
+                        for (const text of focusHints) {
+                            const fromHint = normalizeNumericText(text);
+                            if (fromHint) return fromHint;
+                        }
+                    } catch { }
+                    return '';
+                };
                 if (!normalizedLabel) return '';
 
                 if (currentSceneName === '货品全站推广') {
@@ -17216,6 +17289,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (hasVisibleNativeHint(/净目标投产比|目标投产比|ROI/i)) {
                             return pickByText('净目标投产比', true)
                                 || pickByText('稳定投产比', true);
+                        }
+                    }
+                    if (/(目标投产比|ROI目标值|出价目标值|约束值|目标值)/.test(normalizedLabel)) {
+                        const fromConstraint = extractSceneConstraintValue();
+                        if (fromConstraint) return fromConstraint;
+                        const runtimeConstraintValue = parseNumberFromSceneValue(
+                            runtimeCache?.value?.storeData?.constraintValue
+                            || runtimeCache?.value?.solutionTemplate?.campaign?.constraintValue
+                            || ''
+                        );
+                        if (Number.isFinite(runtimeConstraintValue) && runtimeConstraintValue > 0) {
+                            return toShortSceneValue(String(runtimeConstraintValue));
+                        }
+                        const fromDefaults = parseNumberFromSceneValue(
+                            sceneDefaults[normalizedLabel]
+                            || sceneDefaults.目标投产比
+                            || sceneDefaults.净目标投产比
+                            || ''
+                        );
+                        if (Number.isFinite(fromDefaults) && fromDefaults > 0) {
+                            return toShortSceneValue(String(fromDefaults));
                         }
                     }
                     if (/(投放调优|优化模式)/.test(normalizedLabel)) {
@@ -17446,6 +17540,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         fillCount += 1;
                         return;
                     }
+                    const fallbackDefaultValue = normalizeSceneSettingValue(
+                        SCENE_SPEC_FIELD_FALLBACK?.[targetSceneName]?.[normalizeSceneRenderFieldLabel(fieldLabel) || fieldLabel]
+                        || ''
+                    );
+                    if (fallbackDefaultValue) {
+                        bucket[key] = fallbackDefaultValue;
+                        fillCount += 1;
+                        return;
+                    }
                     if (options.length) {
                         bucket[key] = options[0];
                         fillCount += 1;
@@ -17495,7 +17598,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .filter(Boolean)
                 );
                 const preserveDynamicKeySet = new Set(
-                    ['营销场景', '投放调优', '发布日期', '投放时间', '投放地域', '计划组']
+                    ['营销场景', '投放调优', '发布日期', '投放时间', '投放地域', '计划组', '目标投产比']
                         .map(label => normalizeSceneFieldKey(label))
                         .filter(Boolean)
                 );
@@ -17712,7 +17815,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     );
                 }
                 const extraSceneFields = sceneName === '货品全站推广'
-                    ? ['营销场景', '投放调优', '发布日期', '投放时间', '投放地域', '计划组']
+                    ? ['营销场景', '目标投产比', '投放调优', '发布日期', '投放时间', '投放地域', '计划组']
                     : [];
                 const allSceneFields = dedupeSceneFieldLabelsForRender(
                     baseSceneFields.concat(
@@ -17756,12 +17859,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const fields = allSceneFields.filter((fieldLabel) => {
                     if (isGoalSelectorField(fieldLabel)) return false;
                     if (!isSceneFieldConnectedToPayload(fieldLabel)) return false;
-                    if (staticFieldTokenSet.has(normalizeSceneRenderFieldToken(fieldLabel))) return false;
+                    const fieldToken = normalizeSceneRenderFieldToken(fieldLabel);
+                    if (staticFieldTokenSet.has(fieldToken)) return false;
+                    if (
+                        sceneName === '货品全站推广'
+                        && /^(营销场景|目标投产比|投放调优|发布日期|投放时间|投放地域|计划组)$/.test(fieldToken)
+                    ) {
+                        return true;
+                    }
                     if (!allGoalFieldLabels.length || !activeGoalFieldLabels.length) return true;
                     if (!isLabelInGoalFieldSet(fieldLabel, allGoalFieldLabels)) return true;
                     return isLabelInGoalFieldSet(fieldLabel, activeGoalFieldLabels);
                 });
-                if (sceneName === '货品全站推广' && !fields.some(fieldLabel => isSceneLabelMatch(fieldLabel, '营销场景'))) {
+                if (
+                    sceneName === '货品全站推广'
+                    && !fields.some(fieldLabel => normalizeSceneRenderFieldToken(fieldLabel) === normalizeSceneRenderFieldToken('营销场景'))
+                ) {
                     fields.unshift('营销场景');
                 }
                 const autoFilledCount = autoFillSceneDefaults({
@@ -17882,6 +17995,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     staticRows.push(buildProxySelectRow('预算类型', 'am-wxt-keyword-budget-type', wizardState.els.budgetTypeSelect, { segmented: true }));
                 }
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
+                if (sceneName === '货品全站推广') {
+                    const marketingSceneKey = normalizeSceneFieldKey('营销场景');
+                    const marketingSceneValue = normalizeSceneSettingValue(
+                        bucket[marketingSceneKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.营销场景
+                        || ''
+                    );
+                    staticRows.push(`
+                        <div class="am-wxt-scene-setting-row">
+                            <div class="am-wxt-scene-setting-label">营销场景</div>
+                            <div class="am-wxt-setting-control">
+                                <input data-scene-field="${Utils.escapeHtml(marketingSceneKey)}" value="${Utils.escapeHtml(marketingSceneValue)}" placeholder="请输入营销场景" />
+                            </div>
+                        </div>
+                    `);
+                }
                 if (isKeywordScene || hasSceneField(/预算|日均预算|每日预算|总预算/)) {
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
@@ -17954,7 +18083,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         bucket[key] = value;
                     }
                     if (options.length < 2 || isApiPathField) {
-                        const forceKeepInputField = /^(营销场景|投放地域|计划组|发布日期)$/.test(token);
+                        const forceKeepInputField = /^(营销场景|目标投产比|ROI目标值|出价目标值|约束值|投放地域|计划组|发布日期)$/.test(token);
                         const shouldKeepInputField = (
                             isApiPathField
                             || (
