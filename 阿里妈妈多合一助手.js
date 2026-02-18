@@ -16897,9 +16897,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return fallbackByBidMode;
             };
             const getStrategyMainLabel = (strategy = {}) => {
+                const explicitPlanName = String(strategy?.planName || '').trim();
+                if (explicitPlanName) return explicitPlanName;
+                const strategyName = String(strategy?.name || '').trim();
+                if (strategyName) return strategyName;
                 const sceneLabel = getCurrentEditorSceneName();
-                const fallback = buildDefaultPlanPrefixByScene(sceneLabel);
-                return String(strategy?.planName || wizardState?.draft?.planNamePrefix || fallback).trim() || fallback;
+                return buildDefaultPlanPrefixByScene(sceneLabel);
             };
             const updateBidModeControls = (modeValue = 'smart') => {
                 const bidMode = normalizeBidMode(modeValue, 'smart');
@@ -19140,6 +19143,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const input = Array.isArray(rawList) && rawList.length ? rawList : fallback;
                 return input.map((item, idx) => {
                     const base = fallback[idx] || fallback[0];
+                    const sceneName = SCENE_OPTIONS.includes(String(item?.sceneName || '').trim())
+                        ? String(item.sceneName).trim()
+                        : (SCENE_OPTIONS.includes(String(wizardState?.draft?.sceneName || '').trim())
+                            ? String(wizardState.draft.sceneName).trim()
+                            : getCurrentEditorSceneName());
                     const id = String(item?.id || base?.id || `strategy_${idx + 1}`).trim();
                     const name = String(item?.name || base?.name || `${getCurrentEditorSceneName()}-策略${idx + 1}`).trim();
                     const enabled = item?.enabled !== false;
@@ -19168,8 +19176,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         bidMode,
                         bidTargetV2,
                         marketingGoal: item?.marketingGoal || base?.marketingGoal || ''
-                    }, {}, wizardState?.draft?.sceneName || getCurrentEditorSceneName()));
+                    }, {}, sceneName));
                     return {
+                        sceneName,
                         id,
                         name,
                         marketingGoal,
@@ -19198,10 +19207,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (wizardState.els.detailTitle) {
                     wizardState.els.detailTitle.textContent = getStrategyMainLabel(strategy);
                 }
+                const strategyScene = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
+                    ? String(strategy.sceneName).trim()
+                    : (SCENE_OPTIONS.includes(String(wizardState.draft?.sceneName || '').trim())
+                        ? String(wizardState.draft.sceneName).trim()
+                        : '关键词推广');
+                strategy.sceneName = strategyScene;
                 if (wizardState.els.sceneSelect) {
-                    const selectedScene = wizardState.draft?.sceneName || '关键词推广';
-                    wizardState.els.sceneSelect.value = SCENE_OPTIONS.includes(selectedScene) ? selectedScene : '关键词推广';
+                    wizardState.els.sceneSelect.value = strategyScene;
                 }
+                if (wizardState.draft) wizardState.draft.sceneName = strategyScene;
                 const currentSceneName = getCurrentEditorSceneName();
                 if (currentSceneName === '关键词推广') {
                     const strategyGoal = normalizeGoalLabel(strategy.marketingGoal || resolveStrategyMarketingGoal(strategy, {}, currentSceneName));
@@ -19241,6 +19256,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 );
                 const sceneName = getCurrentEditorSceneName();
                 const sceneSettings = buildSceneSettingsPayload(sceneName);
+                strategy.sceneName = sceneName;
                 strategy.bidMode = bidMode;
                 if (wizardState.els.bidTargetSelect) strategy.bidTargetV2 = wizardState.els.bidTargetSelect.value || DEFAULTS.bidTargetV2;
                 if (wizardState.els.budgetTypeSelect) strategy.budgetType = wizardState.els.budgetTypeSelect.value || 'day_average';
@@ -19300,6 +19316,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 ).trim();
                 const sceneSettings = buildSceneSettingsPayload(sceneName);
                 const next = {
+                    sceneName,
                     id: createStrategyCloneId('strategy'),
                     name: createNewStrategyName(sceneName),
                     enabled: true,
@@ -19405,6 +19422,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         || buildDefaultPlanPrefixByScene(sceneName)
                     ).trim() || buildDefaultPlanPrefixByScene(sceneName);
                     const next = {
+                        sceneName,
                         id: createStrategyCloneId('strategy'),
                         name: createUniqueStrategyNameByGoal(runtime.marketingGoal),
                         enabled: true,
@@ -19448,16 +19466,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.els.strategyList.innerHTML = '';
                 const enabledCount = wizardState.strategyList.filter(item => item.enabled).length;
                 wizardState.els.strategyCount.textContent = String(enabledCount);
-                const currentSceneName = getCurrentEditorSceneName();
-                const sceneSettingsForStrategy = buildSceneSettingsPayload(currentSceneName);
+                const fallbackSceneName = getCurrentEditorSceneName();
+                const sceneSettingsCache = new Map();
+                const getSceneSettingsFor = (sceneName = '') => {
+                    const targetScene = SCENE_OPTIONS.includes(String(sceneName || '').trim())
+                        ? String(sceneName).trim()
+                        : fallbackSceneName;
+                    if (targetScene === '关键词推广') return {};
+                    if (!sceneSettingsCache.has(targetScene)) {
+                        sceneSettingsCache.set(targetScene, buildSceneSettingsPayload(targetScene));
+                    }
+                    return sceneSettingsCache.get(targetScene) || {};
+                };
                 wizardState.strategyList.forEach((strategy) => {
+                    const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
+                        ? String(strategy.sceneName).trim()
+                        : fallbackSceneName;
+                    strategy.sceneName = strategySceneName;
                     const bidMode = normalizeBidMode(strategy.bidMode || 'smart', 'smart');
                     strategy.bidMode = bidMode;
-                    const goalSceneSettings = currentSceneName === '关键词推广' ? {} : sceneSettingsForStrategy;
-                    strategy.marketingGoal = resolveStrategyMarketingGoal(strategy, goalSceneSettings, currentSceneName);
+                    const goalSceneSettings = getSceneSettingsFor(strategySceneName);
+                    strategy.marketingGoal = resolveStrategyMarketingGoal(strategy, goalSceneSettings, strategySceneName);
                     const bidTargetLabel = BID_TARGET_OPTIONS.find(item => item.value === strategy.bidTargetV2)?.label || '获取成交量';
                     const bidModeLabel = bidMode === 'manual' ? '手动出价' : '智能出价';
                     const goalLabel = normalizeGoalLabel(strategy.marketingGoal || '') || '未设置目标';
+                    const budgetLabel = String(strategy.dayAverageBudget || '').trim() || '100';
                     const copyBatchCount = Math.min(99, Math.max(1, toNumber(strategy.copyBatchCount, 1)));
                     strategy.copyBatchCount = copyBatchCount;
                     const row = document.createElement('div');
@@ -19469,7 +19502,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <span>${Utils.escapeHtml(getStrategyMainLabel(strategy))}</span>
                             </div>
                             <div class="am-wxt-strategy-right">
-                                <span>${Utils.escapeHtml(goalLabel)} / ${Utils.escapeHtml(bidModeLabel)} / ${Utils.escapeHtml(bidTargetLabel)} / 预算 ${Utils.escapeHtml(strategy.dayAverageBudget || wizardState.draft?.dayAverageBudget || '100')} 元</span>
+                                <span>${Utils.escapeHtml(goalLabel)} / ${Utils.escapeHtml(bidModeLabel)} / ${Utils.escapeHtml(bidTargetLabel)} / 预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
                                 <button class="am-wxt-btn am-wxt-copy-btn" data-action="copy">
                                     <span>复制</span>
                                     <span class="am-wxt-copy-multi" data-action="copy-count-badge" title="点击增加，右键减少，滚轮可调节">
@@ -19580,6 +19613,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.draft = wizardState.draft || wizardDefaultDraft();
                 wizardState.draft.schemaVersion = SESSION_DRAFT_SCHEMA_VERSION;
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
+                const syncGlobalDefaults = !editingStrategy || !wizardState.detailVisible;
                 const selectedScene = wizardState.els.sceneSelect?.value || wizardState.draft.sceneName || '关键词推广';
                 wizardState.draft.sceneName = SCENE_OPTIONS.includes(selectedScene) ? selectedScene : '关键词推广';
                 syncSceneSettingValuesFromUI();
@@ -19589,16 +19623,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 } else if (!wizardState.draft.planNamePrefix) {
                     wizardState.draft.planNamePrefix = buildSceneTimePrefix(wizardState.draft.sceneName);
                 }
-                wizardState.draft.dayAverageBudget = wizardState.els.budgetInput?.value?.trim() || wizardState.draft.dayAverageBudget || '';
-                wizardState.draft.defaultBidPrice = wizardState.els.bidInput?.value?.trim() || wizardState.draft.defaultBidPrice || '1';
-                wizardState.draft.bidMode = normalizeBidMode(
-                    wizardState.els.bidModeSelect?.value || wizardState.draft.bidMode || 'smart',
-                    'smart'
-                );
-                wizardState.draft.keywordMode = wizardState.els.modeSelect?.value || wizardState.draft.keywordMode || DEFAULTS.keywordMode;
+                if (syncGlobalDefaults) {
+                    wizardState.draft.dayAverageBudget = wizardState.els.budgetInput?.value?.trim() || wizardState.draft.dayAverageBudget || '';
+                    wizardState.draft.defaultBidPrice = wizardState.els.bidInput?.value?.trim() || wizardState.draft.defaultBidPrice || '1';
+                    wizardState.draft.bidMode = normalizeBidMode(
+                        wizardState.els.bidModeSelect?.value || wizardState.draft.bidMode || 'smart',
+                        'smart'
+                    );
+                    wizardState.draft.keywordMode = wizardState.els.modeSelect?.value || wizardState.draft.keywordMode || DEFAULTS.keywordMode;
+                    wizardState.draft.recommendCount = wizardState.els.recommendCountInput?.value?.trim() || wizardState.draft.recommendCount || String(DEFAULTS.recommendCount);
+                    wizardState.draft.manualKeywords = wizardState.els.manualInput?.value || wizardState.draft.manualKeywords || '';
+                }
                 wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
-                wizardState.draft.recommendCount = wizardState.els.recommendCountInput?.value?.trim() || wizardState.draft.recommendCount || String(DEFAULTS.recommendCount);
-                wizardState.draft.manualKeywords = wizardState.els.manualInput?.value || wizardState.draft.manualKeywords || '';
                 wizardState.draft.fallbackPolicy = normalizeWizardFallbackPolicy(wizardState.draft.fallbackPolicy);
                 if (editingStrategy) {
                     pullDetailFormToStrategy(editingStrategy);
@@ -20249,6 +20285,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.draft = wizardState.draft || wizardDefaultDraft();
                 const prevScene = wizardState.draft.sceneName;
                 const prevPrefix = String(wizardState.draft.planNamePrefix || '').trim();
+                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
+                const applyToAllStrategies = !wizardState.detailVisible || !editingStrategy;
                 wizardState.draft.sceneName = nextScene;
                 const sceneBizCodeHint = resolveSceneBizCodeHint(nextScene);
                 if (sceneBizCodeHint) wizardState.draft.bizCode = sceneBizCodeHint;
@@ -20261,8 +20299,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.sceneSelect.value = nextScene;
                 }
                 const nextPrefix = buildDefaultPlanPrefixByScene(nextScene);
-                wizardState.draft.planNamePrefix = nextPrefix;
-                if (wizardState.els.prefixInput) wizardState.els.prefixInput.value = nextPrefix;
+                if (applyToAllStrategies) {
+                    wizardState.draft.planNamePrefix = nextPrefix;
+                    if (wizardState.els.prefixInput) wizardState.els.prefixInput.value = nextPrefix;
+                }
                 const shouldSyncAutoPlanName = (rawPlanName = '') => {
                     const value = String(rawPlanName || '').trim();
                     if (!value) return true;
@@ -20273,20 +20313,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         return new RegExp(`^${escaped}_\\d{8,14}(?:_|$)`).test(value);
                     });
                 };
-                (wizardState.strategyList || []).forEach(strategy => {
+                const targetStrategies = applyToAllStrategies
+                    ? (wizardState.strategyList || [])
+                    : [editingStrategy];
+                targetStrategies.forEach(strategy => {
                     if (!isPlainObject(strategy)) return;
-                    if (!shouldSyncAutoPlanName(strategy.planName || '')) return;
-                    strategy.planName = '';
+                    strategy.sceneName = nextScene;
+                    if (applyToAllStrategies && shouldSyncAutoPlanName(strategy.planName || '')) {
+                        strategy.planName = '';
+                    }
                 });
                 renderSceneDynamicConfig();
                 const sceneSettingsForStrategy = nextScene === '关键词推广'
                     ? {}
                     : buildSceneSettingsPayload(nextScene);
-                (wizardState.strategyList || []).forEach(strategy => {
+                targetStrategies.forEach(strategy => {
                     if (!isPlainObject(strategy)) return;
                     strategy.marketingGoal = resolveStrategyMarketingGoal(strategy, sceneSettingsForStrategy, nextScene);
                 });
-                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
                 if (editingStrategy && wizardState.detailVisible) {
                     applyStrategyToDetailForm(editingStrategy);
                 }
@@ -20298,7 +20342,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 if (prevScene !== nextScene) {
                     const sceneHintText = sceneBizCodeHint ? `（${sceneBizCodeHint}）` : '';
-                    appendWizardLog(`场景配置已切换：${nextScene}${sceneHintText}${WIZARD_FORCE_API_ONLY_SCENE_CONFIG ? ' [API模式]' : ''}`, 'success');
+                    const scopeText = applyToAllStrategies ? '全部计划' : (editingStrategy?.name || '当前计划');
+                    appendWizardLog(`场景配置已切换：${nextScene}${sceneHintText}（${scopeText}）${WIZARD_FORCE_API_ONLY_SCENE_CONFIG ? ' [API模式]' : ''}`, 'success');
                 }
                 if (!WIZARD_FORCE_API_ONLY_SCENE_CONFIG) {
                     refreshSceneProfileFromSpec(nextScene, {
