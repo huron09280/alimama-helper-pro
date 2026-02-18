@@ -16978,24 +16978,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 const fromScene = detectKeywordGoalFromText(resolveKeywordGoalFromSceneSettings(sceneSettings));
                 if (fromScene) return fromScene;
-                const bidMode = normalizeBidMode(strategy?.bidMode || wizardState?.draft?.bidMode || 'smart', 'smart');
-                const fallbackByBidMode = bidMode === 'manual' ? '自定义推广' : '趋势明星';
-                const isGoalCompatibleWithBidMode = (goal = '') => {
-                    if (!goal) return false;
-                    if (bidMode === 'manual') return goal === '自定义推广';
-                    return goal !== '自定义推广';
-                };
                 const fromStrategy = detectKeywordGoalFromText(strategy?.marketingGoal || '');
-                if (fromStrategy) {
-                    return isGoalCompatibleWithBidMode(fromStrategy) ? fromStrategy : fallbackByBidMode;
-                }
+                if (fromStrategy) return fromStrategy;
                 const fromBidTarget = detectKeywordGoalFromBidTarget(strategy?.bidTargetV2 || '');
-                if (fromBidTarget && isGoalCompatibleWithBidMode(fromBidTarget)) return fromBidTarget;
+                if (fromBidTarget) return fromBidTarget;
                 const fromName = detectKeywordGoalFromText(strategy?.name || '');
-                if (fromName && isGoalCompatibleWithBidMode(fromName)) return fromName;
+                if (fromName) return fromName;
                 const fromPlanName = detectKeywordGoalFromText(strategy?.planName || '');
-                if (fromPlanName && isGoalCompatibleWithBidMode(fromPlanName)) return fromPlanName;
-                return fallbackByBidMode;
+                if (fromPlanName) return fromPlanName;
+                return getSceneMarketingGoalFallbackList(currentScene)[0] || '趋势明星';
             };
             const getStrategyMainLabel = (strategy = {}) => {
                 const explicitPlanName = String(strategy?.planName || '').trim();
@@ -18394,12 +18385,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const activeGoalFieldLabels = dedupeSceneFieldLabelsForRender(
                     collectGoalFieldLabels(matchedGoalSpec).concat(fallbackGoalFieldLabels)
                 );
-                if (sceneName === '关键词推广') {
-                    activeGoalFieldLabels.push(
-                        'campaign.promotionScene',
-                        'campaign.itemSelectedMode'
-                    );
-                }
                 const extraSceneFields = sceneName === '货品全站推广'
                     ? ['目标投产比', '发布日期', '计划组']
                     : [];
@@ -18470,10 +18455,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     || ''
                 );
                 const isFullSiteMaxAmount = sceneName === '货品全站推广' && /最大化拿量/.test(fullSiteBidType);
+                const hiddenKeywordFieldTokenSet = new Set(
+                    [
+                        'campaign.promotionScene',
+                        'campaign.itemSelectedMode'
+                    ].map(item => normalizeSceneRenderFieldToken(item)).filter(Boolean)
+                );
                 let fields = allSceneFields.filter((fieldLabel) => {
                     if (isGoalSelectorField(fieldLabel)) return false;
                     if (!isSceneFieldConnectedToPayload(fieldLabel)) return false;
                     const fieldToken = normalizeSceneRenderFieldToken(fieldLabel);
+                    if (sceneName === '关键词推广' && hiddenKeywordFieldTokenSet.has(fieldToken)) return false;
                     if (isFullSiteMaxAmount && /^(目标投产比|ROI目标值|出价目标值|约束值)$/.test(fieldToken)) return false;
                     if (staticFieldTokenSet.has(fieldToken)) return false;
                     if (
@@ -21172,17 +21164,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const currentGoal = detectKeywordGoalFromText(
                         sceneBucket.营销目标 || sceneBucket.选择卡位方案 || ''
                     );
-                    if (nextMode === 'manual') {
-                        sceneBucket.营销目标 = '自定义推广';
-                        if (sceneBucket.选择卡位方案 !== undefined) {
-                            sceneBucket.选择卡位方案 = '自定义推广';
-                        }
-                        touchedBucket[goalFieldKey] = false;
-                        touchedBucket[schemeFieldKey] = false;
-                    } else if (!currentGoal) {
+                    if (!currentGoal) {
                         const fallbackSmartGoal = detectKeywordGoalFromBidTarget(
                             wizardState.els.bidTargetSelect?.value || wizardState.draft?.bidTargetV2 || DEFAULTS.bidTargetV2
-                        ) || '趋势明星';
+                        ) || (nextMode === 'manual' ? '自定义推广' : '趋势明星');
                         sceneBucket.营销目标 = fallbackSmartGoal;
                         if (sceneBucket.选择卡位方案 !== undefined) {
                             sceneBucket.选择卡位方案 = fallbackSmartGoal;
