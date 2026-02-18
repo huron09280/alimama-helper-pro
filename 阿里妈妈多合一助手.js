@@ -16507,7 +16507,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             </select>
                                         </div>
                                     </div>
-                                    <div class="am-wxt-setting-row">
+                                    <div class="am-wxt-setting-row" id="am-wxt-keyword-bid-target-row">
                                         <div class="am-wxt-setting-label">出价目标</div>
                                         <div class="am-wxt-setting-control">
                                             <div class="am-wxt-option-line" data-bind-select="am-wxt-keyword-bid-target"></div>
@@ -16601,9 +16601,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 </div>
                                 <div class="am-wxt-crowd-list" id="am-wxt-keyword-crowd-list"></div>
                             </div>
-                            <div class="am-wxt-debug-toggle">
-                                <button class="am-wxt-btn" data-am-wxt-debug-toggle="1">打开日志</button>
-                            </div>
                             <div id="am-wxt-keyword-debug-wrap" class="collapsed">
                                 <pre id="am-wxt-keyword-preview"></pre>
                                 <div id="am-wxt-keyword-log"></div>
@@ -16646,6 +16643,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 sceneSelect: overlay.querySelector('#am-wxt-keyword-scene-select'),
                 bidModeSelect: overlay.querySelector('#am-wxt-keyword-bid-mode'),
                 sceneDynamic: overlay.querySelector('#am-wxt-keyword-scene-dynamic'),
+                bidTargetRow: overlay.querySelector('#am-wxt-keyword-bid-target-row'),
                 bidTargetSelect: overlay.querySelector('#am-wxt-keyword-bid-target'),
                 budgetTypeSelect: overlay.querySelector('#am-wxt-keyword-budget-type'),
                 prefixInput: overlay.querySelector('#am-wxt-keyword-prefix'),
@@ -17020,6 +17018,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const isManual = bidMode === 'manual';
                 if (wizardState.els.bidModeSelect) {
                     wizardState.els.bidModeSelect.value = bidMode;
+                }
+                if (wizardState.els.bidTargetRow instanceof HTMLElement) {
+                    wizardState.els.bidTargetRow.style.display = isManual ? 'none' : '';
                 }
                 if (wizardState.els.bidTargetSelect) {
                     wizardState.els.bidTargetSelect.disabled = isManual;
@@ -18731,11 +18732,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 staticRows.push(buildProxySelectRow('场景选择', 'am-wxt-keyword-scene-select', wizardState.els.sceneSelect, { segmented: true }));
                 staticRows.push(buildGoalSelectorRow('营销目标', goalOptions, activeMarketingGoal, { segmented: true }));
                 if (isKeywordScene) {
+                    const keywordBidMode = normalizeBidMode(
+                        wizardState?.els?.bidModeSelect?.value || wizardState?.draft?.bidMode || 'smart',
+                        'smart'
+                    );
                     staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
-                    staticRows.push(buildProxySelectRow('出价目标', 'am-wxt-keyword-bid-target', wizardState.els.bidTargetSelect, {
-                        segmented: true,
-                        resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
-                    }));
+                    if (keywordBidMode !== 'manual') {
+                        staticRows.push(buildProxySelectRow('出价目标', 'am-wxt-keyword-bid-target', wizardState.els.bidTargetSelect, {
+                            segmented: true,
+                            resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
+                        }));
+                    }
                     staticRows.push(buildProxySelectRow('预算类型', 'am-wxt-keyword-budget-type', wizardState.els.budgetTypeSelect, {
                         segmented: true,
                         inlineControlHtml: shouldInlineBudgetWithBudgetType
