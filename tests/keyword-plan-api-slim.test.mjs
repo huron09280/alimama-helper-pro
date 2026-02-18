@@ -89,15 +89,14 @@ test('向导已移除 scan/repair UI 控件与 component/findList 依赖', () =>
   assert.doesNotMatch(source, /component\/findList\.json/, '不应保留 component/findList 依赖');
 });
 
-test('向导运行回退会将页面已添加商品注入 itemSearch（避免空计划误提交）', () => {
+test('向导运行在无计划时直接拦截，不再依赖页面商品回退', () => {
   const runStart = source.indexOf('const handleRun = async () => {');
   assert.ok(runStart > -1, '无法定位 handleRun');
   const runEnd = source.indexOf('wizardState.els.runBtn.onclick = handleRun;', runStart);
   assert.ok(runEnd > runStart, 'handleRun 结构不完整');
   const runBlock = source.slice(runStart, runEnd);
 
-  assert.match(runBlock, /req\.itemSearch\s*=\s*{/, '应在 run 回退分支注入 itemSearch');
-  assert.match(runBlock, /itemIdList:\s*mergedItemIdList/, '应将页面商品 ID 合并写入 itemSearch.itemIdList');
-  assert.match(runBlock, /const fallbackItemCount = Array\.isArray\(req\.itemSearch\?\.itemIdList\)/, '应基于 itemSearch.itemIdList 计算回退数量');
-  assert.match(runBlock, /if \(!req\.plans\.length && !fallbackItemCount\)/, '应在 plans 和回退商品都为空时阻断提交');
+  assert.match(runBlock, /if \(!req\.plans\.length\)\s*{\s*appendWizardLog\('请先添加商品并勾选策略后再创建', 'error'\);/s, '无计划时应直接拦截并提示');
+  assert.doesNotMatch(runBlock, /extractPageAddedItemIds/, 'run 分支不应再读取页面商品回退');
+  assert.doesNotMatch(runBlock, /本地未选商品，已自动读取页面已添加商品/, '不应保留误导性的页面商品回退日志');
 });
