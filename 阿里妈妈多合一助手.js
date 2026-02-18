@@ -15965,6 +15965,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: rgba(79,104,255,0.1);
                     color: #5f76cc;
                     box-shadow: inset 0 0 0 1px rgba(63,94,251,0.62);
+                    border-radius: 10px;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-toggle.am-wxt-site-toggle-wide {
                     flex-wrap: nowrap;
@@ -16136,6 +16137,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: #5f76cc;
                     font-weight: 600;
                     box-shadow: inset 0 0 0 1px rgba(63,94,251,0.62);
+                    border-radius: 10px;
                 }
                 #am-wxt-keyword-modal .am-wxt-option-chip .am-wxt-option-badge {
                     display: inline-flex;
