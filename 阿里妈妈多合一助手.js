@@ -13238,10 +13238,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const launchTimeValue = normalizeSceneSettingValue(launchTimeEntry?.value || '');
                 const quickLiftEnabled = !!launchTimeValue && !/固定时段|关闭|不启用|关/.test(launchTimeValue);
                 if (launchTimeEntry) {
-                    applyCampaign('isQuickLift', quickLiftEnabled, launchTimeEntry.key, launchTimeEntry.value);
                     applyCampaign('quickLiftBudgetCommand.quickLiftSwitch', quickLiftEnabled ? 'true' : 'false', launchTimeEntry.key, launchTimeEntry.value);
-                } else {
-                    applyCampaign('isQuickLift', false, '投放时间', '');
                 }
 
                 const quickLiftBudgetEntry = findSceneSettingEntry(entries, [/一键起量预算/]);
@@ -13884,20 +13881,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             quickLiftCommand.quickLiftLaunchArea = ['all'];
                         }
                         merged.campaign.quickLiftBudgetCommand = quickLiftCommand;
-                        merged.campaign.isQuickLift = true;
                         merged.campaign.dmcTypeElement = 'quickLiftBudgetCommand.quickLiftBudget';
                     } else {
-                        if (Object.keys(quickLiftCommand).length) {
-                            quickLiftCommand.quickLiftSwitch = 'false';
-                            merged.campaign.quickLiftBudgetCommand = quickLiftCommand;
-                        }
-                        merged.campaign.isQuickLift = false;
+                        delete merged.campaign.quickLiftBudgetCommand;
+                        delete merged.campaign.isQuickLift;
                         if (merged.campaign.isMultiTarget) {
                             merged.campaign.dmcTypeElement = 'multiTarget.multiTargetConfigList';
-                        } else if (!merged.campaign.dmcTypeElement) {
+                        } else {
                             delete merged.campaign.dmcTypeElement;
                         }
                     }
+                    delete merged.campaign.isQuickLift;
                     if (!hasOwn(merged.campaign, 'campaignId')) {
                         merged.campaign.campaignId = '';
                     }
