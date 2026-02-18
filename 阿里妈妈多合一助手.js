@@ -13732,6 +13732,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!merged.campaign.sourceChannel) {
                         merged.campaign.sourceChannel = 'onebp';
                     }
+                    const siteDmcType = String(merged.campaign.dmcType || '').trim().toLowerCase();
+                    const siteBudgetValue = [
+                        merged.campaign.dayBudget,
+                        merged.campaign.dayAverageBudget,
+                        runtimeForScene?.storeData?.dayBudget,
+                        runtimeForScene?.storeData?.dayAverageBudget,
+                        runtimeForScene?.dayBudget,
+                        runtimeForScene?.dayAverageBudget
+                    ]
+                        .map(item => toNumber(item, NaN))
+                        .find(item => Number.isFinite(item) && item > 0);
+                    if (siteDmcType === 'unlimit') {
+                        delete merged.campaign.dayBudget;
+                        delete merged.campaign.dayAverageBudget;
+                        delete merged.campaign.totalBudget;
+                        delete merged.campaign.futureBudget;
+                    } else {
+                        merged.campaign.dmcType = 'normal';
+                        if (Number.isFinite(siteBudgetValue) && siteBudgetValue > 0) {
+                            merged.campaign.dayBudget = siteBudgetValue;
+                        }
+                        delete merged.campaign.dayAverageBudget;
+                        delete merged.campaign.totalBudget;
+                        delete merged.campaign.futureBudget;
+                    }
                     delete merged.campaign.bidTargetV2;
                     delete merged.campaign.wordList;
                     delete merged.campaign.wordPackageList;
@@ -20024,6 +20049,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     dayAverageBudget: Math.max(30, toNumber(options.dayAverageBudget, 100))
                 }
             };
+            if (sceneName === '货品全站推广') {
+                plan.budget = {
+                    dayBudget: Math.max(30, toNumber(options.dayAverageBudget, 100))
+                };
+            }
             if (itemId) {
                 plan.itemId = String(itemId).trim();
             }
