@@ -15650,11 +15650,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-scene-inline-input {
                     display: inline-flex;
                     align-items: center;
-                    justify-content: flex-end;
+                    justify-content: flex-start;
                     gap: 6px;
                     min-width: 178px;
                     flex: 0 0 auto;
-                    margin-left: auto;
+                    margin-left: 8px;
                 }
                 #am-wxt-keyword-modal .am-wxt-scene-inline-input .am-wxt-inline-label {
                     font-size: 12px;
