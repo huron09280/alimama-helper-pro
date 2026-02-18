@@ -20649,12 +20649,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 appendWizardLog('已清空会话草稿');
             };
-            [wizardState.els.prefixInput, wizardState.els.budgetInput, wizardState.els.bidInput, wizardState.els.bidModeSelect, wizardState.els.modeSelect, wizardState.els.recommendCountInput, wizardState.els.manualInput, wizardState.els.bidTargetSelect, wizardState.els.budgetTypeSelect, wizardState.els.singleCostEnableInput, wizardState.els.singleCostInput]
+            [wizardState.els.budgetInput, wizardState.els.bidInput, wizardState.els.bidModeSelect, wizardState.els.modeSelect, wizardState.els.recommendCountInput, wizardState.els.manualInput, wizardState.els.bidTargetSelect, wizardState.els.budgetTypeSelect, wizardState.els.singleCostEnableInput, wizardState.els.singleCostInput]
                 .forEach(el => {
                     if (!el) return;
                     el.addEventListener('input', syncDraftFromUI);
                     el.addEventListener('change', syncDraftFromUI);
                 });
+            if (wizardState.els.prefixInput) {
+                const syncPlanNameToStrategyList = () => {
+                    syncDraftFromUI();
+                    renderStrategyList();
+                };
+                wizardState.els.prefixInput.addEventListener('input', syncPlanNameToStrategyList);
+                wizardState.els.prefixInput.addEventListener('change', syncPlanNameToStrategyList);
+            }
             wizardState.els.budgetInput.addEventListener('change', renderStrategyList);
             wizardState.els.bidTargetSelect.addEventListener('change', () => {
                 syncDraftFromUI();
