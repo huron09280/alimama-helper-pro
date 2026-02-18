@@ -18241,14 +18241,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     sceneSettings.出价目标 = bidTargetLabel;
                 }
                 if (targetSceneName === '关键词推广') {
-                    const goalFieldKey = normalizeSceneFieldKey('营销目标');
-                    const schemeFieldKey = normalizeSceneFieldKey('选择卡位方案');
-                    const goalTouched = !!(touchedBucket?.[goalFieldKey] || touchedBucket?.[schemeFieldKey]);
-                    const inferredKeywordGoal = normalizeBidMode(wizardState?.draft?.bidMode || 'smart', 'smart') === 'manual'
-                        ? '自定义推广'
-                        : '趋势明星';
                     const keywordGoalFromScene = resolveKeywordGoalFromSceneSettings(sceneSettings);
-                    if (!goalTouched || !keywordGoalFromScene) {
+                    const inferredKeywordGoal = (() => {
+                        if (keywordGoalFromScene) return keywordGoalFromScene;
+                        const bidModeValue = normalizeBidMode(wizardState?.draft?.bidMode || 'smart', 'smart');
+                        if (bidModeValue === 'manual') return '自定义推广';
+                        return detectKeywordGoalFromBidTarget(bidTargetValue) || '趋势明星';
+                    })();
+                    if (!keywordGoalFromScene) {
                         sceneSettings.营销目标 = inferredKeywordGoal;
                         if (sceneSettings.选择卡位方案 || hasProfileField(/选择卡位方案/)) {
                             sceneSettings.选择卡位方案 = inferredKeywordGoal;
@@ -21165,15 +21165,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const currentSceneName = getCurrentEditorSceneName();
                 if (currentSceneName === '关键词推广') {
                     const nextMode = normalizeBidMode(wizardState.els.bidModeSelect.value || 'smart', 'smart');
-                    const inferredGoal = nextMode === 'manual' ? '自定义推广' : '趋势明星';
                     const sceneBucket = ensureSceneSettingBucket(currentSceneName);
                     const touchedBucket = ensureSceneTouchedBucket(currentSceneName);
-                    sceneBucket.营销目标 = inferredGoal;
-                    if (sceneBucket.选择卡位方案 !== undefined) {
-                        sceneBucket.选择卡位方案 = inferredGoal;
+                    const goalFieldKey = normalizeSceneFieldKey('营销目标');
+                    const schemeFieldKey = normalizeSceneFieldKey('选择卡位方案');
+                    const currentGoal = detectKeywordGoalFromText(
+                        sceneBucket.营销目标 || sceneBucket.选择卡位方案 || ''
+                    );
+                    if (nextMode === 'manual') {
+                        sceneBucket.营销目标 = '自定义推广';
+                        if (sceneBucket.选择卡位方案 !== undefined) {
+                            sceneBucket.选择卡位方案 = '自定义推广';
+                        }
+                        touchedBucket[goalFieldKey] = false;
+                        touchedBucket[schemeFieldKey] = false;
+                    } else if (!currentGoal) {
+                        const fallbackSmartGoal = detectKeywordGoalFromBidTarget(
+                            wizardState.els.bidTargetSelect?.value || wizardState.draft?.bidTargetV2 || DEFAULTS.bidTargetV2
+                        ) || '趋势明星';
+                        sceneBucket.营销目标 = fallbackSmartGoal;
+                        if (sceneBucket.选择卡位方案 !== undefined) {
+                            sceneBucket.选择卡位方案 = fallbackSmartGoal;
+                        }
+                        touchedBucket[goalFieldKey] = false;
+                        touchedBucket[schemeFieldKey] = false;
                     }
-                    touchedBucket[normalizeSceneFieldKey('营销目标')] = false;
-                    touchedBucket[normalizeSceneFieldKey('选择卡位方案')] = false;
                     renderSceneDynamicConfig();
                 }
                 syncDraftFromUI();
