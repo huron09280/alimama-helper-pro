@@ -5644,8 +5644,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 营销目标: '货品全站推广',
                 营销场景: '全域投放 · ROI确定交付',
                 选品方式: '自定义选品',
-                出价方式: '控投产比',
-                出价目标: '净目标投产比',
+                出价方式: '控投产比投放',
+                出价目标: '增加净成交金额',
                 目标投产比: '5',
                 预算类型: '不限预算',
                 投放调优: '多目标优化',
@@ -5725,8 +5725,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '货品全站推广': [
                 { label: '营销场景', options: ['全域投放 · ROI确定交付'], defaultValue: '全域投放 · ROI确定交付' },
                 { label: '选品方式', options: ['自定义选品', '行业推荐选品'], defaultValue: '自定义选品' },
-                { label: '出价方式', options: ['控投产比', '控成本', '最大化拿量'], defaultValue: '控投产比' },
-                { label: '出价目标', options: ['净目标投产比', '稳定投产比', '获取成交量', '增加点击量', '增加收藏加购量', '提升市场渗透'], defaultValue: '净目标投产比' },
+                { label: '出价方式', options: ['控投产比投放', '最大化拿量'], defaultValue: '控投产比投放' },
+                { label: '出价目标', options: ['增加总成交金额', '增加净成交金额'], defaultValue: '增加净成交金额' },
                 { label: '预算类型', options: ['不限预算', '每日预算', '日均预算'], defaultValue: '不限预算' },
                 { label: '投放调优', options: ['多目标优化', '日常优化'], defaultValue: '多目标优化' },
                 { label: '发布日期', options: ['长期投放', '立即投放'], defaultValue: '长期投放' },
@@ -12527,7 +12527,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const mapSceneBidTargetValue = (text = '') => {
             const value = normalizeSceneSettingValue(text);
             if (!value) return '';
-            if (/^(conv|roi|click|fav_cart|market_penetration|similar_item|search_rank|display_shentou|display_roi|display_uv|display_cart|detent|word_penetration_rate|coll_cart)$/i.test(value)) return value;
+            if (/^(conv|roi|click|fav_cart|market_penetration|similar_item|search_rank|display_shentou|display_roi|display_uv|display_cart|detent|word_penetration_rate|coll_cart|ad_strategy_buy|ad_strategy_retained_buy)$/i.test(value)) return value;
+            if (/增加净成交金额|净成交金额|ad_strategy[_\s-]*retained[_\s-]*buy/i.test(value)) return 'ad_strategy_retained_buy';
+            if (/增加总成交金额|总成交金额|ad_strategy[_\s-]*buy/i.test(value)) return 'ad_strategy_buy';
             if (/稳定新客投产比|display[_\s-]*roi/i.test(value)) return 'display_roi';
             if (/扩大新客规模|新客规模|display[_\s-]*uv/i.test(value)) return 'display_uv';
             if (/新客收藏加购|display[_\s-]*cart/i.test(value)) return 'display_cart';
@@ -12960,6 +12962,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             const supportsBidTargetFields = normalizedSceneName === '关键词推广'
                 || normalizedSceneName === '人群推广'
+                || normalizedSceneName === '货品全站推广'
                 || hasOwn(templateCampaign, 'bidTargetV2')
                 || hasOwn(templateCampaign, 'optimizeTarget');
             if (targetEntry && targetCode && supportsBidTargetFields) {
@@ -13637,6 +13640,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
 
                 const supportsBidTargetFields = sceneCapabilities.sceneName === '人群推广'
+                    || sceneCapabilities.sceneName === '货品全站推广'
                     || hasRuntimeTemplateCampaign && (
                         hasOwn(runtimeForScene.solutionTemplate.campaign || {}, 'bidTargetV2')
                         || hasOwn(runtimeForScene.solutionTemplate.campaign || {}, 'optimizeTarget')
@@ -13706,9 +13710,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     merged.campaign.itemSelectedMode = merged.campaign.itemSelectedMode || runtimeForScene?.storeData?.itemSelectedMode || 'user_define';
                     merged.campaign.bidType = merged.campaign.bidType || runtimeForScene?.storeData?.bidType || 'roi_control';
                     merged.campaign.optimizeTarget = merged.campaign.optimizeTarget || runtimeForScene?.storeData?.optimizeTarget || 'ad_strategy_retained_buy';
-                    merged.campaign.constraintType = merged.campaign.constraintType || runtimeForScene?.storeData?.constraintType || 'roi';
-                    if (merged.campaign.constraintValue === undefined || merged.campaign.constraintValue === null || merged.campaign.constraintValue === '') {
-                        merged.campaign.constraintValue = toNumber(runtimeForScene?.storeData?.constraintValue, 5.0);
+                    const siteBidType = String(merged.campaign.bidType || '').trim().toLowerCase();
+                    const needConstraintValue = siteBidType !== 'max_amount';
+                    if (needConstraintValue) {
+                        merged.campaign.constraintType = merged.campaign.constraintType || runtimeForScene?.storeData?.constraintType || 'roi';
+                        if (merged.campaign.constraintValue === undefined || merged.campaign.constraintValue === null || merged.campaign.constraintValue === '') {
+                            merged.campaign.constraintValue = toNumber(runtimeForScene?.storeData?.constraintValue, 5.0);
+                        }
+                    } else {
+                        delete merged.campaign.constraintType;
+                        delete merged.campaign.constraintValue;
                     }
                     if (!isPlainObject(merged.campaign.multiTarget)) {
                         merged.campaign.multiTarget = { multiTargetSwitch: '0' };
@@ -16312,6 +16323,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const BID_TARGET_OPTIONS = [
                 { value: 'conv', label: '获取成交量' },
+                { value: 'ad_strategy_buy', label: '增加总成交金额' },
+                { value: 'ad_strategy_retained_buy', label: '增加净成交金额' },
                 { value: 'similar_item', label: '相似品跟投' },
                 { value: 'search_rank', label: '抢占搜索卡位' },
                 { value: 'market_penetration', label: '提升市场渗透' },
@@ -16515,8 +16528,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 { pattern: /(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式)/, options: [] },
                 { pattern: /(营销场景)/, options: ['全域投放 · ROI确定交付'] },
                 { pattern: /(预算类型)/, options: ['不限预算', '每日预算', '日均预算', '总预算'] },
-                { pattern: /(出价方式)/, options: ['智能出价', '手动出价', '最大化拿量', '控成本', '控投产比'] },
-                { pattern: /(出价目标|优化目标)/, options: ['获取成交量', '稳定投产比', '增加点击量', '增加收藏加购量', '提升市场渗透', '优化留资获客成本', '拉新渗透', '扩大新客规模', '稳定新客投产比', '新客收藏加购', '增加净成交金额', '增加成交金额', '增加观看次数', '增加观看时长'] },
+                { pattern: /(出价方式)/, options: ['智能出价', '手动出价', '最大化拿量', '控成本', '控投产比投放', '控投产比'] },
+                { pattern: /(出价目标|优化目标)/, options: ['增加总成交金额', '增加净成交金额', '获取成交量', '稳定投产比', '增加点击量', '增加收藏加购量', '提升市场渗透', '优化留资获客成本', '拉新渗透', '扩大新客规模', '稳定新客投产比', '新客收藏加购', '增加成交金额', '增加观看次数', '增加观看时长'] },
                 { pattern: /(关键词设置|核心词设置|设置词包)/, options: ['添加关键词', '系统推荐词', '手动自选词'] },
                 { pattern: /(匹配方式)/, options: ['广泛', '中心词', '精准'] },
                 { pattern: /(流量智选)/, options: ['开启', '关闭'] },
@@ -16533,8 +16546,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     营销目标: ['货品全站推广'],
                     营销场景: ['全域投放 · ROI确定交付'],
                     选品方式: ['自定义选品', '行业推荐选品'],
-                    出价方式: ['控投产比', '控成本', '最大化拿量'],
-                    出价目标: ['净目标投产比', '稳定投产比', '获取成交量', '增加点击量', '增加收藏加购量', '提升市场渗透'],
+                    出价方式: ['控投产比投放', '最大化拿量'],
+                    出价目标: ['增加总成交金额', '增加净成交金额'],
                     目标投产比: ['5'],
                     预算类型: ['不限预算', '每日预算', '日均预算'],
                     投放调优: ['多目标优化', '日常优化'],
@@ -17276,16 +17289,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     if (/出价方式/.test(normalizedLabel)) {
                         if (hasVisibleNativeHint(/控投产比投放|控投产比/)) {
-                            return pickByText('控投产比', true);
-                        }
-                        if (hasVisibleNativeHint(/控成本投放|控成本/)) {
-                            return pickByText('控成本', true);
+                            return pickByText('控投产比投放', true)
+                                || pickByText('控投产比', true);
                         }
                         if (hasVisibleNativeHint(/最大化拿量/)) {
                             return pickByText('最大化拿量', true);
                         }
+                        if (hasVisibleNativeHint(/控成本投放|控成本/)) {
+                            return pickByText('控成本', true);
+                        }
                     }
                     if (/(出价目标|优化目标)/.test(normalizedLabel)) {
+                        if (hasVisibleNativeHint(/增加净成交金额|净成交金额/)) {
+                            return pickByText('增加净成交金额', true);
+                        }
+                        if (hasVisibleNativeHint(/增加总成交金额|总成交金额/)) {
+                            return pickByText('增加总成交金额', true);
+                        }
                         if (hasVisibleNativeHint(/净目标投产比|目标投产比|ROI/i)) {
                             return pickByText('净目标投产比', true)
                                 || pickByText('稳定投产比', true);
@@ -17695,6 +17715,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         sceneSettings.平均直接成交成本 = singleCostValue;
                     }
                 }
+                if (targetSceneName === '货品全站推广') {
+                    const siteBidType = normalizeSceneSettingValue(sceneSettings.出价方式 || '');
+                    if (/最大化拿量/.test(siteBidType)) {
+                        delete sceneSettings.目标投产比;
+                        delete sceneSettings.净目标投产比;
+                        delete sceneSettings.ROI目标值;
+                        delete sceneSettings.出价目标值;
+                        delete sceneSettings.约束值;
+                        if (!sceneSettings.预算类型 || /不限预算/.test(sceneSettings.预算类型)) {
+                            sceneSettings.预算类型 = '每日预算';
+                        }
+                    }
+                }
 
                 return sceneSettings;
             };
@@ -17856,10 +17889,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         '手动关键词'
                     ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                 }
+                const fullSiteBidType = normalizeSceneSettingValue(
+                    bucket[normalizeSceneFieldKey('出价方式')]
+                    || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.出价方式
+                    || ''
+                );
+                const isFullSiteMaxAmount = sceneName === '货品全站推广' && /最大化拿量/.test(fullSiteBidType);
                 const fields = allSceneFields.filter((fieldLabel) => {
                     if (isGoalSelectorField(fieldLabel)) return false;
                     if (!isSceneFieldConnectedToPayload(fieldLabel)) return false;
                     const fieldToken = normalizeSceneRenderFieldToken(fieldLabel);
+                    if (isFullSiteMaxAmount && /^(目标投产比|ROI目标值|出价目标值|约束值)$/.test(fieldToken)) return false;
                     if (staticFieldTokenSet.has(fieldToken)) return false;
                     if (
                         sceneName === '货品全站推广'
@@ -18251,7 +18291,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         }
                         syncSceneSettingValuesFromUI();
                         syncDraftFromUI();
-                        if (isGoalSelectorField(fieldKey)) {
+                        const shouldRerenderSceneConfig = isGoalSelectorField(fieldKey)
+                            || (activeScene === '货品全站推广' && isSceneLabelMatch(fieldKey, '出价方式'));
+                        if (shouldRerenderSceneConfig) {
                             renderSceneDynamicConfig();
                         }
                         if (typeof wizardState.buildRequest === 'function') {
