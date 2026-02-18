@@ -5021,12 +5021,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (res.success === false || res.ok === false) return false;
             if (res.info && res.info.ok === false) return false;
             if (res.info && res.info.errorCode) return false;
+            if (Array.isArray(res.ret) && res.ret.length) {
+                const retTokens = res.ret.map(item => String(item || '').trim()).filter(Boolean);
+                const hasRetFail = retTokens.some(token => /^FAIL[_:]/i.test(token));
+                const hasRetSuccess = retTokens.some(token => /^SUCCESS(?:$|[:_])/i.test(token) || token.includes('调用成功'));
+                if (hasRetFail && !hasRetSuccess) return false;
+            }
             return true;
         };
 
         const assertResponseOk = (res, action) => {
             if (isResponseOk(res)) return;
-            const msg = res?.info?.message || res?.message || `${action}失败`;
+            const retMessage = Array.isArray(res?.ret) && res.ret.length
+                ? res.ret.map(item => String(item || '').trim()).filter(Boolean).join(' | ')
+                : '';
+            const punishUrl = String(res?.data?.url || '').trim();
+            const isRiskChallenge = punishUrl.includes('/_____tmd_____/punish');
+            const fallbackMessage = isRiskChallenge
+                ? `${action}失败：触发风控验证，请在页面完成人机验证后重试`
+                : `${action}失败`;
+            const msg = res?.info?.message || res?.message || retMessage || fallbackMessage;
             throw new Error(msg);
         };
 
@@ -17882,9 +17896,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         strategy.marketingGoal = strategyGoal;
                     }
                 }
-                renderSceneDynamicConfig();
                 const bidMode = normalizeBidMode(strategy.bidMode || wizardState.draft?.bidMode || 'smart', 'smart');
-                updateBidModeControls(bidMode);
                 if (wizardState.els.bidTargetSelect) wizardState.els.bidTargetSelect.value = strategy.bidTargetV2 || DEFAULTS.bidTargetV2;
                 if (wizardState.els.budgetTypeSelect) wizardState.els.budgetTypeSelect.value = strategy.budgetType || 'day_average';
                 if (wizardState.els.budgetInput) wizardState.els.budgetInput.value = strategy.dayAverageBudget || wizardState.draft?.dayAverageBudget || '';
@@ -17898,6 +17910,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.singleCostInput.value = strategy.singleCostV2 || '';
                 }
                 updateBidModeControls(bidMode);
+                renderSceneDynamicConfig();
             };
 
             const pullDetailFormToStrategy = (strategy) => {
