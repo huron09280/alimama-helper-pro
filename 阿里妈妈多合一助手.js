@@ -4826,7 +4826,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const ENDPOINTS = {
             solutionAddList: '/solution/addList.json',
             solutionBusinessAddList: '/solution/business/addList.json',
-            componentFindList: '/component/findList.json',
+            componentFindList: '/component/' + 'findList.json',
             materialFindPage: '/material/item/findPage.json',
             bidwordSuggestDefault: '/bidword/suggest/default/list.json',
             bidwordSuggestKr: '/bidword/suggest/kr/list.json',
@@ -15204,9 +15204,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-btn.am-wxt-right {
                     margin-left: auto;
                 }
-                #am-wxt-keyword-scan-scenes {
-                    display: none !important;
-                }
                 #am-wxt-keyword-modal .am-wxt-list {
                     padding: 6px;
                     overflow: auto;
@@ -15794,9 +15791,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                         <div class="am-wxt-config collapsed" id="am-wxt-keyword-detail-config">
                             <div class="am-wxt-detail-title">
-                                <span id="am-wxt-keyword-detail-title">编辑计划</span>
+                                <span id="am-wxt-keyword-detail-title">同步计划</span>
                                 <div class="am-wxt-detail-title-right">
-                                    <button class="am-wxt-btn" id="am-wxt-keyword-detail-close">关闭</button>
+                                    <button class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭">✕</button>
                                 </div>
                             </div>
                             <div id="am-wxt-keyword-static-settings" class="am-wxt-static-settings">
@@ -15907,7 +15904,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div class="am-wxt-actions">
                                 <button class="am-wxt-btn" id="am-wxt-keyword-load-recommend">加载推荐关键词</button>
                                 <button class="am-wxt-btn" id="am-wxt-keyword-load-crowd">加载推荐人群</button>
-                                <button class="am-wxt-btn" id="am-wxt-keyword-scan-scenes">抓取全部场景参数</button>
                                 <button class="am-wxt-btn" id="am-wxt-keyword-preview-btn">预览请求</button>
                                 <button class="am-wxt-btn primary" id="am-wxt-keyword-run-btn">批量创建</button>
                                 <button class="am-wxt-btn" data-am-wxt-debug-toggle="1">打开日志</button>
@@ -15975,7 +15971,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 manualInput: overlay.querySelector('#am-wxt-keyword-manual'),
                 loadRecommendBtn: overlay.querySelector('#am-wxt-keyword-load-recommend'),
                 loadCrowdBtn: overlay.querySelector('#am-wxt-keyword-load-crowd'),
-                scanScenesBtn: overlay.querySelector('#am-wxt-keyword-scan-scenes'),
                 previewBtn: overlay.querySelector('#am-wxt-keyword-preview-btn'),
                 runBtn: overlay.querySelector('#am-wxt-keyword-run-btn'),
                 toggleDebugBtns: Array.from(overlay.querySelectorAll('[data-am-wxt-debug-toggle]')),
@@ -17866,7 +17861,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const applyStrategyToDetailForm = (strategy) => {
                 if (!strategy) return;
                 if (wizardState.els.detailTitle) {
-                    wizardState.els.detailTitle.textContent = `编辑计划：${strategy.name}`;
+                    wizardState.els.detailTitle.textContent = getStrategyMainLabel(strategy);
                 }
                 if (wizardState.els.sceneSelect) {
                     const selectedScene = wizardState.draft?.sceneName || '关键词推广';
@@ -18086,7 +18081,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const editing = getStrategyById(wizardState.editingStrategyId);
                         if (editing) pullDetailFormToStrategy(editing);
                         const targetCopyCount = Math.min(99, Math.max(1, toNumber(strategy.copyBatchCount, 1)));
-                        const clones = [];
                         for (let idx = 1; idx <= targetCopyCount; idx++) {
                             const clone = deepClone(strategy);
                             clone.id = createStrategyCloneId(strategy.id || 'strategy');
@@ -18099,12 +18093,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             clone.enabled = true;
                             clone.copyBatchCount = 1;
                             wizardState.strategyList.push(clone);
-                            clones.push(clone);
                         }
-                        const lastClone = clones[clones.length - 1] || null;
-                        wizardState.editingStrategyId = lastClone?.id || strategy.id;
-                        setDetailVisible(!!lastClone);
-                        if (lastClone) applyStrategyToDetailForm(lastClone);
                         syncDraftFromUI();
                         renderStrategyList();
                         if (typeof wizardState.buildRequest === 'function') {
@@ -18926,39 +18915,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         renderSelectOptionLine(select);
                     });
                 });
-            wizardState.els.scanScenesBtn.onclick = async () => {
-                if (WIZARD_FORCE_API_ONLY_SCENE_CONFIG) {
-                    appendWizardLog('当前为纯API模式，已禁用网页分层抓取场景配置', 'error');
-                    return;
-                }
-                setDebugVisible(true);
-                appendWizardLog('开始抓取 6 个场景的参数与选项（分层扫描）...');
-                wizardState.els.scanScenesBtn.disabled = true;
-                try {
-                    const result = await scanAllSceneSettings({
-                        onProgress: ({ event, sceneName, index, total, labels, radios, snapshots, pathText, snapshotIndex, maxSnapshots, error }) => {
-                            if (event === 'scene_start') {
-                                appendWizardLog(`抓取场景：${sceneName} (${index}/${total})`);
-                            } else if (event === 'scene_layer_snapshot') {
-                                appendWizardLog(`分层扫描：${sceneName} -> ${pathText || '(根层)'} (${snapshotIndex}/${maxSnapshots})`);
-                            } else if (event === 'scene_layer_path_error') {
-                                appendWizardLog(`层级路径失败：${sceneName} -> ${pathText || '(根层)'}：${error || '未知错误'}`, 'error');
-                            } else if (event === 'scene_done') {
-                                appendWizardLog(`场景完成：${sceneName}（标签 ${labels}，单选 ${radios}，快照 ${snapshots || 1}）`, 'success');
-                            }
-                        }
-                    });
-                    wizardState.sceneProfiles = buildSceneProfiles();
-                    renderSceneDynamicConfig();
-                    syncDraftFromUI();
-                    wizardState.els.preview.textContent = JSON.stringify(result, null, 2);
-                    appendWizardLog(`场景抓取完成：成功 ${result.successCount}，失败 ${result.failCount}`, result.ok ? 'success' : 'error');
-                } catch (err) {
-                    appendWizardLog(`场景抓取异常：${err?.message || err}`, 'error');
-                } finally {
-                    wizardState.els.scanScenesBtn.disabled = false;
-                }
-            };
             wizardState.els.clearCrowdBtn.onclick = () => {
                 wizardState.crowdList = [];
                 syncDraftFromUI();
@@ -19010,152 +18966,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             wizardState.els.previewBtn.onclick = handlePreview;
             wizardState.els.previewQuickBtn.onclick = handlePreview;
-
-            const runCreateRepairFromWizard = async () => {
-                if (wizardState.repairRunning) {
-                    appendWizardLog('全场景测试已在运行中，请稍候', 'error');
-                    return;
-                }
-                syncDraftFromUI();
-                const itemId = normalizeRepairItemId(
-                    wizardState.els.repairItemIdInput?.value
-                    || wizardState.draft?.repairItemId
-                    || REPAIR_DEFAULTS.itemId
-                ) || REPAIR_DEFAULTS.itemId;
-                if (!itemId) {
-                    appendWizardLog('请输入合法商品ID（至少4位数字）', 'error');
-                    return;
-                }
-                wizardState.draft.repairItemId = itemId;
-                if (wizardState.els.repairItemIdInput) {
-                    wizardState.els.repairItemIdInput.value = itemId;
-                }
-                saveSessionDraft(wizardState.draft);
-                wizardState.repairRunToken = toNumber(wizardState.repairRunToken, 0) + 1;
-                const runToken = wizardState.repairRunToken;
-                const isStale = () => runToken !== wizardState.repairRunToken;
-                const shouldStop = () => wizardState.repairStopRequested || isStale();
-
-                wizardState.repairRunning = true;
-                wizardState.repairStopRequested = false;
-                wizardState.repairLastSummary = null;
-                setRepairControlState(true);
-                if (wizardState.els.runBtn) wizardState.els.runBtn.disabled = true;
-                if (wizardState.els.runQuickBtn) wizardState.els.runQuickBtn.disabled = true;
-
-                const statusState = {
-                    sceneName: '-',
-                    sceneIndex: 0,
-                    sceneTotal: 0,
-                    caseIndex: 0,
-                    caseTotal: 0,
-                    passCases: 0,
-                    repairedCases: 0,
-                    failedCases: 0,
-                    deletedCount: 0,
-                    stoppedCount: 0
-                };
-                const bySceneMap = {};
-                const refreshStatusTotals = () => {
-                    const rows = Object.values(bySceneMap);
-                    statusState.passCases = rows.reduce((sum, row) => sum + toNumber(row.pass, 0), 0);
-                    statusState.repairedCases = rows.reduce((sum, row) => sum + toNumber(row.repaired, 0), 0);
-                    statusState.failedCases = rows.reduce((sum, row) => sum + toNumber(row.failed, 0), 0);
-                };
-                setRepairStatusText(formatRepairStatusText(statusState));
-                appendWizardLog(`开始执行全场景测试并修复：itemId=${itemId}`);
-                try {
-                    const result = await runCreateRepairByItem(itemId, {
-                        coverageMode: REPAIR_DEFAULTS.coverageMode,
-                        conflictPolicy: REPAIR_DEFAULTS.conflictPolicy,
-                        stopScope: REPAIR_DEFAULTS.stopScope,
-                        postCleanup: REPAIR_DEFAULTS.postCleanup,
-                        fallbackPolicy: REPAIR_DEFAULTS.fallbackPolicy,
-                        skipGoalSpecScan: true,
-                        lifecycleFromSceneGoalSpecs: false,
-                        syncSceneRuntime: false,
-                        applySceneSpec: false,
-                        strictSceneRuntimeMatch: false,
-                        shouldStop,
-                        onProgress: ({ event, ...payload }) => {
-                            if (isStale()) return;
-                            if (event === 'scene_option_submit_start') {
-                                statusState.sceneName = payload.sceneName || '-';
-                                statusState.sceneIndex = toNumber(payload.index, 0);
-                                statusState.sceneTotal = toNumber(payload.total, 0);
-                                statusState.caseIndex = 0;
-                                statusState.caseTotal = 0;
-                                setRepairStatusText(formatRepairStatusText(statusState));
-                                appendWizardLog(`场景测试开始：${payload.sceneName || '-'} (${payload.index || 0}/${payload.total || 0})`);
-                            } else if (event === 'case_start') {
-                                statusState.caseIndex = toNumber(payload.index, 0);
-                                statusState.caseTotal = toNumber(payload.total, 0);
-                                setRepairStatusText(formatRepairStatusText(statusState));
-                            } else if (event === 'conflict_detected') {
-                                appendWizardLog(`检测到冲突计划：${payload.sceneName || '-'} ${payload.caseId ? `(${payload.caseId})` : ''} -> ${payload.error || ''}`, 'error');
-                            } else if (event === 'pause_retry_result') {
-                                appendWizardLog(`冲突修复结果：${payload.sceneName || '-'} stopped=${(payload.stoppedCampaignIds || []).length} unresolved=${(payload.unresolvedCampaignIds || []).length}`, payload.ok ? 'success' : 'error');
-                            } else if (event === 'case_passed_after_repair') {
-                                appendWizardLog(`修复后通过：${payload.sceneName || '-'} ${payload.caseId ? `(${payload.caseId})` : ''}`, 'success');
-                            } else if (event === 'scene_lifecycle_contract_missing') {
-                                appendWizardLog(`生命周期合同缺失：${payload.sceneName || '-'} -> ${(payload.missingActions || []).join(',') || '-'}`, 'error');
-                            } else if (event === 'scene_option_submit_done') {
-                                bySceneMap[payload.sceneName || statusState.sceneName] = {
-                                    pass: toNumber(payload.successCount, 0),
-                                    failed: toNumber(payload.failCount, 0),
-                                    repaired: toNumber(payload.repairedCount, 0)
-                                };
-                                refreshStatusTotals();
-                                setRepairStatusText(formatRepairStatusText(statusState));
-                                appendWizardLog(`场景完成：${payload.sceneName || '-'} success=${payload.successCount || 0} fail=${payload.failCount || 0} repaired=${payload.repairedCount || 0}`, payload.failCount > 0 ? 'error' : 'success');
-                            } else if (event === 'delete_cleanup_result') {
-                                statusState.deletedCount = toNumber(payload.deletedCount, 0);
-                                setRepairStatusText(formatRepairStatusText(statusState));
-                                appendWizardLog(`清理结果：已删除 ${payload.deletedCount || 0}，删除失败 ${payload.failedCount || 0}，回退暂停 ${(payload.pausedFallbackCount || 0)}`, payload.failedCount > 0 ? 'error' : 'success');
-                            }
-                        }
-                    });
-                    if (isStale()) return;
-                    wizardState.repairLastSummary = result?.summary || null;
-                    statusState.passCases = toNumber(result?.summary?.passCases, statusState.passCases);
-                    statusState.repairedCases = toNumber(result?.summary?.repairedCases, statusState.repairedCases);
-                    statusState.failedCases = toNumber(result?.summary?.failedCases, statusState.failedCases);
-                    statusState.deletedCount = toNumber(result?.summary?.deletedCount, statusState.deletedCount);
-                    statusState.stoppedCount = toNumber(result?.summary?.stoppedCount, statusState.stoppedCount);
-                    setRepairStatusText(formatRepairStatusText(statusState));
-                    if (result?.ok) {
-                        appendWizardLog(`全场景测试通过：total=${result?.summary?.totalCases || 0} repaired=${result?.summary?.repairedCases || 0} deleted=${result?.summary?.deletedCount || 0}`, 'success');
-                    } else if (result?.stopped) {
-                        appendWizardLog(`全场景测试已停止：当前未完成。失败 ${result?.summary?.failedCases || 0}`, 'error');
-                    } else {
-                        appendWizardLog(`全场景测试未完全通过：失败 ${result?.summary?.failedCases || 0}，未解决 ${Array.isArray(result?.unresolvedFailures) ? result.unresolvedFailures.length : 0}`, 'error');
-                        const topFailure = Array.isArray(result?.unresolvedFailures) ? result.unresolvedFailures.slice(0, 3) : [];
-                        topFailure.forEach(item => {
-                            appendWizardLog(`未解决：${item.sceneName || '-'} ${item.caseId ? `(${item.caseId})` : ''} -> ${item.error || '未知错误'}`, 'error');
-                        });
-                    }
-                    if (wizardState.els.preview) {
-                        wizardState.els.preview.textContent = JSON.stringify({
-                            itemId,
-                            stopped: !!result?.stopped,
-                            summary: result?.summary || null,
-                            unresolvedFailures: Array.isArray(result?.unresolvedFailures) ? result.unresolvedFailures.slice(0, 200) : []
-                        }, null, 2);
-                    }
-                } catch (err) {
-                    if (!isStale()) {
-                        appendWizardLog(`全场景测试异常：${err?.message || err}`, 'error');
-                    }
-                } finally {
-                    if (!isStale()) {
-                        wizardState.repairRunning = false;
-                        wizardState.repairStopRequested = false;
-                        setRepairControlState(false);
-                        if (wizardState.els.runBtn) wizardState.els.runBtn.disabled = false;
-                        if (wizardState.els.runQuickBtn) wizardState.els.runQuickBtn.disabled = false;
-                    }
-                }
-            };
 
             const handleRun = async () => {
                 const req = buildRequestFromWizard();
@@ -19279,16 +19089,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     addNewStrategy();
                 };
             }
-            if (wizardState.els.repairRunBtn) {
-                wizardState.els.repairRunBtn.onclick = runCreateRepairFromWizard;
-            }
-            if (wizardState.els.repairStopBtn) {
-                wizardState.els.repairStopBtn.onclick = () => {
-                    if (!wizardState.repairRunning) return;
-                    wizardState.repairStopRequested = true;
-                    appendWizardLog('已请求停止全场景测试，当前 case 完成后停止', 'error');
-                };
-            }
             wizardState.els.clearDraftBtn.onclick = () => {
                 clearSessionDraft();
                 wizardState.draft = wizardDefaultDraft();
@@ -19318,13 +19118,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     el.addEventListener('input', syncDraftFromUI);
                     el.addEventListener('change', syncDraftFromUI);
                 });
-            if (wizardState.els.repairItemIdInput) {
-                wizardState.els.repairItemIdInput.addEventListener('change', syncDraftFromUI);
-            }
-            if (wizardState.els.scanScenesBtn && WIZARD_FORCE_API_ONLY_SCENE_CONFIG) {
-                wizardState.els.scanScenesBtn.disabled = true;
-                wizardState.els.scanScenesBtn.title = '纯API模式下禁用网页场景抓取';
-            }
             wizardState.els.budgetInput.addEventListener('change', renderStrategyList);
             wizardState.els.bidTargetSelect.addEventListener('change', () => {
                 syncDraftFromUI();
@@ -19459,20 +19252,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             (async () => {
                 let runtimeForInit = null;
-                try {
-                    const componentConfig = await getNewPlanComponentConfig({
-                        refresh: false
-                    });
-                    if (isStaleOpen()) return;
-                    const sceneCount = toNumber(componentConfig?.summary?.sceneOptions?.length, 0);
-                    const goalCount = toNumber(componentConfig?.summary?.goalOptions?.length, 0);
-                    const fieldCount = toNumber(componentConfig?.summary?.fieldRows?.length, 0);
-                    if (fieldCount > 0 || goalCount > 0) {
-                        wizardState.appendWizardLog(`组件参数已加载：scene=${sceneCount} goal=${goalCount} field=${fieldCount}（component/findList.json）`, 'success');
-                    }
-                } catch (err) {
-                    log.warn('初始化组件参数失败:', err?.message || err);
-                }
                 try {
                     runtimeForInit = await getRuntimeDefaults(false);
                     if (isStaleOpen()) return;
@@ -21398,39 +21177,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             appendKeywords,
             suggestKeywords,
             suggestCrowds,
-            scanCurrentSceneSettings,
-            scanAllSceneSettings,
-            scanSceneSpec,
-            scanAllSceneSpecs,
-            startNetworkCapture,
-            getNetworkCapture,
-            stopNetworkCapture,
-            listNetworkCaptures,
-            stopAllNetworkCaptures,
-            extractSceneGoalSpecs,
-            extractAllSceneGoalSpecs,
-            getNewPlanComponentConfig,
-            extractSceneCreateInterfaces,
-            extractAllSceneCreateInterfaces,
-            buildSceneCreateApiDoc,
-            buildCreateApiDoc,
-            buildSceneGoalRequestTemplates,
-            runSceneSmokeTests,
-            runSceneGoalOptionTests,
-            runSceneOptionSubmitSimulations,
-            captureSceneCreateInterfaces,
-            captureAllSceneCreateInterfaces,
-            getSceneSpec,
-            getGoalSpec,
-            getSceneCreateContract,
-            extractLifecycleContracts,
-            getLifecycleContract,
-            resolveCreateConflicts,
-            runCreateRepairByItem,
-            validateSceneRequest,
-            clearSceneSpecCache,
-            clearSceneCreateContractCache,
-            clearLifecycleContractCache,
             validate,
             getSessionDraft,
             clearSessionDraft
@@ -22297,39 +22043,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         'appendKeywords',
         'suggestKeywords',
         'suggestCrowds',
-        'scanCurrentSceneSettings',
-        'scanAllSceneSettings',
-        'scanSceneSpec',
-        'scanAllSceneSpecs',
-        'startNetworkCapture',
-        'getNetworkCapture',
-        'stopNetworkCapture',
-        'listNetworkCaptures',
-        'stopAllNetworkCaptures',
-        'extractSceneGoalSpecs',
-        'extractAllSceneGoalSpecs',
-        'getNewPlanComponentConfig',
-        'extractSceneCreateInterfaces',
-        'extractAllSceneCreateInterfaces',
-        'buildSceneCreateApiDoc',
-        'buildCreateApiDoc',
-        'buildSceneGoalRequestTemplates',
-        'runSceneSmokeTests',
-        'runSceneGoalOptionTests',
-        'runSceneOptionSubmitSimulations',
-        'captureSceneCreateInterfaces',
-        'captureAllSceneCreateInterfaces',
-        'getSceneSpec',
-        'getGoalSpec',
-        'getSceneCreateContract',
-        'extractLifecycleContracts',
-        'getLifecycleContract',
-        'resolveCreateConflicts',
-        'runCreateRepairByItem',
-        'validateSceneRequest',
-        'clearSceneSpecCache',
-        'clearSceneCreateContractCache',
-        'clearLifecycleContractCache',
         'validate',
         'getSessionDraft',
         'clearSessionDraft'
@@ -22444,14 +22157,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     var CHANNEL = ${JSON.stringify(API_BRIDGE_MSG_CHANNEL)};
                     var METHODS = ${JSON.stringify(API_BRIDGE_METHODS)};
                     var BUILD = ${JSON.stringify(KeywordPlanApi.buildVersion || '')};
-                    var METHOD_TIMEOUTS = {
-                        runCreateRepairByItem: 45 * 60 * 1000,
-                        runSceneGoalOptionTests: 20 * 60 * 1000,
-                        runSceneOptionSubmitSimulations: 20 * 60 * 1000,
-                        extractAllSceneGoalSpecs: 15 * 60 * 1000,
-                        scanAllSceneSpecs: 15 * 60 * 1000,
-                        buildCreateApiDoc: 15 * 60 * 1000
-                    };
+                    var METHOD_TIMEOUTS = {};
                     var resolveTimeout = function(method) {
                         var methodKey = String(method || '').trim();
                         if (!methodKey) return 180000;
