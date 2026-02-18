@@ -5649,6 +5649,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 目标投产比: '5',
                 预算类型: '不限预算',
                 投放调优: '多目标优化',
+                优化目标: '优化加购',
+                多目标预算: '50',
+                一键起量预算: '50',
                 投放时间: '长期投放',
                 投放地域: '全部地域',
                 计划组: '不设置计划组'
@@ -15714,6 +15717,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-site-toggle .am-wxt-option-chip.active {
                     background: #fff;
                 }
+                #am-wxt-keyword-modal .am-wxt-site-toggle.am-wxt-site-toggle-wide {
+                    flex-wrap: nowrap;
+                    max-width: 100%;
+                    overflow-x: auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-inline-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-inline-label {
+                    font-size: 12px;
+                    color: #475569;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-inline-input {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 12px;
+                    color: #475569;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-inline-input input {
+                    width: 92px;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-optimize-hint {
+                    font-size: 12px;
+                    color: #64748b;
+                    line-height: 1.4;
+                }
                 #am-wxt-keyword-modal .am-wxt-site-optimize-link {
                     font-size: 12px;
                     color: #4f68ff;
@@ -16003,6 +16037,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     #am-wxt-keyword-modal .am-wxt-site-optimize-config {
                         padding-left: 0;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-site-optimize-inline-row {
+                        align-items: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-site-optimize-inline-input {
+                        width: 100%;
+                        justify-content: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-site-optimize-inline-input input {
+                        width: min(220px, 100%);
+                        flex: 1 1 auto;
                     }
                     #am-wxt-keyword-modal .am-wxt-site-optimize-config input {
                         width: min(220px, 100%);
@@ -17760,7 +17805,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .filter(Boolean)
                 );
                 const preserveDynamicKeySet = new Set(
-                    ['投放调优', '发布日期', '投放时间', '投放地域', '计划组', '目标投产比']
+                    ['投放调优', '优化目标', '发布日期', '投放时间', '投放地域', '计划组', '目标投产比']
                         .map(label => normalizeSceneFieldKey(label))
                         .filter(Boolean)
                 );
@@ -18034,7 +18079,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                 }
                 if (sceneName === '货品全站推广') {
-                    ['投放调优', '投放时间', '投放地域', '地域设置', '起量时间地域设置']
+                    [
+                        '出价方式',
+                        '出价目标',
+                        '预算类型',
+                        '专属权益',
+                        '投放调优',
+                        '优化目标',
+                        '多目标预算',
+                        '一键起量预算',
+                        '投放时间',
+                        '投放地域',
+                        '地域设置',
+                        '起量时间地域设置'
+                    ]
                         .forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                 }
                 const liveBidTypeValue = normalizeSceneSettingValue(
@@ -18161,6 +18219,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     `;
                 };
 
+                const buildSceneOptionRow = (label, fieldKey, options = [], selectedValue = '', rowOptions = {}) => {
+                    const segmented = rowOptions.segmented !== false;
+                    const inlineControlHtml = String(rowOptions.inlineControlHtml || '').trim();
+                    const optionList = uniqueBy(
+                        (Array.isArray(options) ? options : [])
+                            .concat([selectedValue])
+                            .map(item => normalizeSceneSettingValue(item))
+                            .filter(Boolean),
+                        item => item
+                    ).slice(0, 24);
+                    if (!optionList.length) return '';
+                    const safeValue = optionList.find(opt => isSceneOptionMatch(opt, selectedValue)) || optionList[0];
+                    const optionHtml = optionList.map(opt => `
+                        <button
+                            type="button"
+                            class="am-wxt-option-chip ${isSceneOptionMatch(opt, safeValue) ? 'active' : ''}"
+                            data-scene-option="1"
+                            data-scene-option-value="${Utils.escapeHtml(opt)}"
+                        >${Utils.escapeHtml(opt)}</button>
+                    `).join('');
+                    const controlClass = `am-wxt-setting-control${inlineControlHtml ? ' am-wxt-setting-control-pair' : ''}`;
+                    return `
+                        <div class="am-wxt-scene-setting-row">
+                            <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
+                            <div class="${controlClass}">
+                                <div class="am-wxt-option-line${segmented ? ' segmented' : ''}">${optionHtml}</div>
+                                <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(fieldKey)}" value="${Utils.escapeHtml(safeValue)}" />
+                                ${inlineControlHtml}
+                            </div>
+                        </div>
+                    `;
+                };
+
                 const buildProxyInputRow = (label, targetId, value, placeholder = '') => `
                     <div class="am-wxt-scene-setting-row">
                         <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
@@ -18216,12 +18307,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const hasDynamicBudgetTypeField = fields.some(
                     fieldLabel => normalizeSceneRenderFieldToken(fieldLabel) === budgetTypeFieldToken
                 );
-                const shouldInlineBudgetWithBudgetType = shouldShowBudgetInput && (isKeywordScene || hasDynamicBudgetTypeField);
+                const shouldInlineBudgetWithBudgetType = shouldShowBudgetInput && (isKeywordScene || sceneName === '货品全站推广' || hasDynamicBudgetTypeField);
                 const shouldRenderStandaloneBudgetRow = shouldShowBudgetInput && !shouldInlineBudgetWithBudgetType;
                 const bidConstraintFieldLabel = (() => {
                     if (sceneName !== '货品全站推广' || isFullSiteMaxAmount) return '';
-                    const hasBidTargetField = fields.some(fieldLabel => /^(出价目标|优化目标)$/.test(normalizeSceneRenderFieldToken(fieldLabel)));
-                    if (!hasBidTargetField) return '';
                     const preferredLabels = ['目标投产比', '净目标投产比', 'ROI目标值', '出价目标值', '约束值'];
                     for (const preferredLabel of preferredLabels) {
                         const token = normalizeSceneRenderFieldToken(preferredLabel);
@@ -18279,13 +18368,124 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
                 if (sceneName === '货品全站推广') {
+                    const bidTypeKey = normalizeSceneFieldKey('出价方式');
+                    const bidTypeOptions = resolveSceneFieldOptions(profile, '出价方式');
+                    const bidTypeValue = normalizeSceneSettingValue(
+                        bucket[bidTypeKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.出价方式
+                        || bidTypeOptions[0]
+                        || ''
+                    );
+                    if (bidTypeValue) bucket[bidTypeKey] = bidTypeValue;
+                    staticRows.push(buildSceneOptionRow('出价方式', bidTypeKey, bidTypeOptions, bidTypeValue, { segmented: true }));
+
+                    const bidTargetKey = normalizeSceneFieldKey('出价目标');
+                    const bidTargetOptions = resolveSceneFieldOptions(profile, '出价目标');
+                    const bidTargetValue = normalizeSceneSettingValue(
+                        bucket[bidTargetKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.出价目标
+                        || bidTargetOptions[0]
+                        || ''
+                    );
+                    if (bidTargetValue) bucket[bidTargetKey] = bidTargetValue;
+                    const bidConstraintLabel = normalizeSceneRenderFieldLabel(bidConstraintFieldLabel) || '目标投产比';
+                    staticRows.push(buildSceneOptionRow('出价目标', bidTargetKey, bidTargetOptions, bidTargetValue, {
+                        segmented: true,
+                        inlineControlHtml: (!isFullSiteMaxAmount && bidConstraintFieldKey)
+                            ? buildInlineSceneInputControl(
+                                bidConstraintLabel,
+                                bidConstraintFieldKey,
+                                normalizeSceneSettingValue(bucket[bidConstraintFieldKey] || ''),
+                                `请输入${bidConstraintLabel}`
+                            )
+                            : ''
+                    }));
+
+                    const budgetTypeKey = normalizeSceneFieldKey('预算类型');
+                    const budgetTypeOptions = resolveSceneFieldOptions(profile, '预算类型');
+                    const budgetTypeValue = normalizeSceneSettingValue(
+                        bucket[budgetTypeKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.预算类型
+                        || budgetTypeOptions[0]
+                        || ''
+                    );
+                    if (budgetTypeValue) bucket[budgetTypeKey] = budgetTypeValue;
+                    staticRows.push(buildSceneOptionRow('预算类型', budgetTypeKey, budgetTypeOptions, budgetTypeValue, {
+                        segmented: true,
+                        inlineControlHtml: buildInlineProxyInputControl(
+                            '预算值',
+                            'am-wxt-keyword-budget',
+                            wizardState.els.budgetInput?.value || '',
+                            '请输入预算'
+                        )
+                    }));
+
+                    const benefitKey = normalizeSceneFieldKey('专属权益');
+                    const benefitValue = normalizeSceneSettingValue(bucket[benefitKey] || '智能补贴券');
+                    bucket[benefitKey] = benefitValue;
+                    const benefitOn = !/不启用|关闭|无/.test(benefitValue);
+                    staticRows.push(`
+                        <div class="am-wxt-scene-setting-row">
+                            <div class="am-wxt-scene-setting-label">专属权益</div>
+                            <div class="am-wxt-setting-control">
+                                <div class="am-wxt-site-optimize-main">
+                                    <span class="am-wxt-site-optimize-title">智能补贴券</span>
+                                    <div class="am-wxt-site-toggle" data-scene-toggle-group="site-benefit">
+                                        <button
+                                            type="button"
+                                            class="am-wxt-option-chip ${benefitOn ? 'active' : ''}"
+                                            data-scene-toggle-target="${Utils.escapeHtml(benefitKey)}"
+                                            data-scene-toggle-value="智能补贴券"
+                                        >开</button>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-option-chip ${!benefitOn ? 'active' : ''}"
+                                            data-scene-toggle-target="${Utils.escapeHtml(benefitKey)}"
+                                            data-scene-toggle-value="不启用"
+                                        >关</button>
+                                    </div>
+                                    <span class="am-wxt-site-optimize-link">投放即有机会获得消费者补贴券</span>
+                                </div>
+                                <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(benefitKey)}" value="${Utils.escapeHtml(benefitValue)}" />
+                            </div>
+                        </div>
+                    `);
+
                     const optimizeModeKey = normalizeSceneFieldKey('投放调优');
+                    const optimizeTargetKey = normalizeSceneFieldKey('优化目标');
+                    const optimizeBudgetKey = normalizeSceneFieldKey('多目标预算');
+                    const launchBudgetKey = normalizeSceneFieldKey('一键起量预算');
                     const launchTimeKey = normalizeSceneFieldKey('投放时间');
                     const launchAreaKey = normalizeSceneFieldKey('投放地域');
+                    const optimizeTargetOptions = uniqueBy(
+                        ['优化加购', '增加收藏加购量', '增加总成交金额', '增加净成交金额']
+                            .concat(resolveSceneFieldOptions(profile, '优化目标'))
+                            .map(item => normalizeSceneSettingValue(item))
+                            .filter(Boolean),
+                        item => normalizeSceneOptionText(item)
+                    ).slice(0, 6);
                     const optimizeModeValue = normalizeSceneSettingValue(
                         bucket[optimizeModeKey]
                         || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.投放调优
                         || '多目标优化'
+                    );
+                    const optimizeTargetValue = normalizeSceneSettingValue(
+                        bucket[optimizeTargetKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.优化目标
+                        || optimizeTargetOptions[0]
+                        || '优化加购'
+                    );
+                    const optimizeBudgetValue = normalizeSceneSettingValue(
+                        bucket[optimizeBudgetKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.多目标预算
+                        || wizardState.els.budgetInput?.value
+                        || '50'
+                    );
+                    const launchBudgetValue = normalizeSceneSettingValue(
+                        bucket[launchBudgetKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.一键起量预算
+                        || wizardState.els.budgetInput?.value
+                        || '50'
                     );
                     const launchTimeValue = normalizeSceneSettingValue(
                         bucket[launchTimeKey]
@@ -18298,10 +18498,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         || '全部地域'
                     );
                     bucket[optimizeModeKey] = optimizeModeValue;
+                    bucket[optimizeTargetKey] = optimizeTargetValue;
+                    bucket[optimizeBudgetKey] = optimizeBudgetValue;
+                    bucket[launchBudgetKey] = launchBudgetValue;
                     bucket[launchTimeKey] = launchTimeValue;
                     bucket[launchAreaKey] = launchAreaValue;
                     const optimizeModeOn = !/日常|单目标|基础/.test(optimizeModeValue);
                     const launchBoostOn = /长期|不限|24|全天/.test(launchTimeValue);
+                    const optimizeTargetOptionHtml = optimizeTargetOptions.map(opt => `
+                        <button
+                            type="button"
+                            class="am-wxt-option-chip ${isSceneOptionMatch(opt, optimizeTargetValue) ? 'active' : ''}"
+                            data-scene-toggle-target="${Utils.escapeHtml(optimizeTargetKey)}"
+                            data-scene-toggle-value="${Utils.escapeHtml(opt)}"
+                        >${Utils.escapeHtml(opt)}</button>
+                    `).join('');
                     staticRows.push(`
                         <div class="am-wxt-scene-setting-row">
                             <div class="am-wxt-scene-setting-label">投放调优</div>
@@ -18324,7 +18535,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             >关</button>
                                         </div>
                                     </div>
+                                    <div class="am-wxt-site-optimize-inline-row">
+                                        <span class="am-wxt-site-optimize-inline-label">目标：</span>
+                                        <div class="am-wxt-site-toggle am-wxt-site-toggle-wide" data-scene-toggle-group="optimize-target">
+                                            ${optimizeTargetOptionHtml}
+                                        </div>
+                                        <div class="am-wxt-site-optimize-inline-input">
+                                            <span>预算：</span>
+                                            <input data-scene-field="${Utils.escapeHtml(optimizeBudgetKey)}" value="${Utils.escapeHtml(optimizeBudgetValue)}" placeholder="预算" />
+                                            <span>元</span>
+                                        </div>
+                                    </div>
+                                    <div class="am-wxt-site-optimize-hint">建议预算不低于50元</div>
                                     <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(optimizeModeKey)}" value="${Utils.escapeHtml(optimizeModeValue)}" />
+                                    <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(optimizeTargetKey)}" value="${Utils.escapeHtml(optimizeTargetValue)}" />
                                 </div>
                                 <div class="am-wxt-site-optimize-item">
                                     <div class="am-wxt-site-optimize-main">
@@ -18345,6 +18569,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         </div>
                                         <span class="am-wxt-site-optimize-link">起量时间地域设置</span>
                                     </div>
+                                    <div class="am-wxt-site-optimize-inline-row">
+                                        <div class="am-wxt-site-optimize-inline-input">
+                                            <span>预算：</span>
+                                            <input data-scene-field="${Utils.escapeHtml(launchBudgetKey)}" value="${Utils.escapeHtml(launchBudgetValue)}" placeholder="预算" />
+                                            <span>元</span>
+                                        </div>
+                                    </div>
+                                    <div class="am-wxt-site-optimize-hint">建议预算不低于133元</div>
                                     <div class="am-wxt-site-optimize-config">
                                         <input data-scene-field="${Utils.escapeHtml(launchTimeKey)}" value="${Utils.escapeHtml(launchTimeValue)}" placeholder="投放时间（如：长期投放）" />
                                         <input data-scene-field="${Utils.escapeHtml(launchAreaKey)}" value="${Utils.escapeHtml(launchAreaValue)}" placeholder="投放地域（如：全部地域）" />
