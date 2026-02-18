@@ -15722,6 +15722,60 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     max-width: 100%;
                     overflow-x: auto;
                 }
+                #am-wxt-keyword-modal .am-wxt-site-switch {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-start;
+                    width: 74px;
+                    min-width: 74px;
+                    height: 38px;
+                    border: none;
+                    border-radius: 999px;
+                    padding: 0 12px;
+                    background: #4f68ff;
+                    color: #fff;
+                    cursor: pointer;
+                    font-size: 14px;
+                    line-height: 1;
+                    font-weight: 700;
+                    transition: background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-switch.is-off {
+                    justify-content: flex-end;
+                    background: #cbd5e1;
+                    color: #64748b;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-switch .am-wxt-site-switch-handle {
+                    position: absolute;
+                    top: 4px;
+                    left: 40px;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    background: #fff;
+                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+                    transition: left 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-switch.is-off .am-wxt-site-switch-handle {
+                    left: 4px;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-switch .am-wxt-site-switch-state {
+                    position: relative;
+                    z-index: 1;
+                    pointer-events: none;
+                    user-select: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-switch.is-on .am-wxt-site-switch-state {
+                    padding-right: 24px;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-switch.is-off .am-wxt-site-switch-state {
+                    padding-left: 24px;
+                }
+                #am-wxt-keyword-modal .am-wxt-site-switch:focus-visible {
+                    outline: 2px solid rgba(59, 130, 246, 0.65);
+                    outline-offset: 2px;
+                }
                 #am-wxt-keyword-modal .am-wxt-site-optimize-inline-row {
                     display: flex;
                     align-items: center;
@@ -18252,6 +18306,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     `;
                 };
 
+                const buildSceneSwitchControl = (fieldKey, currentValue, onValue, offValue, switchOptions = {}) => {
+                    const normalizedValue = normalizeSceneSettingValue(currentValue || '');
+                    const normalizedOn = normalizeSceneSettingValue(onValue || '开');
+                    const normalizedOff = normalizeSceneSettingValue(offValue || '关');
+                    const onLabel = normalizeSceneSettingValue(switchOptions.onLabel || '开') || '开';
+                    const offLabel = normalizeSceneSettingValue(switchOptions.offLabel || '关') || '关';
+                    const isOn = isSceneOptionMatch(normalizedValue, normalizedOn);
+                    const stateText = isOn ? onLabel : offLabel;
+                    return `
+                        <button
+                            type="button"
+                            class="am-wxt-site-switch ${isOn ? 'is-on' : 'is-off'}"
+                            data-scene-switch-target="${Utils.escapeHtml(fieldKey)}"
+                            data-scene-switch-on="${Utils.escapeHtml(normalizedOn)}"
+                            data-scene-switch-off="${Utils.escapeHtml(normalizedOff)}"
+                            data-scene-switch-on-label="${Utils.escapeHtml(onLabel)}"
+                            data-scene-switch-off-label="${Utils.escapeHtml(offLabel)}"
+                            aria-pressed="${isOn ? 'true' : 'false'}"
+                        >
+                            <span class="am-wxt-site-switch-handle"></span>
+                            <span class="am-wxt-site-switch-state">${Utils.escapeHtml(stateText)}</span>
+                        </button>
+                    `;
+                };
+
                 const buildProxyInputRow = (label, targetId, value, placeholder = '') => `
                     <div class="am-wxt-scene-setting-row">
                         <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
@@ -18423,27 +18502,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const benefitKey = normalizeSceneFieldKey('专属权益');
                     const benefitValue = normalizeSceneSettingValue(bucket[benefitKey] || '智能补贴券');
                     bucket[benefitKey] = benefitValue;
-                    const benefitOn = !/不启用|关闭|无/.test(benefitValue);
                     staticRows.push(`
                         <div class="am-wxt-scene-setting-row">
                             <div class="am-wxt-scene-setting-label">专属权益</div>
                             <div class="am-wxt-setting-control">
                                 <div class="am-wxt-site-optimize-main">
                                     <span class="am-wxt-site-optimize-title">智能补贴券</span>
-                                    <div class="am-wxt-site-toggle" data-scene-toggle-group="site-benefit">
-                                        <button
-                                            type="button"
-                                            class="am-wxt-option-chip ${benefitOn ? 'active' : ''}"
-                                            data-scene-toggle-target="${Utils.escapeHtml(benefitKey)}"
-                                            data-scene-toggle-value="智能补贴券"
-                                        >开</button>
-                                        <button
-                                            type="button"
-                                            class="am-wxt-option-chip ${!benefitOn ? 'active' : ''}"
-                                            data-scene-toggle-target="${Utils.escapeHtml(benefitKey)}"
-                                            data-scene-toggle-value="不启用"
-                                        >关</button>
-                                    </div>
+                                    ${buildSceneSwitchControl(benefitKey, benefitValue, '智能补贴券', '不启用')}
                                     <span class="am-wxt-site-optimize-link">投放即有机会获得消费者补贴券</span>
                                 </div>
                                 <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(benefitKey)}" value="${Utils.escapeHtml(benefitValue)}" />
@@ -18503,8 +18568,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bucket[launchBudgetKey] = launchBudgetValue;
                     bucket[launchTimeKey] = launchTimeValue;
                     bucket[launchAreaKey] = launchAreaValue;
-                    const optimizeModeOn = !/日常|单目标|基础/.test(optimizeModeValue);
-                    const launchBoostOn = /长期|不限|24|全天/.test(launchTimeValue);
                     const optimizeTargetOptionHtml = optimizeTargetOptions.map(opt => `
                         <button
                             type="button"
@@ -18520,20 +18583,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <div class="am-wxt-site-optimize-item">
                                     <div class="am-wxt-site-optimize-main">
                                         <span class="am-wxt-site-optimize-title">多目标优化</span>
-                                        <div class="am-wxt-site-toggle" data-scene-toggle-group="optimize-mode">
-                                            <button
-                                                type="button"
-                                                class="am-wxt-option-chip ${optimizeModeOn ? 'active' : ''}"
-                                                data-scene-toggle-target="${Utils.escapeHtml(optimizeModeKey)}"
-                                                data-scene-toggle-value="多目标优化"
-                                            >开</button>
-                                            <button
-                                                type="button"
-                                                class="am-wxt-option-chip ${!optimizeModeOn ? 'active' : ''}"
-                                                data-scene-toggle-target="${Utils.escapeHtml(optimizeModeKey)}"
-                                                data-scene-toggle-value="日常优化"
-                                            >关</button>
-                                        </div>
+                                        ${buildSceneSwitchControl(optimizeModeKey, optimizeModeValue, '多目标优化', '日常优化')}
                                     </div>
                                     <div class="am-wxt-site-optimize-inline-row">
                                         <span class="am-wxt-site-optimize-inline-label">目标：</span>
@@ -18553,20 +18603,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <div class="am-wxt-site-optimize-item">
                                     <div class="am-wxt-site-optimize-main">
                                         <span class="am-wxt-site-optimize-title">一键起量</span>
-                                        <div class="am-wxt-site-toggle" data-scene-toggle-group="launch-boost">
-                                            <button
-                                                type="button"
-                                                class="am-wxt-option-chip ${launchBoostOn ? 'active' : ''}"
-                                                data-scene-toggle-target="${Utils.escapeHtml(launchTimeKey)}"
-                                                data-scene-toggle-value="长期投放"
-                                            >开</button>
-                                            <button
-                                                type="button"
-                                                class="am-wxt-option-chip ${!launchBoostOn ? 'active' : ''}"
-                                                data-scene-toggle-target="${Utils.escapeHtml(launchTimeKey)}"
-                                                data-scene-toggle-value="固定时段"
-                                            >关</button>
-                                        </div>
+                                        ${buildSceneSwitchControl(launchTimeKey, launchTimeValue, '长期投放', '固定时段')}
                                         <span class="am-wxt-site-optimize-link">起量时间地域设置</span>
                                     </div>
                                     <div class="am-wxt-site-optimize-inline-row">
@@ -18830,6 +18867,44 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 chip.classList.toggle('active', chip === button);
                             });
                         }
+                    });
+                });
+
+                const syncSceneSwitchVisual = (switchButton, enabled) => {
+                    if (!(switchButton instanceof HTMLButtonElement)) return;
+                    const onLabel = normalizeSceneSettingValue(switchButton.getAttribute('data-scene-switch-on-label') || '开') || '开';
+                    const offLabel = normalizeSceneSettingValue(switchButton.getAttribute('data-scene-switch-off-label') || '关') || '关';
+                    const isOn = !!enabled;
+                    switchButton.classList.toggle('is-on', isOn);
+                    switchButton.classList.toggle('is-off', !isOn);
+                    switchButton.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+                    const stateEl = switchButton.querySelector('.am-wxt-site-switch-state');
+                    if (stateEl) stateEl.textContent = isOn ? onLabel : offLabel;
+                };
+
+                const sceneSwitchButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-switch-target]');
+                sceneSwitchButtons.forEach(button => {
+                    if (!(button instanceof HTMLButtonElement)) return;
+                    button.addEventListener('click', () => {
+                        const fieldKey = String(button.getAttribute('data-scene-switch-target') || '').trim();
+                        const onValue = normalizeSceneSettingValue(button.getAttribute('data-scene-switch-on') || '开') || '开';
+                        const offValue = normalizeSceneSettingValue(button.getAttribute('data-scene-switch-off') || '关') || '关';
+                        if (!fieldKey) return;
+                        const targetControl = Array.from(wizardState.els.sceneDynamic.querySelectorAll('[data-scene-field]')).find(control => (
+                            String(control.getAttribute('data-scene-field') || '').trim() === fieldKey
+                        ));
+                        if (!(targetControl instanceof HTMLInputElement || targetControl instanceof HTMLTextAreaElement)) return;
+                        const currentValue = normalizeSceneSettingValue(targetControl.value);
+                        const nextValue = isSceneOptionMatch(currentValue, onValue) ? offValue : onValue;
+                        targetControl.value = nextValue;
+                        targetControl.dispatchEvent(new Event('input', { bubbles: true }));
+                        targetControl.dispatchEvent(new Event('change', { bubbles: true }));
+                        const isOn = isSceneOptionMatch(nextValue, onValue);
+                        wizardState.els.sceneDynamic.querySelectorAll('[data-scene-switch-target]').forEach(peer => {
+                            if (!(peer instanceof HTMLButtonElement)) return;
+                            if (String(peer.getAttribute('data-scene-switch-target') || '').trim() !== fieldKey) return;
+                            syncSceneSwitchVisual(peer, isOn);
+                        });
                     });
                 });
 
