@@ -13760,6 +13760,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     delete merged.campaign.bidTargetV2;
                     delete merged.campaign.wordList;
                     delete merged.campaign.wordPackageList;
+                    delete merged.campaign.promotionModel;
+                    delete merged.campaign.promotionModelMarketing;
+                    delete merged.campaign.orderChargeType;
+                    delete merged.campaign.orderInfo;
                     const safeSiteCampaignName = String(merged.campaign.campaignName || '').trim();
                     if (!/^[A-Za-z0-9]{2,64}$/.test(safeSiteCampaignName)) {
                         merged.campaign.campaignName = `site${nowStampSeconds()}`;
