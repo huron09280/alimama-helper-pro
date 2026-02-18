@@ -15727,16 +15727,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: inline-flex;
                     align-items: center;
                     justify-content: flex-start;
-                    width: 74px;
-                    min-width: 74px;
-                    height: 38px;
+                    width: 68px;
+                    min-width: 68px;
+                    height: 34px;
                     border: none;
                     border-radius: 999px;
-                    padding: 0 12px;
+                    padding: 0 10px;
                     background: #4f68ff;
                     color: #fff;
                     cursor: pointer;
-                    font-size: 14px;
+                    font-size: 13px;
                     line-height: 1;
                     font-weight: 700;
                     transition: background 0.2s ease;
@@ -15749,9 +15749,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-site-switch .am-wxt-site-switch-handle {
                     position: absolute;
                     top: 4px;
-                    left: 40px;
-                    width: 30px;
-                    height: 30px;
+                    left: 38px;
+                    width: 26px;
+                    height: 26px;
                     border-radius: 50%;
                     background: #fff;
                     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
@@ -15767,10 +15767,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     user-select: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-switch.is-on .am-wxt-site-switch-state {
-                    padding-right: 24px;
+                    padding-right: 20px;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-switch.is-off .am-wxt-site-switch-state {
-                    padding-left: 24px;
+                    padding-left: 20px;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-switch:focus-visible {
                     outline: 2px solid rgba(59, 130, 246, 0.65);
