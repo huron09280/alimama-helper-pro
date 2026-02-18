@@ -17895,7 +17895,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     || ''
                 );
                 const isFullSiteMaxAmount = sceneName === '货品全站推广' && /最大化拿量/.test(fullSiteBidType);
-                const fields = allSceneFields.filter((fieldLabel) => {
+                let fields = allSceneFields.filter((fieldLabel) => {
                     if (isGoalSelectorField(fieldLabel)) return false;
                     if (!isSceneFieldConnectedToPayload(fieldLabel)) return false;
                     const fieldToken = normalizeSceneRenderFieldToken(fieldLabel);
@@ -17916,6 +17916,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     && !fields.some(fieldLabel => normalizeSceneRenderFieldToken(fieldLabel) === normalizeSceneRenderFieldToken('营销场景'))
                 ) {
                     fields.unshift('营销场景');
+                }
+                if (sceneName === '货品全站推广') {
+                    const moveFieldAfter = (list = [], targetLabel = '', anchorLabel = '') => {
+                        const targetToken = normalizeSceneRenderFieldToken(targetLabel);
+                        const anchorToken = normalizeSceneRenderFieldToken(anchorLabel);
+                        if (!targetToken || !anchorToken || targetToken === anchorToken) return list;
+                        const targetIndex = list.findIndex(item => normalizeSceneRenderFieldToken(item) === targetToken);
+                        const anchorIndex = list.findIndex(item => normalizeSceneRenderFieldToken(item) === anchorToken);
+                        if (targetIndex < 0 || anchorIndex < 0) return list;
+                        const next = list.slice();
+                        const [targetField] = next.splice(targetIndex, 1);
+                        const currentAnchorIndex = next.findIndex(item => normalizeSceneRenderFieldToken(item) === anchorToken);
+                        const insertIndex = currentAnchorIndex >= 0 ? currentAnchorIndex + 1 : next.length;
+                        next.splice(insertIndex, 0, targetField);
+                        return next;
+                    };
+                    fields = moveFieldAfter(fields, '目标投产比', '出价目标');
                 }
                 const autoFilledCount = autoFillSceneDefaults({
                     sceneName,
@@ -18161,10 +18178,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             || hasExactOptionMatch(value)
                         )
                     );
-                    const optionList = uniqueBy(
-                        (includeCurrentValue ? [value] : []).concat(options).map(item => normalizeSceneSettingValue(item)).filter(Boolean),
-                        item => item
-                    ).slice(0, 18);
+                    const optionList = (() => {
+                        const baseList = uniqueBy(
+                            (Array.isArray(options) ? options : [])
+                                .map(item => normalizeSceneSettingValue(item))
+                                .filter(Boolean),
+                            item => item
+                        );
+                        if (includeCurrentValue && value && !baseList.some(opt => isSceneOptionMatch(opt, value))) {
+                            baseList.push(value);
+                        }
+                        return baseList.slice(0, 18);
+                    })();
                     const optionHtml = optionList.map(opt => `
                         <button
                             type="button"
