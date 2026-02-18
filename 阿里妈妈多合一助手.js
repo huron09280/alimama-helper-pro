@@ -15637,6 +15637,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 6px;
                     min-width: 0;
                 }
+                #am-wxt-keyword-modal .am-wxt-setting-control.am-wxt-setting-control-pair {
+                    flex-direction: row;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-setting-control.am-wxt-setting-control-pair .am-wxt-option-line.segmented {
+                    flex: 0 1 auto;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-inline-input {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    gap: 6px;
+                    min-width: 178px;
+                    flex: 0 0 auto;
+                    margin-left: auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-inline-input .am-wxt-inline-label {
+                    font-size: 12px;
+                    color: #475569;
+                    line-height: 1.2;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-inline-input input {
+                    width: 120px;
+                }
                 #am-wxt-keyword-modal .am-wxt-static-settings {
                     display: none;
                 }
@@ -15894,6 +15922,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     #am-wxt-keyword-modal .am-wxt-scene-setting-label {
                         line-height: 1.3;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-setting-control.am-wxt-setting-control-pair {
+                        flex-wrap: wrap;
+                        align-items: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-scene-inline-input {
+                        justify-content: flex-start;
+                        min-width: 0;
+                        width: 100%;
+                        margin-left: 0;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-scene-inline-input input {
+                        width: min(220px, 100%);
+                        flex: 1 1 auto;
                     }
                 }
             `;
@@ -17918,8 +17960,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         '手动关键词'
                     ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                 }
+                const liveBidTypeValue = normalizeSceneSettingValue(
+                    wizardState.els.sceneDynamic?.querySelector('input[data-scene-field="出价方式"]')?.value || ''
+                );
                 const fullSiteBidType = normalizeSceneSettingValue(
                     bucket[normalizeSceneFieldKey('出价方式')]
+                    || liveBidTypeValue
                     || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.出价方式
                     || ''
                 );
@@ -17983,6 +18029,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const resolveBadgeText = typeof rowOptions.resolveBadgeText === 'function'
                         ? rowOptions.resolveBadgeText
                         : (() => '');
+                    const inlineControlHtml = String(rowOptions.inlineControlHtml || '').trim();
                     const selectedValue = String(selectEl.value || '');
                     const optionHtml = Array.from(selectEl.options || []).map(option => {
                         const value = String(option?.value || '');
@@ -18000,11 +18047,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             >${textHtml}${badgeHtml}</button>
                         `;
                     }).join('');
+                    const controlClass = `am-wxt-setting-control${inlineControlHtml ? ' am-wxt-setting-control-pair' : ''}`;
                     return `
                         <div class="am-wxt-scene-setting-row">
                             <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
-                            <div class="am-wxt-setting-control">
+                            <div class="${controlClass}">
                                 <div class="am-wxt-option-line${segmented ? ' segmented' : ''}">${optionHtml}</div>
+                                ${inlineControlHtml}
                             </div>
                         </div>
                     `;
@@ -18054,6 +18103,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     </div>
                 `;
 
+                const buildInlineProxyInputControl = (label, targetId, value, placeholder = '') => `
+                    <div class="am-wxt-scene-inline-input">
+                        <span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>
+                        <input
+                            data-proxy-input-target="${Utils.escapeHtml(targetId)}"
+                            value="${Utils.escapeHtml(value || '')}"
+                            placeholder="${Utils.escapeHtml(placeholder || '')}"
+                        />
+                    </div>
+                `;
+
+                const buildInlineSceneInputControl = (label, fieldKey, value, placeholder = '') => `
+                    <div class="am-wxt-scene-inline-input">
+                        <span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>
+                        <input
+                            data-scene-field="${Utils.escapeHtml(fieldKey)}"
+                            value="${Utils.escapeHtml(value || '')}"
+                            placeholder="${Utils.escapeHtml(placeholder || '')}"
+                        />
+                    </div>
+                `;
+
                 const buildProxyTextareaRow = (label, targetId, value, placeholder = '') => `
                     <div class="am-wxt-scene-setting-row">
                         <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
@@ -18069,6 +18140,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const sceneFieldText = uniqueBy((profile.requiredFields || []).concat(metaFieldLabels), item => normalizeSceneLabelToken(item)).join(' ');
                 const hasSceneField = (pattern) => pattern.test(sceneFieldText);
                 const isKeywordScene = sceneName === '关键词推广';
+                const shouldShowBudgetInput = isKeywordScene || hasSceneField(/预算|日均预算|每日预算|总预算/);
+                const budgetTypeFieldToken = normalizeSceneRenderFieldToken('预算类型');
+                const hasDynamicBudgetTypeField = fields.some(
+                    fieldLabel => normalizeSceneRenderFieldToken(fieldLabel) === budgetTypeFieldToken
+                );
+                const shouldInlineBudgetWithBudgetType = shouldShowBudgetInput && (isKeywordScene || hasDynamicBudgetTypeField);
+                const shouldRenderStandaloneBudgetRow = shouldShowBudgetInput && !shouldInlineBudgetWithBudgetType;
+                const bidConstraintFieldLabel = (() => {
+                    if (sceneName !== '货品全站推广' || isFullSiteMaxAmount) return '';
+                    const hasBidTargetField = fields.some(fieldLabel => /^(出价目标|优化目标)$/.test(normalizeSceneRenderFieldToken(fieldLabel)));
+                    if (!hasBidTargetField) return '';
+                    const preferredLabels = ['目标投产比', '净目标投产比', 'ROI目标值', '出价目标值', '约束值'];
+                    for (const preferredLabel of preferredLabels) {
+                        const token = normalizeSceneRenderFieldToken(preferredLabel);
+                        const hit = fields.find(fieldLabel => normalizeSceneRenderFieldToken(fieldLabel) === token);
+                        if (hit) return hit;
+                    }
+                    return '目标投产比';
+                })();
+                const bidConstraintFieldKey = bidConstraintFieldLabel ? normalizeSceneFieldKey(bidConstraintFieldLabel) : '';
+                const bidConstraintFieldToken = bidConstraintFieldLabel ? normalizeSceneRenderFieldToken(bidConstraintFieldLabel) : '';
+                if (sceneName === '货品全站推广' && Object.prototype.hasOwnProperty.call(bucket, 'field')) {
+                    delete bucket.field;
+                }
+                if (sceneName === '货品全站推广' && bidConstraintFieldKey && normalizeSceneSettingValue(bucket[bidConstraintFieldKey]) === '') {
+                    const fallbackBidConstraintValue = normalizeSceneSettingValue(
+                        SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.目标投产比
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.净目标投产比
+                        || ''
+                    );
+                    if (fallbackBidConstraintValue) {
+                        bucket[bidConstraintFieldKey] = fallbackBidConstraintValue;
+                    }
+                }
+                if (sceneName === '货品全站推广' && bidConstraintFieldKey) {
+                    const currentBidConstraintValue = normalizeSceneSettingValue(bucket[bidConstraintFieldKey]);
+                    if (/(增加总成交金额|增加净成交金额|获取成交量|稳定投产比|增加点击量|增加收藏加购量)/.test(currentBidConstraintValue)) {
+                        const fallbackBidConstraintValue = normalizeSceneSettingValue(
+                            SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.目标投产比
+                            || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.净目标投产比
+                            || '5'
+                        );
+                        bucket[bidConstraintFieldKey] = fallbackBidConstraintValue;
+                    }
+                }
                 const staticRows = [];
                 staticRows.push(buildProxySelectRow('场景选择', 'am-wxt-keyword-scene-select', wizardState.els.sceneSelect, { segmented: true }));
                 staticRows.push(buildGoalSelectorRow('营销目标', goalOptions, activeMarketingGoal, { segmented: true }));
@@ -18078,7 +18194,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         segmented: true,
                         resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
                     }));
-                    staticRows.push(buildProxySelectRow('预算类型', 'am-wxt-keyword-budget-type', wizardState.els.budgetTypeSelect, { segmented: true }));
+                    staticRows.push(buildProxySelectRow('预算类型', 'am-wxt-keyword-budget-type', wizardState.els.budgetTypeSelect, {
+                        segmented: true,
+                        inlineControlHtml: shouldInlineBudgetWithBudgetType
+                            ? buildInlineProxyInputControl(
+                                '预算值',
+                                'am-wxt-keyword-budget',
+                                wizardState.els.budgetInput?.value || '',
+                                '请输入预算'
+                            )
+                            : ''
+                    }));
                 }
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
                 if (sceneName === '货品全站推广') {
@@ -18097,7 +18223,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         </div>
                     `);
                 }
-                if (isKeywordScene || hasSceneField(/预算|日均预算|每日预算|总预算/)) {
+                if (shouldRenderStandaloneBudgetRow) {
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
                 if (isKeywordScene) {
@@ -18147,6 +18273,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const gridRows = fields.map(fieldLabel => {
                     const normalizedFieldLabel = normalizeSceneRenderFieldLabel(fieldLabel) || fieldLabel;
                     const key = normalizeSceneFieldKey(normalizedFieldLabel);
+                    const renderFieldToken = normalizeSceneRenderFieldToken(normalizedFieldLabel);
+                    if (bidConstraintFieldToken && renderFieldToken === bidConstraintFieldToken) return '';
                     const options = resolveSceneFieldOptions(profile, normalizedFieldLabel);
                     let value = normalizeSceneSettingValue(bucket[key] || '');
                     const fieldMeta = profile?.fieldMeta?.[key] || {};
@@ -18154,6 +18282,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const isApiPathField = /^(campaign\.|adgroup\.)/i.test(token);
                     const displayFieldLabel = getSceneFieldDisplayLabel(normalizedFieldLabel) || normalizedFieldLabel;
                     const optionType = resolveSceneFieldOptionType(normalizedFieldLabel);
+                    const inlineControlHtml = (() => {
+                        if (shouldInlineBudgetWithBudgetType && renderFieldToken === budgetTypeFieldToken) {
+                            return buildInlineProxyInputControl(
+                                '预算值',
+                                'am-wxt-keyword-budget',
+                                wizardState.els.budgetInput?.value || '',
+                                '请输入预算'
+                            );
+                        }
+                        if (bidConstraintFieldKey && /^(出价目标|优化目标)$/.test(renderFieldToken)) {
+                            const fieldLabelText = normalizeSceneRenderFieldLabel(bidConstraintFieldLabel) || bidConstraintFieldLabel || '目标投产比';
+                            const fieldValue = normalizeSceneSettingValue(bucket[bidConstraintFieldKey] || '');
+                            return buildInlineSceneInputControl(
+                                fieldLabelText,
+                                bidConstraintFieldKey,
+                                fieldValue,
+                                `请输入${fieldLabelText}`
+                            );
+                        }
+                        return '';
+                    })();
+                    const rowControlClass = `am-wxt-setting-control${inlineControlHtml ? ' am-wxt-setting-control-pair' : ''}`;
                     const hasExactOptionMatch = (candidate = '') => {
                         const normalizedCandidate = normalizeSceneOptionText(candidate);
                         if (!normalizedCandidate) return false;
@@ -18192,8 +18342,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         return `
                             <div class="am-wxt-scene-setting-row">
                                 <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(displayFieldLabel)}</div>
-                                <div class="am-wxt-setting-control">
+                                <div class="${rowControlClass}">
                                     <input data-scene-field="${Utils.escapeHtml(key)}" value="${Utils.escapeHtml(value)}" placeholder="${isApiPathField ? '可填 JSON / 数字 / 布尔 / 文本' : `请输入${Utils.escapeHtml(normalizedFieldLabel)}`}" />
+                                    ${inlineControlHtml}
                                     ${optionHint ? `<div style="margin-top:4px;font-size:12px;color:#6b7280;">${Utils.escapeHtml(optionHint)}</div>` : ''}
                                 </div>
                             </div>
@@ -18230,9 +18381,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return `
                         <div class="am-wxt-scene-setting-row">
                             <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(displayFieldLabel)}</div>
-                            <div class="am-wxt-setting-control">
+                            <div class="${rowControlClass}">
                                 <div class="am-wxt-option-line segmented">${optionHtml}</div>
                                 <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(key)}" value="${Utils.escapeHtml(value)}" />
+                                ${inlineControlHtml}
                             </div>
                         </div>
                     `;
@@ -18300,7 +18452,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 sceneOptionButtons.forEach(button => {
                     button.addEventListener('click', () => {
                         const row = button.closest('.am-wxt-scene-setting-row');
-                        const hiddenControl = row?.querySelector('input[data-scene-field]');
+                        const hiddenControl = row?.querySelector('input.am-wxt-hidden-control[data-scene-field]')
+                            || row?.querySelector('input[data-scene-field]');
                         if (!(hiddenControl instanceof HTMLInputElement)) return;
                         const nextValue = String(button.getAttribute('data-scene-option-value') || '').trim();
                         hiddenControl.value = nextValue;
