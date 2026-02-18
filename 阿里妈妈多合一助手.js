@@ -15166,15 +15166,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                         const errSummary = outcome.failures.map(item => `${item.planName}: ${item.error}`).join('；');
                         batchError = new Error(errSummary || '服务端未返回 campaignId');
+                        const immediateRetry = !outcome.successes.length && attempt < batchRetry + 1;
                         emitProgress(options, 'submit_batch_success', {
                             batchIndex: batchIndex + 1,
                             createdCount: outcome.successes.length,
                             failedCount: outcome.failures.length,
                             endpoint: batchEndpoint,
-                            error: batchError.message
+                            error: batchError.message,
+                            pendingRetry: outcome.failures.length > 0,
+                            immediateRetry
                         });
 
-                        if (!outcome.successes.length && attempt < batchRetry + 1) {
+                        if (immediateRetry) {
                             emitProgress(options, 'submit_batch_retry', {
                                 batchIndex: batchIndex + 1,
                                 attempt,
@@ -20972,10 +20975,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const adgroupKeys = Array.isArray(payload.adgroupKeys) ? payload.adgroupKeys.join(',') : '';
                         appendWizardLog(`${sceneTag}提交预览：scene=${payload.sceneName || '-'} goal=${payload.marketingGoal || '-'} promotionScene=${payload.promotionScene || '-'} bidType=${payload.bidTypeV2 || '-'} bidTarget=${payload.bidTargetV2 || '-'} optimizeTarget=${payload.optimizeTarget || '-'} bidMode=${payload.bidMode || '-'} endpoint=${payload.submitEndpoint || '-'} materialId=${payload.materialId || '-'} wordList=${payload.wordListCount || 0} wordPackage=${payload.wordPackageCount || 0} fallbackTriggered=${payload.fallbackTriggered ? 'yes' : 'no'} goalFallback=${payload.goalFallbackUsed ? 'yes' : 'no'} campaignKeys=[${campaignKeys}] adgroupKeys=[${adgroupKeys}]`);
                     } else if (event === 'submit_batch_retry') {
-                        appendWizardLog(`${sceneTag}批次重试 #${payload.attempt}：${payload.error}`, 'error');
+                        appendWizardLog(`${sceneTag}批次重试 #${payload.attempt}：${payload.error}`);
                     } else if (event === 'submit_batch_success') {
                         if (payload.failedCount > 0) {
-                            appendWizardLog(`${sceneTag}批次部分成功：成功 ${payload.createdCount}，失败 ${payload.failedCount}${payload.error ? `（${payload.error}）` : ''}`, 'error');
+                            const pendingText = payload.pendingRetry ? '，进入重试流程' : '';
+                            const level = payload.pendingRetry ? undefined : 'error';
+                            appendWizardLog(`${sceneTag}批次部分成功：成功 ${payload.createdCount}，失败 ${payload.failedCount}${payload.error ? `（${payload.error}）` : ''}${pendingText}`, level);
                         } else {
                             appendWizardLog(`${sceneTag}批次成功：${payload.createdCount} 个`, 'success');
                         }
