@@ -76,3 +76,35 @@ test('关键词自定义推广会清理资源位列表避免接口系统异常',
     '关键词自定义推广未清理 adzoneList'
   );
 });
+
+test('关键词出价模式判定会读取目标强制覆盖来源避免误判手动', () => {
+  const block = getBlock(
+    'const resolvePlanBidMode = ({ plan = {}, request = {}, runtime = {}, campaign = {} } = {}) => {',
+    'const normalizeKeywordWordListForSubmit = (wordList = []) => {'
+  );
+  assert.match(
+    block,
+    /plan\?\.__goalResolution\?\.resolvedMarketingGoal/,
+    '未读取计划级目标解析结果'
+  );
+  assert.match(
+    block,
+    /request\?\.__goalResolution\?\.resolvedMarketingGoal/,
+    '未读取请求级目标解析结果'
+  );
+  assert.match(
+    block,
+    /plan\?\.goalForcedCampaignOverride\?\.promotionScene/,
+    '未读取计划级目标强制营销场景'
+  );
+  assert.match(
+    block,
+    /request\?\.goalForcedCampaignOverride\?\.promotionScene/,
+    '未读取请求级目标强制营销场景'
+  );
+  assert.match(
+    block,
+    /request\?\.sceneForcedCampaignOverride\?\.promotionScene/,
+    '未读取场景级营销场景覆盖'
+  );
+});

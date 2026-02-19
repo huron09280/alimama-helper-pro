@@ -11962,18 +11962,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const resolvePlanBidMode = ({ plan = {}, request = {}, runtime = {}, campaign = {} } = {}) => {
             const keywordGoal = normalizeGoalLabel(
                 plan?.marketingGoal
+                || plan?.__goalResolution?.resolvedMarketingGoal
                 || request?.marketingGoal
                 || request?.common?.marketingGoal
+                || request?.__goalResolution?.resolvedMarketingGoal
                 || ''
             );
             const keywordSceneHint = String(
                 plan?.campaignOverride?.promotionScene
+                || plan?.goalForcedCampaignOverride?.promotionScene
+                || request?.sceneForcedCampaignOverride?.promotionScene
+                || request?.goalForcedCampaignOverride?.promotionScene
+                || request?.common?.campaignOverride?.promotionScene
                 || request?.promotionScene
                 || campaign?.promotionScene
                 || runtime?.promotionScene
                 || ''
             ).trim();
-            if (keywordGoal === '自定义推广' || keywordSceneHint === 'promotion_scene_search_user_define') {
+            const keywordItemModeHint = String(
+                plan?.campaignOverride?.itemSelectedMode
+                || plan?.goalForcedCampaignOverride?.itemSelectedMode
+                || request?.sceneForcedCampaignOverride?.itemSelectedMode
+                || request?.goalForcedCampaignOverride?.itemSelectedMode
+                || request?.common?.campaignOverride?.itemSelectedMode
+                || request?.itemSelectedMode
+                || campaign?.itemSelectedMode
+                || runtime?.itemSelectedMode
+                || ''
+            ).trim();
+            if (keywordGoal === '自定义推广'
+                || keywordSceneHint === 'promotion_scene_search_user_define'
+                || keywordItemModeHint === 'user_define') {
                 // 线上接口当前对自定义推广手动出价稳定性较差，统一走智能出价确保可创建。
                 return 'smart';
             }
@@ -11985,8 +12004,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (fromRequest) return fromRequest;
             const fromPlanCampaign = normalizeBidMode(plan?.campaignOverride?.bidTypeV2 || '', '');
             if (fromPlanCampaign) return fromPlanCampaign;
+            const fromPlanGoalCampaign = normalizeBidMode(plan?.goalForcedCampaignOverride?.bidTypeV2 || '', '');
+            if (fromPlanGoalCampaign) return fromPlanGoalCampaign;
             const fromCommonCampaign = normalizeBidMode(request?.common?.campaignOverride?.bidTypeV2 || '', '');
             if (fromCommonCampaign) return fromCommonCampaign;
+            const fromSceneForcedCampaign = normalizeBidMode(request?.sceneForcedCampaignOverride?.bidTypeV2 || '', '');
+            if (fromSceneForcedCampaign) return fromSceneForcedCampaign;
+            const fromGoalForcedCampaign = normalizeBidMode(request?.goalForcedCampaignOverride?.bidTypeV2 || '', '');
+            if (fromGoalForcedCampaign) return fromGoalForcedCampaign;
             const fromRequestCampaign = normalizeBidMode(request?.bidTypeV2 || '', '');
             if (fromRequestCampaign) return fromRequestCampaign;
             const fromCampaign = normalizeBidMode(campaign?.bidTypeV2 || '', '');
