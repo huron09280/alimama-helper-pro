@@ -154,8 +154,13 @@ test('场景配置中的计划名称位于营销目标下方', () => {
   );
 });
 
-test('场景配置隐藏默认关键词出价与推荐词目标数', () => {
+test('场景配置隐藏关键词模式、默认关键词出价与推荐词目标数', () => {
   const renderBlock = getRenderSceneDynamicConfigBlock();
+  assert.doesNotMatch(
+    renderBlock,
+    /staticRows\.push\(buildProxySelectRow\('关键词模式'/,
+    '场景配置仍在展示“关键词模式”'
+  );
   assert.doesNotMatch(
     renderBlock,
     /staticRows\.push\(buildProxyInputRow\('默认关键词出价'/,

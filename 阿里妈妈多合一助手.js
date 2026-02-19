@@ -20281,7 +20281,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
                 if (isKeywordScene) {
-                    staticRows.push(buildProxySelectRow('关键词模式', 'am-wxt-keyword-mode', wizardState.els.modeSelect, { segmented: true }));
                     staticRows.push(`
                         <div class="am-wxt-scene-setting-row">
                             <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
