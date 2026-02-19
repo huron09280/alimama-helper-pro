@@ -28,7 +28,7 @@ test('自定义推广已提供弹窗配置入口并绑定到 API 字段', () => 
     '缺少弹窗触发器渲染逻辑'
   );
 
-  for (const trigger of ['crowd', 'launchPeriod', 'launchArea']) {
+  for (const trigger of ['crowd', 'adzone', 'launchPeriod', 'launchArea']) {
     assert.match(
       block,
       new RegExp(`trigger:\\s*'${escapeRegExp(trigger)}'`),
@@ -36,7 +36,7 @@ test('自定义推广已提供弹窗配置入口并绑定到 API 字段', () => 
     );
   }
 
-  for (const fieldKey of ['campaign.crowdList', 'adgroup.rightList', 'campaign.launchPeriodList', 'campaign.launchAreaStrList']) {
+  for (const fieldKey of ['campaign.crowdList', 'adgroup.rightList', 'campaign.adzoneList', 'campaign.launchPeriodList', 'campaign.launchAreaStrList']) {
     assert.match(
       block,
       new RegExp(`const\\s+\\w+\\s*=\\s*'${escapeRegExp(fieldKey)}'`),
@@ -82,7 +82,7 @@ test('自定义推广允许通过 direct API 字段提交弹窗配置', () => {
     '提交流程未覆盖 adgroup.* direct 字段'
   );
 
-  for (const directKey of ['launchPeriodList', 'launchAreaStrList', 'crowdList', 'rightList']) {
+  for (const directKey of ['adzoneList', 'launchPeriodList', 'launchAreaStrList', 'crowdList', 'rightList']) {
     assert.match(
       mappingBlock,
       new RegExp(escapeRegExp(directKey)),

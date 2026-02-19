@@ -19184,6 +19184,49 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return `已配置 ${list.length} 个地域`;
                 };
 
+                const isAdzoneStatusEnabled = (item = {}) => {
+                    if (!isPlainObject(item)) return false;
+                    const statusCandidate = [
+                        item.status,
+                        item.enabled,
+                        item.state,
+                        item.switch
+                    ].find(value => value !== undefined && value !== null && String(value).trim() !== '');
+                    if (statusCandidate === undefined) return true;
+                    if (typeof statusCandidate === 'boolean') return statusCandidate;
+                    const text = String(statusCandidate).trim().toLowerCase();
+                    if (!text) return true;
+                    if (['0', 'false', 'off', 'close', 'closed', '关', '关闭', '否', 'no'].includes(text)) return false;
+                    return true;
+                };
+
+                const setAdzoneStatus = (item = {}, enabled = true) => {
+                    const source = isPlainObject(item) ? deepClone(item) : {};
+                    const boolEnabled = !!enabled;
+                    if (hasOwn(source, 'status') || (!hasOwn(source, 'enabled') && !hasOwn(source, 'state') && !hasOwn(source, 'switch'))) {
+                        source.status = boolEnabled ? '1' : '0';
+                        return source;
+                    }
+                    if (hasOwn(source, 'enabled')) {
+                        source.enabled = boolEnabled;
+                    } else if (hasOwn(source, 'state')) {
+                        source.state = boolEnabled ? 1 : 0;
+                    } else if (hasOwn(source, 'switch')) {
+                        source.switch = boolEnabled ? '1' : '0';
+                    } else {
+                        source.status = boolEnabled ? '1' : '0';
+                    }
+                    return source;
+                };
+
+                const describeAdzoneSummary = (rawValue = '') => {
+                    const list = parseScenePopupJsonArray(rawValue, [])
+                        .filter(item => isPlainObject(item));
+                    if (!list.length) return '沿用默认资源位';
+                    const enabledCount = list.filter(item => isAdzoneStatusEnabled(item)).length;
+                    return `已开启 ${enabledCount}/${list.length} 个资源位`;
+                };
+
                 const describeCrowdSummary = (campaignRaw = '', adgroupRaw = '') => {
                     const campaignList = parseScenePopupJsonArray(campaignRaw, []);
                     const adgroupList = parseScenePopupJsonArray(adgroupRaw, []);
@@ -19554,6 +19597,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         };
                         const crowdCampaignField = 'campaign.crowdList';
                         const crowdAdgroupField = 'adgroup.rightList';
+                        const adzoneField = 'campaign.adzoneList';
                         const launchPeriodField = 'campaign.launchPeriodList';
                         const launchAreaField = 'campaign.launchAreaStrList';
                         const crowdCampaignRaw = normalizeSceneSettingValue(
@@ -19597,8 +19641,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const launchAreaRaw = JSON.stringify(
                             launchAreaList.length ? launchAreaList : ['all']
                         );
+                        const adzoneList = parseScenePopupJsonArray(
+                            normalizeSceneSettingValue(
+                                bucket[adzoneField]
+                                || bucket[normalizeSceneFieldKey(adzoneField)]
+                                || '[]'
+                            ),
+                            []
+                        )
+                            .filter(item => isPlainObject(item))
+                            .map(item => deepClone(item));
+                        const adzoneRaw = JSON.stringify(adzoneList);
                         bucket[crowdCampaignField] = crowdCampaignRaw;
                         bucket[crowdAdgroupField] = crowdAdgroupRaw;
+                        bucket[adzoneField] = adzoneRaw;
                         bucket[launchPeriodField] = launchPeriodRaw;
                         bucket[launchAreaField] = launchAreaRaw;
                         const itemModeCode = normalizeSceneSettingValue(
@@ -19644,6 +19700,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             aliases: ['设置创意', '创意模式'],
                             options: ['智能', '专业', '极简'],
                             defaultValue: '智能'
+                        });
+                        pushKeywordCustomSettingRow({
+                            label: '投放资源位',
+                            aliases: ['资源位设置', '投放资源位/投放地域/投放时间', '高级设置'],
+                            options: ['平台优选', '自定义资源位'],
+                            defaultValue: '平台优选',
+                            popup: {
+                                trigger: 'adzone',
+                                title: '配置投放资源位',
+                                buttonLabel: '配置资源位',
+                                summary: describeAdzoneSummary(adzoneRaw),
+                                hiddenFields: [
+                                    { fieldKey: adzoneField, value: adzoneRaw }
+                                ]
+                            }
                         });
                         pushKeywordCustomSettingRow({
                             label: '投放时间',
@@ -20227,7 +20298,138 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const findPopupControl = (fieldKey) => row.querySelector(`input[data-scene-field="${fieldKey}"][data-scene-popup-field="${trigger}"]`);
                         const findMainControl = () => row.querySelector('input.am-wxt-hidden-control[data-scene-field]:not([data-scene-popup-field])');
 
-                        if (trigger === 'launchPeriod') {
+                        if (trigger === 'adzone') {
+                            const adzoneControl = findPopupControl('campaign.adzoneList');
+                            if (!(adzoneControl instanceof HTMLInputElement)) return;
+                            const normalizeAdzoneList = (rawValue = '') => {
+                                const parsed = parseScenePopupJsonArray(rawValue, []);
+                                return parsed
+                                    .map((item, idx) => {
+                                        if (isPlainObject(item)) return deepClone(item);
+                                        const token = normalizeSceneSettingValue(item);
+                                        if (!token) return null;
+                                        return {
+                                            adzoneCode: token,
+                                            adzoneName: token || `资源位${idx + 1}`,
+                                            status: '1'
+                                        };
+                                    })
+                                    .filter(item => isPlainObject(item));
+                            };
+                            const getAdzoneName = (item = {}, idx = 0) => (
+                                normalizeSceneSettingValue(
+                                    item.adzoneName
+                                    || item.name
+                                    || item.title
+                                    || item.adzoneCode
+                                    || item.code
+                                    || item.resourceCode
+                                    || item.resourceName
+                                    || item.tagName
+                                ) || `资源位${idx + 1}`
+                            );
+                            const rawValue = normalizeSceneSettingValue(adzoneControl.value || '') || '[]';
+                            const result = await openScenePopupDialog({
+                                title: popupTitle || '配置投放资源位',
+                                bodyHtml: `
+                                    <div class="am-wxt-scene-popup-tips">支持逐个开关资源位，并保留原始 JSON 字段用于提交。无配置时将沿用网页默认资源位。</div>
+                                    <div class="am-wxt-scene-popup-actions">
+                                        <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="on">全部开启</button>
+                                        <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="off">全部关闭</button>
+                                    </div>
+                                    <div class="am-wxt-scene-popup-adzone-list" data-scene-popup-adzone-list="1"></div>
+                                    <label class="am-wxt-scene-popup-label">资源位 JSON（campaign.adzoneList）</label>
+                                    <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="adzone"></textarea>
+                                `,
+                                onMounted: (mask) => {
+                                    const editor = mask.querySelector('[data-scene-popup-editor="adzone"]');
+                                    const listEl = mask.querySelector('[data-scene-popup-adzone-list]');
+                                    if (!(editor instanceof HTMLTextAreaElement) || !(listEl instanceof HTMLElement)) return;
+                                    let stateList = normalizeAdzoneList(rawValue);
+                                    const syncEditor = () => {
+                                        editor.value = JSON.stringify(stateList, null, 2);
+                                    };
+                                    const renderList = () => {
+                                        if (!stateList.length) {
+                                            listEl.innerHTML = '<div class="am-wxt-scene-popup-tips">当前未识别到资源位列表，提交时将沿用默认资源位。</div>';
+                                            return;
+                                        }
+                                        listEl.innerHTML = stateList.map((item, idx) => {
+                                            const enabled = isAdzoneStatusEnabled(item);
+                                            return `
+                                                <div class="am-wxt-scene-popup-actions" style="justify-content:space-between;border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:8px 10px;margin-bottom:8px;">
+                                                    <span>${Utils.escapeHtml(getAdzoneName(item, idx))}</span>
+                                                    <span class="am-wxt-scene-popup-actions">
+                                                        <button type="button" class="am-wxt-btn ${enabled ? 'primary' : ''}" data-scene-popup-adzone-toggle="${idx}" data-scene-popup-adzone-next="on">开</button>
+                                                        <button type="button" class="am-wxt-btn ${enabled ? '' : 'primary'}" data-scene-popup-adzone-toggle="${idx}" data-scene-popup-adzone-next="off">关</button>
+                                                    </span>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    };
+                                    const applyFromEditor = () => {
+                                        const parsed = tryParseMaybeJSON(String(editor.value || '').trim() || '[]');
+                                        if (Array.isArray(parsed)) {
+                                            stateList = normalizeAdzoneList(JSON.stringify(parsed));
+                                            renderList();
+                                        }
+                                    };
+                                    syncEditor();
+                                    renderList();
+                                    listEl.addEventListener('click', (event) => {
+                                        const target = event.target instanceof HTMLElement
+                                            ? event.target.closest('[data-scene-popup-adzone-toggle]')
+                                            : null;
+                                        if (!(target instanceof HTMLElement)) return;
+                                        const index = toNumber(target.getAttribute('data-scene-popup-adzone-toggle'), -1);
+                                        const next = String(target.getAttribute('data-scene-popup-adzone-next') || '').trim() === 'on';
+                                        if (!Number.isFinite(index) || index < 0 || index >= stateList.length) return;
+                                        stateList[index] = setAdzoneStatus(stateList[index], next);
+                                        syncEditor();
+                                        renderList();
+                                    });
+                                    mask.querySelectorAll('[data-scene-popup-adzone-batch]').forEach(batchBtn => {
+                                        if (!(batchBtn instanceof HTMLButtonElement)) return;
+                                        batchBtn.onclick = () => {
+                                            const enableAll = String(batchBtn.getAttribute('data-scene-popup-adzone-batch') || '') === 'on';
+                                            stateList = stateList.map(item => setAdzoneStatus(item, enableAll));
+                                            syncEditor();
+                                            renderList();
+                                        };
+                                    });
+                                    editor.addEventListener('input', applyFromEditor);
+                                },
+                                onSave: (mask) => {
+                                    const editor = mask.querySelector('[data-scene-popup-editor="adzone"]');
+                                    const inputText = String(editor instanceof HTMLTextAreaElement ? editor.value : '').trim() || '[]';
+                                    const parsed = tryParseMaybeJSON(inputText);
+                                    if (!Array.isArray(parsed)) {
+                                        appendWizardLog('资源位配置格式错误：请填写 JSON 数组', 'error');
+                                        return { ok: false };
+                                    }
+                                    const normalized = normalizeAdzoneList(JSON.stringify(parsed));
+                                    const nextRaw = JSON.stringify(normalized);
+                                    return {
+                                        ok: true,
+                                        raw: nextRaw,
+                                        summary: describeAdzoneSummary(nextRaw)
+                                    };
+                                }
+                            });
+                            if (!result || result.ok !== true) return;
+                            dispatchSceneControlUpdate(adzoneControl, result.raw || '[]');
+                            updateScenePopupSummary(row, trigger, result.summary || describeAdzoneSummary(result.raw || '[]'));
+                            const mainControl = findMainControl();
+                            if (mainControl instanceof HTMLInputElement) {
+                                const parsed = parseScenePopupJsonArray(result.raw || '[]', [])
+                                    .filter(item => isPlainObject(item));
+                                const enabledCount = parsed.filter(item => isAdzoneStatusEnabled(item)).length;
+                                dispatchSceneControlUpdate(
+                                    mainControl,
+                                    parsed.length && enabledCount !== parsed.length ? '自定义资源位' : '平台优选'
+                                );
+                            }
+                        } else if (trigger === 'launchPeriod') {
                             const launchPeriodControl = findPopupControl('campaign.launchPeriodList');
                             if (!(launchPeriodControl instanceof HTMLInputElement)) return;
                             const launchPeriodRaw = normalizeSceneSettingValue(launchPeriodControl.value || '') || JSON.stringify(buildDefaultLaunchPeriodList());
