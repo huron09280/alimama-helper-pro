@@ -1,36 +1,39 @@
 # Repository Guidelines
 
 ## 项目结构与模块组织
-- 核心用户脚本：`阿里妈妈多合一助手.js`，包含主运行逻辑、UI、网络 Hook 与护航桥接能力。
-- 开发辅助：`dev/dev-loader.user.js`，用于 Tampermonkey 本地联调（刷新页面即生效）。
-- 开发辅助：`dev/smoke-harness.html`，用于轻量级 UI/DOM 冒烟验证。
-- 自动化检查：`tests/logger-api.test.mjs`，覆盖 Logger 与关键 UI 契约回归。
-- 自动化检查：`scripts/review-team.sh`，本地与 CI 统一检查入口。
-- CI 与发布流程位于 `.github/workflows/`；PR 检查清单位于 `.github/pull_request_template.md`。
+- `阿里妈妈多合一助手.js` 是主 Tampermonkey 用户脚本，包含核心 UI 逻辑、表格增强、网络 Hook 与护航桥接能力。
+- `dev/` 存放本地开发辅助文件：`dev/dev-loader.user.js` 用于本地热加载，`dev/smoke-harness.html` 用于快速 DOM/UI 冒烟验证。
+- `tests/` 存放 Node 回归测试（如 `tests/logger-api.test.mjs`、`tests/keyword-plan-api-slim.test.mjs`）。
+- `scripts/review-team.sh` 是本地与 CI 共用的统一质量检查入口。
+- `.github/workflows/` 定义 CI（`ci.yml`）与基于 tag 的发布流程（`release.yml`）。
 
 ## 构建、测试与开发命令
-- `node --check "阿里妈妈多合一助手.js"`：校验脚本语法。
-- `node --test tests/logger-api.test.mjs`：运行 Node 内置测试。
-- `bash scripts/review-team.sh`：执行架构、安全、测试、版本一致性全量检查（与 CI 同步）。
-- `python3 -m http.server 5173`：本地启动静态服务，配合 `dev/dev-loader.user.js` 联调。
-- 发布示例：`git tag v5.31 && git push origin v5.31`（触发 `release.yml`）。
+- `node --check "阿里妈妈多合一助手.js"`：校验 userscript 语法。
+- `node --test tests/*.test.mjs`：使用 Node 内置测试运行器执行自动化测试。
+- `bash scripts/review-team.sh`：执行架构、安全、测试与版本一致性检查。
+- `python3 -m http.server 5173`：启动本地静态服务，供 `dev/dev-loader.user.js` 拉取脚本。
+- `git tag vX.YY && git push origin vX.YY`：发布版本标签并触发 `.user.js`/`.meta.js` 打包流程。
 
 ## 编码风格与命名约定
-- 使用 JavaScript，4 空格缩进，保留分号，遵循 `阿里妈妈多合一助手.js` 现有风格。
-- 优先使用 `const`/`let`，函数尽量小且职责单一。
-- 保持双 IIFE 架构与跨模块全局桥接（如 `window.__ALIMAMA_OPTIMIZER_TOGGLE__`、`window.__AM_HOOK_MANAGER__`）不被破坏。
-- 禁止在 UI 中硬编码版本号；统一从 `GM_info`/`GM.info` 动态读取。
-- UI 节点 ID/Class 建议使用 `am-` 前缀；桥接键名保持 `__AM_*__` 形式。
+- 遵循现有 JavaScript 风格：4 空格缩进、保留分号，优先使用 `const`/`let`，避免 `var`。
+- 函数保持单一职责，避免跨模块的广泛副作用。
+- 保持双 IIFE 与全局桥接契约稳定（如 `window.__ALIMAMA_OPTIMIZER_TOGGLE__`、`window.__AM_HOOK_MANAGER__`）。
+- UI ID/Class 建议使用 `am-` 前缀；全局集成键使用 `__AM_*__` 命名。
+- 禁止在 UI 中硬编码版本号，应从 `GM_info`/`GM.info` 动态读取。
 
 ## 测试指南
-- 测试框架为 Node 内置 `node:test` + `assert/strict`。
-- 测试文件放在 `tests/*.test.mjs`，命名参考 `logger-api.test.mjs`。
-- 修改 Logger、UI 契约或 Hook 行为时，必须同步新增或更新回归测试。
-- 提交 PR 前先运行 `bash scripts/review-team.sh`，并在真实阿里妈妈页面完成手工冒烟检查。
+- 测试框架：`node:test` + `node:assert/strict`。
+- 命名规范：测试文件使用 `*.test.mjs`，放在 `tests/` 目录。
+- 调整 Logger、UI 契约、API 桥接暴露或 Hook 行为时，必须同步补充或更新测试。
+- 提交 PR 前，先运行 `bash scripts/review-team.sh`，并完成一次 Tampermonkey 手工冒烟验证。
+
+## 自动循环开发流程
+- 开发任务默认按以下循环执行：写代码 → 跑 MCP 浏览器测试 → 修 bug → 再次测试，直到关键流程通过。
+- MCP 浏览器测试未通过时，不进入提交步骤。
+- 完成上述循环后再提交，提交信息使用中文（可保留 `feat:`、`fix:` 等前缀）。
 
 ## 提交与 Pull Request 规范
-- 提交信息遵循仓库既有 Conventional Commits：`feat:`、`fix:`、`docs:`、`chore:`、`ci:`；版本发布常用 `chore(release): ...`。
-- 每次提交保持聚焦与可审阅性；重构与行为变更尽量拆分。
-- PR 需包含：变更摘要、风险说明；涉及界面调整时附截图或 GIF。
-- 按 `.github/pull_request_template.md` 完成勾选并确保检查全部通过后再请求评审。
-- `CODEOWNERS` 会将核心文件评审路由到 `@huron09280`，不要绕过必需评审流程。
+- 提交信息遵循仓库既有风格：`feat:`、`fix:`、`style:`，以及 `feat(wizard): ...` 这类带 scope 的格式。
+- 每个提交只处理一个逻辑变更，保持可审阅性。
+- PR 需包含简要变更说明、风险说明；涉及 UI 的改动需附截图或 GIF。
+- 按 `.github/pull_request_template.md` 完成清单，确保 CI 通过，并按 `CODEOWNERS` 请求必需评审。
