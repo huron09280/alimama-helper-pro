@@ -18948,7 +18948,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     sceneSettings[mappedLabel] = value;
                 });
 
-                const bidMode = normalizeBidMode(wizardState?.draft?.bidMode || 'smart', 'smart');
+                const currentBidMode = normalizeBidMode(
+                    wizardState?.els?.bidModeSelect?.value || wizardState?.draft?.bidMode || 'smart',
+                    'smart'
+                );
+                const bidMode = currentBidMode;
                 const bidTypeLabel = bidMode === 'manual' ? '手动出价' : '智能出价';
                 const budgetTypeValue = String(wizardState?.els?.budgetTypeSelect?.value || wizardState?.draft?.strategyList?.[0]?.budgetType || 'day_average').trim();
                 const budgetTypeLabel = budgetTypeValue === 'day_budget' ? '日均预算' : '每日预算';
@@ -18978,8 +18982,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const allowAutoBudgetAmount = hasProfileField(/预算|日均预算|每日预算|总预算/) || targetSceneName === '关键词推广';
 
                 sceneSettings.场景名称 = sceneSettings.场景名称 || targetSceneName;
-                if (allowAutoBidType && !sceneSettings.出价方式) {
-                    sceneSettings.出价方式 = bidTypeLabel;
+                if (allowAutoBidType) {
+                    if (targetSceneName === '关键词推广') {
+                        sceneSettings.出价方式 = bidTypeLabel;
+                    } else if (!sceneSettings.出价方式) {
+                        sceneSettings.出价方式 = bidTypeLabel;
+                    }
                 }
                 if (allowAutoBudgetType && !sceneSettings.预算类型) {
                     sceneSettings.预算类型 = budgetTypeLabel;
@@ -18995,8 +19003,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         sceneSettings.每日预算 = budgetValue;
                     }
                 }
-                if (allowAutoBidTarget && bidTargetLabel && !sceneSettings.出价目标) {
-                    sceneSettings.出价目标 = bidTargetLabel;
+                if (allowAutoBidTarget && bidTargetLabel) {
+                    if (targetSceneName === '关键词推广') {
+                        if (currentBidMode === 'manual') {
+                            delete sceneSettings.出价目标;
+                            delete sceneSettings.优化目标;
+                        } else {
+                            sceneSettings.出价目标 = bidTargetLabel;
+                        }
+                    } else if (!sceneSettings.出价目标) {
+                        sceneSettings.出价目标 = bidTargetLabel;
+                    }
                 }
                 if (targetSceneName === '关键词推广') {
                     const keywordGoalFromScene = resolveKeywordGoalFromSceneSettings(sceneSettings);
@@ -21742,12 +21759,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 const campaignItemSelectedModeKey = normalizeSceneFieldKey('campaign.itemSelectedMode');
                                 if (campaignItemSelectedModeKey) localSceneBucket[campaignItemSelectedModeKey] = keywordRuntime.itemSelectedMode;
                             }
-                            if (keywordRuntime.bidTargetV2) {
-                                const campaignBidTargetKey = normalizeSceneFieldKey('campaign.bidTargetV2');
-                                const campaignOptimizeTargetKey = normalizeSceneFieldKey('campaign.optimizeTarget');
-                                if (campaignBidTargetKey) localSceneBucket[campaignBidTargetKey] = keywordRuntime.bidTargetV2;
-                                if (campaignOptimizeTargetKey) localSceneBucket[campaignOptimizeTargetKey] = keywordRuntime.optimizeTarget || keywordRuntime.bidTargetV2;
-                            }
                         }
                         syncSceneSettingValuesFromUI();
                         syncDraftFromUI();
@@ -22821,10 +22832,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             ? String(strategy.sceneName).trim()
                             : selectedSceneName;
                         const isKeywordScene = strategySceneName === '关键词推广';
-                        const strategySceneSettings = normalizeSceneSettingsObject(
+                        let strategySceneSettings = normalizeSceneSettingsObject(
                             strategy?.sceneSettings || getSceneSettingsForRequest(strategySceneName)
                         );
                         const strategyBidMode = normalizeBidMode(strategy.bidMode || wizardState.draft.bidMode || 'smart', 'smart');
+                        const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
+                        if (isKeywordScene) {
+                            strategySceneSettings = mergeDeep({}, strategySceneSettings);
+                            strategySceneSettings.出价方式 = strategyBidMode === 'manual' ? '手动出价' : '智能出价';
+                            delete strategySceneSettings['campaign.bidTypeV2'];
+                            delete strategySceneSettings['campaign.bidTargetV2'];
+                            delete strategySceneSettings['campaign.optimizeTarget'];
+                            if (strategyBidMode === 'manual') {
+                                delete strategySceneSettings.出价目标;
+                                delete strategySceneSettings.优化目标;
+                            } else {
+                                const strategyBidTargetLabel = BID_TARGET_OPTIONS.find(item => item.value === strategyBidTargetV2)?.label || '获取成交量';
+                                strategySceneSettings.出价目标 = strategyBidTargetLabel;
+                            }
+                        }
                         const strategyKeywordMode = strategy.keywordMode || wizardState.draft.keywordMode || DEFAULTS.keywordMode;
                         const strategyUseWordPackage = strategy.useWordPackage !== false && wizardState.draft.useWordPackage !== false;
                         const strategyRecommendCount = Math.max(0, toNumber(strategy.recommendCount, toNumber(wizardState.draft.recommendCount, DEFAULTS.recommendCount)));
@@ -22889,9 +22915,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (isKeywordScene) {
                             campaignOverride.bidTypeV2 = bidModeToBidType(strategyBidMode);
                             if (strategyBidMode === 'smart') {
-                                if (strategy.bidTargetV2) {
-                                    campaignOverride.bidTargetV2 = strategy.bidTargetV2;
-                                    campaignOverride.optimizeTarget = strategy.bidTargetV2;
+                                if (strategyBidTargetV2) {
+                                    campaignOverride.bidTargetV2 = strategyBidTargetV2;
+                                    campaignOverride.optimizeTarget = strategyBidTargetV2;
                                 }
                                 campaignOverride.setSingleCostV2 = !!strategy.setSingleCostV2;
                                 if (strategy.setSingleCostV2 && strategy.singleCostV2 !== '') {

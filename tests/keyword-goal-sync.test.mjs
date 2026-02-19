@@ -12,7 +12,7 @@ function getGoalChangeBlock() {
   return source.slice(start, end);
 }
 
-test('关键词营销目标切换不再强制改写 bidMode/bidTarget，仅同步 campaign 运行时字段', () => {
+test('关键词营销目标切换不再强制改写 bidMode/bidTarget，且不再隐式覆盖 campaign 出价目标字段', () => {
   const block = getGoalChangeBlock();
   assert.match(
     block,
@@ -36,11 +36,6 @@ test('关键词营销目标切换不再强制改写 bidMode/bidTarget，仅同�
   );
   assert.match(
     block,
-    /campaign\.bidTargetV2/,
-    '缺少 campaign.bidTargetV2 同步'
-  );
-  assert.match(
-    block,
     /campaign\.promotionScene/,
     '缺少 campaign.promotionScene 同步'
   );
@@ -49,9 +44,14 @@ test('关键词营销目标切换不再强制改写 bidMode/bidTarget，仅同�
     /campaign\.itemSelectedMode/,
     '缺少 campaign.itemSelectedMode 同步'
   );
-  assert.match(
+  assert.doesNotMatch(
     block,
-    /campaign\.optimizeTarget/,
-    '缺少 campaign.optimizeTarget 同步'
+    /localSceneBucket\[campaignBidTargetKey\]\s*=/,
+    '营销目标切换仍在隐式覆盖 campaign.bidTargetV2'
+  );
+  assert.doesNotMatch(
+    block,
+    /localSceneBucket\[campaignOptimizeTargetKey\]\s*=/,
+    '营销目标切换仍在隐式覆盖 campaign.optimizeTarget'
   );
 });
