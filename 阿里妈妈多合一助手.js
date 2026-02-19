@@ -16214,6 +16214,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: #64748b;
                     white-space: nowrap;
                 }
+                #am-wxt-keyword-modal .am-wxt-scene-popup-summary[data-scene-popup-trigger-proxy] {
+                    cursor: pointer;
+                    user-select: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-popup-summary[data-scene-popup-trigger-proxy]:hover {
+                    color: #475569;
+                    text-decoration: underline;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-popup-summary[data-scene-popup-trigger-proxy]:focus-visible {
+                    outline: 2px solid rgba(59,130,246,0.45);
+                    outline-offset: 2px;
+                    border-radius: 4px;
+                }
                 #am-wxt-scene-popup-mask {
                     position: fixed;
                     inset: 0;
@@ -19264,7 +19277,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 data-scene-popup-trigger="${Utils.escapeHtml(trigger)}"
                                 data-scene-popup-title="${Utils.escapeHtml(title)}"
                             >${Utils.escapeHtml(buttonLabel)}</button>
-                            <span class="am-wxt-scene-popup-summary" data-scene-popup-summary="${Utils.escapeHtml(trigger)}">${Utils.escapeHtml(summary || '未配置')}</span>
+                            <span
+                                class="am-wxt-scene-popup-summary"
+                                data-scene-popup-summary="${Utils.escapeHtml(trigger)}"
+                                data-scene-popup-trigger-proxy="${Utils.escapeHtml(trigger)}"
+                                role="button"
+                                tabindex="0"
+                                aria-label="${Utils.escapeHtml(`点击${buttonLabel}`)}"
+                            >${Utils.escapeHtml(summary || '未配置')}</span>
                             ${hiddenHtml}
                         </div>
                     `;
@@ -20633,6 +20653,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (typeof wizardState.buildRequest === 'function') {
                             wizardState.renderPreview(wizardState.buildRequest());
                         }
+                    });
+                });
+
+                const scenePopupSummaryTriggers = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-popup-trigger-proxy]');
+                scenePopupSummaryTriggers.forEach(summary => {
+                    if (!(summary instanceof HTMLElement)) return;
+                    const resolveScenePopupButton = () => {
+                        const row = summary.closest('.am-wxt-scene-setting-row');
+                        if (!(row instanceof HTMLElement)) return null;
+                        const trigger = String(summary.getAttribute('data-scene-popup-trigger-proxy') || '').trim();
+                        if (!trigger) return null;
+                        const popupButtons = row.querySelectorAll('[data-scene-popup-trigger]');
+                        return Array.from(popupButtons).find(candidate => (
+                            candidate instanceof HTMLButtonElement
+                            && String(candidate.getAttribute('data-scene-popup-trigger') || '').trim() === trigger
+                        )) || null;
+                    };
+                    summary.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        const button = resolveScenePopupButton();
+                        if (!(button instanceof HTMLButtonElement)) return;
+                        button.click();
+                    });
+                    summary.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        const button = resolveScenePopupButton();
+                        if (!(button instanceof HTMLButtonElement)) return;
+                        button.click();
                     });
                 });
 

@@ -69,6 +69,35 @@ test('弹窗保存会回写隐藏字段并触发场景配置联动刷新', () =>
   );
 });
 
+test('弹窗摘要支持点击与键盘触发对应配置按钮', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /data-scene-popup-trigger-proxy=/,
+    '缺少弹窗摘要代理触发标记'
+  );
+  assert.match(
+    block,
+    /const scenePopupSummaryTriggers = wizardState\.els\.sceneDynamic\.querySelectorAll\('\[data-scene-popup-trigger-proxy\]'\);/,
+    '缺少弹窗摘要触发器绑定'
+  );
+  assert.match(
+    block,
+    /addEventListener\('keydown', \(event\) => \{/,
+    '缺少弹窗摘要键盘触发绑定'
+  );
+  assert.match(
+    block,
+    /event\.key !== 'Enter' && event\.key !== ' '/,
+    '缺少 Enter\/Space 键盘过滤'
+  );
+  assert.match(
+    block,
+    /button\.click\(\);/,
+    '弹窗摘要未触发对应按钮点击'
+  );
+});
+
 test('自定义推广允许通过 direct API 字段提交弹窗配置', () => {
   const mappingBlock = getResolveSceneSettingOverridesBlock();
   assert.match(
