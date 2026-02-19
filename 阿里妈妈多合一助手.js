@@ -5816,8 +5816,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const normalizeSceneOptionText = (text = '') => normalizeText(text).replace(/[：:]+$/g, '').trim();
         const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
         const normalizeSceneFieldKey = (label = '') => {
-            const normalized = String(label || '')
-                .trim()
+            const raw = String(label || '').trim();
+            if (!raw) return 'field';
+            // Keep explicit API paths for direct field passthrough.
+            if (/^(campaign|adgroup)\./i.test(raw)) return raw.replace(/\s+/g, '');
+            const normalized = raw
                 .replace(/[^\u4e00-\u9fa5A-Za-z0-9]+/g, '_')
                 .replace(/^_+|_+$/g, '');
             return normalized || 'field';
@@ -12899,6 +12902,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             ]
                 .forEach(key => allowedCampaignKeys.add(key));
             allowedCampaignKeys.add('campaignColdStartVO');
+            allowedCampaignKeys.add('crowdList');
+            allowedCampaignKeys.add('adzoneList');
             if (SCENE_BIDTYPE_V2_ONLY.has(normalizedSceneName) || hasOwn(templateCampaign, 'bidTypeV2')) {
                 allowedCampaignKeys.add('bidTypeV2');
             }
@@ -16198,6 +16203,87 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-hidden-control {
                     display: none !important;
                 }
+                #am-wxt-keyword-modal .am-wxt-scene-popup-control {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-left: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-popup-summary {
+                    font-size: 12px;
+                    color: #64748b;
+                    white-space: nowrap;
+                }
+                #am-wxt-scene-popup-mask {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 2147483500;
+                    background: rgba(15, 23, 42, 0.52);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 16px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog {
+                    width: min(720px, 96vw);
+                    max-height: 86vh;
+                    overflow: auto;
+                    background: #fff;
+                    border-radius: 12px;
+                    border: 1px solid rgba(148,163,184,0.32);
+                    box-shadow: 0 16px 48px rgba(15, 23, 42, 0.26);
+                    padding: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    font-size: 14px;
+                    color: #1f2937;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-body {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-foot {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-tips {
+                    font-size: 12px;
+                    color: #64748b;
+                    line-height: 1.5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-label {
+                    font-size: 12px;
+                    color: #334155;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-actions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-textarea {
+                    width: 100%;
+                    min-height: 120px;
+                    border: 1px solid rgba(148,163,184,0.42);
+                    border-radius: 8px;
+                    padding: 8px;
+                    font-family: Menlo, Consolas, monospace;
+                    font-size: 12px;
+                    line-height: 1.45;
+                    resize: vertical;
+                    background: #f8fafc;
+                    color: #1f2937;
+                }
                 #am-wxt-keyword-modal .am-wxt-scene-dynamic {
                     margin-top: 8px;
                     border: none;
@@ -17517,8 +17603,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const SCENE_STRICT_OPTION_TYPE_SET = new Set(['goal', 'bidType', 'bidTarget', 'budgetType', 'itemMode', 'keyword', 'crowd', 'schedule']);
 
             const normalizeSceneFieldKey = (label = '') => {
-                const normalized = String(label || '')
-                    .trim()
+                const raw = String(label || '').trim();
+                if (!raw) return 'field';
+                // Keep explicit API paths for direct field passthrough.
+                if (/^(campaign|adgroup)\./i.test(raw)) return raw.replace(/\s+/g, '');
+                const normalized = raw
                     .replace(/[^\u4e00-\u9fa5A-Za-z0-9]+/g, '_')
                     .replace(/^_+|_+$/g, '');
                 return normalized || 'field';
@@ -19070,6 +19159,74 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     </div>
                 `;
 
+                const parseScenePopupJsonArray = (rawValue = '', fallback = []) => {
+                    const parsed = tryParseMaybeJSON(rawValue);
+                    if (!Array.isArray(parsed)) return Array.isArray(fallback) ? fallback : [];
+                    return parsed.filter(item => item !== null && item !== undefined);
+                };
+
+                const describeLaunchPeriodSummary = (rawValue = '') => {
+                    const list = parseScenePopupJsonArray(rawValue, []);
+                    if (!list.length) return '使用默认全时段';
+                    const allDay = list.every(item => {
+                        const timeSpanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                        return timeSpanList.length === 1 && String(timeSpanList[0]?.time || '') === '00:00-24:00';
+                    });
+                    if (allDay) return '全时段 00:00-24:00';
+                    return `已配置 ${list.length} 组时段`;
+                };
+
+                const describeLaunchAreaSummary = (rawValue = '') => {
+                    const list = parseScenePopupJsonArray(rawValue, ['all'])
+                        .map(item => String(item || '').trim())
+                        .filter(Boolean);
+                    if (!list.length || (list.length === 1 && list[0] === 'all')) return '全部地域';
+                    return `已配置 ${list.length} 个地域`;
+                };
+
+                const describeCrowdSummary = (campaignRaw = '', adgroupRaw = '') => {
+                    const campaignList = parseScenePopupJsonArray(campaignRaw, []);
+                    const adgroupList = parseScenePopupJsonArray(adgroupRaw, []);
+                    if (!campaignList.length && !adgroupList.length) return '未配置人群明细';
+                    return `客户 ${campaignList.length} / 种子 ${adgroupList.length}`;
+                };
+
+                const buildScenePopupControl = (popup = {}) => {
+                    const trigger = String(popup?.trigger || '').trim();
+                    if (!trigger) return '';
+                    const title = String(popup?.title || '').trim();
+                    const buttonLabel = String(popup?.buttonLabel || '配置').trim() || '配置';
+                    const summary = String(popup?.summary || '').trim();
+                    const hiddenFields = Array.isArray(popup?.hiddenFields) ? popup.hiddenFields : [];
+                    const hiddenHtml = hiddenFields
+                        .map(field => {
+                            const fieldKey = String(field?.fieldKey || '').trim();
+                            if (!fieldKey) return '';
+                            const fieldValue = String(field?.value || '').trim();
+                            return `
+                                <input
+                                    class="am-wxt-hidden-control"
+                                    data-scene-field="${Utils.escapeHtml(fieldKey)}"
+                                    data-scene-popup-field="${Utils.escapeHtml(trigger)}"
+                                    value="${Utils.escapeHtml(fieldValue)}"
+                                />
+                            `;
+                        })
+                        .join('');
+                    return `
+                        <div class="am-wxt-scene-popup-control">
+                            <button
+                                type="button"
+                                class="am-wxt-btn"
+                                data-scene-popup-trigger="${Utils.escapeHtml(trigger)}"
+                                data-scene-popup-title="${Utils.escapeHtml(title)}"
+                            >${Utils.escapeHtml(buttonLabel)}</button>
+                            <span class="am-wxt-scene-popup-summary" data-scene-popup-summary="${Utils.escapeHtml(trigger)}">${Utils.escapeHtml(summary || '未配置')}</span>
+                            ${hiddenHtml}
+                        </div>
+                    `;
+                };
+
                 const buildProxyTextareaRow = (label, targetId, value, placeholder = '') => `
                     <div class="am-wxt-scene-setting-row">
                         <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
@@ -19358,7 +19515,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             label = '',
                             aliases = [],
                             options = [],
-                            defaultValue = ''
+                            defaultValue = '',
+                            popup = null
                         } = {}) => {
                             const normalizedLabel = normalizeSceneRenderFieldLabel(label) || label;
                             const key = normalizeSceneFieldKey(normalizedLabel);
@@ -19388,8 +19546,61 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     bucket[aliasKey] = currentValue;
                                 });
                             }
-                            staticRows.push(buildSceneOptionRow(normalizedLabel, key, optionList, currentValue, { segmented: true }));
+                            const popupControlHtml = isPlainObject(popup) ? buildScenePopupControl(popup) : '';
+                            staticRows.push(buildSceneOptionRow(normalizedLabel, key, optionList, currentValue, {
+                                segmented: true,
+                                inlineControlHtml: popupControlHtml
+                            }));
                         };
+                        const crowdCampaignField = 'campaign.crowdList';
+                        const crowdAdgroupField = 'adgroup.rightList';
+                        const launchPeriodField = 'campaign.launchPeriodList';
+                        const launchAreaField = 'campaign.launchAreaStrList';
+                        const crowdCampaignRaw = normalizeSceneSettingValue(
+                            bucket[crowdCampaignField]
+                            || bucket[normalizeSceneFieldKey(crowdCampaignField)]
+                            || '[]'
+                        ) || '[]';
+                        const crowdAdgroupRaw = normalizeSceneSettingValue(
+                            bucket[crowdAdgroupField]
+                            || bucket[normalizeSceneFieldKey(crowdAdgroupField)]
+                            || (Array.isArray(wizardState.crowdList) && wizardState.crowdList.length
+                                ? JSON.stringify(wizardState.crowdList)
+                                : '[]')
+                        ) || '[]';
+                        const launchPeriodList = parseScenePopupJsonArray(
+                            normalizeSceneSettingValue(
+                                bucket[launchPeriodField]
+                                || bucket[normalizeSceneFieldKey(launchPeriodField)]
+                                || ''
+                            ),
+                            buildDefaultLaunchPeriodList()
+                        );
+                        const launchPeriodRaw = JSON.stringify(
+                            Array.isArray(launchPeriodList) && launchPeriodList.length
+                                ? launchPeriodList
+                                : buildDefaultLaunchPeriodList()
+                        );
+                        const launchAreaList = uniqueBy(
+                            parseScenePopupJsonArray(
+                                normalizeSceneSettingValue(
+                                    bucket[launchAreaField]
+                                    || bucket[normalizeSceneFieldKey(launchAreaField)]
+                                    || '["all"]'
+                                ),
+                                ['all']
+                            )
+                                .map(item => String(item || '').trim())
+                                .filter(Boolean),
+                            item => item
+                        );
+                        const launchAreaRaw = JSON.stringify(
+                            launchAreaList.length ? launchAreaList : ['all']
+                        );
+                        bucket[crowdCampaignField] = crowdCampaignRaw;
+                        bucket[crowdAdgroupField] = crowdAdgroupRaw;
+                        bucket[launchPeriodField] = launchPeriodRaw;
+                        bucket[launchAreaField] = launchAreaRaw;
                         const itemModeCode = normalizeSceneSettingValue(
                             bucket[normalizeSceneFieldKey('campaign.itemSelectedMode')]
                             || keywordGoalRuntime.itemSelectedMode
@@ -19416,7 +19627,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             label: '人群设置',
                             aliases: ['设置人群', '设置拉新人群', '种子人群'],
                             options: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'],
-                            defaultValue: '关闭'
+                            defaultValue: '关闭',
+                            popup: {
+                                trigger: 'crowd',
+                                title: '配置人群明细',
+                                buttonLabel: '配置人群',
+                                summary: describeCrowdSummary(crowdCampaignRaw, crowdAdgroupRaw),
+                                hiddenFields: [
+                                    { fieldKey: crowdCampaignField, value: crowdCampaignRaw },
+                                    { fieldKey: crowdAdgroupField, value: crowdAdgroupRaw }
+                                ]
+                            }
                         });
                         pushKeywordCustomSettingRow({
                             label: '创意设置',
@@ -19428,13 +19649,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             label: '投放时间',
                             aliases: ['投放日期', '发布日期'],
                             options: ['长期投放', '不限时段', '固定时段'],
-                            defaultValue: '长期投放'
+                            defaultValue: '长期投放',
+                            popup: {
+                                trigger: 'launchPeriod',
+                                title: '配置投放时段',
+                                buttonLabel: '配置时段',
+                                summary: describeLaunchPeriodSummary(launchPeriodRaw),
+                                hiddenFields: [
+                                    { fieldKey: launchPeriodField, value: launchPeriodRaw }
+                                ]
+                            }
                         });
                         pushKeywordCustomSettingRow({
                             label: '投放地域',
                             aliases: ['地域设置'],
                             options: ['全部地域'],
-                            defaultValue: '全部地域'
+                            defaultValue: '全部地域',
+                            popup: {
+                                trigger: 'launchArea',
+                                title: '配置投放地域',
+                                buttonLabel: '配置地域',
+                                summary: describeLaunchAreaSummary(launchAreaRaw),
+                                hiddenFields: [
+                                    { fieldKey: launchAreaField, value: launchAreaRaw }
+                                ]
+                            }
                         });
                     }
                 }
@@ -19910,6 +20149,288 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         });
                         hiddenControl.dispatchEvent(new Event('input', { bubbles: true }));
                         hiddenControl.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                });
+
+                const updateScenePopupSummary = (row, trigger, text) => {
+                    const summaryEl = row?.querySelector?.(`[data-scene-popup-summary="${trigger}"]`);
+                    if (summaryEl instanceof HTMLElement) {
+                        summaryEl.textContent = String(text || '').trim() || '未配置';
+                    }
+                };
+                const dispatchSceneControlUpdate = (control, nextValue = '') => {
+                    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) return;
+                    control.value = String(nextValue || '');
+                    control.dispatchEvent(new Event('input', { bubbles: true }));
+                    control.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+                const openScenePopupDialog = ({ title = '', bodyHtml = '', onMounted = null, onSave = null } = {}) => (
+                    new Promise((resolve) => {
+                        const previousMask = document.getElementById('am-wxt-scene-popup-mask');
+                        if (previousMask) previousMask.remove();
+                        const mask = document.createElement('div');
+                        mask.id = 'am-wxt-scene-popup-mask';
+                        mask.className = 'am-wxt-scene-popup-mask';
+                        mask.innerHTML = `
+                            <div class="am-wxt-scene-popup-dialog" role="dialog" aria-modal="true">
+                                <div class="am-wxt-scene-popup-head">
+                                    <span>${Utils.escapeHtml(title || '配置设置')}</span>
+                                    <button type="button" class="am-wxt-btn" data-scene-popup-close="1">关闭</button>
+                                </div>
+                                <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
+                                <div class="am-wxt-scene-popup-foot">
+                                    <button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">取消</button>
+                                    <button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">保存</button>
+                                </div>
+                            </div>
+                        `;
+                        const close = (payload = null) => {
+                            mask.remove();
+                            resolve(payload);
+                        };
+                        mask.addEventListener('click', (event) => {
+                            if (event.target === mask) close(null);
+                        });
+                        const closeBtn = mask.querySelector('[data-scene-popup-close]');
+                        const cancelBtn = mask.querySelector('[data-scene-popup-cancel]');
+                        const saveBtn = mask.querySelector('[data-scene-popup-save]');
+                        if (closeBtn instanceof HTMLButtonElement) closeBtn.onclick = () => close(null);
+                        if (cancelBtn instanceof HTMLButtonElement) cancelBtn.onclick = () => close(null);
+                        if (saveBtn instanceof HTMLButtonElement) {
+                            saveBtn.onclick = () => {
+                                try {
+                                    const payload = typeof onSave === 'function' ? onSave(mask) : {};
+                                    if (payload && payload.ok === false) return;
+                                    close(payload || {});
+                                } catch (err) {
+                                    appendWizardLog(`保存配置失败：${err?.message || err}`, 'error');
+                                }
+                            };
+                        }
+                        document.body.appendChild(mask);
+                        if (typeof onMounted === 'function') {
+                            try {
+                                onMounted(mask);
+                            } catch (err) {
+                                appendWizardLog(`初始化配置弹窗失败：${err?.message || err}`, 'error');
+                            }
+                        }
+                    })
+                );
+                const scenePopupButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-popup-trigger]');
+                scenePopupButtons.forEach(button => {
+                    button.addEventListener('click', async () => {
+                        const trigger = String(button.getAttribute('data-scene-popup-trigger') || '').trim();
+                        const popupTitle = String(button.getAttribute('data-scene-popup-title') || '').trim();
+                        const row = button.closest('.am-wxt-scene-setting-row');
+                        if (!trigger || !(row instanceof HTMLElement)) return;
+                        const findPopupControl = (fieldKey) => row.querySelector(`input[data-scene-field="${fieldKey}"][data-scene-popup-field="${trigger}"]`);
+                        const findMainControl = () => row.querySelector('input.am-wxt-hidden-control[data-scene-field]:not([data-scene-popup-field])');
+
+                        if (trigger === 'launchPeriod') {
+                            const launchPeriodControl = findPopupControl('campaign.launchPeriodList');
+                            if (!(launchPeriodControl instanceof HTMLInputElement)) return;
+                            const launchPeriodRaw = normalizeSceneSettingValue(launchPeriodControl.value || '') || JSON.stringify(buildDefaultLaunchPeriodList());
+                            const result = await openScenePopupDialog({
+                                title: popupTitle || '配置投放时段',
+                                bodyHtml: `
+                                    <div class="am-wxt-scene-popup-tips">支持 JSON 数组格式，默认使用全时段（00:00-24:00）。</div>
+                                    <div class="am-wxt-scene-popup-actions">
+                                        <button type="button" class="am-wxt-btn" data-scene-popup-preset="all">全天 00:00-24:00</button>
+                                        <button type="button" class="am-wxt-btn" data-scene-popup-preset="work">工作时段模板</button>
+                                    </div>
+                                    <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="launchPeriod"></textarea>
+                                `,
+                                onMounted: (mask) => {
+                                    const editor = mask.querySelector('[data-scene-popup-editor="launchPeriod"]');
+                                    if (editor instanceof HTMLTextAreaElement) {
+                                        try {
+                                            editor.value = JSON.stringify(
+                                                parseScenePopupJsonArray(launchPeriodRaw, buildDefaultLaunchPeriodList()),
+                                                null,
+                                                2
+                                            );
+                                        } catch {
+                                            editor.value = launchPeriodRaw;
+                                        }
+                                    }
+                                    const allPresetBtn = mask.querySelector('[data-scene-popup-preset="all"]');
+                                    const workPresetBtn = mask.querySelector('[data-scene-popup-preset="work"]');
+                                    if (allPresetBtn instanceof HTMLButtonElement) {
+                                        allPresetBtn.onclick = () => {
+                                            if (!(editor instanceof HTMLTextAreaElement)) return;
+                                            editor.value = JSON.stringify(buildDefaultLaunchPeriodList(), null, 2);
+                                        };
+                                    }
+                                    if (workPresetBtn instanceof HTMLButtonElement) {
+                                        workPresetBtn.onclick = () => {
+                                            if (!(editor instanceof HTMLTextAreaElement)) return;
+                                            editor.value = JSON.stringify([
+                                                { dayOfWeek: '1', timeSpanList: [{ discount: 100, time: '09:00-23:00' }] },
+                                                { dayOfWeek: '2', timeSpanList: [{ discount: 100, time: '09:00-23:00' }] },
+                                                { dayOfWeek: '3', timeSpanList: [{ discount: 100, time: '09:00-23:00' }] },
+                                                { dayOfWeek: '4', timeSpanList: [{ discount: 100, time: '09:00-23:00' }] },
+                                                { dayOfWeek: '5', timeSpanList: [{ discount: 100, time: '09:00-23:00' }] },
+                                                { dayOfWeek: '6', timeSpanList: [{ discount: 100, time: '10:00-22:00' }] },
+                                                { dayOfWeek: '7', timeSpanList: [{ discount: 100, time: '10:00-22:00' }] }
+                                            ], null, 2);
+                                        };
+                                    }
+                                },
+                                onSave: (mask) => {
+                                    const editor = mask.querySelector('[data-scene-popup-editor="launchPeriod"]');
+                                    const inputText = String(editor instanceof HTMLTextAreaElement ? editor.value : '').trim();
+                                    const parsed = tryParseMaybeJSON(inputText);
+                                    if (!Array.isArray(parsed) || !parsed.length) {
+                                        appendWizardLog('投放时段格式错误：请填写 JSON 数组', 'error');
+                                        return { ok: false };
+                                    }
+                                    const nextRaw = JSON.stringify(parsed);
+                                    return {
+                                        ok: true,
+                                        raw: nextRaw,
+                                        summary: describeLaunchPeriodSummary(nextRaw)
+                                    };
+                                }
+                            });
+                            if (!result || result.ok !== true) return;
+                            dispatchSceneControlUpdate(launchPeriodControl, result.raw || JSON.stringify(buildDefaultLaunchPeriodList()));
+                            updateScenePopupSummary(row, trigger, result.summary || describeLaunchPeriodSummary(result.raw || ''));
+                            const mainControl = findMainControl();
+                            if (mainControl instanceof HTMLInputElement) {
+                                dispatchSceneControlUpdate(mainControl, '固定时段');
+                            }
+                        } else if (trigger === 'launchArea') {
+                            const launchAreaControl = findPopupControl('campaign.launchAreaStrList');
+                            if (!(launchAreaControl instanceof HTMLInputElement)) return;
+                            const launchAreaRaw = normalizeSceneSettingValue(launchAreaControl.value || '') || '["all"]';
+                            const currentAreaList = parseScenePopupJsonArray(launchAreaRaw, ['all'])
+                                .map(item => String(item || '').trim())
+                                .filter(Boolean);
+                            const result = await openScenePopupDialog({
+                                title: popupTitle || '配置投放地域',
+                                bodyHtml: `
+                                    <div class="am-wxt-scene-popup-tips">输入地域编码，使用逗号或换行分隔（如：330100,110000）。输入 all 代表全部地域。</div>
+                                    <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="launchArea"></textarea>
+                                `,
+                                onMounted: (mask) => {
+                                    const editor = mask.querySelector('[data-scene-popup-editor="launchArea"]');
+                                    if (editor instanceof HTMLTextAreaElement) {
+                                        editor.value = (currentAreaList.length ? currentAreaList : ['all']).join('\n');
+                                    }
+                                },
+                                onSave: (mask) => {
+                                    const editor = mask.querySelector('[data-scene-popup-editor="launchArea"]');
+                                    const inputText = String(editor instanceof HTMLTextAreaElement ? editor.value : '').trim();
+                                    const list = uniqueBy(
+                                        inputText
+                                            .split(/[\n,，\s]+/)
+                                            .map(item => String(item || '').trim())
+                                            .filter(Boolean),
+                                        item => item
+                                    );
+                                    const nextList = !list.length || list.some(item => /^all$/i.test(item))
+                                        ? ['all']
+                                        : list;
+                                    const nextRaw = JSON.stringify(nextList);
+                                    return {
+                                        ok: true,
+                                        raw: nextRaw,
+                                        summary: describeLaunchAreaSummary(nextRaw)
+                                    };
+                                }
+                            });
+                            if (!result || result.ok !== true) return;
+                            dispatchSceneControlUpdate(launchAreaControl, result.raw || '["all"]');
+                            updateScenePopupSummary(row, trigger, result.summary || describeLaunchAreaSummary(result.raw || ''));
+                        } else if (trigger === 'crowd') {
+                            const crowdCampaignControl = findPopupControl('campaign.crowdList');
+                            const crowdAdgroupControl = findPopupControl('adgroup.rightList');
+                            if (!(crowdCampaignControl instanceof HTMLInputElement) || !(crowdAdgroupControl instanceof HTMLInputElement)) return;
+                            const crowdCampaignRaw = normalizeSceneSettingValue(crowdCampaignControl.value || '') || '[]';
+                            const crowdAdgroupRaw = normalizeSceneSettingValue(crowdAdgroupControl.value || '') || '[]';
+                            const result = await openScenePopupDialog({
+                                title: popupTitle || '配置人群明细',
+                                bodyHtml: `
+                                    <div class="am-wxt-scene-popup-tips">优先投放客户与种子人群均支持 JSON 数组。种子人群建议使用 rightList 格式。</div>
+                                    <label class="am-wxt-scene-popup-label">优先投放客户（campaign.crowdList）</label>
+                                    <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="crowdCampaign"></textarea>
+                                    <label class="am-wxt-scene-popup-label">种子人群（adgroup.rightList）</label>
+                                    <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="crowdAdgroup"></textarea>
+                                    <div class="am-wxt-scene-popup-actions">
+                                        <button type="button" class="am-wxt-btn" data-scene-popup-copy-right-list="1">使用当前计划人群</button>
+                                    </div>
+                                `,
+                                onMounted: (mask) => {
+                                    const campaignEditor = mask.querySelector('[data-scene-popup-editor="crowdCampaign"]');
+                                    const adgroupEditor = mask.querySelector('[data-scene-popup-editor="crowdAdgroup"]');
+                                    if (campaignEditor instanceof HTMLTextAreaElement) {
+                                        campaignEditor.value = JSON.stringify(
+                                            parseScenePopupJsonArray(crowdCampaignRaw, []),
+                                            null,
+                                            2
+                                        );
+                                    }
+                                    if (adgroupEditor instanceof HTMLTextAreaElement) {
+                                        adgroupEditor.value = JSON.stringify(
+                                            parseScenePopupJsonArray(crowdAdgroupRaw, []),
+                                            null,
+                                            2
+                                        );
+                                    }
+                                    const copyBtn = mask.querySelector('[data-scene-popup-copy-right-list]');
+                                    if (copyBtn instanceof HTMLButtonElement && adgroupEditor instanceof HTMLTextAreaElement) {
+                                        copyBtn.onclick = () => {
+                                            adgroupEditor.value = JSON.stringify(
+                                                Array.isArray(wizardState.crowdList) ? wizardState.crowdList : [],
+                                                null,
+                                                2
+                                            );
+                                        };
+                                    }
+                                },
+                                onSave: (mask) => {
+                                    const campaignEditor = mask.querySelector('[data-scene-popup-editor="crowdCampaign"]');
+                                    const adgroupEditor = mask.querySelector('[data-scene-popup-editor="crowdAdgroup"]');
+                                    const campaignParsed = tryParseMaybeJSON(
+                                        String(campaignEditor instanceof HTMLTextAreaElement ? campaignEditor.value : '').trim() || '[]'
+                                    );
+                                    const adgroupParsed = tryParseMaybeJSON(
+                                        String(adgroupEditor instanceof HTMLTextAreaElement ? adgroupEditor.value : '').trim() || '[]'
+                                    );
+                                    if (!Array.isArray(campaignParsed) || !Array.isArray(adgroupParsed)) {
+                                        appendWizardLog('人群配置格式错误：请填写 JSON 数组', 'error');
+                                        return { ok: false };
+                                    }
+                                    return {
+                                        ok: true,
+                                        campaignRaw: JSON.stringify(campaignParsed),
+                                        adgroupRaw: JSON.stringify(adgroupParsed),
+                                        summary: describeCrowdSummary(JSON.stringify(campaignParsed), JSON.stringify(adgroupParsed)),
+                                        adgroupList: adgroupParsed
+                                    };
+                                }
+                            });
+                            if (!result || result.ok !== true) return;
+                            dispatchSceneControlUpdate(crowdCampaignControl, result.campaignRaw || '[]');
+                            dispatchSceneControlUpdate(crowdAdgroupControl, result.adgroupRaw || '[]');
+                            if (Array.isArray(result.adgroupList)) {
+                                wizardState.crowdList = deepClone(result.adgroupList);
+                                if (typeof wizardState.renderCrowdList === 'function') {
+                                    wizardState.renderCrowdList();
+                                }
+                            }
+                            updateScenePopupSummary(row, trigger, result.summary || describeCrowdSummary(result.campaignRaw || '[]', result.adgroupRaw || '[]'));
+                        } else {
+                            return;
+                        }
+
+                        syncSceneSettingValuesFromUI();
+                        syncDraftFromUI();
+                        renderSceneDynamicConfig();
+                        if (typeof wizardState.buildRequest === 'function') {
+                            wizardState.renderPreview(wizardState.buildRequest());
+                        }
                     });
                 });
 
