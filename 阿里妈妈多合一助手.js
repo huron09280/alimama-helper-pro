@@ -21292,7 +21292,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const fallbackGoal = sceneName === '关键词推广'
                         ? (normalizeBidMode(request?.common?.bidMode || 'smart', 'smart') === 'manual' ? '自定义推广' : '趋势明星')
                         : normalizeGoalLabel(request?.marketingGoal || '');
-                    const plansForAsync = Array.isArray(plans) ? plans : [];
+                    const isSiteScene = sceneName === '货品全站推广';
+                    const plansForSync = Array.isArray(plans) ? plans : [];
+                    if (isSiteScene) {
+                        const siteSceneGoal = normalizeGoalLabel(
+                            sceneGoalFromSettings
+                            || request?.marketingGoal
+                            || fallbackGoal
+                            || ''
+                        );
+                        sceneRequests.push({
+                            bizCode,
+                            promotionScene,
+                            sceneName,
+                            marketingGoal: siteSceneGoal || undefined,
+                            sceneSettings,
+                            fallbackPolicy,
+                            plans: plansForSync,
+                            common: buildSceneCommon()
+                        });
+                        return;
+                    }
+                    const plansForAsync = plansForSync;
                     plansForAsync.forEach(plan => {
                         const planGoal = normalizeGoalLabel(plan?.marketingGoal || '');
                         const sceneMarketingGoal = sceneGoalFromSettings || planGoal || fallbackGoal;
@@ -22111,6 +22132,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         try {
                             const sceneResult = await createPlansByScene(sceneReq.sceneName, sceneReq, {
                                 ...API_ONLY_CREATE_OPTIONS,
+                                conflictPolicy: sceneReq.sceneName === '货品全站推广'
+                                    ? 'none'
+                                    : String(API_ONLY_CREATE_OPTIONS.conflictPolicy || 'auto_stop_retry').trim() || 'auto_stop_retry',
                                 onProgress: ({ event, ...payload }) => {
                                     onRunProgress({
                                         event,
