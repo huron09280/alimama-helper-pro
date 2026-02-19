@@ -11916,6 +11916,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'campaignGroupId',
             'campaignGroupName',
             'supportCouponId',
+            'creativeSetMode',
+            'smartCreative',
+            'campaignColdStartVO',
+            'needTargetCrowd',
+            'aiXiaowanCrowdListSwitch',
             'crowdList',
             'adzoneList',
             'launchAreaStrList',
@@ -12893,6 +12898,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 'supportCouponId'
             ]
                 .forEach(key => allowedCampaignKeys.add(key));
+            allowedCampaignKeys.add('campaignColdStartVO');
             if (SCENE_BIDTYPE_V2_ONLY.has(normalizedSceneName) || hasOwn(templateCampaign, 'bidTypeV2')) {
                 allowedCampaignKeys.add('bidTypeV2');
             }
@@ -13199,6 +13205,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 applyCampaign('creativeSetMode', creativeModeCode, creativeModeEntry.key, creativeModeEntry.value);
             }
 
+            const coldStartEntry = findSceneSettingEntry(entries, [/开启冷启加速/, /冷启加速/]);
+            if (coldStartEntry) {
+                const coldStartText = normalizeSceneSettingValue(coldStartEntry.value || '');
+                if (coldStartText) {
+                    const isColdStartOff = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(coldStartText)
+                        && !/(开|开启|启用|是|on|true|1)/i.test(coldStartText);
+                    applyCampaign(
+                        'campaignColdStartVO.coldStartStatus',
+                        isColdStartOff ? '0' : '1',
+                        coldStartEntry.key,
+                        coldStartEntry.value
+                    );
+                }
+            }
+
             const launchTimeEntry = findSceneSettingEntry(entries, [/投放时间/, /投放日期/, /发布日期/, /排期/]);
             if (launchTimeEntry && /(不限|长期|全天|24小时)/.test(launchTimeEntry.value)) {
                 applyCampaign('launchPeriodList', buildDefaultLaunchPeriodList(), launchTimeEntry.key, launchTimeEntry.value);
@@ -13292,21 +13313,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             }
 
+            const crowdEntry = findSceneSettingEntry(entries, [/设置拉新人群/, /人群设置/, /种子人群/]);
+            if (crowdEntry) {
+                const crowdValue = normalizeSceneSettingValue(crowdEntry.value || '');
+                const crowdOpenHint = /(开|开启|启用|是|on|true|1)/i.test(crowdValue);
+                const crowdCloseHint = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(crowdValue);
+                if (/(设置优先投放客户|优先投放客户|优先)/.test(crowdValue) || crowdOpenHint) {
+                    applyCampaign('needTargetCrowd', '1', crowdEntry.key, crowdEntry.value);
+                    applyCampaign('aiXiaowanCrowdListSwitch', '1', crowdEntry.key, crowdEntry.value);
+                } else if (/(智能人群|添加种子人群|种子人群|智能|种子)/.test(crowdValue)) {
+                    applyCampaign('needTargetCrowd', '1', crowdEntry.key, crowdEntry.value);
+                    applyCampaign('aiXiaowanCrowdListSwitch', '0', crowdEntry.key, crowdEntry.value);
+                } else if (crowdCloseHint || !crowdValue) {
+                    applyCampaign('needTargetCrowd', '0', crowdEntry.key, crowdEntry.value);
+                    applyCampaign('aiXiaowanCrowdListSwitch', '0', crowdEntry.key, crowdEntry.value);
+                }
+            }
+
             if (normalizedSceneName === '人群推广') {
                 const strategyEntry = findSceneSettingEntry(entries, [/选择拉新方案/, /投放策略/, /方案选择/, /方案/]);
                 const strategyCode = mapScenePromotionStrategyValue(normalizedSceneName, strategyEntry?.value || '', runtime);
                 if (strategyEntry && strategyCode) {
                     applyCampaign('promotionStrategy', strategyCode, strategyEntry.key, strategyEntry.value);
-                }
-                const crowdEntry = findSceneSettingEntry(entries, [/设置拉新人群/, /人群设置/, /种子人群/]);
-                if (crowdEntry) {
-                    if (/(关|关闭|不启用)/.test(crowdEntry.value)) {
-                        applyCampaign('needTargetCrowd', '0', crowdEntry.key, crowdEntry.value);
-                        applyCampaign('aiXiaowanCrowdListSwitch', '0', crowdEntry.key, crowdEntry.value);
-                    } else if (/(开|开启|启用|智能|优先)/.test(crowdEntry.value)) {
-                        applyCampaign('needTargetCrowd', '1', crowdEntry.key, crowdEntry.value);
-                        applyCampaign('aiXiaowanCrowdListSwitch', '1', crowdEntry.key, crowdEntry.value);
-                    }
                 }
             }
 
@@ -17415,7 +17443,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 { pattern: /(匹配方式)/, options: ['广泛', '中心词', '精准'] },
                 { pattern: /(流量智选)/, options: ['开启', '关闭'] },
                 { pattern: /(冷启加速)/, options: ['开启', '关闭'] },
-                { pattern: /(人群设置|种子人群|设置拉新人群|设置人群)/, options: ['智能人群', '添加种子人群', '设置优先投放客户'] },
+                { pattern: /(人群设置|种子人群|设置拉新人群|设置人群)/, options: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'] },
                 { pattern: /(选品方式|选择推广商品)/, options: ['自定义选品', '行业推荐选品'] },
                 { pattern: /(投放调优|优化模式)/, options: ['多目标优化', '日常优化'] },
                 { pattern: /(投放地域|地域设置)/, options: ['全部地域'] },
@@ -17446,6 +17474,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     流量智选: ['开启', '关闭'],
                     开启冷启加速: ['开启', '关闭'],
                     冷启加速: ['开启', '关闭'],
+                    人群设置: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'],
                     添加商品: ['全部商品', '机会品推荐', '自定义选品'],
                     出价方式: ['智能出价', '手动出价'],
                     出价目标: ['获取成交量', '相似品跟投', '抢占搜索卡位', '提升市场渗透', '增加收藏加购量', '增加点击量', '稳定投产比'],
@@ -18788,7 +18817,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         '默认关键词出价',
                         '推荐词目标数',
                         '平均直接成交成本',
-                        '手动关键词'
+                        '手动关键词',
+                        '选品方式',
+                        '选择推广商品',
+                        '冷启加速',
+                        '开启冷启加速',
+                        '流量智选',
+                        '人群设置',
+                        '创意设置',
+                        '投放时间',
+                        '投放地域'
                     ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                 }
                 if (sceneName === '货品全站推广') {
@@ -19053,6 +19091,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const rawManualText = String(wizardState.els.manualInput?.value || '').trim();
                     const keywordList = parseKeywords(rawManualText, keywordDefaults).slice(0, 200);
                     const normalizedManualText = keywordList.map(item => formatKeywordLine(item)).join('\n');
+                    const flowFieldKey = normalizeSceneFieldKey('流量智选');
+                    const editingStrategy = typeof getStrategyById === 'function'
+                        ? getStrategyById(wizardState.editingStrategyId)
+                        : null;
+                    const flowEnabled = editingStrategy
+                        ? editingStrategy.useWordPackage !== false
+                        : wizardState?.draft?.useWordPackage !== false;
+                    const flowStatusText = flowEnabled ? '生效中' : '已关闭';
+                    const flowSwitchText = flowEnabled ? '开' : '关';
+                    const flowSwitchClassName = flowEnabled ? 'is-on' : 'is-off';
                     const formatBidDisplay = (value) => {
                         const num = toNumber(value, Number.isFinite(fallbackBid) ? fallbackBid : 1);
                         if (!Number.isFinite(num)) return '1';
@@ -19150,8 +19198,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         <div class="am-wxt-scene-setting-row">
                             <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(label)}</div>
                             <div class="am-wxt-setting-control">
+                                <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(flowFieldKey)}" data-manual-keyword-flow-hidden="1" value="${flowEnabled ? '开启' : '关闭'}" />
                                 <textarea class="am-wxt-hidden-control" data-proxy-input-target="am-wxt-keyword-manual" data-manual-keyword-hidden="1">${Utils.escapeHtml(normalizedManualText || rawManualText)}</textarea>
-                                <div class="am-wxt-manual-keyword-panel" data-manual-keyword-panel="1">
+                                <div
+                                    class="am-wxt-manual-keyword-panel"
+                                    data-manual-keyword-panel="1"
+                                    data-manual-keyword-combo-count="${keywordComboList.length}"
+                                    data-manual-keyword-count="${keywordList.length}"
+                                >
                                     <div class="am-wxt-manual-keyword-toolbar">
                                         <div class="am-wxt-manual-keyword-toolbar-left">
                                             <button class="am-wxt-btn primary" type="button" data-manual-keyword-add="1">+更多关键词</button>
@@ -19164,7 +19218,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 </div>
                                             </div>
                                         </div>
-                                        <span class="tips">已设置：开启流量智选，关键词组合 ${keywordComboList.length} 个、自选词 ${keywordList.length} 个</span>
+                                        <span class="tips">已设置：${flowEnabled ? '开启' : '关闭'}流量智选，关键词组合 ${keywordComboList.length} 个、自选词 ${keywordList.length} 个</span>
                                     </div>
                                     <div class="am-wxt-manual-keyword-layout">
                                         <div class="am-wxt-manual-keyword-left">
@@ -19178,20 +19232,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             <div class="am-wxt-manual-keyword-left-list">
                                                 <div class="am-wxt-manual-keyword-left-item">
                                                     <label class="am-wxt-manual-left-check">
-                                                        <input type="checkbox" data-manual-package-enable="1" checked />
+                                                        <input type="checkbox" data-manual-package-enable="1" ${flowEnabled ? 'checked' : ''} />
                                                         <span>
                                                             <span class="am-wxt-manual-left-title">流量智选</span>
-                                                            <span class="am-wxt-manual-left-meta status">生效中</span>
+                                                            <span class="am-wxt-manual-left-meta status">${flowStatusText}</span>
                                                         </span>
                                                     </label>
                                                     <button
                                                         type="button"
-                                                        class="am-wxt-site-switch is-on"
+                                                        class="am-wxt-site-switch ${flowSwitchClassName}"
                                                         data-manual-keyword-flow-toggle="1"
-                                                        aria-pressed="true"
+                                                        aria-pressed="${flowEnabled ? 'true' : 'false'}"
                                                     >
                                                         <span class="am-wxt-site-switch-handle"></span>
-                                                        <span class="am-wxt-site-switch-state">开</span>
+                                                        <span class="am-wxt-site-switch-state">${flowSwitchText}</span>
                                                     </button>
                                                 </div>
                                                 ${comboRows || '<div class="am-wxt-manual-keyword-empty">暂无关键词组合</div>'}
@@ -19298,6 +19352,91 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             )
                             : ''
                     }));
+                    const activeKeywordGoal = detectKeywordGoalFromText(activeMarketingGoal || '');
+                    if (activeKeywordGoal === '自定义推广') {
+                        const pushKeywordCustomSettingRow = ({
+                            label = '',
+                            aliases = [],
+                            options = [],
+                            defaultValue = ''
+                        } = {}) => {
+                            const normalizedLabel = normalizeSceneRenderFieldLabel(label) || label;
+                            const key = normalizeSceneFieldKey(normalizedLabel);
+                            if (!normalizedLabel || !key) return;
+                            const aliasKeys = (Array.isArray(aliases) ? aliases : [])
+                                .map(item => normalizeSceneFieldKey(item))
+                                .filter(Boolean);
+                            const optionList = uniqueBy(
+                                resolveSceneFieldOptions(profile, normalizedLabel)
+                                    .concat(Array.isArray(options) ? options : [])
+                                    .map(item => normalizeSceneSettingValue(item))
+                                    .filter(Boolean),
+                                item => item
+                            ).slice(0, 24);
+                            const currentValue = normalizeSceneSettingValue(
+                                bucket[key]
+                                || aliasKeys.map(aliasKey => bucket[aliasKey]).find(val => normalizeSceneSettingValue(val))
+                                || defaultValue
+                                || optionList[0]
+                                || ''
+                            );
+                            if (currentValue) {
+                                bucket[key] = currentValue;
+                                aliasKeys.forEach(aliasKey => {
+                                    if (!aliasKey || touchedBucket[aliasKey]) return;
+                                    if (normalizeSceneSettingValue(bucket[aliasKey])) return;
+                                    bucket[aliasKey] = currentValue;
+                                });
+                            }
+                            staticRows.push(buildSceneOptionRow(normalizedLabel, key, optionList, currentValue, { segmented: true }));
+                        };
+                        const itemModeCode = normalizeSceneSettingValue(
+                            bucket[normalizeSceneFieldKey('campaign.itemSelectedMode')]
+                            || keywordGoalRuntime.itemSelectedMode
+                            || ''
+                        );
+                        const defaultItemModeLabel = /shop/i.test(itemModeCode) ? '行业推荐选品' : '自定义选品';
+                        pushKeywordCustomSettingRow({
+                            label: '选品方式',
+                            aliases: ['选择推广商品'],
+                            options: ['自定义选品', '行业推荐选品'],
+                            defaultValue: defaultItemModeLabel
+                        });
+                        pushKeywordCustomSettingRow({
+                            label: '冷启加速',
+                            aliases: ['开启冷启加速'],
+                            options: ['开启', '关闭'],
+                            defaultValue: normalizeSceneSettingValue(
+                                SCENE_SPEC_FIELD_FALLBACK?.['关键词推广']?.冷启加速
+                                || SCENE_SPEC_FIELD_FALLBACK?.['关键词推广']?.开启冷启加速
+                                || '开启'
+                            )
+                        });
+                        pushKeywordCustomSettingRow({
+                            label: '人群设置',
+                            aliases: ['设置人群', '设置拉新人群', '种子人群'],
+                            options: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'],
+                            defaultValue: '关闭'
+                        });
+                        pushKeywordCustomSettingRow({
+                            label: '创意设置',
+                            aliases: ['设置创意', '创意模式'],
+                            options: ['智能', '专业', '极简'],
+                            defaultValue: '智能'
+                        });
+                        pushKeywordCustomSettingRow({
+                            label: '投放时间',
+                            aliases: ['投放日期', '发布日期'],
+                            options: ['长期投放', '不限时段', '固定时段'],
+                            defaultValue: '长期投放'
+                        });
+                        pushKeywordCustomSettingRow({
+                            label: '投放地域',
+                            aliases: ['地域设置'],
+                            options: ['全部地域'],
+                            defaultValue: '全部地域'
+                        });
+                    }
                 }
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
                 if (sceneName === '货品全站推广') {
@@ -19929,6 +20068,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         target.setAttribute('aria-pressed', nextOn ? 'true' : 'false');
                         const state = target.querySelector('.am-wxt-site-switch-state');
                         if (state) state.textContent = nextOn ? '开' : '关';
+                        const flowCheckbox = target.closest('.am-wxt-manual-keyword-left-item')?.querySelector('input[data-manual-package-enable]');
+                        if (flowCheckbox instanceof HTMLInputElement) {
+                            flowCheckbox.checked = nextOn;
+                        }
+                        const status = target.closest('.am-wxt-manual-keyword-left-item')?.querySelector('.am-wxt-manual-left-meta.status');
+                        if (status) status.textContent = nextOn ? '生效中' : '已关闭';
+                        const flowScope = panel.closest('.am-wxt-setting-control') || panel.parentElement || panel;
+                        const flowHidden = flowScope?.querySelector?.('input[data-manual-keyword-flow-hidden]');
+                        if (flowHidden instanceof HTMLInputElement) {
+                            flowHidden.value = nextOn ? '开启' : '关闭';
+                            flowHidden.dispatchEvent(new Event('input', { bubbles: true }));
+                            flowHidden.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        const comboCount = Math.max(0, toNumber(panel.getAttribute('data-manual-keyword-combo-count'), 0));
+                        const keywordCount = Math.max(0, toNumber(panel.getAttribute('data-manual-keyword-count'), 0));
+                        const toolbarTips = panel.querySelector('.am-wxt-manual-keyword-toolbar .tips');
+                        if (toolbarTips) {
+                            toolbarTips.textContent = `已设置：${nextOn ? '开启' : '关闭'}流量智选，关键词组合 ${comboCount} 个、自选词 ${keywordCount} 个`;
+                        }
+                        const editingStrategy = getStrategyById(wizardState.editingStrategyId);
+                        if (editingStrategy) {
+                            editingStrategy.useWordPackage = nextOn;
+                        }
+                        syncSceneSettingValuesFromUI();
+                        syncDraftFromUI();
+                        renderStrategyList();
+                        if (typeof wizardState.buildRequest === 'function') {
+                            wizardState.renderPreview(wizardState.buildRequest());
+                        }
                         return;
                     }
 
