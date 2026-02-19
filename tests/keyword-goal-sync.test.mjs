@@ -12,27 +12,27 @@ function getGoalChangeBlock() {
   return source.slice(start, end);
 }
 
-test('关键词营销目标切换会同步 bidMode/bidTarget 与 campaign 运行时字段', () => {
+test('关键词营销目标切换不再强制改写 bidMode/bidTarget，仅同步 campaign 运行时字段', () => {
   const block = getGoalChangeBlock();
   assert.match(
     block,
     /resolveKeywordGoalRuntime\(/,
     '缺少关键词目标运行时映射调用'
   );
-  assert.match(
+  assert.doesNotMatch(
     block,
     /wizardState\.els\.bidModeSelect\.value\s*=\s*keywordRuntime\.bidMode/,
-    '缺少出价方式同步'
+    '仍存在营销目标切换时强制改写出价方式'
   );
-  assert.match(
+  assert.doesNotMatch(
     block,
     /updateBidModeControls\(keywordRuntime\.bidMode\)/,
-    '缺少出价方式 UI 同步'
+    '仍存在营销目标切换时强制刷新为目标默认出价方式'
   );
-  assert.match(
+  assert.doesNotMatch(
     block,
     /wizardState\.els\.bidTargetSelect\.value\s*=\s*keywordRuntime\.bidTargetV2/,
-    '缺少出价目标同步'
+    '仍存在营销目标切换时强制改写出价目标'
   );
   assert.match(
     block,

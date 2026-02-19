@@ -21734,13 +21734,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     localTouchedBucket[goalSchemeFieldKey] = false;
                                 }
                             }
-                            if (wizardState.els.bidModeSelect && keywordRuntime.bidMode) {
-                                wizardState.els.bidModeSelect.value = keywordRuntime.bidMode;
-                                updateBidModeControls(keywordRuntime.bidMode);
-                            }
-                            if (wizardState.els.bidTargetSelect && keywordRuntime.bidTargetV2) {
-                                wizardState.els.bidTargetSelect.value = keywordRuntime.bidTargetV2;
-                            }
                             if (keywordRuntime.promotionScene) {
                                 const campaignPromotionSceneKey = normalizeSceneFieldKey('campaign.promotionScene');
                                 if (campaignPromotionSceneKey) localSceneBucket[campaignPromotionSceneKey] = keywordRuntime.promotionScene;
