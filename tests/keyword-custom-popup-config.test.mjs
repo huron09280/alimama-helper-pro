@@ -98,6 +98,40 @@ test('弹窗摘要支持点击与键盘触发对应配置按钮', () => {
   );
 });
 
+test('资源位与时段使用原站同构高级设置弹窗（三 Tab）', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /title:\s*'高级设置'/,
+    '缺少高级设置弹窗标题'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-advanced-tab="adzone"/,
+    '缺少投放资源位 Tab'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-advanced-tab="launchArea"/,
+    '缺少投放地域 Tab'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-advanced-tab="launchPeriod"/,
+    '缺少投放时间 Tab'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-time-grid/,
+    '缺少投放时间网格容器'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-adzone-row-toggle/,
+    '缺少资源位逐行开关'
+  );
+});
+
 test('自定义推广允许通过 direct API 字段提交弹窗配置', () => {
   const mappingBlock = getResolveSceneSettingOverridesBlock();
   assert.match(
