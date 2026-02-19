@@ -77,6 +77,18 @@ test('关键词自定义推广会清理资源位列表避免接口系统异常',
   );
 });
 
+test('关键词手动出价提交会移除出价目标字段（bidTargetV2/optimizeTarget）', () => {
+  const block = getBlock(
+    'const pruneKeywordCampaignForCustomScene = (campaign = {}, options = {}) => {',
+    'const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null, options = {}) => {'
+  );
+  assert.match(
+    block,
+    /if \(isManual\)\s*\{[\s\S]*delete out\.bidTargetV2;[\s\S]*delete out\.optimizeTarget;[\s\S]*\}/,
+    '手动出价分支未清理 bidTargetV2/optimizeTarget'
+  );
+});
+
 test('关键词出价模式判定会读取目标强制覆盖来源避免误判手动', () => {
   const block = getBlock(
     'const resolvePlanBidMode = ({ plan = {}, request = {}, runtime = {}, campaign = {} } = {}) => {',

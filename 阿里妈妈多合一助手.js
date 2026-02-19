@@ -22083,20 +22083,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         Object.assign(strategySceneSettingValues, fromPayload);
                     }
                 }
-                if (Object.keys(strategySceneSettingValues).length) {
-                    wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                    if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
-                        wizardState.draft.sceneSettingValues = {};
-                    }
-                    wizardState.draft.sceneSettingValues[strategyScene] = mergeDeep({}, strategySceneSettingValues);
+                wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
+                    wizardState.draft.sceneSettingValues = {};
                 }
-                if (Object.keys(strategySceneSettingTouched).length) {
-                    wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                    if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
-                        wizardState.draft.sceneSettingTouched = {};
-                    }
-                    wizardState.draft.sceneSettingTouched[strategyScene] = mergeDeep({}, strategySceneSettingTouched);
+                wizardState.draft.sceneSettingValues[strategyScene] = mergeDeep({}, strategySceneSettingValues);
+                if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
+                    wizardState.draft.sceneSettingTouched = {};
                 }
+                wizardState.draft.sceneSettingTouched[strategyScene] = mergeDeep({}, strategySceneSettingTouched);
                 const currentSceneName = getCurrentEditorSceneName();
                 if (currentSceneName === '关键词推广') {
                     const strategyGoal = normalizeGoalLabel(strategy.marketingGoal || resolveStrategyMarketingGoal(strategy, {}, currentSceneName));
