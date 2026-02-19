@@ -9042,7 +9042,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     roi: '稳定投产比',
                     click: '增加点击量',
                     fav_cart: '增加收藏加购量',
+                    coll_cart: '增加收藏加购量',
                     market_penetration: '提升市场渗透',
+                    word_penetration_rate: '提升市场渗透',
                     similar_item: '相似品跟投',
                     search_rank: '抢占搜索卡位',
                     display_shentou: '拉新渗透'
@@ -17664,9 +17666,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const next = `${base}_${suffix}`;
                 return ensureUniqueStrategyPlanName(next);
             };
+            const normalizeKeywordBidTargetOptionValue = (bidTarget = '') => {
+                const value = String(bidTarget || '').trim();
+                if (!value) return '';
+                if (value === 'coll_cart') return 'fav_cart';
+                if (value === 'word_penetration_rate') return 'market_penetration';
+                return value;
+            };
             const getStrategyTargetLabel = (strategy = {}) => {
-                const bidTargetValue = String(strategy?.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
+                const bidTargetValue = normalizeKeywordBidTargetOptionValue(
+                    String(strategy?.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2
+                ) || DEFAULTS.bidTargetV2;
                 return BID_TARGET_OPTIONS.find(item => item.value === bidTargetValue)?.label || '获取成交量';
+            };
+            const resolveKeywordCustomBidTargetAlias = (bidTarget = '', marketingGoal = '') => {
+                const value = String(bidTarget || '').trim();
+                if (!value) return '';
+                const goal = normalizeGoalLabel(marketingGoal);
+                if (goal !== '自定义推广') return value;
+                if (value === 'fav_cart') return 'coll_cart';
+                if (value === 'market_penetration') return 'word_penetration_rate';
+                return value;
             };
             const detectKeywordGoalFromText = (text = '') => {
                 const value = normalizeGoalLabel(text);
@@ -17681,7 +17701,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const value = String(bidTarget || '').trim();
                 if (!value) return '';
                 if (value === 'search_rank') return '搜索卡位';
-                if (value === 'market_penetration') return '趋势明星';
+                if (value === 'market_penetration' || value === 'word_penetration_rate') return '趋势明星';
                 if (value === 'click') return '流量金卡';
                 return '自定义推广';
             };
@@ -22118,7 +22138,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 }
                 const bidMode = normalizeBidMode(strategy.bidMode || wizardState.draft?.bidMode || 'smart', 'smart');
-                if (wizardState.els.bidTargetSelect) wizardState.els.bidTargetSelect.value = strategy.bidTargetV2 || DEFAULTS.bidTargetV2;
+                if (wizardState.els.bidTargetSelect) {
+                    const strategyBidTargetValue = normalizeKeywordBidTargetOptionValue(
+                        strategy.bidTargetV2 || DEFAULTS.bidTargetV2
+                    ) || DEFAULTS.bidTargetV2;
+                    wizardState.els.bidTargetSelect.value = strategyBidTargetValue;
+                }
                 if (wizardState.els.budgetTypeSelect) wizardState.els.budgetTypeSelect.value = strategy.budgetType || 'day_average';
                 if (wizardState.els.budgetInput) wizardState.els.budgetInput.value = strategy.dayAverageBudget || wizardState.draft?.dayAverageBudget || '';
                 if (wizardState.els.bidInput) wizardState.els.bidInput.value = strategy.defaultBidPrice || wizardState.draft?.defaultBidPrice || '1';
@@ -22837,6 +22862,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         );
                         const strategyBidMode = normalizeBidMode(strategy.bidMode || wizardState.draft.bidMode || 'smart', 'smart');
                         const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
+                        const strategyBidTargetOptionValue = normalizeKeywordBidTargetOptionValue(strategyBidTargetV2) || strategyBidTargetV2;
                         if (isKeywordScene) {
                             strategySceneSettings = mergeDeep({}, strategySceneSettings);
                             strategySceneSettings.出价方式 = strategyBidMode === 'manual' ? '手动出价' : '智能出价';
@@ -22847,7 +22873,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 delete strategySceneSettings.出价目标;
                                 delete strategySceneSettings.优化目标;
                             } else {
-                                const strategyBidTargetLabel = BID_TARGET_OPTIONS.find(item => item.value === strategyBidTargetV2)?.label || '获取成交量';
+                                const strategyBidTargetLabel = BID_TARGET_OPTIONS.find(item => item.value === strategyBidTargetOptionValue)?.label || '获取成交量';
                                 strategySceneSettings.出价目标 = strategyBidTargetLabel;
                             }
                         }
@@ -22873,6 +22899,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const strategyMarketingGoal = normalizeGoalLabel(
                             resolveStrategyMarketingGoal(strategy, strategySceneSettings, strategySceneName)
                         );
+                        const strategySubmitBidTargetV2 = resolveKeywordCustomBidTargetAlias(strategyBidTargetV2, strategyMarketingGoal);
                         if (strategyMarketingGoal) {
                             if (!strategyGoalSetByScene.has(strategySceneName)) {
                                 strategyGoalSetByScene.set(strategySceneName, new Set());
@@ -22915,9 +22942,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (isKeywordScene) {
                             campaignOverride.bidTypeV2 = bidModeToBidType(strategyBidMode);
                             if (strategyBidMode === 'smart') {
-                                if (strategyBidTargetV2) {
-                                    campaignOverride.bidTargetV2 = strategyBidTargetV2;
-                                    campaignOverride.optimizeTarget = strategyBidTargetV2;
+                                if (strategySubmitBidTargetV2) {
+                                    campaignOverride.bidTargetV2 = strategySubmitBidTargetV2;
+                                    campaignOverride.optimizeTarget = strategySubmitBidTargetV2;
                                 }
                                 campaignOverride.setSingleCostV2 = !!strategy.setSingleCostV2;
                                 if (strategy.setSingleCostV2 && strategy.singleCostV2 !== '') {
