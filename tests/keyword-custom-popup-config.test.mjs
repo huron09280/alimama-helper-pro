@@ -132,6 +132,34 @@ test('资源位与时段使用原站同构高级设置弹窗（三 Tab）', () =
   );
 });
 
+test('配置资源位初始值兼容字符串并同步加载到高级弹窗', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /const adzoneRawValue = normalizeSceneSettingValue\(/,
+    '缺少配置资源位原始值归一化变量'
+  );
+  assert.match(
+    block,
+    /const adzoneList = normalizeAdzoneListForAdvanced\(adzoneRawValue\);/,
+    '配置资源位未复用高级弹窗同构归一化逻辑'
+  );
+  assert.match(
+    block,
+    /const adzoneRaw = JSON\.stringify\(adzoneList\);/,
+    '配置资源位归一化后未回填隐藏字段'
+  );
+});
+
+test('投放时间序列化保留 24:00 结束时间', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /if \(safeMinutes >= 24 \* 60 && base === 0\) return '24:00';/,
+    '投放时间结束分钟 1440 未被序列化为 24:00'
+  );
+});
+
 test('自定义推广允许通过 direct API 字段提交弹窗配置', () => {
   const mappingBlock = getResolveSceneSettingOverridesBlock();
   assert.match(

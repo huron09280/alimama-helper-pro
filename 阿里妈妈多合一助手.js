@@ -16284,6 +16284,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     flex-wrap: wrap;
                     gap: 8px;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-btn {
+                    border: 1px solid rgba(69,84,229,0.3);
+                    border-radius: 8px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                    line-height: 1;
+                    background: #eef2ff;
+                    color: #2e3ab8;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-btn.primary {
+                    background: linear-gradient(135deg, #4554e5, #4f68ff);
+                    color: #fff;
+                    border-color: #4554e5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-btn.danger {
+                    background: #fee2e2;
+                    color: #b91c1c;
+                    border-color: rgba(185, 28, 28, 0.32);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-textarea {
                     width: 100%;
                     min-height: 120px;
@@ -19935,16 +19959,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const launchAreaRaw = JSON.stringify(
                             launchAreaList.length ? launchAreaList : ['all']
                         );
-                        const adzoneList = parseScenePopupJsonArray(
-                            normalizeSceneSettingValue(
-                                bucket[adzoneField]
-                                || bucket[normalizeSceneFieldKey(adzoneField)]
-                                || '[]'
-                            ),
-                            []
-                        )
-                            .filter(item => isPlainObject(item))
-                            .map(item => deepClone(item));
+                        const adzoneRawValue = normalizeSceneSettingValue(
+                            bucket[adzoneField]
+                            || bucket[normalizeSceneFieldKey(adzoneField)]
+                            || '[]'
+                        ) || '[]';
+                        const adzoneList = normalizeAdzoneListForAdvanced(adzoneRawValue);
                         const adzoneRaw = JSON.stringify(adzoneList);
                         bucket[crowdCampaignField] = crowdCampaignRaw;
                         bucket[crowdAdgroupField] = crowdAdgroupRaw;
@@ -20621,7 +20641,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ? triggerButton.closest('.am-wxt-scene-setting-row')
                         : null;
                 };
-                const normalizeAdzoneListForAdvanced = (rawValue = '') => {
+                function normalizeAdzoneListForAdvanced(rawValue = '') {
                     const parsed = parseScenePopupJsonArray(rawValue, []);
                     return parsed
                         .map((item, idx) => {
@@ -20635,7 +20655,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             };
                         })
                         .filter(item => isPlainObject(item));
-                };
+                }
                 const getAdzoneDisplayName = (item = {}, idx = 0) => (
                     normalizeSceneSettingValue(
                         item.adzoneName
@@ -20691,7 +20711,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return { start, end };
                 };
                 const formatMinutesToClock = (minutes = 0) => {
-                    const base = ((toNumber(minutes, 0) % (24 * 60)) + (24 * 60)) % (24 * 60);
+                    const safeMinutes = toNumber(minutes, 0);
+                    const base = ((safeMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+                    if (safeMinutes >= 24 * 60 && base === 0) return '24:00';
                     const hour = Math.floor(base / 60);
                     const minute = base % 60;
                     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
