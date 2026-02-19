@@ -25,6 +25,13 @@ function getManualFlowToggleBlock() {
   return source.slice(start, end);
 }
 
+function getManualCollapseToggleBlock() {
+  const start = source.indexOf('if (target.matches(\'button[data-manual-keyword-collapse-toggle]\')) {');
+  const end = source.indexOf('if (target.matches(\'button[data-manual-keyword-flow-toggle]\')) {', start);
+  assert.ok(start > -1 && end > start, '无法定位手动关键词展开/收起分支');
+  return source.slice(start, end);
+}
+
 function getKeywordCustomCampaignAllowListBlock() {
   const start = source.indexOf('const KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS = new Set([');
   const end = source.indexOf(']);', start);
@@ -81,6 +88,37 @@ test('流量智选开关会同步到策略 useWordPackage', () => {
   );
 });
 
+test('手动关键词面板默认收起，并支持展开状态同步', () => {
+  const renderBlock = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    renderBlock,
+    /const manualKeywordPanelCollapsed = wizardState\.manualKeywordPanelCollapsed !== false;/,
+    '手动关键词面板默认收起状态未定义'
+  );
+  assert.match(
+    renderBlock,
+    /data-manual-keyword-collapse-toggle="1"/,
+    '手动关键词面板缺少展开\/收起按钮'
+  );
+  assert.match(
+    renderBlock,
+    /manualKeywordPanelCollapsed \? '展开' : '收起'/,
+    '手动关键词面板未根据状态显示展开\/收起文案'
+  );
+
+  const collapseBlock = getManualCollapseToggleBlock();
+  assert.match(
+    collapseBlock,
+    /wizardState\.manualKeywordPanelCollapsed = nextCollapsed;/,
+    '手动关键词展开\/收起后未同步到草稿状态'
+  );
+  assert.match(
+    collapseBlock,
+    /panel\.classList\.toggle\('is-collapsed', nextCollapsed\);/,
+    '手动关键词展开\/收起后未更新面板折叠样式'
+  );
+});
+
 test('自定义推广的人群设置四个按钮与提交字段一一对应', () => {
   const renderBlock = getRenderSceneDynamicConfigBlock();
   assert.match(
@@ -113,5 +151,19 @@ test('场景配置中的计划名称位于营销目标下方', () => {
     renderBlock,
     /buildGoalSelectorRow\('营销目标'[\s\S]*?staticRows\.push\(buildProxyInputRow\('计划名称'/,
     '计划名称未紧随营销目标渲染'
+  );
+});
+
+test('场景配置隐藏默认关键词出价与推荐词目标数', () => {
+  const renderBlock = getRenderSceneDynamicConfigBlock();
+  assert.doesNotMatch(
+    renderBlock,
+    /staticRows\.push\(buildProxyInputRow\('默认关键词出价'/,
+    '场景配置仍在展示“默认关键词出价”'
+  );
+  assert.doesNotMatch(
+    renderBlock,
+    /staticRows\.push\(buildProxyInputRow\('推荐词目标数'/,
+    '场景配置仍在展示“推荐词目标数”'
   );
 });

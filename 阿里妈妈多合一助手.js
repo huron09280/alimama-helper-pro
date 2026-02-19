@@ -4872,6 +4872,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             repairStopRequested: false,
             repairLastSummary: null,
             manualKeywordDelegatedBound: false,
+            manualKeywordPanelCollapsed: true,
             keywordMetricMap: {},
             els: {}
         };
@@ -16624,6 +16625,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: #fff;
                     overflow: hidden;
                 }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-panel.is-collapsed .am-wxt-manual-keyword-layout,
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-panel.is-collapsed .am-wxt-manual-keyword-actions {
+                    display: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-panel.is-collapsed .am-wxt-manual-keyword-toolbar {
+                    border-bottom: 0;
+                }
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar {
                     display: flex;
                     align-items: center;
@@ -16663,6 +16671,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar .tips {
                     font-size: 12px;
                     color: #64748b;
+                }
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar-right {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-left: auto;
                 }
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-layout {
                     display: grid;
@@ -17083,6 +17097,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             useWordPackage: DEFAULTS.useWordPackage,
             recommendCount: String(DEFAULTS.recommendCount),
             manualKeywords: '',
+            manualKeywordPanelCollapsed: true,
             addedItems: [],
             crowdList: [],
             debugVisible: false,
@@ -19628,6 +19643,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const flowEnabled = editingStrategy
                         ? editingStrategy.useWordPackage !== false
                         : wizardState?.draft?.useWordPackage !== false;
+                    const manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
                     const flowStatusText = flowEnabled ? '生效中' : '已关闭';
                     const flowSwitchText = flowEnabled ? '开' : '关';
                     const flowSwitchClassName = flowEnabled ? 'is-on' : 'is-off';
@@ -19731,10 +19747,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(flowFieldKey)}" data-manual-keyword-flow-hidden="1" value="${flowEnabled ? '开启' : '关闭'}" />
                                 <textarea class="am-wxt-hidden-control" data-proxy-input-target="am-wxt-keyword-manual" data-manual-keyword-hidden="1">${Utils.escapeHtml(normalizedManualText || rawManualText)}</textarea>
                                 <div
-                                    class="am-wxt-manual-keyword-panel"
+                                    class="am-wxt-manual-keyword-panel ${manualKeywordPanelCollapsed ? 'is-collapsed' : ''}"
                                     data-manual-keyword-panel="1"
                                     data-manual-keyword-combo-count="${keywordComboList.length}"
                                     data-manual-keyword-count="${keywordList.length}"
+                                    data-manual-keyword-collapsed="${manualKeywordPanelCollapsed ? '1' : '0'}"
                                 >
                                     <div class="am-wxt-manual-keyword-toolbar">
                                         <div class="am-wxt-manual-keyword-toolbar-left">
@@ -19748,7 +19765,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 </div>
                                             </div>
                                         </div>
-                                        <span class="tips">已设置：${flowEnabled ? '开启' : '关闭'}流量智选，关键词组合 ${keywordComboList.length} 个、自选词 ${keywordList.length} 个</span>
+                                        <div class="am-wxt-manual-keyword-toolbar-right">
+                                            <span class="tips">已设置：${flowEnabled ? '开启' : '关闭'}流量智选，关键词组合 ${keywordComboList.length} 个、自选词 ${keywordList.length} 个</span>
+                                            <button
+                                                class="am-wxt-btn"
+                                                type="button"
+                                                data-manual-keyword-collapse-toggle="1"
+                                                aria-expanded="${manualKeywordPanelCollapsed ? 'false' : 'true'}"
+                                            >${manualKeywordPanelCollapsed ? '展开' : '收起'}</button>
+                                        </div>
                                     </div>
                                     <div class="am-wxt-manual-keyword-layout">
                                         <div class="am-wxt-manual-keyword-left">
@@ -20257,8 +20282,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 if (isKeywordScene) {
                     staticRows.push(buildProxySelectRow('关键词模式', 'am-wxt-keyword-mode', wizardState.els.modeSelect, { segmented: true }));
-                    staticRows.push(buildProxyInputRow('默认关键词出价', 'am-wxt-keyword-bid', wizardState.els.bidInput?.value || '', '默认 1.00'));
-                    staticRows.push(buildProxyInputRow('推荐词目标数', 'am-wxt-keyword-recommend-count', wizardState.els.recommendCountInput?.value || '', '默认 20'));
                     staticRows.push(`
                         <div class="am-wxt-scene-setting-row">
                             <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
@@ -21858,6 +21881,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         return;
                     }
 
+                    if (target.matches('button[data-manual-keyword-collapse-toggle]')) {
+                        const nextCollapsed = !panel.classList.contains('is-collapsed');
+                        panel.classList.toggle('is-collapsed', nextCollapsed);
+                        panel.setAttribute('data-manual-keyword-collapsed', nextCollapsed ? '1' : '0');
+                        target.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+                        target.textContent = nextCollapsed ? '展开' : '收起';
+                        wizardState.manualKeywordPanelCollapsed = nextCollapsed;
+                        wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                        wizardState.draft.manualKeywordPanelCollapsed = nextCollapsed;
+                        syncDraftFromUI();
+                        return;
+                    }
+
                     if (target.matches('button[data-manual-keyword-flow-toggle]')) {
                         const nextOn = !target.classList.contains('is-on');
                         target.classList.toggle('is-on', nextOn);
@@ -22610,6 +22646,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.draft.recommendCount = wizardState.els.recommendCountInput?.value?.trim() || wizardState.draft.recommendCount || String(DEFAULTS.recommendCount);
                     wizardState.draft.manualKeywords = wizardState.els.manualInput?.value || wizardState.draft.manualKeywords || '';
                 }
+                wizardState.manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
+                wizardState.draft.manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
                 wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
                 wizardState.draft.fallbackPolicy = normalizeWizardFallbackPolicy(wizardState.draft.fallbackPolicy);
                 if (editingStrategy) {
@@ -22637,8 +22675,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 wizardState.draft.itemSplitExpanded = wizardState.draft.itemSplitExpanded === true;
                 wizardState.draft.candidateListExpanded = wizardState.draft.candidateListExpanded === true;
+                wizardState.draft.manualKeywordPanelCollapsed = wizardState.draft.manualKeywordPanelCollapsed !== false;
                 wizardState.itemSplitExpanded = wizardState.draft.itemSplitExpanded;
                 wizardState.candidateListExpanded = wizardState.draft.candidateListExpanded;
+                wizardState.manualKeywordPanelCollapsed = wizardState.draft.manualKeywordPanelCollapsed;
                 const sceneName = SCENE_OPTIONS.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '关键词推广';
                 wizardState.draft.sceneName = sceneName || '关键词推广';
                 wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
