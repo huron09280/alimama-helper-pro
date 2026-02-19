@@ -19804,6 +19804,45 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 localTouchedBucket[key] = false;
                                 if (key !== fieldKey) delete localSceneBucket[key];
                             });
+                            const selectedGoal = normalizeGoalCandidateLabel(
+                                normalizeSceneSettingValue(control.value)
+                                || normalizeSceneSettingValue(localSceneBucket[normalizeSceneFieldKey('营销目标')] || '')
+                                || normalizeSceneSettingValue(localSceneBucket[normalizeSceneFieldKey('选择卡位方案')] || '')
+                            );
+                            const keywordRuntime = resolveKeywordGoalRuntime(selectedGoal || '趋势明星');
+                            if (keywordRuntime.marketingGoal) {
+                                const goalFieldKey = normalizeSceneFieldKey('营销目标');
+                                const goalSchemeFieldKey = normalizeSceneFieldKey('选择卡位方案');
+                                if (goalFieldKey) {
+                                    localSceneBucket[goalFieldKey] = keywordRuntime.marketingGoal;
+                                    localTouchedBucket[goalFieldKey] = false;
+                                }
+                                if (goalSchemeFieldKey) {
+                                    localSceneBucket[goalSchemeFieldKey] = keywordRuntime.marketingGoal;
+                                    localTouchedBucket[goalSchemeFieldKey] = false;
+                                }
+                            }
+                            if (wizardState.els.bidModeSelect && keywordRuntime.bidMode) {
+                                wizardState.els.bidModeSelect.value = keywordRuntime.bidMode;
+                                updateBidModeControls(keywordRuntime.bidMode);
+                            }
+                            if (wizardState.els.bidTargetSelect && keywordRuntime.bidTargetV2) {
+                                wizardState.els.bidTargetSelect.value = keywordRuntime.bidTargetV2;
+                            }
+                            if (keywordRuntime.promotionScene) {
+                                const campaignPromotionSceneKey = normalizeSceneFieldKey('campaign.promotionScene');
+                                if (campaignPromotionSceneKey) localSceneBucket[campaignPromotionSceneKey] = keywordRuntime.promotionScene;
+                            }
+                            if (keywordRuntime.itemSelectedMode) {
+                                const campaignItemSelectedModeKey = normalizeSceneFieldKey('campaign.itemSelectedMode');
+                                if (campaignItemSelectedModeKey) localSceneBucket[campaignItemSelectedModeKey] = keywordRuntime.itemSelectedMode;
+                            }
+                            if (keywordRuntime.bidTargetV2) {
+                                const campaignBidTargetKey = normalizeSceneFieldKey('campaign.bidTargetV2');
+                                const campaignOptimizeTargetKey = normalizeSceneFieldKey('campaign.optimizeTarget');
+                                if (campaignBidTargetKey) localSceneBucket[campaignBidTargetKey] = keywordRuntime.bidTargetV2;
+                                if (campaignOptimizeTargetKey) localSceneBucket[campaignOptimizeTargetKey] = keywordRuntime.optimizeTarget || keywordRuntime.bidTargetV2;
+                            }
                         }
                         syncSceneSettingValuesFromUI();
                         syncDraftFromUI();
@@ -20277,15 +20316,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const resolveKeywordGoalRuntime = (goalLabel = '') => {
                 const normalizedGoal = detectKeywordGoalFromText(goalLabel) || normalizeGoalCandidateLabel(goalLabel);
-                const runtimeRule = KEYWORD_GOAL_RUNTIME_FALLBACK_MAP.find(rule => rule.pattern.test(normalizedGoal));
+                const runtimeRule = resolveKeywordGoalRuntimeFallback(normalizedGoal);
                 const bidTargetV2 = String(
                     runtimeRule?.bidTargetV2
                     || (normalizedGoal === '自定义推广' ? 'conv' : DEFAULTS.bidTargetV2)
                 ).trim() || DEFAULTS.bidTargetV2;
+                const optimizeTarget = String(runtimeRule?.optimizeTarget || bidTargetV2).trim() || bidTargetV2;
+                const promotionScene = String(runtimeRule?.promotionScene || '').trim();
+                const itemSelectedMode = String(runtimeRule?.itemSelectedMode || '').trim();
                 return {
                     marketingGoal: normalizedGoal || '趋势明星',
                     bidMode: normalizedGoal === '自定义推广' ? 'manual' : 'smart',
-                    bidTargetV2
+                    bidTargetV2,
+                    optimizeTarget,
+                    promotionScene,
+                    itemSelectedMode
                 };
             };
             const handleGenerateOtherStrategies = () => {
@@ -21231,7 +21276,97 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.els.preview.textContent = JSON.stringify(preview, null, 2);
             };
 
-            const loadRecommendedKeywords = async () => {
+            const buildKeywordConsoleRows = (words = []) => (
+                (Array.isArray(words) ? words : [])
+                    .map(item => {
+                        const word = String(item?.word || item?.keyword || '').trim();
+                        if (!word) return null;
+                        const metricEntry = getKeywordMetricByWord(word) || {};
+                        return {
+                            keyword: word,
+                            bidPrice: toNumber(item?.bidPrice, 1),
+                            matchScope: parseMatchScope(item?.matchScope, DEFAULTS.matchScope) === 1 ? '精准' : '广泛',
+                            onlineStatus: toNumber(item?.onlineStatus, DEFAULTS.keywordOnlineStatus),
+                            searchIndex: String(metricEntry.searchIndexText || '-'),
+                            marketClickRate: String(metricEntry.marketClickRateText || '-'),
+                            marketClickConversionRate: String(metricEntry.marketClickConversionRateText || '-'),
+                            marketAverageBid: String(metricEntry.marketAverageBidText || '-'),
+                            relevance: String(metricEntry.relevanceText || '-')
+                        };
+                    })
+                    .filter(Boolean)
+            );
+
+            const logRecommendedKeywordConsoleReport = ({
+                triggerSource = 'manual',
+                targetItem = {},
+                runtime = {},
+                keywordDefaults = {},
+                recommendCount = 0,
+                recommendedWords = [],
+                normalizedRecommend = [],
+                manualWords = [],
+                mergedWords = []
+            } = {}) => {
+                if (typeof console === 'undefined') return;
+                const sourceTag = String(triggerSource || 'manual').trim() || 'manual';
+                const targetItemSnapshot = {
+                    materialId: toIdValue(targetItem?.materialId || targetItem?.itemId),
+                    materialName: String(targetItem?.materialName || '').trim()
+                };
+                const runtimeSnapshot = {
+                    bizCode: String(runtime?.bizCode || '').trim(),
+                    promotionScene: String(runtime?.promotionScene || '').trim(),
+                    itemSelectedMode: String(runtime?.itemSelectedMode || '').trim(),
+                    bidTypeV2: String(runtime?.bidTypeV2 || '').trim(),
+                    bidTargetV2: String(runtime?.bidTargetV2 || '').trim()
+                };
+                const keywordDefaultsSnapshot = {
+                    bidPrice: toNumber(keywordDefaults?.bidPrice, 1),
+                    matchScope: parseMatchScope(keywordDefaults?.matchScope, DEFAULTS.matchScope),
+                    onlineStatus: toNumber(keywordDefaults?.onlineStatus, DEFAULTS.keywordOnlineStatus)
+                };
+                const summary = {
+                    source: sourceTag,
+                    recommendCount,
+                    rawRecommendCount: Array.isArray(recommendedWords) ? recommendedWords.length : 0,
+                    normalizedRecommendCount: Array.isArray(normalizedRecommend) ? normalizedRecommend.length : 0,
+                    manualWordCount: Array.isArray(manualWords) ? manualWords.length : 0,
+                    mergedWordCount: Array.isArray(mergedWords) ? mergedWords.length : 0
+                };
+                const reportTitle = `${TAG} 推荐关键词加载结果 [${sourceTag}] item=${targetItemSnapshot.materialId || '-'}`;
+
+                if (typeof console.groupCollapsed === 'function') {
+                    console.groupCollapsed(reportTitle);
+                } else if (typeof console.log === 'function') {
+                    console.log(reportTitle);
+                }
+                try {
+                    if (typeof console.log === 'function') {
+                        console.log('summary', summary);
+                        console.log('targetItem', targetItemSnapshot);
+                        console.log('runtime', runtimeSnapshot);
+                        console.log('keywordDefaults', keywordDefaultsSnapshot);
+                        console.log('recommendedWords(raw)', recommendedWords);
+                        console.log('normalizedRecommend', normalizedRecommend);
+                        console.log('manualWords(beforeMerge)', manualWords);
+                        console.log('mergedWords(afterMerge)', mergedWords);
+                    }
+                    const mergedRows = buildKeywordConsoleRows(mergedWords);
+                    if (mergedRows.length && typeof console.table === 'function') {
+                        console.table(mergedRows);
+                    } else if (typeof console.log === 'function') {
+                        console.log('mergedWords(rows)', mergedRows);
+                    }
+                } finally {
+                    if (typeof console.groupEnd === 'function') {
+                        console.groupEnd();
+                    }
+                }
+            };
+
+            const loadRecommendedKeywords = async (options = {}) => {
+                const triggerSource = String(options?.triggerSource || 'manual').trim() || 'manual';
                 if (!wizardState.addedItems.length) {
                     appendWizardLog('请先添加商品，再加载推荐关键词', 'error');
                     return false;
@@ -21286,6 +21421,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (typeof wizardState.buildRequest === 'function') {
                         wizardState.renderPreview(wizardState.buildRequest());
                     }
+                    logRecommendedKeywordConsoleReport({
+                        triggerSource,
+                        targetItem,
+                        runtime,
+                        keywordDefaults,
+                        recommendCount,
+                        recommendedWords,
+                        normalizedRecommend,
+                        manualWords,
+                        mergedWords
+                    });
                     appendWizardLog(`推荐关键词已加载 ${normalizedRecommend.length} 条（合并后 ${mergedWords.length} 条）`, 'success');
                     return true;
                 } catch (err) {
@@ -21318,7 +21464,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         delete wizardState.autoKeywordLoadMap[autoLoadKey];
                         return;
                     }
-                    const loadOk = await loadRecommendedKeywords();
+                    const loadOk = await loadRecommendedKeywords({ triggerSource: 'auto_fill' });
                     if (!loadOk) {
                         delete wizardState.autoKeywordLoadMap[autoLoadKey];
                         return;
@@ -21597,7 +21743,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 renderCandidateList();
             };
             wizardState.els.loadRecommendBtn.onclick = () => {
-                loadRecommendedKeywords();
+                loadRecommendedKeywords({ triggerSource: 'button_click' });
             };
             wizardState.els.loadCrowdBtn.onclick = () => {
                 loadRecommendedCrowds();
