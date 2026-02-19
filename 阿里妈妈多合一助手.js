@@ -11990,12 +11990,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 || runtime?.itemSelectedMode
                 || ''
             ).trim();
-            if (keywordGoal === '自定义推广'
-                || keywordSceneHint === 'promotion_scene_search_user_define'
-                || keywordItemModeHint === 'user_define') {
-                // 线上接口当前对自定义推广手动出价稳定性较差，统一走智能出价确保可创建。
-                return 'smart';
-            }
             const fromPlan = normalizeBidMode(plan?.bidMode || '', '');
             if (fromPlan) return fromPlan;
             const fromCommon = normalizeBidMode(request?.common?.bidMode || '', '');
@@ -12016,6 +12010,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (fromRequestCampaign) return fromRequestCampaign;
             const fromCampaign = normalizeBidMode(campaign?.bidTypeV2 || '', '');
             if (fromCampaign) return fromCampaign;
+            const hintedBidType = normalizeBidMode(
+                keywordGoal === '自定义推广'
+                    ? 'custom_bid'
+                    : (
+                        keywordSceneHint === 'promotion_scene_search_user_define'
+                            || keywordItemModeHint === 'user_define'
+                            ? 'custom_bid'
+                            : ''
+                    ),
+                ''
+            );
+            if (hintedBidType) return hintedBidType;
             return normalizeBidMode(runtime?.bidTypeV2 || DEFAULTS.bidTypeV2, 'smart');
         };
 
@@ -15202,43 +15208,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 submitEndpoint: entry?.meta?.submitEndpoint || '',
                 error: String(entry?.lastError || entry?.meta?.lastError || fallbackError || '服务端未返回 campaignId')
             });
-            const downgradeKeywordEntryToManual = (entry = {}) => {
-                const sourceCampaign = isPlainObject(entry?.solution?.campaign) ? entry.solution.campaign : {};
-                const sourceAdgroup = isPlainObject(entry?.solution?.adgroupList?.[0]) ? entry.solution.adgroupList[0] : {};
-                const goalRuntime = resolveKeywordGoalRuntimeFallback(
-                    entry?.meta?.marketingGoal
-                    || mergedRequest?.marketingGoal
-                    || mergedRequest?.common?.marketingGoal
-                    || ''
-                );
-                const downgradedCampaign = pruneKeywordCampaignForCustomScene(sourceCampaign, {
-                    request: mergedRequest,
-                    bidMode: 'manual',
-                    goalRuntime
-                });
-                const downgradedAdgroup = pruneKeywordAdgroupForCustomScene(sourceAdgroup, entry?.meta?.item || null, {
-                    bidMode: 'manual'
-                });
-                if (hasOwn(downgradedAdgroup, 'wordPackageList')) {
-                    delete downgradedAdgroup.wordPackageList;
-                }
-                return {
-                    ...entry,
-                    solution: {
-                        ...(entry.solution || {}),
-                        campaign: downgradedCampaign,
-                        adgroupList: [downgradedAdgroup]
-                    },
-                    meta: {
-                        ...(entry.meta || {}),
-                        bidMode: 'manual',
-                        bidTypeV2: 'custom_bid',
-                        bidTargetV2: '',
-                        fallbackTriggered: true,
-                        fallbackDowngraded: true
-                    }
-                };
-            };
 
             for (let batchIndex = 0; batchIndex < groupedBatches.length; batchIndex++) {
                 const batchPayload = groupedBatches[batchIndex] || {};
@@ -15313,75 +15282,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 if (!remainingEntries.length) continue;
 
-                const downgradeCandidates = remainingEntries.filter(entry => {
-                    const bidMode = normalizeBidMode(entry?.meta?.bidMode || 'smart', 'smart');
-                    const isKeywordEntry = entry?.meta?.isKeywordScene === true || sceneCapabilities.sceneName === '关键词推广';
-                    const errorText = String(entry?.lastError || entry?.meta?.lastError || batchError?.message || '');
-                    return isKeywordEntry && bidMode === 'smart' && isWordPackageValidationError(errorText);
-                });
-                let singleRetryEntries = remainingEntries.slice();
-                let skippedEntries = [];
-                let downgradeTriggered = false;
-                if (downgradeCandidates.length && fallbackPolicy !== 'none') {
-                    emitProgress(options, 'fallback_downgrade_pending', {
-                        batchIndex: batchIndex + 1,
-                        count: downgradeCandidates.length,
-                        policy: fallbackPolicy,
-                        error: batchError?.message || ''
-                    });
-                    if (fallbackPolicy === 'auto') {
-                        downgradeTriggered = true;
-                        emitProgress(options, 'fallback_downgrade_confirmed', {
-                            batchIndex: batchIndex + 1,
-                            count: downgradeCandidates.length,
-                            auto: true
-                        });
-                    } else if (fallbackPolicy === 'confirm') {
-                        let confirmed = false;
-                        try {
-                            confirmed = window.confirm('检测到流量智选词包校验失败，是否将失败计划改为手动出价后重试？');
-                        } catch {
-                            confirmed = false;
-                        }
-                        if (confirmed) {
-                            downgradeTriggered = true;
-                            emitProgress(options, 'fallback_downgrade_confirmed', {
-                                batchIndex: batchIndex + 1,
-                                count: downgradeCandidates.length,
-                                auto: false
-                            });
-                        } else {
-                            emitProgress(options, 'fallback_downgrade_canceled', {
-                                batchIndex: batchIndex + 1,
-                                count: downgradeCandidates.length
-                            });
-                            const downgradeSet = new Set(downgradeCandidates);
-                            skippedEntries = remainingEntries.filter(entry => downgradeSet.has(entry));
-                            singleRetryEntries = remainingEntries.filter(entry => !downgradeSet.has(entry));
-                        }
-                    }
-                    if (downgradeTriggered) {
-                        const downgradeSet = new Set(downgradeCandidates);
-                        singleRetryEntries = remainingEntries.map(entry => (
-                            downgradeSet.has(entry) ? downgradeKeywordEntryToManual(entry) : entry
-                        ));
-                    }
-                }
-
-                if (skippedEntries.length) {
-                    failures.push(...skippedEntries.map(entry => buildFailureFromEntry(entry)));
-                }
-                if (!singleRetryEntries.length) continue;
+                const singleRetryEntries = remainingEntries.slice();
 
                 emitProgress(options, 'submit_batch_fallback_single', {
                     batchIndex: batchIndex + 1,
                     endpoint: batchEndpoint,
                     error: batchError?.message || String(batchError),
-                    fallbackTriggered: downgradeTriggered,
+                    fallbackTriggered: false,
                     fallbackPolicy
                 });
-                let downgradeRetrySuccessCount = 0;
-                let downgradeRetryFailCount = 0;
                 for (const entry of singleRetryEntries) {
                     const entrySceneName = String(sceneCapabilities.sceneName || mergedRequest.sceneName || '').trim();
                     const entryItemId = toPositiveIdText(entry?.meta?.item?.materialId || entry?.meta?.item?.itemId || '');
@@ -15398,7 +15307,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         let outcome = await submitSingleEntry();
                         if (outcome.successes.length) {
                             successes.push(...outcome.successes);
-                            if (entry?.meta?.fallbackDowngraded) downgradeRetrySuccessCount += outcome.successes.length;
                         } else {
                             const primaryFailure = outcome.failures[0] || buildFailureFromEntry(entry, 'single_retry_failed');
                             const classification = classifyCreateFailure(primaryFailure?.error || '');
@@ -15447,13 +15355,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             }
                             if (outcome.successes.length) {
                                 successes.push(...outcome.successes);
-                                if (entry?.meta?.fallbackDowngraded) downgradeRetrySuccessCount += outcome.successes.length;
                             } else {
                                 const finalFailures = Array.isArray(outcome.failures) && outcome.failures.length
                                     ? outcome.failures
                                     : [buildFailureFromEntry(entry, conflictRetried ? 'conflict_resolve_retry_failed' : 'single_retry_failed')];
                                 failures.push(...finalFailures);
-                                if (entry?.meta?.fallbackDowngraded) downgradeRetryFailCount += finalFailures.length;
                             }
                         }
                     } catch (err) {
@@ -15464,15 +15370,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             submitEndpoint: entry?.meta?.submitEndpoint || '',
                             error: err?.message || String(err)
                         });
-                        if (entry?.meta?.fallbackDowngraded) downgradeRetryFailCount += 1;
                     }
-                }
-                if (downgradeTriggered) {
-                    emitProgress(options, 'fallback_downgrade_result', {
-                        batchIndex: batchIndex + 1,
-                        successCount: downgradeRetrySuccessCount,
-                        failCount: downgradeRetryFailCount
-                    });
                 }
             }
 

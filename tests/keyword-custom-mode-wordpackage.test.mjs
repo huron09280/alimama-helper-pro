@@ -108,3 +108,27 @@ test('关键词出价模式判定会读取目标强制覆盖来源避免误判�
     '未读取场景级营销场景覆盖'
   );
 });
+
+test('关键词自定义推广不再强制改为智能出价', () => {
+  const block = getBlock(
+    'const resolvePlanBidMode = ({ plan = {}, request = {}, runtime = {}, campaign = {} } = {}) => {',
+    'const normalizeKeywordWordListForSubmit = (wordList = []) => {'
+  );
+  assert.doesNotMatch(
+    block,
+    /keywordGoal === '自定义推广'[\s\S]*keywordSceneHint === 'promotion_scene_search_user_define'[\s\S]*keywordItemModeHint === 'user_define'[\s\S]*return 'smart';/,
+    '仍存在“自定义推广/自定义选品强制智能出价”逻辑'
+  );
+});
+
+test('关键词提交失败后不再执行词包校验降级重提', () => {
+  const block = getBlock(
+    'const buildFailureFromEntry = (entry = {}, fallbackError = \'\') => ({',
+    'const result = {'
+  );
+  assert.doesNotMatch(
+    block,
+    /fallback_downgrade_pending|fallback_downgrade_confirmed|fallback_downgrade_result|downgradeKeywordEntryToManual/,
+    '仍存在失败后降级重提逻辑'
+  );
+});
