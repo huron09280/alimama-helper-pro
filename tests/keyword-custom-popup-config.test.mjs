@@ -132,6 +132,50 @@ test('资源位与时段使用原站同构高级设置弹窗（三 Tab）', () =
   );
 });
 
+test('高级设置补齐地域与时段模板层按钮（最细层）', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /data-scene-popup-area-template="current"/,
+    '缺少投放地域“当前设置”模板按钮'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-area-template="recommended"/,
+    '缺少投放地域“推荐模板”按钮'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-area-template="custom"/,
+    '缺少投放地域“自定义模板”按钮'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-area-mode="alpha"/,
+    '缺少投放地域“按首字母选择”按钮'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-area-mode="geo"/,
+    '缺少投放地域“按地理区选择”按钮'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-time-template="current"/,
+    '缺少投放时间“当前设置”模板按钮'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-time-template="full"/,
+    '缺少投放时间“全日制投放”模板按钮'
+  );
+  assert.match(
+    block,
+    /data-scene-popup-time-template="custom"/,
+    '缺少投放时间“自定义投放时间模板”按钮'
+  );
+});
+
 test('配置资源位初始值兼容字符串并同步加载到高级弹窗', () => {
   const block = getRenderSceneDynamicConfigBlock();
   assert.match(

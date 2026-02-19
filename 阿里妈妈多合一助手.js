@@ -12289,7 +12289,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             if (request?.itemSearch) {
                 const searched = await searchItems(request.itemSearch);
-                return searched.list.slice(0, WIZARD_MAX_ITEMS);
+                if (Array.isArray(searched?.list) && searched.list.length) {
+                    return searched.list.slice(0, WIZARD_MAX_ITEMS);
+                }
+            }
+
+            const targetScene = String(
+                request?.sceneName
+                || wizardState?.draft?.sceneName
+                || inferCurrentSceneName()
+                || ''
+            ).trim();
+            const targetGoal = normalizeGoalCandidateLabel(
+                request?.marketingGoal
+                || request?.common?.marketingGoal
+                || ''
+            );
+            const isKeywordScene = targetScene === '关键词推广';
+            const shouldInjectKeywordDefaultItem = isKeywordScene && (!targetGoal || targetGoal === '自定义推广');
+            if (shouldInjectKeywordDefaultItem) {
+                const defaultItems = await fetchItemsByIds([SCENE_SYNC_DEFAULT_ITEM_ID], runtime);
+                if (defaultItems.length) return defaultItems.slice(0, WIZARD_MAX_ITEMS);
             }
 
             return [];
@@ -21110,6 +21130,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             </div>
                                         </section>
                                         <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchArea">
+                                            <div class="am-wxt-scene-advanced-toolbar">
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-template="current">当前设置</button>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-template="recommended">推荐投放地域模板</button>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-template="custom">自定义投放地域模板</button>
+                                            </div>
+                                            <div class="am-wxt-scene-advanced-toolbar">
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
+                                            </div>
                                             <div class="am-wxt-scene-advanced-tip">输入地域编码，逗号或换行分隔。输入 all 代表全部地域。</div>
                                             <div class="am-wxt-scene-advanced-area-presets">
                                                 <span class="am-wxt-scene-advanced-area-label">当前设置</span>
@@ -21119,6 +21148,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             <textarea class="am-wxt-scene-popup-textarea am-wxt-scene-advanced-area-editor" data-scene-popup-editor="launchArea"></textarea>
                                         </section>
                                         <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchPeriod">
+                                            <div class="am-wxt-scene-advanced-toolbar">
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="current">当前设置</button>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="full">全日制投放</button>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="custom">自定义投放时间模板</button>
+                                            </div>
                                             <div class="am-wxt-scene-advanced-toolbar">
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-time-action="clear">清空</button>
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-time-action="reset">重置</button>
@@ -21143,7 +21177,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         onMounted: (mask) => {
                             let currentTab = initialTabValue;
                             let areaList = Array.isArray(initialAreaList) ? initialAreaList.slice() : ['all'];
+                            const initialAreaListSnapshot = Array.isArray(initialAreaList) ? initialAreaList.slice() : ['all'];
+                            let areaTemplate = 'current';
+                            let areaMode = 'alpha';
                             let launchPeriodGridState = deepClone(initialPeriodGridState);
+                            const initialLaunchPeriodGridState = deepClone(initialPeriodGridState);
+                            let timeTemplate = 'current';
                             let adzoneList = initialAdzoneList.length
                                 ? initialAdzoneList.map(item => deepClone(item))
                                 : [deepClone(defaultFallbackAdzone)];
@@ -21155,6 +21194,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const adzoneListEl = mask.querySelector('[data-scene-popup-adzone-list]');
                             const areaEditor = mask.querySelector('[data-scene-popup-editor="launchArea"]');
                             const timeGrid = mask.querySelector('[data-scene-popup-time-grid]');
+                            const areaTemplateButtons = Array.from(mask.querySelectorAll('[data-scene-popup-area-template]'));
+                            const areaModeButtons = Array.from(mask.querySelectorAll('[data-scene-popup-area-mode]'));
+                            const timeTemplateButtons = Array.from(mask.querySelectorAll('[data-scene-popup-time-template]'));
 
                             const renderTabs = () => {
                                 tabButtons.forEach(btn => {
@@ -21170,6 +21212,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     const active = tab === currentTab;
                                     panel.classList.toggle('active', active);
                                     panel.hidden = !active;
+                                });
+                            };
+                            const renderAreaTemplateButtons = () => {
+                                areaTemplateButtons.forEach(btn => {
+                                    if (!(btn instanceof HTMLButtonElement)) return;
+                                    const key = String(btn.getAttribute('data-scene-popup-area-template') || '').trim();
+                                    const active = key === areaTemplate;
+                                    btn.classList.toggle('primary', active);
+                                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                });
+                            };
+                            const renderAreaModeButtons = () => {
+                                areaModeButtons.forEach(btn => {
+                                    if (!(btn instanceof HTMLButtonElement)) return;
+                                    const key = String(btn.getAttribute('data-scene-popup-area-mode') || '').trim();
+                                    const active = key === areaMode;
+                                    btn.classList.toggle('primary', active);
+                                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                });
+                            };
+                            const renderTimeTemplateButtons = () => {
+                                timeTemplateButtons.forEach(btn => {
+                                    if (!(btn instanceof HTMLButtonElement)) return;
+                                    const key = String(btn.getAttribute('data-scene-popup-time-template') || '').trim();
+                                    const active = key === timeTemplate;
+                                    btn.classList.toggle('primary', active);
+                                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
                                 });
                             };
 
@@ -21206,12 +21275,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 areaList = !list.length || list.some(item => /^all$/i.test(item))
                                     ? ['all']
                                     : list;
+                                areaTemplate = areaList.length === 1 && /^all$/i.test(areaList[0]) ? 'current' : 'custom';
                             };
                             const renderAreaEditor = () => {
                                 if (!(areaEditor instanceof HTMLTextAreaElement)) return;
                                 areaEditor.value = (areaList.length ? areaList : ['all']).join('\n');
+                                renderAreaTemplateButtons();
+                                renderAreaModeButtons();
                             };
 
+                            const setAllLaunchPeriodSlots = (enabled = true) => {
+                                ADVANCED_DAY_COLUMNS.forEach(day => {
+                                    ADVANCED_TIME_SLOTS.forEach(slot => {
+                                        setTimeSlot(day.key, slot.key, enabled);
+                                    });
+                                });
+                            };
                             const setTimeSlot = (dayKey = '', slotKey = '', enabled = true) => {
                                 if (!isPlainObject(launchPeriodGridState?.[dayKey])) return;
                                 if (!hasOwn(launchPeriodGridState[dayKey], slotKey)) return;
@@ -21249,6 +21328,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     </div>
                                     <div class="am-wxt-scene-time-body">${rowHtml}</div>
                                 `;
+                                renderTimeTemplateButtons();
                             };
 
                             tabButtons.forEach(btn => {
@@ -21280,18 +21360,70 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 };
                             });
                             if (areaEditor instanceof HTMLTextAreaElement) {
-                                areaEditor.addEventListener('input', parseAreaEditorValue);
+                                areaEditor.addEventListener('input', () => {
+                                    parseAreaEditorValue();
+                                    renderAreaTemplateButtons();
+                                });
                             }
+                            areaTemplateButtons.forEach(btn => {
+                                if (!(btn instanceof HTMLButtonElement)) return;
+                                btn.onclick = () => {
+                                    const templateKey = String(btn.getAttribute('data-scene-popup-area-template') || '').trim();
+                                    if (templateKey === 'recommended') {
+                                        areaList = ['110000', '310000', '330100', '440100'];
+                                        areaTemplate = 'recommended';
+                                        areaMode = 'geo';
+                                    } else if (templateKey === 'custom') {
+                                        if (!areaList.length || (areaList.length === 1 && /^all$/i.test(areaList[0]))) {
+                                            areaList = ['110000'];
+                                        }
+                                        areaTemplate = 'custom';
+                                    } else {
+                                        areaList = initialAreaListSnapshot.length ? initialAreaListSnapshot.slice() : ['all'];
+                                        areaTemplate = 'current';
+                                    }
+                                    renderAreaEditor();
+                                };
+                            });
+                            areaModeButtons.forEach(btn => {
+                                if (!(btn instanceof HTMLButtonElement)) return;
+                                btn.onclick = () => {
+                                    const modeKey = String(btn.getAttribute('data-scene-popup-area-mode') || '').trim();
+                                    if (!modeKey) return;
+                                    areaMode = modeKey;
+                                    renderAreaModeButtons();
+                                };
+                            });
                             mask.querySelectorAll('[data-scene-popup-area-preset]').forEach(btn => {
                                 if (!(btn instanceof HTMLButtonElement)) return;
                                 btn.onclick = () => {
                                     const preset = String(btn.getAttribute('data-scene-popup-area-preset') || '').trim();
                                     if (preset === 'popular') {
                                         areaList = ['110000', '310000', '330100', '440100'];
+                                        areaTemplate = 'recommended';
+                                        areaMode = 'geo';
                                     } else {
                                         areaList = ['all'];
+                                        areaTemplate = 'current';
                                     }
                                     renderAreaEditor();
+                                };
+                            });
+                            timeTemplateButtons.forEach(btn => {
+                                if (!(btn instanceof HTMLButtonElement)) return;
+                                btn.onclick = () => {
+                                    const templateKey = String(btn.getAttribute('data-scene-popup-time-template') || '').trim();
+                                    if (templateKey === 'full') {
+                                        launchPeriodGridState = createEmptyLaunchPeriodGridState();
+                                        setAllLaunchPeriodSlots(true);
+                                        timeTemplate = 'full';
+                                    } else if (templateKey === 'custom') {
+                                        timeTemplate = 'custom';
+                                    } else {
+                                        launchPeriodGridState = deepClone(initialLaunchPeriodGridState);
+                                        timeTemplate = 'current';
+                                    }
+                                    renderTimeGrid();
                                 };
                             });
                             if (timeGrid instanceof HTMLElement) {
@@ -21312,6 +21444,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     const current = !!launchPeriodGridState?.[dayKey]?.[slotKey];
                                     dragState = { active: true, next: !current };
                                     applyFromCell(cell, !current);
+                                    timeTemplate = 'custom';
                                     renderTimeGrid();
                                 });
                                 timeGrid.addEventListener('mouseover', (event) => {
@@ -21321,6 +21454,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         : null;
                                     if (!(cell instanceof HTMLElement)) return;
                                     applyFromCell(cell, !!dragState.next);
+                                    timeTemplate = 'custom';
                                     renderTimeGrid();
                                 });
                                 const handleMouseUp = () => {
@@ -21337,8 +21471,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     const action = String(btn.getAttribute('data-scene-popup-time-action') || '').trim();
                                     if (action === 'clear') {
                                         launchPeriodGridState = createEmptyLaunchPeriodGridState();
+                                        timeTemplate = 'custom';
                                     } else if (action === 'reset') {
                                         launchPeriodGridState = deepClone(initialPeriodGridState);
+                                        timeTemplate = 'current';
                                     }
                                     renderTimeGrid();
                                 };
@@ -25220,6 +25356,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         };
         const resolveParityTestItem = async (sceneName = '', options = {}) => {
+            const targetScene = String(sceneName || '').trim() || '关键词推广';
             const explicitItem = isPlainObject(options.item) ? options.item : null;
             if (explicitItem && (explicitItem.materialId || explicitItem.itemId)) {
                 return deepClone(explicitItem);
@@ -25233,9 +25370,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (existing) return deepClone(existing);
             const query = String(options.itemQuery || '').trim();
             const runtime = await getRuntimeDefaults(false);
-            const bizCode = resolveSceneBizCodeHint(sceneName) || runtime.bizCode || DEFAULTS.bizCode;
+            if (targetScene === '关键词推广' && options.useDefaultSyncItem !== false) {
+                const defaultItems = await fetchItemsByIds([SCENE_SYNC_DEFAULT_ITEM_ID], runtime);
+                if (Array.isArray(defaultItems) && defaultItems.length) {
+                    return deepClone(defaultItems[0]);
+                }
+            }
+            const bizCode = resolveSceneBizCodeHint(targetScene) || runtime.bizCode || DEFAULTS.bizCode;
             const promotionScene = resolveSceneDefaultPromotionScene(
-                sceneName,
+                targetScene,
                 runtime.promotionScene || DEFAULTS.promotionScene
             );
             const searched = await searchItems({
