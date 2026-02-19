@@ -19924,6 +19924,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const staticRows = [];
                 staticRows.push(buildProxySelectRow('场景选择', 'am-wxt-keyword-scene-select', wizardState.els.sceneSelect, { segmented: true }));
                 staticRows.push(buildGoalSelectorRow('营销目标', goalOptions, activeMarketingGoal, { segmented: true }));
+                staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
                 if (isKeywordScene) {
                     const keywordBidMode = normalizeBidMode(
                         wizardState?.els?.bidModeSelect?.value || wizardState?.draft?.bidMode || 'smart',
@@ -20139,7 +20140,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         });
                     }
                 }
-                staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
                 if (sceneName === '货品全站推广') {
                     const bidTypeKey = normalizeSceneFieldKey('出价方式');
                     const bidTypeOptions = resolveSceneFieldOptions(profile, '出价方式');

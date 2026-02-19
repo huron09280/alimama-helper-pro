@@ -106,3 +106,12 @@ test('自定义推广的人群设置四个按钮与提交字段一一对应', ()
     '“关闭”未映射到 aiXiaowanCrowdListSwitch=0'
   );
 });
+
+test('场景配置中的计划名称位于营销目标下方', () => {
+  const renderBlock = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    renderBlock,
+    /buildGoalSelectorRow\('营销目标'[\s\S]*?staticRows\.push\(buildProxyInputRow\('计划名称'/,
+    '计划名称未紧随营销目标渲染'
+  );
+});
