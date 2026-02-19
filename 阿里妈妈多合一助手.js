@@ -20686,6 +20686,235 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     );
                     return list.length ? list : ['all'];
                 };
+                const normalizeNativeAdzoneCode = (item = {}, idx = 0) => {
+                    const token = normalizeSceneSettingValue(
+                        item.adzoneCode
+                        || item.adzoneId
+                        || item.code
+                        || item.id
+                        || item.resourceCode
+                        || item.properties?.adzoneId
+                        || ''
+                    );
+                    if (token) return token;
+                    const fallbackName = normalizeSceneSettingValue(
+                        item.adzoneName
+                        || item.name
+                        || item.properties?.adzoneName
+                        || ''
+                    );
+                    if (fallbackName) return fallbackName;
+                    return `native_adzone_${idx + 1}`;
+                };
+                const normalizeNativeAdzoneName = (item = {}, idx = 0) => (
+                    normalizeSceneSettingValue(
+                        item.adzoneName
+                        || item.name
+                        || item.title
+                        || item.properties?.adzoneName
+                        || ''
+                    ) || `资源位${idx + 1}`
+                );
+                const isAdzoneListPlaceholderForSync = (list = []) => {
+                    const normalized = Array.isArray(list) ? list : [];
+                    if (!normalized.length) return true;
+                    return normalized.every((item, idx) => {
+                        const code = normalizeSceneSettingValue(
+                            item?.adzoneCode
+                            || item?.adzoneId
+                            || item?.code
+                            || item?.id
+                            || ''
+                        );
+                        const name = normalizeNativeAdzoneName(item, idx);
+                        if (/^(DEFAULT_SEARCH|A_TEST_SLOT|B_TEST_SLOT|TEST_|native_adzone_)/i.test(code)) return true;
+                        if (/^(DEFAULT_SEARCH|A_TEST_SLOT|B_TEST_SLOT|TEST_|native_adzone_)/i.test(name)) return true;
+                        if (/^资源位\d+$/.test(name)) return true;
+                        return false;
+                    });
+                };
+                const extractNativeAdvancedDefaultsSnapshot = (stateData = {}) => {
+                    if (!isPlainObject(stateData)) return null;
+                    const selected = isPlainObject(stateData.selected) ? stateData.selected : {};
+                    const selectedAdzoneList = Array.isArray(selected.adzoneList)
+                        ? selected.adzoneList.filter(item => isPlainObject(item))
+                        : [];
+                    const allAdzoneListRaw = Array.isArray(stateData.adzoneList)
+                        ? stateData.adzoneList
+                        : selectedAdzoneList;
+                    const selectedCodeSet = new Set(
+                        selectedAdzoneList
+                            .map((item, idx) => normalizeNativeAdzoneCode(item, idx))
+                            .filter(Boolean)
+                    );
+                    const adzoneList = allAdzoneListRaw
+                        .filter(item => isPlainObject(item))
+                        .map((item, idx) => {
+                            const adzoneCode = normalizeNativeAdzoneCode(item, idx);
+                            const adzoneName = normalizeNativeAdzoneName(item, idx);
+                            const isEnabledBySelection = selectedCodeSet.size
+                                ? selectedCodeSet.has(adzoneCode)
+                                : true;
+                            return {
+                                adzoneCode,
+                                adzoneId: normalizeSceneSettingValue(item.adzoneId || item.id || item.properties?.adzoneId || adzoneCode),
+                                adzoneName,
+                                resourceName: normalizeSceneSettingValue(
+                                    item.resourceName
+                                    || item.description
+                                    || item.desc
+                                    || item.subTitle
+                                    || item.properties?.desc
+                                    || ''
+                                ),
+                                status: isEnabledBySelection ? '1' : '0'
+                            };
+                        });
+                    const launchAreaList = uniqueBy(
+                        (Array.isArray(selected.launchAreaStrList) ? selected.launchAreaStrList : ['all'])
+                            .map(item => String(item || '').trim())
+                            .filter(Boolean),
+                        item => item
+                    );
+                    const launchPeriodList = Array.isArray(selected.launchPeriodList)
+                        ? selected.launchPeriodList.filter(item => isPlainObject(item))
+                        : [];
+                    if (!adzoneList.length && !launchAreaList.length && !launchPeriodList.length) return null;
+                    return {
+                        adzoneList,
+                        launchAreaList: launchAreaList.length ? launchAreaList : ['all'],
+                        launchPeriodList: launchPeriodList.length ? launchPeriodList : buildDefaultLaunchPeriodList()
+                    };
+                };
+                const scoreNativeAdvancedDefaultsSnapshot = (snapshot = {}) => {
+                    if (!isPlainObject(snapshot)) return -1;
+                    const adzoneList = Array.isArray(snapshot.adzoneList) ? snapshot.adzoneList : [];
+                    const launchAreaList = Array.isArray(snapshot.launchAreaList) ? snapshot.launchAreaList : [];
+                    const launchPeriodList = Array.isArray(snapshot.launchPeriodList) ? snapshot.launchPeriodList : [];
+                    let score = 0;
+                    score += Math.min(60, adzoneList.length * 12);
+                    if (adzoneList.some((item, idx) => !/^资源位\d+$/.test(normalizeNativeAdzoneName(item, idx)))) {
+                        score += 20;
+                    }
+                    if (launchAreaList.length) score += Math.min(10, launchAreaList.length);
+                    if (launchPeriodList.length) score += 8;
+                    if (launchPeriodList.some(item => Array.isArray(item?.timeSpanList) && item.timeSpanList.length)) {
+                        score += 4;
+                    }
+                    return score;
+                };
+                const isNativeAdvancedSnapshotRich = (snapshot = {}) => {
+                    if (!isPlainObject(snapshot)) return false;
+                    const adzoneList = Array.isArray(snapshot.adzoneList) ? snapshot.adzoneList : [];
+                    if (!adzoneList.length) return false;
+                    return adzoneList.some((item, idx) => {
+                        const code = normalizeSceneSettingValue(
+                            item?.adzoneCode
+                            || item?.adzoneId
+                            || item?.code
+                            || item?.id
+                            || ''
+                        );
+                        const name = normalizeNativeAdzoneName(item, idx);
+                        if (!name || /^资源位\d+$/.test(name)) return false;
+                        if (/^(DEFAULT_SEARCH|A_TEST_SLOT|B_TEST_SLOT|TEST_|native_adzone_)/i.test(code)) return false;
+                        if (/^(DEFAULT_SEARCH|A_TEST_SLOT|B_TEST_SLOT|TEST_|native_adzone_)/i.test(name)) return false;
+                        return true;
+                    });
+                };
+                const resolveNativeAdvancedDefaultsFromDialog = () => {
+                    const stateHosts = Array.from(document.querySelectorAll('[id^="content_cnt_dlg_"][id$="_adzoneList"], [id^="cnt_dlg_"]'));
+                    let bestSnapshot = null;
+                    let bestScore = -1;
+                    for (const host of stateHosts) {
+                        const stateData = host?.vframe?.$v?.updater?.$d;
+                        const snapshot = extractNativeAdvancedDefaultsSnapshot(stateData);
+                        if (!snapshot) continue;
+                        const score = scoreNativeAdvancedDefaultsSnapshot(snapshot);
+                        if (score > bestScore) {
+                            bestSnapshot = snapshot;
+                            bestScore = score;
+                        }
+                    }
+                    return bestSnapshot;
+                };
+                const resolveNativeAdvancedDialogRoot = () => (
+                    document.querySelector('[data-daynamic-view="onebp/views/pages/main/campaign/advance-dlg"]')
+                );
+                const resolveNativeAdvancedDialogCloseButton = () => {
+                    const root = resolveNativeAdvancedDialogRoot();
+                    if (!(root instanceof HTMLElement)) return null;
+                    return root.querySelector('[data-spm-click*="dialog_close"] button')
+                        || root.querySelector('[mx-click*="magix-portsbN"]')
+                        || root.querySelector('[data-spm-click*="dialog_close"]');
+                };
+                const findNativeAdvancedEntryButton = () => {
+                    const root = pickPlanConfigRoot();
+                    const searchScopes = [root, document];
+                    const visited = new Set();
+                    for (const scope of searchScopes) {
+                        if (!scope || visited.has(scope) || typeof scope.querySelectorAll !== 'function') continue;
+                        visited.add(scope);
+                        const candidates = Array.from(scope.querySelectorAll('button,a,[role="button"]'));
+                        const target = candidates.find(item => {
+                            if (!(item instanceof HTMLElement)) return false;
+                            const style = window.getComputedStyle(item);
+                            if (style.display === 'none' || style.visibility === 'hidden') return false;
+                            const text = normalizeText(item.textContent || '').replace(/\s+/g, '');
+                            if (!text) return false;
+                            return /投放资源位\/投放地域\/投放时间/.test(text)
+                                || (/投放资源位/.test(text) && /投放地域/.test(text) && /投放时间/.test(text));
+                        });
+                        if (target instanceof HTMLElement) return target;
+                    }
+                    return null;
+                };
+                const loadNativeAdvancedDefaultsSnapshot = async () => {
+                    let latestSnapshot = resolveNativeAdvancedDefaultsFromDialog();
+                    if (isNativeAdvancedSnapshotRich(latestSnapshot)) return latestSnapshot;
+                    const openButton = findNativeAdvancedEntryButton();
+                    if (!(openButton instanceof HTMLElement)) return latestSnapshot;
+                    try {
+                        openButton.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+                    } catch {
+                        try {
+                            openButton.scrollIntoView({ block: 'center', inline: 'nearest' });
+                        } catch {}
+                    }
+                    let openedByScript = false;
+                    if (!(resolveNativeAdvancedDialogRoot() instanceof HTMLElement)) {
+                        openedByScript = clickElement(openButton) === true;
+                    }
+                    await waitUntil(
+                        () => {
+                            latestSnapshot = resolveNativeAdvancedDefaultsFromDialog();
+                            return isNativeAdvancedSnapshotRich(latestSnapshot);
+                        },
+                        2200,
+                        90
+                    );
+                    if (!latestSnapshot) {
+                        latestSnapshot = resolveNativeAdvancedDefaultsFromDialog();
+                    }
+                    if (!isNativeAdvancedSnapshotRich(latestSnapshot)) {
+                        await waitUntil(
+                            () => {
+                                latestSnapshot = resolveNativeAdvancedDefaultsFromDialog();
+                                return !!latestSnapshot;
+                            },
+                            500,
+                            80
+                        );
+                    }
+                    if (openedByScript) {
+                        const closeButton = resolveNativeAdvancedDialogCloseButton();
+                        if (closeButton instanceof HTMLElement) {
+                            clickElement(closeButton);
+                            await sleep(80);
+                        }
+                    }
+                    return latestSnapshot;
+                };
                 const ADVANCED_DAY_COLUMNS = [
                     { key: '1', label: '星期一' },
                     { key: '2', label: '星期二' },
@@ -20807,12 +21036,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!(launchPeriodControl instanceof HTMLInputElement)) return null;
                     if (!(launchAreaControl instanceof HTMLInputElement)) return null;
 
-                    const adzoneRaw = normalizeSceneSettingValue(adzoneControl.value || '') || '[]';
-                    const launchPeriodRaw = normalizeSceneSettingValue(launchPeriodControl.value || '') || JSON.stringify(buildDefaultLaunchPeriodList());
-                    const launchAreaRaw = normalizeSceneSettingValue(launchAreaControl.value || '') || '["all"]';
-                    const initialAdzoneList = normalizeAdzoneListForAdvanced(adzoneRaw);
-                    const initialAreaList = parseLaunchAreaList(launchAreaRaw);
-                    const initialPeriodGridState = buildLaunchPeriodGridState(launchPeriodRaw);
+                    const adzoneFieldKey = normalizeSceneFieldKey('campaign.adzoneList');
+                    const launchAreaFieldKey = normalizeSceneFieldKey('campaign.launchAreaStrList');
+                    const launchPeriodFieldKey = normalizeSceneFieldKey('campaign.launchPeriodList');
+                    const adzoneTouched = !!(adzoneFieldKey && touchedBucket[adzoneFieldKey]);
+                    const launchAreaTouched = !!(launchAreaFieldKey && touchedBucket[launchAreaFieldKey]);
+                    const launchPeriodTouched = !!(launchPeriodFieldKey && touchedBucket[launchPeriodFieldKey]);
+
+                    let adzoneRaw = normalizeSceneSettingValue(adzoneControl.value || '') || '[]';
+                    let launchPeriodRaw = normalizeSceneSettingValue(launchPeriodControl.value || '') || JSON.stringify(buildDefaultLaunchPeriodList());
+                    let launchAreaRaw = normalizeSceneSettingValue(launchAreaControl.value || '') || '["all"]';
+                    let initialAdzoneList = normalizeAdzoneListForAdvanced(adzoneRaw);
+                    let initialAreaList = parseLaunchAreaList(launchAreaRaw);
+                    let initialPeriodGridState = buildLaunchPeriodGridState(launchPeriodRaw);
+                    const needNativeAdzoneDefaults = !adzoneTouched || isAdzoneListPlaceholderForSync(initialAdzoneList);
+                    const needNativeAreaDefaults = !launchAreaTouched || !initialAreaList.length;
+                    const needNativePeriodDefaults = !launchPeriodTouched || !parseScenePopupJsonArray(launchPeriodRaw, []).length;
+                    if (needNativeAdzoneDefaults || needNativeAreaDefaults || needNativePeriodDefaults) {
+                        const nativeDefaults = await loadNativeAdvancedDefaultsSnapshot();
+                        if (nativeDefaults) {
+                            if (needNativeAdzoneDefaults && Array.isArray(nativeDefaults.adzoneList) && nativeDefaults.adzoneList.length) {
+                                adzoneRaw = JSON.stringify(nativeDefaults.adzoneList);
+                                initialAdzoneList = normalizeAdzoneListForAdvanced(adzoneRaw);
+                            }
+                            if (needNativeAreaDefaults && Array.isArray(nativeDefaults.launchAreaList) && nativeDefaults.launchAreaList.length) {
+                                launchAreaRaw = JSON.stringify(nativeDefaults.launchAreaList);
+                                initialAreaList = parseLaunchAreaList(launchAreaRaw);
+                            }
+                            if (needNativePeriodDefaults && Array.isArray(nativeDefaults.launchPeriodList) && nativeDefaults.launchPeriodList.length) {
+                                launchPeriodRaw = JSON.stringify(nativeDefaults.launchPeriodList);
+                                initialPeriodGridState = buildLaunchPeriodGridState(launchPeriodRaw);
+                            }
+                        }
+                    }
                     const defaultFallbackAdzone = {
                         adzoneCode: 'DEFAULT_SEARCH',
                         adzoneName: '淘宝搜索',
@@ -27781,11 +28037,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
     window.__AM_WXT_PLAN_API__ = KeywordPlanApi;
     window.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
+    window.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     installPageApiBridgeHost();
     injectPageApiBridgeClient();
     if (pageGlobal && pageGlobal !== window) {
         pageGlobal.__AM_TOKENS__ = State.tokens;
         pageGlobal.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
+        pageGlobal.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }
 
     // [INTEGRATED] Expose toggle function

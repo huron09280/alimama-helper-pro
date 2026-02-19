@@ -151,6 +151,105 @@ test('配置资源位初始值兼容字符串并同步加载到高级弹窗', ()
   );
 });
 
+test('高级设置会优先同步网页默认资源位/地域/时段', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /const loadNativeAdvancedDefaultsSnapshot = async \(\) => \{/,
+    '缺少网页默认高级设置回源加载器'
+  );
+  assert.match(
+    block,
+    /selected\.adzoneList/,
+    '网页默认资源位未从原站状态读取'
+  );
+  assert.match(
+    block,
+    /selected\.launchAreaStrList/,
+    '网页默认地域未从原站状态读取'
+  );
+  assert.match(
+    block,
+    /selected\.launchPeriodList/,
+    '网页默认时段未从原站状态读取'
+  );
+  assert.match(
+    block,
+    /openKeywordAdvancedSettingPopup[\s\S]*loadNativeAdvancedDefaultsSnapshot\(\)/,
+    '高级设置弹窗打开时未触发网页默认值同步'
+  );
+});
+
+test('资源位占位名称会触发默认值回源同步', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /const name = normalizeNativeAdzoneName\(item, idx\);/,
+    '缺少资源位占位名称归一化读取'
+  );
+  assert.match(
+    block,
+    /if \(\/\^\(DEFAULT_SEARCH\|A_TEST_SLOT\|B_TEST_SLOT\|TEST_\|native_adzone_\)\/i\.test\(name\)\) return true;/,
+    '资源位占位名称未纳入默认值回源判定'
+  );
+});
+
+test('网页高级设置入口支持根节点未命中时全局回退', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /const searchScopes = \[root, document\];/,
+    '缺少网页高级设置入口的全局回退查找范围'
+  );
+  assert.match(
+    block,
+    /for \(const scope of searchScopes\)/,
+    '缺少网页高级设置入口的回退遍历逻辑'
+  );
+});
+
+test('网页高级设置入口在视口外时会先滚动再点击', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /openButton\.scrollIntoView\(\{ block: 'center', inline: 'nearest', behavior: 'instant' \}\);/,
+    '缺少网页高级设置入口的滚动到视口逻辑'
+  );
+});
+
+test('网页高级设置会优先选择信息更完整的状态快照', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /let bestSnapshot = null;/,
+    '缺少高级设置状态快照优选容器'
+  );
+  assert.match(
+    block,
+    /let bestScore = -1;/,
+    '缺少高级设置状态快照评分变量'
+  );
+  assert.match(
+    block,
+    /if \(score > bestScore\)/,
+    '缺少高级设置状态快照择优逻辑'
+  );
+});
+
+test('网页高级设置会等待高质量状态快照后再回填', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /const isNativeAdvancedSnapshotRich = \(snapshot = {}\) => \{/,
+    '缺少高级设置快照质量判定器'
+  );
+  assert.match(
+    block,
+    /isNativeAdvancedSnapshotRich\(latestSnapshot\)/,
+    '缺少等待高质量快照的判定调用'
+  );
+});
+
 test('投放时间序列化保留 24:00 结束时间', () => {
   const block = getRenderSceneDynamicConfigBlock();
   assert.match(
