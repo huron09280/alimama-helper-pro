@@ -11960,6 +11960,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const isWordPackageValidationError = (errorText = '') => KEYWORD_WORD_PACKAGE_ERROR_RE.test(String(errorText || ''));
 
         const resolvePlanBidMode = ({ plan = {}, request = {}, runtime = {}, campaign = {} } = {}) => {
+            const keywordGoal = normalizeGoalLabel(
+                plan?.marketingGoal
+                || request?.marketingGoal
+                || request?.common?.marketingGoal
+                || ''
+            );
+            const keywordSceneHint = String(
+                plan?.campaignOverride?.promotionScene
+                || request?.promotionScene
+                || campaign?.promotionScene
+                || runtime?.promotionScene
+                || ''
+            ).trim();
+            if (keywordGoal === '自定义推广' || keywordSceneHint === 'promotion_scene_search_user_define') {
+                // 线上接口当前对自定义推广手动出价稳定性较差，统一走智能出价确保可创建。
+                return 'smart';
+            }
             const fromPlan = normalizeBidMode(plan?.bidMode || '', '');
             if (fromPlan) return fromPlan;
             const fromCommon = normalizeBidMode(request?.common?.bidMode || '', '');
@@ -12060,16 +12077,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!Array.isArray(out.updatedRightInfoAdgroupList)) out.updatedRightInfoAdgroupList = [];
             if (!Array.isArray(out.crowdList)) out.crowdList = [];
             if (!Array.isArray(out.adzoneList)) out.adzoneList = [];
+            if (out.promotionScene === 'promotion_scene_search_user_define') {
+                // 自定义推广提交 adzone 对象时服务端存在异常，当前场景改为由后端使用默认资源位。
+                out.adzoneList = [];
+            }
             if (!Array.isArray(out.launchAreaStrList) || !out.launchAreaStrList.length) out.launchAreaStrList = ['all'];
             if (!Array.isArray(out.launchPeriodList) || !out.launchPeriodList.length) out.launchPeriodList = buildDefaultLaunchPeriodList();
             return out;
         };
 
-        const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null) => {
+        const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null, options = {}) => {
             const input = isPlainObject(adgroup) ? adgroup : {};
+            const bidMode = normalizeBidMode(options?.bidMode || '', 'smart');
+            const isManual = bidMode === 'manual';
             const out = {};
             out.rightList = Array.isArray(input.rightList) ? deepClone(input.rightList) : [];
             out.wordList = normalizeKeywordWordListForSubmit(input.wordList || []);
+            if (!isManual && hasOwn(input, 'wordPackageList')) {
+                out.wordPackageList = Array.isArray(input.wordPackageList)
+                    ? deepClone(input.wordPackageList).slice(0, 100)
+                    : [];
+            }
             if (item && (item.materialId || item.itemId)) {
                 out.material = pickMaterialFields(mergeDeep(input.material || {}, {
                     materialId: toIdValue(item.materialId || item.itemId),
@@ -13809,7 +13837,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bidMode: planBidMode,
                     goalRuntime: keywordGoalRuntime
                 });
-                merged.adgroup = pruneKeywordAdgroupForCustomScene(merged.adgroup, hasItem ? item : null);
+                merged.adgroup = pruneKeywordAdgroupForCustomScene(merged.adgroup, hasItem ? item : null, {
+                    bidMode: planBidMode
+                });
             } else {
                 const expectedSceneBizCode = normalizeSceneBizCode(sceneCapabilities.expectedSceneBizCode || sceneBizCodeHint || request?.bizCode || '');
                 const templateBizCode = normalizeSceneBizCode(runtimeForScene?.solutionTemplate?.bizCode || runtimeForScene?.solutionTemplate?.campaign?.bizCode || '');
@@ -15161,7 +15191,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bidMode: 'manual',
                     goalRuntime
                 });
-                const downgradedAdgroup = pruneKeywordAdgroupForCustomScene(sourceAdgroup, entry?.meta?.item || null);
+                const downgradedAdgroup = pruneKeywordAdgroupForCustomScene(sourceAdgroup, entry?.meta?.item || null, {
+                    bidMode: 'manual'
+                });
                 if (hasOwn(downgradedAdgroup, 'wordPackageList')) {
                     delete downgradedAdgroup.wordPackageList;
                 }
@@ -17108,7 +17140,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const getDefaultStrategyList = () => ([
             { id: 'trend_star', name: '关键词推广-趋势明星', marketingGoal: '趋势明星', enabled: true, dayAverageBudget: '100', bidMode: 'smart', useWordPackage: DEFAULTS.useWordPackage },
-            { id: 'custom_define', name: '关键词推广-自定义推广', marketingGoal: '自定义推广', enabled: true, dayAverageBudget: '100', bidMode: 'manual', useWordPackage: DEFAULTS.useWordPackage }
+            { id: 'custom_define', name: '关键词推广-自定义推广', marketingGoal: '自定义推广', enabled: true, dayAverageBudget: '100', bidMode: 'smart', useWordPackage: DEFAULTS.useWordPackage }
         ]);
 
         const wizardDefaultDraft = () => ({
@@ -22312,7 +22344,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const itemSelectedMode = String(runtimeRule?.itemSelectedMode || '').trim();
                 return {
                     marketingGoal: normalizedGoal || '趋势明星',
-                    bidMode: normalizedGoal === '自定义推广' ? 'manual' : 'smart',
+                    bidMode: 'smart',
                     bidTargetV2,
                     optimizeTarget,
                     promotionScene,
