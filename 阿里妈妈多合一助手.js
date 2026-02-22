@@ -5566,7 +5566,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '内容营销': true
         };
         const SCENE_SKIP_TEXT_RE = /^(上手指南|了解更多|了解详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开)$/;
-        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
+        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
         const SCENE_SECTION_ONLY_LABEL_RE = /^(营销场景与目标|营销场景|推广方案设置(?:-.+)?|推广方案设置|设置预算(?:及排期)?|设置基础信息|高级设置|创建完成|收集销售线索|行业解决方案|自定义方案)$/;
         const SCENE_LABEL_NOISE_RE = /[，。,！？!；;]/;
         const SCENE_LABEL_NOISE_PREFIX_RE = /^(请|建议|支持|算法|未添加|如有|当前|完成后|符合条件|在投商品|想探测|卡位客户都在玩|流量规模)/;
@@ -5575,11 +5575,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const SCENE_DYNAMIC_FIELD_BLOCK_RE = /(步骤|案例|同行|上涨|关键作用|全链路|打造|双出价模式|近\d+天|一键|详情|主播|ID|HOT|NEW|分析|策略属性|匹配到|完成|覆盖|潜力|同比|环比|帮我快速|竞争案例|已设置\d+个关键词|修改匹配方案)/i;
         const SCENE_KEYWORD_HINT_RE = /(设置|选择|预算|出价|关键词|人群|创意|商品|投放|落地页|线索|计划|方案|目标|资源位|地域|时间|店铺|内容|货品)/;
         const SCENE_FORBIDDEN_ACTION_RE = /(创建完成|立即投放|保存并关闭|确认提交|提交并投放|提交计划|确认投放|创建计划|确定提交|提交审核)/;
-        const SCENE_SECTION_HINT_RE = /(营销场景与目标|推广方案设置|选择推广商品|设置出价及预算|设置预算及排期|设置基础信息|高级设置|设置商品推广方案|设置落地页|收集销售线索|设置创意|设置推广方案|设置计划组|核心词设置|设置拉新人群|投放日期|投放时间|设置人群|选择解决方案)/;
+        const SCENE_SECTION_HINT_RE = /(营销场景与目标|推广方案设置|选择推广商品|设置出价及预算|设置预算及排期|设置基础信息|高级设置|设置商品推广方案|设置落地页|收集销售线索|设置创意|设置推广方案|设置计划组|核心词设置|设置拉新人群|投放日期|投放时间|分时折扣|设置人群|选择解决方案)/;
         const SCENE_REQUIRED_GUESS_RE = /(预算|出价|目标|计划名称|计划名|商品|关键词|人群|投放|创意|方式|类型|落地页|线索|方案)/;
         const SCENE_GOAL_GROUP_HINT_RE = /(营销目标|优化目标|投放目标|目标)/;
         const SCENE_GOAL_OPTION_HINT_RE = /(卡位|趋势|金卡|自定义|拉新|成交|点击|收藏|加购|渗透|投产|ROI|线索|留资|观看|转化|曝光|引流|促活|店铺|内容|直播|收集)/i;
-        const SCENE_GOAL_OPTION_SKIP_RE = /(添加商品|添加关键词|添加种子人群|设置基础信息|高级设置|预算|出价|计划名称|计划名|上手指南|了解更多|思考过程|保存并关闭|创建完成|立即投放|场景名称|营销场景与目标|设置预算|设置出价|设置推广|投放时间|投放资源位)/;
+        const SCENE_GOAL_OPTION_SKIP_RE = /(添加商品|添加关键词|添加种子人群|设置基础信息|高级设置|预算|出价|计划名称|计划名|上手指南|了解更多|思考过程|保存并关闭|创建完成|立即投放|场景名称|营销场景与目标|设置预算|设置出价|设置推广|投放时间|分时折扣|投放资源位)/;
         const SCENE_GOAL_LABEL_HINTS = [
             '货品全站推广',
             '关键词推广',
@@ -12048,6 +12048,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const request = options?.request || {};
             const input = isPlainObject(campaign) ? campaign : {};
             const goalRuntime = isPlainObject(options?.goalRuntime) ? options.goalRuntime : {};
+            const runtimeDefaults = isPlainObject(options?.runtimeDefaults) ? options.runtimeDefaults : {};
+            const templateCampaign = isPlainObject(options?.templateCampaign) ? options.templateCampaign : {};
+            const runtimeStoreData = isPlainObject(runtimeDefaults?.storeData) ? runtimeDefaults.storeData : {};
             const bidMode = normalizeBidMode(
                 options?.bidMode
                     || request?.common?.bidMode
@@ -12082,6 +12085,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 return '';
             };
+            const resolveNonEmptyArrayField = (field = '', fallback = []) => {
+                const candidates = [
+                    input?.[field],
+                    goalRuntime?.[field],
+                    request?.sceneForcedCampaignOverride?.[field],
+                    request?.goalForcedCampaignOverride?.[field],
+                    request?.common?.campaignOverride?.[field],
+                    request?.[field],
+                    request?.common?.[field],
+                    templateCampaign?.[field],
+                    runtimeStoreData?.[field],
+                    runtimeDefaults?.[field],
+                    fallback
+                ];
+                for (let i = 0; i < candidates.length; i++) {
+                    const value = candidates[i];
+                    if (Array.isArray(value)) {
+                        if (!value.length) continue;
+                        return deepClone(value);
+                    }
+                    if (typeof value === 'string') {
+                        const text = String(value || '').trim();
+                        if (!text) continue;
+                        if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
+                            try {
+                                const parsed = JSON.parse(text);
+                                if (Array.isArray(parsed) && parsed.length) return deepClone(parsed);
+                            } catch { }
+                        }
+                    }
+                }
+                return Array.isArray(fallback) ? deepClone(fallback) : [];
+            };
             out.bizCode = String(out.bizCode || '').trim() || DEFAULTS.bizCode;
             out.promotionScene = resolveCampaignField('promotionScene', DEFAULTS.promotionScene) || DEFAULTS.promotionScene;
             out.subPromotionType = out.subPromotionType || DEFAULTS.subPromotionType;
@@ -12097,7 +12133,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 out.bidTargetV2 = out.bidTargetV2 || DEFAULTS.bidTargetV2;
                 out.optimizeTarget = out.optimizeTarget || out.bidTargetV2 || DEFAULTS.bidTargetV2;
                 out.setSingleCostV2 = !!out.setSingleCostV2;
-                if (!out.setSingleCostV2) delete out.singleCostV2;
+                const singleCostValue = toNumber(out.singleCostV2, NaN);
+                if (out.setSingleCostV2 && Number.isFinite(singleCostValue) && singleCostValue > 0) {
+                    out.singleCostV2 = singleCostValue;
+                } else {
+                    out.setSingleCostV2 = false;
+                    delete out.singleCostV2;
+                }
             }
             out.dmcType = out.dmcType || DEFAULTS.dmcType;
             out.campaignName = String(out.campaignName || `关键词推广_${todayStamp()}`).trim();
@@ -12109,25 +12151,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!Array.isArray(out.itemIdList)) out.itemIdList = [];
             if (!Array.isArray(out.deleteAdgroupList)) out.deleteAdgroupList = [];
             if (!Array.isArray(out.updatedRightInfoAdgroupList)) out.updatedRightInfoAdgroupList = [];
+            out.crowdList = resolveNonEmptyArrayField('crowdList', Array.isArray(out.crowdList) ? out.crowdList : []);
             if (!Array.isArray(out.crowdList)) out.crowdList = [];
+            out.adzoneList = resolveNonEmptyArrayField('adzoneList', Array.isArray(out.adzoneList) ? out.adzoneList : []);
             if (!Array.isArray(out.adzoneList)) out.adzoneList = [];
-            if (out.promotionScene === 'promotion_scene_search_user_define') {
-                // 自定义推广提交 adzone 对象时服务端存在异常，当前场景改为由后端使用默认资源位。
-                out.adzoneList = [];
-            }
-            if (!Array.isArray(out.launchAreaStrList) || !out.launchAreaStrList.length) out.launchAreaStrList = ['all'];
-            if (!Array.isArray(out.launchPeriodList) || !out.launchPeriodList.length) out.launchPeriodList = buildDefaultLaunchPeriodList();
+            const resolvedLaunchAreaList = resolveNonEmptyArrayField(
+                'launchAreaStrList',
+                Array.isArray(out.launchAreaStrList) ? out.launchAreaStrList : []
+            );
+            out.launchAreaStrList = Array.isArray(resolvedLaunchAreaList) && resolvedLaunchAreaList.length
+                ? resolvedLaunchAreaList
+                : ['all'];
+            const resolvedLaunchPeriodList = resolveNonEmptyArrayField(
+                'launchPeriodList',
+                Array.isArray(out.launchPeriodList) ? out.launchPeriodList : []
+            );
+            out.launchPeriodList = Array.isArray(resolvedLaunchPeriodList) && resolvedLaunchPeriodList.length
+                ? resolvedLaunchPeriodList
+                : buildDefaultLaunchPeriodList();
             return out;
         };
 
         const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null, options = {}) => {
             const input = isPlainObject(adgroup) ? adgroup : {};
-            const bidMode = normalizeBidMode(options?.bidMode || '', 'smart');
-            const isManual = bidMode === 'manual';
             const out = {};
             out.rightList = Array.isArray(input.rightList) ? deepClone(input.rightList) : [];
             out.wordList = normalizeKeywordWordListForSubmit(input.wordList || []);
-            if (!isManual && hasOwn(input, 'wordPackageList')) {
+            if (hasOwn(input, 'wordPackageList')) {
                 out.wordPackageList = Array.isArray(input.wordPackageList)
                     ? deepClone(input.wordPackageList).slice(0, 100)
                     : [];
@@ -12208,25 +12258,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const useWordPackage = resolveWordPackageSwitch();
             const manualWords = parseKeywords(plan?.keywords || [], keywordDefaults).map(word => applyKeywordDefaults(word, keywordDefaults));
+            const keywordSuggestDefaults = {
+                ...runtimeDefaults,
+                itemSelectedMode: runtimeDefaults.itemSelectedMode || DEFAULTS.itemSelectedMode,
+                bidTypeV2: runtimeDefaults.bidTypeV2 || DEFAULTS.bidTypeV2,
+                bidTargetV2: runtimeDefaults.bidTargetV2 || DEFAULTS.bidTargetV2,
+                promotionScene: runtimeDefaults.promotionScene || DEFAULTS.promotionScene
+            };
 
             let recommendedWords = [];
             let recommendedPackages = [];
             if (mode !== 'manual') {
                 recommendedWords = await fetchRecommendWordList({
-                    bizCode: runtimeDefaults.bizCode,
+                    bizCode: keywordSuggestDefaults.bizCode,
                     materialId: item.materialId,
-                    defaults: runtimeDefaults,
+                    defaults: keywordSuggestDefaults,
                     source: recommendSource,
                     requestOptions
                 });
-                if (useWordPackage) {
-                    recommendedPackages = await fetchRecommendWordPackageList({
-                        bizCode: runtimeDefaults.bizCode,
-                        materialId: item.materialId,
-                        defaults: runtimeDefaults,
-                        requestOptions
-                    });
-                }
+            }
+            if (useWordPackage) {
+                recommendedPackages = await fetchRecommendWordPackageList({
+                    bizCode: keywordSuggestDefaults.bizCode,
+                    materialId: item.materialId,
+                    defaults: keywordSuggestDefaults,
+                    requestOptions
+                });
             }
 
             const normalizedRecommend = recommendedWords
@@ -12790,7 +12847,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (/自定义|手动|指定商品/.test(value)) return 'user_define';
             if (/搜索卡位/.test(value)) return 'search_detent';
             if (/趋势/.test(value)) return 'trend';
-            if (/店铺|全店|自动选品|推荐选品|行业推荐/.test(value)) return 'shop';
+            if (/店铺|全店|自动选品|推荐选品|行业推荐|好货快投/.test(value)) return 'shop';
             return '';
         };
 
@@ -13307,7 +13364,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             }
 
-            const launchTimeEntry = findSceneSettingEntry(entries, [/投放时间/, /投放日期/, /发布日期/, /排期/]);
+            const launchTimeEntry = findSceneSettingEntry(entries, [/投放时间/, /投放日期/, /分时折扣/, /发布日期/, /排期/]);
             if (launchTimeEntry && /(不限|长期|全天|24小时)/.test(launchTimeEntry.value)) {
                 applyCampaign('launchPeriodList', buildDefaultLaunchPeriodList(), launchTimeEntry.key, launchTimeEntry.value);
             }
@@ -13400,20 +13457,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             }
 
-            const crowdEntry = findSceneSettingEntry(entries, [/设置拉新人群/, /人群设置/, /种子人群/]);
-            if (crowdEntry) {
-                const crowdValue = normalizeSceneSettingValue(crowdEntry.value || '');
-                const crowdOpenHint = /(开|开启|启用|是|on|true|1)/i.test(crowdValue);
-                const crowdCloseHint = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(crowdValue);
-                if (/(设置优先投放客户|优先投放客户|优先)/.test(crowdValue) || crowdOpenHint) {
-                    applyCampaign('needTargetCrowd', '1', crowdEntry.key, crowdEntry.value);
-                    applyCampaign('aiXiaowanCrowdListSwitch', '1', crowdEntry.key, crowdEntry.value);
-                } else if (/(智能人群|添加种子人群|种子人群|智能|种子)/.test(crowdValue)) {
-                    applyCampaign('needTargetCrowd', '1', crowdEntry.key, crowdEntry.value);
-                    applyCampaign('aiXiaowanCrowdListSwitch', '0', crowdEntry.key, crowdEntry.value);
-                } else if (crowdCloseHint || !crowdValue) {
-                    applyCampaign('needTargetCrowd', '0', crowdEntry.key, crowdEntry.value);
-                    applyCampaign('aiXiaowanCrowdListSwitch', '0', crowdEntry.key, crowdEntry.value);
+            const crowdPriorityEntry = findSceneSettingEntry(entries, [/设置拉新人群/, /人群设置/, /种子人群/]);
+            if (crowdPriorityEntry) {
+                const crowdPriorityValue = normalizeSceneSettingValue(crowdPriorityEntry.value || '');
+                const crowdOpenHint = /(开|开启|启用|是|on|true|1)/i.test(crowdPriorityValue);
+                const crowdCloseHint = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(crowdPriorityValue);
+                if (/(设置优先投放客户|优先投放客户|优先|添加精选人群|精选人群)/.test(crowdPriorityValue) || crowdOpenHint) {
+                    applyCampaign('needTargetCrowd', '1', crowdPriorityEntry.key, crowdPriorityEntry.value);
+                    applyCampaign('aiXiaowanCrowdListSwitch', '1', crowdPriorityEntry.key, crowdPriorityEntry.value);
+                } else if (/(智能人群|添加种子人群|种子人群|智能|种子)/.test(crowdPriorityValue)) {
+                    applyCampaign('needTargetCrowd', '1', crowdPriorityEntry.key, crowdPriorityEntry.value);
+                    applyCampaign('aiXiaowanCrowdListSwitch', '0', crowdPriorityEntry.key, crowdPriorityEntry.value);
+                } else if (crowdCloseHint || !crowdPriorityValue) {
+                    applyCampaign('needTargetCrowd', '0', crowdPriorityEntry.key, crowdPriorityEntry.value);
+                    applyCampaign('aiXiaowanCrowdListSwitch', '0', crowdPriorityEntry.key, crowdPriorityEntry.value);
+                }
+            }
+            const crowdTargetEntry = findSceneSettingEntry(entries, [/人群优化目标/, /客户口径设置/, /人群价值设置/]);
+            if (crowdTargetEntry) {
+                const crowdTargetValue = normalizeSceneSettingValue(crowdTargetEntry.value || '');
+                const crowdTargetEnabled = /(开|开启|启用|是|on|true|1)/i.test(crowdTargetValue)
+                    || /人群优化目标/.test(crowdTargetValue);
+                const crowdTargetDisabled = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(crowdTargetValue);
+                if (crowdTargetEnabled && !crowdTargetDisabled) {
+                    applyCampaign('needTargetCrowd', '1', crowdTargetEntry.key, crowdTargetEntry.value);
+                } else if (crowdTargetDisabled || !crowdTargetValue) {
+                    applyCampaign('needTargetCrowd', '0', crowdTargetEntry.key, crowdTargetEntry.value);
                 }
             }
 
@@ -13779,9 +13848,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     request,
                     requestOptions
                 });
-                if (isKeywordManualMode) {
-                    keywordBundle.useWordPackage = false;
-                    keywordBundle.wordPackageList = [];
+                const templateWordPackageList = Array.isArray(baseAdgroup?.wordPackageList)
+                    ? deepClone(baseAdgroup.wordPackageList)
+                    : [];
+                if (keywordBundle.useWordPackage && !keywordBundle.wordPackageList.length && templateWordPackageList.length) {
+                    keywordBundle.wordPackageList = templateWordPackageList.slice(0, 100);
                 }
             }
 
@@ -13869,7 +13940,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 merged.campaign = pruneKeywordCampaignForCustomScene(merged.campaign, {
                     request,
                     bidMode: planBidMode,
-                    goalRuntime: keywordGoalRuntime
+                    goalRuntime: keywordGoalRuntime,
+                    runtimeDefaults: runtimeForScene,
+                    templateCampaign: template?.campaign || {}
                 });
                 merged.adgroup = pruneKeywordAdgroupForCustomScene(merged.adgroup, hasItem ? item : null, {
                     bidMode: planBidMode
@@ -15636,8 +15709,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     align-items: center;
                     flex-wrap: wrap;
                 }
-                #am-wxt-keyword-modal .am-wxt-toolbar input,
-                #am-wxt-keyword-modal .am-wxt-config input,
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]),
+                #am-wxt-keyword-modal .am-wxt-config input:not([type="checkbox"]):not([type="radio"]),
                 #am-wxt-keyword-modal .am-wxt-config select,
                 #am-wxt-keyword-modal .am-wxt-config textarea {
                     border: 1px solid rgba(148,163,184,0.5);
@@ -15652,6 +15725,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-toolbar input {
                     flex: 1;
                     min-width: 180px;
+                }
+                #am-wxt-keyword-modal .am-wxt-config input[type="checkbox"] {
+                    width: 14px;
+                    height: 14px;
+                    min-height: 14px;
+                    margin: 0;
+                    padding: 0;
+                    border: 0;
+                    background: transparent;
+                    box-sizing: border-box;
+                    -webkit-appearance: auto !important;
+                    appearance: auto !important;
+                    accent-color: #4f68ff;
+                    cursor: pointer;
+                    flex: 0 0 auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-config input[type="checkbox"]:disabled {
+                    cursor: not-allowed;
+                    opacity: 0.55;
                 }
                 #am-wxt-keyword-modal .am-wxt-btn {
                     border: 1px solid rgba(69,84,229,0.3);
@@ -16262,6 +16354,236 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     flex-wrap: wrap;
                     gap: 8px;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-layout {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+                    gap: 12px;
+                    min-height: min(500px, 62vh);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-pane {
+                    border: 1px solid rgba(148,163,184,0.28);
+                    border-radius: 10px;
+                    background: #fff;
+                    min-height: 0;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-tabs {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 10px 10px 8px;
+                    border-bottom: 1px solid rgba(148,163,184,0.18);
+                    overflow: auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-tab {
+                    border: 1px solid rgba(148,163,184,0.36);
+                    background: #fff;
+                    color: #475569;
+                    border-radius: 14px;
+                    padding: 4px 10px;
+                    font-size: 12px;
+                    line-height: 1.3;
+                    white-space: nowrap;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-tab.active {
+                    border-color: rgba(79,104,255,0.4);
+                    background: rgba(79,104,255,0.12);
+                    color: #3447cf;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-pane.is-left .am-wxt-scene-popup-actions {
+                    padding: 8px 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.18);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-quick-filters {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 8px 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.18);
+                    overflow: auto;
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-quick-filter {
+                    border: 1px solid rgba(148,163,184,0.34);
+                    border-radius: 14px;
+                    background: #fff;
+                    color: #64748b;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    white-space: nowrap;
+                    padding: 4px 9px;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-quick-filter.active {
+                    border-color: rgba(79,104,255,0.38);
+                    background: rgba(79,104,255,0.11);
+                    color: #3344c8;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-table-head {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 96px 136px 96px 72px;
+                    gap: 8px;
+                    align-items: center;
+                    padding: 8px 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.18);
+                    background: #f8fafc;
+                    color: #475569;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-list,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-list {
+                    overflow: auto;
+                    min-height: 0;
+                    flex: 1;
+                    padding: 8px 10px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-row {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 96px 136px 96px 72px;
+                    gap: 8px;
+                    align-items: center;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 8px;
+                    padding: 8px;
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-scale {
+                    font-size: 12px;
+                    color: #334155;
+                    text-align: right;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-reason {
+                    display: flex;
+                    align-items: center;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-reason .tag {
+                    display: inline-flex;
+                    align-items: center;
+                    max-width: 100%;
+                    border-radius: 999px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    line-height: 1.25;
+                    color: #3344c8;
+                    background: rgba(79,104,255,0.14);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-name .name,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-name .name {
+                    font-size: 12px;
+                    line-height: 1.35;
+                    color: #1f2937;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-name .meta,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-name .meta {
+                    margin-top: 2px;
+                    font-size: 11px;
+                    line-height: 1.35;
+                    color: #64748b;
+                    word-break: break-all;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-bid {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-bid input {
+                    width: 72px;
+                    height: 28px;
+                    border: 1px solid rgba(148,163,184,0.42);
+                    border-radius: 7px;
+                    padding: 0 8px;
+                    background: #fff;
+                    color: #1f2937;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-candidate-bid span {
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    padding: 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.18);
+                    background: #f8fafc;
+                    color: #334155;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-actions {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-row {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 86px 58px;
+                    align-items: center;
+                    gap: 8px;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 8px;
+                    padding: 8px;
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-bid {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    justify-content: flex-end;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-bid input {
+                    width: 56px;
+                    height: 28px;
+                    border: 1px solid rgba(148,163,184,0.42);
+                    border-radius: 7px;
+                    padding: 0 6px;
+                    background: #fff;
+                    color: #1f2937;
+                    font-size: 12px;
+                    text-align: right;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-selected-bid span {
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-empty {
+                    border: 1px dashed rgba(148,163,184,0.28);
+                    border-radius: 8px;
+                    padding: 12px;
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.45;
+                    text-align: center;
+                    background: #f8fafc;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-json.hidden {
+                    display: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-json {
+                    border: 1px solid rgba(148,163,184,0.26);
+                    border-radius: 10px;
+                    background: #f8fafc;
+                    padding: 10px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
                 #am-wxt-scene-popup-mask .am-wxt-btn {
                     border: 1px solid rgba(69,84,229,0.3);
                     border-radius: 8px;
@@ -16298,6 +16620,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     resize: vertical;
                     background: #f8fafc;
                     color: #1f2937;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-crowd {
+                    width: min(1180px, 96vw);
+                    max-height: 90vh;
+                    border-radius: 14px;
+                    padding: 14px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-crowd .am-wxt-scene-popup-body {
+                    gap: 10px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-advanced {
                     width: min(1120px, 96vw);
@@ -16401,6 +16732,50 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 12px;
                     color: #64748b;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-cards {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-card {
+                    text-align: left;
+                    border: 1px solid rgba(148,163,184,0.3);
+                    border-radius: 10px;
+                    background: #f8fafc;
+                    padding: 10px 10px 9px;
+                    cursor: pointer;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
+                    color: #334155;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-card.active {
+                    border-color: rgba(79,104,255,0.5);
+                    background: rgba(79,104,255,0.08);
+                    box-shadow: inset 0 0 0 1px rgba(79,104,255,0.18);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-title {
+                    font-size: 12px;
+                    line-height: 1.35;
+                    font-weight: 700;
+                    color: #1f2937;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-desc {
+                    font-size: 11px;
+                    line-height: 1.35;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-tag {
+                    display: inline-flex;
+                    width: fit-content;
+                    border-radius: 999px;
+                    padding: 2px 8px;
+                    background: rgba(79,104,255,0.16);
+                    color: #3447cf;
+                    font-size: 11px;
+                    line-height: 1.3;
+                    font-weight: 600;
+                }
                 #am-wxt-scene-popup-mask .am-wxt-scene-advanced-adzone-table {
                     border: 1px solid rgba(148,163,184,0.32);
                     border-radius: 10px;
@@ -16448,19 +16823,297 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     justify-content: flex-end;
                     gap: 6px;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-presets {
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-config-row {
                     display: flex;
                     align-items: center;
-                    flex-wrap: wrap;
                     gap: 8px;
+                    flex-wrap: wrap;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-label {
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-radio {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 12px;
+                    color: #475569;
+                    padding: 3px 8px;
+                    border: 1px solid rgba(148,163,184,0.35);
+                    border-radius: 999px;
+                    background: #fff;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-radio.active {
+                    border-color: rgba(79,104,255,0.42);
+                    background: rgba(79,104,255,0.08);
+                    color: #3241b9;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-radio input {
+                    margin: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-select {
+                    min-width: 178px;
+                    max-width: 260px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-tools {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-search-icon {
+                    font-size: 13px;
+                    color: #94a3b8;
+                    margin-left: 4px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-search {
+                    width: 220px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-selector {
+                    min-height: 320px;
+                    max-height: 420px;
+                    overflow: auto;
+                    border: 1px solid rgba(148,163,184,0.28);
+                    border-radius: 10px;
+                    background: #fff;
+                    padding: 10px 12px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section {
+                    border-bottom: 1px dashed rgba(148,163,184,0.25);
+                    padding-bottom: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section:last-child {
+                    border-bottom: none;
+                    padding-bottom: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle {
+                    border: none;
+                    background: transparent;
+                    padding: 0;
                     font-size: 12px;
                     color: #334155;
                     font-weight: 600;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-editor {
-                    min-height: 280px;
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.checked,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.partial {
+                    color: #3450d6;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-check-icon {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 3px;
+                    border: 1px solid rgba(79,104,255,0.45);
+                    color: #fff;
+                    background: #fff;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 10px;
+                    line-height: 1;
+                    flex-shrink: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.checked .am-wxt-scene-area-check-icon,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.partial .am-wxt-scene-area-check-icon,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-item.checked .am-wxt-scene-area-check-icon,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-check.checked .am-wxt-scene-area-check-icon,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-check.partial .am-wxt-scene-area-check-icon {
+                    background: #4f68ff;
+                    border-color: #4f68ff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-section-body {
+                    margin-top: 8px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    overflow: visible;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-group {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-group.no-title {
+                    display: block;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-group.geo-title {
+                    display: block;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-group-title {
+                    width: 20px;
+                    flex-shrink: 0;
+                    font-size: 12px;
+                    color: #64748b;
+                    line-height: 26px;
+                    text-align: center;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-group.geo-title .am-wxt-scene-area-group-title {
+                    width: auto;
+                    margin: 0 0 6px;
+                    color: #334155;
+                    line-height: 1.4;
+                    text-align: left;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-item-grid {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    flex: 1;
+                    position: relative;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-selector.area-mode-alpha .am-wxt-scene-area-item-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 8px 14px;
+                    align-items: start;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-selector.area-mode-geo .am-wxt-scene-area-item-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 8px 14px;
+                    align-items: start;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-row {
+                    position: relative;
+                    min-height: 24px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-main {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    max-width: 100%;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-item {
+                    border: none;
+                    background: transparent;
+                    padding: 0;
+                    min-height: 24px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    color: #334155;
+                    font-size: 12px;
+                    text-align: left;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-item.checked {
+                    color: #2f45c9;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-item.partial {
+                    color: #2f45c9;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-item {
+                    max-width: 100%;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-check {
+                    border: none;
+                    background: transparent;
+                    width: 16px;
+                    height: 16px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    flex-shrink: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-open {
+                    border: none;
+                    background: transparent;
+                    padding: 0;
+                    min-height: 24px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    color: #334155;
+                    font-size: 12px;
+                    text-align: left;
+                    max-width: 100%;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-open:hover,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-open.open,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-open.checked,
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-open.partial {
+                    color: #2f45c9;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-open .am-wxt-scene-area-item-label {
+                    white-space: nowrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-caret {
+                    color: #94a3b8;
+                    font-size: 11px;
+                    line-height: 1;
+                    transform: translateY(1px);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-province-open.open .am-wxt-scene-area-caret {
+                    color: #2f45c9;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-expand {
+                    display: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-city-list {
+                    position: absolute;
+                    left: 22px;
+                    top: calc(100% + 4px);
+                    z-index: 12;
+                    width: min(520px, calc(100% - 22px));
+                    min-width: 320px;
+                    padding: 10px 12px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(148,163,184,0.28);
+                    background: #fff;
+                    box-shadow: 0 10px 24px rgba(15,23,42,0.12);
+                    display: none;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 8px 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-city-list.open {
+                    display: grid;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-city-popover {
+                    pointer-events: auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-city-item {
+                    min-height: 22px;
+                    font-size: 12px;
+                    color: #334155;
+                    border: none;
+                    background: transparent;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    text-align: left;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-city-item.checked {
+                    color: #2f45c9;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-city-item.checked .am-wxt-scene-area-check-icon {
+                    background: #4f68ff;
+                    border-color: #4f68ff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-item-label {
+                    line-height: 1.2;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-loading {
+                    font-size: 12px;
+                    color: #64748b;
+                    line-height: 1.4;
+                    margin-bottom: 4px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-empty {
+                    font-size: 12px;
+                    color: #94a3b8;
+                    line-height: 1.5;
+                    padding: 6px 0 2px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-time-grid {
                     border: 1px solid rgba(148,163,184,0.3);
@@ -16470,18 +17123,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-time-head {
                     display: grid;
-                    grid-template-columns: 110px minmax(0, 1fr);
+                    grid-template-columns: 54px minmax(0, 1fr) 126px;
                     border-bottom: 1px solid rgba(148,163,184,0.2);
                     background: #f8fafc;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-time-days {
-                    display: grid;
-                    grid-template-columns: repeat(7, minmax(0, 1fr));
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-head-day,
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-head-actions {
+                    font-size: 11px;
+                    color: #64748b;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-time-day {
-                    font-size: 12px;
-                    color: #475569;
-                    padding: 10px 4px;
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-hours {
+                    display: grid;
+                    grid-template-columns: repeat(24, minmax(24px, 1fr));
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-hour {
+                    font-size: 10px;
+                    color: #64748b;
+                    padding: 8px 0;
                     text-align: center;
                     border-left: 1px solid rgba(148,163,184,0.12);
                 }
@@ -16489,32 +17150,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: flex;
                     flex-direction: column;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-time-row {
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-week-row {
                     display: grid;
-                    grid-template-columns: 110px minmax(0, 1fr);
+                    grid-template-columns: 54px minmax(0, 1fr) 126px;
                     border-bottom: 1px solid rgba(148,163,184,0.12);
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-time-row:last-child {
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-week-row:last-child {
                     border-bottom: none;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-time-label {
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-week-label {
                     font-size: 12px;
                     color: #64748b;
-                    padding: 8px 10px;
+                    padding: 8px 0;
                     display: flex;
                     align-items: center;
+                    justify-content: center;
                     background: #f8fafc;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-time-cells {
                     display: grid;
-                    grid-template-columns: repeat(7, minmax(0, 1fr));
+                    grid-template-columns: repeat(24, minmax(24px, 1fr));
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-time-cell {
                     border: none;
                     border-left: 1px solid rgba(148,163,184,0.12);
                     border-radius: 0;
                     background: rgba(100,116,139,0.08);
-                    min-height: 38px;
+                    min-height: 26px;
                     cursor: pointer;
                     padding: 0;
                 }
@@ -16522,6 +17184,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: rgba(79,104,255,0.23);
                     box-shadow: inset 0 0 0 1px rgba(79,104,255,0.45);
                 }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-week-actions {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                    padding: 0 6px;
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-copy {
+                    border: none;
+                    background: transparent;
+                    color: #4f68ff;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    padding: 0;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-copy:hover {
+                    text-decoration: underline;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-legend {
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    color: #64748b;
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-legend-item {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-legend-item i {
+                    width: 9px;
+                    height: 9px;
+                    border-radius: 50%;
+                    display: inline-block;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-legend-item i.level-1 { background: #9ca3af; }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-legend-item i.level-2 { background: #f59e0b; }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-legend-item i.level-3 { background: #f472b6; }
+                #am-wxt-scene-popup-mask .am-wxt-scene-time-legend-item i.level-4 { background: #4f68ff; }
                 #am-wxt-scene-popup-mask .am-wxt-scene-advanced-preview {
                     border-left: 1px solid rgba(148,163,184,0.18);
                     background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
@@ -16566,8 +17273,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-advanced {
                         width: min(96vw, 900px);
                     }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-crowd {
+                        width: min(96vw, 900px);
+                    }
                     #am-wxt-scene-popup-mask .am-wxt-scene-advanced-main {
                         grid-template-columns: minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-layout {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-cards {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-select,
+                    #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-search {
+                        width: 100%;
+                        max-width: 100%;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-area-city-list {
+                        position: static;
+                        left: auto;
+                        top: auto;
+                        width: 100%;
+                        min-width: 0;
+                        max-width: 100%;
+                        margin: 6px 0 0 22px;
+                        box-shadow: none;
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-selector.area-mode-alpha .am-wxt-scene-area-item-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                        gap: 8px 12px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-selector.area-mode-geo .am-wxt-scene-area-item-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                        gap: 8px 12px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-time-head {
+                        grid-template-columns: 46px minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-time-head-actions,
+                    #am-wxt-scene-popup-mask .am-wxt-scene-time-week-actions {
+                        display: none;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-time-week-row {
+                        grid-template-columns: 46px minmax(0, 1fr);
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-advanced-preview {
                         display: none;
@@ -16887,7 +17637,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     height: 36px;
                     background: #fff;
                 }
-                #am-wxt-keyword-modal .am-wxt-manual-keyword-item .am-wxt-bid-edit input {
+                #am-wxt-keyword-modal .am-wxt-config .am-wxt-manual-keyword-item .am-wxt-bid-edit input:not([type="checkbox"]):not([type="radio"]) {
                     width: 64px;
                     border: 0;
                     outline: none;
@@ -17851,17 +18601,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 { pattern: /(流量智选)/, options: ['开启', '关闭'] },
                 { pattern: /(冷启加速)/, options: ['开启', '关闭'] },
                 { pattern: /(人群设置|种子人群|设置拉新人群|设置人群)/, options: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'] },
-                { pattern: /(选品方式|选择推广商品)/, options: ['自定义选品', '行业推荐选品'] },
+                { pattern: /(选品方式|选择推广商品)/, options: ['自定义选品', '好货快投-大家电专享', '行业推荐选品'] },
                 { pattern: /(投放调优|优化模式)/, options: ['多目标优化', '日常优化'] },
                 { pattern: /(投放地域|地域设置)/, options: ['全部地域'] },
-                { pattern: /(投放时间|投放日期|发布日期|排期)/, options: ['长期投放', '不限时段', '固定时段'] },
+                { pattern: /(投放时间|投放日期|分时折扣|发布日期|排期)/, options: ['长期投放', '不限时段', '固定时段'] },
                 { pattern: /(计划组|设置计划组)/, options: ['不设置计划组'] }
             ];
             const SCENE_FALLBACK_OPTION_MAP = {
                 '货品全站推广': {
                     营销目标: ['货品全站推广'],
                     营销场景: ['全域投放 · ROI确定交付'],
-                    选品方式: ['自定义选品', '行业推荐选品'],
+                    选品方式: ['自定义选品', '好货快投-大家电专享', '行业推荐选品'],
                     出价方式: ['控投产比投放', '最大化拿量'],
                     出价目标: ['增加总成交金额', '增加净成交金额'],
                     目标投产比: ['5'],
@@ -17979,14 +18729,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
-            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|发布日期|排期|投放地域|地域设置|起量时间地域设置|计划组|设置计划组|选品方式|选择推广商品|人群设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
+            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|起量时间地域设置|计划组|设置计划组|选品方式|选择推广商品|人群设置|人群优化目标|客户口径设置|人群价值设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
             const SCENE_RENDER_FIELD_ALIAS_RULES = [
                 { pattern: /^(关键词设置|核心词设置)$/, label: '核心词设置' },
                 { pattern: /^(开启冷启加速|冷启加速)$/, label: '冷启加速' },
                 { pattern: /^(设置创意|创意设置|创意模式)$/, label: '创意设置' },
                 { pattern: /^(设置拉新人群|设置人群|人群设置|种子人群)$/, label: '人群设置' },
                 { pattern: /^(净目标投产比|目标投产比|ROI目标值|出价目标值|约束值)$/, label: '目标投产比' },
-                { pattern: /^(投放日期|投放时间|排期)$/, label: '投放时间' },
+                { pattern: /^(投放日期|投放时间|分时折扣|排期)$/, label: '投放时间' },
                 { pattern: /^(发布日期|发布时间)$/, label: '投放时间' },
                 { pattern: /^(选择推广商品|选品方式)$/, label: '选品方式' },
                 { pattern: /^(方案选择|选择方案)$/, label: '选择方案' },
@@ -18108,7 +18858,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (/(关键词设置|核心词设置|设置词包|匹配方式)/.test(token)) return 'keyword';
                 if (/(人群设置|种子人群|设置拉新人群|设置人群)/.test(token)) return 'crowd';
                 if (/(投放调优|优化模式)/.test(token)) return 'strategy';
-                if (/(投放时间|投放日期|发布日期|排期|投放地域|地域设置|流量智选|冷启加速)/.test(token)) return 'schedule';
+                if (/(投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|流量智选|冷启加速)/.test(token)) return 'schedule';
                 return '';
             };
 
@@ -18682,7 +19432,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             return pickByText('日常优化', true);
                         }
                     }
-                    if (/(投放时间|投放日期|发布日期|排期)/.test(normalizedLabel)) {
+                    if (/(投放时间|投放日期|分时折扣|发布日期|排期)/.test(normalizedLabel)) {
                         if (hasVisibleNativeHint(/长期投放|不限时段|全天|24小时/)) {
                             return pickByText('长期投放', true) || pickByText('不限时段', true);
                         }
@@ -18795,10 +19545,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         || pickByText('全部商品', true)
                         || pickByText('机会品推荐', true)
                         || pickByText('自定义选品', true)
+                        || pickByText('好货快投-大家电专享', true)
                         || pickByText('行业推荐选品', true);
                 }
 
-                if (/(投放日期|投放时间|排期)/.test(normalizedLabel)) {
+                if (/(投放日期|投放时间|分时折扣|排期)/.test(normalizedLabel)) {
                     return pickByText('长期投放', true) || pickByText('不限时段', true);
                 }
 
@@ -19344,8 +20095,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ? rowOptions.resolveBadgeText
                         : (() => '');
                     const inlineControlHtml = String(rowOptions.inlineControlHtml || '').trim();
-                    const selectedValue = String(selectEl.value || '');
-                    const optionHtml = Array.from(selectEl.options || []).map(option => {
+                    const allowedValues = Array.isArray(rowOptions.allowedValues)
+                        ? new Set(rowOptions.allowedValues.map(item => String(item || '').trim()).filter(Boolean))
+                        : null;
+                    const optionList = Array.from(selectEl.options || []).filter(option => {
+                        if (!(allowedValues instanceof Set) || !allowedValues.size) return true;
+                        return allowedValues.has(String(option?.value || '').trim());
+                    });
+                    const safeOptionList = optionList.length ? optionList : Array.from(selectEl.options || []);
+                    let selectedValue = String(selectEl.value || '');
+                    if (!safeOptionList.some(option => String(option?.value || '') === selectedValue)) {
+                        const fallbackValue = String(safeOptionList[0]?.value || '');
+                        const shouldEnforceSelection = rowOptions.enforceFilteredSelection !== false;
+                        if (shouldEnforceSelection && fallbackValue && selectedValue !== fallbackValue && !selectEl.disabled) {
+                            selectEl.value = fallbackValue;
+                            selectedValue = fallbackValue;
+                        }
+                    }
+                    const optionHtml = safeOptionList.map(option => {
                         const value = String(option?.value || '');
                         const text = String(option?.textContent || option?.label || value);
                         const badgeText = String(resolveBadgeText({ value, text, label }) || '').trim();
@@ -19570,6 +20337,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const adgroupList = parseScenePopupJsonArray(adgroupRaw, []);
                     if (!campaignList.length && !adgroupList.length) return '未配置人群明细';
                     return `客户 ${campaignList.length} / 种子 ${adgroupList.length}`;
+                };
+                const describeKeywordAdvancedSummary = ({
+                    adzoneRaw = '[]',
+                    launchAreaRaw = '["all"]',
+                    launchPeriodRaw = ''
+                } = {}) => {
+                    const adzoneList = parseScenePopupJsonArray(adzoneRaw, [])
+                        .filter(item => isPlainObject(item));
+                    const adzoneEnabledCount = adzoneList.filter(item => isAdzoneStatusEnabled(item)).length;
+                    const adzoneText = !adzoneList.length || adzoneEnabledCount === adzoneList.length
+                        ? '资源位:默认'
+                        : `资源位:${adzoneEnabledCount}/${adzoneList.length}`;
+                    const areaList = parseScenePopupJsonArray(launchAreaRaw, ['all'])
+                        .map(item => String(item || '').trim())
+                        .filter(Boolean);
+                    const areaText = (!areaList.length || (areaList.length === 1 && /^all$/i.test(areaList[0])))
+                        ? '地域:全部'
+                        : `地域:${areaList.length}个`;
+                    const periodList = parseScenePopupJsonArray(launchPeriodRaw || '', []);
+                    const periodAllDay = periodList.length > 0 && periodList.every(item => {
+                        const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                        return spanList.length === 1 && String(spanList[0]?.time || '').trim() === '00:00-24:00';
+                    });
+                    const periodText = periodAllDay ? '分时:全时段' : '分时:自定义';
+                    return `${adzoneText}｜${areaText}｜${periodText}`;
                 };
 
                 const buildScenePopupControl = (popup = {}) => {
@@ -19890,10 +20682,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         wizardState?.els?.bidModeSelect?.value || wizardState?.draft?.bidMode || 'smart',
                         'smart'
                     );
+                    const activeKeywordGoal = detectKeywordGoalFromText(activeMarketingGoal || '');
                     staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
                     if (keywordBidMode !== 'manual') {
+                        const keywordCustomBidTargetAllowedValues = ['conv', 'similar_item', 'market_penetration', 'fav_cart', 'click', 'roi'];
                         staticRows.push(buildProxySelectRow('出价目标', 'am-wxt-keyword-bid-target', wizardState.els.bidTargetSelect, {
                             segmented: true,
+                            allowedValues: activeKeywordGoal === '自定义推广' ? keywordCustomBidTargetAllowedValues : [],
+                            enforceFilteredSelection: activeKeywordGoal === '自定义推广',
                             resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
                         }));
                     }
@@ -19908,14 +20704,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             )
                             : ''
                     }));
-                    const activeKeywordGoal = detectKeywordGoalFromText(activeMarketingGoal || '');
                     if (activeKeywordGoal === '自定义推广') {
                         const pushKeywordCustomSettingRow = ({
                             label = '',
                             aliases = [],
                             options = [],
                             defaultValue = '',
-                            popup = null
+                            popup = null,
+                            strictOptions = false
                         } = {}) => {
                             const normalizedLabel = normalizeSceneRenderFieldLabel(label) || label;
                             const key = normalizeSceneFieldKey(normalizedLabel);
@@ -19923,20 +20719,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const aliasKeys = (Array.isArray(aliases) ? aliases : [])
                                 .map(item => normalizeSceneFieldKey(item))
                                 .filter(Boolean);
+                            const optionSource = strictOptions === true
+                                ? (Array.isArray(options) ? options : [])
+                                : resolveSceneFieldOptions(profile, normalizedLabel)
+                                    .concat(Array.isArray(options) ? options : []);
                             const optionList = uniqueBy(
-                                resolveSceneFieldOptions(profile, normalizedLabel)
-                                    .concat(Array.isArray(options) ? options : [])
+                                optionSource
                                     .map(item => normalizeSceneSettingValue(item))
                                     .filter(Boolean),
                                 item => item
                             ).slice(0, 24);
-                            const currentValue = normalizeSceneSettingValue(
+                            const currentCandidate = normalizeSceneSettingValue(
                                 bucket[key]
                                 || aliasKeys.map(aliasKey => bucket[aliasKey]).find(val => normalizeSceneSettingValue(val))
                                 || defaultValue
                                 || optionList[0]
                                 || ''
                             );
+                            let currentValue = currentCandidate;
+                            if (strictOptions === true && optionList.length) {
+                                const matchedCurrent = pickSceneValueFromOptions(currentCandidate, optionList);
+                                if (matchedCurrent) {
+                                    currentValue = matchedCurrent;
+                                } else {
+                                    const matchedDefault = pickSceneValueFromOptions(defaultValue, optionList);
+                                    currentValue = matchedDefault || optionList[0];
+                                }
+                            }
                             if (currentValue) {
                                 bucket[key] = currentValue;
                                 aliasKeys.forEach(aliasKey => {
@@ -20014,12 +20823,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             || keywordGoalRuntime.itemSelectedMode
                             || ''
                         );
-                        const defaultItemModeLabel = /shop/i.test(itemModeCode) ? '行业推荐选品' : '自定义选品';
+                        const defaultItemModeLabel = /shop/i.test(itemModeCode) ? '好货快投-大家电专享' : '自定义选品';
+                        const needTargetCrowdRaw = normalizeSceneSettingValue(
+                            bucket.campaign?.needTargetCrowd
+                            || bucket['campaign.needTargetCrowd']
+                            || bucket[normalizeSceneFieldKey('campaign.needTargetCrowd')]
+                            || '1'
+                        );
+                        const aiCrowdListSwitchRaw = normalizeSceneSettingValue(
+                            bucket.campaign?.aiXiaowanCrowdListSwitch
+                            || bucket['campaign.aiXiaowanCrowdListSwitch']
+                            || bucket[normalizeSceneFieldKey('campaign.aiXiaowanCrowdListSwitch')]
+                            || needTargetCrowdRaw
+                            || '1'
+                        );
+                        const isCrowdTargetEnabled = !/^(0|false|off|关闭|否)$/i.test(needTargetCrowdRaw || '1');
+                        const isPriorityCrowdEnabled = !/^(0|false|off|关闭|否)$/i.test(aiCrowdListSwitchRaw || '1');
+                        const launchAreaIsAll = !launchAreaList.length || (launchAreaList.length === 1 && /^all$/i.test(launchAreaList[0]));
+                        const launchPeriodIsAllDay = launchPeriodList.length > 0 && launchPeriodList.every(item => {
+                            const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                            return spanList.length === 1 && String(spanList[0]?.time || '').trim() === '00:00-24:00';
+                        });
+                        const adzoneEnabledCount = adzoneList.filter(item => isAdzoneStatusEnabled(item)).length;
+                        const advancedDefaultMode = (!adzoneList.length || adzoneEnabledCount === adzoneList.length)
+                            && launchAreaIsAll
+                            && launchPeriodIsAllDay;
                         pushKeywordCustomSettingRow({
                             label: '选品方式',
                             aliases: ['选择推广商品'],
-                            options: ['自定义选品', '行业推荐选品'],
-                            defaultValue: defaultItemModeLabel
+                            options: ['自定义选品', '好货快投-大家电专享'],
+                            defaultValue: defaultItemModeLabel,
+                            strictOptions: true
                         });
                         pushKeywordCustomSettingRow({
                             label: '冷启加速',
@@ -20029,75 +20863,115 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 SCENE_SPEC_FIELD_FALLBACK?.['关键词推广']?.冷启加速
                                 || SCENE_SPEC_FIELD_FALLBACK?.['关键词推广']?.开启冷启加速
                                 || '开启'
-                            )
+                            ),
+                            strictOptions: true
                         });
-                        pushKeywordCustomSettingRow({
-                            label: '人群设置',
-                            aliases: ['设置人群', '设置拉新人群', '种子人群'],
-                            options: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'],
-                            defaultValue: '关闭',
-                            popup: {
-                                trigger: 'crowd',
-                                title: '配置人群明细',
-                                buttonLabel: '配置人群',
-                                summary: describeCrowdSummary(crowdCampaignRaw, crowdAdgroupRaw),
-                                hiddenFields: [
-                                    { fieldKey: crowdCampaignField, value: crowdCampaignRaw },
-                                    { fieldKey: crowdAdgroupField, value: crowdAdgroupRaw }
-                                ]
-                            }
-                        });
-                        pushKeywordCustomSettingRow({
-                            label: '创意设置',
-                            aliases: ['设置创意', '创意模式'],
-                            options: ['智能', '专业', '极简'],
-                            defaultValue: '智能'
-                        });
-                        pushKeywordCustomSettingRow({
-                            label: '投放资源位',
-                            aliases: ['资源位设置', '投放资源位/投放地域/投放时间', '高级设置'],
-                            options: ['平台优选', '自定义资源位'],
-                            defaultValue: '平台优选',
-                            popup: {
-                                trigger: 'adzone',
-                                title: '高级设置',
-                                buttonLabel: '配置资源位',
-                                summary: describeAdzoneSummary(adzoneRaw),
-                                hiddenFields: [
-                                    { fieldKey: adzoneField, value: adzoneRaw }
-                                ]
-                            }
-                        });
-                        pushKeywordCustomSettingRow({
-                            label: '投放时间',
-                            aliases: ['投放日期', '发布日期'],
-                            options: ['长期投放', '不限时段', '固定时段'],
-                            defaultValue: '长期投放',
-                            popup: {
-                                trigger: 'launchPeriod',
-                                title: '高级设置',
-                                buttonLabel: '配置时段',
-                                summary: describeLaunchPeriodSummary(launchPeriodRaw),
-                                hiddenFields: [
-                                    { fieldKey: launchPeriodField, value: launchPeriodRaw }
-                                ]
-                            }
-                        });
-                        pushKeywordCustomSettingRow({
-                            label: '投放地域',
-                            aliases: ['地域设置'],
-                            options: ['全部地域'],
-                            defaultValue: '全部地域',
-                            popup: {
-                                trigger: 'launchArea',
-                                title: '高级设置',
-                                buttonLabel: '配置地域',
-                                summary: describeLaunchAreaSummary(launchAreaRaw),
-                                hiddenFields: [
-                                    { fieldKey: launchAreaField, value: launchAreaRaw }
-                                ]
-                            }
-                        });
+                        if (keywordBidMode === 'manual') {
+                            const hasCrowdData = parseScenePopupJsonArray(crowdCampaignRaw, []).length > 0
+                                || parseScenePopupJsonArray(crowdAdgroupRaw, []).length > 0;
+                            pushKeywordCustomSettingRow({
+                                label: '人群设置',
+                                aliases: ['设置人群', '设置拉新人群', '种子人群'],
+                                options: ['添加精选人群', '关闭'],
+                                defaultValue: (isPriorityCrowdEnabled || hasCrowdData) ? '添加精选人群' : '关闭',
+                                strictOptions: true,
+                                popup: {
+                                    trigger: 'crowd',
+                                    title: '添加精选人群',
+                                    buttonLabel: '编辑人群',
+                                    summary: describeCrowdSummary(crowdCampaignRaw, crowdAdgroupRaw),
+                                    hiddenFields: [
+                                        { fieldKey: crowdCampaignField, value: crowdCampaignRaw },
+                                        { fieldKey: crowdAdgroupField, value: crowdAdgroupRaw }
+                                    ]
+                                }
+                            });
+                            pushKeywordCustomSettingRow({
+                                label: '投放资源位/投放地域/分时折扣',
+                                aliases: ['高级设置', '投放资源位/投放地域/投放时间', '资源位设置'],
+                                options: ['默认投放', '自定义设置'],
+                                defaultValue: advancedDefaultMode ? '默认投放' : '自定义设置',
+                                strictOptions: true,
+                                popup: {
+                                    trigger: 'adzone',
+                                    title: '高级设置',
+                                    buttonLabel: '编辑设置',
+                                    summary: describeKeywordAdvancedSummary({
+                                        adzoneRaw,
+                                        launchAreaRaw,
+                                        launchPeriodRaw
+                                    }),
+                                    hiddenFields: [
+                                        { fieldKey: adzoneField, value: adzoneRaw },
+                                        { fieldKey: launchPeriodField, value: launchPeriodRaw },
+                                        { fieldKey: launchAreaField, value: launchAreaRaw }
+                                    ]
+                                }
+                            });
+                        } else {
+                            pushKeywordCustomSettingRow({
+                                label: '人群设置',
+                                aliases: ['设置人群', '设置拉新人群', '种子人群'],
+                                options: ['设置优先投放客户', '关闭'],
+                                defaultValue: isPriorityCrowdEnabled ? '设置优先投放客户' : '关闭',
+                                strictOptions: true
+                            });
+                            pushKeywordCustomSettingRow({
+                                label: '人群优化目标',
+                                aliases: ['客户口径设置', '人群价值设置'],
+                                options: ['开启', '关闭'],
+                                defaultValue: isCrowdTargetEnabled ? '开启' : '关闭',
+                                strictOptions: true
+                            });
+                            pushKeywordCustomSettingRow({
+                                label: '投放资源位',
+                                aliases: ['资源位设置', '投放资源位/投放地域/投放时间', '投放资源位/投放地域/分时折扣', '高级设置'],
+                                options: ['平台优选', '自定义资源位'],
+                                defaultValue: '平台优选',
+                                strictOptions: true,
+                                popup: {
+                                    trigger: 'adzone',
+                                    title: '高级设置',
+                                    buttonLabel: '配置资源位',
+                                    summary: describeAdzoneSummary(adzoneRaw),
+                                    hiddenFields: [
+                                        { fieldKey: adzoneField, value: adzoneRaw }
+                                    ]
+                                }
+                            });
+                            pushKeywordCustomSettingRow({
+                                label: '投放时间',
+                                aliases: ['投放日期', '发布日期', '分时折扣'],
+                                options: ['长期投放', '不限时段', '固定时段'],
+                                defaultValue: '长期投放',
+                                strictOptions: true,
+                                popup: {
+                                    trigger: 'launchPeriod',
+                                    title: '高级设置',
+                                    buttonLabel: '配置时段',
+                                    summary: describeLaunchPeriodSummary(launchPeriodRaw),
+                                    hiddenFields: [
+                                        { fieldKey: launchPeriodField, value: launchPeriodRaw }
+                                    ]
+                                }
+                            });
+                            pushKeywordCustomSettingRow({
+                                label: '投放地域',
+                                aliases: ['地域设置'],
+                                options: ['全部地域'],
+                                defaultValue: '全部地域',
+                                strictOptions: true,
+                                popup: {
+                                    trigger: 'launchArea',
+                                    title: '高级设置',
+                                    buttonLabel: '配置地域',
+                                    summary: describeLaunchAreaSummary(launchAreaRaw),
+                                    hiddenFields: [
+                                        { fieldKey: launchAreaField, value: launchAreaRaw }
+                                    ]
+                                }
+                            });
+                        }
                     }
                 }
                 if (sceneName === '货品全站推广') {
@@ -20286,7 +21160,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
                             <div class="am-wxt-setting-control am-wxt-setting-control-inline">
                                 <label class="am-wxt-inline-check">
-                                    <input type="checkbox" data-proxy-check-target="am-wxt-keyword-single-cost-enable" ${wizardState.els.singleCostEnableInput?.checked ? 'checked' : ''} />
+                                    <input
+                                        type="checkbox"
+                                        data-proxy-check-target="am-wxt-keyword-single-cost-enable"
+                                        ${wizardState.els.singleCostEnableInput?.checked ? 'checked' : ''}
+                                        ${wizardState.els.singleCostEnableInput?.disabled ? 'disabled' : ''}
+                                    />
                                     <span>启用（非必要）</span>
                                 </label>
                                 <input
@@ -20471,7 +21350,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     checkbox.addEventListener('change', () => {
                         const targetId = String(checkbox.getAttribute('data-proxy-check-target') || '').trim();
                         const target = targetId ? wizardState.els.overlay.querySelector(`#${targetId}`) : null;
-                        if (!(target instanceof HTMLInputElement)) return;
+                        if (!(target instanceof HTMLInputElement) || target.disabled) return;
                         target.checked = !!checkbox.checked;
                         target.dispatchEvent(new Event('input', { bubbles: true }));
                         target.dispatchEvent(new Event('change', { bubbles: true }));
@@ -20872,6 +21751,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     return bestSnapshot;
                 };
+                const sampleBestNativeAdvancedDefaultsSnapshot = async (seedSnapshot = null, options = {}) => {
+                    let bestSnapshot = isPlainObject(seedSnapshot) ? seedSnapshot : null;
+                    let bestScore = scoreNativeAdvancedDefaultsSnapshot(bestSnapshot);
+                    const durationMs = Math.max(0, toNumber(options.durationMs, 0));
+                    const intervalMs = Math.max(40, toNumber(options.intervalMs, 80));
+                    const deadline = Date.now() + durationMs;
+                    const capture = () => {
+                        const snapshot = resolveNativeAdvancedDefaultsFromDialog();
+                        const score = scoreNativeAdvancedDefaultsSnapshot(snapshot);
+                        if (score > bestScore) {
+                            bestSnapshot = snapshot;
+                            bestScore = score;
+                        }
+                    };
+                    capture();
+                    while (Date.now() < deadline) {
+                        await sleep(intervalMs);
+                        capture();
+                    }
+                    return bestSnapshot;
+                };
                 const resolveNativeAdvancedDialogRoot = () => (
                     document.querySelector('[data-daynamic-view="onebp/views/pages/main/campaign/advance-dlg"]')
                 );
@@ -20896,8 +21796,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             if (style.display === 'none' || style.visibility === 'hidden') return false;
                             const text = normalizeText(item.textContent || '').replace(/\s+/g, '');
                             if (!text) return false;
-                            return /投放资源位\/投放地域\/投放时间/.test(text)
-                                || (/投放资源位/.test(text) && /投放地域/.test(text) && /投放时间/.test(text));
+                            return /投放资源位\/投放地域\/(投放时间|分时折扣)/.test(text)
+                                || (
+                                    /投放资源位/.test(text)
+                                    && /投放地域/.test(text)
+                                    && (/(投放时间|分时折扣)/.test(text))
+                                );
                         });
                         if (target instanceof HTMLElement) return target;
                     }
@@ -20905,7 +21809,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
                 const loadNativeAdvancedDefaultsSnapshot = async () => {
                     let latestSnapshot = resolveNativeAdvancedDefaultsFromDialog();
-                    if (isNativeAdvancedSnapshotRich(latestSnapshot)) return latestSnapshot;
+                    if (isNativeAdvancedSnapshotRich(latestSnapshot)) {
+                        latestSnapshot = await sampleBestNativeAdvancedDefaultsSnapshot(latestSnapshot, {
+                            durationMs: 420,
+                            intervalMs: 70
+                        });
+                        return latestSnapshot;
+                    }
                     const openButton = findNativeAdvancedEntryButton();
                     if (!(openButton instanceof HTMLElement)) return latestSnapshot;
                     try {
@@ -20940,6 +21850,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             80
                         );
                     }
+                    latestSnapshot = await sampleBestNativeAdvancedDefaultsSnapshot(latestSnapshot, {
+                        durationMs: isNativeAdvancedSnapshotRich(latestSnapshot) ? 560 : 360,
+                        intervalMs: 70
+                    });
                     if (openedByScript) {
                         const closeButton = resolveNativeAdvancedDialogCloseButton();
                         if (closeButton instanceof HTMLElement) {
@@ -20950,20 +21864,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return latestSnapshot;
                 };
                 const ADVANCED_DAY_COLUMNS = [
-                    { key: '1', label: '星期一' },
-                    { key: '2', label: '星期二' },
-                    { key: '3', label: '星期三' },
-                    { key: '4', label: '星期四' },
-                    { key: '5', label: '星期五' },
-                    { key: '6', label: '星期六' },
-                    { key: '7', label: '星期日' }
+                    { key: '1', label: '星期一', shortLabel: '一' },
+                    { key: '2', label: '星期二', shortLabel: '二' },
+                    { key: '3', label: '星期三', shortLabel: '三' },
+                    { key: '4', label: '星期四', shortLabel: '四' },
+                    { key: '5', label: '星期五', shortLabel: '五' },
+                    { key: '6', label: '星期六', shortLabel: '六' },
+                    { key: '7', label: '星期日', shortLabel: '日' }
                 ];
-                const ADVANCED_TIME_SLOTS = [
-                    { key: '00:00-06:00', label: '00:00 - 06:00', start: 0, end: 360 },
-                    { key: '06:00-12:00', label: '06:00 - 12:00', start: 360, end: 720 },
-                    { key: '12:00-18:00', label: '12:00 - 18:00', start: 720, end: 1080 },
-                    { key: '18:00-24:00', label: '18:00 - 24:00', start: 1080, end: 1440 }
-                ];
+                const ADVANCED_TIME_SLOTS = Array.from({ length: 24 }, (_, hour) => {
+                    const startHour = String(hour).padStart(2, '0');
+                    const endHourRaw = hour + 1;
+                    const endHour = endHourRaw >= 24 ? '24' : String(endHourRaw).padStart(2, '0');
+                    return {
+                        key: `${startHour}:00-${endHour}:00`,
+                        label: `${startHour}:00 - ${endHour}:00`,
+                        hour,
+                        start: hour * 60,
+                        end: (hour + 1) * 60
+                    };
+                });
                 const parseTimeRangeToMinutes = (timeText = '') => {
                     const match = String(timeText || '').trim().match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
                     if (!match) return null;
@@ -21064,8 +21984,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
                 const openKeywordAdvancedSettingPopup = async (initialTab = 'adzone') => {
                     const adzoneControl = resolveScenePopupControl('campaign.adzoneList', 'adzone');
-                    const launchPeriodControl = resolveScenePopupControl('campaign.launchPeriodList', 'launchPeriod');
-                    const launchAreaControl = resolveScenePopupControl('campaign.launchAreaStrList', 'launchArea');
+                    const launchPeriodControl = resolveScenePopupControl('campaign.launchPeriodList', 'launchPeriod')
+                        || resolveScenePopupControl('campaign.launchPeriodList', 'adzone');
+                    const launchAreaControl = resolveScenePopupControl('campaign.launchAreaStrList', 'launchArea')
+                        || resolveScenePopupControl('campaign.launchAreaStrList', 'adzone');
                     if (!(adzoneControl instanceof HTMLInputElement)) return null;
                     if (!(launchPeriodControl instanceof HTMLInputElement)) return null;
                     if (!(launchAreaControl instanceof HTMLInputElement)) return null;
@@ -21103,13 +22025,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             }
                         }
                     }
-                    const defaultFallbackAdzone = {
-                        adzoneCode: 'DEFAULT_SEARCH',
-                        adzoneName: '淘宝搜索',
-                        resourceName: '移动设备（含销量明星）、计算机设备',
-                        status: '1',
-                        __defaultSynthetic: true
-                    };
+                    const defaultFallbackAdzoneList = [
+                        {
+                            adzoneCode: 'DEFAULT_SEARCH',
+                            adzoneName: '淘宝搜索',
+                            resourceName: '移动设备（含销量明星）、计算机设备',
+                            status: '1',
+                            __defaultSynthetic: true
+                        },
+                        {
+                            adzoneCode: 'DEFAULT_SEARCH_CHAIN',
+                            adzoneName: '搜索意图全链路投',
+                            resourceName: '移动设备（含销量明星）、计算机设备',
+                            status: '1',
+                            __defaultSynthetic: true
+                        }
+                    ];
                     const initialTabValue = ['adzone', 'launchArea', 'launchPeriod'].includes(String(initialTab || '').trim())
                         ? String(initialTab || '').trim()
                         : 'adzone';
@@ -21125,7 +22056,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <div class="am-wxt-scene-advanced-tabs">
                                     <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="adzone">投放资源位</button>
                                     <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchArea">投放地域</button>
-                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchPeriod">投放时间</button>
+                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchPeriod">分时折扣</button>
                                 </div>
                                 <div class="am-wxt-scene-advanced-main">
                                     <div class="am-wxt-scene-advanced-content">
@@ -21144,27 +22075,64 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             </div>
                                         </section>
                                         <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchArea">
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-template="current">当前设置</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-template="recommended">推荐投放地域模板</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-template="custom">自定义投放地域模板</button>
+                                            <div class="am-wxt-scene-advanced-tip">您可以根据该计划内的您想主推的商品品类在各地区的搜索、成交、转化表现，选择您希望投放的区域</div>
+                                            <div class="am-wxt-scene-advanced-area-config-row">
+                                                <label class="am-wxt-scene-advanced-area-radio">
+                                                    <input type="radio" name="am-wxt-area-template" value="current" data-scene-popup-area-template="current" />
+                                                    <span>当前设置</span>
+                                                </label>
+                                                <label class="am-wxt-scene-advanced-area-radio">
+                                                    <input type="radio" name="am-wxt-area-template" value="recommended" data-scene-popup-area-template="recommended" />
+                                                    <span>推荐投放地域模板</span>
+                                                </label>
+                                                <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-recommend-template="1">
+                                                    <option value="dishwasher_low_price">大家电/低价引流地域</option>
+                                                </select>
+                                                <label class="am-wxt-scene-advanced-area-radio">
+                                                    <input type="radio" name="am-wxt-area-template" value="custom" data-scene-popup-area-template="custom" />
+                                                    <span>自定义投放地域模板</span>
+                                                </label>
+                                                <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-custom-template="1">
+                                                    <option value="migration_rx600_standard">[迁移]RX600S标准地域</option>
+                                                </select>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-save-template="1">保存模板</button>
                                             </div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
+                                            <div class="am-wxt-scene-advanced-area-tools">
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
+                                                <span class="am-wxt-scene-advanced-area-search-icon"></span>
+                                                <input
+                                                    type="text"
+                                                    class="am-wxt-scene-advanced-area-search"
+                                                    data-scene-popup-area-search="1"
+                                                    placeholder="省份/城市"
+                                                />
                                             </div>
-                                            <div class="am-wxt-scene-advanced-tip">输入地域编码，逗号或换行分隔。输入 all 代表全部地域。</div>
-                                            <div class="am-wxt-scene-advanced-area-presets">
-                                                <span class="am-wxt-scene-advanced-area-label">当前设置</span>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-preset="all">全部地域</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-preset="popular">常用区域</button>
-                                            </div>
-                                            <textarea class="am-wxt-scene-popup-textarea am-wxt-scene-advanced-area-editor" data-scene-popup-editor="launchArea"></textarea>
+                                            <div class="am-wxt-scene-advanced-area-selector" data-scene-popup-area-selector="1"></div>
                                         </section>
                                         <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchPeriod">
+                                            <div class="am-wxt-scene-advanced-tip">出价方式于非活动性时段，允许对不同时段设置不同的折扣，分时折扣预计可提升流量稳定性。</div>
+                                            <div class="am-wxt-scene-time-recommend-cards" data-scene-popup-time-recommend-cards="1">
+                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="gmv_peak">
+                                                    <div class="am-wxt-scene-time-recommend-title">11:00-14:00 午间小单快节奏</div>
+                                                    <div class="am-wxt-scene-time-recommend-desc">适合午间高意向成交，建议覆盖午间+晚高峰。</div>
+                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +6%~10%</span>
+                                                </button>
+                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="night_click">
+                                                    <div class="am-wxt-scene-time-recommend-title">17:00-21:00 晚间意向购买</div>
+                                                    <div class="am-wxt-scene-time-recommend-desc">覆盖下班后高转化窗口，适合促进成交。</div>
+                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +8%~12%</span>
+                                                </button>
+                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="morning_click">
+                                                    <div class="am-wxt-scene-time-recommend-title">06:00-09:00 早高峰浏览点击</div>
+                                                    <div class="am-wxt-scene-time-recommend-desc">早间通勤时段补量，适合提升曝光与点击。</div>
+                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +5%~9%</span>
+                                                </button>
+                                            </div>
                                             <div class="am-wxt-scene-advanced-toolbar">
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-time-template="current">当前设置</button>
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-time-template="full">全日制投放</button>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="dishwasher">大家电专属时段</button>
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-time-template="custom">自定义投放时间模板</button>
                                             </div>
                                             <div class="am-wxt-scene-advanced-toolbar">
@@ -21173,6 +22141,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 <span class="am-wxt-scene-advanced-tip-inline">支持单击与拖拽选择投放时间</span>
                                             </div>
                                             <div class="am-wxt-scene-popup-time-grid" data-scene-popup-time-grid="1"></div>
+                                            <div class="am-wxt-scene-time-legend" data-scene-popup-time-legend="1">
+                                                <span class="am-wxt-scene-time-legend-item"><i class="level-1"></i>30-100%</span>
+                                                <span class="am-wxt-scene-time-legend-item"><i class="level-2"></i>100-200%</span>
+                                                <span class="am-wxt-scene-time-legend-item"><i class="level-3"></i>200-250%</span>
+                                                <span class="am-wxt-scene-time-legend-item"><i class="level-4"></i>可以系统智能推算分时折扣</span>
+                                            </div>
                                         </section>
                                     </div>
                                     <aside class="am-wxt-scene-advanced-preview">
@@ -21194,23 +22168,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const initialAreaListSnapshot = Array.isArray(initialAreaList) ? initialAreaList.slice() : ['all'];
                             let areaTemplate = 'current';
                             let areaMode = 'alpha';
+                            let areaSearchKeyword = '';
                             let launchPeriodGridState = deepClone(initialPeriodGridState);
                             const initialLaunchPeriodGridState = deepClone(initialPeriodGridState);
                             let timeTemplate = 'current';
+                            let timeRecommendPreset = '';
                             let adzoneList = initialAdzoneList.length
                                 ? initialAdzoneList.map(item => deepClone(item))
-                                : [deepClone(defaultFallbackAdzone)];
+                                : defaultFallbackAdzoneList.map(item => deepClone(item));
                             const syntheticOnly = !initialAdzoneList.length;
                             let dragState = { active: false, next: null };
 
                             const tabButtons = Array.from(mask.querySelectorAll('[data-scene-popup-advanced-tab]'));
                             const panelEls = Array.from(mask.querySelectorAll('[data-scene-popup-advanced-panel]'));
                             const adzoneListEl = mask.querySelector('[data-scene-popup-adzone-list]');
-                            const areaEditor = mask.querySelector('[data-scene-popup-editor="launchArea"]');
+                            const areaSelector = mask.querySelector('[data-scene-popup-area-selector="1"]');
+                            const areaSearchInput = mask.querySelector('[data-scene-popup-area-search="1"]');
+                            const areaRecommendTemplateSelect = mask.querySelector('[data-scene-popup-area-recommend-template="1"]');
+                            const areaCustomTemplateSelect = mask.querySelector('[data-scene-popup-area-custom-template="1"]');
+                            const areaSaveTemplateButton = mask.querySelector('[data-scene-popup-area-save-template="1"]');
                             const timeGrid = mask.querySelector('[data-scene-popup-time-grid]');
-                            const areaTemplateButtons = Array.from(mask.querySelectorAll('[data-scene-popup-area-template]'));
+                            const areaTemplateButtons = Array.from(mask.querySelectorAll('input[data-scene-popup-area-template]'));
                             const areaModeButtons = Array.from(mask.querySelectorAll('[data-scene-popup-area-mode]'));
                             const timeTemplateButtons = Array.from(mask.querySelectorAll('[data-scene-popup-time-template]'));
+                            const timeRecommendCards = Array.from(mask.querySelectorAll('[data-scene-popup-time-recommend-card]'));
 
                             const renderTabs = () => {
                                 tabButtons.forEach(btn => {
@@ -21229,22 +22210,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 });
                             };
                             const renderAreaTemplateButtons = () => {
-                                areaTemplateButtons.forEach(btn => {
-                                    if (!(btn instanceof HTMLButtonElement)) return;
-                                    const key = String(btn.getAttribute('data-scene-popup-area-template') || '').trim();
+                                areaTemplateButtons.forEach(input => {
+                                    if (!(input instanceof HTMLInputElement)) return;
+                                    const key = String(input.getAttribute('data-scene-popup-area-template') || '').trim();
                                     const active = key === areaTemplate;
-                                    btn.classList.toggle('primary', active);
-                                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                    input.checked = active;
+                                    const label = input.closest('.am-wxt-scene-advanced-area-radio');
+                                    if (label instanceof HTMLElement) {
+                                        label.classList.toggle('active', active);
+                                    }
                                 });
+                                if (areaRecommendTemplateSelect instanceof HTMLSelectElement) {
+                                    areaRecommendTemplateSelect.disabled = areaTemplate !== 'recommended';
+                                }
+                                if (areaCustomTemplateSelect instanceof HTMLSelectElement) {
+                                    areaCustomTemplateSelect.disabled = areaTemplate !== 'custom';
+                                }
                             };
+                            const normalizeAreaModeKey = (value = '') => String(value || '').trim() === 'geo' ? 'geo' : 'alpha';
                             const renderAreaModeButtons = () => {
+                                const normalizedAreaMode = normalizeAreaModeKey(areaMode);
+                                areaMode = normalizedAreaMode;
                                 areaModeButtons.forEach(btn => {
                                     if (!(btn instanceof HTMLButtonElement)) return;
                                     const key = String(btn.getAttribute('data-scene-popup-area-mode') || '').trim();
-                                    const active = key === areaMode;
+                                    const active = key === normalizedAreaMode;
                                     btn.classList.toggle('primary', active);
                                     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
                                 });
+                                if (areaSelector instanceof HTMLElement) {
+                                    areaSelector.classList.toggle('area-mode-alpha', normalizedAreaMode === 'alpha');
+                                    areaSelector.classList.toggle('area-mode-geo', normalizedAreaMode === 'geo');
+                                    areaSelector.setAttribute('data-area-mode', normalizedAreaMode);
+                                }
                             };
                             const renderTimeTemplateButtons = () => {
                                 timeTemplateButtons.forEach(btn => {
@@ -21252,6 +22250,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     const key = String(btn.getAttribute('data-scene-popup-time-template') || '').trim();
                                     const active = key === timeTemplate;
                                     btn.classList.toggle('primary', active);
+                                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                });
+                            };
+                            const renderTimeRecommendCards = () => {
+                                timeRecommendCards.forEach(btn => {
+                                    if (!(btn instanceof HTMLButtonElement)) return;
+                                    const key = String(btn.getAttribute('data-scene-popup-time-recommend-card') || '').trim();
+                                    const active = key && key === timeRecommendPreset;
+                                    btn.classList.toggle('active', active);
                                     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
                                 });
                             };
@@ -21277,27 +22284,848 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 }).join('');
                             };
 
-                            const parseAreaEditorValue = () => {
-                                const text = String(areaEditor instanceof HTMLTextAreaElement ? areaEditor.value : '').trim();
-                                const list = uniqueBy(
-                                    text
-                                        .split(/[\n,，\s]+/)
+                            const AREA_GEO_ORDER = ['华北', '华东', '华中', '华南', '东北', '西南', '西北', '港澳台', '其他', '海外'];
+                            const AREA_SECTION_LABEL_MAP = {
+                                common: '全选 - 常用区域',
+                                uncommon: '全选 - 不常用区域',
+                                overseas: '全选 - 海外地区'
+                            };
+                            const buildAreaNameOrderMap = (list = []) => {
+                                const map = new Map();
+                                (Array.isArray(list) ? list : []).forEach((name, idx) => {
+                                    const safeName = String(name || '').trim();
+                                    if (!safeName || map.has(safeName)) return;
+                                    map.set(safeName, idx);
+                                });
+                                return map;
+                            };
+                            const AREA_ALPHA_NAME_ORDER_BY_SECTION = {
+                                common: buildAreaNameOrderMap([
+                                    '安徽', '北京', '重庆', '福建',
+                                    '广东', '广西', '贵州', '甘肃',
+                                    '黑龙江', '河北', '河南', '湖北', '湖南', '海南',
+                                    '吉林', '江苏', '江西',
+                                    '辽宁',
+                                    '内蒙古', '宁夏',
+                                    '青海',
+                                    '山西', '陕西', '山东', '上海', '四川',
+                                    '天津',
+                                    '云南',
+                                    '浙江'
+                                ]),
+                                uncommon: buildAreaNameOrderMap(['新疆', '西藏', '台湾', '香港', '澳门', '中国其他']),
+                                overseas: buildAreaNameOrderMap(['国外'])
+                            };
+                            const AREA_NATIVE_CODE_CONFIG_URL = 'https://bpcommon.alimama.com/commonapi/tetris/area/getCodeConfig.json';
+                            const LEGACY_AREA_REGION_GROUPS = [
+                                {
+                                    section: 'common',
+                                    label: '全选 - 常用区域',
+                                    items: [
+                                        { code: '110000', name: '北京', initial: 'B', geo: '华北', cityCount: 17 },
+                                        { code: '120000', name: '天津', initial: 'T', geo: '华北', cityCount: 16 },
+                                        { code: '130000', name: '河北', initial: 'H', geo: '华北', cityCount: 11 },
+                                        { code: '140000', name: '山西', initial: 'S', geo: '华北', cityCount: 11 },
+                                        { code: '150000', name: '内蒙古', initial: 'N', geo: '华北', cityCount: 12 },
+                                        { code: '210000', name: '辽宁', initial: 'L', geo: '东北', cityCount: 14 },
+                                        { code: '220000', name: '吉林', initial: 'J', geo: '东北', cityCount: 9 },
+                                        { code: '230000', name: '黑龙江', initial: 'H', geo: '东北', cityCount: 13 },
+                                        { code: '310000', name: '上海', initial: 'S', geo: '华东', cityCount: 16 },
+                                        { code: '320000', name: '江苏', initial: 'J', geo: '华东', cityCount: 13 },
+                                        { code: '330000', name: '浙江', initial: 'Z', geo: '华东', cityCount: 11 },
+                                        { code: '340000', name: '安徽', initial: 'A', geo: '华东', cityCount: 17 },
+                                        { code: '350000', name: '福建', initial: 'F', geo: '华东', cityCount: 9 },
+                                        { code: '360000', name: '江西', initial: 'J', geo: '华东', cityCount: 11 },
+                                        { code: '370000', name: '山东', initial: 'S', geo: '华东', cityCount: 16 },
+                                        { code: '410000', name: '河南', initial: 'H', geo: '华中', cityCount: 17 },
+                                        { code: '420000', name: '湖北', initial: 'H', geo: '华中', cityCount: 17 },
+                                        { code: '430000', name: '湖南', initial: 'H', geo: '华中', cityCount: 14 },
+                                        { code: '440000', name: '广东', initial: 'G', geo: '华南', cityCount: 21 },
+                                        { code: '450000', name: '广西', initial: 'G', geo: '华南', cityCount: 14 },
+                                        { code: '460000', name: '海南', initial: 'H', geo: '华南', cityCount: 18 },
+                                        { code: '500000', name: '重庆', initial: 'C', geo: '西南', cityCount: 38 },
+                                        { code: '510000', name: '四川', initial: 'S', geo: '西南', cityCount: 21 },
+                                        { code: '520000', name: '贵州', initial: 'G', geo: '西南', cityCount: 9 },
+                                        { code: '530000', name: '云南', initial: 'Y', geo: '西南', cityCount: 16 },
+                                        { code: '610000', name: '陕西', initial: 'S', geo: '西北', cityCount: 10 },
+                                        { code: '620000', name: '甘肃', initial: 'G', geo: '西北', cityCount: 14 },
+                                        { code: '630000', name: '青海', initial: 'Q', geo: '西北', cityCount: 8 },
+                                        { code: '640000', name: '宁夏', initial: 'N', geo: '西北', cityCount: 5 }
+                                    ]
+                                },
+                                {
+                                    section: 'uncommon',
+                                    label: '全选 - 不常用区域',
+                                    items: [
+                                        { code: '650000', name: '新疆', initial: 'X', geo: '西北', cityCount: 17 },
+                                        { code: '540000', name: '西藏', initial: 'X', geo: '西南', cityCount: 7 },
+                                        { code: '810000', name: '香港', initial: 'X', geo: '港澳台', cityCount: 1 },
+                                        { code: '710000', name: '台湾', initial: 'T', geo: '港澳台', cityCount: 1 },
+                                        { code: '820000', name: '澳门', initial: 'A', geo: '港澳台', cityCount: 1 },
+                                        { code: '990000', name: '中国其他', initial: 'Z', geo: '其他', cityCount: 1 }
+                                    ]
+                                },
+                                {
+                                    section: 'overseas',
+                                    label: '全选 - 海外地区',
+                                    items: [
+                                        { code: 'foreign', name: '国外', initial: 'G', geo: '海外', cityCount: 1 }
+                                    ]
+                                }
+                            ];
+                            const LEGACY_AREA_CODE_NAME_MAP = new Map(
+                                LEGACY_AREA_REGION_GROUPS.flatMap(section => section.items.map(item => [String(item.code || '').trim(), String(item.name || '').trim()]))
+                            );
+                            const LEGACY_AREA_NAME_CODE_MAP = new Map(
+                                Array.from(LEGACY_AREA_CODE_NAME_MAP.entries()).map(([code, name]) => [String(name || '').trim(), code])
+                            );
+                            let areaRegionGroups = [];
+                            let areaCodeSet = new Set();
+                            let areaProvinceMap = new Map();
+                            let areaCityParentMap = new Map();
+                            let areaAllProvinceCodes = [];
+                            let areaTokenMap = new Map();
+                            let areaExpandedProvinceSet = new Set();
+                            let areaDataLoading = false;
+                            let areaDataLoaded = false;
+                            const normalizeAreaToken = (value = '') => String(value || '').trim().toLowerCase();
+                            const stripAreaSuffix = (value = '') => String(value || '')
+                                .trim()
+                                .replace(/(壮族自治区|回族自治区|维吾尔自治区|特别行政区|自治区|省|市)$/g, '');
+                            const resolveInitialLetter = (value = '') => {
+                                const text = String(value || '').trim();
+                                if (!text) return '#';
+                                const first = text.charAt(0).toUpperCase();
+                                return /^[A-Z]$/.test(first) ? first : '#';
+                            };
+                            const normalizeGeoName = (name = '') => String(name || '').trim().replace(/地区$/g, '').trim() || '其他';
+                            const normalizeAreaNodeCode = (value = '') => String(value ?? '').trim();
+                            const appendAreaAlias = (alias = '', code = '') => {
+                                const token = normalizeAreaToken(alias);
+                                const normalizedCode = normalizeAreaNodeCode(code);
+                                if (!token || !normalizedCode) return;
+                                areaTokenMap.set(token, normalizedCode);
+                            };
+                            const normalizeAreaNode = (node = {}, options = {}) => {
+                                const code = normalizeAreaNodeCode(node?.id ?? node?.code ?? node?.value);
+                                const name = String(node?.name || '').trim();
+                                if (!code || !name) return null;
+                                const cityList = Array.isArray(node?.cities)
+                                    ? node.cities
+                                        .map(city => {
+                                            const cityCode = normalizeAreaNodeCode(city?.id ?? city?.code ?? city?.value);
+                                            const cityName = String(city?.name || '').trim();
+                                            if (!cityCode || !cityName) return null;
+                                            return {
+                                                code: cityCode,
+                                                name: cityName,
+                                                initial: resolveInitialLetter(options.initial || cityName),
+                                                geo: String(options.geo || '其他').trim() || '其他',
+                                                parentCode: code
+                                            };
+                                        })
+                                        .filter(Boolean)
+                                    : [];
+                                const cityCount = cityList.length || Math.max(0, toNumber(node?.cityCount, 0));
+                                return {
+                                    code,
+                                    name,
+                                    initial: resolveInitialLetter(options.initial || name),
+                                    geo: String(options.geo || '其他').trim() || '其他',
+                                    cityCount,
+                                    cityList,
+                                    section: String(options.section || 'common').trim() || 'common',
+                                    sourceOrder: toNumber(options.sourceOrder, Number.MAX_SAFE_INTEGER),
+                                    alphaOrder: toNumber(options.alphaOrder, Number.MAX_SAFE_INTEGER)
+                                };
+                            };
+                            const buildAreaRegionGroupsFallback = () => (
+                                LEGACY_AREA_REGION_GROUPS.map(section => ({
+                                    section: section.section,
+                                    label: section.label,
+                                    items: section.items.map((item, idx) => ({
+                                        code: String(item.code || '').trim(),
+                                        name: String(item.name || '').trim(),
+                                        initial: resolveInitialLetter(item.initial || item.name),
+                                        geo: normalizeGeoName(item.geo || '其他'),
+                                        cityCount: Math.max(0, toNumber(item.cityCount, 0)),
+                                        cityList: [],
+                                        sourceOrder: idx,
+                                        alphaOrder: idx
+                                    }))
+                                }))
+                            );
+                            const buildAreaRegionGroupsFromNativeConfig = (payload = {}) => {
+                                const source = isPlainObject(payload?.data) ? payload.data : payload;
+                                if (!isPlainObject(source)) return [];
+                                const letterLookup = new Map();
+                                const alphaOrderLookup = new Map();
+                                let alphaOrderSeed = 0;
+                                const letterGroups = Array.isArray(source.letterGroups) ? source.letterGroups : [];
+                                letterGroups.forEach(group => {
+                                    const initial = resolveInitialLetter(group?.name || '');
+                                    (Array.isArray(group?.provinces) ? group.provinces : []).forEach(province => {
+                                        const provinceCode = normalizeAreaNodeCode(province?.id ?? province?.code ?? province?.value);
+                                        if (!provinceCode) return;
+                                        letterLookup.set(provinceCode, initial);
+                                        if (!alphaOrderLookup.has(provinceCode)) {
+                                            alphaOrderLookup.set(provinceCode, alphaOrderSeed++);
+                                        }
+                                    });
+                                });
+                                const seenProvinceCodes = new Set();
+                                const commonItems = [];
+                                let sourceOrderSeed = 0;
+                                const locationGroups = Array.isArray(source.locationGroups) ? source.locationGroups : [];
+                                locationGroups.forEach(group => {
+                                    const geo = normalizeGeoName(group?.name || '其他');
+                                    (Array.isArray(group?.provinces) ? group.provinces : []).forEach(province => {
+                                        const provinceCode = normalizeAreaNodeCode(province?.id ?? province?.code ?? province?.value);
+                                        if (!provinceCode || seenProvinceCodes.has(provinceCode)) return;
+                                        const normalized = normalizeAreaNode(province, {
+                                            section: 'common',
+                                            geo,
+                                            initial: letterLookup.get(provinceCode) || resolveInitialLetter(province?.name || ''),
+                                            sourceOrder: sourceOrderSeed++,
+                                            alphaOrder: alphaOrderLookup.get(provinceCode)
+                                        });
+                                        if (!normalized) return;
+                                        seenProvinceCodes.add(normalized.code);
+                                        commonItems.push(normalized);
+                                    });
+                                });
+                                const uncommonItems = [];
+                                const lastProvinces = Array.isArray(source.lastProvinces) ? source.lastProvinces : [];
+                                lastProvinces.forEach(province => {
+                                    const provinceCode = normalizeAreaNodeCode(province?.id ?? province?.code ?? province?.value);
+                                    if (!provinceCode || seenProvinceCodes.has(provinceCode)) return;
+                                    const provinceName = String(province?.name || '').trim();
+                                    let geo = '其他';
+                                    if (/(香港|澳门|台湾)/.test(provinceName)) geo = '港澳台';
+                                    else if (/新疆/.test(provinceName)) geo = '西北';
+                                    else if (/西藏/.test(provinceName)) geo = '西南';
+                                    const normalized = normalizeAreaNode(province, {
+                                        section: 'uncommon',
+                                        geo,
+                                        initial: letterLookup.get(provinceCode) || resolveInitialLetter(provinceName),
+                                        sourceOrder: sourceOrderSeed++,
+                                        alphaOrder: alphaOrderLookup.get(provinceCode)
+                                    });
+                                    if (!normalized) return;
+                                    seenProvinceCodes.add(normalized.code);
+                                    uncommonItems.push(normalized);
+                                });
+                                const overseasItems = [];
+                                const overseas = Array.isArray(source.overseas) ? source.overseas : [];
+                                overseas.forEach(province => {
+                                    const provinceCode = normalizeAreaNodeCode(province?.id ?? province?.code ?? province?.value);
+                                    if (!provinceCode || seenProvinceCodes.has(provinceCode)) return;
+                                    const normalized = normalizeAreaNode(province, {
+                                        section: 'overseas',
+                                        geo: '海外',
+                                        initial: resolveInitialLetter(province?.name || 'H'),
+                                        sourceOrder: sourceOrderSeed++,
+                                        alphaOrder: alphaOrderLookup.get(provinceCode)
+                                    });
+                                    if (!normalized) return;
+                                    seenProvinceCodes.add(normalized.code);
+                                    overseasItems.push(normalized);
+                                });
+                                const groups = [
+                                    { section: 'common', label: AREA_SECTION_LABEL_MAP.common, items: commonItems },
+                                    { section: 'uncommon', label: AREA_SECTION_LABEL_MAP.uncommon, items: uncommonItems },
+                                    { section: 'overseas', label: AREA_SECTION_LABEL_MAP.overseas, items: overseasItems }
+                                ].filter(section => Array.isArray(section.items) && section.items.length);
+                                return groups;
+                            };
+                            const refreshAreaMetadata = () => {
+                                areaCodeSet = new Set();
+                                areaProvinceMap = new Map();
+                                areaCityParentMap = new Map();
+                                areaAllProvinceCodes = [];
+                                areaTokenMap = new Map();
+                                areaRegionGroups.forEach(section => {
+                                    const list = Array.isArray(section?.items) ? section.items : [];
+                                    list.forEach(province => {
+                                        const provinceCode = normalizeAreaNodeCode(province?.code);
+                                        const provinceName = String(province?.name || '').trim();
+                                        if (!provinceCode || !provinceName) return;
+                                        areaProvinceMap.set(provinceCode, province);
+                                        areaCodeSet.add(provinceCode);
+                                        areaAllProvinceCodes.push(provinceCode);
+                                        appendAreaAlias(provinceCode, provinceCode);
+                                        appendAreaAlias(provinceName, provinceCode);
+                                        appendAreaAlias(stripAreaSuffix(provinceName), provinceCode);
+                                        const legacyCode = LEGACY_AREA_NAME_CODE_MAP.get(provinceName);
+                                        if (legacyCode) appendAreaAlias(legacyCode, provinceCode);
+                                        const cityList = Array.isArray(province?.cityList) ? province.cityList : [];
+                                        cityList.forEach(city => {
+                                            const cityCode = normalizeAreaNodeCode(city?.code);
+                                            const cityName = String(city?.name || '').trim();
+                                            if (!cityCode || !cityName) return;
+                                            areaCodeSet.add(cityCode);
+                                            areaCityParentMap.set(cityCode, provinceCode);
+                                            appendAreaAlias(cityCode, cityCode);
+                                            appendAreaAlias(`${provinceName}${cityName}`, cityCode);
+                                            appendAreaAlias(`${stripAreaSuffix(provinceName)}${cityName}`, cityCode);
+                                        });
+                                    });
+                                });
+                                areaAllProvinceCodes = uniqueBy(areaAllProvinceCodes, code => normalizeAreaToken(code));
+                            };
+                            const mapAreaTokenToCode = (token = '') => {
+                                const normalized = normalizeAreaToken(token);
+                                if (!normalized) return '';
+                                if (normalized === 'all') return 'all';
+                                if (areaTokenMap.has(normalized)) {
+                                    return String(areaTokenMap.get(normalized) || '').trim();
+                                }
+                                if (/^\d+$/.test(normalized) && areaCodeSet.has(normalized)) {
+                                    return normalized;
+                                }
+                                if (/^\d{6}$/.test(normalized) && LEGACY_AREA_CODE_NAME_MAP.has(normalized)) {
+                                    const legacyName = String(LEGACY_AREA_CODE_NAME_MAP.get(normalized) || '').trim();
+                                    const mapped = areaTokenMap.get(normalizeAreaToken(legacyName));
+                                    if (mapped) return String(mapped).trim();
+                                }
+                                return '';
+                            };
+                            const getAreaProvinceByCode = (code = '') => areaProvinceMap.get(normalizeAreaNodeCode(code)) || null;
+                            const getAreaCityCodeList = (provinceCode = '') => {
+                                const province = getAreaProvinceByCode(provinceCode);
+                                return Array.isArray(province?.cityList)
+                                    ? province.cityList.map(city => normalizeAreaNodeCode(city?.code)).filter(Boolean)
+                                    : [];
+                            };
+                            const getAreaCodesBySection = (section = '') => {
+                                const normalizedSection = String(section || '').trim();
+                                const matched = areaRegionGroups.find(item => String(item?.section || '').trim() === normalizedSection);
+                                return Array.isArray(matched?.items)
+                                    ? matched.items.map(item => normalizeAreaNodeCode(item?.code)).filter(Boolean)
+                                    : [];
+                            };
+                            const isProvinceFullySelected = (province = null, selected = new Set()) => {
+                                const safeProvince = isPlainObject(province) ? province : null;
+                                if (!safeProvince || !(selected instanceof Set)) return false;
+                                const provinceCode = normalizeAreaNodeCode(safeProvince.code);
+                                if (!provinceCode) return false;
+                                if (selected.has(provinceCode)) return true;
+                                const cityCodes = getAreaCityCodeList(provinceCode);
+                                if (!cityCodes.length) return false;
+                                return cityCodes.every(code => selected.has(code));
+                            };
+                            const getProvinceSelectedCityCount = (province = null, selected = new Set()) => {
+                                const safeProvince = isPlainObject(province) ? province : null;
+                                if (!safeProvince || !(selected instanceof Set)) return 0;
+                                const provinceCode = normalizeAreaNodeCode(safeProvince.code);
+                                if (!provinceCode) return 0;
+                                const cityCodes = getAreaCityCodeList(provinceCode);
+                                if (!cityCodes.length) return selected.has(provinceCode) ? 1 : 0;
+                                if (selected.has(provinceCode)) return cityCodes.length;
+                                return cityCodes.filter(code => selected.has(code)).length;
+                            };
+                            const isCitySelected = (cityCode = '', provinceCode = '', selected = new Set()) => {
+                                const normalizedCityCode = normalizeAreaNodeCode(cityCode);
+                                const normalizedProvinceCode = normalizeAreaNodeCode(provinceCode || areaCityParentMap.get(normalizedCityCode) || '');
+                                if (!(selected instanceof Set) || !normalizedCityCode) return false;
+                                if (normalizedProvinceCode && selected.has(normalizedProvinceCode)) return true;
+                                return selected.has(normalizedCityCode);
+                            };
+                            const canonicalizeSelectedAreaSet = (selected = new Set()) => {
+                                if (!(selected instanceof Set)) return selected;
+                                areaProvinceMap.forEach((province, provinceCode) => {
+                                    const cityCodes = getAreaCityCodeList(provinceCode);
+                                    if (selected.has(provinceCode)) {
+                                        cityCodes.forEach(code => selected.delete(code));
+                                        return;
+                                    }
+                                    if (!cityCodes.length) return;
+                                    if (cityCodes.every(code => selected.has(code))) {
+                                        selected.add(provinceCode);
+                                        cityCodes.forEach(code => selected.delete(code));
+                                    }
+                                });
+                                return selected;
+                            };
+                            const collectUnknownAreaTokens = (list = []) => {
+                                const rawList = uniqueBy(
+                                    (Array.isArray(list) ? list : [])
                                         .map(item => String(item || '').trim())
                                         .filter(Boolean),
-                                    item => item
+                                    item => normalizeAreaToken(item)
                                 );
-                                areaList = !list.length || list.some(item => /^all$/i.test(item))
-                                    ? ['all']
-                                    : list;
-                                areaTemplate = areaList.length === 1 && /^all$/i.test(areaList[0]) ? 'current' : 'custom';
+                                return rawList.filter(item => {
+                                    if (/^all$/i.test(item)) return false;
+                                    const mapped = mapAreaTokenToCode(item);
+                                    return !(mapped && mapped !== 'all' && areaCodeSet.has(mapped));
+                                });
                             };
-                            const renderAreaEditor = () => {
-                                if (!(areaEditor instanceof HTMLTextAreaElement)) return;
-                                areaEditor.value = (areaList.length ? areaList : ['all']).join('\n');
+                            const buildSelectedAreaCodeSet = (list = []) => {
+                                const rawList = uniqueBy(
+                                    (Array.isArray(list) ? list : [])
+                                        .map(item => String(item || '').trim())
+                                        .filter(Boolean),
+                                    item => normalizeAreaToken(item)
+                                );
+                                if (!rawList.length || rawList.some(item => /^all$/i.test(item))) {
+                                    return new Set(areaAllProvinceCodes);
+                                }
+                                const selected = new Set();
+                                rawList.forEach(item => {
+                                    const mapped = mapAreaTokenToCode(item);
+                                    if (!mapped || mapped === 'all' || !areaCodeSet.has(mapped)) return;
+                                    selected.add(mapped);
+                                });
+                                canonicalizeSelectedAreaSet(selected);
+                                return selected;
+                            };
+                            const normalizeAreaListForStorage = (list = []) => {
+                                const rawList = uniqueBy(
+                                    (Array.isArray(list) ? list : [])
+                                        .map(item => String(item || '').trim())
+                                        .filter(Boolean),
+                                    item => normalizeAreaToken(item)
+                                );
+                                if (!rawList.length || rawList.some(item => /^all$/i.test(item))) return ['all'];
+                                const selected = new Set();
+                                const unknownList = [];
+                                rawList.forEach(item => {
+                                    const mapped = mapAreaTokenToCode(item);
+                                    if (mapped && mapped !== 'all' && areaCodeSet.has(mapped)) {
+                                        selected.add(mapped);
+                                        return;
+                                    }
+                                    if (mapped && mapped !== 'all') {
+                                        unknownList.push(mapped);
+                                        return;
+                                    }
+                                    unknownList.push(item);
+                                });
+                                canonicalizeSelectedAreaSet(selected);
+                                const allSelected = areaAllProvinceCodes.length > 0
+                                    && areaAllProvinceCodes.every(code => isProvinceFullySelected(getAreaProvinceByCode(code), selected));
+                                if (allSelected && !unknownList.length) return ['all'];
+                                const normalizedUnknown = uniqueBy(
+                                    unknownList
+                                        .map(item => String(item || '').trim())
+                                        .filter(Boolean),
+                                    item => normalizeAreaToken(item)
+                                );
+                                const merged = Array.from(selected).concat(normalizedUnknown);
+                                return merged.length ? merged : ['all'];
+                            };
+                            const isAreaListSame = (left = [], right = []) => {
+                                const leftNormalized = normalizeAreaListForStorage(left);
+                                const rightNormalized = normalizeAreaListForStorage(right);
+                                const leftIsAll = leftNormalized.length === 1 && /^all$/i.test(leftNormalized[0]);
+                                const rightIsAll = rightNormalized.length === 1 && /^all$/i.test(rightNormalized[0]);
+                                if (leftIsAll || rightIsAll) return leftIsAll === rightIsAll;
+                                const leftSet = new Set(leftNormalized.map(item => normalizeAreaToken(item)));
+                                const rightSet = new Set(rightNormalized.map(item => normalizeAreaToken(item)));
+                                if (leftSet.size !== rightSet.size) return false;
+                                return Array.from(leftSet).every(token => rightSet.has(token));
+                            };
+                            const loadAreaCodeConfig = async () => {
+                                if (areaDataLoaded) return areaRegionGroups;
+                                try {
+                                    const token = ensureTokens();
+                                    const params = new URLSearchParams();
+                                    params.set('bizCode', DEFAULTS.bizCode || 'onebpSearch');
+                                    params.set('templateType', 'AREA');
+                                    params.set('csrfId', token.csrfId);
+                                    params.set('loginPointId', token.loginPointId);
+                                    const requestBody = params.toString();
+                                    recordApiRequestToHookHistory(AREA_NATIVE_CODE_CONFIG_URL, 'POST', requestBody, 'api_fetch_preflight');
+                                    const response = await fetch(AREA_NATIVE_CODE_CONFIG_URL, {
+                                        method: 'POST',
+                                        credentials: 'include',
+                                        headers: {
+                                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                                            Accept: 'application/json, text/javascript, */*; q=0.01'
+                                        },
+                                        body: requestBody
+                                    });
+                                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                    const payload = await response.json().catch(() => ({}));
+                                    const parsedGroups = buildAreaRegionGroupsFromNativeConfig(payload?.data || payload);
+                                    if (!parsedGroups.length) throw new Error('EMPTY_AREA_CONFIG');
+                                    areaRegionGroups = parsedGroups;
+                                    refreshAreaMetadata();
+                                    areaDataLoaded = true;
+                                } catch {
+                                    if (!areaRegionGroups.length) {
+                                        areaRegionGroups = buildAreaRegionGroupsFallback();
+                                        refreshAreaMetadata();
+                                    }
+                                }
+                                return areaRegionGroups;
+                            };
+                            const areaRecommendTemplateMap = {
+                                dishwasher_low_price: ['110000', '310000', '320000', '330000', '370000', '440000', '500000']
+                            };
+                            const defaultCustomTemplateList = (() => {
+                                const normalizedInitial = normalizeAreaListForStorage(initialAreaListSnapshot);
+                                if (normalizedInitial.length === 1 && /^all$/i.test(normalizedInitial[0])) {
+                                    return ['110000', '310000', '320000', '330000', '440000'];
+                                }
+                                return normalizedInitial.filter(item => !/^all$/i.test(item));
+                            })();
+                            const areaCustomTemplateMap = {
+                                migration_rx600_standard: defaultCustomTemplateList
+                            };
+                            const resolveAreaTemplateList = (templateKey = '') => {
+                                const key = String(templateKey || '').trim();
+                                if (key === 'current') {
+                                    return normalizeAreaListForStorage(initialAreaListSnapshot);
+                                }
+                                if (key === 'recommended') {
+                                    const selectedKey = String(
+                                        areaRecommendTemplateSelect instanceof HTMLSelectElement
+                                            ? areaRecommendTemplateSelect.value
+                                            : 'dishwasher_low_price'
+                                    ).trim() || 'dishwasher_low_price';
+                                    return normalizeAreaListForStorage(
+                                        areaRecommendTemplateMap[selectedKey] || areaRecommendTemplateMap.dishwasher_low_price || []
+                                    );
+                                }
+                                if (key === 'custom') {
+                                    const selectedKey = String(
+                                        areaCustomTemplateSelect instanceof HTMLSelectElement
+                                            ? areaCustomTemplateSelect.value
+                                            : 'migration_rx600_standard'
+                                    ).trim() || 'migration_rx600_standard';
+                                    return normalizeAreaListForStorage(
+                                        areaCustomTemplateMap[selectedKey] || areaCustomTemplateMap.migration_rx600_standard || []
+                                    );
+                                }
+                                return normalizeAreaListForStorage(areaList);
+                            };
+                            const syncAreaTemplateByAreaList = () => {
+                                if (isAreaListSame(areaList, initialAreaListSnapshot)) {
+                                    areaTemplate = 'current';
+                                    return;
+                                }
+                                if (isAreaListSame(areaList, resolveAreaTemplateList('recommended'))) {
+                                    areaTemplate = 'recommended';
+                                    return;
+                                }
+                                areaTemplate = 'custom';
+                            };
+                            const applyAreaTemplate = (templateKey = '') => {
+                                const key = String(templateKey || '').trim();
+                                const normalizedKey = ['current', 'recommended', 'custom'].includes(key) ? key : 'current';
+                                areaTemplate = normalizedKey;
+                                areaList = resolveAreaTemplateList(normalizedKey);
+                                areaExpandedProvinceSet.clear();
+                                renderAreaTemplateButtons();
+                                renderAreaModeButtons();
+                                renderAreaSelector();
+                            };
+                            const toggleAreaGroupSelection = (group = '', enabled = true) => {
+                                const section = String(group || '').trim();
+                                if (!section) return;
+                                const provinceCodes = getAreaCodesBySection(section);
+                                if (!provinceCodes.length) return;
+                                const selected = buildSelectedAreaCodeSet(areaList);
+                                const unknownTokens = collectUnknownAreaTokens(areaList);
+                                provinceCodes.forEach(code => {
+                                    const cityCodes = getAreaCityCodeList(code);
+                                    if (enabled) selected.add(code);
+                                    else selected.delete(code);
+                                    cityCodes.forEach(cityCode => selected.delete(cityCode));
+                                });
+                                areaList = normalizeAreaListForStorage(Array.from(selected).concat(unknownTokens));
+                                syncAreaTemplateByAreaList();
+                            };
+                            const toggleAreaProvinceSelection = (provinceCode = '', enabled = true) => {
+                                const code = mapAreaTokenToCode(provinceCode);
+                                if (!code || code === 'all') return;
+                                const province = getAreaProvinceByCode(code);
+                                if (!province) return;
+                                const selected = buildSelectedAreaCodeSet(areaList);
+                                const unknownTokens = collectUnknownAreaTokens(areaList);
+                                if (enabled) selected.add(code);
+                                else selected.delete(code);
+                                getAreaCityCodeList(code).forEach(cityCode => selected.delete(cityCode));
+                                areaList = normalizeAreaListForStorage(Array.from(selected).concat(unknownTokens));
+                                syncAreaTemplateByAreaList();
+                            };
+                            const toggleAreaCitySelection = (provinceCode = '', cityCode = '', enabled = true) => {
+                                const safeProvinceCode = mapAreaTokenToCode(provinceCode);
+                                const safeCityCode = mapAreaTokenToCode(cityCode);
+                                if (!safeProvinceCode || !safeCityCode || safeProvinceCode === 'all' || safeCityCode === 'all') return;
+                                const province = getAreaProvinceByCode(safeProvinceCode);
+                                if (!province) return;
+                                const cityCodes = getAreaCityCodeList(safeProvinceCode);
+                                if (!cityCodes.includes(safeCityCode)) return;
+                                const selected = buildSelectedAreaCodeSet(areaList);
+                                const unknownTokens = collectUnknownAreaTokens(areaList);
+                                const provinceSelected = selected.has(safeProvinceCode);
+                                if (enabled) {
+                                    if (!provinceSelected) {
+                                        selected.add(safeCityCode);
+                                        if (cityCodes.every(code => selected.has(code))) {
+                                            selected.add(safeProvinceCode);
+                                            cityCodes.forEach(code => selected.delete(code));
+                                        }
+                                    }
+                                } else if (provinceSelected) {
+                                    selected.delete(safeProvinceCode);
+                                    cityCodes.forEach(code => {
+                                        if (code !== safeCityCode) selected.add(code);
+                                    });
+                                } else {
+                                    selected.delete(safeCityCode);
+                                }
+                                areaList = normalizeAreaListForStorage(Array.from(selected).concat(unknownTokens));
+                                syncAreaTemplateByAreaList();
+                            };
+                            const toggleAreaItemSelection = (areaCode = '', enabled = true) => {
+                                toggleAreaProvinceSelection(areaCode, enabled);
+                            };
+                            const matchesAreaSearch = (item = {}, keyword = '') => {
+                                const token = normalizeAreaToken(keyword);
+                                if (!token) return true;
+                                const code = normalizeAreaToken(item?.code || '');
+                                const name = normalizeAreaToken(item?.name || '');
+                                const shortName = normalizeAreaToken(stripAreaSuffix(item?.name || ''));
+                                const geo = normalizeAreaToken(item?.geo || '');
+                                if (code.includes(token) || name.includes(token) || shortName.includes(token) || geo.includes(token)) return true;
+                                const cityList = Array.isArray(item?.cityList) ? item.cityList : [];
+                                return cityList.some(city => {
+                                    const cityCode = normalizeAreaToken(city?.code || '');
+                                    const cityName = normalizeAreaToken(city?.name || '');
+                                    return cityCode.includes(token) || cityName.includes(token);
+                                });
+                            };
+                            const getProvinceRenderState = (province = {}, keyword = '') => {
+                                const cityList = Array.isArray(province?.cityList) ? province.cityList : [];
+                                const token = normalizeAreaToken(keyword);
+                                if (!token) {
+                                    return {
+                                        visible: true,
+                                        visibleCities: cityList.slice(),
+                                        autoExpand: false
+                                    };
+                                }
+                                const provinceMatched = (() => {
+                                    const code = normalizeAreaToken(province?.code || '');
+                                    const name = normalizeAreaToken(province?.name || '');
+                                    const shortName = normalizeAreaToken(stripAreaSuffix(province?.name || ''));
+                                    const geo = normalizeAreaToken(province?.geo || '');
+                                    return code.includes(token) || name.includes(token) || shortName.includes(token) || geo.includes(token);
+                                })();
+                                const matchedCities = cityList.filter(city => {
+                                    const cityCode = normalizeAreaToken(city?.code || '');
+                                    const cityName = normalizeAreaToken(city?.name || '');
+                                    return cityCode.includes(token) || cityName.includes(token);
+                                });
+                                if (!provinceMatched && !matchedCities.length) {
+                                    return { visible: false, visibleCities: [], autoExpand: false };
+                                }
+                                if (provinceMatched && !matchedCities.length) {
+                                    return { visible: true, visibleCities: cityList.slice(), autoExpand: false };
+                                }
+                                return { visible: true, visibleCities: matchedCities, autoExpand: matchedCities.length > 0 };
+                            };
+                            const renderAreaSectionGroups = (items = [], selected = new Set(), keyword = '', sectionName = 'common') => {
+                                const mode = areaMode === 'geo' ? 'geo' : 'alpha';
+                                const normalizedSection = String(sectionName || '').trim() || 'common';
+                                const useInitialGrouping = mode === 'alpha' && normalizedSection === 'common';
+                                const grouped = {};
+                                const resolveProvinceOrderWeight = (province = null, currentMode = 'alpha') => {
+                                    const safeProvince = isPlainObject(province) ? province : {};
+                                    if (currentMode === 'alpha') {
+                                        const section = String(safeProvince?.section || '').trim() || 'common';
+                                        const customOrderMap = AREA_ALPHA_NAME_ORDER_BY_SECTION?.[section];
+                                        const provinceName = String(safeProvince?.name || '').trim();
+                                        if (customOrderMap instanceof Map && customOrderMap.has(provinceName)) {
+                                            return customOrderMap.get(provinceName);
+                                        }
+                                        const alphaOrder = toNumber(safeProvince?.alphaOrder, Number.MAX_SAFE_INTEGER);
+                                        if (Number.isFinite(alphaOrder)) return alphaOrder;
+                                    }
+                                    const sourceOrder = toNumber(safeProvince?.sourceOrder, Number.MAX_SAFE_INTEGER);
+                                    if (Number.isFinite(sourceOrder)) return sourceOrder;
+                                    return Number.MAX_SAFE_INTEGER;
+                                };
+                                (Array.isArray(items) ? items : []).forEach(item => {
+                                    const province = getAreaProvinceByCode(item?.code || '');
+                                    if (!province) return;
+                                    const renderState = getProvinceRenderState(province, keyword);
+                                    if (!renderState.visible) return;
+                                    const key = mode === 'geo'
+                                        ? String(province?.geo || '其他').trim() || '其他'
+                                        : (useInitialGrouping ? resolveInitialLetter(province?.initial || '#') : '__all__');
+                                    if (!Array.isArray(grouped[key])) grouped[key] = [];
+                                    grouped[key].push({ province, renderState });
+                                });
+                                const groupKeys = Object.keys(grouped).sort((left, right) => {
+                                    if (mode === 'alpha' && !useInitialGrouping) return 0;
+                                    if (mode === 'geo') {
+                                        const leftIdx = AREA_GEO_ORDER.indexOf(left);
+                                        const rightIdx = AREA_GEO_ORDER.indexOf(right);
+                                        const safeLeft = leftIdx < 0 ? AREA_GEO_ORDER.length + 1 : leftIdx;
+                                        const safeRight = rightIdx < 0 ? AREA_GEO_ORDER.length + 1 : rightIdx;
+                                        if (safeLeft !== safeRight) return safeLeft - safeRight;
+                                    }
+                                    return left.localeCompare(right, 'zh-Hans-CN', { sensitivity: 'base' });
+                                });
+                                return groupKeys.map(groupKey => {
+                                    const rowHtml = grouped[groupKey]
+                                        .slice()
+                                        .sort((left, right) => {
+                                            const leftWeight = resolveProvinceOrderWeight(left?.province, mode);
+                                            const rightWeight = resolveProvinceOrderWeight(right?.province, mode);
+                                            if (leftWeight !== rightWeight) return leftWeight - rightWeight;
+                                            return String(left?.province?.name || '').localeCompare(String(right?.province?.name || ''), 'zh-Hans-CN', { sensitivity: 'base' });
+                                        })
+                                        .map(({ province, renderState }) => {
+                                            const provinceCode = normalizeAreaNodeCode(province?.code);
+                                            const cityList = Array.isArray(renderState?.visibleCities) ? renderState.visibleCities : [];
+                                            const cityCodes = getAreaCityCodeList(provinceCode);
+                                            const cityTotal = cityCodes.length;
+                                            const selectedCityCount = getProvinceSelectedCityCount(province, selected);
+                                            const fullChecked = isProvinceFullySelected(province, selected);
+                                            const partialChecked = !fullChecked && cityTotal > 0 && selectedCityCount > 0;
+                                            const hasCities = cityTotal > 0;
+                                            const expanded = hasCities && areaExpandedProvinceSet.has(provinceCode);
+                                            const labelText = cityTotal > 0
+                                                ? `${String(province?.name || '').trim()}(${selectedCityCount}/${cityTotal})`
+                                                : String(province?.name || '').trim();
+                                            const cityHtml = hasCities
+                                                ? `
+                                                    <div
+                                                        class="am-wxt-scene-area-city-list am-wxt-scene-area-city-popover ${expanded ? 'open' : ''}"
+                                                        data-scene-popup-area-city-list="${Utils.escapeHtml(provinceCode)}"
+                                                        ${expanded ? '' : 'hidden'}
+                                                    >
+                                                        ${cityList
+                                                            .map(city => {
+                                                                const cityCode = normalizeAreaNodeCode(city?.code);
+                                                                const checked = isCitySelected(cityCode, provinceCode, selected);
+                                                                return `
+                                                                    <button
+                                                                        type="button"
+                                                                        class="am-wxt-scene-area-city-item ${checked ? 'checked' : ''}"
+                                                                        data-scene-popup-area-item-toggle="${Utils.escapeHtml(cityCode)}"
+                                                                        data-scene-popup-area-city-toggle="${Utils.escapeHtml(cityCode)}"
+                                                                        data-scene-popup-area-city-parent="${Utils.escapeHtml(provinceCode)}"
+                                                                    >
+                                                                        <span class="am-wxt-scene-area-check-icon">${checked ? '✓' : ''}</span>
+                                                                        <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(String(city?.name || '').trim())}</span>
+                                                                    </button>
+                                                                `;
+                                                            })
+                                                            .join('')}
+                                                    </div>
+                                                `
+                                                : '';
+                                            if (!hasCities) {
+                                                return `
+                                                    <div class="am-wxt-scene-area-province-row" data-scene-popup-area-province-row="${Utils.escapeHtml(provinceCode)}">
+                                                        <button
+                                                            type="button"
+                                                            class="am-wxt-scene-area-item am-wxt-scene-area-province-item ${fullChecked ? 'checked' : ''} ${partialChecked ? 'partial' : ''}"
+                                                            data-scene-popup-area-item-toggle="${Utils.escapeHtml(provinceCode)}"
+                                                            data-scene-popup-area-province-toggle="${Utils.escapeHtml(provinceCode)}"
+                                                        >
+                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                            <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(labelText)}</span>
+                                                        </button>
+                                                    </div>
+                                                `;
+                                            }
+                                            return `
+                                                <div class="am-wxt-scene-area-province-row" data-scene-popup-area-province-row="${Utils.escapeHtml(provinceCode)}">
+                                                    <div class="am-wxt-scene-area-province-main">
+                                                        <button
+                                                            type="button"
+                                                            class="am-wxt-scene-area-province-check ${fullChecked ? 'checked' : ''} ${partialChecked ? 'partial' : ''}"
+                                                            data-scene-popup-area-province-toggle="${Utils.escapeHtml(provinceCode)}"
+                                                            title="${Utils.escapeHtml(`全选${labelText}`)}"
+                                                        >
+                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            class="am-wxt-scene-area-province-open ${expanded ? 'open' : ''} ${fullChecked ? 'checked' : ''} ${partialChecked ? 'partial' : ''}"
+                                                            data-scene-popup-area-city-expand="${Utils.escapeHtml(provinceCode)}"
+                                                            data-scene-popup-area-province-open="${Utils.escapeHtml(provinceCode)}"
+                                                            aria-expanded="${expanded ? 'true' : 'false'}"
+                                                        >
+                                                            <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(labelText)}</span>
+                                                            <span class="am-wxt-scene-area-caret">${expanded ? '▴' : '▾'}</span>
+                                                        </button>
+                                                    </div>
+                                                    ${cityHtml}
+                                                </div>
+                                            `;
+                                        })
+                                        .join('');
+                                    const isGeoGrouping = mode === 'geo' && groupKey !== '__all__';
+                                    const isAlphaGrouping = useInitialGrouping && groupKey !== '__all__';
+                                    const showGroupTitle = isGeoGrouping || isAlphaGrouping;
+                                    const groupClassName = `am-wxt-scene-area-group ${showGroupTitle ? '' : 'no-title'} ${isGeoGrouping ? 'geo-title' : ''}`.trim();
+                                    return `
+                                        <div class="${groupClassName}">
+                                            ${showGroupTitle ? `<div class="am-wxt-scene-area-group-title">${Utils.escapeHtml(groupKey)}</div>` : ''}
+                                            <div class="am-wxt-scene-area-item-grid">${rowHtml}</div>
+                                        </div>
+                                    `;
+                                }).join('');
+                            };
+                            const renderAreaSelector = () => {
+                                if (!(areaSelector instanceof HTMLElement)) return;
+                                const selected = buildSelectedAreaCodeSet(areaList);
+                                const keyword = String(areaSearchKeyword || '').trim();
+                                const loadingHtml = areaDataLoading
+                                    ? `<div class="am-wxt-scene-area-loading">地域数据加载中...</div>`
+                                    : '';
+                                const sectionHtml = areaRegionGroups.map(section => {
+                                    const sectionItems = Array.isArray(section?.items) ? section.items : [];
+                                    const visibleItems = sectionItems.filter(item => matchesAreaSearch(item, keyword));
+                                    const groupCodes = getAreaCodesBySection(section.section);
+                                    const fullCheckedCount = groupCodes.filter(code => isProvinceFullySelected(getAreaProvinceByCode(code), selected)).length;
+                                    const allChecked = groupCodes.length > 0 && fullCheckedCount === groupCodes.length;
+                                    const partialChecked = fullCheckedCount > 0 && !allChecked;
+                                    const contentHtml = visibleItems.length
+                                        ? renderAreaSectionGroups(visibleItems, selected, keyword, section.section)
+                                        : `<div class="am-wxt-scene-area-empty">${areaDataLoading ? '正在同步地域...' : '无匹配地域'}</div>`;
+                                    return `
+                                        <section class="am-wxt-scene-area-section" data-scene-popup-area-section="${Utils.escapeHtml(section.section)}">
+                                            <button
+                                                type="button"
+                                                class="am-wxt-scene-area-section-toggle ${allChecked ? 'checked' : ''} ${partialChecked ? 'partial' : ''}"
+                                                data-scene-popup-area-group-toggle="${Utils.escapeHtml(section.section)}"
+                                            >
+                                                <span class="am-wxt-scene-area-check-icon">${allChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                <span>${Utils.escapeHtml(String(section?.label || AREA_SECTION_LABEL_MAP[section.section] || '全选').trim())}</span>
+                                            </button>
+                                            <div class="am-wxt-scene-area-section-body">${contentHtml}</div>
+                                        </section>
+                                    `;
+                                }).join('');
+                                areaSelector.innerHTML = `${loadingHtml}${sectionHtml}`;
                                 renderAreaTemplateButtons();
                                 renderAreaModeButtons();
                             };
+                            areaRegionGroups = buildAreaRegionGroupsFallback();
+                            refreshAreaMetadata();
+                            areaList = normalizeAreaListForStorage(areaList);
+                            syncAreaTemplateByAreaList();
+                            void (async () => {
+                                areaDataLoading = true;
+                                renderAreaSelector();
+                                await loadAreaCodeConfig();
+                                areaDataLoading = false;
+                                areaList = normalizeAreaListForStorage(areaList);
+                                syncAreaTemplateByAreaList();
+                                renderAreaSelector();
+                            })();
 
+                            const WEEKDAY_DAY_KEYS = ['1', '2', '3', '4', '5'];
+                            const WEEKEND_DAY_KEYS = ['6', '7'];
                             const setAllLaunchPeriodSlots = (enabled = true) => {
                                 ADVANCED_DAY_COLUMNS.forEach(day => {
                                     ADVANCED_TIME_SLOTS.forEach(slot => {
@@ -21310,13 +23138,70 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 if (!hasOwn(launchPeriodGridState[dayKey], slotKey)) return;
                                 launchPeriodGridState[dayKey][slotKey] = !!enabled;
                             };
+                            const setHourRange = (dayKeys = [], startHour = 0, endHour = 24, enabled = true) => {
+                                const safeStart = Math.max(0, Math.min(24, toNumber(startHour, 0)));
+                                const safeEnd = Math.max(safeStart, Math.min(24, toNumber(endHour, 24)));
+                                (Array.isArray(dayKeys) ? dayKeys : []).forEach(dayKey => {
+                                    ADVANCED_TIME_SLOTS.forEach(slot => {
+                                        if (slot.hour >= safeStart && slot.hour < safeEnd) {
+                                            setTimeSlot(dayKey, slot.key, enabled);
+                                        }
+                                    });
+                                });
+                            };
+                            const applyTimeRecommendCard = (recommendKey = '') => {
+                                const key = String(recommendKey || '').trim();
+                                launchPeriodGridState = createEmptyLaunchPeriodGridState();
+                                setAllLaunchPeriodSlots(false);
+                                if (key === 'gmv_peak') {
+                                    setHourRange(WEEKDAY_DAY_KEYS, 11, 14, true);
+                                    setHourRange(WEEKDAY_DAY_KEYS, 17, 21, true);
+                                    setHourRange(WEEKEND_DAY_KEYS, 10, 22, true);
+                                } else if (key === 'night_click') {
+                                    setHourRange(['1', '2', '3', '4', '5', '6', '7'], 17, 24, true);
+                                } else if (key === 'morning_click') {
+                                    setHourRange(['1', '2', '3', '4', '5', '6', '7'], 6, 10, true);
+                                } else {
+                                    launchPeriodGridState = deepClone(initialLaunchPeriodGridState);
+                                }
+                                timeTemplate = 'custom';
+                                timeRecommendPreset = key;
+                                renderTimeGrid();
+                            };
+                            const copyDayPatternToGroup = (sourceDayKey = '', group = '') => {
+                                if (!sourceDayKey || !isPlainObject(launchPeriodGridState?.[sourceDayKey])) return;
+                                const source = deepClone(launchPeriodGridState[sourceDayKey]);
+                                const targets = (() => {
+                                    if (group === 'workday') return WEEKDAY_DAY_KEYS.slice();
+                                    if (group === 'weekend') return WEEKEND_DAY_KEYS.slice();
+                                    if (group === 'other') {
+                                        return ADVANCED_DAY_COLUMNS
+                                            .map(day => day.key)
+                                            .filter(dayKey => dayKey !== sourceDayKey);
+                                    }
+                                    return [];
+                                })();
+                                targets.forEach(dayKey => {
+                                    if (!isPlainObject(launchPeriodGridState?.[dayKey])) return;
+                                    launchPeriodGridState[dayKey] = deepClone(source);
+                                });
+                                timeTemplate = 'custom';
+                                timeRecommendPreset = '';
+                                renderTimeGrid();
+                            };
                             const renderTimeGrid = () => {
                                 if (!(timeGrid instanceof HTMLElement)) return;
-                                const headerHtml = ADVANCED_DAY_COLUMNS.map(day => `
-                                    <div class="am-wxt-scene-time-day">${Utils.escapeHtml(day.label)}</div>
-                                `).join('');
-                                const rowHtml = ADVANCED_TIME_SLOTS.map(slot => {
-                                    const cells = ADVANCED_DAY_COLUMNS.map(day => {
+                                const hourHeaderHtml = ADVANCED_TIME_SLOTS.map(slot => {
+                                    const hourLabel = String(slot.hour);
+                                    return `
+                                        <div
+                                            class="am-wxt-scene-time-hour"
+                                            data-scene-popup-time-hour="${Utils.escapeHtml(hourLabel)}"
+                                        >${Utils.escapeHtml(hourLabel)}</div>
+                                    `;
+                                }).join('');
+                                const rowHtml = ADVANCED_DAY_COLUMNS.map(day => {
+                                    const cells = ADVANCED_TIME_SLOTS.map(slot => {
                                         const active = !!launchPeriodGridState?.[day.key]?.[slot.key];
                                         return `
                                             <button
@@ -21325,24 +23210,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 data-scene-popup-time-slot="${Utils.escapeHtml(`${day.key}:${slot.key}`)}"
                                                 data-scene-popup-time-day="${Utils.escapeHtml(day.key)}"
                                                 data-scene-popup-time-range="${Utils.escapeHtml(slot.key)}"
+                                                title="${Utils.escapeHtml(`${day.label} ${slot.label}`)}"
                                             ></button>
                                         `;
                                     }).join('');
                                     return `
-                                        <div class="am-wxt-scene-time-row">
-                                            <div class="am-wxt-scene-time-label">${Utils.escapeHtml(slot.label)}</div>
+                                        <div class="am-wxt-scene-time-week-row">
+                                            <div class="am-wxt-scene-time-week-label">${Utils.escapeHtml(day.shortLabel || day.label)}</div>
                                             <div class="am-wxt-scene-time-cells">${cells}</div>
+                                            <div class="am-wxt-scene-time-week-actions">
+                                                <button type="button" class="am-wxt-scene-time-copy" data-scene-popup-time-copy-day="${Utils.escapeHtml(day.key)}" data-scene-popup-time-copy-group="workday">工作日</button>
+                                                <button type="button" class="am-wxt-scene-time-copy" data-scene-popup-time-copy-day="${Utils.escapeHtml(day.key)}" data-scene-popup-time-copy-group="weekend">周末</button>
+                                                <button type="button" class="am-wxt-scene-time-copy" data-scene-popup-time-copy-day="${Utils.escapeHtml(day.key)}" data-scene-popup-time-copy-group="other">其他</button>
+                                            </div>
                                         </div>
                                     `;
                                 }).join('');
                                 timeGrid.innerHTML = `
                                     <div class="am-wxt-scene-time-head">
-                                        <div class="am-wxt-scene-time-head-spacer"></div>
-                                        <div class="am-wxt-scene-time-days">${headerHtml}</div>
+                                        <div class="am-wxt-scene-time-head-day">星期</div>
+                                        <div class="am-wxt-scene-time-hours">${hourHeaderHtml}</div>
+                                        <div class="am-wxt-scene-time-head-actions">复制到</div>
                                     </div>
                                     <div class="am-wxt-scene-time-body">${rowHtml}</div>
                                 `;
                                 renderTimeTemplateButtons();
+                                renderTimeRecommendCards();
                             };
 
                             tabButtons.forEach(btn => {
@@ -21373,56 +23266,125 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     renderAdzoneList();
                                 };
                             });
-                            if (areaEditor instanceof HTMLTextAreaElement) {
-                                areaEditor.addEventListener('input', () => {
-                                    parseAreaEditorValue();
+                            areaTemplateButtons.forEach(input => {
+                                if (!(input instanceof HTMLInputElement)) return;
+                                input.addEventListener('change', () => {
+                                    const templateKey = String(input.getAttribute('data-scene-popup-area-template') || '').trim();
+                                    if (!templateKey || !input.checked) return;
+                                    applyAreaTemplate(templateKey);
+                                });
+                            });
+                            if (areaRecommendTemplateSelect instanceof HTMLSelectElement) {
+                                areaRecommendTemplateSelect.addEventListener('change', () => {
+                                    if (areaTemplate !== 'recommended') return;
+                                    applyAreaTemplate('recommended');
+                                });
+                            }
+                            if (areaCustomTemplateSelect instanceof HTMLSelectElement) {
+                                areaCustomTemplateSelect.addEventListener('change', () => {
+                                    if (areaTemplate !== 'custom') return;
+                                    applyAreaTemplate('custom');
+                                });
+                            }
+                            if (areaSaveTemplateButton instanceof HTMLButtonElement) {
+                                areaSaveTemplateButton.addEventListener('click', () => {
+                                    const selectedKey = String(
+                                        areaCustomTemplateSelect instanceof HTMLSelectElement
+                                            ? areaCustomTemplateSelect.value
+                                            : 'migration_rx600_standard'
+                                    ).trim() || 'migration_rx600_standard';
+                                    areaCustomTemplateMap[selectedKey] = normalizeAreaListForStorage(areaList)
+                                        .filter(item => !/^all$/i.test(String(item || '').trim()));
+                                    areaTemplate = 'custom';
                                     renderAreaTemplateButtons();
                                 });
                             }
-                            areaTemplateButtons.forEach(btn => {
-                                if (!(btn instanceof HTMLButtonElement)) return;
-                                btn.onclick = () => {
-                                    const templateKey = String(btn.getAttribute('data-scene-popup-area-template') || '').trim();
-                                    if (templateKey === 'recommended') {
-                                        areaList = ['110000', '310000', '330100', '440100'];
-                                        areaTemplate = 'recommended';
-                                        areaMode = 'geo';
-                                    } else if (templateKey === 'custom') {
-                                        if (!areaList.length || (areaList.length === 1 && /^all$/i.test(areaList[0]))) {
-                                            areaList = ['110000'];
-                                        }
-                                        areaTemplate = 'custom';
-                                    } else {
-                                        areaList = initialAreaListSnapshot.length ? initialAreaListSnapshot.slice() : ['all'];
-                                        areaTemplate = 'current';
-                                    }
-                                    renderAreaEditor();
-                                };
-                            });
                             areaModeButtons.forEach(btn => {
                                 if (!(btn instanceof HTMLButtonElement)) return;
                                 btn.onclick = () => {
                                     const modeKey = String(btn.getAttribute('data-scene-popup-area-mode') || '').trim();
                                     if (!modeKey) return;
-                                    areaMode = modeKey;
-                                    renderAreaModeButtons();
+                                    areaMode = normalizeAreaModeKey(modeKey);
+                                    areaExpandedProvinceSet.clear();
+                                    renderAreaSelector();
                                 };
                             });
-                            mask.querySelectorAll('[data-scene-popup-area-preset]').forEach(btn => {
-                                if (!(btn instanceof HTMLButtonElement)) return;
-                                btn.onclick = () => {
-                                    const preset = String(btn.getAttribute('data-scene-popup-area-preset') || '').trim();
-                                    if (preset === 'popular') {
-                                        areaList = ['110000', '310000', '330100', '440100'];
-                                        areaTemplate = 'recommended';
-                                        areaMode = 'geo';
-                                    } else {
-                                        areaList = ['all'];
-                                        areaTemplate = 'current';
+                            if (areaSearchInput instanceof HTMLInputElement) {
+                                areaSearchInput.addEventListener('input', () => {
+                                    areaSearchKeyword = String(areaSearchInput.value || '').trim();
+                                    if (areaSearchKeyword) {
+                                        areaExpandedProvinceSet.clear();
                                     }
-                                    renderAreaEditor();
-                                };
-                            });
+                                    renderAreaSelector();
+                                });
+                            }
+                            if (areaSelector instanceof HTMLElement) {
+                                areaSelector.addEventListener('click', (event) => {
+                                    const groupTrigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-area-group-toggle]')
+                                        : null;
+                                    if (groupTrigger instanceof HTMLElement) {
+                                        const group = String(groupTrigger.getAttribute('data-scene-popup-area-group-toggle') || '').trim();
+                                        if (!group) return;
+                                        const groupCodes = getAreaCodesBySection(group);
+                                        const selected = buildSelectedAreaCodeSet(areaList);
+                                        const allChecked = groupCodes.length > 0
+                                            && groupCodes.every(code => isProvinceFullySelected(getAreaProvinceByCode(code), selected));
+                                        toggleAreaGroupSelection(group, !allChecked);
+                                        renderAreaSelector();
+                                        return;
+                                    }
+                                    const cityTrigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-area-city-toggle]')
+                                        : null;
+                                    if (cityTrigger instanceof HTMLElement) {
+                                        const provinceCode = String(cityTrigger.getAttribute('data-scene-popup-area-city-parent') || '').trim();
+                                        const cityCode = String(cityTrigger.getAttribute('data-scene-popup-area-city-toggle') || '').trim();
+                                        if (!provinceCode || !cityCode) return;
+                                        const selected = buildSelectedAreaCodeSet(areaList);
+                                        const checked = isCitySelected(cityCode, provinceCode, selected);
+                                        toggleAreaCitySelection(provinceCode, cityCode, !checked);
+                                        renderAreaSelector();
+                                        return;
+                                    }
+                                    const provinceTrigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-area-province-toggle]')
+                                        : null;
+                                    if (provinceTrigger instanceof HTMLElement) {
+                                        const provinceCode = String(provinceTrigger.getAttribute('data-scene-popup-area-province-toggle') || '').trim();
+                                        if (!provinceCode) return;
+                                        const selected = buildSelectedAreaCodeSet(areaList);
+                                        const checked = isProvinceFullySelected(getAreaProvinceByCode(provinceCode), selected);
+                                        toggleAreaProvinceSelection(provinceCode, !checked);
+                                        renderAreaSelector();
+                                        return;
+                                    }
+                                    const expandTrigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-area-city-expand], [data-scene-popup-area-province-open]')
+                                        : null;
+                                    if (expandTrigger instanceof HTMLElement) {
+                                        const provinceCode = String(expandTrigger.getAttribute('data-scene-popup-area-city-expand') || '').trim();
+                                        if (!provinceCode) return;
+                                        if (areaExpandedProvinceSet.has(provinceCode)) {
+                                            areaExpandedProvinceSet.delete(provinceCode);
+                                        } else {
+                                            areaExpandedProvinceSet = new Set([provinceCode]);
+                                        }
+                                        renderAreaSelector();
+                                        return;
+                                    }
+                                    const itemTrigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-area-item-toggle]')
+                                        : null;
+                                    if (!(itemTrigger instanceof HTMLElement)) return;
+                                    const areaCode = String(itemTrigger.getAttribute('data-scene-popup-area-item-toggle') || '').trim();
+                                    if (!areaCode) return;
+                                    const selected = buildSelectedAreaCodeSet(areaList);
+                                    const checked = selected.has(areaCode);
+                                    toggleAreaItemSelection(areaCode, !checked);
+                                    renderAreaSelector();
+                                });
+                            }
                             timeTemplateButtons.forEach(btn => {
                                 if (!(btn instanceof HTMLButtonElement)) return;
                                 btn.onclick = () => {
@@ -21431,13 +23393,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         launchPeriodGridState = createEmptyLaunchPeriodGridState();
                                         setAllLaunchPeriodSlots(true);
                                         timeTemplate = 'full';
+                                        timeRecommendPreset = '';
+                                    } else if (templateKey === 'dishwasher') {
+                                        launchPeriodGridState = createEmptyLaunchPeriodGridState();
+                                        setAllLaunchPeriodSlots(false);
+                                        setHourRange(WEEKDAY_DAY_KEYS, 9, 12, true);
+                                        setHourRange(WEEKDAY_DAY_KEYS, 18, 23, true);
+                                        setHourRange(WEEKEND_DAY_KEYS, 10, 23, true);
+                                        timeTemplate = 'dishwasher';
+                                        timeRecommendPreset = '';
                                     } else if (templateKey === 'custom') {
                                         timeTemplate = 'custom';
                                     } else {
                                         launchPeriodGridState = deepClone(initialLaunchPeriodGridState);
                                         timeTemplate = 'current';
+                                        timeRecommendPreset = '';
                                     }
                                     renderTimeGrid();
+                                };
+                            });
+                            timeRecommendCards.forEach(btn => {
+                                if (!(btn instanceof HTMLButtonElement)) return;
+                                btn.onclick = () => {
+                                    const recommendKey = String(btn.getAttribute('data-scene-popup-time-recommend-card') || '').trim();
+                                    if (!recommendKey) return;
+                                    applyTimeRecommendCard(recommendKey);
                                 };
                             });
                             if (timeGrid instanceof HTMLElement) {
@@ -21459,6 +23439,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     dragState = { active: true, next: !current };
                                     applyFromCell(cell, !current);
                                     timeTemplate = 'custom';
+                                    timeRecommendPreset = '';
                                     renderTimeGrid();
                                 });
                                 timeGrid.addEventListener('mouseover', (event) => {
@@ -21469,7 +23450,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     if (!(cell instanceof HTMLElement)) return;
                                     applyFromCell(cell, !!dragState.next);
                                     timeTemplate = 'custom';
+                                    timeRecommendPreset = '';
                                     renderTimeGrid();
+                                });
+                                timeGrid.addEventListener('click', (event) => {
+                                    const trigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-time-copy-day]')
+                                        : null;
+                                    if (!(trigger instanceof HTMLElement)) return;
+                                    const sourceDayKey = String(trigger.getAttribute('data-scene-popup-time-copy-day') || '').trim();
+                                    const group = String(trigger.getAttribute('data-scene-popup-time-copy-group') || '').trim();
+                                    if (!sourceDayKey || !group) return;
+                                    copyDayPatternToGroup(sourceDayKey, group);
                                 });
                                 const handleMouseUp = () => {
                                     dragState = { active: false, next: null };
@@ -21486,9 +23478,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     if (action === 'clear') {
                                         launchPeriodGridState = createEmptyLaunchPeriodGridState();
                                         timeTemplate = 'custom';
+                                        timeRecommendPreset = '';
                                     } else if (action === 'reset') {
                                         launchPeriodGridState = deepClone(initialPeriodGridState);
                                         timeTemplate = 'current';
+                                        timeRecommendPreset = '';
                                     }
                                     renderTimeGrid();
                                 };
@@ -21496,7 +23490,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                             renderTabs();
                             renderAdzoneList();
-                            renderAreaEditor();
+                            renderAreaTemplateButtons();
+                            renderAreaModeButtons();
+                            renderAreaSelector();
                             renderTimeGrid();
 
                             mask.dataset.scenePopupSyntheticAdzone = syntheticOnly ? '1' : '0';
@@ -21584,21 +23580,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const adzoneRow = resolveScenePopupRowByTrigger('adzone');
                             const launchPeriodRow = resolveScenePopupRowByTrigger('launchPeriod');
                             const launchAreaRow = resolveScenePopupRowByTrigger('launchArea');
+                            const combinedAdvancedRow = adzoneRow instanceof HTMLElement
+                                && /投放资源位\/投放地域\/(投放时间|分时折扣)/.test(
+                                    normalizeText(adzoneRow.querySelector('.am-wxt-scene-setting-label')?.textContent || '').replace(/\s+/g, '')
+                                );
+                            const combinedSummary = describeKeywordAdvancedSummary({
+                                adzoneRaw: result.adzoneRaw || '[]',
+                                launchAreaRaw: result.launchAreaRaw || '["all"]',
+                                launchPeriodRaw: result.launchPeriodRaw || JSON.stringify(buildDefaultLaunchPeriodList())
+                            });
                             updateScenePopupSummary(
                                 adzoneRow,
                                 'adzone',
-                                result.adzoneSummary || describeAdzoneSummary(result.adzoneRaw || '[]')
+                                combinedAdvancedRow
+                                    ? combinedSummary
+                                    : (result.adzoneSummary || describeAdzoneSummary(result.adzoneRaw || '[]'))
                             );
-                            updateScenePopupSummary(
-                                launchPeriodRow,
-                                'launchPeriod',
-                                result.launchPeriodSummary || describeLaunchPeriodSummary(result.launchPeriodRaw || '[]')
-                            );
-                            updateScenePopupSummary(
-                                launchAreaRow,
-                                'launchArea',
-                                result.launchAreaSummary || describeLaunchAreaSummary(result.launchAreaRaw || '["all"]')
-                            );
+                            if (!combinedAdvancedRow) {
+                                updateScenePopupSummary(
+                                    launchPeriodRow,
+                                    'launchPeriod',
+                                    result.launchPeriodSummary || describeLaunchPeriodSummary(result.launchPeriodRaw || '[]')
+                                );
+                                updateScenePopupSummary(
+                                    launchAreaRow,
+                                    'launchArea',
+                                    result.launchAreaSummary || describeLaunchAreaSummary(result.launchAreaRaw || '["all"]')
+                                );
+                            }
 
                             const adzoneMainControl = adzoneRow?.querySelector(
                                 'input.am-wxt-hidden-control[data-scene-field]:not([data-scene-popup-field])'
@@ -21607,15 +23616,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 const parsedAdzone = parseScenePopupJsonArray(result.adzoneRaw || '[]', [])
                                     .filter(item => isPlainObject(item));
                                 const enabledCount = parsedAdzone.filter(item => isAdzoneStatusEnabled(item)).length;
-                                dispatchSceneControlUpdate(
-                                    adzoneMainControl,
-                                    parsedAdzone.length && enabledCount !== parsedAdzone.length ? '自定义资源位' : '平台优选'
-                                );
+                                if (combinedAdvancedRow) {
+                                    const areaList = parseScenePopupJsonArray(result.launchAreaRaw || '["all"]', ['all'])
+                                        .map(item => String(item || '').trim())
+                                        .filter(Boolean);
+                                    const areaDefault = !areaList.length || (areaList.length === 1 && /^all$/i.test(areaList[0]));
+                                    const periodAllDay = isLaunchPeriodAllDay(result.launchPeriodRaw || JSON.stringify(buildDefaultLaunchPeriodList()));
+                                    const adzoneDefault = !parsedAdzone.length || enabledCount === parsedAdzone.length;
+                                    dispatchSceneControlUpdate(
+                                        adzoneMainControl,
+                                        (adzoneDefault && areaDefault && periodAllDay) ? '默认投放' : '自定义设置'
+                                    );
+                                } else {
+                                    dispatchSceneControlUpdate(
+                                        adzoneMainControl,
+                                        parsedAdzone.length && enabledCount !== parsedAdzone.length ? '自定义资源位' : '平台优选'
+                                    );
+                                }
                             }
                             const launchPeriodMainControl = launchPeriodRow?.querySelector(
                                 'input.am-wxt-hidden-control[data-scene-field]:not([data-scene-popup-field])'
                             );
-                            if (launchPeriodMainControl instanceof HTMLInputElement) {
+                            if (!combinedAdvancedRow && launchPeriodMainControl instanceof HTMLInputElement) {
                                 const nextLaunchPeriodRaw = String(result.launchPeriodRaw || '').trim();
                                 let nextLabel = '长期投放';
                                 if (nextLaunchPeriodRaw && nextLaunchPeriodRaw !== '[]') {
@@ -21632,64 +23654,495 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const crowdCampaignRaw = normalizeSceneSettingValue(crowdCampaignControl.value || '') || '[]';
                             const crowdAdgroupRaw = normalizeSceneSettingValue(crowdAdgroupControl.value || '') || '[]';
                             const result = await openScenePopupDialog({
-                                title: popupTitle || '配置人群明细',
+                                title: popupTitle || '添加精选人群',
+                                dialogClassName: 'am-wxt-scene-popup-dialog-crowd',
                                 bodyHtml: `
-                                    <div class="am-wxt-scene-popup-tips">优先投放客户与种子人群均支持 JSON 数组。种子人群建议使用 rightList 格式。</div>
-                                    <label class="am-wxt-scene-popup-label">优先投放客户（campaign.crowdList）</label>
-                                    <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="crowdCampaign"></textarea>
-                                    <label class="am-wxt-scene-popup-label">种子人群（adgroup.rightList）</label>
-                                    <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="crowdAdgroup"></textarea>
-                                    <div class="am-wxt-scene-popup-actions">
-                                        <button type="button" class="am-wxt-btn" data-scene-popup-copy-right-list="1">使用当前计划人群</button>
+                                    <div class="am-wxt-scene-popup-tips">原生页“添加精选人群”同构：左侧候选人群、右侧已选人群，支持推荐出价和高级 JSON 编辑。</div>
+                                    <div class="am-wxt-scene-crowd-layout" data-scene-popup-crowd-layout="1">
+                                        <section class="am-wxt-scene-crowd-pane is-left">
+                                            <div class="am-wxt-scene-crowd-tabs">
+                                                <button type="button" class="am-wxt-scene-crowd-tab active" data-scene-popup-crowd-tab="recommend">人群推荐</button>
+                                                <button type="button" class="am-wxt-scene-crowd-tab" data-scene-popup-crowd-tab="system">系统推荐人群</button>
+                                                <button type="button" class="am-wxt-scene-crowd-tab" data-scene-popup-crowd-tab="base">基础属性人群</button>
+                                                <button type="button" class="am-wxt-scene-crowd-tab" data-scene-popup-crowd-tab="ai">AI小万达人</button>
+                                            </div>
+                                            <div class="am-wxt-scene-popup-actions">
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-copy-right-list="1">同步计划人群</button>
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-crowd-toggle-json="1">高级JSON</button>
+                                            </div>
+                                            <div class="am-wxt-scene-crowd-quick-filters" data-scene-popup-crowd-quick-filters="1">
+                                                <button type="button" class="am-wxt-scene-crowd-quick-filter active" data-scene-popup-crowd-quick-filter="all">全部人群</button>
+                                                <button type="button" class="am-wxt-scene-crowd-quick-filter" data-scene-popup-crowd-quick-filter="assist">助力人群提效</button>
+                                                <button type="button" class="am-wxt-scene-crowd-quick-filter" data-scene-popup-crowd-quick-filter="asset">宝贝成交资产</button>
+                                                <button type="button" class="am-wxt-scene-crowd-quick-filter" data-scene-popup-crowd-quick-filter="high_value">高价值潜客</button>
+                                            </div>
+                                            <div class="am-wxt-scene-crowd-table-head">
+                                                <span>人群名称</span>
+                                                <span>人群规模</span>
+                                                <span>推荐理由</span>
+                                                <span>设置溢价</span>
+                                                <span>操作</span>
+                                            </div>
+                                            <div class="am-wxt-scene-crowd-candidate-list" data-scene-popup-crowd-candidate-list="1"></div>
+                                        </section>
+                                        <section class="am-wxt-scene-crowd-pane is-right">
+                                            <div class="am-wxt-scene-crowd-selected-head">
+                                                <span>已选人群（<b data-scene-popup-crowd-selected-count="1">0</b>/100）</span>
+                                                <div class="am-wxt-scene-crowd-selected-actions">
+                                                    <button type="button" class="am-wxt-btn" data-scene-popup-crowd-batch-bid="1">批量设置溢价</button>
+                                                    <button type="button" class="am-wxt-btn" data-scene-popup-crowd-clear-selected="1">清空</button>
+                                                </div>
+                                            </div>
+                                            <div class="am-wxt-scene-crowd-selected-list" data-scene-popup-crowd-selected-list="1"></div>
+                                        </section>
                                     </div>
+                                    <section class="am-wxt-scene-crowd-json hidden" data-scene-popup-crowd-json="1">
+                                        <label class="am-wxt-scene-popup-label">添加精选人群（adgroup.rightList）</label>
+                                        <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="crowdAdgroup"></textarea>
+                                        <label class="am-wxt-scene-popup-label">客户口径设置（campaign.crowdList）</label>
+                                        <textarea class="am-wxt-scene-popup-textarea" data-scene-popup-editor="crowdCampaign"></textarea>
+                                    </section>
                                 `,
                                 onMounted: (mask) => {
+                                    const getCrowdKey = (item = {}, index = 0) => (
+                                        normalizeSceneSettingValue(
+                                            item?.mx_crowdId
+                                            || item?.crowd?.label?.labelId
+                                            || item?.id
+                                            || item?.crowd?.id
+                                            || ''
+                                        ) || `crowd_${index + 1}`
+                                    );
+                                    const normalizeCrowdBid = (item = {}, fallback = 30) => {
+                                        const raw = toNumber(
+                                            item?.price?.price
+                                            || item?.price?.value
+                                            || item?.crowd?.price
+                                            || fallback,
+                                            fallback
+                                        );
+                                        if (!Number.isFinite(raw)) return fallback;
+                                        return Math.max(30, Math.min(300, Math.round(raw)));
+                                    };
+                                    const cloneWithCrowdBid = (item = {}, bid = 30) => {
+                                        const next = deepClone(item || {});
+                                        if (!isPlainObject(next.price)) next.price = {};
+                                        next.price.price = normalizeCrowdBid(next, bid);
+                                        return next;
+                                    };
                                     const campaignEditor = mask.querySelector('[data-scene-popup-editor="crowdCampaign"]');
                                     const adgroupEditor = mask.querySelector('[data-scene-popup-editor="crowdAdgroup"]');
+                                    const crowdJsonWrap = mask.querySelector('[data-scene-popup-crowd-json]');
+                                    const crowdCandidateListEl = mask.querySelector('[data-scene-popup-crowd-candidate-list]');
+                                    const crowdSelectedListEl = mask.querySelector('[data-scene-popup-crowd-selected-list]');
+                                    const crowdSelectedCountEl = mask.querySelector('[data-scene-popup-crowd-selected-count]');
+                                    const tabButtons = Array.from(mask.querySelectorAll('[data-scene-popup-crowd-tab]'));
+                                    const quickFilterButtons = Array.from(mask.querySelectorAll('[data-scene-popup-crowd-quick-filter]'));
+                                    const initialCampaignList = parseScenePopupJsonArray(crowdCampaignRaw, [])
+                                        .filter(item => isPlainObject(item));
+                                    const initialAdgroupList = parseScenePopupJsonArray(crowdAdgroupRaw, [])
+                                        .filter(item => isPlainObject(item));
+                                    const wizardCrowdList = Array.isArray(wizardState.crowdList) ? wizardState.crowdList : [];
+                                    const fallbackCandidates = (Array.isArray(DEFAULTS.recommendCrowdLabelIds) ? DEFAULTS.recommendCrowdLabelIds : [])
+                                        .slice(0, 20)
+                                        .map((labelId, idx) => ({
+                                            mx_crowdId: `fallback_${labelId}`,
+                                            crowd: {
+                                                targetType: 'label',
+                                                label: {
+                                                    labelId: String(labelId || '').trim(),
+                                                    labelName: `系统推荐人群${idx + 1}`,
+                                                    optionList: []
+                                                },
+                                                crowdName: `系统推荐人群${idx + 1}`
+                                            },
+                                            price: { price: 30 }
+                                        }));
+                                    let activeTab = 'recommend';
+                                    let activeQuickFilter = 'all';
+                                    let selectedList = uniqueBy(
+                                        initialAdgroupList.length ? initialAdgroupList : wizardCrowdList,
+                                        (item, idx) => getCrowdKey(item, idx)
+                                    ).slice(0, 100);
+                                    let candidateList = uniqueBy(
+                                        wizardCrowdList
+                                            .concat(initialAdgroupList)
+                                            .concat(initialCampaignList)
+                                            .concat(fallbackCandidates),
+                                        (item, idx) => getCrowdKey(item, idx)
+                                    ).slice(0, 200);
+                                    let jsonMode = false;
+
+                                    const formatCrowdScaleText = (item = {}, index = 0) => {
+                                        const fromItem = toNumber(
+                                            item?.crowdScale
+                                            || item?.crowd?.scale
+                                            || item?.crowd?.crowdScale
+                                            || item?.crowd?.estimateUv
+                                            || item?.coverage
+                                            || '',
+                                            NaN
+                                        );
+                                        const keySeed = getCrowdKey(item, index);
+                                        let value = Number.isFinite(fromItem) && fromItem > 0
+                                            ? Math.max(1, Math.round(fromItem))
+                                            : NaN;
+                                        if (!Number.isFinite(value) || value <= 0) {
+                                            const hash = Array.from(String(keySeed || `crowd_${index + 1}`))
+                                                .reduce((acc, ch) => ((acc << 5) - acc + ch.charCodeAt(0)) | 0, 0);
+                                            value = (Math.abs(hash) % 280000000) + 1200000;
+                                        }
+                                        return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                    };
+                                    const resolveCrowdQuickFilterKey = (item = {}, index = 0, name = '') => {
+                                        const normalizedName = String(name || getCrowdDisplayName(item) || '').trim();
+                                        if (/高价值|高潜|高净值|收藏|加购|复购|潜客/.test(normalizedName)) return 'high_value';
+                                        if (/资产|宝贝|货品|成交|老客|行为/.test(normalizedName)) return 'asset';
+                                        if (/达人|系统|推荐|拉新|提效|流量/.test(normalizedName)) return 'assist';
+                                        const ring = ['assist', 'asset', 'high_value'];
+                                        return ring[index % ring.length];
+                                    };
+                                    const resolveCrowdReasonText = (item = {}, index = 0, name = '') => {
+                                        const reasonList = uniqueBy(
+                                            (Array.isArray(item?.reasonTagList) ? item.reasonTagList : [])
+                                                .map(reason => String(reason?.name || reason || '').trim())
+                                                .filter(Boolean),
+                                            reason => reason
+                                        );
+                                        if (reasonList.length) return reasonList[0];
+                                        const quickKey = resolveCrowdQuickFilterKey(item, index, name);
+                                        if (quickKey === 'high_value') return '高价值高潜力';
+                                        if (quickKey === 'asset') return '优选成交资产';
+                                        return '高相关引流';
+                                    };
+
+                                    const getSelectedKeySet = () => new Set(
+                                        selectedList.map((item, idx) => getCrowdKey(item, idx))
+                                    );
+                                    const renderTabs = () => {
+                                        tabButtons.forEach(btn => {
+                                            if (!(btn instanceof HTMLButtonElement)) return;
+                                            const key = String(btn.getAttribute('data-scene-popup-crowd-tab') || '').trim();
+                                            const active = key === activeTab;
+                                            btn.classList.toggle('active', active);
+                                            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                        });
+                                    };
+                                    const renderQuickFilters = () => {
+                                        quickFilterButtons.forEach(btn => {
+                                            if (!(btn instanceof HTMLButtonElement)) return;
+                                            const key = String(btn.getAttribute('data-scene-popup-crowd-quick-filter') || '').trim() || 'all';
+                                            const active = key === activeQuickFilter;
+                                            btn.classList.toggle('active', active);
+                                            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                        });
+                                    };
+                                    const renderCandidateList = () => {
+                                        if (!(crowdCandidateListEl instanceof HTMLElement)) return;
+                                        const selectedSet = getSelectedKeySet();
+                                        const filtered = candidateList.filter((item, idx) => {
+                                            const key = getCrowdKey(item, idx);
+                                            if (!key) return false;
+                                            const name = getCrowdDisplayName(item);
+                                            let tabMatched = true;
+                                            if (activeTab === 'system') tabMatched = /系统|推荐/.test(name);
+                                            else if (activeTab === 'base') tabMatched = /属性|人群/.test(name);
+                                            else if (activeTab === 'ai') tabMatched = /AI|达人|小万/.test(name);
+                                            if (!tabMatched) return false;
+                                            if (activeQuickFilter === 'all') return true;
+                                            return resolveCrowdQuickFilterKey(item, idx, name) === activeQuickFilter;
+                                        });
+                                        if (!filtered.length) {
+                                            crowdCandidateListEl.innerHTML = '<div class="am-wxt-scene-crowd-empty">暂无可选人群</div>';
+                                            return;
+                                        }
+                                        crowdCandidateListEl.innerHTML = filtered.map((item, idx) => {
+                                            const key = getCrowdKey(item, idx);
+                                            const rawName = getCrowdDisplayName(item) || `精选人群${idx + 1}`;
+                                            const name = Utils.escapeHtml(rawName);
+                                            const labelId = Utils.escapeHtml(normalizeSceneSettingValue(item?.crowd?.label?.labelId || key));
+                                            const bid = normalizeCrowdBid(item, 30);
+                                            const scaleText = Utils.escapeHtml(formatCrowdScaleText(item, idx));
+                                            const reasonText = Utils.escapeHtml(resolveCrowdReasonText(item, idx, rawName));
+                                            const selected = selectedSet.has(key);
+                                            return `
+                                                <div class="am-wxt-scene-crowd-candidate-row">
+                                                    <div class="am-wxt-scene-crowd-candidate-name">
+                                                        <div class="name">${name}</div>
+                                                        <div class="meta">${labelId || '未提供ID'}</div>
+                                                    </div>
+                                                    <div class="am-wxt-scene-crowd-candidate-scale">${scaleText}</div>
+                                                    <div class="am-wxt-scene-crowd-candidate-reason">
+                                                        <span class="tag">${reasonText}</span>
+                                                    </div>
+                                                    <div class="am-wxt-scene-crowd-candidate-bid">
+                                                        <input type="number" min="30" max="300" step="1" value="${Utils.escapeHtml(String(bid))}" data-scene-popup-crowd-bid="${Utils.escapeHtml(key)}" />
+                                                        <span>%</span>
+                                                    </div>
+                                                    <div class="am-wxt-scene-crowd-candidate-actions">
+                                                        ${selected
+            ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>`
+            : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-add="${Utils.escapeHtml(key)}">添加</button>`}
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    };
+                                    const renderSelectedList = () => {
+                                        if (!(crowdSelectedListEl instanceof HTMLElement)) return;
+                                        if (crowdSelectedCountEl instanceof HTMLElement) {
+                                            crowdSelectedCountEl.textContent = String(selectedList.length);
+                                        }
+                                        if (!selectedList.length) {
+                                            crowdSelectedListEl.innerHTML = '<div class="am-wxt-scene-crowd-empty">暂无已选人群</div>';
+                                            return;
+                                        }
+                                        crowdSelectedListEl.innerHTML = selectedList.map((item, idx) => {
+                                            const key = getCrowdKey(item, idx);
+                                            const name = Utils.escapeHtml(getCrowdDisplayName(item) || `已选人群${idx + 1}`);
+                                            const labelId = Utils.escapeHtml(
+                                                normalizeSceneSettingValue(item?.crowd?.label?.labelId || key)
+                                            );
+                                            const bid = normalizeCrowdBid(item, 30);
+                                            return `
+                                                <div class="am-wxt-scene-crowd-selected-row">
+                                                    <div class="am-wxt-scene-crowd-selected-name">
+                                                        <div class="name">${name}</div>
+                                                        <div class="meta">${labelId || '未提供ID'}</div>
+                                                    </div>
+                                                    <div class="am-wxt-scene-crowd-selected-bid">
+                                                        <input type="number" min="30" max="300" step="1" value="${Utils.escapeHtml(String(bid))}" data-scene-popup-crowd-selected-bid="${Utils.escapeHtml(key)}" />
+                                                        <span>%</span>
+                                                    </div>
+                                                    <button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    };
+                                    const syncJsonEditors = () => {
+                                        if (campaignEditor instanceof HTMLTextAreaElement) {
+                                            campaignEditor.value = JSON.stringify(selectedList, null, 2);
+                                        }
+                                        if (adgroupEditor instanceof HTMLTextAreaElement) {
+                                            adgroupEditor.value = JSON.stringify(selectedList, null, 2);
+                                        }
+                                    };
+                                    const toggleJsonMode = (nextVisible) => {
+                                        jsonMode = !!nextVisible;
+                                        if (crowdJsonWrap instanceof HTMLElement) {
+                                            crowdJsonWrap.classList.toggle('hidden', !jsonMode);
+                                        }
+                                        syncJsonEditors();
+                                    };
+                                    const findCandidateByKey = (key = '') => (
+                                        candidateList.find((item, idx) => getCrowdKey(item, idx) === key) || null
+                                    );
+                                    const removeSelectedByKey = (key = '') => {
+                                        selectedList = selectedList.filter((item, idx) => getCrowdKey(item, idx) !== key);
+                                    };
+                                    const addSelectedByKey = (key = '') => {
+                                        const candidate = findCandidateByKey(key);
+                                        if (!candidate) return;
+                                        if (selectedList.some((item, idx) => getCrowdKey(item, idx) === key)) return;
+                                        if (selectedList.length >= 100) {
+                                            appendWizardLog('最多添加 100 条精选人群', 'error');
+                                            return;
+                                        }
+                                        selectedList.push(deepClone(candidate));
+                                    };
+                                    const updateBidByKey = (key = '', nextBid = 30) => {
+                                        const safeBid = normalizeCrowdBid({ price: { price: nextBid } }, 30);
+                                        candidateList = candidateList.map((item, idx) => {
+                                            if (getCrowdKey(item, idx) !== key) return item;
+                                            return cloneWithCrowdBid(item, safeBid);
+                                        });
+                                        selectedList = selectedList.map((item, idx) => {
+                                            if (getCrowdKey(item, idx) !== key) return item;
+                                            return cloneWithCrowdBid(item, safeBid);
+                                        });
+                                        return safeBid;
+                                    };
                                     if (campaignEditor instanceof HTMLTextAreaElement) {
                                         campaignEditor.value = JSON.stringify(
-                                            parseScenePopupJsonArray(crowdCampaignRaw, []),
+                                            parseScenePopupJsonArray(crowdCampaignRaw, []).filter(item => isPlainObject(item)),
                                             null,
                                             2
                                         );
                                     }
                                     if (adgroupEditor instanceof HTMLTextAreaElement) {
                                         adgroupEditor.value = JSON.stringify(
-                                            parseScenePopupJsonArray(crowdAdgroupRaw, []),
+                                            parseScenePopupJsonArray(crowdAdgroupRaw, []).filter(item => isPlainObject(item)),
                                             null,
                                             2
                                         );
                                     }
+                                    renderTabs();
+                                    renderQuickFilters();
+                                    renderCandidateList();
+                                    renderSelectedList();
+                                    syncJsonEditors();
+                                    toggleJsonMode(false);
+                                    tabButtons.forEach(btn => {
+                                        if (!(btn instanceof HTMLButtonElement)) return;
+                                        btn.onclick = () => {
+                                            const nextTab = String(btn.getAttribute('data-scene-popup-crowd-tab') || '').trim() || 'recommend';
+                                            activeTab = nextTab;
+                                            renderTabs();
+                                            renderCandidateList();
+                                        };
+                                    });
+                                    quickFilterButtons.forEach(btn => {
+                                        if (!(btn instanceof HTMLButtonElement)) return;
+                                        btn.onclick = () => {
+                                            const nextFilter = String(btn.getAttribute('data-scene-popup-crowd-quick-filter') || '').trim() || 'all';
+                                            activeQuickFilter = nextFilter;
+                                            renderQuickFilters();
+                                            renderCandidateList();
+                                        };
+                                    });
                                     const copyBtn = mask.querySelector('[data-scene-popup-copy-right-list]');
-                                    if (copyBtn instanceof HTMLButtonElement && adgroupEditor instanceof HTMLTextAreaElement) {
+                                    if (copyBtn instanceof HTMLButtonElement) {
                                         copyBtn.onclick = () => {
-                                            adgroupEditor.value = JSON.stringify(
-                                                Array.isArray(wizardState.crowdList) ? wizardState.crowdList : [],
-                                                null,
-                                                2
-                                            );
+                                            selectedList = uniqueBy(
+                                                (Array.isArray(wizardState.crowdList) ? wizardState.crowdList : [])
+                                                    .filter(item => isPlainObject(item))
+                                                    .map(item => deepClone(item)),
+                                                (item, idx) => getCrowdKey(item, idx)
+                                            ).slice(0, 100);
+                                            syncJsonEditors();
+                                            renderCandidateList();
+                                            renderSelectedList();
                                         };
                                     }
+                                    const jsonToggleBtn = mask.querySelector('[data-scene-popup-crowd-toggle-json]');
+                                    if (jsonToggleBtn instanceof HTMLButtonElement) {
+                                        jsonToggleBtn.onclick = () => {
+                                            toggleJsonMode(!jsonMode);
+                                            jsonToggleBtn.classList.toggle('primary', jsonMode);
+                                        };
+                                    }
+                                    const batchBidBtn = mask.querySelector('[data-scene-popup-crowd-batch-bid]');
+                                    if (batchBidBtn instanceof HTMLButtonElement) {
+                                        batchBidBtn.onclick = () => {
+                                            if (!selectedList.length) {
+                                                appendWizardLog('请先添加人群后再设置溢价', 'error');
+                                                return;
+                                            }
+                                            const defaultBid = normalizeCrowdBid(selectedList[0], 30);
+                                            const inputText = String(window.prompt('请输入批量溢价（30-300）', String(defaultBid)) || '').trim();
+                                            if (!inputText) return;
+                                            const nextBid = normalizeCrowdBid({ price: { price: inputText } }, defaultBid);
+                                            const selectedKeySet = new Set(selectedList.map((item, idx) => getCrowdKey(item, idx)));
+                                            candidateList = candidateList.map((item, idx) => {
+                                                if (!selectedKeySet.has(getCrowdKey(item, idx))) return item;
+                                                return cloneWithCrowdBid(item, nextBid);
+                                            });
+                                            selectedList = selectedList.map(item => cloneWithCrowdBid(item, nextBid));
+                                            syncJsonEditors();
+                                            renderCandidateList();
+                                            renderSelectedList();
+                                        };
+                                    }
+                                    const clearBtn = mask.querySelector('[data-scene-popup-crowd-clear-selected]');
+                                    if (clearBtn instanceof HTMLButtonElement) {
+                                        clearBtn.onclick = () => {
+                                            selectedList = [];
+                                            syncJsonEditors();
+                                            renderCandidateList();
+                                            renderSelectedList();
+                                        };
+                                    }
+                                    if (crowdCandidateListEl instanceof HTMLElement) {
+                                        crowdCandidateListEl.addEventListener('click', (event) => {
+                                            const actionBtn = event.target instanceof HTMLElement
+                                                ? event.target.closest('[data-scene-popup-crowd-add],[data-scene-popup-crowd-remove]')
+                                                : null;
+                                            if (!(actionBtn instanceof HTMLElement)) return;
+                                            const addKey = String(actionBtn.getAttribute('data-scene-popup-crowd-add') || '').trim();
+                                            const removeKey = String(actionBtn.getAttribute('data-scene-popup-crowd-remove') || '').trim();
+                                            if (addKey) addSelectedByKey(addKey);
+                                            if (removeKey) removeSelectedByKey(removeKey);
+                                            syncJsonEditors();
+                                            renderCandidateList();
+                                            renderSelectedList();
+                                        });
+                                        crowdCandidateListEl.addEventListener('input', (event) => {
+                                            const input = event.target instanceof HTMLInputElement
+                                                ? event.target
+                                                : null;
+                                            if (!(input instanceof HTMLInputElement)) return;
+                                            const key = String(input.getAttribute('data-scene-popup-crowd-bid') || '').trim();
+                                            if (!key) return;
+                                            const nextBid = updateBidByKey(key, input.value);
+                                            input.value = String(nextBid);
+                                            syncJsonEditors();
+                                            renderSelectedList();
+                                        });
+                                    }
+                                    if (crowdSelectedListEl instanceof HTMLElement) {
+                                        crowdSelectedListEl.addEventListener('click', (event) => {
+                                            const removeBtn = event.target instanceof HTMLElement
+                                                ? event.target.closest('[data-scene-popup-crowd-remove]')
+                                                : null;
+                                            if (!(removeBtn instanceof HTMLElement)) return;
+                                            const key = String(removeBtn.getAttribute('data-scene-popup-crowd-remove') || '').trim();
+                                            if (!key) return;
+                                            removeSelectedByKey(key);
+                                            syncJsonEditors();
+                                            renderCandidateList();
+                                            renderSelectedList();
+                                        });
+                                        crowdSelectedListEl.addEventListener('input', (event) => {
+                                            const input = event.target instanceof HTMLInputElement
+                                                ? event.target
+                                                : null;
+                                            if (!(input instanceof HTMLInputElement)) return;
+                                            const key = String(input.getAttribute('data-scene-popup-crowd-selected-bid') || '').trim();
+                                            if (!key) return;
+                                            const nextBid = updateBidByKey(key, input.value);
+                                            input.value = String(nextBid);
+                                            syncJsonEditors();
+                                            renderCandidateList();
+                                            renderSelectedList();
+                                        });
+                                    }
+                                    mask._sceneCrowdPopupState = {
+                                        getSelectedList: () => selectedList.map(item => deepClone(item)),
+                                        isJsonMode: () => !!jsonMode
+                                    };
                                 },
                                 onSave: (mask) => {
                                     const campaignEditor = mask.querySelector('[data-scene-popup-editor="crowdCampaign"]');
                                     const adgroupEditor = mask.querySelector('[data-scene-popup-editor="crowdAdgroup"]');
-                                    const campaignParsed = tryParseMaybeJSON(
-                                        String(campaignEditor instanceof HTMLTextAreaElement ? campaignEditor.value : '').trim() || '[]'
-                                    );
-                                    const adgroupParsed = tryParseMaybeJSON(
-                                        String(adgroupEditor instanceof HTMLTextAreaElement ? adgroupEditor.value : '').trim() || '[]'
-                                    );
-                                    if (!Array.isArray(campaignParsed) || !Array.isArray(adgroupParsed)) {
-                                        appendWizardLog('人群配置格式错误：请填写 JSON 数组', 'error');
-                                        return { ok: false };
+                                    const popupState = mask._sceneCrowdPopupState || {};
+                                    const selectedOutput = typeof popupState.getSelectedList === 'function'
+                                        ? popupState.getSelectedList()
+                                        : [];
+                                    const jsonModeEnabled = typeof popupState.isJsonMode === 'function'
+                                        ? popupState.isJsonMode()
+                                        : false;
+                                    let campaignOutput = selectedOutput.map(item => deepClone(item));
+                                    let adgroupOutput = selectedOutput.map(item => deepClone(item));
+                                    if (jsonModeEnabled) {
+                                        const campaignParsed = tryParseMaybeJSON(
+                                            String(campaignEditor instanceof HTMLTextAreaElement ? campaignEditor.value : '').trim() || '[]'
+                                        );
+                                        const adgroupParsed = tryParseMaybeJSON(
+                                            String(adgroupEditor instanceof HTMLTextAreaElement ? adgroupEditor.value : '').trim() || '[]'
+                                        );
+                                        if (!Array.isArray(campaignParsed) || !Array.isArray(adgroupParsed)) {
+                                            appendWizardLog('人群配置格式错误：请填写 JSON 数组', 'error');
+                                            return { ok: false };
+                                        }
+                                        campaignOutput = campaignParsed.filter(item => isPlainObject(item));
+                                        adgroupOutput = adgroupParsed.filter(item => isPlainObject(item));
                                     }
                                     return {
                                         ok: true,
-                                        campaignRaw: JSON.stringify(campaignParsed),
-                                        adgroupRaw: JSON.stringify(adgroupParsed),
-                                        summary: describeCrowdSummary(JSON.stringify(campaignParsed), JSON.stringify(adgroupParsed)),
-                                        adgroupList: adgroupParsed
+                                        campaignRaw: JSON.stringify(campaignOutput),
+                                        adgroupRaw: JSON.stringify(adgroupOutput),
+                                        summary: describeCrowdSummary(JSON.stringify(campaignOutput), JSON.stringify(adgroupOutput)),
+                                        adgroupList: adgroupOutput
                                     };
                                 }
                             });
@@ -25756,13 +28209,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         field: 'wordListCount',
                         expected: `>=${expectedManualKeywordCount}`,
                         actual: actualWordListCount
-                    });
-                }
-                if (expectedBidMode === 'manual' && toNumber(submitPayloadSnapshot?.wordPackageCount, 0) > 0) {
-                    diffs.push({
-                        field: 'wordPackageCount',
-                        expected: 0,
-                        actual: toNumber(submitPayloadSnapshot?.wordPackageCount, 0)
                     });
                 }
             }
