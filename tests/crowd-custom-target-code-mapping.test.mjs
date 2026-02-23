@@ -62,6 +62,29 @@ test('normalizeCrowdCustomBidTargetCode 将旧码归一到三目标并支持 str
   );
 });
 
+test('normalizeCrowdCustomSmartBidTargetCode 支持智能出价目标归一与 fallback', () => {
+  const block = sliceBlock(
+    'const normalizeCrowdCustomSmartBidTargetCode = (value = \'\', options = {}) => {',
+    'const mapSiteMultiTargetOptimizeTargetValue = (text = \'\') => {',
+    'normalizeCrowdCustomSmartBidTargetCode'
+  );
+  assert.match(
+    block,
+    /if \(token === 'display_roi' \|\| token === 'roi'\) return 'display_roi';/,
+    '智能出价目标未支持稳定投产比映射'
+  );
+  assert.match(
+    block,
+    /if \(token === 'display_shentou' \|\| token === 'market_penetration' \|\| token === 'word_penetration_rate'\) \{\s*return 'display_shentou';/s,
+    '智能出价目标未支持拉新渗透映射'
+  );
+  assert.match(
+    block,
+    /return strict \? '' : fallback;/,
+    'normalizeCrowdCustomSmartBidTargetCode 缺少 strict/fallback 兜底行为'
+  );
+});
+
 test('人群场景目标映射优先读取“出价目标”并双写到 bidTargetV2/optimizeTarget', () => {
   const block = sliceBlock(
     'const resolveSceneSettingOverrides = ({ sceneName = \'\', sceneSettings = {}, runtime = {} }) => {',
@@ -78,6 +101,16 @@ test('人群场景目标映射优先读取“出价目标”并双写到 bidTarg
     /if \(targetEntry && targetCode && supportsBidTargetFields\) \{[\s\S]*?applyCampaign\('bidTargetV2', targetCode, targetEntry\.key, targetEntry\.value\);[\s\S]*?applyCampaign\('optimizeTarget', targetCode, targetEntry\.key, targetEntry\.value\);/,
     '目标码未同步写入 bidTargetV2/optimizeTarget'
   );
+  assert.match(
+    block,
+    /const targetConstraintEntry = findSceneSettingEntry\(entries,\s*\[[\s\S]*?\/7日投产比\/[\s\S]*?\]\);/,
+    '智能出价“设置7日投产比”未纳入约束值映射'
+  );
+  assert.match(
+    block,
+    /const singleCostSwitchEntry = findSceneSettingEntry\(entries,\s*\[[\s\S]*?\/设置平均成交成本\/[\s\S]*?\/设置平均收藏加购成本\/[\s\S]*?\]\);[\s\S]*?const singleCostEntry = findSceneSettingEntry\(entries,\s*\[[\s\S]*?\/平均收藏加购成本\/[\s\S]*?\]\);/,
+    '智能出价控成本设置未纳入单次成本映射'
+  );
 });
 
 test('人群自定义草稿迁移与场景设置构建会清理旧字段并写入新键', () => {
@@ -88,7 +121,17 @@ test('人群自定义草稿迁移与场景设置构建会清理旧字段并写�
   );
   assert.match(
     migrateBlock,
-    /writeValueByLabel\('出价目标', crowdCustomBidTargetCodeToLabel\(targetCode\), \[[\s\S]*?'优化目标'[\s\S]*?'人群优化目标'[\s\S]*?'客户口径设置'[\s\S]*?'人群价值设置'[\s\S]*?\]\);/,
+    /const crowdBidMode = normalizeBidMode\([\s\S]*?mapSceneBidTypeValue\(bidTypeSourceValue, '人群推广'\)[\s\S]*?'manual'[\s\S]*?\);/,
+    '草稿迁移未按人群场景识别出价方式'
+  );
+  assert.match(
+    migrateBlock,
+    /const targetCode = crowdBidMode === 'smart'[\s\S]*?normalizeCrowdCustomSmartBidTargetCode\(targetSourceValue, \{[\s\S]*?fallback:\s*'display_roi'[\s\S]*?\}\)[\s\S]*?: normalizeCrowdCustomBidTargetCode\(targetSourceValue, \{[\s\S]*?fallback:\s*'display_pay'[\s\S]*?\}\);/,
+    '草稿迁移未按智能\/手动分别归一出价目标'
+  );
+  assert.match(
+    migrateBlock,
+    /const targetLabel = crowdBidMode === 'smart'[\s\S]*?crowdCustomSmartBidTargetCodeToLabel\(targetCode\)[\s\S]*?: crowdCustomBidTargetCodeToLabel\(targetCode\);[\s\S]*?writeValueByLabel\('出价目标', targetLabel, \[[\s\S]*?'优化目标'[\s\S]*?'人群优化目标'[\s\S]*?'客户口径设置'[\s\S]*?'人群价值设置'[\s\S]*?'campaign\.bidTargetV2'[\s\S]*?'campaign\.optimizeTarget'[\s\S]*?\]\);/,
     '草稿迁移未把旧目标键归并到“出价目标”'
   );
   assert.match(
@@ -114,8 +157,8 @@ test('人群自定义草稿迁移与场景设置构建会清理旧字段并写�
   );
   assert.match(
     payloadBlock,
-    /if \(isCrowdCustomGoal\) \{[\s\S]*?sceneSettings\.出价目标 = crowdCustomBidTargetCodeToLabel\(crowdTargetCode\);[\s\S]*?sceneSettings\.资源位溢价 = \/\(自定义\|手动\|关闭\|停用\)\/\.test\(resourcePremiumSeed\)[\s\S]*?sceneSettings\['投放地域\/投放时间'\] = \/\(自定义\|固定\|手动\|编辑\|配置\)\/\.test\(launchSettingSeed\)/,
-    '构建场景设置时未规范化人群自定义新字段'
+    /if \(isCrowdCustomGoal\) \{[\s\S]*?const crowdBidMode = normalizeBidMode\([\s\S]*?if \(crowdBidMode === 'smart'\) \{[\s\S]*?sceneSettings\.出价目标 = crowdCustomSmartBidTargetCodeToLabel\(crowdSmartTargetCode\);[\s\S]*?\} else \{[\s\S]*?sceneSettings\.出价目标 = crowdCustomBidTargetCodeToLabel\(crowdTargetCode\);[\s\S]*?\}[\s\S]*?sceneSettings\.资源位溢价 = \/\(自定义\|手动\|关闭\|停用\)\/\.test\(resourcePremiumSeed\)[\s\S]*?sceneSettings\['投放地域\/投放时间'\] = \/\(自定义\|固定\|手动\|编辑\|配置\)\/\.test\(launchSettingSeed\)/,
+    '构建场景设置时未按智能/手动出价规范化人群自定义字段'
   );
   assert.match(
     payloadBlock,

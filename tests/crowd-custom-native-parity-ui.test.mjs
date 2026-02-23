@@ -61,7 +61,7 @@ test('人群推广营销目标回退选项包含自定义推广', () => {
   );
 });
 
-test('人群推广自定义推广手动出价提供原生同构弹窗入口', () => {
+test('人群推广自定义推广提供原生同构弹窗入口与双出价模式', () => {
   const renderBlock = getRenderSceneDynamicConfigBlock();
   const marker = "if (sceneName === '人群推广' && activeMarketingGoal === '自定义推广') {";
   const branchStart = renderBlock.lastIndexOf(marker);
@@ -70,8 +70,23 @@ test('人群推广自定义推广手动出价提供原生同构弹窗入口', ()
 
   assert.match(
     branch,
-    /label:\s*'出价方式'[\s\S]*?options:\s*\[\s*'手动出价'\s*\]/,
-    '人群自定义推广未固定为“手动出价”'
+    /label:\s*'出价方式'[\s\S]*?options:\s*\[\s*'智能出价'\s*,\s*'手动出价'\s*\]/,
+    '人群自定义推广未补齐“智能出价/手动出价”双模式'
+  );
+  assert.match(
+    branch,
+    /am-wxt-scene-setting-label">选择推广商品[\s\S]*?trigger:\s*'itemSelect'/,
+    '人群自定义推广缺少“选择推广商品-添加商品”弹窗触发器'
+  );
+  assert.match(
+    branch,
+    /am-wxt-scene-setting-label">选择推广商品[\s\S]*?title:\s*'添加商品'/,
+    '人群自定义推广“选择推广商品”弹窗标题未对齐原生“添加商品”'
+  );
+  assert.doesNotMatch(
+    branch,
+    /label:\s*'选择推广商品'[\s\S]*?options:\s*\[\s*'自定义选品'\s*\]/,
+    '人群自定义推广不应再显示“选品方式/自定义选品”选项片'
   );
   assert.match(
     branch,
@@ -90,8 +105,23 @@ test('人群推广自定义推广手动出价提供原生同构弹窗入口', ()
   );
   assert.match(
     branch,
-    /const crowdBidTargetOptions = CROWD_CUSTOM_BID_TARGET_ORDER\.map\(code => \([\s\S]*?label:\s*'出价目标'[\s\S]*?options:\s*crowdBidTargetOptions[\s\S]*?strictOptions:\s*true/,
-    '人群自定义推广“出价目标”未按原生三目标集合渲染'
+    /const crowdBidTargetOptions = \(crowdBidMode === 'smart'[\s\S]*?CROWD_CUSTOM_SMART_BID_TARGET_ORDER[\s\S]*?CROWD_CUSTOM_BID_TARGET_ORDER[\s\S]*?label:\s*'出价目标'[\s\S]*?options:\s*crowdBidTargetOptions[\s\S]*?strictOptions:\s*true/,
+    '人群自定义推广“出价目标”未按智能/手动出价模式切换'
+  );
+  assert.match(
+    branch,
+    /const crowdRoiLevelFieldLabel = '设置7日投产比';[\s\S]*?if \(crowdBidMode === 'smart'\) \{[\s\S]*?crowdBidTargetCode === 'display_roi'[\s\S]*?buildSceneOptionRow\(\s*crowdRoiLevelFieldLabel,/,
+    '人群自定义推广智能出价缺少“设置7日投产比”设置块'
+  );
+  assert.match(
+    branch,
+    /if \(crowdBidMode === 'smart'\) \{[\s\S]*?crowdBidTargetCode === 'display_pay'[\s\S]*?设置平均成交成本/,
+    '人群自定义推广智能出价缺少“设置平均成交成本（控成本投放）”设置块'
+  );
+  assert.match(
+    branch,
+    /if \(crowdBidMode === 'smart'\) \{[\s\S]*?crowdBidTargetCode === 'display_cart'[\s\S]*?设置平均收藏加购成本/,
+    '人群自定义推广智能出价缺少“设置平均收藏加购成本（控成本投放）”设置块'
   );
   assert.match(
     branch,
@@ -135,6 +165,8 @@ test('人群推广自定义推广手动出价提供原生同构弹窗入口', ()
   );
 
   for (const fieldKey of [
+    'campaign.itemIdList',
+    'campaign.itemSelectedMode',
     'campaign.adzoneList',
     'campaign.launchPeriodList',
     'campaign.launchAreaStrList',
@@ -156,6 +188,11 @@ test('人群推广自定义推广弹窗触发器路由到独立资源位与地�
   const renderBlock = getRenderSceneDynamicConfigBlock();
   assert.match(
     renderBlock,
+    /const openCrowdItemSettingPopup = async \(\) => \{/,
+    '缺少“添加商品”独立弹窗函数 openCrowdItemSettingPopup'
+  );
+  assert.match(
+    renderBlock,
     /const openAdzonePremiumSettingPopup = async \(\) => \{/,
     '缺少“资源位溢价”独立弹窗函数 openAdzonePremiumSettingPopup'
   );
@@ -166,6 +203,16 @@ test('人群推广自定义推广弹窗触发器路由到独立资源位与地�
   );
   assert.match(
     renderBlock,
+    /const openCrowdLaunchSettingPopup = async \(\) => \{[\s\S]*?openKeywordAdvancedSettingPopup\('launchArea'\)/,
+    '投放地域/投放时间弹窗未复用关键词高级设置板块'
+  );
+  assert.match(
+    renderBlock,
+    /resolvePopupControlByTriggers\('campaign\.adzoneList',\s*\[[\s\S]*?'adzonePremium'[\s\S]*?'launchSetting'[\s\S]*?\]\)/,
+    '关键词高级设置弹窗未兼容人群场景的 adzonePremium/launchSetting 控件'
+  );
+  assert.match(
+    renderBlock,
     /else if \(trigger === 'adzonePremium'\) \{[\s\S]*?openAdzonePremiumSettingPopup\(\)[\s\S]*?dispatchSceneControlUpdate\(mainControl,\s*nextMode\);/,
     '未将 adzonePremium 触发器路由到独立资源位弹窗并回写主控件'
   );
@@ -173,6 +220,30 @@ test('人群推广自定义推广弹窗触发器路由到独立资源位与地�
     renderBlock,
     /else if \(trigger === 'launchSetting'\) \{[\s\S]*?openCrowdLaunchSettingPopup\(\)[\s\S]*?dispatchSceneControlUpdate\(mainControl,\s*areaDefault && periodAllDay \? '默认投放' : '自定义设置'\);/,
     '未将 launchSetting 触发器路由到地域时间弹窗并回写主控件'
+  );
+  assert.match(
+    renderBlock,
+    /else if \(trigger === 'itemSelect'\) \{[\s\S]*?openCrowdItemSettingPopup\(\)[\s\S]*?dispatchSceneControlUpdate\(itemIdListControl,\s*result\.itemIdListRaw \|\| '\[\]'\);/,
+    '未将 itemSelect 触发器路由到“添加商品”弹窗并回写商品ID列表'
+  );
+});
+
+test('场景选项按钮携带字段键并在人群自定义出价字段变更时强制重渲染', () => {
+  const renderBlock = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    renderBlock,
+    /data-scene-option-field="\$\{Utils\.escapeHtml\(fieldKey\)\}"/,
+    '场景分段选项缺少 data-scene-option-field 字段绑定'
+  );
+  assert.match(
+    renderBlock,
+    /const isCrowdCustomBidField = activeScene === '人群推广'[\s\S]*?activeCrowdGoal === '自定义推广'[\s\S]*?isSceneLabelMatch\(fieldKey, '出价方式'\)[\s\S]*?isSceneLabelMatch\(fieldKey, '出价目标'\)/,
+    '人群自定义推广出价方式/出价目标变更未触发强制重渲染'
+  );
+  assert.match(
+    renderBlock,
+    /const shouldRerenderSceneConfig =[\s\S]*?isCrowdCustomBidField/,
+    '人群自定义推广出价方式/出价目标变更未触发强制重渲染'
   );
 });
 
@@ -366,8 +437,8 @@ test('人群推广自定义推广提交对齐原生 campaign 契约', () => {
   );
   assert.match(
     block,
-    /if \(isCrowdCustomGoal\) \{[\s\S]*?const normalizedCustomTarget = normalizeCrowdCustomBidTargetCode\([\s\S]*?fallback:\s*'display_pay'[\s\S]*?merged\.campaign\.bidTargetV2 = normalizedCustomTarget;[\s\S]*?merged\.campaign\.optimizeTarget = normalizedCustomTarget;/,
-    '人群自定义推广未对齐原生 bidTargetV2/optimizeTarget'
+    /if \(isCrowdCustomGoal\) \{[\s\S]*?const crowdCustomBidMode = normalizeBidMode\([\s\S]*?const normalizedCustomTarget = crowdCustomBidMode === 'smart'[\s\S]*?normalizeCrowdCustomSmartBidTargetCode\([\s\S]*?fallback:\s*'display_roi'[\s\S]*?: normalizeCrowdCustomBidTargetCode\([\s\S]*?fallback:\s*'display_pay'[\s\S]*?merged\.campaign\.bidTargetV2 = normalizedCustomTarget;[\s\S]*?merged\.campaign\.optimizeTarget = normalizedCustomTarget;/,
+    '人群自定义推广未按出价模式写入 bidTargetV2/optimizeTarget'
   );
   assert.match(
     block,
