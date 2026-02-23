@@ -39,6 +39,44 @@ function getKeywordCustomCampaignAllowListBlock() {
   return source.slice(start, end);
 }
 
+function extractBraceBlock(text, anchorIndex, label = '代码块') {
+  const openIndex = text.indexOf('{', anchorIndex);
+  assert.ok(openIndex > -1, `无法定位${label}起始大括号`);
+  let depth = 0;
+  for (let idx = openIndex; idx < text.length; idx += 1) {
+    const ch = text[idx];
+    if (ch === '{') depth += 1;
+    if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          start: openIndex,
+          end: idx,
+          body: text.slice(openIndex + 1, idx)
+        };
+      }
+    }
+  }
+  assert.fail(`无法定位${label}结束位置`);
+}
+
+function getKeywordCustomBidModeBranchesFromRenderBlock() {
+  const renderBlock = getRenderSceneDynamicConfigBlock();
+  const customStart = renderBlock.indexOf("if (activeKeywordGoal === '自定义推广') {");
+  assert.ok(customStart > -1, '无法定位自定义推广场景渲染分支');
+  const customBlock = extractBraceBlock(renderBlock, customStart, '自定义推广分支').body;
+  const manualStart = customBlock.indexOf("if (keywordBidMode === 'manual') {");
+  assert.ok(manualStart > -1, '自定义推广缺少手动出价分支');
+  const manualBlock = extractBraceBlock(customBlock, manualStart, '手动分支');
+  const elseStart = customBlock.indexOf('else {', manualBlock.end);
+  assert.ok(elseStart > -1, '自定义推广缺少智能出价分支');
+  const smartBlock = extractBraceBlock(customBlock, elseStart, '智能分支');
+  return {
+    manualBranch: manualBlock.body,
+    smartBranch: smartBlock.body
+  };
+}
+
 test('自定义推广静态设置与提交流程已接入选品方式/冷启加速', () => {
   const renderBlock = getRenderSceneDynamicConfigBlock();
   assert.match(
@@ -119,12 +157,22 @@ test('手动关键词面板默认收起，并支持展开状态同步', () => {
   );
 });
 
-test('自定义推广的人群设置四个按钮与提交字段一一对应', () => {
-  const renderBlock = getRenderSceneDynamicConfigBlock();
+test('自定义推广手动出价启用人群弹窗并保留提交流程映射', () => {
+  const { manualBranch } = getKeywordCustomBidModeBranchesFromRenderBlock();
   assert.match(
-    renderBlock,
-    /label:\s*'人群设置'[\s\S]*options:\s*\[\s*'智能人群'\s*,\s*'添加种子人群'\s*,\s*'设置优先投放客户'\s*,\s*'关闭'\s*\]/,
-    '编辑计划“人群设置”未覆盖四个按钮'
+    manualBranch,
+    /label:\s*'人群设置'[\s\S]*trigger:\s*'crowd'/,
+    '编辑计划手动出价未启用“人群设置”弹窗'
+  );
+  assert.match(
+    manualBranch,
+    /label:\s*'人群设置'[\s\S]*title:\s*'添加精选人群'/,
+    '编辑计划手动出价“人群设置”弹窗标题未对齐原生'
+  );
+  assert.doesNotMatch(
+    manualBranch,
+    /label:\s*'人群优化目标'/,
+    '编辑计划手动出价仍展示“人群优化目标”'
   );
 
   const mappingBlock = getResolveSceneSettingOverridesBlock();
@@ -135,13 +183,13 @@ test('自定义推广的人群设置四个按钮与提交字段一一对应', ()
   );
   assert.match(
     mappingBlock,
-    /添加种子人群[\s\S]*aiXiaowanCrowdListSwitch',\s*'0'/,
-    '“添加种子人群”未映射到 aiXiaowanCrowdListSwitch=0'
+    /crowdCloseHint[\s\S]*aiXiaowanCrowdListSwitch',\s*'0'/,
+    '“关闭”未映射到 aiXiaowanCrowdListSwitch=0'
   );
   assert.match(
     mappingBlock,
-    /crowdCloseHint[\s\S]*aiXiaowanCrowdListSwitch',\s*'0'/,
-    '“关闭”未映射到 aiXiaowanCrowdListSwitch=0'
+    /const crowdTargetEntry = findSceneSettingEntry\(entries,\s*\[\/人群优化目标\/,\s*\/客户口径设置\/,\s*\/人群价值设置\//,
+    '缺少人群优化目标独立映射入口'
   );
 });
 
