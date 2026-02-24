@@ -110,6 +110,21 @@ test('人群推广自定义推广提供原生同构弹窗入口与双出价模�
   );
   assert.match(
     branch,
+    /if \(crowdBidMode === 'manual'\) \{[\s\S]*?am-wxt-scene-setting-label">目标人群[\s\S]*?data-scene-crowd-target-panel="1"/,
+    '人群自定义推广手动出价缺少“目标人群”内联面板'
+  );
+  assert.match(
+    branch,
+    /if \(crowdBidMode === 'manual'\) \{[\s\S]*?data-scene-crowd-target-batch-apply="1"[\s\S]*?data-scene-crowd-target-open-popup="1"/,
+    '人群自定义推广手动出价“目标人群”面板缺少批量应用与人群编辑入口'
+  );
+  assert.match(
+    branch,
+    /if \(crowdBidMode === 'manual'\) \{[\s\S]*?data-scene-crowd-target-json="campaign"[\s\S]*?data-scene-crowd-target-json="adgroup"/,
+    '人群自定义推广手动出价“目标人群”面板未绑定 campaign\/adgroup 人群字段'
+  );
+  assert.match(
+    branch,
     /const crowdRoiLevelFieldLabel = '设置7日投产比';[\s\S]*?if \(crowdBidMode === 'smart'\) \{[\s\S]*?crowdBidTargetCode === 'display_roi'[\s\S]*?buildSceneOptionRow\(\s*crowdRoiLevelFieldLabel,/,
     '人群自定义推广智能出价缺少“设置7日投产比”设置块'
   );
@@ -198,6 +213,56 @@ test('人群推广自定义推广弹窗触发器路由到独立资源位与地�
   );
   assert.match(
     renderBlock,
+    /const openAdzonePremiumSettingPopup = async \(\) => \{[\s\S]*?批量修改为[\s\S]*?data-scene-popup-adzone-discount-batch-input="1"[\s\S]*?建议溢价/,
+    '资源位溢价弹窗未复刻原生“批量溢价/建议溢价”结构'
+  );
+  assert.match(
+    renderBlock,
+    /const openAdzonePremiumSettingPopup = async \(\) => \{[\s\S]*?needNativeAdzoneRefresh[\s\S]*?isAdzoneListPlaceholderForSync\(adzoneList\)[\s\S]*?isDisplayBizCode && !isDisplayAdzoneList\(adzoneList\)[\s\S]*?resolveNativeAdzoneListFromVframes\([\s\S]*?force:\s*isAdzoneListPlaceholderForSync\(adzoneList\) \|\| \(isDisplayBizCode && !isDisplayAdzoneList\(adzoneList\)\)/,
+    '资源位溢价弹窗未在占位资源位时强制回源原生资源位'
+  );
+  assert.match(
+    renderBlock,
+    /const openAdzonePremiumSettingPopup = async \(\) => \{[\s\S]*?loadNativeAdvancedDefaultsSnapshot\(\)[\s\S]*?nativeDefaults\.adzoneList/,
+    '资源位溢价弹窗未兜底复用原生高级设置资源位数据'
+  );
+  assert.match(
+    renderBlock,
+    /const openAdzonePremiumSettingPopup = async \(\) => \{[\s\S]*?if \(isDisplayBizCode\) \{[\s\S]*?淘系信息流[\s\S]*?首页猜你喜欢[\s\S]*?全屏微详情[\s\S]*?购中购后猜你喜欢[\s\S]*?信息流人群追投/,
+    '资源位溢价弹窗缺少 onebpDisplay 场景资源位兜底列表'
+  );
+  assert.match(
+    renderBlock,
+    /const openAdzonePremiumSettingPopup = async \(\) => \{[\s\S]*?const parentCodeSet = new Set\([\s\S]*?switchHint = \/追投\|开关\|switch\|开\\\/关\/i\.test\(text\)[\s\S]*?const rowType = maybeGroup \? 'group' : \(switchOnly \? 'switch' : 'premium'\);/,
+    '资源位溢价弹窗未按原生父子层级与追投语义识别分组/开关行'
+  );
+  assert.match(
+    renderBlock,
+    /const openAdzonePremiumSettingPopup = async \(\) => \{[\s\S]*?class="am-wxt-site-switch \$\{row\.enabled \? 'is-on' : 'is-off'\}"/,
+    '资源位溢价弹窗未渲染统一开关样式'
+  );
+  assert.doesNotMatch(
+    renderBlock,
+    /资源位开关/,
+    '资源位溢价弹窗不应展示“资源位开关”文案'
+  );
+  assert.match(
+    renderBlock,
+    /if \(row\.rowType === 'group'\) \{[\s\S]*?class="am-wxt-site-switch \$\{row\.enabled \? 'is-on' : 'is-off'\}"[\s\S]*?data-scene-popup-adzone-row-toggle="\$\{idx\}"/,
+    '资源位溢价分组行（如淘系信息流）未提供统一开关样式'
+  );
+  assert.match(
+    renderBlock,
+    /const rowType = String\(currentRows\[index\]\?\.rowType \|\| ''\)\.trim\(\);[\s\S]*?if \(rowType !== 'switch' && rowType !== 'group'\) return;/,
+    '资源位溢价开关点击逻辑未覆盖分组行'
+  );
+  assert.match(
+    renderBlock,
+    /if \(rowType === 'group'\) \{[\s\S]*?setAdzoneStatus\(raw,\s*row\?\.enabled !== false\);/,
+    '资源位溢价保存逻辑未回写分组行开关状态'
+  );
+  assert.match(
+    renderBlock,
     /const openCrowdLaunchSettingPopup = async \(\) => \{/,
     '缺少“投放地域\/投放时间”独立弹窗函数 openCrowdLaunchSettingPopup'
   );
@@ -213,7 +278,7 @@ test('人群推广自定义推广弹窗触发器路由到独立资源位与地�
   );
   assert.match(
     renderBlock,
-    /else if \(trigger === 'adzonePremium'\) \{[\s\S]*?openAdzonePremiumSettingPopup\(\)[\s\S]*?dispatchSceneControlUpdate\(mainControl,\s*nextMode\);/,
+    /else if \(trigger === 'adzonePremium'\) \{[\s\S]*?openAdzonePremiumSettingPopup\(\)[\s\S]*?result\.isDefaultMode[\s\S]*?dispatchSceneControlUpdate\(mainControl,\s*nextMode\);/,
     '未将 adzonePremium 触发器路由到独立资源位弹窗并回写主控件'
   );
   assert.match(
@@ -244,6 +309,21 @@ test('场景选项按钮携带字段键并在人群自定义出价字段变更�
     renderBlock,
     /const shouldRerenderSceneConfig =[\s\S]*?isCrowdCustomBidField/,
     '人群自定义推广出价方式/出价目标变更未触发强制重渲染'
+  );
+  assert.match(
+    renderBlock,
+    /const sceneCrowdTargetPanels = wizardState\.els\.sceneDynamic\.querySelectorAll\('\[data-scene-crowd-target-panel="1"\]'\);/,
+    '缺少“目标人群”内联面板绑定逻辑'
+  );
+  assert.match(
+    renderBlock,
+    /const crowdCampaignControl = resolveScenePopupControl\('campaign\.crowdList', 'crowd'\);[\s\S]*?const crowdAdgroupControl = resolveScenePopupControl\('adgroup\.rightList', 'crowd'\);/,
+    '“目标人群”面板未复用人群弹窗字段 campaign.crowdList\/adgroup.rightList'
+  );
+  assert.match(
+    renderBlock,
+    /data-scene-crowd-target-open-popup="1"[\s\S]*?crowdPopupButton\.click\(\);/,
+    '“目标人群”面板未联动“人群设置”弹窗入口'
   );
 });
 
@@ -292,6 +372,26 @@ test('场景弹窗支持 ESC 关闭并在销毁时解绑事件', () => {
     renderBlock,
     /dialogClassName:\s*'am-wxt-scene-popup-dialog-crowd'[\s\S]*?data-scene-popup-crowd-add-new[\s\S]*?新增人群/,
     '人群设置弹窗缺少“新增人群”入口'
+  );
+  assert.match(
+    renderBlock,
+    /data-scene-popup-crowd-native-tab="compete_new"[\s\S]*?竞争航线[\s\S]*?data-scene-popup-crowd-native-tab="shopAndItem"[\s\S]*?本店核心人群[\s\S]*?data-scene-popup-crowd-native-tab="dmpRecommends"[\s\S]*?平台精选人群[\s\S]*?data-scene-popup-crowd-native-tab="keywordAndDmp"[\s\S]*?用户画像人群/,
+    '新增人群弹窗未复刻原生一级人群分类导航'
+  );
+  assert.match(
+    renderBlock,
+    /data-scene-popup-crowd-native-subtab="item"[\s\S]*?竞争商品[\s\S]*?data-scene-popup-crowd-native-subtab="shop"[\s\S]*?竞争店铺/,
+    '新增人群弹窗未复刻原生“竞争商品/竞争店铺”二级切换'
+  );
+  assert.match(
+    renderBlock,
+    /data-scene-popup-crowd-native-selected-count="1"[\s\S]*?已选人群/,
+    '新增人群弹窗缺少原生“已选人群”计数区'
+  );
+  assert.match(
+    renderBlock,
+    /data-scene-popup-crowd-native-clear="1"[\s\S]*?全部移除/,
+    '新增人群弹窗缺少原生“全部移除”入口'
   );
   assert.match(
     renderBlock,

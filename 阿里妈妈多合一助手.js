@@ -12464,39 +12464,54 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 list
                     .filter(item => isPlainObject(item))
                     .map((item, idx) => {
+                        const source = deepClone(item);
                         const adzoneCode = normalizeSceneSettingValue(
-                            item.adzoneCode
-                            || item.adzoneId
-                            || item.code
-                            || item.id
-                            || item.resourceCode
-                            || item.properties?.adzoneId
+                            source.adzoneCode
+                            || source.adzoneId
+                            || source.code
+                            || source.id
+                            || source.resourceCode
+                            || source.properties?.adzoneId
                             || ''
                         ) || `native_adzone_${idx + 1}`;
                         const adzoneName = normalizeSceneSettingValue(
-                            item.adzoneName
-                            || item.name
-                            || item.title
-                            || item.properties?.adzoneName
+                            source.adzoneName
+                            || source.name
+                            || source.title
+                            || source.properties?.adzoneName
                             || ''
                         ) || `资源位${idx + 1}`;
-                        const statusRaw = item.status ?? item.enabled ?? item.state ?? item.switch;
+                        const statusRaw = source.status ?? source.enabled ?? source.state ?? source.switch;
                         const status = /^(0|false|off|关闭|否)$/i.test(String(statusRaw ?? '1').trim()) ? '0' : '1';
-                        return {
+                        const normalized = {
+                            ...source,
                             adzoneCode,
-                            adzoneId: normalizeSceneSettingValue(item.adzoneId || item.id || item.properties?.adzoneId || adzoneCode),
+                            adzoneId: normalizeSceneSettingValue(source.adzoneId || source.id || source.properties?.adzoneId || adzoneCode),
                             adzoneName,
                             resourceName: normalizeSceneSettingValue(
-                                item.resourceName
-                                || item.description
-                                || item.desc
-                                || item.subTitle
-                                || item.resourceDesc
-                                || item.properties?.desc
+                                source.resourceName
+                                || source.description
+                                || source.desc
+                                || source.subTitle
+                                || source.resourceDesc
+                                || source.properties?.desc
                                 || ''
                             ),
                             status
                         };
+                        if (!hasOwn(normalized, 'discount') && source.discount !== undefined) {
+                            normalized.discount = source.discount;
+                        }
+                        if (!hasOwn(normalized, 'fitDiscount') && source.fitDiscount !== undefined) {
+                            normalized.fitDiscount = source.fitDiscount;
+                        }
+                        if (!hasOwn(normalized, 'suggestDiscount') && source.suggestDiscount !== undefined) {
+                            normalized.suggestDiscount = source.suggestDiscount;
+                        }
+                        if (!hasOwn(normalized, 'parentAdoneId') && source.parentAdoneId !== undefined) {
+                            normalized.parentAdoneId = source.parentAdoneId;
+                        }
+                        return normalized;
                     }),
                 item => `${item.adzoneCode || ''}_${item.adzoneId || ''}_${item.adzoneName || ''}`
             ).slice(0, 60);
@@ -12527,12 +12542,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return best;
         };
 
-        const scoreNativeAdzoneList = (list = []) => {
+        const isDisplayNativeAdzoneItem = (item = {}) => {
+            const text = [
+                normalizeSceneSettingValue(item?.adzoneName || item?.name || item?.title || ''),
+                normalizeSceneSettingValue(item?.resourceName || item?.description || item?.desc || item?.subTitle || '')
+            ].join(' ');
+            return /(猜你喜欢|信息流|微详情|追投|购中购后)/.test(text);
+        };
+
+        const scoreNativeAdzoneList = (list = [], options = {}) => {
             const normalized = Array.isArray(list) ? list : [];
             if (!normalized.length) return -1;
+            const expectedBizCode = normalizeSceneBizCode(options?.expectedBizCode || '');
             let score = normalized.length * 6;
             if (normalized.some(item => !/^资源位\d+$/.test(String(item?.adzoneName || '')))) score += 20;
             if (normalized.some(item => String(item?.resourceName || '').trim())) score += 10;
+            if (normalized.some(item => Number.isFinite(toNumber(item?.fitDiscount ?? item?.discount, NaN)))) score += 12;
+            if (normalized.some(item => normalizeSceneSettingValue(item?.parentAdoneId || item?.properties?.parentAdoneId || ''))) score += 8;
+            if (normalized.some(item => /^(DEFAULT_SEARCH|A_TEST_SLOT|B_TEST_SLOT|TEST_|native_adzone_)/i.test(String(item?.adzoneCode || '')))) score -= 36;
+            if (expectedBizCode === 'onebpDisplay') {
+                const displayCount = normalized.filter(item => isDisplayNativeAdzoneItem(item)).length;
+                if (displayCount > 0) {
+                    score += Math.min(60, displayCount * 16);
+                } else {
+                    score -= 120;
+                }
+                if (normalized.some(item => /淘宝搜索|全链路投/.test(String(item?.adzoneName || '')))) {
+                    score -= 50;
+                }
+            }
             return score;
         };
 
@@ -12579,7 +12617,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 updaterCandidates.forEach((stateData) => {
                     const adzoneList = extractNativeAdzoneListFromStateData(stateData);
                     if (!adzoneList.length) return;
-                    let score = scoreNativeAdzoneList(adzoneList);
+                    let score = scoreNativeAdzoneList(adzoneList, { expectedBizCode });
                     if (/advance-dlg|adzone|display/i.test(pathText)) score += 100;
                     if (/adzone|display/i.test(id)) score += 24;
                     const stateBizCode = normalizeSceneBizCode(
@@ -17320,6 +17358,109 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     outline-offset: 2px;
                     border-radius: 4px;
                 }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-panel {
+                    border: 1px solid rgba(148,163,184,0.3);
+                    border-radius: 10px;
+                    background: #fff;
+                    overflow: hidden;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-toolbar {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    padding: 8px 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                    background: #f8fafc;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-batch {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 12px;
+                    color: #334155;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-batch input {
+                    width: 100px;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-view-tips {
+                    margin-left: auto;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 12px;
+                    color: #94a3b8;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-view-tips .active {
+                    color: #4f68ff;
+                    font-weight: 600;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-summary {
+                    padding: 6px 10px 0;
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0;
+                    max-height: 420px;
+                    overflow: auto;
+                    padding: 6px 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-row {
+                    display: grid;
+                    grid-template-columns: minmax(180px, 2fr) minmax(140px, 1.2fr) minmax(160px, 1.4fr) auto;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 8px 10px;
+                    border-top: 1px dashed rgba(148,163,184,0.2);
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-row:first-child {
+                    border-top: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-name {
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-name .name {
+                    font-size: 13px;
+                    color: #1f2937;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-name .meta {
+                    margin-top: 3px;
+                    font-size: 11px;
+                    color: #94a3b8;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-bid {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 12px;
+                    color: #475569;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-bid input {
+                    width: 96px;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-suggest {
+                    font-size: 12px;
+                    color: #64748b;
+                    line-height: 1.3;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-actions {
+                    justify-self: end;
+                }
+                #am-wxt-keyword-modal .am-wxt-crowd-target-empty {
+                    padding: 10px;
+                    font-size: 12px;
+                    color: #94a3b8;
+                }
                 #am-wxt-scene-popup-mask {
                     position: fixed;
                     inset: 0;
@@ -17621,12 +17762,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     z-index: 3;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-add-dialog {
-                    width: min(560px, 94vw);
-                    max-height: 80vh;
+                    width: min(1260px, 96vw);
+                    max-height: 86vh;
                     background: #fff;
                     border: 1px solid rgba(148,163,184,0.28);
                     border-radius: 12px;
-                    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.25);
+                    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.28);
                     display: flex;
                     flex-direction: column;
                     min-height: 0;
@@ -17646,11 +17787,226 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 10px 12px 12px;
                     display: flex;
                     flex-direction: column;
-                    gap: 8px;
+                    gap: 10px;
                     min-height: 0;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-add-body .am-wxt-scene-popup-textarea {
-                    min-height: 180px;
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-title {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-help {
+                    color: #3b82f6;
+                    text-decoration: none;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-help:hover {
+                    text-decoration: underline;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout {
+                    min-height: min(560px, 66vh);
+                    display: grid;
+                    grid-template-columns: minmax(0, 1.6fr) minmax(290px, 1fr);
+                    gap: 12px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-left,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-right {
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 10px;
+                    background: #fff;
+                    min-height: 0;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-tabs {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    padding: 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                    background: #f8fafc;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-tab {
+                    border: 1px solid rgba(148,163,184,0.34);
+                    border-radius: 16px;
+                    background: #fff;
+                    color: #475569;
+                    font-size: 12px;
+                    line-height: 1.25;
+                    padding: 5px 10px;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    max-width: 100%;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-tab i {
+                    font-style: normal;
+                    font-size: 11px;
+                    color: #6a76ea;
+                    background: rgba(106,118,234,0.12);
+                    border-radius: 999px;
+                    padding: 1px 7px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-tab.active {
+                    border-color: rgba(79,104,255,0.45);
+                    color: #3344c8;
+                    background: rgba(79,104,255,0.1);
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-subtabs {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 10px 10px 8px;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-subtabs.hidden {
+                    display: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-subtab {
+                    border: 1px solid rgba(148,163,184,0.34);
+                    border-radius: 8px;
+                    background: #fff;
+                    color: #475569;
+                    font-size: 12px;
+                    line-height: 1.25;
+                    padding: 5px 10px;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-subtab.active {
+                    border-color: rgba(79,104,255,0.4);
+                    background: rgba(79,104,255,0.12);
+                    color: #3344c8;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-toolbar,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-manual {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto auto;
+                    gap: 8px;
+                    padding: 8px 10px;
+                    align-items: center;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-manual {
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    border-top: 1px dashed rgba(148,163,184,0.26);
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-head {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 150px 112px 86px;
+                    gap: 8px;
+                    align-items: center;
+                    padding: 8px 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                    background: #f8fafc;
+                    color: #475569;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-list,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-list {
+                    flex: 1;
+                    min-height: 0;
+                    overflow: auto;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    padding: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-row {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 150px 112px 86px;
+                    gap: 8px;
+                    align-items: center;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 8px;
+                    padding: 8px;
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-name .name,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-name {
+                    font-size: 12px;
+                    line-height: 1.35;
+                    color: #1f2937;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-name .meta {
+                    margin-top: 2px;
+                    font-size: 11px;
+                    line-height: 1.3;
+                    color: #64748b;
+                    word-break: break-all;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-reason {
+                    font-size: 12px;
+                    line-height: 1.35;
+                    color: #334155;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-scale {
+                    font-size: 12px;
+                    color: #334155;
+                    text-align: right;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    padding: 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                    background: #f8fafc;
+                    color: #334155;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-head a,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-actions a {
+                    color: #3b82f6;
+                    text-decoration: none;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-head a:hover,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-actions a:hover {
+                    text-decoration: underline;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-table-head {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 92px 56px;
+                    gap: 8px;
+                    align-items: center;
+                    padding: 8px 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.2);
+                    color: #64748b;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-row {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 92px 56px;
+                    gap: 8px;
+                    align-items: center;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 8px;
+                    padding: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-source {
+                    font-size: 11px;
+                    color: #64748b;
+                    line-height: 1.25;
+                    text-align: center;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-foot {
+                    justify-content: flex-end;
+                    border-top: 1px solid rgba(148,163,184,0.2);
+                    padding-top: 10px;
                 }
                 #am-wxt-keyword-modal .am-wxt-scene-budget-guard-main {
                     display: inline-flex;
@@ -18033,7 +18389,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: #64748b;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-body {
-                    padding: 0;
+                    padding: 18px;
                     gap: 0;
                     min-height: min(640px, 72vh);
                     overflow: hidden;
@@ -18199,6 +18555,153 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: inline-flex;
                     justify-content: flex-end;
                     gap: 6px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-shell {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-batch {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    font-size: 12px;
+                    color: #334155;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-batch input {
+                    width: 110px;
+                    height: 30px;
+                    border: 1px solid rgba(148,163,184,0.4);
+                    border-radius: 8px;
+                    padding: 0 8px;
+                    font-size: 12px;
+                    color: #1f2937;
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-hot {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    border-radius: 10px;
+                    border: 1px solid rgba(59,130,246,0.24);
+                    background: rgba(59,130,246,0.07);
+                    padding: 8px 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-hot .tag {
+                    display: inline-flex;
+                    align-items: center;
+                    border-radius: 999px;
+                    background: #ef4444;
+                    color: #fff;
+                    font-size: 11px;
+                    line-height: 1;
+                    font-weight: 700;
+                    padding: 3px 7px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-hot .text {
+                    font-size: 12px;
+                    color: #1e3a8a;
+                    line-height: 1.45;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-hot a {
+                    font-size: 12px;
+                    color: #1d4ed8;
+                    text-decoration: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-hot a:hover {
+                    text-decoration: underline;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-op {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-end;
+                    gap: 6px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-input-wrap {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 12px;
+                    color: #334155;
+                    flex-wrap: nowrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-input-wrap input {
+                    width: 84px;
+                    height: 30px;
+                    border: 1px solid rgba(148,163,184,0.42);
+                    border-radius: 8px;
+                    padding: 0 8px;
+                    font-size: 12px;
+                    color: #1f2937;
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-suggest {
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-start;
+                    width: 36px;
+                    min-width: 36px;
+                    height: 18px;
+                    border: none;
+                    border-radius: 999px;
+                    padding: 0 4px;
+                    background: #4f68ff;
+                    color: #fff;
+                    cursor: pointer;
+                    font-size: 10px;
+                    line-height: 1;
+                    font-weight: 700;
+                    transition: background 0.2s ease;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch.is-off {
+                    justify-content: flex-end;
+                    background: #cbd5e1;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch .am-wxt-site-switch-handle {
+                    position: absolute;
+                    top: 2px;
+                    left: 20px;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: #fff;
+                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+                    transition: left 0.2s ease;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch.is-off .am-wxt-site-switch-handle {
+                    left: 2px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch .am-wxt-site-switch-state {
+                    position: relative;
+                    z-index: 1;
+                    pointer-events: none;
+                    user-select: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch.is-on .am-wxt-site-switch-state {
+                    padding-right: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch.is-off .am-wxt-site-switch-state {
+                    padding-left: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-site-switch:focus-visible {
+                    outline: 2px solid rgba(59, 130, 246, 0.65);
+                    outline-offset: 2px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-switch {
+                    display: inline-flex;
+                    gap: 6px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-adzone-premium-op-muted {
+                    font-size: 12px;
+                    color: #94a3b8;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-config-row {
                     display: flex;
@@ -18658,6 +19161,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-crowd-layout {
                         grid-template-columns: minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-add-dialog {
+                        width: min(96vw, 940px);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-toolbar {
+                        grid-template-columns: minmax(0, 1fr) auto;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-toolbar .am-wxt-input {
+                        grid-column: 1 / -1;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-manual {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-head {
+                        grid-template-columns: minmax(0, 1fr) 120px 88px 72px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-row {
+                        grid-template-columns: minmax(0, 1fr) 120px 88px 72px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-table-head,
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-row {
+                        grid-template-columns: minmax(0, 1fr) 76px 48px;
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-cards {
                         grid-template-columns: minmax(0, 1fr);
@@ -19183,6 +19711,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #am-wxt-keyword-modal .am-wxt-site-optimize-config input {
                         width: min(220px, 100%);
                         flex: 1 1 auto;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-crowd-target-toolbar {
+                        align-items: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-crowd-target-view-tips {
+                        margin-left: 0;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-crowd-target-row {
+                        grid-template-columns: 1fr;
+                        gap: 6px;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-crowd-target-actions {
+                        justify-self: start;
                     }
                     #am-wxt-keyword-modal .am-wxt-manual-keyword-toolbar {
                         flex-direction: column;
@@ -21987,6 +22528,57 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!campaignList.length && !adgroupList.length) return '未配置人群明细';
                     return `客户 ${campaignList.length} / 种子 ${adgroupList.length}`;
                 };
+                const getSceneCrowdTargetKey = (item = {}, index = 0) => normalizeSceneSettingValue(
+                    item?.mx_crowdId
+                    || getCrowdMxId(item?.crowd?.label || {})
+                    || item?.crowd?.label?.labelId
+                    || item?.crowd?.crowdId
+                    || item?.crowdId
+                    || item?.id
+                    || ''
+                ) || `crowd_target_${index + 1}`;
+                const normalizeSceneCrowdTargetBid = (input = {}, fallback = 0.3) => {
+                    const sourceValue = isPlainObject(input)
+                        ? (
+                            input?.price?.price
+                            ?? input?.price?.value
+                            ?? input?.crowd?.price
+                            ?? input?.bid
+                            ?? input?.bidPrice
+                        )
+                        : input;
+                    const fallbackBid = Math.max(0.01, Math.min(999, Math.round(toNumber(fallback, 0.3) * 100) / 100));
+                    const raw = toNumber(sourceValue, NaN);
+                    if (!Number.isFinite(raw) || raw <= 0) return fallbackBid;
+                    return Math.max(0.01, Math.min(999, Math.round(raw * 100) / 100));
+                };
+                const cloneSceneCrowdTargetWithBid = (item = {}, bid = 0.3) => {
+                    const next = deepClone(item || {});
+                    if (!isPlainObject(next.price)) next.price = {};
+                    next.price.price = normalizeSceneCrowdTargetBid(
+                        bid,
+                        normalizeSceneCrowdTargetBid(next, 0.3)
+                    );
+                    return next;
+                };
+                const resolveSceneCrowdTargetBidSuggestion = (item = {}, bid = 0.3) => {
+                    const suggestion = [
+                        item?.fitBidPriceTips,
+                        item?.crowd?.fitBidPriceTips,
+                        item?.crowd?.label?.fitBidPriceTips,
+                        item?.crowd?.label?.optionList?.[0]?.properties?.fitBidPriceTips,
+                        item?.crowd?.label?.optionList?.[0]?.properties?.recommendRedirectReason
+                    ]
+                        .map(candidate => normalizeSceneSettingValue(candidate))
+                        .find(Boolean);
+                    if (suggestion && /建议|出价|元/.test(suggestion)) {
+                        return suggestion;
+                    }
+                    const baseBid = normalizeSceneCrowdTargetBid(bid, 0.3);
+                    const low = Math.max(0.01, Math.round(baseBid * 0.75 * 100) / 100).toFixed(2);
+                    const high = Math.max(Number(low), Math.round(baseBid * 1.25 * 100) / 100).toFixed(2);
+                    return `建议出价：${low} - ${high}元`;
+                };
                 const normalizeScenePopupItemIdList = (rawValue = '') => {
                     const normalizedInput = isPlainObject(rawValue) || Array.isArray(rawValue)
                         ? rawValue
@@ -23249,6 +23841,83 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         defaultValue: crowdBidTargetLabel,
                         strictOptions: true
                     });
+                    if (crowdBidMode === 'manual') {
+                        const crowdTargetInitialList = uniqueBy(
+                            parseScenePopupJsonArray(crowdAdgroupRaw, [])
+                                .concat(parseScenePopupJsonArray(crowdCampaignRaw, []))
+                                .filter(item => isPlainObject(item)),
+                            (item, idx) => getSceneCrowdTargetKey(item, idx)
+                        ).slice(0, 100);
+                        const crowdTargetBatchSeed = crowdTargetInitialList.length
+                            ? normalizeSceneCrowdTargetBid(crowdTargetInitialList[0], 0.3)
+                            : '';
+                        const crowdTargetRowsHtml = crowdTargetInitialList.length
+                            ? crowdTargetInitialList.map((item, idx) => {
+                                const key = getSceneCrowdTargetKey(item, idx);
+                                const crowdName = getCrowdDisplayName(item) || `目标人群${idx + 1}`;
+                                const bidValue = normalizeSceneCrowdTargetBid(item, 0.3);
+                                const suggestionText = resolveSceneCrowdTargetBidSuggestion(item, bidValue);
+                                const labelId = normalizeSceneSettingValue(item?.crowd?.label?.labelId || key);
+                                return `
+                                    <div class="am-wxt-crowd-target-row" data-scene-crowd-target-key="${Utils.escapeHtml(key)}">
+                                        <div class="am-wxt-crowd-target-name">
+                                            <div class="name">${Utils.escapeHtml(crowdName)}</div>
+                                            <div class="meta">${Utils.escapeHtml(labelId || '未提供ID')}</div>
+                                        </div>
+                                        <div class="am-wxt-crowd-target-bid">
+                                            <input
+                                                type="number"
+                                                min="0.01"
+                                                max="999"
+                                                step="0.01"
+                                                value="${Utils.escapeHtml(bidValue.toFixed(2))}"
+                                                data-scene-crowd-target-bid="${Utils.escapeHtml(key)}"
+                                            />
+                                            <span>元/点击</span>
+                                        </div>
+                                        <div class="am-wxt-crowd-target-suggest">${Utils.escapeHtml(suggestionText)}</div>
+                                        <div class="am-wxt-crowd-target-actions">
+                                            <button type="button" class="am-wxt-btn" data-scene-crowd-target-remove="${Utils.escapeHtml(key)}">移除</button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')
+                            : '<div class="am-wxt-crowd-target-empty">请先添加目标人群</div>';
+                        staticRows.push(`
+                            <div class="am-wxt-scene-setting-row">
+                                <div class="am-wxt-scene-setting-label">目标人群</div>
+                                <div class="am-wxt-setting-control">
+                                    <div class="am-wxt-crowd-target-panel" data-scene-crowd-target-panel="1">
+                                        <div class="am-wxt-crowd-target-toolbar">
+                                            <div class="am-wxt-crowd-target-batch">
+                                                <span>批量修改为</span>
+                                                <input
+                                                    type="number"
+                                                    min="0.01"
+                                                    max="999"
+                                                    step="0.01"
+                                                    value="${Utils.escapeHtml(crowdTargetBatchSeed ? crowdTargetBatchSeed.toFixed(2) : '')}"
+                                                    data-scene-crowd-target-batch-input="1"
+                                                    placeholder="0.30"
+                                                />
+                                                <span>元</span>
+                                                <button type="button" class="am-wxt-btn" data-scene-crowd-target-batch-apply="1">批量应用</button>
+                                            </div>
+                                            <div class="am-wxt-crowd-target-view-tips">
+                                                <span>卡片视图</span>
+                                                <span class="active">表格视图</span>
+                                            </div>
+                                            <button type="button" class="am-wxt-btn" data-scene-crowd-target-open-popup="1">${crowdTargetInitialList.length ? '编辑人群' : '添加人群'}</button>
+                                        </div>
+                                        <div class="am-wxt-crowd-target-summary" data-scene-crowd-target-summary="1">${Utils.escapeHtml(crowdTargetInitialList.length ? `已配置 ${crowdTargetInitialList.length} 条` : '未配置人群')}</div>
+                                        <div class="am-wxt-crowd-target-list" data-scene-crowd-target-list="1">${crowdTargetRowsHtml}</div>
+                                        <input class="am-wxt-hidden-control" data-scene-crowd-target-json="campaign" value="${Utils.escapeHtml(crowdCampaignRaw)}" />
+                                        <input class="am-wxt-hidden-control" data-scene-crowd-target-json="adgroup" value="${Utils.escapeHtml(crowdAdgroupRaw)}" />
+                                    </div>
+                                </div>
+                            </div>
+                        `);
+                    }
                     const crowdRoiLevelFieldLabel = '设置7日投产比';
                     const crowdRoiLevelFieldKey = normalizeSceneFieldKey(crowdRoiLevelFieldLabel);
                     const crowdRoiCustomFieldLabel = '目标投产比';
@@ -24233,25 +24902,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const adzoneList = allAdzoneListRaw
                         .filter(item => isPlainObject(item))
                         .map((item, idx) => {
+                            const source = deepClone(item);
                             const adzoneCode = normalizeNativeAdzoneCode(item, idx);
                             const adzoneName = normalizeNativeAdzoneName(item, idx);
                             const isEnabledBySelection = selectedCodeSet.size
                                 ? selectedCodeSet.has(adzoneCode)
                                 : true;
-                            return {
+                            const normalized = {
+                                ...source,
                                 adzoneCode,
-                                adzoneId: normalizeSceneSettingValue(item.adzoneId || item.id || item.properties?.adzoneId || adzoneCode),
+                                adzoneId: normalizeSceneSettingValue(source.adzoneId || source.id || source.properties?.adzoneId || adzoneCode),
                                 adzoneName,
                                 resourceName: normalizeSceneSettingValue(
-                                    item.resourceName
-                                    || item.description
-                                    || item.desc
-                                    || item.subTitle
-                                    || item.properties?.desc
+                                    source.resourceName
+                                    || source.description
+                                    || source.desc
+                                    || source.subTitle
+                                    || source.properties?.desc
                                     || ''
                                 ),
                                 status: isEnabledBySelection ? '1' : '0'
                             };
+                            if (!hasOwn(normalized, 'fitDiscount') && source.fitDiscount !== undefined) {
+                                normalized.fitDiscount = source.fitDiscount;
+                            }
+                            if (!hasOwn(normalized, 'suggestDiscount') && source.suggestDiscount !== undefined) {
+                                normalized.suggestDiscount = source.suggestDiscount;
+                            }
+                            if (!hasOwn(normalized, 'parentAdoneId') && source.parentAdoneId !== undefined) {
+                                normalized.parentAdoneId = source.parentAdoneId;
+                            }
+                            return normalized;
                         });
                     const launchAreaList = uniqueBy(
                         (Array.isArray(selected.launchAreaStrList) ? selected.launchAreaStrList : ['all'])
@@ -26398,16 +27079,93 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     );
                     const adzoneRawValue = normalizeSceneSettingValue(adzoneControl.value || '') || '[]';
                     let adzoneList = normalizeAdzoneListForAdvanced(adzoneRawValue);
-                    if (!adzoneList.length) {
+                    const isDisplayAdzoneList = (list = []) => (
+                        Array.isArray(list)
+                        && list.some(item => isDisplayNativeAdzoneItem(item))
+                    );
+                    const isDisplayBizCode = expectedBizCode === 'onebpDisplay';
+                    const needNativeAdzoneRefresh = (
+                        !adzoneList.length
+                        || isAdzoneListPlaceholderForSync(adzoneList)
+                        || (isDisplayBizCode && !isDisplayAdzoneList(adzoneList))
+                    );
+                    if (needNativeAdzoneRefresh) {
                         const nativeAdzoneList = await resolveNativeAdzoneListFromVframes({
                             expectedBizCode,
-                            force: false
+                            force: isAdzoneListPlaceholderForSync(adzoneList) || (isDisplayBizCode && !isDisplayAdzoneList(adzoneList))
                         });
                         if (Array.isArray(nativeAdzoneList) && nativeAdzoneList.length) {
                             adzoneList = normalizeAdzoneListForAdvanced(JSON.stringify(nativeAdzoneList));
                         }
                     }
-                    if (!adzoneList.length) {
+                    if (
+                        !adzoneList.length
+                        || isAdzoneListPlaceholderForSync(adzoneList)
+                        || (isDisplayBizCode && !isDisplayAdzoneList(adzoneList))
+                    ) {
+                        const nativeDefaults = await loadNativeAdvancedDefaultsSnapshot();
+                        if (Array.isArray(nativeDefaults?.adzoneList) && nativeDefaults.adzoneList.length) {
+                            adzoneList = normalizeAdzoneListForAdvanced(JSON.stringify(nativeDefaults.adzoneList));
+                        }
+                    }
+                    if (
+                        !adzoneList.length
+                        || isAdzoneListPlaceholderForSync(adzoneList)
+                        || (isDisplayBizCode && !isDisplayAdzoneList(adzoneList))
+                    ) {
+                        if (isDisplayBizCode) {
+                            adzoneList = [
+                                {
+                                    adzoneCode: 'DISPLAY_INFOFLOW_GROUP',
+                                    adzoneId: '115027450244',
+                                    adzoneName: '淘系信息流',
+                                    resourceName: '覆盖首页猜你喜欢、购中购后猜你喜欢、红包权益、菜鸟等站内外消费者购物全路径信息流',
+                                    status: '1',
+                                    discount: 100,
+                                    fitDiscount: 100,
+                                    onlyShow: true
+                                },
+                                {
+                                    adzoneCode: 'DISPLAY_GUESS',
+                                    adzoneId: '111287850195',
+                                    parentAdoneId: '115027450244',
+                                    adzoneName: '首页猜你喜欢',
+                                    resourceName: '淘内无线和PC的首页猜你喜欢信息流',
+                                    status: '1',
+                                    discount: 200,
+                                    fitDiscount: 200
+                                },
+                                {
+                                    adzoneCode: 'DISPLAY_FULL_SCREEN',
+                                    adzoneId: '111287850198',
+                                    parentAdoneId: '115027450244',
+                                    adzoneName: '全屏微详情',
+                                    resourceName: '首页及购中后的全屏微详情场景',
+                                    status: '1',
+                                    discount: 100,
+                                    fitDiscount: 100
+                                },
+                                {
+                                    adzoneCode: 'DISPLAY_POST_PURCHASE',
+                                    adzoneId: '115025700386',
+                                    parentAdoneId: '115027450244',
+                                    adzoneName: '购中购后猜你喜欢',
+                                    resourceName: '淘内无线和PC的订单列表页等购中购后猜你喜欢信息流',
+                                    status: '1',
+                                    discount: 100,
+                                    fitDiscount: 100
+                                },
+                                {
+                                    adzoneCode: 'DISPLAY_RETARGET',
+                                    adzoneId: '115031250425',
+                                    adzoneName: '信息流人群追投',
+                                    resourceName: '在搜索渠道对信息流触达人群进行追投，同时探索搜索优质人群，提高转化效率',
+                                    status: '1'
+                                }
+                            ];
+                        }
+                    }
+                    if (!adzoneList.length || isAdzoneListPlaceholderForSync(adzoneList)) {
                         adzoneList = [
                             {
                                 adzoneCode: 'DEFAULT_SEARCH',
@@ -26423,6 +27181,155 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             }
                         ];
                     }
+                    const clampAdzoneDiscount = (value = 100, fallback = 100) => {
+                        const numeric = toNumber(value, toNumber(fallback, 100));
+                        if (!Number.isFinite(numeric)) return 100;
+                        return Math.max(0, Math.min(300, Math.round(numeric)));
+                    };
+                    const resolveAdzoneDiscountValue = (item = {}) => {
+                        if (!isPlainObject(item)) return NaN;
+                        return toNumber(
+                            item.discount
+                            ?? item.adzoneDiscount
+                            ?? item.premium
+                            ?? item.ratio
+                            ?? item.rate
+                            ?? item.bidRate
+                            ?? item.price?.discount
+                            ?? item.price?.price
+                            ?? item.properties?.discount,
+                            NaN
+                        );
+                    };
+                    const resolveAdzoneSuggestedDiscount = (item = {}, fallback = 100) => clampAdzoneDiscount(
+                        toNumber(
+                            item.suggestDiscount
+                            ?? item.recommendDiscount
+                            ?? item.fitDiscount
+                            ?? item.defaultDiscount
+                            ?? item.suggestedDiscount
+                            ?? item.def
+                            ?? item.properties?.recommendDiscount
+                            ?? item.properties?.fitDiscount
+                            ?? fallback,
+                            fallback
+                        ),
+                        fallback
+                    );
+                    const hasAdzoneDiscountField = (item = {}) => (
+                        isPlainObject(item)
+                        && (
+                            hasOwn(item, 'discount')
+                            || hasOwn(item, 'adzoneDiscount')
+                            || hasOwn(item, 'premium')
+                            || hasOwn(item, 'ratio')
+                            || hasOwn(item, 'rate')
+                            || hasOwn(item, 'bidRate')
+                            || hasOwn(item, 'suggestDiscount')
+                            || hasOwn(item, 'recommendDiscount')
+                            || hasOwn(item, 'fitDiscount')
+                            || hasOwn(item, 'defaultDiscount')
+                            || hasOwn(item, 'suggestedDiscount')
+                            || hasOwn(item, 'def')
+                            || hasOwn(item, 'price')
+                        )
+                    );
+                    const normalizeAdzonePremiumRows = (list = []) => {
+                        const normalized = Array.isArray(list)
+                            ? list.filter(item => isPlainObject(item))
+                            : [];
+                        const parentCodeSet = new Set(
+                            normalized
+                                .map((item) => normalizeSceneSettingValue(
+                                    item?.parentAdoneId
+                                    || item?.parentAdzoneId
+                                    || item?.properties?.parentAdoneId
+                                    || item?.properties?.parentAdzoneId
+                                    || ''
+                                ))
+                                .filter(Boolean)
+                        );
+                        return normalized.map((item, idx) => {
+                            const name = getAdzoneDisplayName(item, idx);
+                            const desc = getAdzoneDisplayDesc(item) || '移动设备（含销量明星）、计算机设备';
+                            const discountSeed = resolveAdzoneDiscountValue(item);
+                            const hasDiscount = Number.isFinite(discountSeed);
+                            const suggestedDiscount = resolveAdzoneSuggestedDiscount(item, hasDiscount ? discountSeed : 100);
+                            const discount = clampAdzoneDiscount(hasDiscount ? discountSeed : suggestedDiscount, suggestedDiscount);
+                            const enabled = isAdzoneStatusEnabled(item);
+                            const text = `${name} ${desc}`;
+                            const code = normalizeSceneSettingValue(
+                                item?.adzoneCode
+                                || item?.adzoneId
+                                || item?.code
+                                || item?.id
+                                || ''
+                            );
+                            const hasChildren = !!(code && parentCodeSet.has(code));
+                            const onlyShowRaw = item?.onlyShow ?? item?.properties?.onlyShow;
+                            const onlyShow = onlyShowRaw === true
+                                || /^(1|true|yes|on)$/i.test(String(onlyShowRaw || '').trim());
+                            const switchHint = /追投|开关|switch|开\/关/i.test(text);
+                            const maybeGroup = hasChildren || onlyShow;
+                            const switchOnly = !maybeGroup && (
+                                switchHint
+                                || (
+                                    !hasDiscount
+                                    && !hasAdzoneDiscountField(item)
+                                    && !/猜你喜欢|微详情|购中购后/.test(text)
+                                )
+                            );
+                            const rowType = maybeGroup ? 'group' : (switchOnly ? 'switch' : 'premium');
+                            const keySeed = normalizeSceneSettingValue(
+                                item?.adzoneCode
+                                || item?.adzoneId
+                                || item?.id
+                                || name
+                            ) || `adzone_${idx + 1}`;
+                            return {
+                                raw: deepClone(item),
+                                key: `${keySeed}_${idx}`,
+                                rowType,
+                                name,
+                                desc,
+                                enabled,
+                                discount,
+                                suggestedDiscount
+                            };
+                        });
+                    };
+                    const writeAdzoneDiscountToRaw = (raw = {}, value = 100) => {
+                        const next = isPlainObject(raw) ? deepClone(raw) : {};
+                        const normalizedValue = clampAdzoneDiscount(value, 100);
+                        if (
+                            hasOwn(next, 'discount')
+                            || (!hasOwn(next, 'adzoneDiscount')
+                                && !hasOwn(next, 'premium')
+                                && !hasOwn(next, 'ratio')
+                                && !hasOwn(next, 'rate')
+                                && !hasOwn(next, 'bidRate'))
+                        ) {
+                            next.discount = normalizedValue;
+                            return next;
+                        }
+                        if (hasOwn(next, 'adzoneDiscount')) {
+                            next.adzoneDiscount = normalizedValue;
+                        } else if (hasOwn(next, 'premium')) {
+                            next.premium = normalizedValue;
+                        } else if (hasOwn(next, 'ratio')) {
+                            next.ratio = normalizedValue;
+                        } else if (hasOwn(next, 'rate')) {
+                            next.rate = normalizedValue;
+                        } else if (hasOwn(next, 'bidRate')) {
+                            next.bidRate = normalizedValue;
+                        } else {
+                            next.discount = normalizedValue;
+                        }
+                        return next;
+                    };
+                    let currentRows = normalizeAdzonePremiumRows(adzoneList);
+                    if (!currentRows.length) return null;
+                    const batchDefaultValue = currentRows.find(row => row.rowType === 'premium')?.discount ?? '';
                     const result = await openScenePopupDialog({
                         title: '资源位溢价',
                         dialogClassName: 'am-wxt-scene-popup-dialog-advanced',
@@ -26430,87 +27337,224 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         bodyHtml: `
-                            <div class="am-wxt-scene-advanced-layout">
-                                <div class="am-wxt-scene-advanced-main">
-                                    <div class="am-wxt-scene-advanced-content">
-                                        <section class="am-wxt-scene-advanced-panel active">
-                                            <div class="am-wxt-scene-advanced-tip">平台为您优选广告位，建议默认开启。如需控制溢价，请切换为自定义并逐项设置。</div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="on">全部开启</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="off">全部关闭</button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-adzone-table" data-scene-popup-adzone-table="1">
-                                                <div class="am-wxt-scene-advanced-adzone-head">
-                                                    <span>资源位</span>
-                                                    <span>操作</span>
-                                                </div>
-                                                <div class="am-wxt-scene-advanced-adzone-list" data-scene-popup-adzone-list="1"></div>
-                                            </div>
-                                        </section>
+                            <div class="am-wxt-scene-adzone-premium-shell">
+                                <div class="am-wxt-scene-popup-tips">您可以在“手动出价”模式下，对部分资源位进行溢价，有助于在这些资源位拿量。若溢价设置为 0，则表示不对该资源位溢价。</div>
+                                <div class="am-wxt-scene-adzone-premium-batch">
+                                    <span>批量修改为</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="300"
+                                        step="1"
+                                        value="${Utils.escapeHtml(String(batchDefaultValue))}"
+                                        data-scene-popup-adzone-discount-batch-input="1"
+                                        placeholder="请输入"
+                                    />
+                                    <span>%</span>
+                                    <button type="button" class="am-wxt-btn" data-scene-popup-adzone-discount-batch-apply="1">批量应用</button>
+                                </div>
+                                <div class="am-wxt-scene-adzone-premium-hot">
+                                    <span class="tag">HOT</span>
+                                    <span class="text">AI大模型升级，首页猜你喜欢推广效果平均提升15%+，核心资源位曝光平均占比60%+</span>
+                                    <a href="https://alidocs.dingtalk.com/i/nodes/NZQYprEoWoxKPoqwCPkEpZ2BV1waOeDk?utm_scene=team_space" target="_blank" rel="noopener noreferrer">查看介绍</a>
+                                </div>
+                                <div class="am-wxt-scene-advanced-adzone-table" data-scene-popup-adzone-table="1">
+                                    <div class="am-wxt-scene-advanced-adzone-head">
+                                        <span>资源位</span>
+                                        <span>操作</span>
                                     </div>
+                                    <div class="am-wxt-scene-advanced-adzone-list" data-scene-popup-adzone-list="1"></div>
                                 </div>
                             </div>
                         `,
                         onMounted: (mask) => {
-                            let currentAdzoneList = adzoneList.map(item => deepClone(item));
                             const adzoneListEl = mask.querySelector('[data-scene-popup-adzone-list]');
+                            const batchInput = mask.querySelector('[data-scene-popup-adzone-discount-batch-input="1"]');
                             const renderAdzoneList = () => {
                                 if (!(adzoneListEl instanceof HTMLElement)) return;
-                                adzoneListEl.innerHTML = currentAdzoneList.map((item, idx) => {
-                                    const enabled = isAdzoneStatusEnabled(item);
-                                    const name = getAdzoneDisplayName(item, idx);
-                                    const desc = getAdzoneDisplayDesc(item) || '移动设备（含销量明星）、计算机设备';
+                                adzoneListEl.innerHTML = currentRows.map((row, idx) => {
+                                    const name = row.name || `资源位${idx + 1}`;
+                                    const desc = row.desc || '移动设备（含销量明星）、计算机设备';
+                                    if (row.rowType === 'group') {
+                                        return `
+                                            <div class="am-wxt-scene-advanced-adzone-row">
+                                                <div class="am-wxt-scene-advanced-adzone-cell">
+                                                    <div class="am-wxt-scene-advanced-adzone-name">${Utils.escapeHtml(name)}</div>
+                                                    <div class="am-wxt-scene-advanced-adzone-desc">${Utils.escapeHtml(desc)}</div>
+                                                </div>
+                                                <div class="am-wxt-scene-adzone-premium-op">
+                                                    <button
+                                                        type="button"
+                                                        class="am-wxt-site-switch ${row.enabled ? 'is-on' : 'is-off'}"
+                                                        data-scene-popup-adzone-row-toggle="${idx}"
+                                                        aria-pressed="${row.enabled ? 'true' : 'false'}"
+                                                    >
+                                                        <span class="am-wxt-site-switch-handle"></span>
+                                                        <span class="am-wxt-site-switch-state">${row.enabled ? '开' : '关'}</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }
+                                    if (row.rowType === 'switch') {
+                                        return `
+                                            <div class="am-wxt-scene-advanced-adzone-row">
+                                                <div class="am-wxt-scene-advanced-adzone-cell">
+                                                    <div class="am-wxt-scene-advanced-adzone-name">${Utils.escapeHtml(name)}</div>
+                                                    <div class="am-wxt-scene-advanced-adzone-desc">${Utils.escapeHtml(desc)}</div>
+                                                </div>
+                                                <div class="am-wxt-scene-adzone-premium-op">
+                                                    <button
+                                                        type="button"
+                                                        class="am-wxt-site-switch ${row.enabled ? 'is-on' : 'is-off'}"
+                                                        data-scene-popup-adzone-row-toggle="${idx}"
+                                                        aria-pressed="${row.enabled ? 'true' : 'false'}"
+                                                    >
+                                                        <span class="am-wxt-site-switch-handle"></span>
+                                                        <span class="am-wxt-site-switch-state">${row.enabled ? '开' : '关'}</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }
                                     return `
                                         <div class="am-wxt-scene-advanced-adzone-row">
                                             <div class="am-wxt-scene-advanced-adzone-cell">
                                                 <div class="am-wxt-scene-advanced-adzone-name">${Utils.escapeHtml(name)}</div>
                                                 <div class="am-wxt-scene-advanced-adzone-desc">${Utils.escapeHtml(desc)}</div>
                                             </div>
-                                            <div class="am-wxt-scene-advanced-adzone-actions">
-                                                <button type="button" class="am-wxt-btn ${enabled ? 'primary' : ''}" data-scene-popup-adzone-row-toggle="${idx}" data-scene-popup-adzone-next="on">开</button>
-                                                <button type="button" class="am-wxt-btn ${enabled ? '' : 'primary'}" data-scene-popup-adzone-row-toggle="${idx}" data-scene-popup-adzone-next="off">关</button>
+                                            <div class="am-wxt-scene-adzone-premium-op">
+                                                <div class="am-wxt-scene-adzone-premium-input-wrap">
+                                                    <span>溢价比例</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="300"
+                                                        step="1"
+                                                        value="${Utils.escapeHtml(String(clampAdzoneDiscount(row.discount, row.suggestedDiscount)))}"
+                                                        data-scene-popup-adzone-discount="${idx}"
+                                                    />
+                                                    <span>%</span>
+                                                </div>
+                                                <div class="am-wxt-scene-adzone-premium-suggest">建议溢价${Utils.escapeHtml(String(clampAdzoneDiscount(row.suggestedDiscount, 100)))}%</div>
                                             </div>
                                         </div>
                                     `;
                                 }).join('');
                             };
-                            const setBatch = (enabled = true) => {
-                                currentAdzoneList = currentAdzoneList.map(item => setAdzoneStatus(item, enabled));
+                            const applyBatchDiscount = () => {
+                                if (!(batchInput instanceof HTMLInputElement)) return;
+                                const fallbackValue = currentRows.find(row => row.rowType === 'premium')?.discount ?? 100;
+                                const nextValue = clampAdzoneDiscount(batchInput.value, fallbackValue);
+                                batchInput.value = String(nextValue);
+                                let changed = false;
+                                currentRows = currentRows.map((row) => {
+                                    if (row.rowType !== 'premium') return row;
+                                    changed = true;
+                                    return {
+                                        ...row,
+                                        enabled: true,
+                                        discount: nextValue
+                                    };
+                                });
+                                if (!changed) {
+                                    appendWizardLog('当前资源位不支持批量溢价设置', 'error');
+                                    return;
+                                }
                                 renderAdzoneList();
                             };
                             renderAdzoneList();
                             mask.addEventListener('click', (event) => {
                                 const target = event.target instanceof HTMLElement ? event.target : null;
                                 if (!(target instanceof HTMLElement)) return;
-                                const batchBtn = target.closest('[data-scene-popup-adzone-batch]');
-                                if (batchBtn instanceof HTMLElement) {
-                                    const mode = String(batchBtn.getAttribute('data-scene-popup-adzone-batch') || '').trim();
-                                    setBatch(mode !== 'off');
+                                const batchApplyBtn = target.closest('[data-scene-popup-adzone-discount-batch-apply]');
+                                if (batchApplyBtn instanceof HTMLElement) {
+                                    applyBatchDiscount();
                                     return;
                                 }
                                 const rowBtn = target.closest('[data-scene-popup-adzone-row-toggle]');
                                 if (!(rowBtn instanceof HTMLElement)) return;
                                 const index = toNumber(rowBtn.getAttribute('data-scene-popup-adzone-row-toggle'), -1);
-                                if (!Number.isFinite(index) || index < 0 || index >= currentAdzoneList.length) return;
+                                if (!Number.isFinite(index) || index < 0 || index >= currentRows.length) return;
+                                const rowType = String(currentRows[index]?.rowType || '').trim();
+                                if (rowType !== 'switch' && rowType !== 'group') return;
                                 const nextMode = String(rowBtn.getAttribute('data-scene-popup-adzone-next') || '').trim();
-                                currentAdzoneList[index] = setAdzoneStatus(currentAdzoneList[index], nextMode !== 'off');
+                                const nextEnabled = nextMode
+                                    ? nextMode !== 'off'
+                                    : !(currentRows[index]?.enabled !== false);
+                                currentRows[index] = {
+                                    ...currentRows[index],
+                                    enabled: nextEnabled
+                                };
                                 renderAdzoneList();
                             });
+                            if (adzoneListEl instanceof HTMLElement) {
+                                adzoneListEl.addEventListener('change', (event) => {
+                                    const input = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-adzone-discount]')
+                                        : null;
+                                    if (!(input instanceof HTMLInputElement)) return;
+                                    const index = toNumber(input.getAttribute('data-scene-popup-adzone-discount'), -1);
+                                    if (!Number.isFinite(index) || index < 0 || index >= currentRows.length) return;
+                                    if (currentRows[index]?.rowType !== 'premium') return;
+                                    const fallbackValue = currentRows[index]?.suggestedDiscount ?? 100;
+                                    const nextDiscount = clampAdzoneDiscount(input.value, fallbackValue);
+                                    currentRows[index] = {
+                                        ...currentRows[index],
+                                        enabled: true,
+                                        discount: nextDiscount
+                                    };
+                                    input.value = String(nextDiscount);
+                                });
+                            }
+                            if (batchInput instanceof HTMLInputElement) {
+                                batchInput.addEventListener('keydown', (event) => {
+                                    if (event.key !== 'Enter') return;
+                                    event.preventDefault();
+                                    applyBatchDiscount();
+                                });
+                            }
                             mask._sceneAdzonePremiumState = {
-                                getAdzoneList: () => currentAdzoneList.map(item => deepClone(item))
+                                getRows: () => currentRows.map(row => ({
+                                    ...row,
+                                    raw: deepClone(row.raw)
+                                }))
                             };
                         },
                         onSave: (mask) => {
                             const state = mask._sceneAdzonePremiumState || {};
-                            const list = typeof state.getAdzoneList === 'function'
-                                ? state.getAdzoneList()
+                            const rows = typeof state.getRows === 'function'
+                                ? state.getRows()
                                 : [];
-                            const adzoneOutput = Array.isArray(list) ? list.filter(item => isPlainObject(item)) : [];
+                            const adzoneOutput = Array.isArray(rows)
+                                ? rows
+                                    .map((row) => {
+                                        const raw = isPlainObject(row?.raw) ? deepClone(row.raw) : {};
+                                        const rowType = String(row?.rowType || '').trim() || 'premium';
+                                        if (rowType === 'group') {
+                                            return setAdzoneStatus(raw, row?.enabled !== false);
+                                        }
+                                        if (rowType === 'switch') {
+                                            return setAdzoneStatus(raw, row?.enabled !== false);
+                                        }
+                                        const next = writeAdzoneDiscountToRaw(raw, row?.discount);
+                                        return setAdzoneStatus(next, row?.enabled !== false);
+                                    })
+                                    .filter(item => isPlainObject(item))
+                                : [];
                             const adzoneRaw = JSON.stringify(adzoneOutput);
+                            const isDefaultMode = Array.isArray(rows) && rows.every((row) => {
+                                const rowType = String(row?.rowType || '').trim() || 'premium';
+                                if (rowType === 'group') return row?.enabled !== false;
+                                if (rowType === 'switch') return row?.enabled !== false;
+                                return row?.enabled !== false
+                                    && clampAdzoneDiscount(row?.discount, 100) === clampAdzoneDiscount(row?.suggestedDiscount, 100);
+                            });
                             return {
                                 ok: true,
                                 adzoneRaw,
-                                summary: describeAdzoneSummary(adzoneRaw)
+                                summary: describeAdzoneSummary(adzoneRaw),
+                                isDefaultMode
                             };
                         }
                     });
@@ -27026,6 +28070,178 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!result || result.ok !== true) return null;
                     return { ok: true, result, configControl };
                 };
+                const sceneCrowdTargetPanels = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-crowd-target-panel="1"]');
+                sceneCrowdTargetPanels.forEach((panel) => {
+                    if (!(panel instanceof HTMLElement)) return;
+                    const listWrap = panel.querySelector('[data-scene-crowd-target-list="1"]');
+                    const summaryEl = panel.querySelector('[data-scene-crowd-target-summary="1"]');
+                    const batchInput = panel.querySelector('[data-scene-crowd-target-batch-input="1"]');
+                    const batchApplyBtn = panel.querySelector('[data-scene-crowd-target-batch-apply="1"]');
+                    const openPopupBtn = panel.querySelector('[data-scene-crowd-target-open-popup="1"]');
+                    const shadowCampaignControl = panel.querySelector('[data-scene-crowd-target-json="campaign"]');
+                    const shadowAdgroupControl = panel.querySelector('[data-scene-crowd-target-json="adgroup"]');
+                    if (!(listWrap instanceof HTMLElement)) return;
+                    const crowdRow = resolveScenePopupRowByTrigger('crowd');
+                    const crowdPopupButton = crowdRow?.querySelector('[data-scene-popup-trigger="crowd"]');
+                    const crowdCampaignControl = resolveScenePopupControl('campaign.crowdList', 'crowd');
+                    const crowdAdgroupControl = resolveScenePopupControl('adgroup.rightList', 'crowd');
+                    const crowdMainControl = crowdRow?.querySelector(
+                        'input.am-wxt-hidden-control[data-scene-field]:not([data-scene-popup-field])'
+                    );
+                    const parseSelectedListFromRaw = (campaignRaw = '', adgroupRaw = '') => uniqueBy(
+                        parseScenePopupJsonArray(adgroupRaw, [])
+                            .concat(parseScenePopupJsonArray(campaignRaw, []))
+                            .filter(item => isPlainObject(item)),
+                        (item, idx) => getSceneCrowdTargetKey(item, idx)
+                    ).slice(0, 100);
+                    let selectedList = parseSelectedListFromRaw(
+                        normalizeSceneSettingValue(
+                            crowdCampaignControl instanceof HTMLInputElement
+                                ? crowdCampaignControl.value
+                                : (shadowCampaignControl instanceof HTMLInputElement ? shadowCampaignControl.value : '')
+                        ) || '[]',
+                        normalizeSceneSettingValue(
+                            crowdAdgroupControl instanceof HTMLInputElement
+                                ? crowdAdgroupControl.value
+                                : (shadowAdgroupControl instanceof HTMLInputElement ? shadowAdgroupControl.value : '')
+                        ) || '[]'
+                    );
+                    const syncShadowJsonControls = (campaignRaw = '[]', adgroupRaw = '[]') => {
+                        if (shadowCampaignControl instanceof HTMLInputElement) {
+                            shadowCampaignControl.value = campaignRaw;
+                        }
+                        if (shadowAdgroupControl instanceof HTMLInputElement) {
+                            shadowAdgroupControl.value = adgroupRaw;
+                        }
+                    };
+                    const renderTargetList = () => {
+                        const safeList = Array.isArray(selectedList) ? selectedList : [];
+                        if (summaryEl instanceof HTMLElement) {
+                            summaryEl.textContent = safeList.length
+                                ? `已配置 ${safeList.length} 条`
+                                : '未配置人群';
+                        }
+                        if (!safeList.length) {
+                            listWrap.innerHTML = '<div class="am-wxt-crowd-target-empty">请先添加目标人群</div>';
+                            return;
+                        }
+                        listWrap.innerHTML = safeList.map((item, idx) => {
+                            const key = getSceneCrowdTargetKey(item, idx);
+                            const crowdName = getCrowdDisplayName(item) || `目标人群${idx + 1}`;
+                            const bidValue = normalizeSceneCrowdTargetBid(item, 0.3);
+                            const suggestionText = resolveSceneCrowdTargetBidSuggestion(item, bidValue);
+                            const labelId = normalizeSceneSettingValue(item?.crowd?.label?.labelId || key);
+                            return `
+                                <div class="am-wxt-crowd-target-row" data-scene-crowd-target-key="${Utils.escapeHtml(key)}">
+                                    <div class="am-wxt-crowd-target-name">
+                                        <div class="name">${Utils.escapeHtml(crowdName)}</div>
+                                        <div class="meta">${Utils.escapeHtml(labelId || '未提供ID')}</div>
+                                    </div>
+                                    <div class="am-wxt-crowd-target-bid">
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            max="999"
+                                            step="0.01"
+                                            value="${Utils.escapeHtml(bidValue.toFixed(2))}"
+                                            data-scene-crowd-target-bid="${Utils.escapeHtml(key)}"
+                                        />
+                                        <span>元/点击</span>
+                                    </div>
+                                    <div class="am-wxt-crowd-target-suggest">${Utils.escapeHtml(suggestionText)}</div>
+                                    <div class="am-wxt-crowd-target-actions">
+                                        <button type="button" class="am-wxt-btn" data-scene-crowd-target-remove="${Utils.escapeHtml(key)}">移除</button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    };
+                    const persistTargetList = () => {
+                        selectedList = uniqueBy(
+                            (Array.isArray(selectedList) ? selectedList : [])
+                                .filter(item => isPlainObject(item)),
+                            (item, idx) => getSceneCrowdTargetKey(item, idx)
+                        ).slice(0, 100);
+                        const crowdRaw = JSON.stringify(selectedList);
+                        syncShadowJsonControls(crowdRaw, crowdRaw);
+                        if (crowdCampaignControl instanceof HTMLInputElement) {
+                            dispatchSceneControlUpdate(crowdCampaignControl, crowdRaw);
+                        }
+                        if (crowdAdgroupControl instanceof HTMLInputElement) {
+                            dispatchSceneControlUpdate(crowdAdgroupControl, crowdRaw);
+                        }
+                        if (crowdMainControl instanceof HTMLInputElement) {
+                            dispatchSceneControlUpdate(crowdMainControl, selectedList.length ? '手动添加人群' : '关闭');
+                        }
+                        updateScenePopupSummary(
+                            crowdRow,
+                            'crowd',
+                            describeCrowdSummary(crowdRaw, crowdRaw)
+                        );
+                        wizardState.crowdList = selectedList.map(item => deepClone(item));
+                        if (typeof wizardState.renderCrowdList === 'function') {
+                            wizardState.renderCrowdList();
+                        }
+                        syncSceneSettingValuesFromUI();
+                        syncDraftFromUI();
+                        if (typeof wizardState.buildRequest === 'function') {
+                            wizardState.renderPreview(wizardState.buildRequest());
+                        }
+                    };
+                    renderTargetList();
+                    if (openPopupBtn instanceof HTMLButtonElement) {
+                        openPopupBtn.addEventListener('click', () => {
+                            if (crowdPopupButton instanceof HTMLButtonElement) {
+                                crowdPopupButton.click();
+                                return;
+                            }
+                            appendWizardLog('未找到“人群设置”弹窗入口，请先检查场景配置', 'error');
+                        });
+                    }
+                    if (batchApplyBtn instanceof HTMLButtonElement) {
+                        batchApplyBtn.addEventListener('click', () => {
+                            const bidText = String(batchInput instanceof HTMLInputElement ? batchInput.value : '').trim();
+                            if (!bidText) {
+                                appendWizardLog('请先输入批量出价', 'error');
+                                return;
+                            }
+                            if (!selectedList.length) {
+                                appendWizardLog('请先添加目标人群', 'error');
+                                return;
+                            }
+                            const nextBid = normalizeSceneCrowdTargetBid({ price: { price: bidText } }, 0.3);
+                            selectedList = selectedList.map(item => cloneSceneCrowdTargetWithBid(item, nextBid));
+                            renderTargetList();
+                            persistTargetList();
+                        });
+                    }
+                    listWrap.addEventListener('click', (event) => {
+                        const removeBtn = event.target instanceof HTMLElement
+                            ? event.target.closest('[data-scene-crowd-target-remove]')
+                            : null;
+                        if (!(removeBtn instanceof HTMLElement)) return;
+                        const key = String(removeBtn.getAttribute('data-scene-crowd-target-remove') || '').trim();
+                        if (!key) return;
+                        selectedList = selectedList.filter((item, idx) => getSceneCrowdTargetKey(item, idx) !== key);
+                        renderTargetList();
+                        persistTargetList();
+                    });
+                    listWrap.addEventListener('input', (event) => {
+                        const input = event.target instanceof HTMLInputElement
+                            ? event.target
+                            : null;
+                        if (!(input instanceof HTMLInputElement)) return;
+                        const key = String(input.getAttribute('data-scene-crowd-target-bid') || '').trim();
+                        if (!key) return;
+                        const hitIndex = selectedList.findIndex((item, idx) => getSceneCrowdTargetKey(item, idx) === key);
+                        if (hitIndex < 0) return;
+                        const fallbackBid = normalizeSceneCrowdTargetBid(selectedList[hitIndex], 0.3);
+                        const nextBid = normalizeSceneCrowdTargetBid({ price: { price: input.value } }, fallbackBid);
+                        input.value = nextBid.toFixed(2);
+                        selectedList[hitIndex] = cloneSceneCrowdTargetWithBid(selectedList[hitIndex], nextBid);
+                        persistTargetList();
+                    });
+                });
                 const scenePopupButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-popup-trigger]');
                 scenePopupButtons.forEach(button => {
                     button.addEventListener('click', async () => {
@@ -27129,12 +28345,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             );
                             const mainControl = findMainControl();
                             if (mainControl instanceof HTMLInputElement) {
-                                const parsedAdzone = parseScenePopupJsonArray(result.adzoneRaw || '[]', [])
-                                    .filter(item => isPlainObject(item));
-                                const enabledCount = parsedAdzone.filter(item => isAdzoneStatusEnabled(item)).length;
-                                const nextMode = !parsedAdzone.length || enabledCount === parsedAdzone.length
-                                    ? '默认溢价'
-                                    : '自定义溢价';
+                                let nextMode = '';
+                                if (typeof result.isDefaultMode === 'boolean') {
+                                    nextMode = result.isDefaultMode ? '默认溢价' : '自定义溢价';
+                                } else {
+                                    const parsedAdzone = parseScenePopupJsonArray(result.adzoneRaw || '[]', [])
+                                        .filter(item => isPlainObject(item));
+                                    const enabledCount = parsedAdzone.filter(item => isAdzoneStatusEnabled(item)).length;
+                                    nextMode = (!parsedAdzone.length || enabledCount === parsedAdzone.length)
+                                        ? '默认溢价'
+                                        : '自定义溢价';
+                                }
                                 dispatchSceneControlUpdate(mainControl, nextMode);
                             }
                         } else if (trigger === 'launchSetting') {
@@ -27245,21 +28466,88 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         </section>
                                     </div>
                                     <div class="am-wxt-scene-crowd-add-mask hidden" data-scene-popup-crowd-add-mask="1">
-                                        <div class="am-wxt-scene-crowd-add-dialog" role="dialog" aria-modal="true" aria-label="新增人群">
+                                        <div class="am-wxt-scene-crowd-add-dialog am-wxt-scene-crowd-native-dialog" role="dialog" aria-modal="true" aria-label="手动添加人群">
                                             <div class="am-wxt-scene-crowd-add-head">
-                                                <span>新增人群</span>
+                                                <div class="am-wxt-scene-crowd-native-title">
+                                                    <span>手动添加人群</span>
+                                                    <a
+                                                        class="am-wxt-scene-crowd-native-help"
+                                                        data-scene-popup-crowd-native-help="1"
+                                                        href="https://alidocs.dingtalk.com/i/nodes/Qnp9zOoBVBDEydnQU4mLjg5G81DK0g6l"
+                                                        target="_blank"
+                                                        rel="noreferrer noopener"
+                                                    >人群解读</a>
+                                                </div>
                                                 <button type="button" class="am-wxt-btn" data-scene-popup-crowd-add-close="1">×</button>
                                             </div>
                                             <div class="am-wxt-scene-crowd-add-body">
-                                                <div class="am-wxt-scene-popup-tips">支持输入人群名称或标签ID，多个可用换行或逗号分隔。确认后会加入候选并自动选中。</div>
-                                                <textarea
-                                                    class="am-wxt-scene-popup-textarea"
-                                                    data-scene-popup-crowd-add-input="1"
-                                                    placeholder="示例：\n智能竞争店铺\n3000949"
-                                                ></textarea>
-                                                <div class="am-wxt-scene-popup-actions">
+                                                <div class="am-wxt-scene-crowd-native-layout" data-scene-popup-crowd-native-layout="1">
+                                                    <section class="am-wxt-scene-crowd-native-left">
+                                                        <div class="am-wxt-scene-crowd-native-tabs" data-scene-popup-crowd-native-tabs="1">
+                                                            <button type="button" class="am-wxt-scene-crowd-native-tab active" data-scene-popup-crowd-native-tab="compete_new">
+                                                                <span>竞争航线</span>
+                                                                <i>强势拉新</i>
+                                                            </button>
+                                                            <button type="button" class="am-wxt-scene-crowd-native-tab" data-scene-popup-crowd-native-tab="shopAndItem">
+                                                                <span>本店核心人群</span>
+                                                            </button>
+                                                            <button type="button" class="am-wxt-scene-crowd-native-tab" data-scene-popup-crowd-native-tab="dmpRecommends">
+                                                                <span>平台精选人群</span>
+                                                            </button>
+                                                            <button type="button" class="am-wxt-scene-crowd-native-tab" data-scene-popup-crowd-native-tab="keywordAndDmp">
+                                                                <span>用户画像人群</span>
+                                                            </button>
+                                                            <button type="button" class="am-wxt-scene-crowd-native-tab" data-scene-popup-crowd-native-tab="other">
+                                                                <span>其他</span>
+                                                            </button>
+                                                        </div>
+                                                        <div class="am-wxt-scene-crowd-native-subtabs" data-scene-popup-crowd-native-subtabs="1">
+                                                            <button type="button" class="am-wxt-scene-crowd-native-subtab active" data-scene-popup-crowd-native-subtab="item">竞争商品</button>
+                                                            <button type="button" class="am-wxt-scene-crowd-native-subtab" data-scene-popup-crowd-native-subtab="shop">竞争店铺</button>
+                                                        </div>
+                                                        <div class="am-wxt-scene-crowd-native-toolbar">
+                                                            <input
+                                                                type="text"
+                                                                class="am-wxt-input"
+                                                                data-scene-popup-crowd-native-search="1"
+                                                                placeholder="输入人群名称或标签ID搜索"
+                                                            />
+                                                            <button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-search-reset="1">重置</button>
+                                                            <button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-add-all="1">全部添加</button>
+                                                        </div>
+                                                        <div class="am-wxt-scene-crowd-native-manual">
+                                                            <input
+                                                                type="text"
+                                                                class="am-wxt-input"
+                                                                data-scene-popup-crowd-add-input="1"
+                                                                placeholder="手动添加：输入人群名称或标签ID，多个可用逗号分隔"
+                                                            />
+                                                            <button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-manual-add="1">添加自定义人群</button>
+                                                        </div>
+                                                        <div class="am-wxt-scene-crowd-native-candidate-head">
+                                                            <span>人群名称</span>
+                                                            <span>推荐理由</span>
+                                                            <span>人群规模</span>
+                                                            <span>操作</span>
+                                                        </div>
+                                                        <div class="am-wxt-scene-crowd-native-candidate-list" data-scene-popup-crowd-native-candidate-list="1"></div>
+                                                    </section>
+                                                    <section class="am-wxt-scene-crowd-native-right">
+                                                        <div class="am-wxt-scene-crowd-native-selected-head">
+                                                            <span>已选人群（<b data-scene-popup-crowd-native-selected-count="1">0</b>/100）</span>
+                                                            <a href="javascript:;" data-scene-popup-crowd-native-clear="1">全部移除</a>
+                                                        </div>
+                                                        <div class="am-wxt-scene-crowd-native-selected-table-head">
+                                                            <span>人群名称</span>
+                                                            <span>来源</span>
+                                                            <span>操作</span>
+                                                        </div>
+                                                        <div class="am-wxt-scene-crowd-native-selected-list" data-scene-popup-crowd-native-selected-list="1"></div>
+                                                    </section>
+                                                </div>
+                                                <div class="am-wxt-scene-popup-actions am-wxt-scene-crowd-native-foot">
                                                     <button type="button" class="am-wxt-btn" data-scene-popup-crowd-add-cancel="1">取消</button>
-                                                    <button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-add-confirm="1">添加并选中</button>
+                                                    <button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-add-confirm="1">确定</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -27308,6 +28596,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     const quickFilterButtons = Array.from(mask.querySelectorAll('[data-scene-popup-crowd-quick-filter]'));
                                     const crowdAddMask = mask.querySelector('[data-scene-popup-crowd-add-mask]');
                                     const crowdAddInput = mask.querySelector('[data-scene-popup-crowd-add-input]');
+                                    const crowdAddNativeTabButtons = Array.from(mask.querySelectorAll('[data-scene-popup-crowd-native-tab]'));
+                                    const crowdAddNativeSubtabButtons = Array.from(mask.querySelectorAll('[data-scene-popup-crowd-native-subtab]'));
+                                    const crowdAddNativeSubtabsWrap = mask.querySelector('[data-scene-popup-crowd-native-subtabs]');
+                                    const crowdAddNativeSearchInput = mask.querySelector('[data-scene-popup-crowd-native-search]');
+                                    const crowdAddNativeSearchResetBtn = mask.querySelector('[data-scene-popup-crowd-native-search-reset]');
+                                    const crowdAddNativeManualAddBtn = mask.querySelector('[data-scene-popup-crowd-native-manual-add]');
+                                    const crowdAddNativeAddAllBtn = mask.querySelector('[data-scene-popup-crowd-native-add-all]');
+                                    const crowdAddNativeCandidateListEl = mask.querySelector('[data-scene-popup-crowd-native-candidate-list]');
+                                    const crowdAddNativeSelectedListEl = mask.querySelector('[data-scene-popup-crowd-native-selected-list]');
+                                    const crowdAddNativeSelectedCountEl = mask.querySelector('[data-scene-popup-crowd-native-selected-count]');
+                                    const crowdAddNativeClearBtn = mask.querySelector('[data-scene-popup-crowd-native-clear]');
                                     const initialCampaignList = parseScenePopupJsonArray(crowdCampaignRaw, [])
                                         .filter(item => isPlainObject(item));
                                     const initialAdgroupList = parseScenePopupJsonArray(crowdAdgroupRaw, [])
@@ -27330,6 +28629,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     let jsonMode = false;
                                     let systemCrowdLoading = false;
                                     let systemCrowdLoaded = false;
+                                    let crowdAddNativeTab = 'compete_new';
+                                    let crowdAddNativeSubtab = 'item';
+                                    let crowdAddNativeKeyword = '';
+                                    let crowdAddDialogSnapshot = [];
+                                    let crowdAddDialogOpen = false;
 
                                     const formatCrowdScaleText = (item = {}, index = 0) => {
                                         const fromItem = toNumber(
@@ -27372,6 +28676,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         if (quickKey === 'high_value') return '高价值高潜力';
                                         if (quickKey === 'asset') return '优选成交资产';
                                         return '高相关引流';
+                                    };
+                                    const resolveCrowdNativeTabKey = (item = {}, index = 0, name = '') => {
+                                        const crowdName = String(name || getCrowdDisplayName(item) || '').trim();
+                                        const reason = resolveCrowdReasonText(item, index, crowdName);
+                                        const merged = `${crowdName} ${reason}`.trim();
+                                        if (/竞店|竞品|竞争|航线|相似宝贝|搭配宝贝/.test(merged)) return 'compete_new';
+                                        if (/店铺|领券|成交|加购|收藏|老客|复购|即将成交/.test(merged)) return 'shopAndItem';
+                                        if (/平台|精选|高潜|高价值|资产|行为|达人/.test(merged)) return 'dmpRecommends';
+                                        if (/关键词|画像|标签|兴趣|偏好/.test(merged)) return 'keywordAndDmp';
+                                        return 'other';
+                                    };
+                                    const resolveCrowdNativeCompeteSubtabKey = (item = {}, index = 0, name = '') => {
+                                        const crowdName = String(name || getCrowdDisplayName(item) || '').trim();
+                                        const reason = resolveCrowdReasonText(item, index, crowdName);
+                                        const merged = `${crowdName} ${reason}`.trim();
+                                        if (/店铺|竞店/.test(merged)) return 'shop';
+                                        return 'item';
+                                    };
+                                    const resolveCrowdNativeSourceLabel = (item = {}, index = 0, name = '') => {
+                                        const tabKey = resolveCrowdNativeTabKey(item, index, name);
+                                        if (tabKey === 'compete_new') return '竞争航线';
+                                        if (tabKey === 'shopAndItem') return '店铺人群';
+                                        if (tabKey === 'dmpRecommends') return '平台精选';
+                                        if (tabKey === 'keywordAndDmp') return '用户画像';
+                                        return '其他';
                                     };
                                     const mergeCandidateList = (incoming = [], limit = 260) => {
                                         candidateList = uniqueBy(
@@ -27463,6 +28792,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 ).slice(0, 100);
                                             }
                                             renderCandidateList();
+                                            if (crowdAddDialogOpen) {
+                                                renderCrowdAddNative();
+                                            }
                                             appendWizardLog(`人群弹窗已加载系统推荐人群 ${mergedSystemList.length} 条`, 'success');
                                             systemCrowdLoaded = true;
                                         } catch (err) {
@@ -27658,17 +28990,183 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         selectedList.push(deepClone(candidate));
                                         return true;
                                     };
-                                    const setCrowdAddMaskVisible = (visible) => {
+                                    const refreshCrowdPopupViews = () => {
+                                        syncJsonEditors();
+                                        renderCandidateList();
+                                        renderSelectedList();
+                                    };
+                                    const getCrowdAddNativeFilteredList = () => {
+                                        return candidateList.filter((item, idx) => {
+                                            const key = getCrowdKey(item, idx);
+                                            if (!key) return false;
+                                            const name = String(getCrowdDisplayName(item) || '').trim();
+                                            const labelId = normalizeSceneSettingValue(item?.crowd?.label?.labelId || key);
+                                            const reason = resolveCrowdReasonText(item, idx, name);
+                                            const tabKey = resolveCrowdNativeTabKey(item, idx, name);
+                                            if (tabKey !== crowdAddNativeTab) return false;
+                                            if (
+                                                crowdAddNativeTab === 'compete_new'
+                                                && resolveCrowdNativeCompeteSubtabKey(item, idx, name) !== crowdAddNativeSubtab
+                                            ) return false;
+                                            if (!crowdAddNativeKeyword) return true;
+                                            const haystack = `${name} ${labelId} ${reason}`.toLowerCase();
+                                            return haystack.includes(crowdAddNativeKeyword.toLowerCase());
+                                        });
+                                    };
+                                    const renderCrowdAddNativeTabs = () => {
+                                        crowdAddNativeTabButtons.forEach(btn => {
+                                            if (!(btn instanceof HTMLButtonElement)) return;
+                                            const key = String(btn.getAttribute('data-scene-popup-crowd-native-tab') || '').trim();
+                                            const active = key === crowdAddNativeTab;
+                                            btn.classList.toggle('active', active);
+                                            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                        });
+                                        crowdAddNativeSubtabButtons.forEach(btn => {
+                                            if (!(btn instanceof HTMLButtonElement)) return;
+                                            const key = String(btn.getAttribute('data-scene-popup-crowd-native-subtab') || '').trim();
+                                            const active = key === crowdAddNativeSubtab;
+                                            btn.classList.toggle('active', active);
+                                            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                                        });
+                                        if (crowdAddNativeSubtabsWrap instanceof HTMLElement) {
+                                            crowdAddNativeSubtabsWrap.classList.toggle('hidden', crowdAddNativeTab !== 'compete_new');
+                                        }
+                                        if (crowdAddNativeSearchInput instanceof HTMLInputElement) {
+                                            crowdAddNativeSearchInput.value = crowdAddNativeKeyword;
+                                        }
+                                    };
+                                    const renderCrowdAddNativeCandidateList = () => {
+                                        if (!(crowdAddNativeCandidateListEl instanceof HTMLElement)) return;
+                                        const selectedSet = getSelectedKeySet();
+                                        const filtered = getCrowdAddNativeFilteredList();
+                                        if (!filtered.length) {
+                                            crowdAddNativeCandidateListEl.innerHTML = '<div class="am-wxt-scene-crowd-empty">暂无可选人群</div>';
+                                            return;
+                                        }
+                                        crowdAddNativeCandidateListEl.innerHTML = filtered.map((item, idx) => {
+                                            const key = getCrowdKey(item, idx);
+                                            const rawName = getCrowdDisplayName(item) || `精选人群${idx + 1}`;
+                                            const selected = selectedSet.has(key);
+                                            const labelId = normalizeSceneSettingValue(item?.crowd?.label?.labelId || key);
+                                            return `
+                                                <div class="am-wxt-scene-crowd-native-candidate-row">
+                                                    <div class="am-wxt-scene-crowd-native-candidate-name">
+                                                        <div class="name">${Utils.escapeHtml(rawName)}</div>
+                                                        <div class="meta">${Utils.escapeHtml(labelId || '未提供ID')}</div>
+                                                    </div>
+                                                    <div class="am-wxt-scene-crowd-native-candidate-reason">
+                                                        ${Utils.escapeHtml(resolveCrowdReasonText(item, idx, rawName))}
+                                                    </div>
+                                                    <div class="am-wxt-scene-crowd-native-candidate-scale">
+                                                        ${Utils.escapeHtml(formatCrowdScaleText(item, idx))}
+                                                    </div>
+                                                    <div class="am-wxt-scene-crowd-native-candidate-actions">
+                                                        ${selected
+                ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-remove="${Utils.escapeHtml(key)}">取消添加</button>`
+                : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-native-add="${Utils.escapeHtml(key)}">添加</button>`}
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    };
+                                    const renderCrowdAddNativeSelectedList = () => {
+                                        if (crowdAddNativeSelectedCountEl instanceof HTMLElement) {
+                                            crowdAddNativeSelectedCountEl.textContent = String(selectedList.length);
+                                        }
+                                        if (!(crowdAddNativeSelectedListEl instanceof HTMLElement)) return;
+                                        if (!selectedList.length) {
+                                            crowdAddNativeSelectedListEl.innerHTML = '<div class="am-wxt-scene-crowd-empty">请从左侧添加人群</div>';
+                                            return;
+                                        }
+                                        crowdAddNativeSelectedListEl.innerHTML = selectedList.map((item, idx) => {
+                                            const key = getCrowdKey(item, idx);
+                                            const crowdName = getCrowdDisplayName(item) || `已选人群${idx + 1}`;
+                                            const source = resolveCrowdNativeSourceLabel(item, idx, crowdName);
+                                            return `
+                                                <div class="am-wxt-scene-crowd-native-selected-row">
+                                                    <div class="am-wxt-scene-crowd-native-selected-name">${Utils.escapeHtml(crowdName)}</div>
+                                                    <div class="am-wxt-scene-crowd-native-selected-source">${Utils.escapeHtml(source)}</div>
+                                                    <div class="am-wxt-scene-crowd-native-selected-actions">
+                                                        <a href="javascript:;" data-scene-popup-crowd-native-remove-selected="${Utils.escapeHtml(key)}">移除</a>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    };
+                                    const renderCrowdAddNative = () => {
+                                        if (!crowdAddDialogOpen) return;
+                                        renderCrowdAddNativeTabs();
+                                        renderCrowdAddNativeCandidateList();
+                                        renderCrowdAddNativeSelectedList();
+                                    };
+                                    const closeCrowdAddDialog = (commit = false) => {
                                         if (!(crowdAddMask instanceof HTMLElement)) return;
-                                        crowdAddMask.classList.toggle('hidden', !visible);
-                                        if (visible && crowdAddInput instanceof HTMLTextAreaElement) {
-                                            requestAnimationFrame(() => {
+                                        if (!crowdAddDialogOpen) {
+                                            crowdAddMask.classList.add('hidden');
+                                            return;
+                                        }
+                                        if (!commit && Array.isArray(crowdAddDialogSnapshot)) {
+                                            selectedList = crowdAddDialogSnapshot.map(item => deepClone(item));
+                                            refreshCrowdPopupViews();
+                                        }
+                                        crowdAddDialogOpen = false;
+                                        crowdAddDialogSnapshot = [];
+                                        crowdAddMask.classList.add('hidden');
+                                        if (crowdAddInput instanceof HTMLInputElement) {
+                                            crowdAddInput.value = '';
+                                        }
+                                    };
+                                    const openCrowdAddDialog = () => {
+                                        if (!(crowdAddMask instanceof HTMLElement)) return;
+                                        crowdAddDialogSnapshot = selectedList.map(item => deepClone(item));
+                                        crowdAddNativeTab = 'compete_new';
+                                        crowdAddNativeSubtab = 'item';
+                                        crowdAddNativeKeyword = '';
+                                        crowdAddDialogOpen = true;
+                                        crowdAddMask.classList.remove('hidden');
+                                        renderCrowdAddNative();
+                                        requestAnimationFrame(() => {
+                                            if (crowdAddNativeSearchInput instanceof HTMLInputElement) {
                                                 try {
-                                                    crowdAddInput.focus({ preventScroll: true });
+                                                    crowdAddNativeSearchInput.focus({ preventScroll: true });
                                                 } catch {
-                                                    crowdAddInput.focus();
+                                                    crowdAddNativeSearchInput.focus();
                                                 }
-                                            });
+                                            }
+                                        });
+                                    };
+                                    const submitCrowdAddInput = () => {
+                                        const rawInput = String(crowdAddInput instanceof HTMLInputElement ? crowdAddInput.value : '').trim();
+                                        if (!rawInput) {
+                                            appendWizardLog('请先输入人群名称或标签ID', 'error');
+                                            return;
+                                        }
+                                        const tokens = uniqueBy(
+                                            rawInput.split(/[,\n，]/g).map(item => item.trim()).filter(Boolean),
+                                            item => item
+                                        ).slice(0, 120);
+                                        if (!tokens.length) {
+                                            appendWizardLog('请先输入人群名称或标签ID', 'error');
+                                            return;
+                                        }
+                                        let addedCount = 0;
+                                        let skippedCount = 0;
+                                        tokens.forEach(token => {
+                                            const added = addSelectedByToken(token);
+                                            if (added) addedCount += 1;
+                                            else skippedCount += 1;
+                                        });
+                                        if (selectedList.length >= 100 && skippedCount > 0) {
+                                            appendWizardLog('最多添加 100 条精选人群', 'error');
+                                        }
+                                        refreshCrowdPopupViews();
+                                        renderCrowdAddNative();
+                                        appendWizardLog(
+                                            `新增人群处理完成：新增 ${addedCount} 条${skippedCount ? `，跳过 ${skippedCount} 条` : ''}`,
+                                            addedCount > 0 ? 'success' : 'error'
+                                        );
+                                        if (crowdAddInput instanceof HTMLInputElement) {
+                                            crowdAddInput.value = '';
                                         }
                                     };
                                     const updateBidByKey = (key = '', nextBid = 30) => {
@@ -27730,77 +29228,132 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                     .map(item => deepClone(item)),
                                                 (item, idx) => getCrowdKey(item, idx)
                                             ).slice(0, 100);
-                                            syncJsonEditors();
-                                            renderCandidateList();
-                                            renderSelectedList();
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         };
                                     }
                                     const crowdAddNewBtn = mask.querySelector('[data-scene-popup-crowd-add-new]');
                                     const crowdAddCloseBtn = mask.querySelector('[data-scene-popup-crowd-add-close]');
                                     const crowdAddCancelBtn = mask.querySelector('[data-scene-popup-crowd-add-cancel]');
                                     const crowdAddConfirmBtn = mask.querySelector('[data-scene-popup-crowd-add-confirm]');
-                                    const submitCrowdAddInput = () => {
-                                        const rawInput = String(crowdAddInput instanceof HTMLTextAreaElement ? crowdAddInput.value : '').trim();
-                                        if (!rawInput) {
-                                            appendWizardLog('请先输入人群名称或标签ID', 'error');
-                                            return;
-                                        }
-                                        const tokens = uniqueBy(
-                                            rawInput.split(/[,\n，]/g).map(item => item.trim()).filter(Boolean),
-                                            item => item
-                                        ).slice(0, 120);
-                                        if (!tokens.length) {
-                                            appendWizardLog('请先输入人群名称或标签ID', 'error');
-                                            return;
-                                        }
-                                        let addedCount = 0;
-                                        let skippedCount = 0;
-                                        tokens.forEach(token => {
-                                            const added = addSelectedByToken(token);
-                                            if (added) addedCount += 1;
-                                            else skippedCount += 1;
-                                        });
-                                        if (selectedList.length >= 100 && skippedCount > 0) {
-                                            appendWizardLog('最多添加 100 条精选人群', 'error');
-                                        }
-                                        syncJsonEditors();
-                                        renderCandidateList();
-                                        renderSelectedList();
-                                        appendWizardLog(
-                                            `新增人群处理完成：新增 ${addedCount} 条${skippedCount ? `，跳过 ${skippedCount} 条` : ''}`,
-                                            addedCount > 0 ? 'success' : 'error'
-                                        );
-                                        if (crowdAddInput instanceof HTMLTextAreaElement) {
-                                            crowdAddInput.value = '';
-                                        }
-                                        setCrowdAddMaskVisible(false);
-                                    };
                                     if (crowdAddNewBtn instanceof HTMLButtonElement) {
                                         crowdAddNewBtn.onclick = () => {
-                                            setCrowdAddMaskVisible(true);
+                                            openCrowdAddDialog();
                                             void loadSystemCrowdCandidates(true);
                                         };
                                     }
                                     if (crowdAddCloseBtn instanceof HTMLButtonElement) {
-                                        crowdAddCloseBtn.onclick = () => setCrowdAddMaskVisible(false);
+                                        crowdAddCloseBtn.onclick = () => closeCrowdAddDialog(false);
                                     }
                                     if (crowdAddCancelBtn instanceof HTMLButtonElement) {
-                                        crowdAddCancelBtn.onclick = () => setCrowdAddMaskVisible(false);
+                                        crowdAddCancelBtn.onclick = () => closeCrowdAddDialog(false);
                                     }
                                     if (crowdAddConfirmBtn instanceof HTMLButtonElement) {
-                                        crowdAddConfirmBtn.onclick = () => submitCrowdAddInput();
+                                        crowdAddConfirmBtn.onclick = () => closeCrowdAddDialog(true);
                                     }
-                                    if (crowdAddInput instanceof HTMLTextAreaElement) {
+                                    if (crowdAddInput instanceof HTMLInputElement) {
                                         crowdAddInput.addEventListener('keydown', (event) => {
-                                            if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
+                                            if (event.key !== 'Enter') return;
                                             event.preventDefault();
                                             submitCrowdAddInput();
+                                        });
+                                    }
+                                    if (crowdAddNativeManualAddBtn instanceof HTMLButtonElement) {
+                                        crowdAddNativeManualAddBtn.onclick = () => submitCrowdAddInput();
+                                    }
+                                    crowdAddNativeTabButtons.forEach(btn => {
+                                        if (!(btn instanceof HTMLButtonElement)) return;
+                                        btn.onclick = () => {
+                                            const nextTab = String(btn.getAttribute('data-scene-popup-crowd-native-tab') || '').trim() || 'compete_new';
+                                            crowdAddNativeTab = nextTab;
+                                            if (crowdAddNativeTab !== 'compete_new') {
+                                                crowdAddNativeSubtab = 'item';
+                                            }
+                                            renderCrowdAddNative();
+                                        };
+                                    });
+                                    crowdAddNativeSubtabButtons.forEach(btn => {
+                                        if (!(btn instanceof HTMLButtonElement)) return;
+                                        btn.onclick = () => {
+                                            const nextSubtab = String(btn.getAttribute('data-scene-popup-crowd-native-subtab') || '').trim() || 'item';
+                                            crowdAddNativeSubtab = nextSubtab;
+                                            renderCrowdAddNative();
+                                        };
+                                    });
+                                    if (crowdAddNativeSearchInput instanceof HTMLInputElement) {
+                                        crowdAddNativeSearchInput.addEventListener('input', () => {
+                                            crowdAddNativeKeyword = String(crowdAddNativeSearchInput.value || '').trim();
+                                            renderCrowdAddNativeCandidateList();
+                                        });
+                                    }
+                                    if (crowdAddNativeSearchResetBtn instanceof HTMLButtonElement) {
+                                        crowdAddNativeSearchResetBtn.onclick = () => {
+                                            crowdAddNativeKeyword = '';
+                                            if (crowdAddNativeSearchInput instanceof HTMLInputElement) {
+                                                crowdAddNativeSearchInput.value = '';
+                                            }
+                                            renderCrowdAddNativeCandidateList();
+                                        };
+                                    }
+                                    if (crowdAddNativeAddAllBtn instanceof HTMLButtonElement) {
+                                        crowdAddNativeAddAllBtn.onclick = () => {
+                                            const filtered = getCrowdAddNativeFilteredList();
+                                            let addedCount = 0;
+                                            filtered.forEach((item, idx) => {
+                                                if (selectedList.length >= 100) return;
+                                                const key = getCrowdKey(item, idx);
+                                                const beforeCount = selectedList.length;
+                                                addSelectedByKey(key);
+                                                if (selectedList.length > beforeCount) addedCount += 1;
+                                            });
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
+                                            if (addedCount === 0) {
+                                                appendWizardLog('当前筛选结果无可新增人群', 'error');
+                                            } else {
+                                                appendWizardLog(`已批量添加 ${addedCount} 条人群`, 'success');
+                                            }
+                                        };
+                                    }
+                                    if (crowdAddNativeClearBtn instanceof HTMLElement) {
+                                        crowdAddNativeClearBtn.addEventListener('click', (event) => {
+                                            event.preventDefault();
+                                            selectedList = [];
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
+                                        });
+                                    }
+                                    if (crowdAddNativeCandidateListEl instanceof HTMLElement) {
+                                        crowdAddNativeCandidateListEl.addEventListener('click', (event) => {
+                                            const actionBtn = event.target instanceof HTMLElement
+                                                ? event.target.closest('[data-scene-popup-crowd-native-add],[data-scene-popup-crowd-native-remove]')
+                                                : null;
+                                            if (!(actionBtn instanceof HTMLElement)) return;
+                                            const addKey = String(actionBtn.getAttribute('data-scene-popup-crowd-native-add') || '').trim();
+                                            const removeKey = String(actionBtn.getAttribute('data-scene-popup-crowd-native-remove') || '').trim();
+                                            if (addKey) addSelectedByKey(addKey);
+                                            if (removeKey) removeSelectedByKey(removeKey);
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
+                                        });
+                                    }
+                                    if (crowdAddNativeSelectedListEl instanceof HTMLElement) {
+                                        crowdAddNativeSelectedListEl.addEventListener('click', (event) => {
+                                            const removeBtn = event.target instanceof HTMLElement
+                                                ? event.target.closest('[data-scene-popup-crowd-native-remove-selected]')
+                                                : null;
+                                            if (!(removeBtn instanceof HTMLElement)) return;
+                                            const key = String(removeBtn.getAttribute('data-scene-popup-crowd-native-remove-selected') || '').trim();
+                                            if (!key) return;
+                                            removeSelectedByKey(key);
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         });
                                     }
                                     if (crowdAddMask instanceof HTMLElement) {
                                         crowdAddMask.addEventListener('click', (event) => {
                                             if (event.target !== crowdAddMask) return;
-                                            setCrowdAddMaskVisible(false);
+                                            closeCrowdAddDialog(false);
                                         });
                                     }
                                     const jsonToggleBtn = mask.querySelector('[data-scene-popup-crowd-toggle-json]');
@@ -27827,18 +29380,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 return cloneWithCrowdBid(item, nextBid);
                                             });
                                             selectedList = selectedList.map(item => cloneWithCrowdBid(item, nextBid));
-                                            syncJsonEditors();
-                                            renderCandidateList();
-                                            renderSelectedList();
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         };
                                     }
                                     const clearBtn = mask.querySelector('[data-scene-popup-crowd-clear-selected]');
                                     if (clearBtn instanceof HTMLButtonElement) {
                                         clearBtn.onclick = () => {
                                             selectedList = [];
-                                            syncJsonEditors();
-                                            renderCandidateList();
-                                            renderSelectedList();
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         };
                                     }
                                     if (crowdCandidateListEl instanceof HTMLElement) {
@@ -27851,9 +29402,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             const removeKey = String(actionBtn.getAttribute('data-scene-popup-crowd-remove') || '').trim();
                                             if (addKey) addSelectedByKey(addKey);
                                             if (removeKey) removeSelectedByKey(removeKey);
-                                            syncJsonEditors();
-                                            renderCandidateList();
-                                            renderSelectedList();
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         });
                                         crowdCandidateListEl.addEventListener('input', (event) => {
                                             const input = event.target instanceof HTMLInputElement
@@ -27864,8 +29414,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             if (!key) return;
                                             const nextBid = updateBidByKey(key, input.value);
                                             input.value = String(nextBid);
-                                            syncJsonEditors();
-                                            renderSelectedList();
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         });
                                     }
                                     if (crowdSelectedListEl instanceof HTMLElement) {
@@ -27877,9 +29427,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             const key = String(removeBtn.getAttribute('data-scene-popup-crowd-remove') || '').trim();
                                             if (!key) return;
                                             removeSelectedByKey(key);
-                                            syncJsonEditors();
-                                            renderCandidateList();
-                                            renderSelectedList();
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         });
                                         crowdSelectedListEl.addEventListener('input', (event) => {
                                             const input = event.target instanceof HTMLInputElement
@@ -27890,9 +29439,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             if (!key) return;
                                             const nextBid = updateBidByKey(key, input.value);
                                             input.value = String(nextBid);
-                                            syncJsonEditors();
-                                            renderCandidateList();
-                                            renderSelectedList();
+                                            refreshCrowdPopupViews();
+                                            renderCrowdAddNative();
                                         });
                                     }
                                     mask._sceneCrowdPopupState = {
