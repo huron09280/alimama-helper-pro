@@ -4807,6 +4807,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             fallbackPolicy: 'auto',
             itemId: SCENE_SYNC_DEFAULT_ITEM_ID
         };
+        const SITE_SCENE_PARALLEL_SUBMIT_TIMES = 1;
+        const DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES = 3;
+        const SERIAL_PLAN_SUBMIT_INTERVAL_MS = 1200;
         const WIZARD_FORCE_API_ONLY_SCENE_CONFIG = true;
         const API_ONLY_CREATE_OPTIONS = Object.freeze({
             syncSceneRuntime: false,
@@ -12838,6 +12841,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (WIZARD_FORCE_API_ONLY_SCENE_CONFIG && normalized === 'confirm') return 'auto';
             return normalized;
         };
+        const normalizeSubmitMode = (value = '') => {
+            const raw = String(value || '').trim().toLowerCase();
+            if (raw === 'serial' || raw === 'single' || raw === '单条') return 'serial';
+            return 'parallel';
+        };
+        const normalizeParallelSubmitTimes = (value, fallback = DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES) => {
+            const base = Math.max(1, toNumber(fallback, DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES));
+            return Math.min(99, Math.max(1, toNumber(value, base)));
+        };
+        const submitModeLabel = (value = '') => (
+            normalizeSubmitMode(value) === 'serial' ? '单条' : '并发'
+        );
 
         const bidModeToBidType = (bidMode = 'smart') => normalizeBidMode(bidMode) === 'manual' ? 'custom_bid' : 'smart_bid';
 
@@ -16298,6 +16313,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const chunkSize = Math.max(1, toNumber(options.chunkSize, toNumber(mergedRequest.chunkSize, DEFAULTS.chunkSize)));
             const batchRetry = Math.max(0, toNumber(options.batchRetry, DEFAULTS.batchRetry));
+            const parallelSubmitTimes = Math.max(1, toNumber(
+                options.parallelSubmitTimes,
+                toNumber(mergedRequest.parallelSubmitTimes, 1)
+            ));
+            const disableFallbackSingleRetry = options.disableFallbackSingleRetry === true
+                || mergedRequest.disableFallbackSingleRetry === true;
             const resolveEntrySubmitEndpoint = (entry = {}) => normalizeGoalCreateEndpoint(
                 entry?.meta?.submitEndpoint
                 || mergedRequest.submitEndpoint
@@ -16329,6 +16350,62 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 submitEndpoint: entry?.meta?.submitEndpoint || '',
                 error: String(entry?.lastError || entry?.meta?.lastError || fallbackError || '服务端未返回 campaignId')
             });
+            const submitSinglePlanInParallel = async (entry = null, endpoint = '', submitTimes = 1) => {
+                if (!entry || submitTimes <= 1) return null;
+                const singleEndpoint = normalizeGoalCreateEndpoint(endpoint || resolveEntrySubmitEndpoint(entry));
+                const tasks = [];
+                for (let i = 0; i < submitTimes; i++) {
+                    tasks.push((async () => {
+                        try {
+                            const res = await requestOne(singleEndpoint, runtime.bizCode, {
+                                bizCode: runtime.bizCode,
+                                solutionList: [entry.solution]
+                            }, options.requestOptions || {});
+                            return { ok: true, res };
+                        } catch (err) {
+                            return {
+                                ok: false,
+                                error: err?.message || String(err)
+                            };
+                        }
+                    })());
+                }
+                const settled = await Promise.all(tasks);
+                const successList = [];
+                const failureList = [];
+                settled.forEach(item => {
+                    if (item.ok) {
+                        rawResponses.push(item.res);
+                        const outcome = parseAddListOutcome(item.res, [entry]);
+                        if (Array.isArray(outcome?.successes) && outcome.successes.length) {
+                            successList.push(outcome.successes[0]);
+                        } else {
+                            const fallbackFailure = Array.isArray(outcome?.failures) && outcome.failures.length
+                                ? outcome.failures[0]
+                                : buildFailureFromEntry(entry, 'parallel_submit_failed');
+                            failureList.push(fallbackFailure);
+                        }
+                        return;
+                    }
+                    failureList.push(buildFailureFromEntry(entry, item.error || 'parallel_submit_failed'));
+                });
+                if (successList.length) {
+                    return {
+                        ok: true,
+                        success: successList[0],
+                        successCopies: successList.length,
+                        failCopies: failureList.length
+                    };
+                }
+                const firstFailure = failureList[0] || buildFailureFromEntry(entry, 'parallel_submit_failed');
+                return {
+                    ok: false,
+                    failure: firstFailure,
+                    error: firstFailure.error || 'parallel_submit_failed',
+                    successCopies: 0,
+                    failCopies: failureList.length
+                };
+            };
 
             for (let batchIndex = 0; batchIndex < groupedBatches.length; batchIndex++) {
                 const batchPayload = groupedBatches[batchIndex] || {};
@@ -16344,6 +16421,62 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 let remainingEntries = batch.slice();
                 let batchError = null;
                 for (let attempt = 1; attempt <= batchRetry + 1; attempt++) {
+                    const useParallelSingleSubmit = remainingEntries.length === 1 && parallelSubmitTimes > 1;
+                    if (useParallelSingleSubmit) {
+                        const parallelEntry = remainingEntries[0];
+                        emitProgress(options, 'submit_batch_parallel_start', {
+                            batchIndex: batchIndex + 1,
+                            batchTotal: groupedBatches.length,
+                            endpoint: batchEndpoint,
+                            submitTimes: parallelSubmitTimes,
+                            planName: parallelEntry?.meta?.planName || ''
+                        });
+                        const parallelResult = await submitSinglePlanInParallel(
+                            parallelEntry,
+                            batchEndpoint,
+                            parallelSubmitTimes
+                        );
+                        if (parallelResult?.ok && parallelResult.success) {
+                            successes.push(parallelResult.success);
+                            emitProgress(options, 'submit_batch_success', {
+                                batchIndex: batchIndex + 1,
+                                createdCount: 1,
+                                failedCount: 0,
+                                endpoint: batchEndpoint,
+                                submitTimes: parallelSubmitTimes,
+                                successCopies: parallelResult.successCopies,
+                                failCopies: parallelResult.failCopies
+                            });
+                            remainingEntries = [];
+                            break;
+                        }
+                        const parallelErrorText = parallelResult?.error || 'parallel_submit_failed';
+                        batchError = new Error(parallelErrorText);
+                        emitProgress(options, 'submit_batch_success', {
+                            batchIndex: batchIndex + 1,
+                            createdCount: 0,
+                            failedCount: 1,
+                            endpoint: batchEndpoint,
+                            submitTimes: parallelSubmitTimes,
+                            successCopies: parallelResult?.successCopies || 0,
+                            failCopies: parallelResult?.failCopies || 0,
+                            error: parallelErrorText
+                        });
+                        if (attempt < batchRetry + 1) {
+                            emitProgress(options, 'submit_batch_retry', {
+                                batchIndex: batchIndex + 1,
+                                attempt,
+                                endpoint: batchEndpoint,
+                                error: parallelErrorText
+                            });
+                            await sleep(1200);
+                            continue;
+                        }
+                        remainingEntries = [mergeDeep({}, parallelEntry, {
+                            lastError: parallelErrorText
+                        })];
+                        break;
+                    }
                     const solutionList = remainingEntries.map(entry => entry.solution);
                     try {
                         const res = await requestOne(batchEndpoint, runtime.bizCode, {
@@ -16402,6 +16535,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
 
                 if (!remainingEntries.length) continue;
+                if (disableFallbackSingleRetry) {
+                    remainingEntries.forEach(entry => {
+                        failures.push(buildFailureFromEntry(entry, batchError?.message || 'submit_failed'));
+                    });
+                    continue;
+                }
 
                 const singleRetryEntries = remainingEntries.slice();
 
@@ -19567,6 +19706,124 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     align-items: center;
                     flex-wrap: wrap;
                 }
+                #am-wxt-keyword-modal .am-wxt-run-mode-wrap {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                    width: fit-content;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-wrap .am-wxt-btn.primary {
+                    padding-right: 28px;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle {
+                    position: absolute;
+                    right: 8px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    min-width: 24px;
+                    width: 24px;
+                    height: 24px;
+                    padding: 0;
+                    border: 0;
+                    border-radius: 4px;
+                    background: transparent;
+                    color: #fff;
+                    font-size: 0;
+                    line-height: 1;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    z-index: 2;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle::before {
+                    content: '◀';
+                    font-size: 11px;
+                    line-height: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle[data-open="1"]::before {
+                    content: '▼';
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle:hover {
+                    color: rgba(255,255,255,0.92);
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle:focus-visible {
+                    outline: 2px solid rgba(255,255,255,0.72);
+                    outline-offset: 1px;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle:disabled {
+                    cursor: not-allowed;
+                    opacity: 0.72;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-menu {
+                    position: fixed;
+                    z-index: 20;
+                    top: 0;
+                    left: 0;
+                    right: auto;
+                    min-width: 84px;
+                    width: max-content;
+                    padding: 4px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(148,163,184,0.35);
+                    background: #fff;
+                    box-shadow: 0 10px 24px rgba(15,23,42,0.18);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-menu.hidden {
+                    display: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-item {
+                    border: 0;
+                    background: transparent;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    text-align: left;
+                    white-space: nowrap;
+                    padding: 6px 10px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    color: #334155;
+                    cursor: pointer;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-label {
+                    flex: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-count {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 2px;
+                    padding: 2px 6px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(99,102,241,0.32);
+                    background: rgba(255,255,255,0.88);
+                    color: #3344c8;
+                    font-size: 11px;
+                    line-height: 1;
+                    user-select: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-count-icon {
+                    font-weight: 700;
+                    opacity: 0.9;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-count-num {
+                    min-width: 12px;
+                    text-align: center;
+                    font-weight: 600;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-item:hover {
+                    background: rgba(37,99,235,0.1);
+                    color: #1d4ed8;
+                }
+                #am-wxt-keyword-modal .am-wxt-run-mode-item.active {
+                    background: rgba(37,99,235,0.14);
+                    color: #1d4ed8;
+                    font-weight: 600;
+                }
                 #am-wxt-keyword-quick-log {
                     margin-top: 8px;
                     border: 1px solid rgba(148,163,184,0.35);
@@ -19772,6 +20029,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             itemSplitExpanded: false,
             candidateListExpanded: false,
             fallbackPolicy: normalizeWizardFallbackPolicy('auto'),
+            submitMode: 'parallel',
+            parallelSubmitTimes: normalizeParallelSubmitTimes(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES),
             strategyList: getDefaultStrategyList(),
             editingStrategyId: '',
             detailVisible: false
@@ -19858,7 +20117,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             </div>
                             <div class="am-wxt-strategy-list" id="am-wxt-keyword-strategy-list"></div>
                             <div class="am-wxt-actions">
-                                <button class="am-wxt-btn primary" id="am-wxt-keyword-run-quick">立即投放</button>
+                                <div class="am-wxt-run-mode-wrap" id="am-wxt-keyword-run-mode-wrap">
+                                    <button class="am-wxt-btn primary" id="am-wxt-keyword-run-quick">立即投放</button>
+                                    <button
+                                        type="button"
+                                        class="am-wxt-btn am-wxt-run-mode-toggle"
+                                        id="am-wxt-keyword-run-mode-toggle"
+                                        title="提交方式"
+                                        aria-label="提交方式"
+                                        aria-haspopup="menu"
+                                        aria-expanded="false"
+                                        data-open="0"
+                                    ></button>
+                                    <div class="am-wxt-run-mode-menu hidden" id="am-wxt-keyword-run-mode-menu" role="menu">
+                                        <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
+                                            <span class="am-wxt-run-mode-label">并发数</span>
+                                            <span class="am-wxt-run-mode-count" data-action="run-mode-count-badge" title="点击增加，右键减少，滚轮可调节">
+                                                <span class="am-wxt-run-mode-count-icon">×</span>
+                                                <span class="am-wxt-run-mode-count-num" data-submit-mode-count="parallel">${Math.max(1, toNumber(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 1))}</span>
+                                            </span>
+                                        </button>
+                                        <button type="button" class="am-wxt-run-mode-item" data-submit-mode="serial" role="menuitem">
+                                            <span class="am-wxt-run-mode-label">单条</span>
+                                        </button>
+                                    </div>
+                                </div>
                                 <button class="am-wxt-btn" id="am-wxt-keyword-preview-quick">生成其他策略</button>
                             </div>
                             <div id="am-wxt-keyword-quick-log"></div>
@@ -20023,6 +20306,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 strategyList: overlay.querySelector('#am-wxt-keyword-strategy-list'),
                 strategyCount: overlay.querySelector('#am-wxt-keyword-strategy-count'),
                 addStrategyBtn: overlay.querySelector('#am-wxt-keyword-add-strategy'),
+                runModeWrap: overlay.querySelector('#am-wxt-keyword-run-mode-wrap'),
+                runModeToggleBtn: overlay.querySelector('#am-wxt-keyword-run-mode-toggle'),
+                runModeMenu: overlay.querySelector('#am-wxt-keyword-run-mode-menu'),
                 runQuickBtn: overlay.querySelector('#am-wxt-keyword-run-quick'),
                 previewQuickBtn: overlay.querySelector('#am-wxt-keyword-preview-quick'),
                 quickLog: overlay.querySelector('#am-wxt-keyword-quick-log'),
@@ -20088,6 +20374,105 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 appendLine(ensureQuickLogContainer(), 40);
                 appendLine(wizardState.els.log, 160);
+            };
+            const positionRunModeMenu = () => {
+                if (!(wizardState.els.runModeMenu instanceof HTMLElement)) return;
+                if (!(wizardState.els.runQuickBtn instanceof HTMLButtonElement)) return;
+                if (!(wizardState.els.runModeToggleBtn instanceof HTMLButtonElement)) return;
+                const menuRect = wizardState.els.runModeMenu.getBoundingClientRect();
+                const runQuickRect = wizardState.els.runQuickBtn.getBoundingClientRect();
+                const runModeToggleRect = wizardState.els.runModeToggleBtn.getBoundingClientRect();
+                const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0);
+                const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement?.clientHeight || 0);
+                let left = Math.round(runModeToggleRect.left);
+                let top = Math.round(runQuickRect.bottom);
+                const maxLeft = Math.max(8, Math.round(viewportWidth - menuRect.width - 8));
+                const maxTop = Math.max(8, Math.round(viewportHeight - menuRect.height - 8));
+                left = Math.min(Math.max(8, left), maxLeft);
+                top = Math.min(Math.max(8, top), maxTop);
+                wizardState.els.runModeMenu.style.left = `${left}px`;
+                wizardState.els.runModeMenu.style.top = `${top}px`;
+            };
+            const setRunModeMenuOpen = (open = false) => {
+                const nextOpen = open === true;
+                if (wizardState.els.runModeMenu instanceof HTMLElement) {
+                    wizardState.els.runModeMenu.classList.toggle('hidden', !nextOpen);
+                    if (nextOpen) {
+                        requestAnimationFrame(() => {
+                            positionRunModeMenu();
+                        });
+                    }
+                }
+                if (wizardState.els.runModeToggleBtn instanceof HTMLButtonElement) {
+                    wizardState.els.runModeToggleBtn.dataset.open = nextOpen ? '1' : '0';
+                    wizardState.els.runModeToggleBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+                }
+            };
+            const resolveParallelSubmitHintCount = () => {
+                const defaultCount = normalizeParallelSubmitTimes(
+                    wizardState?.draft?.parallelSubmitTimes,
+                    DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
+                );
+                const siteOnlyCount = Math.max(1, toNumber(SITE_SCENE_PARALLEL_SUBMIT_TIMES, 1));
+                const strategyList = Array.isArray(wizardState?.strategyList) ? wizardState.strategyList : [];
+                if (!strategyList.length) return defaultCount;
+                const hasNonSiteScene = strategyList.some(item => (
+                    !isSceneLabelMatch(item?.sceneName, '货品全站推广')
+                ));
+                return hasNonSiteScene ? defaultCount : siteOnlyCount;
+            };
+            const renderRunModeMenu = () => {
+                const mode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'parallel');
+                if (wizardState.els.runQuickBtn instanceof HTMLButtonElement) {
+                    wizardState.els.runQuickBtn.title = `提交方式：${submitModeLabel(mode)}`;
+                }
+                if (wizardState.els.runModeToggleBtn instanceof HTMLButtonElement) {
+                    wizardState.els.runModeToggleBtn.title = `提交方式：${submitModeLabel(mode)}`;
+                }
+                if (!(wizardState.els.runModeMenu instanceof HTMLElement)) return;
+                const parallelCountNode = wizardState.els.runModeMenu.querySelector('[data-submit-mode-count="parallel"]');
+                if (parallelCountNode) {
+                    parallelCountNode.textContent = String(resolveParallelSubmitHintCount());
+                }
+                wizardState.els.runModeMenu.querySelectorAll('[data-submit-mode]').forEach(btn => {
+                    const button = btn instanceof HTMLButtonElement ? btn : null;
+                    if (!button) return;
+                    const itemMode = normalizeSubmitMode(button.getAttribute('data-submit-mode') || '');
+                    button.classList.toggle('active', itemMode === mode);
+                });
+            };
+            const setSubmitModeFromUI = (mode = 'parallel', options = {}) => {
+                const nextMode = normalizeSubmitMode(mode);
+                wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                const prevMode = normalizeSubmitMode(wizardState.draft.submitMode || 'parallel');
+                wizardState.draft.submitMode = nextMode;
+                renderRunModeMenu();
+                if (options.syncDraft !== false) {
+                    syncDraftFromUI();
+                } else {
+                    saveSessionDraft(wizardState.draft);
+                }
+                if (options.silent !== true && prevMode !== nextMode) {
+                    appendWizardLog(`提交方式已切换为「${submitModeLabel(nextMode)}」`, 'success');
+                }
+            };
+            const setParallelSubmitTimesFromUI = (next = DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, options = {}) => {
+                wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                const prevCount = normalizeParallelSubmitTimes(
+                    wizardState.draft.parallelSubmitTimes,
+                    DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
+                );
+                const nextCount = normalizeParallelSubmitTimes(next, prevCount);
+                wizardState.draft.parallelSubmitTimes = nextCount;
+                renderRunModeMenu();
+                if (options.syncDraft !== false) {
+                    syncDraftFromUI();
+                } else {
+                    saveSessionDraft(wizardState.draft);
+                }
+                if (options.silent !== true && prevCount !== nextCount) {
+                    appendWizardLog(`并发数已调整为 ×${nextCount}`, 'success');
+                }
             };
 
             const formatKeywordLine = (word) => {
@@ -30452,6 +30837,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.strategyList.appendChild(row);
                 });
                 setDetailVisible(wizardState.detailVisible);
+                renderRunModeMenu();
             };
 
             const syncDraftFromUI = () => {
@@ -30483,6 +30869,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.draft.manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
                 wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
                 wizardState.draft.fallbackPolicy = normalizeWizardFallbackPolicy(wizardState.draft.fallbackPolicy);
+                wizardState.draft.submitMode = normalizeSubmitMode(wizardState.draft.submitMode || 'parallel');
+                wizardState.draft.parallelSubmitTimes = normalizeParallelSubmitTimes(
+                    wizardState.draft.parallelSubmitTimes,
+                    DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
+                );
                 if (editingStrategy) {
                     pullDetailFormToStrategy(editingStrategy);
                 }
@@ -30515,6 +30906,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const sceneName = SCENE_OPTIONS.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '关键词推广';
                 wizardState.draft.sceneName = sceneName || '关键词推广';
                 wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
+                wizardState.draft.submitMode = normalizeSubmitMode(wizardState.draft.submitMode || 'parallel');
+                wizardState.draft.parallelSubmitTimes = normalizeParallelSubmitTimes(
+                    wizardState.draft.parallelSubmitTimes,
+                    DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
+                );
                 if (isAutoGeneratedPlanPrefix(wizardState.draft.planNamePrefix || '') || !String(wizardState.draft.planNamePrefix || '').trim()) {
                     wizardState.draft.planNamePrefix = buildDefaultPlanPrefixByScene(wizardState.draft.sceneName);
                 }
@@ -30538,6 +30934,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 applyStrategyToDetailForm(editingStrategy || wizardState.strategyList[0] || null);
                 updateBidModeControls(editingStrategy?.bidMode || wizardState.draft.bidMode || 'smart');
                 setDebugVisible(!!wizardState.draft.debugVisible);
+                renderRunModeMenu();
+                setRunModeMenuOpen(false);
                 setItemSplitExpanded(wizardState.itemSplitExpanded);
                 setCandidateListExpanded(wizardState.candidateListExpanded);
             };
@@ -30889,6 +31287,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     marketingGoal: sceneMarketingGoal || undefined,
                     sceneSettings: selectedSceneSettings,
                     fallbackPolicy: normalizeWizardFallbackPolicy(wizardState.draft.fallbackPolicy),
+                    parallelSubmitTimes: normalizeParallelSubmitTimes(
+                        wizardState?.draft?.parallelSubmitTimes,
+                        DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
+                    ),
                     plans,
                     common
                 };
@@ -30911,6 +31313,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return ordered;
                 };
                 const groupedPlans = new Map();
+                const configuredParallelSubmitTimes = normalizeParallelSubmitTimes(
+                    request?.parallelSubmitTimes,
+                    wizardState?.draft?.parallelSubmitTimes || DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
+                );
                 planList.forEach(plan => {
                     const planSceneName = SCENE_OPTIONS.includes(String(plan?.sceneName || '').trim())
                         ? String(plan.sceneName).trim()
@@ -30981,27 +31387,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         : normalizeGoalLabel(request?.marketingGoal || '');
                     const isSiteScene = sceneName === '货品全站推广';
                     const plansForSync = Array.isArray(plans) ? plans : [];
-                    if (isSiteScene) {
-                        const siteSceneGoal = normalizeGoalLabel(
-                            sceneGoalFromSettings
-                            || request?.marketingGoal
-                            || fallbackGoal
-                            || ''
-                        );
-                        sceneRequests.push({
-                            bizCode,
-                            promotionScene,
-                            sceneName,
-                            marketingGoal: siteSceneGoal || undefined,
-                            sceneSettings,
-                            fallbackPolicy,
-                            plans: plansForSync,
-                            common: buildSceneCommon()
-                        });
-                        return;
-                    }
-                    const plansForAsync = plansForSync;
-                    plansForAsync.forEach(plan => {
+                    const sceneParallelSubmitTimes = isSiteScene
+                        ? SITE_SCENE_PARALLEL_SUBMIT_TIMES
+                        : configuredParallelSubmitTimes;
+                    plansForSync.forEach(plan => {
                         const planGoal = normalizeGoalLabel(plan?.marketingGoal || '');
                         const sceneMarketingGoal = sceneGoalFromSettings || planGoal || fallbackGoal;
                         sceneRequests.push({
@@ -31011,6 +31400,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             marketingGoal: sceneMarketingGoal || undefined,
                             sceneSettings,
                             fallbackPolicy,
+                            parallelSubmitTimes: sceneParallelSubmitTimes,
+                            chunkSize: 1,
                             plans: [plan],
                             common: buildSceneCommon()
                         });
@@ -31762,12 +32153,90 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 syncDraftFromUI();
                 setDetailVisible(false);
+                setRunModeMenuOpen(false);
                 overlay.classList.remove('open');
                 wizardState.visible = false;
             };
             overlay.addEventListener('click', (e) => {
+                const target = e.target instanceof Element ? e.target : null;
+                if (!(target && target.closest('#am-wxt-keyword-run-mode-wrap'))) {
+                    setRunModeMenuOpen(false);
+                }
                 if (e.target === overlay) wizardState.els.closeBtn.click();
             });
+            if (wizardState.els.runModeToggleBtn instanceof HTMLButtonElement) {
+                const toggleRunModeMenu = (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const opened = wizardState.els.runModeToggleBtn?.dataset?.open === '1';
+                    setRunModeMenuOpen(!opened);
+                };
+                wizardState.els.runModeToggleBtn.addEventListener('pointerdown', toggleRunModeMenu, { passive: false });
+                wizardState.els.runModeToggleBtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                });
+                wizardState.els.runModeToggleBtn.addEventListener('keydown', (event) => {
+                    if (!(event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')) return;
+                    toggleRunModeMenu(event);
+                });
+                window.addEventListener('resize', () => {
+                    if (wizardState.els.runModeToggleBtn?.dataset?.open === '1') positionRunModeMenu();
+                });
+                window.addEventListener('scroll', () => {
+                    if (wizardState.els.runModeToggleBtn?.dataset?.open === '1') positionRunModeMenu();
+                }, true);
+            }
+            if (wizardState.els.runModeMenu instanceof HTMLElement) {
+                const runModeCountBadge = wizardState.els.runModeMenu.querySelector('[data-action="run-mode-count-badge"]');
+                if (runModeCountBadge instanceof HTMLElement) {
+                    const applyParallelCountDelta = (delta = 0) => {
+                        const currentCount = normalizeParallelSubmitTimes(
+                            wizardState?.draft?.parallelSubmitTimes,
+                            DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
+                        );
+                        setParallelSubmitTimesFromUI(currentCount + delta, {
+                            syncDraft: true,
+                            silent: false
+                        });
+                        positionRunModeMenu();
+                    };
+                    runModeCountBadge.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        applyParallelCountDelta(1);
+                    });
+                    runModeCountBadge.addEventListener('contextmenu', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        applyParallelCountDelta(-1);
+                    });
+                    runModeCountBadge.addEventListener('wheel', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const delta = event.deltaY > 0 ? -1 : 1;
+                        applyParallelCountDelta(delta);
+                    }, { passive: false });
+                }
+                wizardState.els.runModeMenu.addEventListener('click', (event) => {
+                    if (event.target instanceof Element && event.target.closest('[data-action="run-mode-count-badge"]')) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        return;
+                    }
+                    const target = event.target instanceof Element
+                        ? event.target.closest('[data-submit-mode]')
+                        : null;
+                    if (!(target instanceof HTMLButtonElement)) return;
+                    event.preventDefault();
+                    const selectedMode = normalizeSubmitMode(target.getAttribute('data-submit-mode') || '');
+                    setSubmitModeFromUI(selectedMode, {
+                        syncDraft: true,
+                        silent: false
+                    });
+                    setRunModeMenuOpen(false);
+                });
+            }
             wizardState.els.searchBtn.onclick = () => loadCandidates(wizardState.els.searchInput.value.trim(), wizardState.candidateSource);
             wizardState.els.hotBtn.onclick = () => {
                 wizardState.els.searchInput.value = '';
@@ -31931,9 +32400,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const runCount = req.plans.length || 0;
                 renderPreview(req);
                 const sceneSummaryText = sceneRequests.map(item => `${item.sceneName}×${item.plans.length}`).join('、');
-                appendWizardLog(`开始批量创建 ${runCount} 个计划（${sceneSummaryText}）...`);
+                const submitMode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'parallel');
+                const serialIntervalMs = Math.max(300, SERIAL_PLAN_SUBMIT_INTERVAL_MS);
+                appendWizardLog(`开始批量创建 ${runCount} 个计划（${sceneSummaryText}，模式=${submitModeLabel(submitMode)}）...`);
                 wizardState.els.runBtn.disabled = true;
                 wizardState.els.runQuickBtn.disabled = true;
+                if (wizardState.els.runModeToggleBtn instanceof HTMLButtonElement) {
+                    wizardState.els.runModeToggleBtn.disabled = true;
+                }
+                setRunModeMenuOpen(false);
                 const onRunProgress = ({ event, ...payload }) => {
                     const sceneTag = payload.sceneName ? `【${payload.sceneName}】` : '';
                     const fallbackPolicyText = ({
@@ -31970,6 +32445,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         appendWizardLog(`${sceneTag}组装计划：${payload.planName} (${payload.index}/${payload.total})`);
                     } else if (event === 'submit_batch_start') {
                         appendWizardLog(`${sceneTag}提交批次 ${payload.batchIndex}/${payload.batchTotal}，数量 ${payload.size}${payload.endpoint ? `，接口=${payload.endpoint}` : ''}`);
+                    } else if (event === 'submit_batch_parallel_start') {
+                        appendWizardLog(`${sceneTag}并发重复提交：计划=${payload.planName || '-'}，并发数=${payload.submitTimes || 1}${payload.endpoint ? `，接口=${payload.endpoint}` : ''}`);
                     } else if (event === 'submit_payload_snapshot') {
                         const campaignKeys = Array.isArray(payload.campaignKeys) ? payload.campaignKeys.join(',') : '';
                         const adgroupKeys = Array.isArray(payload.adgroupKeys) ? payload.adgroupKeys.join(',') : '';
@@ -32007,6 +32484,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         }
                     }
                 };
+                const runSingleSceneTask = async (sceneReq = {}, sceneIdx = 0, total = 1) => {
+                    const submitTimes = submitMode === 'serial'
+                        ? 1
+                        : Math.max(1, toNumber(sceneReq?.parallelSubmitTimes, 1));
+                    appendWizardLog(
+                        `${submitMode === 'serial' ? '场景单条提交' : '场景分组并发提交'} ${sceneIdx + 1}/${total}：${sceneReq.sceneName}（${sceneReq.plans.length} 个，提交=${submitModeLabel(submitMode)}）`
+                    );
+                    try {
+                        const sceneResult = await createPlansByScene(sceneReq.sceneName, sceneReq, {
+                            ...API_ONLY_CREATE_OPTIONS,
+                            conflictPolicy: 'none',
+                            batchRetry: 0,
+                            disableFallbackSingleRetry: true,
+                            parallelSubmitTimes: submitTimes,
+                            onProgress: ({ event, ...payload }) => {
+                                onRunProgress({
+                                    event,
+                                    ...payload,
+                                    sceneName: payload.sceneName || sceneReq.sceneName
+                                });
+                            }
+                        });
+                        return {
+                            sceneIdx,
+                            sceneReq,
+                            sceneResult
+                        };
+                    } catch (sceneErr) {
+                        return {
+                            sceneIdx,
+                            sceneReq,
+                            sceneErrorText: sceneErr?.message || String(sceneErr)
+                        };
+                    }
+                };
                 try {
                     const result = {
                         ok: true,
@@ -32017,36 +32529,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         failures: [],
                         byScene: []
                     };
-                    const sceneTasks = sceneRequests.map((sceneReq, sceneIdx) => (async () => {
-                        appendWizardLog(`场景分组并发提交 ${sceneIdx + 1}/${sceneRequests.length}：${sceneReq.sceneName}（${sceneReq.plans.length} 个）`);
-                        try {
-                            const sceneResult = await createPlansByScene(sceneReq.sceneName, sceneReq, {
-                                ...API_ONLY_CREATE_OPTIONS,
-                                conflictPolicy: sceneReq.sceneName === '货品全站推广'
-                                    ? 'none'
-                                    : String(API_ONLY_CREATE_OPTIONS.conflictPolicy || 'auto_stop_retry').trim() || 'auto_stop_retry',
-                                onProgress: ({ event, ...payload }) => {
-                                    onRunProgress({
-                                        event,
-                                        ...payload,
-                                        sceneName: payload.sceneName || sceneReq.sceneName
-                                    });
-                                }
-                            });
-                            return {
-                                sceneIdx,
-                                sceneReq,
-                                sceneResult
-                            };
-                        } catch (sceneErr) {
-                            return {
-                                sceneIdx,
-                                sceneReq,
-                                sceneErrorText: sceneErr?.message || String(sceneErr)
-                            };
+                    let sceneTaskResults = [];
+                    if (submitMode === 'serial') {
+                        for (let sceneIdx = 0; sceneIdx < sceneRequests.length; sceneIdx++) {
+                            const sceneReq = sceneRequests[sceneIdx];
+                            const taskResult = await runSingleSceneTask(sceneReq, sceneIdx, sceneRequests.length);
+                            sceneTaskResults.push(taskResult);
+                            if (sceneIdx < sceneRequests.length - 1) {
+                                appendWizardLog(`单条模式间隔 ${Math.round(serialIntervalMs / 100) / 10} 秒后继续下一个计划...`);
+                                await sleep(serialIntervalMs);
+                            }
                         }
-                    })());
-                    const sceneTaskResults = await Promise.all(sceneTasks);
+                    } else {
+                        const sceneTasks = sceneRequests.map((sceneReq, sceneIdx) => (
+                            runSingleSceneTask(sceneReq, sceneIdx, sceneRequests.length)
+                        ));
+                        sceneTaskResults = await Promise.all(sceneTasks);
+                    }
                     sceneTaskResults
                         .sort((a, b) => toNumber(a?.sceneIdx, 0) - toNumber(b?.sceneIdx, 0))
                         .forEach(taskResult => {
@@ -32105,6 +32604,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 } finally {
                     wizardState.els.runBtn.disabled = false;
                     wizardState.els.runQuickBtn.disabled = false;
+                    if (wizardState.els.runModeToggleBtn instanceof HTMLButtonElement) {
+                        wizardState.els.runModeToggleBtn.disabled = false;
+                    }
                 }
             };
             wizardState.els.runBtn.onclick = handleRun;
