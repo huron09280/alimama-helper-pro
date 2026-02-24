@@ -4808,7 +4808,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             itemId: SCENE_SYNC_DEFAULT_ITEM_ID
         };
         const SITE_SCENE_PARALLEL_SUBMIT_TIMES = 1;
-        const DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES = 3;
+        const DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES = 2;
         const SERIAL_PLAN_SUBMIT_INTERVAL_MS = 1200;
         const WIZARD_FORCE_API_ONLY_SCENE_CONFIG = true;
         const API_ONLY_CREATE_OPTIONS = Object.freeze({
