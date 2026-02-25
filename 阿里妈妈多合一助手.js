@@ -1868,7 +1868,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     --am26-surface-strong: rgba(255, 255, 255, 0.45);
                     --am26-panel: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
                     --am26-panel-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2));
-                    --am26-primary: #2a5bff;
+                    --am26-primary: rgba(69, 84, 229, 1);
                     --am26-primary-strong: #1d3fcf;
                     --am26-primary-soft: rgba(42, 91, 255, 0.15);
                     --am26-success: #0ea86f;
@@ -2746,8 +2746,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         // --- 递归解析 JSON (Restored Original Logic) ---
-        findUrlInObject(obj, source) {
-            if (!obj) return;
+        // NOTE: maxDepth 防止极深嵌套 JSON 触发调用栈溢出（理论场景，保险起见加限制）
+        // 允许深度恰好为 0 的叶子节点继续判断，避免边界层 URL 被漏检。
+        findUrlInObject(obj, source, maxDepth = 20) {
+            if (!obj || maxDepth < 0) return;
             if (typeof obj === 'string') {
                 if (obj.startsWith('http') && this.isDownloadUrl(obj)) {
                     this.show(obj, source);
@@ -2756,7 +2758,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             if (typeof obj === 'object') {
                 for (let key in obj) {
-                    this.findUrlInObject(obj[key], source);
+                    this.findUrlInObject(obj[key], source, maxDepth - 1);
                 }
             }
         },

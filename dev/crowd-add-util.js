@@ -1,10 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>NoSuchKey</Code>
-  <Message>The specified key does not exist.</Message>
-  <RequestId>699344EA699B9C3037365CD1</RequestId>
-  <HostId>cdn-mutil-object.cn-hangzhou.oss-cdn.aliyun-inc.com</HostId>
-  <Key>g/mm/onebp/20260206.112445.109/onebp/views/pages/main/crowd/add-crowds/util.js</Key>
-  <EC>0026-00000001</EC>
-  <RecommendDoc>https://api.aliyun.com/troubleshoot?q=0026-00000001</RecommendDoc>
-</Error>
+// NOTE: 此文件原为从阿里妈妈 CDN 拉取的页面运行时代码快照（crowd add-crowds/util.js）。
+// 上次拉取时 CDN 返回 404，导致错误 XML 被误存入版本库，已清理。
+// 如需更新，请重新从 Alimama Onebp CDN 获取最新版本并覆盖此文件即可。

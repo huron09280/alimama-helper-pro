@@ -20,8 +20,6 @@
 (function () {
     'use strict';
 
-<<<<<<< ours
-<<<<<<< ours
     const DEV_ENTRY_SETTING_KEY = 'am.devLoader.entryUrl';
     const DEV_ENTRY_LAST_SUCCESS_KEY = 'am.devLoader.lastSuccessUrl';
     const DEV_ENTRY_LIST_KEY = 'am.devLoader.entryList';
@@ -30,7 +28,6 @@
     const DEV_PORTS = [5173, 5500, 8080];
     const DEV_HOSTS = ['127.0.0.1', 'localhost'];
     const DEV_ENTRY_CANDIDATES = [
-        `http://127.0.0.1:5173/.codex/worktrees/cb4b/alimama-helper-pro/${DEV_FILENAME_ENCODED}`,
         `http://127.0.0.1:5173/${DEV_FILENAME_ENCODED}`,
         `http://127.0.0.1:5173/${DEV_FILENAME_RAW}`
     ];
@@ -93,23 +90,6 @@
         const requester = resolveGMRequest();
         if (typeof requester !== 'function') {
             reject(new Error('GM request API unavailable'));
-=======
-    const DEV_ENTRY_CANDIDATES = [
-        'http://127.0.0.1:5173/.codex/worktrees/cb4b/alimama-helper-pro/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js',
-        'http://127.0.0.1:5173/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js'
-    ];
-
-=======
-    const DEV_ENTRY_CANDIDATES = [
-        'http://127.0.0.1:5173/.codex/worktrees/cb4b/alimama-helper-pro/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js',
-        'http://127.0.0.1:5173/%E9%98%BF%E9%87%8C%E5%A6%88%E5%A6%88%E5%A4%9A%E5%90%88%E4%B8%80%E5%8A%A9%E6%89%8B.js'
-    ];
-
->>>>>>> theirs
-    const loadByGMRequest = (requestUrl) => new Promise((resolve, reject) => {
-        if (typeof GM_xmlhttpRequest !== 'function') {
-            reject(new Error('GM_xmlhttpRequest is not available'));
->>>>>>> theirs
             return;
         }
 
@@ -127,7 +107,8 @@
                 reject(new Error(`HTTP ${status || 'unknown'}`));
             },
             ontimeout: () => reject(new Error('Request timeout')),
-            onerror: () => reject(new Error('Network error'))
+            onerror: () => reject(new Error('Network error')),
+            onabort: () => reject(new Error('Request aborted'))
         });
     });
 
@@ -139,8 +120,6 @@
             return response.text();
         });
 
-<<<<<<< ours
-<<<<<<< ours
     const parseEntryListText = (rawText = '') => {
         const text = String(rawText || '').trim();
         if (!text) return [];
@@ -190,7 +169,6 @@
             DEV_PORTS.forEach(port => {
                 autoExpanded.push(`http://${host}:${port}/${DEV_FILENAME_ENCODED}`);
                 autoExpanded.push(`http://${host}:${port}/${DEV_FILENAME_RAW}`);
-                autoExpanded.push(`http://${host}:${port}/.codex/worktrees/cb4b/alimama-helper-pro/${DEV_FILENAME_ENCODED}`);
             });
         });
         return autoExpanded;
@@ -322,6 +300,42 @@
         return `${text.slice(0, maxLength - 3)}...`;
     };
 
+    const showLoadFailureBadge = (error) => {
+        const detail = String(error?.message || error || 'Unknown error').trim() || 'Unknown error';
+        const summary = 'AM Dev Loader 加载失败（点击查看详情）';
+        const mount = () => {
+            if (document.getElementById('am-dev-loader-error')) return;
+            const badge = document.createElement('button');
+            badge.type = 'button';
+            badge.id = 'am-dev-loader-error';
+            badge.textContent = summary;
+            badge.title = detail;
+            badge.style.cssText = [
+                'position:fixed',
+                'right:14px',
+                'top:14px',
+                'z-index:2147483647',
+                'padding:8px 10px',
+                'border:1px solid rgba(185,28,28,0.45)',
+                'border-radius:8px',
+                'background:#fff',
+                'color:#b91c1c',
+                'font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+                'cursor:pointer',
+                'box-shadow:0 6px 16px rgba(15,23,42,0.18)'
+            ].join(';');
+            badge.addEventListener('click', () => {
+                alert(`${summary}\n\n${detail}`);
+            });
+            (document.body || document.documentElement).appendChild(badge);
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', mount, { once: true });
+            return;
+        }
+        mount();
+    };
+
     const mountPageSwitcher = () => {
         const mount = () => {
             if (!document.body || document.getElementById('am-dev-loader-switcher')) return;
@@ -426,39 +440,11 @@
     loadFromCandidates()
         .then(({ code, baseUrl, via }) => {
             console.info('[AM Dev Loader] Loaded from:', baseUrl, `via=${via}`);
-=======
-=======
->>>>>>> theirs
-    const loadFromCandidates = async () => {
-        for (let i = 0; i < DEV_ENTRY_CANDIDATES.length; i += 1) {
-            const baseUrl = DEV_ENTRY_CANDIDATES[i];
-            const requestUrl = `${baseUrl}?t=${Date.now()}`;
-            try {
-                const code = await loadByGMRequest(requestUrl);
-                return { code, baseUrl };
-            } catch {
-                try {
-                    const code = await loadByFetch(requestUrl);
-                    return { code, baseUrl };
-                } catch {
-                    // 继续尝试下一个候选地址
-                }
-            }
-        }
-        throw new Error('All candidate URLs failed');
-    };
-
-    loadFromCandidates()
-        .then(({ code, baseUrl }) => {
-            console.info('[AM Dev Loader] Loaded from:', baseUrl);
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
             // 直接在 userscript 沙箱内执行，保留 GM_* API 能力。
             eval(`${code}\n//# sourceURL=alimama-helper-pro.dev.js`);
         })
         .catch((error) => {
             console.error('[AM Dev Loader] 本地脚本加载失败：', error);
+            showLoadFailureBadge(error);
         });
 })();
