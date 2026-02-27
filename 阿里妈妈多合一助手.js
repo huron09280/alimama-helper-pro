@@ -4341,6 +4341,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite'],
         MAX_START_RETRIES: 6,
         RETRY_DELAY_MS: 450,
+        MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS: 3,
+        SITE_CUSTOM_CONFLICT_RE: /(onebpsite-existed|horizontal-onebpsite-existed|diffbizcode-existed|存在在投计划|在投计划|持续推广计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i,
         ICON_SVG: `
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
                 <path fill="currentColor" d="M770.99008 637.242027c14.86848 14.199467 31.3344 29.463893 47.26784 45.335893 57.869653 57.603413 115.602773 115.397973 173.267627 173.19936 41.53344 41.601707 43.39712 100.27008 4.601173 139.4688-39.130453 39.601493-98.399573 37.730987-140.663467-4.46464-69.864107-69.864107-139.933013-139.598507-209.46944-209.865387-8.669867-8.731307-14.199467-9.332053-25.197227-3.331413-248.66816 136.997547-548.870827 1.467733-611.068587-275.531093-50.333013-224.13312 99.997013-449.733973 329.40032-494.26432 236.264107-45.800107 464.800427 123.467093 490.134187 362.530133 9.530027 90.002773-8.198827 173.93664-52.736 252.463787-1.467733 2.60096-2.935467 5.133653-4.1984 7.80288C771.857067 631.637333 771.857067 632.838827 770.99008 637.242027zM415.39584 703.904427c161.000107-1.201493 289.532587-129.80224 288.802133-289.068373-0.730453-159.136427-131.66592-287.798613-291.403093-286.53568C254.859947 129.6384 127.720107 260.23936 128.587093 420.174507 129.39264 575.03744 260.85376 705.10592 415.39584 703.904427zM193.1264 415.17056c0.197973-132.068693 113.937067-226.269867 222.405973-221.463893 0.26624 5.065387 0.79872 10.267307 0.79872 15.40096 0.136533 15.264427 0.068267 30.53568 0.068267 45.602133-103.99744 8.997547-156.071253 79.598933-161.000107 160.467627C235.055787 415.17056 214.657707 415.17056 193.1264 415.17056z"></path>
@@ -4412,7 +4414,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const scopeText = `（同商品共${allTargets.length || restartTargets.length}个，货品全站必开${mandatorySiteTargets.length}个，实际重开${restartTargets.length}个）`;
                     const verifyText = result?.mode === 'request_only'
                         ? '（状态接口未返回明确结果，按接口成功处理）'
-                        : '';
+                        : (result?.mode === 'site_custom_breakthrough' ? '（已触发全站+自定义同开突破策略）' : '');
                     Logger.log(`✅ 并发开启完成(第${result?.attempt || 1}次)${scopeText}：${pairText}${verifyText}`);
                     this.appendConcurrentLog(`并发开启完成：${scopeText}，目标=${pairText || '-'}`, 'success');
                     this.setConcurrentLogStatus(`执行成功：第${result?.attempt || 1}次即完成`, 'success');
@@ -5197,6 +5199,49 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         },
 
+        collectSiteCustomTargetBuckets(targets = []) {
+            const targetMap = new Map();
+            (Array.isArray(targets) ? targets : []).forEach((item) => {
+                const campaignId = this.normalizeCampaignId(item?.campaignId);
+                const bizCode = this.normalizeBizCode(item?.bizCode || '') || this.DEFAULT_BIZ_CODE;
+                if (!campaignId) return;
+                const key = `${bizCode}@${campaignId}`;
+                if (targetMap.has(key)) return;
+                targetMap.set(key, {
+                    campaignId,
+                    bizCode,
+                    active: item?.active === true ? true : (item?.active === false ? false : null)
+                });
+            });
+            const all = Array.from(targetMap.values());
+            const siteTargets = all.filter(item => item.bizCode === 'onebpSite');
+            const customTargets = all.filter(item => item.bizCode !== 'onebpSite');
+            return {
+                all,
+                siteTargets,
+                customTargets,
+                enabled: siteTargets.length > 0 && customTargets.length > 0
+            };
+        },
+
+        isSiteCustomConflictError(text = '') {
+            const normalized = String(text || '').trim();
+            if (!normalized) return false;
+            return this.SITE_CUSTOM_CONFLICT_RE.test(normalized);
+        },
+
+        shouldRunSiteCustomBreakthrough(targets = [], startErrors = [], verifyResult = null) {
+            const buckets = this.collectSiteCustomTargetBuckets(targets);
+            if (!buckets.enabled) return false;
+            const startText = (Array.isArray(startErrors) ? startErrors : []).join('；');
+            const verifyText = String(verifyResult?.error || '').trim();
+            if (this.isSiteCustomConflictError(startText) || this.isSiteCustomConflictError(verifyText)) {
+                return true;
+            }
+            if (Array.isArray(startErrors) && startErrors.length) return true;
+            return verifyResult && verifyResult.ok === false;
+        },
+
         async resolveConcurrentTargetsByItem(itemId, bizCandidates, authContext) {
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedItemId) {
@@ -5416,6 +5461,156 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 response: json,
                 active: this.resolveCampaignActiveState(current),
                 ref: current
+            };
+        },
+
+        async updateCampaignStatusBatchByBiz(campaignIds = [], bizCode, onlineStatus, authContext) {
+            const normalizedIds = Array.from(new Set(
+                (Array.isArray(campaignIds) ? campaignIds : [])
+                    .map(id => this.normalizeCampaignId(id))
+                    .filter(Boolean)
+            ));
+            if (!normalizedIds.length) {
+                return {
+                    campaignIds: [],
+                    bizCode: this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE,
+                    response: {},
+                    states: []
+                };
+            }
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const status = Number(onlineStatus) === 1 ? 1 : 0;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/updatePart.json?${query.toString()}`;
+            const payload = {
+                bizCode: targetBizCode,
+                campaignList: normalizedIds.map((id) => ({
+                    campaignId: Number(id),
+                    displayStatus: status === 1 ? 'start' : 'pause'
+                })),
+                csrfId: String(authContext?.csrfId || ''),
+                strategyRecoverys: [],
+                loginPointId: String(authContext?.loginPointId || ''),
+                lrsIdList: []
+            };
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: '*/*',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'bx-v': '2.5.36'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`${status === 1 ? '批量开启' : '批量暂停'}计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 160)}` : ''}`);
+            }
+            const json = await response.json().catch(() => ({}));
+            if (!this.isResponseOk(json)) {
+                throw new Error(this.pickResponseMessage(json, `${status === 1 ? '批量开启' : '批量暂停'}计划失败`));
+            }
+            const refs = [];
+            this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
+            const normalizedRefs = this.normalizeCampaignRefs(refs);
+            const refMap = new Map(normalizedRefs.map(item => [item.campaignId, item]));
+            const states = normalizedIds.map((id) => {
+                const ref = refMap.get(id) || null;
+                return {
+                    campaignId: id,
+                    bizCode: targetBizCode,
+                    active: this.resolveCampaignActiveState(ref),
+                    ref
+                };
+            });
+            return {
+                campaignIds: normalizedIds,
+                bizCode: targetBizCode,
+                response: json,
+                states
+            };
+        },
+
+        async runSiteCustomBreakthroughStrategy(options = {}) {
+            const attempt = Number(options?.attempt || 0);
+            const resumeTargets = Array.isArray(options?.resumeTargets) ? options.resumeTargets : [];
+            const allTargets = Array.isArray(options?.allTargets) ? options.allTargets : [];
+            const authContext = options?.authContext || {};
+            const itemId = this.normalizeItemId(options?.itemId || '');
+            const buckets = this.collectSiteCustomTargetBuckets(resumeTargets);
+            if (!buckets.enabled) {
+                return {
+                    ok: false,
+                    mode: 'site_custom_breakthrough',
+                    round: 0,
+                    error: '未命中全站+自定义同开场景'
+                };
+            }
+
+            const siteTargets = buckets.siteTargets;
+            const customTargets = buckets.customTargets;
+            this.appendConcurrentLog(
+                `触发突破策略：全站${siteTargets.length}个 + 自定义${customTargets.length}个，执行双轨批量并发抢开`,
+                'warn'
+            );
+
+            let lastError = '';
+            for (let round = 1; round <= this.MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS; round++) {
+                this.appendConcurrentLog(`突破策略第${round}轮（总第${attempt || 1}次重试）：按业务线批量并发开启`, 'info');
+                const startSettled = await Promise.allSettled([
+                    this.updateCampaignStatusBatchByBiz(
+                        siteTargets.map(item => item.campaignId),
+                        'onebpSite',
+                        1,
+                        authContext
+                    ),
+                    this.updateCampaignStatusBatchByBiz(
+                        customTargets.map(item => item.campaignId),
+                        'onebpSearch',
+                        1,
+                        authContext
+                    )
+                ]);
+                const startErrors = startSettled
+                    .filter(item => item.status === 'rejected')
+                    .map(item => item.reason?.message || '突破策略批量开启失败');
+                if (startErrors.length) {
+                    this.appendConcurrentLog(`突破策略第${round}轮接口失败：${startErrors.join('；')}`, 'warn');
+                }
+
+                const verify = await this.verifyTargetsStarted(resumeTargets, authContext, itemId);
+                if (verify.ok) {
+                    this.appendConcurrentLog(`突破策略第${round}轮校验通过：全站与自定义已同时开启`, 'success');
+                    return {
+                        ok: true,
+                        mode: 'site_custom_breakthrough',
+                        round,
+                        error: ''
+                    };
+                }
+
+                lastError = [startErrors.join('；'), verify.error].filter(Boolean).join('；')
+                    || `突破策略第${round}轮仍未同时开启`;
+                this.appendConcurrentLog(`突破策略第${round}轮未成功：${lastError}`, 'warn');
+                if (round >= this.MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS) break;
+
+                await Promise.allSettled(
+                    allTargets.map(target => this.updateCampaignStatus(target.campaignId, target.bizCode, 0, authContext))
+                );
+                await this.sleep(180 + round * 220);
+            }
+
+            this.appendConcurrentLog(`突破策略结束：${lastError || '多轮并发后仍未同时开启'}`, 'warn');
+            return {
+                ok: false,
+                mode: 'site_custom_breakthrough',
+                round: this.MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS,
+                error: lastError || '多轮并发后仍未同时开启'
             };
         },
 
@@ -5681,7 +5876,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     };
                 }
 
-                lastError = [startErrors.join('；'), verify.error].filter(Boolean).join('；')
+                let breakthroughResult = null;
+                if (this.shouldRunSiteCustomBreakthrough(resumeTargets, startErrors, verify)) {
+                    breakthroughResult = await this.runSiteCustomBreakthroughStrategy({
+                        attempt,
+                        resumeTargets,
+                        allTargets,
+                        authContext,
+                        itemId: resolvedItemId
+                    });
+                    if (breakthroughResult?.ok) {
+                        return {
+                            attempt,
+                            mode: breakthroughResult.mode || 'site_custom_breakthrough',
+                            itemId: resolvedItemId,
+                            targets: resumeTargets,
+                            allTargets,
+                            mandatorySiteTargets
+                        };
+                    }
+                }
+
+                lastError = [startErrors.join('；'), verify.error, breakthroughResult?.error || ''].filter(Boolean).join('；')
                     || `第${attempt}次并发开启失败`;
                 this.appendConcurrentLog(`第${attempt}次未成功：${lastError}`, 'warn');
                 if (attempt >= this.MAX_START_RETRIES) break;

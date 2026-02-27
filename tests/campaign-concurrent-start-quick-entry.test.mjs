@@ -25,6 +25,10 @@ test('并发开启流程包含全量暂停与原在投并发重试', () => {
     assert.match(block, /resolveConcurrentTargetsByItem\(/, '缺少按商品ID的全量计划识别逻辑');
     assert.match(block, /resolveResumeTargets\(/, '缺少重开计划集合解析逻辑');
     assert.match(block, /resolveConcurrentTargets\(/, '缺少同商品计划集合识别逻辑');
+    assert.match(block, /collectSiteCustomTargetBuckets\(/, '缺少全站与自定义计划分桶逻辑');
+    assert.match(block, /shouldRunSiteCustomBreakthrough\(/, '缺少全站与自定义同开突破触发逻辑');
+    assert.match(block, /runSiteCustomBreakthroughStrategy\(/, '缺少全站与自定义同开突破执行逻辑');
+    assert.match(block, /updateCampaignStatusBatchByBiz\(/, '缺少按业务线批量开启突破逻辑');
     assert.match(block, /mandatorySiteTargets/, '缺少货品全站计划强制开启集合');
     assert.match(block, /item\.bizCode === 'onebpSite'/, '缺少货品全站计划筛选逻辑');
     assert.match(
