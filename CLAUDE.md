@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 这是一个运行在 Tampermonkey/Greasemonkey 的阿里妈妈增强脚本。
 
-- **当前版本**: `v5.30`
+- **当前版本**: `v6.01`
 - **主文件**: `阿里妈妈多合一助手.js`
 - **架构**: 双 IIFE（主助手 + 算法护航）
 
