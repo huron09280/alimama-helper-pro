@@ -25,6 +25,8 @@ test('并发开启流程包含全量暂停与原在投并发重试', () => {
     assert.match(block, /resolveConcurrentTargetsByItem\(/, '缺少按商品ID的全量计划识别逻辑');
     assert.match(block, /resolveResumeTargets\(/, '缺少重开计划集合解析逻辑');
     assert.match(block, /resolveConcurrentTargets\(/, '缺少同商品计划集合识别逻辑');
+    assert.match(block, /resolveItemIdByCampaignId\(/, '缺少按计划ID反查商品ID逻辑');
+    assert.match(block, /campaignItemIdCache:\s*new Map\(\)/, '缺少计划与商品映射缓存');
     assert.match(block, /collectSiteCustomTargetBuckets\(/, '缺少全站与自定义计划分桶逻辑');
     assert.match(block, /shouldRunSiteCustomBreakthrough\(/, '缺少全站与自定义同开突破触发逻辑');
     assert.match(block, /runSiteCustomBreakthroughStrategy\(/, '缺少全站与自定义同开突破执行逻辑');
@@ -60,4 +62,6 @@ test('并发开启流程包含弹窗日志并在成功后提示', () => {
     assert.match(block, /appendConcurrentLog\(/, '缺少并发日志追加逻辑');
     assert.match(block, /setConcurrentLogStatus\(/, '缺少并发日志状态提示逻辑');
     assert.match(block, /setConcurrentLogStatus\(`执行成功：第\$\{result\?\.attempt \|\| 1\}次即完成`, 'success'\)/, '缺少成功状态提示');
+    assert.match(block, /#am-campaign-concurrent-log-popup/, '并发日志弹窗未加入忽略区域，可能污染计划按钮');
+    assert.match(block, /data-item-id/, '并发按钮缺少商品ID透传字段');
 });

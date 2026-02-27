@@ -4335,7 +4335,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
         concurrentLogBodyEl: null,
-        IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel',
+        campaignItemIdCache: new Map(),
+        IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
         DEFAULT_BIZ_CODE: 'onebpSearch',
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite'],
@@ -4394,7 +4395,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     Logger.log('⚠️ 计划ID无效，已忽略并发开启', true);
                     return;
                 }
-                const itemId = this.inferItemIdFromElement(concurrentBtn);
+                const itemId = this.inferItemIdFromElement(concurrentBtn, {
+                    allowLocationFallback: false,
+                    allowBodyFallback: false
+                });
                 this.openConcurrentLogPopup(id, itemId);
                 this.appendConcurrentLog(`收到并发开启指令：计划${id}${itemId ? ` / 商品${itemId}` : ''}`);
                 if (this.runningCampaignIds.has(id)) {
@@ -4602,6 +4606,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return /^\d{6,}$/.test(itemId) ? itemId : '';
         },
 
+        rememberCampaignItemId(campaignId, itemId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedCampaignId || !normalizedItemId) return;
+            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+        },
+
+        getCampaignItemId(campaignId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId) return '';
+            return this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+        },
+
         parseItemIdFromRaw(raw) {
             const text = String(raw || '').trim();
             if (!text) return '';
@@ -4625,14 +4642,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return '';
         },
 
-        inferItemIdFromElement(el) {
-            const fromLocation = this.parseItemIdFromRaw(window.location.href)
-                || this.parseItemIdFromRaw(window.location.hash);
+        inferItemIdFromElement(el, options = {}) {
+            const allowLocationFallback = options?.allowLocationFallback !== false;
+            const allowBodyFallback = options?.allowBodyFallback !== false;
+            const fromLocation = allowLocationFallback
+                ? (this.parseItemIdFromRaw(window.location.href)
+                    || this.parseItemIdFromRaw(window.location.hash))
+                : '';
             const findFromText = (text) => this.normalizeItemId(
                 (String(text || '').match(/(?:宝贝|商品)\s*ID\s*[：:]\s*([0-9]{6,})/i) || [])[1]
             );
             if (!(el instanceof Element)) {
-                return fromLocation || findFromText(document.body?.innerText || '');
+                if (fromLocation) return fromLocation;
+                return allowBodyFallback ? findFromText(document.body?.innerText || '') : '';
             }
             const fromSelf = this.parseItemIdFromRaw(el.getAttribute?.('href') || '')
                 || this.parseItemIdFromRaw(el.getAttribute?.('mx-href') || '')
@@ -4641,11 +4663,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 || this.normalizeItemId(el.dataset?.itemId || '')
                 || this.normalizeItemId(el.dataset?.materialId || '');
             if (fromSelf) return fromSelf;
+            const fromNearestData = this.normalizeItemId(
+                el.closest?.('[data-item-id], [data-material-id]')?.getAttribute('data-item-id')
+                || el.closest?.('[data-item-id], [data-material-id]')?.getAttribute('data-material-id')
+                || ''
+            );
+            if (fromNearestData) return fromNearestData;
             const scope = el.closest('tr, li, section, article, .table-row, .list-item, .campaign-row') || el.parentElement;
             const fromScope = findFromText(scope?.textContent || '');
             if (fromScope) return fromScope;
-            const fromBody = findFromText(document.body?.innerText || '');
-            return fromLocation || fromBody;
+            if (fromLocation) return fromLocation;
+            if (!allowBodyFallback) return '';
+            return findFromText(document.body?.innerText || '');
+        },
+
+        async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '') {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId) return '';
+            const fallback = this.normalizeItemId(fallbackItemId);
+            const cached = this.getCampaignItemId(normalizedCampaignId);
+            if (cached) return cached;
+            const bizList = [];
+            const pushBizCode = (value) => {
+                const bizCode = this.normalizeBizCode(value);
+                if (!bizCode) return;
+                if (bizList.includes(bizCode)) return;
+                bizList.push(bizCode);
+            };
+            (Array.isArray(bizCandidates) ? bizCandidates : []).forEach(pushBizCode);
+            this.BIZ_CODE_LIST.forEach(pushBizCode);
+
+            for (let i = 0; i < bizList.length; i++) {
+                try {
+                    const refs = await this.findConflictRefs(normalizedCampaignId, bizList[i], authContext, '');
+                    const selfRef = (Array.isArray(refs) ? refs : []).find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
+                    const resolved = this.normalizeItemId(selfRef?.itemId || '');
+                    if (!resolved) continue;
+                    this.rememberCampaignItemId(normalizedCampaignId, resolved);
+                    return resolved;
+                } catch { }
+            }
+            if (fallback) {
+                this.rememberCampaignItemId(normalizedCampaignId, fallback);
+                return fallback;
+            }
+            return '';
         },
 
         formatDateYmd(date = new Date()) {
@@ -4883,6 +4945,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const depth = Number(meta.depth || 0);
             const seen = meta.seen instanceof WeakSet ? meta.seen : new WeakSet();
             const bizHint = this.normalizeBizCode(meta.bizHint || '');
+            const itemHint = this.normalizeItemId(meta.itemHint || '');
             if (!node || depth > 10) return;
             if (typeof node !== 'object') return;
             if (seen.has(node)) return;
@@ -4892,7 +4955,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 node.forEach(item => this.collectCampaignRefsFromNode(item, out, {
                     depth: depth + 1,
                     seen,
-                    bizHint
+                    bizHint,
+                    itemHint
                 }));
                 return;
             }
@@ -4905,6 +4969,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 || bizHint
                 || ''
             );
+            const localItemId = this.normalizeItemId(
+                node.itemId
+                || node.materialId
+                || node.auctionId
+                || node.targetItemId
+                || node.targetMaterialId
+                || itemHint
+                || ''
+            );
             const localStatus = node.status;
             const localOnlineStatus = node.onlineStatus ?? node.isOnline ?? node.online;
             const localDisplayStatus = node.displayStatus || node.planStatus || node.campaignStatus || '';
@@ -4914,6 +4987,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 out.push({
                     campaignId,
                     bizCode: localBiz,
+                    itemId: localItemId,
                     status: localStatus,
                     onlineStatus: localOnlineStatus,
                     displayStatus: localDisplayStatus,
@@ -4939,6 +5013,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     out.push({
                         campaignId,
                         bizCode: localBiz,
+                        itemId: localItemId,
                         status: localStatus,
                         onlineStatus: localOnlineStatus,
                         displayStatus: localDisplayStatus,
@@ -4953,7 +5028,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.collectCampaignRefsFromNode(value, out, {
                     depth: depth + 1,
                     seen,
-                    bizHint: localBiz || bizHint
+                    bizHint: localBiz || bizHint,
+                    itemHint: localItemId || itemHint
                 });
             });
         },
@@ -4966,13 +5042,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const prev = map.get(campaignId) || {
                     campaignId,
                     bizCode: '',
+                    itemId: '',
                     status: '',
                     onlineStatus: '',
                     displayStatus: '',
                     source: ''
                 };
                 const nextBiz = this.normalizeBizCode(item?.bizCode || '');
+                const nextItemId = this.normalizeItemId(item?.itemId || '');
                 if (!prev.bizCode && nextBiz) prev.bizCode = nextBiz;
+                if (!prev.itemId && nextItemId) prev.itemId = nextItemId;
                 if ((prev.status === '' || prev.status === undefined || prev.status === null)
                     && item?.status !== '' && item?.status !== undefined && item?.status !== null) {
                     prev.status = item.status;
@@ -5044,11 +5123,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 throw new Error(this.pickResponseMessage(json, '查询商品计划失败'));
             }
             const refs = [];
-            this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
-            return this.normalizeCampaignRefs(refs).map((item) => ({
-                ...item,
-                bizCode: this.normalizeBizCode(item?.bizCode || '') || targetBizCode
-            }));
+            this.collectCampaignRefsFromNode(json, refs, {
+                depth: 0,
+                seen: new WeakSet(),
+                bizHint: targetBizCode,
+                itemHint: normalizedItemId
+            });
+            return this.normalizeCampaignRefs(refs).map((item) => {
+                const normalizedCampaignId = this.normalizeCampaignId(item?.campaignId);
+                this.rememberCampaignItemId(normalizedCampaignId, item?.itemId || normalizedItemId);
+                return {
+                    ...item,
+                    itemId: this.normalizeItemId(item?.itemId || normalizedItemId) || normalizedItemId,
+                    bizCode: this.normalizeBizCode(item?.bizCode || '') || targetBizCode
+                };
+            });
         },
 
         async findConflictRefs(campaignId, bizCode, authContext, itemId = '') {
@@ -5096,16 +5185,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 throw new Error(this.pickResponseMessage(json, '查询冲突计划失败'));
             }
             const refs = [];
-            this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
+            this.collectCampaignRefsFromNode(json, refs, {
+                depth: 0,
+                seen: new WeakSet(),
+                bizHint: targetBizCode,
+                itemHint: normalizedItemId || this.getCampaignItemId(id)
+            });
             refs.push({
                 campaignId: id,
+                itemId: normalizedItemId || this.getCampaignItemId(id) || '',
                 bizCode: targetBizCode,
                 status: '',
                 onlineStatus: '',
                 displayStatus: '',
                 source: 'seed'
             });
-            return this.normalizeCampaignRefs(refs);
+            const normalizedRefs = this.normalizeCampaignRefs(refs);
+            normalizedRefs.forEach((item) => {
+                this.rememberCampaignItemId(item?.campaignId, item?.itemId || '');
+            });
+            return normalizedRefs;
         },
 
         resolvePairFromConflictRefs(baseCampaignId, baseBizCode, refs = []) {
@@ -5766,12 +5865,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const bizCandidates = this.getCandidateBizCodes(triggerEl);
             const authContext = this.resolveAuthContext(bizCandidates[0] || this.DEFAULT_BIZ_CODE);
-            const inferredItemId = this.inferItemIdFromElement(triggerEl);
+            const hintedItemId = this.inferItemIdFromElement(triggerEl, {
+                allowLocationFallback: false,
+                allowBodyFallback: false
+            });
+            const fallbackItemId = this.inferItemIdFromElement(triggerEl, {
+                allowLocationFallback: true,
+                allowBodyFallback: false
+            });
+            const inferredItemId = await this.resolveItemIdByCampaignId(
+                id,
+                bizCandidates,
+                authContext,
+                hintedItemId || fallbackItemId
+            );
             let resolvedTargets = await this.resolveConcurrentTargetsByItem(inferredItemId, bizCandidates, authContext);
             if (!Array.isArray(resolvedTargets?.allTargets) || !resolvedTargets.allTargets.length) {
                 resolvedTargets = await this.resolveConcurrentTargets(id, bizCandidates, authContext, { itemId: inferredItemId });
             }
             const resolvedItemId = this.normalizeItemId(resolvedTargets?.itemId || inferredItemId);
+            if (this.concurrentLogTitleEl) {
+                this.concurrentLogTitleEl.textContent = `并发开启执行日志 - 计划${id}${resolvedItemId ? ` / 商品${resolvedItemId}` : ''}`;
+            }
             const allTargets = Array.isArray(resolvedTargets?.allTargets) ? resolvedTargets.allTargets : [];
             const resumeTargets = Array.isArray(resolvedTargets?.resumeTargets) ? resolvedTargets.resumeTargets : [];
             const mandatorySiteTargets = Array.isArray(resolvedTargets?.mandatorySiteTargets) ? resolvedTargets.mandatorySiteTargets : [];
@@ -5917,6 +6032,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!id) return null;
             const mode = options.mode === 'concurrent' ? 'concurrent' : 'quick';
             const bizCode = this.normalizeBizCode(options.bizCode || '');
+            const itemId = this.normalizeItemId(options.itemId || '');
 
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -5928,6 +6044,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (bizCode) {
                 btn.setAttribute('data-biz-code', bizCode);
                 btn.dataset.bizCode = bizCode;
+            }
+            if (itemId) {
+                btn.setAttribute('data-item-id', itemId);
+                btn.dataset.itemId = itemId;
             }
             if (mode === 'concurrent') {
                 btn.setAttribute('data-am-campaign-concurrent-start', '1');
@@ -5982,6 +6102,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const rawText = textNode.nodeValue || '';
                 const regex = new RegExp(this.TEXT_PATTERN.source, 'g');
                 const contextBizCode = this.inferBizCodeFromElement(textNode.parentElement);
+                const contextItemId = this.inferItemIdFromElement(textNode.parentElement, {
+                    allowLocationFallback: false,
+                    allowBodyFallback: false
+                });
                 let match;
                 let cursor = 0;
                 let hasMatch = false;
@@ -6002,9 +6126,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         token.textContent = fullText;
                         frag.appendChild(token);
 
-                        const quickBtn = this.createButton(campaignId, { mode: 'quick', bizCode: contextBizCode });
+                        const quickBtn = this.createButton(campaignId, {
+                            mode: 'quick',
+                            bizCode: contextBizCode,
+                            itemId: contextItemId
+                        });
                         if (quickBtn) frag.appendChild(quickBtn);
-                        const concurrentBtn = this.createButton(campaignId, { mode: 'concurrent', bizCode: contextBizCode });
+                        const concurrentBtn = this.createButton(campaignId, {
+                            mode: 'concurrent',
+                            bizCode: contextBizCode,
+                            itemId: contextItemId
+                        });
                         if (concurrentBtn) frag.appendChild(concurrentBtn);
                         hasMatch = true;
                     } else {
@@ -6038,6 +6170,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const id = this.normalizeCampaignId(MagicReport.extractCampaignId(raw));
                 if (!id) return;
                 const bizCode = this.parseBizCodeFromRaw(raw) || this.inferBizCodeFromElement(el);
+                const itemId = this.inferItemIdFromElement(el, {
+                    allowLocationFallback: false,
+                    allowBodyFallback: false
+                });
 
                 const siblingButtons = [];
                 let pointer = el.nextElementSibling;
@@ -6057,17 +6193,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     btn.matches?.('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]')
                     && btn.getAttribute('data-campaign-id') === id
                 );
+                if (itemId) {
+                    [quickBtn, concurrentBtn].forEach((btn) => {
+                        if (!(btn instanceof HTMLButtonElement)) return;
+                        btn.setAttribute('data-item-id', itemId);
+                        btn.dataset.itemId = itemId;
+                    });
+                }
 
                 let anchor = quickBtn || el;
                 if (!quickBtn) {
-                    const createdQuick = this.createButton(id, { mode: 'quick', bizCode });
+                    const createdQuick = this.createButton(id, { mode: 'quick', bizCode, itemId });
                     if (createdQuick) {
                         el.insertAdjacentElement('afterend', createdQuick);
                         anchor = createdQuick;
                     }
                 }
                 if (!concurrentBtn) {
-                    const createdConcurrent = this.createButton(id, { mode: 'concurrent', bizCode });
+                    const createdConcurrent = this.createButton(id, { mode: 'concurrent', bizCode, itemId });
                     if (createdConcurrent) {
                         anchor.insertAdjacentElement('afterend', createdConcurrent);
                     }
