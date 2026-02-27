@@ -1241,6 +1241,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     user-select: none;
                     vertical-align: middle;
                     padding: 0;
+                    transition: color 0.18s ease, opacity 0.18s ease;
+                }
+                .am-campaign-search-btn:hover {
+                    color: #6b7480;
+                }
+                .am-campaign-concurrent-start-btn:hover {
+                    color: #157a43;
+                }
+                .am-campaign-search-btn.is-running {
+                    color: #1677ff;
+                    opacity: 0.72;
+                    pointer-events: none;
                 }
                 .am-campaign-search-btn svg {
                     width: 11px;
@@ -1248,6 +1260,92 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: block;
                     fill: currentColor;
                     pointer-events: none;
+                }
+                #am-campaign-concurrent-log-popup {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.45);
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 2147483646;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-card {
+                    width: min(760px, calc(100vw - 24px));
+                    max-height: min(78vh, 720px);
+                    display: flex;
+                    flex-direction: column;
+                    border-radius: 14px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    background: #ffffff;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+                    overflow: hidden;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 12px 14px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #111827;
+                    border-bottom: 1px solid #eef1f5;
+                    background: linear-gradient(180deg, #f9fbff 0%, #f4f7fb 100%);
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-close {
+                    border: 0;
+                    background: transparent;
+                    color: #6b7280;
+                    font-size: 18px;
+                    line-height: 1;
+                    cursor: pointer;
+                    padding: 0 2px;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-status {
+                    padding: 10px 14px;
+                    border-bottom: 1px solid #eef1f5;
+                    font-size: 12px;
+                    color: #1f2937;
+                    background: #f8fafc;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-running {
+                    color: #0f4fce;
+                    background: #eff6ff;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-success {
+                    color: #0f6b3f;
+                    background: #edf9f2;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-error {
+                    color: #a43131;
+                    background: #fff1f1;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-body {
+                    flex: 1;
+                    overflow: auto;
+                    background: #0f172a;
+                    padding: 10px 12px;
+                    font-family: var(--am26-mono);
+                    font-size: 12px;
+                    line-height: 1.5;
+                    color: #dbe4ff;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-line {
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    margin-bottom: 6px;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-error {
+                    color: #ffb3b3;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-warn {
+                    color: #ffe08a;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-success {
+                    color: #99f6c6;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-line:last-child {
+                    margin-bottom: 0;
                 }
                 
                 /* 算法护航弹窗居中 */
@@ -4232,11 +4330,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
     const CampaignIdQuickEntry = {
         initialized: false,
+        runningCampaignIds: new Set(),
+        concurrentLogPopup: null,
+        concurrentLogTitleEl: null,
+        concurrentLogStatusEl: null,
+        concurrentLogBodyEl: null,
         IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
+        DEFAULT_BIZ_CODE: 'onebpSearch',
+        BIZ_CODE_LIST: ['onebpSearch', 'onebpSite'],
+        MAX_START_RETRIES: 6,
+        RETRY_DELAY_MS: 450,
         ICON_SVG: `
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
                 <path fill="currentColor" d="M770.99008 637.242027c14.86848 14.199467 31.3344 29.463893 47.26784 45.335893 57.869653 57.603413 115.602773 115.397973 173.267627 173.19936 41.53344 41.601707 43.39712 100.27008 4.601173 139.4688-39.130453 39.601493-98.399573 37.730987-140.663467-4.46464-69.864107-69.864107-139.933013-139.598507-209.46944-209.865387-8.669867-8.731307-14.199467-9.332053-25.197227-3.331413-248.66816 136.997547-548.870827 1.467733-611.068587-275.531093-50.333013-224.13312 99.997013-449.733973 329.40032-494.26432 236.264107-45.800107 464.800427 123.467093 490.134187 362.530133 9.530027 90.002773-8.198827 173.93664-52.736 252.463787-1.467733 2.60096-2.935467 5.133653-4.1984 7.80288C771.857067 631.637333 771.857067 632.838827 770.99008 637.242027zM415.39584 703.904427c161.000107-1.201493 289.532587-129.80224 288.802133-289.068373-0.730453-159.136427-131.66592-287.798613-291.403093-286.53568C254.859947 129.6384 127.720107 260.23936 128.587093 420.174507 129.39264 575.03744 260.85376 705.10592 415.39584 703.904427zM193.1264 415.17056c0.197973-132.068693 113.937067-226.269867 222.405973-221.463893 0.26624 5.065387 0.79872 10.267307 0.79872 15.40096 0.136533 15.264427 0.068267 30.53568 0.068267 45.602133-103.99744 8.997547-156.071253 79.598933-161.000107 160.467627C235.055787 415.17056 214.657707 415.17056 193.1264 415.17056z"></path>
+            </svg>
+        `,
+        CONCURRENT_START_ICON_SVG: `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M165.888 130.112A63.488 63.488 0 0 1 229.312 64H592.32a63.488 63.488 0 0 1 63.424 63.744l-.192 66.24h138.56a63.488 63.488 0 0 1 63.424 63.744v575.68a63.488 63.488 0 0 1-63.424 63.744H431.68a63.488 63.488 0 0 1-63.424-63.744v-66.24H229.312a63.488 63.488 0 0 1-63.424-63.744V130.112zm126.976 153.6l.064 356.16h75.328V257.728a63.488 63.488 0 0 1 63.424-63.744h96.896l.128-66.24-235.84.064zm151.744 486.4l286.08-.064-.128-448-286.08.064.128 448zm28.032-309.952c5.568-22.912 35.968-28.16 48.96-8.384l61.12 93.184h42.048c31.744 0 46.528 39.04 22.976 60.608l-98.624 90.24 23.68 135.552c5.44 31.04-27.328 54.592-55.36 39.808l-120.448-63.488-120.448 63.488c-28.096 14.784-60.8-8.768-55.424-39.808l23.744-135.552-98.624-90.24c-23.552-21.568-8.832-60.608 22.912-60.608h42.112l61.12-93.184c12.992-19.776 43.392-14.528 48.96 8.384l31.552 130.112h89.92l31.552-130.112z"></path>
             </svg>
         `,
 
@@ -4247,25 +4359,70 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const target = e.target;
                 if (!(target instanceof Element)) return;
 
-                const btn = target.closest('.am-campaign-search-btn[data-am-campaign-quick="1"]');
-                if (!btn) return;
+                const quickBtn = target.closest('.am-campaign-search-btn[data-am-campaign-quick="1"]');
+                if (quickBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const id = this.normalizeCampaignId(quickBtn.getAttribute('data-campaign-id') || quickBtn.dataset.campaignId);
+                    if (!id) {
+                        Logger.log('⚠️ 计划ID无效，已忽略快捷查数', true);
+                        return;
+                    }
+
+                    const guessedName = MagicReport.guessCampaignNameById(id, quickBtn);
+                    if (guessedName) {
+                        MagicReport.lastCampaignName = guessedName;
+                    }
+
+                    MagicReport.openWithCampaignId(id, { preferNative: false, promptType: 'click' }).catch((err) => {
+                        Logger.log(`⚠️ 快捷查数失败：${err?.message || '未知错误'} `, true);
+                    });
+                    return;
+                }
+
+                const concurrentBtn = target.closest('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]');
+                if (!concurrentBtn) return;
 
                 e.preventDefault();
                 e.stopPropagation();
 
-                const id = this.normalizeCampaignId(btn.getAttribute('data-campaign-id') || btn.dataset.campaignId);
+                const id = this.normalizeCampaignId(concurrentBtn.getAttribute('data-campaign-id') || concurrentBtn.dataset.campaignId);
                 if (!id) {
-                    Logger.log('⚠️ 计划ID无效，已忽略快捷查数', true);
+                    Logger.log('⚠️ 计划ID无效，已忽略并发开启', true);
                     return;
                 }
-
-                const guessedName = MagicReport.guessCampaignNameById(id, btn);
-                if (guessedName) {
-                    MagicReport.lastCampaignName = guessedName;
+                const itemId = this.inferItemIdFromElement(concurrentBtn);
+                this.openConcurrentLogPopup(id, itemId);
+                this.appendConcurrentLog(`收到并发开启指令：计划${id}${itemId ? ` / 商品${itemId}` : ''}`);
+                if (this.runningCampaignIds.has(id)) {
+                    Logger.log(`⏳ 并发开启进行中：${id} `);
+                    this.appendConcurrentLog(`并发开启已在执行中：计划${id}`, 'warn');
+                    return;
                 }
-
-                MagicReport.openWithCampaignId(id, { preferNative: false, promptType: 'click' }).catch((err) => {
-                    Logger.log(`⚠️ 快捷查数失败：${err?.message || '未知错误'} `, true);
+                this.runningCampaignIds.add(id);
+                this.setConcurrentButtonRunning(id, true);
+                this.runConcurrentStartFlow(id, concurrentBtn).then((result) => {
+                    const restartTargets = Array.isArray(result?.targets) ? result.targets : [];
+                    const allTargets = Array.isArray(result?.allTargets) ? result.allTargets : restartTargets;
+                    const mandatorySiteTargets = Array.isArray(result?.mandatorySiteTargets) ? result.mandatorySiteTargets : [];
+                    const pairText = restartTargets
+                        .map(item => `${item.campaignId}@${item.bizCode}`)
+                        .join(' + ');
+                    const scopeText = `（同商品共${allTargets.length || restartTargets.length}个，货品全站必开${mandatorySiteTargets.length}个，实际重开${restartTargets.length}个）`;
+                    const verifyText = result?.mode === 'request_only'
+                        ? '（状态接口未返回明确结果，按接口成功处理）'
+                        : '';
+                    Logger.log(`✅ 并发开启完成(第${result?.attempt || 1}次)${scopeText}：${pairText}${verifyText}`);
+                    this.appendConcurrentLog(`并发开启完成：${scopeText}，目标=${pairText || '-'}`, 'success');
+                    this.setConcurrentLogStatus(`执行成功：第${result?.attempt || 1}次即完成`, 'success');
+                }).catch((err) => {
+                    Logger.log(`⚠️ 并发开启失败：${err?.message || '未知错误'} `, true);
+                    this.appendConcurrentLog(`并发开启失败：${err?.message || '未知错误'}`, 'error');
+                    this.setConcurrentLogStatus(`执行失败：${err?.message || '未知错误'}`, 'error');
+                }).finally(() => {
+                    this.runningCampaignIds.delete(id);
+                    this.setConcurrentButtonRunning(id, false);
                 });
             }, true);
 
@@ -4277,37 +4434,1298 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return /^\d{6,}$/.test(id) ? id : '';
         },
 
+        normalizeBizCode(rawBizCode) {
+            const biz = String(rawBizCode || '').trim();
+            if (!biz) return '';
+            if (biz === 'onebpSearch' || biz === 'onebpSite') return biz;
+            if (/onebpsearch|search|keyword|关键词/i.test(biz)) return 'onebpSearch';
+            if (/onebpsite|site|全站/i.test(biz)) return 'onebpSite';
+            return '';
+        },
+
+        getOppositeBizCode(bizCode) {
+            const biz = this.normalizeBizCode(bizCode);
+            if (biz === 'onebpSearch') return 'onebpSite';
+            if (biz === 'onebpSite') return 'onebpSearch';
+            return '';
+        },
+
+        sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+        },
+
+        formatTimeClock(date = new Date()) {
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mm = String(date.getMinutes()).padStart(2, '0');
+            const ss = String(date.getSeconds()).padStart(2, '0');
+            return `${hh}:${mm}:${ss}`;
+        },
+
+        ensureConcurrentLogPopup() {
+            if (this.concurrentLogPopup && this.concurrentLogPopup.isConnected) return this.concurrentLogPopup;
+            let popup = document.getElementById('am-campaign-concurrent-log-popup');
+            if (!(popup instanceof HTMLElement)) {
+                popup = document.createElement('div');
+                popup.id = 'am-campaign-concurrent-log-popup';
+                popup.innerHTML = `
+                    <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-label="并发开启执行日志">
+                        <div class="am-concurrent-log-header">
+                            <span id="am-concurrent-log-title">并发开启执行日志</span>
+                            <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">×</button>
+                        </div>
+                        <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status">执行中...</div>
+                        <div class="am-concurrent-log-body" id="am-concurrent-log-body"></div>
+                    </div>
+                `;
+                document.body.appendChild(popup);
+            }
+            this.concurrentLogPopup = popup;
+            this.concurrentLogTitleEl = popup.querySelector('#am-concurrent-log-title');
+            this.concurrentLogStatusEl = popup.querySelector('#am-concurrent-log-status');
+            this.concurrentLogBodyEl = popup.querySelector('#am-concurrent-log-body');
+            const closeBtn = popup.querySelector('.am-concurrent-log-close');
+            if (closeBtn && !closeBtn.dataset.amBound) {
+                closeBtn.dataset.amBound = '1';
+                closeBtn.addEventListener('click', () => {
+                    if (popup) popup.style.display = 'none';
+                });
+            }
+            return popup;
+        },
+
+        openConcurrentLogPopup(campaignId, itemId = '') {
+            const popup = this.ensureConcurrentLogPopup();
+            if (!(popup instanceof HTMLElement)) return;
+            popup.style.display = 'flex';
+            if (this.concurrentLogTitleEl) {
+                this.concurrentLogTitleEl.textContent = `并发开启执行日志 - 计划${campaignId}${itemId ? ` / 商品${itemId}` : ''}`;
+            }
+            if (this.concurrentLogBodyEl) {
+                this.concurrentLogBodyEl.innerHTML = '';
+            }
+            this.setConcurrentLogStatus('执行中：正在识别商品计划并准备并发开启', 'running');
+        },
+
+        setConcurrentLogStatus(text, level = 'running') {
+            this.ensureConcurrentLogPopup();
+            if (!(this.concurrentLogStatusEl instanceof HTMLElement)) return;
+            const normalizedLevel = ['running', 'success', 'error'].includes(level) ? level : 'running';
+            this.concurrentLogStatusEl.className = `am-concurrent-log-status is-${normalizedLevel}`;
+            this.concurrentLogStatusEl.textContent = String(text || '').trim() || '执行中...';
+        },
+
+        appendConcurrentLog(message, level = 'info') {
+            this.ensureConcurrentLogPopup();
+            if (!(this.concurrentLogBodyEl instanceof HTMLElement)) return;
+            const line = document.createElement('div');
+            const normalizedLevel = ['info', 'warn', 'error', 'success'].includes(level) ? level : 'info';
+            line.className = `am-concurrent-log-line is-${normalizedLevel}`;
+            line.textContent = `[${this.formatTimeClock()}] ${String(message || '').trim()}`;
+            this.concurrentLogBodyEl.appendChild(line);
+            this.concurrentLogBodyEl.scrollTop = this.concurrentLogBodyEl.scrollHeight;
+        },
+
         isInIgnoredArea(el) {
             if (!(el instanceof Element)) return true;
             return !!el.closest(this.IGNORE_SELECTOR);
         },
 
-            createButton(campaignId) {
-                const id = this.normalizeCampaignId(campaignId);
-                if (!id) return null;
+        parseBizCodeFromRaw(raw) {
+            const text = String(raw || '').trim();
+            if (!text) return '';
+            try {
+                const parsed = new URL(text, window.location.origin);
+                const fromQuery = this.normalizeBizCode(parsed.searchParams.get('bizCode') || '');
+                if (fromQuery) return fromQuery;
+            } catch { }
+            const match = text.match(/[?&]bizCode=([^&#]+)/i) || text.match(/bizCode[=:]([^&#]+)/i);
+            if (!match || !match[1]) return '';
+            try {
+                return this.normalizeBizCode(decodeURIComponent(match[1]));
+            } catch {
+                return this.normalizeBizCode(match[1]);
+            }
+        },
+
+        inferBizCodeFromElement(el) {
+            const fromLocation = this.parseBizCodeFromRaw(window.location.href) || this.parseBizCodeFromRaw(window.location.hash);
+            if (!(el instanceof Element)) return fromLocation;
+
+            const fromSelf = this.parseBizCodeFromRaw(el.getAttribute?.('href') || '')
+                || this.parseBizCodeFromRaw(el.getAttribute?.('mx-href') || '')
+                || this.parseBizCodeFromRaw(el.getAttribute?.('data-biz-code') || '')
+                || this.parseBizCodeFromRaw(el.dataset?.bizCode || '');
+            if (fromSelf) return fromSelf;
+
+            const nearestLink = el.closest('a[href], [mx-href], [data-biz-code]');
+            if (nearestLink instanceof Element) {
+                const fromLink = this.parseBizCodeFromRaw(nearestLink.getAttribute('href') || '')
+                    || this.parseBizCodeFromRaw(nearestLink.getAttribute('mx-href') || '')
+                    || this.parseBizCodeFromRaw(nearestLink.getAttribute('data-biz-code') || '')
+                    || this.parseBizCodeFromRaw(nearestLink.dataset?.bizCode || '');
+                if (fromLink) return fromLink;
+            }
+
+            const scope = el.closest('tr, li, section, article, .table-row, .list-item, .campaign-row') || el.parentElement;
+            const scopeText = String(scope?.textContent || '');
+            if (/关键词推广|关键词计划|关键词/.test(scopeText)) return 'onebpSearch';
+            if (/全站推广|货品全站|全站/.test(scopeText)) return 'onebpSite';
+            return fromLocation;
+        },
+
+        getCandidateBizCodes(el) {
+            const list = [];
+            const push = (value) => {
+                const biz = this.normalizeBizCode(value);
+                if (!biz) return;
+                if (list.includes(biz)) return;
+                list.push(biz);
+            };
+            if (el instanceof Element) {
+                push(el.getAttribute('data-biz-code') || '');
+                push(el.dataset?.bizCode || '');
+            }
+            push(this.inferBizCodeFromElement(el));
+            push(this.parseBizCodeFromRaw(window.location.href));
+            push(this.parseBizCodeFromRaw(window.location.hash));
+            if (!list.length) push(this.DEFAULT_BIZ_CODE);
+            const opposite = this.getOppositeBizCode(list[0] || '');
+            if (opposite) push(opposite);
+            this.BIZ_CODE_LIST.forEach(push);
+            return list.length ? list : [this.DEFAULT_BIZ_CODE, this.getOppositeBizCode(this.DEFAULT_BIZ_CODE)].filter(Boolean);
+        },
+
+        normalizeItemId(rawItemId) {
+            const itemId = String(rawItemId || '').trim();
+            return /^\d{6,}$/.test(itemId) ? itemId : '';
+        },
+
+        parseItemIdFromRaw(raw) {
+            const text = String(raw || '').trim();
+            if (!text) return '';
+            const fromPlain = this.normalizeItemId(
+                (text.match(/(?:itemId|item_id|materialId|material_id|searchValue)[=:]([0-9]{6,})/i) || [])[1]
+            );
+            if (fromPlain) return fromPlain;
+            try {
+                const parsed = new URL(text, window.location.origin);
+                const searchKey = String(parsed.searchParams.get('searchKey') || '').trim().toLowerCase();
+                const searchValue = this.normalizeItemId(parsed.searchParams.get('searchValue') || '');
+                if (searchValue && (!searchKey || searchKey === 'itemid' || searchKey === 'item_id' || searchKey === 'materialid')) {
+                    return searchValue;
+                }
+                const keys = ['itemId', 'item_id', 'materialId', 'material_id', 'searchValue'];
+                for (let i = 0; i < keys.length; i++) {
+                    const candidate = this.normalizeItemId(parsed.searchParams.get(keys[i]) || '');
+                    if (candidate) return candidate;
+                }
+            } catch { }
+            return '';
+        },
+
+        inferItemIdFromElement(el) {
+            const fromLocation = this.parseItemIdFromRaw(window.location.href)
+                || this.parseItemIdFromRaw(window.location.hash);
+            const findFromText = (text) => this.normalizeItemId(
+                (String(text || '').match(/(?:宝贝|商品)\s*ID\s*[：:]\s*([0-9]{6,})/i) || [])[1]
+            );
+            if (!(el instanceof Element)) {
+                return fromLocation || findFromText(document.body?.innerText || '');
+            }
+            const fromSelf = this.parseItemIdFromRaw(el.getAttribute?.('href') || '')
+                || this.parseItemIdFromRaw(el.getAttribute?.('mx-href') || '')
+                || this.normalizeItemId(el.getAttribute?.('data-item-id') || '')
+                || this.normalizeItemId(el.getAttribute?.('data-material-id') || '')
+                || this.normalizeItemId(el.dataset?.itemId || '')
+                || this.normalizeItemId(el.dataset?.materialId || '');
+            if (fromSelf) return fromSelf;
+            const scope = el.closest('tr, li, section, article, .table-row, .list-item, .campaign-row') || el.parentElement;
+            const fromScope = findFromText(scope?.textContent || '');
+            if (fromScope) return fromScope;
+            const fromBody = findFromText(document.body?.innerText || '');
+            return fromLocation || fromBody;
+        },
+
+        formatDateYmd(date = new Date()) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        },
+
+        parseAuthFromObject(source, depth = 0, visited = new WeakSet()) {
+            const out = { csrfId: '', loginPointId: '', bizCode: '' };
+            if (!source || typeof source !== 'object' || depth > 4) return out;
+            if (visited.has(source)) return out;
+            visited.add(source);
+
+            Object.keys(source).slice(0, 120).forEach((key) => {
+                const value = source[key];
+                const lower = String(key || '').toLowerCase();
+                if (lower === 'csrfid' || lower === 'csrf') {
+                    if (!out.csrfId) out.csrfId = String(value || '').trim();
+                    return;
+                }
+                if (lower === 'loginpointid') {
+                    if (!out.loginPointId) out.loginPointId = String(value || '').trim();
+                    return;
+                }
+                if (lower === 'bizcode') {
+                    if (!out.bizCode) out.bizCode = this.normalizeBizCode(value);
+                    return;
+                }
+                if (value && typeof value === 'object') {
+                    const child = this.parseAuthFromObject(value, depth + 1, visited);
+                    if (!out.csrfId && child.csrfId) out.csrfId = child.csrfId;
+                    if (!out.loginPointId && child.loginPointId) out.loginPointId = child.loginPointId;
+                    if (!out.bizCode && child.bizCode) out.bizCode = child.bizCode;
+                }
+            });
+            return out;
+        },
+
+        parseAuthFromBody(body) {
+            const out = { csrfId: '', loginPointId: '', bizCode: '' };
+            if (body === undefined || body === null) return out;
+            if (typeof body === 'string') {
+                const text = body.trim();
+                if (!text) return out;
+                const parsed = safeParseJSON(text);
+                if (parsed && typeof parsed === 'object') return this.parseAuthFromObject(parsed);
+                try {
+                    const params = new URLSearchParams(text);
+                    out.csrfId = String(params.get('csrfId') || params.get('csrfID') || '').trim();
+                    out.loginPointId = String(params.get('loginPointId') || '').trim();
+                    out.bizCode = this.normalizeBizCode(params.get('bizCode') || '');
+                } catch { }
+                return out;
+            }
+            if (body instanceof URLSearchParams) {
+                out.csrfId = String(body.get('csrfId') || body.get('csrfID') || '').trim();
+                out.loginPointId = String(body.get('loginPointId') || '').trim();
+                out.bizCode = this.normalizeBizCode(body.get('bizCode') || '');
+                return out;
+            }
+            if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                out.csrfId = String(body.get('csrfId') || body.get('csrfID') || '').trim();
+                out.loginPointId = String(body.get('loginPointId') || '').trim();
+                out.bizCode = this.normalizeBizCode(body.get('bizCode') || '');
+                return out;
+            }
+            if (typeof body === 'object') {
+                return this.parseAuthFromObject(body);
+            }
+            return out;
+        },
+
+        parseAuthFromUrl(rawUrl) {
+            const out = { csrfId: '', loginPointId: '', bizCode: '' };
+            const text = String(rawUrl || '').trim();
+            if (!text) return out;
+            try {
+                const parsed = new URL(text, window.location.origin);
+                out.csrfId = String(parsed.searchParams.get('csrfId') || parsed.searchParams.get('csrfID') || '').trim();
+                out.loginPointId = String(parsed.searchParams.get('loginPointId') || '').trim();
+                out.bizCode = this.normalizeBizCode(parsed.searchParams.get('bizCode') || '');
+            } catch { }
+            return out;
+        },
+
+        getCsrfScore(csrf) {
+            const value = String(csrf || '').trim();
+            if (!value) return -1;
+            let score = Math.min(80, value.length);
+            if (value.includes('_')) score += 30;
+            if (!/^\d+$/.test(value)) score += 20;
+            if (value.length >= 16) score += 10;
+            return score;
+        },
+
+        pickCsrf(current, next) {
+            const currentText = String(current || '').trim();
+            const nextText = String(next || '').trim();
+            if (!currentText) return nextText;
+            if (!nextText) return currentText;
+            return this.getCsrfScore(nextText) >= this.getCsrfScore(currentText) ? nextText : currentText;
+        },
+
+        resolveAuthContext(preferredBizCode = '') {
+            const auth = {
+                csrfId: '',
+                loginPointId: '',
+                bizCode: this.normalizeBizCode(preferredBizCode) || ''
+            };
+            const applyAuth = (entry) => {
+                if (!entry || typeof entry !== 'object') return;
+                auth.csrfId = this.pickCsrf(auth.csrfId, entry.csrfId);
+                if (!auth.loginPointId && entry.loginPointId) auth.loginPointId = String(entry.loginPointId || '').trim();
+                if (!auth.bizCode && entry.bizCode) auth.bizCode = this.normalizeBizCode(entry.bizCode);
+            };
+
+            applyAuth(this.parseAuthFromUrl(window.location.href));
+            applyAuth(this.parseAuthFromUrl(window.location.hash));
+            applyAuth(this.parseAuthFromBody(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''));
+
+            [
+                window.__AM_TOKENS__,
+                window.g_config,
+                window.PageConfig,
+                window.mm,
+                window.FEED_CONFIG,
+                window.__magix_data__
+            ].forEach(source => applyAuth(this.parseAuthFromObject(source)));
+
+            const managers = [];
+            const pushManager = (manager) => {
+                if (!manager || typeof manager.getRequestHistory !== 'function') return;
+                if (managers.includes(manager)) return;
+                managers.push(manager);
+            };
+            try { pushManager(window.__AM_HOOK_MANAGER__); } catch { }
+            try {
+                if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
+                    pushManager(unsafeWindow.__AM_HOOK_MANAGER__);
+                }
+            } catch { }
+            if (!managers.length) {
+                try { pushManager(createHookManager()); } catch { }
+            }
+
+            const history = [];
+            managers.forEach((manager) => {
+                try {
+                    const list = manager.getRequestHistory({
+                        includePattern: /\.json(?:$|\?)/i,
+                        limit: 2600
+                    });
+                    if (Array.isArray(list) && list.length) history.push(...list);
+                } catch { }
+            });
+            history.sort((left, right) => Number(right?.ts || 0) - Number(left?.ts || 0));
+            for (let i = 0; i < history.length; i++) {
+                const entry = history[i] || {};
+                applyAuth(this.parseAuthFromUrl(entry.url));
+                applyAuth(this.parseAuthFromBody(entry.body));
+                if (auth.csrfId && auth.loginPointId && auth.bizCode) break;
+            }
+
+            if (!auth.csrfId) {
+                const cookieMatch = document.cookie.match(/_tb_token_=([^;]+)/);
+                if (cookieMatch && cookieMatch[1]) {
+                    auth.csrfId = this.pickCsrf(auth.csrfId, decodeURIComponent(cookieMatch[1]));
+                }
+            }
+            if (!auth.bizCode) auth.bizCode = this.DEFAULT_BIZ_CODE;
+            if (!auth.csrfId || !auth.loginPointId) {
+                throw new Error('Token 未就绪，请先在页面手动点击一次计划开关后重试');
+            }
+            return auth;
+        },
+
+        isResponseOk(res) {
+            if (!res || typeof res !== 'object') return false;
+            if (res.success === false || res.ok === false) return false;
+            if (res.info && res.info.ok === false) return false;
+            if (res.info && res.info.errorCode) return false;
+            if (Array.isArray(res.ret) && res.ret.length) {
+                const retTokens = res.ret.map(item => String(item || '').trim()).filter(Boolean);
+                const hasRetFail = retTokens.some(token => /^FAIL[_:]/i.test(token));
+                const hasRetSuccess = retTokens.some(token => /^SUCCESS(?:$|[:_])/i.test(token) || token.includes('调用成功'));
+                if (hasRetFail && !hasRetSuccess) return false;
+            }
+            return true;
+        },
+
+        pickResponseMessage(res, fallbackMessage = '') {
+            const retText = Array.isArray(res?.ret) ? res.ret.map(item => String(item || '').trim()).filter(Boolean).join(' | ') : '';
+            const punishUrl = String(res?.data?.url || '').trim();
+            if (punishUrl.includes('/_____tmd_____/punish')) {
+                return '触发风控验证，请先在页面完成人机验证后重试';
+            }
+            return String(
+                res?.info?.message
+                || res?.message
+                || res?.msg
+                || retText
+                || fallbackMessage
+                || '请求失败'
+            ).trim();
+        },
+
+        resolveCampaignActiveState(ref = {}) {
+            if (!ref || typeof ref !== 'object') return null;
+            const onlineNum = Number(ref.onlineStatus);
+            if (Number.isFinite(onlineNum)) {
+                if (onlineNum === 1) return true;
+                if (onlineNum === 0) return false;
+            }
+            const statusNum = Number(ref.status);
+            if (Number.isFinite(statusNum)) {
+                if (statusNum === 1) return true;
+                if (statusNum === 0) return false;
+            }
+            const text = [
+                ref.displayStatus,
+                ref.status,
+                ref.onlineStatus,
+                ref.planStatus,
+                ref.campaignStatus
+            ].map(item => String(item || '').trim().toLowerCase()).join('|');
+            if (!text) return null;
+            if (/(start|online|active|running|enable|在投|投放|开启|生效)/.test(text)) return true;
+            if (/(pause|stop|offline|suspend|disable|暂停|关闭|下线|失效)/.test(text)) return false;
+            return null;
+        },
+
+        collectCampaignRefsFromNode(node, out, meta = {}) {
+            const depth = Number(meta.depth || 0);
+            const seen = meta.seen instanceof WeakSet ? meta.seen : new WeakSet();
+            const bizHint = this.normalizeBizCode(meta.bizHint || '');
+            if (!node || depth > 10) return;
+            if (typeof node !== 'object') return;
+            if (seen.has(node)) return;
+            seen.add(node);
+
+            if (Array.isArray(node)) {
+                node.forEach(item => this.collectCampaignRefsFromNode(item, out, {
+                    depth: depth + 1,
+                    seen,
+                    bizHint
+                }));
+                return;
+            }
+
+            const localBiz = this.normalizeBizCode(
+                node.bizCode
+                || node.diffBizCode
+                || node.fromBizCode
+                || node.targetBizCode
+                || bizHint
+                || ''
+            );
+            const localStatus = node.status;
+            const localOnlineStatus = node.onlineStatus ?? node.isOnline ?? node.online;
+            const localDisplayStatus = node.displayStatus || node.planStatus || node.campaignStatus || '';
+            const pushRef = (rawId, source) => {
+                const campaignId = this.normalizeCampaignId(rawId);
+                if (!campaignId) return;
+                out.push({
+                    campaignId,
+                    bizCode: localBiz,
+                    status: localStatus,
+                    onlineStatus: localOnlineStatus,
+                    displayStatus: localDisplayStatus,
+                    source
+                });
+            };
+
+            pushRef(node.campaignId, 'campaignId');
+            pushRef(node.planId, 'planId');
+            pushRef(node.targetCampaignId, 'targetCampaignId');
+            pushRef(node.diffCampaignId, 'diffCampaignId');
+
+            const textHints = [node.message, node.msg, node.error, node.remark]
+                .map(item => String(item || '').trim())
+                .filter(Boolean)
+                .join(' ');
+            if (textHints) {
+                const scoped = textHints.match(/(?:计划|campaign(?:id)?|plan(?:id)?)[^0-9]{0,8}\d{6,}/ig) || [];
+                scoped.slice(0, 12).forEach((segment) => {
+                    const match = segment.match(/(\d{6,})/);
+                    const campaignId = this.normalizeCampaignId(match?.[1] || '');
+                    if (!campaignId) return;
+                    out.push({
+                        campaignId,
+                        bizCode: localBiz,
+                        status: localStatus,
+                        onlineStatus: localOnlineStatus,
+                        displayStatus: localDisplayStatus,
+                        source: 'text_hint'
+                    });
+                });
+            }
+
+            Object.keys(node).forEach((key) => {
+                const value = node[key];
+                if (!value || typeof value !== 'object') return;
+                this.collectCampaignRefsFromNode(value, out, {
+                    depth: depth + 1,
+                    seen,
+                    bizHint: localBiz || bizHint
+                });
+            });
+        },
+
+        normalizeCampaignRefs(refs = []) {
+            const map = new Map();
+            (Array.isArray(refs) ? refs : []).forEach((item) => {
+                const campaignId = this.normalizeCampaignId(item?.campaignId);
+                if (!campaignId) return;
+                const prev = map.get(campaignId) || {
+                    campaignId,
+                    bizCode: '',
+                    status: '',
+                    onlineStatus: '',
+                    displayStatus: '',
+                    source: ''
+                };
+                const nextBiz = this.normalizeBizCode(item?.bizCode || '');
+                if (!prev.bizCode && nextBiz) prev.bizCode = nextBiz;
+                if ((prev.status === '' || prev.status === undefined || prev.status === null)
+                    && item?.status !== '' && item?.status !== undefined && item?.status !== null) {
+                    prev.status = item.status;
+                }
+                if ((prev.onlineStatus === '' || prev.onlineStatus === undefined || prev.onlineStatus === null)
+                    && item?.onlineStatus !== '' && item?.onlineStatus !== undefined && item?.onlineStatus !== null) {
+                    prev.onlineStatus = item.onlineStatus;
+                }
+                if (!prev.displayStatus && item?.displayStatus) prev.displayStatus = item.displayStatus;
+                if (!prev.source && item?.source) prev.source = String(item.source || '');
+                map.set(campaignId, prev);
+            });
+            return Array.from(map.values());
+        },
+
+        async queryCampaignsByItem(itemId, bizCode, authContext) {
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedItemId) return [];
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/horizontal/findPage.json?${query.toString()}`;
+            const today = this.formatDateYmd(new Date());
+            const payload = {
+                mx_bizCode: targetBizCode,
+                bizCode: targetBizCode,
+                offset: 0,
+                pageSize: 200,
+                orderField: '',
+                orderBy: '',
+                queryRuleAuto: '1',
+                adgroupRequired: true,
+                adzoneRequired: false,
+                itemId: Number(normalizedItemId),
+                rptQuery: {
+                    fields: 'charge,click,ecpc,roi',
+                    conditionList: [{
+                        sourceList: ['scene', 'campaign_list'],
+                        adzonePkgIdList: [],
+                        effectEqual: '15',
+                        unifyType: 'last_click_by_effect_time',
+                        startTime: today,
+                        endTime: today,
+                        isRt: true
+                    }]
+                },
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: '*/*',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'bx-v': '2.5.36'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`查询商品计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
+            }
+            const json = await response.json().catch(() => ({}));
+            if (!this.isResponseOk(json)) {
+                throw new Error(this.pickResponseMessage(json, '查询商品计划失败'));
+            }
+            const refs = [];
+            this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
+            return this.normalizeCampaignRefs(refs).map((item) => ({
+                ...item,
+                bizCode: this.normalizeBizCode(item?.bizCode || '') || targetBizCode
+            }));
+        },
+
+        async findConflictRefs(campaignId, bizCode, authContext, itemId = '') {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return [];
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const normalizedItemId = this.normalizeItemId(itemId);
+            const numericCampaignId = Number(id);
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/diff/findList.json?${query.toString()}`;
+            const payload = {
+                bizCode: targetBizCode,
+                source: 'campaign',
+                campaignIdList: [numericCampaignId],
+                campaignList: [{
+                    campaignId: numericCampaignId
+                }],
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            if (normalizedItemId) {
+                payload.campaignList[0].itemSelectedMode = 'user_define';
+                payload.campaignList[0].materialIdList = [Number(normalizedItemId)];
+            }
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: '*/*',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'bx-v': '2.5.36'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`查询冲突计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
+            }
+            const json = await response.json().catch(() => ({}));
+            if (!this.isResponseOk(json)) {
+                throw new Error(this.pickResponseMessage(json, '查询冲突计划失败'));
+            }
+            const refs = [];
+            this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
+            refs.push({
+                campaignId: id,
+                bizCode: targetBizCode,
+                status: '',
+                onlineStatus: '',
+                displayStatus: '',
+                source: 'seed'
+            });
+            return this.normalizeCampaignRefs(refs);
+        },
+
+        resolvePairFromConflictRefs(baseCampaignId, baseBizCode, refs = []) {
+            const mainId = this.normalizeCampaignId(baseCampaignId);
+            if (!mainId) return null;
+            const normalizedRefs = this.normalizeCampaignRefs(refs);
+            const mainRef = normalizedRefs.find(item => item.campaignId === mainId) || {
+                campaignId: mainId,
+                bizCode: this.normalizeBizCode(baseBizCode) || this.DEFAULT_BIZ_CODE
+            };
+            const primaryBizCode = this.normalizeBizCode(mainRef.bizCode || baseBizCode) || this.DEFAULT_BIZ_CODE;
+            const candidates = normalizedRefs.filter(item => item.campaignId !== mainId);
+            if (!candidates.length) {
+                return {
+                    primary: {
+                        campaignId: mainId,
+                        bizCode: primaryBizCode
+                    },
+                    secondary: null
+                };
+            }
+            const preferredSecondary = candidates.find(item => {
+                const biz = this.normalizeBizCode(item.bizCode || '');
+                return biz && biz !== primaryBizCode;
+            }) || candidates[0];
+            const secondaryBizCode = this.normalizeBizCode(preferredSecondary.bizCode || '')
+                || this.getOppositeBizCode(primaryBizCode)
+                || primaryBizCode;
+            return {
+                primary: {
+                    campaignId: mainId,
+                    bizCode: primaryBizCode
+                },
+                secondary: {
+                    campaignId: preferredSecondary.campaignId,
+                    bizCode: secondaryBizCode
+                }
+            };
+        },
+
+        mergeCampaignActiveState(current, next) {
+            const currentState = current === true ? true : (current === false ? false : null);
+            const nextState = next === true ? true : (next === false ? false : null);
+            if (nextState === true) return true;
+            if (nextState === false) return currentState === true ? true : false;
+            return currentState;
+        },
+
+        upsertConcurrentTarget(targetMap, ref = {}, fallbackBizCode = '') {
+            if (!(targetMap instanceof Map)) return;
+            const campaignId = this.normalizeCampaignId(ref?.campaignId);
+            if (!campaignId) return;
+            const resolvedBizCode = this.normalizeBizCode(ref?.bizCode || fallbackBizCode || '');
+            const active = this.resolveCampaignActiveState(ref);
+            const prev = targetMap.get(campaignId) || {
+                campaignId,
+                bizCode: '',
+                active: null
+            };
+            if (!prev.bizCode && resolvedBizCode) prev.bizCode = resolvedBizCode;
+            prev.active = this.mergeCampaignActiveState(prev.active, active);
+            targetMap.set(campaignId, prev);
+        },
+
+        resolveResumeTargets(allTargets = []) {
+            const normalizedTargets = (Array.isArray(allTargets) ? allTargets : []).map((item) => ({
+                campaignId: this.normalizeCampaignId(item?.campaignId),
+                bizCode: this.normalizeBizCode(item?.bizCode || '') || this.DEFAULT_BIZ_CODE,
+                active: item?.active === true ? true : (item?.active === false ? false : null)
+            })).filter(item => item.campaignId);
+            const originalActiveTargets = normalizedTargets.filter(item => item.active === true);
+            const mandatorySiteTargets = normalizedTargets.filter(item => item.bizCode === 'onebpSite');
+            const resumeMap = new Map();
+            const pushResume = (target) => {
+                if (!target || !target.campaignId) return;
+                const key = `${target.bizCode}@${target.campaignId}`;
+                if (resumeMap.has(key)) return;
+                resumeMap.set(key, target);
+            };
+            mandatorySiteTargets.forEach(pushResume);
+            originalActiveTargets.forEach(pushResume);
+            let resumeTargets = Array.from(resumeMap.values());
+            if (!resumeTargets.length) {
+                resumeTargets = mandatorySiteTargets.length ? mandatorySiteTargets : normalizedTargets;
+            }
+            return {
+                allTargets: normalizedTargets,
+                resumeTargets,
+                originalActiveTargets,
+                mandatorySiteTargets
+            };
+        },
+
+        async resolveConcurrentTargetsByItem(itemId, bizCandidates, authContext) {
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedItemId) {
+                return {
+                    itemId: '',
+                    allTargets: [],
+                    resumeTargets: [],
+                    originalActiveTargets: [],
+                    mandatorySiteTargets: [],
+                    unresolvedErrors: []
+                };
+            }
+            const normalizedBizCandidates = [];
+            const pushBizCandidate = (value) => {
+                const bizCode = this.normalizeBizCode(value);
+                if (!bizCode) return;
+                if (normalizedBizCandidates.includes(bizCode)) return;
+                normalizedBizCandidates.push(bizCode);
+            };
+            (Array.isArray(bizCandidates) ? bizCandidates : []).forEach(pushBizCandidate);
+            this.BIZ_CODE_LIST.forEach(pushBizCandidate);
+            if (!normalizedBizCandidates.length) pushBizCandidate(this.DEFAULT_BIZ_CODE);
+
+            const targetMap = new Map();
+            const unresolvedErrors = [];
+            for (let i = 0; i < normalizedBizCandidates.length; i++) {
+                const bizCode = normalizedBizCandidates[i];
+                try {
+                    const refs = await this.queryCampaignsByItem(normalizedItemId, bizCode, authContext);
+                    refs.forEach((ref) => {
+                        const resolvedBizCode = this.normalizeBizCode(ref?.bizCode || bizCode) || bizCode;
+                        this.upsertConcurrentTarget(targetMap, { ...ref, bizCode: resolvedBizCode }, resolvedBizCode);
+                    });
+                } catch (err) {
+                    unresolvedErrors.push(`${normalizedItemId}@${bizCode}:${err?.message || '商品计划识别失败'}`);
+                }
+            }
+            const allTargetsRaw = Array.from(targetMap.values()).map((item) => ({
+                campaignId: this.normalizeCampaignId(item?.campaignId),
+                bizCode: this.normalizeBizCode(item?.bizCode || '') || normalizedBizCandidates[0] || this.DEFAULT_BIZ_CODE,
+                active: item?.active === true ? true : (item?.active === false ? false : null)
+            })).filter(item => item.campaignId);
+            const {
+                allTargets,
+                resumeTargets,
+                originalActiveTargets,
+                mandatorySiteTargets
+            } = this.resolveResumeTargets(allTargetsRaw);
+            return {
+                itemId: normalizedItemId,
+                allTargets,
+                resumeTargets,
+                originalActiveTargets,
+                mandatorySiteTargets,
+                unresolvedErrors
+            };
+        },
+
+        async resolveConcurrentTargets(baseCampaignId, bizCandidates, authContext, options = {}) {
+            const mainId = this.normalizeCampaignId(baseCampaignId);
+            const normalizedItemId = this.normalizeItemId(options?.itemId || '');
+            if (!mainId) {
+                return {
+                    itemId: normalizedItemId,
+                    allTargets: [],
+                    resumeTargets: [],
+                    originalActiveTargets: [],
+                    mandatorySiteTargets: [],
+                    unresolvedErrors: []
+                };
+            }
+            const normalizedBizCandidates = [];
+            const pushBizCandidate = (value) => {
+                const bizCode = this.normalizeBizCode(value);
+                if (!bizCode) return;
+                if (normalizedBizCandidates.includes(bizCode)) return;
+                normalizedBizCandidates.push(bizCode);
+            };
+            (Array.isArray(bizCandidates) ? bizCandidates : []).forEach(pushBizCandidate);
+            if (!normalizedBizCandidates.length) pushBizCandidate(this.DEFAULT_BIZ_CODE);
+
+            const targetMap = new Map();
+            const queue = [{ campaignId: mainId, bizCode: normalizedBizCandidates[0] || this.DEFAULT_BIZ_CODE }];
+            const queuedCampaignIds = new Set([mainId]);
+            const visitedCampaignIds = new Set();
+            const unresolvedErrors = [];
+
+            while (queue.length && visitedCampaignIds.size < 50) {
+                const current = queue.shift() || {};
+                const currentId = this.normalizeCampaignId(current.campaignId);
+                if (!currentId || visitedCampaignIds.has(currentId)) continue;
+                visitedCampaignIds.add(currentId);
+
+                const queryBizCodes = [];
+                const pushQueryBiz = (value) => {
+                    const bizCode = this.normalizeBizCode(value);
+                    if (!bizCode) return;
+                    if (queryBizCodes.includes(bizCode)) return;
+                    queryBizCodes.push(bizCode);
+                };
+                pushQueryBiz(current.bizCode);
+                normalizedBizCandidates.forEach(pushQueryBiz);
+                if (!queryBizCodes.length) pushQueryBiz(this.DEFAULT_BIZ_CODE);
+
+                const refs = [];
+                for (let i = 0; i < queryBizCodes.length; i++) {
+                    const bizCode = queryBizCodes[i];
+                    try {
+                        const list = await this.findConflictRefs(currentId, bizCode, authContext, options?.itemId || '');
+                        if (Array.isArray(list) && list.length) refs.push(...list);
+                    } catch (err) {
+                        unresolvedErrors.push(`${currentId}@${bizCode}:${err?.message || '冲突计划识别失败'}`);
+                    }
+                }
+
+                if (!refs.length) {
+                    this.upsertConcurrentTarget(targetMap, {
+                        campaignId: currentId,
+                        bizCode: current.bizCode || normalizedBizCandidates[0] || this.DEFAULT_BIZ_CODE
+                    }, current.bizCode || normalizedBizCandidates[0] || this.DEFAULT_BIZ_CODE);
+                    continue;
+                }
+
+                const normalizedRefs = this.normalizeCampaignRefs(refs);
+                normalizedRefs.forEach((ref) => {
+                    const campaignId = this.normalizeCampaignId(ref?.campaignId);
+                    if (!campaignId) return;
+                    const resolvedBizCode = this.normalizeBizCode(
+                        ref?.bizCode
+                        || current.bizCode
+                        || normalizedBizCandidates[0]
+                        || this.DEFAULT_BIZ_CODE
+                    ) || this.DEFAULT_BIZ_CODE;
+                    this.upsertConcurrentTarget(targetMap, { ...ref, campaignId, bizCode: resolvedBizCode }, resolvedBizCode);
+                    if (queuedCampaignIds.has(campaignId)) return;
+                    queuedCampaignIds.add(campaignId);
+                    queue.push({ campaignId, bizCode: resolvedBizCode });
+                });
+            }
+
+            if (!targetMap.size) {
+                this.upsertConcurrentTarget(targetMap, {
+                    campaignId: mainId,
+                    bizCode: normalizedBizCandidates[0] || this.DEFAULT_BIZ_CODE
+                }, normalizedBizCandidates[0] || this.DEFAULT_BIZ_CODE);
+            }
+
+            const allTargetsRaw = Array.from(targetMap.values()).map((item) => ({
+                campaignId: this.normalizeCampaignId(item?.campaignId),
+                bizCode: this.normalizeBizCode(item?.bizCode || '') || normalizedBizCandidates[0] || this.DEFAULT_BIZ_CODE,
+                active: item?.active === true ? true : (item?.active === false ? false : null)
+            })).filter(item => item.campaignId);
+            const {
+                allTargets,
+                resumeTargets,
+                originalActiveTargets,
+                mandatorySiteTargets
+            } = this.resolveResumeTargets(allTargetsRaw);
+            return {
+                itemId: normalizedItemId,
+                allTargets,
+                resumeTargets,
+                originalActiveTargets,
+                mandatorySiteTargets,
+                unresolvedErrors
+            };
+        },
+
+        async updateCampaignStatus(campaignId, bizCode, onlineStatus, authContext) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const status = Number(onlineStatus) === 1 ? 1 : 0;
+            const numericCampaignId = Number(id);
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/updatePart.json?${query.toString()}`;
+            const payload = {
+                bizCode: targetBizCode,
+                campaignList: [{
+                    campaignId: numericCampaignId,
+                    displayStatus: status === 1 ? 'start' : 'pause'
+                }],
+                csrfId: String(authContext?.csrfId || ''),
+                strategyRecoverys: [],
+                loginPointId: String(authContext?.loginPointId || ''),
+                lrsIdList: []
+            };
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: '*/*',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'bx-v': '2.5.36'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`${status === 1 ? '开启' : '暂停'}计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 160)}` : ''}`);
+            }
+            const json = await response.json().catch(() => ({}));
+            if (!this.isResponseOk(json)) {
+                throw new Error(this.pickResponseMessage(json, `${status === 1 ? '开启' : '暂停'}计划失败`));
+            }
+            const refs = [];
+            this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
+            const normalizedRefs = this.normalizeCampaignRefs(refs);
+            const current = normalizedRefs.find(item => item.campaignId === id) || null;
+            return {
+                campaignId: id,
+                bizCode: targetBizCode,
+                response: json,
+                active: this.resolveCampaignActiveState(current),
+                ref: current
+            };
+        },
+
+        async verifyTargetsStartedByItem(targets, authContext, itemId) {
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedItemId) {
+                return {
+                    ok: false,
+                    soft: true,
+                    states: [],
+                    error: '商品ID缺失，状态查询降级'
+                };
+            }
+            const targetList = Array.isArray(targets) ? targets : [];
+            const bizCodes = [];
+            const pushBizCode = (value) => {
+                const bizCode = this.normalizeBizCode(value);
+                if (!bizCode) return;
+                if (bizCodes.includes(bizCode)) return;
+                bizCodes.push(bizCode);
+            };
+            targetList.forEach(item => pushBizCode(item?.bizCode || ''));
+            this.BIZ_CODE_LIST.forEach(pushBizCode);
+            const stateByKey = new Map();
+            const stateByCampaignId = new Map();
+            const queryErrors = new Map();
+
+            for (let i = 0; i < bizCodes.length; i++) {
+                const bizCode = bizCodes[i];
+                try {
+                    const refs = await this.queryCampaignsByItem(normalizedItemId, bizCode, authContext);
+                    refs.forEach((ref) => {
+                        const campaignId = this.normalizeCampaignId(ref?.campaignId);
+                        if (!campaignId) return;
+                        const resolvedBizCode = this.normalizeBizCode(ref?.bizCode || bizCode) || bizCode;
+                        const active = this.resolveCampaignActiveState(ref);
+                        stateByKey.set(`${resolvedBizCode}@${campaignId}`, active);
+                        stateByCampaignId.set(campaignId, this.mergeCampaignActiveState(stateByCampaignId.get(campaignId), active));
+                    });
+                } catch (err) {
+                    queryErrors.set(bizCode, err?.message || '状态查询失败');
+                }
+            }
+
+            const checks = targetList.map((target) => {
+                const campaignId = this.normalizeCampaignId(target?.campaignId);
+                const bizCode = this.normalizeBizCode(target?.bizCode || '') || this.DEFAULT_BIZ_CODE;
+                const exactState = stateByKey.get(`${bizCode}@${campaignId}`);
+                const fallbackState = stateByCampaignId.get(campaignId);
+                const active = exactState === undefined ? (fallbackState === undefined ? null : fallbackState) : exactState;
+                return {
+                    campaignId,
+                    bizCode,
+                    active,
+                    error: active === null ? (queryErrors.get(bizCode) || '未命中商品计划结果') : ''
+                };
+            });
+
+            if (checks.length && checks.every(item => item.active === true)) {
+                return { ok: true, soft: false, states: checks, error: '' };
+            }
+            if (checks.length && checks.every(item => item.active === null)) {
+                return { ok: false, soft: true, states: checks, error: '状态查询未返回明确结果' };
+            }
+            const failedText = checks
+                .map(item => {
+                    if (item.active === true) return '';
+                    if (item.active === false) return `${item.campaignId}@${item.bizCode}:未开启`;
+                    return `${item.campaignId}@${item.bizCode}:未知(${item.error || '无返回'})`;
+                })
+                .filter(Boolean)
+                .join('；');
+            return {
+                ok: false,
+                soft: false,
+                states: checks,
+                error: failedText || '状态未同时开启'
+            };
+        },
+
+        async verifyTargetsStarted(targets, authContext, itemId = '') {
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (normalizedItemId) {
+                return this.verifyTargetsStartedByItem(targets, authContext, normalizedItemId);
+            }
+            const checks = await Promise.all((Array.isArray(targets) ? targets : []).map(async (target) => {
+                try {
+                    const refs = await this.findConflictRefs(target.campaignId, target.bizCode, authContext, normalizedItemId);
+                    const current = refs.find(item => item.campaignId === target.campaignId) || null;
+                    const active = this.resolveCampaignActiveState(current);
+                    return {
+                        campaignId: target.campaignId,
+                        bizCode: target.bizCode,
+                        active,
+                        error: ''
+                    };
+                } catch (err) {
+                    return {
+                        campaignId: target.campaignId,
+                        bizCode: target.bizCode,
+                        active: null,
+                        error: err?.message || '状态查询失败'
+                    };
+                }
+            }));
+
+            if (checks.length && checks.every(item => item.active === true)) {
+                return { ok: true, soft: false, states: checks, error: '' };
+            }
+            if (checks.length && checks.every(item => item.active === null)) {
+                return { ok: false, soft: true, states: checks, error: '状态查询未返回明确结果' };
+            }
+            const failedText = checks
+                .map(item => {
+                    if (item.active === true) return '';
+                    if (item.active === false) return `${item.campaignId}@${item.bizCode}:未开启`;
+                    return `${item.campaignId}@${item.bizCode}:未知(${item.error || '无返回'})`;
+                })
+                .filter(Boolean)
+                .join('；');
+            return {
+                ok: false,
+                soft: false,
+                states: checks,
+                error: failedText || '状态未同时开启'
+            };
+        },
+
+        setConcurrentButtonRunning(campaignId, running) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return;
+            const selector = `.am-campaign-search-btn[data-am-campaign-concurrent-start="1"][data-campaign-id="${id}"]`;
+            document.querySelectorAll(selector).forEach((btn) => {
+                if (!(btn instanceof HTMLButtonElement)) return;
+                if (running) {
+                    if (!btn.dataset.amTitleBak) btn.dataset.amTitleBak = btn.title || '';
+                    btn.classList.add('is-running');
+                    btn.disabled = true;
+                    btn.title = `并发开启执行中：${id}`;
+                    return;
+                }
+                btn.classList.remove('is-running');
+                btn.disabled = false;
+                const titleBak = btn.dataset.amTitleBak;
+                btn.title = titleBak || `并发开启关联计划：${id}`;
+                delete btn.dataset.amTitleBak;
+            });
+        },
+
+        async runConcurrentStartFlow(campaignId, triggerEl) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+
+            const bizCandidates = this.getCandidateBizCodes(triggerEl);
+            const authContext = this.resolveAuthContext(bizCandidates[0] || this.DEFAULT_BIZ_CODE);
+            const inferredItemId = this.inferItemIdFromElement(triggerEl);
+            let resolvedTargets = await this.resolveConcurrentTargetsByItem(inferredItemId, bizCandidates, authContext);
+            if (!Array.isArray(resolvedTargets?.allTargets) || !resolvedTargets.allTargets.length) {
+                resolvedTargets = await this.resolveConcurrentTargets(id, bizCandidates, authContext, { itemId: inferredItemId });
+            }
+            const resolvedItemId = this.normalizeItemId(resolvedTargets?.itemId || inferredItemId);
+            const allTargets = Array.isArray(resolvedTargets?.allTargets) ? resolvedTargets.allTargets : [];
+            const resumeTargets = Array.isArray(resolvedTargets?.resumeTargets) ? resolvedTargets.resumeTargets : [];
+            const mandatorySiteTargets = Array.isArray(resolvedTargets?.mandatorySiteTargets) ? resolvedTargets.mandatorySiteTargets : [];
+            const unresolvedErrors = Array.isArray(resolvedTargets?.unresolvedErrors) ? resolvedTargets.unresolvedErrors : [];
+            if (!allTargets.length) {
+                this.appendConcurrentLog('未识别到该商品下可操作计划', 'error');
+                throw new Error('未识别到同商品计划，请先手动切换一次计划开关后重试');
+            }
+            if (!resumeTargets.length) {
+                this.appendConcurrentLog('未识别到可重开计划，无法执行并发开启', 'error');
+                throw new Error('未识别到可重开计划，请检查当前商品计划状态后重试');
+            }
+            if (unresolvedErrors.length) {
+                const text = unresolvedErrors.slice(0, 3).join('；');
+                const extra = unresolvedErrors.length > 3 ? `（另有${unresolvedErrors.length - 3}条）` : '';
+                Logger.log(`⚠️ 部分计划识别失败：${text}${extra} `, true);
+                this.appendConcurrentLog(`部分计划识别失败：${text}${extra}`, 'warn');
+            }
+            Logger.log(
+                `🚦 并发开启准备：商品${resolvedItemId || '-'}共${allTargets.length}个计划，原在投${resumeTargets.length}个；全量暂停后重开：${resumeTargets.map(item => `${item.campaignId}@${item.bizCode}`).join(' + ')} `
+            );
+            this.appendConcurrentLog(
+                `计划识别完成：商品${resolvedItemId || '-'}共${allTargets.length}个计划，货品全站必开${mandatorySiteTargets.length}个，执行重开${resumeTargets.length}个`,
+                'info'
+            );
+            if (mandatorySiteTargets.length) {
+                this.appendConcurrentLog(
+                    `货品全站必开计划：${mandatorySiteTargets.map(item => `${item.campaignId}@${item.bizCode}`).join(' + ')}`,
+                    'info'
+                );
+            }
+
+            const pauseSettled = await Promise.allSettled(
+                allTargets.map(target => this.updateCampaignStatus(target.campaignId, target.bizCode, 0, authContext))
+            );
+            const pauseErrors = pauseSettled
+                .filter(item => item.status === 'rejected')
+                .map(item => item.reason?.message || '暂停失败');
+            const pauseSuccessCount = pauseSettled.length - pauseErrors.length;
+            this.appendConcurrentLog(`全量暂停完成：成功${pauseSuccessCount}，失败${pauseErrors.length}`, pauseErrors.length ? 'warn' : 'success');
+            if (pauseErrors.length) {
+                Logger.log(`⚠️ 全量暂停存在失败：${pauseErrors.join('；')} `, true);
+                this.appendConcurrentLog(`全量暂停错误：${pauseErrors.join('；')}`, 'warn');
+                if (pauseErrors.length >= allTargets.length) {
+                    this.appendConcurrentLog('全量暂停全部失败，流程终止', 'error');
+                    throw new Error(`同商品计划全量暂停失败：${pauseErrors.join('；')}`);
+                }
+            }
+            await this.sleep(180);
+
+            let lastError = '';
+            for (let attempt = 1; attempt <= this.MAX_START_RETRIES; attempt++) {
+                this.appendConcurrentLog(`开始第${attempt}次并发开启，目标${resumeTargets.length}个`, 'info');
+                const startSettled = await Promise.allSettled(
+                    resumeTargets.map(target => this.updateCampaignStatus(target.campaignId, target.bizCode, 1, authContext))
+                );
+                const startErrors = startSettled
+                    .filter(item => item.status === 'rejected')
+                    .map(item => item.reason?.message || '开启失败');
+                const startResults = startSettled
+                    .filter(item => item.status === 'fulfilled')
+                    .map(item => item.value);
+                const allByResponse = startResults.length === resumeTargets.length
+                    && startResults.every(item => item.active === true);
+                this.appendConcurrentLog(
+                    `第${attempt}次开启请求完成：成功${startResults.length}，失败${startErrors.length}`,
+                    startErrors.length ? 'warn' : 'success'
+                );
+                if (allByResponse) {
+                    this.appendConcurrentLog(`第${attempt}次响应即确认全部开启`, 'success');
+                    return {
+                        attempt,
+                        mode: 'response',
+                        itemId: resolvedItemId,
+                        targets: resumeTargets,
+                        allTargets,
+                        mandatorySiteTargets
+                    };
+                }
+
+                const verify = await this.verifyTargetsStarted(resumeTargets, authContext, resolvedItemId);
+                if (verify.ok) {
+                    this.appendConcurrentLog(`第${attempt}次状态校验通过，全部目标已开启`, 'success');
+                    return {
+                        attempt,
+                        mode: 'verify',
+                        itemId: resolvedItemId,
+                        targets: resumeTargets,
+                        allTargets,
+                        mandatorySiteTargets
+                    };
+                }
+                if (!startErrors.length && verify.soft) {
+                    this.appendConcurrentLog(`第${attempt}次状态接口无明确返回，按请求成功处理`, 'warn');
+                    return {
+                        attempt,
+                        mode: 'request_only',
+                        itemId: resolvedItemId,
+                        targets: resumeTargets,
+                        allTargets,
+                        mandatorySiteTargets
+                    };
+                }
+
+                lastError = [startErrors.join('；'), verify.error].filter(Boolean).join('；')
+                    || `第${attempt}次并发开启失败`;
+                this.appendConcurrentLog(`第${attempt}次未成功：${lastError}`, 'warn');
+                if (attempt >= this.MAX_START_RETRIES) break;
+
+                Logger.log(`⚠️ 并发开启第${attempt}次未成功：${lastError}，准备重试`, true);
+                await Promise.allSettled(
+                    allTargets.map(target => this.updateCampaignStatus(target.campaignId, target.bizCode, 0, authContext))
+                );
+                await this.sleep(Math.min(2400, this.RETRY_DELAY_MS * attempt));
+            }
+            this.appendConcurrentLog(`重试结束仍失败：${lastError || `重试${this.MAX_START_RETRIES}次后仍未同时开启`}`, 'error');
+            throw new Error(lastError || `重试${this.MAX_START_RETRIES}次后仍未同时开启`);
+        },
+
+        createButton(campaignId, options = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return null;
+            const mode = options.mode === 'concurrent' ? 'concurrent' : 'quick';
+            const bizCode = this.normalizeBizCode(options.bizCode || '');
 
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'am-campaign-search-btn';
-            btn.setAttribute('data-am-campaign-quick', '1');
-                btn.setAttribute('data-campaign-id', id);
-                btn.dataset.campaignId = id;
+            btn.className = mode === 'concurrent'
+                ? 'am-campaign-search-btn am-campaign-concurrent-start-btn'
+                : 'am-campaign-search-btn';
+            btn.setAttribute('data-campaign-id', id);
+            btn.dataset.campaignId = id;
+            if (bizCode) {
+                btn.setAttribute('data-biz-code', bizCode);
+                btn.dataset.bizCode = bizCode;
+            }
+            if (mode === 'concurrent') {
+                btn.setAttribute('data-am-campaign-concurrent-start', '1');
+                btn.title = `并发开启关联计划：${id}`;
+                btn.setAttribute('aria-label', `并发开启关联计划：${id}`);
+                btn.innerHTML = this.CONCURRENT_START_ICON_SVG.trim();
+            } else {
+                btn.setAttribute('data-am-campaign-quick', '1');
                 btn.title = `查数计划ID：${id}`;
                 btn.setAttribute('aria-label', `查数计划ID：${id}`);
                 btn.innerHTML = this.ICON_SVG.trim();
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const guessedName = MagicReport.guessCampaignNameById(id, btn);
-                    if (guessedName) {
-                        MagicReport.lastCampaignName = guessedName;
-                    }
-                    MagicReport.openWithCampaignId(id, { preferNative: false, promptType: 'click' }).catch((err) => {
-                        Logger.log(`⚠️ 快捷查数失败：${err?.message || '未知错误'} `, true);
-                    });
-                });
-                return btn;
-            },
+            }
+            return btn;
+        },
 
         run() {
             if (window.top !== window.self) return;
@@ -4347,6 +5765,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             textNodes.forEach((textNode) => {
                 const rawText = textNode.nodeValue || '';
                 const regex = new RegExp(this.TEXT_PATTERN.source, 'g');
+                const contextBizCode = this.inferBizCodeFromElement(textNode.parentElement);
                 let match;
                 let cursor = 0;
                 let hasMatch = false;
@@ -4367,8 +5786,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         token.textContent = fullText;
                         frag.appendChild(token);
 
-                        const btn = this.createButton(campaignId);
-                        if (btn) frag.appendChild(btn);
+                        const quickBtn = this.createButton(campaignId, { mode: 'quick', bizCode: contextBizCode });
+                        if (quickBtn) frag.appendChild(quickBtn);
+                        const concurrentBtn = this.createButton(campaignId, { mode: 'concurrent', bizCode: contextBizCode });
+                        if (concurrentBtn) frag.appendChild(concurrentBtn);
                         hasMatch = true;
                     } else {
                         frag.appendChild(document.createTextNode(fullText));
@@ -4400,16 +5821,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const raw = el.getAttribute('href') || el.getAttribute('mx-href') || '';
                 const id = this.normalizeCampaignId(MagicReport.extractCampaignId(raw));
                 if (!id) return;
+                const bizCode = this.parseBizCodeFromRaw(raw) || this.inferBizCodeFromElement(el);
 
-                const next = el.nextElementSibling;
-                if (next?.matches?.('.am-campaign-search-btn[data-am-campaign-quick="1"]') &&
-                    next.getAttribute('data-campaign-id') === id) {
-                    return;
+                const siblingButtons = [];
+                let pointer = el.nextElementSibling;
+                for (let i = 0; i < 6 && pointer; i++) {
+                    if (pointer.matches?.('.am-campaign-search-btn')) {
+                        siblingButtons.push(pointer);
+                        pointer = pointer.nextElementSibling;
+                        continue;
+                    }
+                    break;
                 }
+                const quickBtn = siblingButtons.find(btn =>
+                    btn.matches?.('.am-campaign-search-btn[data-am-campaign-quick="1"]')
+                    && btn.getAttribute('data-campaign-id') === id
+                );
+                const concurrentBtn = siblingButtons.find(btn =>
+                    btn.matches?.('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]')
+                    && btn.getAttribute('data-campaign-id') === id
+                );
 
-                const btn = this.createButton(id);
-                if (!btn) return;
-                el.insertAdjacentElement('afterend', btn);
+                let anchor = quickBtn || el;
+                if (!quickBtn) {
+                    const createdQuick = this.createButton(id, { mode: 'quick', bizCode });
+                    if (createdQuick) {
+                        el.insertAdjacentElement('afterend', createdQuick);
+                        anchor = createdQuick;
+                    }
+                }
+                if (!concurrentBtn) {
+                    const createdConcurrent = this.createButton(id, { mode: 'concurrent', bizCode });
+                    if (createdConcurrent) {
+                        anchor.insertAdjacentElement('afterend', createdConcurrent);
+                    }
+                }
             });
         }
     };

@@ -52,6 +52,9 @@
 dev/dev-loader.user.js                    # 本地开发加载器（刷新即生效）
 dev/smoke-harness.html                    # 本地烟测页面
 tests/logger-api.test.mjs                 # 关键 API 回归测试
+tests/agent-cluster-runtime.test.mjs      # Agent 集群回归测试
+agent-cluster/README.md                   # Agent 集群使用说明
+agent-cluster/bin/cluster-cli.mjs         # Agent 集群 CLI 示例入口
 scripts/review-team.sh                    # 团队自动化检查入口
 .github/workflows/ci.yml                  # CI 检查
 .github/workflows/release.yml             # Tag 发布流程
@@ -70,9 +73,29 @@ RELEASE.md                              # 发布说明
 ```bash
 node --check "阿里妈妈多合一助手.js"
 node --test tests/logger-api.test.mjs
+node --test tests/agent-cluster-runtime.test.mjs
+node agent-cluster/bin/cluster-cli.mjs demo
 ```
 
 建议配合 Tampermonkey 加载脚本后，在阿里妈妈页面执行手工回归（见 `SMOKE_TEST_CHECKLIST.md`）。
+
+## Agent 集群系统（最小可运行）
+
+仓库新增本机可运行的 Agent 集群实现（无外部服务依赖），提供：
+
+- 编排层：`agent-cluster/orchestration/agent-cluster.mjs`
+- 执行层：`agent-cluster/execution/task-queue.mjs` + `agent-cluster/execution/worker.mjs`
+- 通知层：`agent-cluster/notification/local-notifier.mjs`
+- 上下文层：`agent-cluster/context/context-store.mjs`
+- 本地日志：`agent-cluster/shared/file-logger.mjs`
+
+快速体验：
+
+```bash
+node agent-cluster/bin/cluster-cli.mjs demo
+```
+
+更多参数与二次开发示例见：`agent-cluster/README.md`。
 
 ## 代码检查团队（Review Team）
 
