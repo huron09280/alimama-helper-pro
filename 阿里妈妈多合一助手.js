@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      5.30
+// @version      6.00
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,12 @@
 // ==/UserScript==
 /**
  * 更新日志
+ * 
+ * v6.00 (2026-02-27)
+ * - 🚀 版本主线升级：正式从 v5.x 切换到 v6.x，后续迭代以 6 系列为基线
+ * - ✨ 重点更新：主面板三入口与辅助显示交互流程进一步收敛，默认操作更聚焦
+ * - 🔧 稳定性增强：配置迁移、版本同步与 Hook 幂等关键路径继续加固
+ * - ✅ 发布门禁统一：发版前检查持续收敛到 `scripts/review-team.sh`
  * 
  * v5.30 (2026-02-15)
  * - ✅ 新增代码检查团队机制：补充团队职责文档与 PR 检查清单
@@ -4339,7 +4345,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
         DEFAULT_BIZ_CODE: 'onebpSearch',
-        BIZ_CODE_LIST: ['onebpSearch', 'onebpSite'],
+        BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
         MAX_START_RETRIES: 6,
         RETRY_DELAY_MS: 450,
         MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS: 3,
@@ -4440,12 +4446,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return /^\d{6,}$/.test(id) ? id : '';
         },
 
+        normalizeAdgroupId(rawId) {
+            const id = String(rawId || '').trim();
+            return /^\d{6,}$/.test(id) ? id : '';
+        },
+
         normalizeBizCode(rawBizCode) {
             const biz = String(rawBizCode || '').trim();
             if (!biz) return '';
-            if (biz === 'onebpSearch' || biz === 'onebpSite') return biz;
+            if (biz === 'onebpSearch' || biz === 'onebpSite' || biz === 'onebpAdStrategyLiuZi' || biz === 'onebpDisplay') return biz;
             if (/onebpsearch|search|keyword|关键词/i.test(biz)) return 'onebpSearch';
             if (/onebpsite|site|全站/i.test(biz)) return 'onebpSite';
+            if (/onebpadstrategyliuzi|liuzi|lead|线索|留资/i.test(biz)) return 'onebpAdStrategyLiuZi';
+            if (/onebpdisplay|display|crowd|人群/i.test(biz)) return 'onebpDisplay';
             return '';
         },
 
@@ -4576,6 +4589,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const scopeText = String(scope?.textContent || '');
             if (/关键词推广|关键词计划|关键词/.test(scopeText)) return 'onebpSearch';
             if (/全站推广|货品全站|全站/.test(scopeText)) return 'onebpSite';
+            if (/线索推广|线索计划|线索|留资/.test(scopeText)) return 'onebpAdStrategyLiuZi';
+            if (/人群推广|人群计划|人群/.test(scopeText)) return 'onebpDisplay';
             return fromLocation;
         },
 
@@ -4638,6 +4653,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const candidate = this.normalizeItemId(parsed.searchParams.get(keys[i]) || '');
                     if (candidate) return candidate;
                 }
+                const host = String(parsed.hostname || '').toLowerCase();
+                const path = String(parsed.pathname || '').toLowerCase();
+                if (/detail\.tmall\.com|item\.taobao\.com/.test(host) || /\/item\.htm/.test(path)) {
+                    const candidate = this.normalizeItemId(parsed.searchParams.get('id') || '');
+                    if (candidate) return candidate;
+                }
             } catch { }
             return '';
         },
@@ -4677,12 +4698,230 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return findFromText(document.body?.innerText || '');
         },
 
-        async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '') {
+        resolveItemIdFromCandidates(candidates = []) {
+            const queue = Array.isArray(candidates) ? [...candidates] : [candidates];
+            for (let i = 0; i < queue.length; i++) {
+                const current = queue[i];
+                if (current === undefined || current === null || current === '') continue;
+                if (Array.isArray(current)) {
+                    queue.push(...current);
+                    continue;
+                }
+                if (typeof current === 'object') {
+                    queue.push(
+                        current.itemId,
+                        current.materialId,
+                        current.auctionId,
+                        current.targetItemId,
+                        current.targetMaterialId,
+                        current.item_id,
+                        current.material_id,
+                        current.itemid,
+                        current.materialid,
+                        current.itemIdList,
+                        current.materialIdList,
+                        current.whiteBoxItemIds,
+                        current.linkUrl,
+                        current.itemUrl,
+                        current.material,
+                        current.lastAdgroup
+                    );
+                    continue;
+                }
+                const normalized = this.normalizeItemId(current);
+                if (normalized) return normalized;
+                const parsed = this.parseItemIdFromRaw(current);
+                if (parsed) return parsed;
+            }
+            return '';
+        },
+
+        extractAdgroupIdsFromCampaignPayload(payload = {}, expectedCampaignId = '') {
+            const normalizedCampaignId = this.normalizeCampaignId(expectedCampaignId);
+            const campaign = payload?.data?.campaign || payload?.campaign || payload?.data || {};
+            const adgroupList = Array.isArray(campaign?.adgroupList) ? campaign.adgroupList : [];
+            const dataAdgroupList = Array.isArray(payload?.data?.adgroupList) ? payload.data.adgroupList : [];
+            const adgroupIdBuckets = [
+                campaign?.adgroupIdList,
+                campaign?.adgroupIds,
+                payload?.data?.adgroupIdList,
+                payload?.data?.adgroupIds,
+                payload?.adgroupIdList,
+                payload?.adgroupIds
+            ];
+            const candidates = [
+                campaign,
+                campaign?.lastAdgroup,
+                ...adgroupList,
+                ...dataAdgroupList,
+                payload?.data?.adgroup
+            ];
+            const out = [];
+            const pushId = (raw) => {
+                const id = this.normalizeAdgroupId(raw);
+                if (!id) return;
+                if (out.includes(id)) return;
+                out.push(id);
+            };
+            candidates.forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const campaignId = this.normalizeCampaignId(item.campaignId || '');
+                if (normalizedCampaignId && campaignId && campaignId !== normalizedCampaignId) return;
+                pushId(item.adgroupId || item.groupId || item.id || '');
+            });
+            adgroupIdBuckets.forEach((bucket) => {
+                if (Array.isArray(bucket)) {
+                    bucket.forEach(pushId);
+                    return;
+                }
+                pushId(bucket);
+            });
+            return out;
+        },
+
+        extractItemIdFromCampaignPayload(payload = {}, expectedCampaignId = '') {
+            const normalizedCampaignId = this.normalizeCampaignId(expectedCampaignId);
+            const refs = [];
+            this.collectCampaignRefsFromNode(payload, refs, {
+                depth: 0,
+                seen: new WeakSet()
+            });
+            const normalizedRefs = this.normalizeCampaignRefs(refs);
+            normalizedRefs.forEach((item) => {
+                this.rememberCampaignItemId(item?.campaignId, item?.itemId || '');
+            });
+            if (normalizedCampaignId) {
+                const selfRef = normalizedRefs.find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
+                const selfItemId = this.normalizeItemId(selfRef?.itemId || '');
+                if (selfItemId) return selfItemId;
+            }
+            const campaign = payload?.data?.campaign || payload?.campaign || payload?.data || {};
+            const adgroupList = Array.isArray(campaign?.adgroupList) ? campaign.adgroupList : [];
+            const scopedAdgroupList = normalizedCampaignId
+                ? adgroupList.filter((item) => {
+                    const campaignId = this.normalizeCampaignId(item?.campaignId || '');
+                    return !campaignId || campaignId === normalizedCampaignId;
+                })
+                : adgroupList;
+            return this.resolveItemIdFromCandidates([
+                campaign?.itemId,
+                campaign?.materialId,
+                campaign?.auctionId,
+                campaign?.targetItemId,
+                campaign?.targetMaterialId,
+                campaign?.itemIdList,
+                campaign?.materialIdList,
+                campaign?.whiteBoxItemIds,
+                campaign?.scopeItems,
+                campaign?.material,
+                campaign?.lastAdgroup,
+                scopedAdgroupList,
+                payload?.data?.adgroup,
+                payload?.data?.adgroupList
+            ]);
+        },
+
+        async queryCampaignDetail(campaignId, bizCode, authContext) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return { itemId: '', adgroupIds: [] };
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/get.json?${query.toString()}`;
+            const payload = {
+                bizCode: targetBizCode,
+                campaignId: id,
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: '*/*',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'bx-v': '2.5.36'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`查询计划详情失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
+            }
+            const json = await response.json().catch(() => ({}));
+            if (!this.isResponseOk(json)) {
+                throw new Error(this.pickResponseMessage(json, '查询计划详情失败'));
+            }
+            const itemId = this.extractItemIdFromCampaignPayload(json, id);
+            const adgroupIds = this.extractAdgroupIdsFromCampaignPayload(json, id);
+            if (itemId) this.rememberCampaignItemId(id, itemId);
+            return { itemId, adgroupIds, response: json };
+        },
+
+        async queryAdgroupDetail(campaignId, adgroupId, bizCode, authContext) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedAdgroupId = this.normalizeAdgroupId(adgroupId);
+            if (!normalizedCampaignId || !normalizedAdgroupId) return { itemId: '' };
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/adgroup/get.json?${query.toString()}`;
+            const payload = {
+                bizCode: targetBizCode,
+                campaignId: normalizedCampaignId,
+                adgroupId: normalizedAdgroupId,
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: '*/*',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'bx-v': '2.5.36'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`查询单元详情失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
+            }
+            const json = await response.json().catch(() => ({}));
+            if (!this.isResponseOk(json)) {
+                throw new Error(this.pickResponseMessage(json, '查询单元详情失败'));
+            }
+            const itemId = this.extractItemIdFromCampaignPayload(json, normalizedCampaignId)
+                || this.resolveItemIdFromCandidates([
+                    json?.data?.adgroup,
+                    json?.data?.adgroup?.material,
+                    json?.data?.adgroup?.material?.linkUrl
+                ]);
+            if (itemId) this.rememberCampaignItemId(normalizedCampaignId, itemId);
+            return { itemId, response: json };
+        },
+
+        async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '', traceMessages = null) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
+            const pushTrace = (message) => {
+                if (!Array.isArray(traceMessages)) return;
+                const text = String(message || '').trim();
+                if (!text) return;
+                traceMessages.push(text);
+            };
             const fallback = this.normalizeItemId(fallbackItemId);
             const cached = this.getCampaignItemId(normalizedCampaignId);
-            if (cached) return cached;
+            if (cached) {
+                pushTrace(`商品ID识别：命中缓存 ${cached}`);
+                return cached;
+            }
             const bizList = [];
             const pushBizCode = (value) => {
                 const bizCode = this.normalizeBizCode(value);
@@ -4694,19 +4933,54 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.BIZ_CODE_LIST.forEach(pushBizCode);
 
             for (let i = 0; i < bizList.length; i++) {
+                const currentBiz = bizList[i];
                 try {
-                    const refs = await this.findConflictRefs(normalizedCampaignId, bizList[i], authContext, '');
+                    const refs = await this.findConflictRefs(normalizedCampaignId, currentBiz, authContext, '');
                     const selfRef = (Array.isArray(refs) ? refs : []).find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
                     const resolved = this.normalizeItemId(selfRef?.itemId || '');
-                    if (!resolved) continue;
-                    this.rememberCampaignItemId(normalizedCampaignId, resolved);
-                    return resolved;
-                } catch { }
+                    if (resolved) {
+                        this.rememberCampaignItemId(normalizedCampaignId, resolved);
+                        pushTrace(`商品ID识别：冲突接口命中 ${resolved}（${currentBiz}）`);
+                        return resolved;
+                    }
+                } catch (err) {
+                    pushTrace(`商品ID识别：冲突接口失败（${currentBiz}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
+                }
+                try {
+                    const detail = await this.queryCampaignDetail(normalizedCampaignId, currentBiz, authContext);
+                    const resolvedByCampaign = this.normalizeItemId(detail?.itemId || '');
+                    if (resolvedByCampaign) {
+                        this.rememberCampaignItemId(normalizedCampaignId, resolvedByCampaign);
+                        pushTrace(`商品ID识别：计划详情命中 ${resolvedByCampaign}（${currentBiz}）`);
+                        return resolvedByCampaign;
+                    }
+                    const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
+                    if (adgroupIds.length) {
+                        pushTrace(`商品ID识别：计划详情返回单元 ${adgroupIds.length} 个（${currentBiz}）`);
+                    }
+                    for (let j = 0; j < Math.min(8, adgroupIds.length); j++) {
+                        try {
+                            const adgroupDetail = await this.queryAdgroupDetail(normalizedCampaignId, adgroupIds[j], currentBiz, authContext);
+                            const resolvedByAdgroup = this.normalizeItemId(adgroupDetail?.itemId || '');
+                            if (resolvedByAdgroup) {
+                                this.rememberCampaignItemId(normalizedCampaignId, resolvedByAdgroup);
+                                pushTrace(`商品ID识别：单元详情命中 ${resolvedByAdgroup}（${currentBiz} / adgroup=${adgroupIds[j]}）`);
+                                return resolvedByAdgroup;
+                            }
+                        } catch (err) {
+                            pushTrace(`商品ID识别：单元详情失败（${currentBiz} / adgroup=${adgroupIds[j]}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
+                        }
+                    }
+                } catch (err) {
+                    pushTrace(`商品ID识别：计划详情失败（${currentBiz}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
+                }
             }
             if (fallback) {
                 this.rememberCampaignItemId(normalizedCampaignId, fallback);
+                pushTrace(`商品ID识别：使用按钮透传兜底 ${fallback}`);
                 return fallback;
             }
+            pushTrace('商品ID识别：未识别到商品ID');
             return '';
         },
 
@@ -4969,15 +5243,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 || bizHint
                 || ''
             );
-            const localItemId = this.normalizeItemId(
-                node.itemId
-                || node.materialId
-                || node.auctionId
-                || node.targetItemId
-                || node.targetMaterialId
-                || itemHint
-                || ''
-            );
+            const localItemId = this.resolveItemIdFromCandidates([
+                node.itemId,
+                node.materialId,
+                node.auctionId,
+                node.targetItemId,
+                node.targetMaterialId,
+                node.item_id,
+                node.material_id,
+                node.itemid,
+                node.materialid,
+                node.itemIdList,
+                node.materialIdList,
+                node.whiteBoxItemIds,
+                node.scopeItems,
+                node.material,
+                node.linkUrl,
+                itemHint
+            ]);
             const localStatus = node.status;
             const localOnlineStatus = node.onlineStatus ?? node.isOnline ?? node.online;
             const localDisplayStatus = node.displayStatus || node.planStatus || node.campaignStatus || '';
@@ -5653,6 +5936,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const siteTargets = buckets.siteTargets;
             const customTargets = buckets.customTargets;
+            const customTargetsByBiz = new Map();
+            customTargets.forEach((target) => {
+                const bizCode = this.normalizeBizCode(target?.bizCode || '');
+                const campaignId = this.normalizeCampaignId(target?.campaignId || '');
+                if (!bizCode || !campaignId) return;
+                const list = customTargetsByBiz.get(bizCode) || [];
+                if (list.includes(campaignId)) return;
+                list.push(campaignId);
+                customTargetsByBiz.set(bizCode, list);
+            });
+            const customBizList = Array.from(customTargetsByBiz.keys());
             this.appendConcurrentLog(
                 `触发突破策略：全站${siteTargets.length}个 + 自定义${customTargets.length}个，执行双轨批量并发抢开`,
                 'warn'
@@ -5661,23 +5955,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             let lastError = '';
             for (let round = 1; round <= this.MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS; round++) {
                 this.appendConcurrentLog(`突破策略第${round}轮（总第${attempt || 1}次重试）：按业务线批量并发开启`, 'info');
-                const startSettled = await Promise.allSettled([
-                    this.updateCampaignStatusBatchByBiz(
-                        siteTargets.map(item => item.campaignId),
-                        'onebpSite',
-                        1,
-                        authContext
-                    ),
-                    this.updateCampaignStatusBatchByBiz(
-                        customTargets.map(item => item.campaignId),
-                        'onebpSearch',
-                        1,
-                        authContext
-                    )
-                ]);
+                const startJobs = [
+                    {
+                        bizCode: 'onebpSite',
+                        campaignIds: siteTargets.map(item => item.campaignId)
+                    },
+                    ...customBizList.map((bizCode) => ({
+                        bizCode,
+                        campaignIds: customTargetsByBiz.get(bizCode) || []
+                    }))
+                ].filter(item => Array.isArray(item.campaignIds) && item.campaignIds.length);
+                const startSettled = await Promise.allSettled(
+                    startJobs.map(item => this.updateCampaignStatusBatchByBiz(item.campaignIds, item.bizCode, 1, authContext))
+                );
                 const startErrors = startSettled
-                    .filter(item => item.status === 'rejected')
-                    .map(item => item.reason?.message || '突破策略批量开启失败');
+                    .map((item, index) => {
+                        if (item.status !== 'rejected') return '';
+                        const bizCode = startJobs[index]?.bizCode || '-';
+                        return `${bizCode}:${item.reason?.message || '突破策略批量开启失败'}`;
+                    })
+                    .filter(Boolean);
                 if (startErrors.length) {
                     this.appendConcurrentLog(`突破策略第${round}轮接口失败：${startErrors.join('；')}`, 'warn');
                 }
@@ -5869,16 +6166,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 allowLocationFallback: false,
                 allowBodyFallback: false
             });
-            const fallbackItemId = this.inferItemIdFromElement(triggerEl, {
+            const locationItemId = this.inferItemIdFromElement(triggerEl, {
                 allowLocationFallback: true,
                 allowBodyFallback: false
             });
+            const itemIdTrace = [];
+            if (hintedItemId) {
+                itemIdTrace.push(`商品ID识别：按钮上下文候选 ${hintedItemId}`);
+            } else if (locationItemId) {
+                itemIdTrace.push(`商品ID识别：地址栏候选 ${locationItemId}（仅候选，不直接采用）`);
+            }
             const inferredItemId = await this.resolveItemIdByCampaignId(
                 id,
                 bizCandidates,
                 authContext,
-                hintedItemId || fallbackItemId
+                hintedItemId,
+                itemIdTrace
             );
+            if (!inferredItemId && !hintedItemId && locationItemId) {
+                itemIdTrace.push(`商品ID识别：接口未命中，未使用地址栏候选 ${locationItemId}，避免串商品`);
+            }
+            itemIdTrace.slice(0, 8).forEach((text) => this.appendConcurrentLog(text, 'info'));
             let resolvedTargets = await this.resolveConcurrentTargetsByItem(inferredItemId, bizCandidates, authContext);
             if (!Array.isArray(resolvedTargets?.allTargets) || !resolvedTargets.allTargets.length) {
                 resolvedTargets = await this.resolveConcurrentTargets(id, bizCandidates, authContext, { itemId: inferredItemId });
@@ -5891,6 +6199,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const resumeTargets = Array.isArray(resolvedTargets?.resumeTargets) ? resolvedTargets.resumeTargets : [];
             const mandatorySiteTargets = Array.isArray(resolvedTargets?.mandatorySiteTargets) ? resolvedTargets.mandatorySiteTargets : [];
             const unresolvedErrors = Array.isArray(resolvedTargets?.unresolvedErrors) ? resolvedTargets.unresolvedErrors : [];
+            const siteCount = allTargets.filter(item => this.normalizeBizCode(item?.bizCode || '') === 'onebpSite').length;
+            const searchCount = allTargets.filter(item => this.normalizeBizCode(item?.bizCode || '') === 'onebpSearch').length;
+            const leadCount = allTargets.filter(item => this.normalizeBizCode(item?.bizCode || '') === 'onebpAdStrategyLiuZi').length;
+            const crowdCount = allTargets.filter(item => this.normalizeBizCode(item?.bizCode || '') === 'onebpDisplay').length;
+            const knownCount = siteCount + searchCount + leadCount + crowdCount;
+            const otherCount = Math.max(0, allTargets.length - knownCount);
             if (!allTargets.length) {
                 this.appendConcurrentLog('未识别到该商品下可操作计划', 'error');
                 throw new Error('未识别到同商品计划，请先手动切换一次计划开关后重试');
@@ -5910,6 +6224,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             );
             this.appendConcurrentLog(
                 `计划识别完成：商品${resolvedItemId || '-'}共${allTargets.length}个计划，货品全站必开${mandatorySiteTargets.length}个，执行重开${resumeTargets.length}个`,
+                'info'
+            );
+            this.appendConcurrentLog(
+                `同商品分类统计：货品全站${siteCount}，关键词${searchCount}，线索${leadCount}，人群${crowdCount}${otherCount ? `，其它${otherCount}` : ''}`,
+                'info'
+            );
+            this.appendConcurrentLog(
+                `同商品全部计划：${allTargets.map((item) => {
+                    const tag = item?.active === true ? '原在投' : (item?.active === false ? '原暂停' : '状态待确认');
+                    return `${item.campaignId}@${item.bizCode}(${tag})`;
+                }).join(' + ') || '-'}`,
                 'info'
             );
             if (mandatorySiteTargets.length) {

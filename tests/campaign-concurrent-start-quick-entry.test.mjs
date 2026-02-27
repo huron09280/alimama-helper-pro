@@ -20,12 +20,15 @@ test('计划ID快捷入口包含并发开启按钮与样式标识', () => {
 
 test('并发开启流程包含全量暂停与原在投并发重试', () => {
     const block = getCampaignQuickEntryBlock();
+    assert.match(block, /BIZ_CODE_LIST:\s*\[\s*'onebpSearch',\s*'onebpSite',\s*'onebpAdStrategyLiuZi',\s*'onebpDisplay'\s*\]/, '并发识别范围未覆盖关键词/全站/线索/人群四类计划');
     assert.match(block, /MAX_START_RETRIES:\s*\d+/, '缺少并发重试次数配置');
     assert.match(block, /runConcurrentStartFlow\(/, '缺少并发开启主流程函数');
     assert.match(block, /resolveConcurrentTargetsByItem\(/, '缺少按商品ID的全量计划识别逻辑');
     assert.match(block, /resolveResumeTargets\(/, '缺少重开计划集合解析逻辑');
     assert.match(block, /resolveConcurrentTargets\(/, '缺少同商品计划集合识别逻辑');
     assert.match(block, /resolveItemIdByCampaignId\(/, '缺少按计划ID反查商品ID逻辑');
+    assert.match(block, /queryCampaignDetail\(/, '缺少计划详情兜底反查逻辑');
+    assert.match(block, /queryAdgroupDetail\(/, '缺少单元详情兜底反查逻辑');
     assert.match(block, /campaignItemIdCache:\s*new Map\(\)/, '缺少计划与商品映射缓存');
     assert.match(block, /collectSiteCustomTargetBuckets\(/, '缺少全站与自定义计划分桶逻辑');
     assert.match(block, /shouldRunSiteCustomBreakthrough\(/, '缺少全站与自定义同开突破触发逻辑');
@@ -33,6 +36,7 @@ test('并发开启流程包含全量暂停与原在投并发重试', () => {
     assert.match(block, /updateCampaignStatusBatchByBiz\(/, '缺少按业务线批量开启突破逻辑');
     assert.match(block, /mandatorySiteTargets/, '缺少货品全站计划强制开启集合');
     assert.match(block, /item\.bizCode === 'onebpSite'/, '缺少货品全站计划筛选逻辑');
+    assert.match(block, /customTargetsByBiz/, '缺少自定义计划按业务线分桶并发逻辑');
     assert.match(
         block,
         /Promise\.allSettled\(\s*allTargets\.map\(target => this\.updateCampaignStatus\(target\.campaignId,\s*target\.bizCode,\s*0,\s*authContext\)\)\s*\)/s,
@@ -50,6 +54,8 @@ test('并发开启流程使用冲突查询与后台更新接口', () => {
     const block = getCampaignQuickEntryBlock();
     assert.match(block, /campaign\/diff\/findList\.json/, '缺少冲突查询接口');
     assert.match(block, /campaign\/horizontal\/findPage\.json/, '缺少按商品ID查询计划接口');
+    assert.match(block, /campaign\/get\.json/, '缺少计划详情反查接口');
+    assert.match(block, /adgroup\/get\.json/, '缺少单元详情反查接口');
     assert.match(block, /itemId:\s*Number\(normalizedItemId\)/, '缺少商品ID计划查询参数');
     assert.match(block, /campaignList:\s*\[\s*\{\s*campaignId:\s*numericCampaignId,\s*displayStatus:/s, '缺少状态批量更新 payload');
     assert.match(block, /campaign\/updatePart\.json/, '缺少状态更新接口');
@@ -61,6 +67,10 @@ test('并发开启流程包含弹窗日志并在成功后提示', () => {
     assert.match(block, /openConcurrentLogPopup\(/, '缺少并发日志弹窗打开逻辑');
     assert.match(block, /appendConcurrentLog\(/, '缺少并发日志追加逻辑');
     assert.match(block, /setConcurrentLogStatus\(/, '缺少并发日志状态提示逻辑');
+    assert.match(block, /同商品全部计划：/, '缺少同商品全部计划明细日志');
+    assert.match(block, /同商品分类统计：货品全站/, '缺少同商品四类计划分类统计日志');
+    assert.match(block, /商品ID识别：/, '缺少商品ID识别过程日志');
+    assert.match(block, /未使用地址栏候选/, '缺少地址栏候选防串商品日志');
     assert.match(block, /setConcurrentLogStatus\(`执行成功：第\$\{result\?\.attempt \|\| 1\}次即完成`, 'success'\)/, '缺少成功状态提示');
     assert.match(block, /#am-campaign-concurrent-log-popup/, '并发日志弹窗未加入忽略区域，可能污染计划按钮');
     assert.match(block, /data-item-id/, '并发按钮缺少商品ID透传字段');
