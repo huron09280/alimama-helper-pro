@@ -5137,6 +5137,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
             nextMap[metric] = nextVisible;
             this.crowdMetricVisibility = nextMap;
+            if (this.crowdMatrixDataset) {
+                this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: true });
+                return;
+            }
             this.applyCrowdMetricVisibility();
         },
 
@@ -5156,15 +5160,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 [period]: nextVisible
             };
             if (this.crowdMatrixDataset) {
-                this.renderCrowdMatrixCharts(this.crowdMatrixDataset);
+                this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: true });
                 return;
             }
             this.applyCrowdMetricVisibility();
         },
 
-        createCrowdMatrixCell(period, groupName, cell) {
+        createCrowdMatrixCell(period, groupName, cell, options = {}) {
             const wrap = document.createElement('div');
             wrap.className = 'am-crowd-matrix-cell am-crowd-matrix-cell-chart';
+            const animateBars = options?.animate === true;
 
             const labels = Array.isArray(cell?.labels) ? cell.labels : [];
             if (!labels.length) {
@@ -5176,7 +5181,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
 
             const metrics = this.CROWD_METRICS.slice();
-            const cellMaxRatio = metrics.reduce((maxValue, metric) => {
+            const visibleMetrics = metrics.filter(metric => this.getCrowdMetricVisible(metric));
+            const visibleMetricCount = Math.max(1, visibleMetrics.length);
+            const scaleMetrics = visibleMetrics.length ? visibleMetrics : metrics;
+            const cellMaxRatio = scaleMetrics.reduce((maxValue, metric) => {
                 const list = Array.isArray(cell?.[metric]) ? cell[metric] : [];
                 const currentMax = list.reduce((innerMax, value) => Math.max(innerMax, this.toNumericValue(value)), 0);
                 return Math.max(maxValue, currentMax);
@@ -5186,6 +5194,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             chart.className = 'am-crowd-matrix-chart';
             const labelCount = Math.max(1, labels.length);
             chart.style.setProperty('--am-crowd-label-count', String(labelCount));
+            chart.style.setProperty('--am-crowd-metric-visible-count', String(visibleMetricCount));
             if (labelCount >= 7) chart.classList.add('is-dense');
             if (labelCount >= 10) chart.classList.add('is-ultra-dense');
 
@@ -5212,7 +5221,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                     const fill = document.createElement('span');
                     fill.className = 'am-crowd-matrix-bar-fill';
-                    fill.style.height = `${Math.max(0, Math.min(100, (ratio / normalizedMax) * 100))}%`;
+                    const barHeight = `${Math.max(0, Math.min(100, (ratio / normalizedMax) * 100))}%`;
+                    if (animateBars) {
+                        fill.style.height = '0%';
+                        fill.style.opacity = '0.38';
+                        const applyHeight = () => {
+                            fill.style.height = barHeight;
+                            fill.style.opacity = '1';
+                        };
+                        if (typeof requestAnimationFrame === 'function') {
+                            requestAnimationFrame(applyHeight);
+                        } else {
+                            setTimeout(applyHeight, 16);
+                        }
+                    } else {
+                        fill.style.height = barHeight;
+                    }
                     bar.appendChild(fill);
                     columns.appendChild(bar);
                 });
@@ -5265,11 +5289,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return wrap;
         },
 
-        renderCrowdMatrixCharts(dataset) {
+        renderCrowdMatrixCharts(dataset, options = {}) {
             if (!(this.matrixGridEl instanceof HTMLElement)) return;
             this.hideCrowdMatrixHoverTip();
             this.matrixGridEl.innerHTML = '';
             if (!dataset || typeof dataset !== 'object') return;
+            const animateBars = options?.animate === true;
 
             const periods = this.getVisibleCrowdPeriods(Array.isArray(dataset.periods) ? dataset.periods : []);
             const groups = Array.isArray(dataset.groups) ? dataset.groups : [];
@@ -5300,7 +5325,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 periods.forEach((period) => {
                     const cell = dataset?.cellData?.[period]?.[groupName] || null;
-                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell);
+                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell, { animate: animateBars });
                     cellNode.dataset.period = String(period);
                     table.appendChild(cellNode);
                 });
@@ -5703,15 +5728,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-state {
                     --am-crowd-progress: 0%;
                     font-size: 12px;
+                    font-weight: 600;
                     line-height: 1.45;
                     color: #4a5674;
-                    background: rgba(255, 255, 255, 0.88);
+                    background: rgba(255, 255, 255, 0.6);
+                    backdrop-filter: blur(8px);
                     border: 1px solid rgba(42, 91, 255, 0.16);
-                    border-radius: 10px;
-                    padding: 8px 10px;
+                    border-radius: 12px;
+                    padding: 8px 12px;
                     position: relative;
                     overflow: hidden;
                     isolation: isolate;
+                    box-shadow: 0 2px 10px rgba(42, 91, 255, 0.04);
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-hidden {
                     display: none;
@@ -5723,8 +5751,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     top: 0;
                     bottom: 0;
                     width: var(--am-crowd-progress, 0%);
-                    background: rgba(42, 91, 255, 0.14);
-                    transition: width 0.22s ease, background-color 0.22s ease;
+                    background: linear-gradient(90deg, rgba(42, 91, 255, 0.15), rgba(42, 91, 255, 0.25));
+                    transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), background-color 0.3s ease;
                     pointer-events: none;
                 }
                 #am-magic-report-popup .am-crowd-matrix-state .am-crowd-matrix-state-text {
@@ -5738,12 +5766,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-campaign {
                     font-size: 13px;
                     line-height: 1.45;
-                    font-weight: 600;
-                    color: #2d3f67;
-                    background: rgba(255, 255, 255, 0.9);
+                    font-weight: 700;
+                    color: #1a2a47;
+                    background: rgba(255, 255, 255, 0.75);
+                    backdrop-filter: blur(12px);
                     border: 1px solid rgba(42, 91, 255, 0.22);
-                    border-radius: 10px;
-                    padding: 8px 10px;
+                    border-radius: 12px;
+                    padding: 10px 12px;
+                    box-shadow: 0 4px 12px rgba(31, 53, 109, 0.04);
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-loading {
                     color: #2a5bff;
@@ -5752,23 +5782,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-state.is-success {
                     color: #237804;
                     border-color: rgba(82, 196, 26, 0.34);
+                    background: rgba(246, 255, 237, 0.6);
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-success::before {
-                    background: rgba(82, 196, 26, 0.18);
+                    background: linear-gradient(90deg, rgba(82, 196, 26, 0.15), rgba(82, 196, 26, 0.25));
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-warn {
                     color: #ad6800;
                     border-color: rgba(250, 140, 22, 0.34);
+                    background: rgba(255, 251, 230, 0.6);
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-warn::before {
-                    background: rgba(250, 140, 22, 0.18);
+                    background: linear-gradient(90deg, rgba(250, 140, 22, 0.15), rgba(250, 140, 22, 0.25));
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-error {
                     color: #cf1322;
                     border-color: rgba(234, 79, 79, 0.34);
+                    background: rgba(255, 241, 240, 0.6);
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-error::before {
-                    background: rgba(234, 79, 79, 0.16);
+                    background: linear-gradient(90deg, rgba(234, 79, 79, 0.15), rgba(234, 79, 79, 0.25));
                 }
                 #am-magic-report-popup .am-crowd-matrix-toolbar {
                     display: flex;
@@ -5961,15 +5994,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 5px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar-columns {
+                    --am-crowd-visible-metrics: var(--am-crowd-metric-visible-count, 4);
+                    --am-crowd-bar-gap: 5px;
                     display: flex;
                     align-items: flex-end;
                     justify-content: center;
-                    gap: 5px;
+                    gap: var(--am-crowd-bar-gap);
                     width: 100%;
                     height: clamp(120px, 16vh, 200px);
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar {
-                    width: clamp(8px, 18%, 16px);
+                    width: clamp(
+                        8px,
+                        calc((100% - (var(--am-crowd-visible-metrics) - 1) * var(--am-crowd-bar-gap)) / var(--am-crowd-visible-metrics)),
+                        36px
+                    );
                     height: 100%;
                     border-radius: 0;
                     background: none;
@@ -5977,6 +6016,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     overflow: visible;
                     border: none;
                     box-shadow: none;
+                    transition: width 0.25s ease;
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar.is-hover .am-crowd-matrix-bar-fill {
                     filter: brightness(1.15) saturate(1.1);
@@ -6016,16 +6056,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 6px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-bar-columns {
-                    gap: 3px;
+                    --am-crowd-bar-gap: 3px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-bar {
-                    width: clamp(6px, 16%, 12px);
+                    width: clamp(
+                        6px,
+                        calc((100% - (var(--am-crowd-visible-metrics) - 1) * var(--am-crowd-bar-gap)) / var(--am-crowd-visible-metrics)),
+                        28px
+                    );
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-xlabel {
                     font-size: 10px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-bar {
-                    width: clamp(5px, 12%, 10px);
+                    width: clamp(
+                        5px,
+                        calc((100% - (var(--am-crowd-visible-metrics) - 1) * var(--am-crowd-bar-gap)) / var(--am-crowd-visible-metrics)),
+                        22px
+                    );
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-xlabel {
                     font-size: 9px;

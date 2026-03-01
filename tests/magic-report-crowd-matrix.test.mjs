@@ -217,9 +217,19 @@ test('buildMatrixDataset 在单指标内做比例归一化并标记缺失数据'
 
 test('单元格柱高按该单元格最高值自适应缩放，避免整体过矮', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /const cellMaxRatio = metrics\.reduce\(\(maxValue, metric\) => \{[\s\S]*return Math\.max\(maxValue, currentMax\);[\s\S]*\}, 0\);/, '未计算单元格内最高柱值');
+  assert.match(block, /const visibleMetrics = metrics\.filter\(metric => this\.getCrowdMetricVisible\(metric\)\);/, '未按可见系列过滤最高柱值计算范围');
+  assert.match(block, /const cellMaxRatio = scaleMetrics\.reduce\(\(maxValue, metric\) => \{[\s\S]*return Math\.max\(maxValue, currentMax\);[\s\S]*\}, 0\);/, '未按可见系列计算单元格内最高柱值');
   assert.match(block, /const normalizedMax = cellMaxRatio > 0 \? cellMaxRatio : 1;/, '缺少单元格缩放基准');
-  assert.match(block, /fill\.style\.height = `\$\{Math\.max\(0, Math\.min\(100, \(ratio \/ normalizedMax\) \* 100\)\)\}%`;/, '柱高未按单元格最高值自适应');
+  assert.match(block, /const barHeight = `\$\{Math\.max\(0, Math\.min\(100, \(ratio \/ normalizedMax\) \* 100\)\)\}%`;/, '柱高目标值未按单元格最高值计算');
+});
+
+test('切换显示与隐藏会触发重绘动画', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /this\.renderCrowdMatrixCharts\(this\.crowdMatrixDataset,\s*\{\s*animate:\s*true\s*\}\);/, '显示隐藏切换未触发带动画重绘');
+  assert.match(block, /chart\.style\.setProperty\('--am-crowd-metric-visible-count', String\(visibleMetricCount\)\);/, '切换后未写入可见系列数量，柱宽无法自适应');
+  assert.match(block, /width:\s*clamp\(\s*8px,\s*calc\(\(100% - \(var\(--am-crowd-visible-metrics\) - 1\) \* var\(--am-crowd-bar-gap\)\) \/ var\(--am-crowd-visible-metrics\)\),\s*36px\s*\);/, '柱宽未按可见系列数量做自适应公式');
+  assert.match(block, /if \(animateBars\) \{[\s\S]*fill\.style\.height = '0%';[\s\S]*fill\.style\.opacity = '0\.38';/, '柱状图切换动画初始状态缺失');
+  assert.match(block, /requestAnimationFrame\(applyHeight\)/, '柱状图切换动画缺少 requestAnimationFrame 过渡');
 });
 
 test('全部失败时展示统一失败态并提供重试入口', () => {
