@@ -17,33 +17,33 @@
 // ==/UserScript==
 /**
  * 更新日志
- * 
+ *
  * v6.01 (2026-02-27)
  * - ✨ 同商品计划识别扩容：并发识别范围覆盖货品全站、关键词、线索、人群四类计划
  * - ✨ 同商品计划日志增强：弹窗新增四类分类统计与全部计划明细，成功场景同样展示完整执行日志
  * - 🔧 商品ID反查增强：补齐 `campaign/get` + `adgroup/get` 兜底链路，支持 `adgroupIdList/adgroupIds` 多结构提取
  * - 🔧 防串商品修复：并发流程不再直接采用地址栏候选商品ID，优先接口与按钮上下文，避免误用旧商品ID
  * - 🔧 同开突破策略增强：全站与自定义计划按业务线批量并发开启，兼容多业务线混合场景
- * 
+ *
  * v6.00 (2026-02-27)
  * - 🚀 版本主线升级：正式从 v5.x 切换到 v6.x，后续迭代以 6 系列为基线
  * - ✨ 重点更新：主面板三入口与辅助显示交互流程进一步收敛，默认操作更聚焦
  * - 🔧 稳定性增强：配置迁移、版本同步与 Hook 幂等关键路径继续加固
  * - ✅ 发布门禁统一：发版前检查持续收敛到 `scripts/review-team.sh`
- * 
+ *
  * v5.30 (2026-02-15)
  * - ✅ 新增代码检查团队机制：补充团队职责文档与 PR 检查清单
  * - ✅ 新增一键审查脚本：`scripts/review-team.sh` 统一架构/安全/测试/版本校验
  * - 🔧 CI/Release 流程统一：发布前检查改为复用同一套团队检查入口
  * - 🔧 审查责任自动分配：新增 `.github/CODEOWNERS`
- * 
+ *
  * v5.29 (2026-02-15)
  * - ✨ 主面板工具区重构：新增「辅助显示」入口，与「算法护航」「万能查数」形成三入口布局
  * - ✨ 辅助显示体验优化：开关区改为主面板内联展开/收起，加入过渡动画并默认收起
  * - 🔧 配置版本化迁移：新增 `configRevision`，升级时自动修正默认配置并持久化
  * - 🔧 默认行为修订：日志区默认折叠，首次打开更聚焦核心操作区
  * - ✅ 冒烟与回归增强：补充辅助显示与配置迁移相关检查，新增本地烟测页 `dev/smoke-harness.html`
- * 
+ *
  * v5.28 (2026-02-15)
  * - ✨ 万能查数弹窗头部全量重构：替换为新版品牌头图与文案，统一布局与视觉层级
  * - ✨ 弹窗首屏体验优化：iframe 先隐藏后清理再展示，减少前 1 秒整页闪现
@@ -55,12 +55,12 @@
  * - 🐛 日志系统稳定性修复：`Logger.flush` 早退分支重置 timer，避免日志刷新锁死
  * - 🔧 自动化质量加固：补充 Logger API 回归测试，CI/Release 工作流适配 userscript 仓库
  * - 🔧 主面板三入口排版修复：按钮文案强制单行显示，避免“万能查数/辅助显示”在窄宽度下换行
- * 
+ *
  * v5.27 (2026-02-14)
  * - ✨ 版本号改为动态解析：统一从 GM_info / GM.info 读取，移除硬编码版本 fallback
  * - ✨ 双 IIFE 共用同一版本解析器，主面板、护航面板与启动日志版本保持一致
  * - 📝 文档同步：README 徽章改为 GitHub Release 动态版本显示
- * 
+ *
  * v5.26 (2026-02-13)
  * - ✨ 新增「计划ID识别」模块：自动扫描并为页面 ID 注入「万能查数」快捷入口
  * - ✨ UI 视觉标准升级：统一 iPhone 级圆角规范（18px/12px/10px），视觉更感性
@@ -70,21 +70,21 @@
  * - 🔧 界面微调：精简算法护航标题栏结构，优化数据表格背景配色与各级图标显示比例
  * - 🔧 细节修复：调优刷新图标展示效果，修复日志输出空格格式，提升极致稳定性
  * - 🔧 性能优化：优化 MutationObserver 监听频率，减少扫描开销
- * 
+ *
  * v5.25 (2026-02-13)
  * - ✨ 修复样式注入缓存机制，通过动态 ID 强制刷新样式
  * - ✨ 优化触发器 UI 样式，提升原生视觉融合度
  * - 🔧 修复日志系统在特定场景下的引用错误
  * - 🔧 增强数据抓取稳定性，优化 API 注入逻辑
  * - ✨ 关键词推广页面新增「全能数据查」快捷入口
- * 
+ *
  * v5.24 (2026-02-12)
  * - ✨ 新增多表格上下文识别与能力评分，优先处理当前可见且列结构匹配的数据表
  * - ✨ 兼容 Sticky Table 双表头定位，提升表头映射稳定性
  * - 🔧 花费排序改为作用域定位，减少跨模块误触发排序的问题
  * - 🔧 路由变化重置增加节流保护，避免短时间重复重置
  * - 🔧 首次执行增加去重保护，降低 MutationObserver 高频更新下的重复计算
- * 
+ *
  * v5.23 (2026-02-08)
  * - 🐛 修复作用域引用错误导致的算法护航模块加载失败问题
  * - ✨ 实现全 UI 版本号自动化同步，所有界面均显示最新版本
@@ -94,17 +94,17 @@
  * - 🔧 优化面板层级 (z-index)，解决层级遮挡问题
  * - 🔧 移除护航「最小化」图标，集成护航模块并支持一键调出
  * - ✨ 新增预算分类占比显示 (基础 + 多目标预算)
- * 
+ *
  * v5.15 (2026-02-05)
  * - ✨ 新增 Tab 切换监听（关键词、人群、创意等）
  * - ✨ 切换 Tab 时自动重新按花费降序排序
- * 
+ *
  * v5.12 (2026-01-31)
  * - ✨ 新增「花费排序」开关，自动按花费降序排列表格
  * - ✨ 切换页面/点击计划时自动重新排序
  * - ✨ 监听 URL 变化 (hashchange/popstate)
  * - 🐛 修复总花费日志重复输出问题
- * 
+ *
  * v4.11 (2026-01-31)
  * - ✨ UI 样式重新设计，灰色系主题
  * - ✨ 悬浮球恢复 40px SVG 图标
@@ -178,6 +178,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         autoSortCharge: true,  // 花费降序排序
         logExpanded: false,
         magicReportOpen: false,
+        magicReportDefaultView: 'matrix',
         showConcurrentStartButton: false,
         configRevision: CONSTANTS.CONFIG_REVISION
     };
@@ -1050,7 +1051,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     --am26-mono: "SF Mono", "JetBrains Mono", "Menlo", "Monaco", "Consolas", monospace;
                     --am26-text: #1b2438;
                     --am26-text-soft: #505a74;
-                    --am26-border: rgba(255, 255, 255, 0.4); 
+                    --am26-border: rgba(255, 255, 255, 0.4);
                     --am26-border-strong: rgba(255, 255, 255, 0.6);
                     --am26-surface: rgba(255, 255, 255, 0.25);
                     --am26-surface-strong: rgba(255, 255, 255, 0.45);
@@ -1097,7 +1098,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: var(--am26-primary);
                     transition: all 0.3s ease;
                 }
-                #am-helper-icon:hover { 
+                #am-helper-icon:hover {
                     transform: translateY(-1px) scale(1.08);
                     border-color: var(--am26-border-strong);
                     color: var(--am26-primary-strong);
@@ -1119,13 +1120,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
 
                 /* 头部 */
-                .am-header { 
-                    padding: 14px 18px; 
-                    border-bottom: 1px solid var(--am26-border); 
+                .am-header {
+                    padding: 14px 18px;
+                    border-bottom: 1px solid var(--am26-border);
                     background: rgba(255, 255, 255, 0.1);
-                    display: flex; justify-content: space-between; align-items: center; 
+                    display: flex; justify-content: space-between; align-items: center;
                 }
-                .am-title { 
+                .am-title {
                     font-weight: 600; font-size: 15px; color: var(--am26-text);
                     display: flex; align-items: center; gap: 8px;
                     text-shadow: 0 1px 0 rgba(255,255,255,0.4);
@@ -1134,15 +1135,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 10px; color: var(--am26-text-soft); font-weight: normal;
                     background: rgba(255,255,255,0.3); padding: 1px 4px; border-radius: 6px;
                 }
-                .am-icon-btn { 
+                .am-icon-btn {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
                     width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
                 }
                 .am-icon-btn:hover { background: rgba(255, 255, 255, 0.3); color: var(--am26-text); }
                 .am-icon-btn.danger:hover { background: rgba(234, 79, 79, 0.15); color: var(--am26-danger); }
-                
-                .am-close-btn { 
+
+                .am-close-btn {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
                     width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
@@ -1162,7 +1163,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 .am-tool-btn {
                     flex: 1; text-align: center; padding: 12px 0; border-radius: 10px;
-                    background: var(--mx-number-report-brand-color1); 
+                    background: var(--mx-number-report-brand-color1);
                     border: 1px solid rgba(0, 0, 0, 0.1);
                     color: var(--am26-text-soft); font-size: 12px; font-weight: 500;
                     cursor: pointer; transition: all 0.3s;
@@ -1178,7 +1179,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     flex: 0 0 14px;
                 }
                 .am-tool-btn:hover {
-                    background: var(--mx-number-report-brand-color10); 
+                    background: var(--mx-number-report-brand-color10);
                     border-color: var(--mx-number-report-brand-color);
                     color: var(--mx-number-report-brand-color);
                     box-shadow: 0 0 10px var(--mx-number-report-brand-color50); /* 亮灯效果 */
@@ -1226,12 +1227,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: flex; align-items: center; justify-content: center;
                 }
                 .am-switch-btn:hover {
-                    background: rgba(255, 255, 255, 0.8); 
+                    background: rgba(255, 255, 255, 0.8);
                     border-color: var(--mx-number-report-brand-color);
                     box-shadow: 0 0 8px var(--mx-number-report-brand-color10); /* 亮灯效果 */
                 }
                 .am-switch-btn.active {
-                    background: var(--mx-number-report-brand-color10); 
+                    background: var(--mx-number-report-brand-color10);
                     border-color: var(--mx-number-report-brand-color);
                     color: var(--mx-number-report-brand-color); font-weight: 600;
                     box-shadow: inset 0 0 4px var(--mx-number-report-brand-color10);
@@ -1257,6 +1258,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 0;
                     transition: color 0.18s ease, opacity 0.18s ease;
                 }
+                .am-campaign-hover-host .am-campaign-search-btn {
+                    opacity: 0;
+                    visibility: hidden;
+                    pointer-events: none;
+                }
+                .am-campaign-hover-host:hover .am-campaign-search-btn,
+                .am-campaign-hover-host:focus-within .am-campaign-search-btn,
+                .am-campaign-search-btn:focus-visible {
+                    opacity: 1;
+                    visibility: visible;
+                    pointer-events: auto;
+                }
                 .am-campaign-search-btn:hover {
                     color: #6b7480;
                 }
@@ -1266,6 +1279,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 .am-campaign-search-btn.is-running {
                     color: #1677ff;
                     opacity: 0.72;
+                    visibility: visible;
                     pointer-events: none;
                 }
                 .am-campaign-search-btn svg {
@@ -1426,7 +1440,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line:last-child {
                     margin-bottom: 0;
                 }
-                
+
                 /* 算法护航弹窗居中 */
                 #alimama-escort-helper-ui {
                     top: 50% !important; left: 50% !important;
@@ -1436,18 +1450,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 /* 日志区 */
                 .am-log-section { margin-top: 16px; }
-                .am-log-header { 
+                .am-log-header {
                     display: flex; justify-content: space-between; align-items: center;
                     font-size: 12px; color: var(--am26-text-soft); margin-bottom: 8px; padding: 0 4px;
                 }
-                .am-action-btn { 
-                    cursor: pointer; color: var(--am26-text-soft); margin-left: 10px; 
+                .am-action-btn {
+                    cursor: pointer; color: var(--am26-text-soft); margin-left: 10px;
                     padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
                     background: rgba(255,255,255,0.2);
                 }
                 .am-action-btn:hover { background: rgba(255, 255, 255, 0.5); color: var(--am26-primary-strong); }
                 #am-log-content {
-                    height: 100px; overflow-y: auto; 
+                    height: 100px; overflow-y: auto;
                     background: rgba(0, 0, 0, 0.03);
                     border: 1px solid inset rgba(0,0,0,0.05);
                     border-radius: 10px;
@@ -1459,8 +1473,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     transition: all 0.3s ease;
                 }
                 #am-log-content.collapsed { height: 0; padding: 0; border: none; opacity: 0; }
-                .am-log-line { 
-                    padding: 3px 0; line-height: 1.5; 
+                .am-log-line {
+                    padding: 3px 0; line-height: 1.5;
                     border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
                 }
                 .am-log-line:last-child { border-bottom: none; }
@@ -3048,11 +3062,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         popupResizeHandler: null,
         lastCampaignId: '',
         lastCampaignName: '',
-        activeView: 'query',
+        activeView: 'matrix',
         crowdMatrixRunId: 0,
         crowdMatrixLoading: false,
+        crowdMatrixProgress: 0,
+        crowdMatrixStateHideTimer: null,
         crowdMatrixLoadedCampaignId: '',
         crowdMatrixDataset: null,
+        crowdMatrixTaskProgressHandler: null,
+        crowdCampaignItemIdMap: new Map(),
         crowdInsightRunContext: null,
         crowdRequestSlotPromise: null,
         crowdRequestLastAt: 0,
@@ -3071,7 +3089,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             { label: '📛 计划名：{campaignName}', value: '计划名：{campaignName}', type: 'action', autoSubmit: false, requireCampaignName: true },
             { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '🛒 加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true }
+            { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { label: '✨商品ID成交', value: '商品ID：{商品ID} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true }
         ],
 
         // NOTE: iframe 加载后通过 JS 清理页面，只保留万能查数核心内容区
@@ -3099,6 +3118,48 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             .bXMILLeECu { top: -135px!important; }
             #universalBP_common_layout > div.bXMILLeECt > div.bXMILLeECs { top: -150px!important; }
     `,
+
+        normalizeMagicView(view) {
+            const normalized = String(view || '').trim().toLowerCase();
+            if (normalized === 'matrix') return 'matrix';
+            if (normalized === 'query') return 'query';
+            return '';
+        },
+
+        getMagicDefaultView() {
+            const fromConfig = this.normalizeMagicView(State?.config?.magicReportDefaultView);
+            return fromConfig || 'matrix';
+        },
+
+        setMagicDefaultView(view) {
+            const normalized = this.normalizeMagicView(view);
+            if (!normalized) return '';
+            if (State && State.config && State.config.magicReportDefaultView !== normalized) {
+                State.config.magicReportDefaultView = normalized;
+                State.save();
+            }
+            this.refreshMagicViewTabDefaultState();
+            return normalized;
+        },
+
+        refreshMagicViewTabDefaultState() {
+            if (!(this.viewTabsEl instanceof HTMLElement)) return;
+            const defaultView = this.getMagicDefaultView();
+            this.viewTabsEl.querySelectorAll('[data-view]').forEach((node) => {
+                if (!(node instanceof HTMLElement)) return;
+                const view = this.normalizeMagicView(node.dataset.view || '');
+                if (!view) return;
+                const isDefault = view === defaultView;
+                node.classList.toggle('is-default-view', isDefault);
+                node.setAttribute('data-default-view-active', isDefault ? '1' : '0');
+                const icon = node.querySelector('.am-magic-view-default-icon');
+                if (!(icon instanceof HTMLElement)) return;
+                const label = view === 'matrix' ? '人群对比看板' : '万能查数';
+                icon.textContent = isDefault ? '★' : '☆';
+                icon.title = isDefault ? `默认打开：${label}` : `设为默认打开：${label}`;
+                icon.setAttribute('aria-label', icon.title);
+            });
+        },
 
         getIframeDoc() {
             if (!this.iframe) return null;
@@ -3706,10 +3767,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!(this.matrixCampaignEl instanceof HTMLElement)) return;
             const id = String(campaignId || this.getCurrentCampaignId() || this.lastCampaignId || '').trim();
             const name = this.getCurrentCampaignName() || this.lastCampaignName || '';
-            this.matrixCampaignEl.textContent = `计划名：${name || '未识别'} ｜ 计划ID：${id || '--'}`;
+            const itemId = this.getCrowdCampaignItemId(id);
+            this.matrixCampaignEl.textContent = `计划名：${name || '未识别'} ｜ 计划ID：${id || '--'} ｜ 商品ID：${itemId || '--'}`;
         },
 
-        resolvePromptText(promptItem) {
+        async resolvePromptText(promptItem) {
             const template = String(promptItem?.value || '').trim();
             if (!template) return '';
 
@@ -3731,6 +3793,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return '';
                 }
                 resolved = resolved.replace(/\{campaignName\}/g, campaignName);
+            }
+
+            if (resolved.includes('{商品ID}') || resolved.includes('{itemId}')) {
+                const campaignId = this.getCurrentCampaignId();
+                if (!campaignId) {
+                    Logger.log('⚠️ 未识别到当前计划ID，无法解析商品ID，请先进入计划详情页或勾选计划后重试', true);
+                    return '';
+                }
+                let itemId = this.getCrowdCampaignItemId(campaignId);
+                if (!/^\d{6,}$/.test(itemId)) {
+                    itemId = await this.resolveCrowdItemIdByCampaign(campaignId);
+                }
+                if (!/^\d{6,}$/.test(itemId)) {
+                    Logger.log(`⚠️ 未识别到计划 ${campaignId} 对应商品ID，请稍后重试`, true);
+                    return '';
+                }
+                resolved = resolved
+                    .replace(/\{商品ID\}/g, itemId)
+                    .replace(/\{itemId\}/g, itemId);
             }
 
             return resolved;
@@ -4116,6 +4197,36 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return map[metric] || map.click;
         },
 
+        cacheCrowdCampaignItemId(campaignId, itemId) {
+            const id = String(campaignId || '').trim();
+            const normalizedItemId = String(itemId || '').trim();
+            if (!/^\d{6,}$/.test(id) || !/^\d{6,}$/.test(normalizedItemId)) return '';
+            if (!(this.crowdCampaignItemIdMap instanceof Map)) {
+                this.crowdCampaignItemIdMap = new Map();
+            }
+            this.crowdCampaignItemIdMap.set(id, normalizedItemId);
+            return normalizedItemId;
+        },
+
+        getCrowdCampaignItemId(campaignId) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return '';
+            if (this.crowdCampaignItemIdMap instanceof Map) {
+                const localCached = String(this.crowdCampaignItemIdMap.get(id) || '').trim();
+                if (/^\d{6,}$/.test(localCached)) return localCached;
+            }
+            try {
+                if (typeof CampaignIdQuickEntry !== 'object' || !CampaignIdQuickEntry) return '';
+                if (typeof CampaignIdQuickEntry.getCampaignItemId !== 'function') return '';
+                const sharedCached = String(CampaignIdQuickEntry.getCampaignItemId(id) || '').trim();
+                if (!/^\d{6,}$/.test(sharedCached)) return '';
+                this.cacheCrowdCampaignItemId(id, sharedCached);
+                return sharedCached;
+            } catch {
+                return '';
+            }
+        },
+
         async resolveCrowdItemIdByCampaign(campaignId) {
             const id = String(campaignId || '').trim();
             if (!/^\d{6,}$/.test(id)) return '';
@@ -4124,7 +4235,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const fromCache = typeof CampaignIdQuickEntry.getCampaignItemId === 'function'
                     ? String(CampaignIdQuickEntry.getCampaignItemId(id) || '').trim()
                     : '';
-                if (/^\d{6,}$/.test(fromCache)) return fromCache;
+                if (/^\d{6,}$/.test(fromCache)) {
+                    this.cacheCrowdCampaignItemId(id, fromCache);
+                    this.refreshCrowdMatrixCampaignMeta(id);
+                    return fromCache;
+                }
                 if (
                     typeof CampaignIdQuickEntry.resolveAuthContext !== 'function'
                     || typeof CampaignIdQuickEntry.resolveItemIdByCampaignId !== 'function'
@@ -4144,7 +4259,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     []
                 );
                 const normalized = String(resolved || '').trim();
-                return /^\d{6,}$/.test(normalized) ? normalized : '';
+                if (!/^\d{6,}$/.test(normalized)) return '';
+                this.cacheCrowdCampaignItemId(id, normalized);
+                this.refreshCrowdMatrixCampaignMeta(id);
+                return normalized;
             } catch (err) {
                 Logger.warn(`🔮 商品ID识别失败：${err?.message || '未知错误'}`);
                 return '';
@@ -4613,10 +4731,49 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         async runTasksWithConcurrency(taskFns = [], limit = 3) {
             const tasks = Array.isArray(taskFns) ? taskFns.filter(fn => typeof fn === 'function') : [];
             const normalizedLimit = Math.max(1, Number.isFinite(Number(limit)) ? Number(limit) : 1);
+            const onProgress = typeof this.crowdMatrixTaskProgressHandler === 'function'
+                ? this.crowdMatrixTaskProgressHandler
+                : null;
+            let doneCount = 0;
             const results = [];
             const executing = new Set();
             for (let i = 0; i < tasks.length; i++) {
-                const promise = Promise.resolve().then(() => tasks[i]());
+                const taskFn = tasks[i];
+                const taskLabel = String(taskFn?.__amCrowdTaskLabel || '').trim();
+                const promise = Promise.resolve()
+                    .then(() => taskFn())
+                    .then((value) => {
+                        doneCount += 1;
+                        if (onProgress) {
+                            try {
+                                onProgress({
+                                    done: doneCount,
+                                    total: tasks.length,
+                                    status: 'fulfilled',
+                                    index: i,
+                                    label: taskLabel,
+                                    value
+                                });
+                            } catch { }
+                        }
+                        return value;
+                    })
+                    .catch((error) => {
+                        doneCount += 1;
+                        if (onProgress) {
+                            try {
+                                onProgress({
+                                    done: doneCount,
+                                    total: tasks.length,
+                                    status: 'rejected',
+                                    index: i,
+                                    label: taskLabel,
+                                    error
+                                });
+                            } catch { }
+                        }
+                        throw error;
+                    });
                 results.push(promise);
                 executing.add(promise);
                 const clean = () => executing.delete(promise);
@@ -4728,11 +4885,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         setCrowdMatrixStatus(text, level = 'info', options = {}) {
             if (!(this.matrixStateEl instanceof HTMLElement)) return;
+            if (this.crowdMatrixStateHideTimer) {
+                clearTimeout(this.crowdMatrixStateHideTimer);
+                this.crowdMatrixStateHideTimer = null;
+            }
             const normalizedLevel = ['info', 'success', 'warn', 'error', 'loading'].includes(level) ? level : 'info';
             this.matrixStateEl.className = `am-crowd-matrix-state is-${normalizedLevel}`;
-            this.matrixStateEl.textContent = String(text || '').trim();
+            this.matrixStateEl.classList.remove('is-hidden');
+            const rawText = String(text || '');
+            const latestLine = rawText
+                .split(/\r?\n/)
+                .map(line => String(line || '').trim())
+                .filter(Boolean)
+                .pop() || rawText.trim();
+            const hasProgress = Number.isFinite(Number(options.progress));
+            const nextProgress = hasProgress ? Math.max(0, Math.min(100, Number(options.progress))) : 0;
+            this.crowdMatrixProgress = nextProgress;
+            this.matrixStateEl.style.setProperty('--am-crowd-progress', `${nextProgress}%`);
+            const textNode = document.createElement('span');
+            textNode.className = 'am-crowd-matrix-state-text';
+            textNode.textContent = latestLine || ' ';
+            this.matrixStateEl.replaceChildren(textNode);
             if (this.matrixRetryBtn instanceof HTMLElement) {
                 this.matrixRetryBtn.style.display = options.showRetry ? 'inline-flex' : 'none';
+            }
+            if (options.autoHide === true) {
+                const delay = Math.max(0, Number(options.hideDelayMs) || 1200);
+                this.crowdMatrixStateHideTimer = setTimeout(() => {
+                    if (!(this.matrixStateEl instanceof HTMLElement)) return;
+                    this.matrixStateEl.classList.add('is-hidden');
+                    this.crowdMatrixStateHideTimer = null;
+                }, delay);
             }
         },
 
@@ -4897,6 +5080,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         renderCrowdGlobalLegend() {
             if (!(this.matrixLegendEl instanceof HTMLElement)) return;
             this.matrixLegendEl.innerHTML = '';
+            const metricGroup = document.createElement('div');
+            metricGroup.className = 'am-crowd-matrix-legend-group am-crowd-matrix-legend-group-metric';
             this.CROWD_METRICS.forEach((metric) => {
                 const meta = this.getCrowdMetricMeta(metric);
                 const btn = document.createElement('button');
@@ -4909,8 +5094,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 text.textContent = meta.seriesLabel;
                 btn.appendChild(dot);
                 btn.appendChild(text);
-                this.matrixLegendEl.appendChild(btn);
+                metricGroup.appendChild(btn);
             });
+            this.matrixLegendEl.appendChild(metricGroup);
+
+            const divider = document.createElement('span');
+            divider.className = 'am-crowd-matrix-legend-divider';
+            divider.textContent = '｜';
+            divider.setAttribute('aria-hidden', 'true');
+            this.matrixLegendEl.appendChild(divider);
+
+            const periodGroup = document.createElement('div');
+            periodGroup.className = 'am-crowd-matrix-legend-group am-crowd-matrix-legend-group-period';
             this.CROWD_PERIODS.forEach((period) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -4922,8 +5117,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 text.textContent = `过去${period}天`;
                 btn.appendChild(dot);
                 btn.appendChild(text);
-                this.matrixLegendEl.appendChild(btn);
+                periodGroup.appendChild(btn);
             });
+            this.matrixLegendEl.appendChild(periodGroup);
             this.applyCrowdMetricVisibility();
         },
 
@@ -5188,6 +5384,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     node.classList.toggle('active', node.dataset.view === next);
                 });
             }
+            this.refreshMagicViewTabDefaultState();
             if (this.queryPanelEl instanceof HTMLElement) {
                 this.queryPanelEl.style.display = next === 'query' ? 'block' : 'none';
             }
@@ -5205,28 +5402,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         async runCrowdMatrixLoad({ campaignId }) {
             const id = String(campaignId || '').trim();
             this.refreshCrowdMatrixCampaignMeta(id);
+            this.crowdMatrixTaskProgressHandler = null;
             if (!/^\d{6,}$/.test(id)) {
-                this.setCrowdMatrixStatus('未识别到有效计划ID，请先选择单计划后再试', 'error', { showRetry: false });
+                this.setCrowdMatrixStatus('未识别到有效计划ID，请先选择单计划后再试', 'error', { showRetry: false, progress: 0 });
                 return;
             }
             const runId = ++this.crowdMatrixRunId;
             this.crowdMatrixLoading = true;
+            this.crowdMatrixProgress = 0;
             this.crowdMatrixLoadedCampaignId = '';
             this.crowdMatrixDataset = null;
             this.crowdInsightRunContext = null;
             this.crowdRequestSlotPromise = Promise.resolve();
             this.crowdRequestLastAt = 0;
-            this.setCrowdMatrixStatus(`正在加载计划 ${id} 的人群对比看板...`, 'loading', { showRetry: false });
+            this.setCrowdMatrixStatus(`正在加载计划 ${id} 的人群对比看板...`, 'loading', { showRetry: false, progress: 0 });
             if (this.matrixGridEl instanceof HTMLElement) this.matrixGridEl.innerHTML = '';
 
             try {
                 const taskFns = [];
                 this.CROWD_METRICS.forEach((metricType) => {
                     this.CROWD_PERIODS.forEach((periodDays) => {
-                        taskFns.push(async () => this.queryCrowdInsight({ campaignId: id, metricType, periodDays }));
+                        const task = async () => this.queryCrowdInsight({ campaignId: id, metricType, periodDays });
+                        const metricMeta = this.getCrowdMetricMeta(metricType);
+                        task.__amCrowdTaskLabel = `${metricMeta.seriesLabel} · 过去${periodDays}天`;
+                        taskFns.push(task);
                     });
                 });
                 const totalTaskCount = taskFns.length;
+                this.crowdMatrixTaskProgressHandler = (progressInfo) => {
+                    if (runId !== this.crowdMatrixRunId) return;
+                    const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
+                    const status = String(progressInfo?.status || '').trim();
+                    const taskLabel = String(progressInfo?.label || '').trim();
+                    const stepText = status === 'fulfilled' ? '完成' : '失败';
+                    const detailText = taskLabel ? `${stepText} ${taskLabel}` : `${stepText}一项请求`;
+                    const ratio = totalTaskCount > 0 ? (done / totalTaskCount) * 100 : 0;
+                    this.setCrowdMatrixStatus(`加载中 ${done}/${totalTaskCount} · ${detailText}`, 'loading', { showRetry: false, progress: ratio });
+                };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
                 if (runId !== this.crowdMatrixRunId) return;
 
@@ -5238,7 +5450,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 });
 
                 if (!successResults.length) {
-                    this.setCrowdMatrixStatus('人群看板加载失败，请稍后重试', 'error', { showRetry: true });
+                    this.setCrowdMatrixStatus('人群看板加载失败，请稍后重试', 'error', { showRetry: true, progress: 100 });
                     return;
                 }
 
@@ -5247,16 +5459,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.crowdMatrixLoadedCampaignId = id;
                 this.renderCrowdMatrixCharts(dataset);
                 if (failCount > 0) {
-                    this.setCrowdMatrixStatus(`部分数据加载失败，已展示可用结果（失败 ${failCount}/${totalTaskCount}）`, 'warn', { showRetry: true });
+                    this.setCrowdMatrixStatus(`部分数据加载失败，已展示可用结果（失败 ${failCount}/${totalTaskCount}）`, 'warn', { showRetry: true, progress: 100, autoHide: true });
                 } else {
-                    this.setCrowdMatrixStatus('人群对比看板已加载完成（4列周期 × 6行维度）', 'success', { showRetry: false });
+                    this.setCrowdMatrixStatus('人群对比看板已加载完成（4列周期 × 6行维度）', 'success', { showRetry: false, progress: 100, autoHide: true });
                 }
             } catch (err) {
                 if (runId !== this.crowdMatrixRunId) return;
-                this.setCrowdMatrixStatus(`人群看板加载失败：${err?.message || '未知错误'}`, 'error', { showRetry: true });
+                this.setCrowdMatrixStatus(`人群看板加载失败：${err?.message || '未知错误'}`, 'error', { showRetry: true, progress: this.crowdMatrixProgress || 0 });
             } finally {
                 if (runId === this.crowdMatrixRunId) {
                     this.crowdMatrixLoading = false;
+                    this.crowdMatrixTaskProgressHandler = null;
                     this.crowdInsightRunContext = null;
                 }
             }
@@ -5267,12 +5480,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const campaignId = this.getCurrentCampaignId();
             this.refreshCrowdMatrixCampaignMeta(campaignId || this.lastCampaignId);
             if (!campaignId) {
-                this.setCrowdMatrixStatus('未识别到当前计划ID，请先进入计划详情页或勾选计划', 'error', { showRetry: false });
+                this.setCrowdMatrixStatus('未识别到当前计划ID，请先进入计划详情页或勾选计划', 'error', { showRetry: false, progress: 0 });
                 return;
             }
             if (!forceReload && this.crowdMatrixDataset && this.crowdMatrixLoadedCampaignId === campaignId) {
                 this.renderCrowdMatrixCharts(this.crowdMatrixDataset);
-                this.setCrowdMatrixStatus('已展示最近一次加载结果', 'success', { showRetry: false });
+                this.setCrowdMatrixStatus('已展示最近一次加载结果', 'success', { showRetry: false, progress: 100, autoHide: true, hideDelayMs: 800 });
                 return;
             }
             this.runCrowdMatrixLoad({ campaignId });
@@ -5426,6 +5639,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     line-height: 1.4;
                     cursor: pointer;
                     transition: all 0.2s;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab .am-magic-view-tab-label {
+                    white-space: nowrap;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab .am-magic-view-default-icon {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 10px;
+                    line-height: 1;
+                    color: #8c96b1;
+                    background: transparent;
+                    transition: all 0.2s;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab:hover .am-magic-view-default-icon {
+                    color: #66708c;
+                    background: transparent;
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab:hover {
                     border-color: rgba(42, 91, 255, 0.42);
@@ -5437,6 +5673,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-color: rgba(42, 91, 255, 0.48);
                     color: var(--am26-primary-strong);
                     font-weight: 600;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab.is-default-view .am-magic-view-default-icon {
+                    color: var(--am26-primary-strong);
+                    background: transparent;
                 }
                 #am-magic-report-popup .am-magic-content {
                     position: relative; flex: 1; min-height: 0;
@@ -5461,6 +5701,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     animation: am-spin 0.8s linear infinite;
                 }
                 #am-magic-report-popup .am-crowd-matrix-state {
+                    --am-crowd-progress: 0%;
                     font-size: 12px;
                     line-height: 1.45;
                     color: #4a5674;
@@ -5468,6 +5709,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border: 1px solid rgba(42, 91, 255, 0.16);
                     border-radius: 10px;
                     padding: 8px 10px;
+                    position: relative;
+                    overflow: hidden;
+                    isolation: isolate;
+                }
+                #am-magic-report-popup .am-crowd-matrix-state.is-hidden {
+                    display: none;
+                }
+                #am-magic-report-popup .am-crowd-matrix-state::before {
+                    content: '';
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    bottom: 0;
+                    width: var(--am-crowd-progress, 0%);
+                    background: rgba(42, 91, 255, 0.14);
+                    transition: width 0.22s ease, background-color 0.22s ease;
+                    pointer-events: none;
+                }
+                #am-magic-report-popup .am-crowd-matrix-state .am-crowd-matrix-state-text {
+                    position: relative;
+                    z-index: 1;
+                    display: block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 #am-magic-report-popup .am-crowd-matrix-campaign {
                     font-size: 13px;
@@ -5487,41 +5753,70 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: #237804;
                     border-color: rgba(82, 196, 26, 0.34);
                 }
+                #am-magic-report-popup .am-crowd-matrix-state.is-success::before {
+                    background: rgba(82, 196, 26, 0.18);
+                }
                 #am-magic-report-popup .am-crowd-matrix-state.is-warn {
                     color: #ad6800;
                     border-color: rgba(250, 140, 22, 0.34);
+                }
+                #am-magic-report-popup .am-crowd-matrix-state.is-warn::before {
+                    background: rgba(250, 140, 22, 0.18);
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-error {
                     color: #cf1322;
                     border-color: rgba(234, 79, 79, 0.34);
                 }
+                #am-magic-report-popup .am-crowd-matrix-state.is-error::before {
+                    background: rgba(234, 79, 79, 0.16);
+                }
                 #am-magic-report-popup .am-crowd-matrix-toolbar {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    gap: 10px;
+                    gap: 12px;
                     flex-wrap: wrap;
+                    padding: 4px 8px 12px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-legend-global {
+                    display: flex;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-group {
                     display: flex;
                     gap: 8px;
                     flex-wrap: wrap;
                     align-items: center;
+                    background: rgba(255, 255, 255, 0.6);
+                    padding: 4px 10px;
+                    border-radius: 999px;
+                    box-shadow: inset 0 1px 3px rgba(31, 53, 109, 0.05);
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-divider {
+                    color: #b2b8c9;
+                    font-size: 12px;
+                    line-height: 1;
+                    font-weight: 700;
+                    user-select: none;
+                    margin: 0 2px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-legend-toggle {
-                    border: 1px solid var(--am-crowd-legend-color, rgba(42, 91, 255, 0.36));
-                    background: rgba(255, 255, 255, 0.92);
-                    color: #30406a;
+                    border: 1px solid transparent;
+                    background: rgba(255, 255, 255, 0.9);
+                    color: #1a2a47;
                     border-radius: 999px;
                     font-size: 11px;
                     line-height: 1.2;
                     font-weight: 600;
                     cursor: pointer;
-                    padding: 4px 10px;
+                    padding: 5px 12px;
                     display: inline-flex;
                     align-items: center;
                     gap: 6px;
-                    transition: all 0.2s;
+                    box-shadow: 0 2px 6px rgba(31, 53, 109, 0.06);
+                    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
                 }
                 #am-magic-report-popup .am-crowd-matrix-legend-toggle i {
                     width: 8px;
@@ -5529,14 +5824,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-radius: 50%;
                     display: inline-block;
                     background: var(--am-crowd-legend-color, #2f54eb);
+                    box-shadow: 0 0 6px var(--am-crowd-legend-color);
                 }
                 #am-magic-report-popup .am-crowd-matrix-legend-toggle:hover {
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 10px rgba(31, 53, 109, 0.12);
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
+                    border-color: color-mix(in srgb, var(--am-crowd-legend-color) 40%, transparent);
                 }
                 #am-magic-report-popup .am-crowd-matrix-legend-toggle.is-off {
-                    opacity: 0.45;
-                    border-style: dashed;
+                    opacity: 0.5;
+                    border-color: transparent;
+                    box-shadow: none;
+                    background: transparent;
                 }
                 #am-magic-report-popup .am-crowd-matrix-actions {
                     display: flex;
@@ -5544,76 +5843,90 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-magic-report-popup .am-crowd-matrix-retry {
                     display: none;
-                    border: 1px solid rgba(42, 91, 255, 0.28);
-                    background: rgba(255, 255, 255, 0.9);
+                    border: none;
+                    background: linear-gradient(135deg, rgba(42, 91, 255, 0.1), rgba(42, 91, 255, 0.05));
                     color: var(--am26-primary);
+                    font-weight: 600;
                     border-radius: 8px;
                     font-size: 12px;
                     line-height: 1.2;
                     cursor: pointer;
-                    padding: 6px 12px;
+                    padding: 6px 16px;
+                    transition: all 0.2s ease;
                 }
                 #am-magic-report-popup .am-crowd-matrix-retry:hover {
-                    background: rgba(42, 91, 255, 0.1);
+                    background: rgba(42, 91, 255, 0.15);
+                    transform: scale(1.02);
                 }
                 #am-magic-report-popup .am-crowd-matrix-grid {
                     flex: 1;
                     min-height: 120px;
                     overflow: auto;
-                    border: 1px solid rgba(31, 53, 109, 0.08);
-                    border-radius: 12px;
-                    background: linear-gradient(180deg, rgba(248, 251, 255, 0.94) 0%, rgba(241, 247, 255, 0.66) 100%);
+                    border: 1px solid rgba(255, 255, 255, 0.4);
+                    border-radius: 16px;
+                    background: linear-gradient(145deg, rgba(246, 250, 255, 0.75) 0%, rgba(235, 243, 255, 0.5) 100%);
+                    backdrop-filter: blur(12px);
+                    box-shadow: 0 8px 32px rgba(31, 53, 109, 0.06), inset 0 2px 4px rgba(255, 255, 255, 0.6);
                 }
                 #am-magic-report-popup .am-crowd-matrix-table {
                     display: grid;
-                    grid-template-columns: minmax(112px, 136px) repeat(var(--am-crowd-matrix-data-cols, 4), minmax(0, 1fr));
-                    gap: 8px;
-                    padding: 8px;
+                    grid-template-columns: max-content repeat(var(--am-crowd-matrix-data-cols, 4), minmax(0, 1fr));
+                    gap: 12px;
+                    padding: 12px;
                     width: 100%;
                     min-width: 0;
                 }
                 #am-magic-report-popup .am-crowd-matrix-cell {
-                    border: 1px solid rgba(31, 53, 109, 0.08);
-                    border-radius: 10px;
-                    background: rgba(255, 255, 255, 0.92);
+                    border: 1px solid rgba(255, 255, 255, 0.8);
+                    border-radius: 14px;
+                    background: rgba(255, 255, 255, 0.65);
+                    backdrop-filter: blur(8px);
+                    box-shadow: 0 4px 12px rgba(31, 53, 109, 0.03);
+                    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell:hover {
+                    background: rgba(255, 255, 255, 0.85);
+                    box-shadow: 0 8px 20px rgba(31, 53, 109, 0.06);
                 }
                 #am-magic-report-popup .am-crowd-matrix-header {
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: #30406a;
-                    padding: 8px 10px;
-                    background: rgba(42, 91, 255, 0.08);
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #1a2a47;
+                    padding: 12px 14px;
+                    background: rgba(255, 255, 255, 0.85);
+                    backdrop-filter: blur(8px);
                     display: flex;
                     align-items: center;
                     position: sticky;
                     top: 0;
                     z-index: 4;
-                    box-shadow: 0 1px 0 rgba(42, 91, 255, 0.16);
+                    box-shadow: 0 2px 6px rgba(42, 91, 255, 0.05);
                 }
                 #am-magic-report-popup .am-crowd-matrix-corner {
                     justify-content: center;
-                    font-weight: 700;
-                    left: 0;
                     z-index: 6;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 250, 255, 0.85));
+                    border-bottom-right-radius: 0;
                 }
                 #am-magic-report-popup .am-crowd-matrix-row-header {
-                    font-size: 12px;
-                    color: #2f3f66;
-                    padding: 10px;
-                    font-weight: 600;
+                    font-size: 13px;
+                    color: #1a2a47;
+                    padding: 14px 12px;
+                    font-weight: 700;
                     display: flex;
                     align-items: center;
-                    background: rgba(247, 250, 255, 0.95);
+                    background: rgba(255, 255, 255, 0.85);
+                    backdrop-filter: blur(8px);
                     position: sticky;
                     left: 0;
                     z-index: 3;
-                    box-shadow: 1px 0 0 rgba(31, 53, 109, 0.08);
+                    box-shadow: 2px 0 6px rgba(31, 53, 109, 0.04);
                 }
                 #am-magic-report-popup .am-crowd-matrix-cell-chart {
-                    padding: 8px;
+                    padding: 14px;
                     display: flex;
                     flex-direction: column;
-                    gap: 8px;
+                    gap: 14px;
                     min-height: clamp(228px, 26vh, 340px);
                 }
                 #am-magic-report-popup .am-crowd-matrix-empty {
@@ -5621,21 +5934,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 12px;
                     color: #95a0b9;
                     text-align: center;
-                    padding: 12px 0;
+                    padding: 16px 0;
+                    font-weight: 600;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart {
                     display: grid;
                     grid-template-columns: repeat(var(--am-crowd-label-count, 1), minmax(0, 1fr));
                     align-items: end;
-                    gap: 6px;
+                    gap: 8px;
                     min-height: clamp(150px, 18vh, 230px);
-                    overflow: hidden;
-                    padding: 8px 0 4px;
-                    border-radius: 8px;
+                    overflow: visible;
+                    padding: 12px 6px 6px;
+                    border-radius: 10px;
                     background-image:
-                        linear-gradient(to top, rgba(120, 144, 193, 0.14) 1px, transparent 1px),
-                        linear-gradient(180deg, rgba(240, 246, 255, 0.92) 0%, rgba(233, 242, 255, 0.6) 100%);
+                        linear-gradient(to top, rgba(120, 144, 193, 0.08) 1px, transparent 1px),
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(235, 244, 255, 0.3) 100%);
                     background-size: 100% 25%, 100% 100%;
+                    box-shadow: inset 0 2px 8px rgba(31, 53, 109, 0.02);
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar-group {
                     min-width: 0;
@@ -5643,18 +5958,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    gap: 2px;
+                    gap: 5px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar-columns {
                     display: flex;
                     align-items: flex-end;
                     justify-content: center;
-                    gap: 3px;
+                    gap: 5px;
                     width: 100%;
                     height: clamp(120px, 16vh, 200px);
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar {
-                    width: clamp(7px, 19%, 14px);
+                    width: clamp(8px, 18%, 16px);
                     height: 100%;
                     border-radius: 0;
                     background: none;
@@ -5664,8 +5979,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     box-shadow: none;
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar.is-hover .am-crowd-matrix-bar-fill {
-                    filter: brightness(1.06) saturate(1.04);
-                    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 4px 10px rgba(31, 53, 109, 0.22);
+                    filter: brightness(1.15) saturate(1.1);
+                    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 6px 16px var(--am-crowd-bar-color);
+                    transform: scaleY(1.02);
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar.is-nodata {
                     opacity: 0.55;
@@ -5674,72 +5990,84 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     position: absolute;
                     left: 0;
                     bottom: 0;
-                    transform: none;
+                    transform-origin: bottom center;
                     width: 100%;
                     min-height: 0;
-                    border-top-left-radius: 4px;
-                    border-top-right-radius: 4px;
-                    border-bottom-left-radius: 0;
-                    border-bottom-right-radius: 0;
-                    background: var(--am-crowd-bar-color, #2f54eb);
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                    border-bottom-left-radius: 2px;
+                    border-bottom-right-radius: 2px;
+                    background: linear-gradient(180deg, var(--am-crowd-bar-color), color-mix(in srgb, var(--am-crowd-bar-color) 70%, transparent));
+                    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4), 0 2px 8px rgba(31, 53, 109, 0.08);
+                    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
                 }
                 #am-magic-report-popup .am-crowd-matrix-xlabel {
                     max-width: 100%;
                     text-align: center;
-                    font-size: 10px;
-                    color: #576280;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #4a5674;
                     line-height: 1.2;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense {
-                    gap: 4px;
+                    gap: 6px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-bar-columns {
-                    gap: 2px;
+                    gap: 3px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-bar {
-                    width: clamp(5px, 14%, 10px);
+                    width: clamp(6px, 16%, 12px);
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-xlabel {
-                    font-size: 9px;
+                    font-size: 10px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-bar {
-                    width: clamp(4px, 10%, 8px);
+                    width: clamp(5px, 12%, 10px);
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-xlabel {
-                    font-size: 8px;
+                    font-size: 9px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-insights {
                     display: grid;
                     grid-template-columns: repeat(var(--am-crowd-metric-count, 4), minmax(0, 1fr));
-                    gap: 6px;
+                    gap: 8px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-insight-item {
-                    min-height: 24px;
-                    border-radius: 8px;
-                    border: 1px solid rgba(42, 91, 255, 0.2);
-                    background: rgba(42, 91, 255, 0.08);
-                    color: #2d3e63;
-                    font-size: 10px;
+                    min-height: 28px;
+                    border-radius: 10px;
+                    border: 1px solid color-mix(in srgb, var(--am-crowd-insight-color) 30%, transparent);
+                    background: color-mix(in srgb, var(--am-crowd-insight-color) 8%, transparent);
+                    color: color-mix(in srgb, var(--am-crowd-insight-color) 90%, #000);
+                    font-size: 11px;
+                    font-weight: 600;
                     line-height: 1.25;
-                    padding: 3px 6px;
+                    padding: 5px 8px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     text-align: center;
-                    box-shadow: inset 2px 0 0 var(--am-crowd-insight-color, #2f54eb);
+                    box-shadow: 0 2px 6px color-mix(in srgb, var(--am-crowd-insight-color) 12%, transparent);
+                    transition: all 0.2s ease;
+                }
+                #am-magic-report-popup .am-crowd-matrix-insight-item:hover {
+                    background: color-mix(in srgb, var(--am-crowd-insight-color) 15%, transparent);
+                    box-shadow: 0 4px 12px color-mix(in srgb, var(--am-crowd-insight-color) 25%, transparent);
+                    transform: translateY(-2px);
                 }
                 #am-magic-report-popup .am-crowd-matrix-note {
                     margin-top: auto;
                     font-size: 10px;
                     line-height: 1.3;
-                    color: #9a7d3c;
-                    background: rgba(250, 173, 20, 0.08);
-                    border: 1px dashed rgba(250, 173, 20, 0.32);
-                    border-radius: 6px;
-                    padding: 4px 6px;
+                    font-weight: 600;
+                    color: #a88231;
+                    background: rgba(250, 173, 20, 0.1);
+                    border: 1px solid rgba(250, 173, 20, 0.25);
+                    border-radius: 8px;
+                    padding: 6px 10px;
+                    box-shadow: 0 2px 4px rgba(250, 173, 20, 0.05);
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip {
                     position: absolute;
@@ -5748,15 +6076,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     z-index: 40;
                     pointer-events: none;
                     max-width: min(280px, calc(100vw - 48px));
-                    border-radius: 8px;
-                    background: rgba(22, 34, 62, 0.93);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    border-radius: 12px;
+                    background: rgba(15, 23, 42, 0.85);
+                    backdrop-filter: blur(12px);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
                     color: #fff;
                     font-size: 12px;
-                    line-height: 1.35;
+                    line-height: 1.4;
                     font-weight: 600;
-                    padding: 6px 8px;
-                    box-shadow: 0 8px 20px rgba(7, 14, 31, 0.28);
+                    padding: 8px 12px;
+                    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
@@ -5806,8 +6135,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ${quickPromptHtml}
                     </div>
                     <div class="am-magic-view-tabs" id="am-magic-view-tabs">
-                        <button type="button" class="am-magic-view-tab active" data-view="query">万能查数</button>
-                        <button type="button" class="am-magic-view-tab" data-view="matrix">人群对比看板</button>
+                        <button type="button" class="am-magic-view-tab" data-view="query">
+                            <span class="am-magic-view-tab-label">万能查数</span>
+                            <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">☆</span>
+                        </button>
+                        <button type="button" class="am-magic-view-tab active" data-view="matrix">
+                            <span class="am-magic-view-tab-label">人群对比看板</span>
+                            <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">☆</span>
+                        </button>
                     </div>
                 </div>
                 <div class="am-magic-content am-magic-content-query" data-view-panel="query">
@@ -5822,8 +6157,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ></iframe>
                 </div>
                 <div class="am-magic-content am-magic-content-matrix" data-view-panel="matrix">
-                    <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">计划名：未识别 ｜ 计划ID：--</div>
-                    <div class="am-crowd-matrix-state is-info" id="am-crowd-matrix-state">点击“人群对比看板”开始加载</div>
+                    <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">计划名：未识别 ｜ 计划ID：-- ｜ 商品ID：--</div>
+                    <div class="am-crowd-matrix-state is-info" id="am-crowd-matrix-state"><span class="am-crowd-matrix-state-text">点击“人群对比看板”开始加载</span></div>
                     <div class="am-crowd-matrix-toolbar">
                         <div class="am-crowd-matrix-legend-global" id="am-crowd-matrix-global-legend"></div>
                         <div class="am-crowd-matrix-actions">
@@ -5851,7 +6186,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.refreshQuickPromptLabels();
             this.refreshCrowdMatrixCampaignMeta();
             this.renderCrowdGlobalLegend();
-            this.switchMagicView(this.activeView || 'query', { skipLoad: true });
+            this.activeView = this.getMagicDefaultView();
+            this.switchMagicView(this.activeView || 'matrix', { skipLoad: true });
             if (!this.popupResizeHandler) {
                 this.popupResizeHandler = () => {
                     if (!(this.popup instanceof HTMLElement)) return;
@@ -5938,6 +6274,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.viewTabsEl.addEventListener('click', (e) => {
                     const target = e.target;
                     if (!(target instanceof Element)) return;
+                    const defaultIcon = target.closest('[data-default-view]');
+                    if (defaultIcon instanceof HTMLElement) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const defaultView = this.normalizeMagicView(defaultIcon.dataset.defaultView || '');
+                        if (!defaultView) return;
+                        this.setMagicDefaultView(defaultView);
+                        this.switchMagicView(defaultView);
+                        return;
+                    }
                     const btn = target.closest('[data-view]');
                     if (!(btn instanceof HTMLElement)) return;
                     const nextView = String(btn.dataset.view || '').trim();
@@ -5972,7 +6318,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             // 头部快捷话术
             const quickPrompts = div.querySelector('#am-magic-quick-prompts');
             if (quickPrompts) {
-                quickPrompts.addEventListener('click', (e) => {
+                quickPrompts.addEventListener('click', async (e) => {
                     const target = e.target;
                     if (!(target instanceof Element)) return;
                     const btn = target.closest('.am-quick-prompt');
@@ -5988,7 +6334,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     btn.classList.add('active');
                     setTimeout(() => btn.classList.remove('active'), 1200);
 
-                    const promptText = this.resolvePromptText(promptItem);
+                    const promptText = await this.resolvePromptText(promptItem);
                     if (!promptText) return;
 
                     if (promptItem.autoSubmit) {
@@ -6019,14 +6365,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             let isDragging = false;
             let startX, startY, initialLeft, initialTop;
 
-                this.header.onmousedown = (e) => {
-                    const target = e.target;
-                    if (!(target instanceof Element)) return;
-                    if (target.closest('.am-btn-group') || target.closest('.am-quick-prompts') || target.closest('.am-magic-view-tabs')) return;
-                    if (this.activeView === 'matrix' || this.popupMatrixMaximized) return;
-                    isDragging = true;
-                    startX = e.clientX;
-                    startY = e.clientY;
+            this.header.onmousedown = (e) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+                if (target.closest('.am-btn-group') || target.closest('.am-quick-prompts') || target.closest('.am-magic-view-tabs')) return;
+                if (this.activeView === 'matrix' || this.popupMatrixMaximized) return;
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
                 // 首次拖拽时移除 transform 定位，切换为 left/top
                 if (div.style.transform) {
                     const rect = div.getBoundingClientRect();
@@ -6068,7 +6414,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (show) {
                 this.refreshQuickPromptLabels();
                 this.refreshCrowdMatrixCampaignMeta();
-                this.switchMagicView(this.activeView || 'query');
+                const defaultView = this.getMagicDefaultView();
+                this.activeView = defaultView;
+                this.switchMagicView(defaultView || 'matrix');
             }
 
             State.config.magicReportOpen = show;
@@ -8131,6 +8479,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return btn;
         },
 
+        attachHoverHost(anchorEl) {
+            if (!(anchorEl instanceof Element)) return null;
+            const rowHost = anchorEl.closest('tr, [role="row"], .mx-table-row, li');
+            const compactHost = anchorEl.closest('.asiYysqLgo, .asiYysqLgr, .ellipsis');
+            const host = rowHost
+                || compactHost
+                || anchorEl.parentElement
+                || anchorEl;
+            if (!(host instanceof HTMLElement)) return null;
+            if (host === document.body || host === document.documentElement) return null;
+            host.classList.add('am-campaign-hover-host');
+            if (rowHost instanceof HTMLElement && compactHost instanceof HTMLElement && compactHost !== rowHost) {
+                compactHost.classList.add('am-campaign-hover-host');
+            }
+            return host;
+        },
+
         isConcurrentStartEnabled() {
             return !!State.config.showConcurrentStartButton;
         },
@@ -8180,10 +8545,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
 
             textNodes.forEach((textNode) => {
+                const parentEl = textNode.parentElement;
+                this.attachHoverHost(parentEl);
                 const rawText = textNode.nodeValue || '';
                 const regex = new RegExp(this.TEXT_PATTERN.source, 'g');
-                const contextBizCode = this.inferBizCodeFromElement(textNode.parentElement);
-                const contextItemId = this.inferItemIdFromElement(textNode.parentElement, {
+                const contextBizCode = this.inferBizCodeFromElement(parentEl);
+                const contextItemId = this.inferItemIdFromElement(parentEl, {
                     allowLocationFallback: false,
                     allowBodyFallback: false
                 });
@@ -8255,6 +8622,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     allowLocationFallback: false,
                     allowBodyFallback: false
                 });
+                this.attachHoverHost(el);
 
                 const siblingButtons = [];
                 let pointer = el.nextElementSibling;
@@ -8720,7 +9088,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const saved = window.localStorage?.getItem?.(this.EXPORT_DAYS_STORAGE_KEY);
                 const parsed = this.normalizeExportDays(saved);
                 if (parsed) return parsed;
-            } catch (_) {}
+            } catch (_) { }
             return this.TARGET_DAYS;
         },
 
@@ -8729,7 +9097,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!normalized) return;
             try {
                 window.localStorage?.setItem?.(this.EXPORT_DAYS_STORAGE_KEY, String(normalized));
-            } catch (_) {}
+            } catch (_) { }
         },
 
         resolveExportDaysFromButton(btn) {
@@ -11569,20 +11937,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 .sort((a, b) => (b._goalScore - a._goalScore) || (a.top - b.top));
             const fromGroups = groups.length
                 ? groups[0].options
-                .map(option => ({
-                    groupKey: groups[0].groupKey,
-                    groupLabel: groups[0].groupLabel,
-                    optionText: normalizeGoalLabel(option.optionText || ''),
-                    goalLabel: normalizeGoalCandidateLabel(option.optionText || ''),
-                    selected: !!option.selected,
-                    disabled: !!option.disabled,
-                    top: groups[0].top,
-                    left: groups[0].left
-                }))
-                .filter(option => option.optionText && !option.disabled)
-                .filter(option => !SCENE_GOAL_OPTION_SKIP_RE.test(option.goalLabel || option.optionText))
-                .filter(option => isLikelyGoalOptionText(option.goalLabel || option.optionText) || option.selected)
-                .slice(0, 12)
+                    .map(option => ({
+                        groupKey: groups[0].groupKey,
+                        groupLabel: groups[0].groupLabel,
+                        optionText: normalizeGoalLabel(option.optionText || ''),
+                        goalLabel: normalizeGoalCandidateLabel(option.optionText || ''),
+                        selected: !!option.selected,
+                        disabled: !!option.disabled,
+                        top: groups[0].top,
+                        left: groups[0].left
+                    }))
+                    .filter(option => option.optionText && !option.disabled)
+                    .filter(option => !SCENE_GOAL_OPTION_SKIP_RE.test(option.goalLabel || option.optionText))
+                    .filter(option => isLikelyGoalOptionText(option.goalLabel || option.optionText) || option.selected)
+                    .slice(0, 12)
                 : [];
             const fromCards = collectFromDataCards();
             const merged = uniqueBy(
@@ -16422,16 +16790,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 warnings
             };
         };
-            const getSceneCachedGoalSpecs = (sceneName = '') => {
-                const targetScene = String(sceneName || '').trim();
-                if (!targetScene) return [];
-                const sceneBizCode = resolveSceneBizCodeHint(targetScene) || SCENE_BIZCODE_HINT_FALLBACK[targetScene] || '';
-                const cachedSceneSpec = getCachedSceneSpec(targetScene, sceneBizCode);
-                if (isPlainObject(cachedSceneSpec) && Array.isArray(cachedSceneSpec.goals) && cachedSceneSpec.goals.length) {
-                    return normalizeGoalSpecContracts(cachedSceneSpec.goals);
-                }
-                return buildFallbackGoalSpecList(targetScene);
-            };
+        const getSceneCachedGoalSpecs = (sceneName = '') => {
+            const targetScene = String(sceneName || '').trim();
+            if (!targetScene) return [];
+            const sceneBizCode = resolveSceneBizCodeHint(targetScene) || SCENE_BIZCODE_HINT_FALLBACK[targetScene] || '';
+            const cachedSceneSpec = getCachedSceneSpec(targetScene, sceneBizCode);
+            if (isPlainObject(cachedSceneSpec) && Array.isArray(cachedSceneSpec.goals) && cachedSceneSpec.goals.length) {
+                return normalizeGoalSpecContracts(cachedSceneSpec.goals);
+            }
+            return buildFallbackGoalSpecList(targetScene);
+        };
         const buildSceneCreateApiDoc = async (sceneName = '', options = {}) => {
             const targetScene = String(sceneName || '').trim();
             if (!targetScene) {
@@ -18388,12 +18756,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const runtimeStoreData = isPlainObject(runtimeDefaults?.storeData) ? runtimeDefaults.storeData : {};
             const bidMode = normalizeBidMode(
                 options?.bidMode
-                    || request?.common?.bidMode
-                    || request?.bidMode
-                    || input?.bidTypeV2
-                    || request?.common?.campaignOverride?.bidTypeV2
-                    || request?.bidTypeV2
-                    || DEFAULTS.bidTypeV2,
+                || request?.common?.bidMode
+                || request?.bidMode
+                || input?.bidTypeV2
+                || request?.common?.campaignOverride?.bidTypeV2
+                || request?.bidTypeV2
+                || DEFAULTS.bidTypeV2,
                 'smart'
             );
             const isManual = bidMode === 'manual';
@@ -18903,8 +19271,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 normalized.bidMode = normalizeBidMode(
                     normalized.bidMode
-                        || normalized.campaignOverride?.bidTypeV2
-                        || commonBidMode,
+                    || normalized.campaignOverride?.bidTypeV2
+                    || commonBidMode,
                     commonBidMode
                 );
                 if (normalized.item) {
@@ -21206,9 +21574,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             mergedRequest.common.bidMode = normalizeBidMode(
                 mergedRequest?.common?.bidMode
-                    || mergedRequest?.bidMode
-                    || mergedRequest?.bidTypeV2
-                    || DEFAULTS.bidTypeV2,
+                || mergedRequest?.bidMode
+                || mergedRequest?.bidTypeV2
+                || DEFAULTS.bidTypeV2,
                 'smart'
             );
             const requestedSceneName = String(mergedRequest.sceneName || '').trim();
@@ -29641,14 +30009,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     value="${Utils.escapeHtml(crowdItemSelectedModeValue)}"
                                 />
                                 ${buildScenePopupControl({
-            trigger: 'itemSelect',
-            title: '添加商品',
-            buttonLabel: '添加商品',
-            summary: describeCrowdItemSummary(crowdItemIdRaw),
-            hiddenFields: [
-                { fieldKey: crowdItemIdField, value: crowdItemIdRaw }
-            ]
-        })}
+                        trigger: 'itemSelect',
+                        title: '添加商品',
+                        buttonLabel: '添加商品',
+                        summary: describeCrowdItemSummary(crowdItemIdRaw),
+                        hiddenFields: [
+                            { fieldKey: crowdItemIdField, value: crowdItemIdRaw }
+                        ]
+                    })}
                             </div>
                         </div>
                     `);
@@ -29811,18 +30179,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     <div class="am-wxt-scene-setting-label">设置平均成交成本</div>
                                     <div class="am-wxt-setting-control am-wxt-setting-control-pair">
                                         ${buildSceneSwitchControl(
-            crowdAvgDealCostSwitchFieldKey,
-            crowdAvgDealCostSwitchValue,
-            '开启',
-            '关闭'
-        )}
+                                crowdAvgDealCostSwitchFieldKey,
+                                crowdAvgDealCostSwitchValue,
+                                '开启',
+                                '关闭'
+                            )}
                                         <span class="am-wxt-scene-budget-guard-text">控成本投放：成本过低可能影响系统最大化获取成交量</span>
                                         ${buildInlineSceneInputControl(
-            '目标成本',
-            crowdAvgDealCostFieldKey,
-            crowdAvgDealCostValue,
-            '请输入 元/次'
-        )}
+                                '目标成本',
+                                crowdAvgDealCostFieldKey,
+                                crowdAvgDealCostValue,
+                                '请输入 元/次'
+                            )}
                                         <input
                                             class="am-wxt-hidden-control"
                                             data-scene-field="${Utils.escapeHtml(crowdAvgDealCostSwitchFieldKey)}"
@@ -29853,18 +30221,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     <div class="am-wxt-scene-setting-label">设置平均收藏加购成本</div>
                                     <div class="am-wxt-setting-control am-wxt-setting-control-pair">
                                         ${buildSceneSwitchControl(
-            crowdAvgCartCostSwitchFieldKey,
-            crowdAvgCartCostSwitchValue,
-            '开启',
-            '关闭'
-        )}
+                                crowdAvgCartCostSwitchFieldKey,
+                                crowdAvgCartCostSwitchValue,
+                                '开启',
+                                '关闭'
+                            )}
                                         <span class="am-wxt-scene-budget-guard-text">控成本投放：成本过低可能影响系统最大化获取收藏加购量</span>
                                         ${buildInlineSceneInputControl(
-            '目标成本',
-            crowdAvgCartCostFieldKey,
-            crowdAvgCartCostValue,
-            '请输入 元/次'
-        )}
+                                '目标成本',
+                                crowdAvgCartCostFieldKey,
+                                crowdAvgCartCostValue,
+                                '请输入 元/次'
+                            )}
                                         <input
                                             class="am-wxt-hidden-control"
                                             data-scene-field="${Utils.escapeHtml(crowdAvgCartCostSwitchFieldKey)}"
@@ -29903,14 +30271,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div class="am-wxt-scene-setting-label">过滤人群</div>
                             <div class="am-wxt-setting-control">
                                 ${buildScenePopupControl({
-            trigger: 'crowdFilter',
-            title: '设置过滤人群',
-            buttonLabel: '设置过滤人群',
-            summary: crowdFilterSummary,
-            hiddenFields: [
-                                { fieldKey: crowdFilterField, value: crowdFilterRaw }
-                            ]
-                        })}
+                        trigger: 'crowdFilter',
+                        title: '设置过滤人群',
+                        buttonLabel: '设置过滤人群',
+                        summary: crowdFilterSummary,
+                        hiddenFields: [
+                            { fieldKey: crowdFilterField, value: crowdFilterRaw }
+                        ]
+                    })}
                             </div>
                         </div>
                     `);
@@ -29936,22 +30304,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div class="am-wxt-setting-control am-wxt-setting-control-pair">
                                 <div class="am-wxt-scene-budget-guard-main">
                                     ${buildSceneSwitchControl(
-            budgetGuardSwitchField,
-            budgetGuardSwitchValue,
-            '开启',
-            '关闭'
-        )}
+                        budgetGuardSwitchField,
+                        budgetGuardSwitchValue,
+                        '开启',
+                        '关闭'
+                    )}
                                     <span class="am-wxt-scene-budget-guard-text">提升预算续航，防止成交损失</span>
                                 </div>
                                 ${buildScenePopupControl({
-            trigger: 'budgetGuard',
-            title: '优质计划防停投',
-            buttonLabel: '修改',
-            summary: budgetGuardSummary,
-            hiddenFields: [
-                { fieldKey: budgetGuardConfigField, value: budgetGuardConfigRaw }
-            ]
-        })}
+                        trigger: 'budgetGuard',
+                        title: '优质计划防停投',
+                        buttonLabel: '修改',
+                        summary: budgetGuardSummary,
+                        hiddenFields: [
+                            { fieldKey: budgetGuardConfigField, value: budgetGuardConfigRaw }
+                        ]
+                    })}
                                 <input
                                     class="am-wxt-hidden-control"
                                     data-scene-field="${Utils.escapeHtml(budgetGuardSwitchField)}"
@@ -30545,7 +30913,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             if (typeof mask._amWxtCleanup === 'function') {
                                 try {
                                     mask._amWxtCleanup();
-                                } catch {}
+                                } catch { }
                             }
                             mask.remove();
                             resolve(payload);
@@ -30898,7 +31266,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     } catch {
                         try {
                             openButton.scrollIntoView({ block: 'center', inline: 'nearest' });
-                        } catch {}
+                        } catch { }
                     }
                     let openedByScript = false;
                     if (!(resolveNativeAdvancedDialogRoot() instanceof HTMLElement)) {
@@ -32100,10 +32468,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                         ${expanded ? '' : 'hidden'}
                                                     >
                                                         ${cityList
-                                                            .map(city => {
-                                                                const cityCode = normalizeAreaNodeCode(city?.code);
-                                                                const checked = isCitySelected(cityCode, provinceCode, selected);
-                                                                return `
+                                                    .map(city => {
+                                                        const cityCode = normalizeAreaNodeCode(city?.code);
+                                                        const checked = isCitySelected(cityCode, provinceCode, selected);
+                                                        return `
                                                                     <button
                                                                         type="button"
                                                                         class="am-wxt-scene-area-city-item ${checked ? 'checked' : ''}"
@@ -32115,8 +32483,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                                         <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(String(city?.name || '').trim())}</span>
                                                                     </button>
                                                                 `;
-                                                            })
-                                                            .join('')}
+                                                    })
+                                                    .join('')}
                                                     </div>
                                                 `
                                                 : '';
@@ -34693,8 +35061,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                     </div>
                                                     <div class="am-wxt-scene-crowd-candidate-actions">
                                                         ${selected
-            ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>`
-            : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-add="${Utils.escapeHtml(key)}">添加</button>`}
+                                                    ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>`
+                                                    : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-add="${Utils.escapeHtml(key)}">添加</button>`}
                                                     </div>
                                                 </div>
                                             `;
@@ -34886,8 +35254,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                     </div>
                                                     <div class="am-wxt-scene-crowd-native-candidate-actions">
                                                         ${selected
-                ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-remove="${Utils.escapeHtml(key)}">取消添加</button>`
-                : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-native-add="${Utils.escapeHtml(key)}">添加</button>`}
+                                                    ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-remove="${Utils.escapeHtml(key)}">取消添加</button>`
+                                                    : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-native-add="${Utils.escapeHtml(key)}">添加</button>`}
                                                     </div>
                                                 </div>
                                             `;
@@ -35733,10 +36101,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const manualKeywords = String(item?.manualKeywords || '').trim();
                     const bidMode = normalizeBidMode(
                         item?.bidMode
-                            || item?.campaignOverride?.bidTypeV2
-                            || base?.bidMode
-                            || wizardState?.draft?.bidMode
-                            || 'smart',
+                        || item?.campaignOverride?.bidTypeV2
+                        || base?.bidMode
+                        || wizardState?.draft?.bidMode
+                        || 'smart',
                         'smart'
                     );
                     const bidTargetV2 = String(item?.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
@@ -37912,7 +38280,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     } else if (event === 'submit_batch_fallback_single') {
                         appendWizardLog(`${sceneTag}${payload.fallbackTriggered ? '批次降级单计划重试' : '批次单计划重试'}：${payload.error}`, 'error');
                     } else if (event === 'conflict_resolve_start') {
-                        appendWizardLog(`${sceneTag}检测到在投冲突，开始自动处理：计划=${payload.planName || '-'} 商品ID=${payload.itemId || '-'}（${payload.error || '冲突' }）`);
+                        appendWizardLog(`${sceneTag}检测到在投冲突，开始自动处理：计划=${payload.planName || '-'} 商品ID=${payload.itemId || '-'}（${payload.error || '冲突'}）`);
                     } else if (event === 'conflict_resolve_done') {
                         if (payload.resolved) {
                             const oneClickHint = payload.oneClickUsed ? '（一键处理）' : '';
@@ -42234,7 +42602,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         // processCampaign 依赖 UI.createCampaignCard。
         // 为了 Magic Report，我们希望它仅仅返回结果，或者我们可以让 Logic 自己处理 UI。
         // 这里简单地调用 processCampaign，它会把日志输出到 Escort 面板。
-        // 如果我们想要 Magic Report 独立显示，我们需要修改 Core.processCampaign 
+        // 如果我们想要 Magic Report 独立显示，我们需要修改 Core.processCampaign
         // 但为了最小化修改，我们暂时让它在后台跑，并返回结果。
 
         // 确保 ESCORT UI 存在（因为 ProcessCampaign 依赖 UI 创建卡片）
