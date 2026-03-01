@@ -3030,9 +3030,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         popup: null,
         header: null,
         iframe: null,
+        quickPromptsEl: null,
+        viewTabsEl: null,
+        queryPanelEl: null,
+        matrixPanelEl: null,
+        matrixStateEl: null,
+        matrixGridEl: null,
+        matrixRetryBtn: null,
+        matrixLegendEl: null,
+        matrixCampaignEl: null,
+        matrixHoverTipEl: null,
+        matrixHoverActiveBar: null,
+        crowdMetricVisibility: { click: true, cart: true, deal: true, itemdeal: true },
+        crowdPeriodVisibility: { 3: true, 7: true, 30: true, 90: true },
+        popupMatrixMaximized: false,
+        popupLayoutBeforeMatrix: null,
+        popupResizeHandler: null,
         lastCampaignId: '',
         lastCampaignName: '',
+        activeView: 'query',
+        crowdMatrixRunId: 0,
+        crowdMatrixLoading: false,
+        crowdMatrixLoadedCampaignId: '',
+        crowdMatrixDataset: null,
+        crowdInsightRunContext: null,
+        crowdRequestSlotPromise: null,
+        crowdRequestLastAt: 0,
         BASE_URL: 'https://one.alimama.com/index.html#!/report/ai-report',
+        CROWD_API_HOST: 'https://ai.alimama.com',
+        CROWD_PERIODS: [3, 7, 30, 90],
+        CROWD_GROUP_ORDER: ['消费能力等级', '月均消费金额', '用户年龄', '用户性别', '城市等级', '店铺潜新老客'],
+        CROWD_METRICS: ['click', 'cart', 'deal', 'itemdeal'],
+        CROWD_REQUEST_CONCURRENCY: 2,
+        CROWD_REQUEST_THROTTLE_MS: 340,
+        CROWD_REQUEST_JITTER_MS: 180,
+        CROWD_REQUEST_MAX_ATTEMPTS: 3,
+        CROWD_REQUEST_RETRY_BASE_MS: 700,
+        CROWD_REQUEST_RETRY_MAX_MS: 3200,
         QUICK_PROMPTS: [
             { label: '📛 计划名：{campaignName}', value: '计划名：{campaignName}', type: 'action', autoSubmit: false, requireCampaignName: true },
             { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
@@ -3668,6 +3702,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
         },
 
+        refreshCrowdMatrixCampaignMeta(campaignId = '') {
+            if (!(this.matrixCampaignEl instanceof HTMLElement)) return;
+            const id = String(campaignId || this.getCurrentCampaignId() || this.lastCampaignId || '').trim();
+            const name = this.getCurrentCampaignName() || this.lastCampaignName || '';
+            this.matrixCampaignEl.textContent = `计划名：${name || '未识别'} ｜ 计划ID：${id || '--'}`;
+        },
+
         resolvePromptText(promptItem) {
             const template = String(promptItem?.value || '').trim();
             if (!template) return '';
@@ -4039,6 +4080,1204 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return true;
         },
 
+        normalizeCrowdMetricType(metricType) {
+            const normalized = String(metricType || '').trim().toLowerCase();
+            return this.CROWD_METRICS.includes(normalized) ? normalized : '';
+        },
+
+        getCrowdMetricMeta(metricType) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            const map = {
+                click: {
+                    promptKeyword: '点击人群分析',
+                    seriesLabel: '点击人群',
+                    shortLabel: '点',
+                    color: '#2f54eb'
+                },
+                cart: {
+                    promptKeyword: '加购人群分析',
+                    seriesLabel: '加购人群',
+                    shortLabel: '购',
+                    color: '#13c2c2'
+                },
+                deal: {
+                    promptKeyword: '成交人群分析',
+                    seriesLabel: '成交人群',
+                    shortLabel: '成',
+                    color: '#fa8c16'
+                },
+                itemdeal: {
+                    promptKeyword: '成交人群分析',
+                    seriesLabel: '商品成交人群',
+                    shortLabel: '商成',
+                    color: '#52c41a'
+                }
+            };
+            return map[metric] || map.click;
+        },
+
+        async resolveCrowdItemIdByCampaign(campaignId) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return '';
+            try {
+                if (typeof CampaignIdQuickEntry !== 'object' || !CampaignIdQuickEntry) return '';
+                const fromCache = typeof CampaignIdQuickEntry.getCampaignItemId === 'function'
+                    ? String(CampaignIdQuickEntry.getCampaignItemId(id) || '').trim()
+                    : '';
+                if (/^\d{6,}$/.test(fromCache)) return fromCache;
+                if (
+                    typeof CampaignIdQuickEntry.resolveAuthContext !== 'function'
+                    || typeof CampaignIdQuickEntry.resolveItemIdByCampaignId !== 'function'
+                ) {
+                    return '';
+                }
+                const defaultBizCode = String(CampaignIdQuickEntry.DEFAULT_BIZ_CODE || 'onebpSearch').trim();
+                const authContext = CampaignIdQuickEntry.resolveAuthContext(defaultBizCode);
+                const bizCandidates = Array.isArray(CampaignIdQuickEntry.BIZ_CODE_LIST) && CampaignIdQuickEntry.BIZ_CODE_LIST.length
+                    ? CampaignIdQuickEntry.BIZ_CODE_LIST.slice()
+                    : ['onebpSearch', 'onebpSite', 'onebpDisplay', 'onebpAdStrategyLiuZi'];
+                const resolved = await CampaignIdQuickEntry.resolveItemIdByCampaignId(
+                    id,
+                    bizCandidates,
+                    authContext,
+                    '',
+                    []
+                );
+                const normalized = String(resolved || '').trim();
+                return /^\d{6,}$/.test(normalized) ? normalized : '';
+            } catch (err) {
+                Logger.warn(`🔮 商品ID识别失败：${err?.message || '未知错误'}`);
+                return '';
+            }
+        },
+
+        buildMetricPrompt({ campaignId, metricType, itemId = '' }) {
+            const id = String(campaignId || '').trim();
+            const item = String(itemId || '').trim();
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!/^\d{6,}$/.test(id) || !metric) return '';
+            if (metric === 'itemdeal') {
+                if (!/^\d{6,}$/.test(item)) return '';
+                return `商品ID：${item} 成交人群分析`;
+            }
+            return `计划ID：${id} ${this.getCrowdMetricMeta(metric).promptKeyword}`;
+        },
+
+        parseSseEvents(rawText) {
+            const text = String(rawText || '');
+            if (!text) return [];
+            const chunks = [];
+            text.split(/\r?\n/).forEach((line) => {
+                const trimmed = String(line || '').trim();
+                if (!trimmed.startsWith('data:')) return;
+                const payload = trimmed.slice(5).trim();
+                if (!payload) return;
+                try {
+                    chunks.push(JSON.parse(payload));
+                } catch { }
+            });
+            return chunks;
+        },
+
+        parseCrowdRequestBody(rawBody) {
+            if (rawBody === null || rawBody === undefined) return null;
+            if (typeof rawBody === 'object') return rawBody;
+            const text = String(rawBody || '').trim();
+            if (!text) return null;
+            try {
+                return JSON.parse(text);
+            } catch { }
+            try {
+                const params = new URLSearchParams(text);
+                const out = {};
+                for (const [key, value] of params.entries()) {
+                    out[key] = value;
+                }
+                return Object.keys(out).length ? out : null;
+            } catch {
+                return null;
+            }
+        },
+
+        resolveCrowdAuthParams() {
+            const out = {
+                bizCode: 'universalBP',
+                dynamicToken: '',
+                csrfID: '',
+                loginPointId: ''
+            };
+            const manager = window.__AM_HOOK_MANAGER__;
+            if (manager && typeof manager.getRequestHistory === 'function') {
+                let list = [];
+                try {
+                    list = manager.getRequestHistory({
+                        includePattern: /\/ai\/report\//i,
+                        limit: 400
+                    });
+                } catch {
+                    list = [];
+                }
+                for (let i = list.length - 1; i >= 0; i--) {
+                    const item = list[i] || {};
+                    const body = this.parseCrowdRequestBody(item.body);
+                    if (body && typeof body === 'object') {
+                        if (!out.dynamicToken && body.dynamicToken) out.dynamicToken = String(body.dynamicToken || '').trim();
+                        if (!out.csrfID && (body.csrfID || body.csrfId)) out.csrfID = String(body.csrfID || body.csrfId || '').trim();
+                        if (!out.loginPointId && body.loginPointId) out.loginPointId = String(body.loginPointId || '').trim();
+                        if (body.bizCode) out.bizCode = String(body.bizCode || '').trim() || out.bizCode;
+                    }
+                    const rawUrl = String(item.url || '').trim();
+                    if (!rawUrl) continue;
+                    try {
+                        const parsed = new URL(rawUrl, window.location.origin);
+                        if (!out.dynamicToken) out.dynamicToken = String(parsed.searchParams.get('dynamicToken') || '').trim();
+                        if (!out.csrfID) out.csrfID = String(parsed.searchParams.get('csrfID') || parsed.searchParams.get('csrfId') || '').trim();
+                        if (!out.loginPointId) out.loginPointId = String(parsed.searchParams.get('loginPointId') || '').trim();
+                        const bizCode = String(parsed.searchParams.get('bizCode') || '').trim();
+                        if (bizCode) out.bizCode = bizCode;
+                    } catch { }
+                    if (out.dynamicToken && out.csrfID && out.loginPointId) break;
+                }
+            }
+            return out;
+        },
+
+        buildCrowdApiUrl(path = '') {
+            const normalizedPath = String(path || '').trim();
+            if (!normalizedPath) return '';
+            if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
+            const nextPath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+            return `${this.CROWD_API_HOST}${nextPath}`;
+        },
+
+        sleep(ms = 0) {
+            const delay = Math.max(0, Number(ms) || 0);
+            if (!delay) return Promise.resolve();
+            return new Promise(resolve => setTimeout(resolve, delay));
+        },
+
+        async acquireCrowdRequestSlot() {
+            const baseGap = Math.max(0, Number(this.CROWD_REQUEST_THROTTLE_MS) || 0);
+            const jitterMax = Math.max(0, Number(this.CROWD_REQUEST_JITTER_MS) || 0);
+            if (baseGap <= 0 && jitterMax <= 0) return;
+
+            if (!this.crowdRequestSlotPromise) this.crowdRequestSlotPromise = Promise.resolve();
+            const slotTask = this.crowdRequestSlotPromise.then(async () => {
+                const now = Date.now();
+                const waitByGap = Math.max(0, (this.crowdRequestLastAt || 0) + baseGap - now);
+                const jitter = jitterMax > 0 ? Math.floor(Math.random() * (jitterMax + 1)) : 0;
+                const waitMs = waitByGap + jitter;
+                if (waitMs > 0) await this.sleep(waitMs);
+                this.crowdRequestLastAt = Date.now();
+            });
+            this.crowdRequestSlotPromise = slotTask.catch(() => { });
+            await slotTask;
+        },
+
+        extractCrowdApiErrorMessage(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+            const status = payload.status;
+            const code = payload.code;
+            const success = payload.success;
+            const msg = String(
+                payload.msg
+                || payload.message
+                || payload.errorMsg
+                || payload.errorMessage
+                || ''
+            ).trim();
+            const normalizedCode = String(code ?? '').trim().toUpperCase();
+            const hasStatusError = status !== undefined && Number(status) === 0;
+            const hasCodeError = normalizedCode && !['0', '200', 'OK', 'SUCCESS'].includes(normalizedCode);
+            const hasSuccessError = success === false;
+            if (hasStatusError || hasCodeError || hasSuccessError) {
+                if (msg) return msg;
+                return `系统异常，请稍后重试。status=${status ?? code ?? 'unknown'}`;
+            }
+            return '';
+        },
+
+        shouldRetryCrowdApiError(error) {
+            const message = String(error?.message || error || '').toLowerCase();
+            if (!message) return true;
+            if (/abort|canceled|cancelled/.test(message)) return false;
+            return /(status\s*=\s*0|系统异常|稍后重试|too\s*many|rate\s*limit|请求失败\(429\)|请求失败\(5\d{2}\)|network|failed to fetch|fetch failed|timeout|gateway|频繁)/i.test(message);
+        },
+
+        getCrowdRetryDelay(attempt = 1) {
+            const safeAttempt = Math.max(1, Number(attempt) || 1);
+            const base = Math.max(100, Number(this.CROWD_REQUEST_RETRY_BASE_MS) || 700);
+            const max = Math.max(base, Number(this.CROWD_REQUEST_RETRY_MAX_MS) || 3200);
+            const expDelay = Math.min(max, base * (2 ** (safeAttempt - 1)));
+            const jitter = Math.floor(Math.random() * 220);
+            return expDelay + jitter;
+        },
+
+        async requestCrowdApi(path, payload = {}, options = {}) {
+            const url = this.buildCrowdApiUrl(path);
+            if (!url) throw new Error('请求地址为空');
+            const maxAttempts = Math.max(1, Number(options.maxAttempts || this.CROWD_REQUEST_MAX_ATTEMPTS) || 1);
+            let lastError = null;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    await this.acquireCrowdRequestSlot();
+                    const auth = this.resolveCrowdAuthParams();
+                    const body = {
+                        bizCode: auth.bizCode || 'universalBP',
+                        timeStr: Date.now(),
+                        ...payload
+                    };
+                    if (auth.dynamicToken && !body.dynamicToken) body.dynamicToken = auth.dynamicToken;
+                    if (!Object.prototype.hasOwnProperty.call(body, 'csrfID')) body.csrfID = auth.csrfID || '';
+                    if (auth.loginPointId && !body.loginPointId) body.loginPointId = auth.loginPointId;
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json, text/event-stream, */*'
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(body),
+                        signal: options.signal
+                    });
+                    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+                    const rawText = await response.text();
+                    if (!response.ok) {
+                        throw new Error(`请求失败(${response.status}): ${rawText.slice(0, 160)}`);
+                    }
+
+                    if (contentType.includes('text/event-stream')) {
+                        const chunks = this.parseSseEvents(rawText);
+                        if (!chunks.length) throw new Error('SSE 响应为空');
+                        const eventPayload = chunks[chunks.length - 1];
+                        const bizError = this.extractCrowdApiErrorMessage(eventPayload);
+                        if (bizError) throw new Error(bizError);
+                        return {
+                            payload: eventPayload,
+                            isStream: true,
+                            chunks,
+                            rawText,
+                            requestPath: path
+                        };
+                    }
+
+                    try {
+                        const jsonPayload = JSON.parse(rawText);
+                        const bizError = this.extractCrowdApiErrorMessage(jsonPayload);
+                        if (bizError) throw new Error(bizError);
+                        return {
+                            payload: jsonPayload,
+                            isStream: false,
+                            chunks: [],
+                            rawText,
+                            requestPath: path
+                        };
+                    } catch (jsonErr) {
+                        if (!/Unexpected token|JSON/i.test(String(jsonErr?.message || ''))) throw jsonErr;
+                        const chunks = this.parseSseEvents(rawText);
+                        if (!chunks.length) throw new Error(`解析响应失败: ${rawText.slice(0, 120)}`);
+                        const eventPayload = chunks[chunks.length - 1];
+                        const bizError = this.extractCrowdApiErrorMessage(eventPayload);
+                        if (bizError) throw new Error(bizError);
+                        return {
+                            payload: eventPayload,
+                            isStream: true,
+                            chunks,
+                            rawText,
+                            requestPath: path
+                        };
+                    }
+                } catch (error) {
+                    lastError = error;
+                    const canRetry = attempt < maxAttempts && this.shouldRetryCrowdApiError(error);
+                    if (!canRetry) throw error;
+                    const delayMs = this.getCrowdRetryDelay(attempt);
+                    Logger.warn(`🔮 人群看板请求重试(${attempt}/${maxAttempts - 1})：${String(error?.message || error || '未知错误').slice(0, 120)}`);
+                    await this.sleep(delayMs);
+                }
+            }
+
+            throw lastError || new Error('人群看板请求失败');
+        },
+
+        toNumericValue(rawValue) {
+            const text = String(rawValue ?? '').trim();
+            if (!text) return 0;
+            const match = text.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+            if (!match) return 0;
+            const num = Number(match[0]);
+            return Number.isFinite(num) ? num : 0;
+        },
+
+        extractPanelQueryConfFromDataQuery(componentList) {
+            const list = Array.isArray(componentList) ? componentList : [];
+            let title = '';
+            let queryExecutePlan = '';
+            let timeMode = '';
+            for (let i = 0; i < list.length; i++) {
+                const component = list[i];
+                const type = String(component?.componentType || component?.type || '').trim();
+                if (type === 'QUERY_TITLE' && !title) {
+                    title = String(
+                        component?.subComponentList?.[0]?.properties?.title
+                        || component?.properties?.title
+                        || ''
+                    ).trim();
+                }
+                if (type === 'ADDITION') {
+                    queryExecutePlan = String(component?.properties?.queryExecutePlan || '').trim();
+                    timeMode = String(component?.properties?.timeMode || '').trim();
+                }
+            }
+            if (!queryExecutePlan) {
+                throw new Error('未获取到周期切换所需 queryExecutePlan');
+            }
+            return {
+                title,
+                queryExecutePlan,
+                timeMode
+            };
+        },
+
+        extractGroupList(componentList) {
+            const list = Array.isArray(componentList) ? componentList : [];
+            const chartGroup = list.find((item) => String(item?.componentType || item?.type || '').trim() === 'CHART_GROUP');
+            if (!chartGroup) return [];
+            const queue = [chartGroup];
+            const visited = new Set();
+            while (queue.length) {
+                const current = queue.shift();
+                if (!current || typeof current !== 'object') continue;
+                if (visited.has(current)) continue;
+                visited.add(current);
+                if (Array.isArray(current.groupList) && current.groupList.length) return current.groupList;
+                if (Array.isArray(current?.properties?.groupList) && current.properties.groupList.length) return current.properties.groupList;
+                if (Array.isArray(current.subComponentList) && current.subComponentList.length) {
+                    current.subComponentList.forEach((item) => queue.push(item));
+                }
+            }
+            return [];
+        },
+
+        buildGroupMapFromGroupList(groupList) {
+            const map = {};
+            (Array.isArray(groupList) ? groupList : []).forEach((group) => {
+                const groupName = String(group?.groupName || '').trim();
+                if (!groupName) return;
+                const chartData = Array.isArray(group?.componentList?.[0]?.chartData)
+                    ? group.componentList[0].chartData
+                    : [];
+                const valueMap = {};
+                chartData.forEach((item) => {
+                    const label = String(item?.x || '').trim();
+                    if (!label) return;
+                    const rawValue = item?.y;
+                    valueMap[label] = {
+                        value: this.toNumericValue(rawValue),
+                        raw: String(rawValue ?? '')
+                    };
+                });
+                map[groupName] = valueMap;
+            });
+            return map;
+        },
+
+        async queryPanelPeriod({ title, queryExecutePlan, timeMode, periodDays }) {
+            const days = Number(periodDays);
+            if (!this.CROWD_PERIODS.includes(days)) {
+                throw new Error(`不支持的周期: ${periodDays}`);
+            }
+            const payload = {
+                title: String(title || '').trim(),
+                needTitle: false,
+                queryConf: {
+                    period: [{ timeInfo: `过去${days}天` }],
+                    queryExecutePlan: String(queryExecutePlan || '').trim(),
+                    timeMode: String(timeMode || '{"timeInfo":"过去7天","timeMode":"slidedTime"}'),
+                    timeInfo: `过去${days}天`
+                }
+            };
+            const response = await this.requestCrowdApi('/ai/report/panelDataQuery.json', payload);
+            const componentList = Array.isArray(response?.payload?.data?.componentList)
+                ? response.payload.data.componentList
+                : [];
+            return {
+                componentList,
+                groupList: this.extractGroupList(componentList),
+                rawPayload: response.payload,
+                requestPath: response.requestPath
+            };
+        },
+
+        ensureCrowdInsightContext(campaignId) {
+            const id = String(campaignId || '').trim();
+            if (!this.crowdInsightRunContext || this.crowdInsightRunContext.campaignId !== id) {
+                this.crowdInsightRunContext = {
+                    campaignId: id,
+                    basePromiseMap: new Map()
+                };
+            }
+            return this.crowdInsightRunContext;
+        },
+
+        async queryCrowdInsight({ campaignId, metricType, periodDays }) {
+            const id = String(campaignId || '').trim();
+            const metric = this.normalizeCrowdMetricType(metricType);
+            const days = Number(periodDays);
+            if (!/^\d{6,}$/.test(id)) throw new Error('计划ID无效');
+            if (!metric) throw new Error(`不支持的指标: ${metricType}`);
+            if (!this.CROWD_PERIODS.includes(days)) throw new Error(`不支持的周期: ${periodDays}`);
+
+            const context = this.ensureCrowdInsightContext(id);
+            if (!context.basePromiseMap.has(metric)) {
+                context.basePromiseMap.set(metric, (async () => {
+                    let itemId = '';
+                    if (metric === 'itemdeal') {
+                        itemId = await this.resolveCrowdItemIdByCampaign(id);
+                        if (!/^\d{6,}$/.test(itemId)) {
+                            throw new Error(`未识别到计划 ${id} 对应商品ID`);
+                        }
+                    }
+                    const prompt = this.buildMetricPrompt({ campaignId: id, metricType: metric, itemId });
+                    if (!prompt) throw new Error('构造人群查询话术失败');
+                    const response = await this.requestCrowdApi('/ai/report/dataQuery.json', {
+                        bizCode: 'universalBP',
+                        contentParams: { bizCode: 'universalBP' },
+                        prompt: {
+                            promptType: 'text',
+                            wordList: [{
+                                word: prompt,
+                                wordType: 'text',
+                                subjectId: null,
+                                subjectType: null,
+                                isTemplate: false,
+                                placeholder: ''
+                            }]
+                        }
+                    });
+                    const componentList = Array.isArray(response?.payload?.data?.componentList)
+                        ? response.payload.data.componentList
+                        : [];
+                    const groupList = this.extractGroupList(componentList);
+                    return {
+                        prompt,
+                        itemId,
+                        componentList,
+                        groupMap: this.buildGroupMapFromGroupList(groupList),
+                        panelQueryConf: this.extractPanelQueryConfFromDataQuery(componentList),
+                        requestPath: response.requestPath
+                    };
+                })());
+            }
+
+            const baseResult = await context.basePromiseMap.get(metric);
+            if (days === 7) {
+                return {
+                    periodDays: days,
+                    metricType: metric,
+                    groupMap: baseResult.groupMap,
+                    rawMeta: {
+                        prompt: baseResult.prompt,
+                        itemId: baseResult.itemId || '',
+                        requestPath: baseResult.requestPath,
+                        title: baseResult.panelQueryConf?.title || '',
+                        queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
+                        timeMode: baseResult.panelQueryConf?.timeMode || ''
+                    }
+                };
+            }
+
+            const panelResult = await this.queryPanelPeriod({
+                title: baseResult.panelQueryConf?.title || baseResult.prompt,
+                queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
+                timeMode: baseResult.panelQueryConf?.timeMode || '',
+                periodDays: days
+            });
+            return {
+                periodDays: days,
+                metricType: metric,
+                groupMap: this.buildGroupMapFromGroupList(panelResult.groupList),
+                rawMeta: {
+                    prompt: baseResult.prompt,
+                    itemId: baseResult.itemId || '',
+                    requestPath: panelResult.requestPath,
+                    title: baseResult.panelQueryConf?.title || '',
+                    queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
+                    timeMode: baseResult.panelQueryConf?.timeMode || ''
+                }
+            };
+        },
+
+        async runTasksWithConcurrency(taskFns = [], limit = 3) {
+            const tasks = Array.isArray(taskFns) ? taskFns.filter(fn => typeof fn === 'function') : [];
+            const normalizedLimit = Math.max(1, Number.isFinite(Number(limit)) ? Number(limit) : 1);
+            const results = [];
+            const executing = new Set();
+            for (let i = 0; i < tasks.length; i++) {
+                const promise = Promise.resolve().then(() => tasks[i]());
+                results.push(promise);
+                executing.add(promise);
+                const clean = () => executing.delete(promise);
+                promise.then(clean, clean);
+                if (executing.size >= normalizedLimit) {
+                    await Promise.race(executing);
+                }
+            }
+            return Promise.allSettled(results);
+        },
+
+        buildMatrixDataset(results) {
+            const periods = this.CROWD_PERIODS.slice();
+            const groups = this.CROWD_GROUP_ORDER.slice();
+            const metricOrder = this.CROWD_METRICS.slice();
+            const cellData = {};
+
+            periods.forEach((period) => {
+                cellData[period] = {};
+                groups.forEach((groupName) => {
+                    const cell = {
+                        labels: [],
+                        noData: {}
+                    };
+                    metricOrder.forEach((metric) => {
+                        cell[metric] = [];
+                        cell[`${metric}Raw`] = [];
+                        cell.noData[metric] = true;
+                    });
+                    cellData[period][groupName] = cell;
+                });
+            });
+
+            const insightMap = new Map();
+            (Array.isArray(results) ? results : []).forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const period = Number(item.periodDays);
+                const metric = this.normalizeCrowdMetricType(item.metricType);
+                if (!periods.includes(period) || !metric) return;
+                const groupMap = item.groupMap && typeof item.groupMap === 'object' ? item.groupMap : {};
+                groups.forEach((groupName) => {
+                    const groupDetail = groupMap[groupName];
+                    if (!groupDetail || typeof groupDetail !== 'object') return;
+                    insightMap.set(`${period}|${groupName}|${metric}`, groupDetail);
+                });
+            });
+
+            groups.forEach((groupName) => {
+                periods.forEach((period) => {
+                    const labelList = [];
+                    const labelSet = new Set();
+                    metricOrder.forEach((metric) => {
+                        const detail = insightMap.get(`${period}|${groupName}|${metric}`);
+                        if (!detail || typeof detail !== 'object') return;
+                        Object.keys(detail).forEach((label) => {
+                            const normalized = String(label || '').trim();
+                            if (!normalized || labelSet.has(normalized)) return;
+                            labelSet.add(normalized);
+                            labelList.push(normalized);
+                        });
+                    });
+
+                    const nextCell = cellData[period][groupName];
+                    nextCell.labels = labelList;
+
+                    metricOrder.forEach((metric) => {
+                        const detail = insightMap.get(`${period}|${groupName}|${metric}`);
+                        const rawValues = labelList.map((label) => {
+                            const current = detail && detail[label] ? detail[label] : null;
+                            return this.toNumericValue(current?.value ?? current?.raw ?? 0);
+                        });
+                        const rawList = labelList.map((label) => {
+                            const current = detail && detail[label] ? detail[label] : null;
+                            return current?.raw ?? '';
+                        });
+                        const sum = rawValues.reduce((acc, value) => acc + this.toNumericValue(value), 0);
+                        const ratioValues = rawValues.map((value) => {
+                            if (sum <= 0) return 0;
+                            return (this.toNumericValue(value) / sum) * 100;
+                        });
+
+                        nextCell[metric] = ratioValues;
+                        nextCell[`${metric}Raw`] = rawList.length ? rawList : rawValues;
+                        nextCell.noData[metric] = !labelList.length || sum <= 0;
+                    });
+                });
+            });
+
+            return {
+                periods,
+                groups,
+                cellData
+            };
+        },
+
+        formatCrowdPercent(value) {
+            const num = this.toNumericValue(value);
+            if (num <= 0) return '0%';
+            const fixed = num.toFixed(2).replace(/\.?0+$/, '');
+            return `${fixed}%`;
+        },
+
+        formatCrowdRawValue(rawValue, fallbackValue) {
+            const rawText = String(rawValue ?? '').trim();
+            if (rawText) return rawText;
+            const num = this.toNumericValue(fallbackValue);
+            return Number.isInteger(num) ? String(num) : num.toFixed(2).replace(/\.?0+$/, '');
+        },
+
+        setCrowdMatrixStatus(text, level = 'info', options = {}) {
+            if (!(this.matrixStateEl instanceof HTMLElement)) return;
+            const normalizedLevel = ['info', 'success', 'warn', 'error', 'loading'].includes(level) ? level : 'info';
+            this.matrixStateEl.className = `am-crowd-matrix-state is-${normalizedLevel}`;
+            this.matrixStateEl.textContent = String(text || '').trim();
+            if (this.matrixRetryBtn instanceof HTMLElement) {
+                this.matrixRetryBtn.style.display = options.showRetry ? 'inline-flex' : 'none';
+            }
+        },
+
+        ensureCrowdMatrixHoverTip() {
+            if (this.matrixHoverTipEl instanceof HTMLElement && this.matrixHoverTipEl.isConnected) {
+                return this.matrixHoverTipEl;
+            }
+            if (!(this.popup instanceof HTMLElement)) return null;
+            const tip = document.createElement('div');
+            tip.className = 'am-crowd-matrix-hover-tip';
+            tip.style.display = 'none';
+            this.popup.appendChild(tip);
+            this.matrixHoverTipEl = tip;
+            return tip;
+        },
+
+        showCrowdMatrixHoverTip(text, clientX, clientY) {
+            const content = String(text || '').trim();
+            if (!content) return;
+            if (!(this.popup instanceof HTMLElement)) return;
+            const tip = this.ensureCrowdMatrixHoverTip();
+            if (!(tip instanceof HTMLElement)) return;
+
+            tip.textContent = content;
+            tip.style.display = 'block';
+
+            const popupRect = this.popup.getBoundingClientRect();
+            const tipRect = tip.getBoundingClientRect();
+            const safeGap = 12;
+            const offsetX = 10;
+            const offsetY = 14;
+            let left = clientX - popupRect.left + offsetX;
+            let top = clientY - popupRect.top + offsetY;
+
+            const maxLeft = Math.max(safeGap, popupRect.width - tipRect.width - safeGap);
+            const maxTop = Math.max(safeGap, popupRect.height - tipRect.height - safeGap);
+
+            if (left > maxLeft) {
+                left = clientX - popupRect.left - tipRect.width - 10;
+            }
+            left = Math.max(safeGap, Math.min(left, maxLeft));
+            top = Math.max(safeGap, Math.min(top, maxTop));
+
+            tip.style.left = `${left}px`;
+            tip.style.top = `${top}px`;
+        },
+
+        hideCrowdMatrixHoverTip() {
+            if (this.matrixHoverTipEl instanceof HTMLElement) {
+                this.matrixHoverTipEl.style.display = 'none';
+            }
+            if (this.matrixHoverActiveBar instanceof HTMLElement) {
+                this.matrixHoverActiveBar.classList.remove('is-hover');
+            }
+            this.matrixHoverActiveBar = null;
+        },
+
+        bindCrowdMatrixHoverTipEvents() {
+            if (!(this.matrixGridEl instanceof HTMLElement)) return;
+            if (this.matrixGridEl.dataset.crowdHoverBound === '1') return;
+            this.matrixGridEl.dataset.crowdHoverBound = '1';
+
+            this.matrixGridEl.addEventListener('mousemove', (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    this.hideCrowdMatrixHoverTip();
+                    return;
+                }
+                const bar = target.closest('.am-crowd-matrix-bar');
+                if (!(bar instanceof HTMLElement) || !this.matrixGridEl.contains(bar)) {
+                    this.hideCrowdMatrixHoverTip();
+                    return;
+                }
+                if (bar.offsetParent === null) {
+                    this.hideCrowdMatrixHoverTip();
+                    return;
+                }
+
+                const tipText = String(bar.dataset.tooltip || '').trim();
+                if (!tipText) {
+                    this.hideCrowdMatrixHoverTip();
+                    return;
+                }
+
+                if (this.matrixHoverActiveBar !== bar) {
+                    if (this.matrixHoverActiveBar instanceof HTMLElement) {
+                        this.matrixHoverActiveBar.classList.remove('is-hover');
+                    }
+                    this.matrixHoverActiveBar = bar;
+                    this.matrixHoverActiveBar.classList.add('is-hover');
+                }
+                this.showCrowdMatrixHoverTip(tipText, event.clientX, event.clientY);
+            });
+
+            this.matrixGridEl.addEventListener('mouseleave', () => {
+                this.hideCrowdMatrixHoverTip();
+            });
+            this.matrixGridEl.addEventListener('scroll', () => {
+                this.hideCrowdMatrixHoverTip();
+            }, { passive: true });
+        },
+
+        getCrowdMetricVisible(metricType) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!metric) return true;
+            const visibility = this.crowdMetricVisibility && typeof this.crowdMetricVisibility === 'object'
+                ? this.crowdMetricVisibility
+                : {};
+            return visibility[metric] !== false;
+        },
+
+        normalizeCrowdPeriod(periodDays) {
+            const days = Number(periodDays);
+            return this.CROWD_PERIODS.includes(days) ? days : 0;
+        },
+
+        getCrowdPeriodVisible(periodDays) {
+            const period = this.normalizeCrowdPeriod(periodDays);
+            if (!period) return true;
+            const visibility = this.crowdPeriodVisibility && typeof this.crowdPeriodVisibility === 'object'
+                ? this.crowdPeriodVisibility
+                : {};
+            return visibility[period] !== false;
+        },
+
+        getVisibleCrowdPeriods(periods = []) {
+            const list = Array.isArray(periods) && periods.length ? periods : this.CROWD_PERIODS;
+            return list
+                .map(period => this.normalizeCrowdPeriod(period))
+                .filter(period => !!period)
+                .filter(period => this.getCrowdPeriodVisible(period));
+        },
+
+        applyCrowdMetricVisibility() {
+            if (this.matrixGridEl instanceof HTMLElement) {
+                this.CROWD_METRICS.forEach((metric) => {
+                    this.matrixGridEl.classList.toggle(`am-hide-metric-${metric}`, !this.getCrowdMetricVisible(metric));
+                });
+            }
+            if (this.matrixLegendEl instanceof HTMLElement) {
+                this.matrixLegendEl.querySelectorAll('[data-crowd-metric]').forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    const metric = this.normalizeCrowdMetricType(node.dataset.crowdMetric || '');
+                    if (!metric) return;
+                    const visible = this.getCrowdMetricVisible(metric);
+                    node.classList.toggle('is-off', !visible);
+                    node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.title = `${this.getCrowdMetricMeta(metric).seriesLabel}${visible ? '（点击隐藏）' : '（点击显示）'}`;
+                });
+                this.matrixLegendEl.querySelectorAll('[data-crowd-period]').forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    const period = this.normalizeCrowdPeriod(node.dataset.crowdPeriod || '');
+                    if (!period) return;
+                    const visible = this.getCrowdPeriodVisible(period);
+                    node.classList.toggle('is-off', !visible);
+                    node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.title = `过去${period}天${visible ? '（点击隐藏）' : '（点击显示）'}`;
+                });
+            }
+        },
+
+        renderCrowdGlobalLegend() {
+            if (!(this.matrixLegendEl instanceof HTMLElement)) return;
+            this.matrixLegendEl.innerHTML = '';
+            this.CROWD_METRICS.forEach((metric) => {
+                const meta = this.getCrowdMetricMeta(metric);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'am-crowd-matrix-legend-toggle';
+                btn.dataset.crowdMetric = metric;
+                btn.style.setProperty('--am-crowd-legend-color', meta.color);
+                const dot = document.createElement('i');
+                const text = document.createElement('span');
+                text.textContent = meta.seriesLabel;
+                btn.appendChild(dot);
+                btn.appendChild(text);
+                this.matrixLegendEl.appendChild(btn);
+            });
+            this.CROWD_PERIODS.forEach((period) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'am-crowd-matrix-legend-toggle';
+                btn.dataset.crowdPeriod = String(period);
+                btn.style.setProperty('--am-crowd-legend-color', '#7f8ca9');
+                const dot = document.createElement('i');
+                const text = document.createElement('span');
+                text.textContent = `过去${period}天`;
+                btn.appendChild(dot);
+                btn.appendChild(text);
+                this.matrixLegendEl.appendChild(btn);
+            });
+            this.applyCrowdMetricVisibility();
+        },
+
+        toggleCrowdMetricVisibility(metricType) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!metric) return;
+            const nextVisible = !this.getCrowdMetricVisible(metric);
+            if (!nextVisible) {
+                const visibleCount = this.CROWD_METRICS.filter(key => this.getCrowdMetricVisible(key)).length;
+                if (visibleCount <= 1) return;
+            }
+            const nextMap = {};
+            this.CROWD_METRICS.forEach((metricKey) => {
+                nextMap[metricKey] = this.getCrowdMetricVisible(metricKey);
+            });
+            nextMap[metric] = nextVisible;
+            this.crowdMetricVisibility = nextMap;
+            this.applyCrowdMetricVisibility();
+        },
+
+        toggleCrowdPeriodVisibility(periodDays) {
+            const period = this.normalizeCrowdPeriod(periodDays);
+            if (!period) return;
+            const nextVisible = !this.getCrowdPeriodVisible(period);
+            if (!nextVisible) {
+                const visibleCount = this.CROWD_PERIODS.filter(days => this.getCrowdPeriodVisible(days)).length;
+                if (visibleCount <= 1) return;
+            }
+            this.crowdPeriodVisibility = {
+                3: this.getCrowdPeriodVisible(3),
+                7: this.getCrowdPeriodVisible(7),
+                30: this.getCrowdPeriodVisible(30),
+                90: this.getCrowdPeriodVisible(90),
+                [period]: nextVisible
+            };
+            if (this.crowdMatrixDataset) {
+                this.renderCrowdMatrixCharts(this.crowdMatrixDataset);
+                return;
+            }
+            this.applyCrowdMetricVisibility();
+        },
+
+        createCrowdMatrixCell(period, groupName, cell) {
+            const wrap = document.createElement('div');
+            wrap.className = 'am-crowd-matrix-cell am-crowd-matrix-cell-chart';
+
+            const labels = Array.isArray(cell?.labels) ? cell.labels : [];
+            if (!labels.length) {
+                const empty = document.createElement('div');
+                empty.className = 'am-crowd-matrix-empty';
+                empty.textContent = '暂无数据';
+                wrap.appendChild(empty);
+                return wrap;
+            }
+
+            const metrics = this.CROWD_METRICS.slice();
+            const cellMaxRatio = metrics.reduce((maxValue, metric) => {
+                const list = Array.isArray(cell?.[metric]) ? cell[metric] : [];
+                const currentMax = list.reduce((innerMax, value) => Math.max(innerMax, this.toNumericValue(value)), 0);
+                return Math.max(maxValue, currentMax);
+            }, 0);
+            const normalizedMax = cellMaxRatio > 0 ? cellMaxRatio : 1;
+            const chart = document.createElement('div');
+            chart.className = 'am-crowd-matrix-chart';
+            const labelCount = Math.max(1, labels.length);
+            chart.style.setProperty('--am-crowd-label-count', String(labelCount));
+            if (labelCount >= 7) chart.classList.add('is-dense');
+            if (labelCount >= 10) chart.classList.add('is-ultra-dense');
+
+            labels.forEach((label, labelIdx) => {
+                const group = document.createElement('div');
+                group.className = 'am-crowd-matrix-bar-group';
+
+                const columns = document.createElement('div');
+                columns.className = 'am-crowd-matrix-bar-columns';
+
+                metrics.forEach((metric) => {
+                    const metricMeta = this.getCrowdMetricMeta(metric);
+                    const ratio = this.toNumericValue(cell?.[metric]?.[labelIdx] ?? 0);
+                    const rawValue = cell?.[`${metric}Raw`]?.[labelIdx];
+                    const countDisplay = this.formatCrowdRawValue(rawValue, ratio);
+                    const bar = document.createElement('div');
+                    bar.className = 'am-crowd-matrix-bar';
+                    bar.dataset.metric = metric;
+                    if (cell?.noData?.[metric]) bar.classList.add('is-nodata');
+                    bar.style.setProperty('--am-crowd-bar-color', metricMeta.color);
+                    const tooltipText = `${metricMeta.seriesLabel}: ${this.formatCrowdPercent(ratio)}（${countDisplay || '0'}）${cell?.noData?.[metric] ? ' 无数据' : ''}`;
+                    bar.dataset.tooltip = tooltipText;
+                    bar.setAttribute('aria-label', tooltipText);
+
+                    const fill = document.createElement('span');
+                    fill.className = 'am-crowd-matrix-bar-fill';
+                    fill.style.height = `${Math.max(0, Math.min(100, (ratio / normalizedMax) * 100))}%`;
+                    bar.appendChild(fill);
+                    columns.appendChild(bar);
+                });
+
+                const xLabel = document.createElement('div');
+                xLabel.className = 'am-crowd-matrix-xlabel';
+                xLabel.textContent = label;
+
+                group.appendChild(columns);
+                group.appendChild(xLabel);
+                chart.appendChild(group);
+            });
+            wrap.appendChild(chart);
+
+            const insights = document.createElement('div');
+            insights.className = 'am-crowd-matrix-insights';
+            insights.style.setProperty('--am-crowd-metric-count', String(metrics.length));
+            metrics.forEach((metric) => {
+                const metricMeta = this.getCrowdMetricMeta(metric);
+                const values = Array.isArray(cell?.[metric]) ? cell[metric] : [];
+                let topIdx = -1;
+                let topValue = -1;
+                values.forEach((value, idx) => {
+                    const num = this.toNumericValue(value);
+                    if (num > topValue) {
+                        topValue = num;
+                        topIdx = idx;
+                    }
+                });
+                const insightItem = document.createElement('div');
+                insightItem.className = 'am-crowd-matrix-insight-item';
+                insightItem.dataset.metric = metric;
+                insightItem.style.setProperty('--am-crowd-insight-color', metricMeta.color);
+                if (topIdx > -1 && topValue > 0 && labels[topIdx]) {
+                    insightItem.textContent = `${metricMeta.shortLabel}: ${labels[topIdx]} ${this.formatCrowdPercent(topValue)}`;
+                } else {
+                    insightItem.textContent = `${metricMeta.shortLabel}: 无数据`;
+                }
+                insights.appendChild(insightItem);
+            });
+            wrap.appendChild(insights);
+
+            if (metrics.some((metric) => !!cell?.noData?.[metric])) {
+                const note = document.createElement('div');
+                note.className = 'am-crowd-matrix-note';
+                note.textContent = '部分系列无数据，已按 0 展示';
+                wrap.appendChild(note);
+            }
+
+            return wrap;
+        },
+
+        renderCrowdMatrixCharts(dataset) {
+            if (!(this.matrixGridEl instanceof HTMLElement)) return;
+            this.hideCrowdMatrixHoverTip();
+            this.matrixGridEl.innerHTML = '';
+            if (!dataset || typeof dataset !== 'object') return;
+
+            const periods = this.getVisibleCrowdPeriods(Array.isArray(dataset.periods) ? dataset.periods : []);
+            const groups = Array.isArray(dataset.groups) ? dataset.groups : [];
+            if (!periods.length || !groups.length) return;
+
+            const table = document.createElement('div');
+            table.className = 'am-crowd-matrix-table';
+            table.style.setProperty('--am-crowd-matrix-data-cols', String(Math.max(1, periods.length)));
+
+            const corner = document.createElement('div');
+            corner.className = 'am-crowd-matrix-cell am-crowd-matrix-header am-crowd-matrix-corner';
+            corner.textContent = '人群维度 / 周期';
+            table.appendChild(corner);
+
+            periods.forEach((period) => {
+                const header = document.createElement('div');
+                header.className = 'am-crowd-matrix-cell am-crowd-matrix-header';
+                header.dataset.period = String(period);
+                header.textContent = `过去${period}天`;
+                table.appendChild(header);
+            });
+
+            groups.forEach((groupName) => {
+                const rowHeader = document.createElement('div');
+                rowHeader.className = 'am-crowd-matrix-cell am-crowd-matrix-row-header';
+                rowHeader.textContent = groupName;
+                table.appendChild(rowHeader);
+
+                periods.forEach((period) => {
+                    const cell = dataset?.cellData?.[period]?.[groupName] || null;
+                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell);
+                    cellNode.dataset.period = String(period);
+                    table.appendChild(cellNode);
+                });
+            });
+
+            this.matrixGridEl.appendChild(table);
+            this.applyCrowdMetricVisibility();
+        },
+
+        snapshotPopupLayout() {
+            if (!(this.popup instanceof HTMLElement)) return null;
+            return {
+                top: this.popup.style.top || '',
+                left: this.popup.style.left || '',
+                transform: this.popup.style.transform || '',
+                width: this.popup.style.width || '',
+                height: this.popup.style.height || '',
+                maxWidth: this.popup.style.maxWidth || '',
+                maxHeight: this.popup.style.maxHeight || '',
+                borderRadius: this.popup.style.borderRadius || ''
+            };
+        },
+
+        applyPopupLayout(layout) {
+            if (!(this.popup instanceof HTMLElement) || !layout || typeof layout !== 'object') return;
+            this.popup.style.top = String(layout.top || '');
+            this.popup.style.left = String(layout.left || '');
+            this.popup.style.transform = String(layout.transform || '');
+            this.popup.style.width = String(layout.width || '');
+            this.popup.style.height = String(layout.height || '');
+            this.popup.style.maxWidth = String(layout.maxWidth || '');
+            this.popup.style.maxHeight = String(layout.maxHeight || '');
+            this.popup.style.borderRadius = String(layout.borderRadius || '');
+        },
+
+        maximizePopupForMatrix() {
+            if (!(this.popup instanceof HTMLElement)) return;
+            if (!this.popupMatrixMaximized) {
+                this.popupLayoutBeforeMatrix = this.snapshotPopupLayout();
+            }
+            const viewportWidth = Math.max(320, document.documentElement?.clientWidth || window.innerWidth || 0);
+            const viewportHeight = Math.max(320, document.documentElement?.clientHeight || window.innerHeight || 0);
+            this.popup.style.top = '0px';
+            this.popup.style.left = '0px';
+            this.popup.style.transform = 'none';
+            this.popup.style.width = `${viewportWidth}px`;
+            this.popup.style.height = `${viewportHeight}px`;
+            this.popup.style.maxWidth = '100vw';
+            this.popup.style.maxHeight = '100vh';
+            this.popup.style.borderRadius = '0px';
+            this.popupMatrixMaximized = true;
+        },
+
+        restorePopupFromMatrix() {
+            if (!(this.popup instanceof HTMLElement) || !this.popupMatrixMaximized) return;
+            const fallbackLayout = {
+                top: '30px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '900px',
+                height: '85vh',
+                maxWidth: '',
+                maxHeight: '',
+                borderRadius: '18px'
+            };
+            this.applyPopupLayout(this.popupLayoutBeforeMatrix || fallbackLayout);
+            this.popupLayoutBeforeMatrix = null;
+            this.popupMatrixMaximized = false;
+        },
+
+        switchMagicView(view, options = {}) {
+            const next = view === 'matrix' ? 'matrix' : 'query';
+            this.activeView = next;
+            this.refreshCrowdMatrixCampaignMeta();
+            if (next !== 'matrix') this.hideCrowdMatrixHoverTip();
+            if (next === 'matrix') this.maximizePopupForMatrix();
+            else this.restorePopupFromMatrix();
+            if (this.viewTabsEl instanceof HTMLElement) {
+                this.viewTabsEl.querySelectorAll('[data-view]').forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    node.classList.toggle('active', node.dataset.view === next);
+                });
+            }
+            if (this.queryPanelEl instanceof HTMLElement) {
+                this.queryPanelEl.style.display = next === 'query' ? 'block' : 'none';
+            }
+            if (this.matrixPanelEl instanceof HTMLElement) {
+                this.matrixPanelEl.style.display = next === 'matrix' ? 'flex' : 'none';
+            }
+            if (this.quickPromptsEl instanceof HTMLElement) {
+                this.quickPromptsEl.style.display = next === 'query' ? 'flex' : 'none';
+            }
+            if (next === 'matrix' && options.skipLoad !== true) {
+                this.ensureCrowdMatrixLoaded(false);
+            }
+        },
+
+        async runCrowdMatrixLoad({ campaignId }) {
+            const id = String(campaignId || '').trim();
+            this.refreshCrowdMatrixCampaignMeta(id);
+            if (!/^\d{6,}$/.test(id)) {
+                this.setCrowdMatrixStatus('未识别到有效计划ID，请先选择单计划后再试', 'error', { showRetry: false });
+                return;
+            }
+            const runId = ++this.crowdMatrixRunId;
+            this.crowdMatrixLoading = true;
+            this.crowdMatrixLoadedCampaignId = '';
+            this.crowdMatrixDataset = null;
+            this.crowdInsightRunContext = null;
+            this.crowdRequestSlotPromise = Promise.resolve();
+            this.crowdRequestLastAt = 0;
+            this.setCrowdMatrixStatus(`正在加载计划 ${id} 的人群对比看板...`, 'loading', { showRetry: false });
+            if (this.matrixGridEl instanceof HTMLElement) this.matrixGridEl.innerHTML = '';
+
+            try {
+                const taskFns = [];
+                this.CROWD_METRICS.forEach((metricType) => {
+                    this.CROWD_PERIODS.forEach((periodDays) => {
+                        taskFns.push(async () => this.queryCrowdInsight({ campaignId: id, metricType, periodDays }));
+                    });
+                });
+                const totalTaskCount = taskFns.length;
+                const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
+                if (runId !== this.crowdMatrixRunId) return;
+
+                const successResults = [];
+                let failCount = 0;
+                settled.forEach((item) => {
+                    if (item.status === 'fulfilled' && item.value) successResults.push(item.value);
+                    else failCount += 1;
+                });
+
+                if (!successResults.length) {
+                    this.setCrowdMatrixStatus('人群看板加载失败，请稍后重试', 'error', { showRetry: true });
+                    return;
+                }
+
+                const dataset = this.buildMatrixDataset(successResults);
+                this.crowdMatrixDataset = dataset;
+                this.crowdMatrixLoadedCampaignId = id;
+                this.renderCrowdMatrixCharts(dataset);
+                if (failCount > 0) {
+                    this.setCrowdMatrixStatus(`部分数据加载失败，已展示可用结果（失败 ${failCount}/${totalTaskCount}）`, 'warn', { showRetry: true });
+                } else {
+                    this.setCrowdMatrixStatus('人群对比看板已加载完成（4列周期 × 6行维度）', 'success', { showRetry: false });
+                }
+            } catch (err) {
+                if (runId !== this.crowdMatrixRunId) return;
+                this.setCrowdMatrixStatus(`人群看板加载失败：${err?.message || '未知错误'}`, 'error', { showRetry: true });
+            } finally {
+                if (runId === this.crowdMatrixRunId) {
+                    this.crowdMatrixLoading = false;
+                    this.crowdInsightRunContext = null;
+                }
+            }
+        },
+
+        ensureCrowdMatrixLoaded(forceReload = false) {
+            if (this.crowdMatrixLoading) return;
+            const campaignId = this.getCurrentCampaignId();
+            this.refreshCrowdMatrixCampaignMeta(campaignId || this.lastCampaignId);
+            if (!campaignId) {
+                this.setCrowdMatrixStatus('未识别到当前计划ID，请先进入计划详情页或勾选计划', 'error', { showRetry: false });
+                return;
+            }
+            if (!forceReload && this.crowdMatrixDataset && this.crowdMatrixLoadedCampaignId === campaignId) {
+                this.renderCrowdMatrixCharts(this.crowdMatrixDataset);
+                this.setCrowdMatrixStatus('已展示最近一次加载结果', 'success', { showRetry: false });
+                return;
+            }
+            this.runCrowdMatrixLoad({ campaignId });
+        },
+
         /**
          * 在 iframe 中清理非核心元素
          * 策略：找到目标元素，沿父级链向上，隐藏每一层的兄弟节点
@@ -4174,10 +5413,42 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-magic-header .am-quick-prompt.active {
                     background: rgba(42, 91, 255, 0.16); border-color: rgba(42, 91, 255, 0.44); color: var(--am26-primary-strong);
                 }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tabs {
+                    display: flex; gap: 8px; cursor: default;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab {
+                    border: 1px solid rgba(42, 91, 255, 0.24);
+                    background: rgba(255, 255, 255, 0.9);
+                    color: #3f4b68;
+                    border-radius: 999px;
+                    padding: 4px 12px;
+                    font-size: 11px;
+                    line-height: 1.4;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab:hover {
+                    border-color: rgba(42, 91, 255, 0.42);
+                    color: var(--am26-primary);
+                    transform: translateY(-1px);
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab.active {
+                    background: rgba(42, 91, 255, 0.14);
+                    border-color: rgba(42, 91, 255, 0.48);
+                    color: var(--am26-primary-strong);
+                    font-weight: 600;
+                }
                 #am-magic-report-popup .am-magic-content {
                     position: relative; flex: 1; min-height: 0;
                     background: rgba(255, 255, 255, 0.4);
                     backdrop-filter: blur(10px);
+                }
+                #am-magic-report-popup .am-magic-content-matrix {
+                    display: none;
+                    flex-direction: column;
+                    gap: 10px;
+                    padding: 10px 12px 12px;
+                    overflow: hidden;
                 }
                 #am-magic-report-popup .am-iframe-loading {
                     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -4188,6 +5459,317 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     width: 32px; height: 32px; border: 3px solid rgba(42, 91, 255, 0.18);
                     border-top-color: var(--am26-primary); border-radius: 50%;
                     animation: am-spin 0.8s linear infinite;
+                }
+                #am-magic-report-popup .am-crowd-matrix-state {
+                    font-size: 12px;
+                    line-height: 1.45;
+                    color: #4a5674;
+                    background: rgba(255, 255, 255, 0.88);
+                    border: 1px solid rgba(42, 91, 255, 0.16);
+                    border-radius: 10px;
+                    padding: 8px 10px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-campaign {
+                    font-size: 13px;
+                    line-height: 1.45;
+                    font-weight: 600;
+                    color: #2d3f67;
+                    background: rgba(255, 255, 255, 0.9);
+                    border: 1px solid rgba(42, 91, 255, 0.22);
+                    border-radius: 10px;
+                    padding: 8px 10px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-state.is-loading {
+                    color: #2a5bff;
+                    border-color: rgba(42, 91, 255, 0.3);
+                }
+                #am-magic-report-popup .am-crowd-matrix-state.is-success {
+                    color: #237804;
+                    border-color: rgba(82, 196, 26, 0.34);
+                }
+                #am-magic-report-popup .am-crowd-matrix-state.is-warn {
+                    color: #ad6800;
+                    border-color: rgba(250, 140, 22, 0.34);
+                }
+                #am-magic-report-popup .am-crowd-matrix-state.is-error {
+                    color: #cf1322;
+                    border-color: rgba(234, 79, 79, 0.34);
+                }
+                #am-magic-report-popup .am-crowd-matrix-toolbar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-global {
+                    display: flex;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-toggle {
+                    border: 1px solid var(--am-crowd-legend-color, rgba(42, 91, 255, 0.36));
+                    background: rgba(255, 255, 255, 0.92);
+                    color: #30406a;
+                    border-radius: 999px;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    font-weight: 600;
+                    cursor: pointer;
+                    padding: 4px 10px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    transition: all 0.2s;
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-toggle i {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    display: inline-block;
+                    background: var(--am-crowd-legend-color, #2f54eb);
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-toggle:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 10px rgba(31, 53, 109, 0.12);
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-toggle.is-off {
+                    opacity: 0.45;
+                    border-style: dashed;
+                }
+                #am-magic-report-popup .am-crowd-matrix-actions {
+                    display: flex;
+                    justify-content: flex-end;
+                }
+                #am-magic-report-popup .am-crowd-matrix-retry {
+                    display: none;
+                    border: 1px solid rgba(42, 91, 255, 0.28);
+                    background: rgba(255, 255, 255, 0.9);
+                    color: var(--am26-primary);
+                    border-radius: 8px;
+                    font-size: 12px;
+                    line-height: 1.2;
+                    cursor: pointer;
+                    padding: 6px 12px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-retry:hover {
+                    background: rgba(42, 91, 255, 0.1);
+                }
+                #am-magic-report-popup .am-crowd-matrix-grid {
+                    flex: 1;
+                    min-height: 120px;
+                    overflow: auto;
+                    border: 1px solid rgba(31, 53, 109, 0.08);
+                    border-radius: 12px;
+                    background: linear-gradient(180deg, rgba(248, 251, 255, 0.94) 0%, rgba(241, 247, 255, 0.66) 100%);
+                }
+                #am-magic-report-popup .am-crowd-matrix-table {
+                    display: grid;
+                    grid-template-columns: minmax(112px, 136px) repeat(var(--am-crowd-matrix-data-cols, 4), minmax(0, 1fr));
+                    gap: 8px;
+                    padding: 8px;
+                    width: 100%;
+                    min-width: 0;
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell {
+                    border: 1px solid rgba(31, 53, 109, 0.08);
+                    border-radius: 10px;
+                    background: rgba(255, 255, 255, 0.92);
+                }
+                #am-magic-report-popup .am-crowd-matrix-header {
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #30406a;
+                    padding: 8px 10px;
+                    background: rgba(42, 91, 255, 0.08);
+                    display: flex;
+                    align-items: center;
+                    position: sticky;
+                    top: 0;
+                    z-index: 4;
+                    box-shadow: 0 1px 0 rgba(42, 91, 255, 0.16);
+                }
+                #am-magic-report-popup .am-crowd-matrix-corner {
+                    justify-content: center;
+                    font-weight: 700;
+                    left: 0;
+                    z-index: 6;
+                }
+                #am-magic-report-popup .am-crowd-matrix-row-header {
+                    font-size: 12px;
+                    color: #2f3f66;
+                    padding: 10px;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    background: rgba(247, 250, 255, 0.95);
+                    position: sticky;
+                    left: 0;
+                    z-index: 3;
+                    box-shadow: 1px 0 0 rgba(31, 53, 109, 0.08);
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart {
+                    padding: 8px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    min-height: clamp(228px, 26vh, 340px);
+                }
+                #am-magic-report-popup .am-crowd-matrix-empty {
+                    margin: auto 0;
+                    font-size: 12px;
+                    color: #95a0b9;
+                    text-align: center;
+                    padding: 12px 0;
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart {
+                    display: grid;
+                    grid-template-columns: repeat(var(--am-crowd-label-count, 1), minmax(0, 1fr));
+                    align-items: end;
+                    gap: 6px;
+                    min-height: clamp(150px, 18vh, 230px);
+                    overflow: hidden;
+                    padding: 8px 0 4px;
+                    border-radius: 8px;
+                    background-image:
+                        linear-gradient(to top, rgba(120, 144, 193, 0.14) 1px, transparent 1px),
+                        linear-gradient(180deg, rgba(240, 246, 255, 0.92) 0%, rgba(233, 242, 255, 0.6) 100%);
+                    background-size: 100% 25%, 100% 100%;
+                }
+                #am-magic-report-popup .am-crowd-matrix-bar-group {
+                    min-width: 0;
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 2px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-bar-columns {
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: center;
+                    gap: 3px;
+                    width: 100%;
+                    height: clamp(120px, 16vh, 200px);
+                }
+                #am-magic-report-popup .am-crowd-matrix-bar {
+                    width: clamp(7px, 19%, 14px);
+                    height: 100%;
+                    border-radius: 0;
+                    background: none;
+                    position: relative;
+                    overflow: visible;
+                    border: none;
+                    box-shadow: none;
+                }
+                #am-magic-report-popup .am-crowd-matrix-bar.is-hover .am-crowd-matrix-bar-fill {
+                    filter: brightness(1.06) saturate(1.04);
+                    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 4px 10px rgba(31, 53, 109, 0.22);
+                }
+                #am-magic-report-popup .am-crowd-matrix-bar.is-nodata {
+                    opacity: 0.55;
+                }
+                #am-magic-report-popup .am-crowd-matrix-bar-fill {
+                    position: absolute;
+                    left: 0;
+                    bottom: 0;
+                    transform: none;
+                    width: 100%;
+                    min-height: 0;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                    border-bottom-left-radius: 0;
+                    border-bottom-right-radius: 0;
+                    background: var(--am-crowd-bar-color, #2f54eb);
+                }
+                #am-magic-report-popup .am-crowd-matrix-xlabel {
+                    max-width: 100%;
+                    text-align: center;
+                    font-size: 10px;
+                    color: #576280;
+                    line-height: 1.2;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-dense {
+                    gap: 4px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-bar-columns {
+                    gap: 2px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-bar {
+                    width: clamp(5px, 14%, 10px);
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-xlabel {
+                    font-size: 9px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-bar {
+                    width: clamp(4px, 10%, 8px);
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-xlabel {
+                    font-size: 8px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-insights {
+                    display: grid;
+                    grid-template-columns: repeat(var(--am-crowd-metric-count, 4), minmax(0, 1fr));
+                    gap: 6px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-insight-item {
+                    min-height: 24px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(42, 91, 255, 0.2);
+                    background: rgba(42, 91, 255, 0.08);
+                    color: #2d3e63;
+                    font-size: 10px;
+                    line-height: 1.25;
+                    padding: 3px 6px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    text-align: center;
+                    box-shadow: inset 2px 0 0 var(--am-crowd-insight-color, #2f54eb);
+                }
+                #am-magic-report-popup .am-crowd-matrix-note {
+                    margin-top: auto;
+                    font-size: 10px;
+                    line-height: 1.3;
+                    color: #9a7d3c;
+                    background: rgba(250, 173, 20, 0.08);
+                    border: 1px dashed rgba(250, 173, 20, 0.32);
+                    border-radius: 6px;
+                    padding: 4px 6px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    z-index: 40;
+                    pointer-events: none;
+                    max-width: min(280px, calc(100vw - 48px));
+                    border-radius: 8px;
+                    background: rgba(22, 34, 62, 0.93);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    color: #fff;
+                    font-size: 12px;
+                    line-height: 1.35;
+                    font-weight: 600;
+                    padding: 6px 8px;
+                    box-shadow: 0 8px 20px rgba(7, 14, 31, 0.28);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-bar[data-metric="click"],
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-insight-item[data-metric="click"],
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-cart .am-crowd-matrix-bar[data-metric="cart"],
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-cart .am-crowd-matrix-insight-item[data-metric="cart"],
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-deal .am-crowd-matrix-bar[data-metric="deal"],
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-deal .am-crowd-matrix-insight-item[data-metric="deal"],
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-bar[data-metric="itemdeal"],
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-insight-item[data-metric="itemdeal"] {
+                    display: none !important;
                 }
                 @keyframes am-spin { to { transform: rotate(360deg); } }
             `;
@@ -4223,8 +5805,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     <div class="am-quick-prompts" id="am-magic-quick-prompts">
                         ${quickPromptHtml}
                     </div>
+                    <div class="am-magic-view-tabs" id="am-magic-view-tabs">
+                        <button type="button" class="am-magic-view-tab active" data-view="query">万能查数</button>
+                        <button type="button" class="am-magic-view-tab" data-view="matrix">人群对比看板</button>
+                    </div>
                 </div>
-                <div class="am-magic-content">
+                <div class="am-magic-content am-magic-content-query" data-view-panel="query">
                     <div class="am-iframe-loading" id="am-magic-loading">
                         <div class="am-spinner"></div>
                         <span>正在加载万能查数...</span>
@@ -4235,13 +5821,47 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         allow="clipboard-write"
                     ></iframe>
                 </div>
+                <div class="am-magic-content am-magic-content-matrix" data-view-panel="matrix">
+                    <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">计划名：未识别 ｜ 计划ID：--</div>
+                    <div class="am-crowd-matrix-state is-info" id="am-crowd-matrix-state">点击“人群对比看板”开始加载</div>
+                    <div class="am-crowd-matrix-toolbar">
+                        <div class="am-crowd-matrix-legend-global" id="am-crowd-matrix-global-legend"></div>
+                        <div class="am-crowd-matrix-actions">
+                            <button type="button" class="am-crowd-matrix-retry" id="am-crowd-matrix-retry">重试</button>
+                        </div>
+                    </div>
+                    <div class="am-crowd-matrix-grid" id="am-crowd-matrix-grid"></div>
+                </div>
             `;
 
             document.body.appendChild(div);
             this.popup = div;
             this.header = div.querySelector('.am-magic-header');
             this.iframe = div.querySelector('#am-magic-iframe');
+            this.quickPromptsEl = div.querySelector('#am-magic-quick-prompts');
+            this.viewTabsEl = div.querySelector('#am-magic-view-tabs');
+            this.queryPanelEl = div.querySelector('.am-magic-content-query');
+            this.matrixPanelEl = div.querySelector('.am-magic-content-matrix');
+            this.matrixStateEl = div.querySelector('#am-crowd-matrix-state');
+            this.matrixGridEl = div.querySelector('#am-crowd-matrix-grid');
+            this.matrixRetryBtn = div.querySelector('#am-crowd-matrix-retry');
+            this.matrixLegendEl = div.querySelector('#am-crowd-matrix-global-legend');
+            this.matrixCampaignEl = div.querySelector('#am-crowd-matrix-campaign');
+            this.bindCrowdMatrixHoverTipEvents();
             this.refreshQuickPromptLabels();
+            this.refreshCrowdMatrixCampaignMeta();
+            this.renderCrowdGlobalLegend();
+            this.switchMagicView(this.activeView || 'query', { skipLoad: true });
+            if (!this.popupResizeHandler) {
+                this.popupResizeHandler = () => {
+                    if (!(this.popup instanceof HTMLElement)) return;
+                    if (this.popup.style.display === 'none') return;
+                    if (this.activeView === 'matrix') {
+                        this.maximizePopupForMatrix();
+                    }
+                };
+                window.addEventListener('resize', this.popupResizeHandler);
+            }
 
             // iframe 加载完成后先清理，再显示，避免首屏闪现整页内容
             this.iframe.onload = () => {
@@ -4304,11 +5924,50 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             // 刷新按钮
             div.querySelector('#am-magic-refresh').onclick = () => {
+                if (this.activeView === 'matrix') {
+                    this.ensureCrowdMatrixLoaded(true);
+                    return;
+                }
                 const loading = div.querySelector('#am-magic-loading');
                 if (loading) loading.style.display = 'flex';
                 this.iframe.style.opacity = '0';
                 this.iframe.src = this.buildIframeUrl(true);
             };
+
+            if (this.viewTabsEl instanceof HTMLElement) {
+                this.viewTabsEl.addEventListener('click', (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const btn = target.closest('[data-view]');
+                    if (!(btn instanceof HTMLElement)) return;
+                    const nextView = String(btn.dataset.view || '').trim();
+                    if (!nextView) return;
+                    this.switchMagicView(nextView);
+                });
+            }
+            if (this.matrixRetryBtn instanceof HTMLElement) {
+                this.matrixRetryBtn.addEventListener('click', () => {
+                    this.ensureCrowdMatrixLoaded(true);
+                });
+            }
+            if (this.matrixLegendEl instanceof HTMLElement) {
+                this.matrixLegendEl.addEventListener('click', (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const btn = target.closest('[data-crowd-metric]');
+                    if (btn instanceof HTMLElement) {
+                        const metric = String(btn.dataset.crowdMetric || '').trim();
+                        if (!metric) return;
+                        this.toggleCrowdMetricVisibility(metric);
+                        return;
+                    }
+                    const periodBtn = target.closest('[data-crowd-period]');
+                    if (!(periodBtn instanceof HTMLElement)) return;
+                    const period = this.normalizeCrowdPeriod(periodBtn.dataset.crowdPeriod || '');
+                    if (!period) return;
+                    this.toggleCrowdPeriodVisibility(period);
+                });
+            }
 
             // 头部快捷话术
             const quickPrompts = div.querySelector('#am-magic-quick-prompts');
@@ -4360,13 +6019,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             let isDragging = false;
             let startX, startY, initialLeft, initialTop;
 
-            this.header.onmousedown = (e) => {
-                const target = e.target;
-                if (!(target instanceof Element)) return;
-                if (target.closest('.am-btn-group') || target.closest('.am-quick-prompts')) return;
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
+                this.header.onmousedown = (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    if (target.closest('.am-btn-group') || target.closest('.am-quick-prompts') || target.closest('.am-magic-view-tabs')) return;
+                    if (this.activeView === 'matrix' || this.popupMatrixMaximized) return;
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
                 // 首次拖拽时移除 transform 定位，切换为 left/top
                 if (div.style.transform) {
                     const rect = div.getBoundingClientRect();
@@ -4403,8 +6063,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.popup.style.display = 'flex';
             }
 
+            if (!show) this.hideCrowdMatrixHoverTip();
+
             if (show) {
                 this.refreshQuickPromptLabels();
+                this.refreshCrowdMatrixCampaignMeta();
+                this.switchMagicView(this.activeView || 'query');
             }
 
             State.config.magicReportOpen = show;
