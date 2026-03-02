@@ -42,7 +42,10 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
     'clearCrowdMatrixHoverBars',
     'getCrowdMatrixLinkedBars',
     'buildCrowdMatrixHoverTipText',
+    'formatCrowdMatrixHoverTipHtml',
     'activateCrowdMatrixHoverBars',
+    'formatCrowdHoverPercent',
+    'formatCrowdPtDiff',
     'getCrowdPeriodVisible',
     'getVisibleCrowdPeriods',
     'getCrowdRatioVisible',
@@ -217,8 +220,26 @@ test('柱状图悬停提示使用即时 tooltip（data-tooltip）并绑定网格
   assert.match(block, /bar\.dataset\.tooltip\s*=\s*tooltipText;/, '柱状图未写入 data-tooltip');
   assert.match(block, /bar\.dataset\.labelIndex = String\(labelIdx\);/, '柱状图未写入标签索引');
   assert.match(block, /bar\.dataset\.crowdGroup = String\(groupName \|\| ''\);/, '柱状图未写入维度分组标记');
-  assert.match(block, /return items\.map\(\(item\) => \{[\s\S]*过去\$\{item\.period\}天[\s\S]*\}\)\.join\('\\n'\);/, '跨周期提示文案未按周期逐行拼接');
-  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*white-space:\s*pre-line;/, 'tooltip 样式未开启多行换行显示');
+  assert.match(block, /bar\.dataset\.metricLabel = String\(metricMeta\.seriesLabel \|\| ''\);/, '柱状图未写入系列名称');
+  assert.match(block, /bar\.dataset\.ratio = String\(ratio\);/, '柱状图未写入占比数值');
+  assert.match(block, /const periodCompareMap = \{\s*3:\s*7,\s*7:\s*30,\s*30:\s*90\s*\};/, '跨周期 pt 对比链路未按 3→7→30→90 定义');
+  assert.match(block, /const diffPt = item\.ratio - compareItem\.ratio;/, '跨周期提示文案未按相邻周期计算差异 pt');
+  assert.match(block, /diffLabel = `（\$\{this\.formatCrowdPtDiff\(diffPt\)\}）`;/, '跨周期提示文案未按括号格式输出差异 pt');
+  assert.match(block, /const countLabelMax = items\.reduce\(\(maxLen, item\) => \{[\s\S]*item\.countDisplay[\s\S]*\}, 0\);/, '提示文案未计算末尾具体数值列宽');
+  assert.match(block, /const countLabel = item\.countDisplay\.padStart\(countLabelMax, ' '\);/, '提示文案末尾具体数值未做对齐');
+  assert.match(block, /const diffLabelMax = rows\.reduce\(\(maxLen, row\) => Math\.max\(maxLen, row\.diffLabel\.length\), 0\);/, '提示文案未计算 pt 差异列宽');
+  assert.match(block, /const diffColumn = row\.diffLabel\.padEnd\(diffLabelMax, ' '\);/, '提示文案未为缺失 pt 差异补齐占位宽度');
+  assert.match(block, /return `\$\{row\.periodLabel\.padEnd\(periodLabelMax, ' '\)\}\s+\$\{row\.ratioLabel\}\$\{diffColumn\}\s+\$\{row\.countLabel\}\$\{row\.noData \? ' 无数据' : ''\}`;/, '跨周期提示文案未按新增 diff 列宽对齐输出');
+  assert.doesNotMatch(block, /vs\$\{compareLabel\}/, '提示文案仍包含 vs过去N天 文案');
+  assert.match(block, /const tipHtml = this\.formatCrowdMatrixHoverTipHtml\(content\);/, 'tooltip 未构造 HTML 提示内容');
+  assert.match(block, /tip\.innerHTML = tipHtml;/, 'tooltip 未按 HTML 方式渲染分色内容');
+  assert.match(block, /diffClass = diffValue\.startsWith\('\+'\)\s*\?\s*'is-pos'\s*:\s*\(diffValue\.startsWith\('-'\)\s*\?\s*'is-neg'\s*:\s*'is-neutral'\);/, 'pt 差异颜色分类逻辑缺失');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*white-space:\s*pre-wrap;/, 'tooltip 样式未开启对齐换行显示');
+  assert.match(block, /am-crowd-matrix-hover-tip-line[\s\S]*white-space:\s*pre;/, 'tooltip 行样式未启用预格式化对齐');
+  assert.match(block, /am-crowd-matrix-hover-tip-diff\.is-pos[\s\S]*color:\s*#3ddc97;/, 'pt 正向差异未设置正色');
+  assert.match(block, /am-crowd-matrix-hover-tip-diff\.is-neg[\s\S]*color:\s*#ff8a8a;/, 'pt 负向差异未设置负色');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*font-family:\s*"SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;/, 'tooltip 样式未启用等宽字体');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*font-variant-numeric:\s*tabular-nums;/, 'tooltip 样式未启用等宽数字显示');
   assert.doesNotMatch(block, /bar\.title\s*=\s*`/, '柱状图仍在使用 title 作为提示，存在延迟显示问题');
 });
 

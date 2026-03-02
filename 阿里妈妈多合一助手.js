@@ -4879,6 +4879,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return `${fixed}%`;
         },
 
+        formatCrowdHoverPercent(value) {
+            const num = this.toNumericValue(value);
+            return `${num.toFixed(2)}%`;
+        },
+
+        formatCrowdPtDiff(value) {
+            const num = this.toNumericValue(value);
+            const sign = num >= 0 ? '+' : '-';
+            return `${sign}${Math.abs(num).toFixed(2)}pt`;
+        },
+
         formatCrowdRawValue(rawValue, fallbackValue) {
             const rawText = String(rawValue ?? '').trim();
             if (rawText) return rawText;
@@ -4942,7 +4953,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const tip = this.ensureCrowdMatrixHoverTip();
             if (!(tip instanceof HTMLElement)) return;
 
-            tip.textContent = content;
+            const tipHtml = this.formatCrowdMatrixHoverTipHtml(content);
+            if (tipHtml) {
+                tip.innerHTML = tipHtml;
+            } else {
+                tip.textContent = content;
+            }
             tip.style.display = 'block';
 
             const popupRect = this.popup.getBoundingClientRect();
@@ -4997,17 +5013,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         buildCrowdMatrixHoverTipText(anchorBar, linkedBars = []) {
             if (!(anchorBar instanceof HTMLElement)) return '';
             const bars = Array.isArray(linkedBars) && linkedBars.length ? linkedBars : [anchorBar];
+            const metricLabel = String(anchorBar.dataset.metricLabel || '').trim();
+            const labelName = String(anchorBar.dataset.labelName || '').trim();
             const items = [];
             const seenPeriods = new Set();
             bars.forEach((bar) => {
                 if (!(bar instanceof HTMLElement)) return;
-                const tipText = String(bar.dataset.tooltip || '').trim();
-                if (!tipText) return;
                 const period = this.normalizeCrowdPeriod(bar.dataset.period || '');
                 const periodKey = period || String(bar.dataset.period || '').trim() || `p-${items.length}`;
                 if (seenPeriods.has(periodKey)) return;
                 seenPeriods.add(periodKey);
-                items.push({ period, periodKey, tipText });
+                const ratio = this.toNumericValue(bar.dataset.ratio || 0);
+                const countDisplay = String(bar.dataset.countDisplay || '').trim() || '0';
+                const noData = String(bar.dataset.noData || '').trim() === '1';
+                items.push({ period, periodKey, ratio, countDisplay, noData });
             });
             if (!items.length) {
                 return String(anchorBar.dataset.tooltip || '').trim();
@@ -5021,13 +5040,112 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (aRank !== bRank) return aRank - bRank;
                 return String(a.periodKey).localeCompare(String(b.periodKey), 'zh-Hans-CN', { numeric: true });
             });
-            if (items.length === 1) {
-                return items[0].tipText;
-            }
-            return items.map((item) => {
+            const periodLabelMax = items.reduce((maxLen, item) => {
                 const periodLabel = item.period ? `过去${item.period}天` : (String(item.periodKey).trim() || '当前周期');
-                return `${periodLabel}：${item.tipText}`;
-            }).join('\n');
+                return Math.max(maxLen, periodLabel.length);
+            }, 0);
+            const ratioLabelMax = items.reduce((maxLen, item) => {
+                return Math.max(maxLen, this.formatCrowdHoverPercent(item.ratio).length);
+            }, 0);
+            const countLabelMax = items.reduce((maxLen, item) => {
+                return Math.max(maxLen, String(item.countDisplay || '').trim().length);
+            }, 0);
+            const header = [metricLabel, labelName].filter(Boolean).join(' · ');
+            const periodCompareMap = {
+                3: 7,
+                7: 30,
+                30: 90
+            };
+            const periodItemMap = new Map();
+            items.forEach((item) => {
+                if (item.period) periodItemMap.set(item.period, item);
+            });
+            const rows = items.map((item) => {
+                const periodLabel = item.period ? `过去${item.period}天` : (String(item.periodKey).trim() || '当前周期');
+                const ratioLabel = this.formatCrowdHoverPercent(item.ratio).padStart(ratioLabelMax, ' ');
+                let diffLabel = '';
+                const comparePeriod = periodCompareMap[item.period];
+                if (comparePeriod) {
+                    const compareItem = periodItemMap.get(comparePeriod);
+                    if (compareItem) {
+                        const diffPt = item.ratio - compareItem.ratio;
+                        diffLabel = `（${this.formatCrowdPtDiff(diffPt)}）`;
+                    }
+                }
+                const countLabel = item.countDisplay.padStart(countLabelMax, ' ');
+                return { periodLabel, ratioLabel, diffLabel, countLabel, noData: item.noData };
+            });
+            const diffLabelMax = rows.reduce((maxLen, row) => Math.max(maxLen, row.diffLabel.length), 0);
+            const lines = rows.map((row) => {
+                const diffColumn = row.diffLabel.padEnd(diffLabelMax, ' ');
+                return `${row.periodLabel.padEnd(periodLabelMax, ' ')}  ${row.ratioLabel}${diffColumn}  ${row.countLabel}${row.noData ? ' 无数据' : ''}`;
+            });
+            return header ? `${header}\n${lines.join('\n')}` : lines.join('\n');
+        },
+
+        formatCrowdMatrixHoverTipHtml(text) {
+            const content = String(text || '').trim();
+            if (!content) return '';
+            const escapeHtml = (value) => {
+                const input = String(value ?? '');
+                if (typeof Utils === 'object' && Utils && typeof Utils.escapeHtml === 'function') {
+                    return Utils.escapeHtml(input);
+                }
+                return input
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#39;');
+            };
+            const lines = content.split(/\r?\n/).filter(Boolean);
+            if (!lines.length) return '';
+            const headerHtml = `<div class="am-crowd-matrix-hover-tip-header">${escapeHtml(lines[0])}</div>`;
+            const rowDataList = lines.slice(1).map((line) => {
+                const safeLine = String(line || '');
+                const hasNoData = /\s无数据\s*$/.test(safeLine);
+                const normalizedLine = hasNoData ? safeLine.replace(/\s无数据\s*$/, '') : safeLine;
+                const rowMatch = normalizedLine.match(/^(\S+)\s+([0-9]+(?:\.[0-9]+)?%)\s*(（[+-]\d+(?:\.\d+)?pt）)?\s+(\S+)$/);
+                if (!rowMatch) {
+                    return { fallbackHtml: `<div class="am-crowd-matrix-hover-tip-line">${escapeHtml(safeLine)}</div>` };
+                }
+                const periodLabel = rowMatch[1] || '';
+                const ratioLabel = rowMatch[2] || '';
+                const diffLabel = rowMatch[3] || '';
+                const countLabel = rowMatch[4] || '';
+                const diffValue = diffLabel.replaceAll('（', '').replaceAll('）', '');
+                const diffClass = diffValue.startsWith('+')
+                    ? 'is-pos'
+                    : (diffValue.startsWith('-') ? 'is-neg' : 'is-neutral');
+                return {
+                    periodLabel,
+                    ratioLabel,
+                    diffLabel,
+                    countLabel,
+                    hasNoData,
+                    diffClass
+                };
+            });
+            if (!rowDataList.length) return headerHtml;
+            const normalRows = rowDataList.filter(row => !row.fallbackHtml);
+            const periodCh = normalRows.reduce((maxLen, row) => Math.max(maxLen, row.periodLabel.length), 0);
+            const ratioCh = normalRows.reduce((maxLen, row) => Math.max(maxLen, row.ratioLabel.length), 0);
+            const diffCh = normalRows.reduce((maxLen, row) => Math.max(maxLen, row.diffLabel.length), 0);
+            const countCh = normalRows.reduce((maxLen, row) => Math.max(maxLen, row.countLabel.length), 0);
+            const tableStyle = `--am-crowd-period-ch:${Math.max(6, periodCh)};--am-crowd-ratio-ch:${Math.max(7, ratioCh)};--am-crowd-diff-ch:${Math.max(1, diffCh)};--am-crowd-count-ch:${Math.max(3, countCh)};`;
+            const rowsHtml = rowDataList.map((row) => {
+                if (row.fallbackHtml) return row.fallbackHtml;
+                return `
+                    <div class="am-crowd-matrix-hover-tip-row">
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-period">${escapeHtml(row.periodLabel)}</span>
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-ratio">${escapeHtml(row.ratioLabel)}</span>
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-diff am-crowd-matrix-hover-tip-diff ${row.diffLabel ? row.diffClass : 'is-empty'}">${row.diffLabel ? escapeHtml(row.diffLabel) : '&nbsp;'}</span>
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-count">${escapeHtml(row.countLabel)}</span>
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-flag">${row.hasNoData ? '无数据' : ''}</span>
+                    </div>
+                `;
+            }).join('');
+            return `${headerHtml}<div class="am-crowd-matrix-hover-tip-table" style="${tableStyle}">${rowsHtml}</div>`;
         },
 
         activateCrowdMatrixHoverBars(anchorBar) {
@@ -5377,6 +5495,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bar.dataset.labelIndex = String(labelIdx);
                     bar.dataset.crowdGroup = String(groupName || '');
                     bar.dataset.period = String(period || '');
+                    bar.dataset.metricLabel = String(metricMeta.seriesLabel || '');
+                    bar.dataset.labelName = String(label || '');
+                    bar.dataset.ratio = String(ratio);
+                    bar.dataset.countDisplay = String(countDisplay || '0');
+                    bar.dataset.noData = cell?.noData?.[metric] ? '1' : '0';
                     if (cell?.noData?.[metric]) bar.classList.add('is-nodata');
                     bar.style.setProperty('--am-crowd-bar-color', metricMeta.color);
                     const tooltipText = `${metricMeta.seriesLabel}: ${this.formatCrowdPercent(ratio)}（${countDisplay || '0'}）${cell?.noData?.[metric] ? ' 无数据' : ''}`;
@@ -6342,12 +6465,63 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border: 1px solid rgba(255, 255, 255, 0.15);
                     color: #fff;
                     font-size: 12px;
-                    line-height: 1.4;
+                    line-height: 1.45;
                     font-weight: 600;
                     padding: 8px 12px;
                     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-                    white-space: pre-line;
-                    overflow-wrap: anywhere;
+                    white-space: pre-wrap;
+                    font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;
+                    font-variant-numeric: tabular-nums;
+                    font-feature-settings: "tnum" 1;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-header {
+                    margin-bottom: 4px;
+                    white-space: pre-wrap;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-table {
+                    display: grid;
+                    row-gap: 2px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-row {
+                    display: grid;
+                    grid-template-columns:
+                        calc(var(--am-crowd-period-ch, 6) * 1ch)
+                        calc(var(--am-crowd-ratio-ch, 7) * 1ch)
+                        calc(var(--am-crowd-diff-ch, 1) * 1ch)
+                        calc(var(--am-crowd-count-ch, 3) * 1ch)
+                        max-content;
+                    column-gap: 8px;
+                    align-items: baseline;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col {
+                    white-space: nowrap;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-ratio,
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-diff,
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-count {
+                    justify-self: end;
+                    text-align: right;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-flag {
+                    color: rgba(255, 255, 255, 0.72);
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-line {
+                    white-space: pre;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-diff {
+                    font-weight: 700;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-diff.is-empty {
+                    color: transparent;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-diff.is-pos {
+                    color: #3ddc97;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-diff.is-neg {
+                    color: #ff8a8a;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-diff.is-neutral {
+                    color: #ffd666;
                 }
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-bar[data-metric="click"],
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-insight-item[data-metric="click"],
