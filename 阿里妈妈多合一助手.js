@@ -3055,8 +3055,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         matrixCampaignEl: null,
         matrixHoverTipEl: null,
         matrixHoverActiveBar: null,
-        crowdMetricVisibility: { click: true, cart: true, deal: true, itemdeal: true },
+        matrixHoverActiveBars: [],
+        crowdMetricVisibility: { click: false, cart: true, deal: false, itemdeal: false },
         crowdPeriodVisibility: { 3: true, 7: true, 30: true, 90: true },
+        crowdRatioVisibility: true,
+        crowdInsightsVisibility: false,
         popupMatrixMaximized: false,
         popupLayoutBeforeMatrix: null,
         popupResizeHandler: null,
@@ -4963,14 +4966,93 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             tip.style.top = `${top}px`;
         },
 
+        clearCrowdMatrixHoverBars() {
+            const activeBars = Array.isArray(this.matrixHoverActiveBars) ? this.matrixHoverActiveBars : [];
+            activeBars.forEach((bar) => {
+                if (bar instanceof HTMLElement) bar.classList.remove('is-hover');
+            });
+            this.matrixHoverActiveBars = [];
+            this.matrixHoverActiveBar = null;
+        },
+
+        getCrowdMatrixLinkedBars(anchorBar) {
+            if (!(anchorBar instanceof HTMLElement)) return [];
+            if (!(this.matrixGridEl instanceof HTMLElement)) return [anchorBar];
+            const metric = String(anchorBar.dataset.metric || '').trim();
+            const labelIndex = String(anchorBar.dataset.labelIndex || '').trim();
+            const crowdGroup = String(anchorBar.dataset.crowdGroup || '').trim();
+            if (!metric || !labelIndex || !crowdGroup) return [anchorBar];
+            const linkedBars = [];
+            this.matrixGridEl.querySelectorAll('.am-crowd-matrix-bar').forEach((node) => {
+                if (!(node instanceof HTMLElement)) return;
+                if (node.offsetParent === null) return;
+                if (String(node.dataset.metric || '').trim() !== metric) return;
+                if (String(node.dataset.labelIndex || '').trim() !== labelIndex) return;
+                if (String(node.dataset.crowdGroup || '').trim() !== crowdGroup) return;
+                linkedBars.push(node);
+            });
+            return linkedBars.length ? linkedBars : [anchorBar];
+        },
+
+        buildCrowdMatrixHoverTipText(anchorBar, linkedBars = []) {
+            if (!(anchorBar instanceof HTMLElement)) return '';
+            const bars = Array.isArray(linkedBars) && linkedBars.length ? linkedBars : [anchorBar];
+            const items = [];
+            const seenPeriods = new Set();
+            bars.forEach((bar) => {
+                if (!(bar instanceof HTMLElement)) return;
+                const tipText = String(bar.dataset.tooltip || '').trim();
+                if (!tipText) return;
+                const period = this.normalizeCrowdPeriod(bar.dataset.period || '');
+                const periodKey = period || String(bar.dataset.period || '').trim() || `p-${items.length}`;
+                if (seenPeriods.has(periodKey)) return;
+                seenPeriods.add(periodKey);
+                items.push({ period, periodKey, tipText });
+            });
+            if (!items.length) {
+                return String(anchorBar.dataset.tooltip || '').trim();
+            }
+            const periodOrder = this.CROWD_PERIODS.slice();
+            items.sort((a, b) => {
+                const aIdx = periodOrder.indexOf(a.period);
+                const bIdx = periodOrder.indexOf(b.period);
+                const aRank = aIdx > -1 ? aIdx : periodOrder.length + 1;
+                const bRank = bIdx > -1 ? bIdx : periodOrder.length + 1;
+                if (aRank !== bRank) return aRank - bRank;
+                return String(a.periodKey).localeCompare(String(b.periodKey), 'zh-Hans-CN', { numeric: true });
+            });
+            if (items.length === 1) {
+                return items[0].tipText;
+            }
+            return items.map((item) => {
+                const periodLabel = item.period ? `过去${item.period}天` : (String(item.periodKey).trim() || '当前周期');
+                return `${periodLabel}：${item.tipText}`;
+            }).join('\n');
+        },
+
+        activateCrowdMatrixHoverBars(anchorBar) {
+            if (!(anchorBar instanceof HTMLElement)) {
+                this.clearCrowdMatrixHoverBars();
+                return [];
+            }
+            if (this.matrixHoverActiveBar === anchorBar && Array.isArray(this.matrixHoverActiveBars) && this.matrixHoverActiveBars.length) {
+                return this.matrixHoverActiveBars;
+            }
+            this.clearCrowdMatrixHoverBars();
+            const linkedBars = this.getCrowdMatrixLinkedBars(anchorBar);
+            linkedBars.forEach((bar) => {
+                if (bar instanceof HTMLElement) bar.classList.add('is-hover');
+            });
+            this.matrixHoverActiveBar = anchorBar;
+            this.matrixHoverActiveBars = linkedBars;
+            return linkedBars;
+        },
+
         hideCrowdMatrixHoverTip() {
             if (this.matrixHoverTipEl instanceof HTMLElement) {
                 this.matrixHoverTipEl.style.display = 'none';
             }
-            if (this.matrixHoverActiveBar instanceof HTMLElement) {
-                this.matrixHoverActiveBar.classList.remove('is-hover');
-            }
-            this.matrixHoverActiveBar = null;
+            this.clearCrowdMatrixHoverBars();
         },
 
         bindCrowdMatrixHoverTipEvents() {
@@ -4994,18 +5076,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return;
                 }
 
-                const tipText = String(bar.dataset.tooltip || '').trim();
+                const linkedBars = this.activateCrowdMatrixHoverBars(bar);
+                const tipText = this.buildCrowdMatrixHoverTipText(bar, linkedBars);
                 if (!tipText) {
                     this.hideCrowdMatrixHoverTip();
                     return;
-                }
-
-                if (this.matrixHoverActiveBar !== bar) {
-                    if (this.matrixHoverActiveBar instanceof HTMLElement) {
-                        this.matrixHoverActiveBar.classList.remove('is-hover');
-                    }
-                    this.matrixHoverActiveBar = bar;
-                    this.matrixHoverActiveBar.classList.add('is-hover');
                 }
                 this.showCrowdMatrixHoverTip(tipText, event.clientX, event.clientY);
             });
@@ -5049,11 +5124,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 .filter(period => this.getCrowdPeriodVisible(period));
         },
 
+        getCrowdRatioVisible() {
+            return this.crowdRatioVisibility === true;
+        },
+
+        getCrowdInsightsVisible() {
+            return this.crowdInsightsVisibility !== false;
+        },
+
+        syncCrowdAuxiliaryVisibilityByMetricCount(visibilityMap = null) {
+            const visibility = visibilityMap && typeof visibilityMap === 'object'
+                ? visibilityMap
+                : (this.crowdMetricVisibility && typeof this.crowdMetricVisibility === 'object' ? this.crowdMetricVisibility : {});
+            const visibleCount = this.CROWD_METRICS.reduce((count, metric) => {
+                return count + (visibility[metric] === false ? 0 : 1);
+            }, 0);
+            if (visibleCount <= 1) {
+                this.crowdRatioVisibility = true;
+                this.crowdInsightsVisibility = false;
+            } else {
+                this.crowdRatioVisibility = false;
+                this.crowdInsightsVisibility = true;
+            }
+            return visibleCount;
+        },
+
         applyCrowdMetricVisibility() {
             if (this.matrixGridEl instanceof HTMLElement) {
                 this.CROWD_METRICS.forEach((metric) => {
                     this.matrixGridEl.classList.toggle(`am-hide-metric-${metric}`, !this.getCrowdMetricVisible(metric));
                 });
+                this.matrixGridEl.classList.toggle('am-show-ratio-values', this.getCrowdRatioVisible());
+                this.matrixGridEl.classList.toggle('am-hide-insights', !this.getCrowdInsightsVisible());
             }
             if (this.matrixLegendEl instanceof HTMLElement) {
                 this.matrixLegendEl.querySelectorAll('[data-crowd-metric]').forEach((node) => {
@@ -5073,6 +5175,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
                     node.title = `过去${period}天${visible ? '（点击隐藏）' : '（点击显示）'}`;
+                });
+                this.matrixLegendEl.querySelectorAll('[data-crowd-ratio-toggle]').forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    const visible = this.getCrowdRatioVisible();
+                    node.classList.toggle('is-off', !visible);
+                    node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.title = `显示占比${visible ? '（点击隐藏）' : '（点击显示）'}`;
+                });
+                this.matrixLegendEl.querySelectorAll('[data-crowd-insight-toggle]').forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    const visible = this.getCrowdInsightsVisible();
+                    node.classList.toggle('is-off', !visible);
+                    node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.title = `显示提示${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
             }
         },
@@ -5120,6 +5236,40 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 periodGroup.appendChild(btn);
             });
             this.matrixLegendEl.appendChild(periodGroup);
+
+            const ratioDivider = document.createElement('span');
+            ratioDivider.className = 'am-crowd-matrix-legend-divider';
+            ratioDivider.textContent = '｜';
+            ratioDivider.setAttribute('aria-hidden', 'true');
+            this.matrixLegendEl.appendChild(ratioDivider);
+
+            const ratioGroup = document.createElement('div');
+            ratioGroup.className = 'am-crowd-matrix-legend-group am-crowd-matrix-legend-group-ratio';
+            const ratioBtn = document.createElement('button');
+            ratioBtn.type = 'button';
+            ratioBtn.className = 'am-crowd-matrix-legend-toggle';
+            ratioBtn.dataset.crowdRatioToggle = '1';
+            ratioBtn.style.setProperty('--am-crowd-legend-color', '#2f54eb');
+            const ratioDot = document.createElement('i');
+            const ratioText = document.createElement('span');
+            ratioText.textContent = '显示占比';
+            ratioBtn.appendChild(ratioDot);
+            ratioBtn.appendChild(ratioText);
+            ratioGroup.appendChild(ratioBtn);
+
+            const insightBtn = document.createElement('button');
+            insightBtn.type = 'button';
+            insightBtn.className = 'am-crowd-matrix-legend-toggle';
+            insightBtn.dataset.crowdInsightToggle = '1';
+            insightBtn.style.setProperty('--am-crowd-legend-color', '#7f8ca9');
+            const insightDot = document.createElement('i');
+            const insightText = document.createElement('span');
+            insightText.textContent = '显示提示';
+            insightBtn.appendChild(insightDot);
+            insightBtn.appendChild(insightText);
+            ratioGroup.appendChild(insightBtn);
+
+            this.matrixLegendEl.appendChild(ratioGroup);
             this.applyCrowdMetricVisibility();
         },
 
@@ -5137,6 +5287,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
             nextMap[metric] = nextVisible;
             this.crowdMetricVisibility = nextMap;
+            this.syncCrowdAuxiliaryVisibilityByMetricCount(nextMap);
             if (this.crowdMatrixDataset) {
                 this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: true });
                 return;
@@ -5163,6 +5314,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: true });
                 return;
             }
+            this.applyCrowdMetricVisibility();
+        },
+
+        toggleCrowdRatioVisibility() {
+            this.crowdRatioVisibility = !this.getCrowdRatioVisible();
+            this.applyCrowdMetricVisibility();
+        },
+
+        toggleCrowdInsightsVisibility() {
+            this.crowdInsightsVisibility = !this.getCrowdInsightsVisible();
             this.applyCrowdMetricVisibility();
         },
 
@@ -5213,6 +5374,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const bar = document.createElement('div');
                     bar.className = 'am-crowd-matrix-bar';
                     bar.dataset.metric = metric;
+                    bar.dataset.labelIndex = String(labelIdx);
+                    bar.dataset.crowdGroup = String(groupName || '');
+                    bar.dataset.period = String(period || '');
                     if (cell?.noData?.[metric]) bar.classList.add('is-nodata');
                     bar.style.setProperty('--am-crowd-bar-color', metricMeta.color);
                     const tooltipText = `${metricMeta.seriesLabel}: ${this.formatCrowdPercent(ratio)}（${countDisplay || '0'}）${cell?.noData?.[metric] ? ' 无数据' : ''}`;
@@ -5222,6 +5386,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const fill = document.createElement('span');
                     fill.className = 'am-crowd-matrix-bar-fill';
                     const barHeight = `${Math.max(0, Math.min(100, (ratio / normalizedMax) * 100))}%`;
+                    bar.style.setProperty('--am-crowd-bar-height', barHeight);
                     if (animateBars) {
                         fill.style.height = '0%';
                         fill.style.opacity = '0.38';
@@ -5237,6 +5402,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     } else {
                         fill.style.height = barHeight;
                     }
+                    const ratioLabel = document.createElement('span');
+                    ratioLabel.className = 'am-crowd-matrix-bar-ratio';
+                    ratioLabel.textContent = this.formatCrowdPercent(ratio);
+                    fill.appendChild(ratioLabel);
                     bar.appendChild(fill);
                     columns.appendChild(bar);
                 });
@@ -5992,6 +6161,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     flex-direction: column;
                     align-items: center;
                     gap: 5px;
+                    position: relative;
+                }
+                #am-magic-report-popup .am-crowd-matrix-bar-group + .am-crowd-matrix-bar-group::before {
+                    content: '';
+                    position: absolute;
+                    left: -5px;
+                    top: 8px;
+                    bottom: 22px;
+                    width: 1px;
+                    border-radius: 999px;
+                    pointer-events: none;
+                    background: linear-gradient(180deg, rgba(127, 140, 169, 0), rgba(127, 140, 169, 0.16), rgba(127, 140, 169, 0));
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar-columns {
                     --am-crowd-visible-metrics: var(--am-crowd-metric-visible-count, 4);
@@ -6041,6 +6222,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4), 0 2px 8px rgba(31, 53, 109, 0.08);
                     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
                 }
+                #am-magic-report-popup .am-crowd-matrix-bar-ratio {
+                    position: absolute;
+                    left: 50%;
+                    top: -18px;
+                    transform: translateX(-50%) translateY(4px);
+                    font-size: 10px;
+                    line-height: 1;
+                    font-weight: 700;
+                    color: #30406a;
+                    white-space: nowrap;
+                    opacity: 0;
+                    visibility: hidden;
+                    pointer-events: none;
+                    transition: opacity 0.2s ease, transform 0.2s ease;
+                }
+                #am-magic-report-popup .am-crowd-matrix-grid.am-show-ratio-values .am-crowd-matrix-bar-ratio {
+                    opacity: 1;
+                    visibility: visible;
+                    transform: translateX(-50%) translateY(0);
+                }
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-insights .am-crowd-matrix-insights {
+                    display: none !important;
+                }
                 #am-magic-report-popup .am-crowd-matrix-xlabel {
                     max-width: 100%;
                     text-align: center;
@@ -6068,12 +6272,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-xlabel {
                     font-size: 10px;
                 }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-dense .am-crowd-matrix-bar-ratio {
+                    font-size: 9px;
+                    top: -16px;
+                }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-bar {
                     width: clamp(
                         5px,
                         calc((100% - (var(--am-crowd-visible-metrics) - 1) * var(--am-crowd-bar-gap)) / var(--am-crowd-visible-metrics)),
                         22px
                     );
+                }
+                #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-bar-ratio {
+                    font-size: 8px;
+                    top: -14px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-chart.is-ultra-dense .am-crowd-matrix-xlabel {
                     font-size: 9px;
@@ -6123,7 +6335,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     top: 0;
                     z-index: 40;
                     pointer-events: none;
-                    max-width: min(280px, calc(100vw - 48px));
+                    max-width: min(360px, calc(100vw - 48px));
                     border-radius: 12px;
                     background: rgba(15, 23, 42, 0.85);
                     backdrop-filter: blur(12px);
@@ -6134,9 +6346,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-weight: 600;
                     padding: 8px 12px;
                     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
+                    white-space: pre-line;
+                    overflow-wrap: anywhere;
                 }
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-bar[data-metric="click"],
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-insight-item[data-metric="click"],
@@ -6348,6 +6559,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.matrixLegendEl.addEventListener('click', (e) => {
                     const target = e.target;
                     if (!(target instanceof Element)) return;
+                    const ratioBtn = target.closest('[data-crowd-ratio-toggle]');
+                    if (ratioBtn instanceof HTMLElement) {
+                        this.toggleCrowdRatioVisibility();
+                        return;
+                    }
+                    const insightBtn = target.closest('[data-crowd-insight-toggle]');
+                    if (insightBtn instanceof HTMLElement) {
+                        this.toggleCrowdInsightsVisibility();
+                        return;
+                    }
                     const btn = target.closest('[data-crowd-metric]');
                     if (btn instanceof HTMLElement) {
                         const metric = String(btn.dataset.crowdMetric || '').trim();

@@ -36,8 +36,17 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
     'renderCrowdGlobalLegend',
     'toggleCrowdMetricVisibility',
     'toggleCrowdPeriodVisibility',
+    'toggleCrowdRatioVisibility',
+    'toggleCrowdInsightsVisibility',
+    'syncCrowdAuxiliaryVisibilityByMetricCount',
+    'clearCrowdMatrixHoverBars',
+    'getCrowdMatrixLinkedBars',
+    'buildCrowdMatrixHoverTipText',
+    'activateCrowdMatrixHoverBars',
     'getCrowdPeriodVisible',
     'getVisibleCrowdPeriods',
+    'getCrowdRatioVisible',
+    'getCrowdInsightsVisible',
     'applyCrowdMetricVisibility',
     'normalizeMagicView',
     'getMagicDefaultView',
@@ -55,6 +64,13 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
   ]) {
     assert.match(block, new RegExp(`\\b${method}\\s*\\(`), `缺少方法: ${method}`);
   }
+});
+
+test('人群看板默认仅显示加购人群，并默认显示占比/关闭提示', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /crowdMetricVisibility:\s*\{\s*click:\s*false,\s*cart:\s*true,\s*deal:\s*false,\s*itemdeal:\s*false\s*\}/, '默认人群显隐未设置为仅加购可见');
+  assert.match(block, /crowdRatioVisibility:\s*true/, '默认占比显示未开启');
+  assert.match(block, /crowdInsightsVisibility:\s*false/, '默认提示显示未关闭');
 });
 
 test('四类指标 prompt 采用无时间词模板（周期通过 panelDataQuery 覆盖）', () => {
@@ -142,8 +158,21 @@ test('人群看板使用顶部统一图例，并支持点击切换系列显隐',
   assert.match(block, /id="am-crowd-matrix-global-legend"/, '看板顶部缺少统一图例容器');
   assert.match(block, /this\.matrixLegendEl\.addEventListener\('click'[\s\S]*toggleCrowdMetricVisibility\(metric\);/, '统一图例点击未绑定系列显隐切换');
   assert.match(block, /this\.matrixLegendEl\.addEventListener\('click'[\s\S]*toggleCrowdPeriodVisibility\(period\);/, '统一图例点击未绑定周期列显隐切换');
+  assert.match(block, /this\.matrixLegendEl\.addEventListener\('click'[\s\S]*toggleCrowdRatioVisibility\(\);/, '统一图例点击未绑定占比显隐切换');
+  assert.match(block, /this\.matrixLegendEl\.addEventListener\('click'[\s\S]*toggleCrowdInsightsVisibility\(\);/, '统一图例点击未绑定提示显隐切换');
   assert.match(block, /btn\.dataset\.crowdPeriod = String\(period\);/, '统一图例未渲染周期按钮');
+  assert.match(block, /ratioBtn\.dataset\.crowdRatioToggle = '1';/, '统一图例未渲染显示占比按钮');
+  assert.match(block, /insightBtn\.dataset\.crowdInsightToggle = '1';/, '统一图例未渲染显示提示按钮');
   assert.match(block, /classList\.toggle\(`am-hide-metric-\$\{metric\}`,\s*!this\.getCrowdMetricVisible\(metric\)\);/, '网格缺少系列显隐 class 切换');
+  assert.match(block, /this\.matrixGridEl\.classList\.toggle\('am-show-ratio-values', this\.getCrowdRatioVisible\(\)\);/, '网格缺少占比显隐 class 切换');
+  assert.match(block, /this\.matrixGridEl\.classList\.toggle\('am-hide-insights', !this\.getCrowdInsightsVisible\(\)\);/, '网格缺少提示显隐 class 切换');
+});
+
+test('单人群与多人群切换时自动联动“显示占比/显示提示”状态', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /this\.syncCrowdAuxiliaryVisibilityByMetricCount\(nextMap\);/, '人群显隐切换后未触发占比/提示自动联动');
+  assert.match(block, /if \(visibleCount <= 1\) \{[\s\S]*this\.crowdRatioVisibility = true;[\s\S]*this\.crowdInsightsVisibility = false;/, '单人群时未自动开启占比并关闭提示');
+  assert.match(block, /else \{[\s\S]*this\.crowdRatioVisibility = false;[\s\S]*this\.crowdInsightsVisibility = true;/, '多人群时未自动关闭占比并开启提示');
 });
 
 test('顶部统一图例将人群与时间按钮分组，并用竖线分隔', () => {
@@ -183,8 +212,20 @@ test('柱状图悬停提示使用即时 tooltip（data-tooltip）并绑定网格
   const block = getMagicReportBlock();
   assert.match(block, /bindCrowdMatrixHoverTipEvents\(\)\s*\{/, '缺少柱状图悬停事件绑定方法');
   assert.match(block, /showCrowdMatrixHoverTip\(tipText,\s*event\.clientX,\s*event\.clientY\);/, '悬停时未即时显示 tooltip');
+  assert.match(block, /const linkedBars = this\.activateCrowdMatrixHoverBars\(bar\);/, '悬停时未先获取跨周期联动柱集合');
+  assert.match(block, /const tipText = this\.buildCrowdMatrixHoverTipText\(bar,\s*linkedBars\);/, '悬停时未构造跨周期提示文案');
   assert.match(block, /bar\.dataset\.tooltip\s*=\s*tooltipText;/, '柱状图未写入 data-tooltip');
+  assert.match(block, /bar\.dataset\.labelIndex = String\(labelIdx\);/, '柱状图未写入标签索引');
+  assert.match(block, /bar\.dataset\.crowdGroup = String\(groupName \|\| ''\);/, '柱状图未写入维度分组标记');
+  assert.match(block, /return items\.map\(\(item\) => \{[\s\S]*过去\$\{item\.period\}天[\s\S]*\}\)\.join\('\\n'\);/, '跨周期提示文案未按周期逐行拼接');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*white-space:\s*pre-line;/, 'tooltip 样式未开启多行换行显示');
   assert.doesNotMatch(block, /bar\.title\s*=\s*`/, '柱状图仍在使用 title 作为提示，存在延迟显示问题');
+});
+
+test('柱组之间提供轻量竖向分隔线，提升横向可读性', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /am-crowd-matrix-bar-group \+ \.am-crowd-matrix-bar-group::before/, '缺少柱组间分隔线选择器');
+  assert.match(block, /background:\s*linear-gradient\(180deg,\s*rgba\(127,\s*140,\s*169,\s*0\),\s*rgba\(127,\s*140,\s*169,\s*0\.16\),\s*rgba\(127,\s*140,\s*169,\s*0\)\);/, '分隔线未使用弱化渐变样式');
 });
 
 test('周期图例切换会过滤渲染列，且不再生成 peak badge 提示', () => {
@@ -228,6 +269,10 @@ test('切换显示与隐藏会触发重绘动画', () => {
   assert.match(block, /this\.renderCrowdMatrixCharts\(this\.crowdMatrixDataset,\s*\{\s*animate:\s*true\s*\}\);/, '显示隐藏切换未触发带动画重绘');
   assert.match(block, /chart\.style\.setProperty\('--am-crowd-metric-visible-count', String\(visibleMetricCount\)\);/, '切换后未写入可见系列数量，柱宽无法自适应');
   assert.match(block, /width:\s*clamp\(\s*8px,\s*calc\(\(100% - \(var\(--am-crowd-visible-metrics\) - 1\) \* var\(--am-crowd-bar-gap\)\) \/ var\(--am-crowd-visible-metrics\)\),\s*36px\s*\);/, '柱宽未按可见系列数量做自适应公式');
+  assert.match(block, /ratioLabel\.className = 'am-crowd-matrix-bar-ratio';/, '柱状图未渲染占比标签节点');
+  assert.match(block, /ratioLabel\.textContent = this\.formatCrowdPercent\(ratio\);/, '占比标签未按百分比渲染');
+  assert.match(block, /am-crowd-matrix-grid\.am-show-ratio-values \.am-crowd-matrix-bar-ratio/, '缺少占比显示态样式选择器');
+  assert.match(block, /am-crowd-matrix-grid\.am-hide-insights \.am-crowd-matrix-insights/, '缺少提示区隐藏态样式选择器');
   assert.match(block, /if \(animateBars\) \{[\s\S]*fill\.style\.height = '0%';[\s\S]*fill\.style\.opacity = '0\.38';/, '柱状图切换动画初始状态缺失');
   assert.match(block, /requestAnimationFrame\(applyHeight\)/, '柱状图切换动画缺少 requestAnimationFrame 过渡');
 });
