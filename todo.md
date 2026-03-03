@@ -48,8 +48,8 @@
 - 本地测试：
   - `node --test tests/lifecycle-contract-safety.test.mjs tests/lifecycle-payload-builder-compat.test.mjs tests/keyword-create-repair-throttle-retry.test.mjs tests/keyword-create-repair-cleanup-id-extract.test.mjs tests/keyword-create-repair-item-binding-guard.test.mjs` 通过
   - `node --check "阿里妈妈多合一助手.js"` 通过
-- commit：待提交
-- push：待推送
+- commit：`68670d5`（fix: 修复关键词全设置清理链路与限流降频）
+- push：`origin/api/plan-create` 已推送
 
 ## 货品全站推广（安全修复进行中）
 - 问题：真实回归中触发 `oneClick` 冲突处理，存在误操作其它计划风险；且在传入商品时存在落入 `shop` 选品模式的空商品观感风险。
