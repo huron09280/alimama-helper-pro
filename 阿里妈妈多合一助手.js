@@ -593,10 +593,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (child.nodeType === 3) { // Text node
                     text += child.nodeValue;
                 } else if (child.nodeType === 1 && !child.classList.contains('am-helper-tag')) { // Element node (non-tag)
-                    text += child.textContent;
+                    if (typeof child.cloneNode === 'function') {
+                        const cloned = child.cloneNode(true);
+                        if (typeof cloned.querySelectorAll === 'function') {
+                            cloned.querySelectorAll('.am-helper-tag').forEach((tag) => tag.remove());
+                        }
+                        text += cloned.textContent;
+                    } else {
+                        text += child.textContent;
+                    }
                 }
                 child = child.nextSibling;
             }
+            text = text.replace(/，/g, ',');
             const match = text.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
             return match ? parseFloat(match[0]) : 0;
         },
@@ -40725,12 +40734,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const CREATE_FAILURE_ONE_CLICK_CONFLICT_CODE_RE = /(crossaccount-existed|onebpsite-existed|horizontal-onebpsite-existed|order-existed|daily-existed|diffbizcode-existed)/i;
         const CREATE_FAILURE_PERMISSION_RE = /(csrf|403|无权限|权限不足|风控|登录失效|bizlogin|forbidden)/i;
         const CREATE_FAILURE_MAPPING_RE = /(不支持的出价类型|INVALID_PARAMETER|参数.*(非法|错误|校验失败)|字段.*(缺失|错误)|unsupported)/i;
+        const CREATE_FAILURE_THROTTLE_RE = /(FAIL_SYS_USER_VALIDATE|被挤爆|稍后重试|系统繁忙|服务繁忙|请求过于频繁|rate.?limit|throttle|too\\s*many\\s*requests)/i;
 
         const classifyCreateFailure = (errorText = '') => {
             const text = String(errorText || '').trim();
             if (!text) return 'unknown';
             if (isWordPackageValidationError(text)) return 'keyword_word_package';
             if (CREATE_FAILURE_CONFLICT_RE.test(text)) return 'conflict';
+            if (CREATE_FAILURE_THROTTLE_RE.test(text)) return 'throttle';
             if (CREATE_FAILURE_PERMISSION_RE.test(text)) return 'permission_or_risk';
             if (CREATE_FAILURE_MAPPING_RE.test(text)) return 'mapping';
             return 'unknown';
@@ -41561,6 +41572,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 maxRetries: 1,
                 timeout: Math.max(8000, toNumber(options.requestTimeout, 22000))
             }, isPlainObject(options.requestOptions) ? options.requestOptions : {});
+            const throttleRetryTimes = Math.max(0, Math.min(6, toNumber(options.throttleRetryTimes, 2)));
+            const throttleBackoffMs = Math.max(500, toNumber(options.throttleBackoffMs, 1800));
             const shouldStop = typeof options.shouldStop === 'function'
                 ? options.shouldStop
                 : () => false;
@@ -41716,6 +41729,81 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         }];
                     const primaryFailure = failures[0] || {};
                     const classification = classifyCreateFailure(primaryFailure?.error || runError || '');
+                    if (classification === 'throttle' && throttleRetryTimes > 0) {
+                        let throttledRecovered = false;
+                        let throttleErrorText = primaryFailure?.error || runError || 'throttle_failed';
+                        for (let retryAttempt = 1; retryAttempt <= throttleRetryTimes; retryAttempt += 1) {
+                            emitProgress(options, 'throttle_retry_pending', {
+                                sceneName,
+                                goalLabel,
+                                caseId: caseInfo.caseId || '',
+                                retryAttempt,
+                                retryMax: throttleRetryTimes,
+                                waitMs: throttleBackoffMs * retryAttempt,
+                                error: throttleErrorText
+                            });
+                            await sleep(throttleBackoffMs * retryAttempt);
+                            if (Array.isArray(request?.plans) && request.plans[0]) {
+                                request.plans[0].planName = `${sceneName}_${nowStampSeconds()}_${String(globalCaseSeq).padStart(4, '0')}_throttle_${retryAttempt}`;
+                            }
+                            let retryResult = null;
+                            let retryError = '';
+                            try {
+                                retryResult = await createPlansByScene(sceneName, request, {
+                                    fallbackPolicy,
+                                    batchRetry: 0,
+                                    chunkSize: 1,
+                                    applySceneSpec: false,
+                                    syncSceneRuntime: false,
+                                    strictSceneRuntimeMatch: false,
+                                    requestOptions
+                                });
+                            } catch (err) {
+                                retryError = err?.message || String(err);
+                            }
+                            if (!retryError && retryResult?.ok) {
+                                const retrySuccesses = Array.isArray(retryResult.successes) ? retryResult.successes : [];
+                                retrySuccesses.forEach(entry => {
+                                    const campaignId = toPositiveIdText(entry?.campaignId || '');
+                                    if (!campaignId) return;
+                                    createdRecords.push({
+                                        sceneName,
+                                        goalLabel,
+                                        caseId: caseInfo.caseId || '',
+                                        campaignId,
+                                        itemId: targetItemId
+                                    });
+                                });
+                                sceneStats.pass += 1;
+                                sceneStats.repaired += 1;
+                                emitProgress(options, 'case_passed_after_throttle_retry', {
+                                    sceneName,
+                                    goalLabel,
+                                    caseId: caseInfo.caseId || '',
+                                    retryAttempt,
+                                    successCount: retrySuccesses.length
+                                });
+                                throttledRecovered = true;
+                                break;
+                            }
+                            throttleErrorText = retryError || (Array.isArray(retryResult?.failures) && retryResult.failures.length
+                                ? retryResult.failures[0]?.error || 'throttle_retry_failed'
+                                : 'throttle_retry_failed');
+                        }
+                        if (throttledRecovered) {
+                            continue;
+                        }
+                        unresolvedFailures.push({
+                            sceneName,
+                            goalLabel,
+                            caseId: caseInfo.caseId || '',
+                            itemId: targetItemId,
+                            classification,
+                            error: throttleErrorText
+                        });
+                        sceneStats.failed += 1;
+                        continue;
+                    }
                     if (classification === 'conflict' && conflictPolicy === 'auto_stop_retry') {
                         emitProgress(options, 'conflict_detected', {
                             sceneName,
@@ -41913,6 +42001,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             createShopDirectPlansBatch,
             createContentPlansBatch,
             createLeadPlansBatch,
+            runCreateRepairByItem,
             appendKeywords,
             suggestKeywords,
             suggestCrowds,
@@ -42779,6 +42868,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         'createShopDirectPlansBatch',
         'createContentPlansBatch',
         'createLeadPlansBatch',
+        'runCreateRepairByItem',
         'appendKeywords',
         'suggestKeywords',
         'suggestCrowds',
@@ -42896,7 +42986,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     var CHANNEL = ${JSON.stringify(API_BRIDGE_MSG_CHANNEL)};
                     var METHODS = ${JSON.stringify(API_BRIDGE_METHODS)};
                     var BUILD = ${JSON.stringify(KeywordPlanApi.buildVersion || '')};
-                    var METHOD_TIMEOUTS = {};
+                    var METHOD_TIMEOUTS = {
+                        runCreateRepairByItem: 30 * 60 * 1000
+                    };
                     var resolveTimeout = function(method) {
                         var methodKey = String(method || '').trim();
                         if (!methodKey) return 180000;

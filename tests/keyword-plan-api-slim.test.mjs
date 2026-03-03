@@ -33,6 +33,7 @@ const keptMethods = [
   'createShopDirectPlansBatch',
   'createContentPlansBatch',
   'createLeadPlansBatch',
+  'runCreateRepairByItem',
   'appendKeywords',
   'suggestKeywords',
   'suggestCrowds',
@@ -58,7 +59,6 @@ const removedMethods = [
   'extractLifecycleContracts',
   'getLifecycleContract',
   'resolveCreateConflicts',
-  'runCreateRepairByItem',
   'validateSceneRequest'
 ];
 
