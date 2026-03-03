@@ -37655,9 +37655,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             ? String(strategy.sceneName).trim()
                             : selectedSceneName;
                         const isKeywordScene = strategySceneName === '关键词推广';
-                        let strategySceneSettings = normalizeSceneSettingsObject(
-                            strategy?.sceneSettings || getSceneSettingsForRequest(strategySceneName)
-                        );
+                        let strategySceneSettings = normalizeSceneSettingsObject(strategy?.sceneSettings || {});
+                        if (!Object.keys(strategySceneSettings).length && isPlainObject(strategy?.sceneSettingValues)) {
+                            strategySceneSettings = normalizeSceneSettingsObject(
+                                normalizeSceneSettingBucketValues(strategy.sceneSettingValues || {})
+                            );
+                        }
+                        if (!Object.keys(strategySceneSettings).length) {
+                            strategySceneSettings = normalizeSceneSettingsObject(
+                                getSceneSettingsForRequest(strategySceneName)
+                            );
+                        }
                         const strategyBidMode = normalizeBidMode(strategy.bidMode || wizardState.draft.bidMode || 'smart', 'smart');
                         const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
                         const strategyBidTargetOptionValue = normalizeKeywordBidTargetOptionValue(strategyBidTargetV2) || strategyBidTargetV2;
@@ -37697,6 +37705,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const strategyMarketingGoal = normalizeGoalLabel(
                             resolveStrategyMarketingGoal(strategy, strategySceneSettings, strategySceneName)
                         );
+                        if (isKeywordScene && strategyMarketingGoal) {
+                            strategySceneSettings = mergeDeep({}, strategySceneSettings, {
+                                营销目标: strategyMarketingGoal
+                            });
+                            strategySceneSettings.选择卡位方案 = strategyMarketingGoal;
+                        }
                         const strategySubmitBidTargetV2 = resolveKeywordCustomBidTargetAlias(strategyBidTargetV2, strategyMarketingGoal);
                         if (strategyMarketingGoal) {
                             if (!strategyGoalSetByScene.has(strategySceneName)) {

@@ -60,3 +60,12 @@
   - `node --test tests/site-scene-item-binding.test.mjs` 通过
   - `node --test tests/site-scene-submit-mode.test.mjs` 通过
   - `node --check "阿里妈妈多合一助手.js"` 通过
+
+## 关键词推广（编辑计划链路补修）
+- 反馈：向导“编辑计划”里关键词策略未看到对应修复，担心编辑值和提交值不一致。
+- 修复：
+  - `buildRequestFromWizard` 新增兜底：当 `strategy.sceneSettings` 为空时，先用 `strategy.sceneSettingValues` 回填，再兜底到场景默认。
+  - 关键词策略提交前强制同步 `营销目标/选择卡位方案` 到当前策略 `sceneSettings`，避免编辑计划与提交目标不一致。
+- 验证：
+  - `node --test tests/keyword-edit-request-scene-settings-sync.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-scene-settings-sync.test.mjs` 通过
+  - `node --check "阿里妈妈多合一助手.js"` 通过
