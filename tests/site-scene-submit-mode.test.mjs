@@ -191,6 +191,15 @@ test('非全站场景单计划支持同计划并发 3 次提交', () => {
   );
 });
 
+test('createPlansBatch 默认禁用冲突处理，避免误操作其它计划', () => {
+  const block = getCreatePlansBatchBlock();
+  assert.match(
+    block,
+    /const conflictPolicy = String\([\s\S]*options\?\.conflictPolicy[\s\S]*mergedRequest\?\.conflictPolicy[\s\S]*\|\| 'none'[\s\S]*\)\.trim\(\) \|\| 'none';/,
+    'createPlansBatch 默认 conflictPolicy 不是 none，存在误操作其它计划风险'
+  );
+});
+
 test('禁用兜底重试时，失败计划不会再次单条提交', () => {
   const block = getCreatePlansBatchBlock();
   assert.match(

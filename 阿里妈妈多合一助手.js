@@ -440,9 +440,36 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
     const State = {
         config: loadConfig(),
+        riskAlertLastUrl: '',
         save() {
             localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(this.config));
         }
+    };
+
+    const RISK_CHALLENGE_URL_RE = /\/_____tmd_____\/punish/i;
+    const RISK_CHALLENGE_STEP_RE = /[?&]x5step=1(?:&|$)/i;
+
+    const isRiskChallengePage = (url = '') => {
+        const href = String(url || window.location.href || '').trim();
+        if (!href) return false;
+        return RISK_CHALLENGE_URL_RE.test(href) || RISK_CHALLENGE_STEP_RE.test(href);
+    };
+
+    const notifyRiskChallengeIfNeeded = (url = '') => {
+        const href = String(url || window.location.href || '').trim();
+        if (!isRiskChallengePage(href)) {
+            State.riskAlertLastUrl = '';
+            return false;
+        }
+        if (State.riskAlertLastUrl === href) return true;
+        State.riskAlertLastUrl = href;
+        Logger.warn('⚠️ 检测到阿里妈妈风控页，请手动完成人机验证后继续');
+        setTimeout(() => {
+            try {
+                alert('检测到阿里妈妈风控页，请先手动完成人机验证（滑块/短信/扫码）后再继续操作。');
+            } catch { }
+        }, 0);
+        return true;
     };
 
     // ==========================================
@@ -10442,6 +10469,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         // NOTE: MagicReport 采用 iframe 方案，无需 init，按需创建
 
         Logger.log(`🚀 阿里助手 Pro v${CURRENT_VERSION} 已启动`);
+        notifyRiskChallengeIfNeeded(window.location.href);
 
         let lastUrl = window.location.href;
         let lastUrlResetAt = 0;
@@ -10452,8 +10480,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (now - lastUrlResetAt < 300) return;
                 lastUrlResetAt = now;
                 resetSortState('页面切换');
+                notifyRiskChallengeIfNeeded(lastUrl);
             }
         };
+        const hookHistoryMethod = (methodName = '') => {
+            try {
+                const historyRef = window.history;
+                const original = historyRef?.[methodName];
+                if (typeof original !== 'function') return;
+                if (original.__amRiskHooked === true) return;
+                const wrapped = function (...args) {
+                    const ret = original.apply(this, args);
+                    checkUrlChange();
+                    return ret;
+                };
+                Object.defineProperty(wrapped, '__amRiskHooked', {
+                    value: true,
+                    configurable: false,
+                    enumerable: false,
+                    writable: false
+                });
+                historyRef[methodName] = wrapped;
+            } catch { }
+        };
+        hookHistoryMethod('pushState');
+        hookHistoryMethod('replaceState');
         window.addEventListener('hashchange', checkUrlChange);
         window.addEventListener('popstate', checkUrlChange);
 
@@ -11004,11 +11055,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         // 带重试的请求
         request: async (url, data, options = {}) => {
             const { maxRetries = 3, timeout = 30000, retryDelay = 2000, signal } = options;
+            const parsedMaxRetries = Number(maxRetries);
+            const totalAttempts = Number.isFinite(parsedMaxRetries)
+                ? Math.max(1, Math.floor(parsedMaxRetries))
+                : 3;
             let lastError = null;
 
-            Logger.info(`📡 API请求: ${url.split('/').pop()}`, { maxRetries, timeout });
+            Logger.info(`📡 API请求: ${url.split('/').pop()}`, { maxRetries: totalAttempts, timeout });
 
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            for (let attempt = 1; attempt <= totalAttempts; attempt++) {
                 try {
                     const result = await API._singleRequest(url, data, timeout, signal);
                     Logger.info(`✓ 请求成功 (第${attempt}次)`);
@@ -11016,17 +11071,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 } catch (err) {
                     lastError = err;
                     if (err.name === 'AbortError') throw err;
-                    Logger.warn(`✗ 请求失败 (第${attempt}/${maxRetries}次): ${err.message}`);
+                    Logger.warn(`✗ 请求失败 (第${attempt}/${totalAttempts}次): ${err.message}`);
 
-                    if (attempt < maxRetries) {
+                    if (attempt < totalAttempts) {
                         Logger.info(`⏳ ${retryDelay / 1000}秒后重试...`);
                         await Utils.delay(retryDelay);
                     }
                 }
             }
 
-            Logger.error(`❌ 请求最终失败: ${lastError.message}`, { url, attempts: maxRetries });
-            throw lastError;
+            const finalError = lastError instanceof Error
+                ? lastError
+                : new Error(`请求失败：未捕获到具体异常（maxRetries=${totalAttempts}）`);
+            Logger.error(`❌ 请求最终失败: ${finalError.message}`, { url, attempts: totalAttempts });
+            throw finalError;
         }
     };
 
@@ -14288,6 +14346,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 persistSceneLifecycleContractCache();
                 return null;
             }
+            if (!isLifecycleContractUsable(normalizedAction, entry.data)) {
+                delete sceneLifecycleContractCache.map[key];
+                persistSceneLifecycleContractCache();
+                return null;
+            }
             return deepClone(entry.data);
         };
 
@@ -14295,6 +14358,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const scene = String(sceneName || '').trim();
             const normalizedAction = normalizeLifecycleAction(action);
             if (!scene || !normalizedAction || !isPlainObject(contract)) return;
+            if (!isLifecycleContractUsable(normalizedAction, contract)) return;
             loadSceneLifecycleContractCache();
             const key = buildSceneLifecycleContractCacheKey(scene, normalizedAction);
             sceneLifecycleContractCache.map[key] = {
@@ -14346,6 +14410,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     action: normalizedAction,
                     contract: direct,
                     fallbackUsed: false,
+                    error: ''
+                };
+            }
+            const fallbackContract = getFallbackLifecycleContract(targetScene, normalizedAction);
+            if (fallbackContract) {
+                setCachedSceneLifecycleContract(targetScene, normalizedAction, fallbackContract);
+                return {
+                    ok: true,
+                    sceneName: targetScene,
+                    action: normalizedAction,
+                    contract: fallbackContract,
+                    fallbackUsed: true,
                     error: ''
                 };
             }
@@ -16279,18 +16355,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         };
 
-        const LIFECYCLE_LIST_PATH_RE = /\/(?:campaign|solution|plan|bp)[^?]*?(?:list|query|find|get)[^?]*?\.json$/i;
-        const LIFECYCLE_PAUSE_PATH_RE = /\/(?:campaign|solution|plan|bp)[^?]*?(?:pause|offline|stop|suspend|update(?:Batch)?Status|changeStatus|setStatus|onlineStatus)[^?]*?\.json$/i;
-        const LIFECYCLE_DELETE_PATH_RE = /\/(?:campaign|solution|plan|bp)[^?]*?(?:delete|remove|batchDelete|del|recycle)[^?]*?\.json$/i;
-        const LIFECYCLE_CONFLICT_LIST_PATH_RE = /\/campaign\/(?:horizontal\/findPage|diff\/findList)\.json$/i;
-        const LIFECYCLE_IGNORE_PATH_RE = /\/(?:material\/item\/findPage|bidword\/suggest|wordpackage\/suggest|label\/findList)\.json$/i;
+        const LIFECYCLE_LIST_PATH_RE = /\/(?:campaign|plan)(?:\/[^?]*)?(?:list|query|find|get)[^?]*?\.json$/i;
+        const LIFECYCLE_PAUSE_PATH_RE = /\/(?:campaign|plan)(?:\/[^?]*)?(?:pause|offline|stop|suspend|updatePart|update(?:Batch)?Status|changeStatus|setStatus|onlineStatus)[^?]*?\.json$/i;
+        const LIFECYCLE_DELETE_PATH_RE = /\/(?:campaign|plan)(?:\/[^?]*)?(?:delete|remove|batchDelete|del|recycle)[^?]*?\.json$/i;
+        const LIFECYCLE_CONFLICT_LIST_PATH_RE = /\/campaign\/(?:horizontal\/findPage|diff\/findList|findPage|findList)\.json$/i;
+        const LIFECYCLE_IGNORE_PATH_RE = /\/(?:material\/item\/findPage|bidword\/suggest|wordpackage\/suggest|label\/findList|algo\/getBudgetSuggestion|cube\/triggerDynamicModule|component\/findList)\.json$/i;
 
-        const inferLifecycleActionFromContract = (contract = {}, options = {}) => {
-            const path = normalizeCapturePath(contract?.path || contract?.endpoint || '');
-            if (!path) return '';
-            if (isGoalCreateSubmitPath(path)) return 'create';
-            if (LIFECYCLE_IGNORE_PATH_RE.test(path)) return '';
-
+        const buildLifecycleMergedKeyText = (contract = {}) => {
             const bodyKeys = Array.isArray(contract?.bodyKeys)
                 ? contract.bodyKeys
                 : (Array.isArray(contract?.requestKeys) ? contract.requestKeys : []);
@@ -16298,30 +16369,113 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 ? contract.bodyKeyPaths
                 : (Array.isArray(contract?.requestKeyPaths) ? contract.requestKeyPaths : []);
             const queryKeys = Array.isArray(contract?.queryKeys) ? contract.queryKeys : [];
-            const mergedKeyText = bodyKeys.concat(bodyKeyPaths, queryKeys).map(item => String(item || '').toLowerCase()).join('|');
-            const forceAction = normalizeLifecycleAction(options?.forceAction || '');
-            if (forceAction) return forceAction;
+            return bodyKeys
+                .concat(bodyKeyPaths, queryKeys)
+                .map(item => String(item || '').toLowerCase())
+                .join('|');
+        };
 
-            if (LIFECYCLE_DELETE_PATH_RE.test(path)) return 'delete';
-            if (LIFECYCLE_PAUSE_PATH_RE.test(path)) return 'pause';
-            if (LIFECYCLE_CONFLICT_LIST_PATH_RE.test(path)) return 'list_conflict';
-            if (LIFECYCLE_LIST_PATH_RE.test(path)) {
-                const hasListHint = /(itemid|materialid|campaignid|planid|status|online|offset|pagesize|page|keyword)/.test(mergedKeyText);
-                if (hasListHint) return 'list_conflict';
+        const hasLifecycleCampaignIdHint = (keyText = '') => (
+            /(campaignid|planid|targetcampaignid|campaignidlist|planidlist|entitylist\[\]\.campaignid)/.test(keyText)
+        );
+        const hasLifecycleItemIdHint = (keyText = '') => (
+            /(itemid|materialid|auctionid|itemidlist|materialidlist)/.test(keyText)
+        );
+        const hasLifecycleStatusHint = (keyText = '') => (
+            /(status|onlinestatus|offlinestatus|desiredstatus|pause|offline|suspend|online)/.test(keyText)
+        );
+
+        const isLifecycleContractUsable = (action = '', contract = {}) => {
+            const normalizedAction = normalizeLifecycleAction(action);
+            if (!normalizedAction) return false;
+            const path = normalizeCapturePath(contract?.path || contract?.endpoint || '');
+            if (!path) return false;
+            if (LIFECYCLE_IGNORE_PATH_RE.test(path)) return false;
+            if (normalizedAction === 'create') {
+                return isGoalCreateSubmitPath(path);
             }
 
-            if (/delete|remove|batchdelete|recycle/.test(mergedKeyText)) return 'delete';
-            if (/(pause|offline|online|status|suspend)/.test(mergedKeyText)
-                && /(campaignid|planid|campaignidlist|planidlist)/.test(mergedKeyText)) return 'pause';
-            if (/(itemid|materialid)/.test(mergedKeyText)
-                && /(list|query|find|get|search)/.test(path.toLowerCase())) return 'list_conflict';
+            const mergedKeyText = buildLifecycleMergedKeyText(contract);
+            if (normalizedAction === 'delete') {
+                return LIFECYCLE_DELETE_PATH_RE.test(path)
+                    && hasLifecycleCampaignIdHint(mergedKeyText);
+            }
+            if (normalizedAction === 'pause') {
+                return LIFECYCLE_PAUSE_PATH_RE.test(path)
+                    && hasLifecycleCampaignIdHint(mergedKeyText)
+                    && (
+                        hasLifecycleStatusHint(mergedKeyText)
+                        || /updatepart|status|online|offline|pause|suspend|stop/i.test(path)
+                    );
+            }
+            if (normalizedAction === 'list_conflict') {
+                if (LIFECYCLE_CONFLICT_LIST_PATH_RE.test(path)) return true;
+                if (!LIFECYCLE_LIST_PATH_RE.test(path)) return false;
+                if (!/\/campaign\//i.test(path)) return false;
+                return hasLifecycleItemIdHint(mergedKeyText) || hasLifecycleCampaignIdHint(mergedKeyText);
+            }
+            return false;
+        };
 
+        const getFallbackLifecycleContract = (sceneName = '', action = '') => {
+            const targetScene = String(sceneName || '').trim();
+            const normalizedAction = normalizeLifecycleAction(action);
+            if (!targetScene || !normalizedAction) return null;
+            if (normalizedAction === 'pause') {
+                return {
+                    sceneName: targetScene,
+                    action: normalizedAction,
+                    method: 'POST',
+                    endpoint: '/campaign/updatePart.json',
+                    requestKeys: ['campaignId', 'onlineStatus'],
+                    requestKeyPaths: ['campaignId', 'onlineStatus'],
+                    queryKeys: [],
+                    bodyKeys: ['campaignId', 'onlineStatus'],
+                    bodyKeyPaths: ['campaignId', 'onlineStatus'],
+                    responseShape: {},
+                    sampleBody: null,
+                    count: 1,
+                    source: 'builtin_fallback',
+                    sampledAt: new Date().toISOString()
+                };
+            }
+            if (normalizedAction === 'delete') {
+                return {
+                    sceneName: targetScene,
+                    action: normalizedAction,
+                    method: 'POST',
+                    endpoint: '/campaign/delete.json',
+                    requestKeys: ['campaignIdList'],
+                    requestKeyPaths: ['campaignIdList'],
+                    queryKeys: [],
+                    bodyKeys: ['campaignIdList'],
+                    bodyKeyPaths: ['campaignIdList'],
+                    responseShape: {},
+                    sampleBody: null,
+                    count: 1,
+                    source: 'builtin_fallback',
+                    sampledAt: new Date().toISOString()
+                };
+            }
+            return null;
+        };
+
+        const inferLifecycleActionFromContract = (contract = {}, options = {}) => {
+            const path = normalizeCapturePath(contract?.path || contract?.endpoint || '');
+            if (!path) return '';
+            const forceAction = normalizeLifecycleAction(options?.forceAction || '');
+            if (forceAction && isLifecycleContractUsable(forceAction, contract)) return forceAction;
+            if (isLifecycleContractUsable('create', contract)) return 'create';
+            if (isLifecycleContractUsable('delete', contract)) return 'delete';
+            if (isLifecycleContractUsable('pause', contract)) return 'pause';
+            if (isLifecycleContractUsable('list_conflict', contract)) return 'list_conflict';
             return '';
         };
 
         const scoreLifecycleContractCandidate = (action = '', contract = {}) => {
             const normalizedAction = normalizeLifecycleAction(action);
             if (!normalizedAction) return -1;
+            if (!isLifecycleContractUsable(normalizedAction, contract)) return -1;
             const path = normalizeCapturePath(contract?.path || contract?.endpoint || '');
             const count = Math.max(1, toNumber(contract?.count, 1));
             const bodyKeys = Array.isArray(contract?.bodyKeys) ? contract.bodyKeys : [];
@@ -16685,11 +16839,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         contract: null
                     };
                 }
-                const picked = list.slice().sort((left, right) => {
-                    const scoreDiff = scoreLifecycleContractCandidate(action, right) - scoreLifecycleContractCandidate(action, left);
+                const candidates = list
+                    .map(item => ({
+                        item,
+                        score: scoreLifecycleContractCandidate(action, item)
+                    }))
+                    .filter(row => row.score >= 0);
+                if (!candidates.length) {
+                    return {
+                        action,
+                        ok: false,
+                        error: 'not_detected',
+                        contract: null
+                    };
+                }
+                const picked = candidates.sort((left, right) => {
+                    const scoreDiff = right.score - left.score;
                     if (scoreDiff !== 0) return scoreDiff;
-                    return normalizeCapturePath(String(right?.path || '')).length - normalizeCapturePath(String(left?.path || '')).length;
-                })[0];
+                    return normalizeCapturePath(String(right?.item?.path || '')).length
+                        - normalizeCapturePath(String(left?.item?.path || '')).length;
+                })[0]?.item;
                 const normalized = normalizeLifecycleContract(targetScene, action, picked, {
                     source: 'network_listener'
                 });
@@ -18168,16 +18337,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (isPlainObject(item)) {
                             const materialId = toIdValue(item?.materialId || item?.itemId);
                             if (!materialId) return null;
+                            const resolvedMaterialName = String(item?.materialName || item?.name || '').trim() || `商品${materialId}`;
                             return {
                                 materialId,
-                                materialName: String(item?.materialName || item?.name || '').trim()
+                                materialName: resolvedMaterialName
                             };
                         }
                         const materialId = toIdValue(item);
                         if (!materialId) return null;
                         return {
                             materialId,
-                            materialName: ''
+                            materialName: `商品${materialId}`
                         };
                     })
                     .filter(item => item && item.materialId),
@@ -18186,7 +18356,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (normalized.length) return normalized.slice(0, 10);
             const fallbackId = toIdValue(SCENE_SYNC_DEFAULT_ITEM_ID);
             return fallbackId
-                ? [{ materialId: fallbackId, materialName: '' }]
+                ? [{ materialId: fallbackId, materialName: `商品${fallbackId}` }]
                 : [];
         };
 
@@ -19338,9 +19508,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     : [];
             }
             if (item && (item.materialId || item.itemId)) {
+                const fallbackMaterialName = `商品${item.itemId || item.materialId || ''}`;
+                const materialName = String(item.materialName || '').trim() || fallbackMaterialName;
                 out.material = pickMaterialFields(mergeDeep(input.material || {}, {
                     materialId: toIdValue(item.materialId || item.itemId),
-                    materialName: item.materialName || '',
+                    materialName,
                     promotionType: DEFAULTS.promotionType,
                     subPromotionType: DEFAULTS.subPromotionType,
                     fromTab: item.fromTab || 'manual',
@@ -19621,7 +19793,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 ? template.adgroupList[0]
                 : {};
             const capabilityFallback = {
-                '货品全站推广': { hasMaterial: true, hasItemIdList: false, hasWordList: false, hasWordPackageList: false, hasRightList: false },
+                '货品全站推广': { hasMaterial: true, hasItemIdList: true, hasWordList: false, hasWordPackageList: false, hasRightList: false },
                 '关键词推广': { hasMaterial: true, hasItemIdList: true, hasWordList: true, hasWordPackageList: true, hasRightList: true },
                 '人群推广': { hasMaterial: false, hasItemIdList: true, hasWordList: false, hasWordPackageList: false, hasRightList: true },
                 '店铺直达': { hasMaterial: true, hasItemIdList: false, hasWordList: false, hasWordPackageList: true, hasRightList: false },
@@ -19674,7 +19846,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 hasMaterial: SCENE_FORCE_ADGROUP_MATERIAL[normalizedScene]
                     ? true
                     : (normalizedScene === '关键词推广' ? true : (hasMaterial || (!!capabilityFallback.hasMaterial && useFallbackCapability))),
-                hasItemIdList: normalizedScene === '关键词推广' ? true : hasItemIdList,
+                // 货品全站推广同样依赖 itemIdList 绑定商品，避免创建后出现空商品计划。
+                hasItemIdList: (normalizedScene === '关键词推广' || normalizedScene === '货品全站推广') ? true : hasItemIdList,
                 hasWordList: normalizedScene === '关键词推广' ? true : hasWordList,
                 hasWordPackageList: normalizedScene === '关键词推广' ? true : hasWordPackageList,
                 hasRightList
@@ -19692,6 +19865,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const requiresItem = options.requiresItem !== false;
             const commonBidMode = normalizeBidMode(request?.common?.bidMode || request?.bidMode || '', 'smart');
             const plans = Array.isArray(request?.plans) ? request.plans.map(plan => ({ ...plan })) : [];
+            const fallbackRequestItemId = String(toIdValue(request?.itemId || request?.materialId || '')).trim();
+            const fallbackRequestItemName = String(request?.itemName || request?.materialName || '').trim();
             if (!plans.length) {
                 const prefix = resolvePlanNamePrefix(request);
                 if (!preferredItems.length) {
@@ -19734,6 +19909,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         materialId: normalized.itemId,
                         itemId: normalized.itemId,
                         materialName: normalized.itemName || ''
+                    });
+                } else if (fallbackRequestItemId) {
+                    normalized.itemId = fallbackRequestItemId;
+                    normalized.item = normalizeItem({
+                        materialId: fallbackRequestItemId,
+                        itemId: fallbackRequestItemId,
+                        materialName: fallbackRequestItemName || ''
                     });
                 } else if (preferredItems[fillCursor]) {
                     normalized.item = normalizeItem(preferredItems[fillCursor]);
@@ -21356,7 +21538,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 if (sceneCapabilities.sceneName === '货品全站推广') {
                     merged.campaign.promotionScene = merged.campaign.promotionScene || runtimeForScene?.storeData?.promotionScene || 'promotion_scene_site';
-                    merged.campaign.itemSelectedMode = merged.campaign.itemSelectedMode || runtimeForScene?.storeData?.itemSelectedMode || 'user_define';
+                    merged.campaign.itemSelectedMode = hasItem
+                        ? 'user_define'
+                        : (merged.campaign.itemSelectedMode || runtimeForScene?.storeData?.itemSelectedMode || 'user_define');
                     merged.campaign.bidType = merged.campaign.bidType || runtimeForScene?.storeData?.bidType || 'roi_control';
                     merged.campaign.optimizeTarget = merged.campaign.optimizeTarget || runtimeForScene?.storeData?.optimizeTarget || 'ad_strategy_retained_buy';
                     const siteBidType = String(merged.campaign.bidType || '').trim().toLowerCase();
@@ -21429,6 +21613,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ]
                         .map(item => toNumber(item, NaN))
                         .find(item => Number.isFinite(item) && item > 0);
+                    const siteBudgetFallback = toNumber(
+                        plan?.budget?.dayBudget
+                        ?? plan?.budget?.dayAverageBudget
+                        ?? request?.common?.dayAverageBudget
+                        ?? request?.dayAverageBudget
+                        ?? 100,
+                        100
+                    );
+                    const resolvedSiteBudget = Number.isFinite(siteBudgetValue) && siteBudgetValue > 0
+                        ? siteBudgetValue
+                        : (Number.isFinite(siteBudgetFallback) && siteBudgetFallback > 0 ? siteBudgetFallback : 100);
                     if (siteDmcType === 'unlimit') {
                         delete merged.campaign.dayBudget;
                         delete merged.campaign.dayAverageBudget;
@@ -21436,9 +21631,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         delete merged.campaign.futureBudget;
                     } else {
                         merged.campaign.dmcType = 'normal';
-                        if (Number.isFinite(siteBudgetValue) && siteBudgetValue > 0) {
-                            merged.campaign.dayBudget = siteBudgetValue;
-                        }
+                        merged.campaign.dayBudget = resolvedSiteBudget;
                         delete merged.campaign.dayAverageBudget;
                         delete merged.campaign.totalBudget;
                         delete merged.campaign.futureBudget;
@@ -21603,6 +21796,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         'orderChargeType'
                     ];
                     optionalKeys.forEach(key => {
+                        if (key === 'itemIdList' && hasItem && sceneCapabilities.hasItemIdList) return;
                         if (hasOwn(templateCampaign, key)) return;
                         if (hasExplicitCampaignField(key)) return;
                         if (sceneCapabilities.sceneName === '人群推广' && key === 'bidTypeV2') return;
@@ -21664,6 +21858,75 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return res?.info?.message || res?.message || '';
         };
 
+        const CREATE_RESPONSE_CAMPAIGN_ID_KEYS = ['campaignId', 'planId', 'id', 'bpCampaignId', 'targetCampaignId'];
+        const CREATE_RESPONSE_CAMPAIGN_ID_LIST_KEYS = ['campaignIdList', 'planIdList', 'campaignIds', 'planIds', 'idList'];
+
+        const toCreateCampaignIdText = (value) => {
+            if (value === undefined || value === null || value === '') return '';
+            const text = String(value).trim();
+            return /^\d{4,}$/.test(text) ? text : '';
+        };
+
+        const pickCreateCampaignIdFromNode = (node = null) => {
+            if (!node || typeof node !== 'object') return '';
+            for (let i = 0; i < CREATE_RESPONSE_CAMPAIGN_ID_KEYS.length; i++) {
+                const key = CREATE_RESPONSE_CAMPAIGN_ID_KEYS[i];
+                const id = toCreateCampaignIdText(node[key]);
+                if (id) return id;
+            }
+            for (let i = 0; i < CREATE_RESPONSE_CAMPAIGN_ID_LIST_KEYS.length; i++) {
+                const key = CREATE_RESPONSE_CAMPAIGN_ID_LIST_KEYS[i];
+                const list = Array.isArray(node[key]) ? node[key] : [];
+                for (let j = 0; j < list.length; j++) {
+                    const id = toCreateCampaignIdText(list[j]);
+                    if (id) return id;
+                }
+            }
+            return '';
+        };
+
+        const collectCreateCampaignIdsFromResponse = (res = {}, out = []) => {
+            const push = (value) => {
+                const id = toCreateCampaignIdText(value);
+                if (!id) return;
+                out.push(id);
+            };
+            const appendNode = (node = null) => {
+                if (!node || typeof node !== 'object') return;
+                push(pickCreateCampaignIdFromNode(node));
+                CREATE_RESPONSE_CAMPAIGN_ID_LIST_KEYS.forEach((key) => {
+                    const list = Array.isArray(node[key]) ? node[key] : [];
+                    list.forEach(push);
+                });
+            };
+            appendNode(res?.data || {});
+            const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
+            createdList.forEach((node) => appendNode(node));
+            const detailList = Array.isArray(res?.data?.errorDetails) ? res.data.errorDetails : [];
+            detailList.forEach((detail) => {
+                if (isPlainObject(detail?.result)) {
+                    appendNode(detail.result);
+                } else if (isPlainObject(detail)) {
+                    appendNode(detail);
+                }
+            });
+            return out;
+        };
+
+        const extractCreatedCampaignIdsFromCreateResult = (result = {}) => {
+            const out = [];
+            const successList = Array.isArray(result?.successes) ? result.successes : [];
+            successList.forEach((entry) => {
+                const id = pickCreateCampaignIdFromNode(entry);
+                if (id) out.push(id);
+            });
+            if (!out.length) {
+                const rawResponses = Array.isArray(result?.rawResponses) ? result.rawResponses : [];
+                rawResponses.forEach((res) => collectCreateCampaignIdsFromResponse(res, out));
+            }
+            return uniqueBy(out, id => id);
+        };
+
         const parseAddListOutcome = (res, entries = []) => {
             const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
             const detailList = Array.isArray(res?.data?.errorDetails) ? res.data.errorDetails : [];
@@ -21675,8 +21938,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             entries.forEach((entry, idx) => {
                 const created = createdList[idx] || {};
                 const detail = detailList[idx] || (detailList.length === 1 ? detailList[0] : null);
-                const campaignId = created?.campaignId || null;
-                if (campaignId) {
+                const createdCampaignId = pickCreateCampaignIdFromNode(created);
+                const detailCode = detail?.code || '';
+                const detailMsg = detail?.msg || '';
+                const detailHasError = !!(detailCode || detailMsg || created?.errorMsg);
+                const detailCampaignId = pickCreateCampaignIdFromNode(isPlainObject(detail?.result) ? detail.result : detail);
+                const rootCampaignId = entries.length === 1 ? pickCreateCampaignIdFromNode(res?.data || {}) : '';
+                const campaignId = createdCampaignId
+                    || (!detailHasError ? (detailCampaignId || rootCampaignId) : '');
+                if (campaignId && (!detailHasError || !!createdCampaignId)) {
                     successes.push({
                         planName: entry.meta.planName,
                         item: entry.meta.item,
@@ -21692,8 +21962,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return;
                 }
 
-                const detailCode = detail?.code || '';
-                const detailMsg = detail?.msg || '';
                 const error = created?.errorMsg
                     || (detailCode || detailMsg ? `${detailCode || 'ERROR'}：${detailMsg || '服务端返回失败'}` : '')
                     || globalError
@@ -21997,9 +22265,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const conflictPolicy = String(
                 options?.conflictPolicy
                 || mergedRequest?.conflictPolicy
-                || REPAIR_DEFAULTS.conflictPolicy
-                || 'auto_stop_retry'
-            ).trim() || 'auto_stop_retry';
+                || 'none'
+            ).trim() || 'none';
             const stopScope = String(
                 options?.stopScope
                 || mergedRequest?.stopScope
@@ -35362,9 +35629,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 .map(item => {
                                                     const materialId = toIdValue(item?.materialId || item?.itemId);
                                                     if (!materialId) return null;
+                                                    const resolvedMaterialName = String(item?.materialName || item?.name || '').trim() || `商品${materialId}`;
                                                     return {
                                                         materialId,
-                                                        materialName: String(item?.materialName || item?.name || '').trim()
+                                                        materialName: resolvedMaterialName
                                                     };
                                                 })
                                                 .filter(item => item && item.materialId),
@@ -35373,7 +35641,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         if (list.length) return list.slice(0, 10);
                                         const fallbackId = toIdValue(SCENE_SYNC_DEFAULT_ITEM_ID);
                                         return fallbackId
-                                            ? [{ materialId: fallbackId, materialName: '' }]
+                                            ? [{ materialId: fallbackId, materialName: `商品${fallbackId}` }]
                                             : [];
                                     };
                                     const resolveCrowdGoalLabel = () => {
@@ -37765,7 +38033,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bidMode: normalizeBidMode(plan.bidMode || '', 'smart'),
                     item: {
                         materialId: item.materialId || item.itemId || '',
-                        materialName: item.materialName || ''
+                        materialName: item.materialName || (item.materialId || item.itemId ? `商品${item.materialId || item.itemId}` : '')
                     },
                     keywordCount: Array.isArray(plan.keywords) ? plan.keywords.length : 0,
                     keywordSource: isPlainObject(plan.keywordSource) ? plan.keywordSource : {},
@@ -37836,9 +38104,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             } = {}) => {
                 if (typeof console === 'undefined') return;
                 const sourceTag = String(triggerSource || 'manual').trim() || 'manual';
+                const snapshotMaterialId = toIdValue(targetItem?.materialId || targetItem?.itemId);
                 const targetItemSnapshot = {
-                    materialId: toIdValue(targetItem?.materialId || targetItem?.itemId),
-                    materialName: String(targetItem?.materialName || '').trim()
+                    materialId: snapshotMaterialId,
+                    materialName: String(targetItem?.materialName || '').trim() || (snapshotMaterialId ? `商品${snapshotMaterialId}` : '')
                 };
                 const runtimeSnapshot = {
                     bizCode: String(runtime?.bizCode || '').trim(),
@@ -38013,9 +38282,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             .map(item => {
                                 const materialId = toIdValue(item?.materialId || item?.itemId);
                                 if (!materialId) return null;
+                                const resolvedMaterialName = String(item?.materialName || item?.name || '').trim() || `商品${materialId}`;
                                 return {
                                     materialId,
-                                    materialName: String(item?.materialName || item?.name || '').trim()
+                                    materialName: resolvedMaterialName
                                 };
                             })
                             .filter(item => item && item.materialId),
@@ -38023,7 +38293,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ).slice(0, 10);
                     if (!materialList.length) {
                         const fallbackId = toIdValue(SCENE_SYNC_DEFAULT_ITEM_ID);
-                        if (fallbackId) materialList.push({ materialId: fallbackId, materialName: '' });
+                        if (fallbackId) materialList.push({ materialId: fallbackId, materialName: `商品${fallbackId}` });
                     }
                     const materialIdList = materialList.map(item => item.materialId);
                     const draft = isPlainObject(wizardState.draft) ? wizardState.draft : {};
@@ -40896,6 +41166,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const requestKeys = Array.isArray(contract?.requestKeys) ? contract.requestKeys : [];
             const bodyKeys = Array.isArray(contract?.bodyKeys) ? contract.bodyKeys : requestKeys;
             const keyList = uniqueBy(requestKeys.concat(bodyKeys).map(item => normalizeText(item)).filter(Boolean), item => item);
+            const normalizedAction = normalizeLifecycleAction(context?.action || context?.lifecycleAction || contract?.action || '');
             const itemId = toPositiveIdText(context?.itemId || '');
             const campaignId = toPositiveIdText(context?.campaignId || '');
             const campaignIdList = uniqueBy(
@@ -40904,62 +41175,145 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     .filter(Boolean),
                 item => item
             );
+            const toCompactPayload = (payload = {}) => Object.keys(payload).reduce((acc, key) => {
+                const value = payload[key];
+                if (value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)) return acc;
+                acc[key] = value;
+                return acc;
+            }, {});
+            const toNumericId = (idText = '') => {
+                const num = Number(idText);
+                return Number.isFinite(num) ? num : idText;
+            };
+            const normalizedCampaignId = campaignId ? toNumericId(campaignId) : '';
+            const normalizedCampaignIdList = campaignIdList.map(id => toNumericId(id));
             const fallbackPayload = {
                 itemId,
                 materialId: itemId,
-                campaignId,
-                campaignIdList: campaignIdList.slice(0, 50),
+                campaignId: normalizedCampaignId || campaignId,
+                campaignIdList: normalizedCampaignIdList.slice(0, 50),
                 pageNo: 1,
                 pageSize: 50,
                 offset: 0
             };
-            if (!keyList.length) {
-                return Object.keys(fallbackPayload).reduce((acc, key) => {
-                    const value = fallbackPayload[key];
-                    if (value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)) return acc;
-                    acc[key] = value;
-                    return acc;
-                }, {});
-            }
-            const payload = {};
+            const payload = keyList.length ? {} : toCompactPayload(fallbackPayload);
+            const ensureCampaignList = () => {
+                if (!Array.isArray(payload.campaignList)) payload.campaignList = [];
+                if (!isPlainObject(payload.campaignList[0])) payload.campaignList[0] = {};
+                return payload.campaignList[0];
+            };
+            const ensureEntityList = () => {
+                if (!Array.isArray(payload.entityList)) payload.entityList = [];
+                if (!isPlainObject(payload.entityList[0])) payload.entityList[0] = {};
+                return payload.entityList[0];
+            };
+            const setSimplePayloadKey = (key, value) => {
+                if (!key || value === undefined || value === null || value === '') return;
+                if (Array.isArray(value) && !value.length) return;
+                if (/[.\[\]]/.test(key)) return;
+                payload[key] = value;
+            };
+            const hasCampaignListHint = keyList.some(rawKey => /campaignlist|displaystatus/.test(String(rawKey || '').toLowerCase()));
+            const hasEntityListHint = keyList.some(rawKey => /entitylist/.test(String(rawKey || '').toLowerCase()));
             keyList.forEach(rawKey => {
                 const key = String(rawKey || '').trim();
                 const lower = key.toLowerCase();
                 if (!key) return;
                 if (lower === 'bizcode' || lower === 'csrfid' || lower === 'loginpointid') return;
+                if (/campaignlist/.test(lower)) {
+                    if (campaignId) {
+                        const row = ensureCampaignList();
+                        row.campaignId = normalizedCampaignId;
+                    }
+                    if (/displaystatus/.test(lower) && context?.desiredStatus !== undefined) {
+                        const row = ensureCampaignList();
+                        row.displayStatus = Number(context.desiredStatus) === 1 ? 'start' : 'pause';
+                    }
+                    return;
+                }
+                if (/entitylist/.test(lower)) {
+                    if (campaignId) {
+                        const row = ensureEntityList();
+                        row.campaignId = normalizedCampaignId;
+                    }
+                    return;
+                }
+                if (/displaystatus/.test(lower) && context?.desiredStatus !== undefined) {
+                    setSimplePayloadKey(key, Number(context.desiredStatus) === 1 ? 'start' : 'pause');
+                    return;
+                }
                 if (/itemidlist|materialidlist/.test(lower)) {
-                    payload[key] = itemId ? [itemId] : [];
+                    setSimplePayloadKey(key, itemId ? [itemId] : []);
                     return;
                 }
                 if (/itemid|materialid|auctionid/.test(lower)) {
-                    if (itemId) payload[key] = itemId;
+                    if (itemId) setSimplePayloadKey(key, itemId);
                     return;
                 }
                 if (/campaignidlist|planidlist|campaignids|planids|idlist/.test(lower)) {
-                    if (campaignIdList.length) payload[key] = campaignIdList.slice(0, 50);
+                    if (normalizedCampaignIdList.length) setSimplePayloadKey(key, normalizedCampaignIdList.slice(0, 50));
                     return;
                 }
                 if (/campaignid|planid|targetcampaignid/.test(lower)) {
-                    if (campaignId) payload[key] = campaignId;
+                    if (campaignId) setSimplePayloadKey(key, normalizedCampaignId);
                     return;
                 }
                 if (/pagesize|limit|size/.test(lower)) {
-                    payload[key] = Math.max(20, toNumber(context?.pageSize, 50));
+                    setSimplePayloadKey(key, Math.max(20, toNumber(context?.pageSize, 50)));
                     return;
                 }
                 if (/pageno|pageindex|page|offset|start/.test(lower)) {
-                    payload[key] = /offset|start/.test(lower) ? 0 : 1;
+                    setSimplePayloadKey(key, /offset|start/.test(lower) ? 0 : 1);
                     return;
                 }
                 if (/status|online/.test(lower) && context?.desiredStatus !== undefined) {
-                    payload[key] = context.desiredStatus;
+                    setSimplePayloadKey(key, context.desiredStatus);
                     return;
                 }
                 if (/keyword|search|query/.test(lower) && context?.query !== undefined) {
-                    payload[key] = context.query;
+                    setSimplePayloadKey(key, context.query);
                 }
             });
-            return payload;
+            if (normalizedAction === 'pause') {
+                if (campaignId && payload.campaignId === undefined) {
+                    payload.campaignId = normalizedCampaignId;
+                }
+                if (context?.desiredStatus !== undefined && payload.onlineStatus === undefined) {
+                    payload.onlineStatus = context.desiredStatus;
+                }
+                if (hasCampaignListHint) {
+                    const row = ensureCampaignList();
+                    if (row.campaignId === undefined && campaignId) row.campaignId = normalizedCampaignId;
+                    if (row.displayStatus === undefined && context?.desiredStatus !== undefined) {
+                        row.displayStatus = Number(context.desiredStatus) === 1 ? 'start' : 'pause';
+                    }
+                }
+            }
+            if (normalizedAction === 'delete') {
+                if ((!Array.isArray(payload.campaignIdList) || !payload.campaignIdList.length) && normalizedCampaignIdList.length) {
+                    payload.campaignIdList = normalizedCampaignIdList.slice(0, 50);
+                }
+                if (payload.campaignId === undefined && campaignId) {
+                    payload.campaignId = normalizedCampaignId;
+                }
+                if (hasCampaignListHint && campaignId) {
+                    const row = ensureCampaignList();
+                    if (row.campaignId === undefined) row.campaignId = normalizedCampaignId;
+                }
+                if (hasEntityListHint && campaignId) {
+                    const row = ensureEntityList();
+                    if (row.campaignId === undefined) row.campaignId = normalizedCampaignId;
+                }
+            }
+            if (Array.isArray(payload.campaignList)) {
+                payload.campaignList = payload.campaignList.filter(item => isPlainObject(item) && Object.keys(item).length > 0);
+                if (!payload.campaignList.length) delete payload.campaignList;
+            }
+            if (Array.isArray(payload.entityList)) {
+                payload.entityList = payload.entityList.filter(item => isPlainObject(item) && Object.keys(item).length > 0);
+                if (!payload.entityList.length) delete payload.entityList;
+            }
+            return toCompactPayload(payload);
         };
 
         const executeLifecycleActionByContract = async (sceneName = '', action = '', context = {}, options = {}) => {
@@ -40985,7 +41339,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
             }
             const contract = contractResult.contract;
-            const payload = buildLifecyclePayloadByContract(contract, context);
+            const payload = buildLifecyclePayloadByContract(contract, {
+                ...context,
+                action: normalizedAction
+            });
             let captureId = '';
             if (options.capture !== false) {
                 try {
@@ -41560,6 +41917,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
             }
 
+            const ensureRepairCaseItemBinding = (request = {}, itemIdText = '') => {
+                const normalizedItemId = toPositiveIdText(itemIdText);
+                if (!normalizedItemId || !isPlainObject(request)) return;
+                if (!Array.isArray(request.plans)) request.plans = [];
+                if (!isPlainObject(request.plans[0])) request.plans[0] = {};
+                const firstPlan = request.plans[0];
+                firstPlan.itemId = normalizedItemId;
+                const currentItem = isPlainObject(firstPlan.item) ? normalizeItem(firstPlan.item) : null;
+                if (!currentItem || !toIdValue(currentItem.materialId || currentItem.itemId)) {
+                    firstPlan.item = normalizeItem({
+                        materialId: normalizedItemId,
+                        itemId: normalizedItemId,
+                        materialName: `商品${normalizedItemId}`
+                    });
+                } else {
+                    firstPlan.item = normalizeItem({
+                        ...currentItem,
+                        materialId: currentItem.materialId || normalizedItemId,
+                        itemId: currentItem.itemId || normalizedItemId,
+                        materialName: String(currentItem.materialName || '').trim() || `商品${normalizedItemId}`
+                    });
+                }
+                if (!request.itemId) request.itemId = normalizedItemId;
+                if (!request.materialId) request.materialId = normalizedItemId;
+            };
             const coverageMode = String(options.coverageMode || 'scene_goal_option_full').trim();
             const conflictPolicy = String(options.conflictPolicy || 'auto_stop_retry').trim();
             const stopScope = String(options.stopScope || 'same_item_only').trim();
@@ -41574,6 +41956,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }, isPlainObject(options.requestOptions) ? options.requestOptions : {});
             const throttleRetryTimes = Math.max(0, Math.min(6, toNumber(options.throttleRetryTimes, 2)));
             const throttleBackoffMs = Math.max(500, toNumber(options.throttleBackoffMs, 1800));
+            const throttleCooldownMs = Math.max(0, toNumber(options.throttleCooldownMs, Math.max(throttleBackoffMs * 2, 3000)));
+            const throttleBurstCooldownMs = Math.max(throttleCooldownMs, toNumber(options.throttleBurstCooldownMs, Math.max(throttleBackoffMs * 6, 12000)));
+            const throttleBurstThreshold = Math.max(1, Math.min(12, toNumber(options.throttleBurstThreshold, 3)));
+            const caseIntervalMs = Math.max(0, toNumber(options.caseIntervalMs, 0));
+            const caseIntervalJitterMs = Math.max(0, toNumber(options.caseIntervalJitterMs, 0));
+            const resolveCaseIntervalWaitMs = () => {
+                if (caseIntervalMs <= 0) return 0;
+                if (caseIntervalJitterMs <= 0) return caseIntervalMs;
+                const jitter = Math.floor(Math.random() * (caseIntervalJitterMs + 1));
+                return caseIntervalMs + jitter;
+            };
             const shouldStop = typeof options.shouldStop === 'function'
                 ? options.shouldStop
                 : () => false;
@@ -41641,11 +42034,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     deleted: 0,
                     stopped: 0
                 };
+                let throttleStreak = 0;
 
                 for (let caseIdx = 0; caseIdx < cases.length; caseIdx++) {
                     if (isStopRequested()) {
                         stopped = true;
                         break;
+                    }
+                    if (caseIdx > 0) {
+                        const spacingWaitMs = resolveCaseIntervalWaitMs();
+                        if (spacingWaitMs > 0) {
+                            emitProgress(options, 'case_interval_wait', {
+                                sceneName,
+                                index: caseIdx + 1,
+                                total: cases.length,
+                                waitMs: spacingWaitMs
+                            });
+                            await sleep(spacingWaitMs);
+                        }
                     }
                     const caseInfo = cases[caseIdx] || {};
                     globalCaseSeq += 1;
@@ -41653,18 +42059,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         index: globalCaseSeq,
                         dayAverageBudget: Math.max(30, toNumber(options.dayAverageBudget, 100))
                     });
+                    const casePlanName = `${sceneName}_${nowStampSeconds()}_${String(globalCaseSeq).padStart(4, '0')}`;
                     const goalLabel = normalizeGoalLabel(caseInfo.goalLabel || request.marketingGoal || '');
                     request.marketingGoal = goalLabel || request.marketingGoal || '';
                     request.common = mergeDeep({}, request.common || {}, {
                         marketingGoal: goalLabel || request?.common?.marketingGoal || ''
                     });
                     request.sceneSettings = mergeDeep({}, request.sceneSettings || {}, caseInfo.sceneSettingsPatch || {});
-                    if (Array.isArray(request?.plans) && request.plans[0]) {
-                        request.plans[0].itemId = targetItemId;
-                        request.plans[0].planName = `${sceneName}_${nowStampSeconds()}_${String(globalCaseSeq).padStart(4, '0')}`;
-                    }
                     if (isPlainObject(options.requestOverrides)) {
                         mergeDeep(request, options.requestOverrides);
+                    }
+                    ensureRepairCaseItemBinding(request, targetItemId);
+                    if (Array.isArray(request?.plans) && request.plans[0]) {
+                        request.plans[0].planName = casePlanName;
                     }
 
                     emitProgress(options, 'case_start', {
@@ -41704,10 +42111,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
 
                     if (!runError && runResult?.ok) {
-                        const successes = Array.isArray(runResult.successes) ? runResult.successes : [];
-                        successes.forEach(entry => {
-                            const campaignId = toPositiveIdText(entry?.campaignId || '');
-                            if (!campaignId) return;
+                        const successCampaignIds = extractCreatedCampaignIdsFromCreateResult(runResult);
+                        successCampaignIds.forEach(campaignId => {
                             createdRecords.push({
                                 sceneName,
                                 goalLabel,
@@ -41716,6 +42121,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 itemId: targetItemId
                             });
                         });
+                        throttleStreak = 0;
                         sceneStats.pass += 1;
                         continue;
                     }
@@ -41746,6 +42152,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             if (Array.isArray(request?.plans) && request.plans[0]) {
                                 request.plans[0].planName = `${sceneName}_${nowStampSeconds()}_${String(globalCaseSeq).padStart(4, '0')}_throttle_${retryAttempt}`;
                             }
+                            ensureRepairCaseItemBinding(request, targetItemId);
                             let retryResult = null;
                             let retryError = '';
                             try {
@@ -41762,10 +42169,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 retryError = err?.message || String(err);
                             }
                             if (!retryError && retryResult?.ok) {
-                                const retrySuccesses = Array.isArray(retryResult.successes) ? retryResult.successes : [];
-                                retrySuccesses.forEach(entry => {
-                                    const campaignId = toPositiveIdText(entry?.campaignId || '');
-                                    if (!campaignId) return;
+                                const retrySuccessCampaignIds = extractCreatedCampaignIdsFromCreateResult(retryResult);
+                                retrySuccessCampaignIds.forEach(campaignId => {
                                     createdRecords.push({
                                         sceneName,
                                         goalLabel,
@@ -41774,6 +42179,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         itemId: targetItemId
                                     });
                                 });
+                                throttleStreak = 0;
                                 sceneStats.pass += 1;
                                 sceneStats.repaired += 1;
                                 emitProgress(options, 'case_passed_after_throttle_retry', {
@@ -41781,7 +42187,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     goalLabel,
                                     caseId: caseInfo.caseId || '',
                                     retryAttempt,
-                                    successCount: retrySuccesses.length
+                                    successCount: retrySuccessCampaignIds.length
                                 });
                                 throttledRecovered = true;
                                 break;
@@ -41801,9 +42207,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             classification,
                             error: throttleErrorText
                         });
+                        throttleStreak += 1;
+                        const cooldownMs = throttleStreak >= throttleBurstThreshold
+                            ? throttleBurstCooldownMs
+                            : throttleCooldownMs;
+                        if (cooldownMs > 0) {
+                            emitProgress(options, 'throttle_cooldown_wait', {
+                                sceneName,
+                                goalLabel,
+                                caseId: caseInfo.caseId || '',
+                                throttleStreak,
+                                throttleBurstThreshold,
+                                waitMs: cooldownMs
+                            });
+                            await sleep(cooldownMs);
+                        }
                         sceneStats.failed += 1;
                         continue;
                     }
+                    throttleStreak = 0;
                     if (classification === 'conflict' && conflictPolicy === 'auto_stop_retry') {
                         emitProgress(options, 'conflict_detected', {
                             sceneName,
@@ -41836,6 +42258,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             if (Array.isArray(request?.plans) && request.plans[0]) {
                                 request.plans[0].planName = `${sceneName}_${nowStampSeconds()}_${String(globalCaseSeq).padStart(4, '0')}_retry`;
                             }
+                            ensureRepairCaseItemBinding(request, targetItemId);
                             let retryResult = null;
                             let retryError = '';
                             try {
@@ -41852,10 +42275,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 retryError = err?.message || String(err);
                             }
                             if (!retryError && retryResult?.ok) {
-                                const retrySuccesses = Array.isArray(retryResult.successes) ? retryResult.successes : [];
-                                retrySuccesses.forEach(entry => {
-                                    const campaignId = toPositiveIdText(entry?.campaignId || '');
-                                    if (!campaignId) return;
+                                const retrySuccessCampaignIds = extractCreatedCampaignIdsFromCreateResult(retryResult);
+                                retrySuccessCampaignIds.forEach(campaignId => {
                                     createdRecords.push({
                                         sceneName,
                                         goalLabel,
@@ -41870,7 +42291,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     sceneName,
                                     goalLabel,
                                     caseId: caseInfo.caseId || '',
-                                    successCount: retrySuccesses.length
+                                    successCount: retrySuccessCampaignIds.length
                                 });
                                 continue;
                             }
