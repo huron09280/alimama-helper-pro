@@ -584,23 +584,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     // 3. 核心计算 (Logic)
     // ==========================================
     const Core = {
-        // 使用 XPath 高效查找包含 "花费(元)" 的元素，避免遍历所有 span
-        getTotalCost() {
+        // 使用 XPath 高效查找顶部汇总指标，避免扫描整页节点
+        getSummaryMetricTotal(labels = []) {
             try {
-                // XPath 定位：查找包含文本 "花费(元)" 的 span
-                // 限制查找范围在常见的顶部统计区域 (class 包含 summary 或 overview 的 div)，如果找不到则全文查找
-                const xpath = "//span[contains(text(), '花费(元)')]";
-                const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                let span = result.singleNodeValue;
-
-                if (span) {
-                    const container = span.closest('div');
-                    if (container) {
-                        const rawText = container.textContent.replace('花费(元)', '').replace(/,/g, '').trim();
-                        // 提取第一个浮点数
-                        const match = rawText.match(/(\d+(\.\d+)?)/);
+                const labelList = Array.isArray(labels)
+                    ? labels.map(label => String(label || '').trim()).filter(Boolean)
+                    : [String(labels || '').trim()].filter(Boolean);
+                for (const label of labelList) {
+                    const xpath = `//span[contains(normalize-space(.), '${label}') and not(ancestor::table) and not(ancestor::*[@id='am-helper-panel'])]`;
+                    const result = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                    for (let i = 0; i < result.snapshotLength; i++) {
+                        const span = result.snapshotItem(i);
+                        const container = span?.closest?.('div');
+                        if (!container) continue;
+                        const rawText = (container.textContent || '').replace(span.textContent || '', '').replace(/,/g, '').trim();
+                        const match = rawText.match(/(\d+(?:\.\d+)?)/);
                         if (match) {
-                            return parseFloat(match[0]) || 0;
+                            return parseFloat(match[1]) || 0;
                         }
                     }
                 }
@@ -608,6 +608,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             } catch (e) {
                 return 0;
             }
+        },
+
+        getTotalCost() {
+            return this.getSummaryMetricTotal(['花费(元)', '花费']);
+        },
+
+        getTotalImpression() {
+            return this.getSummaryMetricTotal(['展现量', '展示量', '曝光量']);
+        },
+
+        getTotalClick() {
+            return this.getSummaryMetricTotal(['点击量', '点击数', '点击次数']);
         },
 
         // 解析单元格数值
@@ -665,7 +677,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return this.colMapCache.map;
             }
 
-            const map = { cost: -1, wang: -1, carts: [], guide: -1, click: -1, budget: -1 };
+            const map = { cost: -1, wang: -1, carts: [], guide: -1, impression: -1, click: -1, budget: -1 };
             headers.forEach((th, i) => {
                 const text = (th.textContent || '').replace(/\s+/g, ''); // 移除所有空格
                 const idx = (th.cellIndex !== undefined) ? th.cellIndex : i;
@@ -674,6 +686,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 else if (text.includes('旺旺咨询量')) map.wang = idx;
                 else if ((text.includes('购物车') || text.includes('加购')) && !text.includes('率') && !text.includes('成本')) map.carts.push(idx);
                 else if ((text.includes('引导访问') && text.includes('潜客')) || (text.includes('潜客数') && !text.includes('占比'))) map.guide = idx;
+                else if (text.includes('展现量') || text.includes('展示量') || text.includes('曝光量')) map.impression = idx;
                 else if (text.includes('点击量')) map.click = idx;
                 else if (text.includes('预算') && !text.includes('建议')) map.budget = idx;
             });
@@ -728,6 +741,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (colMap.cost > -1) score += 8;
             if (colMap.wang > -1) score += 4;
             if (colMap.carts.length > 0) score += 2;
+            if (colMap.impression > -1) score += 2;
             if (colMap.guide > -1 && colMap.click > -1) score += 2;
             if (colMap.budget > -1) score += 1;
             return score;
@@ -760,6 +774,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const costIdx = toBodyIdx(colMap.cost);
             const wangIdx = toBodyIdx(colMap.wang);
             const guideIdx = toBodyIdx(colMap.guide);
+            const impressionIdx = toBodyIdx(colMap.impression);
             const clickIdx = toBodyIdx(colMap.click);
             const budgetIdx = toBodyIdx(colMap.budget);
             const cartIdxList = (colMap.carts || []).map(toBodyIdx);
@@ -768,6 +783,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (hasCell(costIdx)) score += 12;
             if (hasCell(wangIdx)) score += 6;
             if (cartIdxList.some(hasCell)) score += 4;
+            if (hasCell(impressionIdx)) score += 3;
             if (hasCell(guideIdx) && hasCell(clickIdx)) score += 3;
             if (hasCell(budgetIdx)) score += 2;
             score += Math.min(5, Math.floor(maxCells / 5));
@@ -869,13 +885,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const needCost = showCost && colMap.cost > -1 && colMap.wang > -1;
             const needCart = showCartCost && colMap.cost > -1 && colMap.carts.length > 0;
             const needPercent = showPercent && colMap.guide > -1 && colMap.click > -1;
-            const needRatio = showCostRatio && colMap.cost > -1;
+            const needRatio = showCostRatio && (colMap.cost > -1 || colMap.impression > -1 || colMap.click > -1);
             const needBudget = showBudget && colMap.cost > -1 && colMap.budget > -1;
 
             if (!needCost && !needCart && !needPercent && !needRatio && !needBudget) return;
 
-            // 获取总花费 (只需一次，且去重日志)
+            // 获取顶部汇总指标 (只需一次，且去重日志)
             const totalCost = needRatio ? this.getTotalCost() : 0;
+            const totalImpression = needRatio && colMap.impression > -1 ? this.getTotalImpression() : 0;
+            const totalClick = needRatio && colMap.click > -1 ? this.getTotalClick() : 0;
             if (needRatio && totalCost > 0 && this._lastTotalCost !== totalCost) {
                 this._lastTotalCost = totalCost;
                 Logger.log(`💰 总花费更新: ${totalCost}`);
@@ -903,6 +921,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (curMap.wang > -1) curMap.wang -= offset;
                     curMap.carts = curMap.carts.map(c => c - offset);
                     if (curMap.guide > -1) curMap.guide -= offset;
+                    if (curMap.impression > -1) curMap.impression -= offset;
                     if (curMap.click > -1) curMap.click -= offset;
                     if (curMap.budget > -1) curMap.budget -= offset;
                 }
@@ -952,15 +971,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 }
 
-                // 4. 花费占比
-                if (needRatio && totalCost > 0) {
-                    const cCost = getCell(curMap.cost);
-                    if (cCost) {
-                        const cost_val = this.parseValue(cCost);
-                        if (cost_val > 0) {
-                            if (this.renderTag(cCost, 'ratio-tag', `占比: ${((cost_val / totalCost) * 100).toFixed(1)}%`, CONSTANTS.STYLES.ratio)) updatedCount++;
-                        }
-                    }
+                // 4. 花费 / 展现 / 点击 占比
+                if (needRatio) {
+                    const ratioTargets = [
+                        { idx: curMap.cost, total: totalCost },
+                        { idx: curMap.impression, total: totalImpression },
+                        { idx: curMap.click, total: totalClick }
+                    ];
+                    ratioTargets.forEach(({ idx, total }) => {
+                        if (idx < 0 || total <= 0) return;
+                        const cell = getCell(idx);
+                        if (!cell) return;
+                        const value = this.parseValue(cell);
+                        if (value <= 0) return;
+                        if (this.renderTag(cell, 'ratio-tag', `占比: ${((value / total) * 100).toFixed(1)}%`, CONSTANTS.STYLES.ratio)) updatedCount++;
+                    });
                 }
 
                 if (needBudget) {
