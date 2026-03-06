@@ -438,6 +438,1140 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         return { ...DEFAULT_CONFIG };
     };
 
+    const PlanIdentityUtils = {
+        DEFAULT_BIZ_CODE: 'onebpSearch',
+        BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
+        campaignItemIdCache: new Map(),
+
+        normalizeCampaignId(rawId) {
+            const id = String(rawId || '').trim();
+            return /^\d{6,}$/.test(id) ? id : '';
+        },
+
+        normalizeAdgroupId(rawId) {
+            const id = String(rawId || '').trim();
+            return /^\d{6,}$/.test(id) ? id : '';
+        },
+
+        normalizeItemId(rawItemId) {
+            const itemId = String(rawItemId || '').trim();
+            return /^\d{6,}$/.test(itemId) ? itemId : '';
+        },
+
+        normalizeBizCode(rawBizCode) {
+            const biz = String(rawBizCode || '').trim();
+            if (!biz) return '';
+            if (biz === 'onebpSearch' || biz === 'onebpSite' || biz === 'onebpAdStrategyLiuZi' || biz === 'onebpDisplay') return biz;
+            if (/onebpsearch|search|keyword|关键词/i.test(biz)) return 'onebpSearch';
+            if (/onebpsite|site|全站/i.test(biz)) return 'onebpSite';
+            if (/onebpadstrategyliuzi|liuzi|lead|线索|留资/i.test(biz)) return 'onebpAdStrategyLiuZi';
+            if (/onebpdisplay|display|crowd|人群/i.test(biz)) return 'onebpDisplay';
+            return '';
+        },
+
+        getOppositeBizCode(bizCode) {
+            const biz = this.normalizeBizCode(bizCode);
+            if (biz === 'onebpSearch') return 'onebpSite';
+            if (biz === 'onebpSite') return 'onebpSearch';
+            return '';
+        },
+
+        formatDateYmd(date = new Date()) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        },
+
+        rememberCampaignItemId(campaignId, itemId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedCampaignId || !normalizedItemId) return;
+            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+        },
+
+        getCampaignItemId(campaignId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId) return '';
+            return this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+        },
+
+        parseBizCodeFromRaw(raw) {
+            const text = String(raw || '').trim();
+            if (!text) return '';
+            try {
+                const parsed = new URL(text, window.location.origin);
+                const fromQuery = this.normalizeBizCode(parsed.searchParams.get('bizCode') || '');
+                if (fromQuery) return fromQuery;
+            } catch { }
+            const match = text.match(/[?&]bizCode=([^&#]+)/i) || text.match(/bizCode[=:]([^&#]+)/i);
+            if (!match || !match[1]) return '';
+            try {
+                return this.normalizeBizCode(decodeURIComponent(match[1]));
+            } catch {
+                return this.normalizeBizCode(match[1]);
+            }
+        },
+
+        inferBizCodeFromElement(el) {
+            const fromLocation = this.parseBizCodeFromRaw(window.location.href) || this.parseBizCodeFromRaw(window.location.hash);
+            if (!(el instanceof Element)) return fromLocation;
+
+            const fromSelf = this.parseBizCodeFromRaw(el.getAttribute?.('href') || '')
+                || this.parseBizCodeFromRaw(el.getAttribute?.('mx-href') || '')
+                || this.parseBizCodeFromRaw(el.getAttribute?.('data-biz-code') || '')
+                || this.parseBizCodeFromRaw(el.dataset?.bizCode || '');
+            if (fromSelf) return fromSelf;
+
+            const nearestLink = el.closest('a[href], [mx-href], [data-biz-code]');
+            if (nearestLink instanceof Element) {
+                const fromLink = this.parseBizCodeFromRaw(nearestLink.getAttribute('href') || '')
+                    || this.parseBizCodeFromRaw(nearestLink.getAttribute('mx-href') || '')
+                    || this.parseBizCodeFromRaw(nearestLink.getAttribute('data-biz-code') || '')
+                    || this.parseBizCodeFromRaw(nearestLink.dataset?.bizCode || '');
+                if (fromLink) return fromLink;
+            }
+
+            const scope = el.closest('tr, li, section, article, .table-row, .list-item, .campaign-row') || el.parentElement;
+            const scopeText = String(scope?.textContent || '');
+            if (/关键词推广|关键词计划|关键词/.test(scopeText)) return 'onebpSearch';
+            if (/全站推广|货品全站|全站/.test(scopeText)) return 'onebpSite';
+            if (/线索推广|线索计划|线索|留资/.test(scopeText)) return 'onebpAdStrategyLiuZi';
+            if (/人群推广|人群计划|人群/.test(scopeText)) return 'onebpDisplay';
+            return fromLocation;
+        },
+
+        parseItemIdFromRaw(raw) {
+            const text = String(raw || '').trim();
+            if (!text) return '';
+            const fromPlain = this.normalizeItemId(
+                (text.match(/(?:itemId|item_id|materialId|material_id|searchValue)[=:]([0-9]{6,})/i) || [])[1]
+            );
+            if (fromPlain) return fromPlain;
+            try {
+                const parsed = new URL(text, window.location.origin);
+                const searchKey = String(parsed.searchParams.get('searchKey') || '').trim().toLowerCase();
+                const searchValue = this.normalizeItemId(parsed.searchParams.get('searchValue') || '');
+                if (searchValue && (!searchKey || searchKey === 'itemid' || searchKey === 'item_id' || searchKey === 'materialid')) {
+                    return searchValue;
+                }
+                const keys = ['itemId', 'item_id', 'materialId', 'material_id', 'searchValue'];
+                for (let i = 0; i < keys.length; i++) {
+                    const candidate = this.normalizeItemId(parsed.searchParams.get(keys[i]) || '');
+                    if (candidate) return candidate;
+                }
+                const host = String(parsed.hostname || '').toLowerCase();
+                const path = String(parsed.pathname || '').toLowerCase();
+                if (/detail\.tmall\.com|item\.taobao\.com/.test(host) || /\/item\.htm/.test(path)) {
+                    const candidate = this.normalizeItemId(parsed.searchParams.get('id') || '');
+                    if (candidate) return candidate;
+                }
+            } catch { }
+            return '';
+        },
+
+        inferItemIdFromElement(el, options = {}) {
+            const allowLocationFallback = options?.allowLocationFallback !== false;
+            const allowBodyFallback = options?.allowBodyFallback !== false;
+            const fromLocation = allowLocationFallback
+                ? (this.parseItemIdFromRaw(window.location.href)
+                    || this.parseItemIdFromRaw(window.location.hash))
+                : '';
+            const findFromText = (text) => this.normalizeItemId(
+                (String(text || '').match(/(?:宝贝|商品)\s*ID\s*[：:]\s*([0-9]{6,})/i) || [])[1]
+            );
+            if (!(el instanceof Element)) {
+                if (fromLocation) return fromLocation;
+                return allowBodyFallback ? findFromText(document.body?.innerText || '') : '';
+            }
+            const fromSelf = this.parseItemIdFromRaw(el.getAttribute?.('href') || '')
+                || this.parseItemIdFromRaw(el.getAttribute?.('mx-href') || '')
+                || this.normalizeItemId(el.getAttribute?.('data-item-id') || '')
+                || this.normalizeItemId(el.getAttribute?.('data-material-id') || '')
+                || this.normalizeItemId(el.dataset?.itemId || '')
+                || this.normalizeItemId(el.dataset?.materialId || '');
+            if (fromSelf) return fromSelf;
+            const fromNearestData = this.normalizeItemId(
+                el.closest?.('[data-item-id], [data-material-id]')?.getAttribute('data-item-id')
+                || el.closest?.('[data-item-id], [data-material-id]')?.getAttribute('data-material-id')
+                || ''
+            );
+            if (fromNearestData) return fromNearestData;
+            const scope = el.closest('tr, li, section, article, .table-row, .list-item, .campaign-row') || el.parentElement;
+            const fromScope = findFromText(scope?.textContent || '');
+            if (fromScope) return fromScope;
+            if (fromLocation) return fromLocation;
+            if (!allowBodyFallback) return '';
+            return findFromText(document.body?.innerText || '');
+        },
+
+        resolveItemIdFromCandidates(candidates = []) {
+            const queue = Array.isArray(candidates) ? [...candidates] : [candidates];
+            for (let i = 0; i < queue.length; i++) {
+                const current = queue[i];
+                if (current === undefined || current === null || current === '') continue;
+                if (Array.isArray(current)) {
+                    queue.push(...current);
+                    continue;
+                }
+                if (typeof current === 'object') {
+                    queue.push(
+                        current.itemId,
+                        current.materialId,
+                        current.auctionId,
+                        current.targetItemId,
+                        current.targetMaterialId,
+                        current.item_id,
+                        current.material_id,
+                        current.itemid,
+                        current.materialid,
+                        current.itemIdList,
+                        current.materialIdList,
+                        current.whiteBoxItemIds,
+                        current.linkUrl,
+                        current.itemUrl,
+                        current.material,
+                        current.lastAdgroup
+                    );
+                    continue;
+                }
+                const normalized = this.normalizeItemId(current);
+                if (normalized) return normalized;
+                const parsed = this.parseItemIdFromRaw(current);
+                if (parsed) return parsed;
+            }
+            return '';
+        },
+
+        collectCampaignRefsFromNode(node, out, meta = {}) {
+            const depth = Number(meta.depth || 0);
+            const seen = meta.seen instanceof WeakSet ? meta.seen : new WeakSet();
+            const bizHint = this.normalizeBizCode(meta.bizHint || '');
+            const itemHint = this.normalizeItemId(meta.itemHint || '');
+            if (!node || depth > 10) return;
+            if (typeof node !== 'object') return;
+            if (seen.has(node)) return;
+            seen.add(node);
+
+            if (Array.isArray(node)) {
+                node.forEach(item => this.collectCampaignRefsFromNode(item, out, {
+                    depth: depth + 1,
+                    seen,
+                    bizHint,
+                    itemHint
+                }));
+                return;
+            }
+
+            const localBiz = this.normalizeBizCode(
+                node.bizCode
+                || node.diffBizCode
+                || node.fromBizCode
+                || node.targetBizCode
+                || bizHint
+                || ''
+            );
+            const localItemId = this.resolveItemIdFromCandidates([
+                node.itemId,
+                node.materialId,
+                node.auctionId,
+                node.targetItemId,
+                node.targetMaterialId,
+                node.item_id,
+                node.material_id,
+                node.itemid,
+                node.materialid,
+                node.itemIdList,
+                node.materialIdList,
+                node.whiteBoxItemIds,
+                node.scopeItems,
+                node.material,
+                node.linkUrl,
+                itemHint
+            ]);
+            const localStatus = node.status;
+            const localOnlineStatus = node.onlineStatus ?? node.isOnline ?? node.online;
+            const localDisplayStatus = node.displayStatus || node.planStatus || node.campaignStatus || '';
+            const pushRef = (rawId, source) => {
+                const campaignId = this.normalizeCampaignId(rawId);
+                if (!campaignId) return;
+                out.push({
+                    campaignId,
+                    bizCode: localBiz,
+                    itemId: localItemId,
+                    status: localStatus,
+                    onlineStatus: localOnlineStatus,
+                    displayStatus: localDisplayStatus,
+                    source
+                });
+            };
+
+            pushRef(node.campaignId, 'campaignId');
+            pushRef(node.planId, 'planId');
+            pushRef(node.targetCampaignId, 'targetCampaignId');
+            pushRef(node.diffCampaignId, 'diffCampaignId');
+
+            const textHints = [node.message, node.msg, node.error, node.remark]
+                .map(item => String(item || '').trim())
+                .filter(Boolean)
+                .join(' ');
+            if (textHints) {
+                const scoped = textHints.match(/(?:计划|campaign(?:id)?|plan(?:id)?)[^0-9]{0,8}\d{6,}/ig) || [];
+                scoped.slice(0, 12).forEach((segment) => {
+                    const match = segment.match(/(\d{6,})/);
+                    const campaignId = this.normalizeCampaignId(match?.[1] || '');
+                    if (!campaignId) return;
+                    out.push({
+                        campaignId,
+                        bizCode: localBiz,
+                        itemId: localItemId,
+                        status: localStatus,
+                        onlineStatus: localOnlineStatus,
+                        displayStatus: localDisplayStatus,
+                        source: 'text_hint'
+                    });
+                });
+            }
+
+            Object.keys(node).forEach((key) => {
+                const value = node[key];
+                if (!value || typeof value !== 'object') return;
+                this.collectCampaignRefsFromNode(value, out, {
+                    depth: depth + 1,
+                    seen,
+                    bizHint: localBiz || bizHint,
+                    itemHint: localItemId || itemHint
+                });
+            });
+        },
+
+        normalizeCampaignRefs(refs = []) {
+            const map = new Map();
+            (Array.isArray(refs) ? refs : []).forEach((item) => {
+                const campaignId = this.normalizeCampaignId(item?.campaignId);
+                if (!campaignId) return;
+                const prev = map.get(campaignId) || {
+                    campaignId,
+                    bizCode: '',
+                    itemId: '',
+                    status: '',
+                    onlineStatus: '',
+                    displayStatus: '',
+                    source: ''
+                };
+                const nextBiz = this.normalizeBizCode(item?.bizCode || '');
+                const nextItemId = this.normalizeItemId(item?.itemId || '');
+                if (!prev.bizCode && nextBiz) prev.bizCode = nextBiz;
+                if (!prev.itemId && nextItemId) prev.itemId = nextItemId;
+                if ((prev.status === '' || prev.status === undefined || prev.status === null)
+                    && item?.status !== '' && item?.status !== undefined && item?.status !== null) {
+                    prev.status = item.status;
+                }
+                if ((prev.onlineStatus === '' || prev.onlineStatus === undefined || prev.onlineStatus === null)
+                    && item?.onlineStatus !== '' && item?.onlineStatus !== undefined && item?.onlineStatus !== null) {
+                    prev.onlineStatus = item.onlineStatus;
+                }
+                if (!prev.displayStatus && item?.displayStatus) prev.displayStatus = item.displayStatus;
+                if (!prev.source && item?.source) prev.source = String(item.source || '');
+                map.set(campaignId, prev);
+            });
+            return Array.from(map.values());
+        },
+
+        extractAdgroupIdsFromCampaignPayload(payload = {}, expectedCampaignId = '') {
+            const normalizedCampaignId = this.normalizeCampaignId(expectedCampaignId);
+            const campaign = payload?.data?.campaign || payload?.campaign || payload?.data || {};
+            const adgroupList = Array.isArray(campaign?.adgroupList) ? campaign.adgroupList : [];
+            const dataAdgroupList = Array.isArray(payload?.data?.adgroupList) ? payload.data.adgroupList : [];
+            const adgroupIdBuckets = [
+                campaign?.adgroupIdList,
+                campaign?.adgroupIds,
+                payload?.data?.adgroupIdList,
+                payload?.data?.adgroupIds,
+                payload?.adgroupIdList,
+                payload?.adgroupIds
+            ];
+            const candidates = [
+                campaign,
+                campaign?.lastAdgroup,
+                ...adgroupList,
+                ...dataAdgroupList,
+                payload?.data?.adgroup
+            ];
+            const out = [];
+            const pushId = (raw) => {
+                const adgroupId = this.normalizeAdgroupId(raw);
+                if (!adgroupId) return;
+                if (out.includes(adgroupId)) return;
+                out.push(adgroupId);
+            };
+            candidates.forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const campaignId = this.normalizeCampaignId(item.campaignId || '');
+                if (normalizedCampaignId && campaignId && campaignId !== normalizedCampaignId) return;
+                pushId(item.adgroupId || item.groupId || item.id || '');
+            });
+            adgroupIdBuckets.forEach((bucket) => {
+                if (Array.isArray(bucket)) {
+                    bucket.forEach(pushId);
+                    return;
+                }
+                pushId(bucket);
+            });
+            return out;
+        },
+
+        extractItemIdFromCampaignPayload(payload = {}, expectedCampaignId = '') {
+            const normalizedCampaignId = this.normalizeCampaignId(expectedCampaignId);
+            const refs = [];
+            this.collectCampaignRefsFromNode(payload, refs, {
+                depth: 0,
+                seen: new WeakSet()
+            });
+            const normalizedRefs = this.normalizeCampaignRefs(refs);
+            normalizedRefs.forEach((item) => {
+                this.rememberCampaignItemId(item?.campaignId, item?.itemId || '');
+            });
+            if (normalizedCampaignId) {
+                const selfRef = normalizedRefs.find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
+                const selfItemId = this.normalizeItemId(selfRef?.itemId || '');
+                if (selfItemId) return selfItemId;
+            }
+            const campaign = payload?.data?.campaign || payload?.campaign || payload?.data || {};
+            const adgroupList = Array.isArray(campaign?.adgroupList) ? campaign.adgroupList : [];
+            const scopedAdgroupList = normalizedCampaignId
+                ? adgroupList.filter((item) => {
+                    const campaignId = this.normalizeCampaignId(item?.campaignId || '');
+                    return !campaignId || campaignId === normalizedCampaignId;
+                })
+                : adgroupList;
+            return this.resolveItemIdFromCandidates([
+                campaign?.itemId,
+                campaign?.materialId,
+                campaign?.auctionId,
+                campaign?.targetItemId,
+                campaign?.targetMaterialId,
+                campaign?.itemIdList,
+                campaign?.materialIdList,
+                campaign?.whiteBoxItemIds,
+                campaign?.scopeItems,
+                campaign?.material,
+                campaign?.lastAdgroup,
+                scopedAdgroupList,
+                payload?.data?.adgroup,
+                payload?.data?.adgroupList
+            ]);
+        },
+
+        parseAuthFromObject(source, depth = 0, visited = new WeakSet()) {
+            const out = { csrfId: '', loginPointId: '', bizCode: '' };
+            if (!source || typeof source !== 'object' || depth > 4) return out;
+            if (visited.has(source)) return out;
+            visited.add(source);
+
+            Object.keys(source).slice(0, 120).forEach((key) => {
+                const value = source[key];
+                const lower = String(key || '').toLowerCase();
+                if (lower === 'csrfid' || lower === 'csrf') {
+                    if (!out.csrfId) out.csrfId = String(value || '').trim();
+                    return;
+                }
+                if (lower === 'loginpointid') {
+                    if (!out.loginPointId) out.loginPointId = String(value || '').trim();
+                    return;
+                }
+                if (lower === 'bizcode') {
+                    if (!out.bizCode) out.bizCode = this.normalizeBizCode(value);
+                    return;
+                }
+                if (value && typeof value === 'object') {
+                    const child = this.parseAuthFromObject(value, depth + 1, visited);
+                    if (!out.csrfId && child.csrfId) out.csrfId = child.csrfId;
+                    if (!out.loginPointId && child.loginPointId) out.loginPointId = child.loginPointId;
+                    if (!out.bizCode && child.bizCode) out.bizCode = child.bizCode;
+                }
+            });
+            return out;
+        },
+
+        parseAuthFromBody(body) {
+            const out = { csrfId: '', loginPointId: '', bizCode: '' };
+            if (body === undefined || body === null) return out;
+            if (typeof body === 'string') {
+                const text = body.trim();
+                if (!text) return out;
+                const parsed = safeParseJSON(text);
+                if (parsed && typeof parsed === 'object') return this.parseAuthFromObject(parsed);
+                try {
+                    const params = new URLSearchParams(text);
+                    out.csrfId = String(params.get('csrfId') || params.get('csrfID') || '').trim();
+                    out.loginPointId = String(params.get('loginPointId') || '').trim();
+                    out.bizCode = this.normalizeBizCode(params.get('bizCode') || '');
+                } catch { }
+                return out;
+            }
+            if (body instanceof URLSearchParams) {
+                out.csrfId = String(body.get('csrfId') || body.get('csrfID') || '').trim();
+                out.loginPointId = String(body.get('loginPointId') || '').trim();
+                out.bizCode = this.normalizeBizCode(body.get('bizCode') || '');
+                return out;
+            }
+            if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                out.csrfId = String(body.get('csrfId') || body.get('csrfID') || '').trim();
+                out.loginPointId = String(body.get('loginPointId') || '').trim();
+                out.bizCode = this.normalizeBizCode(body.get('bizCode') || '');
+                return out;
+            }
+            if (typeof body === 'object') {
+                return this.parseAuthFromObject(body);
+            }
+            return out;
+        },
+
+        parseAuthFromUrl(rawUrl) {
+            const out = { csrfId: '', loginPointId: '', bizCode: '' };
+            const text = String(rawUrl || '').trim();
+            if (!text) return out;
+            try {
+                const parsed = new URL(text, window.location.origin);
+                out.csrfId = String(parsed.searchParams.get('csrfId') || parsed.searchParams.get('csrfID') || '').trim();
+                out.loginPointId = String(parsed.searchParams.get('loginPointId') || '').trim();
+                out.bizCode = this.normalizeBizCode(parsed.searchParams.get('bizCode') || '');
+            } catch { }
+            return out;
+        },
+
+        getCsrfScore(csrf) {
+            const value = String(csrf || '').trim();
+            if (!value) return -1;
+            let score = Math.min(80, value.length);
+            if (value.includes('_')) score += 30;
+            if (!/^\d+$/.test(value)) score += 20;
+            if (value.length >= 16) score += 10;
+            return score;
+        },
+
+        pickCsrf(current, next) {
+            const currentText = String(current || '').trim();
+            const nextText = String(next || '').trim();
+            if (!currentText) return nextText;
+            if (!nextText) return currentText;
+            return this.getCsrfScore(nextText) >= this.getCsrfScore(currentText) ? nextText : currentText;
+        },
+
+        resolveAuthContext(preferredBizCode = '') {
+            const auth = {
+                csrfId: '',
+                loginPointId: '',
+                bizCode: this.normalizeBizCode(preferredBizCode) || ''
+            };
+            const applyAuth = (entry) => {
+                if (!entry || typeof entry !== 'object') return;
+                auth.csrfId = this.pickCsrf(auth.csrfId, entry.csrfId);
+                if (!auth.loginPointId && entry.loginPointId) auth.loginPointId = String(entry.loginPointId || '').trim();
+                if (!auth.bizCode && entry.bizCode) auth.bizCode = this.normalizeBizCode(entry.bizCode);
+            };
+
+            applyAuth(this.parseAuthFromUrl(window.location.href));
+            applyAuth(this.parseAuthFromUrl(window.location.hash));
+            applyAuth(this.parseAuthFromBody(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''));
+
+            [
+                (typeof globalThis !== 'undefined' ? globalThis.__AM_TOKENS__ : null),
+                window.g_config,
+                window.PageConfig,
+                window.mm,
+                window.FEED_CONFIG,
+                window.__magix_data__
+            ].forEach(source => applyAuth(this.parseAuthFromObject(source)));
+
+            const managers = [];
+            const pushManager = (manager) => {
+                if (!manager || typeof manager.getRequestHistory !== 'function') return;
+                if (managers.includes(manager)) return;
+                managers.push(manager);
+            };
+            try { pushManager(window.__AM_HOOK_MANAGER__); } catch { }
+            try {
+                if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
+                    pushManager(unsafeWindow.__AM_HOOK_MANAGER__);
+                }
+            } catch { }
+            if (!managers.length) {
+                try { pushManager(createHookManager()); } catch { }
+            }
+
+            const history = [];
+            managers.forEach((manager) => {
+                try {
+                    const list = manager.getRequestHistory({
+                        includePattern: /\.json(?:$|\?)/i,
+                        limit: 2600
+                    });
+                    if (Array.isArray(list) && list.length) history.push(...list);
+                } catch { }
+            });
+            history.sort((left, right) => Number(right?.ts || 0) - Number(left?.ts || 0));
+            for (let i = 0; i < history.length; i++) {
+                const entry = history[i] || {};
+                applyAuth(this.parseAuthFromUrl(entry.url));
+                applyAuth(this.parseAuthFromBody(entry.body));
+                if (auth.csrfId && auth.loginPointId && auth.bizCode) break;
+            }
+
+            if (!auth.csrfId) {
+                const cookieMatch = document.cookie.match(/_tb_token_=([^;]+)/);
+                if (cookieMatch && cookieMatch[1]) {
+                    auth.csrfId = this.pickCsrf(auth.csrfId, decodeURIComponent(cookieMatch[1]));
+                }
+            }
+            if (!auth.bizCode) auth.bizCode = this.DEFAULT_BIZ_CODE;
+            if (!auth.csrfId || !auth.loginPointId) {
+                throw new Error('Token 未就绪，请先在页面手动点击一次计划开关后重试');
+            }
+            return auth;
+        },
+
+        isResponseOk(res) {
+            if (!res || typeof res !== 'object') return false;
+            if (res.success === false || res.ok === false) return false;
+            if (res.info && res.info.ok === false) return false;
+            if (res.info && res.info.errorCode) return false;
+            if (Array.isArray(res.ret) && res.ret.length) {
+                const retTokens = res.ret.map(item => String(item || '').trim()).filter(Boolean);
+                const hasRetFail = retTokens.some(token => /^FAIL[_:]/i.test(token));
+                const hasRetSuccess = retTokens.some(token => /^SUCCESS(?:$|[:_])/i.test(token) || token.includes('调用成功'));
+                if (hasRetFail && !hasRetSuccess) return false;
+            }
+            return true;
+        },
+
+        pickResponseMessage(res, fallbackMessage = '') {
+            const retText = Array.isArray(res?.ret) ? res.ret.map(item => String(item || '').trim()).filter(Boolean).join(' | ') : '';
+            const punishUrl = String(res?.data?.url || '').trim();
+            if (punishUrl.includes('/_____tmd_____/punish')) {
+                return '触发风控验证，请先在页面完成人机验证后重试';
+            }
+            return String(
+                res?.info?.message
+                || res?.message
+                || res?.msg
+                || retText
+                || fallbackMessage
+                || '请求失败'
+            ).trim();
+        },
+
+        async queryCampaignDetail(campaignId, bizCode, authContext) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return { itemId: '', adgroupIds: [] };
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const url = OneApiTransport.buildOneUrl('/campaign/get.json', {
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const payload = {
+                bizCode: targetBizCode,
+                campaignId: id,
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询计划详情失败',
+                businessErrorMessage: '查询计划详情失败'
+            });
+            const itemId = this.extractItemIdFromCampaignPayload(json, id);
+            const adgroupIds = this.extractAdgroupIdsFromCampaignPayload(json, id);
+            if (itemId) this.rememberCampaignItemId(id, itemId);
+            return { itemId, adgroupIds, response: json };
+        },
+
+        async queryAdgroupDetail(campaignId, adgroupId, bizCode, authContext) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedAdgroupId = this.normalizeAdgroupId(adgroupId);
+            if (!normalizedCampaignId || !normalizedAdgroupId) return { itemId: '' };
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const url = OneApiTransport.buildOneUrl('/adgroup/get.json', {
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const payload = {
+                bizCode: targetBizCode,
+                campaignId: normalizedCampaignId,
+                adgroupId: normalizedAdgroupId,
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询单元详情失败',
+                businessErrorMessage: '查询单元详情失败'
+            });
+            const itemId = this.extractItemIdFromCampaignPayload(json, normalizedCampaignId)
+                || this.resolveItemIdFromCandidates([
+                    json?.data?.adgroup,
+                    json?.data?.adgroup?.material,
+                    json?.data?.adgroup?.material?.linkUrl
+                ]);
+            if (itemId) this.rememberCampaignItemId(normalizedCampaignId, itemId);
+            return { itemId, response: json };
+        },
+
+        async findConflictRefs(campaignId, bizCode, authContext, itemId = '') {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return [];
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const normalizedItemId = this.normalizeItemId(itemId);
+            const numericCampaignId = Number(id);
+            const url = OneApiTransport.buildOneUrl('/campaign/diff/findList.json', {
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const payload = {
+                bizCode: targetBizCode,
+                source: 'campaign',
+                campaignIdList: [numericCampaignId],
+                campaignList: [{
+                    campaignId: numericCampaignId
+                }],
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            if (normalizedItemId) {
+                payload.campaignList[0].itemSelectedMode = 'user_define';
+                payload.campaignList[0].materialIdList = [Number(normalizedItemId)];
+            }
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询冲突计划失败',
+                businessErrorMessage: '查询冲突计划失败'
+            });
+            const refs = [];
+            this.collectCampaignRefsFromNode(json, refs, {
+                depth: 0,
+                seen: new WeakSet(),
+                bizHint: targetBizCode,
+                itemHint: normalizedItemId || this.getCampaignItemId(id)
+            });
+            refs.push({
+                campaignId: id,
+                itemId: normalizedItemId || this.getCampaignItemId(id) || '',
+                bizCode: targetBizCode,
+                status: '',
+                onlineStatus: '',
+                displayStatus: '',
+                source: 'seed'
+            });
+            const normalizedRefs = this.normalizeCampaignRefs(refs);
+            normalizedRefs.forEach((item) => {
+                this.rememberCampaignItemId(item?.campaignId, item?.itemId || '');
+            });
+            return normalizedRefs;
+        },
+
+        async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '', traceMessages = null) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId) return '';
+            const pushTrace = (message) => {
+                if (!Array.isArray(traceMessages)) return;
+                const text = String(message || '').trim();
+                if (!text) return;
+                traceMessages.push(text);
+            };
+            const fallback = this.normalizeItemId(fallbackItemId);
+            const cached = this.getCampaignItemId(normalizedCampaignId);
+            if (cached) {
+                pushTrace(`商品ID识别：命中缓存 ${cached}`);
+                return cached;
+            }
+            const bizList = [];
+            const pushBizCode = (value) => {
+                const bizCode = this.normalizeBizCode(value);
+                if (!bizCode) return;
+                if (bizList.includes(bizCode)) return;
+                bizList.push(bizCode);
+            };
+            (Array.isArray(bizCandidates) ? bizCandidates : []).forEach(pushBizCode);
+            this.BIZ_CODE_LIST.forEach(pushBizCode);
+
+            for (let i = 0; i < bizList.length; i++) {
+                const currentBiz = bizList[i];
+                try {
+                    const refs = await this.findConflictRefs(normalizedCampaignId, currentBiz, authContext, '');
+                    const selfRef = (Array.isArray(refs) ? refs : []).find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
+                    const resolved = this.normalizeItemId(selfRef?.itemId || '');
+                    if (resolved) {
+                        this.rememberCampaignItemId(normalizedCampaignId, resolved);
+                        pushTrace(`商品ID识别：冲突接口命中 ${resolved}（${currentBiz}）`);
+                        return resolved;
+                    }
+                } catch (err) {
+                    pushTrace(`商品ID识别：冲突接口失败（${currentBiz}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
+                }
+                try {
+                    const detail = await this.queryCampaignDetail(normalizedCampaignId, currentBiz, authContext);
+                    const resolvedByCampaign = this.normalizeItemId(detail?.itemId || '');
+                    if (resolvedByCampaign) {
+                        this.rememberCampaignItemId(normalizedCampaignId, resolvedByCampaign);
+                        pushTrace(`商品ID识别：计划详情命中 ${resolvedByCampaign}（${currentBiz}）`);
+                        return resolvedByCampaign;
+                    }
+                    const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
+                    if (adgroupIds.length) {
+                        pushTrace(`商品ID识别：计划详情返回单元 ${adgroupIds.length} 个（${currentBiz}）`);
+                    }
+                    for (let j = 0; j < Math.min(8, adgroupIds.length); j++) {
+                        try {
+                            const adgroupDetail = await this.queryAdgroupDetail(normalizedCampaignId, adgroupIds[j], currentBiz, authContext);
+                            const resolvedByAdgroup = this.normalizeItemId(adgroupDetail?.itemId || '');
+                            if (resolvedByAdgroup) {
+                                this.rememberCampaignItemId(normalizedCampaignId, resolvedByAdgroup);
+                                pushTrace(`商品ID识别：单元详情命中 ${resolvedByAdgroup}（${currentBiz} / adgroup=${adgroupIds[j]}）`);
+                                return resolvedByAdgroup;
+                            }
+                        } catch (err) {
+                            pushTrace(`商品ID识别：单元详情失败（${currentBiz} / adgroup=${adgroupIds[j]}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
+                        }
+                    }
+                } catch (err) {
+                    pushTrace(`商品ID识别：计划详情失败（${currentBiz}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
+                }
+            }
+            if (fallback) {
+                this.rememberCampaignItemId(normalizedCampaignId, fallback);
+                pushTrace(`商品ID识别：使用按钮透传兜底 ${fallback}`);
+                return fallback;
+            }
+            pushTrace('商品ID识别：未识别到商品ID');
+            return '';
+        }
+    };
+
+    const OneApiTransport = {
+        DEFAULT_HEADERS: {
+            'Content-Type': 'application/json',
+            Accept: '*/*',
+            'X-Requested-With': 'XMLHttpRequest',
+            'bx-v': '2.5.36'
+        },
+
+        buildOneUrl(path, query = {}) {
+            const url = String(path || '').startsWith('http')
+                ? new URL(String(path || ''), window.location.origin)
+                : new URL(`https://one.alimama.com${String(path || '').trim()}`, window.location.origin);
+            Object.keys(query || {}).forEach((key) => {
+                const value = query[key];
+                if (value === undefined || value === null || value === '') return;
+                url.searchParams.set(key, String(value));
+            });
+            return url.toString();
+        },
+
+        async parseJsonResponse(response, options = {}) {
+            const actionName = String(options.actionName || '请求失败').trim() || '请求失败';
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`${actionName}：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
+            }
+            const json = await response.json().catch(() => ({}));
+            if (options.validateOk !== false && !PlanIdentityUtils.isResponseOk(json)) {
+                throw new Error(PlanIdentityUtils.pickResponseMessage(json, options.businessErrorMessage || actionName));
+            }
+            return json;
+        },
+
+        async postJson(url, body = {}, options = {}) {
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    ...this.DEFAULT_HEADERS,
+                    ...(options.headers || {})
+                },
+                body: JSON.stringify(body)
+            });
+            return this.parseJsonResponse(response, options);
+        }
+    };
+
+    const MagicPromptDriver = {
+        isEditablePromptElement(el) {
+            if (!(el instanceof Element)) return false;
+            if (el instanceof HTMLTextAreaElement) return !el.disabled && !el.readOnly;
+            if (el instanceof HTMLInputElement) {
+                const t = (el.type || 'text').toLowerCase();
+                return !el.disabled && !el.readOnly && (t === 'text' || t === 'search' || t === 'url');
+            }
+            return !!el.isContentEditable;
+        },
+
+        isVisibleElement(el) {
+            if (!(el instanceof Element)) return false;
+            const style = el.ownerDocument?.defaultView?.getComputedStyle(el);
+            if (!style) return true;
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        },
+
+        findPromptInput(rootDoc) {
+            const doc = rootDoc && typeof rootDoc.querySelector === 'function' ? rootDoc : null;
+            if (!doc) return null;
+            const selectors = [
+                '#ai-input-magic-report textarea',
+                '#ai-input-magic-report input[type="text"]',
+                '#ai-input-magic-report input[type="search"]',
+                '#ai-input-magic-report [contenteditable="true"]',
+                'textarea#ai-input-magic-report',
+                'input#ai-input-magic-report[type="text"]',
+                'input#ai-input-magic-report[type="search"]',
+                '[id="ai-input-magic-report"][contenteditable="true"]'
+            ];
+
+            for (const selector of selectors) {
+                const el = doc.querySelector(selector);
+                if (this.isEditablePromptElement(el)) return el;
+            }
+
+            const fallback = Array.from(doc.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
+                .find(el => {
+                    const id = (el.id || '').toLowerCase();
+                    const cls = (el.className || '').toLowerCase();
+                    const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+                    const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+                    return (id.includes('magic') || cls.includes('magic') || placeholder.includes('提问') || placeholder.includes('输入') || ariaLabel.includes('输入'))
+                        && this.isEditablePromptElement(el)
+                        && this.isVisibleElement(el);
+                });
+            if (fallback) return fallback;
+
+            return Array.from(doc.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
+                .find(el => this.isEditablePromptElement(el) && this.isVisibleElement(el)) || null;
+        },
+
+        setPromptInputValue(inputEl, promptText) {
+            if (!this.isEditablePromptElement(inputEl)) return false;
+
+            inputEl.focus();
+            if (inputEl.isContentEditable) {
+                inputEl.textContent = '';
+                inputEl.textContent = promptText;
+                inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
+                inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+
+            const proto = inputEl instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const valueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            if (valueSetter) {
+                valueSetter.call(inputEl, promptText);
+            } else {
+                inputEl.value = promptText;
+            }
+
+            inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
+            inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+            return (inputEl.value || '').trim() === promptText.trim();
+        },
+
+        triggerClick(el) {
+            if (!(el instanceof Element)) return;
+            const mouseOpts = { bubbles: true, cancelable: true };
+            ['mousedown', 'mouseup', 'click'].forEach(type => {
+                try {
+                    el.dispatchEvent(new MouseEvent(type, mouseOpts));
+                } catch {
+                    try {
+                        el.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
+                    } catch { }
+                }
+            });
+            if (typeof el.click === 'function') el.click();
+        },
+
+        scoreQueryTrigger(el, inputEl) {
+            const text = (el.textContent || '').trim();
+            const title = (el.getAttribute('title') || '').trim();
+            const aria = (el.getAttribute('aria-label') || '').trim();
+            const mx = (el.getAttribute('mx-click') || '').trim();
+            const cls = (el.className || '').toString();
+            const id = (el.id || '').trim();
+            const merged = `${text} ${title} ${aria} ${mx} ${cls} ${id} `;
+            let score = 0;
+
+            if (text === '查询' || text === '发送' || text === '提问' || text === '立即查询') score += 100;
+            if (text.includes('查询')) score += 90;
+            if (text.includes('发送') || text.includes('提问')) score += 80;
+            if (/query|search|send|submit/i.test(merged)) score += 40;
+            if (/next-btn-primary/.test(cls)) score += 15;
+            if (inputEl?.form && el.closest('form') === inputEl.form) score += 20;
+            return score;
+        },
+
+        findQueryTrigger(rootDoc, inputEl) {
+            const doc = rootDoc && typeof rootDoc.querySelector === 'function' ? rootDoc : null;
+            if (!doc) return null;
+            const roots = [];
+            const nearest = inputEl?.closest?.('[id*="magic"], [class*="magic"], [class*="query"], form');
+            if (nearest) roots.push(nearest);
+            roots.push(doc);
+
+            const triggerSelectors = [
+                'button[type="submit"]',
+                'button[mx-click*="query"]',
+                'button[mx-click*="search"]',
+                'button[mx-click*="send"]',
+                '[role="button"][mx-click*="query"]',
+                '[role="button"][mx-click*="search"]',
+                '[role="button"][mx-click*="send"]',
+                '[mx-click*="query"]',
+                '[mx-click*="search"]',
+                '[mx-click*="send"]',
+                'button[class*="query"]',
+                'button[class*="search"]',
+                'button[class*="send"]',
+                '.next-btn-primary',
+                '.next-btn'
+            ];
+
+            const seen = new Set();
+            const candidates = [];
+            roots.forEach(root => {
+                triggerSelectors.forEach(selector => {
+                    root.querySelectorAll(selector).forEach(el => {
+                        if (seen.has(el) || !this.isVisibleElement(el)) return;
+                        if (el.hasAttribute('disabled')) return;
+                        if (el.getAttribute('aria-disabled') === 'true') return;
+                        seen.add(el);
+                        candidates.push(el);
+                    });
+                });
+            });
+            if (!candidates.length) return null;
+
+            return candidates
+                .map(el => ({ el, score: this.scoreQueryTrigger(el, inputEl) }))
+                .sort((a, b) => b.score - a.score)[0]?.el || null;
+        },
+
+        trySubmitPromptInDocument(doc, promptText) {
+            if (!doc || typeof doc.querySelector !== 'function') {
+                return { ok: false, reason: 'doc-not-ready' };
+            }
+
+            const inputEl = this.findPromptInput(doc);
+            if (!inputEl) return { ok: false, reason: 'input-not-found' };
+
+            if (!this.setPromptInputValue(inputEl, promptText)) {
+                return { ok: false, reason: 'input-set-failed' };
+            }
+
+            const trigger = this.findQueryTrigger(doc, inputEl);
+            if (trigger && typeof trigger.click === 'function') {
+                this.triggerClick(trigger);
+                return { ok: true, method: 'button' };
+            }
+
+            if (inputEl.form && typeof inputEl.form.requestSubmit === 'function') {
+                inputEl.form.requestSubmit();
+                return { ok: true, method: 'form-submit' };
+            }
+
+            const eventView = doc.defaultView || window;
+            const keyOptions = { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true, cancelable: true, view: eventView };
+            inputEl.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
+            inputEl.dispatchEvent(new KeyboardEvent('keypress', keyOptions));
+            inputEl.dispatchEvent(new KeyboardEvent('keyup', keyOptions));
+            return { ok: true, method: 'enter-fallback', uncertain: true };
+        },
+
+        scoreNativeEntry(el) {
+            const text = (el.textContent || '').trim();
+            const title = (el.getAttribute('title') || '').trim();
+            const aria = (el.getAttribute('aria-label') || '').trim();
+            const mx = (el.getAttribute('mx-click') || '').trim();
+            const cls = (el.className || '').toString();
+            const idText = (el.id || '').trim();
+            const merged = `${text} ${title} ${aria} ${mx} ${cls} ${idText}`.toLowerCase();
+
+            let score = 0;
+            if (merged.includes('万象查数')) score += 400;
+            else if (merged.includes('万能查数')) score += 300;
+            else if (merged.includes('全能数据查')) score += 200;
+            else if (merged.includes('查数')) score += 120;
+            else return -1;
+
+            if (merged.includes('万象')) score += 40;
+            if (merged.includes('report')) score += 10;
+            if (el.tagName === 'BUTTON') score += 6;
+            if (merged.includes('ai')) score += 4;
+            return score;
+        },
+
+        pickNativeEntry(rootDoc = document, options = {}) {
+            const doc = rootDoc && typeof rootDoc.querySelectorAll === 'function' ? rootDoc : document;
+            const ignoredSelector = String(options.ignoredSelector || '').trim();
+            const selectors = ['button', 'a', '[role="button"]', '[mx-click]'];
+            const nodes = doc.querySelectorAll(selectors.join(','));
+            const candidates = [];
+            const seen = new Set();
+
+            nodes.forEach(el => {
+                if (!(el instanceof Element) || seen.has(el)) return;
+                if (ignoredSelector && el.closest(ignoredSelector)) return;
+                if (!this.isVisibleElement(el)) return;
+                if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return;
+                const score = this.scoreNativeEntry(el);
+                if (score < 0) return;
+                seen.add(el);
+                candidates.push({ el, score });
+            });
+
+            return candidates.sort((a, b) => b.score - a.score)[0]?.el || null;
+        },
+
+        async openNativeAndSubmit(campaignId, promptText, options = {}) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return false;
+
+            const entry = this.pickNativeEntry(document, {
+                ignoredSelector: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel'
+            });
+            if (!entry) return false;
+
+            this.triggerClick(entry);
+
+            const maxAttempts = Math.max(1, Number(options.maxAttempts || 12) || 12);
+            const retryDelay = Math.max(50, Number(options.retryDelayMs || 350) || 350);
+            for (let i = 0; i < maxAttempts; i++) {
+                const result = this.trySubmitPromptInDocument(document, promptText);
+                if (result.ok) return true;
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
+
+            return false;
+        }
+    };
+
+    const resolveKeywordPlanApiAccessor = () => {
+        try {
+            if (KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
+                return KeywordPlanApi;
+            }
+        } catch { }
+        try {
+            const fromWindow = window.__AM_WXT_KEYWORD_API__;
+            if (fromWindow && typeof fromWindow.openWizard === 'function') {
+                return fromWindow;
+            }
+        } catch { }
+        try {
+            const fromGlobal = globalThis.__AM_WXT_KEYWORD_API__;
+            if (fromGlobal && typeof fromGlobal.openWizard === 'function') {
+                return fromGlobal;
+            }
+        } catch { }
+        return null;
+    };
+
     const State = {
         config: loadConfig(),
         riskAlertLastUrl: '',
@@ -1083,6 +2217,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         Core._sortedByCharge = false;
         Core._lastTotalCost = null;
         Logger.log(`📍 ${reason}，重置排序`);
+    };
+
+    const isVisibleOverlayElement = (el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        if (!el.isConnected) return false;
+        const style = window.getComputedStyle(el);
+        if (!style) return false;
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        if (parseFloat(style.opacity || '1') <= 0.01) return false;
+        if (style.pointerEvents === 'none') return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    };
+
+    const shouldPauseInjectionForPopup = () => {
+        const popupSelectors = [
+            '#am-wxt-keyword-overlay.open',
+            '#am-wxt-scene-popup-mask',
+            '#am-wxt-keyword-item-picker-mask',
+            '#am-campaign-concurrent-log-popup',
+            '#am-magic-report-popup',
+            '#am-report-capture-panel',
+            '#alimama-escort-helper-ui-result-overlay'
+        ];
+        for (let i = 0; i < popupSelectors.length; i++) {
+            const popup = document.querySelector(popupSelectors[i]);
+            if (isVisibleOverlayElement(popup)) return true;
+        }
+        return false;
     };
 
     // ==========================================
@@ -2445,26 +3608,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const keywordPlanBtn = document.getElementById('am-trigger-keyword-plan-api');
             if (keywordPlanBtn) {
-                const resolveKeywordPlanApi = () => {
-                    try {
-                        if (KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
-                            return KeywordPlanApi;
-                        }
-                    } catch { }
-                    try {
-                        const fromWindow = window.__AM_WXT_KEYWORD_API__;
-                        if (fromWindow && typeof fromWindow.openWizard === 'function') {
-                            return fromWindow;
-                        }
-                    } catch { }
-                    try {
-                        const fromGlobal = globalThis.__AM_WXT_KEYWORD_API__;
-                        if (fromGlobal && typeof fromGlobal.openWizard === 'function') {
-                            return fromGlobal;
-                        }
-                    } catch { }
-                    return null;
-                };
+                const resolveKeywordPlanApi = () => resolveKeywordPlanApiAccessor();
 
                 const openExistingKeywordOverlay = () => {
                     const overlay = document.getElementById('am-wxt-keyword-overlay');
@@ -3882,188 +5026,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         isEditablePromptElement(el) {
-            if (!el) return false;
-            if (el instanceof HTMLTextAreaElement) return true;
-            if (el instanceof HTMLInputElement) {
-                const t = (el.type || 'text').toLowerCase();
-                return t === 'text' || t === 'search';
-            }
-            return !!el.isContentEditable;
+            return MagicPromptDriver.isEditablePromptElement(el);
         },
 
         isVisibleElement(el) {
-            if (!(el instanceof Element)) return false;
-            const style = el.ownerDocument?.defaultView?.getComputedStyle(el);
-            if (!style) return true;
-            if (style.display === 'none' || style.visibility === 'hidden') return false;
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0;
+            return MagicPromptDriver.isVisibleElement(el);
         },
 
         findPromptInput(iframeDoc) {
-            const selectors = [
-                '#ai-input-magic-report textarea',
-                '#ai-input-magic-report input[type="text"]',
-                '#ai-input-magic-report input[type="search"]',
-                '#ai-input-magic-report [contenteditable="true"]',
-                'textarea#ai-input-magic-report',
-                'input#ai-input-magic-report[type="text"]',
-                'input#ai-input-magic-report[type="search"]',
-                '[id="ai-input-magic-report"][contenteditable="true"]'
-            ];
-
-            for (const selector of selectors) {
-                const el = iframeDoc.querySelector(selector);
-                if (this.isEditablePromptElement(el)) return el;
-            }
-
-            const fallback = Array.from(iframeDoc.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
-                .find(el => {
-                    const id = (el.id || '').toLowerCase();
-                    const cls = (el.className || '').toLowerCase();
-                    const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
-                    const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
-                    return (id.includes('magic') || cls.includes('magic') || placeholder.includes('提问') || placeholder.includes('输入') || ariaLabel.includes('输入'))
-                        && this.isEditablePromptElement(el)
-                        && this.isVisibleElement(el);
-                });
-
-            if (fallback) return fallback;
-
-            return Array.from(iframeDoc.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
-                .find(el => this.isEditablePromptElement(el) && this.isVisibleElement(el)) || null;
+            return MagicPromptDriver.findPromptInput(iframeDoc);
         },
 
         setPromptInputValue(inputEl, promptText) {
-            if (!this.isEditablePromptElement(inputEl)) return false;
-
-            inputEl.focus();
-            if (inputEl.isContentEditable) {
-                inputEl.textContent = '';
-                inputEl.textContent = promptText;
-                inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
-                inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-                return true;
-            }
-
-            const proto = inputEl instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-            const valueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-            if (valueSetter) {
-                valueSetter.call(inputEl, promptText);
-            } else {
-                inputEl.value = promptText;
-            }
-
-            inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
-            inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-            return (inputEl.value || '').trim() === promptText.trim();
+            return MagicPromptDriver.setPromptInputValue(inputEl, promptText);
         },
 
         triggerClick(el) {
-            if (!(el instanceof Element)) return;
-            const mouseOpts = { bubbles: true, cancelable: true };
-            ['mousedown', 'mouseup', 'click'].forEach(type => {
-                try {
-                    el.dispatchEvent(new MouseEvent(type, mouseOpts));
-                } catch {
-                    try {
-                        el.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
-                    } catch { }
-                }
-            });
-            if (typeof el.click === 'function') el.click();
+            MagicPromptDriver.triggerClick(el);
         },
 
         findQueryTrigger(iframeDoc, inputEl) {
-            const roots = [];
-            const nearest = inputEl?.closest('[id*="magic"], [class*="magic"], [class*="query"], form');
-            if (nearest) roots.push(nearest);
-            roots.push(iframeDoc);
-
-            const triggerSelectors = [
-                'button[type="submit"]',
-                'button[mx-click*="query"]',
-                'button[mx-click*="search"]',
-                'button[mx-click*="send"]',
-                '[role="button"][mx-click*="query"]',
-                '[role="button"][mx-click*="search"]',
-                '[role="button"][mx-click*="send"]',
-                '[mx-click*="query"]',
-                '[mx-click*="search"]',
-                '[mx-click*="send"]',
-                'button[class*="query"]',
-                'button[class*="search"]',
-                'button[class*="send"]',
-                '.next-btn-primary',
-                '.next-btn'
-            ];
-
-            const seen = new Set();
-            const candidates = [];
-            roots.forEach(root => {
-                triggerSelectors.forEach(selector => {
-                    root.querySelectorAll(selector).forEach(el => {
-                        if (seen.has(el) || !this.isVisibleElement(el)) return;
-                        if (el.hasAttribute('disabled')) return;
-                        if (el.getAttribute('aria-disabled') === 'true') return;
-                        seen.add(el);
-                        candidates.push(el);
-                    });
-                });
-            });
-            if (!candidates.length) return null;
-
-            const scoreOf = (el) => {
-                const text = (el.textContent || '').trim();
-                const title = (el.getAttribute('title') || '').trim();
-                const aria = (el.getAttribute('aria-label') || '').trim();
-                const mx = (el.getAttribute('mx-click') || '').trim();
-                const cls = (el.className || '').toString();
-                const id = (el.id || '').trim();
-                const merged = `${text} ${title} ${aria} ${mx} ${cls} ${id} `;
-                let score = 0;
-
-                if (text === '查询' || text === '发送' || text === '提问' || text === '立即查询') score += 100;
-                if (text.includes('查询')) score += 90;
-                if (text.includes('发送') || text.includes('提问')) score += 80;
-                if (/query|search|send|submit/i.test(merged)) score += 40;
-                if (/next-btn-primary/.test(cls)) score += 15;
-                if (inputEl?.form && el.closest('form') === inputEl.form) score += 20;
-                return score;
-            };
-
-            return candidates
-                .map(el => ({ el, score: scoreOf(el) }))
-                .sort((a, b) => b.score - a.score)[0]?.el || null;
+            return MagicPromptDriver.findQueryTrigger(iframeDoc, inputEl);
         },
 
         trySubmitPrompt(promptText) {
             const iframeDoc = this.getIframeDoc();
             if (!iframeDoc) return { ok: false, reason: 'iframe-not-ready' };
-
-            const inputEl = this.findPromptInput(iframeDoc);
-            if (!inputEl) return { ok: false, reason: 'input-not-found' };
-
-            if (!this.setPromptInputValue(inputEl, promptText)) {
-                return { ok: false, reason: 'input-set-failed' };
-            }
-
-            const trigger = this.findQueryTrigger(iframeDoc, inputEl);
-            if (trigger && typeof trigger.click === 'function') {
-                this.triggerClick(trigger);
-                return { ok: true, method: 'button' };
-            }
-
-            if (inputEl.form && typeof inputEl.form.requestSubmit === 'function') {
-                inputEl.form.requestSubmit();
-                return { ok: true, method: 'form-submit' };
-            }
-
-            const keyOptions = { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true, cancelable: true };
-            inputEl.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
-            inputEl.dispatchEvent(new KeyboardEvent('keypress', keyOptions));
-            inputEl.dispatchEvent(new KeyboardEvent('keyup', keyOptions));
-            return { ok: true, method: 'enter-fallback', uncertain: true };
+            return MagicPromptDriver.trySubmitPromptInDocument(iframeDoc, promptText);
         },
 
         runQuickPrompt(promptText) {
@@ -4105,94 +5094,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         trySubmitPromptInDocument(doc, promptText) {
-            if (!doc || typeof doc.querySelector !== 'function') {
-                return { ok: false, reason: 'doc-not-ready' };
-            }
-
-            const inputEl = this.findPromptInput(doc);
-            if (!inputEl) return { ok: false, reason: 'input-not-found' };
-
-            if (!this.setPromptInputValue(inputEl, promptText)) {
-                return { ok: false, reason: 'input-set-failed' };
-            }
-
-            const trigger = this.findQueryTrigger(doc, inputEl);
-            if (trigger && typeof trigger.click === 'function') {
-                this.triggerClick(trigger);
-                return { ok: true, method: 'button' };
-            }
-
-            if (inputEl.form && typeof inputEl.form.requestSubmit === 'function') {
-                inputEl.form.requestSubmit();
-                return { ok: true, method: 'form-submit' };
-            }
-
-            const eventView = doc.defaultView || window;
-            const keyOptions = { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true, cancelable: true, view: eventView };
-            inputEl.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
-            inputEl.dispatchEvent(new KeyboardEvent('keypress', keyOptions));
-            inputEl.dispatchEvent(new KeyboardEvent('keyup', keyOptions));
-            return { ok: true, method: 'enter-fallback', uncertain: true };
+            return MagicPromptDriver.trySubmitPromptInDocument(doc, promptText);
         },
 
         async openNativeAndSubmit(campaignId, promptText) {
-            const id = String(campaignId || '').trim();
-            if (!/^\d{6,}$/.test(id)) return false;
-
-            const pickNativeEntry = () => {
-                const selectors = ['button', 'a', '[role="button"]', '[mx-click]'];
-                const nodes = document.querySelectorAll(selectors.join(','));
-                const candidates = [];
-                const seen = new Set();
-
-                nodes.forEach(el => {
-                    if (!(el instanceof Element) || seen.has(el)) return;
-                    if (el.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel')) return;
-                    if (!this.isVisibleElement(el)) return;
-                    if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return;
-
-                    const text = (el.textContent || '').trim();
-                    const title = (el.getAttribute('title') || '').trim();
-                    const aria = (el.getAttribute('aria-label') || '').trim();
-                    const mx = (el.getAttribute('mx-click') || '').trim();
-                    const cls = (el.className || '').toString();
-                    const idText = (el.id || '').trim();
-                    const merged = `${text} ${title} ${aria} ${mx} ${cls} ${idText}`.toLowerCase();
-
-                    let score = 0;
-                    if (merged.includes('万象查数')) score += 400;
-                    else if (merged.includes('万能查数')) score += 300;
-                    else if (merged.includes('全能数据查')) score += 200;
-                    else if (merged.includes('查数')) score += 120;
-                    else return;
-
-                    if (merged.includes('万象')) score += 40;
-                    if (merged.includes('report')) score += 10;
-                    if (el.tagName === 'BUTTON') score += 6;
-                    if (merged.includes('ai')) score += 4;
-
-                    seen.add(el);
-                    candidates.push({ el, score });
-                });
-
-                return candidates.sort((a, b) => b.score - a.score)[0]?.el || null;
-            };
-
-            const entry = pickNativeEntry();
-            if (!entry) return false;
-
-            this.triggerClick(entry);
-
-            for (let i = 0; i < 12; i++) {
-                const result = this.trySubmitPromptInDocument(document, promptText);
-                if (result.ok) {
-                    Logger.log(`🔍 原生查数已执行：${promptText}`);
-                    return true;
-                }
-                await new Promise(resolve => setTimeout(resolve, 350));
+            const nativeOk = await MagicPromptDriver.openNativeAndSubmit(campaignId, promptText);
+            if (nativeOk) {
+                Logger.log(`🔍 原生查数已执行：${promptText}`);
             }
-
-            return false;
+            return nativeOk;
         },
 
         async openWithCampaignId(campaignId, options = {}) {
@@ -4262,28 +5172,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         cacheCrowdCampaignItemId(campaignId, itemId) {
-            const id = String(campaignId || '').trim();
-            const normalizedItemId = String(itemId || '').trim();
-            if (!/^\d{6,}$/.test(id) || !/^\d{6,}$/.test(normalizedItemId)) return '';
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const normalizedItemId = PlanIdentityUtils.normalizeItemId(itemId);
+            if (!id || !normalizedItemId) return '';
             if (!(this.crowdCampaignItemIdMap instanceof Map)) {
                 this.crowdCampaignItemIdMap = new Map();
             }
             this.crowdCampaignItemIdMap.set(id, normalizedItemId);
+            PlanIdentityUtils.rememberCampaignItemId(id, normalizedItemId);
             return normalizedItemId;
         },
 
         getCrowdCampaignItemId(campaignId) {
-            const id = String(campaignId || '').trim();
-            if (!/^\d{6,}$/.test(id)) return '';
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return '';
             if (this.crowdCampaignItemIdMap instanceof Map) {
-                const localCached = String(this.crowdCampaignItemIdMap.get(id) || '').trim();
-                if (/^\d{6,}$/.test(localCached)) return localCached;
+                const localCached = PlanIdentityUtils.normalizeItemId(this.crowdCampaignItemIdMap.get(id) || '');
+                if (localCached) return localCached;
             }
             try {
-                if (typeof CampaignIdQuickEntry !== 'object' || !CampaignIdQuickEntry) return '';
-                if (typeof CampaignIdQuickEntry.getCampaignItemId !== 'function') return '';
-                const sharedCached = String(CampaignIdQuickEntry.getCampaignItemId(id) || '').trim();
-                if (!/^\d{6,}$/.test(sharedCached)) return '';
+                const sharedCached = PlanIdentityUtils.getCampaignItemId(id);
+                if (!sharedCached) return '';
                 this.cacheCrowdCampaignItemId(id, sharedCached);
                 return sharedCached;
             } catch {
@@ -4292,38 +5201,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         async resolveCrowdItemIdByCampaign(campaignId) {
-            const id = String(campaignId || '').trim();
-            if (!/^\d{6,}$/.test(id)) return '';
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return '';
             try {
-                if (typeof CampaignIdQuickEntry !== 'object' || !CampaignIdQuickEntry) return '';
-                const fromCache = typeof CampaignIdQuickEntry.getCampaignItemId === 'function'
-                    ? String(CampaignIdQuickEntry.getCampaignItemId(id) || '').trim()
-                    : '';
-                if (/^\d{6,}$/.test(fromCache)) {
+                const fromCache = PlanIdentityUtils.getCampaignItemId(id);
+                if (fromCache) {
                     this.cacheCrowdCampaignItemId(id, fromCache);
                     this.refreshCrowdMatrixCampaignMeta(id);
                     return fromCache;
                 }
-                if (
-                    typeof CampaignIdQuickEntry.resolveAuthContext !== 'function'
-                    || typeof CampaignIdQuickEntry.resolveItemIdByCampaignId !== 'function'
-                ) {
-                    return '';
-                }
-                const defaultBizCode = String(CampaignIdQuickEntry.DEFAULT_BIZ_CODE || 'onebpSearch').trim();
-                const authContext = CampaignIdQuickEntry.resolveAuthContext(defaultBizCode);
-                const bizCandidates = Array.isArray(CampaignIdQuickEntry.BIZ_CODE_LIST) && CampaignIdQuickEntry.BIZ_CODE_LIST.length
-                    ? CampaignIdQuickEntry.BIZ_CODE_LIST.slice()
-                    : ['onebpSearch', 'onebpSite', 'onebpDisplay', 'onebpAdStrategyLiuZi'];
-                const resolved = await CampaignIdQuickEntry.resolveItemIdByCampaignId(
+                const authContext = PlanIdentityUtils.resolveAuthContext(PlanIdentityUtils.DEFAULT_BIZ_CODE);
+                const resolved = await PlanIdentityUtils.resolveItemIdByCampaignId(
                     id,
-                    bizCandidates,
+                    PlanIdentityUtils.BIZ_CODE_LIST.slice(),
                     authContext,
                     '',
                     []
                 );
-                const normalized = String(resolved || '').trim();
-                if (!/^\d{6,}$/.test(normalized)) return '';
+                const normalized = PlanIdentityUtils.normalizeItemId(resolved);
+                if (!normalized) return '';
                 this.cacheCrowdCampaignItemId(id, normalized);
                 this.refreshCrowdMatrixCampaignMeta(id);
                 return normalized;
@@ -7037,31 +7933,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         normalizeCampaignId(rawId) {
-            const id = String(rawId || '').trim();
-            return /^\d{6,}$/.test(id) ? id : '';
+            return PlanIdentityUtils.normalizeCampaignId(rawId);
         },
 
         normalizeAdgroupId(rawId) {
-            const id = String(rawId || '').trim();
-            return /^\d{6,}$/.test(id) ? id : '';
+            return PlanIdentityUtils.normalizeAdgroupId(rawId);
         },
 
         normalizeBizCode(rawBizCode) {
-            const biz = String(rawBizCode || '').trim();
-            if (!biz) return '';
-            if (biz === 'onebpSearch' || biz === 'onebpSite' || biz === 'onebpAdStrategyLiuZi' || biz === 'onebpDisplay') return biz;
-            if (/onebpsearch|search|keyword|关键词/i.test(biz)) return 'onebpSearch';
-            if (/onebpsite|site|全站/i.test(biz)) return 'onebpSite';
-            if (/onebpadstrategyliuzi|liuzi|lead|线索|留资/i.test(biz)) return 'onebpAdStrategyLiuZi';
-            if (/onebpdisplay|display|crowd|人群/i.test(biz)) return 'onebpDisplay';
-            return '';
+            return PlanIdentityUtils.normalizeBizCode(rawBizCode);
         },
 
         getOppositeBizCode(bizCode) {
-            const biz = this.normalizeBizCode(bizCode);
-            if (biz === 'onebpSearch') return 'onebpSite';
-            if (biz === 'onebpSite') return 'onebpSearch';
-            return '';
+            return PlanIdentityUtils.getOppositeBizCode(bizCode);
         },
 
         sleep(ms) {
@@ -7145,48 +8029,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         parseBizCodeFromRaw(raw) {
-            const text = String(raw || '').trim();
-            if (!text) return '';
-            try {
-                const parsed = new URL(text, window.location.origin);
-                const fromQuery = this.normalizeBizCode(parsed.searchParams.get('bizCode') || '');
-                if (fromQuery) return fromQuery;
-            } catch { }
-            const match = text.match(/[?&]bizCode=([^&#]+)/i) || text.match(/bizCode[=:]([^&#]+)/i);
-            if (!match || !match[1]) return '';
-            try {
-                return this.normalizeBizCode(decodeURIComponent(match[1]));
-            } catch {
-                return this.normalizeBizCode(match[1]);
-            }
+            return PlanIdentityUtils.parseBizCodeFromRaw(raw);
         },
 
         inferBizCodeFromElement(el) {
-            const fromLocation = this.parseBizCodeFromRaw(window.location.href) || this.parseBizCodeFromRaw(window.location.hash);
-            if (!(el instanceof Element)) return fromLocation;
-
-            const fromSelf = this.parseBizCodeFromRaw(el.getAttribute?.('href') || '')
-                || this.parseBizCodeFromRaw(el.getAttribute?.('mx-href') || '')
-                || this.parseBizCodeFromRaw(el.getAttribute?.('data-biz-code') || '')
-                || this.parseBizCodeFromRaw(el.dataset?.bizCode || '');
-            if (fromSelf) return fromSelf;
-
-            const nearestLink = el.closest('a[href], [mx-href], [data-biz-code]');
-            if (nearestLink instanceof Element) {
-                const fromLink = this.parseBizCodeFromRaw(nearestLink.getAttribute('href') || '')
-                    || this.parseBizCodeFromRaw(nearestLink.getAttribute('mx-href') || '')
-                    || this.parseBizCodeFromRaw(nearestLink.getAttribute('data-biz-code') || '')
-                    || this.parseBizCodeFromRaw(nearestLink.dataset?.bizCode || '');
-                if (fromLink) return fromLink;
-            }
-
-            const scope = el.closest('tr, li, section, article, .table-row, .list-item, .campaign-row') || el.parentElement;
-            const scopeText = String(scope?.textContent || '');
-            if (/关键词推广|关键词计划|关键词/.test(scopeText)) return 'onebpSearch';
-            if (/全站推广|货品全站|全站/.test(scopeText)) return 'onebpSite';
-            if (/线索推广|线索计划|线索|留资/.test(scopeText)) return 'onebpAdStrategyLiuZi';
-            if (/人群推广|人群计划|人群/.test(scopeText)) return 'onebpDisplay';
-            return fromLocation;
+            return PlanIdentityUtils.inferBizCodeFromElement(el);
         },
 
         getCandidateBizCodes(el) {
@@ -7212,8 +8059,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         normalizeItemId(rawItemId) {
-            const itemId = String(rawItemId || '').trim();
-            return /^\d{6,}$/.test(itemId) ? itemId : '';
+            return PlanIdentityUtils.normalizeItemId(rawItemId);
         },
 
         rememberCampaignItemId(campaignId, itemId) {
@@ -7221,114 +8067,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
             this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            PlanIdentityUtils.rememberCampaignItemId(normalizedCampaignId, normalizedItemId);
         },
 
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            return this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const localCached = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            if (localCached) return localCached;
+            const sharedCached = PlanIdentityUtils.getCampaignItemId(normalizedCampaignId);
+            if (sharedCached) {
+                this.campaignItemIdCache.set(normalizedCampaignId, sharedCached);
+            }
+            return sharedCached;
         },
 
         parseItemIdFromRaw(raw) {
-            const text = String(raw || '').trim();
-            if (!text) return '';
-            const fromPlain = this.normalizeItemId(
-                (text.match(/(?:itemId|item_id|materialId|material_id|searchValue)[=:]([0-9]{6,})/i) || [])[1]
-            );
-            if (fromPlain) return fromPlain;
-            try {
-                const parsed = new URL(text, window.location.origin);
-                const searchKey = String(parsed.searchParams.get('searchKey') || '').trim().toLowerCase();
-                const searchValue = this.normalizeItemId(parsed.searchParams.get('searchValue') || '');
-                if (searchValue && (!searchKey || searchKey === 'itemid' || searchKey === 'item_id' || searchKey === 'materialid')) {
-                    return searchValue;
-                }
-                const keys = ['itemId', 'item_id', 'materialId', 'material_id', 'searchValue'];
-                for (let i = 0; i < keys.length; i++) {
-                    const candidate = this.normalizeItemId(parsed.searchParams.get(keys[i]) || '');
-                    if (candidate) return candidate;
-                }
-                const host = String(parsed.hostname || '').toLowerCase();
-                const path = String(parsed.pathname || '').toLowerCase();
-                if (/detail\.tmall\.com|item\.taobao\.com/.test(host) || /\/item\.htm/.test(path)) {
-                    const candidate = this.normalizeItemId(parsed.searchParams.get('id') || '');
-                    if (candidate) return candidate;
-                }
-            } catch { }
-            return '';
+            return PlanIdentityUtils.parseItemIdFromRaw(raw);
         },
 
         inferItemIdFromElement(el, options = {}) {
-            const allowLocationFallback = options?.allowLocationFallback !== false;
-            const allowBodyFallback = options?.allowBodyFallback !== false;
-            const fromLocation = allowLocationFallback
-                ? (this.parseItemIdFromRaw(window.location.href)
-                    || this.parseItemIdFromRaw(window.location.hash))
-                : '';
-            const findFromText = (text) => this.normalizeItemId(
-                (String(text || '').match(/(?:宝贝|商品)\s*ID\s*[：:]\s*([0-9]{6,})/i) || [])[1]
-            );
-            if (!(el instanceof Element)) {
-                if (fromLocation) return fromLocation;
-                return allowBodyFallback ? findFromText(document.body?.innerText || '') : '';
-            }
-            const fromSelf = this.parseItemIdFromRaw(el.getAttribute?.('href') || '')
-                || this.parseItemIdFromRaw(el.getAttribute?.('mx-href') || '')
-                || this.normalizeItemId(el.getAttribute?.('data-item-id') || '')
-                || this.normalizeItemId(el.getAttribute?.('data-material-id') || '')
-                || this.normalizeItemId(el.dataset?.itemId || '')
-                || this.normalizeItemId(el.dataset?.materialId || '');
-            if (fromSelf) return fromSelf;
-            const fromNearestData = this.normalizeItemId(
-                el.closest?.('[data-item-id], [data-material-id]')?.getAttribute('data-item-id')
-                || el.closest?.('[data-item-id], [data-material-id]')?.getAttribute('data-material-id')
-                || ''
-            );
-            if (fromNearestData) return fromNearestData;
-            const scope = el.closest('tr, li, section, article, .table-row, .list-item, .campaign-row') || el.parentElement;
-            const fromScope = findFromText(scope?.textContent || '');
-            if (fromScope) return fromScope;
-            if (fromLocation) return fromLocation;
-            if (!allowBodyFallback) return '';
-            return findFromText(document.body?.innerText || '');
+            return PlanIdentityUtils.inferItemIdFromElement(el, options);
         },
 
         resolveItemIdFromCandidates(candidates = []) {
-            const queue = Array.isArray(candidates) ? [...candidates] : [candidates];
-            for (let i = 0; i < queue.length; i++) {
-                const current = queue[i];
-                if (current === undefined || current === null || current === '') continue;
-                if (Array.isArray(current)) {
-                    queue.push(...current);
-                    continue;
-                }
-                if (typeof current === 'object') {
-                    queue.push(
-                        current.itemId,
-                        current.materialId,
-                        current.auctionId,
-                        current.targetItemId,
-                        current.targetMaterialId,
-                        current.item_id,
-                        current.material_id,
-                        current.itemid,
-                        current.materialid,
-                        current.itemIdList,
-                        current.materialIdList,
-                        current.whiteBoxItemIds,
-                        current.linkUrl,
-                        current.itemUrl,
-                        current.material,
-                        current.lastAdgroup
-                    );
-                    continue;
-                }
-                const normalized = this.normalizeItemId(current);
-                if (normalized) return normalized;
-                const parsed = this.parseItemIdFromRaw(current);
-                if (parsed) return parsed;
-            }
-            return '';
+            return PlanIdentityUtils.resolveItemIdFromCandidates(candidates);
         },
 
         extractAdgroupIdsFromCampaignPayload(payload = {}, expectedCampaignId = '') {
@@ -7431,25 +8194,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 csrfId: String(authContext?.csrfId || ''),
                 loginPointId: String(authContext?.loginPointId || '')
             };
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: '*/*',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'bx-v': '2.5.36'
-                },
-                body: JSON.stringify(payload)
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询计划详情失败',
+                businessErrorMessage: '查询计划详情失败'
             });
-            if (!response.ok) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`查询计划详情失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
-            }
-            const json = await response.json().catch(() => ({}));
-            if (!this.isResponseOk(json)) {
-                throw new Error(this.pickResponseMessage(json, '查询计划详情失败'));
-            }
             const itemId = this.extractItemIdFromCampaignPayload(json, id);
             const adgroupIds = this.extractAdgroupIdsFromCampaignPayload(json, id);
             if (itemId) this.rememberCampaignItemId(id, itemId);
@@ -7473,25 +8221,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 csrfId: String(authContext?.csrfId || ''),
                 loginPointId: String(authContext?.loginPointId || '')
             };
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: '*/*',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'bx-v': '2.5.36'
-                },
-                body: JSON.stringify(payload)
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询单元详情失败',
+                businessErrorMessage: '查询单元详情失败'
             });
-            if (!response.ok) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`查询单元详情失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
-            }
-            const json = await response.json().catch(() => ({}));
-            if (!this.isResponseOk(json)) {
-                throw new Error(this.pickResponseMessage(json, '查询单元详情失败'));
-            }
             const itemId = this.extractItemIdFromCampaignPayload(json, normalizedCampaignId)
                 || this.resolveItemIdFromCandidates([
                     json?.data?.adgroup,
@@ -7503,286 +8236,55 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '', traceMessages = null) {
+            const resolved = await PlanIdentityUtils.resolveItemIdByCampaignId(
+                campaignId,
+                bizCandidates,
+                authContext,
+                fallbackItemId,
+                traceMessages
+            );
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
-            if (!normalizedCampaignId) return '';
-            const pushTrace = (message) => {
-                if (!Array.isArray(traceMessages)) return;
-                const text = String(message || '').trim();
-                if (!text) return;
-                traceMessages.push(text);
-            };
-            const fallback = this.normalizeItemId(fallbackItemId);
-            const cached = this.getCampaignItemId(normalizedCampaignId);
-            if (cached) {
-                pushTrace(`商品ID识别：命中缓存 ${cached}`);
-                return cached;
+            const normalizedItemId = this.normalizeItemId(resolved);
+            if (normalizedCampaignId && normalizedItemId) {
+                this.rememberCampaignItemId(normalizedCampaignId, normalizedItemId);
             }
-            const bizList = [];
-            const pushBizCode = (value) => {
-                const bizCode = this.normalizeBizCode(value);
-                if (!bizCode) return;
-                if (bizList.includes(bizCode)) return;
-                bizList.push(bizCode);
-            };
-            (Array.isArray(bizCandidates) ? bizCandidates : []).forEach(pushBizCode);
-            this.BIZ_CODE_LIST.forEach(pushBizCode);
-
-            for (let i = 0; i < bizList.length; i++) {
-                const currentBiz = bizList[i];
-                try {
-                    const refs = await this.findConflictRefs(normalizedCampaignId, currentBiz, authContext, '');
-                    const selfRef = (Array.isArray(refs) ? refs : []).find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
-                    const resolved = this.normalizeItemId(selfRef?.itemId || '');
-                    if (resolved) {
-                        this.rememberCampaignItemId(normalizedCampaignId, resolved);
-                        pushTrace(`商品ID识别：冲突接口命中 ${resolved}（${currentBiz}）`);
-                        return resolved;
-                    }
-                } catch (err) {
-                    pushTrace(`商品ID识别：冲突接口失败（${currentBiz}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
-                }
-                try {
-                    const detail = await this.queryCampaignDetail(normalizedCampaignId, currentBiz, authContext);
-                    const resolvedByCampaign = this.normalizeItemId(detail?.itemId || '');
-                    if (resolvedByCampaign) {
-                        this.rememberCampaignItemId(normalizedCampaignId, resolvedByCampaign);
-                        pushTrace(`商品ID识别：计划详情命中 ${resolvedByCampaign}（${currentBiz}）`);
-                        return resolvedByCampaign;
-                    }
-                    const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
-                    if (adgroupIds.length) {
-                        pushTrace(`商品ID识别：计划详情返回单元 ${adgroupIds.length} 个（${currentBiz}）`);
-                    }
-                    for (let j = 0; j < Math.min(8, adgroupIds.length); j++) {
-                        try {
-                            const adgroupDetail = await this.queryAdgroupDetail(normalizedCampaignId, adgroupIds[j], currentBiz, authContext);
-                            const resolvedByAdgroup = this.normalizeItemId(adgroupDetail?.itemId || '');
-                            if (resolvedByAdgroup) {
-                                this.rememberCampaignItemId(normalizedCampaignId, resolvedByAdgroup);
-                                pushTrace(`商品ID识别：单元详情命中 ${resolvedByAdgroup}（${currentBiz} / adgroup=${adgroupIds[j]}）`);
-                                return resolvedByAdgroup;
-                            }
-                        } catch (err) {
-                            pushTrace(`商品ID识别：单元详情失败（${currentBiz} / adgroup=${adgroupIds[j]}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
-                        }
-                    }
-                } catch (err) {
-                    pushTrace(`商品ID识别：计划详情失败（${currentBiz}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
-                }
-            }
-            if (fallback) {
-                this.rememberCampaignItemId(normalizedCampaignId, fallback);
-                pushTrace(`商品ID识别：使用按钮透传兜底 ${fallback}`);
-                return fallback;
-            }
-            pushTrace('商品ID识别：未识别到商品ID');
-            return '';
+            return normalizedItemId;
         },
 
         formatDateYmd(date = new Date()) {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
+            return PlanIdentityUtils.formatDateYmd(date);
         },
 
         parseAuthFromObject(source, depth = 0, visited = new WeakSet()) {
-            const out = { csrfId: '', loginPointId: '', bizCode: '' };
-            if (!source || typeof source !== 'object' || depth > 4) return out;
-            if (visited.has(source)) return out;
-            visited.add(source);
-
-            Object.keys(source).slice(0, 120).forEach((key) => {
-                const value = source[key];
-                const lower = String(key || '').toLowerCase();
-                if (lower === 'csrfid' || lower === 'csrf') {
-                    if (!out.csrfId) out.csrfId = String(value || '').trim();
-                    return;
-                }
-                if (lower === 'loginpointid') {
-                    if (!out.loginPointId) out.loginPointId = String(value || '').trim();
-                    return;
-                }
-                if (lower === 'bizcode') {
-                    if (!out.bizCode) out.bizCode = this.normalizeBizCode(value);
-                    return;
-                }
-                if (value && typeof value === 'object') {
-                    const child = this.parseAuthFromObject(value, depth + 1, visited);
-                    if (!out.csrfId && child.csrfId) out.csrfId = child.csrfId;
-                    if (!out.loginPointId && child.loginPointId) out.loginPointId = child.loginPointId;
-                    if (!out.bizCode && child.bizCode) out.bizCode = child.bizCode;
-                }
-            });
-            return out;
+            return PlanIdentityUtils.parseAuthFromObject(source, depth, visited);
         },
 
         parseAuthFromBody(body) {
-            const out = { csrfId: '', loginPointId: '', bizCode: '' };
-            if (body === undefined || body === null) return out;
-            if (typeof body === 'string') {
-                const text = body.trim();
-                if (!text) return out;
-                const parsed = safeParseJSON(text);
-                if (parsed && typeof parsed === 'object') return this.parseAuthFromObject(parsed);
-                try {
-                    const params = new URLSearchParams(text);
-                    out.csrfId = String(params.get('csrfId') || params.get('csrfID') || '').trim();
-                    out.loginPointId = String(params.get('loginPointId') || '').trim();
-                    out.bizCode = this.normalizeBizCode(params.get('bizCode') || '');
-                } catch { }
-                return out;
-            }
-            if (body instanceof URLSearchParams) {
-                out.csrfId = String(body.get('csrfId') || body.get('csrfID') || '').trim();
-                out.loginPointId = String(body.get('loginPointId') || '').trim();
-                out.bizCode = this.normalizeBizCode(body.get('bizCode') || '');
-                return out;
-            }
-            if (typeof FormData !== 'undefined' && body instanceof FormData) {
-                out.csrfId = String(body.get('csrfId') || body.get('csrfID') || '').trim();
-                out.loginPointId = String(body.get('loginPointId') || '').trim();
-                out.bizCode = this.normalizeBizCode(body.get('bizCode') || '');
-                return out;
-            }
-            if (typeof body === 'object') {
-                return this.parseAuthFromObject(body);
-            }
-            return out;
+            return PlanIdentityUtils.parseAuthFromBody(body);
         },
 
         parseAuthFromUrl(rawUrl) {
-            const out = { csrfId: '', loginPointId: '', bizCode: '' };
-            const text = String(rawUrl || '').trim();
-            if (!text) return out;
-            try {
-                const parsed = new URL(text, window.location.origin);
-                out.csrfId = String(parsed.searchParams.get('csrfId') || parsed.searchParams.get('csrfID') || '').trim();
-                out.loginPointId = String(parsed.searchParams.get('loginPointId') || '').trim();
-                out.bizCode = this.normalizeBizCode(parsed.searchParams.get('bizCode') || '');
-            } catch { }
-            return out;
+            return PlanIdentityUtils.parseAuthFromUrl(rawUrl);
         },
 
         getCsrfScore(csrf) {
-            const value = String(csrf || '').trim();
-            if (!value) return -1;
-            let score = Math.min(80, value.length);
-            if (value.includes('_')) score += 30;
-            if (!/^\d+$/.test(value)) score += 20;
-            if (value.length >= 16) score += 10;
-            return score;
+            return PlanIdentityUtils.getCsrfScore(csrf);
         },
 
         pickCsrf(current, next) {
-            const currentText = String(current || '').trim();
-            const nextText = String(next || '').trim();
-            if (!currentText) return nextText;
-            if (!nextText) return currentText;
-            return this.getCsrfScore(nextText) >= this.getCsrfScore(currentText) ? nextText : currentText;
+            return PlanIdentityUtils.pickCsrf(current, next);
         },
 
         resolveAuthContext(preferredBizCode = '') {
-            const auth = {
-                csrfId: '',
-                loginPointId: '',
-                bizCode: this.normalizeBizCode(preferredBizCode) || ''
-            };
-            const applyAuth = (entry) => {
-                if (!entry || typeof entry !== 'object') return;
-                auth.csrfId = this.pickCsrf(auth.csrfId, entry.csrfId);
-                if (!auth.loginPointId && entry.loginPointId) auth.loginPointId = String(entry.loginPointId || '').trim();
-                if (!auth.bizCode && entry.bizCode) auth.bizCode = this.normalizeBizCode(entry.bizCode);
-            };
-
-            applyAuth(this.parseAuthFromUrl(window.location.href));
-            applyAuth(this.parseAuthFromUrl(window.location.hash));
-            applyAuth(this.parseAuthFromBody(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''));
-
-            [
-                window.__AM_TOKENS__,
-                window.g_config,
-                window.PageConfig,
-                window.mm,
-                window.FEED_CONFIG,
-                window.__magix_data__
-            ].forEach(source => applyAuth(this.parseAuthFromObject(source)));
-
-            const managers = [];
-            const pushManager = (manager) => {
-                if (!manager || typeof manager.getRequestHistory !== 'function') return;
-                if (managers.includes(manager)) return;
-                managers.push(manager);
-            };
-            try { pushManager(window.__AM_HOOK_MANAGER__); } catch { }
-            try {
-                if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
-                    pushManager(unsafeWindow.__AM_HOOK_MANAGER__);
-                }
-            } catch { }
-            if (!managers.length) {
-                try { pushManager(createHookManager()); } catch { }
-            }
-
-            const history = [];
-            managers.forEach((manager) => {
-                try {
-                    const list = manager.getRequestHistory({
-                        includePattern: /\.json(?:$|\?)/i,
-                        limit: 2600
-                    });
-                    if (Array.isArray(list) && list.length) history.push(...list);
-                } catch { }
-            });
-            history.sort((left, right) => Number(right?.ts || 0) - Number(left?.ts || 0));
-            for (let i = 0; i < history.length; i++) {
-                const entry = history[i] || {};
-                applyAuth(this.parseAuthFromUrl(entry.url));
-                applyAuth(this.parseAuthFromBody(entry.body));
-                if (auth.csrfId && auth.loginPointId && auth.bizCode) break;
-            }
-
-            if (!auth.csrfId) {
-                const cookieMatch = document.cookie.match(/_tb_token_=([^;]+)/);
-                if (cookieMatch && cookieMatch[1]) {
-                    auth.csrfId = this.pickCsrf(auth.csrfId, decodeURIComponent(cookieMatch[1]));
-                }
-            }
-            if (!auth.bizCode) auth.bizCode = this.DEFAULT_BIZ_CODE;
-            if (!auth.csrfId || !auth.loginPointId) {
-                throw new Error('Token 未就绪，请先在页面手动点击一次计划开关后重试');
-            }
-            return auth;
+            return PlanIdentityUtils.resolveAuthContext(preferredBizCode);
         },
 
         isResponseOk(res) {
-            if (!res || typeof res !== 'object') return false;
-            if (res.success === false || res.ok === false) return false;
-            if (res.info && res.info.ok === false) return false;
-            if (res.info && res.info.errorCode) return false;
-            if (Array.isArray(res.ret) && res.ret.length) {
-                const retTokens = res.ret.map(item => String(item || '').trim()).filter(Boolean);
-                const hasRetFail = retTokens.some(token => /^FAIL[_:]/i.test(token));
-                const hasRetSuccess = retTokens.some(token => /^SUCCESS(?:$|[:_])/i.test(token) || token.includes('调用成功'));
-                if (hasRetFail && !hasRetSuccess) return false;
-            }
-            return true;
+            return PlanIdentityUtils.isResponseOk(res);
         },
 
         pickResponseMessage(res, fallbackMessage = '') {
-            const retText = Array.isArray(res?.ret) ? res.ret.map(item => String(item || '').trim()).filter(Boolean).join(' | ') : '';
-            const punishUrl = String(res?.data?.url || '').trim();
-            if (punishUrl.includes('/_____tmd_____/punish')) {
-                return '触发风控验证，请先在页面完成人机验证后重试';
-            }
-            return String(
-                res?.info?.message
-                || res?.message
-                || res?.msg
-                || retText
-                || fallbackMessage
-                || '请求失败'
-            ).trim();
+            return PlanIdentityUtils.pickResponseMessage(res, fallbackMessage);
         },
 
         resolveCampaignActiveState(ref = {}) {
@@ -7811,138 +8313,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         collectCampaignRefsFromNode(node, out, meta = {}) {
-            const depth = Number(meta.depth || 0);
-            const seen = meta.seen instanceof WeakSet ? meta.seen : new WeakSet();
-            const bizHint = this.normalizeBizCode(meta.bizHint || '');
-            const itemHint = this.normalizeItemId(meta.itemHint || '');
-            if (!node || depth > 10) return;
-            if (typeof node !== 'object') return;
-            if (seen.has(node)) return;
-            seen.add(node);
-
-            if (Array.isArray(node)) {
-                node.forEach(item => this.collectCampaignRefsFromNode(item, out, {
-                    depth: depth + 1,
-                    seen,
-                    bizHint,
-                    itemHint
-                }));
-                return;
-            }
-
-            const localBiz = this.normalizeBizCode(
-                node.bizCode
-                || node.diffBizCode
-                || node.fromBizCode
-                || node.targetBizCode
-                || bizHint
-                || ''
-            );
-            const localItemId = this.resolveItemIdFromCandidates([
-                node.itemId,
-                node.materialId,
-                node.auctionId,
-                node.targetItemId,
-                node.targetMaterialId,
-                node.item_id,
-                node.material_id,
-                node.itemid,
-                node.materialid,
-                node.itemIdList,
-                node.materialIdList,
-                node.whiteBoxItemIds,
-                node.scopeItems,
-                node.material,
-                node.linkUrl,
-                itemHint
-            ]);
-            const localStatus = node.status;
-            const localOnlineStatus = node.onlineStatus ?? node.isOnline ?? node.online;
-            const localDisplayStatus = node.displayStatus || node.planStatus || node.campaignStatus || '';
-            const pushRef = (rawId, source) => {
-                const campaignId = this.normalizeCampaignId(rawId);
-                if (!campaignId) return;
-                out.push({
-                    campaignId,
-                    bizCode: localBiz,
-                    itemId: localItemId,
-                    status: localStatus,
-                    onlineStatus: localOnlineStatus,
-                    displayStatus: localDisplayStatus,
-                    source
-                });
-            };
-
-            pushRef(node.campaignId, 'campaignId');
-            pushRef(node.planId, 'planId');
-            pushRef(node.targetCampaignId, 'targetCampaignId');
-            pushRef(node.diffCampaignId, 'diffCampaignId');
-
-            const textHints = [node.message, node.msg, node.error, node.remark]
-                .map(item => String(item || '').trim())
-                .filter(Boolean)
-                .join(' ');
-            if (textHints) {
-                const scoped = textHints.match(/(?:计划|campaign(?:id)?|plan(?:id)?)[^0-9]{0,8}\d{6,}/ig) || [];
-                scoped.slice(0, 12).forEach((segment) => {
-                    const match = segment.match(/(\d{6,})/);
-                    const campaignId = this.normalizeCampaignId(match?.[1] || '');
-                    if (!campaignId) return;
-                    out.push({
-                        campaignId,
-                        bizCode: localBiz,
-                        itemId: localItemId,
-                        status: localStatus,
-                        onlineStatus: localOnlineStatus,
-                        displayStatus: localDisplayStatus,
-                        source: 'text_hint'
-                    });
-                });
-            }
-
-            Object.keys(node).forEach((key) => {
-                const value = node[key];
-                if (!value || typeof value !== 'object') return;
-                this.collectCampaignRefsFromNode(value, out, {
-                    depth: depth + 1,
-                    seen,
-                    bizHint: localBiz || bizHint,
-                    itemHint: localItemId || itemHint
-                });
-            });
+            return PlanIdentityUtils.collectCampaignRefsFromNode(node, out, meta);
         },
 
         normalizeCampaignRefs(refs = []) {
-            const map = new Map();
-            (Array.isArray(refs) ? refs : []).forEach((item) => {
-                const campaignId = this.normalizeCampaignId(item?.campaignId);
-                if (!campaignId) return;
-                const prev = map.get(campaignId) || {
-                    campaignId,
-                    bizCode: '',
-                    itemId: '',
-                    status: '',
-                    onlineStatus: '',
-                    displayStatus: '',
-                    source: ''
-                };
-                const nextBiz = this.normalizeBizCode(item?.bizCode || '');
-                const nextItemId = this.normalizeItemId(item?.itemId || '');
-                if (!prev.bizCode && nextBiz) prev.bizCode = nextBiz;
-                if (!prev.itemId && nextItemId) prev.itemId = nextItemId;
-                if ((prev.status === '' || prev.status === undefined || prev.status === null)
-                    && item?.status !== '' && item?.status !== undefined && item?.status !== null) {
-                    prev.status = item.status;
-                }
-                if ((prev.onlineStatus === '' || prev.onlineStatus === undefined || prev.onlineStatus === null)
-                    && item?.onlineStatus !== '' && item?.onlineStatus !== undefined && item?.onlineStatus !== null) {
-                    prev.onlineStatus = item.onlineStatus;
-                }
-                if (!prev.displayStatus && item?.displayStatus) prev.displayStatus = item.displayStatus;
-                if (!prev.source && item?.source) prev.source = String(item.source || '');
-                map.set(campaignId, prev);
-            });
-            return Array.from(map.values());
+            return PlanIdentityUtils.normalizeCampaignRefs(refs);
         },
 
         async queryCampaignsByItem(itemId, bizCode, authContext) {
@@ -7981,25 +8356,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 csrfId: String(authContext?.csrfId || ''),
                 loginPointId: String(authContext?.loginPointId || '')
             };
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: '*/*',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'bx-v': '2.5.36'
-                },
-                body: JSON.stringify(payload)
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询商品计划失败',
+                businessErrorMessage: '查询商品计划失败'
             });
-            if (!response.ok) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`查询商品计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
-            }
-            const json = await response.json().catch(() => ({}));
-            if (!this.isResponseOk(json)) {
-                throw new Error(this.pickResponseMessage(json, '查询商品计划失败'));
-            }
             const refs = [];
             this.collectCampaignRefsFromNode(json, refs, {
                 depth: 0,
@@ -8043,25 +8403,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 payload.campaignList[0].itemSelectedMode = 'user_define';
                 payload.campaignList[0].materialIdList = [Number(normalizedItemId)];
             }
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: '*/*',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'bx-v': '2.5.36'
-                },
-                body: JSON.stringify(payload)
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询冲突计划失败',
+                businessErrorMessage: '查询冲突计划失败'
             });
-            if (!response.ok) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`查询冲突计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
-            }
-            const json = await response.json().catch(() => ({}));
-            if (!this.isResponseOk(json)) {
-                throw new Error(this.pickResponseMessage(json, '查询冲突计划失败'));
-            }
             const refs = [];
             this.collectCampaignRefsFromNode(json, refs, {
                 depth: 0,
@@ -8083,44 +8428,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.rememberCampaignItemId(item?.campaignId, item?.itemId || '');
             });
             return normalizedRefs;
-        },
-
-        resolvePairFromConflictRefs(baseCampaignId, baseBizCode, refs = []) {
-            const mainId = this.normalizeCampaignId(baseCampaignId);
-            if (!mainId) return null;
-            const normalizedRefs = this.normalizeCampaignRefs(refs);
-            const mainRef = normalizedRefs.find(item => item.campaignId === mainId) || {
-                campaignId: mainId,
-                bizCode: this.normalizeBizCode(baseBizCode) || this.DEFAULT_BIZ_CODE
-            };
-            const primaryBizCode = this.normalizeBizCode(mainRef.bizCode || baseBizCode) || this.DEFAULT_BIZ_CODE;
-            const candidates = normalizedRefs.filter(item => item.campaignId !== mainId);
-            if (!candidates.length) {
-                return {
-                    primary: {
-                        campaignId: mainId,
-                        bizCode: primaryBizCode
-                    },
-                    secondary: null
-                };
-            }
-            const preferredSecondary = candidates.find(item => {
-                const biz = this.normalizeBizCode(item.bizCode || '');
-                return biz && biz !== primaryBizCode;
-            }) || candidates[0];
-            const secondaryBizCode = this.normalizeBizCode(preferredSecondary.bizCode || '')
-                || this.getOppositeBizCode(primaryBizCode)
-                || primaryBizCode;
-            return {
-                primary: {
-                    campaignId: mainId,
-                    bizCode: primaryBizCode
-                },
-                secondary: {
-                    campaignId: preferredSecondary.campaignId,
-                    bizCode: secondaryBizCode
-                }
-            };
         },
 
         mergeCampaignActiveState(current, next) {
@@ -8409,25 +8716,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 loginPointId: String(authContext?.loginPointId || ''),
                 lrsIdList: []
             };
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: '*/*',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'bx-v': '2.5.36'
-                },
-                body: JSON.stringify(payload)
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: `${status === 1 ? '开启' : '暂停'}计划失败`,
+                businessErrorMessage: `${status === 1 ? '开启' : '暂停'}计划失败`
             });
-            if (!response.ok) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`${status === 1 ? '开启' : '暂停'}计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 160)}` : ''}`);
-            }
-            const json = await response.json().catch(() => ({}));
-            if (!this.isResponseOk(json)) {
-                throw new Error(this.pickResponseMessage(json, `${status === 1 ? '开启' : '暂停'}计划失败`));
-            }
             const refs = [];
             this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
             const normalizedRefs = this.normalizeCampaignRefs(refs);
@@ -8473,25 +8765,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 loginPointId: String(authContext?.loginPointId || ''),
                 lrsIdList: []
             };
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: '*/*',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'bx-v': '2.5.36'
-                },
-                body: JSON.stringify(payload)
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: `${status === 1 ? '批量开启' : '批量暂停'}计划失败`,
+                businessErrorMessage: `${status === 1 ? '批量开启' : '批量暂停'}计划失败`
             });
-            if (!response.ok) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`${status === 1 ? '批量开启' : '批量暂停'}计划失败：HTTP ${response.status}${text ? ` ${text.slice(0, 160)}` : ''}`);
-            }
-            const json = await response.json().catch(() => ({}));
-            if (!this.isResponseOk(json)) {
-                throw new Error(this.pickResponseMessage(json, `${status === 1 ? '批量开启' : '批量暂停'}计划失败`));
-            }
             const refs = [];
             this.collectCampaignRefsFromNode(json, refs, { depth: 0, seen: new WeakSet(), bizHint: targetBizCode });
             const normalizedRefs = this.normalizeCampaignRefs(refs);
@@ -9240,15 +9517,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         normalizeCampaignId(raw) {
-            return CampaignIdQuickEntry.normalizeCampaignId(raw);
+            return PlanIdentityUtils.normalizeCampaignId(raw);
         },
 
         normalizeItemId(raw) {
-            return CampaignIdQuickEntry.normalizeItemId(raw);
+            return PlanIdentityUtils.normalizeItemId(raw);
         },
 
         normalizeBizCode(raw) {
-            return CampaignIdQuickEntry.normalizeBizCode(raw);
+            return PlanIdentityUtils.normalizeBizCode(raw);
         },
 
         sleep(ms) {
@@ -9491,11 +9768,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const fromHash = this.normalizeBizCode(params.get('bizCode') || '');
             if (fromHash) return fromHash;
             if (pair?.trigger instanceof Element) {
-                const inferred = CampaignIdQuickEntry.inferBizCodeFromElement(pair.trigger);
+                const inferred = PlanIdentityUtils.inferBizCodeFromElement(pair.trigger);
                 const normalized = this.normalizeBizCode(inferred);
                 if (normalized) return normalized;
             }
-            return CampaignIdQuickEntry.DEFAULT_BIZ_CODE;
+            return PlanIdentityUtils.DEFAULT_BIZ_CODE;
         },
 
         setButtonState(btn, running, text = '') {
@@ -9750,7 +10027,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const list = [];
             for (let i = total - 1; i >= 0; i--) {
                 const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-                list.push(CampaignIdQuickEntry.formatDateYmd(d));
+                list.push(PlanIdentityUtils.formatDateYmd(d));
             }
             return list;
         },
@@ -9822,10 +10099,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const maybeTs = Number(text);
             if (Number.isFinite(maybeTs) && maybeTs > 100000) {
                 const d = new Date(maybeTs > 1000000000000 ? maybeTs : maybeTs * 1000);
-                if (!Number.isNaN(d.getTime())) return CampaignIdQuickEntry.formatDateYmd(d);
+                if (!Number.isNaN(d.getTime())) return PlanIdentityUtils.formatDateYmd(d);
             }
             const date = new Date(text);
-            if (!Number.isNaN(date.getTime())) return CampaignIdQuickEntry.formatDateYmd(date);
+            if (!Number.isNaN(date.getTime())) return PlanIdentityUtils.formatDateYmd(date);
             return fallback;
         },
 
@@ -9932,7 +10209,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     planId,
                     planName,
                     bizCode: this.normalizeBizCode(campaign.bizCode || report.bizCode || bizCode)
-                        || CampaignIdQuickEntry.DEFAULT_BIZ_CODE,
+                        || PlanIdentityUtils.DEFAULT_BIZ_CODE,
                     charge: pick(report.charge, campaign.charge),
                     click: pick(report.click, campaign.click),
                     imp: pick(
@@ -9986,40 +10263,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         async postPotentialApi(action, bizCode, authContext, payload = {}) {
-            const normalizedBizCode = this.normalizeBizCode(bizCode) || CampaignIdQuickEntry.DEFAULT_BIZ_CODE;
+            const normalizedBizCode = this.normalizeBizCode(bizCode) || PlanIdentityUtils.DEFAULT_BIZ_CODE;
             const csrfId = String(authContext?.csrfId || '');
             const loginPointId = String(authContext?.loginPointId || '');
-            const query = new URLSearchParams({
+            const url = OneApiTransport.buildOneUrl(`/potential/bidword/${action}.json`, {
                 csrfId,
                 bizCode: normalizedBizCode
             });
-            const url = `https://one.alimama.com/potential/bidword/${action}.json?${query.toString()}`;
             const body = {
                 bizCode: normalizedBizCode,
                 ...payload,
                 csrfId,
                 loginPointId
             };
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
+            return OneApiTransport.postJson(url, body, {
                 headers: {
-                    'Content-Type': 'application/json',
                     Accept: 'application/json, text/javascript, */*; q=0.01',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'bx-v': '2.5.36'
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(body)
+                actionName: `${action} 请求失败`,
+                businessErrorMessage: `${action} 响应异常`
             });
-            if (!response.ok) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`${action} 请求失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
-            }
-            const json = await response.json().catch(() => ({}));
-            if (!CampaignIdQuickEntry.isResponseOk(json)) {
-                throw new Error(CampaignIdQuickEntry.pickResponseMessage(json, `${action} 响应异常`));
-            }
-            return json;
         },
 
         async queryPotentialCampaignList(startDate, endDate, bizCode, authContext) {
@@ -10158,12 +10422,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         async queryDailyMetrics(itemId, bizCode, dateYmd, authContext) {
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedItemId) throw new Error('itemId 无效，无法查询计划数据');
-            const normalizedBizCode = this.normalizeBizCode(bizCode) || CampaignIdQuickEntry.DEFAULT_BIZ_CODE;
-            const query = new URLSearchParams({
+            const normalizedBizCode = this.normalizeBizCode(bizCode) || PlanIdentityUtils.DEFAULT_BIZ_CODE;
+            const url = OneApiTransport.buildOneUrl('/campaign/horizontal/findPage.json', {
                 csrfId: String(authContext?.csrfId || ''),
                 bizCode: normalizedBizCode
             });
-            const url = `https://one.alimama.com/campaign/horizontal/findPage.json?${query.toString()}`;
             const pageSize = 200;
             const maxRounds = 20;
             const merged = [];
@@ -10195,25 +10458,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     csrfId: String(authContext?.csrfId || ''),
                     loginPointId: String(authContext?.loginPointId || '')
                 };
-                const response = await fetch(url, {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: '*/*',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'bx-v': '2.5.36'
-                    },
-                    body: JSON.stringify(payload)
+                const json = await OneApiTransport.postJson(url, payload, {
+                    actionName: `查询${dateYmd}计划数据失败`,
+                    businessErrorMessage: `查询${dateYmd}计划数据失败`
                 });
-                if (!response.ok) {
-                    const text = await response.text().catch(() => '');
-                    throw new Error(`查询${dateYmd}计划数据失败：HTTP ${response.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
-                }
-                const json = await response.json().catch(() => ({}));
-                if (!CampaignIdQuickEntry.isResponseOk(json)) {
-                    throw new Error(CampaignIdQuickEntry.pickResponseMessage(json, `查询${dateYmd}计划数据失败`));
-                }
                 const rows = this.extractMetricRows(json, dateYmd, normalizedBizCode);
                 if (!rows.length) break;
                 merged.push(...rows);
@@ -10234,128 +10482,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return merged;
             }
             return out;
-        },
-
-        buildPlanMatcher(plans = []) {
-            const idSet = new Set();
-            const nameSet = new Set();
-            const looseNameSet = new Set();
-            (Array.isArray(plans) ? plans : []).forEach((plan) => {
-                const planId = this.normalizeCampaignId(plan?.planId || '');
-                const planName = this.normalizePlanName(plan?.planName || '');
-                if (planId) idSet.add(planId);
-                if (planName) nameSet.add(planName);
-                const loose = this.normalizePlanNameLoose(planName);
-                if (loose) looseNameSet.add(loose);
-            });
-            return {
-                idSet,
-                nameSet,
-                looseNameSet,
-                looseNameList: Array.from(looseNameSet)
-            };
-        },
-
-        isPlanNameMatch(left, right) {
-            const a = this.normalizePlanNameLoose(left);
-            const b = this.normalizePlanNameLoose(right);
-            if (!a || !b) return false;
-            if (a === b) return true;
-            if (Math.min(a.length, b.length) < 4) return false;
-            return a.includes(b) || b.includes(a);
-        },
-
-        rowMatchesPlan(row = {}, plan = {}) {
-            const rowId = this.normalizeCampaignId(row?.planId || '');
-            const planId = this.normalizeCampaignId(plan?.planId || '');
-            if (rowId && planId) return rowId === planId;
-            const rowName = this.normalizePlanName(row?.planName || '');
-            const planName = this.normalizePlanName(plan?.planName || '');
-            if (!rowName || !planName) return false;
-            return this.isPlanNameMatch(rowName, planName);
-        },
-
-        filterRowsByPlans(rows = [], plans = []) {
-            const matcher = this.buildPlanMatcher(plans);
-            const hasMatcher = matcher.idSet.size > 0 || matcher.nameSet.size > 0;
-            if (!hasMatcher) return Array.isArray(rows) ? rows.slice() : [];
-            const filtered = (Array.isArray(rows) ? rows : []).filter((row) => {
-                const id = this.normalizeCampaignId(row?.planId || '');
-                const name = this.normalizePlanName(row?.planName || '');
-                if (id && matcher.idSet.has(id)) return true;
-                if (name && matcher.nameSet.has(name)) return true;
-                const loose = this.normalizePlanNameLoose(name);
-                if (loose && matcher.looseNameList.some((item) => this.isPlanNameMatch(item, loose))) return true;
-                return false;
-            });
-            return filtered;
-        },
-
-        buildEmptyPlanRow(plan, dateYmd, bizCode) {
-            return {
-                date: dateYmd,
-                planId: this.normalizeCampaignId(plan?.planId || ''),
-                planName: this.normalizePlanName(plan?.planName || ''),
-                bizCode: this.normalizeBizCode(bizCode) || CampaignIdQuickEntry.DEFAULT_BIZ_CODE,
-                charge: '0',
-                click: '0',
-                imp: '0',
-                ctr: '0',
-                cpc: '0',
-                cpm: '0',
-                ecpc: '0',
-                roi: '0',
-                cartNum: '0',
-                transactionNum: '0',
-                gmv: '0'
-            };
-        },
-
-        sortRows(rows = []) {
-            return (Array.isArray(rows) ? rows.slice() : []).sort((left, right) => {
-                const d1 = String(left?.date || '');
-                const d2 = String(right?.date || '');
-                if (d1 !== d2) return d1.localeCompare(d2);
-                const n1 = this.normalizePlanName(left?.planName || '');
-                const n2 = this.normalizePlanName(right?.planName || '');
-                if (n1 !== n2) return n1.localeCompare(n2);
-                const i1 = String(left?.planId || '');
-                const i2 = String(right?.planId || '');
-                return i1.localeCompare(i2);
-            });
-        },
-
-        escapeCsvCell(value) {
-            if (value === undefined || value === null) return '';
-            const text = String(value);
-            if (!/[",\r\n]/.test(text)) return text;
-            return `"${text.replace(/"/g, '""')}"`;
-        },
-
-        toCsv(rows = []) {
-            const columns = [
-                'date',
-                'planId',
-                'planName',
-                'bizCode',
-                'charge',
-                'click',
-                'imp',
-                'ctr',
-                'cpc',
-                'cpm',
-                'ecpc',
-                'roi',
-                'cartNum',
-                'transactionNum',
-                'gmv'
-            ];
-            const lines = [columns.join(',')];
-            this.sortRows(rows).forEach((row) => {
-                const line = columns.map((key) => this.escapeCsvCell(row?.[key] ?? '')).join(',');
-                lines.push(line);
-            });
-            return lines.join('\n');
         },
 
         buildFileName(itemId, days) {
@@ -10396,7 +10522,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     throw new Error('未识别到 itemId，请确认 URL 中存在 itemId 参数');
                 }
                 const bizCode = this.resolveBizCode(params, pair);
-                const authContext = CampaignIdQuickEntry.resolveAuthContext(bizCode);
+                const authContext = PlanIdentityUtils.resolveAuthContext(bizCode);
                 const dateList = this.buildDateRange(exportDays);
                 const rangeStart = dateList[0];
                 const rangeEnd = dateList[dateList.length - 1];
@@ -10533,28 +10659,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         window.addEventListener('hashchange', checkUrlChange);
         window.addEventListener('popstate', checkUrlChange);
 
+        const CORE_RUN_DEBOUNCE_MS = 1000;
+        const CORE_PAUSE_RECHECK_MS = 350;
         let timer;
-        let hasExecuted = false;
         const runCore = () => {
+            if (shouldPauseInjectionForPopup()) return false;
             Core.run();
             CampaignIdQuickEntry.run();
             PotentialPlanDailyExporter.run();
-            hasExecuted = true;
+            return true;
         };
-        const observer = new MutationObserver((mutations) => {
+        const scheduleRunCore = (delay = CORE_RUN_DEBOUNCE_MS) => {
             if (timer) return;
             timer = setTimeout(() => {
-                runCore();
                 timer = null;
-            }, 1000);
+                if (!runCore()) {
+                    scheduleRunCore(CORE_PAUSE_RECHECK_MS);
+                }
+            }, Math.max(0, Number(delay) || 0));
+        };
+        const observer = new MutationObserver(() => {
+            scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
 
-        setTimeout(() => {
-            if (hasExecuted || timer) return;
-            runCore();
-        }, 1000);
+        scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
     }
 
     main();
@@ -11118,8 +11248,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const TAG = '[KeywordPlanAPI]';
         const BUILD_VERSION = '2026-02-18 04:00';
         const SESSION_DRAFT_KEY = 'am.wxt.keyword_plan_wizard.draft';
-        const SESSION_DRAFT_SCHEMA_VERSION = 2;
+        const SESSION_DRAFT_SCHEMA_VERSION = 3;
         const WIZARD_MAX_ITEMS = 30;
+        const WORKBENCH_PAGE_SET = new Set(['home', 'editor', 'matrix', 'previewlog']);
+        const MATRIX_LIMITS = {
+            maxCombinations: 48,
+            batchSize: 10
+        };
+        const MATRIX_DEFAULT_NAMING_PATTERN = '{planName}_{index}';
         const DEFAULTS = {
             bizCode: 'onebpSearch',
             promotionScene: 'promotion_scene_search_user_define',
@@ -11208,6 +11344,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             ts: 0
         };
         const COMPONENT_CONFIG_CACHE_TTL_MS = 10 * 60 * 1000;
+        const KeywordPlanCoreUtils = {};
+        const KeywordPlanRuntime = {};
+        const KeywordPlanSceneSpec = {};
+        const KeywordPlanWizardStore = {};
+        const KeywordPlanRequestBuilder = {};
+        const KeywordPlanPreviewExecutor = {};
         const wizardState = {
             mounted: false,
             visible: false,
@@ -11223,6 +11365,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             strategyList: [],
             editingStrategyId: '',
             detailVisible: false,
+            workbenchPage: 'home',
+            previewLogLines: [],
             sceneSyncTimer: 0,
             sceneSyncInFlight: false,
             sceneSyncPendingToken: '',
@@ -11928,7 +12072,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '线索推广': true
         };
         const SCENE_SKIP_TEXT_RE = /^(上手指南|了解更多|了解详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开)$/;
-        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|平均直接成交成本|平均成交成本|平均收藏加购成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
+        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
         const SCENE_SECTION_ONLY_LABEL_RE = /^(营销场景与目标|营销场景|推广方案设置(?:-.+)?|推广方案设置|设置预算(?:及排期)?|设置基础信息|高级设置|创建完成|收集销售线索|行业解决方案|自定义方案)$/;
         const SCENE_LABEL_NOISE_RE = /[，。,！？!；;]/;
         const SCENE_LABEL_NOISE_PREFIX_RE = /^(请|建议|支持|算法|未添加|如有|当前|完成后|符合条件|在投商品|想探测|卡位客户都在玩|流量规模)/;
@@ -13525,20 +13669,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         };
 
         const applyRuntimeToDraft = (runtime = {}, sceneName = '') => {
-            if (!wizardState.draft) wizardState.draft = wizardDefaultDraft();
-            if (sceneName && SCENE_NAME_LIST.includes(sceneName)) wizardState.draft.sceneName = sceneName;
-            if (runtime?.bizCode) wizardState.draft.bizCode = runtime.bizCode;
-            if (runtime?.promotionScene) wizardState.draft.promotionScene = runtime.promotionScene;
+            const draft = ensureWizardDraft();
+            if (sceneName && SCENE_NAME_LIST.includes(sceneName)) draft.sceneName = sceneName;
+            if (runtime?.bizCode) draft.bizCode = runtime.bizCode;
+            if (runtime?.promotionScene) draft.promotionScene = runtime.promotionScene;
         };
 
         const refreshSceneSelect = () => {
             if (!wizardState?.els?.sceneSelect) return;
-            if (!wizardState.draft) wizardState.draft = wizardDefaultDraft();
-            const draftSceneName = SCENE_NAME_LIST.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '';
+            const draft = ensureWizardDraft();
+            const draftSceneName = SCENE_NAME_LIST.includes(draft.sceneName) ? draft.sceneName : '';
             const inferredSceneName = inferCurrentSceneName();
             const sceneName = draftSceneName || (SCENE_NAME_LIST.includes(inferredSceneName) ? inferredSceneName : '关键词推广');
             wizardState.els.sceneSelect.value = sceneName;
-            wizardState.draft.sceneName = sceneName;
+            draft.sceneName = sceneName;
         };
 
         const SCENE_LAYER_OPTION_SKIP_RE = /^(上手指南|了解更多|了解详情|查看详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开|添加商品|添加关键词|修改匹配方案|一键上车|恢复默认推荐|新建模板创意|从创意库添加|批量修改词包溢价比例|添加种子人群|设置计划组|详情|移除|图搜同款|开|关|今日|不限|new|NEW|HOT)$/;
@@ -15414,7 +15558,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const campaign = runtime?.solutionTemplate?.campaign || {};
             const out = {};
             const bidType = mapSceneBidTypeValue(campaign.bidTypeV2 || runtime.bidTypeV2 || '');
-            const bidTarget = mapSceneBidTargetValue(campaign.bidTargetV2 || campaign.optimizeTarget || runtime.bidTargetV2 || '');
+            let bidTarget = mapSceneBidTargetValue(campaign.bidTargetV2 || campaign.optimizeTarget || runtime.bidTargetV2 || '');
+            const constraintType = String(campaign.constraintType || '').trim().toLowerCase();
+            if (
+                (bidTarget === 'conv' || bidTarget === 'display_pay' || bidTarget === 'ad_strategy_buy' || bidTarget === 'ad_strategy_retained_buy')
+                && (constraintType === 'roi' || constraintType === 'dir_conv')
+            ) {
+                // 兼容历史 ROI 老合同（conv + dir_conv）与现网 roi 合同，编辑态统一展示为“稳定投产比”。
+                bidTarget = 'roi';
+            }
             const budgetType = mapSceneBudgetTypeValue(campaign.dmcType || runtime.dmcType || '');
             if (bidType === 'smart_bid') out.出价方式 = '智能出价';
             if (bidType === 'manual_bid') out.出价方式 = '手动出价';
@@ -19255,6 +19407,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'setSingleCostV2',
             'singleCostV2',
             'optimizeTarget',
+            'constraintType',
+            'constraintValue',
+            'subOptimizeTarget',
             'dmcType',
             'campaignName',
             'campaignGroupId',
@@ -19274,6 +19429,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'totalBudget',
             'futureBudget'
         ]);
+        // 关键词创建口偶发新增 MCB 相关字段，按关键字兜底透传，避免被白名单裁剪导致服务端参数缺失。
+        const KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE = /(mcb|bidmodel)/i;
         const KEYWORD_WORD_PACKAGE_ERROR_RE = /流量智选词包校验失败/;
 
         const normalizeBidMode = (value, fallback = 'smart') => {
@@ -19345,14 +19502,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             ).trim();
             const fromPlan = normalizeBidMode(plan?.bidMode || '', '');
             if (fromPlan) return fromPlan;
-            const fromCommon = normalizeBidMode(request?.common?.bidMode || '', '');
-            if (fromCommon) return fromCommon;
-            const fromRequest = normalizeBidMode(request?.bidMode || '', '');
-            if (fromRequest) return fromRequest;
             const fromPlanCampaign = normalizeBidMode(plan?.campaignOverride?.bidTypeV2 || '', '');
             if (fromPlanCampaign) return fromPlanCampaign;
             const fromPlanGoalCampaign = normalizeBidMode(plan?.goalForcedCampaignOverride?.bidTypeV2 || '', '');
             if (fromPlanGoalCampaign) return fromPlanGoalCampaign;
+            const fromCampaign = normalizeBidMode(campaign?.bidTypeV2 || '', '');
+            if (fromCampaign) return fromCampaign;
+            const fromCommon = normalizeBidMode(request?.common?.bidMode || '', '');
+            if (fromCommon) return fromCommon;
+            const fromRequest = normalizeBidMode(request?.bidMode || '', '');
+            if (fromRequest) return fromRequest;
             const fromCommonCampaign = normalizeBidMode(request?.common?.campaignOverride?.bidTypeV2 || '', '');
             if (fromCommonCampaign) return fromCommonCampaign;
             const fromSceneForcedCampaign = normalizeBidMode(request?.sceneForcedCampaignOverride?.bidTypeV2 || '', '');
@@ -19361,8 +19520,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (fromGoalForcedCampaign) return fromGoalForcedCampaign;
             const fromRequestCampaign = normalizeBidMode(request?.bidTypeV2 || '', '');
             if (fromRequestCampaign) return fromRequestCampaign;
-            const fromCampaign = normalizeBidMode(campaign?.bidTypeV2 || '', '');
-            if (fromCampaign) return fromCampaign;
             const hintedBidType = normalizeBidMode(
                 keywordGoal === '自定义推广'
                     ? 'custom_bid'
@@ -19414,7 +19571,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const isManual = bidMode === 'manual';
             const out = {};
             Object.keys(input).forEach(key => {
-                if (!KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS.has(key)) return;
+                if (!KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS.has(key) && !KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE.test(key)) return;
                 out[key] = deepClone(input[key]);
             });
             const resolveCampaignField = (field = '', fallback = '') => {
@@ -19468,6 +19625,53 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 return Array.isArray(fallback) ? deepClone(fallback) : [];
             };
+            const resolveKeywordMcbBidModel = (fallback = '') => {
+                const sourceList = [
+                    out,
+                    input,
+                    goalRuntime,
+                    request?.sceneForcedCampaignOverride,
+                    request?.goalForcedCampaignOverride,
+                    request?.common?.campaignOverride,
+                    request?.campaignOverride,
+                    request?.common,
+                    request,
+                    templateCampaign,
+                    runtimeStoreData,
+                    runtimeDefaults
+                ];
+                const knownKeyList = [
+                    'mcbBidModel',
+                    'mcb_bid_model',
+                    'mcbModel',
+                    'campaignMcbBidModel',
+                    'planMcbBidModel',
+                    'bidModel',
+                    'bid_model'
+                ];
+                const normalizeValue = (value) => {
+                    if (value === undefined || value === null || value === '') return '';
+                    const text = String(value).trim();
+                    return text || '';
+                };
+                for (let i = 0; i < sourceList.length; i++) {
+                    const source = sourceList[i];
+                    if (!isPlainObject(source)) continue;
+                    for (let j = 0; j < knownKeyList.length; j++) {
+                        const key = knownKeyList[j];
+                        const normalized = normalizeValue(source[key]);
+                        if (normalized) return normalized;
+                    }
+                    const keyList = Object.keys(source);
+                    for (let j = 0; j < keyList.length; j++) {
+                        const key = keyList[j];
+                        if (!KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE.test(key)) continue;
+                        const normalized = normalizeValue(source[key]);
+                        if (normalized) return normalized;
+                    }
+                }
+                return normalizeValue(fallback);
+            };
             out.bizCode = String(out.bizCode || '').trim() || DEFAULTS.bizCode;
             out.promotionScene = resolveCampaignField('promotionScene', DEFAULTS.promotionScene) || DEFAULTS.promotionScene;
             out.subPromotionType = out.subPromotionType || DEFAULTS.subPromotionType;
@@ -19477,18 +19681,111 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (isManual) {
                 delete out.bidTargetV2;
                 delete out.optimizeTarget;
+                delete out.subOptimizeTarget;
                 out.setSingleCostV2 = false;
                 delete out.singleCostV2;
             } else {
                 out.bidTargetV2 = out.bidTargetV2 || DEFAULTS.bidTargetV2;
                 out.optimizeTarget = out.optimizeTarget || out.bidTargetV2 || DEFAULTS.bidTargetV2;
-                out.setSingleCostV2 = !!out.setSingleCostV2;
-                const singleCostValue = toNumber(out.singleCostV2, NaN);
-                if (out.setSingleCostV2 && Number.isFinite(singleCostValue) && singleCostValue > 0) {
-                    out.singleCostV2 = singleCostValue;
+                const normalizedKeywordBidTarget = normalizeKeywordBidTargetCode(
+                    out.bidTargetV2 || out.optimizeTarget || ''
+                );
+                if (normalizedKeywordBidTarget) {
+                    out.bidTargetV2 = normalizedKeywordBidTarget;
+                    out.optimizeTarget = normalizedKeywordBidTarget;
+                }
+                const keywordRoiTarget = String(
+                    out.bidTargetV2 || out.optimizeTarget || ''
+                ).trim().toLowerCase() === 'roi';
+                if (keywordRoiTarget) {
+                    const roiConstraintValue = toNumber(
+                        out.constraintValue
+                        ?? out.singleCostV2
+                        ?? goalRuntime?.constraintValue
+                        ?? runtimeStoreData?.constraintValue
+                        ?? templateCampaign?.constraintValue
+                        ?? runtimeDefaults?.constraintValue,
+                        NaN
+                    );
+                    out.bidTargetV2 = 'roi';
+                    out.optimizeTarget = 'roi';
+                    out.constraintType = 'roi';
+                    if (Number.isFinite(roiConstraintValue) && roiConstraintValue > 0) {
+                        out.constraintValue = roiConstraintValue;
+                    }
+                }
+                const keywordRoiContract = keywordRoiTarget || (
+                    String(out.bidTargetV2 || '').trim().toLowerCase() === 'roi'
+                    && String(out.constraintType || '').trim().toLowerCase() === 'roi'
+                );
+                if (keywordRoiContract) {
+                    if (!out.dmcType || String(out.dmcType).trim().toLowerCase() === 'normal') {
+                        const roiBudgetValue = toNumber(
+                            out.dayAverageBudget,
+                            toNumber(out.dayBudget, NaN)
+                        );
+                        if (Number.isFinite(roiBudgetValue) && roiBudgetValue > 0) {
+                            out.dayAverageBudget = roiBudgetValue;
+                            delete out.dayBudget;
+                        }
+                        out.dmcType = 'day_average';
+                    }
+                }
+                const keywordBidTargetCode = normalizeKeywordBidTargetCode(
+                    out.bidTargetV2 || out.optimizeTarget || ''
+                ) || String(out.bidTargetV2 || out.optimizeTarget || '').trim().toLowerCase();
+                const keywordFavCartContract = keywordBidTargetCode === 'fav_cart';
+                if (keywordFavCartContract) {
+                    // 原生“增加收藏加购量”使用 coll_cart 合同，若提交 fav_cart 会落库成手动出价。
+                    out.bidTargetV2 = 'coll_cart';
+                    delete out.optimizeTarget;
+                    out.constraintType = 'coll_cart';
+                }
+                const resolvedMcbBidModel = resolveKeywordMcbBidModel(
+                    (keywordFavCartContract ? 'coll_cart' : keywordBidTargetCode)
+                    || String(out.bidTargetV2 || out.optimizeTarget || '').trim().toLowerCase()
+                );
+                if (keywordFavCartContract) {
+                    out.mcbBidModel = 'coll_cart';
+                } else if (resolvedMcbBidModel) {
+                    // 关键词创建口要求显式携带 MCB 出价模型，缺失时会报 INVALID_PARAMETER。
+                    out.mcbBidModel = resolvedMcbBidModel;
+                }
+                if (keywordBidTargetCode === 'conv') {
+                    const subOptimizeTargetSeed = normalizeSceneSettingValue(
+                        out.subOptimizeTarget
+                        || runtimeStoreData?.subOptimizeTarget
+                        || templateCampaign?.subOptimizeTarget
+                        || 'retained_buy'
+                    );
+                    out.subOptimizeTarget = normalizeKeywordConvSubOptimizeTargetValue(subOptimizeTargetSeed, {
+                        fallback: 'retained_buy'
+                    }) || 'retained_buy';
                 } else {
+                    delete out.subOptimizeTarget;
+                }
+                const singleCostValue = toNumber(out.singleCostV2, NaN);
+                if (keywordRoiContract) {
                     out.setSingleCostV2 = false;
                     delete out.singleCostV2;
+                } else {
+                    out.setSingleCostV2 = !!out.setSingleCostV2;
+                    if (out.setSingleCostV2 && Number.isFinite(singleCostValue) && singleCostValue > 0) {
+                        out.singleCostV2 = singleCostValue;
+                        if (keywordFavCartContract) {
+                            out.constraintValue = singleCostValue;
+                            delete out.singleCostV2;
+                        }
+                    } else {
+                        out.setSingleCostV2 = false;
+                        delete out.singleCostV2;
+                        if (keywordFavCartContract) delete out.constraintValue;
+                    }
+                    // 非 ROI 目标默认只保留 singleCostV2；收藏加购目标需保留 coll_cart 合同字段以对齐原生。
+                    if (!keywordFavCartContract) {
+                        delete out.constraintType;
+                        delete out.constraintValue;
+                    }
                 }
             }
             out.dmcType = out.dmcType || DEFAULTS.dmcType;
@@ -19745,8 +20042,125 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             wizardState.detailVisible = false;
         };
 
+        const createWizardDraft = (seed = {}) => mergeDeep(
+            KeywordPlanWizardStore.wizardDefaultDraft(),
+            isPlainObject(seed) ? seed : {}
+        );
+
+        const resetWizardDraft = (patch = {}) => {
+            const draft = createWizardDraft(patch);
+            wizardState.draft = draft;
+            return draft;
+        };
+
+        const hydrateWizardDraftForOpen = (storedDraft = {}) => {
+            const draft = createWizardDraft(storedDraft);
+            const draftSchemaVersion = toNumber(storedDraft?.schemaVersion, 0);
+            if (draftSchemaVersion !== SESSION_DRAFT_SCHEMA_VERSION) {
+                draft.sceneSettingValues = {};
+                draft.sceneSettingTouched = {};
+                draft.editingStrategyId = '';
+                draft.detailVisible = false;
+            }
+            draft.schemaVersion = SESSION_DRAFT_SCHEMA_VERSION;
+            draft.detailVisible = false;
+            draft.itemSplitExpanded = false;
+            draft.candidateListExpanded = false;
+            if (!SCENE_NAME_LIST.includes(draft.sceneName)) {
+                const currentSceneName = inferCurrentSceneName();
+                draft.sceneName = SCENE_NAME_LIST.includes(currentSceneName) ? currentSceneName : '关键词推广';
+            }
+            const initSceneBizCodeHint = resolveSceneBizCodeHint(draft.sceneName);
+            if (initSceneBizCodeHint && !draft.bizCode) {
+                draft.bizCode = initSceneBizCodeHint;
+            }
+            if (draft.bizCode && draft.bizCode !== DEFAULTS.bizCode) {
+                draft.promotionScene = '';
+            } else if (!draft.promotionScene) {
+                draft.promotionScene = DEFAULTS.promotionScene;
+            }
+            return draft;
+        };
+
+        const ensureWizardDraft = () => {
+            wizardState.draft = wizardState.draft || KeywordPlanWizardStore.wizardDefaultDraft();
+            return wizardState.draft;
+        };
+
+        const persistWizardDraft = (draft = null) => {
+            const nextDraft = isPlainObject(draft) ? draft : ensureWizardDraft();
+            KeywordPlanWizardStore.saveSessionDraft(nextDraft);
+            return nextDraft;
+        };
+
+        const refreshWizardPreview = () => {
+            if (typeof wizardState.buildRequest !== 'function' || typeof wizardState.renderPreview !== 'function') return null;
+            const request = wizardState.buildRequest();
+            wizardState.renderPreview(request);
+            return request;
+        };
+
+        const prepareWizardStateForOpen = (storedDraft = {}) => {
+            const draft = KeywordPlanWizardStore.hydrateWizardDraftForOpen(storedDraft);
+            wizardState.draft = draft;
+            wizardState.candidateSource = 'all';
+            wizardState.addedItems = Array.isArray(draft.addedItems)
+                ? draft.addedItems.map(normalizeItem).filter(item => item.materialId).slice(0, WIZARD_MAX_ITEMS)
+                : [];
+            return draft;
+        };
+
+        const renderWizardFromState = (options = {}) => {
+            const shouldRefreshPreview = options.refreshPreview !== false;
+            const shouldClearLogs = options.clearLogs === true;
+            if (typeof wizardState.fillUIFromDraft === 'function') {
+                wizardState.fillUIFromDraft();
+            }
+            if (typeof wizardState.refreshSceneSelect === 'function') {
+                wizardState.refreshSceneSelect();
+            } else {
+                refreshSceneSelect();
+            }
+            if (typeof wizardState.renderStrategyList === 'function') {
+                wizardState.renderStrategyList();
+            }
+            if (typeof wizardState.renderAddedList === 'function') {
+                wizardState.renderAddedList();
+            }
+            if (typeof wizardState.renderCrowdList === 'function') {
+                wizardState.renderCrowdList();
+            }
+            if (typeof wizardState.renderCandidateList === 'function') {
+                wizardState.renderCandidateList();
+            }
+            if (typeof wizardState.setCandidateSource === 'function') {
+                wizardState.setCandidateSource(wizardState.candidateSource || 'all');
+            }
+            if (typeof wizardState.setWorkbenchPage === 'function') {
+                wizardState.setWorkbenchPage(wizardState.workbenchPage || 'home');
+            }
+            if (shouldRefreshPreview) {
+                if (typeof wizardState.renderWizardPreview === 'function') {
+                    wizardState.renderWizardPreview();
+                } else {
+                    refreshWizardPreview();
+                }
+            }
+            if (shouldClearLogs) {
+                if (wizardState.els.log) {
+                    wizardState.els.log.innerHTML = '';
+                }
+                if (wizardState.els.quickLog) {
+                    wizardState.els.quickLog.innerHTML = '';
+                }
+                if (wizardState.els.workbenchPreviewLog) {
+                    wizardState.els.workbenchPreviewLog.innerHTML = '';
+                }
+            }
+        };
+
         const resolvePreferredItems = async (request, runtime) => {
-            const draft = readSessionDraft();
+            const draft = KeywordPlanWizardStore.readSessionDraft();
             const draftItems = Array.isArray(draft?.addedItems)
                 ? draft.addedItems.map(normalizeItem).filter(item => item.materialId)
                 : [];
@@ -20077,6 +20491,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return '';
         };
 
+        const normalizeKeywordBidTargetCode = (bidTarget = '') => {
+            const value = normalizeSceneSettingValue(bidTarget);
+            if (!value) return '';
+            const token = String(value).trim().toLowerCase();
+            if (!token) return '';
+            if (token === 'coll_cart' || token === 'display_cart') return 'fav_cart';
+            if (token === 'display_click') return 'click';
+            if (token === 'display_roi') return 'roi';
+            if (token === 'display_pay' || token === 'ad_strategy_buy' || token === 'ad_strategy_retained_buy') {
+                return 'conv';
+            }
+            if (token === 'word_penetration_rate') return 'market_penetration';
+            return token;
+        };
+
+        const normalizeKeywordConvSubOptimizeTargetValue = (value = '', options = {}) => {
+            const fallback = normalizeSceneSettingValue(options?.fallback || 'retained_buy') || 'retained_buy';
+            const strict = options?.strict === true;
+            const token = normalizeSceneSettingValue(value).toLowerCase();
+            if (!token) return strict ? '' : fallback;
+            if (token === 'retained_buy' || token === 'ad_strategy_retained_buy') return 'retained_buy';
+            if (token === 'buy' || token === 'ad_strategy_buy') return 'buy';
+            if (/净成交|retained|buy_net|net/.test(token)) return 'retained_buy';
+            if (/成交量|总成交|buy/.test(token)) return 'buy';
+            return strict ? '' : fallback;
+        };
+
+        const keywordConvSubOptimizeTargetCodeToLabel = (code = '') => {
+            const value = normalizeSceneSettingValue(code).toLowerCase();
+            if (value === 'buy' || value === 'ad_strategy_buy') return '获取成交量';
+            return '获取净成交';
+        };
+
         const crowdCustomBidTargetCodeToLabel = (code = '') => {
             const value = normalizeSceneSettingValue(code).toLowerCase();
             if (!value) return '获取成交量';
@@ -20198,6 +20645,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const mapSceneBudgetTypeValue = (text = '') => {
             const value = normalizeSceneSettingValue(text);
             if (!value) return '';
+            if (/^day_budget$/i.test(value)) return 'normal';
             if (/^(day_average|normal|total|day_freeze|unlimit)$/i.test(value)) return value;
             if (/不限预算/.test(value)) return 'unlimit';
             if (/日均预算/.test(value)) return 'day_average';
@@ -20384,6 +20832,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     code = runtimeTarget;
                 }
                 return code || runtimeTarget;
+            }
+            if (normalizedScene === '关键词推广') {
+                const keywordTargetCode = normalizeKeywordBidTargetCode(code || value);
+                return keywordTargetCode || runtimeTarget;
             }
 
             if (!code) return runtimeTarget;
@@ -20601,12 +21053,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const keywordGoalRuntime = normalizedSceneName === '关键词推广'
                 ? resolveKeywordGoalRuntimeFallback(keywordGoalEntry?.value || '')
                 : {};
-            const targetCode = resolveSceneTargetCode({
+            const rawTargetCode = resolveSceneTargetCode({
                 sceneName: normalizedSceneName,
                 sourceKey: targetEntry?.key || '',
                 sourceValue: targetEntry?.value || '',
                 runtime
             });
+            const keywordRoiTarget = normalizedSceneName === '关键词推广'
+                && String(rawTargetCode || '').trim().toLowerCase() === 'roi';
+            const targetCode = rawTargetCode;
             if (normalizedSceneName === '关键词推广') {
                 if (keywordGoalEntry && keywordGoalRuntime.promotionScene) {
                     applyCampaign('promotionScene', keywordGoalRuntime.promotionScene, keywordGoalEntry.key, keywordGoalEntry.value);
@@ -20630,6 +21085,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     targetKey: 'bidTargetV2/optimizeTarget',
                     reason: '当前场景未识别到可用目标字段'
                 });
+            }
+            const keywordSubOptimizeTargetEntry = normalizedSceneName === '关键词推广'
+                ? findSceneSettingEntry(entries, [/成交口径/, /净成交口径/])
+                : null;
+            if (keywordSubOptimizeTargetEntry) {
+                const keywordTargetToken = normalizeSceneSettingValue(
+                    targetCode
+                    || mapSceneBidTargetValue(targetEntry?.value || '')
+                ).toLowerCase();
+                const isKeywordConvTarget = keywordTargetToken === 'conv'
+                    || keywordTargetToken === 'display_pay'
+                    || keywordTargetToken === 'ad_strategy_buy'
+                    || keywordTargetToken === 'ad_strategy_retained_buy';
+                if (isKeywordConvTarget) {
+                    const keywordSubOptimizeTargetCode = normalizeKeywordConvSubOptimizeTargetValue(
+                        keywordSubOptimizeTargetEntry.value || '',
+                        {
+                            fallback: runtime?.storeData?.subOptimizeTarget
+                                || runtime?.solutionTemplate?.campaign?.subOptimizeTarget
+                                || 'retained_buy'
+                        }
+                    );
+                    if (keywordSubOptimizeTargetCode) {
+                        applyCampaign(
+                            'subOptimizeTarget',
+                            keywordSubOptimizeTargetCode,
+                            keywordSubOptimizeTargetEntry.key,
+                            keywordSubOptimizeTargetEntry.value
+                        );
+                    }
+                }
             }
 
             const budgetTypeEntry = findSceneSettingEntry(entries, [/预算类型/]);
@@ -20683,7 +21169,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     targetConstraintEntry?.key || ''
                 ].join(' ');
                 let constraintTypeCode = '';
-                if (/roi_control/i.test(String(bidTypeCode || ''))) {
+                if (keywordRoiTarget && /投产比|ROI/i.test(constraintTypeHint)) {
+                    // 关键词「稳定投产比」对齐原生创建口：roi 约束。
+                    constraintTypeCode = 'roi';
+                } else if (/roi_control/i.test(String(bidTypeCode || ''))) {
                     constraintTypeCode = 'roi';
                 } else if (/控成本|成本|cpa/i.test(constraintTypeHint)) {
                     constraintTypeCode = 'cost';
@@ -20692,6 +21181,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 if (constraintTypeCode) {
                     applyCampaign('constraintType', constraintTypeCode, targetConstraintEntry.key, targetConstraintEntry.value);
+                }
+            }
+            if (keywordRoiTarget) {
+                const runtimeConstraintValue = parseNumberFromSceneValue(
+                    runtime?.storeData?.constraintValue
+                    || runtime?.solutionTemplate?.campaign?.constraintValue
+                    || ''
+                );
+                const roiConstraintValue = Number.isFinite(targetConstraintValue) && targetConstraintValue > 0
+                    ? targetConstraintValue
+                    : runtimeConstraintValue;
+                const targetSourceKey = targetConstraintEntry?.key || targetEntry?.key || '出价目标';
+                const targetSourceValue = targetConstraintEntry?.value || targetEntry?.value || '稳定投产比';
+                applyCampaign('constraintType', 'roi', targetSourceKey, targetSourceValue);
+                if (Number.isFinite(roiConstraintValue) && roiConstraintValue > 0) {
+                    applyCampaign('constraintValue', roiConstraintValue, targetSourceKey, targetSourceValue);
                 }
             }
 
@@ -20760,11 +21265,55 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 applyCampaign(budgetField, genericBudgetAmount, genericBudgetEntry.key, genericBudgetEntry.value);
             }
 
-            const singleCostSwitchEntry = findSceneSettingEntry(entries, [/设置平均成交成本/, /设置平均收藏加购成本/, /控成本投放/]);
+            const resolveKeywordSingleCostPatternsByTarget = (target = '', type = 'amount') => {
+                const keywordTargetCode = normalizeKeywordBidTargetCode(
+                    mapSceneBidTargetValue(target) || target
+                ) || 'conv';
+                const switchPatternMap = {
+                    conv: [/设置平均成交成本/, /控成本投放/],
+                    fav_cart: [/设置平均收藏加购成本/, /控成本投放/],
+                    click: [/设置平均点击成本/, /控成本投放/]
+                };
+                const valuePatternMap = {
+                    conv: [/平均直接成交成本/, /平均成交成本/, /直接成交成本/, /单次成交成本/, /目标成交成本/, /目标成本/],
+                    fav_cart: [/平均收藏加购成本/, /收藏加购成本/, /目标成本/],
+                    click: [/平均点击成本/, /点击成本/, /目标成本/]
+                };
+                if (type === 'switch') {
+                    return switchPatternMap[keywordTargetCode] || [/控成本投放/];
+                }
+                return valuePatternMap[keywordTargetCode] || [
+                    /平均直接成交成本/,
+                    /平均成交成本/,
+                    /平均收藏加购成本/,
+                    /平均点击成本/,
+                    /直接成交成本/,
+                    /单次成交成本/,
+                    /目标成交成本/,
+                    /点击成本/,
+                    /目标成本/
+                ];
+            };
+            const keywordSingleCostTargetCode = normalizedSceneName === '关键词推广'
+                ? normalizeKeywordBidTargetCode(
+                    mapSceneBidTargetValue(targetCode) || targetCode
+                ) || 'conv'
+                : '';
+            const singleCostSwitchEntry = findSceneSettingEntry(
+                entries,
+                normalizedSceneName === '关键词推广'
+                    ? resolveKeywordSingleCostPatternsByTarget(keywordSingleCostTargetCode, 'switch')
+                    : [/设置平均成交成本/, /设置平均收藏加购成本/, /设置平均点击成本/, /控成本投放/]
+            );
             const singleCostSwitchOff = singleCostSwitchEntry
                 && /(关|关闭|不启用|禁用|否|off|false|0)/i.test(singleCostSwitchEntry.value || '')
                 && !/(开|开启|启用|是|on|true|1)/i.test(singleCostSwitchEntry.value || '');
-            const singleCostEntry = findSceneSettingEntry(entries, [/平均直接成交成本/, /平均成交成本/, /平均收藏加购成本/, /直接成交成本/, /单次成交成本/, /目标成交成本/]);
+            const singleCostEntry = findSceneSettingEntry(
+                entries,
+                normalizedSceneName === '关键词推广'
+                    ? resolveKeywordSingleCostPatternsByTarget(keywordSingleCostTargetCode, 'amount')
+                    : [/平均直接成交成本/, /平均成交成本/, /平均收藏加购成本/, /平均点击成本/, /直接成交成本/, /单次成交成本/, /目标成交成本/, /点击成本/, /目标成本/]
+            );
             if (singleCostSwitchOff) {
                 applyCampaign('setSingleCostV2', false, singleCostSwitchEntry.key, singleCostSwitchEntry.value);
             }
@@ -23374,13 +23923,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     inset: 0;
                     background: rgba(15, 23, 42, 0.36);
                     backdrop-filter: blur(4px);
+                    -webkit-backdrop-filter: blur(4px);
                     z-index: 1000006;
                     display: none;
                     align-items: center;
                     justify-content: center;
+                    overscroll-behavior: contain;
                 }
                 #am-wxt-keyword-overlay.open {
                     display: flex;
+                }
+                #am-wxt-keyword-overlay.item-picker-open {
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                 }
                 #am-wxt-keyword-modal {
                     width: min(1160px, 96vw);
@@ -23615,6 +24170,48 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 8px;
                     color: #374151;
                     font-size: 12px;
+                    flex-wrap: wrap;
+                    justify-content: flex-end;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-summary {
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    padding: 2px 8px;
+                    border-radius: 999px;
+                    border: 1px solid rgba(37,99,235,0.28);
+                    background: rgba(37,99,235,0.08);
+                    color: #1e3a8a;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost-field {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost input {
+                    width: 78px;
+                    min-width: 66px;
+                    padding: 2px 6px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(148,163,184,0.45);
+                    font-size: 12px;
+                    line-height: 1.4;
+                    padding-right: 24px;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost-field:not(.with-unit) input {
+                    padding-right: 6px;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost-unit {
+                    position: absolute;
+                    right: 8px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    font-size: 11px;
+                    color: #475569;
+                    pointer-events: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-copy-btn {
                     display: inline-flex;
@@ -23762,8 +24359,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     line-height: 1.2;
                     white-space: nowrap;
                 }
+                #am-wxt-keyword-modal .am-wxt-scene-inline-input .am-wxt-inline-input-wrap {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                }
                 #am-wxt-keyword-modal .am-wxt-scene-inline-input input {
                     width: 120px;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-inline-input.with-unit input {
+                    padding-right: 24px;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-inline-input .am-wxt-inline-unit {
+                    position: absolute;
+                    right: 8px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    font-size: 11px;
+                    color: #64748b;
+                    pointer-events: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-site-optimize-box {
                     display: flex;
@@ -24150,6 +24764,148 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 10px;
                     font-size: 12px;
                     color: #94a3b8;
+                }
+                #am-wxt-keyword-item-picker-mask {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 1000010;
+                    background: rgba(15, 23, 42, 0.48);
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: center;
+                    padding: 56px 16px 24px;
+                    box-sizing: border-box;
+                    overscroll-behavior: contain;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-dialog {
+                    width: min(620px, 96vw);
+                    max-height: 92vh;
+                    background: #f7f8fc;
+                    border: 1px solid rgba(69,84,229,0.2);
+                    border-radius: 14px;
+                    box-shadow: 0 16px 42px rgba(17,24,39,0.28);
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    font-family: PingFangSC-Regular,PingFang SC,"Microsoft Yahei","SimHei",sans-serif;
+                    color: #1f2937;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-head {
+                    height: 48px;
+                    padding: 0 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #1f2937;
+                    background: linear-gradient(135deg, #eef2ff, #f8f9ff);
+                    border-bottom: 1px solid rgba(69,84,229,0.18);
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-body {
+                    padding: 12px 14px 14px;
+                    overflow: auto;
+                    min-height: 0;
+                    flex: 1;
+                    overscroll-behavior: contain;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-host {
+                    min-height: 300px;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-panel {
+                    border: 1px solid rgba(148,163,184,0.35);
+                    border-radius: 10px;
+                    background: #fff;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 310px;
+                    overflow: hidden;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-panel-candidate {
+                    min-height: 310px;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-toolbar {
+                    padding: 10px;
+                    border-bottom: 1px solid rgba(148,163,184,0.28);
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]) {
+                    border: 1px solid rgba(148,163,184,0.5);
+                    border-radius: 8px;
+                    padding: 6px 8px;
+                    font-size: 12px;
+                    background: #fff;
+                    color: #1f2937;
+                    min-height: 30px;
+                    box-sizing: border-box;
+                    flex: 1;
+                    min-width: 180px;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn {
+                    border: 1px solid rgba(69,84,229,0.3);
+                    border-radius: 8px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                    line-height: 1;
+                    background: #eef2ff;
+                    color: #2e3ab8;
+                    cursor: pointer;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn.primary {
+                    background: linear-gradient(135deg, #4554e5, #4f68ff);
+                    color: #fff;
+                    border-color: #4554e5;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn:disabled {
+                    cursor: not-allowed;
+                    opacity: 0.55;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-list {
+                    padding: 6px;
+                    overflow: auto;
+                    flex: 1;
+                    overscroll-behavior: contain;
+                }
+                #am-wxt-keyword-item-picker-mask #am-wxt-keyword-candidate-list {
+                    flex: 0 0 auto;
+                    height: 222px;
+                    max-height: 222px;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-item {
+                    border: 1px solid rgba(148,163,184,0.34);
+                    border-radius: 8px;
+                    padding: 8px;
+                    margin-bottom: 6px;
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 8px;
+                    align-items: center;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-item .name {
+                    font-size: 12px;
+                    line-height: 1.35;
+                    color: #111827;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-item .meta {
+                    font-size: 11px;
+                    color: #64748b;
+                    margin-top: 2px;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-item .actions {
+                    display: flex;
+                    gap: 4px;
+                    flex-shrink: 0;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-foot {
+                    padding: 0 14px 14px;
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 8px;
+                    background: #f7f8fc;
                 }
                 #am-wxt-scene-popup-mask {
                     position: fixed;
@@ -26257,6 +27013,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     align-items: center;
                     flex-wrap: wrap;
                 }
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs {
+                    display: flex;
+                    gap: 8px;
+                    padding: 10px 12px 0;
+                    flex-wrap: wrap;
+                    border-bottom: 1px solid rgba(148,163,184,0.18);
+                }
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log {
+                    margin-top: 10px;
+                    border: 1px solid rgba(148,163,184,0.35);
+                    border-radius: 8px;
+                    background: #fff;
+                    min-height: 96px;
+                    max-height: 220px;
+                    overflow: auto;
+                    padding: 8px;
+                    font-size: 12px;
+                }
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line {
+                    margin-bottom: 4px;
+                    color: #334155;
+                }
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.error {
+                    color: #b91c1c;
+                }
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.success {
+                    color: #15803d;
+                }
                 #am-wxt-keyword-modal .am-wxt-run-mode-wrap {
                     position: relative;
                     display: inline-flex;
@@ -26474,6 +27258,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #am-wxt-keyword-modal .am-wxt-split {
                         grid-template-columns: 1fr;
                     }
+                    #am-wxt-keyword-modal .am-wxt-strategy-main {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-strategy-right {
+                        width: 100%;
+                        justify-content: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-strategy-summary {
+                        white-space: normal;
+                    }
                     #am-wxt-keyword-modal .am-wxt-setting-row {
                         grid-template-columns: 1fr;
                         gap: 6px;
@@ -26558,6 +27353,117 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             { id: 'custom_define', name: '关键词推广-自定义推广', marketingGoal: '自定义推广', enabled: true, dayAverageBudget: '100', bidMode: 'smart', useWordPackage: DEFAULTS.useWordPackage }
         ]);
 
+        const buildDefaultMatrixConfig = () => ({
+            enabled: false,
+            maxCombinations: MATRIX_LIMITS.maxCombinations,
+            batchSize: MATRIX_LIMITS.batchSize,
+            namingPattern: MATRIX_DEFAULT_NAMING_PATTERN,
+            dimensions: []
+        });
+
+        const normalizeMatrixDimension = (dimension = {}) => {
+            const normalized = isPlainObject(dimension) ? { ...dimension } : {};
+            const key = String(normalized.key || normalized.id || '').trim();
+            const label = String(normalized.label || normalized.name || key || '').trim();
+            const values = uniqueBy(
+                (Array.isArray(normalized.values) ? normalized.values : (Array.isArray(normalized.options) ? normalized.options : []))
+                    .map(item => String(item || '').trim())
+                    .filter(Boolean),
+                item => item
+            );
+            return {
+                key,
+                label: label || key,
+                values,
+                enabled: normalized.enabled !== false
+            };
+        };
+
+        const normalizeMatrixConfig = (matrixConfig = {}, sceneName = '') => {
+            const base = buildDefaultMatrixConfig();
+            const raw = isPlainObject(matrixConfig) ? matrixConfig : {};
+            const dimensions = uniqueBy(
+                (Array.isArray(raw.dimensions) ? raw.dimensions : [])
+                    .map(item => normalizeMatrixDimension(item))
+                    .filter(item => item.key && item.values.length),
+                item => item.key
+            );
+            return {
+                enabled: raw.enabled === true,
+                maxCombinations: Math.max(1, Math.min(200, toNumber(raw.maxCombinations, base.maxCombinations) || base.maxCombinations)),
+                batchSize: Math.max(1, Math.min(50, toNumber(raw.batchSize, base.batchSize) || base.batchSize)),
+                namingPattern: String(raw.namingPattern || base.namingPattern || '').trim() || base.namingPattern,
+                dimensions,
+                sceneName: String(sceneName || raw.sceneName || '').trim()
+            };
+        };
+
+        const buildMatrixCombinations = (matrixConfig = {}, options = {}) => {
+            const config = normalizeMatrixConfig(matrixConfig, options?.sceneName || '');
+            if (config.enabled !== true) return [];
+            const activeDimensions = config.dimensions.filter(item => item.enabled !== false && item.values.length);
+            if (!activeDimensions.length) return [];
+            const combinations = [];
+            const visit = (depth, current) => {
+                if (depth >= activeDimensions.length) {
+                    combinations.push({
+                        index: combinations.length + 1,
+                        values: current.slice(),
+                        labels: current.map(item => item.label)
+                    });
+                    return;
+                }
+                const dimension = activeDimensions[depth];
+                dimension.values.forEach((value) => {
+                    visit(depth + 1, current.concat([{
+                        key: dimension.key,
+                        label: String(value || '').trim(),
+                        dimensionLabel: dimension.label || dimension.key
+                    }]));
+                });
+            };
+            visit(0, []);
+            return combinations;
+        };
+
+        const applyMatrixNamingPattern = (pattern = MATRIX_DEFAULT_NAMING_PATTERN, plan = {}, combination = {}, index = 0) => {
+            const template = String(pattern || MATRIX_DEFAULT_NAMING_PATTERN).trim() || MATRIX_DEFAULT_NAMING_PATTERN;
+            const basePlanName = String(plan?.planName || '').trim();
+            const comboLabel = Array.isArray(combination?.labels) ? combination.labels.join('_') : '';
+            return template
+                .replace(/\{planName\}/g, basePlanName)
+                .replace(/\{combo\}/g, comboLabel)
+                .replace(/\{index\}/g, String(index + 1).padStart(2, '0'))
+                .trim();
+        };
+
+        const materializePlansFromMatrix = (basePlans = [], combinations = [], options = {}) => {
+            const sourcePlans = Array.isArray(basePlans) ? basePlans : [];
+            const comboList = Array.isArray(combinations) ? combinations : [];
+            if (!comboList.length) return sourcePlans.map(item => mergeDeep({}, item));
+            const namingPattern = String(options?.namingPattern || MATRIX_DEFAULT_NAMING_PATTERN).trim() || MATRIX_DEFAULT_NAMING_PATTERN;
+            const plans = [];
+            sourcePlans.forEach((plan) => {
+                comboList.forEach((combination, comboIndex) => {
+                    const nextPlan = mergeDeep({}, plan);
+                    nextPlan.planName = applyMatrixNamingPattern(namingPattern, nextPlan, combination, comboIndex);
+                    nextPlan.matrixCombination = {
+                        index: comboIndex + 1,
+                        values: Array.isArray(combination?.values) ? combination.values.map(item => ({ ...item })) : [],
+                        labels: Array.isArray(combination?.labels) ? combination.labels.slice() : []
+                    };
+                    plans.push(nextPlan);
+                });
+            });
+            return plans;
+        };
+
+        const splitMatrixBatches = (plans = [], batchSize = MATRIX_LIMITS.batchSize) => {
+            const list = Array.isArray(plans) ? plans : [];
+            const size = Math.max(1, toNumber(batchSize, MATRIX_LIMITS.batchSize) || MATRIX_LIMITS.batchSize);
+            return chunk(list, size);
+        };
+
         const wizardDefaultDraft = () => ({
             schemaVersion: SESSION_DRAFT_SCHEMA_VERSION,
             bizCode: DEFAULTS.bizCode,
@@ -26582,6 +27488,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             fallbackPolicy: normalizeWizardFallbackPolicy('auto'),
             submitMode: 'parallel',
             parallelSubmitTimes: normalizeParallelSubmitTimes(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES),
+            matrixConfig: buildDefaultMatrixConfig(),
             strategyList: getDefaultStrategyList(),
             editingStrategyId: '',
             detailVisible: false
@@ -26636,8 +27543,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         <span>关键词推广批量建计划 API 向导</span>
                         <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭">✕</button>
                     </div>
+                    <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
+                        <button type="button" class="am-wxt-btn primary" data-workbench-page="home">首页</button>
+                        <button type="button" class="am-wxt-btn" data-workbench-page="editor">编辑页</button>
+                        <button type="button" class="am-wxt-btn" data-workbench-page="matrix">矩阵页</button>
+                        <button type="button" class="am-wxt-btn" data-workbench-page="previewlog">日志页</button>
+                    </div>
                     <div class="am-wxt-body">
-                        <div class="am-wxt-split" id="am-wxt-keyword-item-split">
+                        <div class="am-wxt-split" id="am-wxt-keyword-item-split" data-workbench-page-panel="home">
                             <div class="am-wxt-panel am-wxt-panel-candidate">
                                 <div class="am-wxt-toolbar">
                                     <input id="am-wxt-keyword-search-input" placeholder="输入商品关键词或商品ID（逗号分隔）" />
@@ -26659,7 +27572,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             </div>
                         </div>
 
-                        <div class="am-wxt-strategy-board">
+                        <div class="am-wxt-strategy-board" data-workbench-page-panel="home">
                             <div class="am-wxt-strategy-head">
                                 <div class="am-wxt-strategy-head-right">
                                     <button class="am-wxt-btn" id="am-wxt-keyword-add-strategy">新建计划</button>
@@ -26698,7 +27611,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div id="am-wxt-keyword-quick-log"></div>
                         </div>
 
-                        <div class="am-wxt-config collapsed" id="am-wxt-keyword-detail-config">
+                        <div class="am-wxt-config collapsed" id="am-wxt-keyword-detail-config" data-workbench-page-panel="editor">
                             <div class="am-wxt-detail-title">
                                 <span id="am-wxt-keyword-detail-title">同步计划</span>
                                 <div class="am-wxt-detail-title-right">
@@ -26751,8 +27664,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         <div class="am-wxt-setting-control">
                                             <div class="am-wxt-option-line" data-bind-select="am-wxt-keyword-budget-type"></div>
                                             <select id="am-wxt-keyword-budget-type" class="am-wxt-hidden-control">
-                                                <option value="day_average">每日预算</option>
-                                                <option value="day_budget">日均预算</option>
+                                                <option value="day_budget">每日预算</option>
+                                                <option value="day_average">日均预算</option>
                                             </select>
                                         </div>
                                     </div>
@@ -26833,6 +27746,58 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <button class="am-wxt-btn primary" id="am-wxt-keyword-back-simple">保存并关闭</button>
                             </div>
                         </div>
+                        <div class="am-wxt-config collapsed" id="am-wxt-keyword-matrix-config" data-workbench-page-panel="matrix">
+                            <div class="am-wxt-detail-title">
+                                <span>矩阵计划配置</span>
+                            </div>
+                            <div class="am-wxt-config-grid">
+                                <div class="am-wxt-setting-row">
+                                    <div class="am-wxt-setting-label">启用矩阵</div>
+                                    <div class="am-wxt-setting-control">
+                                        <label class="am-wxt-inline-check">
+                                            <input type="checkbox" id="am-wxt-matrix-enabled" />
+                                            <span>按组合展开计划</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="am-wxt-setting-row">
+                                    <div class="am-wxt-setting-label">组合上限</div>
+                                    <div class="am-wxt-setting-control">
+                                        <input id="am-wxt-matrix-max" type="number" min="1" max="200" />
+                                    </div>
+                                </div>
+                                <div class="am-wxt-setting-row">
+                                    <div class="am-wxt-setting-label">批次大小</div>
+                                    <div class="am-wxt-setting-control">
+                                        <input id="am-wxt-matrix-batch" type="number" min="1" max="50" />
+                                    </div>
+                                </div>
+                                <div class="am-wxt-setting-row">
+                                    <div class="am-wxt-setting-label">命名模板</div>
+                                    <div class="am-wxt-setting-control">
+                                        <input id="am-wxt-matrix-name-pattern" placeholder="{planName}_{index}" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="am-wxt-crowd-box">
+                                <div class="am-wxt-crowd-title">
+                                    <span>矩阵维度</span>
+                                    <span id="am-wxt-matrix-summary">矩阵：关闭 ｜ 组合 0 ｜ 批次 0</span>
+                                </div>
+                                <div class="am-wxt-crowd-list" id="am-wxt-matrix-dimension-list"></div>
+                            </div>
+                        </div>
+                        <div class="am-wxt-config collapsed" id="am-wxt-keyword-previewlog-panel" data-workbench-page-panel="previewlog">
+                            <div class="am-wxt-detail-title">
+                                <span>预览与执行日志</span>
+                            </div>
+                            <div class="am-wxt-crowd-box">
+                                <div class="am-wxt-crowd-title"><span>场景摘要</span><span id="am-wxt-preview-scene-summary">-</span></div>
+                                <div class="am-wxt-crowd-title"><span>组合摘要</span><span id="am-wxt-preview-combo-summary">未启用</span></div>
+                                <div class="am-wxt-crowd-title"><span>批次摘要</span><span id="am-wxt-preview-batch-summary">0 批 / 每批 ${MATRIX_LIMITS.batchSize}</span></div>
+                            </div>
+                            <div id="am-wxt-workbench-preview-log"></div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -26842,12 +27807,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 overlay,
                 closeBtn: overlay.querySelector('#am-wxt-keyword-close'),
                 detailBackdrop: overlay.querySelector('#am-wxt-keyword-detail-backdrop'),
+                workbenchTabs: Array.from(overlay.querySelectorAll('[data-workbench-page]')),
                 searchInput: overlay.querySelector('#am-wxt-keyword-search-input'),
                 searchBtn: overlay.querySelector('#am-wxt-keyword-search'),
                 hotBtn: overlay.querySelector('#am-wxt-keyword-hot'),
                 allBtn: overlay.querySelector('#am-wxt-keyword-all'),
                 addAllBtn: overlay.querySelector('#am-wxt-keyword-add-all'),
                 itemSplit: overlay.querySelector('#am-wxt-keyword-item-split'),
+                strategyBoard: overlay.querySelector('.am-wxt-strategy-board'),
                 candidateList: overlay.querySelector('#am-wxt-keyword-candidate-list'),
                 addedList: overlay.querySelector('#am-wxt-keyword-added-list'),
                 addedCount: overlay.querySelector('#am-wxt-keyword-added-count'),
@@ -26892,7 +27859,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 clearCrowdBtn: overlay.querySelector('#am-wxt-keyword-clear-crowd'),
                 debugWrap: overlay.querySelector('#am-wxt-keyword-debug-wrap'),
                 preview: overlay.querySelector('#am-wxt-keyword-preview'),
-                log: overlay.querySelector('#am-wxt-keyword-log')
+                log: overlay.querySelector('#am-wxt-keyword-log'),
+                matrixPanel: overlay.querySelector('#am-wxt-keyword-matrix-config'),
+                matrixEnabledInput: overlay.querySelector('#am-wxt-matrix-enabled'),
+                matrixMaxInput: overlay.querySelector('#am-wxt-matrix-max'),
+                matrixBatchInput: overlay.querySelector('#am-wxt-matrix-batch'),
+                matrixNamePatternInput: overlay.querySelector('#am-wxt-matrix-name-pattern'),
+                matrixDimensionList: overlay.querySelector('#am-wxt-matrix-dimension-list'),
+                matrixSummary: overlay.querySelector('#am-wxt-matrix-summary'),
+                previewlogPanel: overlay.querySelector('#am-wxt-keyword-previewlog-panel'),
+                previewSceneSummary: overlay.querySelector('#am-wxt-preview-scene-summary'),
+                previewComboSummary: overlay.querySelector('#am-wxt-preview-combo-summary'),
+                previewBatchSummary: overlay.querySelector('#am-wxt-preview-batch-summary'),
+                workbenchPreviewLog: overlay.querySelector('#am-wxt-workbench-preview-log')
             };
 
             const ensureQuickLogContainer = () => {
@@ -26925,6 +27904,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 appendLine(ensureQuickLogContainer(), 40);
                 appendLine(wizardState.els.log, 160);
+                appendLine(wizardState.els.workbenchPreviewLog, 160);
+            };
+            const setWorkbenchPage = (page = 'home') => {
+                const nextPage = WORKBENCH_PAGE_SET.has(String(page || '').trim()) ? String(page || '').trim() : 'home';
+                wizardState.workbenchPage = nextPage;
+                const toggleDisplay = (el, visible) => {
+                    if (!(el instanceof HTMLElement)) return;
+                    el.style.display = visible ? '' : 'none';
+                };
+                (Array.isArray(wizardState?.els?.workbenchTabs) ? wizardState.els.workbenchTabs : []).forEach((btn) => {
+                    if (!(btn instanceof HTMLButtonElement)) return;
+                    const active = btn.dataset.workbenchPage === nextPage;
+                    btn.classList.toggle('primary', active);
+                });
+                toggleDisplay(wizardState.els.itemSplit, nextPage === 'home');
+                toggleDisplay(wizardState.els.strategyBoard, nextPage === 'home');
+                toggleDisplay(wizardState.els.detailConfig, nextPage === 'editor');
+                toggleDisplay(wizardState.els.matrixPanel, nextPage === 'matrix');
+                toggleDisplay(wizardState.els.previewlogPanel, nextPage === 'previewlog');
+            };
+            const syncMatrixConfigFromUI = () => {
+                const draft = ensureWizardDraft();
+                const currentSceneName = draft.sceneName || '关键词推广';
+                const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, currentSceneName);
+                if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
+                    nextMatrixConfig.enabled = wizardState.els.matrixEnabledInput.checked;
+                }
+                if (wizardState.els.matrixMaxInput instanceof HTMLInputElement) {
+                    nextMatrixConfig.maxCombinations = Math.max(1, Math.min(200, toNumber(wizardState.els.matrixMaxInput.value, nextMatrixConfig.maxCombinations) || nextMatrixConfig.maxCombinations));
+                }
+                if (wizardState.els.matrixBatchInput instanceof HTMLInputElement) {
+                    nextMatrixConfig.batchSize = Math.max(1, Math.min(50, toNumber(wizardState.els.matrixBatchInput.value, nextMatrixConfig.batchSize) || nextMatrixConfig.batchSize));
+                }
+                if (wizardState.els.matrixNamePatternInput instanceof HTMLInputElement) {
+                    nextMatrixConfig.namingPattern = String(wizardState.els.matrixNamePatternInput.value || nextMatrixConfig.namingPattern || MATRIX_DEFAULT_NAMING_PATTERN).trim() || MATRIX_DEFAULT_NAMING_PATTERN;
+                }
+                draft.matrixConfig = nextMatrixConfig;
             };
             const positionRunModeMenu = () => {
                 if (!(wizardState.els.runModeMenu instanceof HTMLElement)) return;
@@ -26994,33 +28010,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const setSubmitModeFromUI = (mode = 'parallel', options = {}) => {
                 const nextMode = normalizeSubmitMode(mode);
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                const prevMode = normalizeSubmitMode(wizardState.draft.submitMode || 'parallel');
-                wizardState.draft.submitMode = nextMode;
+                const draft = ensureWizardDraft();
+                const prevMode = normalizeSubmitMode(draft.submitMode || 'parallel');
+                draft.submitMode = nextMode;
                 renderRunModeMenu();
-                if (options.syncDraft !== false) {
-                    syncDraftFromUI();
-                } else {
-                    saveSessionDraft(wizardState.draft);
-                }
+                commitDraftState(options.syncDraft !== false ? null : draft);
                 if (options.silent !== true && prevMode !== nextMode) {
                     appendWizardLog(`提交方式已切换为「${submitModeLabel(nextMode)}」`, 'success');
                 }
             };
             const setParallelSubmitTimesFromUI = (next = DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, options = {}) => {
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
+                const draft = ensureWizardDraft();
                 const prevCount = normalizeParallelSubmitTimes(
-                    wizardState.draft.parallelSubmitTimes,
+                    draft.parallelSubmitTimes,
                     DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
                 );
                 const nextCount = normalizeParallelSubmitTimes(next, prevCount);
-                wizardState.draft.parallelSubmitTimes = nextCount;
+                draft.parallelSubmitTimes = nextCount;
                 renderRunModeMenu();
-                if (options.syncDraft !== false) {
-                    syncDraftFromUI();
-                } else {
-                    saveSessionDraft(wizardState.draft);
-                }
+                commitDraftState(options.syncDraft !== false ? null : draft);
                 if (options.silent !== true && prevCount !== nextCount) {
                     appendWizardLog(`并发数已调整为 ×${nextCount}`, 'success');
                 }
@@ -27113,10 +28121,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     });
             };
             const refreshItemSplitButtons = () => {
-                const splitExpanded = wizardState.itemSplitExpanded === true;
                 const listExpanded = wizardState.candidateListExpanded === true;
                 if (wizardState.els.toggleCandidateBtn instanceof HTMLButtonElement) {
-                    wizardState.els.toggleCandidateBtn.textContent = splitExpanded ? '收起商品库' : '添加商品';
+                    wizardState.els.toggleCandidateBtn.textContent = '添加商品';
                 }
                 if (wizardState.els.toggleCandidateListBtn instanceof HTMLButtonElement) {
                     wizardState.els.toggleCandidateListBtn.classList.remove('hidden');
@@ -27126,8 +28133,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const setCandidateListExpanded = (expanded) => {
                 const nextExpanded = expanded === true;
                 wizardState.candidateListExpanded = nextExpanded;
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                wizardState.draft.candidateListExpanded = nextExpanded;
+                ensureWizardDraft().candidateListExpanded = nextExpanded;
                 if (wizardState.els.itemSplit) {
                     wizardState.els.itemSplit.classList.toggle(
                         'candidate-list-expanded',
@@ -27139,8 +28145,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const setItemSplitExpanded = (expanded) => {
                 const nextExpanded = expanded === true;
                 wizardState.itemSplitExpanded = nextExpanded;
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                wizardState.draft.itemSplitExpanded = nextExpanded;
+                ensureWizardDraft().itemSplitExpanded = nextExpanded;
                 if (wizardState.els.itemSplit) {
                     wizardState.els.itemSplit.classList.toggle('compact', !nextExpanded);
                     wizardState.els.itemSplit.classList.toggle(
@@ -27149,6 +28154,125 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     );
                 }
                 refreshItemSplitButtons();
+            };
+            const openKeywordItemPickerPopup = () => {
+                if (document.getElementById('am-wxt-keyword-item-picker-mask')) return;
+                const candidatePanel = wizardState?.els?.itemSplit?.querySelector('.am-wxt-panel-candidate');
+                if (!(candidatePanel instanceof HTMLElement)) {
+                    appendWizardLog('未找到候选商品面板，请刷新后重试', 'error');
+                    return;
+                }
+                if (!(candidatePanel.parentNode instanceof Node)) {
+                    appendWizardLog('候选商品面板状态异常，请刷新后重试', 'error');
+                    return;
+                }
+                const splitPanelWidth = Math.round(candidatePanel.getBoundingClientRect().width || 0);
+
+                const initialAddedItemsSnapshot = wizardState.addedItems.map(item => deepClone(item));
+                const initialSplitExpanded = wizardState.itemSplitExpanded === true;
+                const initialCandidateListExpanded = wizardState.candidateListExpanded === true;
+                const placeholder = document.createComment('am-wxt-keyword-item-picker-placeholder');
+                const mask = document.createElement('div');
+                mask.id = 'am-wxt-keyword-item-picker-mask';
+                mask.innerHTML = `
+                    <div class="am-wxt-keyword-item-picker-dialog" role="dialog" aria-modal="true" aria-label="添加商品">
+                        <div class="am-wxt-keyword-item-picker-head">
+                            <span>添加商品</span>
+                            <button type="button" class="am-wxt-btn" data-am-wxt-item-picker-close="1">关闭</button>
+                        </div>
+                        <div class="am-wxt-keyword-item-picker-body">
+                            <div class="am-wxt-keyword-item-picker-host" data-am-wxt-item-picker-host="1"></div>
+                        </div>
+                        <div class="am-wxt-keyword-item-picker-foot">
+                            <button type="button" class="am-wxt-btn" data-am-wxt-item-picker-cancel="1">取消</button>
+                            <button type="button" class="am-wxt-btn primary" data-am-wxt-item-picker-confirm="1">确定</button>
+                        </div>
+                    </div>
+                `;
+                const panelHost = mask.querySelector('[data-am-wxt-item-picker-host="1"]');
+                if (!(panelHost instanceof HTMLElement)) return;
+                const dialog = mask.querySelector('.am-wxt-keyword-item-picker-dialog');
+                if (dialog instanceof HTMLElement && splitPanelWidth > 0) {
+                    const viewportMaxWidth = Math.max(420, Math.round((window.innerWidth || 0) - 32));
+                    const desiredWidth = Math.max(540, splitPanelWidth + 28);
+                    dialog.style.width = `${Math.min(viewportMaxWidth, desiredWidth)}px`;
+                }
+
+                const htmlEl = document.documentElement;
+                const bodyEl = document.body;
+                const previousHtmlOverflow = htmlEl?.style?.overflow || '';
+                const previousBodyOverflow = bodyEl?.style?.overflow || '';
+                if (wizardState?.els?.overlay instanceof HTMLElement) {
+                    wizardState.els.overlay.classList.add('item-picker-open');
+                }
+                if (htmlEl) htmlEl.style.overflow = 'hidden';
+                if (bodyEl) bodyEl.style.overflow = 'hidden';
+
+                candidatePanel.parentNode.insertBefore(placeholder, candidatePanel);
+                panelHost.appendChild(candidatePanel);
+                document.body.appendChild(mask);
+
+                let closed = false;
+                const handleEsc = (event) => {
+                    if (event.key !== 'Escape') return;
+                    event.preventDefault();
+                    closePicker(false);
+                };
+                const restoreCandidatePanel = () => {
+                    if (!(candidatePanel instanceof HTMLElement) || !(placeholder instanceof Comment)) return;
+                    if (placeholder.parentNode) {
+                        placeholder.parentNode.insertBefore(candidatePanel, placeholder);
+                        placeholder.parentNode.removeChild(placeholder);
+                    }
+                };
+                const closePicker = (confirmed = false) => {
+                    if (closed) return;
+                    closed = true;
+                    document.removeEventListener('keydown', handleEsc, true);
+                    if (!confirmed) {
+                        wizardState.addedItems = initialAddedItemsSnapshot.map(item => deepClone(item));
+                    }
+                    restoreCandidatePanel();
+                    setItemSplitExpanded(initialSplitExpanded);
+                    setCandidateListExpanded(initialCandidateListExpanded);
+                    commitItemSelectionUiState({
+                        renderAdded: true,
+                        renderCandidate: true
+                    });
+                    if (wizardState?.els?.overlay instanceof HTMLElement) {
+                        wizardState.els.overlay.classList.remove('item-picker-open');
+                    }
+                    if (htmlEl) htmlEl.style.overflow = previousHtmlOverflow;
+                    if (bodyEl) bodyEl.style.overflow = previousBodyOverflow;
+                    if (mask.parentNode) {
+                        mask.parentNode.removeChild(mask);
+                    }
+                };
+
+                document.addEventListener('keydown', handleEsc, true);
+                const closeBtn = mask.querySelector('[data-am-wxt-item-picker-close="1"]');
+                const cancelBtn = mask.querySelector('[data-am-wxt-item-picker-cancel="1"]');
+                const confirmBtn = mask.querySelector('[data-am-wxt-item-picker-confirm="1"]');
+                if (closeBtn instanceof HTMLButtonElement) closeBtn.onclick = () => closePicker(false);
+                if (cancelBtn instanceof HTMLButtonElement) cancelBtn.onclick = () => closePicker(false);
+                if (confirmBtn instanceof HTMLButtonElement) confirmBtn.onclick = () => closePicker(true);
+                mask.addEventListener('click', (event) => {
+                    if (event.target === mask) {
+                        closePicker(false);
+                    }
+                });
+
+                if (!wizardState.candidates.length) {
+                    void loadCandidates('', wizardState.candidateSource || 'all');
+                }
+                const searchInput = wizardState?.els?.searchInput;
+                if (searchInput instanceof HTMLInputElement) {
+                    requestAnimationFrame(() => {
+                        if (mask.parentNode) {
+                            searchInput.focus();
+                        }
+                    });
+                }
             };
 
             const renderSelectOptionLine = (selectEl) => {
@@ -27297,6 +28421,112 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     String(strategy?.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2
                 ) || DEFAULTS.bidTargetV2;
                 return BID_TARGET_OPTIONS.find(item => item.value === bidTargetValue)?.label || '获取成交量';
+            };
+            const resolveStrategyTargetCostConfig = (bidTarget = '') => {
+                const bidTargetCode = normalizeKeywordBidTargetOptionValue(
+                    mapSceneBidTargetValue(bidTarget) || bidTarget
+                );
+                if (bidTargetCode === 'roi') {
+                    return {
+                        switchLabel: '设置7日投产比',
+                        switchOnValue: '自定义',
+                        valueLabels: ['目标投产比', 'ROI目标值', '出价目标值', '约束值']
+                    };
+                }
+                if (bidTargetCode === 'conv') {
+                    return {
+                        switchLabel: '设置平均成交成本',
+                        switchOnValue: '开启',
+                        valueLabels: ['平均成交成本', '平均直接成交成本', '直接成交成本', '单次成交成本', '目标成交成本', '目标成本']
+                    };
+                }
+                if (bidTargetCode === 'fav_cart') {
+                    return {
+                        switchLabel: '设置平均收藏加购成本',
+                        switchOnValue: '开启',
+                        valueLabels: ['平均收藏加购成本', '收藏加购成本', '目标成本']
+                    };
+                }
+                if (bidTargetCode === 'click') {
+                    return {
+                        switchLabel: '设置平均点击成本',
+                        switchOnValue: '开启',
+                        valueLabels: ['平均点击成本', '点击成本', '目标成本']
+                    };
+                }
+                return null;
+            };
+            const resolveStrategySceneValueByLabels = (strategy = {}, labels = []) => {
+                const candidates = Array.isArray(labels) ? labels : [];
+                if (!candidates.length) return '';
+                const buckets = [];
+                if (isPlainObject(strategy?.sceneSettingValues)) buckets.push(strategy.sceneSettingValues);
+                if (isPlainObject(strategy?.sceneSettings)) buckets.push(strategy.sceneSettings);
+                for (const label of candidates) {
+                    const fieldLabel = normalizeSceneRenderFieldLabel(label) || label;
+                    if (!fieldLabel) continue;
+                    const fieldKey = normalizeSceneFieldKey(fieldLabel);
+                    for (const bucket of buckets) {
+                        const value = normalizeSceneSettingValue(
+                            bucket[fieldLabel]
+                            || (fieldKey ? bucket[fieldKey] : '')
+                            || ''
+                        );
+                        if (value) return value;
+                    }
+                }
+                return '';
+            };
+            const resolveStrategyTargetCostValue = (strategy = {}, bidTarget = '') => {
+                const config = resolveStrategyTargetCostConfig(bidTarget);
+                if (!config) return '';
+                const sceneTargetCostValue = resolveStrategySceneValueByLabels(strategy, config.valueLabels || []);
+                const candidateValues = [
+                    sceneTargetCostValue,
+                    strategy?.singleCostV2
+                ];
+                for (const candidate of candidateValues) {
+                    const amount = parseNumberFromSceneValue(candidate);
+                    if (!Number.isFinite(amount) || amount <= 0 || amount > 9999) continue;
+                    const normalized = toShortSceneValue(String(amount));
+                    if (normalized) return normalized;
+                }
+                return '';
+            };
+            const syncStrategyTargetCostFields = (strategy = {}, bidTarget = '', inputValue = '') => {
+                const config = resolveStrategyTargetCostConfig(bidTarget);
+                if (!config || !isPlainObject(strategy)) return '';
+                const amount = parseNumberFromSceneValue(inputValue);
+                const nextValue = (Number.isFinite(amount) && amount > 0 && amount <= 9999)
+                    ? (toShortSceneValue(String(amount)) || '')
+                    : '';
+                const writeSceneField = (fieldLabel = '', fieldValue = '', markTouched = true) => {
+                    const normalizedLabel = normalizeSceneRenderFieldLabel(fieldLabel) || fieldLabel;
+                    if (!normalizedLabel) return;
+                    const fieldKey = normalizeSceneFieldKey(normalizedLabel);
+                    if (!isPlainObject(strategy.sceneSettingValues)) strategy.sceneSettingValues = {};
+                    if (!isPlainObject(strategy.sceneSettings)) strategy.sceneSettings = {};
+                    [strategy.sceneSettingValues, strategy.sceneSettings].forEach(bucket => {
+                        if (!isPlainObject(bucket)) return;
+                        if (fieldValue) {
+                            bucket[normalizedLabel] = fieldValue;
+                            if (fieldKey) bucket[fieldKey] = fieldValue;
+                        } else {
+                            delete bucket[normalizedLabel];
+                            if (fieldKey) delete bucket[fieldKey];
+                        }
+                    });
+                    if (!markTouched) return;
+                    if (!isPlainObject(strategy.sceneSettingTouched)) strategy.sceneSettingTouched = {};
+                    if (fieldKey) strategy.sceneSettingTouched[fieldKey] = true;
+                };
+                strategy.setSingleCostV2 = normalizeBidMode(strategy.bidMode || 'smart', 'smart') === 'smart' && !!nextValue;
+                strategy.singleCostV2 = nextValue;
+                writeSceneField(config.switchLabel, nextValue ? (config.switchOnValue || '开启') : '', false);
+                (config.valueLabels || []).forEach(label => {
+                    writeSceneField(label, nextValue, true);
+                });
+                return nextValue;
             };
             const resolveKeywordCustomBidTargetAlias = (bidTarget = '', marketingGoal = '') => {
                 const value = String(bidTarget || '').trim();
@@ -27544,21 +28774,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const migrateCrowdCustomSceneSettingBucket = (sceneName = '') => {
                 if (String(sceneName || '').trim() !== '人群推广') return false;
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
-                    wizardState.draft.sceneSettingValues = {};
+                const draft = ensureWizardDraft();
+                if (!isPlainObject(draft.sceneSettingValues)) {
+                    draft.sceneSettingValues = {};
                 }
-                if (!isPlainObject(wizardState.draft.sceneSettingValues['人群推广'])) {
-                    wizardState.draft.sceneSettingValues['人群推广'] = {};
+                if (!isPlainObject(draft.sceneSettingValues['人群推广'])) {
+                    draft.sceneSettingValues['人群推广'] = {};
                 }
-                if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
-                    wizardState.draft.sceneSettingTouched = {};
+                if (!isPlainObject(draft.sceneSettingTouched)) {
+                    draft.sceneSettingTouched = {};
                 }
-                if (!isPlainObject(wizardState.draft.sceneSettingTouched['人群推广'])) {
-                    wizardState.draft.sceneSettingTouched['人群推广'] = {};
+                if (!isPlainObject(draft.sceneSettingTouched['人群推广'])) {
+                    draft.sceneSettingTouched['人群推广'] = {};
                 }
-                const bucket = wizardState.draft.sceneSettingValues['人群推广'];
-                const touchedBucket = wizardState.draft.sceneSettingTouched['人群推广'];
+                const bucket = draft.sceneSettingValues['人群推广'];
+                const touchedBucket = draft.sceneSettingTouched['人群推广'];
                 let changed = false;
 
                 const readValueByLabel = (label = '') => {
@@ -27719,27 +28949,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const ensureSceneSettingBucket = (sceneName) => {
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
-                    wizardState.draft.sceneSettingValues = {};
+                const draft = ensureWizardDraft();
+                if (!isPlainObject(draft.sceneSettingValues)) {
+                    draft.sceneSettingValues = {};
                 }
-                if (!isPlainObject(wizardState.draft.sceneSettingValues[sceneName])) {
-                    wizardState.draft.sceneSettingValues[sceneName] = {};
+                if (!isPlainObject(draft.sceneSettingValues[sceneName])) {
+                    draft.sceneSettingValues[sceneName] = {};
                 }
                 migrateCrowdCustomSceneSettingBucket(sceneName);
-                return wizardState.draft.sceneSettingValues[sceneName];
+                return draft.sceneSettingValues[sceneName];
             };
 
             const ensureSceneTouchedBucket = (sceneName) => {
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
-                    wizardState.draft.sceneSettingTouched = {};
+                const draft = ensureWizardDraft();
+                if (!isPlainObject(draft.sceneSettingTouched)) {
+                    draft.sceneSettingTouched = {};
                 }
-                if (!isPlainObject(wizardState.draft.sceneSettingTouched[sceneName])) {
-                    wizardState.draft.sceneSettingTouched[sceneName] = {};
+                if (!isPlainObject(draft.sceneSettingTouched[sceneName])) {
+                    draft.sceneSettingTouched[sceneName] = {};
                 }
                 migrateCrowdCustomSceneSettingBucket(sceneName);
-                return wizardState.draft.sceneSettingTouched[sceneName];
+                return draft.sceneSettingTouched[sceneName];
             };
             const normalizeSceneSettingBucketValues = (rawValues = {}) => {
                 if (!isPlainObject(rawValues)) return {};
@@ -27765,7 +28995,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
-            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|平均成交成本|平均收藏加购成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|起量时间地域设置|投放地域\/投放时间|资源位溢价|计划组|设置计划组|选品方式|选择推广商品|人群设置|人群优化目标|客户口径设置|人群价值设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
+            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|起量时间地域设置|投放地域\/投放时间|资源位溢价|计划组|设置计划组|选品方式|选择推广商品|人群设置|人群优化目标|客户口径设置|人群价值设置|设置拉新人群|设置人群|种子人群|方案选择)$/;
             const SCENE_RENDER_FIELD_ALIAS_RULES = [
                 { pattern: /^(关键词设置|核心词设置)$/, label: '核心词设置' },
                 { pattern: /^(开启冷启加速|冷启加速)$/, label: '冷启加速' },
@@ -28277,11 +29507,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.sceneProfiles = buildSceneProfiles();
                     const currentScene = String(wizardState.els.sceneSelect?.value || wizardState.draft?.sceneName || '').trim();
                     if (currentScene === targetSceneName) {
-                        renderSceneDynamicConfig();
-                        syncDraftFromUI();
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                        commitSceneDynamicUiState({ renderSceneDynamic: true });
                     }
                     if (!silent) {
                         appendWizardLog(`场景设置已对齐：${targetSceneName}（字段 ${spec.fields.length}，目标 ${(spec.goals || []).length}）`, 'success');
@@ -28487,7 +29713,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 if (/预算类型/.test(normalizedLabel)) {
                     const budgetType = String(wizardState?.els?.budgetTypeSelect?.value || wizardState?.draft?.strategyList?.[0]?.budgetType || 'day_average').trim();
-                    const preferred = budgetType === 'day_budget' ? '日均预算' : '每日预算';
+                    const preferred = budgetType === 'day_budget' ? '每日预算' : '日均预算';
                     return pickByText(preferred, true)
                         || pickByText(sceneDefaults.预算类型 || '', true)
                         || pickByText(fallbackOptions[0] || '', true)
@@ -28839,7 +30065,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const bidMode = currentBidMode;
                 const bidTypeLabel = bidMode === 'manual' ? '手动出价' : '智能出价';
                 const budgetTypeValue = String(wizardState?.els?.budgetTypeSelect?.value || wizardState?.draft?.strategyList?.[0]?.budgetType || 'day_average').trim();
-                const budgetTypeLabel = budgetTypeValue === 'day_budget' ? '日均预算' : '每日预算';
+                const budgetTypeLabel = budgetTypeValue === 'day_budget' ? '每日预算' : '日均预算';
                 const scenePrefix = String(wizardState?.draft?.planNamePrefix || buildSceneTimePrefix(targetSceneName)).trim();
                 const budgetValue = normalizeSceneSettingValue(wizardState?.els?.budgetInput?.value || wizardState?.draft?.dayAverageBudget || '');
                 const bidTargetValue = String(wizardState?.els?.bidTargetSelect?.value || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
@@ -28880,11 +30106,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (scenePrefix) sceneSettings.计划名称 = scenePrefix;
                 }
                 if (allowAutoBudgetAmount && budgetValue) {
-                    if (budgetTypeValue === 'day_budget' && !sceneSettings.日均预算) {
-                        sceneSettings.日均预算 = budgetValue;
-                    }
-                    if (budgetTypeValue !== 'day_budget' && !sceneSettings.每日预算) {
+                    if (budgetTypeValue === 'day_budget' && !sceneSettings.每日预算) {
                         sceneSettings.每日预算 = budgetValue;
+                    }
+                    if (budgetTypeValue !== 'day_budget' && !sceneSettings.日均预算) {
+                        sceneSettings.日均预算 = budgetValue;
                     }
                 }
                 if (allowAutoBidTarget && bidTargetLabel) {
@@ -28912,6 +30138,64 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             sceneSettings.选择卡位方案 = inferredKeywordGoal;
                         }
                     }
+                    const keywordBidTargetSeed = normalizeSceneSettingValue(
+                        sceneSettings.出价目标
+                        || sceneSettings.优化目标
+                        || bucket[normalizeSceneFieldKey('出价目标')]
+                        || bucket[normalizeSceneFieldKey('优化目标')]
+                        || bidTargetValue
+                    );
+                    const keywordBidTargetCode = normalizeKeywordBidTargetOptionValue(
+                        mapSceneBidTargetValue(keywordBidTargetSeed) || keywordBidTargetSeed
+                    ) || 'conv';
+                    const keywordSubOptimizeTargetFieldKey = normalizeSceneFieldKey('campaign.subOptimizeTarget');
+                    const keywordConvLabelFieldKey = normalizeSceneFieldKey('成交口径');
+                    const keywordRoiConstraintFields = ['设置7日投产比', '目标投产比', 'ROI目标值', '出价目标值', '约束值'];
+                    const keywordConvCostFields = ['设置平均成交成本', '平均直接成交成本', '平均成交成本', '直接成交成本', '单次成交成本', '目标成交成本', '目标成本'];
+                    const keywordCartCostFields = ['设置平均收藏加购成本', '平均收藏加购成本', '目标成本'];
+                    const keywordClickCostFields = ['设置平均点击成本', '平均点击成本', '点击成本', '目标成本'];
+                    const clearKeywordTargetSpecificFields = (labels = []) => {
+                        labels.forEach(label => {
+                            const key = normalizeSceneFieldKey(label);
+                            delete sceneSettings[label];
+                            if (key) delete sceneSettings[key];
+                        });
+                    };
+                    if (
+                        currentBidMode !== 'manual'
+                        && inferredKeywordGoal === '自定义推广'
+                        && keywordBidTargetCode === 'conv'
+                    ) {
+                        const keywordSubOptimizeTargetSeed = normalizeSceneSettingValue(
+                            sceneSettings.成交口径
+                            || bucket[keywordConvLabelFieldKey]
+                            || bucket[keywordSubOptimizeTargetFieldKey]
+                            || runtimeCache?.value?.storeData?.subOptimizeTarget
+                            || runtimeCache?.value?.solutionTemplate?.campaign?.subOptimizeTarget
+                            || 'retained_buy'
+                        );
+                        const keywordSubOptimizeTargetCode = normalizeKeywordConvSubOptimizeTargetValue(
+                            keywordSubOptimizeTargetSeed,
+                            { fallback: 'retained_buy' }
+                        ) || 'retained_buy';
+                        sceneSettings['campaign.subOptimizeTarget'] = keywordSubOptimizeTargetCode;
+                    } else {
+                        delete sceneSettings['campaign.subOptimizeTarget'];
+                    }
+                    if (keywordBidTargetCode === 'roi') {
+                        clearKeywordTargetSpecificFields(keywordConvCostFields.concat(keywordCartCostFields, keywordClickCostFields));
+                    } else if (keywordBidTargetCode === 'conv') {
+                        clearKeywordTargetSpecificFields(keywordRoiConstraintFields.concat(keywordCartCostFields, keywordClickCostFields));
+                    } else if (keywordBidTargetCode === 'fav_cart') {
+                        clearKeywordTargetSpecificFields(keywordRoiConstraintFields.concat(keywordConvCostFields, keywordClickCostFields));
+                    } else if (keywordBidTargetCode === 'click') {
+                        clearKeywordTargetSpecificFields(keywordRoiConstraintFields.concat(keywordConvCostFields, keywordCartCostFields));
+                    } else {
+                        clearKeywordTargetSpecificFields(
+                            keywordRoiConstraintFields.concat(keywordConvCostFields, keywordCartCostFields, keywordClickCostFields)
+                        );
+                    }
+                    delete sceneSettings.成交口径;
                     if (keywordModeLabel && !sceneSettings.关键词模式) {
                         sceneSettings.关键词模式 = keywordModeLabel;
                     }
@@ -29205,7 +30489,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bucket
                 });
                 if (autoFilledCount > 0) {
-                    saveSessionDraft(wizardState.draft);
+                    KeywordPlanWizardStore.persistDraft();
                     appendWizardLog(`场景默认设置已加载 ${autoFilledCount} 项（${sceneName}）`, 'success');
                 }
                 const filledCount = Object.keys(bucket || {})
@@ -29379,16 +30663,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     </div>
                 `;
 
-                const buildInlineSceneInputControl = (label, fieldKey, value, placeholder = '') => `
-                    <div class="am-wxt-scene-inline-input">
-                        <span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>
-                        <input
-                            data-scene-field="${Utils.escapeHtml(fieldKey)}"
-                            value="${Utils.escapeHtml(value || '')}"
-                            placeholder="${Utils.escapeHtml(placeholder || '')}"
-                        />
-                    </div>
-                `;
+                const buildInlineSceneInputControl = (label, fieldKey, value, placeholder = '', options = {}) => {
+                    const unit = normalizeSceneSettingValue(options?.unit || '');
+                    return `
+                        <div class="am-wxt-scene-inline-input ${unit ? 'with-unit' : ''}">
+                            <span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>
+                            <span class="am-wxt-inline-input-wrap">
+                                <input
+                                    data-scene-field="${Utils.escapeHtml(fieldKey)}"
+                                    value="${Utils.escapeHtml(value || '')}"
+                                    placeholder="${Utils.escapeHtml(placeholder || '')}"
+                                />
+                                ${unit ? `<span class="am-wxt-inline-unit">${Utils.escapeHtml(unit)}</span>` : ''}
+                            </span>
+                        </div>
+                    `;
+                };
 
                 const parseScenePopupJsonArray = (rawValue = '', fallback = []) => {
                     const parsed = tryParseMaybeJSON(rawValue);
@@ -30052,6 +31342,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         'smart'
                     );
                     const activeKeywordGoal = detectKeywordGoalFromText(activeMarketingGoal || '');
+                    let keywordBidTargetLinkedInsertIndex = -1;
                     staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
                     if (keywordBidMode !== 'manual') {
                         const keywordCustomBidTargetAllowedValues = ['conv', 'similar_item', 'market_penetration', 'fav_cart', 'click', 'roi'];
@@ -30061,6 +31352,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             enforceFilteredSelection: activeKeywordGoal === '自定义推广',
                             resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
                         }));
+                        if (activeKeywordGoal === '自定义推广') {
+                            keywordBidTargetLinkedInsertIndex = staticRows.length;
+                        }
                     }
                     staticRows.push(buildProxySelectRow('预算类型', 'am-wxt-keyword-budget-type', wizardState.els.budgetTypeSelect, {
                         segmented: true,
@@ -30292,6 +31586,349 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 defaultValue: isCrowdTargetEnabled ? '开启' : '关闭',
                                 strictOptions: true
                             });
+                            const keywordBidTargetLinkedRows = [];
+                            const keywordRoiLevelFieldLabel = '设置7日投产比';
+                            const keywordRoiLevelFieldKey = normalizeSceneFieldKey(keywordRoiLevelFieldLabel);
+                            const keywordRoiCustomFieldLabel = '目标投产比';
+                            const keywordRoiCustomFieldKey = normalizeSceneFieldKey(keywordRoiCustomFieldLabel);
+                            const keywordAvgDealCostSwitchFieldLabel = '设置平均成交成本';
+                            const keywordAvgDealCostSwitchFieldKey = normalizeSceneFieldKey(keywordAvgDealCostSwitchFieldLabel);
+                            const keywordAvgDealCostFieldLabel = '平均成交成本';
+                            const keywordAvgDealCostFieldKey = normalizeSceneFieldKey(keywordAvgDealCostFieldLabel);
+                            const keywordAvgCartCostSwitchFieldLabel = '设置平均收藏加购成本';
+                            const keywordAvgCartCostSwitchFieldKey = normalizeSceneFieldKey(keywordAvgCartCostSwitchFieldLabel);
+                            const keywordAvgCartCostFieldLabel = '平均收藏加购成本';
+                            const keywordAvgCartCostFieldKey = normalizeSceneFieldKey(keywordAvgCartCostFieldLabel);
+                            const keywordAvgClickCostSwitchFieldLabel = '设置平均点击成本';
+                            const keywordAvgClickCostSwitchFieldKey = normalizeSceneFieldKey(keywordAvgClickCostSwitchFieldLabel);
+                            const keywordAvgClickCostFieldLabel = '平均点击成本';
+                            const keywordAvgClickCostFieldKey = normalizeSceneFieldKey(keywordAvgClickCostFieldLabel);
+                            const keywordSubOptimizeTargetFieldLabel = '成交口径';
+                            const keywordSubOptimizeTargetFieldKey = normalizeSceneFieldKey(keywordSubOptimizeTargetFieldLabel);
+                            const keywordSubOptimizeTargetApiFieldKey = normalizeSceneFieldKey('campaign.subOptimizeTarget');
+                            const keywordBidTargetSeed = normalizeSceneSettingValue(
+                                wizardState?.els?.bidTargetSelect?.value
+                                || bucket[normalizeSceneFieldKey('campaign.bidTargetV2')]
+                                || bucket[normalizeSceneFieldKey('campaign.optimizeTarget')]
+                                || bucket[normalizeSceneFieldKey('优化目标')]
+                                || bucket[normalizeSceneFieldKey('出价目标')]
+                                || ''
+                            );
+                            const keywordBidTargetCode = normalizeKeywordBidTargetOptionValue(
+                                mapSceneBidTargetValue(keywordBidTargetSeed) || keywordBidTargetSeed
+                            ) || 'conv';
+                            const resolveKeywordTargetCostValue = ({
+                                fieldKey = '',
+                                fieldLabel = '',
+                                aliases = [],
+                                fallback = ''
+                            } = {}) => {
+                                const aliasKeys = (Array.isArray(aliases) ? aliases : [])
+                                    .map(item => normalizeSceneFieldKey(item))
+                                    .filter(Boolean);
+                                const optionSeeds = resolveSceneFieldOptions(profile, fieldLabel);
+                                const heuristicSeed = resolveSceneFieldHeuristicDefault(fieldLabel, optionSeeds);
+                                const candidates = [
+                                    fieldKey ? bucket[fieldKey] : '',
+                                    fieldLabel ? bucket[fieldLabel] : '',
+                                    ...aliasKeys.map(aliasKey => bucket[aliasKey]),
+                                    wizardState?.els?.singleCostInput?.value,
+                                    runtimeCache?.value?.storeData?.singleCostV2,
+                                    runtimeCache?.value?.solutionTemplate?.campaign?.singleCostV2,
+                                    runtimeCache?.value?.storeData?.constraintValue,
+                                    runtimeCache?.value?.solutionTemplate?.campaign?.constraintValue,
+                                    heuristicSeed,
+                                    fallback
+                                ];
+                                for (const candidate of candidates) {
+                                    const num = parseNumberFromSceneValue(candidate);
+                                    if (!Number.isFinite(num) || num <= 0 || num > 9999) continue;
+                                    const text = toShortSceneValue(String(num));
+                                    if (text) return text;
+                                }
+                                return '';
+                            };
+                            const keywordRoiFallbackValue = resolveKeywordTargetCostValue({
+                                fieldKey: keywordRoiCustomFieldKey,
+                                fieldLabel: keywordRoiCustomFieldLabel,
+                                aliases: ['ROI目标值', '出价目标值', '约束值'],
+                                fallback: ''
+                            });
+                            if (keywordBidTargetCode === 'roi') {
+                                const collectKeywordRoiPresetValues = () => {
+                                    const values = [];
+                                    const pushNumericValue = (candidate = '') => {
+                                        const num = parseNumberFromSceneValue(candidate);
+                                        if (!Number.isFinite(num) || num <= 0 || num > 9999) return;
+                                        const text = toShortSceneValue(String(num));
+                                        if (!text) return;
+                                        values.push(text);
+                                    };
+                                    const appendOptions = (fieldLabel = '') => {
+                                        resolveSceneFieldOptions(profile, fieldLabel).forEach(pushNumericValue);
+                                    };
+                                    appendOptions(keywordRoiLevelFieldLabel);
+                                    appendOptions(keywordRoiCustomFieldLabel);
+                                    appendOptions('ROI目标值');
+                                    appendOptions('出价目标值');
+                                    appendOptions('约束值');
+                                    [
+                                        bucket[keywordRoiLevelFieldKey],
+                                        bucket[keywordRoiLevelFieldLabel],
+                                        bucket[keywordRoiCustomFieldKey],
+                                        bucket[keywordRoiCustomFieldLabel],
+                                        runtimeCache?.value?.storeData?.constraintValue,
+                                        runtimeCache?.value?.solutionTemplate?.campaign?.constraintValue
+                                    ].forEach(pushNumericValue);
+                                    [
+                                        runtimeCache?.value?.storeData?.constraintValueList,
+                                        runtimeCache?.value?.storeData?.constraintList,
+                                        runtimeCache?.value?.storeData?.constraintOptions,
+                                        runtimeCache?.value?.storeData?.constraintValueOptions,
+                                        runtimeCache?.value?.solutionTemplate?.campaign?.constraintValueList,
+                                        runtimeCache?.value?.solutionTemplate?.campaign?.constraintOptions
+                                    ].forEach(list => {
+                                        if (!Array.isArray(list)) return;
+                                        list.forEach(item => {
+                                            if (isPlainObject(item)) {
+                                                pushNumericValue(item.value);
+                                                pushNumericValue(item.constraintValue);
+                                                pushNumericValue(item.label);
+                                                pushNumericValue(item.text);
+                                                return;
+                                            }
+                                            pushNumericValue(item);
+                                        });
+                                    });
+                                    if (!values.length) {
+                                        pushNumericValue(keywordRoiFallbackValue);
+                                    }
+                                    return uniqueBy(values, item => item).slice(0, 8);
+                                };
+                                const keywordRoiPresetOptions = collectKeywordRoiPresetValues();
+                                const keywordRoiCustomValue = normalizeSceneSettingValue(
+                                    bucket[keywordRoiCustomFieldKey]
+                                    || bucket[keywordRoiCustomFieldLabel]
+                                    || keywordRoiFallbackValue
+                                    || ''
+                                );
+                                if (keywordRoiCustomValue) {
+                                    bucket[keywordRoiCustomFieldKey] = keywordRoiCustomValue;
+                                    bucket[keywordRoiCustomFieldLabel] = keywordRoiCustomValue;
+                                }
+                                const keywordRoiSeed = normalizeSceneSettingValue(
+                                    bucket[keywordRoiLevelFieldKey]
+                                    || bucket[keywordRoiLevelFieldLabel]
+                                    || keywordRoiCustomValue
+                                    || ''
+                                );
+                                let keywordRoiPresetValue = pickSceneValueFromOptions(keywordRoiSeed, keywordRoiPresetOptions);
+                                if (!keywordRoiPresetValue) {
+                                    keywordRoiPresetValue = keywordRoiCustomValue ? '自定义' : (keywordRoiPresetOptions[0] || '自定义');
+                                }
+                                const keywordRoiPresetOptionsWithCustom = keywordRoiPresetOptions.concat(['自定义']);
+                                bucket[keywordRoiLevelFieldKey] = keywordRoiPresetValue;
+                                bucket[keywordRoiLevelFieldLabel] = keywordRoiPresetValue;
+                                keywordBidTargetLinkedRows.push(buildSceneOptionRow(
+                                    keywordRoiLevelFieldLabel,
+                                    keywordRoiLevelFieldKey,
+                                    keywordRoiPresetOptionsWithCustom,
+                                    keywordRoiPresetValue,
+                                    {
+                                        segmented: true,
+                                        inlineControlHtml: keywordRoiPresetValue === '自定义'
+                                            ? buildInlineSceneInputControl(
+                                                '自定义',
+                                                keywordRoiCustomFieldKey,
+                                                keywordRoiCustomValue,
+                                                '例如 2.24'
+                                            )
+                                            : ''
+                                    }
+                                ));
+                            } else if (keywordBidTargetCode === 'conv') {
+                                const keywordSubOptimizeTargetSeed = normalizeSceneSettingValue(
+                                    bucket[keywordSubOptimizeTargetFieldKey]
+                                    || bucket[keywordSubOptimizeTargetFieldLabel]
+                                    || bucket[keywordSubOptimizeTargetApiFieldKey]
+                                    || runtimeCache?.value?.storeData?.subOptimizeTarget
+                                    || runtimeCache?.value?.solutionTemplate?.campaign?.subOptimizeTarget
+                                    || 'retained_buy'
+                                );
+                                const keywordSubOptimizeTargetCode = normalizeKeywordConvSubOptimizeTargetValue(
+                                    keywordSubOptimizeTargetSeed,
+                                    { fallback: 'retained_buy' }
+                                ) || 'retained_buy';
+                                const keywordSubOptimizeTargetValue = keywordConvSubOptimizeTargetCodeToLabel(keywordSubOptimizeTargetCode);
+                                const keywordSubOptimizeTargetOptions = ['获取成交量', '获取净成交'];
+                                const keywordSubOptimizeTargetOptionHtml = keywordSubOptimizeTargetOptions.map(opt => `
+                                    <button
+                                        type="button"
+                                        class="am-wxt-option-chip ${isSceneOptionMatch(opt, keywordSubOptimizeTargetValue) ? 'active' : ''}"
+                                        data-scene-option="1"
+                                        data-scene-option-field="${Utils.escapeHtml(keywordSubOptimizeTargetFieldKey)}"
+                                        data-scene-option-value="${Utils.escapeHtml(opt)}"
+                                    >${Utils.escapeHtml(opt)}</button>
+                                `).join('');
+                                bucket[keywordSubOptimizeTargetFieldKey] = keywordSubOptimizeTargetValue;
+                                bucket[keywordSubOptimizeTargetFieldLabel] = keywordSubOptimizeTargetValue;
+                                bucket[keywordSubOptimizeTargetApiFieldKey] = keywordSubOptimizeTargetCode;
+                                const keywordAvgDealCostValue = resolveKeywordTargetCostValue({
+                                    fieldKey: keywordAvgDealCostFieldKey,
+                                    fieldLabel: keywordAvgDealCostFieldLabel,
+                                    aliases: ['平均直接成交成本', '直接成交成本', '单次成交成本', '目标成交成本'],
+                                    fallback: ''
+                                });
+                                if (keywordAvgDealCostValue) {
+                                    bucket[keywordAvgDealCostFieldKey] = keywordAvgDealCostValue;
+                                    bucket[keywordAvgDealCostFieldLabel] = keywordAvgDealCostValue;
+                                }
+                                const keywordAvgDealCostSwitchRaw = normalizeSceneSettingValue(
+                                    bucket[keywordAvgDealCostSwitchFieldKey]
+                                    || bucket[keywordAvgDealCostSwitchFieldLabel]
+                                    || ''
+                                );
+                                const keywordAvgDealCostEnabled = keywordAvgDealCostSwitchRaw
+                                    ? !/^(0|false|off|关闭|否)$/i.test(keywordAvgDealCostSwitchRaw)
+                                    : (toNumber(keywordAvgDealCostValue, 0) > 0);
+                                const keywordAvgDealCostSwitchValue = keywordAvgDealCostEnabled ? '开启' : '关闭';
+                                bucket[keywordAvgDealCostSwitchFieldKey] = keywordAvgDealCostSwitchValue;
+                                bucket[keywordAvgDealCostSwitchFieldLabel] = keywordAvgDealCostSwitchValue;
+                                keywordBidTargetLinkedRows.push(`
+                                    <div class="am-wxt-scene-setting-row">
+                                        <div class="am-wxt-scene-setting-label">设置平均成交成本</div>
+                                        <div class="am-wxt-setting-control am-wxt-setting-control-pair">
+                                            <div class="am-wxt-option-line segmented">${keywordSubOptimizeTargetOptionHtml}</div>
+                                            ${buildSceneSwitchControl(
+                                    keywordAvgDealCostSwitchFieldKey,
+                                    keywordAvgDealCostSwitchValue,
+                                    '开启',
+                                    '关闭'
+                                )}
+                                            <span class="am-wxt-scene-budget-guard-text">控成本投放：成本过低可能影响系统最大化获取成交量</span>
+                                            ${buildInlineSceneInputControl(
+                                    '目标成本',
+                                    keywordAvgDealCostFieldKey,
+                                    keywordAvgDealCostValue,
+                                    '请输入',
+                                    { unit: '元' }
+                                )}
+                                            <input
+                                                class="am-wxt-hidden-control"
+                                                data-scene-field="${Utils.escapeHtml(keywordSubOptimizeTargetFieldKey)}"
+                                                value="${Utils.escapeHtml(keywordSubOptimizeTargetValue)}"
+                                            />
+                                            <input
+                                                class="am-wxt-hidden-control"
+                                                data-scene-field="${Utils.escapeHtml(keywordAvgDealCostSwitchFieldKey)}"
+                                                value="${Utils.escapeHtml(keywordAvgDealCostSwitchValue)}"
+                                            />
+                                        </div>
+                                    </div>
+                                `);
+                            } else if (keywordBidTargetCode === 'fav_cart') {
+                                const keywordAvgCartCostValue = resolveKeywordTargetCostValue({
+                                    fieldKey: keywordAvgCartCostFieldKey,
+                                    fieldLabel: keywordAvgCartCostFieldLabel,
+                                    aliases: ['收藏加购成本'],
+                                    fallback: ''
+                                });
+                                if (keywordAvgCartCostValue) {
+                                    bucket[keywordAvgCartCostFieldKey] = keywordAvgCartCostValue;
+                                    bucket[keywordAvgCartCostFieldLabel] = keywordAvgCartCostValue;
+                                }
+                                const keywordAvgCartCostSwitchRaw = normalizeSceneSettingValue(
+                                    bucket[keywordAvgCartCostSwitchFieldKey]
+                                    || bucket[keywordAvgCartCostSwitchFieldLabel]
+                                    || ''
+                                );
+                                const keywordAvgCartCostEnabled = keywordAvgCartCostSwitchRaw
+                                    ? !/^(0|false|off|关闭|否)$/i.test(keywordAvgCartCostSwitchRaw)
+                                    : (toNumber(keywordAvgCartCostValue, 0) > 0);
+                                const keywordAvgCartCostSwitchValue = keywordAvgCartCostEnabled ? '开启' : '关闭';
+                                bucket[keywordAvgCartCostSwitchFieldKey] = keywordAvgCartCostSwitchValue;
+                                bucket[keywordAvgCartCostSwitchFieldLabel] = keywordAvgCartCostSwitchValue;
+                                keywordBidTargetLinkedRows.push(`
+                                    <div class="am-wxt-scene-setting-row">
+                                        <div class="am-wxt-scene-setting-label">设置平均收藏加购成本</div>
+                                        <div class="am-wxt-setting-control am-wxt-setting-control-pair">
+                                            ${buildSceneSwitchControl(
+                                    keywordAvgCartCostSwitchFieldKey,
+                                    keywordAvgCartCostSwitchValue,
+                                    '开启',
+                                    '关闭'
+                                )}
+                                            <span class="am-wxt-scene-budget-guard-text">控成本投放：成本过低可能影响系统最大化获取收藏加购量</span>
+                                            ${buildInlineSceneInputControl(
+                                    '目标成本',
+                                    keywordAvgCartCostFieldKey,
+                                    keywordAvgCartCostValue,
+                                    '请输入',
+                                    { unit: '元' }
+                                )}
+                                            <input
+                                                class="am-wxt-hidden-control"
+                                                data-scene-field="${Utils.escapeHtml(keywordAvgCartCostSwitchFieldKey)}"
+                                                value="${Utils.escapeHtml(keywordAvgCartCostSwitchValue)}"
+                                            />
+                                        </div>
+                                    </div>
+                                `);
+                            } else if (keywordBidTargetCode === 'click') {
+                                const keywordAvgClickCostValue = resolveKeywordTargetCostValue({
+                                    fieldKey: keywordAvgClickCostFieldKey,
+                                    fieldLabel: keywordAvgClickCostFieldLabel,
+                                    aliases: ['点击成本'],
+                                    fallback: ''
+                                });
+                                if (keywordAvgClickCostValue) {
+                                    bucket[keywordAvgClickCostFieldKey] = keywordAvgClickCostValue;
+                                    bucket[keywordAvgClickCostFieldLabel] = keywordAvgClickCostValue;
+                                }
+                                const keywordAvgClickCostSwitchRaw = normalizeSceneSettingValue(
+                                    bucket[keywordAvgClickCostSwitchFieldKey]
+                                    || bucket[keywordAvgClickCostSwitchFieldLabel]
+                                    || ''
+                                );
+                                const keywordAvgClickCostEnabled = keywordAvgClickCostSwitchRaw
+                                    ? !/^(0|false|off|关闭|否)$/i.test(keywordAvgClickCostSwitchRaw)
+                                    : (toNumber(keywordAvgClickCostValue, 0) > 0);
+                                const keywordAvgClickCostSwitchValue = keywordAvgClickCostEnabled ? '开启' : '关闭';
+                                bucket[keywordAvgClickCostSwitchFieldKey] = keywordAvgClickCostSwitchValue;
+                                bucket[keywordAvgClickCostSwitchFieldLabel] = keywordAvgClickCostSwitchValue;
+                                keywordBidTargetLinkedRows.push(`
+                                    <div class="am-wxt-scene-setting-row">
+                                        <div class="am-wxt-scene-setting-label">设置平均点击成本</div>
+                                        <div class="am-wxt-setting-control am-wxt-setting-control-pair">
+                                            ${buildSceneSwitchControl(
+                                    keywordAvgClickCostSwitchFieldKey,
+                                    keywordAvgClickCostSwitchValue,
+                                    '开启',
+                                    '关闭'
+                                )}
+                                            <span class="am-wxt-scene-budget-guard-text">控成本投放：成本过低可能影响系统最大化获取点击量</span>
+                                            ${buildInlineSceneInputControl(
+                                    '目标成本',
+                                    keywordAvgClickCostFieldKey,
+                                    keywordAvgClickCostValue,
+                                    '请输入',
+                                    { unit: '元' }
+                                )}
+                                            <input
+                                                class="am-wxt-hidden-control"
+                                                data-scene-field="${Utils.escapeHtml(keywordAvgClickCostSwitchFieldKey)}"
+                                                value="${Utils.escapeHtml(keywordAvgClickCostSwitchValue)}"
+                                            />
+                                        </div>
+                                    </div>
+                                `);
+                            }
+                            if (keywordBidTargetLinkedRows.length) {
+                                const keywordLinkedInsertAt = keywordBidTargetLinkedInsertIndex > -1
+                                    ? keywordBidTargetLinkedInsertIndex
+                                    : staticRows.length;
+                                staticRows.splice(keywordLinkedInsertAt, 0, ...keywordBidTargetLinkedRows);
+                            }
                             pushKeywordCustomSettingRow({
                                 label: '投放资源位',
                                 aliases: ['资源位设置', '投放资源位/投放地域/投放时间', '投放资源位/投放地域/分时折扣', '高级设置'],
@@ -30933,7 +32570,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 '目标成本',
                                 crowdAvgDealCostFieldKey,
                                 crowdAvgDealCostValue,
-                                '请输入 元/次'
+                                '请输入',
+                                { unit: '元' }
                             )}
                                         <input
                                             class="am-wxt-hidden-control"
@@ -30975,7 +32613,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 '目标成本',
                                 crowdAvgCartCostFieldKey,
                                 crowdAvgCartCostValue,
-                                '请输入 元/次'
+                                '请输入',
+                                { unit: '元' }
                             )}
                                         <input
                                             class="am-wxt-hidden-control"
@@ -31271,29 +32910,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
                 if (isKeywordScene) {
-                    staticRows.push(`
-                        <div class="am-wxt-scene-setting-row">
-                            <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
-                            <div class="am-wxt-setting-control am-wxt-setting-control-inline">
-                                <label class="am-wxt-inline-check">
-                                    <input
-                                        type="checkbox"
-                                        data-proxy-check-target="am-wxt-keyword-single-cost-enable"
-                                        ${wizardState.els.singleCostEnableInput?.checked ? 'checked' : ''}
-                                        ${wizardState.els.singleCostEnableInput?.disabled ? 'disabled' : ''}
-                                    />
-                                    <span>启用（非必要）</span>
-                                </label>
-                                <input
-                                    data-proxy-input-target="am-wxt-keyword-single-cost"
-                                    value="${Utils.escapeHtml(wizardState.els.singleCostInput?.value || '')}"
-                                    placeholder="成本上限"
-                                    style="width:140px;"
-                                    ${wizardState.els.singleCostInput?.disabled ? 'disabled' : ''}
-                                />
-                            </div>
-                        </div>
-                    `);
                     staticRows.push(buildManualKeywordDesignerRow('手动关键词'));
                 }
                 const staticGridHtml = staticRows.join('');
@@ -31578,6 +33194,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         hiddenControl.dispatchEvent(new Event('change', { bubbles: true }));
                         const crowdCustomBidTypeFieldKey = normalizeSceneFieldKey('出价方式');
                         const crowdCustomBidTargetFieldKey = normalizeSceneFieldKey('出价目标');
+                        const keywordCustomRoiFieldKey = normalizeSceneFieldKey('设置7日投产比');
                         const activeSceneName = String(wizardState.els.sceneSelect?.value || wizardState.draft?.sceneName || '').trim();
                         const activeSceneBucket = ensureSceneSettingBucket(activeSceneName);
                         const activeCrowdGoal = normalizeGoalCandidateLabel(
@@ -31587,11 +33204,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             || activeSceneBucket[normalizeSceneFieldKey('选择方式')]
                             || ''
                         );
-                        if (
+                        const activeKeywordGoal = detectKeywordGoalFromText(
+                            activeSceneBucket[normalizeSceneFieldKey('营销目标')]
+                            || activeSceneBucket[normalizeSceneFieldKey('选择卡位方案')]
+                            || ''
+                        );
+                        const shouldRerenderCrowdCustomBid = (
                             activeSceneName === '人群推广'
                             && activeCrowdGoal === '自定义推广'
                             && (isSceneLabelMatch(fieldKey, crowdCustomBidTypeFieldKey) || isSceneLabelMatch(fieldKey, crowdCustomBidTargetFieldKey))
-                        ) {
+                        );
+                        const shouldRerenderKeywordCustomRoi = (
+                            activeSceneName === '关键词推广'
+                            && activeKeywordGoal === '自定义推广'
+                            && isSceneLabelMatch(fieldKey, keywordCustomRoiFieldKey)
+                        );
+                        if (shouldRerenderCrowdCustomBid || shouldRerenderKeywordCustomRoi) {
                             renderSceneDynamicConfig();
                         }
                     });
@@ -35115,14 +36743,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             describeCrowdSummary(crowdRaw, crowdRaw)
                         );
                         wizardState.crowdList = selectedList.map(item => deepClone(item));
-                        if (typeof wizardState.renderCrowdList === 'function') {
-                            wizardState.renderCrowdList();
-                        }
-                        syncSceneSettingValuesFromUI();
-                        syncDraftFromUI();
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                        commitCrowdUiState({ syncSceneSettings: true });
                     };
                     renderTargetList();
                     if (openPopupBtn instanceof HTMLButtonElement) {
@@ -35336,9 +36957,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     .map(item => normalizeItem(item))
                                     .filter(item => toIdValue(item?.materialId || item?.itemId))
                                     .slice(0, WIZARD_MAX_ITEMS);
-                                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                                wizardState.draft.addedItems = wizardState.addedItems.map(item => deepClone(item));
-                                saveSessionDraft(wizardState.draft);
+                                const draft = ensureWizardDraft();
+                                draft.addedItems = wizardState.addedItems.map(item => deepClone(item));
+                                KeywordPlanWizardStore.persistDraft(draft);
                                 if (typeof renderAddedList === 'function') renderAddedList();
                                 if (typeof renderCandidateList === 'function') renderCandidateList();
                             }
@@ -35927,10 +37548,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         selectedList.push(deepClone(candidate));
                                         return true;
                                     };
-                                    const refreshCrowdPopupViews = () => {
-                                        syncJsonEditors();
+                                    const renderCrowdPopupLists = () => {
                                         renderCandidateList();
                                         renderSelectedList();
+                                    };
+                                    const refreshCrowdPopupViews = () => {
+                                        syncJsonEditors();
+                                        renderCrowdPopupLists();
+                                    };
+                                    const refreshCrowdAddDialogViews = (options = {}) => {
+                                        if (options.refreshPopup !== false) {
+                                            refreshCrowdPopupViews();
+                                        }
+                                        if (options.renderNative !== false) {
+                                            renderCrowdAddNative();
+                                        }
                                     };
                                     const getCrowdAddNativeFilteredList = () => {
                                         return candidateList.filter((item, idx) => {
@@ -36030,11 +37662,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             `;
                                         }).join('');
                                     };
+                                    const renderCrowdAddNativeLists = () => {
+                                        renderCrowdAddNativeCandidateList();
+                                        renderCrowdAddNativeSelectedList();
+                                    };
                                     const renderCrowdAddNative = () => {
                                         if (!crowdAddDialogOpen) return;
                                         renderCrowdAddNativeTabs();
-                                        renderCrowdAddNativeCandidateList();
-                                        renderCrowdAddNativeSelectedList();
+                                        renderCrowdAddNativeLists();
                                     };
                                     const closeCrowdAddDialog = (commit = false) => {
                                         if (!(crowdAddMask instanceof HTMLElement)) return;
@@ -36044,7 +37679,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         }
                                         if (!commit && Array.isArray(crowdAddDialogSnapshot)) {
                                             selectedList = crowdAddDialogSnapshot.map(item => deepClone(item));
-                                            refreshCrowdPopupViews();
+                                            refreshCrowdAddDialogViews({ renderNative: false });
                                         }
                                         crowdAddDialogOpen = false;
                                         crowdAddDialogSnapshot = [];
@@ -36096,8 +37731,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         if (selectedList.length >= 100 && skippedCount > 0) {
                                             appendWizardLog('最多添加 100 条精选人群', 'error');
                                         }
-                                        refreshCrowdPopupViews();
-                                        renderCrowdAddNative();
+                                        refreshCrowdAddDialogViews();
                                         appendWizardLog(
                                             `新增人群处理完成：新增 ${addedCount} 条${skippedCount ? `，跳过 ${skippedCount} 条` : ''}`,
                                             addedCount > 0 ? 'success' : 'error'
@@ -36165,8 +37799,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                     .map(item => deepClone(item)),
                                                 (item, idx) => getCrowdKey(item, idx)
                                             ).slice(0, 100);
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         };
                                     }
                                     const crowdAddNewBtn = mask.querySelector('[data-scene-popup-crowd-add-new]');
@@ -36243,8 +37876,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 addSelectedByKey(key);
                                                 if (selectedList.length > beforeCount) addedCount += 1;
                                             });
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                             if (addedCount === 0) {
                                                 appendWizardLog('当前筛选结果无可新增人群', 'error');
                                             } else {
@@ -36256,8 +37888,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         crowdAddNativeClearBtn.addEventListener('click', (event) => {
                                             event.preventDefault();
                                             selectedList = [];
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         });
                                     }
                                     if (crowdAddNativeCandidateListEl instanceof HTMLElement) {
@@ -36270,8 +37901,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             const removeKey = String(actionBtn.getAttribute('data-scene-popup-crowd-native-remove') || '').trim();
                                             if (addKey) addSelectedByKey(addKey);
                                             if (removeKey) removeSelectedByKey(removeKey);
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         });
                                     }
                                     if (crowdAddNativeSelectedListEl instanceof HTMLElement) {
@@ -36283,8 +37913,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             const key = String(removeBtn.getAttribute('data-scene-popup-crowd-native-remove-selected') || '').trim();
                                             if (!key) return;
                                             removeSelectedByKey(key);
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         });
                                     }
                                     if (crowdAddMask instanceof HTMLElement) {
@@ -36317,16 +37946,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 return cloneWithCrowdBid(item, nextBid);
                                             });
                                             selectedList = selectedList.map(item => cloneWithCrowdBid(item, nextBid));
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         };
                                     }
                                     const clearBtn = mask.querySelector('[data-scene-popup-crowd-clear-selected]');
                                     if (clearBtn instanceof HTMLButtonElement) {
                                         clearBtn.onclick = () => {
                                             selectedList = [];
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         };
                                     }
                                     if (crowdCandidateListEl instanceof HTMLElement) {
@@ -36339,8 +37966,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             const removeKey = String(actionBtn.getAttribute('data-scene-popup-crowd-remove') || '').trim();
                                             if (addKey) addSelectedByKey(addKey);
                                             if (removeKey) removeSelectedByKey(removeKey);
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         });
                                         crowdCandidateListEl.addEventListener('input', (event) => {
                                             const input = event.target instanceof HTMLInputElement
@@ -36351,8 +37977,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             if (!key) return;
                                             const nextBid = updateBidByKey(key, input.value);
                                             input.value = String(nextBid);
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         });
                                     }
                                     if (crowdSelectedListEl instanceof HTMLElement) {
@@ -36364,8 +37989,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             const key = String(removeBtn.getAttribute('data-scene-popup-crowd-remove') || '').trim();
                                             if (!key) return;
                                             removeSelectedByKey(key);
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         });
                                         crowdSelectedListEl.addEventListener('input', (event) => {
                                             const input = event.target instanceof HTMLInputElement
@@ -36376,8 +38000,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             if (!key) return;
                                             const nextBid = updateBidByKey(key, input.value);
                                             input.value = String(nextBid);
-                                            refreshCrowdPopupViews();
-                                            renderCrowdAddNative();
+                                            refreshCrowdAddDialogViews();
                                         });
                                     }
                                     mask._sceneCrowdPopupState = {
@@ -36467,12 +38090,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             return;
                         }
 
-                        syncSceneSettingValuesFromUI();
-                        syncDraftFromUI();
-                        renderSceneDynamicConfig();
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                        commitSceneDynamicUiState({ renderSceneDynamic: true });
                     });
                 });
 
@@ -36562,8 +38180,61 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 if (campaignItemSelectedModeKey) localSceneBucket[campaignItemSelectedModeKey] = keywordRuntime.itemSelectedMode;
                             }
                         }
-                        syncSceneSettingValuesFromUI();
-                        syncDraftFromUI();
+                        if (activeScene === '关键词推广') {
+                            const keywordActiveGoal = detectKeywordGoalFromText(
+                                localSceneBucket[normalizeSceneFieldKey('营销目标')]
+                                || localSceneBucket[normalizeSceneFieldKey('选择卡位方案')]
+                                || ''
+                            );
+                            const resolveKeywordCostSwitchField = (candidateFieldKey = '') => {
+                                if (!candidateFieldKey) return '';
+                                if (
+                                    isSceneLabelMatch(candidateFieldKey, '平均直接成交成本')
+                                    || isSceneLabelMatch(candidateFieldKey, '平均成交成本')
+                                ) {
+                                    return normalizeSceneFieldKey('设置平均成交成本');
+                                }
+                                if (isSceneLabelMatch(candidateFieldKey, '平均收藏加购成本')) {
+                                    return normalizeSceneFieldKey('设置平均收藏加购成本');
+                                }
+                                if (
+                                    isSceneLabelMatch(candidateFieldKey, '平均点击成本')
+                                    || isSceneLabelMatch(candidateFieldKey, '点击成本')
+                                ) {
+                                    return normalizeSceneFieldKey('设置平均点击成本');
+                                }
+                                return '';
+                            };
+                            const keywordCostSwitchFieldKey = keywordActiveGoal === '自定义推广'
+                                ? resolveKeywordCostSwitchField(fieldKey)
+                                : '';
+                            if (keywordCostSwitchFieldKey) {
+                                const valueText = control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement
+                                    ? control.value
+                                    : '';
+                                const amount = parseNumberFromSceneValue(valueText);
+                                if (Number.isFinite(amount) && amount > 0) {
+                                    const relatedControls = Array.from(
+                                        wizardState.els.sceneDynamic.querySelectorAll('[data-scene-field]')
+                                    ).filter(candidate => {
+                                        const candidateFieldKey = String(candidate.getAttribute('data-scene-field') || '').trim();
+                                        return candidateFieldKey && candidateFieldKey === keywordCostSwitchFieldKey;
+                                    });
+                                    relatedControls.forEach(candidate => {
+                                        if (!(candidate instanceof HTMLInputElement || candidate instanceof HTMLTextAreaElement)) return;
+                                        candidate.value = '开启';
+                                    });
+                                    localSceneBucket[keywordCostSwitchFieldKey] = '开启';
+                                    localTouchedBucket[keywordCostSwitchFieldKey] = true;
+                                    wizardState.els.sceneDynamic.querySelectorAll('[data-scene-switch-target]').forEach(peer => {
+                                        if (!(peer instanceof HTMLButtonElement)) return;
+                                        const peerFieldKey = String(peer.getAttribute('data-scene-switch-target') || '').trim();
+                                        if (!peerFieldKey || peerFieldKey !== keywordCostSwitchFieldKey) return;
+                                        syncSceneSwitchVisual(peer, true);
+                                    });
+                                }
+                            }
+                        }
                         const activeCrowdGoal = normalizeGoalCandidateLabel(
                             localSceneBucket[normalizeSceneFieldKey('营销目标')]
                             || localSceneBucket[normalizeSceneFieldKey('选择拉新方案')]
@@ -36571,18 +38242,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             || localSceneBucket[normalizeSceneFieldKey('选择方式')]
                             || ''
                         );
+                        const activeKeywordGoal = detectKeywordGoalFromText(
+                            localSceneBucket[normalizeSceneFieldKey('营销目标')]
+                            || localSceneBucket[normalizeSceneFieldKey('选择卡位方案')]
+                            || ''
+                        );
                         const isCrowdCustomBidField = activeScene === '人群推广'
                             && activeCrowdGoal === '自定义推广'
                             && (isSceneLabelMatch(fieldKey, '出价方式') || isSceneLabelMatch(fieldKey, '出价目标'));
+                        const isKeywordCustomRoiField = activeScene === '关键词推广'
+                            && activeKeywordGoal === '自定义推广'
+                            && isSceneLabelMatch(fieldKey, '设置7日投产比');
                         const shouldRerenderSceneConfig = isGoalSelectorField(fieldKey)
                             || (activeScene === '货品全站推广' && isSceneLabelMatch(fieldKey, '出价方式'))
-                            || isCrowdCustomBidField;
-                        if (shouldRerenderSceneConfig) {
-                            renderSceneDynamicConfig();
-                        }
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                            || isCrowdCustomBidField
+                            || isKeywordCustomRoiField;
+                        commitSceneDynamicUiState({
+                            renderSceneDynamic: shouldRerenderSceneConfig
+                        });
                     };
                     control.addEventListener('input', onChange);
                     control.addEventListener('change', onChange);
@@ -36658,9 +38335,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         target.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
                         target.textContent = nextCollapsed ? '展开' : '收起';
                         wizardState.manualKeywordPanelCollapsed = nextCollapsed;
-                        wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                        wizardState.draft.manualKeywordPanelCollapsed = nextCollapsed;
-                        syncDraftFromUI();
+                        ensureWizardDraft().manualKeywordPanelCollapsed = nextCollapsed;
+                        commitDraftState();
                         return;
                     }
 
@@ -36695,11 +38371,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             editingStrategy.useWordPackage = nextOn;
                         }
                         syncSceneSettingValuesFromUI();
-                        syncDraftFromUI();
-                        renderStrategyList();
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                        commitStrategyUiState();
                         return;
                     }
 
@@ -36920,15 +38592,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         Object.assign(strategySceneSettingValues, fromPayload);
                     }
                 }
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
-                    wizardState.draft.sceneSettingValues = {};
-                }
-                wizardState.draft.sceneSettingValues[strategyScene] = mergeDeep({}, strategySceneSettingValues);
-                if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
-                    wizardState.draft.sceneSettingTouched = {};
-                }
-                wizardState.draft.sceneSettingTouched[strategyScene] = mergeDeep({}, strategySceneSettingTouched);
+                    const draft = ensureWizardDraft();
+                    if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
+                        draft.sceneSettingValues = {};
+                    }
+                    wizardState.draft.sceneSettingValues[strategyScene] = mergeDeep({}, strategySceneSettingValues);
+                    if (!isPlainObject(draft.sceneSettingTouched)) {
+                        draft.sceneSettingTouched = {};
+                    }
+                    wizardState.draft.sceneSettingTouched[strategyScene] = mergeDeep({}, strategySceneSettingTouched);
                 const currentSceneName = getCurrentEditorSceneName();
                 if (currentSceneName === '关键词推广') {
                     const strategyGoal = normalizeGoalLabel(strategy.marketingGoal || resolveStrategyMarketingGoal(strategy, {}, currentSceneName));
@@ -37003,6 +38675,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 strategy.sceneSettingValues = mergeDeep({}, normalizeSceneSettingBucketValues(ensureSceneSettingBucket(sceneName)));
                 strategy.sceneSettingTouched = mergeDeep({}, normalizeSceneSettingTouchedValues(ensureSceneTouchedBucket(sceneName)));
                 strategy.sceneSettings = normalizeSceneSettingsObject(sceneSettings);
+                const strategyTargetCostConfig = (
+                    sceneName === '关键词推广' && bidMode === 'smart'
+                ) ? resolveStrategyTargetCostConfig(strategy.bidTargetV2 || '') : null;
+                if (strategyTargetCostConfig) {
+                    const targetCostValueFromScene = resolveStrategyTargetCostValue({
+                        singleCostV2: '',
+                        sceneSettingValues: strategy.sceneSettingValues,
+                        sceneSettings: strategy.sceneSettings
+                    }, strategy.bidTargetV2 || '');
+                    strategy.setSingleCostV2 = !!targetCostValueFromScene;
+                    strategy.singleCostV2 = targetCostValueFromScene;
+                }
             };
 
             const setDetailVisible = (visible) => {
@@ -37019,23 +38703,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const strategy = getStrategyById(strategyId);
                 if (!strategy) return;
                 const previous = getStrategyById(wizardState.editingStrategyId);
-                if (previous) pullDetailFormToStrategy(previous);
+                if (previous && wizardState.detailVisible) pullDetailFormToStrategy(previous);
                 if (wizardState.editingStrategyId === strategy.id && wizardState.detailVisible) {
                     setDetailVisible(false);
-                    syncDraftFromUI();
-                    renderStrategyList();
+                    if (typeof wizardState.setWorkbenchPage === 'function') {
+                        wizardState.setWorkbenchPage('home');
+                    }
+                    commitStrategyUiState({ refreshPreview: false });
                     return;
                 }
                 wizardState.editingStrategyId = strategy.id;
                 applyStrategyToDetailForm(strategy);
                 setDetailVisible(true);
-                syncDraftFromUI();
-                renderStrategyList();
+                if (typeof wizardState.setWorkbenchPage === 'function') {
+                    wizardState.setWorkbenchPage('editor');
+                }
+                commitStrategyUiState({ refreshPreview: false });
                 maybeAutoLoadManualKeywords(strategy);
             };
             const addNewStrategy = () => {
                 const editing = getStrategyById(wizardState.editingStrategyId);
-                if (editing) pullDetailFormToStrategy(editing);
+                if (editing && wizardState.detailVisible) pullDetailFormToStrategy(editing);
                 const sceneName = getCurrentEditorSceneName();
                 const bidMode = normalizeBidMode(
                     wizardState.els.bidModeSelect?.value || wizardState.draft?.bidMode || 'smart',
@@ -37077,11 +38765,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.editingStrategyId = next.id;
                 setDetailVisible(true);
                 applyStrategyToDetailForm(next);
-                syncDraftFromUI();
-                renderStrategyList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
-                }
+                commitStrategyUiState();
                 appendWizardLog(`已新建计划：${next.name}`, 'success');
                 maybeAutoLoadManualKeywords(next, { delayMs: 320 });
             };
@@ -37106,7 +38790,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const handleGenerateOtherStrategies = () => {
                 const editing = getStrategyById(wizardState.editingStrategyId);
-                if (editing) pullDetailFormToStrategy(editing);
+                if (editing && wizardState.detailVisible) pullDetailFormToStrategy(editing);
                 const sceneName = getCurrentEditorSceneName();
                 const sceneSettings = buildSceneSettingsPayload(sceneName);
                 const goalCandidates = getSceneMarketingGoalFallbackList(sceneName);
@@ -37229,15 +38913,88 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     setDetailVisible(true);
                     applyStrategyToDetailForm(currentEditing);
                 }
-                syncDraftFromUI();
-                renderStrategyList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
-                }
+                commitStrategyUiState();
                 appendWizardLog(
                     `已生成其他策略：${created.length} 个（${created.map(item => item.marketingGoal || item.name).slice(0, 4).join('、')}）`,
                     'success'
                 );
+            };
+
+            const commitStrategyUiState = (options = {}) => {
+                syncDraftFromUI();
+                renderStrategyList();
+                if (options.renderSceneDynamic === true) {
+                    renderSceneDynamicConfig();
+                }
+                if (options.refreshPreview !== false) {
+                    refreshWizardPreview();
+                }
+            };
+
+            const commitCrowdUiState = (options = {}) => {
+                if (options.syncSceneSettings === true) {
+                    syncSceneSettingValuesFromUI();
+                }
+                syncDraftFromUI();
+                renderCrowdList();
+                if (options.renderSceneDynamic === true) {
+                    renderSceneDynamicConfig();
+                }
+                if (options.refreshPreview !== false) {
+                    refreshWizardPreview();
+                }
+            };
+
+            const commitSceneDynamicUiState = (options = {}) => {
+                if (options.syncSceneSettings !== false) {
+                    syncSceneSettingValuesFromUI();
+                }
+                syncDraftFromUI();
+                if (options.renderStrategyList === true) {
+                    renderStrategyList();
+                }
+                if (options.renderCrowdList === true) {
+                    renderCrowdList();
+                }
+                if (options.renderSceneDynamic === true) {
+                    renderSceneDynamicConfig();
+                }
+                if (options.refreshPreview !== false) {
+                    refreshWizardPreview();
+                }
+            };
+
+            const renderItemSelectionLists = (options = {}) => {
+                if (options.renderAdded !== false) {
+                    renderAddedList();
+                }
+                if (options.renderCandidate === true) {
+                    renderCandidateList(options.candidateOptions || {});
+                }
+            };
+
+            const commitItemSelectionUiState = (options = {}) => {
+                syncDraftFromUI();
+                renderItemSelectionLists(options);
+                if (options.refreshPreview === true) {
+                    refreshWizardPreview();
+                }
+            };
+
+            const commitPreviewUiState = (options = {}) => {
+                syncDraftFromUI();
+                if (options.refreshPreview !== false) {
+                    refreshWizardPreview();
+                }
+            };
+
+            const commitDraftState = (draft = null) => {
+                if (isPlainObject(draft)) {
+                    KeywordPlanWizardStore.persistDraft(draft);
+                    return draft;
+                }
+                syncDraftFromUI();
+                return wizardState.draft;
             };
 
             const renderStrategyList = () => {
@@ -37269,10 +39026,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ? strategySceneSettings
                         : getSceneSettingsFor(strategySceneName);
                     strategy.marketingGoal = resolveStrategyMarketingGoal(strategy, goalSceneSettings, strategySceneName);
-                    const bidTargetLabel = BID_TARGET_OPTIONS.find(item => item.value === strategy.bidTargetV2)?.label || '获取成交量';
+                    const strategyBidTargetCode = normalizeKeywordBidTargetOptionValue(
+                        mapSceneBidTargetValue(strategy.bidTargetV2 || '') || strategy.bidTargetV2 || DEFAULTS.bidTargetV2
+                    ) || DEFAULTS.bidTargetV2;
+                    const bidTargetLabel = BID_TARGET_OPTIONS.find(item => item.value === strategyBidTargetCode)?.label || '获取成交量';
                     const bidModeLabel = bidMode === 'manual' ? '手动出价' : '智能出价';
                     const goalLabel = normalizeGoalLabel(strategy.marketingGoal || '') || '未设置目标';
                     const budgetLabel = String(strategy.dayAverageBudget || '').trim() || '100';
+                    const strategyTargetCostConfig = resolveStrategyTargetCostConfig(strategyBidTargetCode);
+                    const shouldShowStrategyTargetCostInput = strategySceneName === '关键词推广'
+                        && bidMode === 'smart'
+                        && !!strategyTargetCostConfig;
+                    const strategyTargetCostValue = shouldShowStrategyTargetCostInput
+                        ? resolveStrategyTargetCostValue(strategy, strategyBidTargetCode)
+                        : '';
+                    const showStrategyTargetCostUnit = shouldShowStrategyTargetCostInput && strategyBidTargetCode !== 'roi';
                     const copyBatchCount = Math.min(99, Math.max(1, toNumber(strategy.copyBatchCount, 1)));
                     strategy.copyBatchCount = copyBatchCount;
                     const row = document.createElement('div');
@@ -37284,7 +39052,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <span>${Utils.escapeHtml(getStrategyMainLabel(strategy))}</span>
                             </div>
                             <div class="am-wxt-strategy-right">
-                                <span>${Utils.escapeHtml(goalLabel)} / ${Utils.escapeHtml(bidModeLabel)} / ${Utils.escapeHtml(bidTargetLabel)} / 预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
+                                <span class="am-wxt-strategy-summary">${Utils.escapeHtml(goalLabel)} / ${Utils.escapeHtml(bidModeLabel)} / ${Utils.escapeHtml(bidTargetLabel)}</span>
+                                ${shouldShowStrategyTargetCostInput ? `
+                                    <label class="am-wxt-strategy-target-cost">
+                                        <span>目标成本</span>
+                                        <span class="am-wxt-strategy-target-cost-field ${showStrategyTargetCostUnit ? 'with-unit' : ''}">
+                                            <input
+                                                type="number"
+                                                min="0.01"
+                                                max="9999"
+                                                step="0.01"
+                                                value="${Utils.escapeHtml(strategyTargetCostValue)}"
+                                                data-action="target-cost-input"
+                                                data-target-code="${Utils.escapeHtml(strategyBidTargetCode)}"
+                                                placeholder="${strategyBidTargetCode === 'roi' ? '例如 2.24' : '请输入'}"
+                                            />
+                                            ${showStrategyTargetCostUnit ? '<span class="am-wxt-strategy-target-cost-unit">元</span>' : ''}
+                                        </span>
+                                    </label>
+                                ` : ''}
+                                <span class="am-wxt-strategy-summary">/ 预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
                                 <button class="am-wxt-btn am-wxt-copy-btn" data-action="copy">
                                     <span>复制</span>
                                     <span class="am-wxt-copy-multi" data-action="copy-count-badge" title="点击增加，右键减少，滚轮可调节">
@@ -37303,11 +39090,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const copyBtn = row.querySelector('button[data-action="copy"]');
                     const deleteBtn = row.querySelector('button[data-action="delete"]');
                     const editBtn = row.querySelector('button[data-action="edit"]');
+                    const targetCostInput = row.querySelector('input[data-action="target-cost-input"]');
+                    let commitStrategyTargetCostInput = () => { };
                     checkbox.onchange = () => {
                         strategy.enabled = !!checkbox.checked;
-                        syncDraftFromUI();
-                        renderStrategyList();
+                        commitStrategyUiState({ refreshPreview: false });
                     };
+                    if (targetCostInput instanceof HTMLInputElement) {
+                        const syncStrategyTargetCostInputOnly = () => {
+                            syncStrategyTargetCostFields(strategy, strategyBidTargetCode, targetCostInput.value);
+                        };
+                        commitStrategyTargetCostInput = () => {
+                            const parsed = parseNumberFromSceneValue(targetCostInput.value);
+                            const nextValue = syncStrategyTargetCostFields(strategy, strategyBidTargetCode, parsed);
+                            targetCostInput.value = nextValue;
+                            if (wizardState.detailVisible && wizardState.editingStrategyId === strategy.id) {
+                                applyStrategyToDetailForm(strategy);
+                            }
+                            syncDraftFromUI();
+                            wizardState.renderPreview(wizardState.buildRequest());
+                        };
+                        targetCostInput.addEventListener('input', syncStrategyTargetCostInputOnly);
+                        targetCostInput.addEventListener('change', commitStrategyTargetCostInput);
+                        targetCostInput.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                        });
+                    }
                     if (copyCountBadge instanceof HTMLElement) {
                         const refreshCopyCount = () => {
                             if (copyCountNum instanceof HTMLElement) {
@@ -37318,7 +39126,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const nextCount = Math.min(99, Math.max(1, toNumber(next, 1)));
                             strategy.copyBatchCount = nextCount;
                             refreshCopyCount();
-                            syncDraftFromUI();
+                            commitDraftState();
                         };
                         copyCountBadge.addEventListener('click', (event) => {
                             event.preventDefault();
@@ -37338,8 +39146,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         }, { passive: false });
                     }
                     copyBtn.onclick = () => {
+                        commitStrategyTargetCostInput();
                         const editing = getStrategyById(wizardState.editingStrategyId);
-                        if (editing) pullDetailFormToStrategy(editing);
+                        if (editing && wizardState.detailVisible) pullDetailFormToStrategy(editing);
                         const targetCopyCount = Math.min(99, Math.max(1, toNumber(strategy.copyBatchCount, 1)));
                         for (let idx = 1; idx <= targetCopyCount; idx++) {
                             const clone = deepClone(strategy);
@@ -37354,14 +39163,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             clone.copyBatchCount = 1;
                             wizardState.strategyList.push(clone);
                         }
-                        syncDraftFromUI();
-                        renderStrategyList();
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                        commitStrategyUiState();
                         appendWizardLog(`已复制计划：${targetCopyCount} 个`, 'success');
                     };
                     deleteBtn.onclick = () => {
+                        commitStrategyTargetCostInput();
                         if ((wizardState.strategyList || []).length <= 1) {
                             appendWizardLog('至少保留 1 个计划', 'error');
                             return;
@@ -37376,14 +39182,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 applyStrategyToDetailForm(fallback);
                             }
                         }
-                        syncDraftFromUI();
-                        renderStrategyList();
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                        commitStrategyUiState();
                         appendWizardLog(`已删除计划：${removed?.name || ''}`, 'success');
                     };
                     editBtn.onclick = () => {
+                        commitStrategyTargetCostInput();
                         openStrategyDetail(strategy.id);
                     };
                     wizardState.els.strategyList.appendChild(row);
@@ -37392,104 +39195,138 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 renderRunModeMenu();
             };
 
-            const syncDraftFromUI = () => {
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                wizardState.draft.schemaVersion = SESSION_DRAFT_SCHEMA_VERSION;
-                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
-                const syncGlobalDefaults = !editingStrategy || !wizardState.detailVisible;
-                const selectedScene = wizardState.els.sceneSelect?.value || wizardState.draft.sceneName || '关键词推广';
-                wizardState.draft.sceneName = SCENE_OPTIONS.includes(selectedScene) ? selectedScene : '关键词推广';
+            const syncDraftSceneIdentity = (draft, editingStrategy = null) => {
+                const selectedScene = wizardState.els.sceneSelect?.value || draft.sceneName || '关键词推广';
+                draft.sceneName = SCENE_OPTIONS.includes(selectedScene) ? selectedScene : '关键词推广';
                 syncSceneSettingValuesFromUI();
                 const prefixValue = wizardState.els.prefixInput?.value?.trim() || '';
                 if (!editingStrategy || !wizardState.detailVisible) {
-                    wizardState.draft.planNamePrefix = prefixValue || wizardState.draft.planNamePrefix || buildSceneTimePrefix(wizardState.draft.sceneName);
-                } else if (!wizardState.draft.planNamePrefix) {
-                    wizardState.draft.planNamePrefix = buildSceneTimePrefix(wizardState.draft.sceneName);
+                    draft.planNamePrefix = prefixValue || draft.planNamePrefix || buildSceneTimePrefix(draft.sceneName);
+                } else if (!draft.planNamePrefix) {
+                    draft.planNamePrefix = buildSceneTimePrefix(draft.sceneName);
                 }
-                if (syncGlobalDefaults) {
-                    wizardState.draft.dayAverageBudget = wizardState.els.budgetInput?.value?.trim() || wizardState.draft.dayAverageBudget || '';
-                    wizardState.draft.defaultBidPrice = wizardState.els.bidInput?.value?.trim() || wizardState.draft.defaultBidPrice || '1';
-                    wizardState.draft.bidMode = normalizeBidMode(
-                        wizardState.els.bidModeSelect?.value || wizardState.draft.bidMode || 'smart',
-                        'smart'
-                    );
-                    wizardState.draft.keywordMode = wizardState.els.modeSelect?.value || wizardState.draft.keywordMode || DEFAULTS.keywordMode;
-                    wizardState.draft.recommendCount = wizardState.els.recommendCountInput?.value?.trim() || wizardState.draft.recommendCount || String(DEFAULTS.recommendCount);
-                    wizardState.draft.manualKeywords = wizardState.els.manualInput?.value || wizardState.draft.manualKeywords || '';
-                }
-                wizardState.manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
-                wizardState.draft.manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
-                wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
-                wizardState.draft.fallbackPolicy = normalizeWizardFallbackPolicy(wizardState.draft.fallbackPolicy);
-                wizardState.draft.submitMode = normalizeSubmitMode(wizardState.draft.submitMode || 'parallel');
-                wizardState.draft.parallelSubmitTimes = normalizeParallelSubmitTimes(
-                    wizardState.draft.parallelSubmitTimes,
-                    DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
-                );
-                if (editingStrategy) {
-                    pullDetailFormToStrategy(editingStrategy);
-                }
-                wizardState.draft.addedItems = wizardState.addedItems.map(item => ({ ...item }));
-                wizardState.draft.crowdList = wizardState.crowdList.map(item => deepClone(item));
-                wizardState.draft.debugVisible = !!wizardState.debugVisible;
-                wizardState.draft.itemSplitExpanded = wizardState.itemSplitExpanded === true;
-                wizardState.draft.candidateListExpanded = wizardState.candidateListExpanded === true;
-                wizardState.draft.strategyList = wizardState.strategyList.map(item => deepClone(item));
-                wizardState.draft.editingStrategyId = wizardState.editingStrategyId || '';
-                wizardState.draft.detailVisible = !!wizardState.detailVisible;
-                saveSessionDraft(wizardState.draft);
             };
 
-            const fillUIFromDraft = () => {
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                wizardState.draft.fallbackPolicy = normalizeWizardFallbackPolicy(wizardState.draft.fallbackPolicy);
-                if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
-                    wizardState.draft.sceneSettingValues = {};
-                }
-                if (!isPlainObject(wizardState.draft.sceneSettingTouched)) {
-                    wizardState.draft.sceneSettingTouched = {};
-                }
-                wizardState.draft.itemSplitExpanded = wizardState.draft.itemSplitExpanded === true;
-                wizardState.draft.candidateListExpanded = wizardState.draft.candidateListExpanded === true;
-                wizardState.draft.manualKeywordPanelCollapsed = wizardState.draft.manualKeywordPanelCollapsed !== false;
-                wizardState.itemSplitExpanded = wizardState.draft.itemSplitExpanded;
-                wizardState.candidateListExpanded = wizardState.draft.candidateListExpanded;
-                wizardState.manualKeywordPanelCollapsed = wizardState.draft.manualKeywordPanelCollapsed;
-                const sceneName = SCENE_OPTIONS.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '关键词推广';
-                wizardState.draft.sceneName = sceneName || '关键词推广';
-                wizardState.draft.useWordPackage = wizardState.draft.useWordPackage !== false;
+            const syncDraftGlobalDefaults = (draft, enabled = false) => {
+                if (!enabled) return;
+                draft.dayAverageBudget = wizardState.els.budgetInput?.value?.trim() || draft.dayAverageBudget || '';
+                draft.defaultBidPrice = wizardState.els.bidInput?.value?.trim() || draft.defaultBidPrice || '1';
+                draft.bidMode = normalizeBidMode(
+                    wizardState.els.bidModeSelect?.value || draft.bidMode || 'smart',
+                    'smart'
+                );
+                draft.keywordMode = wizardState.els.modeSelect?.value || draft.keywordMode || DEFAULTS.keywordMode;
+                draft.recommendCount = wizardState.els.recommendCountInput?.value?.trim() || draft.recommendCount || String(DEFAULTS.recommendCount);
+                draft.manualKeywords = wizardState.els.manualInput?.value || draft.manualKeywords || '';
+            };
+
+            const syncDraftViewState = (draft) => {
+                draft.addedItems = wizardState.addedItems.map(item => ({ ...item }));
+                draft.crowdList = wizardState.crowdList.map(item => deepClone(item));
+                draft.debugVisible = !!wizardState.debugVisible;
+                draft.itemSplitExpanded = wizardState.itemSplitExpanded === true;
+                draft.candidateListExpanded = wizardState.candidateListExpanded === true;
+                draft.strategyList = wizardState.strategyList.map(item => deepClone(item));
+                draft.editingStrategyId = wizardState.editingStrategyId || '';
+                draft.detailVisible = !!wizardState.detailVisible;
+                draft.workbenchPage = WORKBENCH_PAGE_SET.has(wizardState.workbenchPage) ? wizardState.workbenchPage : 'home';
+            };
+
+            const syncDraftMetaState = (draft) => {
+                wizardState.manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
+                draft.manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
+                draft.useWordPackage = draft.useWordPackage !== false;
+                draft.fallbackPolicy = normalizeWizardFallbackPolicy(draft.fallbackPolicy);
+                syncMatrixConfigFromUI();
+            };
+
+            const syncDraftFromUI = () => {
+                const draft = ensureWizardDraft();
+                draft.schemaVersion = SESSION_DRAFT_SCHEMA_VERSION;
+                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
+                const syncGlobalDefaults = !editingStrategy || !wizardState.detailVisible;
+                KeywordPlanWizardStore.syncDraftSceneIdentity(draft, editingStrategy);
+                KeywordPlanWizardStore.syncDraftGlobalDefaults(draft, syncGlobalDefaults);
+                syncDraftMetaState(draft);
                 wizardState.draft.submitMode = normalizeSubmitMode(wizardState.draft.submitMode || 'parallel');
                 wizardState.draft.parallelSubmitTimes = normalizeParallelSubmitTimes(
                     wizardState.draft.parallelSubmitTimes,
                     DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
                 );
-                if (isAutoGeneratedPlanPrefix(wizardState.draft.planNamePrefix || '') || !String(wizardState.draft.planNamePrefix || '').trim()) {
-                    wizardState.draft.planNamePrefix = buildDefaultPlanPrefixByScene(wizardState.draft.sceneName);
+                if (editingStrategy && wizardState.detailVisible) {
+                    pullDetailFormToStrategy(editingStrategy);
                 }
-                if (wizardState.els.sceneSelect) wizardState.els.sceneSelect.value = wizardState.draft.sceneName;
-                wizardState.sceneProfiles = buildSceneProfiles();
-                if (wizardState.els.prefixInput) wizardState.els.prefixInput.value = wizardState.draft.planNamePrefix || '';
-                if (wizardState.els.budgetInput) wizardState.els.budgetInput.value = wizardState.draft.dayAverageBudget || '';
-                if (wizardState.els.bidInput) wizardState.els.bidInput.value = wizardState.draft.defaultBidPrice || '';
-                if (wizardState.els.bidModeSelect) wizardState.els.bidModeSelect.value = normalizeBidMode(wizardState.draft.bidMode || 'smart', 'smart');
-                if (wizardState.els.modeSelect) wizardState.els.modeSelect.value = wizardState.draft.keywordMode || DEFAULTS.keywordMode;
-                if (wizardState.els.recommendCountInput) wizardState.els.recommendCountInput.value = wizardState.draft.recommendCount || String(DEFAULTS.recommendCount);
-                if (wizardState.els.manualInput) wizardState.els.manualInput.value = wizardState.draft.manualKeywords || '';
-                wizardState.crowdList = Array.isArray(wizardState.draft.crowdList) ? wizardState.draft.crowdList.map(item => deepClone(item)) : [];
-                wizardState.strategyList = normalizeStrategyList(
-                    wizardState.draft.strategyList,
-                    wizardState.draft.dayAverageBudget || ''
+                KeywordPlanWizardStore.syncDraftViewState(draft);
+                KeywordPlanWizardStore.persistDraft(draft);
+            };
+
+            const normalizeDraftForUi = (draft = {}) => {
+                const nextDraft = isPlainObject(draft) ? draft : ensureWizardDraft();
+                nextDraft.fallbackPolicy = normalizeWizardFallbackPolicy(nextDraft.fallbackPolicy);
+                if (!isPlainObject(nextDraft.sceneSettingValues)) {
+                    nextDraft.sceneSettingValues = {};
+                }
+                if (!isPlainObject(nextDraft.sceneSettingTouched)) {
+                    nextDraft.sceneSettingTouched = {};
+                }
+                nextDraft.itemSplitExpanded = nextDraft.itemSplitExpanded === true;
+                nextDraft.candidateListExpanded = nextDraft.candidateListExpanded === true;
+                nextDraft.manualKeywordPanelCollapsed = nextDraft.manualKeywordPanelCollapsed !== false;
+                const sceneName = SCENE_OPTIONS.includes(nextDraft.sceneName) ? nextDraft.sceneName : '关键词推广';
+                nextDraft.sceneName = sceneName || '关键词推广';
+                nextDraft.useWordPackage = nextDraft.useWordPackage !== false;
+                nextDraft.submitMode = normalizeSubmitMode(nextDraft.submitMode || 'parallel');
+                nextDraft.parallelSubmitTimes = normalizeParallelSubmitTimes(
+                    nextDraft.parallelSubmitTimes,
+                    DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
                 );
-                wizardState.editingStrategyId = String(wizardState.draft.editingStrategyId || wizardState.strategyList[0]?.id || '').trim();
-                setDetailVisible(!!wizardState.draft.detailVisible);
+                nextDraft.matrixConfig = normalizeMatrixConfig(nextDraft.matrixConfig, nextDraft.sceneName);
+                if (isAutoGeneratedPlanPrefix(nextDraft.planNamePrefix || '') || !String(nextDraft.planNamePrefix || '').trim()) {
+                    nextDraft.planNamePrefix = buildDefaultPlanPrefixByScene(nextDraft.sceneName);
+                }
+                return nextDraft;
+            };
+
+            const applyDraftStateToWizard = (draft = {}) => {
+                wizardState.itemSplitExpanded = draft.itemSplitExpanded === true;
+                wizardState.candidateListExpanded = draft.candidateListExpanded === true;
+                wizardState.manualKeywordPanelCollapsed = draft.manualKeywordPanelCollapsed !== false;
+                wizardState.workbenchPage = WORKBENCH_PAGE_SET.has(String(draft.workbenchPage || '').trim())
+                    ? String(draft.workbenchPage || '').trim()
+                    : 'home';
+                wizardState.sceneProfiles = buildSceneProfiles();
+                wizardState.crowdList = Array.isArray(draft.crowdList) ? draft.crowdList.map(item => deepClone(item)) : [];
+                wizardState.strategyList = normalizeStrategyList(
+                    draft.strategyList,
+                    draft.dayAverageBudget || ''
+                );
+                wizardState.editingStrategyId = String(draft.editingStrategyId || wizardState.strategyList[0]?.id || '').trim();
+            };
+
+            const applyDraftValuesToControls = (draft = {}) => {
+                if (wizardState.els.sceneSelect) wizardState.els.sceneSelect.value = draft.sceneName;
+                if (wizardState.els.prefixInput) wizardState.els.prefixInput.value = draft.planNamePrefix || '';
+                if (wizardState.els.budgetInput) wizardState.els.budgetInput.value = draft.dayAverageBudget || '';
+                if (wizardState.els.bidInput) wizardState.els.bidInput.value = draft.defaultBidPrice || '';
+                if (wizardState.els.bidModeSelect) wizardState.els.bidModeSelect.value = normalizeBidMode(draft.bidMode || 'smart', 'smart');
+                if (wizardState.els.modeSelect) wizardState.els.modeSelect.value = draft.keywordMode || DEFAULTS.keywordMode;
+                if (wizardState.els.recommendCountInput) wizardState.els.recommendCountInput.value = draft.recommendCount || String(DEFAULTS.recommendCount);
+                if (wizardState.els.manualInput) wizardState.els.manualInput.value = draft.manualKeywords || '';
+                setDetailVisible(!!draft.detailVisible);
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
                 applyStrategyToDetailForm(editingStrategy || wizardState.strategyList[0] || null);
-                updateBidModeControls(editingStrategy?.bidMode || wizardState.draft.bidMode || 'smart');
-                setDebugVisible(!!wizardState.draft.debugVisible);
+                updateBidModeControls(editingStrategy?.bidMode || draft.bidMode || 'smart');
+                setDebugVisible(!!draft.debugVisible);
                 renderRunModeMenu();
                 setRunModeMenuOpen(false);
                 setItemSplitExpanded(wizardState.itemSplitExpanded);
                 setCandidateListExpanded(wizardState.candidateListExpanded);
+            };
+
+            const fillUIFromDraft = () => {
+                const draft = KeywordPlanRuntime.normalizeDraftForUi(ensureWizardDraft());
+                KeywordPlanRuntime.applyDraftStateToWizard(draft);
+                KeywordPlanRuntime.applyDraftValuesToControls(draft);
             };
 
             const setCandidateSource = (source = 'all') => {
@@ -37521,18 +39358,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const removeBtn = row.querySelector('button');
                     removeBtn.onclick = () => {
                         wizardState.crowdList = wizardState.crowdList.filter((_, i) => i !== idx);
-                        syncDraftFromUI();
-                        renderCrowdList();
+                        commitCrowdUiState({ refreshPreview: false });
                     };
                     wizardState.els.crowdList.appendChild(row);
                 });
             };
 
-            const renderCandidateList = () => {
+            const renderCandidateList = (options = {}) => {
+                const preserveScroll = options && options.preserveScroll === true;
                 const addedSet = new Set(wizardState.addedItems.map(item => String(item.materialId)));
-                wizardState.els.candidateList.innerHTML = '';
+                const candidateListEl = wizardState.els.candidateList;
+                const previousScrollTop = preserveScroll ? candidateListEl.scrollTop : 0;
+                candidateListEl.innerHTML = '';
                 if (!wizardState.candidates.length) {
-                    wizardState.els.candidateList.innerHTML = '<div class="am-wxt-item"><div class="name">暂无候选商品</div></div>';
+                    candidateListEl.innerHTML = '<div class="am-wxt-item"><div class="name">暂无候选商品</div></div>';
                     return;
                 }
                 wizardState.candidates.forEach(item => {
@@ -37557,12 +39396,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (addedSet.has(String(item.materialId))) return;
                         wizardState.addedItems.push(item);
                         wizardState.addedItems = uniqueBy(wizardState.addedItems, x => String(x.materialId)).slice(0, WIZARD_MAX_ITEMS);
-                        syncDraftFromUI();
-                        renderAddedList();
-                        renderCandidateList();
+                        commitItemSelectionUiState({
+                            renderAdded: true,
+                            renderCandidate: true
+                        });
                     };
-                    wizardState.els.candidateList.appendChild(row);
+                    candidateListEl.appendChild(row);
                 });
+                if (preserveScroll) {
+                    const maxScrollTop = Math.max(0, candidateListEl.scrollHeight - candidateListEl.clientHeight);
+                    candidateListEl.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+                }
             };
 
             const renderAddedList = () => {
@@ -37594,30 +39438,53 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const clone = wizardState.addedItems.slice();
                         [clone[idx - 1], clone[idx]] = [clone[idx], clone[idx - 1]];
                         wizardState.addedItems = clone;
-                        syncDraftFromUI();
-                        renderAddedList();
+                        commitItemSelectionUiState({ renderAdded: true });
                     };
                     downBtn.onclick = () => {
                         if (idx >= wizardState.addedItems.length - 1) return;
                         const clone = wizardState.addedItems.slice();
                         [clone[idx + 1], clone[idx]] = [clone[idx], clone[idx + 1]];
                         wizardState.addedItems = clone;
-                        syncDraftFromUI();
-                        renderAddedList();
+                        commitItemSelectionUiState({ renderAdded: true });
                     };
                     removeBtn.onclick = () => {
                         wizardState.addedItems = wizardState.addedItems.filter((_, i) => i !== idx);
-                        syncDraftFromUI();
-                        renderAddedList();
-                        renderCandidateList();
+                        commitItemSelectionUiState({
+                            renderAdded: true,
+                            renderCandidate: true
+                        });
                     };
                     wizardState.els.addedList.appendChild(row);
+                });
+            };
+            const filterCandidateListByQuery = (list = [], query = '') => {
+                const normalizedQuery = String(query || '').trim().toLowerCase();
+                if (!normalizedQuery) return Array.isArray(list) ? list : [];
+                const queryTokens = uniqueBy(
+                    normalizedQuery
+                        .split(/[\s,，]+/g)
+                        .map(token => String(token || '').trim())
+                        .filter(Boolean),
+                    token => token
+                );
+                if (!queryTokens.length) return Array.isArray(list) ? list : [];
+                const idTokens = queryTokens.filter(token => /^\d{4,}$/.test(token));
+                const textTokens = queryTokens.filter(token => !/^\d{4,}$/.test(token));
+                return (Array.isArray(list) ? list : []).filter((item) => {
+                    const itemId = String(toIdValue(item?.materialId || item?.itemId || '')).trim();
+                    const name = String(item?.materialName || item?.title || item?.name || '').trim().toLowerCase();
+                    const haystack = `${name} ${itemId}`.trim();
+                    const textMatched = !textTokens.length || textTokens.every(token => haystack.includes(token));
+                    const idMatched = !idTokens.length || idTokens.some(token => itemId.includes(token));
+                    return textMatched && idMatched;
                 });
             };
 
             const loadCandidates = async (query = '', source = wizardState.candidateSource || 'all') => {
                 const normalizedQuery = String(query || '').trim();
                 const effectiveSource = normalizedQuery ? 'all' : source;
+                const requestToken = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                wizardState.candidateLoadToken = requestToken;
                 setCandidateSource(effectiveSource);
                 wizardState.els.candidateList.innerHTML = '<div class="am-wxt-item"><div class="name">正在加载候选商品...</div></div>';
                 try {
@@ -37630,12 +39497,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         tagId: useAll ? null : '101111310',
                         channelKey: useAll ? '' : (normalizedQuery ? '' : 'effect')
                     });
-                    wizardState.candidates = res.list;
-                    renderCandidateList();
-                    appendWizardLog(`候选商品已加载 ${res.list.length} 条（${useAll ? '全部商品' : '机会品推荐'}${normalizedQuery ? `，关键词：${normalizedQuery}` : ''}）`, 'success');
+                    if (wizardState.candidateLoadToken !== requestToken) return;
+                    const remoteList = Array.isArray(res.list) ? res.list : [];
+                    const filteredList = normalizedQuery
+                        ? filterCandidateListByQuery(remoteList, normalizedQuery)
+                        : remoteList;
+                    wizardState.candidates = filteredList;
+                    renderItemSelectionLists({
+                        renderAdded: false,
+                        renderCandidate: true
+                    });
+                    const sourceLabel = useAll ? '全部商品' : '机会品推荐';
+                    const countLabel = normalizedQuery && filteredList.length !== remoteList.length
+                        ? `${filteredList.length}（接口返回 ${remoteList.length}）`
+                        : String(filteredList.length);
+                    appendWizardLog(`候选商品已加载 ${countLabel} 条（${sourceLabel}${normalizedQuery ? `，关键词：${normalizedQuery}` : ''}）`, 'success');
                 } catch (err) {
+                    if (wizardState.candidateLoadToken !== requestToken) return;
                     wizardState.candidates = [];
-                    renderCandidateList();
+                    renderItemSelectionLists({
+                        renderAdded: false,
+                        renderCandidate: true
+                    });
                     appendWizardLog(`加载候选商品失败：${err?.message || err}`, 'error');
                 }
             };
@@ -37643,6 +39526,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const buildRequestFromWizard = () => {
                 syncDraftFromUI();
                 const selectedSceneName = SCENE_OPTIONS.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '关键词推广';
+                const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, selectedSceneName);
                 const selectedSceneSettings = buildSceneSettingsPayload(selectedSceneName);
                 const selectedSceneGoalFromSettings = normalizeGoalLabel(resolveKeywordGoalFromSceneSettings(selectedSceneSettings));
                 const prefix = wizardState.draft.planNamePrefix || buildSceneTimePrefix(selectedSceneName);
@@ -37681,17 +39565,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             : selectedSceneName;
                         const isKeywordScene = strategySceneName === '关键词推广';
                         let strategySceneSettings = normalizeSceneSettingsObject(strategy?.sceneSettings || {});
-                        if (!Object.keys(strategySceneSettings).length && isPlainObject(strategy?.sceneSettingValues)) {
-                            strategySceneSettings = normalizeSceneSettingsObject(
+                        if (isPlainObject(strategy?.sceneSettingValues)) {
+                            const strategySceneSettingValues = normalizeSceneSettingsObject(
                                 normalizeSceneSettingBucketValues(strategy.sceneSettingValues || {})
                             );
+                            if (Object.keys(strategySceneSettingValues).length) {
+                                // sceneSettingValues 来自动态表单输入，优先覆盖旧版 sceneSettings，避免成本字段丢失。
+                                strategySceneSettings = mergeDeep({}, strategySceneSettings, strategySceneSettingValues);
+                            }
                         }
                         if (!Object.keys(strategySceneSettings).length) {
                             strategySceneSettings = normalizeSceneSettingsObject(
                                 getSceneSettingsForRequest(strategySceneName)
                             );
                         }
-                        const strategyBidMode = normalizeBidMode(strategy.bidMode || wizardState.draft.bidMode || 'smart', 'smart');
+                        const strategySceneBidTypeSeed = isKeywordScene
+                            ? normalizeSceneSettingValue(
+                                strategySceneSettings[normalizeSceneFieldKey('出价方式')]
+                                || strategySceneSettings.出价方式
+                                || strategySceneSettings[normalizeSceneFieldKey('campaign.bidTypeV2')]
+                                || strategySceneSettings['campaign.bidTypeV2']
+                                || ''
+                            )
+                            : '';
+                        const strategySceneBidTypeCode = isKeywordScene
+                            ? mapSceneBidTypeValue(strategySceneBidTypeSeed, '关键词推广')
+                            : '';
+                        const strategyBidMode = normalizeBidMode(
+                            strategySceneBidTypeCode || strategy.bidMode || wizardState.draft.bidMode || 'smart',
+                            'smart'
+                        );
+                        strategy.bidMode = strategyBidMode;
                         const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
                         const strategyBidTargetOptionValue = normalizeKeywordBidTargetOptionValue(strategyBidTargetV2) || strategyBidTargetV2;
                         if (isKeywordScene) {
@@ -37743,6 +39647,73 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             }
                             strategyGoalSetByScene.get(strategySceneName).add(strategyMarketingGoal);
                         }
+                        const resolveKeywordSceneSettingValueByLabels = (labels = []) => {
+                            if (!isPlainObject(strategySceneSettings)) return '';
+                            const list = Array.isArray(labels) ? labels : [];
+                            for (const label of list) {
+                                const key = normalizeSceneFieldKey(label);
+                                const value = normalizeSceneSettingValue(
+                                    strategySceneSettings[label]
+                                    || (key ? strategySceneSettings[key] : '')
+                                    || ''
+                                );
+                                if (value) return value;
+                            }
+                            return '';
+                        };
+                        const resolveKeywordSingleCostLabelsByTarget = (targetCode = '', type = 'amount') => {
+                            const normalizedTargetCode = normalizeKeywordBidTargetOptionValue(
+                                mapSceneBidTargetValue(targetCode) || targetCode
+                            ) || 'conv';
+                            const switchLabelMap = {
+                                conv: ['设置平均成交成本', '控成本投放'],
+                                fav_cart: ['设置平均收藏加购成本', '控成本投放'],
+                                click: ['设置平均点击成本', '控成本投放']
+                            };
+                            const amountLabelMap = {
+                                conv: ['平均直接成交成本', '平均成交成本', '直接成交成本', '单次成交成本', '目标成交成本', '目标成本'],
+                                fav_cart: ['平均收藏加购成本', '收藏加购成本', '目标成本'],
+                                click: ['平均点击成本', '点击成本', '目标成本']
+                            };
+                            if (type === 'switch') {
+                                return switchLabelMap[normalizedTargetCode] || ['控成本投放'];
+                            }
+                            return amountLabelMap[normalizedTargetCode] || [
+                                '平均直接成交成本',
+                                '平均成交成本',
+                                '平均收藏加购成本',
+                                '平均点击成本',
+                                '直接成交成本',
+                                '单次成交成本',
+                                '目标成交成本',
+                                '点击成本',
+                                '目标成本'
+                            ];
+                        };
+                        const keywordSingleCostTargetCode = isKeywordScene
+                            ? normalizeKeywordBidTargetOptionValue(
+                                mapSceneBidTargetValue(strategySubmitBidTargetV2) || strategySubmitBidTargetV2
+                            ) || 'conv'
+                            : '';
+                        const keywordSceneSingleCostSwitchLabels = isKeywordScene
+                            ? resolveKeywordSingleCostLabelsByTarget(keywordSingleCostTargetCode, 'switch')
+                            : [];
+                        const keywordSceneSingleCostSwitchValue = isKeywordScene
+                            ? resolveKeywordSceneSettingValueByLabels(keywordSceneSingleCostSwitchLabels)
+                            : '';
+                        const keywordSceneSingleCostSwitchOff = keywordSceneSingleCostSwitchValue
+                            && /(关|关闭|不启用|禁用|否|off|false|0)/i.test(keywordSceneSingleCostSwitchValue)
+                            && !/(开|开启|启用|是|on|true|1)/i.test(keywordSceneSingleCostSwitchValue);
+                        const keywordSceneSingleCostAmountLabels = isKeywordScene
+                            ? resolveKeywordSingleCostLabelsByTarget(keywordSingleCostTargetCode, 'amount')
+                            : [];
+                        const keywordSceneSingleCostAmount = isKeywordScene
+                            ? parseNumberFromSceneValue(resolveKeywordSceneSettingValueByLabels(keywordSceneSingleCostAmountLabels))
+                            : NaN;
+                        const keywordSceneSingleCostEnabled = isKeywordScene
+                            && !keywordSceneSingleCostSwitchOff
+                            && Number.isFinite(keywordSceneSingleCostAmount)
+                            && keywordSceneSingleCostAmount > 0;
                         const plan = {
                             sceneName: strategySceneName,
                             planName: finalPlanName,
@@ -37782,10 +39753,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 if (strategySubmitBidTargetV2) {
                                     campaignOverride.bidTargetV2 = strategySubmitBidTargetV2;
                                     campaignOverride.optimizeTarget = strategySubmitBidTargetV2;
+                                    if (strategySubmitBidTargetV2 === 'roi') {
+                                        const roiConstraintValue = toNumber(
+                                            strategy.singleCostV2
+                                            || runtimeCache?.value?.storeData?.constraintValue
+                                            || runtimeCache?.value?.solutionTemplate?.campaign?.constraintValue,
+                                            NaN
+                                        );
+                                        campaignOverride.bidTargetV2 = 'roi';
+                                        campaignOverride.optimizeTarget = 'roi';
+                                        campaignOverride.constraintType = 'roi';
+                                        if (Number.isFinite(roiConstraintValue) && roiConstraintValue > 0) {
+                                            campaignOverride.constraintValue = roiConstraintValue;
+                                        }
+                                    }
                                 }
-                                campaignOverride.setSingleCostV2 = !!strategy.setSingleCostV2;
-                                if (strategy.setSingleCostV2 && strategy.singleCostV2 !== '') {
-                                    campaignOverride.singleCostV2 = toNumber(strategy.singleCostV2, 0);
+                                const strategySingleCostAmount = toNumber(strategy.singleCostV2, NaN);
+                                const strategySingleCostEnabled = !!strategy.setSingleCostV2
+                                    && Number.isFinite(strategySingleCostAmount)
+                                    && strategySingleCostAmount > 0;
+                                campaignOverride.setSingleCostV2 = strategySingleCostEnabled || keywordSceneSingleCostEnabled;
+                                if (campaignOverride.setSingleCostV2) {
+                                    const mergedSingleCostAmount = strategySingleCostEnabled
+                                        ? strategySingleCostAmount
+                                        : keywordSceneSingleCostAmount;
+                                    if (Number.isFinite(mergedSingleCostAmount) && mergedSingleCostAmount > 0) {
+                                        campaignOverride.singleCostV2 = mergedSingleCostAmount;
+                                    }
+                                }
+                                if (strategySubmitBidTargetV2 === 'roi') {
+                                    campaignOverride.setSingleCostV2 = false;
+                                    delete campaignOverride.singleCostV2;
                                 }
                             } else {
                                 campaignOverride.setSingleCostV2 = false;
@@ -37803,7 +39801,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const commonRecommendCount = Math.max(0, toNumber(wizardState.draft.recommendCount, DEFAULTS.recommendCount));
                 const commonDefaultBid = toNumber(wizardState.draft.defaultBidPrice, 1);
                 const commonBidMode = normalizeBidMode(
-                    wizardState.draft.bidMode || enabledStrategies[0]?.bidMode || 'smart',
+                    (isSelectedKeywordScene ? plans[0]?.bidMode : '')
+                    || wizardState.draft.bidMode
+                    || enabledStrategies[0]?.bidMode
+                    || 'smart',
                     'smart'
                 );
                 const common = {
@@ -37845,6 +39846,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (selectedSceneGoalSet.size > 1) return Array.from(selectedSceneGoalSet)[0] || '';
                     return normalizeBidMode(commonBidMode, 'smart') === 'manual' ? '自定义推广' : '趋势明星';
                 })();
+                const matrixCombinations = buildMatrixCombinations(matrixConfig, {
+                    sceneName: selectedSceneName,
+                    strategyList: enabledStrategies,
+                    itemList: wizardState.addedItems
+                });
+                if (matrixCombinations.length > matrixConfig.maxCombinations) {
+                    throw new Error(`组合数 ${matrixCombinations.length} 超过上限 ${matrixConfig.maxCombinations}`);
+                }
+                const requestPlans = matrixCombinations.length
+                    ? materializePlansFromMatrix(plans, matrixCombinations, {
+                        namingPattern: matrixConfig.namingPattern,
+                        sceneName: selectedSceneName
+                    })
+                    : plans;
+                const matrixBatches = splitMatrixBatches(requestPlans, matrixConfig.batchSize);
 
                 return {
                     bizCode: requestBizCode,
@@ -37857,8 +39873,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         wizardState?.draft?.parallelSubmitTimes,
                         DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
                     ),
-                    plans,
-                    common
+                    plans: requestPlans,
+                    common,
+                    matrixPreview: {
+                        enabled: matrixConfig.enabled === true,
+                        combinationCount: matrixCombinations.length,
+                        batchSize: matrixConfig.batchSize,
+                        batchCount: matrixBatches.length,
+                        namingPattern: matrixConfig.namingPattern
+                    }
                 };
             };
 
@@ -38081,6 +40104,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
             };
 
+            const renderWorkbenchMatrixSummary = (request = null) => {
+                if (!(wizardState?.els?.matrixSummary instanceof HTMLElement)) return;
+                const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, wizardState?.draft?.sceneName || '');
+                const matrixPreview = request?.matrixPreview || {};
+                const dimensionList = Array.isArray(matrixConfig.dimensions) ? matrixConfig.dimensions : [];
+                if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
+                    wizardState.els.matrixEnabledInput.checked = matrixConfig.enabled === true;
+                }
+                if (wizardState.els.matrixMaxInput instanceof HTMLInputElement) {
+                    wizardState.els.matrixMaxInput.value = String(matrixConfig.maxCombinations);
+                }
+                if (wizardState.els.matrixBatchInput instanceof HTMLInputElement) {
+                    wizardState.els.matrixBatchInput.value = String(matrixConfig.batchSize);
+                }
+                if (wizardState.els.matrixNamePatternInput instanceof HTMLInputElement) {
+                    wizardState.els.matrixNamePatternInput.value = matrixConfig.namingPattern || MATRIX_DEFAULT_NAMING_PATTERN;
+                }
+                wizardState.els.matrixSummary.textContent = `矩阵：${matrixConfig.enabled ? '开启' : '关闭'} ｜ 组合 ${toNumber(matrixPreview?.combinationCount, 0)} ｜ 批次 ${toNumber(matrixPreview?.batchCount, 0)}`;
+                if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
+                    if (!dimensionList.length) {
+                        wizardState.els.matrixDimensionList.innerHTML = '<div class="am-wxt-item"><div class="name">当前未配置组合维度，开启后仍按原计划直出</div></div>';
+                    } else {
+                        wizardState.els.matrixDimensionList.innerHTML = dimensionList.map((item) => `
+                            <div class="am-wxt-item">
+                                <div class="name">${Utils.escapeHtml(item.label || item.key || '未命名维度')}</div>
+                                <div class="meta">${Utils.escapeHtml((item.values || []).join(' / '))}</div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            };
+
+            const renderPreviewSummaryPanel = (request = null) => {
+                if (!(wizardState?.els?.previewSceneSummary instanceof HTMLElement)) return;
+                const sceneGroups = Array.isArray(request?.scenePlanGroups) ? request.scenePlanGroups : [];
+                const sceneSummary = sceneGroups.length
+                    ? sceneGroups.map(item => `${item.sceneName}×${item.count}`).join('、')
+                    : `${request?.sceneName || wizardState?.draft?.sceneName || '-'}×${toNumber(request?.planCount, 0)}`;
+                const combinationCount = toNumber(request?.matrixPreview?.combinationCount, 0);
+                const batchSummary = `${toNumber(request?.matrixPreview?.batchCount, 0)} 批 / 每批 ${toNumber(request?.matrixPreview?.batchSize, MATRIX_LIMITS.batchSize)}`;
+                wizardState.els.previewSceneSummary.textContent = sceneSummary;
+                wizardState.els.previewComboSummary.textContent = combinationCount > 0 ? `${combinationCount} 组` : '未启用';
+                wizardState.els.previewBatchSummary.textContent = batchSummary;
+            };
+
             const renderPreview = (request) => {
                 const scenePlanGroups = Array.isArray(request?.plans)
                     ? uniqueBy(
@@ -38104,9 +40172,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     keywordMode: request.common?.keywordMode,
                     recommendCount: request.common?.recommendCount,
                     crowdCount: Array.isArray(request.common?.adgroupOverride?.rightList) ? request.common.adgroupOverride.rightList.length : 0,
-                    firstPlan: summarizePlanForPreview(request.plans[0] || null)
+                    firstPlan: summarizePlanForPreview(request.plans[0] || null),
+                    matrix: {
+                        enabled: request?.matrixPreview?.enabled === true,
+                        combinationCount: toNumber(request?.matrixPreview?.combinationCount, 0),
+                        batchSize: toNumber(request?.matrixPreview?.batchSize, MATRIX_LIMITS.batchSize),
+                        batchCount: toNumber(request?.matrixPreview?.batchCount, 0),
+                        namingPattern: String(request?.matrixPreview?.namingPattern || MATRIX_DEFAULT_NAMING_PATTERN).trim()
+                    }
                 };
                 wizardState.els.preview.textContent = JSON.stringify(preview, null, 2);
+                renderWorkbenchMatrixSummary(request);
+                renderPreviewSummaryPanel({
+                    ...preview,
+                    scenePlanGroups,
+                    planCount: preview.planCount,
+                    matrixPreview: request?.matrixPreview || {}
+                });
             };
 
             const buildKeywordConsoleRows = (words = []) => (
@@ -38249,12 +40331,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const mergedWords = Array.from(dedupMap.values()).slice(0, 200);
                     wizardState.els.manualInput.value = mergedWords.map(formatKeywordLine).join('\n');
                     pullDetailFormToStrategy(editingStrategy);
-                    syncDraftFromUI();
-                    renderStrategyList();
-                    renderSceneDynamicConfig();
-                    if (typeof wizardState.buildRequest === 'function') {
-                        wizardState.renderPreview(wizardState.buildRequest());
-                    }
+                    commitStrategyUiState({ renderSceneDynamic: true });
                     logRecommendedKeywordConsoleReport({
                         triggerSource,
                         targetItem,
@@ -38380,11 +40457,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         mergedCrowdList,
                         item => item?.mx_crowdId || `${item?.crowd?.label?.labelId || ''}_${item?.crowd?.label?.optionList?.[0]?.optionValue || ''}`
                     ).slice(0, 50);
-                    syncDraftFromUI();
-                    renderCrowdList();
-                    if (typeof wizardState.buildRequest === 'function') {
-                        wizardState.renderPreview(wizardState.buildRequest());
-                    }
+                    commitCrowdUiState();
                     appendWizardLog(`推荐人群已加载 ${wizardState.crowdList.length} 条`, 'success');
                 } catch (err) {
                     appendWizardLog(`加载推荐人群失败：${err?.message || err}`, 'error');
@@ -38467,14 +40540,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 itemId: SCENE_SYNC_DEFAULT_ITEM_ID,
                 materialName: `默认商品 ${SCENE_SYNC_DEFAULT_ITEM_ID}`
             });
-            const ensureSceneDefaultItemForScene = async ({
+            async function ensureSceneDefaultItemForScene({
                 sceneName = '',
                 runtime = null,
                 force = false,
                 silent = false,
                 rerender = true,
                 isStale = null
-            } = {}) => {
+            } = {}) {
                 const currentScene = SCENE_OPTIONS.includes(sceneName)
                     ? sceneName
                     : (SCENE_OPTIONS.includes(wizardState?.draft?.sceneName) ? wizardState.draft.sceneName : inferCurrentSceneName());
@@ -38504,22 +40577,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (!nextItem || !toIdValue(nextItem.materialId || nextItem.itemId)) return false;
 
                 wizardState.addedItems = [deepClone(nextItem)];
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                wizardState.draft.addedItems = wizardState.addedItems.map(item => deepClone(item));
-                saveSessionDraft(wizardState.draft);
+                const draft = ensureWizardDraft();
+                draft.addedItems = wizardState.addedItems.map(item => deepClone(item));
+                KeywordPlanWizardStore.persistDraft(draft);
                 if (typeof isStale === 'function' && isStale()) return false;
                 if (rerender) {
-                    renderAddedList();
-                    renderCandidateList();
-                    if (typeof wizardState.buildRequest === 'function') {
-                        wizardState.renderPreview(wizardState.buildRequest());
-                    }
+                    commitItemSelectionUiState({
+                        renderAdded: true,
+                        renderCandidate: true,
+                        refreshPreview: true
+                    });
                 }
                 if (!silent) {
                     appendWizardLog(`已注入默认商品 ${SCENE_SYNC_DEFAULT_ITEM_ID} 以补齐人群配置层`, 'success');
                 }
                 return true;
-            };
+            }
             const syncNativeCrowdDefaultsForScene = async ({
                 sceneName = '',
                 runtime = null,
@@ -38583,16 +40656,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (shouldSyncWizardCrowd) {
                     wizardState.crowdList = syncedCrowdList;
                 }
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                wizardState.draft.crowdList = deepClone(wizardState.crowdList);
-                saveSessionDraft(wizardState.draft);
+                const draft = ensureWizardDraft();
+                draft.crowdList = deepClone(wizardState.crowdList);
+                KeywordPlanWizardStore.persistDraft(draft);
                 if (typeof isStale === 'function' && isStale()) return false;
                 if (rerender) {
-                    renderCrowdList();
-                    renderSceneDynamicConfig();
-                    if (typeof wizardState.buildRequest === 'function') {
-                        wizardState.renderPreview(wizardState.buildRequest());
-                    }
+                    commitCrowdUiState({
+                        renderSceneDynamic: true
+                    });
                 }
                 if (!silent) {
                     appendWizardLog(`已同步原生默认人群 ${wizardState.crowdList.length} 条`, 'success');
@@ -38603,9 +40674,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const switchSceneFromEditor = (sceneName) => {
                 const nextScene = String(sceneName || '').trim();
                 if (!SCENE_OPTIONS.includes(nextScene)) return;
-                wizardState.draft = wizardState.draft || wizardDefaultDraft();
-                const prevScene = wizardState.draft.sceneName;
-                const prevPrefix = String(wizardState.draft.planNamePrefix || '').trim();
+                const draft = ensureWizardDraft();
+                const prevScene = draft.sceneName;
+                const prevPrefix = String(draft.planNamePrefix || '').trim();
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId)
                     || wizardState.strategyList[0]
                     || null;
@@ -38613,13 +40684,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.editingStrategyId = editingStrategy.id;
                 }
                 const applyToAllStrategies = !editingStrategy;
-                wizardState.draft.sceneName = nextScene;
+                draft.sceneName = nextScene;
                 const sceneBizCodeHint = resolveSceneBizCodeHint(nextScene);
-                if (sceneBizCodeHint) wizardState.draft.bizCode = sceneBizCodeHint;
+                if (sceneBizCodeHint) draft.bizCode = sceneBizCodeHint;
                 if (sceneBizCodeHint && sceneBizCodeHint !== DEFAULTS.bizCode) {
-                    wizardState.draft.promotionScene = '';
-                } else if (!wizardState.draft.promotionScene) {
-                    wizardState.draft.promotionScene = DEFAULTS.promotionScene;
+                    draft.promotionScene = '';
+                } else if (!draft.promotionScene) {
+                    draft.promotionScene = DEFAULTS.promotionScene;
                 }
                 if (wizardState.els.sceneSelect && wizardState.els.sceneSelect.value !== nextScene) {
                     wizardState.els.sceneSelect.value = nextScene;
@@ -38669,11 +40740,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     applyStrategyToDetailForm(editingStrategy);
                 }
                 renderStaticOptionLines();
-                syncDraftFromUI();
-                renderStrategyList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
-                }
+                commitStrategyUiState();
                 if (prevScene !== nextScene) {
                     const sceneHintText = sceneBizCodeHint ? `（${sceneBizCodeHint}）` : '';
                     const scopeText = applyToAllStrategies ? '全部计划' : (editingStrategy?.name || '当前计划');
@@ -38719,7 +40786,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.repairStopRequested = true;
                     appendWizardLog('弹窗已关闭，停止信号已发送（当前 case 结束后停止）', 'error');
                 }
-                syncDraftFromUI();
+                commitDraftState();
                 setDetailVisible(false);
                 setRunModeMenuOpen(false);
                 overlay.classList.remove('open');
@@ -38821,21 +40888,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             });
             wizardState.els.toggleCandidateBtn.onclick = () => {
-                const nextExpanded = wizardState.itemSplitExpanded !== true;
-                setItemSplitExpanded(nextExpanded);
-                if (nextExpanded) {
-                    if (!wizardState.candidates.length) {
-                        loadCandidates('', wizardState.candidateSource || 'all');
-                    }
-                    if (wizardState.els.searchInput instanceof HTMLInputElement) {
-                        wizardState.els.searchInput.focus();
-                    }
-                }
-                syncDraftFromUI();
+                openKeywordItemPickerPopup();
             };
             wizardState.els.toggleCandidateListBtn.onclick = () => {
                 setCandidateListExpanded(wizardState.candidateListExpanded !== true);
-                syncDraftFromUI();
+                commitDraftState();
             };
             wizardState.els.addAllBtn.onclick = () => {
                 if (!wizardState.candidates.length) return;
@@ -38847,17 +40904,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const addedSet = new Set(wizardState.addedItems.map(item => String(item.materialId)));
                 const pick = wizardState.candidates.filter(item => !addedSet.has(String(item.materialId))).slice(0, room);
                 wizardState.addedItems = wizardState.addedItems.concat(pick);
-                syncDraftFromUI();
-                renderAddedList();
-                renderCandidateList();
+                commitItemSelectionUiState({
+                    renderAdded: true,
+                    renderCandidate: true
+                });
                 appendWizardLog(`已批量添加 ${pick.length} 个商品`, 'success');
             };
             wizardState.els.clearAddedBtn.onclick = () => {
                 wizardState.addedItems = [];
-                syncDraftFromUI();
-                renderAddedList();
-                renderCandidateList();
+                commitItemSelectionUiState({
+                    renderAdded: true,
+                    renderCandidate: true
+                });
             };
+            (Array.isArray(wizardState.els.workbenchTabs) ? wizardState.els.workbenchTabs : []).forEach((btn) => {
+                if (!(btn instanceof HTMLButtonElement)) return;
+                btn.addEventListener('click', () => {
+                    const nextPage = btn.dataset.workbenchPage || 'home';
+                    setWorkbenchPage(nextPage);
+                    commitPreviewUiState();
+                });
+            });
+            [wizardState.els.matrixEnabledInput, wizardState.els.matrixMaxInput, wizardState.els.matrixBatchInput, wizardState.els.matrixNamePatternInput]
+                .forEach((input) => {
+                    if (!(input instanceof HTMLElement)) return;
+                    input.addEventListener('change', () => {
+                        commitPreviewUiState();
+                    });
+                });
             wizardState.els.loadRecommendBtn.onclick = () => {
                 loadRecommendedKeywords({ triggerSource: 'button_click' });
             };
@@ -38876,11 +40950,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 });
             wizardState.els.clearCrowdBtn.onclick = () => {
                 wizardState.crowdList = [];
-                syncDraftFromUI();
-                renderCrowdList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
-                }
+                commitCrowdUiState();
                 appendWizardLog('已清空人群设置');
             };
             (Array.isArray(wizardState.els.toggleDebugBtns) ? wizardState.els.toggleDebugBtns : [])
@@ -38888,11 +40958,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!(btn instanceof HTMLButtonElement)) return;
                     btn.onclick = () => {
                         setDebugVisible(!wizardState.debugVisible);
-                        syncDraftFromUI();
-                        renderSceneDynamicConfig();
-                        if (typeof wizardState.buildRequest === 'function') {
-                            wizardState.renderPreview(wizardState.buildRequest());
-                        }
+                        commitSceneDynamicUiState({
+                            syncSceneSettings: false,
+                            renderSceneDynamic: true
+                        });
                     };
                 });
 
@@ -38900,11 +40969,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
                 if (editingStrategy) pullDetailFormToStrategy(editingStrategy);
                 setDetailVisible(false);
-                syncDraftFromUI();
-                renderStrategyList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
+                if (typeof wizardState.setWorkbenchPage === 'function') {
+                    wizardState.setWorkbenchPage('home');
                 }
+                commitStrategyUiState();
             };
             wizardState.els.backSimpleBtn.onclick = closeDetailDialog;
             if (wizardState.els.detailCloseBtn) {
@@ -38916,8 +40984,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const handlePreview = () => {
                 try {
-                    const req = buildRequestFromWizard();
-                    renderPreview(req);
+                    const req = KeywordPlanRequestBuilder.buildRequestFromWizard();
+                    KeywordPlanPreviewExecutor.renderPreview(req);
                     appendWizardLog(`预览已生成：${req.plans.length} 个计划`, 'success');
                 } catch (err) {
                     appendWizardLog(`预览失败：${err?.message || err}`, 'error');
@@ -38927,7 +40995,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             wizardState.els.previewQuickBtn.onclick = handleGenerateOtherStrategies;
 
             const handleRun = async () => {
-                const req = buildRequestFromWizard();
+                const req = KeywordPlanRequestBuilder.buildRequestFromWizard();
                 if (!req.plans.length) {
                     appendWizardLog('请先添加商品并勾选策略后再创建', 'error');
                     return;
@@ -38966,7 +41034,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return;
                 }
                 const runCount = req.plans.length || 0;
-                renderPreview(req);
+                KeywordPlanPreviewExecutor.renderPreview(req);
                 const sceneSummaryText = sceneRequests.map(item => `${item.sceneName}×${item.plans.length}`).join('、');
                 const submitMode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'parallel');
                 const serialIntervalMs = Math.max(300, SERIAL_PLAN_SUBMIT_INTERVAL_MS);
@@ -39185,9 +41253,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
             }
             wizardState.els.clearDraftBtn.onclick = () => {
-                clearSessionDraft();
-                wizardState.draft = wizardDefaultDraft();
-                wizardState.draft.sceneName = '关键词推广';
+                KeywordPlanWizardStore.clearSessionDraft();
+                wizardState.draft = KeywordPlanWizardStore.resetWizardDraft({
+                    sceneName: '关键词推广'
+                });
                 wizardState.addedItems = [];
                 wizardState.crowdList = [];
                 wizardState.candidates = [];
@@ -39198,14 +41267,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.repairLastSummary = null;
                 setRepairControlState(false);
                 setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
-                fillUIFromDraft();
-                renderStrategyList();
-                renderAddedList();
-                renderCrowdList();
-                renderCandidateList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
-                }
+                KeywordPlanPreviewExecutor.renderWizardFromState({ clearLogs: true });
                 appendWizardLog('已清空会话草稿');
             };
             [wizardState.els.budgetInput, wizardState.els.bidInput, wizardState.els.bidModeSelect, wizardState.els.modeSelect, wizardState.els.recommendCountInput, wizardState.els.manualInput, wizardState.els.bidTargetSelect, wizardState.els.budgetTypeSelect, wizardState.els.singleCostEnableInput, wizardState.els.singleCostInput]
@@ -39231,19 +41293,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             if (wizardState.els.prefixInput) {
                 const syncPlanNameToStrategyList = () => {
-                    syncDraftFromUI();
-                    renderStrategyList();
+                    commitStrategyUiState({ refreshPreview: false });
                 };
                 wizardState.els.prefixInput.addEventListener('input', syncPlanNameToStrategyList);
                 wizardState.els.prefixInput.addEventListener('change', syncPlanNameToStrategyList);
             }
             wizardState.els.budgetInput.addEventListener('change', renderStrategyList);
             wizardState.els.bidTargetSelect.addEventListener('change', () => {
-                syncDraftFromUI();
-                renderStrategyList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
-                }
+                commitStrategyUiState();
             });
             wizardState.els.bidModeSelect.addEventListener('change', () => {
                 updateBidModeControls(wizardState.els.bidModeSelect.value);
@@ -39270,15 +41327,68 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     renderSceneDynamicConfig();
                 }
-                syncDraftFromUI();
-                renderStrategyList();
-                if (typeof wizardState.buildRequest === 'function') {
-                    wizardState.renderPreview(wizardState.buildRequest());
-                }
+                commitStrategyUiState();
             });
             wizardState.els.singleCostEnableInput.addEventListener('change', () => {
                 wizardState.els.singleCostInput.disabled = !wizardState.els.singleCostEnableInput.checked;
-                syncDraftFromUI();
+                commitDraftState();
+            });
+
+            Object.assign(KeywordPlanCoreUtils, {
+                buildDefaultMatrixConfig,
+                normalizeMatrixConfig,
+                buildMatrixCombinations,
+                materializePlansFromMatrix,
+                splitMatrixBatches
+            });
+            Object.assign(KeywordPlanRuntime, {
+                getDefaultStrategyList,
+                buildSceneProfiles,
+                loadCandidates,
+                loadRecommendedKeywords,
+                loadRecommendedCrowds,
+                prepareWizardStateForOpen: (storedDraft = {}) => prepareWizardStateForOpen(storedDraft),
+                applyRuntimeToDraft: (runtime = {}, sceneName = '') => applyRuntimeToDraft(runtime, sceneName),
+                refreshSceneSelect: () => refreshSceneSelect(),
+                commitStrategyUiState: (options = {}) => commitStrategyUiState(options),
+                commitCrowdUiState: (options = {}) => commitCrowdUiState(options),
+                commitSceneDynamicUiState: (options = {}) => commitSceneDynamicUiState(options),
+                commitItemSelectionUiState: (options = {}) => commitItemSelectionUiState(options),
+                commitPreviewUiState: (options = {}) => commitPreviewUiState(options),
+                commitDraftState: (draft = null) => commitDraftState(draft),
+                normalizeDraftForUi: (draft = {}) => normalizeDraftForUi(draft),
+                applyDraftStateToWizard: (draft = {}) => applyDraftStateToWizard(draft),
+                applyDraftValuesToControls: (draft = {}) => applyDraftValuesToControls(draft),
+                renderWizardFromState: (options = {}) => renderWizardFromState(options)
+            });
+            Object.assign(KeywordPlanSceneSpec, {
+                buildSceneSettingsPayload,
+                normalizeSceneSettingsObject
+            });
+            Object.assign(KeywordPlanWizardStore, {
+                readSessionDraft,
+                saveSessionDraft,
+                clearSessionDraft,
+                wizardDefaultDraft,
+                createWizardDraft,
+                resetWizardDraft,
+                hydrateWizardDraftForOpen: (storedDraft = {}) => hydrateWizardDraftForOpen(storedDraft),
+                ensureWizardDraft: () => ensureWizardDraft(),
+                persistDraft: (draft = null) => persistWizardDraft(draft),
+                syncDraftSceneIdentity: (draft, editingStrategy = null) => syncDraftSceneIdentity(draft, editingStrategy),
+                syncDraftGlobalDefaults: (draft, enabled = false) => syncDraftGlobalDefaults(draft, enabled),
+                syncDraftViewState: (draft) => syncDraftViewState(draft),
+                syncDraftMetaState: (draft) => syncDraftMetaState(draft)
+            });
+            Object.assign(KeywordPlanRequestBuilder, {
+                buildRequestFromWizard: () => buildRequestFromWizard()
+            });
+            Object.assign(KeywordPlanPreviewExecutor, {
+                renderPreview: (request) => renderPreview(request),
+                renderWorkbenchMatrixSummary: (request = null) => renderWorkbenchMatrixSummary(request),
+                renderPreviewSummaryPanel: (request = null) => renderPreviewSummaryPanel(request),
+                refreshWizardPreview: () => refreshWizardPreview(),
+                renderWizardFromState: (options = {}) => renderWizardFromState(options)
             });
 
             wizardState.renderStrategyList = renderStrategyList;
@@ -39286,18 +41396,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             wizardState.renderCandidateList = renderCandidateList;
             wizardState.renderAddedList = renderAddedList;
             wizardState.renderCrowdList = renderCrowdList;
-            wizardState.loadCandidates = loadCandidates;
-            wizardState.loadRecommendedKeywords = loadRecommendedKeywords;
-            wizardState.loadRecommendedCrowds = loadRecommendedCrowds;
+            wizardState.loadCandidates = KeywordPlanRuntime.loadCandidates;
+            wizardState.loadRecommendedKeywords = KeywordPlanRuntime.loadRecommendedKeywords;
+            wizardState.loadRecommendedCrowds = KeywordPlanRuntime.loadRecommendedCrowds;
+            wizardState.applyRuntimeToDraft = KeywordPlanRuntime.applyRuntimeToDraft;
+            wizardState.refreshSceneSelect = KeywordPlanRuntime.refreshSceneSelect;
             wizardState.setCandidateSource = setCandidateSource;
+            wizardState.setWorkbenchPage = setWorkbenchPage;
             wizardState.setDebugVisible = setDebugVisible;
             wizardState.setItemSplitExpanded = setItemSplitExpanded;
             wizardState.setCandidateListExpanded = setCandidateListExpanded;
             wizardState.fillUIFromDraft = fillUIFromDraft;
             wizardState.appendWizardLog = appendWizardLog;
-            wizardState.renderPreview = renderPreview;
-            wizardState.buildRequest = buildRequestFromWizard;
+            wizardState.renderPreview = KeywordPlanPreviewExecutor.renderPreview;
+            wizardState.renderWorkbenchMatrixSummary = KeywordPlanPreviewExecutor.renderWorkbenchMatrixSummary;
+            wizardState.renderPreviewSummaryPanel = KeywordPlanPreviewExecutor.renderPreviewSummaryPanel;
+            wizardState.renderWizardPreview = KeywordPlanPreviewExecutor.refreshWizardPreview;
+            wizardState.renderWizardFromState = KeywordPlanPreviewExecutor.renderWizardFromState;
+            wizardState.buildRequest = KeywordPlanRequestBuilder.buildRequestFromWizard;
+            wizardState.keywordPlanCoreUtils = KeywordPlanCoreUtils;
+            wizardState.keywordPlanRuntime = KeywordPlanRuntime;
+            wizardState.keywordPlanSceneSpec = KeywordPlanSceneSpec;
+            wizardState.keywordPlanWizardStore = KeywordPlanWizardStore;
             wizardState.refreshSceneProfileFromSpec = refreshSceneProfileFromSpec;
+            wizardState.ensureSceneDefaultItemForScene = ensureSceneDefaultItemForScene;
+            wizardState.syncNativeCrowdDefaultsForScene = syncNativeCrowdDefaultsForScene;
             setRepairControlState(false);
             setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
             wizardState.mounted = true;
@@ -39309,55 +41432,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const openToken = wizardState.openToken;
             const isStaleOpen = () => openToken !== wizardState.openToken;
 
-            const storedDraft = readSessionDraft() || {};
-            wizardState.draft = mergeDeep(wizardDefaultDraft(), storedDraft);
-            const draftSchemaVersion = toNumber(storedDraft?.schemaVersion, 0);
-            if (draftSchemaVersion !== SESSION_DRAFT_SCHEMA_VERSION) {
-                wizardState.draft.sceneSettingValues = {};
-                wizardState.draft.sceneSettingTouched = {};
-                wizardState.draft.editingStrategyId = '';
-                wizardState.draft.detailVisible = false;
+            const storedDraft = KeywordPlanWizardStore.readSessionDraft() || {};
+            if (typeof KeywordPlanRuntime.prepareWizardStateForOpen === 'function') {
+                KeywordPlanRuntime.prepareWizardStateForOpen(storedDraft);
+            } else {
+                wizardState.draft = KeywordPlanWizardStore.hydrateWizardDraftForOpen(storedDraft);
+                wizardState.candidateSource = 'all';
+                wizardState.addedItems = Array.isArray(wizardState.draft.addedItems)
+                    ? wizardState.draft.addedItems.map(normalizeItem).filter(item => item.materialId).slice(0, WIZARD_MAX_ITEMS)
+                    : [];
             }
-            wizardState.draft.schemaVersion = SESSION_DRAFT_SCHEMA_VERSION;
-            wizardState.draft.detailVisible = false;
-            wizardState.draft.itemSplitExpanded = false;
-            wizardState.draft.candidateListExpanded = false;
-            wizardState.candidateSource = 'all';
-            if (!SCENE_NAME_LIST.includes(wizardState.draft.sceneName)) {
-                const currentSceneName = inferCurrentSceneName();
-                wizardState.draft.sceneName = SCENE_NAME_LIST.includes(currentSceneName) ? currentSceneName : '关键词推广';
-            }
-            const initSceneBizCodeHint = resolveSceneBizCodeHint(wizardState.draft.sceneName);
-            if (initSceneBizCodeHint && !wizardState.draft.bizCode) {
-                wizardState.draft.bizCode = initSceneBizCodeHint;
-            }
-            if (wizardState.draft.bizCode && wizardState.draft.bizCode !== DEFAULTS.bizCode) {
-                wizardState.draft.promotionScene = '';
-            } else if (!wizardState.draft.promotionScene) {
-                wizardState.draft.promotionScene = DEFAULTS.promotionScene;
-            }
-            wizardState.addedItems = Array.isArray(wizardState.draft.addedItems)
-                ? wizardState.draft.addedItems.map(normalizeItem).filter(item => item.materialId).slice(0, WIZARD_MAX_ITEMS)
-                : [];
 
-            wizardState.fillUIFromDraft();
-            refreshSceneSelect();
-            if (typeof wizardState.renderStrategyList === 'function') {
-                wizardState.renderStrategyList();
-            }
-            wizardState.renderAddedList();
-            wizardState.renderCrowdList();
-            wizardState.renderCandidateList();
-            if (typeof wizardState.setCandidateSource === 'function') {
-                wizardState.setCandidateSource(wizardState.candidateSource || 'all');
-            }
-            if (typeof wizardState.buildRequest === 'function') {
-                wizardState.renderPreview(wizardState.buildRequest());
-            }
-            wizardState.els.log.innerHTML = '';
-            if (wizardState.els.quickLog) {
-                wizardState.els.quickLog.innerHTML = '';
-            }
+            KeywordPlanPreviewExecutor.renderWizardFromState({ clearLogs: true });
             setRepairControlState(!!wizardState.repairRunning);
             if (wizardState.repairLastSummary) {
                 setRepairStatusText(formatRepairStatusText({
@@ -39396,8 +41482,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 try {
                     runtimeForInit = await getRuntimeDefaults(false);
                     if (isStaleOpen()) return;
-                    applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
-                    await ensureSceneDefaultItemForScene({
+                    if (typeof wizardState.applyRuntimeToDraft === 'function') {
+                        wizardState.applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                    } else {
+                        applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                    }
+                    const ensureDefaultItemForScene = typeof wizardState.ensureSceneDefaultItemForScene === 'function'
+                        ? wizardState.ensureSceneDefaultItemForScene
+                        : (async () => false);
+                    const syncNativeCrowdDefaults = typeof wizardState.syncNativeCrowdDefaultsForScene === 'function'
+                        ? wizardState.syncNativeCrowdDefaultsForScene
+                        : (async () => false);
+                    await ensureDefaultItemForScene({
                         sceneName: wizardState?.draft?.sceneName || '',
                         runtime: runtimeForInit,
                         force: false,
@@ -39405,7 +41501,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         rerender: false,
                         isStale: () => isStaleOpen()
                     });
-                    await syncNativeCrowdDefaultsForScene({
+                    await syncNativeCrowdDefaults({
                         sceneName: wizardState?.draft?.sceneName || '',
                         runtime: runtimeForInit,
                         silent: false,
@@ -39413,14 +41509,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         isStale: () => isStaleOpen()
                     });
                     if (isStaleOpen()) return;
-                    wizardState.fillUIFromDraft();
-                    refreshSceneSelect();
-                    if (typeof wizardState.renderStrategyList === 'function') {
-                        wizardState.renderStrategyList();
-                    }
-                    if (typeof wizardState.buildRequest === 'function') {
-                        wizardState.renderPreview(wizardState.buildRequest());
-                    }
+                    KeywordPlanPreviewExecutor.renderWizardFromState();
                 } catch (err) {
                     log.warn('初始化运行时默认值失败:', err?.message || err);
                 }
@@ -39433,12 +41522,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (isStaleOpen()) return;
                     wizardState.addedItems = preferred.slice(0, WIZARD_MAX_ITEMS);
                     wizardState.draft.addedItems = wizardState.addedItems;
-                    saveSessionDraft(wizardState.draft);
+                    KeywordPlanWizardStore.persistDraft();
                     wizardState.renderAddedList();
-                    wizardState.renderCandidateList();
-                    if (typeof wizardState.buildRequest === 'function') {
-                        wizardState.renderPreview(wizardState.buildRequest());
-                    }
+                    wizardState.renderCandidateList({ preserveScroll: true });
+                    KeywordPlanPreviewExecutor.refreshWizardPreview();
                 } catch (err) {
                     log.warn('初始化已添加商品失败:', err?.message || err);
                 }
@@ -40353,18 +42440,157 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 runWizardSceneParityTest,
                 checkWizardApiCoverage
             };
-            const pageApi = (typeof window !== 'undefined' && isPlainObject(window.__AM_WXT_KEYWORD_API__))
-                ? window.__AM_WXT_KEYWORD_API__
-                : {};
+            const pageApiExposed = (typeof window !== 'undefined' && isPlainObject(window.__AM_WXT_KEYWORD_API__));
+            const pageApi = pageApiExposed ? window.__AM_WXT_KEYWORD_API__ : {};
             const missingInLocal = WIZARD_PARITY_REQUIRED_API_METHODS
                 .filter(name => typeof localApi[name] !== 'function');
-            const missingInPage = WIZARD_PARITY_REQUIRED_API_METHODS
-                .filter(name => typeof pageApi[name] !== 'function');
+            const missingInPage = pageApiExposed
+                ? WIZARD_PARITY_REQUIRED_API_METHODS.filter(name => typeof pageApi[name] !== 'function')
+                : [];
             return {
                 required: WIZARD_PARITY_REQUIRED_API_METHODS.slice(),
+                pageApiExposed,
                 missingInLocal,
                 missingInPage,
-                ok: missingInLocal.length === 0 && missingInPage.length === 0
+                ok: missingInLocal.length === 0 && (!pageApiExposed || missingInPage.length === 0)
+            };
+        };
+        const KEYWORD_PARITY_TARGET_COST_PRESET = Object.freeze({
+            conv: '35',
+            fav_cart: '1.88',
+            click: '1.29',
+            roi: '5'
+        });
+        const normalizeKeywordParityBidTargetCode = (value = '') => {
+            const seed = normalizeSceneSettingValue(value);
+            if (!seed) return '';
+            const mapped = normalizeKeywordBidTargetCode(mapSceneBidTargetValue(seed) || seed);
+            const token = String(mapped || seed).trim().toLowerCase();
+            if (!token) return '';
+            if (token === 'display_cart' || token === 'coll_cart') return 'fav_cart';
+            if (token === 'display_click') return 'click';
+            if (token === 'display_roi') return 'roi';
+            if (token === 'display_pay' || token === 'ad_strategy_buy' || token === 'ad_strategy_retained_buy') return 'conv';
+            if (token === 'fav_cart' || token === 'click' || token === 'roi' || token === 'conv') return token;
+            if (/收藏|加购/.test(seed)) return 'fav_cart';
+            if (/点击/.test(seed)) return 'click';
+            if (/投产|roi/i.test(seed)) return 'roi';
+            if (/成交|gmv|净成交/i.test(seed)) return 'conv';
+            return '';
+        };
+        const resolveKeywordParityCostConfig = (targetCode = '') => {
+            const token = String(targetCode || '').trim().toLowerCase();
+            if (token === 'roi') {
+                return {
+                    switchLabel: '设置7日投产比',
+                    switchOnValue: '自定义',
+                    valueLabels: ['目标投产比', 'ROI目标值', '出价目标值', '约束值']
+                };
+            }
+            if (token === 'conv') {
+                return {
+                    switchLabel: '设置平均成交成本',
+                    switchOnValue: '开启',
+                    valueLabels: ['平均成交成本', '平均直接成交成本', '目标成本']
+                };
+            }
+            if (token === 'fav_cart') {
+                return {
+                    switchLabel: '设置平均收藏加购成本',
+                    switchOnValue: '开启',
+                    valueLabels: ['平均收藏加购成本', '目标成本']
+                };
+            }
+            if (token === 'click') {
+                return {
+                    switchLabel: '设置平均点击成本',
+                    switchOnValue: '开启',
+                    valueLabels: ['平均点击成本', '目标成本']
+                };
+            }
+            return null;
+        };
+        const ensureKeywordParityTargetCostForTest = (strategy = {}, sceneSettingsPatch = {}, options = {}) => {
+            const enabled = options?.ensureTargetCostForTest !== false;
+            const nextStrategy = isPlainObject(strategy) ? mergeDeep({}, strategy) : {};
+            const nextPatch = isPlainObject(sceneSettingsPatch) ? mergeDeep({}, sceneSettingsPatch) : {};
+            if (!enabled) {
+                return {
+                    strategy: nextStrategy,
+                    sceneSettingsPatch: nextPatch
+                };
+            }
+            const bidMode = normalizeBidMode(nextStrategy.bidMode || 'smart', 'smart');
+            if (bidMode !== 'smart') {
+                return {
+                    strategy: nextStrategy,
+                    sceneSettingsPatch: nextPatch
+                };
+            }
+            const marketingGoal = detectKeywordGoalFromText(
+                nextStrategy.marketingGoal
+                || nextPatch.营销目标
+                || nextPatch.选择卡位方案
+                || ''
+            );
+            if (marketingGoal !== '自定义推广') {
+                return {
+                    strategy: nextStrategy,
+                    sceneSettingsPatch: nextPatch
+                };
+            }
+            const targetCode = normalizeKeywordParityBidTargetCode(
+                nextStrategy.bidTargetV2
+                || nextPatch.出价目标
+                || nextPatch.优化目标
+                || ''
+            );
+            const targetCostConfig = resolveKeywordParityCostConfig(targetCode);
+            if (!targetCostConfig) {
+                return {
+                    strategy: nextStrategy,
+                    sceneSettingsPatch: nextPatch
+                };
+            }
+            const candidateValues = [
+                nextStrategy.singleCostV2,
+                ...targetCostConfig.valueLabels.map(label => nextPatch[label]),
+                targetCode === 'roi' ? nextPatch.设置7日投产比 : '',
+                nextPatch.目标成本
+            ];
+            let targetCostValue = '';
+            for (const candidate of candidateValues) {
+                const amount = parseNumberFromSceneValue(candidate);
+                if (!Number.isFinite(amount) || amount <= 0) continue;
+                targetCostValue = toShortSceneValue(String(amount));
+                if (targetCostValue) break;
+            }
+            if (!targetCostValue) {
+                targetCostValue = KEYWORD_PARITY_TARGET_COST_PRESET[targetCode] || '';
+            }
+            if (!targetCostValue) {
+                return {
+                    strategy: nextStrategy,
+                    sceneSettingsPatch: nextPatch
+                };
+            }
+            nextStrategy.setSingleCostV2 = true;
+            nextStrategy.singleCostV2 = targetCostValue;
+            if (targetCostConfig.switchLabel) {
+                nextPatch[targetCostConfig.switchLabel] = targetCostConfig.switchOnValue || '开启';
+            }
+            targetCostConfig.valueLabels.forEach((label, idx) => {
+                if (!label) return;
+                if (idx === 0 || !normalizeSceneSettingValue(nextPatch[label])) {
+                    nextPatch[label] = targetCostValue;
+                }
+            });
+            if (targetCode !== 'roi' && !normalizeSceneSettingValue(nextPatch.目标成本)) {
+                nextPatch.目标成本 = targetCostValue;
+            }
+            return {
+                strategy: nextStrategy,
+                sceneSettingsPatch: nextPatch
             };
         };
         const buildSceneParityCaseMatrix = (sceneName = '', options = {}) => {
@@ -40432,48 +42658,98 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     label: '关键词-智能投产比',
                     strategyPatch: {
                         bidMode: 'smart',
-                        marketingGoal: defaultGoal === '自定义推广' ? '趋势明星' : defaultGoal,
+                        marketingGoal: '自定义推广',
                         bidTargetV2: 'roi',
                         keywordMode: 'recommend',
                         recommendCount: '8',
                         manualKeywords: '',
                         setSingleCostV2: true,
-                        singleCostV2: '35'
+                        singleCostV2: '5'
                     },
-                    sceneSettingsPatch: {}
+                    sceneSettingsPatch: {
+                        营销目标: '自定义推广',
+                        选择卡位方案: '自定义推广',
+                        出价目标: '稳定投产比',
+                        设置7日投产比: '自定义',
+                        目标投产比: '5'
+                    }
+                });
+                pushCase({
+                    caseId: 'kw_smart_fav_cart',
+                    label: '关键词-智能收藏加购',
+                    strategyPatch: {
+                        bidMode: 'smart',
+                        marketingGoal: '自定义推广',
+                        bidTargetV2: 'fav_cart',
+                        keywordMode: 'recommend',
+                        recommendCount: '8',
+                        manualKeywords: '',
+                        setSingleCostV2: true,
+                        singleCostV2: '1.88'
+                    },
+                    sceneSettingsPatch: {
+                        营销目标: '自定义推广',
+                        选择卡位方案: '自定义推广',
+                        出价目标: '增加收藏加购量',
+                        设置平均收藏加购成本: '开启',
+                        平均收藏加购成本: '1.88',
+                        目标成本: '1.88'
+                    }
+                });
+                pushCase({
+                    caseId: 'kw_smart_click',
+                    label: '关键词-智能点击量',
+                    strategyPatch: {
+                        bidMode: 'smart',
+                        marketingGoal: '自定义推广',
+                        bidTargetV2: 'click',
+                        keywordMode: 'recommend',
+                        recommendCount: '8',
+                        manualKeywords: '',
+                        setSingleCostV2: true,
+                        singleCostV2: '1.29'
+                    },
+                    sceneSettingsPatch: {
+                        营销目标: '自定义推广',
+                        选择卡位方案: '自定义推广',
+                        出价目标: '增加点击量',
+                        设置平均点击成本: '开启',
+                        平均点击成本: '1.29',
+                        目标成本: '1.29'
+                    }
                 });
                 pushCase({
                     caseId: 'kw_day_budget',
-                    label: '关键词-日均预算',
+                    label: '关键词-每日预算',
                     strategyPatch: {
                         budgetType: 'day_budget',
                         dayAverageBudget: '188'
                     },
                     sceneSettingsPatch: {
-                        预算类型: '日均预算'
+                        预算类型: '每日预算'
                     }
                 });
             } else {
                 pushCase({
                     caseId: 'scene_day_budget',
-                    label: '场景-日均预算',
+                    label: '场景-每日预算',
                     strategyPatch: {
                         budgetType: 'day_budget',
                         dayAverageBudget: '188'
                     },
                     sceneSettingsPatch: {
-                        预算类型: '日均预算'
+                        预算类型: '每日预算'
                     }
                 });
                 pushCase({
                     caseId: 'scene_day_average',
-                    label: '场景-每日预算',
+                    label: '场景-日均预算',
                     strategyPatch: {
                         budgetType: 'day_average',
                         dayAverageBudget: '166'
                     },
                     sceneSettingsPatch: {
-                        预算类型: '每日预算'
+                        预算类型: '日均预算'
                     }
                 });
             }
@@ -40702,8 +42978,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!item || !(item.materialId || item.itemId)) {
                 throw new Error(`场景「${targetScene}」未找到可用商品`);
             }
-            const strategy = buildParityStrategyTemplate(targetScene, caseInfo?.strategyPatch || {});
-            const draft = mergeDeep(wizardDefaultDraft(), wizardState.draft || {});
+            const rawStrategy = buildParityStrategyTemplate(targetScene, caseInfo?.strategyPatch || {});
+            const rawSceneSettingsPatch = mergeDeep({}, isPlainObject(caseInfo?.sceneSettingsPatch) ? caseInfo.sceneSettingsPatch : {});
+            const parityCostSeed = targetScene === '关键词推广'
+                ? ensureKeywordParityTargetCostForTest(rawStrategy, rawSceneSettingsPatch, options)
+                : {
+                    strategy: rawStrategy,
+                    sceneSettingsPatch: rawSceneSettingsPatch
+            };
+            const strategy = parityCostSeed.strategy;
+            const sceneSettingsPatch = parityCostSeed.sceneSettingsPatch;
+            const draft = KeywordPlanWizardStore.createWizardDraft(wizardState.draft || {});
             const planPrefix = String(strategy.planName || caseInfo?.planNamePrefix || '').trim() || `PARITY_${targetScene}_${nowStampSeconds()}`;
             draft.sceneName = targetScene;
             draft.planNamePrefix = planPrefix;
@@ -40721,7 +43006,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             draft.detailVisible = false;
             draft.sceneSettings = isPlainObject(draft.sceneSettings) ? draft.sceneSettings : {};
             draft.sceneSettingTouched = isPlainObject(draft.sceneSettingTouched) ? draft.sceneSettingTouched : {};
-            const sceneSettingsPatch = mergeDeep({}, isPlainObject(caseInfo?.sceneSettingsPatch) ? caseInfo.sceneSettingsPatch : {});
             if (strategy.marketingGoal) {
                 sceneSettingsPatch.营销目标 = sceneSettingsPatch.营销目标 || strategy.marketingGoal;
                 if (targetScene === '关键词推广') {
@@ -41040,6 +43324,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         };
 
         const CREATE_FAILURE_CONFLICT_RE = /(onebpsite-existed|horizontal-onebpsite-existed|daily-existed|crossaccount-existed|order-existed|diffbizcode-existed|存在在投计划|在投计划|持续推广计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i;
+        const CREATE_FAILURE_DUPLICATE_PLAN_NAME_RE = /(计划标题不合法|标题重复|不允许重复|计划名称重复|计划名重复|campaign\s*name.*(exist|duplicate|repeat)|title.*(duplicate|repeat))/i;
         const CREATE_FAILURE_ONE_CLICK_CONFLICT_CODE_RE = /(crossaccount-existed|onebpsite-existed|horizontal-onebpsite-existed|order-existed|daily-existed|diffbizcode-existed)/i;
         const CREATE_FAILURE_PERMISSION_RE = /(csrf|403|无权限|权限不足|风控|登录失效|bizlogin|forbidden)/i;
         const CREATE_FAILURE_MAPPING_RE = /(不支持的出价类型|INVALID_PARAMETER|参数.*(非法|错误|校验失败)|字段.*(缺失|错误)|unsupported)/i;
@@ -41049,11 +43334,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const text = String(errorText || '').trim();
             if (!text) return 'unknown';
             if (isWordPackageValidationError(text)) return 'keyword_word_package';
+            if (CREATE_FAILURE_DUPLICATE_PLAN_NAME_RE.test(text)) return 'duplicate_plan_name';
             if (CREATE_FAILURE_CONFLICT_RE.test(text)) return 'conflict';
             if (CREATE_FAILURE_THROTTLE_RE.test(text)) return 'throttle';
             if (CREATE_FAILURE_PERMISSION_RE.test(text)) return 'permission_or_risk';
             if (CREATE_FAILURE_MAPPING_RE.test(text)) return 'mapping';
             return 'unknown';
+        };
+
+        const buildDuplicatePlanRetryName = (seedName = '', sceneName = '') => {
+            const source = String(seedName || '').trim() || String(sceneName || '').trim() || '计划';
+            const timeSuffix = String(nowStampSeconds()).slice(-8);
+            const randSuffix = Math.random().toString(36).slice(2, 4);
+            const suffix = `${timeSuffix}${randSuffix}`;
+            const maxLength = 60;
+            const keepLength = Math.max(6, maxLength - suffix.length - 1);
+            const clipped = source.replace(/\s+/g, ' ').trim().slice(0, keepLength).replace(/[_-]+$/, '');
+            return `${clipped || '计划'}_${suffix}`;
         };
 
         const toPositiveIdText = (value) => {
@@ -43311,8 +45608,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     } catch { }
     TokenManager.hookXHR();
 
-    // NOTE: 将 Token 引用暴露到全局，供万能查数弹窗等模块跨作用域读取
+    // NOTE: page bridge 默认仅在调试模式下暴露，避免向页面脚本开放高权限 API
     const pageGlobal = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+    const PAGE_API_DEBUG_STORAGE_KEY = '__AM_WXT_DEBUG_PAGE_API__';
+    const shouldExposePageApiDebug = () => {
+        try {
+            return window.localStorage?.getItem?.(PAGE_API_DEBUG_STORAGE_KEY) === '1';
+        } catch { }
+        return false;
+    };
     const API_BRIDGE_REQ_EVENT = '__AM_WXT_PLAN_API_BRIDGE_REQ__';
     const API_BRIDGE_RES_EVENT = '__AM_WXT_PLAN_API_BRIDGE_RES__';
     const API_BRIDGE_MSG_CHANNEL = '__AM_WXT_PLAN_API_BRIDGE_MSG__';
@@ -43446,6 +45750,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     var CHANNEL = ${JSON.stringify(API_BRIDGE_MSG_CHANNEL)};
                     var METHODS = ${JSON.stringify(API_BRIDGE_METHODS)};
                     var BUILD = ${JSON.stringify(KeywordPlanApi.buildVersion || '')};
+                    var DEBUG_STORAGE_KEY = ${JSON.stringify(PAGE_API_DEBUG_STORAGE_KEY)};
+                    var shouldExposePageApi = function() {
+                        try {
+                            return window.localStorage && window.localStorage.getItem(DEBUG_STORAGE_KEY) === '1';
+                        } catch (_) {
+                            return false;
+                        }
+                    };
                     var METHOD_TIMEOUTS = {
                         runCreateRepairByItem: 30 * 60 * 1000
                     };
@@ -43532,8 +45844,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             return callApi(method, Array.prototype.slice.call(arguments));
                         };
                     });
-                    window.__AM_WXT_KEYWORD_API__ = bridgeApi;
-                    window.__AM_WXT_PLAN_API__ = bridgeApi;
+                    if (shouldExposePageApi()) {
+                        window.__AM_WXT_KEYWORD_API__ = bridgeApi;
+                        window.__AM_WXT_PLAN_API__ = bridgeApi;
+                    }
                     window.__AM_WXT_PLAN_BUILD__ = BUILD;
                 } catch (err) {
                     console.warn('[AM] plan api bridge client inject failed', err);
@@ -43543,15 +45857,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         (document.documentElement || document.head || document.body || document).appendChild(script);
         script.remove();
     };
-    window.__AM_TOKENS__ = State.tokens;
-    window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
-    window.__AM_WXT_PLAN_API__ = KeywordPlanApi;
+    if (typeof globalThis !== 'undefined') {
+        globalThis.__AM_TOKENS__ = State.tokens;
+        globalThis.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
+        globalThis.__AM_WXT_PLAN_API__ = KeywordPlanApi;
+        globalThis.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
+        globalThis.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
+    }
+    if (shouldExposePageApiDebug()) {
+        window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
+        window.__AM_WXT_PLAN_API__ = KeywordPlanApi;
+        installPageApiBridgeHost();
+        injectPageApiBridgeClient();
+    }
     window.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
     window.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
-    installPageApiBridgeHost();
-    injectPageApiBridgeClient();
     if (pageGlobal && pageGlobal !== window) {
-        pageGlobal.__AM_TOKENS__ = State.tokens;
         pageGlobal.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
         pageGlobal.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }

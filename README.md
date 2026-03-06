@@ -2,7 +2,7 @@
 
 [![Version](https://img.shields.io/github/v/release/huron09280/alimama-helper-pro?sort=semver&label=version)](https://github.com/huron09280/alimama-helper-pro/releases/latest)
 
-阿里妈妈投放平台增强工具，当前仓库以 **Tampermonkey 用户脚本** 为主，发布产物为 `.user.js` 与 `.meta.js`。
+阿里妈妈投放平台增强工具，当前仓库以 **Tampermonkey 用户脚本** 为主，发布产物为 `.user.js` 与 `.meta.js`。当前绝大多数业务逻辑集中在根目录 [`阿里妈妈多合一助手.js`](./阿里妈妈多合一助手.js) 中，包括主面板、算法护航桥接、万能查数流程、关键词/人群/全站场景逻辑、日志与配置迁移。
 
 ## 快速安装（推荐）
 
@@ -63,22 +63,20 @@
 ```text
 阿里妈妈多合一助手.js                     # 主 UserScript（主助手 + 算法护航）
 dev/dev-loader.user.js                    # 本地开发加载器（刷新即生效）
-dev/smoke-harness.html                    # 本地烟测页面
 tests/logger-api.test.mjs                 # 关键 API 回归测试
-tests/agent-cluster-runtime.test.mjs      # Agent 集群回归测试
-agent-cluster/README.md                   # Agent 集群使用说明
-agent-cluster/bin/cluster-cli.mjs         # Agent 集群 CLI 示例入口
+tests/*.test.mjs                          # 关键词 / 人群 / 场景 / UI / 安全回归测试
 scripts/review-team.sh                    # 团队自动化检查入口
 .github/workflows/ci.yml                  # CI 检查
 .github/workflows/release.yml             # Tag 发布流程
 .github/pull_request_template.md          # PR 团队检查清单
 .github/CODEOWNERS                        # 审查责任人自动分配
-CODE_REVIEW_TEAM.md                       # 代码检查团队职责说明
+other/CODE_REVIEW_TEAM.md                 # 代码检查团队职责说明
 README.md                               # 项目说明
-PROJECT_RULES.md                        # 工程规则
-SMOKE_TEST_CHECKLIST.md                 # 回归验收清单
-KNOWLEDGE.md                            # 架构与实现知识库
-RELEASE.md                              # 发布说明
+other/PROJECT_RULES.md                  # 工程规则
+other/SMOKE_TEST_CHECKLIST.md           # 回归验收清单
+other/KNOWLEDGE.md                      # 架构与实现知识库
+other/RELEASE.md                        # 发布说明
+docs/*.md                              # 设计/回归/实现记录
 ```
 
 ## 本地开发与联调
@@ -86,29 +84,10 @@ RELEASE.md                              # 发布说明
 ```bash
 node --check "阿里妈妈多合一助手.js"
 node --test tests/logger-api.test.mjs
-node --test tests/agent-cluster-runtime.test.mjs
-node agent-cluster/bin/cluster-cli.mjs demo
+node --test tests/*.test.mjs
 ```
 
-建议配合 Tampermonkey 加载脚本后，在阿里妈妈页面执行手工回归（见 `SMOKE_TEST_CHECKLIST.md`）。
-
-## Agent 集群系统（最小可运行）
-
-仓库新增本机可运行的 Agent 集群实现（无外部服务依赖），提供：
-
-- 编排层：`agent-cluster/orchestration/agent-cluster.mjs`
-- 执行层：`agent-cluster/execution/task-queue.mjs` + `agent-cluster/execution/worker.mjs`
-- 通知层：`agent-cluster/notification/local-notifier.mjs`
-- 上下文层：`agent-cluster/context/context-store.mjs`
-- 本地日志：`agent-cluster/shared/file-logger.mjs`
-
-快速体验：
-
-```bash
-node agent-cluster/bin/cluster-cli.mjs demo
-```
-
-更多参数与二次开发示例见：`agent-cluster/README.md`。
+建议配合 Tampermonkey 加载脚本后，在阿里妈妈真实页面执行手工回归（见 `other/SMOKE_TEST_CHECKLIST.md`）。
 
 ## 代码检查团队（Review Team）
 
@@ -118,8 +97,13 @@ node agent-cluster/bin/cluster-cli.mjs demo
 bash scripts/review-team.sh
 ```
 
-- 团队职责说明：`CODE_REVIEW_TEAM.md`
+- 团队职责说明：`other/CODE_REVIEW_TEAM.md`
 - PR 勾选清单：`.github/pull_request_template.md`
+
+说明：
+- `scripts/review-team.sh` 会校验 userscript 头部版本与 `README.md` 最近更新是否一致。
+- 若仓库存在 `CLAUDE.md`，脚本会额外校验其版本；缺失时会跳过，不再阻塞 CI/Release。
+- 该脚本会统一执行 `node --check "阿里妈妈多合一助手.js"` 与 `node --test tests/*.test.mjs`，作为发布门禁入口。
 
 ### 刷新即生效（Dev Loader）
 
@@ -139,11 +123,9 @@ python3 -m http.server 5173
 - Dev Loader 默认从 `http://127.0.0.1:5173/阿里妈妈多合一助手.js` 拉取脚本，并附加时间戳避免缓存。
 - 若端口不同，改 `dev/dev-loader.user.js` 里的 `DEV_ENTRY_URL` 即可。
 
-### 本地烟测页
+### 手工回归
 
-如需在无业务环境下做基础验证，可打开 `dev/smoke-harness.html`，用于检查：
-- 计划 ID 识别与快捷入口注入
-- 基础 UI 结构与脚本加载是否正常
+当前仓库未包含独立的本地烟测页，建议直接在阿里妈妈真实页面配合 Dev Loader 回归关键流程，并参考 `other/SMOKE_TEST_CHECKLIST.md` 执行人工验收。
 
 ## 发布流程（维护者）
 
@@ -151,7 +133,8 @@ python3 -m http.server 5173
 2. 本地检查：
 ```bash
 node --check "阿里妈妈多合一助手.js"
-node --test tests/logger-api.test.mjs
+node --test tests/*.test.mjs
+bash scripts/review-team.sh
 ```
 3. 推送代码并打 tag：
 ```bash
@@ -170,5 +153,7 @@ git push origin vX.YY
 ## 说明与排错
 
 - 若版本号显示不一致，优先检查脚本头 `@version`、脚本内更新日志、README 最近更新三处是否同步。
+- 若 `bash scripts/review-team.sh` 失败，先确认 `README.md` 最新版本与 userscript 头一致；若仓库存在 `CLAUDE.md`，再检查其版本记录。
 - 若 Tampermonkey 未提示更新，手动打开 `.meta.js` 地址触发更新检查。
 - 若页面未生效，先确认脚本匹配域名是否命中、是否与旧版脚本重复启用。
+- 若查找工程规则、回归清单、发布说明等文档，请从 `other/` 目录读取，而不是仓库根目录。

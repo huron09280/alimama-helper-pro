@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 SCRIPT_FILE="阿里妈妈多合一助手.js"
-TEST_FILE="tests/logger-api.test.mjs"
 README_FILE="README.md"
 CLAUDE_FILE="CLAUDE.md"
+TEST_FILES=()
 
 pass() {
   printf '[PASS] %s\n' "$1"
@@ -21,6 +21,14 @@ fail() {
 require_file() {
   local file="$1"
   [[ -f "$file" ]] || fail "Missing required file: $file"
+}
+
+collect_test_files() {
+  TEST_FILES=()
+  while IFS= read -r file; do
+    TEST_FILES+=("$file")
+  done < <(find tests -maxdepth 1 -type f -name '*.test.mjs' | sort)
+  [[ "${#TEST_FILES[@]}" -gt 0 ]] || fail 'No test files found under tests/'
 }
 
 require_cmd() {
@@ -75,9 +83,8 @@ assert_no_pattern() {
 main() {
   require_cmd node
   require_file "$SCRIPT_FILE"
-  require_file "$TEST_FILE"
   require_file "$README_FILE"
-  require_file "$CLAUDE_FILE"
+  collect_test_files
 
   printf '== Review Team Check ==\n'
 
@@ -93,24 +100,30 @@ main() {
   printf '\n[Test] Syntax and automated tests\n'
   node --check "$SCRIPT_FILE"
   pass 'Syntax check passed'
-  node --test "$TEST_FILE"
-  pass 'Logger API tests passed'
+  node --test "${TEST_FILES[@]}"
+  pass "Regression tests passed (${#TEST_FILES[@]})"
 
   printf '\n[Release] Version consistency checks\n'
   local script_version
   local readme_version
-  local claude_version
   script_version="$(extract_script_version)"
   readme_version="$(extract_readme_version)"
-  claude_version="$(extract_claude_version)"
 
   [[ -n "$script_version" ]] || fail 'Cannot parse @version from userscript header'
   [[ -n "$readme_version" ]] || fail 'Cannot parse latest version from README.md'
-  [[ -n "$claude_version" ]] || fail 'Cannot parse current version from CLAUDE.md'
 
   [[ "$script_version" == "$readme_version" ]] || fail "Version mismatch: script=$script_version README=$readme_version"
-  [[ "$script_version" == "$claude_version" ]] || fail "Version mismatch: script=$script_version CLAUDE=$claude_version"
-  pass "Version aligned: $script_version"
+  pass "Version aligned with README.md: $script_version"
+
+  if [[ -f "$CLAUDE_FILE" ]]; then
+    local claude_version
+    claude_version="$(extract_claude_version)"
+    [[ -n "$claude_version" ]] || fail 'Cannot parse current version from CLAUDE.md'
+    [[ "$script_version" == "$claude_version" ]] || fail "Version mismatch: script=$script_version CLAUDE=$claude_version"
+    pass "Version aligned with CLAUDE.md: $script_version"
+  else
+    pass 'Optional version file missing: CLAUDE.md (skipped)'
+  fi
 
   printf '\nAll automated review checks passed.\n'
 }

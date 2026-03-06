@@ -18,7 +18,7 @@
 - 页面：`https://one.alimama.com/index.html#!/main/index?bizCode=onebpSearch&promotionScene=promotion_scene_search_detent`
 - 页面内向导：`关键词推广批量建计划 API 向导`
 - 向导构建信息：`构建 2026-02-18 04:00`
-- 调试 API：`window.__AM_WXT_KEYWORD_API__`
+- 调试 API：默认关闭；如需启用，先执行 `localStorage.__AM_WXT_DEBUG_PAGE_API__ = '1'` 后刷新页面，再使用 `window.__AM_WXT_KEYWORD_API__`
 
 ## 3. 层级点击覆盖（最细层）
 
