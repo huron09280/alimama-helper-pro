@@ -23977,20 +23977,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     grid-template-columns: 1fr 1fr;
                     gap: 12px;
                 }
+                #am-wxt-keyword-item-split {
+                    height: auto;
+                    min-height: 0;
+                    align-items: stretch;
+                    overflow: hidden;
+                    overscroll-behavior: contain;
+                }
+                #am-wxt-keyword-item-split > .am-wxt-panel {
+                    min-height: 0;
+                }
                 #am-wxt-keyword-modal .am-wxt-split.compact {
                     grid-template-columns: 1fr;
+                    align-items: start;
                 }
                 #am-wxt-keyword-modal .am-wxt-split.compact .am-wxt-panel:nth-child(1) {
                     display: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-split.compact .am-wxt-panel:nth-child(2) {
                     display: flex;
+                    flex: 0 0 auto;
+                    height: auto;
                     min-height: 0;
+                    overflow: hidden;
                 }
                 #am-wxt-keyword-modal .am-wxt-split.compact #am-wxt-keyword-added-list {
-                    flex: 0 0 auto;
-                    height: 126px;
-                    max-height: 126px;
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    height: auto;
+                    max-height: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-panel {
                     border: 1px solid rgba(148,163,184,0.35);
@@ -24075,21 +24090,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 6px;
                     overflow: auto;
                     flex: 1;
+                    min-height: 0;
+                    overscroll-behavior: contain;
                 }
                 #am-wxt-keyword-candidate-list {
-                    flex: 0 0 auto;
-                    height: 222px;
-                    max-height: 222px;
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    height: auto;
+                    max-height: none;
                 }
                 #am-wxt-keyword-added-list {
                     flex: 0 0 auto;
-                    height: 126px;
-                    max-height: 126px;
-                    transition: height .2s ease, max-height .2s ease;
+                    min-height: 72px;
+                    height: 168px;
+                    max-height: 168px;
                 }
                 #am-wxt-keyword-item-split.candidate-list-expanded #am-wxt-keyword-added-list {
-                    height: 222px;
-                    max-height: 222px;
+                    flex: 1 1 auto;
+                    height: auto;
+                    max-height: none;
+                    min-height: 0;
                 }
                 #am-wxt-keyword-modal .am-wxt-toggle-candidate-list-btn.hidden {
                     display: none;
@@ -24192,17 +24212,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     align-items: center;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost input {
-                    width: 78px;
-                    min-width: 66px;
-                    padding: 2px 6px;
+                    width: 68px;
+                    min-width: 68px;
+                    padding: 2px 8px;
                     border-radius: 8px;
                     border: 1px solid rgba(148,163,184,0.45);
                     font-size: 12px;
-                    line-height: 1.4;
-                    padding-right: 24px;
+                    line-height: 18px;
+                    box-sizing: border-box;
+                    padding-right: 20px;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost input::placeholder {
+                    color: #9ca3af;
+                    opacity: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost input[type="number"] {
+                    appearance: textfield;
+                    -moz-appearance: textfield;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost input[type="number"]::-webkit-outer-spin-button,
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost input[type="number"]::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost-field:not(.with-unit) input {
-                    padding-right: 6px;
+                    min-width: 84px;
+                    padding-right: 8px;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost-unit {
                     position: absolute;
@@ -24779,6 +24814,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-dialog {
                     width: min(620px, 96vw);
+                    min-height: min(310px, calc(100vh - 80px));
                     max-height: 92vh;
                     background: #f7f8fc;
                     border: 1px solid rgba(69,84,229,0.2);
@@ -24805,13 +24841,42 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-body {
                     padding: 12px 14px 14px;
-                    overflow: auto;
+                    overflow: hidden;
                     min-height: 0;
                     flex: 1;
+                    display: flex;
+                    flex-direction: column;
                     overscroll-behavior: contain;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-host {
-                    min-height: 300px;
+                    min-height: 0;
+                    display: flex;
+                    flex: 1 1 auto;
+                    flex-direction: column;
+                    overflow: hidden;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-host > #am-wxt-keyword-item-split {
+                    flex: 1 1 auto;
+                    height: 100%;
+                    min-height: 0;
+                    overflow: hidden;
+                    overscroll-behavior: contain;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-split {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr);
+                    gap: 12px;
+                    align-items: stretch;
+                    min-height: 0;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-split > .am-wxt-panel {
+                    min-height: 0;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-split > .am-wxt-panel:nth-child(1) {
+                    display: flex;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-split > .am-wxt-panel:nth-child(2) {
+                    display: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-panel {
                     border: 1px solid rgba(148,163,184,0.35);
@@ -24819,6 +24884,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: #fff;
                     display: flex;
                     flex-direction: column;
+                    height: 100%;
                     min-height: 310px;
                     overflow: hidden;
                 }
@@ -24868,12 +24934,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 6px;
                     overflow: auto;
                     flex: 1;
+                    min-height: 0;
                     overscroll-behavior: contain;
                 }
                 #am-wxt-keyword-item-picker-mask #am-wxt-keyword-candidate-list {
-                    flex: 0 0 auto;
-                    height: 222px;
-                    max-height: 222px;
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    height: auto;
+                    max-height: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-item {
                     border: 1px solid rgba(148,163,184,0.34);
@@ -28141,6 +28209,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     );
                 }
                 refreshItemSplitButtons();
+                syncItemPickerAddedListViewport();
             };
             const setItemSplitExpanded = (expanded) => {
                 const nextExpanded = expanded === true;
@@ -28155,23 +28224,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 refreshItemSplitButtons();
             };
+            const createItemSplitShadow = (itemSplit) => {
+                if (!(itemSplit instanceof HTMLElement)) return null;
+                const shadow = itemSplit.cloneNode(true);
+                if (!(shadow instanceof HTMLElement)) return null;
+                shadow.setAttribute('data-am-wxt-item-picker-shadow', '1');
+                shadow.setAttribute('aria-hidden', 'true');
+                shadow.querySelectorAll('[id]').forEach((node) => {
+                    if (node instanceof HTMLElement) node.removeAttribute('id');
+                });
+                return shadow;
+            };
             const openKeywordItemPickerPopup = () => {
                 if (document.getElementById('am-wxt-keyword-item-picker-mask')) return;
-                const candidatePanel = wizardState?.els?.itemSplit?.querySelector('.am-wxt-panel-candidate');
-                if (!(candidatePanel instanceof HTMLElement)) {
-                    appendWizardLog('未找到候选商品面板，请刷新后重试', 'error');
+                const itemSplit = wizardState?.els?.itemSplit;
+                if (!(itemSplit instanceof HTMLElement)) {
+                    appendWizardLog('未找到商品选择区域，请刷新后重试', 'error');
                     return;
                 }
-                if (!(candidatePanel.parentNode instanceof Node)) {
-                    appendWizardLog('候选商品面板状态异常，请刷新后重试', 'error');
+                if (!(itemSplit.parentNode instanceof Node)) {
+                    appendWizardLog('商品选择区域状态异常，请刷新后重试', 'error');
                     return;
                 }
-                const splitPanelWidth = Math.round(candidatePanel.getBoundingClientRect().width || 0);
+                const splitPanelWidth = Math.round(itemSplit.getBoundingClientRect().width || 0);
+                const candidatePanel = itemSplit.querySelector('.am-wxt-panel-candidate');
+                const candidatePanelWidth = candidatePanel instanceof HTMLElement
+                    ? Math.round(candidatePanel.getBoundingClientRect().width || 0)
+                    : 0;
 
                 const initialAddedItemsSnapshot = wizardState.addedItems.map(item => deepClone(item));
                 const initialSplitExpanded = wizardState.itemSplitExpanded === true;
                 const initialCandidateListExpanded = wizardState.candidateListExpanded === true;
                 const placeholder = document.createComment('am-wxt-keyword-item-picker-placeholder');
+                const itemSplitShadow = createItemSplitShadow(itemSplit);
                 const mask = document.createElement('div');
                 mask.id = 'am-wxt-keyword-item-picker-mask';
                 mask.innerHTML = `
@@ -28194,7 +28279,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const dialog = mask.querySelector('.am-wxt-keyword-item-picker-dialog');
                 if (dialog instanceof HTMLElement && splitPanelWidth > 0) {
                     const viewportMaxWidth = Math.max(420, Math.round((window.innerWidth || 0) - 32));
-                    const desiredWidth = Math.max(540, splitPanelWidth + 28);
+                    const desiredWidthSeed = candidatePanelWidth > 0 ? candidatePanelWidth : splitPanelWidth;
+                    const desiredWidth = Math.max(460, Math.round(desiredWidthSeed * 0.5));
                     dialog.style.width = `${Math.min(viewportMaxWidth, desiredWidth)}px`;
                 }
 
@@ -28208,9 +28294,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (htmlEl) htmlEl.style.overflow = 'hidden';
                 if (bodyEl) bodyEl.style.overflow = 'hidden';
 
-                candidatePanel.parentNode.insertBefore(placeholder, candidatePanel);
-                panelHost.appendChild(candidatePanel);
+                itemSplit.parentNode.insertBefore(placeholder, itemSplit);
+                if (itemSplitShadow) {
+                    itemSplit.parentNode.insertBefore(itemSplitShadow, itemSplit);
+                }
+                panelHost.appendChild(itemSplit);
                 document.body.appendChild(mask);
+                setItemSplitExpanded(true);
+                commitItemSelectionUiState({
+                    renderAdded: true,
+                    renderCandidate: true
+                });
 
                 let closed = false;
                 const handleEsc = (event) => {
@@ -28218,10 +28312,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     event.preventDefault();
                     closePicker(false);
                 };
-                const restoreCandidatePanel = () => {
-                    if (!(candidatePanel instanceof HTMLElement) || !(placeholder instanceof Comment)) return;
+                const restoreItemSplit = () => {
+                    if (!(itemSplit instanceof HTMLElement) || !(placeholder instanceof Comment)) return;
                     if (placeholder.parentNode) {
-                        placeholder.parentNode.insertBefore(candidatePanel, placeholder);
+                        placeholder.parentNode.insertBefore(itemSplit, placeholder);
+                        if (itemSplitShadow?.parentNode) {
+                            itemSplitShadow.parentNode.removeChild(itemSplitShadow);
+                        }
                         placeholder.parentNode.removeChild(placeholder);
                     }
                 };
@@ -28232,7 +28329,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!confirmed) {
                         wizardState.addedItems = initialAddedItemsSnapshot.map(item => deepClone(item));
                     }
-                    restoreCandidatePanel();
+                    restoreItemSplit();
                     setItemSplitExpanded(initialSplitExpanded);
                     setCandidateListExpanded(initialCandidateListExpanded);
                     commitItemSelectionUiState({
@@ -39409,11 +39506,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             };
 
+            const syncItemPickerAddedListViewport = () => {
+                const addedListEl = wizardState?.els?.addedList;
+                if (!(addedListEl instanceof HTMLElement)) return;
+                const clearCompactViewport = () => {
+                    addedListEl.style.removeProperty('height');
+                    addedListEl.style.removeProperty('max-height');
+                    addedListEl.style.removeProperty('scrollbar-gutter');
+                    addedListEl.style.removeProperty('visibility');
+                };
+                const keywordModal = addedListEl.closest('#am-wxt-keyword-modal');
+                if (!(keywordModal instanceof HTMLElement)) {
+                    addedListEl.style.removeProperty('visibility');
+                    return;
+                }
+                if (wizardState.candidateListExpanded === true || wizardState.addedItems.length <= 0) {
+                    clearCompactViewport();
+                    return;
+                }
+                const compactHeight = 168;
+                addedListEl.style.height = `${compactHeight}px`;
+                addedListEl.style.maxHeight = `${compactHeight}px`;
+                addedListEl.style.scrollbarGutter = 'stable';
+                addedListEl.scrollTop = 0;
+                addedListEl.style.visibility = 'visible';
+                if (wizardState?.els?.itemSplit instanceof HTMLElement) {
+                    wizardState.els.itemSplit.scrollTop = 0;
+                }
+            };
+
             const renderAddedList = () => {
                 wizardState.els.addedCount.textContent = String(wizardState.addedItems.length);
                 wizardState.els.addedList.innerHTML = '';
                 if (!wizardState.addedItems.length) {
                     wizardState.els.addedList.innerHTML = '<div class="am-wxt-item"><div class="name">请点击上方“添加商品”按钮</div></div>';
+                    syncItemPickerAddedListViewport();
                     return;
                 }
                 wizardState.addedItems.forEach((item, idx) => {
@@ -39456,6 +39583,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     };
                     wizardState.els.addedList.appendChild(row);
                 });
+                syncItemPickerAddedListViewport();
             };
             const filterCandidateListByQuery = (list = [], query = '') => {
                 const normalizedQuery = String(query || '').trim().toLowerCase();
