@@ -116,7 +116,7 @@ test('矩阵物化会先绑定 plan 字段再命名，并透传商品池', () =>
   );
 });
 
-test('矩阵场景门控与绑定 helper 暴露到 CoreUtils', () => {
+test('矩阵场景切换与绑定 helper 暴露到 CoreUtils', () => {
   assert.match(
     source,
     /const getMatrixSceneName = \(sceneName = ''\) => \{[\s\S]*?SCENE_NAME_LIST\.includes\(normalizedSceneName\) \? normalizedSceneName : '';/,
@@ -129,8 +129,13 @@ test('矩阵场景门控与绑定 helper 暴露到 CoreUtils', () => {
   );
   assert.match(
     source,
-    /请先去“编辑页”选择场景，再回到矩阵页添加维度。/,
-    '矩阵页缺少场景门控文案'
+    /id="am-wxt-keyword-matrix-config"[\s\S]*?<div class="am-wxt-setting-label">场景选择<\/div>[\s\S]*?data-bind-select="am-wxt-keyword-scene-select"/,
+    '矩阵页缺少顶部场景切换入口'
+  );
+  assert.match(
+    source,
+    /const lineList = Array\.from\(wizardState\?\.\s*els\?\.\s*overlay\?\.querySelectorAll\?\.\(`\[data-bind-select="\$\{selectEl\.id\}"\]`\) \|\| \[\]\)[\s\S]*?lineList\.forEach\(\(line\) => \{/,
+    '矩阵页未复用场景切换代理渲染链路'
   );
   assert.match(
     source,

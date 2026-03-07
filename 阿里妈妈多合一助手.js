@@ -29580,6 +29580,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         </div>
                                         <div class="am-wxt-config-grid am-wxt-matrix-settings-grid">
                                             <div class="am-wxt-setting-row" data-matrix-setting-span="2">
+                                                <div class="am-wxt-setting-label">场景选择</div>
+                                                <div class="am-wxt-setting-control">
+                                                    <div class="am-wxt-option-line segmented" data-bind-select="am-wxt-keyword-scene-select"></div>
+                                                </div>
+                                            </div>
+                                            <div class="am-wxt-setting-row" data-matrix-setting-span="2">
                                                 <div class="am-wxt-setting-label">启用矩阵</div>
                                                 <div class="am-wxt-setting-control">
                                                     <label class="am-wxt-inline-check">
@@ -30213,29 +30219,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const renderSelectOptionLine = (selectEl) => {
                 if (!(selectEl instanceof HTMLSelectElement)) return;
-                const line = wizardState?.els?.detailConfig?.querySelector(`[data-bind-select="${selectEl.id}"]`);
-                if (!(line instanceof HTMLElement)) return;
+                const lineList = Array.from(wizardState?.els?.overlay?.querySelectorAll?.(`[data-bind-select="${selectEl.id}"]`) || [])
+                    .filter(line => line instanceof HTMLElement);
+                if (!lineList.length) return;
                 const currentValue = String(selectEl.value || '');
                 const options = Array.from(selectEl.options || []);
-                line.innerHTML = '';
-                options.forEach((option) => {
-                    const value = String(option?.value || '');
-                    const text = String(option?.textContent || option?.label || value);
-                    const chip = document.createElement('button');
-                    chip.type = 'button';
-                    chip.className = `am-wxt-option-chip${value === currentValue ? ' active' : ''}`;
-                    chip.textContent = text;
-                    chip.disabled = !!selectEl.disabled;
-                    chip.onclick = () => {
-                        if (selectEl.disabled) return;
-                        if (selectEl.value !== value) {
-                            selectEl.value = value;
-                            selectEl.dispatchEvent(new Event('input', { bubbles: true }));
-                        }
-                        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-                        renderSelectOptionLine(selectEl);
-                    };
-                    line.appendChild(chip);
+                lineList.forEach((line) => {
+                    line.innerHTML = '';
+                    options.forEach((option) => {
+                        const value = String(option?.value || '');
+                        const text = String(option?.textContent || option?.label || value);
+                        const chip = document.createElement('button');
+                        chip.type = 'button';
+                        chip.className = `am-wxt-option-chip${value === currentValue ? ' active' : ''}`;
+                        chip.textContent = text;
+                        chip.disabled = !!selectEl.disabled;
+                        chip.onclick = () => {
+                            if (selectEl.disabled) return;
+                            if (selectEl.value !== value) {
+                                selectEl.value = value;
+                                selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                            renderSelectOptionLine(selectEl);
+                        };
+                        line.appendChild(chip);
+                    });
                 });
             };
 
@@ -42284,7 +42293,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 if (wizardState.els.matrixIntro instanceof HTMLElement) {
                     wizardState.els.matrixIntro.textContent = !canEditMatrixDimensions
-                        ? '先到编辑页选择场景，矩阵维度会按该场景同步展示。'
+                        ? '先在上方切换场景，矩阵维度会按该场景同步展示。'
                         : currentSceneName === '关键词推广'
                         ? '推荐先配预算、出价方式、出价目标、计划名前缀、商品，再补充匹配方式等场景维度。'
                         : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。';
@@ -42333,7 +42342,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 if (wizardState.els.matrixActionNote instanceof HTMLElement) {
                     if (!canEditMatrixDimensions) {
-                        wizardState.els.matrixActionNote.textContent = '请先去“编辑页”选择场景，再回到矩阵页添加维度。';
+                        wizardState.els.matrixActionNote.textContent = '请先在上方切换场景，再添加矩阵维度。';
                     } else {
                         const recommendedKeys = getMatrixRecommendedPresetKeys(currentSceneName);
                         const configuredKeys = new Set(dimensionList.map(item => item.key));
@@ -42354,8 +42363,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         wizardState.els.matrixDimensionList.innerHTML = `
                             <div class="am-wxt-matrix-empty-state">
                                 <div class="am-wxt-matrix-empty-title">先选场景</div>
-                                <div class="am-wxt-matrix-empty-desc">请先去“编辑页”选择场景，再回到矩阵页添加维度。</div>
-                                <div class="am-wxt-matrix-empty-hint">矩阵维度会同步编辑计划场景，只显示该场景可用的预算、出价、前缀、商品等维度。</div>
+                                <div class="am-wxt-matrix-empty-desc">请先在上方切换场景，再添加维度。</div>
+                                <div class="am-wxt-matrix-empty-hint">矩阵维度会同步当前场景，只显示该场景可用的预算、出价、前缀、商品等维度。</div>
                             </div>
                         `;
                     } else {
