@@ -24656,6 +24656,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions select {
                     width: 100%;
                     min-width: 0;
+                    min-height: 38px;
+                    padding: 8px 36px 8px 12px;
+                    border: 1px solid rgba(148,163,184,0.3);
+                    border-radius: 10px;
+                    appearance: none;
+                    -webkit-appearance: none;
+                    background-color: #fff;
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2394A3B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                    background-repeat: no-repeat;
+                    background-position: right 12px center;
+                    background-size: 12px 8px;
+                    color: #334155;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    cursor: pointer;
+                    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions select:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions select:focus {
+                    border-color: rgba(79,104,255,0.34);
+                    box-shadow: 0 0 0 3px rgba(79,104,255,0.08);
+                    background: rgba(248,250,255,0.98);
+                    outline: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-chip {
                     display: inline-flex;
@@ -24741,13 +24764,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow {
                     flex: 0 0 auto;
-                    color: #94a3b8;
-                    font-size: 11px;
-                    transition: transform 0.2s ease, color 0.2s ease;
-                }
-                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker.open .am-wxt-matrix-dimension-picker-arrow {
-                    color: #3354d1;
-                    transform: rotate(180deg);
+                    width: 12px;
+                    height: 8px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: transparent;
+                    background: center / 12px 8px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2394A3B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                    transition: opacity 0.2s ease;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel {
                     display: none;
