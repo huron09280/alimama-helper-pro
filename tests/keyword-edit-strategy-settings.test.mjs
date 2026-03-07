@@ -36,10 +36,25 @@ test('编辑计划切换策略时会覆盖 sceneSettingValues/sceneSettingTouche
   );
 });
 
-test('点击编辑页 tab 会自动进入当前策略编辑态，避免页面空白', () => {
+test('顶部编辑页与编辑计划共用 showStrategyDetail 链路，避免字段联动分叉', () => {
   assert.match(
     source,
-    /const setWorkbenchPage = \(page = 'home'\) => \{[\s\S]*?if \(nextPage === 'editor'\) \{[\s\S]*?const editingStrategy = getStrategyById\(wizardState\.editingStrategyId\) \|\| wizardState\.strategyList\[0\] \|\| null;[\s\S]*?applyStrategyToDetailForm\(editingStrategy\);[\s\S]*?wizardState\.detailVisible = true;[\s\S]*?wizardState\.els\.detailConfig\.classList\.toggle\('collapsed', !\(nextPage === 'editor' && wizardState\.detailVisible\)\);/,
-    '编辑页 tab 未自动拉起当前策略编辑态，仍可能出现空白页'
+    /const showStrategyDetail = \(strategy = null, options = \{\}\) => \{[\s\S]*?applyStrategyToDetailForm\(targetStrategy\);[\s\S]*?setDetailVisible\(true\);[\s\S]*?wizardState\.setWorkbenchPage\('editor'\);[\s\S]*?commitStrategyUiState\(\{ refreshPreview: false \}\);[\s\S]*?maybeAutoLoadManualKeywords\(targetStrategy\);[\s\S]*?return targetStrategy;[\s\S]*?\};/,
+    '缺少统一的 showStrategyDetail 打开链路，顶部编辑页与编辑计划仍可能分叉'
+  );
+  assert.match(
+    source,
+    /const openStrategyDetail = \(strategyId\) => \{[\s\S]*?showStrategyDetail\(strategy\);[\s\S]*?\};/,
+    '编辑计划入口没有复用 showStrategyDetail，字段联动仍可能不一致'
+  );
+  assert.match(
+    source,
+    /btn\.addEventListener\('click', \(\) => \{[\s\S]*?if \(nextPage === 'editor'\) \{[\s\S]*?showStrategyDetail\(activeStrategy\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?setWorkbenchPage\(nextPage\);/,
+    '顶部编辑页 tab 没有复用 showStrategyDetail，可能继续出现空白或全量字段'
+  );
+  assert.doesNotMatch(
+    source,
+    /const setWorkbenchPage = \(page = 'home'\) => \{[\s\S]*?if \(nextPage === 'editor'\) \{[\s\S]*?const editingStrategy = getStrategyById\(wizardState\.editingStrategyId\) \|\| wizardState\.strategyList\[0\] \|\| null;[\s\S]*?applyStrategyToDetailForm\(editingStrategy\);[\s\S]*?wizardState\.detailVisible = true;/,
+    'setWorkbenchPage 里仍保留 editor 特判，顶部编辑页与编辑计划仍是两套链路'
   );
 });

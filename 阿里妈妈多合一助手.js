@@ -29815,14 +29815,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const setWorkbenchPage = (page = 'home') => {
                 const nextPage = WORKBENCH_PAGE_SET.has(String(page || '').trim()) ? String(page || '').trim() : 'home';
                 wizardState.workbenchPage = nextPage;
-                if (nextPage === 'editor') {
-                    const editingStrategy = getStrategyById(wizardState.editingStrategyId) || wizardState.strategyList[0] || null;
-                    if (editingStrategy) {
-                        wizardState.editingStrategyId = editingStrategy.id;
-                        applyStrategyToDetailForm(editingStrategy);
-                    }
-                    wizardState.detailVisible = true;
-                }
                 const toggleDisplay = (el, visible) => {
                     if (!(el instanceof HTMLElement)) return;
                     el.style.display = visible ? '' : 'none';
@@ -40686,12 +40678,36 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             };
 
+            const showStrategyDetail = (strategy = null, options = {}) => {
+                const targetStrategy = strategy || getStrategyById(wizardState.editingStrategyId) || wizardState.strategyList[0] || null;
+                if (!targetStrategy) return null;
+                const previous = getStrategyById(wizardState.editingStrategyId);
+                if (previous && previous.id !== targetStrategy.id && wizardState.detailVisible) {
+                    pullDetailFormToStrategy(previous);
+                }
+                wizardState.editingStrategyId = targetStrategy.id;
+                applyStrategyToDetailForm(targetStrategy);
+                setDetailVisible(true);
+                if (options.switchWorkbench !== false && typeof wizardState.setWorkbenchPage === 'function') {
+                    wizardState.setWorkbenchPage('editor');
+                }
+                if (options.commit !== false) {
+                    commitStrategyUiState({ refreshPreview: false });
+                }
+                if (options.autoLoad !== false) {
+                    maybeAutoLoadManualKeywords(targetStrategy);
+                }
+                return targetStrategy;
+            };
+
             const openStrategyDetail = (strategyId) => {
                 const strategy = getStrategyById(strategyId);
                 if (!strategy) return;
-                const previous = getStrategyById(wizardState.editingStrategyId);
-                if (previous && wizardState.detailVisible) pullDetailFormToStrategy(previous);
-                if (wizardState.editingStrategyId === strategy.id && wizardState.detailVisible) {
+                if (
+                    wizardState.editingStrategyId === strategy.id
+                    && wizardState.detailVisible
+                    && wizardState.workbenchPage === 'editor'
+                ) {
                     setDetailVisible(false);
                     if (typeof wizardState.setWorkbenchPage === 'function') {
                         wizardState.setWorkbenchPage('home');
@@ -40699,14 +40715,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     commitStrategyUiState({ refreshPreview: false });
                     return;
                 }
-                wizardState.editingStrategyId = strategy.id;
-                applyStrategyToDetailForm(strategy);
-                setDetailVisible(true);
-                if (typeof wizardState.setWorkbenchPage === 'function') {
-                    wizardState.setWorkbenchPage('editor');
-                }
-                commitStrategyUiState({ refreshPreview: false });
-                maybeAutoLoadManualKeywords(strategy);
+                showStrategyDetail(strategy);
             };
             const addNewStrategy = () => {
                 const editing = getStrategyById(wizardState.editingStrategyId);
@@ -43214,6 +43223,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (!(btn instanceof HTMLButtonElement)) return;
                 btn.addEventListener('click', () => {
                     const nextPage = btn.dataset.workbenchPage || 'home';
+                    if (nextPage === 'editor') {
+                        const activeStrategy = getStrategyById(wizardState.editingStrategyId) || wizardState.strategyList[0] || null;
+                        if (activeStrategy) {
+                            showStrategyDetail(activeStrategy);
+                            return;
+                        }
+                    }
                     setWorkbenchPage(nextPage);
                     commitPreviewUiState();
                 });
