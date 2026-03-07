@@ -24653,33 +24653,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     justify-content: flex-end;
                     align-items: center;
                 }
-                #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions select {
-                    width: 100%;
-                    min-width: 0;
-                    min-height: 38px;
-                    padding: 8px 36px 8px 12px;
-                    border: 1px solid rgba(148,163,184,0.3);
-                    border-radius: 10px;
-                    appearance: none;
-                    -webkit-appearance: none;
-                    background-color: #fff;
-                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2394A3B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-                    background-repeat: no-repeat;
-                    background-position: right 12px center;
-                    background-size: 12px 8px;
-                    color: #334155;
-                    font-size: 12px;
-                    line-height: 1.4;
-                    cursor: pointer;
-                    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-                }
-                #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions select:hover,
-                #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions select:focus {
-                    border-color: rgba(79,104,255,0.34);
-                    box-shadow: 0 0 0 3px rgba(79,104,255,0.08);
-                    background: rgba(248,250,255,0.98);
-                    outline: none;
-                }
                 #am-wxt-keyword-modal .am-wxt-matrix-chip {
                     display: inline-flex;
                     align-items: center;
@@ -24803,7 +24776,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:hover {
                     background: rgba(79,104,255,0.05);
                 }
-                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option input[type="checkbox"] {
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option input[type="checkbox"],
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option input[type="radio"] {
                     flex: 0 0 auto;
                     margin-top: 2px;
                 }
@@ -28077,6 +28051,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             })}`;
         };
 
+        const buildMatrixDimensionKeyPickerSummaryText = (key = '', sceneName = '') => {
+            const preset = getMatrixDimensionPresetByKey(key, sceneName);
+            return String(preset?.label || key || '请选择维度').trim() || '请选择维度';
+        };
+
         const syncMatrixDimensionMetaStateFromRow = (row = null, sceneName = '') => {
             if (!(row instanceof HTMLElement)) return [];
             return readMatrixDimensionValuesFromRow(row, sceneName);
@@ -28103,11 +28082,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return selectedValues;
         };
 
+        const syncMatrixDimensionKeyPickerStateFromRow = (row = null, sceneName = '') => {
+            if (!(row instanceof HTMLElement)) return '';
+            const hiddenSelect = row.querySelector('[data-matrix-dimension-key="1"]');
+            if (!(hiddenSelect instanceof HTMLSelectElement)) return '';
+            const checkedInput = row.querySelector('[data-matrix-dimension-key-option="1"]:checked');
+            const nextKey = String(
+                (checkedInput instanceof HTMLInputElement ? checkedInput.value : hiddenSelect.value) || ''
+            ).trim();
+            if (nextKey) {
+                hiddenSelect.value = nextKey;
+            }
+            const pickerLabel = row.querySelector('[data-matrix-dimension-key-picker-label="1"]');
+            if (pickerLabel instanceof HTMLElement) {
+                pickerLabel.textContent = buildMatrixDimensionKeyPickerSummaryText(
+                    hiddenSelect.value || nextKey,
+                    sceneName
+                );
+            }
+            return String(hiddenSelect.value || nextKey || '').trim();
+        };
+
         const setMatrixDimensionPickerOpen = (picker = null, open = false) => {
             if (!(picker instanceof HTMLElement)) return;
             const nextOpen = open === true;
             picker.classList.toggle('open', nextOpen);
-            const toggleBtn = picker.querySelector('[data-matrix-dimension-picker-toggle="1"]');
+            const toggleBtn = picker.querySelector('[data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-key-picker-toggle="1"]');
             if (toggleBtn instanceof HTMLButtonElement) {
                 toggleBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
             }
@@ -41463,6 +41463,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const optionHtml = presetCatalog.map(item => `
                         <option value="${Utils.escapeHtml(item.key)}" ${item.key === dimension.key ? 'selected' : ''}>${Utils.escapeHtml(item.label)}</option>
                     `).join('');
+                    const keyPickerSummaryText = buildMatrixDimensionKeyPickerSummaryText(dimension.key, currentSceneName);
+                    const keyPickerOptionHtml = presetCatalog.map(item => `
+                        <label class="am-wxt-matrix-dimension-picker-option" title="${Utils.escapeHtml(item.hint || item.label)}">
+                            <input
+                                type="radio"
+                                name="am-wxt-matrix-dimension-key-${index}"
+                                data-matrix-dimension-key-option="1"
+                                value="${Utils.escapeHtml(item.key)}"
+                                ${item.key === dimension.key ? 'checked' : ''}
+                            />
+                            <span class="am-wxt-matrix-dimension-picker-option-text">${Utils.escapeHtml(item.label)}</span>
+                        </label>
+                    `).join('');
                     const normalizedValues = normalizeMatrixDimensionValues(dimension.values || []);
                     const valuesText = serializeMatrixDimensionValues(normalizedValues);
                     const valueOptions = getMatrixDimensionValueOptions(preset, {
@@ -41532,7 +41545,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     <span class="am-wxt-matrix-dimension-index">维度 ${index + 1}</span>
                                 </div>
                                 <div class="am-wxt-matrix-dimension-top-actions">
-                                    <select data-matrix-dimension-key="1" title="${Utils.escapeHtml(rowHintText)}">${optionHtml}</select>
+                                    <div class="am-wxt-matrix-dimension-picker am-wxt-matrix-dimension-key-picker" data-matrix-dimension-picker="1">
+                                        <button
+                                            type="button"
+                                            class="am-wxt-matrix-dimension-picker-trigger"
+                                            data-matrix-dimension-key-picker-toggle="1"
+                                            aria-expanded="false"
+                                            title="${Utils.escapeHtml(rowHintText)}"
+                                        >
+                                            <span class="am-wxt-matrix-dimension-picker-label" data-matrix-dimension-key-picker-label="1">${Utils.escapeHtml(keyPickerSummaryText)}</span>
+                                            <span class="am-wxt-matrix-dimension-picker-arrow">▾</span>
+                                        </button>
+                                        <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
+                                            ${keyPickerOptionHtml}
+                                        </div>
+                                        <select class="am-wxt-hidden-control" data-matrix-dimension-key="1" title="${Utils.escapeHtml(rowHintText)}">${optionHtml}</select>
+                                    </div>
                                     <button
                                         type="button"
                                         class="am-wxt-matrix-dimension-remove-icon"
@@ -42466,7 +42494,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
                 wizardState.els.matrixDimensionList.addEventListener('click', (event) => {
                     const toggleBtn = event.target instanceof Element
-                        ? event.target.closest('[data-matrix-dimension-picker-toggle="1"]')
+                        ? event.target.closest('[data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-key-picker-toggle="1"]')
                         : null;
                     if (toggleBtn instanceof HTMLButtonElement) {
                         event.preventDefault();
@@ -42493,6 +42521,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         : null;
                     if (!(row instanceof HTMLElement)) return;
                     const currentSceneName = wizardState?.draft?.sceneName || '关键词推广';
+                    if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-key-option="1"]')) {
+                        return;
+                    }
                     if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-value-option="1"]')) {
                         syncMatrixDimensionPickerStateFromRow(row);
                     } else {
@@ -42507,6 +42538,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         : null;
                     if (!(row instanceof HTMLElement)) return;
                     const currentSceneName = wizardState?.draft?.sceneName || '关键词推广';
+                    if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-key-option="1"]')) {
+                        const nextKey = syncMatrixDimensionKeyPickerStateFromRow(row, currentSceneName);
+                        const hiddenLabelInput = row.querySelector('[data-matrix-dimension-label="1"]');
+                        if (hiddenLabelInput instanceof HTMLInputElement) {
+                            const nextPreset = getMatrixDimensionPresetByKey(nextKey, currentSceneName);
+                            hiddenLabelInput.value = String(nextPreset?.label || nextKey || '').trim();
+                        }
+                        syncMatrixConfigFromUI();
+                        KeywordPlanWizardStore.persistDraft(wizardState.draft);
+                        closeMatrixDimensionPickers(wizardState.els.matrixDimensionList);
+                        renderWorkbenchMatrixSummary();
+                        refreshWizardPreview();
+                        return;
+                    }
                     if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-value-option="1"]')) {
                         syncMatrixDimensionPickerStateFromRow(row);
                     }

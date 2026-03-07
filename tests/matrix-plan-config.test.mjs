@@ -169,9 +169,17 @@ test('矩阵页使用双栏工作台布局并扩展维度编辑区', () => {
 test('矩阵维度卡片将维度类型下拉收进首行，避免重复展示', () => {
   assert.match(
     source,
-    /class="am-wxt-matrix-dimension-top-main">[\s\S]*?class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline"[\s\S]*?data-matrix-dimension-enabled="1"[\s\S]*?class="am-wxt-matrix-dimension-index">维度 \$\{index \+ 1\}<\/span>[\s\S]*?class="am-wxt-matrix-dimension-top-actions">[\s\S]*?<select data-matrix-dimension-key="1"[\s\S]*?class="am-wxt-matrix-dimension-remove-icon"[\s\S]*?data-matrix-dimension-remove="1"[\s\S]*?&times;/,
-    '维度序号、启用控件或右上角删除图标未收进卡片首行'
+    /class="am-wxt-matrix-dimension-top-main">[\s\S]*?class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline"[\s\S]*?data-matrix-dimension-enabled="1"[\s\S]*?class="am-wxt-matrix-dimension-index">维度 \$\{index \+ 1\}<\/span>/,
+    '维度序号与勾选框未收进卡片首行'
   );
+  assert.match(
+    source,
+    /class="am-wxt-matrix-dimension-top-actions">[\s\S]*?class="am-wxt-matrix-dimension-picker am-wxt-matrix-dimension-key-picker"[\s\S]*?data-matrix-dimension-key-picker-toggle="1"[\s\S]*?data-matrix-dimension-key-picker-label="1"[\s\S]*?class="am-wxt-matrix-dimension-remove-icon"[\s\S]*?data-matrix-dimension-remove="1"[\s\S]*?&times;/,
+    '维度类型单选或右上角删除图标未收进卡片首行'
+  );
+  assert.match(source, /data-matrix-dimension-key-picker-toggle="1"/, '维度类型单选未改成自定义下拉触发器');
+  assert.match(source, /data-matrix-dimension-key-option="1"/, '维度类型单选展开项缺少 radio 选项');
+  assert.match(source, /<select[\s\S]*?class="am-wxt-hidden-control"[\s\S]*?data-matrix-dimension-key="1"/, '维度类型单选未保留隐藏 select 同步链路');
   assert.doesNotMatch(
     source,
     /class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline">[\s\S]*?<span>启用<\/span>/,
@@ -201,6 +209,24 @@ test('矩阵维度卡片将维度类型下拉收进首行，避免重复展示',
     source,
     /data-matrix-dimension-meta-summary="1"/,
     '卡片顶部仍在渲染重复的摘要行'
+  );
+});
+
+test('维度类型单选展开面板复用矩阵下拉面板样式与同步链路', () => {
+  assert.match(
+    source,
+    /class="am-wxt-matrix-dimension-picker am-wxt-matrix-dimension-key-picker"[\s\S]*?class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">[\s\S]*?data-matrix-dimension-key-option="1"/,
+    '维度类型单选未复用与多选一致的自定义下拉面板'
+  );
+  assert.match(
+    source,
+    /const syncMatrixDimensionKeyPickerStateFromRow = \(row = null,\s*sceneName = ''\) => \{[\s\S]*?querySelector\('\[data-matrix-dimension-key="1"\]'\)[\s\S]*?querySelector\('\[data-matrix-dimension-key-picker-label="1"\]'\)[\s\S]*?buildMatrixDimensionKeyPickerSummaryText/,
+    '维度类型单选缺少隐藏 select 与可见摘要的同步函数'
+  );
+  assert.match(
+    source,
+    /event\.target instanceof HTMLInputElement && event\.target\.matches\('\[data-matrix-dimension-key-option="1"\]'\)[\s\S]*?syncMatrixDimensionKeyPickerStateFromRow\(row,\s*currentSceneName\);[\s\S]*?syncMatrixConfigFromUI\(\);[\s\S]*?renderWorkbenchMatrixSummary\(\);[\s\S]*?refreshWizardPreview\(\);/,
+    '维度类型单选切换后未走统一的草稿与预览刷新链路'
   );
 });
 
