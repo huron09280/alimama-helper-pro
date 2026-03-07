@@ -28057,6 +28057,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 valueOptions: ['获取成交量', '相似品跟投', '抢占搜索卡位', '提升市场渗透', '增加收藏加购量', '增加点击量', '稳定投产比']
             },
             {
+                key: 'bid_target_cost_package',
+                label: '智能出价目标包',
+                sceneNames: ['关键词推广'],
+                hint: '仅用于关键词推广-自定义推广-智能出价；每行填写“出价目标|目标成本/ROI值”，按整组组合。',
+                placeholder: '例如 获取成交量|35\n增加收藏加购量|1.88\n增加点击量|1.29\n稳定投产比|5',
+                suggestedValues: ['获取成交量|35', '增加收藏加购量|1.88', '增加点击量|1.29', '稳定投产比|5']
+            },
+            {
                 key: 'plan_prefix',
                 label: '计划名前缀',
                 hint: '在命名模板计算前先拼接前缀，适合区分素材/预算分组。',
@@ -28729,17 +28737,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const getMatrixRecommendedPresetKeys = (sceneName = '') => {
             const catalog = getMatrixDimensionPresetCatalog(sceneName);
             const availableKeys = new Set(catalog.map(item => item.key));
+            const preferredPresetKeys = sceneName === '关键词推广'
+                ? ['budget', 'bid_mode', 'bid_target_cost_package', 'plan_prefix', 'material_id', 'bid_target', 'day_budget', 'day_average_budget']
+                : ['budget', 'bid_mode', 'bid_target', 'plan_prefix', 'material_id', 'day_budget', 'day_average_budget'];
             return uniqueBy(
-                [
-                    'budget',
-                    'bid_mode',
-                    'bid_target',
-                    'plan_prefix',
-                    'material_id',
-                    'day_budget',
-                    'day_average_budget',
-                    ...catalog.map(item => item.key)
-                ].filter(key => availableKeys.has(key)),
+                preferredPresetKeys
+                    .concat(catalog.map(item => item.key))
+                    .filter(key => availableKeys.has(key)),
                 item => item
             ).slice(0, Math.min(5, catalog.length));
         };
@@ -28802,6 +28806,101 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             );
         };
 
+        const MATRIX_BID_TARGET_OPTIONS = [
+            { value: 'conv', label: '获取成交量' },
+            { value: 'ad_strategy_buy', label: '增加总成交金额' },
+            { value: 'ad_strategy_retained_buy', label: '增加净成交金额' },
+            { value: 'similar_item', label: '相似品跟投' },
+            { value: 'search_rank', label: '抢占搜索卡位' },
+            { value: 'market_penetration', label: '提升市场渗透' },
+            { value: 'fav_cart', label: '增加收藏加购量' },
+            { value: 'click', label: '增加点击量' },
+            { value: 'roi', label: '稳定投产比' }
+        ];
+
+        const resolveMatrixBidTargetCostConfig = (bidTarget = '') => {
+            const bidTargetCode = normalizeKeywordBidTargetOptionValue(
+                mapSceneBidTargetValue(bidTarget) || bidTarget
+            );
+            if (bidTargetCode === 'roi') {
+                return {
+                    switchLabel: '设置7日投产比',
+                    switchOnValue: '自定义',
+                    valueLabels: ['目标投产比', 'ROI目标值', '出价目标值', '约束值']
+                };
+            }
+            if (bidTargetCode === 'conv') {
+                return {
+                    switchLabel: '设置平均成交成本',
+                    switchOnValue: '开启',
+                    valueLabels: ['平均成交成本', '平均直接成交成本', '直接成交成本', '单次成交成本', '目标成交成本', '目标成本']
+                };
+            }
+            if (bidTargetCode === 'fav_cart') {
+                return {
+                    switchLabel: '设置平均收藏加购成本',
+                    switchOnValue: '开启',
+                    valueLabels: ['平均收藏加购成本', '收藏加购成本', '目标成本']
+                };
+            }
+            if (bidTargetCode === 'click') {
+                return {
+                    switchLabel: '设置平均点击成本',
+                    switchOnValue: '开启',
+                    valueLabels: ['平均点击成本', '点击成本', '目标成本']
+                };
+            }
+            return null;
+        };
+
+        const parseMatrixBidTargetCostPackageValue = (value = '') => {
+            const text = normalizeText(value);
+            if (!text) return null;
+            const parts = text.split(/[|｜]/g).map(item => normalizeSceneSettingValue(item)).filter(Boolean);
+            if (parts.length < 2) return null;
+            const targetSeed = String(parts.shift() || '').trim();
+            const costSeed = String(parts.join('|') || '').trim();
+            if (!targetSeed || !costSeed) return null;
+            const targetOptionValue = normalizeKeywordBidTargetOptionValue(
+                mapSceneBidTargetValue(targetSeed) || targetSeed
+            ) || '';
+            const targetCostConfig = targetOptionValue ? resolveMatrixBidTargetCostConfig(targetOptionValue) : null;
+            if (!targetOptionValue || !targetCostConfig) return null;
+            const amount = parseNumberFromSceneValue(costSeed);
+            if (!Number.isFinite(amount) || amount <= 0) return null;
+            const targetLabel = MATRIX_BID_TARGET_OPTIONS.find(item => item.value === targetOptionValue)?.label || targetSeed;
+            const costValue = String(amount);
+            return {
+                targetLabel,
+                targetOptionValue,
+                amount,
+                costValue,
+                rawValue: `${targetLabel}|${costValue}`,
+                displayLabel: `${targetLabel}_${costValue}`
+            };
+        };
+
+        const normalizeMatrixDimensionValuesByPreset = (values = [], preset = null) => {
+            const normalizedValues = normalizeMatrixDimensionValues(values);
+            if (String(preset?.key || '').trim() === 'bid_target_cost_package') {
+                return uniqueBy(
+                    normalizedValues
+                        .map(item => parseMatrixBidTargetCostPackageValue(item)?.rawValue || '')
+                        .filter(Boolean),
+                    item => item
+                );
+            }
+            return normalizedValues;
+        };
+
+        const buildMatrixCombinationValueLabel = (dimension = {}, value = '', sceneName = '') => {
+            const preset = getMatrixDimensionPresetByKey(dimension?.key || '', sceneName);
+            if (String(preset?.key || '').trim() === 'bid_target_cost_package') {
+                return parseMatrixBidTargetCostPackageValue(value)?.displayLabel || String(value || '').trim();
+            }
+            return String(value || '').trim();
+        };
+
         const serializeMatrixDimensionValues = (values = []) => (
             normalizeMatrixDimensionValues(values).join('\n')
         );
@@ -28819,10 +28918,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     item => item
                 ).slice(0, 5)
                 : [];
-            const nextValues = normalizeMatrixDimensionValues(
+            const nextValues = normalizeMatrixDimensionValuesByPreset(
                 Array.isArray(options?.values) && options.values.length
                     ? options.values
-                    : (preset.key === 'material_id' ? defaultMaterialValues : preset.suggestedValues)
+                    : (preset.key === 'material_id' ? defaultMaterialValues : preset.suggestedValues),
+                preset
             );
             return {
                 key: preset.key,
@@ -28838,8 +28938,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const preset = getMatrixDimensionPresetByKey(key, sceneName);
             if (!preset) return null;
             const label = String(normalized.label || normalized.name || preset?.label || key || '').trim();
-            const values = normalizeMatrixDimensionValues(
+            const values = normalizeMatrixDimensionValuesByPreset(
                 Array.isArray(normalized.values) ? normalized.values : (Array.isArray(normalized.options) ? normalized.options : [])
+                , preset
             );
             return {
                 key,
@@ -29020,9 +29121,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 const dimension = activeDimensions[depth];
                 dimension.values.forEach((value) => {
+                    const rawValue = String(value || '').trim();
                     visit(depth + 1, current.concat([{
                         key: dimension.key,
-                        label: String(value || '').trim(),
+                        value: rawValue,
+                        label: buildMatrixCombinationValueLabel(dimension, rawValue, config.sceneName || options?.sceneName || ''),
                         dimensionLabel: dimension.label || dimension.key
                     }]));
                 });
@@ -29076,6 +29179,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (compact === 'dayaveragebudget' || compact === '日均预算') return 'day_average_budget';
             if (compact === 'bidmode' || compact === '出价方式') return 'bid_mode';
             if (compact === 'bidtarget' || compact === '出价目标' || compact === '优化目标') return 'bid_target';
+            if (
+                compact === 'bidtargetcostpackage'
+                || compact === 'bidtargetcost'
+                || compact === '出价目标目标成本'
+                || compact === '出价目标+目标值'
+                || compact === '智能出价目标包'
+            ) return 'bid_target_cost_package';
             if (compact === 'planprefix' || compact === '计划名前缀' || compact === '前缀') return 'plan_prefix';
             if (
                 compact === 'materialid'
@@ -29119,7 +29229,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const applyMatrixDimensionBindingToPlan = (plan = {}, dimensionValue = {}, options = {}) => {
             if (!isPlainObject(plan) || !isPlainObject(dimensionValue)) return plan;
             const bindingKey = normalizeMatrixBindingKey(dimensionValue.key || dimensionValue.dimensionLabel || '');
-            const rawValue = normalizeText(dimensionValue.label || '');
+            const rawValue = normalizeText(dimensionValue.value || dimensionValue.label || '');
             const planSceneName = String(plan?.sceneName || options?.sceneName || '').trim();
             if (!bindingKey || !rawValue) return plan;
             if (isMatrixSceneFieldBindingKey(bindingKey)) {
@@ -29170,6 +29280,66 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     delete plan.campaignOverride.constraintValue;
                     plan.campaignOverride.setSingleCostV2 = false;
                     delete plan.campaignOverride.singleCostV2;
+                }
+                return plan;
+            }
+            if (bindingKey === 'bid_target_cost_package') {
+                if (planSceneName !== '关键词推广') return plan;
+                const targetPackage = parseMatrixBidTargetCostPackageValue(rawValue);
+                if (!targetPackage) return plan;
+                const submitBidTargetV2 = resolveKeywordCustomBidTargetAlias(
+                    targetPackage.targetOptionValue,
+                    '自定义推广'
+                ) || targetPackage.targetOptionValue;
+                const targetCostConfig = resolveMatrixBidTargetCostConfig(targetPackage.targetOptionValue);
+                const applySceneSetting = (label, value) => {
+                    const text = String(value || '').trim();
+                    const fieldLabel = normalizeSceneRenderFieldLabel(label) || label;
+                    const fieldKey = normalizeSceneFieldKey(fieldLabel);
+                    if (!fieldLabel || !text) return;
+                    plan.sceneSettingValues = isPlainObject(plan?.sceneSettingValues)
+                        ? mergeDeep({}, plan.sceneSettingValues)
+                        : {};
+                    plan.sceneSettingValues[fieldKey || fieldLabel] = text;
+                    plan.sceneSettings = isPlainObject(plan?.sceneSettings)
+                        ? mergeDeep({}, plan.sceneSettings)
+                        : {};
+                    plan.sceneSettings[fieldLabel] = text;
+                };
+                plan.bidMode = 'smart';
+                plan.marketingGoal = '自定义推广';
+                plan.bidTargetV2 = submitBidTargetV2;
+                plan.setSingleCostV2 = targetPackage.targetOptionValue !== 'roi';
+                plan.singleCostV2 = targetPackage.targetOptionValue === 'roi' ? '' : targetPackage.costValue;
+                plan.campaignOverride = isPlainObject(plan?.campaignOverride)
+                    ? mergeDeep({}, plan.campaignOverride)
+                    : {};
+                plan.campaignOverride.bidTypeV2 = bidModeToBidType('smart');
+                plan.campaignOverride.bidTargetV2 = submitBidTargetV2;
+                plan.campaignOverride.optimizeTarget = submitBidTargetV2;
+                if (targetPackage.targetOptionValue === 'roi') {
+                    plan.campaignOverride.constraintType = 'roi';
+                    plan.campaignOverride.constraintValue = targetPackage.amount;
+                    plan.campaignOverride.setSingleCostV2 = false;
+                    delete plan.campaignOverride.singleCostV2;
+                } else {
+                    delete plan.campaignOverride.constraintType;
+                    delete plan.campaignOverride.constraintValue;
+                    plan.campaignOverride.setSingleCostV2 = true;
+                    plan.campaignOverride.singleCostV2 = targetPackage.amount;
+                }
+                applySceneSetting('营销目标', '自定义推广');
+                applySceneSetting('选择卡位方案', '自定义推广');
+                applySceneSetting('出价方式', '智能出价');
+                applySceneSetting('出价目标', targetPackage.targetLabel);
+                if (targetCostConfig?.switchLabel) {
+                    applySceneSetting(targetCostConfig.switchLabel, targetCostConfig.switchOnValue || '开启');
+                }
+                if (Array.isArray(targetCostConfig?.valueLabels) && targetCostConfig.valueLabels.length) {
+                    applySceneSetting(targetCostConfig.valueLabels[0], targetPackage.costValue);
+                }
+                if (targetPackage.targetOptionValue !== 'roi') {
+                    applySceneSetting('目标成本', targetPackage.costValue);
                 }
                 return plan;
             }
@@ -29224,6 +29394,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 'budget',
                 'bid_mode',
                 'bid_target',
+                'bid_target_cost_package',
                 'plan_prefix'
             ].forEach((bindingKey) => {
                 matrixValues
@@ -42338,7 +42509,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.matrixIntro.textContent = !canEditMatrixDimensions
                         ? '先在上方切换场景，矩阵维度会按该场景同步展示。'
                         : currentSceneName === '关键词推广'
-                        ? '推荐先配预算、出价方式、出价目标、计划名前缀、商品，再补充匹配方式等场景维度。'
+                        ? '推荐先配预算、出价方式、智能出价目标包、计划名前缀、商品，再补充匹配方式等场景维度。'
                         : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。';
                 }
                 if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
