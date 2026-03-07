@@ -77,11 +77,21 @@ test('矩阵物化会先绑定 plan 字段再命名，并透传商品池', () =>
   );
 });
 
-test('矩阵空态文案说明支持白名单绑定', () => {
+test('矩阵场景门控与绑定 helper 暴露到 CoreUtils', () => {
   assert.match(
     source,
-    /当前未配置组合维度，开启后仍按原计划直出；支持预算、出价、计划名前缀、商品等白名单绑定/,
-    '矩阵空态文案未说明绑定能力'
+    /const getMatrixSceneName = \(sceneName = ''\) => \{[\s\S]*?SCENE_NAME_LIST\.includes\(normalizedSceneName\) \? normalizedSceneName : '';/,
+    '矩阵缺少场景归一化 helper'
+  );
+  assert.match(
+    source,
+    /const getMatrixDimensionPresetCatalog = \(sceneName = ''\) => \{[\s\S]*?const normalizedSceneName = getMatrixSceneName\(sceneName\);[\s\S]*?if \(!normalizedSceneName\) return \[\];/,
+    '矩阵维度模板未绑定有效场景'
+  );
+  assert.match(
+    source,
+    /请先去“编辑页”选择场景，再回到矩阵页添加维度。/,
+    '矩阵页缺少场景门控文案'
   );
   assert.match(
     source,
@@ -129,6 +139,32 @@ test('固定枚举维度改为多选，自由输入维度保留文本框', () =>
   );
 });
 
+test('矩阵页在卡片尾部提供 + 新增入口，并按场景追加未配置维度', () => {
+  assert.match(source, /const getMatrixAppendablePresetKeys = \(sceneName = '', dimensions = \[\]\) => \{/, '缺少场景可追加维度集合函数');
+  assert.match(source, /const getNextAvailableMatrixPresetKey = \(sceneName = '', dimensions = \[\]\) => \(/, '缺少下一个可追加维度 helper');
+  assert.match(
+    source,
+    /const normalizeMatrixDimension = \(dimension = \{\}, sceneName = ''\) => \{[\s\S]*?const preset = getMatrixDimensionPresetByKey\(key, sceneName\);[\s\S]*?if \(!preset\) return null;/,
+    '矩阵维度未按当前场景过滤无效 key'
+  );
+  assert.match(
+    source,
+    /const canEditMatrixDimensions = SCENE_OPTIONS\.includes\(String\(currentSceneName \|\| ''\)\.trim\(\)\);/,
+    '矩阵页未按当前场景控制维度编辑态'
+  );
+  assert.match(source, /data-matrix-dimension-add="1"/, '矩阵页缺少尾部 + 新增入口');
+  assert.match(
+    source,
+    /class="am-wxt-matrix-dimension-add-card\$\{isDisabled \? ' is-disabled' : ''\}"/,
+    '矩阵页尾部新增卡片样式未渲染'
+  );
+  assert.match(
+    source,
+    /const addBtn = event\.target instanceof Element[\s\S]*?closest\('\[data-matrix-dimension-add="1"\]'\)[\s\S]*?applyMatrixPreset\(nextPresetKey\);/,
+    '矩阵页尾部 + 按钮未接到统一新增链路'
+  );
+});
+
 test('矩阵页支持一键补齐推荐 5 维并自动聚焦新增卡片', () => {
   assert.match(source, /id="am-wxt-matrix-apply-recommended"/, '矩阵页缺少一键补齐推荐 5 维按钮');
   assert.match(source, /id="am-wxt-matrix-clear-dimensions"/, '矩阵页缺少清空维度按钮');
@@ -143,13 +179,26 @@ test('矩阵页支持一键补齐推荐 5 维并自动聚焦新增卡片', () =>
   );
   assert.match(
     source,
-    /wizardState\.els\.matrixApplyRecommendedBtn\.addEventListener\('click',[\s\S]*?const presetKeys = getMatrixRecommendedPresetKeys\(wizardState\.draft\?\.sceneName \|\| ''\);[\s\S]*?applyMatrixPresetBundle\(presetKeys,\s*\{[\s\S]*?focusKey:\s*presetKeys\[presetKeys\.length - 1\] \|\| ''[\s\S]*?\}\);/,
+    /wizardState\.els\.matrixApplyRecommendedBtn\.addEventListener\('click',[\s\S]*?const currentSceneName = getMatrixSceneName\(wizardState\.draft\?\.sceneName \|\| ''\);[\s\S]*?const presetKeys = getMatrixRecommendedPresetKeys\(currentSceneName\);[\s\S]*?applyMatrixPresetBundle\(presetKeys,\s*\{[\s\S]*?focusKey:\s*presetKeys\[presetKeys\.length - 1\] \|\| ''[\s\S]*?\}\);/,
     '一键补齐推荐 5 维按钮未接到批量注入链路'
   );
   assert.match(
     source,
     /scrollMatrixDimensionRowIntoView\(insertedPresetKey \|\| presetKey\);[\s\S]*?const applyMatrixPresetBundle = \(presetKeys = \[\], options = \{\}\) => \{[\s\S]*?scrollMatrixDimensionRowIntoView\(focusKey\);/,
     '单个或批量新增维度后未自动滚动到对应卡片'
+  );
+});
+
+test('切换场景时矩阵维度会同步裁剪到当前场景', () => {
+  assert.match(
+    source,
+    /const prevMatrixConfig = normalizeMatrixConfig\(draft\.matrixConfig, prevScene\);[\s\S]*?draft\.matrixConfig = normalizeMatrixConfig\(draft\.matrixConfig, nextScene\);[\s\S]*?removedMatrixLabels/,
+    '切换场景时未先按场景重算矩阵维度'
+  );
+  assert.match(
+    source,
+    /appendWizardLog\(`矩阵维度已按场景同步，移除：\$\{removedMatrixLabels\.join\('、'\)\}`\);/,
+    '切换场景后未反馈矩阵维度同步结果'
   );
 });
 
@@ -308,7 +357,7 @@ test('矩阵摘要在没有 request 时也会按当前草稿兜底计算', () =>
   );
   assert.match(
     source,
-    /const displayMatrixBatchCount = matrixConfig\.enabled[\s\S]*?\?\s*toNumber\(matrixPreview\?\.batchCount,\s*0\)[\s\S]*?:\s*0;[\s\S]*?矩阵：\$\{matrixConfig\.enabled \? '开启' : '关闭'\} ｜ 组合 \$\{toNumber\(matrixPreview\?\.combinationCount,\s*0\)\} ｜ 批次 \$\{displayMatrixBatchCount\}/,
+    /const displayMatrixBatchCount = matrixConfig\.enabled && canEditMatrixDimensions[\s\S]*?\?\s*toNumber\(matrixPreview\?\.batchCount,\s*0\)[\s\S]*?:\s*0;[\s\S]*?矩阵：\$\{canEditMatrixDimensions && matrixConfig\.enabled \? '开启' : '关闭'\} ｜ 组合 \$\{toNumber\(matrixPreview\?\.combinationCount,\s*0\)\} ｜ 批次 \$\{displayMatrixBatchCount\}/,
     '矩阵关闭时摘要批次未归零'
   );
   assert.match(

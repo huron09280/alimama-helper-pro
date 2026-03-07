@@ -24600,6 +24600,62 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     margin: 0 0 10px;
                     box-shadow: 0 6px 16px rgba(15,23,42,0.04);
                 }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card {
+                    position: relative;
+                    display: inline-flex;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    justify-content: center;
+                    gap: 6px;
+                    width: 100%;
+                    min-height: 132px;
+                    margin: 0 0 10px;
+                    padding: 16px 14px;
+                    border: 1px dashed rgba(148,163,184,0.42);
+                    border-radius: 14px;
+                    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+                    color: #334155;
+                    text-align: left;
+                    box-sizing: border-box;
+                    break-inside: avoid;
+                    -webkit-column-break-inside: avoid;
+                    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card:hover:not(:disabled) {
+                    border-color: rgba(79,104,255,0.38);
+                    background: linear-gradient(180deg, rgba(248,250,255,0.98), rgba(255,255,255,0.98));
+                    transform: translateY(-1px);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card.is-disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card:disabled {
+                    opacity: 0.72;
+                    cursor: default;
+                    transform: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 36px;
+                    min-width: 36px;
+                    height: 36px;
+                    border-radius: 999px;
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                    font-size: 24px;
+                    line-height: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-title {
+                    color: #0f172a;
+                    font-size: 13px;
+                    font-weight: 700;
+                    line-height: 1.35;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-desc {
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.5;
+                }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-row::before {
                     content: "";
                     position: absolute;
@@ -27993,8 +28049,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
         ];
 
-        const getMatrixDimensionPresetCatalog = (sceneName = '') => {
+        const getMatrixSceneName = (sceneName = '') => {
             const normalizedSceneName = String(sceneName || '').trim();
+            return SCENE_NAME_LIST.includes(normalizedSceneName) ? normalizedSceneName : '';
+        };
+
+        const getMatrixDimensionPresetCatalog = (sceneName = '') => {
+            const normalizedSceneName = getMatrixSceneName(sceneName);
+            if (!normalizedSceneName) return [];
             return MATRIX_DIMENSION_PRESET_CATALOG
                 .filter(item => !Array.isArray(item.sceneNames) || !item.sceneNames.length || item.sceneNames.includes(normalizedSceneName))
                 .map(item => ({
@@ -28173,6 +28235,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             ).slice(0, Math.min(5, catalog.length));
         };
 
+        const getMatrixAppendablePresetKeys = (sceneName = '', dimensions = []) => {
+            const catalog = getMatrixDimensionPresetCatalog(sceneName);
+            if (!catalog.length) return [];
+            const existingKeys = new Set(
+                (Array.isArray(dimensions) ? dimensions : [])
+                    .map(item => String(item?.key || '').trim())
+                    .filter(Boolean)
+            );
+            return uniqueBy(
+                [
+                    ...getMatrixRecommendedPresetKeys(sceneName),
+                    ...catalog.map(item => item.key)
+                ].filter(key => key && !existingKeys.has(key)),
+                item => item
+            );
+        };
+
+        const getNextAvailableMatrixPresetKey = (sceneName = '', dimensions = []) => (
+            String(getMatrixAppendablePresetKeys(sceneName, dimensions)[0] || '').trim()
+        );
+
         const normalizeMatrixDimensionValues = (input = []) => {
             const sourceList = Array.isArray(input)
                 ? input
@@ -28219,6 +28302,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const normalized = isPlainObject(dimension) ? { ...dimension } : {};
             const key = String(normalized.key || normalized.id || '').trim();
             const preset = getMatrixDimensionPresetByKey(key, sceneName);
+            if (!preset) return null;
             const label = String(normalized.label || normalized.name || preset?.label || key || '').trim();
             const values = normalizeMatrixDimensionValues(
                 Array.isArray(normalized.values) ? normalized.values : (Array.isArray(normalized.options) ? normalized.options : [])
@@ -28237,7 +28321,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const dimensions = uniqueBy(
                 (Array.isArray(raw.dimensions) ? raw.dimensions : [])
                     .map(item => normalizeMatrixDimension(item, sceneName))
-                    .filter(item => item.key),
+                    .filter(item => item?.key),
                 item => item.key
             );
             return {
@@ -28275,11 +28359,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const applyMatrixPreset = (presetKey = '') => {
             const draft = ensureWizardDraft();
-            const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, draft.sceneName || '');
+            const currentSceneName = getMatrixSceneName(draft.sceneName || '');
+            const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, currentSceneName);
+            if (!currentSceneName) {
+                nextMatrixConfig.enabled = false;
+                draft.matrixConfig = nextMatrixConfig;
+                KeywordPlanWizardStore.persistDraft(draft);
+                if (typeof KeywordPlanPreviewExecutor.renderWorkbenchMatrixSummary === 'function') {
+                    KeywordPlanPreviewExecutor.renderWorkbenchMatrixSummary();
+                }
+                if (typeof KeywordPlanPreviewExecutor.refreshWizardPreview === 'function') {
+                    KeywordPlanPreviewExecutor.refreshWizardPreview();
+                }
+                return nextMatrixConfig;
+            }
             let insertedPresetKey = '';
             if (!nextMatrixConfig.dimensions.some(item => item.key === presetKey)) {
                 const nextDimension = buildMatrixDimensionDraft(presetKey, {
-                    sceneName: draft.sceneName || '',
+                    sceneName: currentSceneName,
                     itemList: wizardState.addedItems
                 });
                 if (nextDimension) {
@@ -28287,10 +28384,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     insertedPresetKey = nextDimension.key;
                 }
             }
-            nextMatrixConfig.enabled = true;
+            nextMatrixConfig.enabled = nextMatrixConfig.dimensions.length > 0;
             draft.matrixConfig = nextMatrixConfig;
             if (wizardState.els?.matrixEnabledInput instanceof HTMLInputElement) {
-                wizardState.els.matrixEnabledInput.checked = true;
+                wizardState.els.matrixEnabledInput.checked = nextMatrixConfig.enabled === true;
             }
             KeywordPlanWizardStore.persistDraft(draft);
             if (typeof KeywordPlanPreviewExecutor.renderWorkbenchMatrixSummary === 'function') {
@@ -28305,7 +28402,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const applyMatrixPresetBundle = (presetKeys = [], options = {}) => {
             const draft = ensureWizardDraft();
-            const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, draft.sceneName || '');
+            const currentSceneName = getMatrixSceneName(draft.sceneName || '');
+            const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, currentSceneName);
+            if (!currentSceneName) {
+                nextMatrixConfig.enabled = false;
+                draft.matrixConfig = nextMatrixConfig;
+                KeywordPlanWizardStore.persistDraft(draft);
+                if (typeof KeywordPlanPreviewExecutor.renderWorkbenchMatrixSummary === 'function') {
+                    KeywordPlanPreviewExecutor.renderWorkbenchMatrixSummary();
+                }
+                if (typeof KeywordPlanPreviewExecutor.refreshWizardPreview === 'function') {
+                    KeywordPlanPreviewExecutor.refreshWizardPreview();
+                }
+                return nextMatrixConfig;
+            }
             const orderedKeys = uniqueBy(
                 (Array.isArray(presetKeys) ? presetKeys : [presetKeys])
                     .map(item => String(item || '').trim())
@@ -28316,17 +28426,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             orderedKeys.forEach((presetKey) => {
                 if (nextMatrixConfig.dimensions.some(item => item.key === presetKey)) return;
                 const nextDimension = buildMatrixDimensionDraft(presetKey, {
-                    sceneName: draft.sceneName || '',
+                    sceneName: currentSceneName,
                     itemList: wizardState.addedItems
                 });
                 if (!nextDimension) return;
                 nextMatrixConfig.dimensions.push(nextDimension);
                 insertedKeys.push(nextDimension.key);
             });
-            nextMatrixConfig.enabled = true;
+            nextMatrixConfig.enabled = nextMatrixConfig.dimensions.length > 0;
             draft.matrixConfig = nextMatrixConfig;
             if (wizardState.els?.matrixEnabledInput instanceof HTMLInputElement) {
-                wizardState.els.matrixEnabledInput.checked = true;
+                wizardState.els.matrixEnabledInput.checked = nextMatrixConfig.enabled === true;
             }
             KeywordPlanWizardStore.persistDraft(draft);
             if (typeof KeywordPlanPreviewExecutor.renderWorkbenchMatrixSummary === 'function') {
@@ -28342,7 +28452,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const clearMatrixDimensions = (options = {}) => {
             const draft = ensureWizardDraft();
-            const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, draft.sceneName || '');
+            const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, getMatrixSceneName(draft.sceneName || ''));
             nextMatrixConfig.dimensions = [];
             nextMatrixConfig.enabled = false;
             draft.matrixConfig = nextMatrixConfig;
@@ -29168,10 +29278,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const syncMatrixConfigFromUI = () => {
                 const draft = ensureWizardDraft();
-                const currentSceneName = draft.sceneName || '关键词推广';
+                const currentSceneName = getMatrixSceneName(draft.sceneName || '');
                 const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, currentSceneName);
                 if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
-                    nextMatrixConfig.enabled = wizardState.els.matrixEnabledInput.checked;
+                    nextMatrixConfig.enabled = currentSceneName
+                        ? wizardState.els.matrixEnabledInput.checked
+                        : false;
                 }
                 if (wizardState.els.matrixMaxInput instanceof HTMLInputElement) {
                     nextMatrixConfig.maxCombinations = Math.max(1, Math.min(200, toNumber(wizardState.els.matrixMaxInput.value, nextMatrixConfig.maxCombinations) || nextMatrixConfig.maxCombinations));
@@ -29202,7 +29314,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             values,
                             enabled
                         }, currentSceneName);
-                    }).filter(item => item.key);
+                    }).filter(item => item?.key);
                 }
                 draft.matrixConfig = nextMatrixConfig;
             };
@@ -41438,7 +41550,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const renderWorkbenchMatrixSummary = (request = null) => {
                 if (!(wizardState?.els?.matrixSummary instanceof HTMLElement)) return;
-                const currentSceneName = wizardState?.draft?.sceneName || '';
+                const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
                 const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, currentSceneName);
                 const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
                     ? wizardState.strategyList.filter(item => item?.enabled !== false).length
@@ -41467,6 +41579,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     : fallbackMatrixPreview;
                 const dimensionList = Array.isArray(matrixConfig.dimensions) ? matrixConfig.dimensions : [];
                 const presetCatalog = getMatrixDimensionPresetCatalog(currentSceneName);
+                const canEditMatrixDimensions = SCENE_OPTIONS.includes(String(currentSceneName || '').trim());
+                const appendablePresetKeys = getMatrixAppendablePresetKeys(currentSceneName, dimensionList);
                 const buildMatrixDimensionHint = (dimension = {}) => {
                     const preset = getMatrixDimensionPresetByKey(dimension?.key || '', currentSceneName);
                     if (!preset) return '值可用换行或逗号分隔。';
@@ -41596,22 +41710,58 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         </div>
                     `;
                 };
+                const buildMatrixDimensionAddCard = (presetKey = '') => {
+                    const normalizedPresetKey = String(presetKey || '').trim();
+                    const nextPreset = getMatrixDimensionPresetByKey(normalizedPresetKey, currentSceneName);
+                    const isDisabled = !normalizedPresetKey;
+                    const title = isDisabled ? '当前场景维度已补齐' : '添加维度';
+                    const desc = isDisabled
+                        ? '该场景可用维度已全部加入，直接编辑现有卡片即可。'
+                        : `下一个可加：${nextPreset?.label || normalizedPresetKey}`;
+                    return `
+                        <button
+                            type="button"
+                            class="am-wxt-matrix-dimension-add-card${isDisabled ? ' is-disabled' : ''}"
+                            data-matrix-dimension-add="1"
+                            data-matrix-preset-key="${Utils.escapeHtml(normalizedPresetKey)}"
+                            aria-label="${Utils.escapeHtml(title)}"
+                            title="${Utils.escapeHtml(desc)}"
+                            ${isDisabled ? 'disabled' : ''}
+                        >
+                            <span class="am-wxt-matrix-dimension-add-icon">+</span>
+                            <span class="am-wxt-matrix-dimension-add-title">${Utils.escapeHtml(title)}</span>
+                            <span class="am-wxt-matrix-dimension-add-desc">${Utils.escapeHtml(desc)}</span>
+                        </button>
+                    `;
+                };
                 if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
-                    wizardState.els.matrixEnabledInput.checked = matrixConfig.enabled === true;
+                    wizardState.els.matrixEnabledInput.checked = canEditMatrixDimensions && matrixConfig.enabled === true;
+                    wizardState.els.matrixEnabledInput.disabled = !canEditMatrixDimensions;
                 }
                 if (wizardState.els.matrixMaxInput instanceof HTMLInputElement) {
                     wizardState.els.matrixMaxInput.value = String(matrixConfig.maxCombinations);
+                    wizardState.els.matrixMaxInput.disabled = !canEditMatrixDimensions;
                 }
                 if (wizardState.els.matrixBatchInput instanceof HTMLInputElement) {
                     wizardState.els.matrixBatchInput.value = String(matrixConfig.batchSize);
+                    wizardState.els.matrixBatchInput.disabled = !canEditMatrixDimensions;
                 }
                 if (wizardState.els.matrixNamePatternInput instanceof HTMLInputElement) {
                     wizardState.els.matrixNamePatternInput.value = matrixConfig.namingPattern || MATRIX_DEFAULT_NAMING_PATTERN;
+                    wizardState.els.matrixNamePatternInput.disabled = !canEditMatrixDimensions;
                 }
                 if (wizardState.els.matrixIntro instanceof HTMLElement) {
-                    wizardState.els.matrixIntro.textContent = currentSceneName === '关键词推广'
+                    wizardState.els.matrixIntro.textContent = !canEditMatrixDimensions
+                        ? '先到编辑页选择场景，矩阵维度会按该场景同步展示。'
+                        : currentSceneName === '关键词推广'
                         ? '推荐优先配置预算、出价方式、出价目标、计划名前缀、商品这 5 维。'
                         : '推荐优先配置预算、出价方式、计划名前缀、商品等维度。';
+                }
+                if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
+                    wizardState.els.matrixApplyRecommendedBtn.disabled = !canEditMatrixDimensions;
+                }
+                if (wizardState.els.matrixClearBtn instanceof HTMLButtonElement) {
+                    wizardState.els.matrixClearBtn.disabled = !canEditMatrixDimensions && !dimensionList.length;
                 }
                 if (wizardState.els.matrixPresetList instanceof HTMLElement) {
                     wizardState.els.matrixPresetList.innerHTML = presetCatalog.map(item => `
@@ -41621,6 +41771,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             data-matrix-preset-key="${Utils.escapeHtml(item.key)}"
                             onclick="window.__AM_WXT_PLAN_API__ && typeof window.__AM_WXT_PLAN_API__.applyMatrixPreset === 'function' && window.__AM_WXT_PLAN_API__.applyMatrixPreset('${Utils.escapeHtml(item.key)}');"
                             title="${Utils.escapeHtml(item.hint || item.label)}"
+                            ${canEditMatrixDimensions ? '' : 'disabled'}
                         >${Utils.escapeHtml(item.label)}</button>
                     `).join('');
                     wizardState.els.matrixPresetList.querySelectorAll('[data-matrix-preset-key]').forEach((button) => {
@@ -41630,12 +41781,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         });
                     });
                 }
-                const displayMatrixBatchCount = matrixConfig.enabled
+                const displayMatrixBatchCount = matrixConfig.enabled && canEditMatrixDimensions
                     ? toNumber(matrixPreview?.batchCount, 0)
                     : 0;
-                wizardState.els.matrixSummary.textContent = `矩阵：${matrixConfig.enabled ? '开启' : '关闭'} ｜ 组合 ${toNumber(matrixPreview?.combinationCount, 0)} ｜ 批次 ${displayMatrixBatchCount}`;
+                wizardState.els.matrixSummary.textContent = `矩阵：${canEditMatrixDimensions && matrixConfig.enabled ? '开启' : '关闭'} ｜ 组合 ${toNumber(matrixPreview?.combinationCount, 0)} ｜ 批次 ${displayMatrixBatchCount}`;
                 if (wizardState.els.matrixStatusValue instanceof HTMLElement) {
-                    wizardState.els.matrixStatusValue.textContent = matrixConfig.enabled ? '已开启' : '已关闭';
+                    wizardState.els.matrixStatusValue.textContent = !canEditMatrixDimensions
+                        ? '待选场景'
+                        : (matrixConfig.enabled ? '已开启' : '已关闭');
                 }
                 if (wizardState.els.matrixDimensionCountValue instanceof HTMLElement) {
                     wizardState.els.matrixDimensionCountValue.textContent = String(dimensionList.length);
@@ -41647,32 +41800,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.matrixBatchCountValue.textContent = String(displayMatrixBatchCount);
                 }
                 if (wizardState.els.matrixActionNote instanceof HTMLElement) {
-                    const recommendedKeys = getMatrixRecommendedPresetKeys(currentSceneName);
-                    const configuredKeys = new Set(dimensionList.map(item => item.key));
-                    const readyCount = recommendedKeys.filter(key => configuredKeys.has(key)).length;
-                    const missingLabels = recommendedKeys
-                        .filter(key => !configuredKeys.has(key))
-                        .map(key => getMatrixDimensionPresetByKey(key, currentSceneName)?.label || key);
-                    wizardState.els.matrixActionNote.textContent = recommendedKeys.length
-                        ? (readyCount >= recommendedKeys.length
-                            ? `推荐维度 ${readyCount}/${recommendedKeys.length}`
-                            : `推荐维度 ${readyCount}/${recommendedKeys.length} · 缺 ${missingLabels.join('、')}`)
-                        : '当前场景暂无推荐维度，可按需手动添加。';
+                    if (!canEditMatrixDimensions) {
+                        wizardState.els.matrixActionNote.textContent = '请先去“编辑页”选择场景，再回到矩阵页添加维度。';
+                    } else {
+                        const recommendedKeys = getMatrixRecommendedPresetKeys(currentSceneName);
+                        const configuredKeys = new Set(dimensionList.map(item => item.key));
+                        const readyCount = recommendedKeys.filter(key => configuredKeys.has(key)).length;
+                        const missingLabels = recommendedKeys
+                            .filter(key => !configuredKeys.has(key))
+                            .map(key => getMatrixDimensionPresetByKey(key, currentSceneName)?.label || key);
+                        wizardState.els.matrixActionNote.textContent = recommendedKeys.length
+                            ? (readyCount >= recommendedKeys.length
+                                ? `推荐维度 ${readyCount}/${recommendedKeys.length}`
+                                : `推荐维度 ${readyCount}/${recommendedKeys.length} · 缺 ${missingLabels.join('、')}`)
+                            : '当前场景暂无推荐维度，可按需手动添加。';
+                    }
                 }
                 if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
-                    wizardState.els.matrixDimensionList.classList.toggle('is-empty', !dimensionList.length);
-                    if (!dimensionList.length) {
+                    wizardState.els.matrixDimensionList.classList.toggle('is-empty', !canEditMatrixDimensions);
+                    if (!canEditMatrixDimensions) {
                         wizardState.els.matrixDimensionList.innerHTML = `
                             <div class="am-wxt-matrix-empty-state">
-                                <div class="am-wxt-matrix-empty-title">先添加维度</div>
-                                <div class="am-wxt-matrix-empty-desc">当前未配置组合维度，开启后仍按原计划直出；支持预算、出价、计划名前缀、商品等白名单绑定。</div>
-                                <div class="am-wxt-matrix-empty-hint">先点左侧“补齐5维”或任一预设，再直接修改右侧卡片值。</div>
+                                <div class="am-wxt-matrix-empty-title">先选场景</div>
+                                <div class="am-wxt-matrix-empty-desc">请先去“编辑页”选择场景，再回到矩阵页添加维度。</div>
+                                <div class="am-wxt-matrix-empty-hint">矩阵维度会同步编辑计划场景，只显示该场景可用的预算、出价、前缀、商品等维度。</div>
                             </div>
                         `;
                     } else {
-                        wizardState.els.matrixDimensionList.innerHTML = dimensionList.map((item, index) => (
-                            buildMatrixDimensionRow(item, index)
-                        )).join('');
+                        const nextPresetKey = getNextAvailableMatrixPresetKey(currentSceneName, dimensionList);
+                        wizardState.els.matrixDimensionList.innerHTML = [
+                            ...dimensionList.map((item, index) => buildMatrixDimensionRow(item, index)),
+                            buildMatrixDimensionAddCard(nextPresetKey)
+                        ].join('');
                     }
                 }
             };
@@ -42269,6 +42428,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         strategy.autoPlanPrefix = nextPrefix;
                     }
                 });
+                const prevMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, prevScene);
+                draft.matrixConfig = normalizeMatrixConfig(draft.matrixConfig, nextScene);
+                const nextMatrixKeySet = new Set(
+                    (Array.isArray(draft.matrixConfig?.dimensions) ? draft.matrixConfig.dimensions : [])
+                        .map(item => String(item?.key || '').trim())
+                        .filter(Boolean)
+                );
+                const removedMatrixLabels = (Array.isArray(prevMatrixConfig?.dimensions) ? prevMatrixConfig.dimensions : [])
+                    .map(item => {
+                        const key = String(item?.key || '').trim();
+                        if (!key || nextMatrixKeySet.has(key)) return '';
+                        return getMatrixDimensionPresetByKey(key, prevScene)?.label || item?.label || key;
+                    })
+                    .filter(Boolean);
                 renderSceneDynamicConfig();
                 const sceneSettingsForStrategy = nextScene === '关键词推广'
                     ? {}
@@ -42286,6 +42459,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const sceneHintText = sceneBizCodeHint ? `（${sceneBizCodeHint}）` : '';
                     const scopeText = applyToAllStrategies ? '全部计划' : (editingStrategy?.name || '当前计划');
                     appendWizardLog(`场景配置已切换：${nextScene}${sceneHintText}（${scopeText}）${WIZARD_FORCE_API_ONLY_SCENE_CONFIG ? ' [API模式]' : ''}`, 'success');
+                    if (removedMatrixLabels.length) {
+                        appendWizardLog(`矩阵维度已按场景同步，移除：${removedMatrixLabels.join('、')}`);
+                    }
                 }
                 if (!WIZARD_FORCE_API_ONLY_SCENE_CONFIG) {
                     refreshSceneProfileFromSpec(nextScene, {
@@ -42480,13 +42656,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ? event.target.closest('[data-matrix-preset-key]')
                         : null;
                     if (!(target instanceof Element)) return;
+                    const currentSceneName = getMatrixSceneName(wizardState.draft?.sceneName || '');
+                    if (!currentSceneName) {
+                        appendWizardLog('请先在编辑页选择场景，再添加矩阵维度', 'error');
+                        return;
+                    }
                     const presetKey = String(target.getAttribute('data-matrix-preset-key') || '').trim();
                     applyMatrixPreset(presetKey);
                 });
             }
             if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
                 wizardState.els.matrixApplyRecommendedBtn.addEventListener('click', () => {
-                    const presetKeys = getMatrixRecommendedPresetKeys(wizardState.draft?.sceneName || '');
+                    const currentSceneName = getMatrixSceneName(wizardState.draft?.sceneName || '');
+                    if (!currentSceneName) {
+                        appendWizardLog('请先在编辑页选择场景，再补齐矩阵维度', 'error');
+                        return;
+                    }
+                    const presetKeys = getMatrixRecommendedPresetKeys(currentSceneName);
                     const beforeCount = Array.isArray(wizardState?.draft?.matrixConfig?.dimensions)
                         ? wizardState.draft.matrixConfig.dimensions.length
                         : 0;
@@ -42521,6 +42707,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         setMatrixDimensionPickerOpen(picker, nextOpen);
                         return;
                     }
+                    const addBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-dimension-add="1"]')
+                        : null;
+                    if (addBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        closeMatrixDimensionPickers(wizardState.els.matrixDimensionList);
+                        const nextPresetKey = String(addBtn.getAttribute('data-matrix-preset-key') || '').trim();
+                        if (!nextPresetKey) return;
+                        applyMatrixPreset(nextPresetKey);
+                        const nextPreset = getMatrixDimensionPresetByKey(nextPresetKey, getMatrixSceneName(wizardState.draft?.sceneName || ''));
+                        appendWizardLog(`已添加矩阵维度：${nextPreset?.label || nextPresetKey}`, 'success');
+                        return;
+                    }
                     const removeBtn = event.target instanceof Element
                         ? event.target.closest('[data-matrix-dimension-remove="1"]')
                         : null;
@@ -42536,7 +42735,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ? event.target.closest('[data-matrix-dimension-row="1"]')
                         : null;
                     if (!(row instanceof HTMLElement)) return;
-                    const currentSceneName = wizardState?.draft?.sceneName || '关键词推广';
+                    const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
                     if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-key-option="1"]')) {
                         return;
                     }
@@ -42553,7 +42752,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ? event.target.closest('[data-matrix-dimension-row="1"]')
                         : null;
                     if (!(row instanceof HTMLElement)) return;
-                    const currentSceneName = wizardState?.draft?.sceneName || '关键词推广';
+                    const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
                     if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-key-option="1"]')) {
                         const nextKey = syncMatrixDimensionKeyPickerStateFromRow(row, currentSceneName);
                         const hiddenLabelInput = row.querySelector('[data-matrix-dimension-label="1"]');
