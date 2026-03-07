@@ -24683,17 +24683,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    border: 1px solid rgba(148,163,184,0.26);
-                    border-radius: 10px;
-                    background: #fff;
+                    border: 0;
+                    border-radius: 999px;
+                    background: transparent;
                     color: #94a3b8;
                     font-size: 16px;
                     line-height: 1;
                     box-shadow: none;
-                    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+                    transition: color 0.2s ease, background 0.2s ease;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-remove-icon:hover {
-                    border-color: rgba(79,104,255,0.28);
                     background: rgba(79,104,255,0.05);
                     color: #3354d1;
                 }
