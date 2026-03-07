@@ -169,8 +169,13 @@ test('矩阵页使用双栏工作台布局并扩展维度编辑区', () => {
 test('矩阵维度卡片将维度类型下拉收进首行，避免重复展示', () => {
   assert.match(
     source,
-    /class="am-wxt-matrix-dimension-top-main">[\s\S]*?class="am-wxt-matrix-dimension-index">维度 \$\{index \+ 1\}<\/span>[\s\S]*?class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline">[\s\S]*?data-matrix-dimension-enabled="1"[\s\S]*?class="am-wxt-matrix-dimension-top-actions">[\s\S]*?<select data-matrix-dimension-key="1"[\s\S]*?class="am-wxt-matrix-dimension-remove-icon"[\s\S]*?data-matrix-dimension-remove="1"[\s\S]*?&times;/,
+    /class="am-wxt-matrix-dimension-top-main">[\s\S]*?class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline"[\s\S]*?data-matrix-dimension-enabled="1"[\s\S]*?class="am-wxt-matrix-dimension-index">维度 \$\{index \+ 1\}<\/span>[\s\S]*?class="am-wxt-matrix-dimension-top-actions">[\s\S]*?<select data-matrix-dimension-key="1"[\s\S]*?class="am-wxt-matrix-dimension-remove-icon"[\s\S]*?data-matrix-dimension-remove="1"[\s\S]*?&times;/,
     '维度序号、启用控件或右上角删除图标未收进卡片首行'
+  );
+  assert.doesNotMatch(
+    source,
+    /class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline">[\s\S]*?<span>启用<\/span>/,
+    '卡片头部仍保留“启用”文案'
   );
   assert.match(
     source,

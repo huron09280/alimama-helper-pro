@@ -24637,7 +24637,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-enable-inline {
                     display: inline-flex;
                     align-items: center;
-                    gap: 5px;
+                    gap: 0;
                     color: #475569;
                     font-size: 12px;
                     line-height: 1.2;
@@ -24651,7 +24651,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     grid-template-columns: minmax(0, 136px) auto;
                     gap: 6px;
                     justify-content: flex-end;
-                    align-items: flex-start;
+                    align-items: center;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions select {
                     width: 100%;
@@ -41502,11 +41502,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         <div class="am-wxt-matrix-dimension-row" data-matrix-dimension-row="1" data-matrix-dimension-index="${index}">
                             <div class="am-wxt-matrix-dimension-top">
                                 <div class="am-wxt-matrix-dimension-top-main">
-                                    <span class="am-wxt-matrix-dimension-index">维度 ${index + 1}</span>
-                                    <label class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline">
-                                        <input type="checkbox" data-matrix-dimension-enabled="1" ${dimension.enabled !== false ? 'checked' : ''} />
-                                        <span>启用</span>
+                                    <label class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline" aria-label="启用维度">
+                                        <input type="checkbox" data-matrix-dimension-enabled="1" ${dimension.enabled !== false ? 'checked' : ''} title="启用维度" />
                                     </label>
+                                    <span class="am-wxt-matrix-dimension-index">维度 ${index + 1}</span>
                                 </div>
                                 <div class="am-wxt-matrix-dimension-top-actions">
                                     <select data-matrix-dimension-key="1" title="${Utils.escapeHtml(rowHintText)}">${optionHtml}</select>
