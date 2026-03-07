@@ -129,8 +129,8 @@ test('矩阵场景切换与绑定 helper 暴露到 CoreUtils', () => {
   );
   assert.match(
     source,
-    /id="am-wxt-keyword-matrix-config"[\s\S]*?<div class="am-wxt-setting-label">场景选择<\/div>[\s\S]*?data-bind-select="am-wxt-keyword-scene-select"/,
-    '矩阵页缺少顶部场景切换入口'
+    /class="am-wxt-matrix-main">[\s\S]*?class="am-wxt-matrix-card am-wxt-matrix-scene-card"[\s\S]*?<div class="am-wxt-scene-setting-label">场景选择<\/div>[\s\S]*?data-bind-select="am-wxt-keyword-scene-select"[\s\S]*?<div class="am-wxt-crowd-box am-wxt-matrix-dimension-box">/,
+    '矩阵页未把场景切换放到维度卡片上方'
   );
   assert.match(
     source,
@@ -257,6 +257,8 @@ test('矩阵页使用双栏工作台布局并扩展维度编辑区', () => {
   assert.match(source, /class="am-wxt-config-grid am-wxt-matrix-settings-grid"/, '矩阵页缺少侧栏参数网格');
   assert.match(source, /id="am-wxt-matrix-stat-enabled"/, '矩阵页缺少状态统计卡片');
   assert.match(source, /id="am-wxt-matrix-stat-dimensions"/, '矩阵页缺少维度数量统计卡片');
+  assert.match(source, /#am-wxt-keyword-modal \.am-wxt-matrix-main \{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?gap:\s*10px;/, '矩阵主区未改成场景横条加维度卡片的纵向结构');
+  assert.match(source, /#am-wxt-keyword-modal \.am-wxt-matrix-scene-card \{[\s\S]*?padding:\s*12px 14px;/, '矩阵场景横条未启用独立卡片样式');
   assert.match(source, /class="am-wxt-crowd-list am-wxt-matrix-dimension-list"/, '矩阵页缺少独立维度列表容器');
   assert.match(
     source,

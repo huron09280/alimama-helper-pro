@@ -24408,6 +24408,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     flex-direction: column;
                     gap: 10px;
                 }
+                #am-wxt-keyword-modal .am-wxt-matrix-main {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
                 #am-wxt-keyword-modal .am-wxt-matrix-card {
                     border: 1px solid rgba(148,163,184,0.22);
                     border-radius: 14px;
@@ -24531,6 +24536,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     line-height: 1.2;
                     font-size: 11px;
                     border-radius: 999px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-scene-card {
+                    padding: 12px 14px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-scene-card .am-wxt-scene-setting-row {
+                    grid-template-columns: 74px minmax(0, 1fr);
+                    gap: 10px;
+                    padding: 0;
+                    border-bottom: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-scene-card .am-wxt-scene-setting-label {
+                    color: #334155;
+                    font-weight: 600;
+                    line-height: 32px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-scene-card .am-wxt-option-line {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-box {
                     margin-top: 0;
@@ -29580,12 +29604,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         </div>
                                         <div class="am-wxt-config-grid am-wxt-matrix-settings-grid">
                                             <div class="am-wxt-setting-row" data-matrix-setting-span="2">
-                                                <div class="am-wxt-setting-label">场景选择</div>
-                                                <div class="am-wxt-setting-control">
-                                                    <div class="am-wxt-option-line segmented" data-bind-select="am-wxt-keyword-scene-select"></div>
-                                                </div>
-                                            </div>
-                                            <div class="am-wxt-setting-row" data-matrix-setting-span="2">
                                                 <div class="am-wxt-setting-label">启用矩阵</div>
                                                 <div class="am-wxt-setting-control">
                                                     <label class="am-wxt-inline-check">
@@ -29649,6 +29667,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     </div>
                                 </div>
                                 <div class="am-wxt-matrix-main">
+                                    <div class="am-wxt-matrix-card am-wxt-matrix-scene-card">
+                                        <div class="am-wxt-scene-setting-row">
+                                            <div class="am-wxt-scene-setting-label">场景选择</div>
+                                            <div class="am-wxt-setting-control">
+                                                <div class="am-wxt-option-line segmented" data-bind-select="am-wxt-keyword-scene-select"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="am-wxt-crowd-box am-wxt-matrix-dimension-box">
                                         <div class="am-wxt-crowd-title">
                                             <span>维度卡片</span>
