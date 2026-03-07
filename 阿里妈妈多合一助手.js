@@ -24625,15 +24625,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 8px;
                     flex-wrap: nowrap;
                 }
-                #am-wxt-keyword-modal .am-wxt-matrix-dimension-index {
-                    flex: 0 0 auto;
-                    color: #3354d1;
-                    font-size: 11px;
-                    font-weight: 700;
-                    padding: 4px 9px;
-                    border-radius: 999px;
-                    background: rgba(79,104,255,0.08);
-                }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-enable-inline {
                     display: inline-flex;
                     align-items: center;
@@ -24646,10 +24637,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     margin: 0;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-top-actions {
-                    min-width: 0;
-                    display: grid;
-                    grid-template-columns: minmax(0, 136px) auto;
-                    gap: 6px;
+                    flex: 0 0 auto;
+                    display: flex;
+                    gap: 0;
                     justify-content: flex-end;
                     align-items: center;
                 }
@@ -24763,6 +24753,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker.open .am-wxt-matrix-dimension-picker-panel {
                     display: block;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger {
+                    min-height: 32px;
+                    padding: 6px 12px;
+                    border: 1px solid rgba(79,104,255,0.14);
+                    border-radius: 999px;
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                    font-weight: 600;
+                    box-shadow: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker.open .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: rgba(79,104,255,0.26);
+                    background: rgba(79,104,255,0.12);
+                    box-shadow: 0 0 0 3px rgba(79,104,255,0.06);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-arrow {
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%233354D1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-panel {
+                    left: 0;
+                    right: auto;
+                    min-width: 188px;
+                    max-height: min(360px, calc(100vh - 180px));
+                    overflow-y: auto;
+                    overflow-x: hidden;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option {
                     display: flex;
@@ -41542,9 +41559,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     <label class="am-wxt-inline-check am-wxt-matrix-dimension-enable-inline" aria-label="启用维度">
                                         <input type="checkbox" data-matrix-dimension-enabled="1" ${dimension.enabled !== false ? 'checked' : ''} title="启用维度" />
                                     </label>
-                                    <span class="am-wxt-matrix-dimension-index">维度 ${index + 1}</span>
-                                </div>
-                                <div class="am-wxt-matrix-dimension-top-actions">
                                     <div class="am-wxt-matrix-dimension-picker am-wxt-matrix-dimension-key-picker" data-matrix-dimension-picker="1">
                                         <button
                                             type="button"
@@ -41561,6 +41575,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         </div>
                                         <select class="am-wxt-hidden-control" data-matrix-dimension-key="1" title="${Utils.escapeHtml(rowHintText)}">${optionHtml}</select>
                                     </div>
+                                </div>
+                                <div class="am-wxt-matrix-dimension-top-actions">
                                     <button
                                         type="button"
                                         class="am-wxt-matrix-dimension-remove-icon"
