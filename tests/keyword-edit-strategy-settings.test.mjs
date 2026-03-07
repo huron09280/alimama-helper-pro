@@ -35,3 +35,11 @@ test('编辑计划切换策略时会覆盖 sceneSettingValues/sceneSettingTouche
     '仍存在按非空才回填 sceneSettingTouched 的逻辑，可能导致编辑计划串值'
   );
 });
+
+test('点击编辑页 tab 会自动进入当前策略编辑态，避免页面空白', () => {
+  assert.match(
+    source,
+    /const setWorkbenchPage = \(page = 'home'\) => \{[\s\S]*?if \(nextPage === 'editor'\) \{[\s\S]*?const editingStrategy = getStrategyById\(wizardState\.editingStrategyId\) \|\| wizardState\.strategyList\[0\] \|\| null;[\s\S]*?applyStrategyToDetailForm\(editingStrategy\);[\s\S]*?wizardState\.detailVisible = true;[\s\S]*?wizardState\.els\.detailConfig\.classList\.toggle\('collapsed', !\(nextPage === 'editor' && wizardState\.detailVisible\)\);/,
+    '编辑页 tab 未自动拉起当前策略编辑态，仍可能出现空白页'
+  );
+});

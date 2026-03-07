@@ -29815,6 +29815,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const setWorkbenchPage = (page = 'home') => {
                 const nextPage = WORKBENCH_PAGE_SET.has(String(page || '').trim()) ? String(page || '').trim() : 'home';
                 wizardState.workbenchPage = nextPage;
+                if (nextPage === 'editor') {
+                    const editingStrategy = getStrategyById(wizardState.editingStrategyId) || wizardState.strategyList[0] || null;
+                    if (editingStrategy) {
+                        wizardState.editingStrategyId = editingStrategy.id;
+                        applyStrategyToDetailForm(editingStrategy);
+                    }
+                    wizardState.detailVisible = true;
+                }
                 const toggleDisplay = (el, visible) => {
                     if (!(el instanceof HTMLElement)) return;
                     el.style.display = visible ? '' : 'none';
