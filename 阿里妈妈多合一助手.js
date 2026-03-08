@@ -24189,16 +24189,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-head {
                     display: flex;
-                    justify-content: flex-start;
+                    justify-content: space-between;
                     align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
                     font-size: 13px;
                     color: #334155;
                     margin-bottom: 8px;
                 }
+                #am-wxt-keyword-modal .am-wxt-strategy-head-main,
                 #am-wxt-keyword-modal .am-wxt-strategy-head-right {
                     display: flex;
                     align-items: center;
                     gap: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-left: auto;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-list {
                     display: flex;
@@ -28321,6 +28330,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #am-wxt-keyword-modal .am-wxt-matrix-workspace {
                         grid-template-columns: 1fr;
                     }
+                    #am-wxt-keyword-modal .am-wxt-strategy-head-actions {
+                        width: 100%;
+                        margin-left: 0;
+                        justify-content: flex-end;
+                    }
                     #am-wxt-keyword-modal .am-wxt-matrix-action-grid,
                     #am-wxt-keyword-modal .am-wxt-matrix-settings-grid,
                     #am-wxt-keyword-modal .am-wxt-matrix-preset-grid,
@@ -30700,9 +30714,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                         <div class="am-wxt-strategy-board" data-workbench-page-panel="home">
                             <div class="am-wxt-strategy-head">
-                                <div class="am-wxt-strategy-head-right">
+                                <div class="am-wxt-strategy-head-main">
                                     <button class="am-wxt-btn" id="am-wxt-keyword-add-strategy">新建计划</button>
                                     <span>已选 <b id="am-wxt-keyword-strategy-count">0</b> 个</span>
+                                </div>
+                                <div class="am-wxt-strategy-head-actions">
+                                    <button class="am-wxt-btn" id="am-wxt-keyword-batch-edit-strategy">批量编辑</button>
+                                    <button class="am-wxt-btn" id="am-wxt-keyword-clear-strategy">清空</button>
                                 </div>
                             </div>
                             <div class="am-wxt-strategy-list" id="am-wxt-keyword-strategy-list"></div>
@@ -31003,6 +31021,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 strategyList: overlay.querySelector('#am-wxt-keyword-strategy-list'),
                 strategyCount: overlay.querySelector('#am-wxt-keyword-strategy-count'),
                 addStrategyBtn: overlay.querySelector('#am-wxt-keyword-add-strategy'),
+                batchEditStrategyBtn: overlay.querySelector('#am-wxt-keyword-batch-edit-strategy'),
+                clearStrategyBtn: overlay.querySelector('#am-wxt-keyword-clear-strategy'),
                 runModeWrap: overlay.querySelector('#am-wxt-keyword-run-mode-wrap'),
                 runModeToggleBtn: overlay.querySelector('#am-wxt-keyword-run-mode-toggle'),
                 runModeMenu: overlay.querySelector('#am-wxt-keyword-run-mode-menu'),
@@ -41974,6 +41994,74 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState?.draft?.dayAverageBudget || ''
             );
 
+            const getSelectedStrategyList = () => (
+                Array.isArray(wizardState?.strategyList)
+                    ? wizardState.strategyList.filter(item => item?.enabled !== false)
+                    : []
+            );
+
+            const buildBatchEditableStrategySnapshot = (strategy = {}) => ({
+                sceneName: SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
+                    ? String(strategy.sceneName).trim()
+                    : getCurrentEditorSceneName(),
+                marketingGoal: normalizeGoalLabel(strategy?.marketingGoal || ''),
+                bidMode: normalizeBidMode(strategy?.bidMode || 'smart', 'smart'),
+                dayAverageBudget: String(strategy?.dayAverageBudget || '').trim(),
+                defaultBidPrice: String(strategy?.defaultBidPrice || '1').trim() || '1',
+                keywordMode: String(strategy?.keywordMode || DEFAULTS.keywordMode).trim() || DEFAULTS.keywordMode,
+                useWordPackage: strategy?.useWordPackage !== false,
+                recommendCount: String(strategy?.recommendCount ?? DEFAULTS.recommendCount).trim() || String(DEFAULTS.recommendCount),
+                manualKeywords: String(strategy?.manualKeywords || '').trim(),
+                bidTargetV2: String(strategy?.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2,
+                budgetType: String(strategy?.budgetType || 'day_average').trim() || 'day_average',
+                setSingleCostV2: strategy?.setSingleCostV2 === true,
+                singleCostV2: String(strategy?.singleCostV2 || '').trim(),
+                sceneSettingValues: mergeDeep({}, normalizeSceneSettingBucketValues(strategy?.sceneSettingValues || {})),
+                sceneSettingTouched: mergeDeep({}, normalizeSceneSettingTouchedValues(strategy?.sceneSettingTouched || {})),
+                sceneSettings: mergeDeep({}, normalizeSceneSettingsObject(strategy?.sceneSettings || {}))
+            });
+
+            const applyBatchEditableStrategySnapshot = (strategy = {}, snapshot = {}) => {
+                if (!isPlainObject(strategy) || !isPlainObject(snapshot)) return strategy;
+                strategy.sceneName = snapshot.sceneName;
+                strategy.marketingGoal = snapshot.marketingGoal;
+                strategy.bidMode = snapshot.bidMode;
+                strategy.dayAverageBudget = snapshot.dayAverageBudget;
+                strategy.defaultBidPrice = snapshot.defaultBidPrice;
+                strategy.keywordMode = snapshot.keywordMode;
+                strategy.useWordPackage = snapshot.useWordPackage !== false;
+                strategy.recommendCount = snapshot.recommendCount;
+                strategy.manualKeywords = snapshot.manualKeywords;
+                strategy.bidTargetV2 = snapshot.bidTargetV2;
+                strategy.budgetType = snapshot.budgetType;
+                strategy.setSingleCostV2 = snapshot.bidMode === 'smart' && snapshot.setSingleCostV2 === true;
+                strategy.singleCostV2 = snapshot.bidMode === 'smart' ? snapshot.singleCostV2 : '';
+                strategy.sceneSettingValues = mergeDeep({}, normalizeSceneSettingBucketValues(snapshot.sceneSettingValues || {}));
+                strategy.sceneSettingTouched = mergeDeep({}, normalizeSceneSettingTouchedValues(snapshot.sceneSettingTouched || {}));
+                strategy.sceneSettings = mergeDeep({}, normalizeSceneSettingsObject(snapshot.sceneSettings || {}));
+                return strategy;
+            };
+
+            const applyBatchEditToStrategies = (sourceStrategy = null, strategyIds = []) => {
+                if (!isPlainObject(sourceStrategy)) return 0;
+                const normalizedIds = uniqueBy(
+                    (Array.isArray(strategyIds) ? strategyIds : [])
+                        .map(id => String(id || '').trim())
+                        .filter(Boolean),
+                    id => id
+                );
+                if (!normalizedIds.length) return 0;
+                const snapshot = buildBatchEditableStrategySnapshot(sourceStrategy);
+                let appliedCount = 0;
+                normalizedIds.forEach((strategyId) => {
+                    const targetStrategy = getStrategyById(strategyId);
+                    if (!targetStrategy) return;
+                    applyBatchEditableStrategySnapshot(targetStrategy, snapshot);
+                    appliedCount += 1;
+                });
+                return appliedCount;
+            };
+
             const getStrategyById = (strategyId) => wizardState.strategyList.find(item => item.id === strategyId) || null;
 
             const applyStrategyToDetailForm = (strategy) => {
@@ -42109,6 +42197,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const showStrategyDetail = (strategy = null, options = {}) => {
                 const targetStrategy = strategy || getStrategyById(wizardState.editingStrategyId) || wizardState.strategyList[0] || null;
                 if (!targetStrategy) return null;
+                if (Array.isArray(options.batchSyncIds)) {
+                    wizardState.strategyBatchEditIds = uniqueBy(
+                        options.batchSyncIds
+                            .map(id => String(id || '').trim())
+                            .filter(Boolean),
+                        id => id
+                    );
+                } else if (options.keepBatchSync !== true) {
+                    wizardState.strategyBatchEditIds = [];
+                }
                 const previous = getStrategyById(wizardState.editingStrategyId);
                 if (previous && previous.id !== targetStrategy.id && wizardState.detailVisible) {
                     pullDetailFormToStrategy(previous);
@@ -42131,6 +42229,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const openStrategyDetail = (strategyId) => {
                 const strategy = getStrategyById(strategyId);
                 if (!strategy) return;
+                wizardState.strategyBatchEditIds = [];
                 if (
                     wizardState.editingStrategyId === strategy.id
                     && wizardState.detailVisible
@@ -42146,6 +42245,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 showStrategyDetail(strategy);
             };
             const addNewStrategy = () => {
+                wizardState.strategyBatchEditIds = [];
                 const editing = getStrategyById(wizardState.editingStrategyId);
                 if (editing && wizardState.detailVisible) pullDetailFormToStrategy(editing);
                 const sceneName = getCurrentEditorSceneName();
@@ -42193,6 +42293,90 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 appendWizardLog(`已新建计划：${next.name}`, 'success');
                 maybeAutoLoadManualKeywords(next, { delayMs: 320 });
             };
+
+            const syncStrategyHeadActionState = () => {
+                const selectedCount = getSelectedStrategyList().length;
+                const totalCount = Array.isArray(wizardState?.strategyList) ? wizardState.strategyList.length : 0;
+                if (wizardState.els.batchEditStrategyBtn instanceof HTMLButtonElement) {
+                    wizardState.els.batchEditStrategyBtn.disabled = selectedCount <= 0;
+                    wizardState.els.batchEditStrategyBtn.title = selectedCount > 0
+                        ? `编辑已选 ${selectedCount} 个计划`
+                        : '请先勾选至少 1 个计划';
+                }
+                if (wizardState.els.clearStrategyBtn instanceof HTMLButtonElement) {
+                    wizardState.els.clearStrategyBtn.disabled = selectedCount <= 0 || totalCount <= 1;
+                    wizardState.els.clearStrategyBtn.title = totalCount <= 1
+                        ? '至少保留 1 个计划'
+                        : (selectedCount > 0 ? `清空已选 ${selectedCount} 个计划` : '请先勾选至少 1 个计划');
+                }
+            };
+
+            const handleBatchEditStrategies = () => {
+                const selectedStrategies = getSelectedStrategyList();
+                if (!selectedStrategies.length) {
+                    appendWizardLog('请先勾选至少 1 个计划，再批量编辑', 'error');
+                    return;
+                }
+                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
+                const sourceStrategy = selectedStrategies.find(item => item.id === editingStrategy?.id) || selectedStrategies[0] || null;
+                if (!sourceStrategy) {
+                    appendWizardLog('未找到可批量编辑的计划', 'error');
+                    return;
+                }
+                const batchSyncIds = selectedStrategies
+                    .map(item => String(item?.id || '').trim())
+                    .filter(Boolean);
+                showStrategyDetail(sourceStrategy, {
+                    batchSyncIds,
+                    switchWorkbench: true
+                });
+                appendWizardLog(`已进入批量编辑：保存并关闭后将同步 ${batchSyncIds.length} 个已选计划`, 'success');
+            };
+
+            const clearSelectedStrategies = () => {
+                const selectedStrategies = getSelectedStrategyList();
+                if (!selectedStrategies.length) {
+                    appendWizardLog('请先勾选至少 1 个计划，再清空', 'error');
+                    return;
+                }
+                const strategyList = Array.isArray(wizardState?.strategyList) ? wizardState.strategyList : [];
+                if (strategyList.length <= 1) {
+                    appendWizardLog('至少保留 1 个计划', 'error');
+                    return;
+                }
+                const selectedIdSet = new Set(
+                    selectedStrategies
+                        .map(item => String(item?.id || '').trim())
+                        .filter(Boolean)
+                );
+                let preservedLocked = false;
+                let nextStrategyList = strategyList.filter(item => !selectedIdSet.has(String(item?.id || '').trim()));
+                if (!nextStrategyList.length) {
+                    const fallbackStrategy = selectedStrategies[0] || strategyList[0] || null;
+                    nextStrategyList = fallbackStrategy ? [fallbackStrategy] : strategyList.slice(0, 1);
+                    preservedLocked = true;
+                }
+                const removedCount = Math.max(0, strategyList.length - nextStrategyList.length);
+                if (!removedCount) {
+                    appendWizardLog('至少保留 1 个计划', 'error');
+                    return;
+                }
+                wizardState.strategyList = nextStrategyList;
+                wizardState.strategyBatchEditIds = [];
+                if (!nextStrategyList.some(item => item.id === wizardState.editingStrategyId)) {
+                    const fallbackStrategy = nextStrategyList[0] || null;
+                    wizardState.editingStrategyId = fallbackStrategy?.id || '';
+                    if (fallbackStrategy && wizardState.detailVisible) {
+                        applyStrategyToDetailForm(fallbackStrategy);
+                    }
+                }
+                commitStrategyUiState();
+                appendWizardLog(
+                    `已清空 ${removedCount} 个计划${preservedLocked ? '，已保留 1 个计划' : ''}`,
+                    'success'
+                );
+            };
+
             const resolveKeywordGoalRuntime = (goalLabel = '') => {
                 const normalizedGoal = detectKeywordGoalFromText(goalLabel) || normalizeGoalCandidateLabel(goalLabel);
                 const runtimeRule = resolveKeywordGoalRuntimeFallback(normalizedGoal);
@@ -42426,6 +42610,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.els.strategyList.innerHTML = '';
                 const enabledCount = wizardState.strategyList.filter(item => item.enabled).length;
                 wizardState.els.strategyCount.textContent = String(enabledCount);
+                syncStrategyHeadActionState();
                 const fallbackSceneName = getCurrentEditorSceneName();
                 const sceneSettingsCache = new Map();
                 const getSceneSettingsFor = (sceneName = '') => {
@@ -45281,6 +45466,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 commitCrowdUiState();
                 appendWizardLog('已清空人群设置');
             };
+            if (wizardState.els.batchEditStrategyBtn instanceof HTMLButtonElement) {
+                wizardState.els.batchEditStrategyBtn.onclick = handleBatchEditStrategies;
+            }
+            if (wizardState.els.clearStrategyBtn instanceof HTMLButtonElement) {
+                wizardState.els.clearStrategyBtn.onclick = clearSelectedStrategies;
+            }
             (Array.isArray(wizardState.els.toggleDebugBtns) ? wizardState.els.toggleDebugBtns : [])
                 .forEach(btn => {
                     if (!(btn instanceof HTMLButtonElement)) return;
@@ -45295,12 +45486,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const closeDetailDialog = () => {
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
-                if (editingStrategy) pullDetailFormToStrategy(editingStrategy);
+                const batchStrategyIds = uniqueBy(
+                    (Array.isArray(wizardState.strategyBatchEditIds) ? wizardState.strategyBatchEditIds : [])
+                        .map(id => String(id || '').trim())
+                        .filter(Boolean),
+                    id => id
+                );
+                let batchEditedCount = 0;
+                if (editingStrategy) {
+                    pullDetailFormToStrategy(editingStrategy);
+                    if (batchStrategyIds.length) {
+                        batchEditedCount = applyBatchEditToStrategies(editingStrategy, batchStrategyIds);
+                    }
+                }
+                wizardState.strategyBatchEditIds = [];
                 setDetailVisible(false);
                 if (typeof wizardState.setWorkbenchPage === 'function') {
                     wizardState.setWorkbenchPage('home');
                 }
                 commitStrategyUiState();
+                if (batchEditedCount > 0) {
+                    appendWizardLog(`已批量编辑 ${batchEditedCount} 个计划`, 'success');
+                }
             };
             wizardState.els.backSimpleBtn.onclick = closeDetailDialog;
             if (wizardState.els.detailCloseBtn) {
