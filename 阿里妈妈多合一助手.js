@@ -24198,21 +24198,44 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     margin-bottom: 8px;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-head-main,
-                #am-wxt-keyword-modal .am-wxt-strategy-head-right {
+                #am-wxt-keyword-modal .am-wxt-strategy-head-right,
+                #am-wxt-keyword-modal .am-wxt-strategy-head-tools {
                     display: flex;
                     align-items: center;
                     gap: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-head-tools {
+                    flex: 1 1 280px;
+                    justify-content: flex-end;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input {
+                    width: min(260px, 100%);
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-select-all {
+                    color: #475569;
+                    white-space: nowrap;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-head-actions {
                     display: flex;
                     align-items: center;
                     gap: 8px;
-                    margin-left: auto;
+                    flex-wrap: wrap;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-list {
                     display: flex;
                     flex-direction: column;
                     gap: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-empty {
+                    border: 1px dashed rgba(148,163,184,0.4);
+                    border-radius: 10px;
+                    padding: 18px 14px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #64748b;
+                    background: rgba(248,250,252,0.8);
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-item {
                     border: 1px solid rgba(148,163,184,0.3);
@@ -28380,6 +28403,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         margin-left: 0;
                         justify-content: flex-end;
                     }
+                    #am-wxt-keyword-modal .am-wxt-strategy-head-tools {
+                        width: 100%;
+                        justify-content: flex-start;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-strategy-search-input {
+                        width: 100%;
+                    }
                     #am-wxt-keyword-modal .am-wxt-matrix-action-grid,
                     #am-wxt-keyword-modal .am-wxt-matrix-settings-grid,
                     #am-wxt-keyword-modal .am-wxt-matrix-preset-grid,
@@ -30763,6 +30793,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     <button class="am-wxt-btn" id="am-wxt-keyword-add-strategy">新建计划</button>
                                     <span>已选 <b id="am-wxt-keyword-strategy-count">0</b> 个</span>
                                 </div>
+                                <div class="am-wxt-strategy-head-tools">
+                                    <label class="am-wxt-inline-check am-wxt-strategy-select-all">
+                                        <input type="checkbox" id="am-wxt-keyword-strategy-select-all" />
+                                        <span>全选</span>
+                                    </label>
+                                    <input
+                                        id="am-wxt-keyword-strategy-search"
+                                        class="am-wxt-strategy-search-input"
+                                        placeholder="搜索计划名称"
+                                    />
+                                </div>
                                 <div class="am-wxt-strategy-head-actions">
                                     <button class="am-wxt-btn" id="am-wxt-keyword-batch-edit-strategy">批量编辑</button>
                                     <button class="am-wxt-btn" id="am-wxt-keyword-clear-strategy">清空</button>
@@ -31066,6 +31107,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 strategyList: overlay.querySelector('#am-wxt-keyword-strategy-list'),
                 strategyCount: overlay.querySelector('#am-wxt-keyword-strategy-count'),
                 addStrategyBtn: overlay.querySelector('#am-wxt-keyword-add-strategy'),
+                strategySelectAllInput: overlay.querySelector('#am-wxt-keyword-strategy-select-all'),
+                strategySearchInput: overlay.querySelector('#am-wxt-keyword-strategy-search'),
                 batchEditStrategyBtn: overlay.querySelector('#am-wxt-keyword-batch-edit-strategy'),
                 clearStrategyBtn: overlay.querySelector('#am-wxt-keyword-clear-strategy'),
                 runModeWrap: overlay.querySelector('#am-wxt-keyword-run-mode-wrap'),
@@ -42045,6 +42088,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     : []
             );
 
+            const normalizeStrategySearchText = (text = '') => String(text || '').trim().toLowerCase();
+
+            const getStrategySearchKeyword = () => normalizeStrategySearchText(
+                wizardState?.els?.strategySearchInput?.value || ''
+            );
+
+            const isStrategyMatchedBySearch = (strategy = {}, keyword = '') => {
+                const normalizedKeyword = normalizeStrategySearchText(keyword);
+                if (!normalizedKeyword) return true;
+                const candidateTexts = [
+                    getStrategyMainLabel(strategy),
+                    strategy?.planName,
+                    strategy?.name
+                ]
+                    .map(item => normalizeStrategySearchText(item))
+                    .filter(Boolean);
+                return candidateTexts.some(text => text.includes(normalizedKeyword));
+            };
+
+            const getFilteredStrategyList = () => {
+                const strategyList = Array.isArray(wizardState?.strategyList) ? wizardState.strategyList : [];
+                const keyword = getStrategySearchKeyword();
+                if (!keyword) return strategyList;
+                return strategyList.filter(strategy => isStrategyMatchedBySearch(strategy, keyword));
+            };
+
+            const setFilteredStrategiesEnabled = (enabled = true) => {
+                const filteredStrategyList = getFilteredStrategyList();
+                filteredStrategyList.forEach((strategy) => {
+                    if (!isPlainObject(strategy)) return;
+                    strategy.enabled = !!enabled;
+                });
+                return filteredStrategyList.length;
+            };
+
             const resolveBatchEditableStrategyTargetCostCode = (strategy = {}) => {
                 const sceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                     ? String(strategy.sceneName).trim()
@@ -42543,6 +42621,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const syncStrategyHeadActionState = () => {
                 const selectedCount = getSelectedStrategyList().length;
                 const totalCount = Array.isArray(wizardState?.strategyList) ? wizardState.strategyList.length : 0;
+                const filteredStrategyList = getFilteredStrategyList();
+                const filteredCount = filteredStrategyList.length;
+                const filteredSelectedCount = filteredStrategyList.filter(item => item?.enabled !== false).length;
+                const hasStrategySearch = !!getStrategySearchKeyword();
+                if (wizardState.els.strategySelectAllInput instanceof HTMLInputElement) {
+                    wizardState.els.strategySelectAllInput.disabled = filteredCount <= 0;
+                    wizardState.els.strategySelectAllInput.checked = filteredCount > 0 && filteredSelectedCount === filteredCount;
+                    wizardState.els.strategySelectAllInput.indeterminate = filteredSelectedCount > 0 && filteredSelectedCount < filteredCount;
+                    wizardState.els.strategySelectAllInput.title = filteredCount > 0
+                        ? (hasStrategySearch ? `全选当前搜索结果 ${filteredCount} 个计划` : `全选当前 ${filteredCount} 个计划`)
+                        : (hasStrategySearch ? '当前搜索无匹配计划' : '暂无计划可全选');
+                }
                 if (wizardState.els.batchEditStrategyBtn instanceof HTMLButtonElement) {
                     wizardState.els.batchEditStrategyBtn.disabled = selectedCount <= 0;
                     wizardState.els.batchEditStrategyBtn.title = selectedCount > 0
@@ -42555,6 +42645,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         ? '至少保留 1 个计划'
                         : (selectedCount > 0 ? `清空已选 ${selectedCount} 个计划` : '请先勾选至少 1 个计划');
                 }
+            };
+
+            const handleSelectAllStrategies = () => {
+                if (!(wizardState.els.strategySelectAllInput instanceof HTMLInputElement)) return;
+                const nextEnabled = !!wizardState.els.strategySelectAllInput.checked;
+                const affectedCount = setFilteredStrategiesEnabled(nextEnabled);
+                if (affectedCount <= 0) {
+                    appendWizardLog('当前没有可全选的计划', 'error');
+                    return;
+                }
+                commitStrategyUiState({ refreshPreview: false });
+                const scopeLabel = getStrategySearchKeyword() ? '当前搜索结果' : '当前计划';
+                appendWizardLog(`${nextEnabled ? '已全选' : '已取消全选'} ${scopeLabel} ${affectedCount} 个`, 'success');
             };
 
             const handleBatchEditStrategies = async () => {
@@ -42863,6 +42966,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const enabledCount = wizardState.strategyList.filter(item => item.enabled).length;
                 wizardState.els.strategyCount.textContent = String(enabledCount);
                 syncStrategyHeadActionState();
+                const filteredStrategyList = getFilteredStrategyList();
+                const strategySearchKeyword = getStrategySearchKeyword();
+                if (!filteredStrategyList.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'am-wxt-strategy-empty';
+                    empty.textContent = strategySearchKeyword
+                        ? `未找到匹配“${wizardState.els.strategySearchInput?.value?.trim() || ''}”的计划`
+                        : '暂无计划';
+                    wizardState.els.strategyList.appendChild(empty);
+                    setDetailVisible(wizardState.detailVisible);
+                    renderRunModeMenu();
+                    return;
+                }
                 const fallbackSceneName = getCurrentEditorSceneName();
                 const sceneSettingsCache = new Map();
                 const getSceneSettingsFor = (sceneName = '') => {
@@ -42875,7 +42991,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     return sceneSettingsCache.get(targetScene) || {};
                 };
-                wizardState.strategyList.forEach((strategy) => {
+                filteredStrategyList.forEach((strategy) => {
                     const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                         ? String(strategy.sceneName).trim()
                         : fallbackSceneName;
@@ -45718,6 +45834,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 commitCrowdUiState();
                 appendWizardLog('已清空人群设置');
             };
+            if (wizardState.els.strategySearchInput instanceof HTMLInputElement) {
+                wizardState.els.strategySearchInput.addEventListener('input', () => {
+                    renderStrategyList();
+                });
+            }
+            if (wizardState.els.strategySelectAllInput instanceof HTMLInputElement) {
+                wizardState.els.strategySelectAllInput.addEventListener('change', handleSelectAllStrategies);
+            }
             if (wizardState.els.batchEditStrategyBtn instanceof HTMLButtonElement) {
                 wizardState.els.batchEditStrategyBtn.onclick = handleBatchEditStrategies;
             }
