@@ -24814,9 +24814,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     align-items: flex-start;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row input {
-                    flex: 0 0 56px;
-                    width: 56px;
-                    min-width: 56px;
+                    flex: 0 0 auto;
+                    width: calc(var(--am-wxt-matrix-bid-package-cost-chars, 4) * 1ch + 14px);
+                    min-width: calc(3ch + 14px);
+                    max-width: calc(10ch + 14px);
                     min-height: 30px;
                     padding: 0 7px;
                     border: 0;
@@ -24825,6 +24826,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: #334155;
                     font-size: 12px;
                     line-height: 1.4;
+                    text-align: center;
+                    appearance: none;
+                    -webkit-appearance: none;
+                    box-shadow: none;
                     font-variant-numeric: tabular-nums;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row input:focus {
@@ -24911,10 +24916,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: rgba(248,250,255,0.88);
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-remove {
-                    flex: 0 0 26px;
-                    width: 26px;
-                    min-width: 26px;
+                    flex: 0 0 14px;
+                    width: 14px;
+                    min-width: 14px;
                     height: 30px;
+                    margin-left: -14px;
                     padding: 0;
                     display: inline-flex;
                     align-items: center;
@@ -24926,6 +24932,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 14px;
                     line-height: 1;
                     box-shadow: none;
+                    visibility: hidden;
+                    opacity: 0;
+                    pointer-events: none;
+                    transform: translateX(4px) scale(0.82);
+                    transition: width 0.2s ease, min-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease, transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item:hover .am-wxt-matrix-bid-package-cost-remove {
+                    width: 26px;
+                    min-width: 26px;
+                    margin-left: 0;
+                    visibility: visible;
+                    opacity: 1;
+                    pointer-events: auto;
+                    transform: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-remove:hover {
                     color: #3354d1;
@@ -25073,9 +25093,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     white-space: nowrap;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-remove {
-                    width: 32px;
-                    min-width: 32px;
+                    width: 18px;
+                    min-width: 18px;
                     height: 32px;
+                    margin-left: -18px;
                     padding: 0;
                     display: inline-flex;
                     align-items: center;
@@ -25087,7 +25108,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 16px;
                     line-height: 1;
                     box-shadow: none;
-                    transition: color 0.2s ease, background 0.2s ease;
+                    visibility: hidden;
+                    opacity: 0;
+                    pointer-events: none;
+                    transform: translateX(6px) scale(0.78);
+                    transition: width 0.2s ease, min-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease, transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row:hover .am-wxt-matrix-bid-package-remove {
+                    width: 32px;
+                    min-width: 32px;
+                    margin-left: 0;
+                    visibility: visible;
+                    opacity: 1;
+                    pointer-events: auto;
+                    transform: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-remove:hover {
                     background: rgba(79,104,255,0.08);
@@ -29389,15 +29423,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const buildMatrixBidTargetCostPackageCostItemHtml = (costValue = '', targetOptionValue = '', costIndex = 0) => {
             const { costLabel, costPlaceholder } = getMatrixBidTargetCostPackageCostFieldMeta(targetOptionValue);
+            const displayValue = String(costValue || '').trim();
+            const widthChars = Math.max(3, Math.min(10, (displayValue || costPlaceholder || '').length || 3));
             return `
                 <div class="am-wxt-matrix-bid-package-cost-item" data-matrix-bid-package-cost-item="1" data-matrix-bid-package-cost-index="${costIndex}">
                     <input
                         type="text"
                         inputmode="decimal"
                         data-matrix-bid-package-cost="1"
-                        value="${Utils.escapeHtml(String(costValue || '').trim())}"
+                        value="${Utils.escapeHtml(displayValue)}"
                         placeholder="${Utils.escapeHtml(costPlaceholder)}"
                         title="${Utils.escapeHtml(`填写${costLabel}`)}"
+                        size="${widthChars}"
+                        style="--am-wxt-matrix-bid-package-cost-chars:${widthChars};padding:0 7px;border:0;background:transparent;text-align:center;box-shadow:none;outline:none;-webkit-appearance:none;appearance:none;"
                     />
                     <button
                         type="button"
@@ -29446,6 +29484,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!Number.isFinite(amount)) return maxValue;
                     return !Number.isFinite(maxValue) || amount > maxValue ? amount : maxValue;
                 }, NaN);
+        };
+
+        const syncMatrixBidTargetCostInputPresentation = (costInput = null) => {
+            if (!(costInput instanceof HTMLInputElement)) return;
+            const displayValue = String(costInput.value || costInput.placeholder || '').trim();
+            const widthChars = Math.max(3, Math.min(10, displayValue.length || 0 || 3));
+            costInput.style.setProperty('--am-wxt-matrix-bid-package-cost-chars', String(widthChars));
+            costInput.style.padding = '0 7px';
+            costInput.style.border = '0';
+            costInput.style.background = 'transparent';
+            costInput.style.textAlign = 'center';
+            costInput.style.boxShadow = 'none';
+            costInput.style.outline = 'none';
+            costInput.style.webkitAppearance = 'none';
+            costInput.style.appearance = 'none';
         };
 
         const getMatrixBidTargetCostPackageBatchDraft = (packageRow = null) => ({
@@ -29864,6 +29917,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (costInput instanceof HTMLInputElement) {
                         costInput.placeholder = costPlaceholder;
                         costInput.title = `填写${costLabel}`;
+                        syncMatrixBidTargetCostInputPresentation(costInput);
                     }
                     const rowValue = buildMatrixBidTargetCostPackageRowValue({
                         targetOptionValue,

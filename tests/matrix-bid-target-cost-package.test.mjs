@@ -16,6 +16,11 @@ test('智能出价目标包改为结构化行编辑，不再依赖纯文本 text
   assert.match(source, /const buildMatrixBidTargetCostPackageRows = \(values = \[\]\) => \(/, '缺少智能出价目标包结构化行 helper');
   assert.match(source, /const buildMatrixBidTargetCostPackageRowValue = \(row = \{\}\) => \{/, '缺少智能出价目标包行值序列化 helper');
   assert.match(source, /const buildMatrixBidTargetCostPackageCostItemHtml = \(costValue = '', targetOptionValue = '', costIndex = 0\) => \{/, '缺少智能出价目标包行内成本项 helper');
+  assert.match(
+    source,
+    /const buildMatrixBidTargetCostPackageCostItemHtml = \(costValue = '', targetOptionValue = '', costIndex = 0\) => \{[\s\S]*?const widthChars = Math\.max\(3, Math\.min\(10, \(displayValue \|\| costPlaceholder \|\| ''\)\.length \|\| 3\)\);[\s\S]*?size="\$\{widthChars\}"[\s\S]*?--am-wxt-matrix-bid-package-cost-chars:\$\{widthChars\};padding:0 7px;border:0;background:transparent;text-align:center;box-shadow:none;outline:none;-webkit-appearance:none;appearance:none;/,
+    '智能出价目标包初始输入框未内联同步无边框自适应样式'
+  );
   assert.match(source, /const getMatrixBidTargetCostPackageRowMaxCostValue = \(packageRow = null\) => \{/, '缺少智能出价目标包当前行最高成本 helper');
   assert.match(source, /const getMatrixBidTargetCostPackageBatchDraft = \(packageRow = null\) => \(\{/, '缺少智能出价目标包批量草稿 helper');
   assert.match(source, /const setMatrixBidTargetCostPackageBatchDraft = \(packageRow = null, options = \{\}\) => \{/, '缺少智能出价目标包批量草稿写入 helper');
@@ -63,8 +68,28 @@ test('智能出价目标包改为结构化行编辑，不再依赖纯文本 text
   );
   assert.match(
     source,
-    /\.am-wxt-matrix-bid-package-row input \{[\s\S]*?width: 56px;[\s\S]*?min-width: 56px;/,
-    '智能出价目标包数值输入框仍过宽'
+    /\.am-wxt-matrix-bid-package-row input \{[\s\S]*?width: calc\(var\(--am-wxt-matrix-bid-package-cost-chars, 4\) \* 1ch \+ 14px\);[\s\S]*?min-width: calc\(3ch \+ 14px\);[\s\S]*?max-width: calc\(10ch \+ 14px\);[\s\S]*?border: 0;/,
+    '智能出价目标包数值输入框未切到无边框自适应宽度'
+  );
+  assert.match(
+    source,
+    /\.am-wxt-matrix-bid-package-cost-remove \{[\s\S]*?width: 14px;[\s\S]*?margin-left: -14px;[\s\S]*?visibility: hidden;[\s\S]*?opacity: 0;[\s\S]*?pointer-events: none;[\s\S]*?transform: translateX\(4px\) scale\(0\.82\);/,
+    '目标成本删除 X 默认态未改为非 0 宽隐藏'
+  );
+  assert.match(
+    source,
+    /\.am-wxt-matrix-bid-package-cost-item:hover \.am-wxt-matrix-bid-package-cost-remove \{[\s\S]*?width: 26px;[\s\S]*?margin-left: 0;[\s\S]*?visibility: visible;[\s\S]*?pointer-events: auto;/,
+    '目标成本删除 X hover 态未恢复完整占位'
+  );
+  assert.match(
+    source,
+    /\.am-wxt-matrix-bid-package-remove \{[\s\S]*?width: 18px;[\s\S]*?margin-left: -18px;[\s\S]*?visibility: hidden;[\s\S]*?opacity: 0;[\s\S]*?pointer-events: none;[\s\S]*?transform: translateX\(6px\) scale\(0\.78\);/,
+    '目标包删除 X 默认态未改为非 0 宽隐藏'
+  );
+  assert.match(
+    source,
+    /\.am-wxt-matrix-bid-package-row:hover \.am-wxt-matrix-bid-package-remove \{[\s\S]*?width: 32px;[\s\S]*?margin-left: 0;[\s\S]*?visibility: visible;[\s\S]*?pointer-events: auto;/,
+    '目标包删除 X hover 态未恢复完整占位'
   );
   assert.match(
     source,
