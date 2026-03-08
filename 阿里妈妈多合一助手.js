@@ -26813,6 +26813,48 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: #64748b;
                     line-height: 1.45;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-batch-number {
+                    width: min(560px, 96vw);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-form {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    font-size: 12px;
+                    color: #334155;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"] {
+                    width: 100%;
+                    min-width: 0;
+                    height: 34px;
+                    border: 1px solid rgba(148,163,184,0.36);
+                    border-radius: 8px;
+                    padding: 0 10px;
+                    background: #fff;
+                    color: #1f2937;
+                    font-size: 13px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"]:disabled {
+                    background: #f1f5f9;
+                    color: #94a3b8;
+                    cursor: not-allowed;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-note {
+                    font-size: 12px;
+                    color: #64748b;
+                    line-height: 1.45;
+                }
                 #am-wxt-scene-popup-mask .am-wxt-btn {
                     border: 1px solid rgba(69,84,229,0.3);
                     border-radius: 8px;
@@ -27652,6 +27694,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-crowd {
                         width: min(96vw, 900px);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-grid {
+                        grid-template-columns: minmax(0, 1fr);
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-advanced-main {
                         grid-template-columns: minmax(0, 1fr);
@@ -42000,69 +42045,282 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     : []
             );
 
-            const buildBatchEditableStrategySnapshot = (strategy = {}) => ({
-                sceneName: SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
+            const resolveBatchEditableStrategyTargetCostCode = (strategy = {}) => {
+                const sceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                     ? String(strategy.sceneName).trim()
-                    : getCurrentEditorSceneName(),
-                marketingGoal: normalizeGoalLabel(strategy?.marketingGoal || ''),
-                bidMode: normalizeBidMode(strategy?.bidMode || 'smart', 'smart'),
-                dayAverageBudget: String(strategy?.dayAverageBudget || '').trim(),
-                defaultBidPrice: String(strategy?.defaultBidPrice || '1').trim() || '1',
-                keywordMode: String(strategy?.keywordMode || DEFAULTS.keywordMode).trim() || DEFAULTS.keywordMode,
-                useWordPackage: strategy?.useWordPackage !== false,
-                recommendCount: String(strategy?.recommendCount ?? DEFAULTS.recommendCount).trim() || String(DEFAULTS.recommendCount),
-                manualKeywords: String(strategy?.manualKeywords || '').trim(),
-                bidTargetV2: String(strategy?.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2,
-                budgetType: String(strategy?.budgetType || 'day_average').trim() || 'day_average',
-                setSingleCostV2: strategy?.setSingleCostV2 === true,
-                singleCostV2: String(strategy?.singleCostV2 || '').trim(),
-                sceneSettingValues: mergeDeep({}, normalizeSceneSettingBucketValues(strategy?.sceneSettingValues || {})),
-                sceneSettingTouched: mergeDeep({}, normalizeSceneSettingTouchedValues(strategy?.sceneSettingTouched || {})),
-                sceneSettings: mergeDeep({}, normalizeSceneSettingsObject(strategy?.sceneSettings || {}))
-            });
-
-            const applyBatchEditableStrategySnapshot = (strategy = {}, snapshot = {}) => {
-                if (!isPlainObject(strategy) || !isPlainObject(snapshot)) return strategy;
-                strategy.sceneName = snapshot.sceneName;
-                strategy.marketingGoal = snapshot.marketingGoal;
-                strategy.bidMode = snapshot.bidMode;
-                strategy.dayAverageBudget = snapshot.dayAverageBudget;
-                strategy.defaultBidPrice = snapshot.defaultBidPrice;
-                strategy.keywordMode = snapshot.keywordMode;
-                strategy.useWordPackage = snapshot.useWordPackage !== false;
-                strategy.recommendCount = snapshot.recommendCount;
-                strategy.manualKeywords = snapshot.manualKeywords;
-                strategy.bidTargetV2 = snapshot.bidTargetV2;
-                strategy.budgetType = snapshot.budgetType;
-                strategy.setSingleCostV2 = snapshot.bidMode === 'smart' && snapshot.setSingleCostV2 === true;
-                strategy.singleCostV2 = snapshot.bidMode === 'smart' ? snapshot.singleCostV2 : '';
-                strategy.sceneSettingValues = mergeDeep({}, normalizeSceneSettingBucketValues(snapshot.sceneSettingValues || {}));
-                strategy.sceneSettingTouched = mergeDeep({}, normalizeSceneSettingTouchedValues(snapshot.sceneSettingTouched || {}));
-                strategy.sceneSettings = mergeDeep({}, normalizeSceneSettingsObject(snapshot.sceneSettings || {}));
-                return strategy;
+                    : getCurrentEditorSceneName();
+                if (sceneName !== '关键词推广') return '';
+                const bidMode = normalizeBidMode(strategy?.bidMode || 'smart', 'smart');
+                if (bidMode !== 'smart') return '';
+                return normalizeKeywordBidTargetOptionValue(
+                    mapSceneBidTargetValue(strategy?.bidTargetV2 || '') || strategy?.bidTargetV2 || DEFAULTS.bidTargetV2
+                ) || '';
             };
 
-            const applyBatchEditToStrategies = (sourceStrategy = null, strategyIds = []) => {
-                if (!isPlainObject(sourceStrategy)) return 0;
-                const normalizedIds = uniqueBy(
-                    (Array.isArray(strategyIds) ? strategyIds : [])
-                        .map(id => String(id || '').trim())
-                        .filter(Boolean),
-                    id => id
-                );
-                if (!normalizedIds.length) return 0;
-                const snapshot = buildBatchEditableStrategySnapshot(sourceStrategy);
-                let appliedCount = 0;
-                normalizedIds.forEach((strategyId) => {
-                    const targetStrategy = getStrategyById(strategyId);
-                    if (!targetStrategy) return;
-                    applyBatchEditableStrategySnapshot(targetStrategy, snapshot);
-                    appliedCount += 1;
+            const isBatchEditableStrategyTargetCostEnabled = (strategy = {}) => {
+                const bidTargetCode = resolveBatchEditableStrategyTargetCostCode(strategy);
+                return !!(bidTargetCode && resolveStrategyTargetCostConfig(bidTargetCode));
+            };
+
+            const countBatchEditableStrategyTargetCostPlans = (strategies = []) => (
+                (Array.isArray(strategies) ? strategies : []).reduce((count, strategy) => (
+                    isBatchEditableStrategyTargetCostEnabled(strategy) ? count + 1 : count
+                ), 0)
+            );
+
+            const getBatchStrategyNumberFieldSeedValue = (strategies = [], fieldKey = '') => {
+                const list = Array.isArray(strategies) ? strategies : [];
+                if (!list.length) return '';
+                if (fieldKey === 'targetCostValue') {
+                    const targetStrategy = list.find(item => isBatchEditableStrategyTargetCostEnabled(item));
+                    if (!targetStrategy) return '';
+                    return resolveStrategyTargetCostValue(
+                        targetStrategy,
+                        resolveBatchEditableStrategyTargetCostCode(targetStrategy)
+                    );
+                }
+                const seedStrategy = list[0] || {};
+                if (fieldKey === 'dayAverageBudget') {
+                    return String(seedStrategy?.dayAverageBudget || wizardState?.draft?.dayAverageBudget || '100').trim() || '100';
+                }
+                if (fieldKey === 'defaultBidPrice') {
+                    return String(seedStrategy?.defaultBidPrice || wizardState?.draft?.defaultBidPrice || '1').trim() || '1';
+                }
+                if (fieldKey === 'recommendCount') {
+                    return String(seedStrategy?.recommendCount || wizardState?.draft?.recommendCount || DEFAULTS.recommendCount).trim() || String(DEFAULTS.recommendCount);
+                }
+                return '';
+            };
+
+            const normalizeBatchStrategyNumberEditValues = (rawValues = {}) => {
+                const normalizedValues = {};
+                const normalizeDecimalValue = (rawValue = '', label = '', options = {}) => {
+                    const text = String(rawValue || '').trim();
+                    if (!text) return '';
+                    const amount = parseNumberFromSceneValue(text);
+                    const min = Number.isFinite(options.min) ? options.min : 0;
+                    const max = Number.isFinite(options.max) ? options.max : 9999;
+                    if (!Number.isFinite(amount) || amount <= min || amount > max) {
+                        throw new Error(`${label}需填写大于 ${min} 且不超过 ${max} 的数值`);
+                    }
+                    return toShortSceneValue(String(amount)) || String(amount);
+                };
+                const normalizeIntegerValue = (rawValue = '', label = '', options = {}) => {
+                    const text = String(rawValue || '').trim();
+                    if (!text) return '';
+                    const amount = Number(text);
+                    const min = Number.isFinite(options.min) ? options.min : 1;
+                    const max = Number.isFinite(options.max) ? options.max : 200;
+                    if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount < min || amount > max) {
+                        throw new Error(`${label}需填写 ${min}-${max} 的整数`);
+                    }
+                    return String(amount);
+                };
+                const budgetValue = normalizeDecimalValue(rawValues.dayAverageBudget, '预算值', { min: 0, max: 999999 });
+                const bidValue = normalizeDecimalValue(rawValues.defaultBidPrice, '默认出价', { min: 0, max: 9999 });
+                const recommendValue = normalizeIntegerValue(rawValues.recommendCount, '推荐词目标数', { min: 1, max: 200 });
+                const targetCostValue = normalizeDecimalValue(rawValues.targetCostValue, '目标成本/ROI', { min: 0, max: 9999 });
+                if (budgetValue) normalizedValues.dayAverageBudget = budgetValue;
+                if (bidValue) normalizedValues.defaultBidPrice = bidValue;
+                if (recommendValue) normalizedValues.recommendCount = recommendValue;
+                if (targetCostValue) normalizedValues.targetCostValue = targetCostValue;
+                return normalizedValues;
+            };
+
+            const applyBatchNumberEditToStrategies = (strategies = [], values = {}) => {
+                const targetStrategies = Array.isArray(strategies)
+                    ? strategies.filter(item => isPlainObject(item))
+                    : [];
+                const hasBudget = typeof values.dayAverageBudget === 'string' && values.dayAverageBudget !== '';
+                const hasBidPrice = typeof values.defaultBidPrice === 'string' && values.defaultBidPrice !== '';
+                const hasRecommendCount = typeof values.recommendCount === 'string' && values.recommendCount !== '';
+                const hasTargetCost = typeof values.targetCostValue === 'string' && values.targetCostValue !== '';
+                let updatedCount = 0;
+                let targetCostAppliedCount = 0;
+                targetStrategies.forEach((strategy) => {
+                    let changed = false;
+                    if (hasBudget) {
+                        strategy.dayAverageBudget = values.dayAverageBudget;
+                        changed = true;
+                    }
+                    if (hasBidPrice) {
+                        strategy.defaultBidPrice = values.defaultBidPrice;
+                        changed = true;
+                    }
+                    if (hasRecommendCount) {
+                        strategy.recommendCount = values.recommendCount;
+                        changed = true;
+                    }
+                    if (hasTargetCost) {
+                        const bidTargetCode = resolveBatchEditableStrategyTargetCostCode(strategy);
+                        if (bidTargetCode && resolveStrategyTargetCostConfig(bidTargetCode)) {
+                            syncStrategyTargetCostFields(strategy, bidTargetCode, values.targetCostValue);
+                            targetCostAppliedCount += 1;
+                            changed = true;
+                        }
+                    }
+                    if (changed) updatedCount += 1;
                 });
-                return appliedCount;
+                return {
+                    updatedCount,
+                    targetCostAppliedCount
+                };
             };
 
             const getStrategyById = (strategyId) => wizardState.strategyList.find(item => item.id === strategyId) || null;
+
+            const openBatchStrategyPopupDialog = ({
+                title = '',
+                bodyHtml = '',
+                onMounted = null,
+                onSave = null,
+                dialogClassName = '',
+                cancelLabel = '取消',
+                saveLabel = '保存'
+            } = {}) => (
+                new Promise((resolve) => {
+                    const previousMask = document.getElementById('am-wxt-scene-popup-mask');
+                    if (previousMask) previousMask.remove();
+                    const mask = document.createElement('div');
+                    mask.id = 'am-wxt-scene-popup-mask';
+                    mask.className = 'am-wxt-scene-popup-mask';
+                    const dialogClass = `am-wxt-scene-popup-dialog${String(dialogClassName || '').trim() ? ` ${String(dialogClassName || '').trim()}` : ''}`;
+                    mask.innerHTML = `
+                        <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true">
+                            <div class="am-wxt-scene-popup-head">
+                                <span>${Utils.escapeHtml(title || '批量修改')}</span>
+                                <button type="button" class="am-wxt-btn" data-scene-popup-close="1">关闭</button>
+                            </div>
+                            <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
+                            <div class="am-wxt-scene-popup-foot">
+                                <button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">${Utils.escapeHtml(cancelLabel || '取消')}</button>
+                                <button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">${Utils.escapeHtml(saveLabel || '保存')}</button>
+                            </div>
+                        </div>
+                    `;
+                    const handleEscClose = (event) => {
+                        if (event?.key !== 'Escape') return;
+                        event.preventDefault();
+                        close(null);
+                    };
+                    const close = (payload = null) => {
+                        document.removeEventListener('keydown', handleEscClose, true);
+                        mask.remove();
+                        resolve(payload);
+                    };
+                    mask.addEventListener('click', (event) => {
+                        if (event.target === mask) close(null);
+                    });
+                    document.addEventListener('keydown', handleEscClose, true);
+                    const closeBtn = mask.querySelector('[data-scene-popup-close]');
+                    const cancelBtn = mask.querySelector('[data-scene-popup-cancel]');
+                    const saveBtn = mask.querySelector('[data-scene-popup-save]');
+                    if (closeBtn instanceof HTMLButtonElement) closeBtn.onclick = () => close(null);
+                    if (cancelBtn instanceof HTMLButtonElement) cancelBtn.onclick = () => close(null);
+                    if (saveBtn instanceof HTMLButtonElement) {
+                        saveBtn.onclick = () => {
+                            try {
+                                const payload = typeof onSave === 'function' ? onSave(mask) : {};
+                                if (payload && payload.ok === false) return;
+                                close(payload || {});
+                            } catch (err) {
+                                appendWizardLog(`保存配置失败：${err?.message || err}`, 'error');
+                            }
+                        };
+                    }
+                    document.body.appendChild(mask);
+                    if (typeof onMounted === 'function') {
+                        try {
+                            onMounted(mask);
+                        } catch (err) {
+                            appendWizardLog(`初始化批量编辑弹窗失败：${err?.message || err}`, 'error');
+                        }
+                    }
+                })
+            );
+
+            const openBatchStrategyNumberEditPopup = async (strategies = []) => {
+                const selectedStrategies = Array.isArray(strategies)
+                    ? strategies.filter(item => isPlainObject(item))
+                    : [];
+                if (!selectedStrategies.length) return null;
+                const targetCostPlanCount = countBatchEditableStrategyTargetCostPlans(selectedStrategies);
+                const budgetSeedValue = getBatchStrategyNumberFieldSeedValue(selectedStrategies, 'dayAverageBudget');
+                const bidSeedValue = getBatchStrategyNumberFieldSeedValue(selectedStrategies, 'defaultBidPrice');
+                const recommendSeedValue = getBatchStrategyNumberFieldSeedValue(selectedStrategies, 'recommendCount');
+                const targetCostSeedValue = getBatchStrategyNumberFieldSeedValue(selectedStrategies, 'targetCostValue');
+                return openBatchStrategyPopupDialog({
+                    title: `批量修改数值（已选 ${selectedStrategies.length} 个计划）`,
+                    dialogClassName: 'am-wxt-scene-popup-dialog-batch-number',
+                    saveLabel: '批量修改',
+                    bodyHtml: `
+                        <div class="am-wxt-strategy-batch-number-form">
+                            <div class="am-wxt-scene-popup-tips">留空表示不修改；仅会批量修改数值字段，不会覆盖计划名、商品、场景和出价模式。</div>
+                            <div class="am-wxt-strategy-batch-number-grid">
+                                <label class="am-wxt-strategy-batch-number-field">
+                                    <span>预算值</span>
+                                    <input type="number" min="0.01" max="999999" step="0.01" placeholder="${Utils.escapeHtml(budgetSeedValue || '例如 100')}" data-batch-strategy-number-field="dayAverageBudget" />
+                                </label>
+                                <label class="am-wxt-strategy-batch-number-field">
+                                    <span>默认出价</span>
+                                    <input type="number" min="0.01" max="9999" step="0.01" placeholder="${Utils.escapeHtml(bidSeedValue || '例如 1')}" data-batch-strategy-number-field="defaultBidPrice" />
+                                </label>
+                                <label class="am-wxt-strategy-batch-number-field">
+                                    <span>推荐词目标数</span>
+                                    <input type="number" min="1" max="200" step="1" placeholder="${Utils.escapeHtml(recommendSeedValue || String(DEFAULTS.recommendCount))}" data-batch-strategy-number-field="recommendCount" />
+                                </label>
+                                <label class="am-wxt-strategy-batch-number-field">
+                                    <span>目标成本/ROI</span>
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        max="9999"
+                                        step="0.01"
+                                        placeholder="${Utils.escapeHtml(targetCostSeedValue || '例如 5')}"
+                                        data-batch-strategy-number-field="targetCostValue"
+                                        ${targetCostPlanCount > 0 ? '' : 'disabled'}
+                                    />
+                                </label>
+                            </div>
+                            <div class="am-wxt-strategy-batch-number-note">
+                                目标成本/ROI 仅对关键词推广下的智能出价计划生效，本次命中 ${targetCostPlanCount} 个计划。
+                            </div>
+                        </div>
+                    `,
+                    onMounted(mask) {
+                        const budgetInput = mask.querySelector('[data-batch-strategy-number-field="dayAverageBudget"]');
+                        if (budgetInput instanceof HTMLInputElement) {
+                            requestAnimationFrame(() => {
+                                try {
+                                    budgetInput.focus({ preventScroll: true });
+                                } catch {
+                                    budgetInput.focus();
+                                }
+                            });
+                        }
+                    },
+                    onSave(mask) {
+                        const normalizedValues = normalizeBatchStrategyNumberEditValues({
+                            dayAverageBudget: mask.querySelector('[data-batch-strategy-number-field="dayAverageBudget"]')?.value || '',
+                            defaultBidPrice: mask.querySelector('[data-batch-strategy-number-field="defaultBidPrice"]')?.value || '',
+                            recommendCount: mask.querySelector('[data-batch-strategy-number-field="recommendCount"]')?.value || '',
+                            targetCostValue: mask.querySelector('[data-batch-strategy-number-field="targetCostValue"]')?.value || ''
+                        });
+                        if (!Object.keys(normalizedValues).length) {
+                            appendWizardLog('请至少填写 1 个需要批量修改的数值字段', 'error');
+                            return { ok: false };
+                        }
+                        if (normalizedValues.targetCostValue && targetCostPlanCount <= 0) {
+                            appendWizardLog('已选计划中没有可批量修改目标成本/ROI的计划', 'error');
+                            return { ok: false };
+                        }
+                        return {
+                            ok: true,
+                            values: normalizedValues
+                        };
+                    }
+                });
+            };
 
             const applyStrategyToDetailForm = (strategy) => {
                 if (!strategy) return;
@@ -42197,16 +42455,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const showStrategyDetail = (strategy = null, options = {}) => {
                 const targetStrategy = strategy || getStrategyById(wizardState.editingStrategyId) || wizardState.strategyList[0] || null;
                 if (!targetStrategy) return null;
-                if (Array.isArray(options.batchSyncIds)) {
-                    wizardState.strategyBatchEditIds = uniqueBy(
-                        options.batchSyncIds
-                            .map(id => String(id || '').trim())
-                            .filter(Boolean),
-                        id => id
-                    );
-                } else if (options.keepBatchSync !== true) {
-                    wizardState.strategyBatchEditIds = [];
-                }
                 const previous = getStrategyById(wizardState.editingStrategyId);
                 if (previous && previous.id !== targetStrategy.id && wizardState.detailVisible) {
                     pullDetailFormToStrategy(previous);
@@ -42229,7 +42477,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const openStrategyDetail = (strategyId) => {
                 const strategy = getStrategyById(strategyId);
                 if (!strategy) return;
-                wizardState.strategyBatchEditIds = [];
                 if (
                     wizardState.editingStrategyId === strategy.id
                     && wizardState.detailVisible
@@ -42245,7 +42492,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 showStrategyDetail(strategy);
             };
             const addNewStrategy = () => {
-                wizardState.strategyBatchEditIds = [];
                 const editing = getStrategyById(wizardState.editingStrategyId);
                 if (editing && wizardState.detailVisible) pullDetailFormToStrategy(editing);
                 const sceneName = getCurrentEditorSceneName();
@@ -42300,7 +42546,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (wizardState.els.batchEditStrategyBtn instanceof HTMLButtonElement) {
                     wizardState.els.batchEditStrategyBtn.disabled = selectedCount <= 0;
                     wizardState.els.batchEditStrategyBtn.title = selectedCount > 0
-                        ? `编辑已选 ${selectedCount} 个计划`
+                        ? `批量修改已选 ${selectedCount} 个计划的数值项`
                         : '请先勾选至少 1 个计划';
                 }
                 if (wizardState.els.clearStrategyBtn instanceof HTMLButtonElement) {
@@ -42311,26 +42557,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             };
 
-            const handleBatchEditStrategies = () => {
+            const handleBatchEditStrategies = async () => {
                 const selectedStrategies = getSelectedStrategyList();
                 if (!selectedStrategies.length) {
                     appendWizardLog('请先勾选至少 1 个计划，再批量编辑', 'error');
                     return;
                 }
-                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
-                const sourceStrategy = selectedStrategies.find(item => item.id === editingStrategy?.id) || selectedStrategies[0] || null;
-                if (!sourceStrategy) {
-                    appendWizardLog('未找到可批量编辑的计划', 'error');
+                const result = await openBatchStrategyNumberEditPopup(selectedStrategies);
+                if (!result?.values || !isPlainObject(result.values)) return;
+                const applyResult = applyBatchNumberEditToStrategies(selectedStrategies, result.values);
+                if (applyResult.updatedCount <= 0) {
+                    appendWizardLog('未命中可批量修改的计划', 'error');
                     return;
                 }
-                const batchSyncIds = selectedStrategies
-                    .map(item => String(item?.id || '').trim())
-                    .filter(Boolean);
-                showStrategyDetail(sourceStrategy, {
-                    batchSyncIds,
-                    switchWorkbench: true
-                });
-                appendWizardLog(`已进入批量编辑：保存并关闭后将同步 ${batchSyncIds.length} 个已选计划`, 'success');
+                const editingStrategy = getStrategyById(wizardState.editingStrategyId);
+                if (
+                    editingStrategy
+                    && wizardState.detailVisible
+                    && selectedStrategies.some(item => item?.id === editingStrategy.id)
+                ) {
+                    applyStrategyToDetailForm(editingStrategy);
+                }
+                commitStrategyUiState();
+                const logParts = [`已批量修改 ${applyResult.updatedCount} 个计划`];
+                if (result.values.targetCostValue) {
+                    logParts.push(`目标成本/ROI 命中 ${applyResult.targetCostAppliedCount} 个计划`);
+                }
+                appendWizardLog(logParts.join('；'), 'success');
             };
 
             const clearSelectedStrategies = () => {
@@ -42362,7 +42615,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return;
                 }
                 wizardState.strategyList = nextStrategyList;
-                wizardState.strategyBatchEditIds = [];
                 if (!nextStrategyList.some(item => item.id === wizardState.editingStrategyId)) {
                     const fallbackStrategy = nextStrategyList[0] || null;
                     wizardState.editingStrategyId = fallbackStrategy?.id || '';
@@ -45486,28 +45738,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const closeDetailDialog = () => {
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
-                const batchStrategyIds = uniqueBy(
-                    (Array.isArray(wizardState.strategyBatchEditIds) ? wizardState.strategyBatchEditIds : [])
-                        .map(id => String(id || '').trim())
-                        .filter(Boolean),
-                    id => id
-                );
-                let batchEditedCount = 0;
                 if (editingStrategy) {
                     pullDetailFormToStrategy(editingStrategy);
-                    if (batchStrategyIds.length) {
-                        batchEditedCount = applyBatchEditToStrategies(editingStrategy, batchStrategyIds);
-                    }
                 }
-                wizardState.strategyBatchEditIds = [];
                 setDetailVisible(false);
                 if (typeof wizardState.setWorkbenchPage === 'function') {
                     wizardState.setWorkbenchPage('home');
                 }
                 commitStrategyUiState();
-                if (batchEditedCount > 0) {
-                    appendWizardLog(`已批量编辑 ${batchEditedCount} 个计划`, 'success');
-                }
             };
             wizardState.els.backSimpleBtn.onclick = closeDetailDialog;
             if (wizardState.els.detailCloseBtn) {

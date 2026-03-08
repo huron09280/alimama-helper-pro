@@ -36,27 +36,34 @@ test('首页计划区会按已选计划刷新批量操作按钮状态', () => {
   );
 });
 
-test('批量编辑会进入编辑页，并在保存并关闭时同步到已选计划', () => {
-  assert.match(source, /const buildBatchEditableStrategySnapshot = \(strategy = \{\}\) => \(\{/, '缺少批量编辑快照 helper');
+test('批量编辑改为独立弹窗，只批量修改数值字段', () => {
+  assert.match(source, /const resolveBatchEditableStrategyTargetCostCode = \(strategy = \{\}\) => \{/, '缺少批量目标成本适配 helper');
+  assert.match(source, /const openBatchStrategyPopupDialog = \(\{/, '缺少首页计划批量编辑弹窗 helper');
   assert.match(
     source,
-    /const applyBatchEditableStrategySnapshot = \(strategy = \{\}, snapshot = \{\}\) => \{[\s\S]*?strategy\.sceneName = snapshot\.sceneName;[\s\S]*?strategy\.sceneSettings = mergeDeep\(\{\}, normalizeSceneSettingsObject\(snapshot\.sceneSettings \|\| \{\}\)\);/,
-    '批量编辑快照未回写到目标计划字段'
+    /const normalizeBatchStrategyNumberEditValues = \(rawValues = \{\}\) => \{[\s\S]*?const budgetValue = normalizeDecimalValue\(rawValues\.dayAverageBudget, '预算值', \{ min: 0, max: 999999 \}\);[\s\S]*?const recommendValue = normalizeIntegerValue\(rawValues\.recommendCount, '推荐词目标数', \{ min: 1, max: 200 \}\);/,
+    '批量编辑缺少数值字段校验'
   );
   assert.match(
     source,
-    /if \(Array\.isArray\(options\.batchSyncIds\)\) \{[\s\S]*?wizardState\.strategyBatchEditIds = uniqueBy\(/,
-    'showStrategyDetail 未接收批量编辑目标集合'
+    /const applyBatchNumberEditToStrategies = \(strategies = \[\], values = \{\}\) => \{[\s\S]*?strategy\.dayAverageBudget = values\.dayAverageBudget;[\s\S]*?strategy\.defaultBidPrice = values\.defaultBidPrice;[\s\S]*?strategy\.recommendCount = values\.recommendCount;[\s\S]*?syncStrategyTargetCostFields\(strategy,\s*bidTargetCode,\s*values\.targetCostValue\);/,
+    '批量编辑未收敛为数值字段回写'
   );
   assert.match(
     source,
-    /const handleBatchEditStrategies = \(\) => \{[\s\S]*?const selectedStrategies = getSelectedStrategyList\(\);[\s\S]*?appendWizardLog\('请先勾选至少 1 个计划，再批量编辑', 'error'\);[\s\S]*?const batchSyncIds = selectedStrategies[\s\S]*?showStrategyDetail\(sourceStrategy,\s*\{[\s\S]*?batchSyncIds,[\s\S]*?switchWorkbench:\s*true[\s\S]*?\}\);[\s\S]*?appendWizardLog\(`已进入批量编辑：保存并关闭后将同步 \$\{batchSyncIds\.length\} 个已选计划`, 'success'\);/,
-    '批量编辑按钮未进入“编辑后统一保存”的链路'
+    /const openBatchStrategyNumberEditPopup = async \(strategies = \[\]\) => \{[\s\S]*?return openBatchStrategyPopupDialog\(\{[\s\S]*?data-batch-strategy-number-field="dayAverageBudget"[\s\S]*?data-batch-strategy-number-field="defaultBidPrice"[\s\S]*?data-batch-strategy-number-field="recommendCount"[\s\S]*?data-batch-strategy-number-field="targetCostValue"[\s\S]*?请至少填写 1 个需要批量修改的数值字段/,
+    '批量编辑弹窗未提供独立数值字段表单'
   );
   assert.match(
     source,
-    /const closeDetailDialog = \(\) => \{[\s\S]*?const batchStrategyIds = uniqueBy\([\s\S]*?batchEditedCount = applyBatchEditToStrategies\(editingStrategy,\s*batchStrategyIds\);[\s\S]*?wizardState\.strategyBatchEditIds = \[\];[\s\S]*?appendWizardLog\(`已批量编辑 \$\{batchEditedCount\} 个计划`, 'success'\);/,
-    '保存并关闭时未把批量编辑结果同步回已选计划'
+    /const handleBatchEditStrategies = async \(\) => \{[\s\S]*?const result = await openBatchStrategyNumberEditPopup\(selectedStrategies\);[\s\S]*?const applyResult = applyBatchNumberEditToStrategies\(selectedStrategies,\s*result\.values\);[\s\S]*?applyStrategyToDetailForm\(editingStrategy\);[\s\S]*?appendWizardLog\(logParts\.join\('；'\), 'success'\);/,
+    '批量编辑按钮未改为“弹窗填写数值后批量应用”的链路'
+  );
+  assert.doesNotMatch(source, /buildBatchEditableStrategySnapshot|applyBatchEditableStrategySnapshot|applyBatchEditToStrategies/, '旧的整条计划覆盖式批量编辑 helper 仍然存在');
+  assert.doesNotMatch(
+    source,
+    /const closeDetailDialog = \(\) => \{[\s\S]*?applyBatchEditToStrategies\(/,
+    '关闭编辑页时仍会触发旧的整条计划同步'
   );
 });
 
