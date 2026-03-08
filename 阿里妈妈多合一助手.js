@@ -24212,6 +24212,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-wxt-keyword-modal .am-wxt-strategy-search-input {
                     width: min(260px, 100%);
                     min-width: 0;
+                    border: 1px solid rgba(69,84,229,0.3);
+                    border-radius: 8px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                    line-height: 1;
+                    background: #eef2ff;
+                    color: #2e3ab8;
+                    box-sizing: border-box;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input::placeholder {
+                    color: rgba(46,58,184,0.56);
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-select-all {
                     color: #475569;
