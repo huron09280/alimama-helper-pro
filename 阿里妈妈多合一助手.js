@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      6.01
+// @version      6.02
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,11 @@
 // ==/UserScript==
 /**
  * 更新日志
+ *
+ * v6.02 (2026-03-08)
+ * - ✨ Dev Loader 列表增强：自定义入口支持备注名，切换列表优先展示备注名
+ * - ✨ Dev Loader 交互升级：编辑列表改为逐条管理，可新增、编辑、删除单条入口
+ * - 🔧 Dev Loader 编辑体验修复：编辑列表不再依赖浏览器 `prompt/alert`，改为内置弹层
  *
  * v6.01 (2026-02-27)
  * - ✨ 同商品计划识别扩容：并发识别范围覆盖货品全站、关键词、线索、人群四类计划

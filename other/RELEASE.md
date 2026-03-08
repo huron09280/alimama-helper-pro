@@ -28,7 +28,7 @@
 
 ## 2. 发版流程
 
-1. 确认脚本头 `@version` 与更新日志一致（例如 `6.01`）
+1. 确认脚本头 `@version` 与更新日志一致（例如 `6.02`）
 2. 本地验证：
 
 ```bash
@@ -42,8 +42,8 @@ bash scripts/review-team.sh
 3. 提交并打 tag：
 
 ```bash
-git tag v6.01
-git push origin v6.01
+git tag v6.02
+git push origin v6.02
 ```
 
 4. GitHub Actions 自动执行：

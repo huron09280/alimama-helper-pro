@@ -28,7 +28,7 @@
 
 ## 2. 发版流程
 
-1. 确认脚本头 `@version` 与更新日志一致（例如 `5.29`）
+1. 确认脚本头 `@version` 与更新日志一致（例如 `6.02`）
 2. 本地验证：
 
 ```bash
@@ -39,8 +39,8 @@ node --test tests/logger-api.test.mjs
 3. 提交并打 tag：
 
 ```bash
-git tag v5.29
-git push origin v5.29
+git tag v6.02
+git push origin v6.02
 ```
 
 4. GitHub Actions 自动执行：

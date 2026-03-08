@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Dev Loader)
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.2.0
 // @description  本地开发加载器：每次刷新页面都拉取最新脚本并执行，避免手动复制粘贴
 // @author       Liangchao
 // @match        *://alimama.com/*
@@ -120,6 +120,26 @@
             return response.text();
         });
 
+    const normalizeEntryItem = (rawItem) => {
+        if (typeof rawItem === 'string') {
+            const normalizedUrl = normalizeEntryUrl(rawItem);
+            return normalizedUrl ? { url: normalizedUrl, remark: '' } : null;
+        }
+        if (!rawItem || typeof rawItem !== 'object') return null;
+        const normalizedUrl = normalizeEntryUrl(rawItem.url || rawItem.value || '');
+        if (!normalizedUrl) return null;
+        return {
+            url: normalizedUrl,
+            remark: String(rawItem.remark || rawItem.note || rawItem.name || '').trim()
+        };
+    };
+
+    const formatEntryItem = (entry) => {
+        const normalized = normalizeEntryItem(entry);
+        if (!normalized) return '';
+        return normalized.remark ? `${normalized.url} | ${normalized.remark}` : normalized.url;
+    };
+
     const parseEntryListText = (rawText = '') => {
         const text = String(rawText || '').trim();
         if (!text) return [];
@@ -127,13 +147,24 @@
             try {
                 const parsed = JSON.parse(text);
                 if (Array.isArray(parsed)) {
-                    return parsed.map(item => (typeof item === 'string' ? item : item?.url || '')).filter(Boolean);
+                    return parsed.map(item => normalizeEntryItem(item)).filter(Boolean);
                 }
             } catch { }
         }
-        return text
-            .split(/\r?\n|[,;]/)
-            .map(item => String(item || '').trim())
+
+        const lines = text.includes('\n')
+            ? text.split(/\r?\n/)
+            : text.split(/[,;]/);
+
+        return lines
+            .map((item) => {
+                const line = String(item || '').trim();
+                if (!line) return null;
+                const segments = line.split(/\s*[|｜]\s*/);
+                const urlPart = String(segments.shift() || '').trim();
+                const remarkPart = segments.join(' | ').trim();
+                return normalizeEntryItem({ url: urlPart, remark: remarkPart });
+            })
             .filter(Boolean);
     };
 
@@ -146,21 +177,29 @@
     };
 
     const readConfiguredEntryList = () => uniqueBy(
-        parseEntryListText(safeGetValue(DEV_ENTRY_LIST_KEY, ''))
-            .map(item => normalizeEntryUrl(item))
-            .filter(Boolean),
-        item => item
+        parseEntryListText(safeGetValue(DEV_ENTRY_LIST_KEY, '')),
+        item => item.url
     );
 
     const writeConfiguredEntryList = (entryList = []) => {
         const normalizedList = uniqueBy(
             (Array.isArray(entryList) ? entryList : [])
-                .map(item => normalizeEntryUrl(item))
+                .map(item => normalizeEntryItem(item))
                 .filter(Boolean),
-            item => item
+            item => item.url
         );
         safeSetValue(DEV_ENTRY_LIST_KEY, JSON.stringify(normalizedList));
         return normalizedList;
+    };
+
+    const createEntryMap = (entryList = []) => {
+        const map = new Map();
+        (Array.isArray(entryList) ? entryList : []).forEach((item) => {
+            const normalized = normalizeEntryItem(item);
+            if (!normalized) return;
+            map.set(normalized.url, normalized);
+        });
+        return map;
     };
 
     const buildAutoExpandedUrls = () => {
@@ -174,21 +213,21 @@
         return autoExpanded;
     };
 
-    const buildPresetEntryUrls = () => {
+    const buildPresetEntryList = () => {
         const custom = normalizeEntryUrl(safeGetValue(DEV_ENTRY_SETTING_KEY, ''));
         const lastSuccess = normalizeEntryUrl(safeGetValue(DEV_ENTRY_LAST_SUCCESS_KEY, ''));
         const configured = readConfiguredEntryList();
         return uniqueBy(
             [custom, lastSuccess].concat(configured, DEV_ENTRY_CANDIDATES)
-                .map(item => normalizeEntryUrl(item))
+                .map(item => normalizeEntryItem(item))
                 .filter(Boolean),
-            item => item
+            item => item.url
         );
     };
 
     const buildCandidateUrls = () => uniqueBy(
-        buildPresetEntryUrls().concat(buildAutoExpandedUrls())
-            .map(item => normalizeEntryUrl(item))
+        buildPresetEntryList().concat(buildAutoExpandedUrls())
+            .map(item => normalizeEntryItem(item)?.url || '')
             .filter(Boolean),
         item => item
     );
@@ -241,9 +280,10 @@
         const custom = normalizeEntryUrl(safeGetValue(DEV_ENTRY_SETTING_KEY, ''));
         const lastSuccess = normalizeEntryUrl(safeGetValue(DEV_ENTRY_LAST_SUCCESS_KEY, ''));
         const configuredList = readConfiguredEntryList();
-        const presetList = buildPresetEntryUrls();
-        const effective = custom || lastSuccess || presetList[0] || DEV_ENTRY_CANDIDATES[0];
-        return { custom, lastSuccess, configuredList, presetList, effective };
+        const presetList = buildPresetEntryList();
+        const entryMap = createEntryMap(configuredList.concat(presetList));
+        const effective = custom || lastSuccess || presetList[0]?.url || DEV_ENTRY_CANDIDATES[0];
+        return { custom, lastSuccess, configuredList, presetList, entryMap, effective };
     };
 
     const registerMenuCommands = () => {
@@ -281,7 +321,7 @@
             const state = readLoaderEntryState();
             const input = prompt(
                 '每行一个入口 URL（支持完整 URL 或相对路径）',
-                (state.configuredList || []).join('\n')
+                (state.configuredList || []).map(item => item.url || '').filter(Boolean).join('\n')
             );
             if (input === null) return;
             const nextList = writeConfiguredEntryList(parseEntryListText(input));
@@ -298,6 +338,20 @@
         const text = String(url || '').trim();
         if (!text || text.length <= maxLength) return text;
         return `${text.slice(0, maxLength - 3)}...`;
+    };
+
+    const escapeHtml = (text = '') => String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const getEntryRemark = (url = '', entryMap = new Map()) => String(entryMap.get(url)?.remark || '').trim();
+
+    const getEntryDisplayText = (url = '', entryMap = new Map()) => {
+        const normalizedUrl = normalizeEntryUrl(url);
+        const remark = getEntryRemark(normalizedUrl, entryMap);
+        return remark || shortenUrl(normalizedUrl);
     };
 
     const showLoadFailureBadge = (error) => {
@@ -351,7 +405,25 @@
                 #am-dev-loader-switcher .am-dev-select { flex: 1; min-width: 0; height: 30px; border: 1px solid rgba(15,23,42,0.22); border-radius: 8px; padding: 0 8px; background: #fff; color: #111827; }
                 #am-dev-loader-switcher .am-dev-btn { border: 1px solid rgba(15,23,42,0.18); background: #fff; border-radius: 8px; height: 30px; padding: 0 10px; cursor: pointer; color: #111827; white-space: nowrap; }
                 #am-dev-loader-switcher .am-dev-btn.primary { border-color: rgba(29,78,216,0.45); color: #1d4ed8; }
+                #am-dev-loader-switcher .am-dev-btn.danger { border-color: rgba(185,28,28,0.18); color: #b91c1c; }
                 #am-dev-loader-switcher .am-dev-tip { font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                #am-dev-loader-switcher .am-dev-modal-mask { position: fixed; inset: 0; z-index: 2147483646; background: rgba(15,23,42,0.32); display: none; align-items: center; justify-content: center; padding: 16px; }
+                #am-dev-loader-switcher .am-dev-modal { width: 560px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; background: #fff; border: 1px solid rgba(15,23,42,0.12); border-radius: 12px; padding: 14px; box-shadow: 0 16px 40px rgba(15,23,42,0.24); }
+                #am-dev-loader-switcher .am-dev-modal-title { font-size: 14px; font-weight: 600; color: #111827; }
+                #am-dev-loader-switcher .am-dev-modal-desc { margin-top: 6px; font-size: 12px; color: #64748b; }
+                #am-dev-loader-switcher .am-dev-entry-editor { margin-top: 10px; border: 1px solid rgba(15,23,42,0.12); border-radius: 10px; padding: 10px; background: #f8fafc; }
+                #am-dev-loader-switcher .am-dev-field { display: block; font-size: 12px; color: #475569; }
+                #am-dev-loader-switcher .am-dev-field + .am-dev-field { margin-top: 8px; }
+                #am-dev-loader-switcher .am-dev-input { width: 100%; height: 34px; margin-top: 4px; border: 1px solid rgba(15,23,42,0.18); border-radius: 8px; padding: 0 10px; box-sizing: border-box; background: #fff; color: #111827; }
+                #am-dev-loader-switcher .am-dev-entry-list { margin-top: 10px; border: 1px solid rgba(15,23,42,0.12); border-radius: 10px; background: #fff; max-height: 260px; overflow: auto; }
+                #am-dev-loader-switcher .am-dev-entry-empty { padding: 16px 12px; text-align: center; font-size: 12px; color: #94a3b8; }
+                #am-dev-loader-switcher .am-dev-entry-item { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(15,23,42,0.08); }
+                #am-dev-loader-switcher .am-dev-entry-item:last-child { border-bottom: none; }
+                #am-dev-loader-switcher .am-dev-entry-main { flex: 1; min-width: 0; cursor: pointer; }
+                #am-dev-loader-switcher .am-dev-entry-name { font-size: 13px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                #am-dev-loader-switcher .am-dev-entry-url { margin-top: 4px; font-size: 11px; color: #64748b; word-break: break-all; }
+                #am-dev-loader-switcher .am-dev-entry-actions { display: flex; gap: 6px; flex-shrink: 0; }
+                #am-dev-loader-switcher .am-dev-modal-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
             `;
             document.documentElement.appendChild(style);
 
@@ -372,6 +444,29 @@
                         <div class="am-dev-tip"></div>
                     </div>
                 </div>
+                <div class="am-dev-modal-mask" hidden>
+                    <div class="am-dev-modal">
+                        <div class="am-dev-modal-title">编辑列表</div>
+                        <div class="am-dev-modal-desc">每一个列表项都可以设置备注名，列表显示备注名，点“编辑”可以继续修改。</div>
+                        <div class="am-dev-entry-editor">
+                            <label class="am-dev-field">入口 URL
+                                <input type="text" class="am-dev-input" data-role="entry-url" placeholder="支持完整 URL 或相对路径">
+                            </label>
+                            <label class="am-dev-field">备注名
+                                <input type="text" class="am-dev-input" data-role="entry-remark" placeholder="例如：本地开发 / 测试入口">
+                            </label>
+                            <div class="am-dev-modal-actions">
+                                <button type="button" class="am-dev-btn" data-act="reset-entry">新增</button>
+                                <button type="button" class="am-dev-btn primary" data-act="apply-entry">加入列表</button>
+                            </div>
+                        </div>
+                        <div class="am-dev-entry-list"></div>
+                        <div class="am-dev-modal-actions">
+                            <button type="button" class="am-dev-btn" data-act="cancel-edit">取消</button>
+                            <button type="button" class="am-dev-btn primary" data-act="save-edit">保存</button>
+                        </div>
+                    </div>
+                </div>
             `;
             document.body.appendChild(wrap);
 
@@ -382,17 +477,174 @@
             const applyBtn = wrap.querySelector('[data-act="apply"]');
             const editBtn = wrap.querySelector('[data-act="edit"]');
             const autoBtn = wrap.querySelector('[data-act="auto"]');
+            const editMask = wrap.querySelector('.am-dev-modal-mask');
+            const editModal = wrap.querySelector('.am-dev-modal');
+            const entryUrlInput = wrap.querySelector('[data-role="entry-url"]');
+            const entryRemarkInput = wrap.querySelector('[data-role="entry-remark"]');
+            const entryListBox = wrap.querySelector('.am-dev-entry-list');
+            const resetEntryBtn = wrap.querySelector('[data-act="reset-entry"]');
+            const applyEntryBtn = wrap.querySelector('[data-act="apply-entry"]');
+            const cancelEditBtn = wrap.querySelector('[data-act="cancel-edit"]');
+            const saveEditBtn = wrap.querySelector('[data-act="save-edit"]');
+            let tipTimer = 0;
+            let draftEntryList = [];
+            let editingEntryIndex = -1;
+
+            const restoreTip = () => {
+                const state = readLoaderEntryState();
+                tip.textContent = `当前: ${getEntryDisplayText(state.effective || '未识别', state.entryMap)}`;
+            };
+
+            const flashTip = (message) => {
+                tip.textContent = message;
+                if (tipTimer) {
+                    clearTimeout(tipTimer);
+                }
+                tipTimer = setTimeout(() => {
+                    tipTimer = 0;
+                    restoreTip();
+                }, 1800);
+            };
+
+            const syncEntryFormState = () => {
+                applyEntryBtn.textContent = editingEntryIndex >= 0 ? '更新' : '加入列表';
+                resetEntryBtn.textContent = editingEntryIndex >= 0 ? '取消编辑' : '新增';
+            };
+
+            const resetEntryForm = (shouldFocus = false) => {
+                editingEntryIndex = -1;
+                entryUrlInput.value = '';
+                entryRemarkInput.value = '';
+                syncEntryFormState();
+                if (shouldFocus) {
+                    setTimeout(() => {
+                        entryUrlInput.focus();
+                    }, 0);
+                }
+            };
+
+            const renderDraftEntryList = () => {
+                if (!draftEntryList.length) {
+                    entryListBox.innerHTML = '<div class="am-dev-entry-empty">暂无自定义入口，先新增一条吧。</div>';
+                    return;
+                }
+                entryListBox.innerHTML = draftEntryList.map((item, index) => {
+                    const primaryText = item.remark || shortenUrl(item.url);
+                    return `
+                        <div class="am-dev-entry-item" data-entry-index="${index}">
+                            <div class="am-dev-entry-main" data-act="edit-entry" data-entry-index="${index}" title="${escapeHtml(item.url)}">
+                                <div class="am-dev-entry-name">${escapeHtml(primaryText)}</div>
+                                <div class="am-dev-entry-url">${escapeHtml(item.url)}</div>
+                            </div>
+                            <div class="am-dev-entry-actions">
+                                <button type="button" class="am-dev-btn" data-act="edit-entry" data-entry-index="${index}">编辑</button>
+                                <button type="button" class="am-dev-btn danger" data-act="remove-entry" data-entry-index="${index}">删除</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            };
 
             const renderOptions = () => {
                 const state = readLoaderEntryState();
-                const options = (state.presetList || []).length ? state.presetList : buildCandidateUrls();
+                const options = (state.presetList || []).length
+                    ? state.presetList
+                    : buildCandidateUrls().map(url => ({ url, remark: '' }));
                 const activeValue = state.custom || state.effective || options[0] || '';
-                select.innerHTML = options.map(url => (
-                    `<option value="${url.replace(/"/g, '&quot;')}">${shortenUrl(url)}</option>`
+                select.innerHTML = options.map(({ url, remark }) => (
+                    `<option value="${escapeHtml(url)}" title="${escapeHtml(url)}">${escapeHtml(remark || shortenUrl(url))}</option>`
                 )).join('');
-                if (activeValue) select.value = activeValue;
-                if (!select.value && options.length) select.value = options[0];
-                tip.textContent = `当前: ${shortenUrl(state.effective || '未识别')}`;
+                if (activeValue) select.value = typeof activeValue === 'string' ? activeValue : activeValue.url;
+                if (!select.value && options.length) select.value = options[0].url;
+                if (!tipTimer) {
+                    restoreTip();
+                }
+            };
+
+            const closeEditModal = () => {
+                editMask.hidden = true;
+                editMask.style.display = 'none';
+                resetEntryForm();
+            };
+
+            const openEditModal = () => {
+                const state = readLoaderEntryState();
+                draftEntryList = (state.configuredList || []).map(item => normalizeEntryItem(item)).filter(Boolean);
+                renderDraftEntryList();
+                resetEntryForm();
+                editMask.hidden = false;
+                editMask.style.display = 'flex';
+                setTimeout(() => {
+                    entryUrlInput.focus();
+                }, 0);
+            };
+
+            const beginEditEntry = (index) => {
+                const current = draftEntryList[index];
+                if (!current) return;
+                editingEntryIndex = index;
+                entryUrlInput.value = current.url;
+                entryRemarkInput.value = current.remark || '';
+                syncEntryFormState();
+                entryRemarkInput.focus();
+                entryRemarkInput.select();
+            };
+
+            const removeDraftEntry = (index) => {
+                if (!draftEntryList[index]) return;
+                draftEntryList = draftEntryList.filter((_, itemIndex) => itemIndex !== index);
+                if (editingEntryIndex === index) {
+                    resetEntryForm();
+                } else if (editingEntryIndex > index) {
+                    editingEntryIndex -= 1;
+                    syncEntryFormState();
+                }
+                renderDraftEntryList();
+            };
+
+            const applyDraftEntry = () => {
+                const normalized = normalizeEntryItem({
+                    url: entryUrlInput.value,
+                    remark: entryRemarkInput.value
+                });
+                if (!normalized) {
+                    flashTip('请输入有效入口 URL。');
+                    entryUrlInput.focus();
+                    return;
+                }
+                const nextList = draftEntryList.slice();
+                if (editingEntryIndex >= 0 && nextList[editingEntryIndex]) {
+                    nextList[editingEntryIndex] = normalized;
+                } else {
+                    nextList.push(normalized);
+                }
+                draftEntryList = uniqueBy(nextList, item => item.url);
+                renderDraftEntryList();
+                resetEntryForm(true);
+                flashTip(normalized.remark ? `已更新：${normalized.remark}` : `已更新：${shortenUrl(normalized.url, 40)}`);
+            };
+
+            const saveEditedList = () => {
+                const nextList = writeConfiguredEntryList(draftEntryList);
+                closeEditModal();
+                renderOptions();
+                flashTip(nextList.length ? `已保存 ${nextList.length} 个入口。` : '列表已清空，仅保留默认候选。');
+            };
+
+            const handleEntryFieldKeydown = (event) => {
+                if (event.key === 'Escape') {
+                    closeEditModal();
+                    return;
+                }
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                    event.preventDefault();
+                    saveEditedList();
+                    return;
+                }
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyDraftEntry();
+                }
             };
 
             toggleBtn.addEventListener('click', () => {
@@ -407,19 +659,35 @@
                 location.reload();
             });
 
-            editBtn.addEventListener('click', () => {
-                const state = readLoaderEntryState();
-                const input = prompt(
-                    '每行一个入口 URL（支持完整 URL 或相对路径）',
-                    (state.configuredList || []).join('\n')
-                );
-                if (input === null) return;
-                const nextList = writeConfiguredEntryList(parseEntryListText(input));
-                if (!nextList.length) {
-                    alert('列表已清空，仅保留默认候选。');
-                }
-                renderOptions();
+            editBtn.addEventListener('click', openEditModal);
+            resetEntryBtn.addEventListener('click', () => {
+                resetEntryForm(true);
             });
+            applyEntryBtn.addEventListener('click', applyDraftEntry);
+            cancelEditBtn.addEventListener('click', closeEditModal);
+            saveEditBtn.addEventListener('click', saveEditedList);
+            entryListBox.addEventListener('click', (event) => {
+                const trigger = event.target.closest('[data-act]');
+                if (!trigger) return;
+                const action = trigger.getAttribute('data-act');
+                const index = Number(trigger.getAttribute('data-entry-index'));
+                if (!Number.isInteger(index) || index < 0) return;
+                if (action === 'edit-entry') {
+                    beginEditEntry(index);
+                    return;
+                }
+                if (action === 'remove-entry') {
+                    removeDraftEntry(index);
+                }
+            });
+            editMask.addEventListener('click', (event) => {
+                if (event.target === editMask) closeEditModal();
+            });
+            editModal.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+            entryUrlInput.addEventListener('keydown', handleEntryFieldKeydown);
+            entryRemarkInput.addEventListener('keydown', handleEntryFieldKeydown);
 
             autoBtn.addEventListener('click', () => {
                 safeSetValue(DEV_ENTRY_SETTING_KEY, '');
