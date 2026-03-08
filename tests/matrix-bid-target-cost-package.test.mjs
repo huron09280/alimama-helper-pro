@@ -7,8 +7,121 @@ const source = fs.readFileSync(new URL('../阿里妈妈多合一助手.js', impo
 test('矩阵模板补充智能出价目标包维度', () => {
   assert.match(
     source,
-    /key:\s*'bid_target_cost_package'[\s\S]*?label:\s*'智能出价目标包'[\s\S]*?sceneNames:\s*\['关键词推广'\][\s\S]*?hint:\s*'仅用于关键词推广-自定义推广-智能出价；每行填写“出价目标\|目标成本\/ROI值”，按整组组合。'[\s\S]*?suggestedValues:\s*\['获取成交量\|35',\s*'增加收藏加购量\|1\.88',\s*'增加点击量\|1\.29',\s*'稳定投产比\|5'\]/,
+    /key:\s*'bid_target_cost_package'[\s\S]*?label:\s*'智能出价目标包'[\s\S]*?sceneNames:\s*\['关键词推广'\][\s\S]*?hint:\s*'仅用于关键词推广-自定义推广-智能出价；每个出价目标单独占一行，同一行可追加多个目标成本\/ROI值，不用手写分隔符。'[\s\S]*?valueInputMode:\s*'package_rows'[\s\S]*?suggestedValues:\s*\['获取成交量\|35',\s*'增加收藏加购量\|1\.88',\s*'增加点击量\|1\.29',\s*'稳定投产比\|5'\]/,
     '矩阵模板缺少智能出价目标包预设'
+  );
+});
+
+test('智能出价目标包改为结构化行编辑，不再依赖纯文本 textarea 协议输入', () => {
+  assert.match(source, /const buildMatrixBidTargetCostPackageRows = \(values = \[\]\) => \(/, '缺少智能出价目标包结构化行 helper');
+  assert.match(source, /const buildMatrixBidTargetCostPackageRowValue = \(row = \{\}\) => \{/, '缺少智能出价目标包行值序列化 helper');
+  assert.match(source, /const buildMatrixBidTargetCostPackageCostItemHtml = \(costValue = '', targetOptionValue = '', costIndex = 0\) => \{/, '缺少智能出价目标包行内成本项 helper');
+  assert.match(source, /const getMatrixBidTargetCostPackageRowMaxCostValue = \(packageRow = null\) => \{/, '缺少智能出价目标包当前行最高成本 helper');
+  assert.match(source, /const getMatrixBidTargetCostPackageBatchDraft = \(packageRow = null\) => \(\{/, '缺少智能出价目标包批量草稿 helper');
+  assert.match(source, /const setMatrixBidTargetCostPackageBatchDraft = \(packageRow = null, options = \{\}\) => \{/, '缺少智能出价目标包批量草稿写入 helper');
+  assert.match(source, /const buildMatrixBidTargetCostPackageBatchMenuHtml = \(targetOptionValue = '', baseCost = NaN, options = \{\}\) => \{/, '缺少智能出价目标包批量菜单渲染 helper');
+  assert.match(source, /const appendMatrixBidTargetCostPackageBatchCosts = \(packageRow = null, options = \{\}\) => \{/, '缺少智能出价目标包批量追加 helper');
+  assert.match(source, /const readMatrixBidTargetCostPackageValuesFromRow = \(row = null\) => \{/, '缺少智能出价目标包读值 helper');
+  assert.match(source, /const syncMatrixBidTargetCostPackageStateFromRow = \(row = null\) => \{/, '缺少智能出价目标包行同步 helper');
+  assert.match(source, /const mergeMatrixBidTargetCostPackageRowsFromDom = \(row = null\) => \{/, '缺少智能出价目标包同目标分组合并 helper');
+  assert.match(
+    source,
+    /const readMatrixDimensionValuesFromRow = \(row = null, sceneName = ''\) => \{[\s\S]*?String\(preset\?\.valueInputMode \|\| ''\)\.trim\(\) === 'package_rows'[\s\S]*?readMatrixBidTargetCostPackageValuesFromRow\(row\)/,
+    '矩阵维度读值链路未接入结构化目标包'
+  );
+  assert.match(source, /data-matrix-bid-package-list="1"/, '矩阵页缺少智能出价目标包列表容器');
+  assert.match(source, /data-matrix-bid-package-row="1"/, '矩阵页缺少智能出价目标包目标行容器');
+  assert.match(source, /class="am-wxt-matrix-bid-package-row-head"/, '矩阵页缺少智能出价目标包目标头部容器');
+  assert.match(source, /class="am-wxt-matrix-bid-package-row-body"/, '矩阵页缺少智能出价目标包数值独立行容器');
+  assert.match(source, /data-matrix-bid-package-target="1"/, '矩阵页缺少智能出价目标包目标隐藏控件');
+  assert.match(source, /data-matrix-bid-package-cost-list="1"/, '矩阵页缺少智能出价目标包行内成本列表');
+  assert.match(source, /data-matrix-bid-package-cost="1"/, '矩阵页缺少智能出价目标包成本输入');
+  assert.match(source, /data-matrix-bid-package-cost-remove="1"/, '矩阵页缺少智能出价目标包行内成本删除按钮');
+  assert.match(source, /data-matrix-bid-package-cost-add="1"/, '矩阵页缺少智能出价目标包行内成本追加按钮');
+  assert.match(source, /data-matrix-bid-package-cost-actions="1"/, '矩阵页缺少智能出价目标包行内成本操作下拉容器');
+  assert.match(source, /data-matrix-bid-package-cost-batch-menu="1"/, '矩阵页缺少智能出价目标包批量菜单面板');
+  assert.match(source, /data-matrix-bid-package-batch-manual="1"/, '矩阵页缺少智能出价目标包手动新增按钮');
+  assert.match(source, /data-matrix-bid-package-batch-interval="1"/, '矩阵页缺少智能出价目标包批量区间输入');
+  assert.match(source, /data-matrix-bid-package-batch-count="1"/, '矩阵页缺少智能出价目标包批量个数输入');
+  assert.match(source, /data-matrix-bid-package-batch-add="1"/, '矩阵页缺少智能出价目标包批量追加按钮');
+  assert.match(source, /data-matrix-bid-package-remove="1"/, '矩阵页缺少智能出价目标包整行删除按钮');
+  assert.match(source, /data-matrix-bid-package-add="1"/, '矩阵页缺少智能出价目标包新增目标按钮');
+  assert.match(
+    source,
+    /groupedRowMap\.get\(item\.targetOptionValue\)\.costValues\.push\(item\.costValue\)/,
+    '智能出价目标包未按目标聚合同一行多个成本'
+  );
+  assert.match(
+    source,
+    /class="am-wxt-matrix-bid-package-target-option[\s\S]*?data-matrix-bid-package-target-option="1"[\s\S]*?data-value="\$\{Utils\.escapeHtml\(item\.value\)\}"/,
+    '智能出价目标包下拉仍未切到紧凑按钮菜单'
+  );
+  assert.match(
+    source,
+    /\.am-wxt-matrix-bid-package-row \{[\s\S]*?display: flex;[\s\S]*?flex-direction: column;/,
+    '智能出价目标包目标与数值仍未拆成上下两行'
+  );
+  assert.match(
+    source,
+    /\.am-wxt-matrix-bid-package-row input \{[\s\S]*?width: 56px;[\s\S]*?min-width: 56px;/,
+    '智能出价目标包数值输入框仍过宽'
+  );
+  assert.match(
+    source,
+    /const bidPackageTargetOptionBtn = event\.target instanceof Element[\s\S]*?closest\('\[data-matrix-bid-package-target-option="1"\]'\)/,
+    '智能出价目标包下拉点击未接入按钮菜单事件'
+  );
+  assert.doesNotMatch(source, /<span class="am-wxt-matrix-chip">结构化编辑<\/span>/, '智能出价目标包仍保留冗余结构化编辑标签');
+  assert.match(
+    source,
+    /data-matrix-bid-package-cost-add="1"[\s\S]*?data-matrix-bid-package-picker-toggle="1"[\s\S]*?>\+<\/button>/,
+    '智能出价目标包行内新增按钮未接入下拉菜单或仍保留冗余文字'
+  );
+  assert.match(
+    source,
+    /data-matrix-bid-package-add="1"[\s\S]*?>\+<\/button>/,
+    '智能出价目标包底部新增按钮仍保留冗余文字'
+  );
+  assert.doesNotMatch(source, /class="am-wxt-matrix-bid-package-suggest"/, '智能出价目标包仍保留快捷提示标签');
+  assert.match(
+    source,
+    /const buildMatrixBidTargetCostPackageBatchMenuHtml = \(targetOptionValue = '', baseCost = NaN, options = \{\}\) => \{[\s\S]*?data-matrix-bid-package-batch-interval="1"[\s\S]*?data-matrix-bid-package-batch-count="1"[\s\S]*?>批量新增<\/button>/,
+    '智能出价目标包批量菜单未改为用户自填区间和个数'
+  );
+  assert.match(
+    source,
+    /const appendMatrixBidTargetCostPackageBatchCosts = \(packageRow = null, options = \{\}\) => \{[\s\S]*?getMatrixBidTargetCostPackageRowMaxCostValue\(packageRow\)[\s\S]*?const nextCostValue = formatMatrixBidTargetCostPackageAmount\(baseCost \+ interval \* step\)/,
+    '智能出价目标包批量追加未基于当前最高成本递增生成'
+  );
+  assert.match(
+    source,
+    /const bidPackageCostAddBtn = event\.target instanceof Element[\s\S]*?closest\('\[data-matrix-bid-package-cost-add="1"\]'\)/,
+    '智能出价目标包同目标追加成本按钮未接入点击链路'
+  );
+  assert.match(
+    source,
+    /const bidPackageBatchAddBtn = event\.target instanceof Element[\s\S]*?closest\('\[data-matrix-bid-package-batch-add="1"\]'\)[\s\S]*?const intervalInput = batchMenu\?\.querySelector\('\[data-matrix-bid-package-batch-interval="1"\]'\)[\s\S]*?const countInput = batchMenu\?\.querySelector\('\[data-matrix-bid-package-batch-count="1"\]'\)[\s\S]*?appendMatrixBidTargetCostPackageBatchCosts\(packageRow,\s*\{[\s\S]*?interval:\s*intervalValue[\s\S]*?count:\s*countValue/,
+    '智能出价目标包批量菜单点击未读取自填区间和个数'
+  );
+  assert.match(
+    source,
+    /const bidPackageBatchManualBtn = event\.target instanceof Element[\s\S]*?closest\('\[data-matrix-bid-package-batch-manual="1"\]'\)[\s\S]*?appendMatrixBidTargetCostPackageBatchCosts\(packageRow,\s*\{[\s\S]*?mode:\s*'manual'/,
+    '智能出价目标包手动新增按钮未接入链路'
+  );
+  assert.match(
+    source,
+    /event\.target instanceof HTMLInputElement && event\.target\.matches\('\[data-matrix-bid-package-batch-interval="1"\], \[data-matrix-bid-package-batch-count="1"\]'\)[\s\S]*?setMatrixBidTargetCostPackageBatchDraft\(packageRow,\s*\{/,
+    '智能出价目标包批量区间和个数字段未保留输入草稿'
+  );
+  assert.match(
+    source,
+    /const bidPackageCostRemoveBtn = event\.target instanceof Element[\s\S]*?closest\('\[data-matrix-bid-package-cost-remove="1"\]'\)/,
+    '智能出价目标包行内成本删除按钮未接入点击链路'
+  );
+  assert.match(
+    source,
+    /data-matrix-bid-package-add="1"[\s\S]*?packageList\.insertAdjacentHTML\([\s\S]*?syncMatrixBidTargetCostPackageStateFromRow\(row\);[\s\S]*?focus\(\{ preventScroll: true \}\);[\s\S]*?return;/,
+    '智能出价目标包新增空行后未保留在当前编辑态'
   );
 });
 

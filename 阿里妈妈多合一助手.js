@@ -24767,6 +24767,383 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     min-height: 96px;
                     resize: vertical;
                 }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-editor {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-summary {
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.45;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    padding: 2px 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row.is-pending {
+                    opacity: 0.96;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row-head {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row-head .am-wxt-matrix-bid-package-target-picker {
+                    flex: 1 1 auto;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row-body {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    align-items: flex-start;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row input {
+                    flex: 0 0 56px;
+                    width: 56px;
+                    min-width: 56px;
+                    min-height: 30px;
+                    padding: 0 7px;
+                    border: 0;
+                    border-radius: 10px;
+                    background: transparent;
+                    color: #334155;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row input:focus {
+                    outline: none;
+                    box-shadow: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger {
+                    min-height: 32px;
+                    padding: 5px 11px;
+                    border: 1px solid rgba(79,104,255,0.14);
+                    border-radius: 999px;
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                    font-weight: 600;
+                    box-shadow: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker.open .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: rgba(79,104,255,0.26);
+                    background: rgba(79,104,255,0.12);
+                    box-shadow: 0 0 0 3px rgba(79,104,255,0.06);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-panel {
+                    left: 0;
+                    right: auto;
+                    min-width: 188px;
+                    max-width: 220px;
+                    overflow-x: hidden;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option {
+                    width: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-start;
+                    margin: 0;
+                    padding: 9px 10px;
+                    border: 0;
+                    border-radius: 10px;
+                    background: transparent;
+                    color: #334155;
+                    font-size: 12px;
+                    line-height: 1.35;
+                    text-align: left;
+                    white-space: nowrap;
+                    cursor: pointer;
+                    transition: background 0.2s ease, color 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option + .am-wxt-matrix-bid-package-target-option {
+                    margin-top: 4px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option.is-active {
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option.is-active {
+                    font-weight: 600;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-list {
+                    flex: 1 1 auto;
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item {
+                    flex: 0 0 auto;
+                    min-width: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    border: 1px solid rgba(148,163,184,0.28);
+                    border-radius: 10px;
+                    background: #fff;
+                    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item:focus-within {
+                    border-color: rgba(79,104,255,0.42);
+                    box-shadow: 0 0 0 3px rgba(79,104,255,0.08);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item.is-pending {
+                    border-style: dashed;
+                    background: rgba(248,250,255,0.88);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-remove {
+                    flex: 0 0 26px;
+                    width: 26px;
+                    min-width: 26px;
+                    height: 30px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 0;
+                    border-radius: 0 10px 10px 0;
+                    background: transparent;
+                    color: #94a3b8;
+                    font-size: 14px;
+                    line-height: 1;
+                    box-shadow: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-remove:hover {
+                    color: #3354d1;
+                    background: rgba(79,104,255,0.06);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-add {
+                    flex: 0 0 auto;
+                    width: 30px;
+                    min-width: 30px;
+                    min-height: 30px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px dashed rgba(79,104,255,0.24);
+                    border-radius: 999px;
+                    background: rgba(79,104,255,0.05);
+                    color: #3354d1;
+                    font-size: 16px;
+                    font-weight: 600;
+                    line-height: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-actions {
+                    flex: 0 0 auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-actions .am-wxt-matrix-bid-package-cost-add {
+                    box-shadow: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-actions.open .am-wxt-matrix-bid-package-cost-add,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-actions .am-wxt-matrix-bid-package-cost-add:hover {
+                    border-color: rgba(79,104,255,0.34);
+                    background: rgba(79,104,255,0.12);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-batch-menu {
+                    left: auto;
+                    right: 0;
+                    min-width: 188px;
+                    padding: 8px;
+                    overflow: hidden;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-note {
+                    color: #64748b;
+                    font-size: 11px;
+                    line-height: 1.35;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-top: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form input {
+                    flex: 1 1 0;
+                    width: auto;
+                    min-width: 0;
+                    min-height: 28px;
+                    height: 28px;
+                    padding: 0 8px;
+                    border: 1px solid rgba(148,163,184,0.28);
+                    border-radius: 8px;
+                    background: #f8fafc;
+                    color: #334155;
+                    font-size: 12px;
+                    line-height: 1.3;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form input:focus {
+                    border-color: rgba(79,104,255,0.38);
+                    box-shadow: 0 0 0 3px rgba(79,104,255,0.08);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form input[data-matrix-bid-package-batch-count="1"] {
+                    flex: 0 0 52px;
+                    width: 52px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option {
+                    width: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-start;
+                    margin: 0;
+                    padding: 8px 10px;
+                    border: 0;
+                    border-radius: 10px;
+                    background: transparent;
+                    color: #334155;
+                    font-size: 12px;
+                    line-height: 1.35;
+                    text-align: left;
+                    white-space: nowrap;
+                    cursor: pointer;
+                    transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option + .am-wxt-matrix-bid-package-batch-option {
+                    margin-top: 4px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option:hover {
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option.is-disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option:disabled {
+                    opacity: 0.52;
+                    cursor: not-allowed;
+                    background: transparent;
+                    color: #94a3b8;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit {
+                    width: 100%;
+                    min-height: 30px;
+                    margin-top: 8px;
+                    padding: 0 10px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid rgba(79,104,255,0.16);
+                    border-radius: 10px;
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                    font-size: 12px;
+                    font-weight: 600;
+                    line-height: 1;
+                    box-shadow: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit:hover {
+                    border-color: rgba(79,104,255,0.3);
+                    background: rgba(79,104,255,0.14);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit.is-disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit:disabled {
+                    opacity: 0.52;
+                    cursor: not-allowed;
+                    background: rgba(241,245,249,0.88);
+                    color: #94a3b8;
+                    border-color: rgba(148,163,184,0.2);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-meta {
+                    flex: 0 0 auto;
+                    display: inline-block;
+                    padding: 0;
+                    min-height: 0;
+                    background: transparent;
+                    color: #64748b;
+                    font-size: 10px;
+                    line-height: 1.2;
+                    font-weight: 600;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-remove {
+                    width: 32px;
+                    min-width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 0;
+                    border-radius: 999px;
+                    background: rgba(241,245,249,0.72);
+                    color: #94a3b8;
+                    font-size: 16px;
+                    line-height: 1;
+                    box-shadow: none;
+                    transition: color 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-remove:hover {
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-footer {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-footer-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-add {
+                    width: 32px;
+                    min-width: 32px;
+                    min-height: 32px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px dashed rgba(79,104,255,0.26);
+                    border-radius: 999px;
+                    background: rgba(79,104,255,0.05);
+                    color: #3354d1;
+                    font-size: 17px;
+                    font-weight: 600;
+                    line-height: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-suggests {
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    gap: 6px;
+                    flex: 1 1 auto;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-suggest {
+                    min-height: 28px;
+                    padding: 0 9px;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 999px;
+                    background: #fff;
+                    color: #475569;
+                    font-size: 11px;
+                    line-height: 1.2;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-suggest:hover {
+                    border-color: rgba(79,104,255,0.26);
+                    color: #3354d1;
+                }
+                @media (max-width: 720px) {
+                    #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row-head {
+                        gap: 5px;
+                    }
+                }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker {
                     position: relative;
                 }
@@ -24879,10 +25256,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     margin-top: 2px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option-text {
+                    flex: 1 1 auto;
                     min-width: 0;
                     font-size: 12px;
                     line-height: 1.45;
-                    word-break: break-all;
+                    word-break: break-word;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-empty {
                     padding: 10px;
@@ -28060,7 +28438,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 key: 'bid_target_cost_package',
                 label: '智能出价目标包',
                 sceneNames: ['关键词推广'],
-                hint: '仅用于关键词推广-自定义推广-智能出价；每行填写“出价目标|目标成本/ROI值”，按整组组合。',
+                hint: '仅用于关键词推广-自定义推广-智能出价；每个出价目标单独占一行，同一行可追加多个目标成本/ROI值，不用手写分隔符。',
+                valueInputMode: 'package_rows',
                 placeholder: '例如 获取成交量|35\n增加收藏加购量|1.88\n增加点击量|1.29\n稳定投产比|5',
                 suggestedValues: ['获取成交量|35', '增加收藏加购量|1.88', '增加点击量|1.29', '稳定投产比|5']
             },
@@ -28691,6 +29070,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const syncMatrixDimensionMetaStateFromRow = (row = null, sceneName = '') => {
             if (!(row instanceof HTMLElement)) return [];
+            const currentSceneName = getMatrixSceneName(sceneName || wizardState?.draft?.sceneName || '');
+            const key = String(row.querySelector('[data-matrix-dimension-key="1"]')?.value || '').trim();
+            const preset = getMatrixDimensionPresetByKey(key, currentSceneName);
+            if (String(preset?.valueInputMode || '').trim() === 'package_rows') {
+                return syncMatrixBidTargetCostPackageStateFromRow(row);
+            }
             return readMatrixDimensionValuesFromRow(row, sceneName);
         };
 
@@ -28740,7 +29125,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!(picker instanceof HTMLElement)) return;
             const nextOpen = open === true;
             picker.classList.toggle('open', nextOpen);
-            const toggleBtn = picker.querySelector('[data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-key-picker-toggle="1"]');
+            const toggleBtn = picker.querySelector('[data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-key-picker-toggle="1"], [data-matrix-bid-package-picker-toggle="1"]');
             if (toggleBtn instanceof HTMLButtonElement) {
                 toggleBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
             }
@@ -28758,6 +29143,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!(row instanceof HTMLElement)) return [];
             const key = String(row.querySelector('[data-matrix-dimension-key="1"]')?.value || '').trim();
             const preset = getMatrixDimensionPresetByKey(key, sceneName);
+            if (String(preset?.valueInputMode || '').trim() === 'package_rows') {
+                return readMatrixBidTargetCostPackageValuesFromRow(row);
+            }
             if (String(preset?.valueInputMode || '').trim() === 'multi_select') {
                 const valueSelect = row.querySelector('[data-matrix-dimension-values-select="1"]');
                 if (valueSelect instanceof HTMLSelectElement) {
@@ -28906,7 +29294,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const amount = parseNumberFromSceneValue(costSeed);
             if (!Number.isFinite(amount) || amount <= 0) return null;
             const targetLabel = MATRIX_BID_TARGET_OPTIONS.find(item => item.value === targetOptionValue)?.label || targetSeed;
-            const costValue = String(amount);
+            const costValue = formatMatrixBidTargetCostPackageAmount(amount);
             return {
                 targetLabel,
                 targetOptionValue,
@@ -28915,6 +29303,603 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 rawValue: `${targetLabel}|${costValue}`,
                 displayLabel: `${targetLabel}_${costValue}`
             };
+        };
+
+        const getMatrixBidTargetCostPackageOptions = () => (
+            MATRIX_BID_TARGET_OPTIONS
+                .map(item => ({
+                    ...item,
+                    costConfig: resolveMatrixBidTargetCostConfig(item.value)
+                }))
+                .filter(item => item.costConfig)
+        );
+
+        const getMatrixBidTargetCostPackageDefaultOption = () => (
+            getMatrixBidTargetCostPackageOptions()[0] || { value: 'conv', label: '获取成交量', costConfig: resolveMatrixBidTargetCostConfig('conv') || {} }
+        );
+
+        const getMatrixBidTargetCostPackageCostFieldMeta = (targetOptionValue = '') => {
+            const normalizedTarget = normalizeKeywordBidTargetOptionValue(targetOptionValue) || getMatrixBidTargetCostPackageDefaultOption().value;
+            const targetCostConfig = resolveMatrixBidTargetCostConfig(normalizedTarget);
+            const costLabel = Array.isArray(targetCostConfig?.valueLabels) && targetCostConfig.valueLabels.length
+                ? targetCostConfig.valueLabels[0]
+                : (normalizedTarget === 'roi' ? 'ROI目标值' : '目标成本');
+            const costPlaceholder = normalizedTarget === 'roi'
+                ? '例如 5'
+                : (normalizedTarget === 'click' ? '例如 1.29' : (normalizedTarget === 'fav_cart' ? '例如 1.88' : '例如 35'));
+            return { costLabel, costPlaceholder };
+        };
+
+        const formatMatrixBidTargetCostPackageAmount = (amount = NaN) => {
+            if (!Number.isFinite(amount) || amount <= 0) return '';
+            return String((Math.round(amount * 100) / 100).toFixed(2)).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+        };
+
+        const buildMatrixBidTargetCostPackageRows = (values = []) => (
+            (() => {
+                const groupedRows = [];
+                const groupedRowMap = new Map();
+                normalizeMatrixDimensionValues(values)
+                    .map(item => parseMatrixBidTargetCostPackageValue(item))
+                    .filter(Boolean)
+                    .forEach((item) => {
+                        if (!groupedRowMap.has(item.targetOptionValue)) {
+                            const nextRow = {
+                                targetOptionValue: item.targetOptionValue,
+                                targetLabel: item.targetLabel,
+                                costValues: []
+                            };
+                            groupedRowMap.set(item.targetOptionValue, nextRow);
+                            groupedRows.push(nextRow);
+                        }
+                        groupedRowMap.get(item.targetOptionValue).costValues.push(item.costValue);
+                    });
+                if (groupedRows.length) {
+                    return groupedRows.map((item) => ({
+                        ...item,
+                        costValues: Array.isArray(item.costValues) && item.costValues.length ? item.costValues : ['']
+                    }));
+                }
+                const defaultOption = getMatrixBidTargetCostPackageDefaultOption();
+                return [{
+                    targetOptionValue: defaultOption.value,
+                    targetLabel: defaultOption.label,
+                    costValues: ['']
+                }];
+            })()
+        );
+
+        const buildMatrixBidTargetCostPackageRowValue = (row = {}) => {
+            const targetOptionValue = normalizeKeywordBidTargetOptionValue(
+                row?.targetOptionValue || row?.target || row?.bidTarget || ''
+            );
+            const targetLabel = MATRIX_BID_TARGET_OPTIONS.find(item => item.value === targetOptionValue)?.label
+                || String(row?.targetLabel || '').trim();
+            const targetCostConfig = resolveMatrixBidTargetCostConfig(targetOptionValue);
+            const amount = parseNumberFromSceneValue(row?.costValue || row?.amount || row?.cost || '');
+            if (!targetOptionValue || !targetLabel || !targetCostConfig) return '';
+            if (!Number.isFinite(amount) || amount <= 0) return '';
+            return `${targetLabel}|${formatMatrixBidTargetCostPackageAmount(amount)}`;
+        };
+
+        const buildMatrixBidTargetCostPackageCostItemHtml = (costValue = '', targetOptionValue = '', costIndex = 0) => {
+            const { costLabel, costPlaceholder } = getMatrixBidTargetCostPackageCostFieldMeta(targetOptionValue);
+            return `
+                <div class="am-wxt-matrix-bid-package-cost-item" data-matrix-bid-package-cost-item="1" data-matrix-bid-package-cost-index="${costIndex}">
+                    <input
+                        type="text"
+                        inputmode="decimal"
+                        data-matrix-bid-package-cost="1"
+                        value="${Utils.escapeHtml(String(costValue || '').trim())}"
+                        placeholder="${Utils.escapeHtml(costPlaceholder)}"
+                        title="${Utils.escapeHtml(`填写${costLabel}`)}"
+                    />
+                    <button
+                        type="button"
+                        class="am-wxt-matrix-bid-package-cost-remove"
+                        data-matrix-bid-package-cost-remove="1"
+                        aria-label="删除目标成本"
+                        title="删除这个目标成本"
+                    >&times;</button>
+                </div>
+            `;
+        };
+
+        const getMatrixBidTargetCostPackageCostInsertAnchor = (costAddBtn = null) => (
+            costAddBtn instanceof HTMLElement
+                ? (costAddBtn.closest('[data-matrix-bid-package-cost-actions="1"]') || costAddBtn)
+                : null
+        );
+
+        const insertMatrixBidTargetCostPackageCostItemHtml = (costList = null, costAddBtn = null, html = '') => {
+            if (!(costList instanceof HTMLElement) || !String(html || '').trim()) return null;
+            const anchor = getMatrixBidTargetCostPackageCostInsertAnchor(costAddBtn);
+            if (anchor instanceof HTMLElement && anchor.parentElement === costList) {
+                anchor.insertAdjacentHTML('beforebegin', html);
+            } else {
+                costList.insertAdjacentHTML('beforeend', html);
+            }
+            return Array.from(costList.querySelectorAll('[data-matrix-bid-package-cost-item="1"]')).slice(-1)[0] || null;
+        };
+
+        const insertMatrixBidTargetCostPackageCostItemElement = (costList = null, costAddBtn = null, costItem = null) => {
+            if (!(costList instanceof HTMLElement) || !(costItem instanceof HTMLElement)) return null;
+            const anchor = getMatrixBidTargetCostPackageCostInsertAnchor(costAddBtn);
+            if (anchor instanceof HTMLElement && anchor.parentElement === costList) {
+                anchor.insertAdjacentElement('beforebegin', costItem);
+            } else {
+                costList.appendChild(costItem);
+            }
+            return costItem;
+        };
+
+        const getMatrixBidTargetCostPackageRowMaxCostValue = (packageRow = null) => {
+            if (!(packageRow instanceof HTMLElement)) return NaN;
+            return Array.from(packageRow.querySelectorAll('[data-matrix-bid-package-cost="1"]'))
+                .reduce((maxValue, costInput) => {
+                    const amount = parseNumberFromSceneValue(costInput instanceof HTMLInputElement ? costInput.value : '');
+                    if (!Number.isFinite(amount)) return maxValue;
+                    return !Number.isFinite(maxValue) || amount > maxValue ? amount : maxValue;
+                }, NaN);
+        };
+
+        const getMatrixBidTargetCostPackageBatchDraft = (packageRow = null) => ({
+            interval: packageRow instanceof HTMLElement
+                ? String(packageRow.dataset.matrixBidPackageBatchInterval || '').trim()
+                : '',
+            count: packageRow instanceof HTMLElement
+                ? String(packageRow.dataset.matrixBidPackageBatchCount || '').trim()
+                : ''
+        });
+
+        const setMatrixBidTargetCostPackageBatchDraft = (packageRow = null, options = {}) => {
+            if (!(packageRow instanceof HTMLElement)) return { interval: '', count: '' };
+            const currentDraft = getMatrixBidTargetCostPackageBatchDraft(packageRow);
+            const nextInterval = String(options?.interval ?? currentDraft.interval ?? '').trim();
+            const nextCount = String(options?.count ?? currentDraft.count ?? '').trim();
+            if (nextInterval) {
+                packageRow.dataset.matrixBidPackageBatchInterval = nextInterval;
+            } else {
+                delete packageRow.dataset.matrixBidPackageBatchInterval;
+            }
+            if (nextCount) {
+                packageRow.dataset.matrixBidPackageBatchCount = nextCount;
+            } else {
+                delete packageRow.dataset.matrixBidPackageBatchCount;
+            }
+            return {
+                interval: nextInterval,
+                count: nextCount
+            };
+        };
+
+        const getMatrixBidTargetCostPackageBatchIntervalPlaceholder = (baseCost = NaN) => (
+            baseCost < 3 ? '0.1'
+                : baseCost < 10 ? '0.5'
+                : baseCost < 80 ? '1'
+                : '5'
+        );
+
+        const buildMatrixBidTargetCostPackageBatchMenuHtml = (targetOptionValue = '', baseCost = NaN, options = {}) => {
+            const { costLabel } = getMatrixBidTargetCostPackageCostFieldMeta(targetOptionValue);
+            const hasPendingCost = options?.hasPendingCost === true;
+            const batchDraft = {
+                interval: String(options?.interval || '').trim(),
+                count: String(options?.count || '').trim()
+            };
+            const canBatch = Number.isFinite(baseCost) && baseCost > 0;
+            const baseText = canBatch
+                ? `参考当前最高 ${formatMatrixBidTargetCostPackageAmount(baseCost)}`
+                : `先填 1 个${costLabel}`;
+            return `
+                <button
+                    type="button"
+                    class="am-wxt-matrix-bid-package-batch-option"
+                    data-matrix-bid-package-batch-manual="1"
+                    title="${Utils.escapeHtml(hasPendingCost ? `继续填写当前空白${costLabel}` : `手动新增一个${costLabel}`)}"
+                >${Utils.escapeHtml(hasPendingCost ? '继续填写空位' : '手动新增 1 个')}</button>
+                <div class="am-wxt-matrix-bid-package-batch-note">${Utils.escapeHtml(baseText)}</div>
+                <div class="am-wxt-matrix-bid-package-batch-form">
+                    <input
+                        type="text"
+                        inputmode="decimal"
+                        data-matrix-bid-package-batch-interval="1"
+                        value="${Utils.escapeHtml(batchDraft.interval)}"
+                        placeholder="${Utils.escapeHtml(getMatrixBidTargetCostPackageBatchIntervalPlaceholder(baseCost))}"
+                        aria-label="批量区间值"
+                        title="填写批量递增区间值"
+                        ${canBatch ? '' : 'disabled'}
+                    />
+                    <input
+                        type="text"
+                        inputmode="numeric"
+                        data-matrix-bid-package-batch-count="1"
+                        value="${Utils.escapeHtml(batchDraft.count)}"
+                        placeholder="3"
+                        aria-label="批量个数"
+                        title="填写批量新增个数"
+                        ${canBatch ? '' : 'disabled'}
+                    />
+                </div>
+                <button
+                    type="button"
+                    class="am-wxt-matrix-bid-package-batch-submit${canBatch ? '' : ' is-disabled'}"
+                    data-matrix-bid-package-batch-add="${canBatch ? '1' : '0'}"
+                    title="${Utils.escapeHtml(canBatch ? `按你设置的区间和个数，基于当前最高${formatMatrixBidTargetCostPackageAmount(baseCost)}批量新增${costLabel}` : `先填写一个${costLabel}后再批量新增`)}"
+                    ${canBatch ? '' : 'disabled'}
+                >批量新增</button>
+            `;
+        };
+
+        const appendMatrixBidTargetCostPackageBatchCosts = (packageRow = null, options = {}) => {
+            if (!(packageRow instanceof HTMLElement)) return [];
+            const targetSelect = packageRow.querySelector('[data-matrix-bid-package-target="1"]');
+            const costList = packageRow.querySelector('[data-matrix-bid-package-cost-list="1"]');
+            const costAddBtn = costList?.querySelector('[data-matrix-bid-package-cost-add="1"]');
+            if (!(costList instanceof HTMLElement)) return [];
+            const targetOptionValue = normalizeKeywordBidTargetOptionValue(
+                targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+            ) || getMatrixBidTargetCostPackageDefaultOption().value;
+            const insertedInputs = [];
+            const appendBlankOrPresetValue = (costValue = '') => {
+                const insertedItem = insertMatrixBidTargetCostPackageCostItemHtml(
+                    costList,
+                    costAddBtn,
+                    buildMatrixBidTargetCostPackageCostItemHtml(
+                        costValue,
+                        targetOptionValue,
+                        packageRow.querySelectorAll('[data-matrix-bid-package-cost-item="1"]').length
+                    )
+                );
+                const insertedInput = insertedItem?.querySelector('[data-matrix-bid-package-cost="1"]');
+                if (insertedInput instanceof HTMLInputElement) {
+                    insertedInputs.push(insertedInput);
+                }
+                return insertedInput;
+            };
+            const reusableEmptyInputs = Array.from(packageRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).filter((costInput) => (
+                !buildMatrixBidTargetCostPackageRowValue({
+                    targetOptionValue,
+                    costValue: costInput instanceof HTMLInputElement ? costInput.value : ''
+                })
+            ));
+            if (String(options?.mode || '').trim() === 'manual') {
+                const emptyCostInput = reusableEmptyInputs[0];
+                if (emptyCostInput instanceof HTMLInputElement) {
+                    insertedInputs.push(emptyCostInput);
+                    return insertedInputs;
+                }
+                appendBlankOrPresetValue('');
+                return insertedInputs;
+            }
+            const baseCost = getMatrixBidTargetCostPackageRowMaxCostValue(packageRow);
+            const interval = parseNumberFromSceneValue(options?.interval || '');
+            const count = Math.max(1, Math.min(20, Math.round(parseNumberFromSceneValue(options?.count || '')) || 0));
+            if (!Number.isFinite(baseCost) || baseCost <= 0) return insertedInputs;
+            if (!Number.isFinite(interval) || interval <= 0 || !count) return insertedInputs;
+            const existingCostValueSet = new Set(
+                Array.from(packageRow.querySelectorAll('[data-matrix-bid-package-cost="1"]'))
+                    .map((costInput) => formatMatrixBidTargetCostPackageAmount(
+                        parseNumberFromSceneValue(costInput instanceof HTMLInputElement ? costInput.value : '')
+                    ))
+                    .filter(Boolean)
+            );
+            for (let step = 1; step <= count; step += 1) {
+                const nextCostValue = formatMatrixBidTargetCostPackageAmount(baseCost + interval * step);
+                if (!nextCostValue || existingCostValueSet.has(nextCostValue)) continue;
+                existingCostValueSet.add(nextCostValue);
+                const reusableInput = reusableEmptyInputs.shift();
+                if (reusableInput instanceof HTMLInputElement) {
+                    reusableInput.value = nextCostValue;
+                    insertedInputs.push(reusableInput);
+                    continue;
+                }
+                appendBlankOrPresetValue(nextCostValue);
+            }
+            return insertedInputs;
+        };
+
+        const buildMatrixBidTargetCostPackageRowHtml = (row = {}, index = 0) => {
+            const optionList = getMatrixBidTargetCostPackageOptions();
+            const defaultOption = getMatrixBidTargetCostPackageDefaultOption();
+            const targetOptionValue = normalizeKeywordBidTargetOptionValue(row?.targetOptionValue || '') || defaultOption.value;
+            const targetOption = optionList.find(item => item.value === targetOptionValue) || defaultOption;
+            const { costLabel } = getMatrixBidTargetCostPackageCostFieldMeta(targetOption.value);
+            const costValues = Array.isArray(row?.costValues) && row.costValues.length
+                ? row.costValues
+                : [String(row?.costValue || '').trim()];
+            const rowMaxCost = costValues.reduce((maxValue, costValue) => {
+                const amount = parseNumberFromSceneValue(costValue);
+                if (!Number.isFinite(amount)) return maxValue;
+                return !Number.isFinite(maxValue) || amount > maxValue ? amount : maxValue;
+            }, NaN);
+            const hasPendingCost = costValues.some((costValue) => !buildMatrixBidTargetCostPackageRowValue({
+                targetOptionValue: targetOption.value,
+                costValue
+            }));
+            const batchDraft = {
+                interval: String(row?.batchInterval || '').trim(),
+                count: String(row?.batchCount || '').trim()
+            };
+            return `
+                <div class="am-wxt-matrix-bid-package-row" data-matrix-bid-package-row="1" data-matrix-bid-package-index="${index}">
+                    <div class="am-wxt-matrix-bid-package-row-head">
+                        <div class="am-wxt-matrix-dimension-picker am-wxt-matrix-bid-package-target-picker" data-matrix-dimension-picker="1">
+                            <button
+                                type="button"
+                                class="am-wxt-matrix-dimension-picker-trigger"
+                                data-matrix-bid-package-picker-toggle="1"
+                                aria-expanded="false"
+                                title="选择出价目标"
+                            >
+                                <span class="am-wxt-matrix-dimension-picker-label" data-matrix-bid-package-target-label="1">${Utils.escapeHtml(targetOption.label || defaultOption.label)}</span>
+                                <span class="am-wxt-matrix-dimension-picker-arrow">▾</span>
+                            </button>
+                            <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
+                                ${optionList.map(item => `
+                                    <button
+                                        type="button"
+                                        class="am-wxt-matrix-bid-package-target-option${item.value === targetOption.value ? ' is-active' : ''}"
+                                        data-matrix-bid-package-target-option="1"
+                                        data-value="${Utils.escapeHtml(item.value)}"
+                                        aria-pressed="${item.value === targetOption.value ? 'true' : 'false'}"
+                                        title="${Utils.escapeHtml(item.label)}"
+                                    >${Utils.escapeHtml(item.label)}</button>
+                                `).join('')}
+                            </div>
+                            <select class="am-wxt-hidden-control" data-matrix-bid-package-target="1" title="选择出价目标">
+                                ${optionList.map(item => `
+                                    <option value="${Utils.escapeHtml(item.value)}" ${item.value === targetOption.value ? 'selected' : ''}>${Utils.escapeHtml(item.label)}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <button
+                            type="button"
+                            class="am-wxt-matrix-bid-package-remove"
+                            data-matrix-bid-package-remove="1"
+                            aria-label="删除目标包"
+                            title="删除这一组"
+                        >&times;</button>
+                    </div>
+                    <div class="am-wxt-matrix-bid-package-row-body">
+                        <div class="am-wxt-matrix-bid-package-cost-list" data-matrix-bid-package-cost-list="1">
+                            ${costValues.map((item, costIndex) => (
+                                buildMatrixBidTargetCostPackageCostItemHtml(item, targetOption.value, costIndex)
+                            )).join('')}
+                            <div
+                                class="am-wxt-matrix-dimension-picker am-wxt-matrix-bid-package-cost-actions"
+                                data-matrix-dimension-picker="1"
+                                data-matrix-bid-package-cost-actions="1"
+                            >
+                                <button
+                                    type="button"
+                                    class="am-wxt-matrix-bid-package-cost-add"
+                                    data-matrix-bid-package-cost-add="1"
+                                    data-matrix-bid-package-picker-toggle="1"
+                                    aria-expanded="false"
+                                    aria-label="${Utils.escapeHtml(targetOption.value === 'roi' ? '新增目标值' : '新增目标成本')}"
+                                    title="${Utils.escapeHtml(`为${targetOption.label || defaultOption.label}再加一个${costLabel}`)}"
+                                >+</button>
+                                <div
+                                    class="am-wxt-matrix-dimension-picker-panel am-wxt-matrix-bid-package-cost-batch-menu"
+                                    data-matrix-dimension-picker-panel="1"
+                                    data-matrix-bid-package-cost-batch-menu="1"
+                                >
+                                    ${buildMatrixBidTargetCostPackageBatchMenuHtml(targetOption.value, rowMaxCost, {
+                                        hasPendingCost,
+                                        interval: batchDraft.interval,
+                                        count: batchDraft.count
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const buildMatrixBidTargetCostPackageEditorHtml = (values = [], suggestedValues = []) => {
+            const rows = buildMatrixBidTargetCostPackageRows(values);
+            const normalizedValues = uniqueBy(
+                rows
+                    .reduce((result, item) => {
+                        const targetOptionValue = normalizeKeywordBidTargetOptionValue(item?.targetOptionValue || '');
+                        const costValues = Array.isArray(item?.costValues) ? item.costValues : [item?.costValue || ''];
+                        costValues.forEach((costValue) => {
+                            const rowValue = buildMatrixBidTargetCostPackageRowValue({
+                                targetOptionValue,
+                                costValue
+                            });
+                            if (rowValue) result.push(rowValue);
+                        });
+                        return result;
+                    }, []),
+                item => item
+            );
+            const summaryText = normalizedValues.length
+                ? `已配置 ${normalizedValues.length} 组目标包`
+                : '先选目标，再在下方填写目标成本';
+            // data-matrix-bid-package-list="1" -> data-matrix-bid-package-row="1" -> data-matrix-bid-package-target="1" -> data-matrix-bid-package-cost="1" -> data-matrix-bid-package-cost-add="1" -> data-matrix-bid-package-cost-remove="1" -> data-matrix-bid-package-remove="1" -> data-matrix-bid-package-add="1"
+            return `
+                <div class="am-wxt-matrix-bid-package-editor" data-matrix-dimension-bid-package="1">
+                    <div class="am-wxt-matrix-bid-package-summary" data-matrix-bid-package-summary="1">${Utils.escapeHtml(summaryText)}</div>
+                    <div class="am-wxt-matrix-bid-package-list" data-matrix-bid-package-list="1">
+                        ${rows.map((item, index) => buildMatrixBidTargetCostPackageRowHtml(item, index)).join('')}
+                    </div>
+                    <div class="am-wxt-matrix-bid-package-footer">
+                        <div class="am-wxt-matrix-bid-package-footer-left">
+                            <button
+                                type="button"
+                                class="am-wxt-matrix-bid-package-add"
+                                data-matrix-bid-package-add="1"
+                                aria-label="添加目标"
+                                title="新增一个出价目标"
+                            >+</button>
+                        </div>
+                    </div>
+                    <textarea class="am-wxt-hidden-control" data-matrix-dimension-values="1" tabindex="-1" aria-hidden="true">${Utils.escapeHtml(serializeMatrixDimensionValues(normalizedValues))}</textarea>
+                </div>
+            `;
+        };
+
+        const readMatrixBidTargetCostPackageValuesFromRow = (row = null) => {
+            if (!(row instanceof HTMLElement)) return [];
+            const packageRows = Array.from(row.querySelectorAll('[data-matrix-bid-package-row="1"]'));
+            if (!packageRows.length) {
+                return normalizeMatrixDimensionValues(
+                    row.querySelector('[data-matrix-dimension-values="1"]')?.value || ''
+                );
+            }
+            return uniqueBy(
+                packageRows
+                    .reduce((result, itemRow) => {
+                        const targetSelect = itemRow.querySelector('[data-matrix-bid-package-target="1"]');
+                        Array.from(itemRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).forEach((costInput) => {
+                            const rowValue = buildMatrixBidTargetCostPackageRowValue({
+                                targetOptionValue: targetSelect instanceof HTMLSelectElement ? targetSelect.value : '',
+                                costValue: costInput instanceof HTMLInputElement ? costInput.value : ''
+                            });
+                            if (rowValue) result.push(rowValue);
+                        });
+                        return result;
+                    }, []),
+                item => item
+            );
+        };
+
+        const mergeMatrixBidTargetCostPackageRowsFromDom = (row = null) => {
+            if (!(row instanceof HTMLElement)) return;
+            const defaultOptionValue = getMatrixBidTargetCostPackageDefaultOption().value;
+            const primaryRowByTarget = new Map();
+            Array.from(row.querySelectorAll('[data-matrix-bid-package-row="1"]')).forEach((itemRow) => {
+                if (!(itemRow instanceof HTMLElement)) return;
+                const targetSelect = itemRow.querySelector('[data-matrix-bid-package-target="1"]');
+                if (!(targetSelect instanceof HTMLSelectElement)) return;
+                const normalizedTargetValue = normalizeKeywordBidTargetOptionValue(targetSelect.value || '') || defaultOptionValue;
+                targetSelect.value = resolveMatrixBidTargetCostConfig(normalizedTargetValue)
+                    ? normalizedTargetValue
+                    : defaultOptionValue;
+                if (!primaryRowByTarget.has(targetSelect.value)) {
+                    primaryRowByTarget.set(targetSelect.value, itemRow);
+                    return;
+                }
+                const primaryRow = primaryRowByTarget.get(targetSelect.value);
+                const primaryCostList = primaryRow?.querySelector('[data-matrix-bid-package-cost-list="1"]');
+                const primaryCostAddBtn = primaryCostList?.querySelector('[data-matrix-bid-package-cost-add="1"]');
+                Array.from(itemRow.querySelectorAll('[data-matrix-bid-package-cost-item="1"]')).forEach((costItem) => {
+                    if (!(costItem instanceof HTMLElement) || !(primaryCostList instanceof HTMLElement)) return;
+                    insertMatrixBidTargetCostPackageCostItemElement(primaryCostList, primaryCostAddBtn, costItem);
+                });
+                itemRow.remove();
+            });
+            Array.from(row.querySelectorAll('[data-matrix-bid-package-row="1"]')).forEach((itemRow) => {
+                if (!(itemRow instanceof HTMLElement)) return;
+                const targetSelect = itemRow.querySelector('[data-matrix-bid-package-target="1"]');
+                const costList = itemRow.querySelector('[data-matrix-bid-package-cost-list="1"]');
+                const costAddBtn = costList?.querySelector('[data-matrix-bid-package-cost-add="1"]');
+                const targetOptionValue = normalizeKeywordBidTargetOptionValue(
+                    targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+                ) || defaultOptionValue;
+                if (!(costList instanceof HTMLElement)) return;
+                if (!costList.querySelector('[data-matrix-bid-package-cost-item="1"]')) {
+                    insertMatrixBidTargetCostPackageCostItemHtml(
+                        costList,
+                        costAddBtn,
+                        buildMatrixBidTargetCostPackageCostItemHtml('', targetOptionValue, 0)
+                    );
+                }
+            });
+        };
+
+        const syncMatrixBidTargetCostPackageStateFromRow = (row = null) => {
+            if (!(row instanceof HTMLElement)) return [];
+            mergeMatrixBidTargetCostPackageRowsFromDom(row);
+            let pendingCount = 0;
+            row.querySelectorAll('[data-matrix-bid-package-row="1"]').forEach((itemRow, index) => {
+                if (!(itemRow instanceof HTMLElement)) return;
+                itemRow.setAttribute('data-matrix-bid-package-index', String(index));
+                const targetSelect = itemRow.querySelector('[data-matrix-bid-package-target="1"]');
+                const targetLabel = itemRow.querySelector('[data-matrix-bid-package-target-label="1"]');
+                const targetOptions = Array.from(itemRow.querySelectorAll('[data-matrix-bid-package-target-option="1"]'));
+                const costMeta = itemRow.querySelector('[data-matrix-bid-package-cost-meta="1"]');
+                const costAddBtn = itemRow.querySelector('[data-matrix-bid-package-cost-add="1"]');
+                const targetOptionValue = normalizeKeywordBidTargetOptionValue(
+                    targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+                ) || 'conv';
+                const targetOptionLabel = MATRIX_BID_TARGET_OPTIONS.find(item => item.value === targetOptionValue)?.label || '获取成交量';
+                const { costLabel, costPlaceholder } = getMatrixBidTargetCostPackageCostFieldMeta(targetOptionValue);
+                if (targetSelect instanceof HTMLSelectElement && !resolveMatrixBidTargetCostConfig(targetSelect.value)) {
+                    targetSelect.value = 'conv';
+                }
+                if (targetSelect instanceof HTMLSelectElement) {
+                    targetOptions.forEach((optionInput) => {
+                        if (!(optionInput instanceof HTMLButtonElement)) return;
+                        const isActive = String(optionInput.getAttribute('data-value') || '').trim() === targetSelect.value;
+                        optionInput.classList.toggle('is-active', isActive);
+                        optionInput.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    });
+                    if (targetLabel instanceof HTMLElement) {
+                        targetLabel.textContent = targetOptionLabel;
+                    }
+                }
+                if (costMeta instanceof HTMLElement) {
+                    costMeta.textContent = costLabel;
+                }
+                if (costAddBtn instanceof HTMLButtonElement) {
+                    costAddBtn.textContent = '+';
+                    costAddBtn.setAttribute('aria-label', targetOptionValue === 'roi' ? '新增目标值' : '新增目标成本');
+                    costAddBtn.title = `为${targetOptionLabel}再加一个${costLabel}`;
+                }
+                let rowHasPending = false;
+                Array.from(itemRow.querySelectorAll('[data-matrix-bid-package-cost-item="1"]')).forEach((costItem, costIndex) => {
+                    if (!(costItem instanceof HTMLElement)) return;
+                    costItem.setAttribute('data-matrix-bid-package-cost-index', String(costIndex));
+                    const costInput = costItem.querySelector('[data-matrix-bid-package-cost="1"]');
+                    const costValue = costInput instanceof HTMLInputElement ? costInput.value : '';
+                    if (costInput instanceof HTMLInputElement) {
+                        costInput.placeholder = costPlaceholder;
+                        costInput.title = `填写${costLabel}`;
+                    }
+                    const rowValue = buildMatrixBidTargetCostPackageRowValue({
+                        targetOptionValue,
+                        costValue
+                    });
+                    const isPending = !rowValue;
+                    costItem.classList.toggle('is-pending', isPending);
+                    rowHasPending = rowHasPending || isPending;
+                    if (isPending) pendingCount += 1;
+                });
+                const batchMenu = itemRow.querySelector('[data-matrix-bid-package-cost-batch-menu="1"]');
+                if (batchMenu instanceof HTMLElement) {
+                    const batchDraft = getMatrixBidTargetCostPackageBatchDraft(itemRow);
+                    batchMenu.innerHTML = buildMatrixBidTargetCostPackageBatchMenuHtml(
+                        targetOptionValue,
+                        getMatrixBidTargetCostPackageRowMaxCostValue(itemRow),
+                        {
+                            hasPendingCost: rowHasPending,
+                            interval: batchDraft.interval,
+                            count: batchDraft.count
+                        }
+                    );
+                }
+                itemRow.classList.toggle('is-pending', rowHasPending);
+            });
+            const values = readMatrixBidTargetCostPackageValuesFromRow(row);
+            const hiddenTextarea = row.querySelector('[data-matrix-dimension-values="1"]');
+            if (hiddenTextarea instanceof HTMLTextAreaElement) {
+                hiddenTextarea.value = serializeMatrixDimensionValues(values);
+            }
+            const summary = row.querySelector('[data-matrix-bid-package-summary="1"]');
+            if (summary instanceof HTMLElement) {
+                summary.textContent = values.length && pendingCount
+                    ? `已配置 ${values.length} 组目标包，另有 ${pendingCount} 组待填写`
+                    : values.length
+                    ? `已配置 ${values.length} 组目标包`
+                    : pendingCount
+                    ? `已新增 ${pendingCount} 组待填写`
+                    : '先选目标，再在下方填写目标成本';
+            }
+            return values;
         };
 
         const normalizeMatrixDimensionValuesByPreset = (values = [], preset = null) => {
@@ -29038,19 +30023,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const targetKey = String(presetKey || '').trim();
             if (!targetKey) return;
             if (!(wizardState?.els?.matrixDimensionList instanceof HTMLElement)) return;
-            const targetRow = Array.from(
-                wizardState.els.matrixDimensionList.querySelectorAll('[data-matrix-dimension-row="1"]')
-            ).find((row) => (
-                String(row.querySelector('[data-matrix-dimension-key="1"]')?.value || '').trim() === targetKey
-            ));
+                const targetRow = Array.from(
+                    wizardState.els.matrixDimensionList.querySelectorAll('[data-matrix-dimension-row="1"]')
+                ).find((row) => (
+                    String(row.querySelector('[data-matrix-dimension-key="1"]')?.value || '').trim() === targetKey
+                ));
             if (!(targetRow instanceof HTMLElement)) return;
             requestAnimationFrame(() => {
                 targetRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-                const valuesInput = targetRow.querySelector('[data-matrix-dimension-values="1"], [data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-values-select="1"]');
+                const valuesInput = targetRow.querySelector('[data-matrix-bid-package-target="1"], [data-matrix-bid-package-cost="1"], [data-matrix-bid-package-add="1"], [data-matrix-dimension-values="1"], [data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-values-select="1"]');
                 if (
                     valuesInput instanceof HTMLTextAreaElement
                     || valuesInput instanceof HTMLSelectElement
                     || valuesInput instanceof HTMLButtonElement
+                    || valuesInput instanceof HTMLInputElement
                 ) {
                     valuesInput.focus({ preventScroll: true });
                 }
@@ -42428,20 +43414,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <span class="am-wxt-matrix-dimension-picker-option-text">${Utils.escapeHtml(item.label)}</span>
                         </label>
                     `).join('');
-                    const normalizedValues = normalizeMatrixDimensionValues(dimension.values || []);
+                    const normalizedValues = normalizeMatrixDimensionValuesByPreset(dimension.values || [], preset);
                     const valuesText = serializeMatrixDimensionValues(normalizedValues);
                     const valueOptions = getMatrixDimensionValueOptions(preset, {
                         itemList: wizardState.addedItems,
                         selectedValues: normalizedValues
                     });
                     const useMultiSelect = String(preset?.valueInputMode || '').trim() === 'multi_select';
+                    const usePackageRows = String(preset?.valueInputMode || '').trim() === 'package_rows';
                     const selectedValueSet = new Set(normalizedValues);
                     const pickerSummaryText = buildMatrixDimensionPickerSummaryText(normalizedValues);
                     const rowHintText = buildMatrixDimensionHint(dimension);
                     const pickerHintText = preset?.key === 'material_id'
                         ? '从已添加商品里下拉勾选；如无可选项，请先回首页添加商品。'
                         : '固定维度改为下拉勾选；不带搜索。';
-                    const valueEditorHtml = useMultiSelect
+                    const valueEditorHtml = usePackageRows
+                        ? buildMatrixBidTargetCostPackageEditorHtml(normalizedValues, preset?.suggestedValues || [])
+                        : (useMultiSelect
                         ? `
                             <div class="am-wxt-matrix-dimension-picker" data-matrix-dimension-picker="1">
                                 <button
@@ -42486,7 +43475,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 placeholder="${Utils.escapeHtml(preset?.placeholder || '每行一个值，或用逗号分隔')}"
                                 title="${Utils.escapeHtml(rowHintText)}"
                             >${Utils.escapeHtml(valuesText)}</textarea>
-                        `;
+                        `);
                     return `
                         <div class="am-wxt-matrix-dimension-row" data-matrix-dimension-row="1" data-matrix-dimension-index="${index}">
                             <div class="am-wxt-matrix-dimension-top">
@@ -43524,7 +44513,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
                 wizardState.els.matrixDimensionList.addEventListener('click', (event) => {
                     const toggleBtn = event.target instanceof Element
-                        ? event.target.closest('[data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-key-picker-toggle="1"]')
+                        ? event.target.closest('[data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-key-picker-toggle="1"], [data-matrix-bid-package-picker-toggle="1"]')
                         : null;
                     if (toggleBtn instanceof HTMLButtonElement) {
                         event.preventDefault();
@@ -43533,6 +44522,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const nextOpen = !picker.classList.contains('open');
                         closeMatrixDimensionPickers(wizardState.els.matrixDimensionList, picker);
                         setMatrixDimensionPickerOpen(picker, nextOpen);
+                        return;
+                    }
+                    const bidPackageTargetOptionBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-target-option="1"]')
+                        : null;
+                    if (bidPackageTargetOptionBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageTargetOptionBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageRow = bidPackageTargetOptionBtn.closest('[data-matrix-bid-package-row="1"]');
+                        const hiddenSelect = packageRow?.querySelector('[data-matrix-bid-package-target="1"]');
+                        const nextValue = normalizeKeywordBidTargetOptionValue(
+                            bidPackageTargetOptionBtn.getAttribute('data-value') || ''
+                        );
+                        if (!(row instanceof HTMLElement) || !(packageRow instanceof HTMLElement) || !(hiddenSelect instanceof HTMLSelectElement)) return;
+                        if (!resolveMatrixBidTargetCostConfig(nextValue)) return;
+                        hiddenSelect.value = nextValue;
+                        const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
+                        syncMatrixDimensionMetaStateFromRow(row, currentSceneName);
+                        syncMatrixConfigFromUI();
+                        KeywordPlanWizardStore.persistDraft(wizardState.draft);
+                        closeMatrixDimensionPickers(wizardState.els.matrixDimensionList);
+                        if (!row.querySelector('[data-matrix-bid-package-row="1"].is-pending')) {
+                            renderWorkbenchMatrixSummary();
+                            refreshWizardPreview();
+                        }
+                        const activeRow = Array.from(row.querySelectorAll('[data-matrix-bid-package-row="1"]')).find((itemRow) => {
+                            const targetSelect = itemRow.querySelector('[data-matrix-bid-package-target="1"]');
+                            return normalizeKeywordBidTargetOptionValue(
+                                targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+                            ) === nextValue;
+                        }) || packageRow;
+                        const costInput = Array.from(activeRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).slice(-1)[0];
+                        if (costInput instanceof HTMLInputElement) {
+                            costInput.focus({ preventScroll: true });
+                        }
                         return;
                     }
                     const addBtn = event.target instanceof Element
@@ -43546,6 +44570,300 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         applyMatrixPreset(nextPresetKey);
                         const nextPreset = getMatrixDimensionPresetByKey(nextPresetKey, getMatrixSceneName(wizardState.draft?.sceneName || ''));
                         appendWizardLog(`已添加矩阵维度：${nextPreset?.label || nextPresetKey}`, 'success');
+                        return;
+                    }
+                    const bidPackageAddBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-add="1"]')
+                        : null;
+                    if (bidPackageAddBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageAddBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageList = row?.querySelector('[data-matrix-bid-package-list="1"]');
+                        if (!(row instanceof HTMLElement) || !(packageList instanceof HTMLElement)) return;
+                        const emptyCostInput = Array.from(packageList.querySelectorAll('[data-matrix-bid-package-cost="1"]')).find((costInput) => {
+                            const packageRow = costInput.closest('[data-matrix-bid-package-row="1"]');
+                            const targetSelect = packageRow?.querySelector('[data-matrix-bid-package-target="1"]');
+                            return !buildMatrixBidTargetCostPackageRowValue({
+                                targetOptionValue: targetSelect instanceof HTMLSelectElement ? targetSelect.value : '',
+                                costValue: costInput instanceof HTMLInputElement ? costInput.value : ''
+                            });
+                        });
+                        if (emptyCostInput instanceof HTMLInputElement) {
+                            emptyCostInput.focus({ preventScroll: true });
+                            return;
+                        }
+                        const usedTargetValues = new Set(
+                            Array.from(packageList.querySelectorAll('[data-matrix-bid-package-target="1"]'))
+                                .map((targetSelect) => normalizeKeywordBidTargetOptionValue(
+                                    targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+                                ))
+                                .filter(Boolean)
+                        );
+                        const nextOption = getMatrixBidTargetCostPackageOptions().find(item => !usedTargetValues.has(item.value)) || null;
+                        if (nextOption) {
+                            packageList.insertAdjacentHTML(
+                                'beforeend',
+                                buildMatrixBidTargetCostPackageRowHtml({
+                                    targetOptionValue: nextOption.value,
+                                    targetLabel: nextOption.label,
+                                    costValues: ['']
+                                }, packageList.children.length)
+                            );
+                        } else {
+                            const lastRow = packageList.querySelector('[data-matrix-bid-package-row="1"]:last-child');
+                            const targetSelect = lastRow?.querySelector('[data-matrix-bid-package-target="1"]');
+                            const costList = lastRow?.querySelector('[data-matrix-bid-package-cost-list="1"]');
+                            const costAddBtn = costList?.querySelector('[data-matrix-bid-package-cost-add="1"]');
+                            const targetOptionValue = normalizeKeywordBidTargetOptionValue(
+                                targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+                            ) || getMatrixBidTargetCostPackageDefaultOption().value;
+                            if (costList instanceof HTMLElement) {
+                                insertMatrixBidTargetCostPackageCostItemHtml(
+                                    costList,
+                                    costAddBtn,
+                                    buildMatrixBidTargetCostPackageCostItemHtml(
+                                        '',
+                                        targetOptionValue,
+                                        costList.querySelectorAll('[data-matrix-bid-package-cost-item="1"]').length
+                                    )
+                                );
+                            }
+                        }
+                        syncMatrixBidTargetCostPackageStateFromRow(row);
+                        const insertedRow = packageList.querySelector('[data-matrix-bid-package-row="1"]:last-child');
+                        const costInput = insertedRow
+                            ? Array.from(insertedRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).slice(-1)[0]
+                            : null;
+                        const targetSelect = insertedRow?.querySelector('[data-matrix-bid-package-target="1"]');
+                        if (costInput instanceof HTMLInputElement || targetSelect instanceof HTMLSelectElement) {
+                            (costInput || targetSelect).focus({ preventScroll: true });
+                        }
+                        return;
+                    }
+                    const bidPackageBatchAddBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-batch-add="1"]')
+                        : null;
+                    if (bidPackageBatchAddBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageBatchAddBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageRow = bidPackageBatchAddBtn.closest('[data-matrix-bid-package-row="1"]');
+                        const batchPicker = bidPackageBatchAddBtn.closest('[data-matrix-dimension-picker="1"]');
+                        if (!(row instanceof HTMLElement) || !(packageRow instanceof HTMLElement)) return;
+                        const batchMenu = bidPackageBatchAddBtn.closest('[data-matrix-bid-package-cost-batch-menu="1"]');
+                        const intervalInput = batchMenu?.querySelector('[data-matrix-bid-package-batch-interval="1"]');
+                        const countInput = batchMenu?.querySelector('[data-matrix-bid-package-batch-count="1"]');
+                        const intervalValue = intervalInput instanceof HTMLInputElement ? intervalInput.value : '';
+                        const countValue = countInput instanceof HTMLInputElement ? countInput.value : '';
+                        if (!Number.isFinite(parseNumberFromSceneValue(intervalValue)) || parseNumberFromSceneValue(intervalValue) <= 0) {
+                            if (intervalInput instanceof HTMLInputElement) {
+                                intervalInput.focus({ preventScroll: true });
+                            }
+                            return;
+                        }
+                        if (!Number.isFinite(parseNumberFromSceneValue(countValue)) || parseNumberFromSceneValue(countValue) <= 0) {
+                            if (countInput instanceof HTMLInputElement) {
+                                countInput.focus({ preventScroll: true });
+                            }
+                            return;
+                        }
+                        setMatrixBidTargetCostPackageBatchDraft(packageRow, {
+                            interval: intervalValue,
+                            count: countValue
+                        });
+                        const insertedInputs = appendMatrixBidTargetCostPackageBatchCosts(packageRow, {
+                            mode: 'batch',
+                            interval: intervalValue,
+                            count: countValue
+                        });
+                        closeMatrixDimensionPickers(wizardState.els.matrixDimensionList);
+                        syncMatrixBidTargetCostPackageStateFromRow(row);
+                        setMatrixDimensionPickerOpen(batchPicker, false);
+                        const focusInput = insertedInputs.slice(-1)[0];
+                        syncMatrixConfigFromUI();
+                        KeywordPlanWizardStore.persistDraft(wizardState.draft);
+                        if (!row.querySelector('[data-matrix-bid-package-row="1"].is-pending')) {
+                            renderWorkbenchMatrixSummary();
+                            refreshWizardPreview();
+                        }
+                        if (focusInput instanceof HTMLInputElement) {
+                            focusInput.focus({ preventScroll: true });
+                        }
+                        return;
+                    }
+                    const bidPackageBatchManualBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-batch-manual="1"]')
+                        : null;
+                    if (bidPackageBatchManualBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageBatchManualBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageRow = bidPackageBatchManualBtn.closest('[data-matrix-bid-package-row="1"]');
+                        const batchPicker = bidPackageBatchManualBtn.closest('[data-matrix-dimension-picker="1"]');
+                        if (!(row instanceof HTMLElement) || !(packageRow instanceof HTMLElement)) return;
+                        const insertedInputs = appendMatrixBidTargetCostPackageBatchCosts(packageRow, {
+                            mode: 'manual'
+                        });
+                        closeMatrixDimensionPickers(wizardState.els.matrixDimensionList);
+                        syncMatrixBidTargetCostPackageStateFromRow(row);
+                        setMatrixDimensionPickerOpen(batchPicker, false);
+                        const focusInput = insertedInputs.slice(-1)[0];
+                        if (focusInput instanceof HTMLInputElement) {
+                            focusInput.focus({ preventScroll: true });
+                        }
+                        return;
+                    }
+                    const bidPackageCostAddBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-cost-add="1"]')
+                        : null;
+                    if (bidPackageCostAddBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageCostAddBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageRow = bidPackageCostAddBtn.closest('[data-matrix-bid-package-row="1"]');
+                        const targetSelect = packageRow?.querySelector('[data-matrix-bid-package-target="1"]');
+                        const costList = packageRow?.querySelector('[data-matrix-bid-package-cost-list="1"]');
+                        if (!(row instanceof HTMLElement) || !(packageRow instanceof HTMLElement) || !(costList instanceof HTMLElement)) return;
+                        const emptyCostInput = Array.from(packageRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).find((costInput) => (
+                            !buildMatrixBidTargetCostPackageRowValue({
+                                targetOptionValue: targetSelect instanceof HTMLSelectElement ? targetSelect.value : '',
+                                costValue: costInput instanceof HTMLInputElement ? costInput.value : ''
+                            })
+                        ));
+                        if (emptyCostInput instanceof HTMLInputElement) {
+                            emptyCostInput.focus({ preventScroll: true });
+                            return;
+                        }
+                        const targetOptionValue = normalizeKeywordBidTargetOptionValue(
+                            targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+                        ) || getMatrixBidTargetCostPackageDefaultOption().value;
+                        insertMatrixBidTargetCostPackageCostItemHtml(
+                            costList,
+                            bidPackageCostAddBtn,
+                            buildMatrixBidTargetCostPackageCostItemHtml(
+                                '',
+                                targetOptionValue,
+                                packageRow.querySelectorAll('[data-matrix-bid-package-cost-item="1"]').length
+                            )
+                        );
+                        syncMatrixBidTargetCostPackageStateFromRow(row);
+                        const insertedInput = Array.from(packageRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).slice(-1)[0];
+                        if (insertedInput instanceof HTMLInputElement) {
+                            insertedInput.focus({ preventScroll: true });
+                        }
+                        return;
+                    }
+                    const bidPackageSuggestBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-suggest="1"]')
+                        : null;
+                    if (bidPackageSuggestBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageSuggestBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageList = row?.querySelector('[data-matrix-bid-package-list="1"]');
+                        if (!(row instanceof HTMLElement) || !(packageList instanceof HTMLElement)) return;
+                        const nextValue = String(bidPackageSuggestBtn.getAttribute('data-matrix-bid-package-value') || '').trim();
+                        const parsedValue = parseMatrixBidTargetCostPackageValue(nextValue);
+                        if (!parsedValue) return;
+                        const currentValueSet = new Set(readMatrixBidTargetCostPackageValuesFromRow(row));
+                        if (currentValueSet.has(parsedValue.rawValue)) return;
+                        const matchedRow = Array.from(packageList.querySelectorAll('[data-matrix-bid-package-row="1"]')).find((itemRow) => {
+                            const targetSelect = itemRow.querySelector('[data-matrix-bid-package-target="1"]');
+                            return normalizeKeywordBidTargetOptionValue(
+                                targetSelect instanceof HTMLSelectElement ? targetSelect.value : ''
+                            ) === parsedValue.targetOptionValue;
+                        });
+                        if (matchedRow instanceof HTMLElement) {
+                            const emptyCostInput = Array.from(matchedRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).find((costInput) => (
+                                !buildMatrixBidTargetCostPackageRowValue({
+                                    targetOptionValue: parsedValue.targetOptionValue,
+                                    costValue: costInput instanceof HTMLInputElement ? costInput.value : ''
+                                })
+                            ));
+                            if (emptyCostInput instanceof HTMLInputElement) {
+                                emptyCostInput.value = parsedValue.costValue;
+                            } else {
+                                const costAddBtn = matchedRow.querySelector('[data-matrix-bid-package-cost-add="1"]');
+                                insertMatrixBidTargetCostPackageCostItemHtml(
+                                    matchedRow.querySelector('[data-matrix-bid-package-cost-list="1"]'),
+                                    costAddBtn,
+                                    buildMatrixBidTargetCostPackageCostItemHtml(
+                                        parsedValue.costValue,
+                                        parsedValue.targetOptionValue,
+                                        matchedRow.querySelectorAll('[data-matrix-bid-package-cost-item="1"]').length
+                                    )
+                                );
+                            }
+                        } else {
+                            const emptyRow = Array.from(packageList.querySelectorAll('[data-matrix-bid-package-row="1"]')).find((itemRow) => {
+                                const targetSelect = itemRow.querySelector('[data-matrix-bid-package-target="1"]');
+                                const rowValues = Array.from(itemRow.querySelectorAll('[data-matrix-bid-package-cost="1"]'))
+                                    .map((costInput) => buildMatrixBidTargetCostPackageRowValue({
+                                        targetOptionValue: targetSelect instanceof HTMLSelectElement ? targetSelect.value : '',
+                                        costValue: costInput instanceof HTMLInputElement ? costInput.value : ''
+                                    }))
+                                    .filter(Boolean);
+                                return !rowValues.length;
+                            });
+                            if (emptyRow instanceof HTMLElement) {
+                                const targetSelect = emptyRow.querySelector('[data-matrix-bid-package-target="1"]');
+                                const costInputs = Array.from(emptyRow.querySelectorAll('[data-matrix-bid-package-cost="1"]'));
+                                if (targetSelect instanceof HTMLSelectElement) targetSelect.value = parsedValue.targetOptionValue;
+                                if (costInputs[0] instanceof HTMLInputElement) costInputs[0].value = parsedValue.costValue;
+                            } else {
+                                packageList.insertAdjacentHTML(
+                                    'beforeend',
+                                    buildMatrixBidTargetCostPackageRowHtml({
+                                        targetOptionValue: parsedValue.targetOptionValue,
+                                        targetLabel: parsedValue.targetLabel,
+                                        costValues: [parsedValue.costValue]
+                                    }, packageList.children.length)
+                                );
+                            }
+                        }
+                        syncMatrixBidTargetCostPackageStateFromRow(row);
+                        commitPreviewUiState();
+                        return;
+                    }
+                    const bidPackageCostRemoveBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-cost-remove="1"]')
+                        : null;
+                    if (bidPackageCostRemoveBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageCostRemoveBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageRow = bidPackageCostRemoveBtn.closest('[data-matrix-bid-package-row="1"]');
+                        const packageList = row?.querySelector('[data-matrix-bid-package-list="1"]');
+                        const costItem = bidPackageCostRemoveBtn.closest('[data-matrix-bid-package-cost-item="1"]');
+                        if (!(row instanceof HTMLElement) || !(packageRow instanceof HTMLElement) || !(packageList instanceof HTMLElement) || !(costItem instanceof HTMLElement)) return;
+                        const rowCostItems = Array.from(packageRow.querySelectorAll('[data-matrix-bid-package-cost-item="1"]'));
+                        const packageRows = Array.from(packageList.querySelectorAll('[data-matrix-bid-package-row="1"]'));
+                        if (rowCostItems.length > 1) {
+                            costItem.remove();
+                        } else if (packageRows.length > 1) {
+                            packageRow.remove();
+                        } else {
+                            const costInput = costItem.querySelector('[data-matrix-bid-package-cost="1"]');
+                            if (costInput instanceof HTMLInputElement) {
+                                costInput.value = '';
+                            }
+                        }
+                        syncMatrixBidTargetCostPackageStateFromRow(row);
+                        commitPreviewUiState();
+                        return;
+                    }
+                    const bidPackageRemoveBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-bid-package-remove="1"]')
+                        : null;
+                    if (bidPackageRemoveBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        const row = bidPackageRemoveBtn.closest('[data-matrix-dimension-row="1"]');
+                        const packageRow = bidPackageRemoveBtn.closest('[data-matrix-bid-package-row="1"]');
+                        const packageList = row?.querySelector('[data-matrix-bid-package-list="1"]');
+                        if (!(row instanceof HTMLElement) || !(packageRow instanceof HTMLElement) || !(packageList instanceof HTMLElement)) return;
+                        const packageRows = Array.from(packageList.querySelectorAll('[data-matrix-bid-package-row="1"]'));
+                        if (packageRows.length <= 1) {
+                            packageRow.outerHTML = buildMatrixBidTargetCostPackageRowHtml(buildMatrixBidTargetCostPackageRows([])[0], 0);
+                        } else {
+                            packageRow.remove();
+                        }
+                        syncMatrixBidTargetCostPackageStateFromRow(row);
+                        commitPreviewUiState();
                         return;
                     }
                     const removeBtn = event.target instanceof Element
@@ -43564,7 +44882,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         : null;
                     if (!(row instanceof HTMLElement)) return;
                     const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
+                    if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-bid-package-batch-interval="1"], [data-matrix-bid-package-batch-count="1"]')) {
+                        const packageRow = event.target.closest('[data-matrix-bid-package-row="1"]');
+                        const batchMenu = event.target.closest('[data-matrix-bid-package-cost-batch-menu="1"]');
+                        const intervalInput = batchMenu?.querySelector('[data-matrix-bid-package-batch-interval="1"]');
+                        const countInput = batchMenu?.querySelector('[data-matrix-bid-package-batch-count="1"]');
+                        setMatrixBidTargetCostPackageBatchDraft(packageRow, {
+                            interval: intervalInput instanceof HTMLInputElement ? intervalInput.value : '',
+                            count: countInput instanceof HTMLInputElement ? countInput.value : ''
+                        });
+                        return;
+                    }
                     if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-key-option="1"]')) {
+                        return;
+                    }
+                    if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-bid-package-target-option="1"]')) {
+                        const packageRow = event.target.closest('[data-matrix-bid-package-row="1"]');
+                        const hiddenSelect = packageRow?.querySelector('[data-matrix-bid-package-target="1"]');
+                        if (hiddenSelect instanceof HTMLSelectElement) {
+                            hiddenSelect.value = event.target.value;
+                        }
+                        syncMatrixDimensionMetaStateFromRow(row, currentSceneName);
+                        syncMatrixConfigFromUI();
+                        KeywordPlanWizardStore.persistDraft(wizardState.draft);
                         return;
                     }
                     if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-value-option="1"]')) {
@@ -43581,6 +44921,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         : null;
                     if (!(row instanceof HTMLElement)) return;
                     const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
+                    if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-bid-package-batch-interval="1"], [data-matrix-bid-package-batch-count="1"]')) {
+                        const packageRow = event.target.closest('[data-matrix-bid-package-row="1"]');
+                        const batchMenu = event.target.closest('[data-matrix-bid-package-cost-batch-menu="1"]');
+                        const intervalInput = batchMenu?.querySelector('[data-matrix-bid-package-batch-interval="1"]');
+                        const countInput = batchMenu?.querySelector('[data-matrix-bid-package-batch-count="1"]');
+                        setMatrixBidTargetCostPackageBatchDraft(packageRow, {
+                            interval: intervalInput instanceof HTMLInputElement ? intervalInput.value : '',
+                            count: countInput instanceof HTMLInputElement ? countInput.value : ''
+                        });
+                        return;
+                    }
+                    if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-bid-package-target-option="1"]')) {
+                        const packageRow = event.target.closest('[data-matrix-bid-package-row="1"]');
+                        const hiddenSelect = packageRow?.querySelector('[data-matrix-bid-package-target="1"]');
+                        if (hiddenSelect instanceof HTMLSelectElement) {
+                            hiddenSelect.value = event.target.value;
+                        }
+                        syncMatrixDimensionMetaStateFromRow(row, currentSceneName);
+                        syncMatrixConfigFromUI();
+                        KeywordPlanWizardStore.persistDraft(wizardState.draft);
+                        closeMatrixDimensionPickers(wizardState.els.matrixDimensionList);
+                        if (row.querySelector('[data-matrix-bid-package-row="1"].is-pending')) return;
+                        renderWorkbenchMatrixSummary();
+                        refreshWizardPreview();
+                        return;
+                    }
+                    if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-bid-package-cost="1"]')) {
+                        syncMatrixDimensionMetaStateFromRow(row, currentSceneName);
+                        syncMatrixConfigFromUI();
+                        KeywordPlanWizardStore.persistDraft(wizardState.draft);
+                        if (row.querySelector('[data-matrix-bid-package-row="1"].is-pending')) return;
+                        renderWorkbenchMatrixSummary();
+                        refreshWizardPreview();
+                        return;
+                    }
                     if (event.target instanceof HTMLInputElement && event.target.matches('[data-matrix-dimension-key-option="1"]')) {
                         const nextKey = syncMatrixDimensionKeyPickerStateFromRow(row, currentSceneName);
                         const hiddenLabelInput = row.querySelector('[data-matrix-dimension-label="1"]');
