@@ -28180,6 +28180,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         };
         const MATRIX_SCENE_STRICT_OPTION_TYPE_SET = new Set(['goal', 'bidType', 'bidTarget', 'budgetType', 'itemMode', 'keyword', 'crowd', 'schedule']);
         const MATRIX_KEYWORD_BID_TARGET_COST_FIELD_LABEL_RE = /^(设置7日投产比|目标投产比|ROI目标值|出价目标值|约束值|设置平均成交成本|平均直接成交成本|平均成交成本|直接成交成本|单次成交成本|目标成交成本|目标成本|设置平均收藏加购成本|平均收藏加购成本|收藏加购成本|设置平均点击成本|平均点击成本|点击成本)$/;
+        const MATRIX_SCENE_RENDER_FIELD_ALIAS_RULES = [
+            { pattern: /^(关键词设置|核心词设置)$/, label: '核心词设置' },
+            { pattern: /^(开启冷启加速|冷启加速)$/, label: '冷启加速' },
+            { pattern: /^(设置创意|创意设置|创意模式)$/, label: '创意设置' },
+            { pattern: /^(设置拉新人群|设置人群|人群设置|种子人群)$/, label: '人群设置' },
+            { pattern: /^(净目标投产比|目标投产比|ROI目标值|出价目标值|约束值)$/, label: '目标投产比' },
+            { pattern: /^(投放日期|投放时间|分时折扣|排期)$/, label: '投放时间' },
+            { pattern: /^(发布日期|发布时间)$/, label: '投放时间' },
+            { pattern: /^(选择推广商品|选品方式)$/, label: '选品方式' },
+            { pattern: /^(方案选择|选择方案)$/, label: '选择方案' },
+            { pattern: /^(设置计划组|计划组设置)$/, label: '计划组' }
+        ];
 
         const getMatrixSceneName = (sceneName = '') => {
             const normalizedSceneName = String(sceneName || '').trim();
@@ -28204,10 +28216,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 : normalizeText(value)
         );
 
+        const normalizeMatrixSceneRenderFieldLabel = (fieldLabel = '') => {
+            if (typeof normalizeSceneRenderFieldLabel === 'function') {
+                return normalizeSceneRenderFieldLabel(fieldLabel);
+            }
+            const raw = normalizeText(fieldLabel).replace(/[：:]/g, '').trim();
+            if (!raw) return '';
+            if (/^(campaign\.|adgroup\.)/i.test(raw)) return raw;
+            const token = normalizeText(String(raw || '').replace(/[：:]/g, ''));
+            for (const rule of MATRIX_SCENE_RENDER_FIELD_ALIAS_RULES) {
+                if (rule.pattern.test(token)) {
+                    return rule.label;
+                }
+            }
+            return raw;
+        };
+
         const normalizeMatrixSceneFieldLabel = (fieldLabel = '') => (
-            typeof normalizeSceneRenderFieldLabel === 'function'
-                ? normalizeSceneRenderFieldLabel(fieldLabel)
-                : String(fieldLabel || '').replace(/[：:]/g, '').trim()
+            normalizeMatrixSceneRenderFieldLabel(fieldLabel)
         );
 
         const normalizeMatrixSceneFieldKey = (fieldLabel = '') => (
@@ -28219,7 +28245,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const normalizeMatrixSceneFieldToken = (fieldLabel = '') => (
             typeof normalizeSceneRenderFieldToken === 'function'
                 ? normalizeSceneRenderFieldToken(fieldLabel)
-                : normalizeText(normalizeMatrixSceneFieldLabel(fieldLabel)).replace(/[：:]/g, '').trim()
+                : normalizeText(normalizeMatrixSceneRenderFieldLabel(fieldLabel)).replace(/[：:]/g, '').trim()
         );
 
         const isMatrixLikelySceneOptionValue = (value = '') => {
@@ -28916,18 +28942,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             normalizeMatrixDimensionValues(values).join('\n')
         );
 
+        const collectMatrixMaterialDimensionValues = (itemList = []) => (
+            uniqueBy(
+                (Array.isArray(itemList) ? itemList : [])
+                    .map(item => String(toIdValue(item?.materialId || item?.itemId || '')).trim())
+                    .filter(item => /^\d{4,}$/.test(item)),
+                item => item
+            ).slice(0, 5)
+        );
+
+        const collectDefaultSelectedMatrixMaterialDimensionValues = (itemList = []) => (
+            collectMatrixMaterialDimensionValues(itemList).slice(0, 1)
+        );
+
         const buildMatrixDimensionDraft = (key = '', options = {}) => {
             const sceneName = String(options?.sceneName || '').trim();
             const preset = getMatrixDimensionPresetByKey(key, sceneName);
             if (!preset) return null;
             const itemList = Array.isArray(options?.itemList) ? options.itemList : [];
             const defaultMaterialValues = preset.key === 'material_id'
-                ? uniqueBy(
-                    itemList
-                        .map(item => String(toIdValue(item?.materialId || item?.itemId || '')).trim())
-                        .filter(item => /^\d{4,}$/.test(item)),
-                    item => item
-                ).slice(0, 5)
+                ? collectDefaultSelectedMatrixMaterialDimensionValues(itemList)
                 : [];
             const nextValues = normalizeMatrixDimensionValuesByPreset(
                 Array.isArray(options?.values) && options.values.length
@@ -28959,6 +28993,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 values,
                 enabled: normalized.enabled !== false
             };
+        };
+
+        const syncMatrixMaterialDimensionValues = (matrixConfig = {}, itemList = [], sceneName = '') => {
+            const currentSceneName = getMatrixSceneName(sceneName || matrixConfig?.sceneName || '');
+            const nextMatrixConfig = normalizeMatrixConfig(matrixConfig, currentSceneName);
+            const materialValues = collectMatrixMaterialDimensionValues(itemList);
+            const defaultSelectedValues = collectDefaultSelectedMatrixMaterialDimensionValues(itemList);
+            const materialValueSet = new Set(materialValues);
+            nextMatrixConfig.dimensions = nextMatrixConfig.dimensions.map((dimension) => {
+                if (dimension.key !== 'material_id') return dimension;
+                const currentValues = normalizeMatrixDimensionValues(dimension.values || []);
+                const validValues = currentValues.filter(value => materialValueSet.has(value));
+                const nextValues = validValues.length ? validValues : defaultSelectedValues;
+                return {
+                    ...dimension,
+                    values: nextValues
+                };
+            });
+            nextMatrixConfig.sceneName = currentSceneName;
+            return nextMatrixConfig;
         };
 
         const normalizeMatrixConfig = (matrixConfig = {}, sceneName = '') => {
@@ -29245,7 +29299,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!bindingKey || !rawValue) return plan;
             if (isMatrixSceneFieldBindingKey(bindingKey)) {
                 const fieldKey = normalizeSceneFieldKey(bindingKey.slice(MATRIX_SCENE_FIELD_KEY_PREFIX.length));
-                const fieldLabel = normalizeSceneRenderFieldLabel(
+                const fieldLabel = normalizeMatrixSceneRenderFieldLabel(
                     dimensionValue.dimensionLabel || dimensionValue.key || fieldKey
                 ) || fieldKey;
                 if (!fieldKey || !fieldLabel) return plan;
@@ -29305,7 +29359,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const targetCostConfig = resolveMatrixBidTargetCostConfig(targetPackage.targetOptionValue);
                 const applySceneSetting = (label, value) => {
                     const text = String(value || '').trim();
-                    const fieldLabel = normalizeSceneRenderFieldLabel(label) || label;
+                    const fieldLabel = normalizeMatrixSceneRenderFieldLabel(label) || label;
                     const fieldKey = normalizeSceneFieldKey(fieldLabel);
                     if (!fieldLabel || !text) return;
                     plan.sceneSettingValues = isPlainObject(plan?.sceneSettingValues)
@@ -41400,6 +41454,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const syncDraftViewState = (draft) => {
                 draft.addedItems = wizardState.addedItems.map(item => ({ ...item }));
+                draft.matrixConfig = syncMatrixMaterialDimensionValues(draft.matrixConfig, draft.addedItems, draft.sceneName);
                 draft.crowdList = wizardState.crowdList.map(item => deepClone(item));
                 draft.debugVisible = !!wizardState.debugVisible;
                 draft.itemSplitExpanded = wizardState.itemSplitExpanded === true;
@@ -44150,6 +44205,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (isStaleOpen()) return;
                     wizardState.addedItems = preferred.slice(0, WIZARD_MAX_ITEMS);
                     wizardState.draft.addedItems = wizardState.addedItems;
+                    wizardState.draft.matrixConfig = syncMatrixMaterialDimensionValues(
+                        wizardState.draft.matrixConfig,
+                        wizardState.addedItems,
+                        wizardState.draft.sceneName
+                    );
                     KeywordPlanWizardStore.persistDraft();
                     wizardState.renderAddedList();
                     wizardState.renderCandidateList({ preserveScroll: true });

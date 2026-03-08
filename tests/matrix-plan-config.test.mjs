@@ -98,6 +98,30 @@ test('关键词自定义推广目标别名 helper 提前定义为共享函数，
   );
 });
 
+test('矩阵场景字段展示标签 helper 提前定义并复用本地兜底，避免矩阵预览运行时报错', () => {
+  const helperSignature = "const normalizeMatrixSceneRenderFieldLabel = (fieldLabel = '') => {";
+  const helperIndex = source.indexOf(helperSignature);
+  const applyBindingIndex = source.indexOf('const applyMatrixDimensionBindingToPlan = (plan = {}, dimensionValue = {}, options = {}) => {');
+  assert.notEqual(helperIndex, -1, '缺少矩阵场景字段展示标签 helper');
+  assert.notEqual(applyBindingIndex, -1, '缺少 applyMatrixDimensionBindingToPlan');
+  assert.ok(helperIndex < applyBindingIndex, 'normalizeMatrixSceneRenderFieldLabel 定义晚于矩阵绑定逻辑，浏览器会报 ReferenceError');
+  assert.match(
+    source,
+    /const normalizeMatrixSceneFieldLabel = \(fieldLabel = ''\) => \(\s*normalizeMatrixSceneRenderFieldLabel\(fieldLabel\)\s*\);/,
+    '矩阵场景字段标签未统一走本地展示标签 helper'
+  );
+  assert.match(
+    source,
+    /const fieldLabel = normalizeMatrixSceneRenderFieldLabel\([\s\S]*?dimensionValue\.dimensionLabel \|\| dimensionValue\.key \|\| fieldKey[\s\S]*?\) \|\| fieldKey;/,
+    '矩阵场景字段回写仍直接依赖后定义的共享 helper'
+  );
+  assert.match(
+    source,
+    /const fieldLabel = normalizeMatrixSceneRenderFieldLabel\(label\) \|\| label;/,
+    '矩阵智能出价目标包仍未切到本地展示标签 helper'
+  );
+});
+
 test('矩阵物化会先绑定 plan 字段再命名，并透传商品池', () => {
   assert.match(
     source,
@@ -113,6 +137,25 @@ test('矩阵物化会先绑定 plan 字段再命名，并透传商品池', () =>
     source,
     /if \(bindingKey === 'budget' && hasExplicitBudgetBinding\) return;/,
     '矩阵预算绑定缺少显式预算键优先规则'
+  );
+});
+
+test('商品池变化会回填已有 material_id 维度，避免矩阵商品维度空值', () => {
+  assert.match(source, /const collectMatrixMaterialDimensionValues = \(itemList = \[\]\) => \(/, '缺少矩阵商品维度默认值收集 helper');
+  assert.match(
+    source,
+    /const syncMatrixMaterialDimensionValues = \(matrixConfig = \{\}, itemList = \[\], sceneName = ''\) => \{[\s\S]*?dimension\.key !== 'material_id'[\s\S]*?const validValues = currentValues\.filter\(value => materialValueSet\.has\(value\)\);[\s\S]*?const nextValues = validValues\.length \? validValues : materialValues;/,
+    '缺少矩阵商品维度随商品池同步的 helper'
+  );
+  assert.match(
+    source,
+    /const syncDraftViewState = \(draft\) => \{[\s\S]*?draft\.addedItems = wizardState\.addedItems\.map\(item => \(\{ \.\.\.item \}\)\);[\s\S]*?draft\.matrixConfig = syncMatrixMaterialDimensionValues\(draft\.matrixConfig,\s*draft\.addedItems,\s*draft\.sceneName\);/,
+    '同步草稿时未回填 material_id 维度'
+  );
+  assert.match(
+    source,
+    /wizardState\.draft\.addedItems = wizardState\.addedItems;[\s\S]*?wizardState\.draft\.matrixConfig = syncMatrixMaterialDimensionValues\([\s\S]*?wizardState\.draft\.matrixConfig,[\s\S]*?wizardState\.addedItems,[\s\S]*?wizardState\.draft\.sceneName[\s\S]*?\);/,
+    '异步默认商品注入后未回填 material_id 维度'
   );
 });
 
