@@ -28179,6 +28179,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
         };
         const MATRIX_SCENE_STRICT_OPTION_TYPE_SET = new Set(['goal', 'bidType', 'bidTarget', 'budgetType', 'itemMode', 'keyword', 'crowd', 'schedule']);
+        const MATRIX_KEYWORD_BID_TARGET_COST_FIELD_LABEL_RE = /^(设置7日投产比|目标投产比|ROI目标值|出价目标值|约束值|设置平均成交成本|平均直接成交成本|平均成交成本|直接成交成本|单次成交成本|目标成交成本|目标成本|设置平均收藏加购成本|平均收藏加购成本|收藏加购成本|设置平均点击成本|平均点击成本|点击成本)$/;
 
         const getMatrixSceneName = (sceneName = '') => {
             const normalizedSceneName = String(sceneName || '').trim();
@@ -28234,6 +28235,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 ? normalizeGoalCandidateLabel(value)
                 : normalizeMatrixSceneFieldValue(value)
         );
+
+        const shouldHideMatrixKeywordBidTargetCostField = (fieldLabel = '', sceneName = '', marketingGoal = '') => {
+            if (getMatrixSceneName(sceneName) !== '关键词推广') return false;
+            const normalizedGoal = normalizeMatrixGoalCandidateLabel(marketingGoal);
+            if (normalizedGoal !== '自定义推广') return false;
+            const normalizedFieldLabel = normalizeMatrixSceneFieldLabel(fieldLabel);
+            if (!normalizedFieldLabel) return false;
+            return MATRIX_KEYWORD_BID_TARGET_COST_FIELD_LABEL_RE.test(normalizedFieldLabel);
+        };
 
         const isMatrixSceneLabelMatch = (left = '', right = '') => {
             if (typeof isSceneLabelMatch === 'function') {
@@ -28449,6 +28459,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (!normalizedFieldLabel || !fieldKey || !fieldToken) return false;
                 if (goalSelectorLabelRe.test(normalizeMatrixSceneFieldToken(normalizedFieldLabel))) return false;
                 if (MATRIX_SCENE_FIELD_EXCLUDE_LABEL_RE.test(normalizedFieldLabel)) return false;
+                if (shouldHideMatrixKeywordBidTargetCostField(normalizedFieldLabel, normalizedSceneName, activeMarketingGoal)) return false;
                 if (/^(campaign\.|adgroup\.)/i.test(normalizedFieldLabel)) return false;
                 if (!preferredFieldTokenSet.has(fieldToken) && !isMatrixSceneFieldConnected(normalizedFieldLabel)) return false;
                 if (normalizedSceneName === '关键词推广' && hiddenKeywordFieldTokenSet.has(fieldToken)) return false;

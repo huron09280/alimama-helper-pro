@@ -97,3 +97,21 @@ test('关键词矩阵推荐优先露出智能出价目标包', () => {
     '矩阵页提示文案未同步到智能出价目标包'
   );
 });
+
+test('关键词矩阵场景维度会隐藏已被智能出价目标包承接的目标成本子字段', () => {
+  assert.match(
+    source,
+    /const MATRIX_KEYWORD_BID_TARGET_COST_FIELD_LABEL_RE = \/.*设置7日投产比.*目标投产比.*目标成本.*设置平均点击成本.*点击成本.*\$\//,
+    '缺少关键词智能出价目标成本子字段白名单'
+  );
+  assert.match(
+    source,
+    /const shouldHideMatrixKeywordBidTargetCostField = \(fieldLabel = '', sceneName = '', marketingGoal = ''\) => \{[\s\S]*?getMatrixSceneName\(sceneName\) !== '关键词推广'[\s\S]*?normalizeMatrixGoalCandidateLabel\(marketingGoal\)[\s\S]*?normalizedGoal !== '自定义推广'[\s\S]*?MATRIX_KEYWORD_BID_TARGET_COST_FIELD_LABEL_RE\.test\(normalizedFieldLabel\)/,
+    '缺少关键词智能出价目标成本子字段隐藏 helper'
+  );
+  assert.match(
+    source,
+    /const getMatrixSceneDimensionFieldLabels = \(sceneName = ''\) => \{[\s\S]*?if \(shouldHideMatrixKeywordBidTargetCostField\(normalizedFieldLabel,\s*normalizedSceneName,\s*activeMarketingGoal\)\) return false;/,
+    '矩阵场景维度未收起智能出价目标成本子字段'
+  );
+});
