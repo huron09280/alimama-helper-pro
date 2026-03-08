@@ -24518,7 +24518,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-action-grid {
                     display: grid;
-                    grid-template-columns: minmax(0, 1fr) 96px;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
                     gap: 6px;
                     margin-bottom: 6px;
                 }
@@ -30941,6 +30941,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         </div>
                                         <div class="am-wxt-matrix-action-grid">
                                             <button type="button" class="am-wxt-btn primary" id="am-wxt-matrix-apply-recommended">补齐5维</button>
+                                            <button type="button" class="am-wxt-btn primary" id="am-wxt-matrix-generate-plans">生成计划</button>
                                             <button type="button" class="am-wxt-btn" id="am-wxt-matrix-clear-dimensions">清空</button>
                                         </div>
                                         <div class="am-wxt-matrix-action-note" id="am-wxt-matrix-action-note">推荐 5 维可直接补齐。</div>
@@ -31046,6 +31047,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 matrixIntro: overlay.querySelector('#am-wxt-matrix-intro'),
                 matrixPresetList: overlay.querySelector('#am-wxt-matrix-preset-list'),
                 matrixApplyRecommendedBtn: overlay.querySelector('#am-wxt-matrix-apply-recommended'),
+                matrixGenerateBtn: overlay.querySelector('#am-wxt-matrix-generate-plans'),
                 matrixClearBtn: overlay.querySelector('#am-wxt-matrix-clear-dimensions'),
                 matrixActionNote: overlay.querySelector('#am-wxt-matrix-action-note'),
                 matrixDimensionList: overlay.querySelector('#am-wxt-matrix-dimension-list'),
@@ -41757,6 +41759,63 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             ensureManualKeywordPanelDelegates();
 
+            const resolveStrategyBoundMaterialId = (strategy = {}) => String(toIdValue(
+                strategy?.materialId
+                || strategy?.item?.materialId
+                || strategy?.item?.itemId
+                || strategy?.boundMaterialId
+                || ''
+            )).trim();
+
+            const normalizeStrategyBoundItem = (strategy = {}) => {
+                const materialId = resolveStrategyBoundMaterialId(strategy);
+                const rawItem = isPlainObject(strategy?.item) ? strategy.item : null;
+                if (rawItem) {
+                    const normalizedItem = normalizeItem(rawItem);
+                    const normalizedMaterialId = String(toIdValue(
+                        normalizedItem?.materialId || normalizedItem?.itemId || ''
+                    )).trim();
+                    if (materialId && normalizedMaterialId !== materialId) {
+                        normalizedItem.materialId = materialId;
+                        normalizedItem.itemId = materialId;
+                    }
+                    if (!String(normalizedItem?.materialName || '').trim()) {
+                        normalizedItem.materialName = String(strategy?.materialName || '').trim();
+                    }
+                    return normalizedItem;
+                }
+                if (!materialId) return null;
+                return normalizeItem({
+                    materialId,
+                    itemId: materialId,
+                    materialName: String(strategy?.materialName || '').trim() || `商品${materialId}`
+                });
+            };
+
+            const resolveStrategyBoundItemList = (strategy = {}, itemList = []) => {
+                const normalizedItems = Array.isArray(itemList)
+                    ? itemList.map(item => normalizeItem(item)).filter(item => item?.materialId)
+                    : [];
+                const materialId = resolveStrategyBoundMaterialId(strategy);
+                if (!materialId) return normalizedItems;
+                const matchedItem = resolveMatrixBoundItem(materialId, normalizedItems);
+                if (matchedItem) return [matchedItem];
+                const fallbackItem = normalizeStrategyBoundItem(strategy);
+                if (fallbackItem?.materialId) return [fallbackItem];
+                throw new Error(`计划绑定商品已失效：${materialId}`);
+            };
+
+            const buildMaterializedStrategyManualKeywords = (keywordList = []) => (
+                (Array.isArray(keywordList) ? keywordList : [])
+                    .map(item => (
+                        isPlainObject(item)
+                            ? formatKeywordLine(item)
+                            : String(item || '').trim()
+                    ))
+                    .filter(Boolean)
+                    .join('\n')
+            );
+
             const normalizeStrategyList = (rawList, fallbackBudget = '') => {
                 const fallback = getDefaultStrategyList();
                 const input = Array.isArray(rawList) && rawList.length ? rawList : fallback;
@@ -41794,6 +41853,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const sceneSettingValues = normalizeSceneSettingBucketValues(item?.sceneSettingValues || {});
                     const sceneSettingTouched = normalizeSceneSettingTouchedValues(item?.sceneSettingTouched || {});
                     const sceneSettings = normalizeSceneSettingsObject(item?.sceneSettings || {});
+                    const materialId = resolveStrategyBoundMaterialId(item);
+                    const itemSnapshot = normalizeStrategyBoundItem(item);
+                    const materialName = String(item?.materialName || itemSnapshot?.materialName || '').trim();
+                    const matrixMaterialized = item?.matrixMaterialized === true;
+                    const matrixCombination = isPlainObject(item?.matrixCombination)
+                        ? mergeDeep({}, item.matrixCombination)
+                        : null;
                     const marketingGoal = normalizeGoalLabel(resolveStrategyMarketingGoal({
                         ...item,
                         bidMode,
@@ -41822,10 +41888,91 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         copyBatchCount,
                         sceneSettingValues,
                         sceneSettingTouched,
-                        sceneSettings
+                        sceneSettings,
+                        materialId,
+                        materialName,
+                        item: itemSnapshot,
+                        matrixMaterialized,
+                        matrixCombination
                     };
                 });
             };
+
+            const materializeStrategyListFromPlans = (plans = []) => normalizeStrategyList(
+                (Array.isArray(plans) ? plans : []).map((plan, idx) => {
+                    const sceneName = SCENE_OPTIONS.includes(String(plan?.sceneName || '').trim())
+                        ? String(plan.sceneName).trim()
+                        : (SCENE_OPTIONS.includes(String(wizardState?.draft?.sceneName || '').trim())
+                            ? String(wizardState.draft.sceneName).trim()
+                            : getCurrentEditorSceneName());
+                    const budget = isPlainObject(plan?.budget) ? plan.budget : {};
+                    const hasDayBudget = budget.dayBudget !== undefined && budget.dayBudget !== null && budget.dayBudget !== '';
+                    const budgetValue = hasDayBudget ? budget.dayBudget : budget.dayAverageBudget;
+                    const campaignOverride = isPlainObject(plan?.campaignOverride) ? plan.campaignOverride : {};
+                    const bidMode = normalizeBidMode(
+                        plan?.bidMode || campaignOverride?.bidTypeV2 || 'smart',
+                        'smart'
+                    );
+                    const bidTargetV2 = String(
+                        campaignOverride?.bidTargetV2
+                        || campaignOverride?.optimizeTarget
+                        || plan?.bidTargetV2
+                        || DEFAULTS.bidTargetV2
+                    ).trim() || DEFAULTS.bidTargetV2;
+                    const sceneSettings = normalizeSceneSettingsObject(plan?.sceneSettings || {});
+                    const sceneSettingValues = normalizeSceneSettingBucketValues(plan?.sceneSettingValues || sceneSettings);
+                    const rawItem = normalizeItem(plan?.item || {});
+                    const materialId = String(toIdValue(rawItem?.materialId || rawItem?.itemId || '')).trim();
+                    const materialName = String(rawItem?.materialName || rawItem?.name || '').trim();
+                    const strategyName = String(plan?.planName || '').trim() || `矩阵计划${idx + 1}`;
+                    return {
+                        sceneName,
+                        id: createStrategyCloneId('matrix_plan'),
+                        name: strategyName,
+                        marketingGoal: normalizeGoalLabel(
+                            plan?.marketingGoal || resolveStrategyMarketingGoal({
+                                marketingGoal: plan?.marketingGoal || '',
+                                bidMode,
+                                bidTargetV2,
+                                planName: plan?.planName || ''
+                            }, sceneSettings, sceneName)
+                        ),
+                        enabled: true,
+                        bidMode,
+                        dayAverageBudget: budgetValue === undefined || budgetValue === null || budgetValue === ''
+                            ? ''
+                            : String(budgetValue).trim(),
+                        defaultBidPrice: String(plan?.keywordDefaults?.bidPrice ?? '1').trim() || '1',
+                        keywordMode: String(plan?.keywordSource?.mode || DEFAULTS.keywordMode).trim() || DEFAULTS.keywordMode,
+                        useWordPackage: plan?.keywordSource?.useWordPackage !== false,
+                        recommendCount: String(plan?.keywordSource?.recommendCount ?? DEFAULTS.recommendCount).trim() || String(DEFAULTS.recommendCount),
+                        manualKeywords: buildMaterializedStrategyManualKeywords(plan?.keywords),
+                        bidTargetV2,
+                        budgetType: hasDayBudget ? 'day_budget' : 'day_average',
+                        setSingleCostV2: bidMode === 'smart'
+                            && campaignOverride?.setSingleCostV2 === true
+                            && Number.isFinite(toNumber(campaignOverride?.singleCostV2, NaN))
+                            && toNumber(campaignOverride?.singleCostV2, NaN) > 0,
+                        singleCostV2: bidMode === 'smart' && campaignOverride?.setSingleCostV2 === true
+                            ? String(campaignOverride?.singleCostV2 ?? '').trim()
+                            : '',
+                        planName: String(plan?.planName || '').trim(),
+                        autoPlanPrefix: '',
+                        copyBatchCount: 1,
+                        sceneSettingValues,
+                        sceneSettingTouched: normalizeSceneSettingTouchedValues({}),
+                        sceneSettings,
+                        materialId,
+                        materialName,
+                        item: rawItem?.materialId ? rawItem : null,
+                        matrixMaterialized: true,
+                        matrixCombination: isPlainObject(plan?.matrixCombination)
+                            ? mergeDeep({}, plan.matrixCombination)
+                            : null
+                    };
+                }),
+                wizardState?.draft?.dayAverageBudget || ''
+            );
 
             const getStrategyById = (strategyId) => wizardState.strategyList.find(item => item.id === strategyId) || null;
 
@@ -42867,8 +43014,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     usedPlanNameInRequest.add(candidate);
                     return candidate;
                 };
-                wizardState.addedItems.forEach((item, itemIdx) => {
-                    enabledStrategies.forEach((strategy, strategyIdx) => {
+                enabledStrategies.forEach((strategy, strategyIdx) => {
+                    const strategyBoundMaterialId = resolveStrategyBoundMaterialId(strategy);
+                    const strategyItemList = resolveStrategyBoundItemList(strategy, wizardState.addedItems);
+                    strategyItemList.forEach((item, itemIdx) => {
                         const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                             ? String(strategy.sceneName).trim()
                             : selectedSceneName;
@@ -42931,7 +43080,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         });
                         const explicitPlanName = String(strategy.planName || '').trim();
                         const autoStrategyPlanName = getStrategyMainLabel(strategy);
-                        const autoPlanName = wizardState.addedItems.length > 1
+                        const shouldAppendItemIndex = strategyItemList.length > 1 || (!strategyBoundMaterialId && wizardState.addedItems.length > 1);
+                        const autoPlanName = shouldAppendItemIndex
                             ? `${autoStrategyPlanName}_${String(itemIdx + 1).padStart(2, '0')}`
                             : autoStrategyPlanName;
                         const finalPlanName = ensureUniquePlanNameInRequest(
@@ -43628,6 +43778,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
                     wizardState.els.matrixApplyRecommendedBtn.disabled = !canEditMatrixDimensions;
+                }
+                if (wizardState.els.matrixGenerateBtn instanceof HTMLButtonElement) {
+                    const canGenerateMatrixPlans = canEditMatrixDimensions
+                        && matrixConfig.enabled === true
+                        && matrixStats.combinations.length > 0
+                        && enabledStrategyCount > 0
+                        && Array.isArray(wizardState?.addedItems)
+                        && wizardState.addedItems.length > 0;
+                    wizardState.els.matrixGenerateBtn.disabled = !canGenerateMatrixPlans;
                 }
                 if (wizardState.els.matrixClearBtn instanceof HTMLButtonElement) {
                     wizardState.els.matrixClearBtn.disabled = !canEditMatrixDimensions && !dimensionList.length;
@@ -44560,6 +44719,56 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         appendWizardLog(`已补齐矩阵推荐维度 ${afterCount} 项`, 'success');
                     } else {
                         appendWizardLog('矩阵推荐维度已齐全，可直接编辑右侧卡片');
+                    }
+                });
+            }
+            if (wizardState.els.matrixGenerateBtn instanceof HTMLButtonElement) {
+                wizardState.els.matrixGenerateBtn.addEventListener('click', () => {
+                    try {
+                        const currentSceneName = getMatrixSceneName(wizardState.draft?.sceneName || '');
+                        if (!currentSceneName) {
+                            appendWizardLog('请先在编辑页选择场景，再生成计划', 'error');
+                            return;
+                        }
+                        const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, currentSceneName);
+                        const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
+                            ? wizardState.strategyList.filter(item => item?.enabled !== false).length
+                            : 0;
+                        const matrixStats = buildMatrixPreviewStats(matrixConfig, {
+                            sceneName: currentSceneName,
+                            strategyCount: enabledStrategyCount,
+                            itemCount: Array.isArray(wizardState?.addedItems) ? wizardState.addedItems.length : 0
+                        });
+                        if (!matrixConfig.enabled || !matrixStats.combinations.length) {
+                            appendWizardLog('请先开启矩阵并补齐至少 1 组有效组合，再生成计划', 'error');
+                            return;
+                        }
+                        const req = KeywordPlanRequestBuilder.buildRequestFromWizard();
+                        if (!Array.isArray(req?.plans) || !req.plans.length) {
+                            appendWizardLog('请先添加商品并勾选策略后再生成计划', 'error');
+                            return;
+                        }
+                        const materializedStrategies = materializeStrategyListFromPlans(req.plans);
+                        if (!materializedStrategies.length) {
+                            appendWizardLog('当前矩阵组合未生成有效计划，请检查维度值', 'error');
+                            return;
+                        }
+                        const draft = ensureWizardDraft();
+                        draft.matrixConfig = normalizeMatrixConfig({
+                            ...(isPlainObject(draft.matrixConfig) ? draft.matrixConfig : buildDefaultMatrixConfig()),
+                            enabled: false
+                        }, currentSceneName);
+                        wizardState.strategyList = materializedStrategies;
+                        wizardState.editingStrategyId = wizardState.strategyList[0]?.id || '';
+                        if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
+                            wizardState.els.matrixEnabledInput.checked = false;
+                        }
+                        setDetailVisible(false);
+                        setWorkbenchPage('home');
+                        commitStrategyUiState();
+                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已回到首页计划列表`, 'success');
+                    } catch (err) {
+                        appendWizardLog(`生成计划失败：${err?.message || err}`, 'error');
                     }
                 });
             }
