@@ -50,7 +50,6 @@ test('智能出价目标包改为结构化行编辑，不再依赖纯文本 text
   assert.match(source, /data-matrix-bid-package-batch-count="1"/, '矩阵页缺少智能出价目标包批量个数输入');
   assert.match(source, /data-matrix-bid-package-batch-add="1"/, '矩阵页缺少智能出价目标包批量追加按钮');
   assert.match(source, /data-matrix-bid-package-remove="1"/, '矩阵页缺少智能出价目标包整行删除按钮');
-  assert.match(source, /data-matrix-bid-package-add="1"/, '矩阵页缺少智能出价目标包新增目标按钮');
   assert.match(
     source,
     /groupedRowMap\.get\(item\.targetOptionValue\)\.costValues\.push\(item\.costValue\)/,
@@ -102,11 +101,8 @@ test('智能出价目标包改为结构化行编辑，不再依赖纯文本 text
     /data-matrix-bid-package-cost-add="1"[\s\S]*?data-matrix-bid-package-picker-toggle="1"[\s\S]*?>\+<\/button>/,
     '智能出价目标包行内新增按钮未接入下拉菜单或仍保留冗余文字'
   );
-  assert.match(
-    source,
-    /data-matrix-bid-package-add="1"[\s\S]*?>\+<\/button>/,
-    '智能出价目标包底部新增按钮仍保留冗余文字'
-  );
+  assert.doesNotMatch(source, /class="am-wxt-matrix-bid-package-footer"/, '智能出价目标包底部 footer 未移除');
+  assert.doesNotMatch(source, /class="am-wxt-matrix-bid-package-add"/, '智能出价目标包底部新增目标按钮未移除');
   assert.doesNotMatch(source, /class="am-wxt-matrix-bid-package-suggest"/, '智能出价目标包仍保留快捷提示标签');
   assert.match(
     source,
@@ -143,11 +139,6 @@ test('智能出价目标包改为结构化行编辑，不再依赖纯文本 text
     /const bidPackageCostRemoveBtn = event\.target instanceof Element[\s\S]*?closest\('\[data-matrix-bid-package-cost-remove="1"\]'\)/,
     '智能出价目标包行内成本删除按钮未接入点击链路'
   );
-  assert.match(
-    source,
-    /data-matrix-bid-package-add="1"[\s\S]*?packageList\.insertAdjacentHTML\([\s\S]*?syncMatrixBidTargetCostPackageStateFromRow\(row\);[\s\S]*?focus\(\{ preventScroll: true \}\);[\s\S]*?return;/,
-    '智能出价目标包新增空行后未保留在当前编辑态'
-  );
 });
 
 test('智能出价目标包会先做行级归一，再生成组合标签', () => {
@@ -181,6 +172,19 @@ test('智能出价目标包会先做行级归一，再生成组合标签', () =>
     source,
     /values:\s*current\.slice\(\),[\s\S]*?dimension\.values\.forEach\(\(value\) => \{[\s\S]*?value:\s*rawValue,[\s\S]*?label:\s*buildMatrixCombinationValueLabel\(dimension,\s*rawValue,\s*config\.sceneName \|\| options\?\.sceneName \|\| ''\)/,
     '矩阵组合未保留智能出价目标包原值与展示标签'
+  );
+});
+
+test('智能出价目标包批量菜单补充间隔说明并收窄宽度', () => {
+  assert.match(
+    source,
+    /class="am-wxt-matrix-bid-package-batch-help">间隔填“隔多少”，个数填“生成多少个”<\/div>/,
+    '智能出价目标包批量菜单缺少间隔与个数说明'
+  );
+  assert.match(
+    source,
+    /\.am-wxt-matrix-bid-package-cost-batch-menu \{[\s\S]*?width: 196px;[\s\S]*?min-width: 196px;[\s\S]*?max-width: 196px;/,
+    '智能出价目标包批量菜单宽度未收窄到固定值'
   );
 });
 
