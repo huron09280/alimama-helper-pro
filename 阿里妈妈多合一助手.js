@@ -24276,30 +24276,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 12px;
                     flex-wrap: wrap;
                     justify-content: flex-end;
+                    flex: 1 1 420px;
+                    min-width: 0;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-summary {
                     white-space: nowrap;
                 }
+                #am-wxt-keyword-modal .am-wxt-strategy-right > .am-wxt-strategy-summary:first-child {
+                    flex: 1 1 auto;
+                    min-width: 0;
+                    text-align: right;
+                }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost {
                     display: inline-flex;
                     align-items: center;
-                    gap: 4px;
-                    padding: 2px 8px;
+                    gap: 6px;
+                    padding: 2px 2px 2px 6px;
                     border-radius: 999px;
                     border: 1px solid rgba(37,99,235,0.28);
                     background: rgba(37,99,235,0.08);
                     color: #1e3a8a;
+                    flex: 0 0 auto;
+                    width: auto;
+                    box-sizing: border-box;
+                    justify-content: flex-start;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost-field {
                     position: relative;
+                    flex: 0 0 auto;
+                    min-width: 0;
                     display: inline-flex;
                     align-items: center;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost input {
-                    width: 68px;
-                    min-width: 68px;
+                    width: auto;
+                    min-width: 0;
                     padding: 2px 8px;
-                    border-radius: 8px;
+                    border-radius: 999px;
                     border: 1px solid rgba(148,163,184,0.45);
                     font-size: 12px;
                     line-height: 18px;
@@ -24320,7 +24333,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     margin: 0;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost-field:not(.with-unit) input {
-                    min-width: 84px;
+                    width: auto;
+                    min-width: 0;
                     padding-right: 8px;
                 }
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost-unit {
@@ -24331,6 +24345,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 11px;
                     color: #475569;
                     pointer-events: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-strategy-right > .am-wxt-strategy-summary:nth-of-type(2) {
+                    flex: 0 0 73px;
+                    width: 73px;
                 }
                 #am-wxt-keyword-modal .am-wxt-copy-btn {
                     display: inline-flex;
@@ -28398,6 +28416,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     #am-wxt-keyword-modal .am-wxt-strategy-summary {
                         white-space: normal;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-strategy-right > .am-wxt-strategy-summary:first-child {
+                        flex: 0 1 auto;
+                        text-align: left;
+                    }
+                    #am-wxt-keyword-modal .am-wxt-strategy-target-cost,
+                    #am-wxt-keyword-modal .am-wxt-strategy-right > .am-wxt-strategy-summary:nth-of-type(2) {
+                        flex: 0 0 auto;
+                        width: auto;
                     }
                     #am-wxt-keyword-modal .am-wxt-setting-row {
                         grid-template-columns: 1fr;
@@ -42971,6 +42998,46 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return wizardState.draft;
             };
 
+            const strategyTargetCostMeasureCanvas = document.createElement('canvas');
+            const strategyTargetCostMeasureContext = strategyTargetCostMeasureCanvas.getContext('2d');
+
+            const measureStrategyTargetCostInputWidth = (input = null) => {
+                if (!(input instanceof HTMLInputElement) || !strategyTargetCostMeasureContext) return 0;
+                const ownerWindow = input.ownerDocument?.defaultView || window;
+                const computedStyle = ownerWindow.getComputedStyle(input);
+                const fontSpec = computedStyle.font
+                    || `${computedStyle.fontStyle} ${computedStyle.fontVariant} ${computedStyle.fontWeight} ${computedStyle.fontSize} / ${computedStyle.lineHeight} ${computedStyle.fontFamily}`;
+                strategyTargetCostMeasureContext.font = fontSpec;
+                const text = String(input.value || input.getAttribute('placeholder') || '').trim() || '0';
+                const textWidth = Math.ceil(strategyTargetCostMeasureContext.measureText(text).width);
+                const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+                const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+                const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+                const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+                const field = input.closest('.am-wxt-strategy-target-cost-field');
+                const hasUnit = field instanceof HTMLElement && field.classList.contains('with-unit');
+                const minWidth = hasUnit ? 48 : 36;
+                return Math.max(minWidth, textWidth + paddingLeft + paddingRight + borderLeft + borderRight + 4);
+            };
+
+            const syncStrategyTargetCostInputWidth = (input = null) => {
+                if (!(input instanceof HTMLInputElement)) return;
+                const nextWidth = measureStrategyTargetCostInputWidth(input);
+                if (nextWidth > 0) {
+                    input.style.width = `${nextWidth}px`;
+                } else {
+                    input.style.removeProperty('width');
+                }
+            };
+
+            const scheduleStrategyTargetCostInputWidthSync = (input = null) => {
+                if (!(input instanceof HTMLInputElement)) return;
+                const ownerWindow = input.ownerDocument?.defaultView || window;
+                ownerWindow.requestAnimationFrame(() => {
+                    syncStrategyTargetCostInputWidth(input);
+                });
+            };
+
             const renderStrategyList = () => {
                 if (!wizardState.els.strategyList || !wizardState.els.strategyCount) return;
                 wizardState.els.strategyList.innerHTML = '';
@@ -43087,11 +43154,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (targetCostInput instanceof HTMLInputElement) {
                         const syncStrategyTargetCostInputOnly = () => {
                             syncStrategyTargetCostFields(strategy, strategyBidTargetCode, targetCostInput.value);
+                            syncStrategyTargetCostInputWidth(targetCostInput);
                         };
                         commitStrategyTargetCostInput = () => {
                             const parsed = parseNumberFromSceneValue(targetCostInput.value);
                             const nextValue = syncStrategyTargetCostFields(strategy, strategyBidTargetCode, parsed);
                             targetCostInput.value = nextValue;
+                            syncStrategyTargetCostInputWidth(targetCostInput);
                             if (wizardState.detailVisible && wizardState.editingStrategyId === strategy.id) {
                                 applyStrategyToDetailForm(strategy);
                             }
@@ -43178,6 +43247,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         openStrategyDetail(strategy.id);
                     };
                     wizardState.els.strategyList.appendChild(row);
+                    scheduleStrategyTargetCostInputWidthSync(targetCostInput);
                 });
                 setDetailVisible(wizardState.detailVisible);
                 renderRunModeMenu();
