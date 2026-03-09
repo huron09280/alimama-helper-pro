@@ -58,3 +58,11 @@ test('顶部编辑页与编辑计划共用 showStrategyDetail 链路，避免字
     'setWorkbenchPage 里仍保留 editor 特判，顶部编辑页与编辑计划仍是两套链路'
   );
 });
+
+test('首页新建计划复用 showStrategyDetail，避免只开遮罩不进入编辑页', () => {
+  assert.match(
+    source,
+    /const addNewStrategy = \(\) => \{[\s\S]*?wizardState\.strategyList\.push\(next\);[\s\S]*?showStrategyDetail\(next,\s*\{\s*autoLoad:\s*false\s*\}\);[\s\S]*?appendWizardLog\(`已新建计划：\$\{next\.name\}`, 'success'\);[\s\S]*?maybeAutoLoadManualKeywords\(next,\s*\{\s*delayMs:\s*320\s*\}\);[\s\S]*?\};/,
+    '首页新建计划未复用统一详情链路，可能出现遮罩打开但编辑页未展示'
+  );
+});

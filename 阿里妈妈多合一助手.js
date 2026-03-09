@@ -43399,10 +43399,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     sceneSettings: normalizeSceneSettingsObject(sceneSettings)
                 };
                 wizardState.strategyList.push(next);
-                wizardState.editingStrategyId = next.id;
-                setDetailVisible(true);
-                applyStrategyToDetailForm(next);
-                commitStrategyUiState();
+                showStrategyDetail(next, { autoLoad: false });
                 appendWizardLog(`已新建计划：${next.name}`, 'success');
                 maybeAutoLoadManualKeywords(next, { delayMs: 320 });
             };
@@ -46136,15 +46133,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             ...(isPlainObject(draft.matrixConfig) ? draft.matrixConfig : buildDefaultMatrixConfig()),
                             enabled: false
                         }, currentSceneName);
-                        wizardState.strategyList = materializedStrategies;
-                        wizardState.editingStrategyId = wizardState.strategyList[0]?.id || '';
+                        const existingStrategyList = Array.isArray(wizardState?.strategyList)
+                            ? wizardState.strategyList
+                            : [];
+                        wizardState.strategyList = [...existingStrategyList, ...materializedStrategies];
+                        wizardState.editingStrategyId = materializedStrategies[0]?.id || wizardState.strategyList[0]?.id || '';
                         if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
                             wizardState.els.matrixEnabledInput.checked = false;
                         }
                         setDetailVisible(false);
                         setWorkbenchPage('home');
                         commitStrategyUiState();
-                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已回到首页计划列表`, 'success');
+                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个）`, 'success');
                     } catch (err) {
                         appendWizardLog(`生成计划失败：${err?.message || err}`, 'error');
                     }

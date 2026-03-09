@@ -209,7 +209,7 @@ test('矩阵页提供至少 5 类白名单维度模板与可编辑维度行', ()
   assert.match(source, /data-matrix-dimension-values="1"/, '矩阵页缺少维度值编辑控件');
 });
 
-test('固定枚举维度改为多选，自由输入维度保留文本框', () => {
+test('固定枚举维度改为多选，自由输入维度改为结构化多值编辑', () => {
   assert.match(
     source,
     /key:\s*'bid_mode'[\s\S]*?valueInputMode:\s*'multi_select'[\s\S]*?valueOptions:\s*\['智能出价',\s*'手动出价'\]/,
@@ -231,8 +231,13 @@ test('固定枚举维度改为多选，自由输入维度保留文本框', () =>
   assert.match(source, /固定维度改为下拉勾选；不带搜索。/, '固定维度提示文案未改成下拉勾选');
   assert.match(
     source,
-    /const readMatrixDimensionValuesFromRow = \(row = null,\s*sceneName = ''\) => \{[\s\S]*?data-matrix-dimension-values-select="1"[\s\S]*?selectedOptions[\s\S]*?data-matrix-dimension-values="1"/,
-    '矩阵取值链路未同时兼容多选和文本框'
+    /const valueEditorHtml = usePackageRows[\s\S]*?buildMatrixBidTargetCostPackageEditorHtml\(normalizedValues,\s*preset\?\.suggestedValues \|\| \[\]\)[\s\S]*?useMultiSelect[\s\S]*?buildMatrixStructuredDimensionEditorHtml\(normalizedValues,\s*preset\)/,
+    '矩阵维度渲染未把自由输入维度切到结构化编辑器'
+  );
+  assert.match(
+    source,
+    /const readMatrixDimensionValuesFromRow = \(row = null,\s*sceneName = ''\) => \{[\s\S]*?data-matrix-dimension-values-select="1"[\s\S]*?selectedOptions[\s\S]*?data-matrix-dimension-value-item-input="1"[\s\S]*?readMatrixStructuredDimensionValuesFromRow\(row\)[\s\S]*?data-matrix-dimension-values="1"/,
+    '矩阵取值链路未同时兼容多选、结构化多值编辑和隐藏值回填'
   );
 });
 
@@ -296,7 +301,7 @@ test('矩阵页支持一键补齐推荐 5 维并自动聚焦新增卡片', () =>
 test('矩阵页支持把组合直接物化回首页计划列表', () => {
   assert.match(
     source,
-    /wizardState\.els\.matrixGenerateBtn\.addEventListener\('click',[\s\S]*?const matrixConfig = normalizeMatrixConfig\(wizardState\?\.draft\?\.matrixConfig,\s*currentSceneName\);[\s\S]*?const req = KeywordPlanRequestBuilder\.buildRequestFromWizard\(\);[\s\S]*?const materializedStrategies = materializeStrategyListFromPlans\(req\.plans\);[\s\S]*?draft\.matrixConfig = normalizeMatrixConfig\(\{[\s\S]*?enabled:\s*false[\s\S]*?\},\s*currentSceneName\);[\s\S]*?wizardState\.strategyList = materializedStrategies;[\s\S]*?setWorkbenchPage\('home'\);[\s\S]*?commitStrategyUiState\(\);/,
+    /wizardState\.els\.matrixGenerateBtn\.addEventListener\('click',[\s\S]*?const matrixConfig = normalizeMatrixConfig\(wizardState\?\.draft\?\.matrixConfig,\s*currentSceneName\);[\s\S]*?const req = KeywordPlanRequestBuilder\.buildRequestFromWizard\(\);[\s\S]*?const materializedStrategies = materializeStrategyListFromPlans\(req\.plans\);[\s\S]*?draft\.matrixConfig = normalizeMatrixConfig\(\{[\s\S]*?enabled:\s*false[\s\S]*?\},\s*currentSceneName\);[\s\S]*?const existingStrategyList = Array\.isArray\(wizardState\?\.strategyList\)[\s\S]*?wizardState\.strategyList = \[\.\.\.existingStrategyList,\s*\.\.\.materializedStrategies\];[\s\S]*?setWorkbenchPage\('home'\);[\s\S]*?commitStrategyUiState\(\);/,
     '矩阵页生成计划按钮未把组合物化回首页列表'
   );
 });
@@ -377,6 +382,16 @@ test('矩阵维度卡片将维度类型下拉收进首行，避免重复展示',
     source,
     /#am-wxt-keyword-modal \.am-wxt-matrix-dimension-remove-icon \{[\s\S]*?width:\s*34px;[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*16px;/,
     '右上角删除图标样式未生效'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-matrix-dimension-remove-icon \{[\s\S]*?visibility:\s*hidden;[\s\S]*?opacity:\s*0;[\s\S]*?pointer-events:\s*none;/,
+    '右上角删除图标默认态未隐藏'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-matrix-dimension-row:hover \.am-wxt-matrix-dimension-remove-icon,[\s\S]*?#am-wxt-keyword-modal \.am-wxt-matrix-dimension-row:focus-within \.am-wxt-matrix-dimension-remove-icon \{[\s\S]*?visibility:\s*visible;[\s\S]*?opacity:\s*1;[\s\S]*?pointer-events:\s*auto;/,
+    '右上角删除图标未在卡片悬停时显示'
   );
   assert.match(
     source,
