@@ -447,6 +447,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         DEFAULT_BIZ_CODE: 'onebpSearch',
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
         campaignItemIdCache: new Map(),
+        campaignItemCandidatesCache: new Map(),
 
         normalizeCampaignId(rawId) {
             const id = String(rawId || '').trim();
@@ -493,12 +494,60 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
             this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.rememberCampaignItemIdCandidates(normalizedCampaignId, [normalizedItemId], {
+                prepend: true,
+                maxCount: 24
+            });
         },
 
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            return this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const direct = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            if (direct) return direct;
+            const candidates = this.getCampaignItemIdCandidates(normalizedCampaignId);
+            const firstCandidate = this.normalizeItemId(candidates[0] || '');
+            if (firstCandidate) {
+                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+            }
+            return firstCandidate;
+        },
+
+        rememberCampaignItemIdCandidates(campaignId, itemIds = [], options = {}) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId) return [];
+            const maxCount = Math.max(1, Number(options?.maxCount) || 24);
+            const prepend = options?.prepend === true;
+            const nextCandidates = this.collectItemIdCandidatesFromSources(itemIds, maxCount);
+            if (!nextCandidates.length) return this.getCampaignItemIdCandidates(normalizedCampaignId);
+            const currentCandidates = this.getCampaignItemIdCandidates(normalizedCampaignId);
+            const merged = prepend
+                ? [...nextCandidates, ...currentCandidates]
+                : [...currentCandidates, ...nextCandidates];
+            const deduped = [];
+            const seen = new Set();
+            for (let i = 0; i < merged.length; i++) {
+                const normalized = this.normalizeItemId(merged[i] || '');
+                if (!normalized || seen.has(normalized)) continue;
+                seen.add(normalized);
+                deduped.push(normalized);
+                if (deduped.length >= maxCount) break;
+            }
+            this.campaignItemCandidatesCache.set(normalizedCampaignId, deduped);
+            const firstCandidate = this.normalizeItemId(deduped[0] || '');
+            if (firstCandidate) {
+                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+            }
+            return deduped;
+        },
+
+        getCampaignItemIdCandidates(campaignId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId) return [];
+            const rawList = this.campaignItemCandidatesCache instanceof Map
+                ? this.campaignItemCandidatesCache.get(normalizedCampaignId)
+                : [];
+            return this.collectItemIdCandidatesFromSources(rawList, 24);
         },
 
         parseBizCodeFromRaw(raw) {
@@ -610,16 +659,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return findFromText(document.body?.innerText || '');
         },
 
-        resolveItemIdFromCandidates(candidates = []) {
+        collectItemIdCandidatesFromSources(candidates = [], maxCount = 24) {
             const queue = Array.isArray(candidates) ? [...candidates] : [candidates];
-            for (let i = 0; i < queue.length; i++) {
-                const current = queue[i];
+            const limit = Math.max(1, Number(maxCount) || 24);
+            const out = [];
+            const seenItemIds = new Set();
+            const visitedObjects = new WeakSet();
+            const pushItemId = (raw) => {
+                const normalized = this.normalizeItemId(raw);
+                if (!normalized || seenItemIds.has(normalized)) return;
+                seenItemIds.add(normalized);
+                out.push(normalized);
+            };
+            while (queue.length && out.length < limit) {
+                const current = queue.shift();
                 if (current === undefined || current === null || current === '') continue;
                 if (Array.isArray(current)) {
                     queue.push(...current);
                     continue;
                 }
                 if (typeof current === 'object') {
+                    if (visitedObjects.has(current)) continue;
+                    visitedObjects.add(current);
                     queue.push(
                         current.itemId,
                         current.materialId,
@@ -630,22 +691,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         current.material_id,
                         current.itemid,
                         current.materialid,
+                        current.lastAdgroup,
+                        current.material,
+                        current.scopeItems,
+                        current.linkUrl,
+                        current.itemUrl,
                         current.itemIdList,
                         current.materialIdList,
                         current.whiteBoxItemIds,
-                        current.linkUrl,
-                        current.itemUrl,
-                        current.material,
-                        current.lastAdgroup
+                        current.similarItemIds,
+                        current.materialList
                     );
                     continue;
                 }
                 const normalized = this.normalizeItemId(current);
-                if (normalized) return normalized;
+                if (normalized) {
+                    pushItemId(normalized);
+                    continue;
+                }
                 const parsed = this.parseItemIdFromRaw(current);
-                if (parsed) return parsed;
+                if (parsed) {
+                    pushItemId(parsed);
+                }
             }
-            return '';
+            return out;
+        },
+
+        resolveItemIdFromCandidates(candidates = []) {
+            return this.collectItemIdCandidatesFromSources(candidates, 1)[0] || '';
         },
 
         collectCampaignRefsFromNode(node, out, meta = {}) {
@@ -686,11 +759,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 node.material_id,
                 node.itemid,
                 node.materialid,
+                node.lastAdgroup,
+                node.material,
+                node.scopeItems,
                 node.itemIdList,
                 node.materialIdList,
                 node.whiteBoxItemIds,
-                node.scopeItems,
-                node.material,
                 node.linkUrl,
                 itemHint
             ]);
@@ -826,7 +900,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return out;
         },
 
-        extractItemIdFromCampaignPayload(payload = {}, expectedCampaignId = '') {
+        extractItemIdCandidatesFromCampaignPayload(payload = {}, expectedCampaignId = '') {
             const normalizedCampaignId = this.normalizeCampaignId(expectedCampaignId);
             const refs = [];
             this.collectCampaignRefsFromNode(payload, refs, {
@@ -837,11 +911,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             normalizedRefs.forEach((item) => {
                 this.rememberCampaignItemId(item?.campaignId, item?.itemId || '');
             });
-            if (normalizedCampaignId) {
-                const selfRef = normalizedRefs.find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
-                const selfItemId = this.normalizeItemId(selfRef?.itemId || '');
-                if (selfItemId) return selfItemId;
-            }
+            const out = [];
+            const seen = new Set();
+            const pushItem = (raw) => {
+                const normalized = this.normalizeItemId(raw);
+                if (!normalized || seen.has(normalized)) return;
+                seen.add(normalized);
+                out.push(normalized);
+            };
             const campaign = payload?.data?.campaign || payload?.campaign || payload?.data || {};
             const adgroupList = Array.isArray(campaign?.adgroupList) ? campaign.adgroupList : [];
             const scopedAdgroupList = normalizedCampaignId
@@ -850,22 +927,68 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return !campaignId || campaignId === normalizedCampaignId;
                 })
                 : adgroupList;
-            return this.resolveItemIdFromCandidates([
+            this.collectItemIdCandidatesFromSources([
                 campaign?.itemId,
                 campaign?.materialId,
                 campaign?.auctionId,
                 campaign?.targetItemId,
                 campaign?.targetMaterialId,
+                campaign?.lastAdgroup,
+                scopedAdgroupList,
+                payload?.data?.adgroup,
+                payload?.data?.adgroupList,
+                campaign?.material,
                 campaign?.itemIdList,
                 campaign?.materialIdList,
                 campaign?.whiteBoxItemIds,
                 campaign?.scopeItems,
-                campaign?.material,
-                campaign?.lastAdgroup,
-                scopedAdgroupList,
-                payload?.data?.adgroup,
-                payload?.data?.adgroupList
-            ]);
+                campaign?.materialList
+            ], 36).forEach(pushItem);
+            if (normalizedCampaignId) {
+                normalizedRefs
+                    .filter(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId)
+                    .forEach(item => pushItem(item?.itemId || ''));
+            }
+            if (normalizedCampaignId && out.length) {
+                this.rememberCampaignItemIdCandidates(normalizedCampaignId, out, {
+                    prepend: true,
+                    maxCount: 36
+                });
+            }
+            return out;
+        },
+
+        extractWeakItemIdCandidatesFromCampaignPayload(payload = {}, expectedCampaignId = '') {
+            const normalizedCampaignId = this.normalizeCampaignId(expectedCampaignId);
+            const campaign = payload?.data?.campaign || payload?.campaign || payload?.data || {};
+            const adgroupList = Array.isArray(campaign?.adgroupList) ? campaign.adgroupList : [];
+            const scopedAdgroupList = normalizedCampaignId
+                ? adgroupList.filter((item) => {
+                    const campaignId = this.normalizeCampaignId(item?.campaignId || '');
+                    return !campaignId || campaignId === normalizedCampaignId;
+                })
+                : adgroupList;
+            const pickSimilarItemBuckets = (preferences) => {
+                if (!Array.isArray(preferences)) return [];
+                return preferences.map(item => item?.similarItemIds);
+            };
+            const weakBuckets = [
+                campaign?.whiteBoxItemIds,
+                pickSimilarItemBuckets(campaign?.boxPreferences),
+                pickSimilarItemBuckets(campaign?.blackBoxPreferences),
+                ...scopedAdgroupList.map(item => item?.whiteBoxItemIds),
+                ...scopedAdgroupList.map(item => pickSimilarItemBuckets(item?.boxPreferences)),
+                ...scopedAdgroupList.map(item => pickSimilarItemBuckets(item?.blackBoxPreferences)),
+                payload?.data?.adgroup?.whiteBoxItemIds,
+                pickSimilarItemBuckets(payload?.data?.adgroup?.boxPreferences),
+                pickSimilarItemBuckets(payload?.data?.adgroup?.blackBoxPreferences)
+            ];
+            return this.collectItemIdCandidatesFromSources(weakBuckets, 48);
+        },
+
+        extractItemIdFromCampaignPayload(payload = {}, expectedCampaignId = '') {
+            const candidates = this.extractItemIdCandidatesFromCampaignPayload(payload, expectedCampaignId);
+            return this.normalizeItemId(candidates[0] || '');
         },
 
         parseAuthFromObject(source, depth = 0, visited = new WeakSet()) {
@@ -1085,10 +1208,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 actionName: '查询计划详情失败',
                 businessErrorMessage: '查询计划详情失败'
             });
-            const itemId = this.extractItemIdFromCampaignPayload(json, id);
+            const itemIdCandidates = this.extractItemIdCandidatesFromCampaignPayload(json, id);
+            const itemId = this.normalizeItemId(itemIdCandidates[0] || '');
+            const weakItemIdCandidates = this.extractWeakItemIdCandidatesFromCampaignPayload(json, id);
             const adgroupIds = this.extractAdgroupIdsFromCampaignPayload(json, id);
+            if (itemIdCandidates.length) {
+                this.rememberCampaignItemIdCandidates(id, itemIdCandidates, {
+                    prepend: true,
+                    maxCount: 36
+                });
+            }
             if (itemId) this.rememberCampaignItemId(id, itemId);
-            return { itemId, adgroupIds, response: json };
+            return { itemId, itemIdCandidates, weakItemIdCandidates, adgroupIds, response: json };
         },
 
         async queryAdgroupDetail(campaignId, adgroupId, bizCode, authContext) {
@@ -1111,21 +1242,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 actionName: '查询单元详情失败',
                 businessErrorMessage: '查询单元详情失败'
             });
-            const itemId = this.extractItemIdFromCampaignPayload(json, normalizedCampaignId)
-                || this.resolveItemIdFromCandidates([
+            const itemIdCandidates = this.extractItemIdCandidatesFromCampaignPayload(json, normalizedCampaignId);
+            const fallbackCandidates = this.collectItemIdCandidatesFromSources([
                     json?.data?.adgroup,
                     json?.data?.adgroup?.material,
                     json?.data?.adgroup?.material?.linkUrl
-                ]);
+                ], 12);
+            const mergedCandidates = [];
+            const seen = new Set();
+            [...itemIdCandidates, ...fallbackCandidates].forEach((raw) => {
+                const normalized = this.normalizeItemId(raw);
+                if (!normalized || seen.has(normalized)) return;
+                seen.add(normalized);
+                mergedCandidates.push(normalized);
+            });
+            const itemId = this.normalizeItemId(mergedCandidates[0] || '');
+            if (mergedCandidates.length) {
+                this.rememberCampaignItemIdCandidates(normalizedCampaignId, mergedCandidates, {
+                    prepend: true,
+                    maxCount: 24
+                });
+            }
             if (itemId) this.rememberCampaignItemId(normalizedCampaignId, itemId);
-            return { itemId, response: json };
+            return { itemId, itemIdCandidates: mergedCandidates, response: json };
         },
 
-        async findConflictRefs(campaignId, bizCode, authContext, itemId = '') {
+        async findConflictRefs(campaignId, bizCode, authContext, itemId = '', options = {}) {
             const id = this.normalizeCampaignId(campaignId);
             if (!id) return [];
             const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
             const normalizedItemId = this.normalizeItemId(itemId);
+            const allowCacheHint = options?.allowCacheHint !== false;
+            const cachedItemHint = allowCacheHint ? this.getCampaignItemId(id) : '';
             const numericCampaignId = Number(id);
             const url = OneApiTransport.buildOneUrl('/campaign/diff/findList.json', {
                 csrfId: String(authContext?.csrfId || ''),
@@ -1154,11 +1302,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 depth: 0,
                 seen: new WeakSet(),
                 bizHint: targetBizCode,
-                itemHint: normalizedItemId || this.getCampaignItemId(id)
+                itemHint: normalizedItemId || cachedItemHint
             });
             refs.push({
                 campaignId: id,
-                itemId: normalizedItemId || this.getCampaignItemId(id) || '',
+                itemId: normalizedItemId || cachedItemHint || '',
                 bizCode: targetBizCode,
                 status: '',
                 onlineStatus: '',
@@ -1169,12 +1317,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             normalizedRefs.forEach((item) => {
                 this.rememberCampaignItemId(item?.campaignId, item?.itemId || '');
             });
+            this.rememberCampaignItemIdCandidates(
+                id,
+                normalizedRefs
+                    .filter(item => this.normalizeCampaignId(item?.campaignId) === id)
+                    .map(item => item?.itemId || ''),
+                {
+                    prepend: true,
+                    maxCount: 24
+                }
+            );
             return normalizedRefs;
         },
 
-        async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '', traceMessages = null) {
+        async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '', traceMessages = null, options = {}) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
+            const preferCache = options?.preferCache !== false;
             const pushTrace = (message) => {
                 if (!Array.isArray(traceMessages)) return;
                 const text = String(message || '').trim();
@@ -1183,7 +1342,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const fallback = this.normalizeItemId(fallbackItemId);
             const cached = this.getCampaignItemId(normalizedCampaignId);
-            if (cached) {
+            const rememberCandidatePool = (candidates = [], sourceLabel = '') => {
+                const list = this.rememberCampaignItemIdCandidates(normalizedCampaignId, candidates, {
+                    prepend: true,
+                    maxCount: 36
+                });
+                if (!Array.isArray(list) || !list.length) return;
+                if (sourceLabel) {
+                    pushTrace(`商品ID识别：${sourceLabel} 候选 ${list.slice(0, 6).join(' / ')}`);
+                }
+            };
+            rememberCandidatePool(this.getCampaignItemIdCandidates(normalizedCampaignId));
+            if (cached && preferCache) {
                 pushTrace(`商品ID识别：命中缓存 ${cached}`);
                 return cached;
             }
@@ -1200,7 +1370,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             for (let i = 0; i < bizList.length; i++) {
                 const currentBiz = bizList[i];
                 try {
-                    const refs = await this.findConflictRefs(normalizedCampaignId, currentBiz, authContext, '');
+                    const refs = await this.findConflictRefs(normalizedCampaignId, currentBiz, authContext, '', {
+                        allowCacheHint: preferCache
+                    });
+                    const selfRefs = (Array.isArray(refs) ? refs : [])
+                        .filter(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
+                    rememberCandidatePool(selfRefs.map(item => item?.itemId || ''), `冲突接口（${currentBiz}）`);
                     const selfRef = (Array.isArray(refs) ? refs : []).find(item => this.normalizeCampaignId(item?.campaignId) === normalizedCampaignId);
                     const resolved = this.normalizeItemId(selfRef?.itemId || '');
                     if (resolved) {
@@ -1213,11 +1388,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 try {
                     const detail = await this.queryCampaignDetail(normalizedCampaignId, currentBiz, authContext);
+                    rememberCandidatePool(detail?.itemIdCandidates || [], `计划详情（${currentBiz}）`);
                     const resolvedByCampaign = this.normalizeItemId(detail?.itemId || '');
-                    if (resolvedByCampaign) {
+                    const weakCandidateSet = new Set(Array.isArray(detail?.weakItemIdCandidates) ? detail.weakItemIdCandidates : []);
+                    const resolvedByCampaignIsWeak = !!resolvedByCampaign && weakCandidateSet.has(resolvedByCampaign);
+                    if (resolvedByCampaign && !resolvedByCampaignIsWeak) {
                         this.rememberCampaignItemId(normalizedCampaignId, resolvedByCampaign);
                         pushTrace(`商品ID识别：计划详情命中 ${resolvedByCampaign}（${currentBiz}）`);
                         return resolvedByCampaign;
+                    }
+                    if (resolvedByCampaign && resolvedByCampaignIsWeak) {
+                        pushTrace(`商品ID识别：计划详情命中白名单候选 ${resolvedByCampaign}（${currentBiz}），继续查单元详情校准`);
                     }
                     const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
                     if (adgroupIds.length) {
@@ -1226,6 +1407,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     for (let j = 0; j < Math.min(8, adgroupIds.length); j++) {
                         try {
                             const adgroupDetail = await this.queryAdgroupDetail(normalizedCampaignId, adgroupIds[j], currentBiz, authContext);
+                            rememberCandidatePool(adgroupDetail?.itemIdCandidates || [], `单元详情（${currentBiz}/adgroup=${adgroupIds[j]}）`);
                             const resolvedByAdgroup = this.normalizeItemId(adgroupDetail?.itemId || '');
                             if (resolvedByAdgroup) {
                                 this.rememberCampaignItemId(normalizedCampaignId, resolvedByAdgroup);
@@ -1236,12 +1418,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             pushTrace(`商品ID识别：单元详情失败（${currentBiz} / adgroup=${adgroupIds[j]}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
                         }
                     }
+                    if (resolvedByCampaign) {
+                        this.rememberCampaignItemId(normalizedCampaignId, resolvedByCampaign);
+                        pushTrace(`商品ID识别：回退计划详情候选 ${resolvedByCampaign}（${currentBiz}）`);
+                        return resolvedByCampaign;
+                    }
                 } catch (err) {
                     pushTrace(`商品ID识别：计划详情失败（${currentBiz}）${err?.message ? `：${String(err.message).slice(0, 80)}` : ''}`);
                 }
             }
             if (fallback) {
                 this.rememberCampaignItemId(normalizedCampaignId, fallback);
+                this.rememberCampaignItemIdCandidates(normalizedCampaignId, [fallback], {
+                    prepend: true,
+                    maxCount: 24
+                });
                 pushTrace(`商品ID识别：使用按钮透传兜底 ${fallback}`);
                 return fallback;
             }
@@ -5205,30 +5396,77 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
         },
 
-        async resolveCrowdItemIdByCampaign(campaignId) {
+        getCrowdCampaignItemCandidates(campaignId, preferredItemId = '') {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return [];
+            const out = [];
+            const seen = new Set();
+            const pushItem = (raw) => {
+                const normalized = PlanIdentityUtils.normalizeItemId(raw);
+                if (!normalized || seen.has(normalized)) return;
+                seen.add(normalized);
+                out.push(normalized);
+            };
+            if (typeof PlanIdentityUtils.getCampaignItemIdCandidates === 'function') {
+                const sharedCandidates = PlanIdentityUtils.getCampaignItemIdCandidates(id);
+                (Array.isArray(sharedCandidates) ? sharedCandidates : []).forEach(pushItem);
+            }
+            pushItem(preferredItemId);
+            pushItem(this.getCrowdCampaignItemId(id));
+            return out;
+        },
+
+        async resolveCrowdItemIdByCampaign(campaignId, options = {}) {
             const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
             if (!id) return '';
-            try {
-                const fromCache = PlanIdentityUtils.getCampaignItemId(id);
-                if (fromCache) {
-                    this.cacheCrowdCampaignItemId(id, fromCache);
-                    this.refreshCrowdMatrixCampaignMeta(id);
-                    return fromCache;
+            const preferCache = options?.preferCache !== false;
+            const allowCacheFallback = options?.allowCacheFallback !== false;
+            const fromCache = PlanIdentityUtils.getCampaignItemId(id);
+            if (fromCache && preferCache) {
+                this.cacheCrowdCampaignItemId(id, fromCache);
+                this.refreshCrowdMatrixCampaignMeta(id);
+                return fromCache;
+            }
+            if (!preferCache) {
+                if (this.crowdCampaignItemIdMap instanceof Map) {
+                    this.crowdCampaignItemIdMap.delete(id);
                 }
+                if (PlanIdentityUtils.campaignItemIdCache instanceof Map) {
+                    PlanIdentityUtils.campaignItemIdCache.delete(id);
+                }
+                if (PlanIdentityUtils.campaignItemCandidatesCache instanceof Map) {
+                    PlanIdentityUtils.campaignItemCandidatesCache.delete(id);
+                }
+            }
+            try {
                 const authContext = PlanIdentityUtils.resolveAuthContext(PlanIdentityUtils.DEFAULT_BIZ_CODE);
                 const resolved = await PlanIdentityUtils.resolveItemIdByCampaignId(
                     id,
                     PlanIdentityUtils.BIZ_CODE_LIST.slice(),
                     authContext,
-                    '',
-                    []
+                    allowCacheFallback ? (fromCache || '') : '',
+                    [],
+                    { preferCache }
                 );
                 const normalized = PlanIdentityUtils.normalizeItemId(resolved);
-                if (!normalized) return '';
+                if (!normalized) {
+                    if (fromCache && allowCacheFallback) {
+                        this.cacheCrowdCampaignItemId(id, fromCache);
+                        this.refreshCrowdMatrixCampaignMeta(id);
+                        return fromCache;
+                    }
+                    return '';
+                }
                 this.cacheCrowdCampaignItemId(id, normalized);
                 this.refreshCrowdMatrixCampaignMeta(id);
                 return normalized;
             } catch (err) {
+                if (fromCache && allowCacheFallback) {
+                    this.cacheCrowdCampaignItemId(id, fromCache);
+                    this.refreshCrowdMatrixCampaignMeta(id);
+                    Logger.warn(`🔮 商品ID识别失败，使用缓存兜底：${err?.message || '未知错误'}`);
+                    return fromCache;
+                }
                 Logger.warn(`🔮 商品ID识别失败：${err?.message || '未知错误'}`);
                 return '';
             }
@@ -5495,24 +5733,65 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         extractPanelQueryConfFromDataQuery(componentList) {
-            const list = Array.isArray(componentList) ? componentList : [];
+            const list = Array.isArray(componentList) ? componentList.slice() : [];
             let title = '';
             let queryExecutePlan = '';
             let timeMode = '';
-            for (let i = 0; i < list.length; i++) {
-                const component = list[i];
+            const visited = new WeakSet();
+            const readText = (value) => String(value || '').trim();
+            while (list.length) {
+                const component = list.shift();
+                if (!component || typeof component !== 'object') continue;
+                if (visited.has(component)) continue;
+                visited.add(component);
+
                 const type = String(component?.componentType || component?.type || '').trim();
+                const properties = component?.properties && typeof component.properties === 'object'
+                    ? component.properties
+                    : {};
                 if (type === 'QUERY_TITLE' && !title) {
                     title = String(
                         component?.subComponentList?.[0]?.properties?.title
-                        || component?.properties?.title
+                        || properties?.title
+                        || component?.title
                         || ''
                     ).trim();
                 }
-                if (type === 'ADDITION') {
-                    queryExecutePlan = String(component?.properties?.queryExecutePlan || '').trim();
-                    timeMode = String(component?.properties?.timeMode || '').trim();
+                if (!queryExecutePlan && (type === 'ADDITION' || properties?.queryExecutePlan || component?.queryExecutePlan || component?.queryConf?.queryExecutePlan)) {
+                    queryExecutePlan = readText(
+                        properties?.queryExecutePlan
+                        || component?.queryExecutePlan
+                        || component?.queryConf?.queryExecutePlan
+                        || ''
+                    );
                 }
+                if (!timeMode && (type === 'ADDITION' || properties?.timeMode || component?.timeMode || component?.queryConf?.timeMode)) {
+                    const rawTimeMode = properties?.timeMode
+                        ?? component?.timeMode
+                        ?? component?.queryConf?.timeMode
+                        ?? '';
+                    if (rawTimeMode && typeof rawTimeMode === 'object') {
+                        try {
+                            timeMode = JSON.stringify(rawTimeMode);
+                        } catch {
+                            timeMode = '';
+                        }
+                    } else {
+                        timeMode = readText(rawTimeMode);
+                    }
+                }
+
+                const childBuckets = [
+                    component?.subComponentList,
+                    component?.componentList,
+                    component?.children,
+                    properties?.subComponentList,
+                    properties?.componentList
+                ];
+                childBuckets.forEach((bucket) => {
+                    if (!Array.isArray(bucket) || !bucket.length) return;
+                    list.push(...bucket);
+                });
             }
             if (!queryExecutePlan) {
                 throw new Error('未获取到周期切换所需 queryExecutePlan');
@@ -5522,6 +5801,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 queryExecutePlan,
                 timeMode
             };
+        },
+
+        extractCrowdUnsupportedReason(componentList) {
+            let serialized = '';
+            try {
+                serialized = JSON.stringify(Array.isArray(componentList) ? componentList : []);
+            } catch {
+                serialized = '';
+            }
+            if (!serialized) return '';
+            if (/商品所属店铺与当前店铺不一致|不支持查询其[它他]店铺商品的人群画像/.test(serialized)) {
+                return '商品成交人群暂不可用（跨店商品）';
+            }
+            return '';
         },
 
         extractGroupList(componentList) {
@@ -5616,6 +5909,95 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const context = this.ensureCrowdInsightContext(id);
             if (!context.basePromiseMap.has(metric)) {
                 context.basePromiseMap.set(metric, (async () => {
+                    const queryBaseByPrompt = async (promptText = '') => {
+                        const response = await this.requestCrowdApi('/ai/report/dataQuery.json', {
+                            bizCode: 'universalBP',
+                            contentParams: { bizCode: 'universalBP' },
+                            prompt: {
+                                promptType: 'text',
+                                wordList: [{
+                                    word: promptText,
+                                    wordType: 'text',
+                                    subjectId: null,
+                                    subjectType: null,
+                                    isTemplate: false,
+                                    placeholder: ''
+                                }]
+                            }
+                        });
+                        const componentList = Array.isArray(response?.payload?.data?.componentList)
+                            ? response.payload.data.componentList
+                            : [];
+                        const unsupportedReason = metric === 'itemdeal'
+                            ? this.extractCrowdUnsupportedReason(componentList)
+                            : '';
+                        if (unsupportedReason) {
+                            return {
+                                componentList,
+                                groupMap: {},
+                                panelQueryConf: null,
+                                requestPath: response.requestPath,
+                                unsupportedReason
+                            };
+                        }
+                        const groupList = this.extractGroupList(componentList);
+                        return {
+                            componentList,
+                            groupMap: this.buildGroupMapFromGroupList(groupList),
+                            panelQueryConf: this.extractPanelQueryConfFromDataQuery(componentList),
+                            requestPath: response.requestPath,
+                            unsupportedReason: ''
+                        };
+                    };
+                    const queryItemDealByCandidate = async (seedItemId = '') => {
+                        const candidates = this.getCrowdCampaignItemCandidates(id, seedItemId);
+                        if (!candidates.length) return null;
+                        const unsupportedResults = [];
+                        let lastQueryExecutePlanError = null;
+                        const maxTryCount = Math.min(12, candidates.length);
+                        for (let i = 0; i < maxTryCount; i++) {
+                            const candidateItemId = PlanIdentityUtils.normalizeItemId(candidates[i] || '');
+                            if (!candidateItemId) continue;
+                            const candidatePrompt = this.buildMetricPrompt({
+                                campaignId: id,
+                                metricType: metric,
+                                itemId: candidateItemId
+                            });
+                            if (!candidatePrompt) continue;
+                            try {
+                                const candidateResult = await queryBaseByPrompt(candidatePrompt);
+                                if (candidateResult?.unsupportedReason) {
+                                    unsupportedResults.push({
+                                        itemId: candidateItemId,
+                                        prompt: candidatePrompt,
+                                        baseQueryResult: candidateResult
+                                    });
+                                    continue;
+                                }
+                                this.cacheCrowdCampaignItemId(id, candidateItemId);
+                                return {
+                                    itemId: candidateItemId,
+                                    prompt: candidatePrompt,
+                                    baseQueryResult: candidateResult
+                                };
+                            } catch (err) {
+                                const message = String(err?.message || '');
+                                if (/queryExecutePlan/.test(message)) {
+                                    lastQueryExecutePlanError = err;
+                                    continue;
+                                }
+                                throw err;
+                            }
+                        }
+                        if (unsupportedResults.length) {
+                            return unsupportedResults[0];
+                        }
+                        if (lastQueryExecutePlanError) {
+                            throw lastQueryExecutePlanError;
+                        }
+                        return null;
+                    };
+
                     let itemId = '';
                     if (metric === 'itemdeal') {
                         itemId = await this.resolveCrowdItemIdByCampaign(id);
@@ -5623,34 +6005,65 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             throw new Error(`未识别到计划 ${id} 对应商品ID`);
                         }
                     }
-                    const prompt = this.buildMetricPrompt({ campaignId: id, metricType: metric, itemId });
+
+                    let prompt = this.buildMetricPrompt({ campaignId: id, metricType: metric, itemId });
                     if (!prompt) throw new Error('构造人群查询话术失败');
-                    const response = await this.requestCrowdApi('/ai/report/dataQuery.json', {
-                        bizCode: 'universalBP',
-                        contentParams: { bizCode: 'universalBP' },
-                        prompt: {
-                            promptType: 'text',
-                            wordList: [{
-                                word: prompt,
-                                wordType: 'text',
-                                subjectId: null,
-                                subjectType: null,
-                                isTemplate: false,
-                                placeholder: ''
-                            }]
+
+                    let baseQueryResult = null;
+                    try {
+                        if (metric === 'itemdeal') {
+                            const resolvedByCandidates = await queryItemDealByCandidate(itemId);
+                            if (resolvedByCandidates) {
+                                itemId = resolvedByCandidates.itemId;
+                                prompt = resolvedByCandidates.prompt;
+                                baseQueryResult = resolvedByCandidates.baseQueryResult;
+                            } else {
+                                throw new Error(`未识别到计划 ${id} 对应可用商品ID`);
+                            }
+                        } else {
+                            baseQueryResult = await queryBaseByPrompt(prompt);
                         }
-                    });
-                    const componentList = Array.isArray(response?.payload?.data?.componentList)
-                        ? response.payload.data.componentList
-                        : [];
-                    const groupList = this.extractGroupList(componentList);
+                    } catch (err) {
+                        const message = String(err?.message || '');
+                        const shouldRetryByRefreshingItem = metric === 'itemdeal' && /queryExecutePlan/.test(message);
+                        if (!shouldRetryByRefreshingItem) throw err;
+
+                        const refreshedItemId = await this.resolveCrowdItemIdByCampaign(id, {
+                            preferCache: false,
+                            allowCacheFallback: false
+                        });
+                        if (!/^\d{6,}$/.test(refreshedItemId) || refreshedItemId === itemId) {
+                            throw err;
+                        }
+
+                        const refreshedPrompt = this.buildMetricPrompt({
+                            campaignId: id,
+                            metricType: metric,
+                            itemId: refreshedItemId
+                        });
+                        if (!refreshedPrompt) throw err;
+
+                        itemId = refreshedItemId;
+                        prompt = refreshedPrompt;
+                        if (metric === 'itemdeal') {
+                            const refreshedByCandidates = await queryItemDealByCandidate(itemId);
+                            if (!refreshedByCandidates) throw err;
+                            itemId = refreshedByCandidates.itemId;
+                            prompt = refreshedByCandidates.prompt;
+                            baseQueryResult = refreshedByCandidates.baseQueryResult;
+                        } else {
+                            baseQueryResult = await queryBaseByPrompt(prompt);
+                        }
+                    }
+
                     return {
                         prompt,
                         itemId,
-                        componentList,
-                        groupMap: this.buildGroupMapFromGroupList(groupList),
-                        panelQueryConf: this.extractPanelQueryConfFromDataQuery(componentList),
-                        requestPath: response.requestPath
+                        componentList: baseQueryResult.componentList,
+                        groupMap: baseQueryResult.groupMap,
+                        panelQueryConf: baseQueryResult.panelQueryConf,
+                        requestPath: baseQueryResult.requestPath,
+                        unsupportedReason: String(baseQueryResult.unsupportedReason || '').trim()
                     };
                 })());
             }
@@ -5667,7 +6080,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         requestPath: baseResult.requestPath,
                         title: baseResult.panelQueryConf?.title || '',
                         queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
-                        timeMode: baseResult.panelQueryConf?.timeMode || ''
+                        timeMode: baseResult.panelQueryConf?.timeMode || '',
+                        unsupportedReason: baseResult.unsupportedReason || ''
+                    }
+                };
+            }
+
+            if (baseResult.unsupportedReason) {
+                return {
+                    periodDays: days,
+                    metricType: metric,
+                    groupMap: {},
+                    rawMeta: {
+                        prompt: baseResult.prompt,
+                        itemId: baseResult.itemId || '',
+                        requestPath: baseResult.requestPath,
+                        title: '',
+                        queryExecutePlan: '',
+                        timeMode: '',
+                        unsupportedReason: baseResult.unsupportedReason
                     }
                 };
             }
@@ -5688,7 +6119,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     requestPath: panelResult.requestPath,
                     title: baseResult.panelQueryConf?.title || '',
                     queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
-                    timeMode: baseResult.panelQueryConf?.timeMode || ''
+                    timeMode: baseResult.panelQueryConf?.timeMode || '',
+                    unsupportedReason: ''
                 }
             };
         },
@@ -5744,7 +6176,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const clean = () => executing.delete(promise);
                 promise.then(clean, clean);
                 if (executing.size >= normalizedLimit) {
-                    await Promise.race(executing);
+                    await Promise.race(Array.from(executing).map(task => task.catch(() => null)));
                 }
             }
             return Promise.allSettled(results);
@@ -6723,9 +7155,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 const successResults = [];
                 let failCount = 0;
+                const unsupportedReasonSet = new Set();
                 settled.forEach((item) => {
-                    if (item.status === 'fulfilled' && item.value) successResults.push(item.value);
-                    else failCount += 1;
+                    if (item.status === 'fulfilled' && item.value) {
+                        successResults.push(item.value);
+                        const reason = String(item.value?.rawMeta?.unsupportedReason || '').trim();
+                        if (reason) unsupportedReasonSet.add(reason);
+                    } else {
+                        failCount += 1;
+                    }
                 });
 
                 if (!successResults.length) {
@@ -6737,8 +7175,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.crowdMatrixDataset = dataset;
                 this.crowdMatrixLoadedCampaignId = id;
                 this.renderCrowdMatrixCharts(dataset);
+                const unsupportedNotice = Array.from(unsupportedReasonSet).filter(Boolean).join('；');
+                const unsupportedSuffix = unsupportedNotice ? `；${unsupportedNotice}` : '';
                 if (failCount > 0) {
-                    this.setCrowdMatrixStatus(`部分数据加载失败，已展示可用结果（失败 ${failCount}/${totalTaskCount}）`, 'warn', { showRetry: true, progress: 100, autoHide: true });
+                    this.setCrowdMatrixStatus(`部分数据加载失败，已展示可用结果（失败 ${failCount}/${totalTaskCount}）${unsupportedSuffix}`, 'warn', { showRetry: true, progress: 100, autoHide: true });
+                } else if (unsupportedNotice) {
+                    this.setCrowdMatrixStatus(`人群对比看板已加载完成；${unsupportedNotice}`, 'warn', { showRetry: false, progress: 100, autoHide: true });
                 } else {
                     this.setCrowdMatrixStatus('人群对比看板已加载完成（4列周期 × 6行维度）', 'success', { showRetry: false, progress: 100, autoHide: true });
                 }

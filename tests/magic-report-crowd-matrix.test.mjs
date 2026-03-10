@@ -121,6 +121,13 @@ test('queryCrowdInsight 采用 dataQuery 首查 + panelDataQuery 周期覆写的
   assert.match(block, /const panelResult = await this\.queryPanelPeriod\(/, '非 7 天分支未走 panel 周期覆写');
 });
 
+test('itemdeal 缺少 queryExecutePlan 时会强制刷新商品ID并重试首查', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const shouldRetryByRefreshingItem = metric === 'itemdeal' && \/queryExecutePlan\/\.test\(message\);/, '未按 itemdeal + queryExecutePlan 缺失条件触发重试');
+  assert.match(block, /this\.resolveCrowdItemIdByCampaign\(id,\s*\{\s*preferCache:\s*false,\s*allowCacheFallback:\s*false\s*\}\)/, '缺少强制刷新商品ID重试逻辑');
+  assert.match(block, /if \(!\/\^\\d\{6,\}\$\/\.test\(refreshedItemId\) \|\| refreshedItemId === itemId\) \{[\s\S]*throw err;/, '缺少无效/未变化商品ID的失败保护');
+});
+
 test('人群看板请求启用限速与重试保护，且并发由配置值控制', () => {
   const block = getMagicReportBlock();
   assert.match(block, /CROWD_REQUEST_CONCURRENCY:\s*2/, '缺少看板请求并发配置');
@@ -302,4 +309,65 @@ test('全部失败时展示统一失败态并提供重试入口', () => {
   const block = getMagicReportBlock();
   assert.match(block, /if \(!successResults\.length\) \{[\s\S]*setCrowdMatrixStatus\('人群看板加载失败，请稍后重试',\s*'error',\s*\{[\s\S]*showRetry:\s*true/, '全失败态或重试按钮逻辑缺失');
   assert.match(block, /this\.matrixRetryBtn\.addEventListener\('click',\s*\(\) => \{[\s\S]*ensureCrowdMatrixLoaded\(true\);/, '重试按钮未绑定强制重载');
+});
+
+test('runTasksWithConcurrency 采用 allSettled 汇总，单任务失败不会提前中断队列', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /Promise\.race\(Array\.from\(executing\)\.map\(task => task\.catch\(\(\) => null\)\)\)/, '并发队列仍会因单任务失败提前中断');
+  assert.match(block, /return Promise\.allSettled\(results\);/, '并发执行结果未按 allSettled 汇总');
+});
+
+test('extractPanelQueryConfFromDataQuery 支持递归扫描嵌套组件提取 queryExecutePlan', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const list = Array\.isArray\(componentList\) \? componentList\.slice\(\) : \[\];/, '未复制组件列表进行递归扫描');
+  assert.match(block, /const childBuckets = \[[\s\S]*component\?\.subComponentList,[\s\S]*component\?\.componentList,[\s\S]*properties\?\.componentList[\s\S]*\];/, '缺少嵌套组件桶递归扫描');
+  assert.match(block, /if \(!queryExecutePlan && \(type === 'ADDITION' \|\| properties\?\.queryExecutePlan \|\| component\?\.queryExecutePlan \|\| component\?\.queryConf\?\.queryExecutePlan\)\) \{/, 'queryExecutePlan 提取未覆盖嵌套/兜底字段');
+});
+
+test('itemdeal 遇到跨店商品时会标记暂不可用并返回空结果', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /extractCrowdUnsupportedReason\(componentList\)\s*\{/, '缺少跨店商品不可用识别方法');
+  assert.match(block, /if \(\/商品所属店铺与当前店铺不一致\|不支持查询其\[它他\]店铺商品的人群画像\/\.test\(serialized\)\) \{\s*return '商品成交人群暂不可用（跨店商品）';/, '跨店商品不可用文案识别缺失');
+  assert.match(block, /const unsupportedReason = metric === 'itemdeal'\s*\?\s*this\.extractCrowdUnsupportedReason\(componentList\)\s*:\s*'';/, 'itemdeal 首查未识别跨店不可用');
+  assert.match(block, /if \(baseResult\.unsupportedReason\) \{[\s\S]*groupMap:\s*\{\},[\s\S]*unsupportedReason:\s*baseResult\.unsupportedReason/, '跨店不可用未走空结果兜底分支');
+});
+
+test('跨店商品暂不可用会单独提示，且不计入失败数', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const unsupportedReasonSet = new Set\(\);/, '缺少暂不可用原因集合');
+  assert.match(block, /const reason = String\(item\.value\?\.rawMeta\?\.unsupportedReason \|\| ''\)\.trim\(\);/, '未从任务结果读取暂不可用原因');
+  assert.match(block, /const unsupportedNotice = Array\.from\(unsupportedReasonSet\)\.filter\(Boolean\)\.join\('；'\);/, '暂不可用原因聚合缺失');
+  assert.match(block, /const unsupportedSuffix = unsupportedNotice \? `；\$\{unsupportedNotice\}` : '';/, '部分失败文案未追加暂不可用提示');
+  assert.match(block, /else if \(unsupportedNotice\) \{[\s\S]*setCrowdMatrixStatus\(`人群对比看板已加载完成；\$\{unsupportedNotice\}`,\s*'warn'/, '无失败时未展示暂不可用提示');
+});
+
+test('强制刷新商品ID会绕过底层缓存并禁用缓存 hint', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /if \(!preferCache\) \{[\s\S]*PlanIdentityUtils\.campaignItemIdCache\.delete\(id\);[\s\S]*\}/, '强制刷新未清理共享缓存');
+  assert.match(block, /if \(!preferCache\) \{[\s\S]*PlanIdentityUtils\.campaignItemCandidatesCache\.delete\(id\);[\s\S]*\}/, '强制刷新未清理商品候选缓存');
+  assert.match(block, /PlanIdentityUtils\.resolveItemIdByCampaignId\([\s\S]*allowCacheFallback \? \(fromCache \|\| ''\) : ''[\s\S]*\{\s*preferCache\s*\}\s*\)/, '强制刷新未透传 preferCache 参数');
+  assert.match(source, /async resolveItemIdByCampaignId\(campaignId, bizCandidates, authContext, fallbackItemId = '', traceMessages = null, options = \{\}\)/, 'PlanIdentity 商品ID解析未支持 options');
+  assert.match(source, /const preferCache = options\?\.preferCache !== false;/, 'PlanIdentity 商品ID解析未读取 preferCache');
+  assert.match(source, /if \(cached && preferCache\) \{/, 'PlanIdentity 商品ID解析仍无条件命中缓存');
+  assert.match(source, /this\.findConflictRefs\(normalizedCampaignId,\s*currentBiz,\s*authContext,\s*'',\s*\{\s*allowCacheHint:\s*preferCache\s*\}\)/, '冲突接口未按 preferCache 控制缓存 hint');
+});
+
+test('itemdeal 会遍历候选商品ID并优先使用可查询结果', () => {
+  const block = getMagicReportBlock();
+  assert.match(source, /campaignItemCandidatesCache:\s*new Map\(\)/, 'PlanIdentity 缺少商品候选缓存');
+  assert.match(source, /rememberCampaignItemIdCandidates\(campaignId,\s*itemIds = \[\],\s*options = \{\}\)\s*\{/, 'PlanIdentity 缺少候选商品缓存写入方法');
+  assert.match(source, /extractItemIdCandidatesFromCampaignPayload\(payload = \{\},\s*expectedCampaignId = ''\)\s*\{/, 'PlanIdentity 缺少计划详情候选商品提取方法');
+  assert.match(block, /getCrowdCampaignItemCandidates\(campaignId,\s*preferredItemId = ''\)\s*\{/, 'MagicReport 缺少候选商品聚合方法');
+  assert.match(block, /const queryItemDealByCandidate = async \(seedItemId = ''\) => \{/, 'itemdeal 缺少候选商品逐个探测逻辑');
+  assert.match(block, /const candidates = this\.getCrowdCampaignItemCandidates\(id,\s*seedItemId\);/, 'itemdeal 未读取候选商品列表');
+  assert.match(block, /const resolvedByCandidates = await queryItemDealByCandidate\(itemId\);/, 'itemdeal 首查未走候选商品探测');
+  assert.match(block, /const refreshedByCandidates = await queryItemDealByCandidate\(itemId\);/, 'itemdeal 强刷后未走候选商品探测');
+});
+
+test('计划详情命中白名单商品时会继续查询单元详情，并仅作为回退候选', () => {
+  assert.match(source, /extractWeakItemIdCandidatesFromCampaignPayload\(payload = \{\},\s*expectedCampaignId = ''\)\s*\{/, 'PlanIdentity 缺少弱商品候选提取方法');
+  assert.match(source, /const weakCandidateSet = new Set\(Array\.isArray\(detail\?\.weakItemIdCandidates\) \? detail\.weakItemIdCandidates : \[\]\);/, '未构建弱候选集合');
+  assert.match(source, /if \(resolvedByCampaign && !resolvedByCampaignIsWeak\) \{[\s\S]*计划详情命中/, '非弱候选未直接使用计划详情结果');
+  assert.match(source, /if \(resolvedByCampaign && resolvedByCampaignIsWeak\) \{[\s\S]*继续查单元详情校准/, '白名单候选未继续查询单元详情校准');
+  assert.match(source, /if \(resolvedByCampaign\) \{[\s\S]*回退计划详情候选/, '白名单候选缺少最终回退分支');
 });
