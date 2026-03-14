@@ -41,3 +41,17 @@ test('矩阵目标包数值输入仍保持无边框和自适应宽度', () => {
     '矩阵目标包数值输入缺少运行时宽度与外观同步'
   );
 });
+
+test('矩阵普通数值维度输入也保持无边框和自适应宽度', () => {
+  assert.match(source, /#am-wxt-keyword-modal \.am-wxt-matrix-value-item\.is-numeric input \{/, '缺少矩阵普通数值维度输入样式块');
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-matrix-value-item\.is-numeric input \{[\s\S]*?width: calc\(var\(--am-wxt-matrix-value-chars, 4\) \* 1ch \+ 14px\);[\s\S]*?border: 0;[\s\S]*?background: transparent;[\s\S]*?appearance: none;[\s\S]*?-webkit-appearance: none;[\s\S]*?text-align: center;/,
+    '矩阵普通数值维度输入未保持无边框自适应样式'
+  );
+  assert.match(
+    source,
+    /const syncMatrixDimensionValueInputPresentation = \(valueInput = null,\s*options = \{\}\) => \{[\s\S]*?valueInput\.style\.setProperty\('--am-wxt-matrix-value-chars', String\(widthChars\)\);[\s\S]*?valueInput\.style\.border = '0';[\s\S]*?valueInput\.style\.webkitAppearance = 'none';[\s\S]*?valueInput\.style\.appearance = 'none';/,
+    '矩阵普通数值维度输入缺少运行时宽度与外观同步'
+  );
+});
