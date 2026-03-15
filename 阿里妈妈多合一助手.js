@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      6.02
+// @version      6.03
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,11 @@
 // ==/UserScript==
 /**
  * 更新日志
+ *
+ * v6.03 (2026-03-16)
+ * - 🐛 人群看板悬停性能修复：预构建指标索引，移除 mousemove 热路径全表扫描
+ * - 🐛 周期查询链路修复：base 维度缺失 queryExecutePlan 时立即失败，不再等待额外维度请求
+ * - ✅ 回归测试补齐：新增悬停缓存与 base 快速失败断言
  *
  * v6.02 (2026-03-08)
  * - ✨ Dev Loader 列表增强：自定义入口支持备注名，切换列表优先展示备注名
@@ -4457,6 +4462,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         matrixHoverTipEl: null,
         matrixHoverActiveBar: null,
         matrixHoverActiveBars: [],
+        matrixHoverMetricIndex: null,
         crowdMetricVisibility: { click: false, cart: true, deal: false, itemdeal: false },
         crowdPeriodVisibility: { 3: true, 7: true, 30: true, 90: true },
         crowdRatioVisibility: true,
@@ -6361,7 +6367,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const scopeEntries = Object.entries(scopeResultMap);
             let panelRequestPath = '';
             let mergedPeriodGroupMap = {};
-            const scopePeriodResults = await Promise.all(scopeEntries.map(async ([scopeKey, scopeMeta]) => {
+            const queryScopePeriod = async (scopeKey, scopeMeta) => {
                 let localRequestPath = '';
                 let mergedPeriodGroupMap = {};
                 const panelQueryConf = scopeMeta?.panelQueryConf;
@@ -6446,15 +6452,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         error: err
                     };
                 }
+            };
+            const baseScopeMeta = scopeResultMap.base;
+            if (!baseScopeMeta || typeof baseScopeMeta !== 'object') {
+                throw new Error('未获取到周期切换所需 queryExecutePlan');
+            }
+            const baseScopeResult = await queryScopePeriod('base', baseScopeMeta);
+            if (baseScopeResult?.error) {
+                throw baseScopeResult.error;
+            }
+            mergedPeriodGroupMap = this.mergeCrowdGroupMaps(mergedPeriodGroupMap, baseScopeResult?.groupMap || {});
+            if (!panelRequestPath && baseScopeResult?.requestPath) {
+                panelRequestPath = String(baseScopeResult.requestPath || '');
+            }
+            const extraScopeEntries = scopeEntries.filter(([scopeKey]) => scopeKey !== 'base');
+            const scopePeriodResults = await Promise.all(extraScopeEntries.map(([scopeKey, scopeMeta]) => {
+                return queryScopePeriod(scopeKey, scopeMeta);
             }));
             scopePeriodResults.forEach((item) => {
                 if (!item || typeof item !== 'object') return;
                 const scopeKey = String(item.scopeKey || '').trim();
                 if (!scopeKey) return;
                 if (item.error) {
-                    if (scopeKey === 'base') {
-                        throw item.error;
-                    }
                     Logger.warn(`🔮 ${scopeKey}维度周期查数失败（过去${days}天）：${item.error?.message || '未知错误'}`);
                     return;
                 }
@@ -6758,6 +6777,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return linkedBars.length ? linkedBars : [anchorBar];
         },
 
+        buildCrowdMatrixHoverMetricIndex() {
+            this.matrixHoverMetricIndex = new Map();
+            if (!(this.matrixGridEl instanceof HTMLElement)) return;
+            this.matrixGridEl.querySelectorAll('.am-crowd-matrix-bar').forEach((node) => {
+                if (!(node instanceof HTMLElement)) return;
+                const labelIndex = String(node.dataset.labelIndex || '').trim();
+                const crowdGroup = String(node.dataset.crowdGroup || '').trim();
+                const metric = this.normalizeCrowdMetricType(node.dataset.metric || '');
+                const period = this.normalizeCrowdPeriod(node.dataset.period || '');
+                const periodKey = period || String(node.dataset.period || '').trim();
+                const periodMapKey = String(periodKey || '');
+                if (!labelIndex || !crowdGroup || !metric || !periodMapKey) return;
+                const scopeKey = `${crowdGroup}::${labelIndex}`;
+                let scopeMap = this.matrixHoverMetricIndex.get(scopeKey);
+                if (!(scopeMap instanceof Map)) {
+                    scopeMap = new Map();
+                    this.matrixHoverMetricIndex.set(scopeKey, scopeMap);
+                }
+                let metricMap = scopeMap.get(metric);
+                if (!(metricMap instanceof Map)) {
+                    metricMap = new Map();
+                    scopeMap.set(metric, metricMap);
+                }
+                if (metricMap.has(periodMapKey)) return;
+                const ratio = this.toNumericValue(node.dataset.ratio || 0);
+                const countDisplay = String(node.dataset.countDisplay || '').trim() || '0';
+                const noData = String(node.dataset.noData || '').trim() === '1';
+                metricMap.set(periodMapKey, { ratio, countDisplay, noData });
+            });
+        },
+
+        getCrowdMatrixHoverMetricScopeMap(labelIndex, crowdGroup) {
+            const normalizedLabelIndex = String(labelIndex || '').trim();
+            const normalizedCrowdGroup = String(crowdGroup || '').trim();
+            if (!normalizedLabelIndex || !normalizedCrowdGroup) return new Map();
+            if (!(this.matrixHoverMetricIndex instanceof Map)) {
+                this.buildCrowdMatrixHoverMetricIndex();
+            }
+            const scopeKey = `${normalizedCrowdGroup}::${normalizedLabelIndex}`;
+            const scopeMap = this.matrixHoverMetricIndex instanceof Map
+                ? this.matrixHoverMetricIndex.get(scopeKey)
+                : null;
+            return scopeMap instanceof Map ? scopeMap : new Map();
+        },
+
         buildCrowdMatrixHoverTipText(anchorBar, linkedBars = []) {
             if (!(anchorBar instanceof HTMLElement)) return '';
             const bars = Array.isArray(linkedBars) && linkedBars.length ? linkedBars : [anchorBar];
@@ -6829,35 +6893,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             items.forEach((item) => {
                 if (item.period) periodItemMap.set(item.period, item);
             });
+            const scopeMetricMap = this.getCrowdMatrixHoverMetricScopeMap(anchorLabelIndex, anchorCrowdGroup);
             const metricItemMap = new Map();
             orderedMetrics.forEach((metric) => {
                 metricItemMap.set(metric, new Map());
             });
-            if (orderedMetrics.length && this.matrixGridEl instanceof HTMLElement) {
-                this.matrixGridEl.querySelectorAll('.am-crowd-matrix-bar').forEach((node) => {
-                    if (!(node instanceof HTMLElement)) return;
-                    if (node.offsetParent === null) return;
-                    if (String(node.dataset.labelIndex || '').trim() !== anchorLabelIndex) return;
-                    if (String(node.dataset.crowdGroup || '').trim() !== anchorCrowdGroup) return;
-                    const metric = this.normalizeCrowdMetricType(node.dataset.metric || '');
-                    if (!orderedMetrics.includes(metric)) return;
-                    const period = this.normalizeCrowdPeriod(node.dataset.period || '');
-                    const periodKey = period || String(node.dataset.period || '').trim();
-                    const periodMapKey = String(periodKey || '');
-                    if (!periodMapKey) return;
-                    const metricMap = metricItemMap.get(metric);
-                    if (!(metricMap instanceof Map) || metricMap.has(periodMapKey)) return;
-                    const ratio = this.toNumericValue(node.dataset.ratio || 0);
-                    const rawCountDisplay = String(node.dataset.countDisplay || '').trim() || '0';
+            orderedMetrics.forEach((metric) => {
+                const metricMap = metricItemMap.get(metric);
+                const scopeMap = scopeMetricMap.get(metric);
+                if (!(metricMap instanceof Map) || !(scopeMap instanceof Map)) return;
+                scopeMap.forEach((metricItem, periodMapKey) => {
+                    if (!periodMapKey || metricMap.has(periodMapKey)) return;
+                    const ratio = this.toNumericValue(metricItem?.ratio || 0);
+                    const rawCountDisplay = String(metricItem?.countDisplay || '').trim() || '0';
                     const countDisplay = shouldAppendYuan && !/元$/.test(rawCountDisplay) ? `${rawCountDisplay}元` : rawCountDisplay;
-                    const noData = String(node.dataset.noData || '').trim() === '1';
+                    const noData = metricItem?.noData === true;
                     metricMap.set(periodMapKey, {
                         ratio,
                         countDisplay,
                         noData
                     });
                 });
-            }
+            });
             const anchorMetricMap = metricItemMap.get(anchorMetric);
             if (anchorMetricMap instanceof Map) {
                 items.forEach((item) => {
@@ -7546,6 +7603,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!(this.matrixGridEl instanceof HTMLElement)) return;
             this.hideCrowdMatrixHoverTip();
             this.matrixGridEl.innerHTML = '';
+            this.matrixHoverMetricIndex = null;
             if (!dataset || typeof dataset !== 'object') return;
             const animateBars = options?.animate === true;
 
@@ -7585,6 +7643,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
 
             this.matrixGridEl.appendChild(table);
+            this.buildCrowdMatrixHoverMetricIndex();
             this.applyCrowdMetricVisibility();
         },
 

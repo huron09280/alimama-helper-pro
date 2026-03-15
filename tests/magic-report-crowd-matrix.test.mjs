@@ -42,6 +42,8 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
     'syncCrowdAuxiliaryVisibilityByMetricCount',
     'clearCrowdMatrixHoverBars',
     'getCrowdMatrixLinkedBars',
+    'buildCrowdMatrixHoverMetricIndex',
+    'getCrowdMatrixHoverMetricScopeMap',
     'buildCrowdMatrixHoverTipText',
     'formatCrowdMatrixHoverTipHtml',
     'activateCrowdMatrixHoverBars',
@@ -74,6 +76,7 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
 
 test('人群看板默认仅显示加购人群，并默认显示占比/关闭提示', () => {
   const block = getMagicReportBlock();
+  assert.match(block, /matrixHoverMetricIndex:\s*null/, '悬停提示指标索引缓存未初始化');
   assert.match(block, /crowdMetricVisibility:\s*\{\s*click:\s*false,\s*cart:\s*true,\s*deal:\s*false,\s*itemdeal:\s*false\s*\}/, '默认人群显隐未设置为仅加购可见');
   assert.match(block, /crowdRatioVisibility:\s*true/, '默认占比显示未开启');
   assert.match(block, /crowdInsightsVisibility:\s*false/, '默认提示显示未关闭');
@@ -156,6 +159,9 @@ test('queryCrowdInsight 采用 dataQuery 首查 + panelDataQuery 周期覆写的
   assert.match(block, /const groupList = this\.extractGroupList\(componentList,\s*scopeKey\);/, '省份\/城市首查未按 scopeKey 兜底维度名');
   assert.match(block, /const scopeGroupList = this\.extractGroupList\(scopeComponentList,\s*scopeKey\);/, '省份\/城市周期直查未按 scopeKey 兜底维度名');
   assert.match(block, /if \(days === 7\) \{[\s\S]*requestPath: baseResult\.requestPath/, '7 天分支未复用首查结果');
+  assert.match(block, /const baseScopeMeta = scopeResultMap\.base;[\s\S]*throw new Error\('未获取到周期切换所需 queryExecutePlan'\);/, 'base 维度缺少 queryExecutePlan 时未快速失败');
+  assert.match(block, /const baseScopeResult = await queryScopePeriod\('base',\s*baseScopeMeta\);[\s\S]*if \(baseScopeResult\?\.error\) \{[\s\S]*throw baseScopeResult\.error;/, 'base 维度周期查询失败未在并发前直接中断');
+  assert.match(block, /const extraScopeEntries = scopeEntries\.filter\(\(\[scopeKey\]\) => scopeKey !== 'base'\);/, '额外维度周期查询未排除 base 独立处理');
   assert.match(block, /const panelResult = await this\.queryPanelPeriod\(/, '非 7 天分支未走 panel 周期覆写');
   assert.match(block, /fallbackGroupName:\s*scopeKey === 'base' \? '' : scopeKey/, 'panelDataQuery 周期覆写未透传 scopeKey 兜底维度名');
   assert.match(block, /mergedPeriodGroupMap = this\.mergeCrowdGroupMaps\(mergedPeriodGroupMap,\s*panelGroupMap\);/, '周期覆写结果未按维度汇总合并');
@@ -303,6 +309,8 @@ test('柱状图悬停提示使用即时 tooltip（data-tooltip）并绑定网格
   assert.match(block, /const diffPt = item\.ratio - compareItem\.ratio;/, '跨周期提示文案未按相邻周期计算差异 pt');
   assert.match(block, /diffLabel = `（\$\{this\.formatCrowdPtDiff\(diffPt\)\}）`;/, '跨周期提示文案未按括号格式输出差异 pt');
   assert.match(block, /const orderedMetrics = anchorMetric[\s\S]*\? \[anchorMetric,\s*\.\.\.visibleMetrics\.filter\(metric => metric !== anchorMetric\)\][\s\S]*: visibleMetrics\.slice\(\);/, '悬停提示未按可见人群构造动态列顺序');
+  assert.match(block, /const scopeMetricMap = this\.getCrowdMatrixHoverMetricScopeMap\(anchorLabelIndex,\s*anchorCrowdGroup\);/, '悬停提示未读取预构建指标索引');
+  assert.match(block, /const scopeMap = scopeMetricMap\.get\(metric\);/, '悬停提示未按人群类型读取缓存映射');
   assert.match(block, /const compareMetricLabels = orderedMetricLabels\.slice\(1\);/, '悬停提示未提取对比人群列表');
   assert.match(block, /const header = \[metricLabel,\s*labelName,\s*compareMetricLabels\.length \? `对比人群：\$\{compareMetricLabels\.join\('、'\)\}` : ''\]\.filter\(Boolean\)\.join\(' · '\);/, '悬停提示标题未按多人群拼接对比人群文案');
   assert.match(block, /const extraMetrics = orderedMetrics\.slice\(1\);/, '悬停提示未构造额外人群列');
@@ -350,6 +358,7 @@ test('柱状图悬停提示使用即时 tooltip（data-tooltip）并绑定网格
   assert.match(block, /am-crowd-matrix-hover-tip-row-metrics/, 'tooltip 样式未声明第一行人群名称样式');
   assert.match(block, /am-crowd-matrix-hover-tip-col-compare-ratio[\s\S]*text-align:\s*right;/, 'tooltip 对比占比列未右对齐');
   assert.match(block, /am-crowd-matrix-hover-tip-col-compare-count[\s\S]*text-align:\s*right;/, 'tooltip 对比数值列未右对齐');
+  assert.match(block, /this\.buildCrowdMatrixHoverMetricIndex\(\);/, '看板渲染后未预构建悬停缓存');
   assert.doesNotMatch(block, /bar\.title\s*=\s*`/, '柱状图仍在使用 title 作为提示，存在延迟显示问题');
 });
 
