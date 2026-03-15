@@ -28,19 +28,22 @@
 
 ## 2. 发版流程
 
-1. 确认脚本头 `@version` 与更新日志一致（例如 `5.29`）
+1. 确认脚本头 `@version` 与更新日志一致（例如 `6.02`）
 2. 本地验证：
 
 ```bash
 node --check "阿里妈妈多合一助手.js"
-node --test tests/logger-api.test.mjs
+node --test tests/*.test.mjs
+bash scripts/review-team.sh
 ```
+
+> `scripts/review-team.sh` 会校验脚本头与 `README.md` 最新版本；若仓库存在 `CLAUDE.md`，还会追加版本一致性检查。
 
 3. 提交并打 tag：
 
 ```bash
-git tag v5.29
-git push origin v5.29
+git tag v6.02
+git push origin v6.02
 ```
 
 4. GitHub Actions 自动执行：

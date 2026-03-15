@@ -5,3 +5,4 @@ alimama-helper-pro/
 node_modules/
 dist/
 .keys/
+.claude/
