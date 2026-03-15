@@ -4481,7 +4481,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         BASE_URL: 'https://one.alimama.com/index.html#!/report/ai-report',
         CROWD_API_HOST: 'https://ai.alimama.com',
         CROWD_PERIODS: [3, 7, 30, 90],
-        CROWD_GROUP_ORDER: ['消费能力等级', '月均消费金额', '用户年龄', '用户性别', '城市等级', '店铺潜新老客'],
+        CROWD_GROUP_ORDER: ['消费能力等级', '月均消费金额', '用户年龄', '用户性别', '城市等级', '店铺潜新老客', '省份', '城市'],
+        CROWD_EXTRA_DIMENSION_GROUPS: ['省份', '城市'],
         CROWD_METRICS: ['click', 'cart', 'deal', 'itemdeal'],
         CROWD_REQUEST_CONCURRENCY: 2,
         CROWD_REQUEST_THROTTLE_MS: 340,
@@ -4494,7 +4495,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '🛒 加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '✨商品ID成交', value: '商品ID：{商品ID} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true }
+            { label: '🏙️ 省份占比', value: '计划ID：{campaignId}，点击人群（加购人群或者成交人群）在各个省份的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { label: '🌆 城市占比', value: '计划ID：{campaignId}，点击人群（加购人群或者成交人群）在各个城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { label: '✨商品ID成交', value: '商品ID：{商品ID}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true }
         ],
 
         // NOTE: iframe 加载后通过 JS 清理页面，只保留万能查数核心内容区
@@ -5484,6 +5487,78 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return `计划ID：${id} ${this.getCrowdMetricMeta(metric).promptKeyword}`;
         },
 
+        normalizeCrowdGroupName(groupName = '') {
+            const name = String(groupName || '').trim();
+            if (!name) return '';
+            if (/城市等级/.test(name)) return '城市等级';
+            if (/省份/.test(name)) return '省份';
+            if (/^省$/.test(name)) return '省份';
+            if (/城市/.test(name)) return '城市';
+            if (/^市$/.test(name)) return '城市';
+            if (/消费能力/.test(name)) return '消费能力等级';
+            if (/月均消费/.test(name)) return '月均消费金额';
+            if (/年龄/.test(name)) return '用户年龄';
+            if (/性别/.test(name)) return '用户性别';
+            if (/潜新老客|新老客/.test(name)) return '店铺潜新老客';
+            return name;
+        },
+
+        mergeCrowdGroupMaps(...groupMaps) {
+            const merged = {};
+            groupMaps.forEach((groupMap) => {
+                if (!groupMap || typeof groupMap !== 'object') return;
+                Object.keys(groupMap).forEach((groupName) => {
+                    const normalizedGroup = this.normalizeCrowdGroupName(groupName);
+                    if (!normalizedGroup) return;
+                    const detail = groupMap[groupName];
+                    if (!detail || typeof detail !== 'object') return;
+                    const currentDetail = merged[normalizedGroup] && typeof merged[normalizedGroup] === 'object'
+                        ? merged[normalizedGroup]
+                        : {};
+                    const nextDetail = { ...currentDetail };
+                    Object.keys(detail).forEach((label) => {
+                        const normalizedLabel = String(label || '').trim();
+                        if (!normalizedLabel) return;
+                        nextDetail[normalizedLabel] = detail[label];
+                    });
+                    merged[normalizedGroup] = nextDetail;
+                });
+            });
+            return merged;
+        },
+
+        buildCrowdDimensionPrompt({ campaignId, metricType, groupName, itemId = '' }) {
+            const id = String(campaignId || '').trim();
+            const item = String(itemId || '').trim();
+            const metric = this.normalizeCrowdMetricType(metricType);
+            const normalizedGroup = this.normalizeCrowdGroupName(groupName);
+            const isExtraGroup = Array.isArray(this.CROWD_EXTRA_DIMENSION_GROUPS)
+                && this.CROWD_EXTRA_DIMENSION_GROUPS.includes(normalizedGroup);
+            if (!isExtraGroup) {
+                return this.buildMetricPrompt({ campaignId: id, metricType: metric, itemId: item });
+            }
+            if (!/^\d{6,}$/.test(id) || !metric) return '';
+            const crowdLabelMap = {
+                click: '点击人群',
+                cart: '加购人群',
+                deal: '成交人群',
+                itemdeal: '成交人群'
+            };
+            const crowdLabel = crowdLabelMap[metric] || '人群';
+            if (metric === 'itemdeal') {
+                if (!/^\d{6,}$/.test(item)) return '';
+                return `商品ID：${item}，${crowdLabel}在各个${normalizedGroup}的花费，再使用占比工具进行占比分析`;
+            }
+            return `计划ID：${id}，${crowdLabel}在各个${normalizedGroup}的花费，再使用占比工具进行占比分析`;
+        },
+
+        buildCrowdPeriodPrompt(promptText = '', periodDays = 7) {
+            const prompt = String(promptText || '').replace(/过去\s*\d+\s*天/g, '').trim();
+            const days = Number(periodDays);
+            if (!prompt || !Number.isFinite(days) || days <= 0) return prompt;
+            return `${prompt} 过去${days}天`;
+        },
+
         parseSseEvents(rawText) {
             const text = String(rawText || '');
             if (!text) return [];
@@ -5817,10 +5892,73 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return '';
         },
 
-        extractGroupList(componentList) {
+        extractGroupList(componentList, fallbackGroupName = '') {
             const list = Array.isArray(componentList) ? componentList : [];
             const chartGroup = list.find((item) => String(item?.componentType || item?.type || '').trim() === 'CHART_GROUP');
-            if (!chartGroup) return [];
+            const normalizedFallbackGroup = this.normalizeCrowdGroupName(fallbackGroupName);
+            if (!chartGroup) {
+                const queue = list.slice();
+                const visited = new Set();
+                const fallbackGroups = [];
+                const normalizeLabel = (value) => String(value || '').trim();
+                while (queue.length) {
+                    const current = queue.shift();
+                    if (!current || typeof current !== 'object') continue;
+                    if (visited.has(current)) continue;
+                    visited.add(current);
+                    const chartData = Array.isArray(current?.chartData) && current.chartData.length
+                        ? current.chartData
+                        : (Array.isArray(current?.properties?.chartData) && current.properties.chartData.length
+                            ? current.properties.chartData
+                            : []);
+                    if (chartData.length) {
+                        let groupName = normalizedFallbackGroup;
+                        if (!groupName) {
+                            groupName = this.normalizeCrowdGroupName(
+                                current?.groupName
+                                || current?.properties?.groupName
+                                || current?.properties?.title
+                                || current?.title
+                                || current?.properties?.subTitle
+                                || current?.subTitle
+                                || ''
+                            );
+                        }
+                        if (!groupName) {
+                            const labels = chartData
+                                .map(item => normalizeLabel(item?.x))
+                                .filter(Boolean);
+                            if (labels.length) {
+                                const provinceLike = labels.filter(label => /省|自治区|特别行政区|香港|澳门/.test(label)).length;
+                                const cityLike = labels.filter(label => /(市|州|盟)$/.test(label)).length;
+                                if (provinceLike > 0 && provinceLike >= cityLike) {
+                                    groupName = '省份';
+                                } else if (cityLike > 0) {
+                                    groupName = '城市';
+                                }
+                            }
+                        }
+                        if (groupName) {
+                            fallbackGroups.push({
+                                groupName,
+                                componentList: [{ chartData }]
+                            });
+                        }
+                    }
+                    const childBuckets = [
+                        current?.subComponentList,
+                        current?.componentList,
+                        current?.children,
+                        current?.properties?.subComponentList,
+                        current?.properties?.componentList
+                    ];
+                    childBuckets.forEach((bucket) => {
+                        if (!Array.isArray(bucket) || !bucket.length) return;
+                        bucket.forEach((item) => queue.push(item));
+                    });
+                }
+                return fallbackGroups;
+            }
             const queue = [chartGroup];
             const visited = new Set();
             while (queue.length) {
@@ -5837,14 +5975,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return [];
         },
 
-        buildGroupMapFromGroupList(groupList) {
+        buildGroupMapFromGroupList(groupList, fallbackGroupName = '') {
             const map = {};
+            const normalizedFallbackGroup = this.normalizeCrowdGroupName(fallbackGroupName);
             (Array.isArray(groupList) ? groupList : []).forEach((group) => {
-                const groupName = String(group?.groupName || '').trim();
-                if (!groupName) return;
                 const chartData = Array.isArray(group?.componentList?.[0]?.chartData)
                     ? group.componentList[0].chartData
                     : [];
+                let groupName = this.normalizeCrowdGroupName(group?.groupName || '');
+                if (!groupName) {
+                    groupName = normalizedFallbackGroup;
+                }
+                if (!groupName && chartData.length) {
+                    const labels = chartData
+                        .map(item => String(item?.x || '').trim())
+                        .filter(Boolean);
+                    const provinceLike = labels.filter(label => /省|自治区|特别行政区|香港|澳门/.test(label)).length;
+                    const cityLike = labels.filter(label => /(市|州|盟)$/.test(label)).length;
+                    if (provinceLike > 0 && provinceLike >= cityLike) {
+                        groupName = '省份';
+                    } else if (cityLike > 0) {
+                        groupName = '城市';
+                    }
+                }
+                if (!groupName) return;
                 const valueMap = {};
                 chartData.forEach((item) => {
                     const label = String(item?.x || '').trim();
@@ -5855,12 +6009,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         raw: String(rawValue ?? '')
                     };
                 });
-                map[groupName] = valueMap;
+                const currentGroupMap = map[groupName] && typeof map[groupName] === 'object'
+                    ? map[groupName]
+                    : {};
+                map[groupName] = {
+                    ...currentGroupMap,
+                    ...valueMap
+                };
             });
             return map;
         },
 
-        async queryPanelPeriod({ title, queryExecutePlan, timeMode, periodDays }) {
+        async queryPanelPeriod({ title, queryExecutePlan, timeMode, periodDays, fallbackGroupName = '' }) {
             const days = Number(periodDays);
             if (!this.CROWD_PERIODS.includes(days)) {
                 throw new Error(`不支持的周期: ${periodDays}`);
@@ -5881,7 +6041,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 : [];
             return {
                 componentList,
-                groupList: this.extractGroupList(componentList),
+                groupList: this.extractGroupList(componentList, fallbackGroupName),
                 rawPayload: response.payload,
                 requestPath: response.requestPath
             };
@@ -6061,6 +6221,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         itemId,
                         componentList: baseQueryResult.componentList,
                         groupMap: baseQueryResult.groupMap,
+                        scopeResultMap: {
+                            base: {
+                                prompt,
+                                groupMap: baseQueryResult.groupMap,
+                                panelQueryConf: baseQueryResult.panelQueryConf,
+                                requestPath: baseQueryResult.requestPath,
+                                resolved: true
+                            }
+                        },
                         panelQueryConf: baseQueryResult.panelQueryConf,
                         requestPath: baseQueryResult.requestPath,
                         unsupportedReason: String(baseQueryResult.unsupportedReason || '').trim()
@@ -6069,6 +6238,82 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
 
             const baseResult = await context.basePromiseMap.get(metric);
+            if (!baseResult.unsupportedReason) {
+                const scopeResultMap = baseResult.scopeResultMap && typeof baseResult.scopeResultMap === 'object'
+                    ? baseResult.scopeResultMap
+                    : {};
+                const itemId = String(baseResult.itemId || '').trim();
+                this.CROWD_EXTRA_DIMENSION_GROUPS.forEach((groupName) => {
+                    const normalizedGroup = this.normalizeCrowdGroupName(groupName);
+                    if (!normalizedGroup || scopeResultMap[normalizedGroup]) return;
+                    const scopePrompt = this.buildCrowdDimensionPrompt({ campaignId: id, metricType: metric, groupName, itemId });
+                    if (!scopePrompt || scopePrompt === baseResult.prompt) return;
+                    scopeResultMap[normalizedGroup] = {
+                        prompt: scopePrompt,
+                        groupMap: {},
+                        panelQueryConf: null,
+                        requestPath: '',
+                        resolved: false
+                    };
+                });
+                const extraScopeKeys = Object.keys(scopeResultMap).filter(key => key !== 'base');
+                for (const scopeKey of extraScopeKeys) {
+                    const scopeMeta = scopeResultMap[scopeKey];
+                    if (scopeMeta?.resolved === true) continue;
+                    const scopePrompt = String(scopeMeta?.prompt || '').trim();
+                    if (!scopePrompt) continue;
+                    try {
+                        const scopeResult = await (async () => {
+                            const response = await this.requestCrowdApi('/ai/report/dataQuery.json', {
+                                bizCode: 'universalBP',
+                                contentParams: { bizCode: 'universalBP' },
+                                prompt: {
+                                    promptType: 'text',
+                                    wordList: [{
+                                        word: scopePrompt,
+                                        wordType: 'text',
+                                        subjectId: null,
+                                        subjectType: null,
+                                        isTemplate: false,
+                                        placeholder: ''
+                                    }]
+                                }
+                            });
+                            const componentList = Array.isArray(response?.payload?.data?.componentList)
+                                ? response.payload.data.componentList
+                                : [];
+                            const groupList = this.extractGroupList(componentList, scopeKey);
+                            let panelQueryConf = null;
+                            try {
+                                panelQueryConf = this.extractPanelQueryConfFromDataQuery(componentList);
+                            } catch { }
+                            return {
+                                groupMap: this.buildGroupMapFromGroupList(groupList, scopeKey),
+                                panelQueryConf,
+                                requestPath: response.requestPath
+                            };
+                        })();
+                        scopeResultMap[scopeKey] = {
+                            ...scopeMeta,
+                            groupMap: scopeResult.groupMap,
+                            panelQueryConf: scopeResult.panelQueryConf,
+                            requestPath: scopeResult.requestPath,
+                            resolved: true
+                        };
+                    } catch (err) {
+                        scopeResultMap[scopeKey] = {
+                            ...scopeMeta,
+                            resolved: true
+                        };
+                        Logger.warn(`🔮 ${scopeKey}维度查数失败：${err?.message || '未知错误'}`);
+                    }
+                }
+                const mergedGroupMap = this.mergeCrowdGroupMaps(
+                    ...Object.values(scopeResultMap).map(item => item?.groupMap)
+                );
+                baseResult.scopeResultMap = scopeResultMap;
+                baseResult.groupMap = mergedGroupMap;
+            }
             if (days === 7) {
                 return {
                     periodDays: days,
@@ -6103,20 +6348,83 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
             }
 
-            const panelResult = await this.queryPanelPeriod({
-                title: baseResult.panelQueryConf?.title || baseResult.prompt,
-                queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
-                timeMode: baseResult.panelQueryConf?.timeMode || '',
-                periodDays: days
-            });
+            const scopeResultMap = baseResult.scopeResultMap && typeof baseResult.scopeResultMap === 'object'
+                ? baseResult.scopeResultMap
+                : {
+                    base: {
+                        prompt: baseResult.prompt,
+                        groupMap: baseResult.groupMap,
+                        panelQueryConf: baseResult.panelQueryConf,
+                        requestPath: baseResult.requestPath
+                    }
+                };
+            const scopeEntries = Object.entries(scopeResultMap);
+            let panelRequestPath = '';
+            let mergedPeriodGroupMap = {};
+            for (const [scopeKey, scopeMeta] of scopeEntries) {
+                const panelQueryConf = scopeMeta?.panelQueryConf;
+                if (!panelQueryConf || typeof panelQueryConf !== 'object') {
+                    if (scopeKey === 'base') {
+                        throw new Error('未获取到周期切换所需 queryExecutePlan');
+                    }
+                    const scopePrompt = this.buildCrowdPeriodPrompt(scopeMeta?.prompt || '', days);
+                    if (!scopePrompt) continue;
+                    try {
+                        const scopeResponse = await this.requestCrowdApi('/ai/report/dataQuery.json', {
+                            bizCode: 'universalBP',
+                            contentParams: { bizCode: 'universalBP' },
+                            prompt: {
+                                promptType: 'text',
+                                wordList: [{
+                                    word: scopePrompt,
+                                    wordType: 'text',
+                                    subjectId: null,
+                                    subjectType: null,
+                                    isTemplate: false,
+                                    placeholder: ''
+                                }]
+                            }
+                        });
+                        const scopeComponentList = Array.isArray(scopeResponse?.payload?.data?.componentList)
+                            ? scopeResponse.payload.data.componentList
+                            : [];
+                        const scopeGroupList = this.extractGroupList(scopeComponentList, scopeKey);
+                        const scopeGroupMap = this.buildGroupMapFromGroupList(scopeGroupList, scopeKey);
+                        mergedPeriodGroupMap = this.mergeCrowdGroupMaps(mergedPeriodGroupMap, scopeGroupMap);
+                        if (!panelRequestPath) {
+                            panelRequestPath = String(scopeResponse.requestPath || '');
+                        }
+                    } catch (err) {
+                        Logger.warn(`🔮 ${scopeKey}维度周期查数失败（过去${days}天）：${err?.message || '未知错误'}`);
+                    }
+                    continue;
+                }
+                try {
+                    const panelResult = await this.queryPanelPeriod({
+                        title: panelQueryConf?.title || scopeMeta?.prompt || baseResult.prompt,
+                        queryExecutePlan: panelQueryConf?.queryExecutePlan || '',
+                        timeMode: panelQueryConf?.timeMode || '',
+                        periodDays: days,
+                        fallbackGroupName: scopeKey === 'base' ? '' : scopeKey
+                    });
+                    const panelGroupMap = this.buildGroupMapFromGroupList(panelResult.groupList, scopeKey === 'base' ? '' : scopeKey);
+                    mergedPeriodGroupMap = this.mergeCrowdGroupMaps(mergedPeriodGroupMap, panelGroupMap);
+                    if (!panelRequestPath) {
+                        panelRequestPath = String(panelResult.requestPath || '');
+                    }
+                } catch (err) {
+                    if (scopeKey === 'base') throw err;
+                    Logger.warn(`🔮 ${scopeKey}维度周期查数失败（过去${days}天）：${err?.message || '未知错误'}`);
+                }
+            }
             return {
                 periodDays: days,
                 metricType: metric,
-                groupMap: this.buildGroupMapFromGroupList(panelResult.groupList),
+                groupMap: mergedPeriodGroupMap,
                 rawMeta: {
                     prompt: baseResult.prompt,
                     itemId: baseResult.itemId || '',
-                    requestPath: panelResult.requestPath,
+                    requestPath: panelRequestPath || baseResult.requestPath,
                     title: baseResult.panelQueryConf?.title || '',
                     queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
                     timeMode: baseResult.panelQueryConf?.timeMode || '',
@@ -6705,6 +7013,54 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
         },
 
+        enableCrowdMatrixHorizontalDrag(scrollerEl) {
+            if (!(scrollerEl instanceof HTMLElement) || scrollerEl.__amCrowdDragBound) return;
+            scrollerEl.__amCrowdDragBound = true;
+            let dragging = false;
+            let activePointerId = null;
+            let startClientX = 0;
+            let startScrollLeft = 0;
+            let hasMoved = false;
+            const stopDrag = () => {
+                if (!dragging) return;
+                dragging = false;
+                activePointerId = null;
+                hasMoved = false;
+                scrollerEl.classList.remove('is-dragging');
+            };
+            scrollerEl.addEventListener('pointerdown', (event) => {
+                if (!event.isPrimary) return;
+                if (event.pointerType === 'mouse' && event.button !== 0) return;
+                if (scrollerEl.scrollWidth <= (scrollerEl.clientWidth + 1)) return;
+                dragging = true;
+                activePointerId = event.pointerId;
+                startClientX = event.clientX;
+                startScrollLeft = scrollerEl.scrollLeft;
+                hasMoved = false;
+                scrollerEl.classList.add('is-dragging');
+                try {
+                    scrollerEl.setPointerCapture(event.pointerId);
+                } catch { }
+            });
+            scrollerEl.addEventListener('pointermove', (event) => {
+                if (!dragging || event.pointerId !== activePointerId) return;
+                const deltaX = event.clientX - startClientX;
+                if (!hasMoved && Math.abs(deltaX) >= 3) {
+                    hasMoved = true;
+                }
+                if (!hasMoved) return;
+                scrollerEl.scrollLeft = startScrollLeft - deltaX;
+                event.preventDefault();
+            });
+            scrollerEl.addEventListener('pointerup', (event) => {
+                if (event.pointerId !== activePointerId) return;
+                stopDrag();
+            });
+            scrollerEl.addEventListener('pointercancel', stopDrag);
+            scrollerEl.addEventListener('lostpointercapture', stopDrag);
+            scrollerEl.addEventListener('dragstart', (event) => event.preventDefault());
+        },
+
         renderCrowdGlobalLegend() {
             if (!(this.matrixLegendEl instanceof HTMLElement)) return;
             this.matrixLegendEl.innerHTML = '';
@@ -6843,6 +7199,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const wrap = document.createElement('div');
             wrap.className = 'am-crowd-matrix-cell am-crowd-matrix-cell-chart';
             const animateBars = options?.animate === true;
+            const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
+            const enableHorizontalScroll = normalizedGroupName === '省份' || normalizedGroupName === '城市';
 
             const labels = Array.isArray(cell?.labels) ? cell.labels : [];
             if (!labels.length) {
@@ -6868,6 +7226,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const labelCount = Math.max(1, labels.length);
             chart.style.setProperty('--am-crowd-label-count', String(labelCount));
             chart.style.setProperty('--am-crowd-metric-visible-count', String(visibleMetricCount));
+            if (enableHorizontalScroll) {
+                const labelMinWidth = labelCount >= 120 ? 50 : (labelCount >= 70 ? 54 : 58);
+                wrap.classList.add('is-horizontal-scroll');
+                chart.style.setProperty('--am-crowd-label-min-width', `${labelMinWidth}px`);
+            }
             if (labelCount >= 7) chart.classList.add('is-dense');
             if (labelCount >= 10) chart.classList.add('is-ultra-dense');
 
@@ -6936,6 +7299,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 chart.appendChild(group);
             });
             wrap.appendChild(chart);
+            if (enableHorizontalScroll) {
+                this.enableCrowdMatrixHorizontalDrag(wrap);
+            }
 
             const insights = document.createElement('div');
             insights.className = 'am-crowd-matrix-insights';
@@ -7148,7 +7514,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const stepText = status === 'fulfilled' ? '完成' : '失败';
                     const detailText = taskLabel ? `${stepText} ${taskLabel}` : `${stepText}一项请求`;
                     const ratio = totalTaskCount > 0 ? (done / totalTaskCount) * 100 : 0;
-                    this.setCrowdMatrixStatus(`加载中 ${done}/${totalTaskCount} · ${detailText}`, 'loading', { showRetry: false, progress: ratio });
+                    const scopeProgressText = totalTaskCount > 0
+                        ? ` ｜ 省份 ${done}/${totalTaskCount} · 城市 ${done}/${totalTaskCount}`
+                        : '';
+                    this.setCrowdMatrixStatus(`加载中 ${done}/${totalTaskCount} · ${detailText}${scopeProgressText}`, 'loading', { showRetry: false, progress: ratio });
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
                 if (runId !== this.crowdMatrixRunId) return;
@@ -7182,7 +7551,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 } else if (unsupportedNotice) {
                     this.setCrowdMatrixStatus(`人群对比看板已加载完成；${unsupportedNotice}`, 'warn', { showRetry: false, progress: 100, autoHide: true });
                 } else {
-                    this.setCrowdMatrixStatus('人群对比看板已加载完成（4列周期 × 6行维度）', 'success', { showRetry: false, progress: 100, autoHide: true });
+                    this.setCrowdMatrixStatus('人群对比看板已加载完成（4列周期 × 8行维度）', 'success', { showRetry: false, progress: 100, autoHide: true });
                 }
             } catch (err) {
                 if (runId !== this.crowdMatrixRunId) return;
@@ -7658,6 +8027,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 14px;
                     min-height: clamp(228px, 26vh, 340px);
                 }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll {
+                    overflow-x: auto;
+                    overflow-y: hidden;
+                    scrollbar-gutter: stable both-edges;
+                    scrollbar-width: thin;
+                    scrollbar-color: rgba(96, 119, 161, 0.45) transparent;
+                    cursor: grab;
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll.is-dragging {
+                    cursor: grabbing;
+                    user-select: none;
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll::-webkit-scrollbar {
+                    height: 8px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll::-webkit-scrollbar-thumb {
+                    background: rgba(96, 119, 161, 0.45);
+                    border-radius: 999px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll::-webkit-scrollbar-track {
+                    background: transparent;
+                }
                 #am-magic-report-popup .am-crowd-matrix-empty {
                     margin: auto 0;
                     font-size: 12px;
@@ -7680,6 +8071,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(235, 244, 255, 0.3) 100%);
                     background-size: 100% 25%, 100% 100%;
                     box-shadow: inset 0 2px 8px rgba(31, 53, 109, 0.02);
+                }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll .am-crowd-matrix-chart {
+                    min-width: calc(var(--am-crowd-label-count, 1) * var(--am-crowd-label-min-width, 58px));
                 }
                 #am-magic-report-popup .am-crowd-matrix-bar-group {
                     min-width: 0;
