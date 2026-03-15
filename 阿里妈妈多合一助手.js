@@ -6257,11 +6257,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     };
                 });
                 const extraScopeKeys = Object.keys(scopeResultMap).filter(key => key !== 'base');
-                for (const scopeKey of extraScopeKeys) {
+                await Promise.all(extraScopeKeys.map(async (scopeKey) => {
                     const scopeMeta = scopeResultMap[scopeKey];
-                    if (scopeMeta?.resolved === true) continue;
+                    if (scopeMeta?.resolved === true) return;
                     const scopePrompt = String(scopeMeta?.prompt || '').trim();
-                    if (!scopePrompt) continue;
+                    if (!scopePrompt) return;
                     try {
                         const scopeResult = await (async () => {
                             const response = await this.requestCrowdApi('/ai/report/dataQuery.json', {
@@ -6307,7 +6307,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         };
                         Logger.warn(`🔮 ${scopeKey}维度查数失败：${err?.message || '未知错误'}`);
                     }
-                }
+                }));
                 const mergedGroupMap = this.mergeCrowdGroupMaps(
                     ...Object.values(scopeResultMap).map(item => item?.groupMap)
                 );
@@ -6361,14 +6361,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const scopeEntries = Object.entries(scopeResultMap);
             let panelRequestPath = '';
             let mergedPeriodGroupMap = {};
-            for (const [scopeKey, scopeMeta] of scopeEntries) {
+            const scopePeriodResults = await Promise.all(scopeEntries.map(async ([scopeKey, scopeMeta]) => {
+                let localRequestPath = '';
+                let mergedPeriodGroupMap = {};
                 const panelQueryConf = scopeMeta?.panelQueryConf;
                 if (!panelQueryConf || typeof panelQueryConf !== 'object') {
                     if (scopeKey === 'base') {
-                        throw new Error('未获取到周期切换所需 queryExecutePlan');
+                        return {
+                            scopeKey,
+                            requestPath: '',
+                            groupMap: {},
+                            error: new Error('未获取到周期切换所需 queryExecutePlan')
+                        };
                     }
                     const scopePrompt = this.buildCrowdPeriodPrompt(scopeMeta?.prompt || '', days);
-                    if (!scopePrompt) continue;
+                    if (!scopePrompt) {
+                        return {
+                            scopeKey,
+                            requestPath: '',
+                            groupMap: {},
+                            error: null
+                        };
+                    }
                     try {
                         const scopeResponse = await this.requestCrowdApi('/ai/report/dataQuery.json', {
                             bizCode: 'universalBP',
@@ -6391,13 +6405,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const scopeGroupList = this.extractGroupList(scopeComponentList, scopeKey);
                         const scopeGroupMap = this.buildGroupMapFromGroupList(scopeGroupList, scopeKey);
                         mergedPeriodGroupMap = this.mergeCrowdGroupMaps(mergedPeriodGroupMap, scopeGroupMap);
-                        if (!panelRequestPath) {
-                            panelRequestPath = String(scopeResponse.requestPath || '');
-                        }
+                        localRequestPath = String(scopeResponse.requestPath || '');
+                        return {
+                            scopeKey,
+                            requestPath: localRequestPath,
+                            groupMap: mergedPeriodGroupMap,
+                            error: null
+                        };
                     } catch (err) {
-                        Logger.warn(`🔮 ${scopeKey}维度周期查数失败（过去${days}天）：${err?.message || '未知错误'}`);
+                        return {
+                            scopeKey,
+                            requestPath: '',
+                            groupMap: {},
+                            error: err
+                        };
                     }
-                    continue;
                 }
                 try {
                     const panelResult = await this.queryPanelPeriod({
@@ -6409,14 +6431,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     });
                     const panelGroupMap = this.buildGroupMapFromGroupList(panelResult.groupList, scopeKey === 'base' ? '' : scopeKey);
                     mergedPeriodGroupMap = this.mergeCrowdGroupMaps(mergedPeriodGroupMap, panelGroupMap);
-                    if (!panelRequestPath) {
-                        panelRequestPath = String(panelResult.requestPath || '');
-                    }
+                    localRequestPath = String(panelResult.requestPath || '');
+                    return {
+                        scopeKey,
+                        requestPath: localRequestPath,
+                        groupMap: mergedPeriodGroupMap,
+                        error: null
+                    };
                 } catch (err) {
-                    if (scopeKey === 'base') throw err;
-                    Logger.warn(`🔮 ${scopeKey}维度周期查数失败（过去${days}天）：${err?.message || '未知错误'}`);
+                    return {
+                        scopeKey,
+                        requestPath: '',
+                        groupMap: {},
+                        error: err
+                    };
                 }
-            }
+            }));
+            scopePeriodResults.forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const scopeKey = String(item.scopeKey || '').trim();
+                if (!scopeKey) return;
+                if (item.error) {
+                    if (scopeKey === 'base') {
+                        throw item.error;
+                    }
+                    Logger.warn(`🔮 ${scopeKey}维度周期查数失败（过去${days}天）：${item.error?.message || '未知错误'}`);
+                    return;
+                }
+                mergedPeriodGroupMap = this.mergeCrowdGroupMaps(mergedPeriodGroupMap, item.groupMap || {});
+                if (!panelRequestPath && item.requestPath) {
+                    panelRequestPath = String(item.requestPath || '');
+                }
+            });
             return {
                 periodDays: days,
                 metricType: metric,
@@ -6717,6 +6763,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const bars = Array.isArray(linkedBars) && linkedBars.length ? linkedBars : [anchorBar];
             const metricLabel = String(anchorBar.dataset.metricLabel || '').trim();
             const labelName = String(anchorBar.dataset.labelName || '').trim();
+            const crowdGroup = this.normalizeCrowdGroupName(anchorBar.dataset.crowdGroup || '');
+            const shouldAppendYuan = crowdGroup === '省份' || crowdGroup === '城市';
+            const anchorMetric = this.normalizeCrowdMetricType(anchorBar.dataset.metric || '');
+            const anchorLabelIndex = String(anchorBar.dataset.labelIndex || '').trim();
+            const anchorCrowdGroup = String(anchorBar.dataset.crowdGroup || '').trim();
+            const visibleMetrics = this.CROWD_METRICS.filter(metric => this.getCrowdMetricVisible(metric));
+            const orderedMetrics = anchorMetric
+                ? [anchorMetric, ...visibleMetrics.filter(metric => metric !== anchorMetric)]
+                : visibleMetrics.slice();
+            const orderedMetricLabels = orderedMetrics.map((metric) => {
+                return String(this.getCrowdMetricMeta(metric).seriesLabel || '').trim() || metric;
+            });
             const items = [];
             const seenPeriods = new Set();
             bars.forEach((bar) => {
@@ -6726,9 +6784,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (seenPeriods.has(periodKey)) return;
                 seenPeriods.add(periodKey);
                 const ratio = this.toNumericValue(bar.dataset.ratio || 0);
-                const countDisplay = String(bar.dataset.countDisplay || '').trim() || '0';
+                const rawCountDisplay = String(bar.dataset.countDisplay || '').trim() || '0';
+                const countDisplay = shouldAppendYuan && !/元$/.test(rawCountDisplay) ? `${rawCountDisplay}元` : rawCountDisplay;
                 const noData = String(bar.dataset.noData || '').trim() === '1';
-                items.push({ period, periodKey, ratio, countDisplay, noData });
+                items.push({
+                    period,
+                    periodKey,
+                    periodMapKey: String(periodKey || ''),
+                    ratio,
+                    countDisplay,
+                    noData
+                });
             });
             if (!items.length) {
                 return String(anchorBar.dataset.tooltip || '').trim();
@@ -6752,7 +6818,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const countLabelMax = items.reduce((maxLen, item) => {
                 return Math.max(maxLen, String(item.countDisplay || '').trim().length);
             }, 0);
-            const header = [metricLabel, labelName].filter(Boolean).join(' · ');
+            const compareMetricLabels = orderedMetricLabels.slice(1);
+            const header = [metricLabel, labelName, compareMetricLabels.length ? `对比人群：${compareMetricLabels.join('、')}` : ''].filter(Boolean).join(' · ');
             const periodCompareMap = {
                 3: 7,
                 7: 30,
@@ -6762,6 +6829,48 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             items.forEach((item) => {
                 if (item.period) periodItemMap.set(item.period, item);
             });
+            const metricItemMap = new Map();
+            orderedMetrics.forEach((metric) => {
+                metricItemMap.set(metric, new Map());
+            });
+            if (orderedMetrics.length && this.matrixGridEl instanceof HTMLElement) {
+                this.matrixGridEl.querySelectorAll('.am-crowd-matrix-bar').forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    if (node.offsetParent === null) return;
+                    if (String(node.dataset.labelIndex || '').trim() !== anchorLabelIndex) return;
+                    if (String(node.dataset.crowdGroup || '').trim() !== anchorCrowdGroup) return;
+                    const metric = this.normalizeCrowdMetricType(node.dataset.metric || '');
+                    if (!orderedMetrics.includes(metric)) return;
+                    const period = this.normalizeCrowdPeriod(node.dataset.period || '');
+                    const periodKey = period || String(node.dataset.period || '').trim();
+                    const periodMapKey = String(periodKey || '');
+                    if (!periodMapKey) return;
+                    const metricMap = metricItemMap.get(metric);
+                    if (!(metricMap instanceof Map) || metricMap.has(periodMapKey)) return;
+                    const ratio = this.toNumericValue(node.dataset.ratio || 0);
+                    const rawCountDisplay = String(node.dataset.countDisplay || '').trim() || '0';
+                    const countDisplay = shouldAppendYuan && !/元$/.test(rawCountDisplay) ? `${rawCountDisplay}元` : rawCountDisplay;
+                    const noData = String(node.dataset.noData || '').trim() === '1';
+                    metricMap.set(periodMapKey, {
+                        ratio,
+                        countDisplay,
+                        noData
+                    });
+                });
+            }
+            const anchorMetricMap = metricItemMap.get(anchorMetric);
+            if (anchorMetricMap instanceof Map) {
+                items.forEach((item) => {
+                    if (!item.periodMapKey) return;
+                    if (anchorMetricMap.has(item.periodMapKey)) return;
+                    anchorMetricMap.set(item.periodMapKey, {
+                        ratio: item.ratio,
+                        countDisplay: item.countDisplay,
+                        noData: item.noData
+                    });
+                });
+            }
+            const extraMetrics = orderedMetrics.slice(1);
             const rows = items.map((item) => {
                 const periodLabel = item.period ? `过去${item.period}天` : (String(item.periodKey).trim() || '当前周期');
                 const ratioLabel = this.formatCrowdHoverPercent(item.ratio).padStart(ratioLabelMax, ' ');
@@ -6775,14 +6884,45 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 }
                 const countLabel = item.countDisplay.padStart(countLabelMax, ' ');
-                return { periodLabel, ratioLabel, diffLabel, countLabel, noData: item.noData };
+                const extraCells = extraMetrics.map((metric) => {
+                    const metricMap = metricItemMap.get(metric);
+                    const metricItem = metricMap instanceof Map
+                        ? metricMap.get(item.periodMapKey)
+                        : null;
+                    return {
+                        ratioLabel: metricItem ? this.formatCrowdHoverPercent(metricItem.ratio) : '',
+                        countLabel: metricItem ? String(metricItem.countDisplay || '') : ''
+                    };
+                });
+                return { periodLabel, ratioLabel, diffLabel, countLabel, extraCells, noData: item.noData };
             });
             const diffLabelMax = rows.reduce((maxLen, row) => Math.max(maxLen, row.diffLabel.length), 0);
+            const extraRatioLabelMaxList = extraMetrics.map((_, idx) => {
+                return rows.reduce((maxLen, row) => {
+                    const ratioLabel = String(row.extraCells?.[idx]?.ratioLabel || '');
+                    return Math.max(maxLen, ratioLabel.length);
+                }, 0);
+            });
+            const extraCountLabelMaxList = extraMetrics.map((_, idx) => {
+                return rows.reduce((maxLen, row) => {
+                    const countLabel = String(row.extraCells?.[idx]?.countLabel || '');
+                    return Math.max(maxLen, countLabel.length);
+                }, 0);
+            });
             const lines = rows.map((row) => {
                 const diffColumn = row.diffLabel.padEnd(diffLabelMax, ' ');
-                return `${row.periodLabel.padEnd(periodLabelMax, ' ')}  ${row.ratioLabel}${diffColumn}  ${row.countLabel}${row.noData ? ' 无数据' : ''}`;
+                const extraColumns = row.extraCells.map((cell, idx) => {
+                    const ratioWidth = extraRatioLabelMaxList[idx];
+                    const countWidth = extraCountLabelMaxList[idx];
+                    const ratioCell = String(cell.ratioLabel || '').padStart(ratioWidth, ' ');
+                    const countCell = String(cell.countLabel || '').padStart(countWidth, ' ');
+                    return `${ratioCell}  ${countCell}`.trimEnd();
+                });
+                return `${row.periodLabel.padEnd(periodLabelMax, ' ')}  ${row.ratioLabel}${diffColumn}  ${row.countLabel}${row.noData ? ' 无数据' : ''}${extraColumns.length ? ` | ${extraColumns.join(' | ')}` : ''}`;
             });
-            return header ? `${header}\n${lines.join('\n')}` : lines.join('\n');
+            const metricHeaderLine = orderedMetricLabels.length ? `__METRICS__|${orderedMetricLabels.join('|')}` : '';
+            const contentLines = metricHeaderLine ? [metricHeaderLine, ...lines] : lines;
+            return header ? `${header}\n${contentLines.join('\n')}` : contentLines.join('\n');
         },
 
         formatCrowdMatrixHoverTipHtml(text) {
@@ -6803,10 +6943,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const lines = content.split(/\r?\n/).filter(Boolean);
             if (!lines.length) return '';
             const headerHtml = `<div class="am-crowd-matrix-hover-tip-header">${escapeHtml(lines[0])}</div>`;
-            const rowDataList = lines.slice(1).map((line) => {
+            const bodyLines = lines.slice(1);
+            let metricLabels = [];
+            if (bodyLines.length && bodyLines[0].startsWith('__METRICS__|')) {
+                metricLabels = bodyLines.shift().split('|').slice(1).map(item => String(item || '').trim()).filter(Boolean);
+            }
+            const compareMetricLabels = metricLabels.slice(1);
+            const rowDataList = bodyLines.map((line) => {
                 const safeLine = String(line || '');
-                const hasNoData = /\s无数据\s*$/.test(safeLine);
-                const normalizedLine = hasNoData ? safeLine.replace(/\s无数据\s*$/, '') : safeLine;
+                const [mainLine = '', ...compareParts] = safeLine.split(' | ');
+                const hasNoData = /\s无数据\s*$/.test(mainLine);
+                const normalizedLine = hasNoData ? mainLine.replace(/\s无数据\s*$/, '') : mainLine;
                 const rowMatch = normalizedLine.match(/^(\S+)\s+([0-9]+(?:\.[0-9]+)?%)\s*(（[+-]\d+(?:\.\d+)?pt）)?\s+(\S+)$/);
                 if (!rowMatch) {
                     return { fallbackHtml: `<div class="am-crowd-matrix-hover-tip-line">${escapeHtml(safeLine)}</div>` };
@@ -6815,6 +6962,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const ratioLabel = rowMatch[2] || '';
                 const diffLabel = rowMatch[3] || '';
                 const countLabel = rowMatch[4] || '';
+                const compareCells = compareParts.map((part) => {
+                    const comparePart = String(part || '').trim();
+                    if (!comparePart) return { ratioLabel: '', countLabel: '' };
+                    const compareMatch = comparePart.match(/^(\S+)(?:\s+(\S+))?$/);
+                    if (!compareMatch) return { ratioLabel: comparePart, countLabel: '' };
+                    return {
+                        ratioLabel: String(compareMatch[1] || '').trim(),
+                        countLabel: String(compareMatch[2] || '').trim()
+                    };
+                });
+                while (compareCells.length < compareMetricLabels.length) {
+                    compareCells.push({ ratioLabel: '', countLabel: '' });
+                }
+                if (compareCells.length > compareMetricLabels.length) {
+                    compareCells.length = compareMetricLabels.length;
+                }
                 const diffValue = diffLabel.replaceAll('（', '').replaceAll('）', '');
                 const diffClass = diffValue.startsWith('+')
                     ? 'is-pos'
@@ -6824,6 +6987,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ratioLabel,
                     diffLabel,
                     countLabel,
+                    compareCells,
                     hasNoData,
                     diffClass
                 };
@@ -6834,20 +6998,61 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const ratioCh = normalRows.reduce((maxLen, row) => Math.max(maxLen, row.ratioLabel.length), 0);
             const diffCh = normalRows.reduce((maxLen, row) => Math.max(maxLen, row.diffLabel.length), 0);
             const countCh = normalRows.reduce((maxLen, row) => Math.max(maxLen, row.countLabel.length), 0);
-            const tableStyle = `--am-crowd-period-ch:${Math.max(6, periodCh)};--am-crowd-ratio-ch:${Math.max(7, ratioCh)};--am-crowd-diff-ch:${Math.max(1, diffCh)};--am-crowd-count-ch:${Math.max(3, countCh)};`;
+            const compareRatioChList = compareMetricLabels.map((_, idx) => {
+                return normalRows.reduce((maxLen, row) => {
+                    const ratioLabel = String(row.compareCells?.[idx]?.ratioLabel || '');
+                    return Math.max(maxLen, ratioLabel.length);
+                }, 0);
+            });
+            const compareCountChList = compareMetricLabels.map((_, idx) => {
+                return normalRows.reduce((maxLen, row) => {
+                    const countLabel = String(row.compareCells?.[idx]?.countLabel || '');
+                    return Math.max(maxLen, countLabel.length);
+                }, 0);
+            });
+            const gridTemplateParts = [
+                `${Math.max(6, periodCh)}ch`,
+                `${Math.max(7, ratioCh)}ch`,
+                `${Math.max(1, diffCh)}ch`,
+                `${Math.max(3, countCh)}ch`
+            ];
+            compareMetricLabels.forEach((_, idx) => {
+                gridTemplateParts.push(`${Math.max(5, compareRatioChList[idx])}ch`);
+                gridTemplateParts.push(`${Math.max(6, compareCountChList[idx])}ch`);
+            });
+            gridTemplateParts.push('max-content');
+            const tableStyle = `--am-crowd-hover-grid-template:${gridTemplateParts.join(' ')};`;
+            const metricHeaderHtml = metricLabels.length
+                ? `
+                    <div class="am-crowd-matrix-hover-tip-row am-crowd-matrix-hover-tip-row-metrics">
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-period">周期</span>
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-metric-label" style="grid-column: span 3">${escapeHtml(metricLabels[0])}</span>
+                        ${compareMetricLabels.map(label => `<span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-metric-label" style="grid-column: span 2">${escapeHtml(label)}</span>`).join('')}
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-flag"></span>
+                    </div>
+                `
+                : '';
             const rowsHtml = rowDataList.map((row) => {
                 if (row.fallbackHtml) return row.fallbackHtml;
+                const compareCellsHtml = compareMetricLabels.map((_, idx) => {
+                    const cell = row.compareCells?.[idx] || { ratioLabel: '', countLabel: '' };
+                    return `
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-compare-ratio">${cell.ratioLabel ? escapeHtml(cell.ratioLabel) : '&nbsp;'}</span>
+                        <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-compare-count">${cell.countLabel ? escapeHtml(cell.countLabel) : '&nbsp;'}</span>
+                    `;
+                }).join('');
                 return `
                     <div class="am-crowd-matrix-hover-tip-row">
                         <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-period">${escapeHtml(row.periodLabel)}</span>
                         <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-ratio">${escapeHtml(row.ratioLabel)}</span>
                         <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-diff am-crowd-matrix-hover-tip-diff ${row.diffLabel ? row.diffClass : 'is-empty'}">${row.diffLabel ? escapeHtml(row.diffLabel) : '&nbsp;'}</span>
                         <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-count">${escapeHtml(row.countLabel)}</span>
+                        ${compareCellsHtml}
                         <span class="am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-flag">${row.hasNoData ? '无数据' : ''}</span>
                     </div>
                 `;
             }).join('');
-            return `${headerHtml}<div class="am-crowd-matrix-hover-tip-table" style="${tableStyle}">${rowsHtml}</div>`;
+            return `${headerHtml}<div class="am-crowd-matrix-hover-tip-table" style="${tableStyle}">${metricHeaderHtml}${rowsHtml}</div>`;
         },
 
         activateCrowdMatrixHoverBars(anchorBar) {
@@ -7246,6 +7451,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const ratio = this.toNumericValue(cell?.[metric]?.[labelIdx] ?? 0);
                     const rawValue = cell?.[`${metric}Raw`]?.[labelIdx];
                     const countDisplay = this.formatCrowdRawValue(rawValue, ratio);
+                    const tooltipCountDisplay = (normalizedGroupName === '省份' || normalizedGroupName === '城市') && !/元$/.test(String(countDisplay || ''))
+                        ? `${countDisplay || '0'}元`
+                        : String(countDisplay || '0');
                     const bar = document.createElement('div');
                     bar.className = 'am-crowd-matrix-bar';
                     bar.dataset.metric = metric;
@@ -7259,7 +7467,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bar.dataset.noData = cell?.noData?.[metric] ? '1' : '0';
                     if (cell?.noData?.[metric]) bar.classList.add('is-nodata');
                     bar.style.setProperty('--am-crowd-bar-color', metricMeta.color);
-                    const tooltipText = `${metricMeta.seriesLabel}: ${this.formatCrowdPercent(ratio)}（${countDisplay || '0'}）${cell?.noData?.[metric] ? ' 无数据' : ''}`;
+                    const tooltipText = `${metricMeta.seriesLabel}: ${this.formatCrowdPercent(ratio)}（${tooltipCountDisplay}）${cell?.noData?.[metric] ? ' 无数据' : ''}`;
                     bar.dataset.tooltip = tooltipText;
                     bar.setAttribute('aria-label', tooltipText);
 
@@ -7330,13 +7538,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 insights.appendChild(insightItem);
             });
             wrap.appendChild(insights);
-
-            if (metrics.some((metric) => !!cell?.noData?.[metric])) {
-                const note = document.createElement('div');
-                note.className = 'am-crowd-matrix-note';
-                note.textContent = '部分系列无数据，已按 0 展示';
-                wrap.appendChild(note);
-            }
 
             return wrap;
         },
@@ -8166,6 +8367,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-insights .am-crowd-matrix-insights {
                     display: none !important;
                 }
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-insights .am-crowd-matrix-cell-chart {
+                    min-height: clamp(186px, 22vh, 276px);
+                    gap: 10px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-grid.am-hide-insights .am-crowd-matrix-chart {
+                    min-height: clamp(136px, 17vh, 208px);
+                }
                 #am-magic-report-popup .am-crowd-matrix-xlabel {
                     max-width: 100%;
                     text-align: center;
@@ -8213,8 +8421,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-magic-report-popup .am-crowd-matrix-insights {
                     display: grid;
-                    grid-template-columns: repeat(var(--am-crowd-metric-count, 4), minmax(0, 1fr));
-                    gap: 8px;
+                    grid-template-columns: minmax(0, 1fr);
+                    gap: 6px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-insight-item {
                     min-height: 28px;
@@ -8228,8 +8436,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 5px 8px;
                     display: flex;
                     align-items: center;
-                    justify-content: center;
-                    text-align: center;
+                    justify-content: flex-start;
+                    text-align: left;
                     box-shadow: 0 2px 6px color-mix(in srgb, var(--am-crowd-insight-color) 12%, transparent);
                     transition: all 0.2s ease;
                 }
@@ -8256,19 +8464,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     top: 0;
                     z-index: 40;
                     pointer-events: none;
-                    max-width: min(360px, calc(100vw - 48px));
+                    max-width: min(560px, calc(100vw - 48px));
                     border-radius: 12px;
-                    background: rgba(15, 23, 42, 0.85);
+                    background: linear-gradient(145deg, rgba(248, 252, 255, 0.95) 0%, rgba(238, 246, 255, 0.92) 100%);
                     backdrop-filter: blur(12px);
-                    border: 1px solid rgba(255, 255, 255, 0.15);
-                    color: #fff;
+                    border: 1px solid rgba(255, 255, 255, 0.82);
+                    color: #56647d;
                     font-size: 12px;
                     line-height: 1.45;
                     font-weight: 600;
                     padding: 8px 12px;
-                    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+                    box-shadow: 0 8px 24px rgba(31, 53, 109, 0.1), inset 0 2px 4px rgba(255, 255, 255, 0.62);
                     white-space: pre-wrap;
-                    font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;
+                    font-family: var(--am26-font, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif);
                     font-variant-numeric: tabular-nums;
                     font-feature-settings: "tnum" 1;
                 }
@@ -8282,26 +8490,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-row {
                     display: grid;
-                    grid-template-columns:
-                        calc(var(--am-crowd-period-ch, 6) * 1ch)
-                        calc(var(--am-crowd-ratio-ch, 7) * 1ch)
-                        calc(var(--am-crowd-diff-ch, 1) * 1ch)
-                        calc(var(--am-crowd-count-ch, 3) * 1ch)
-                        max-content;
+                    grid-template-columns: var(--am-crowd-hover-grid-template, 6ch 7ch 1ch 3ch 5ch 6ch max-content);
                     column-gap: 8px;
                     align-items: baseline;
+                }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-row-metrics {
+                    margin-bottom: 4px;
+                    padding-bottom: 2px;
+                    border-bottom: 1px dashed rgba(31, 53, 109, 0.12);
+                    color: #6c7890;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col {
                     white-space: nowrap;
                 }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-metric-label {
+                    justify-self: center;
+                    text-align: center;
+                    font-weight: 700;
+                }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col-ratio,
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col-diff,
-                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-count {
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-count,
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-compare-ratio,
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-compare-count {
                     justify-self: end;
                     text-align: right;
                 }
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-compare-ratio,
+                #am-magic-report-popup .am-crowd-matrix-hover-tip-col-compare-count {
+                    color: #56647d;
+                }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col-flag {
-                    color: rgba(255, 255, 255, 0.72);
+                    color: #7f8aa0;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-line {
                     white-space: pre;
@@ -8313,13 +8533,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: transparent;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-diff.is-pos {
-                    color: #3ddc97;
+                    color: #0f766e;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-diff.is-neg {
-                    color: #ff8a8a;
+                    color: #b42318;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-diff.is-neutral {
-                    color: #ffd666;
+                    color: #a16207;
                 }
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-bar[data-metric="click"],
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-click .am-crowd-matrix-insight-item[data-metric="click"],
