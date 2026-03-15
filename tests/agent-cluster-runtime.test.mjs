@@ -6,11 +6,19 @@ import { join } from "node:path";
 
 let AgentCluster = null;
 let agentClusterImportError = null;
+const agentClusterModulePath = "../agent-cluster/index.mjs";
 
 try {
-    ({ AgentCluster } = await import("../agent-cluster/index.mjs"));
+    ({ AgentCluster } = await import(agentClusterModulePath));
 } catch (error) {
-    agentClusterImportError = error;
+    const message = String(error?.message || "");
+    const isMissingModule = error?.code === "ERR_MODULE_NOT_FOUND"
+        && /agent-cluster\/index\.mjs/.test(message);
+    if (isMissingModule) {
+        agentClusterImportError = error;
+    } else {
+        throw error;
+    }
 }
 
 const agentClusterSkipReason = agentClusterImportError
