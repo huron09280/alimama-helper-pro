@@ -291,28 +291,65 @@ test('柱状图悬停提示使用即时 tooltip（data-tooltip）并绑定网格
   assert.match(block, /const linkedBars = this\.activateCrowdMatrixHoverBars\(bar\);/, '悬停时未先获取跨周期联动柱集合');
   assert.match(block, /const tipText = this\.buildCrowdMatrixHoverTipText\(bar,\s*linkedBars\);/, '悬停时未构造跨周期提示文案');
   assert.match(block, /bar\.dataset\.tooltip\s*=\s*tooltipText;/, '柱状图未写入 data-tooltip');
+  assert.match(block, /const shouldAppendYuan = crowdGroup === '省份' \|\| crowdGroup === '城市';/, '省份\/城市悬停提示未启用金额单位逻辑');
+  assert.match(block, /const countDisplay = shouldAppendYuan && !\/元\$\/\.test\(rawCountDisplay\) \? `\$\{rawCountDisplay\}元` : rawCountDisplay;/, '跨周期悬停提示未为省份\/城市追加元单位');
   assert.match(block, /bar\.dataset\.labelIndex = String\(labelIdx\);/, '柱状图未写入标签索引');
   assert.match(block, /bar\.dataset\.crowdGroup = String\(groupName \|\| ''\);/, '柱状图未写入维度分组标记');
   assert.match(block, /bar\.dataset\.metricLabel = String\(metricMeta\.seriesLabel \|\| ''\);/, '柱状图未写入系列名称');
   assert.match(block, /bar\.dataset\.ratio = String\(ratio\);/, '柱状图未写入占比数值');
+  assert.match(block, /const tooltipCountDisplay = \(normalizedGroupName === '省份' \|\| normalizedGroupName === '城市'\) && !\/元\$\/\.test\(String\(countDisplay \|\| ''\)\)/, '单柱 fallback tooltip 未按省份\/城市追加元单位');
+  assert.match(block, /const tooltipText = `\$\{metricMeta\.seriesLabel\}: \$\{this\.formatCrowdPercent\(ratio\)\}（\$\{tooltipCountDisplay\}）\$\{cell\?\.noData\?\.\[metric\] \? ' 无数据' : ''\}`;/, '单柱 fallback tooltip 未使用带元单位的金额文案');
   assert.match(block, /const periodCompareMap = \{\s*3:\s*7,\s*7:\s*30,\s*30:\s*90\s*\};/, '跨周期 pt 对比链路未按 3→7→30→90 定义');
   assert.match(block, /const diffPt = item\.ratio - compareItem\.ratio;/, '跨周期提示文案未按相邻周期计算差异 pt');
   assert.match(block, /diffLabel = `（\$\{this\.formatCrowdPtDiff\(diffPt\)\}）`;/, '跨周期提示文案未按括号格式输出差异 pt');
+  assert.match(block, /const orderedMetrics = anchorMetric[\s\S]*\? \[anchorMetric,\s*\.\.\.visibleMetrics\.filter\(metric => metric !== anchorMetric\)\][\s\S]*: visibleMetrics\.slice\(\);/, '悬停提示未按可见人群构造动态列顺序');
+  assert.match(block, /const compareMetricLabels = orderedMetricLabels\.slice\(1\);/, '悬停提示未提取对比人群列表');
+  assert.match(block, /const header = \[metricLabel,\s*labelName,\s*compareMetricLabels\.length \? `对比人群：\$\{compareMetricLabels\.join\('、'\)\}` : ''\]\.filter\(Boolean\)\.join\(' · '\);/, '悬停提示标题未按多人群拼接对比人群文案');
+  assert.match(block, /const extraMetrics = orderedMetrics\.slice\(1\);/, '悬停提示未构造额外人群列');
+  assert.match(block, /const extraCells = extraMetrics\.map\(\(metric\) => \{/, '悬停提示未按可见人群生成动态列数据');
+  assert.match(block, /ratioLabel:\s*metricItem \? this\.formatCrowdHoverPercent\(metricItem\.ratio\) : ''/, '悬停提示缺数据时未隐藏对比占比');
+  assert.match(block, /countLabel:\s*metricItem \? String\(metricItem\.countDisplay \|\| ''\) : ''/, '悬停提示缺数据时未隐藏对比数值');
+  assert.match(block, /const metricHeaderLine = orderedMetricLabels\.length \? `__METRICS__\|\$\{orderedMetricLabels\.join\('\|'\)\}` : '';/, '悬停提示未写入人群列头元数据');
+  assert.match(block, /const contentLines = metricHeaderLine \? \[metricHeaderLine,\s*\.\.\.lines\] : lines;/, '悬停提示未将列头插入第一行');
   assert.match(block, /const countLabelMax = items\.reduce\(\(maxLen, item\) => \{[\s\S]*item\.countDisplay[\s\S]*\}, 0\);/, '提示文案未计算末尾具体数值列宽');
   assert.match(block, /const countLabel = item\.countDisplay\.padStart\(countLabelMax, ' '\);/, '提示文案末尾具体数值未做对齐');
   assert.match(block, /const diffLabelMax = rows\.reduce\(\(maxLen, row\) => Math\.max\(maxLen, row\.diffLabel\.length\), 0\);/, '提示文案未计算 pt 差异列宽');
   assert.match(block, /const diffColumn = row\.diffLabel\.padEnd\(diffLabelMax, ' '\);/, '提示文案未为缺失 pt 差异补齐占位宽度');
-  assert.match(block, /return `\$\{row\.periodLabel\.padEnd\(periodLabelMax, ' '\)\}\s+\$\{row\.ratioLabel\}\$\{diffColumn\}\s+\$\{row\.countLabel\}\$\{row\.noData \? ' 无数据' : ''\}`;/, '跨周期提示文案未按新增 diff 列宽对齐输出');
+  assert.match(block, /if \(bodyLines\.length && bodyLines\[0\]\.startsWith\('__METRICS__\|'\)\) \{/, 'tooltip HTML 未读取第一行人群列头');
+  assert.match(block, /const metricHeaderHtml = metricLabels\.length[\s\S]*am-crowd-matrix-hover-tip-row-metrics/, 'tooltip HTML 未渲染人群名称第一行');
+  assert.match(block, /const compareCells = compareParts\.map\(\(part\) => \{/, 'tooltip HTML 未按动态列拆分对比数据');
+  assert.match(block, /while \(compareCells\.length < compareMetricLabels\.length\) \{/, 'tooltip HTML 未按可见人群补齐动态列');
+  assert.match(block, /const gridTemplateParts = \[[\s\S]*\];/, 'tooltip HTML 未初始化动态网格模板');
+  assert.match(block, /gridTemplateParts\.push\('max-content'\);/, 'tooltip HTML 未追加末尾标记列宽');
+  assert.match(block, /const tableStyle = `--am-crowd-hover-grid-template:\$\{gridTemplateParts\.join\(' '\)\};`;/, 'tooltip HTML 未写入动态网格模板样式');
+  assert.match(block, /am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-compare-ratio/, 'tooltip HTML 未渲染对比占比列');
+  assert.match(block, /am-crowd-matrix-hover-tip-col am-crowd-matrix-hover-tip-col-compare-count/, 'tooltip HTML 未渲染对比数值列');
+  assert.doesNotMatch(block, /`VS \$\{compareMetricLabel\}`/, '悬停提示仍包含 VS 文案');
+  assert.doesNotMatch(block, /compareRatioLabel[\s\S]*:\s*'--'/, '悬停提示对比占比仍使用 -- 占位符，未按要求隐藏空值');
+  assert.doesNotMatch(block, /compareCountLabel[\s\S]*:\s*'--'/, '悬停提示对比数值仍使用 -- 占位符，未按要求隐藏空值');
   assert.doesNotMatch(block, /vs\$\{compareLabel\}/, '提示文案仍包含 vs过去N天 文案');
   assert.match(block, /const tipHtml = this\.formatCrowdMatrixHoverTipHtml\(content\);/, 'tooltip 未构造 HTML 提示内容');
   assert.match(block, /tip\.innerHTML = tipHtml;/, 'tooltip 未按 HTML 方式渲染分色内容');
   assert.match(block, /diffClass = diffValue\.startsWith\('\+'\)\s*\?\s*'is-pos'\s*:\s*\(diffValue\.startsWith\('-'\)\s*\?\s*'is-neg'\s*:\s*'is-neutral'\);/, 'pt 差异颜色分类逻辑缺失');
   assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*white-space:\s*pre-wrap;/, 'tooltip 样式未开启对齐换行显示');
   assert.match(block, /am-crowd-matrix-hover-tip-line[\s\S]*white-space:\s*pre;/, 'tooltip 行样式未启用预格式化对齐');
-  assert.match(block, /am-crowd-matrix-hover-tip-diff\.is-pos[\s\S]*color:\s*#3ddc97;/, 'pt 正向差异未设置正色');
-  assert.match(block, /am-crowd-matrix-hover-tip-diff\.is-neg[\s\S]*color:\s*#ff8a8a;/, 'pt 负向差异未设置负色');
-  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*font-family:\s*"SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;/, 'tooltip 样式未启用等宽字体');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*background:\s*linear-gradient\(145deg,\s*rgba\(248,\s*252,\s*255,\s*0\.95\)\s*0%,\s*rgba\(238,\s*246,\s*255,\s*0\.92\)\s*100%\);/, 'tooltip 背景未对齐看板浅蓝玻璃风格');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*border:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.82\);/, 'tooltip 边框未与看板卡片风格统一');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*color:\s*#56647d;/, 'tooltip 主文字未调整为浅灰蓝');
+  assert.match(block, /am-crowd-matrix-hover-tip-row-metrics[\s\S]*border-bottom:\s*1px dashed rgba\(31,\s*53,\s*109,\s*0\.12\);/, 'tooltip 列头分隔线未统一为看板风格');
+  assert.match(block, /am-crowd-matrix-hover-tip-row-metrics[\s\S]*color:\s*#6c7890;/, 'tooltip 列头文字未统一为看板辅色');
+  assert.match(block, /am-crowd-matrix-hover-tip-col-compare-ratio[\s\S]*color:\s*#56647d;/, 'tooltip 对比占比列未使用浅灰蓝主色');
+  assert.match(block, /am-crowd-matrix-hover-tip-col-compare-count[\s\S]*color:\s*#56647d;/, 'tooltip 对比数值列未使用浅灰蓝主色');
+  assert.match(block, /am-crowd-matrix-hover-tip-col-flag[\s\S]*color:\s*#7f8aa0;/, 'tooltip 标记列未使用更浅辅色');
+  assert.match(block, /am-crowd-matrix-hover-tip-diff\.is-pos[\s\S]*color:\s*#0f766e;/, 'pt 正向差异未切换为浅色主题配色');
+  assert.match(block, /am-crowd-matrix-hover-tip-diff\.is-neg[\s\S]*color:\s*#b42318;/, 'pt 负向差异未切换为浅色主题配色');
+  assert.match(block, /am-crowd-matrix-hover-tip-diff\.is-neutral[\s\S]*color:\s*#a16207;/, 'pt 中性差异未切换为浅色主题配色');
+  assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*font-family:\s*var\(--am26-font,\s*-apple-system,\s*BlinkMacSystemFont,\s*"Segoe UI",\s*"PingFang SC",\s*"Hiragino Sans GB",\s*"Microsoft YaHei",\s*sans-serif\);/, 'tooltip 字体未与看板风格统一');
   assert.match(block, /am-crowd-matrix-hover-tip[\s\S]*font-variant-numeric:\s*tabular-nums;/, 'tooltip 样式未启用等宽数字显示');
+  assert.match(block, /am-crowd-matrix-hover-tip-row[\s\S]*--am-crowd-hover-grid-template/, 'tooltip 样式未使用动态网格模板变量');
+  assert.match(block, /am-crowd-matrix-hover-tip-row-metrics/, 'tooltip 样式未声明第一行人群名称样式');
+  assert.match(block, /am-crowd-matrix-hover-tip-col-compare-ratio[\s\S]*text-align:\s*right;/, 'tooltip 对比占比列未右对齐');
+  assert.match(block, /am-crowd-matrix-hover-tip-col-compare-count[\s\S]*text-align:\s*right;/, 'tooltip 对比数值列未右对齐');
   assert.doesNotMatch(block, /bar\.title\s*=\s*`/, '柱状图仍在使用 title 作为提示，存在延迟显示问题');
 });
 
@@ -332,6 +369,11 @@ test('周期图例切换会过滤渲染列，且不再生成 peak badge 提示',
 test('单元格不再渲染 am-crowd-matrix-cell-title，保持页面更简洁', () => {
   const block = getMagicReportBlock();
   assert.doesNotMatch(block, /title\.className\s*=\s*'am-crowd-matrix-cell-title'/, '单元格标题节点仍在渲染');
+});
+
+test('单元格不再显示“部分系列无数据，已按 0 展示”提示', () => {
+  const block = getMagicReportBlock();
+  assert.doesNotMatch(block, /note\.textContent\s*=\s*'部分系列无数据，已按 0 展示'/, '无数据提示仍在渲染');
 });
 
 test('buildMatrixDataset 生成固定 4x8 结构并包含四系列与 raw/noData 字段', () => {
@@ -367,6 +409,10 @@ test('切换显示与隐藏会触发重绘动画', () => {
   assert.match(block, /ratioLabel\.textContent = this\.formatCrowdPercent\(ratio\);/, '占比标签未按百分比渲染');
   assert.match(block, /am-crowd-matrix-grid\.am-show-ratio-values \.am-crowd-matrix-bar-ratio/, '缺少占比显示态样式选择器');
   assert.match(block, /am-crowd-matrix-grid\.am-hide-insights \.am-crowd-matrix-insights/, '缺少提示区隐藏态样式选择器');
+  assert.match(block, /am-crowd-matrix-grid\.am-hide-insights \.am-crowd-matrix-cell-chart[\s\S]*min-height:\s*clamp\(186px,\s*22vh,\s*276px\);/, '隐藏提示后未压缩单元格高度');
+  assert.match(block, /am-crowd-matrix-grid\.am-hide-insights \.am-crowd-matrix-chart[\s\S]*min-height:\s*clamp\(136px,\s*17vh,\s*208px\);/, '隐藏提示后未压缩图表区高度');
+  assert.match(block, /am-crowd-matrix-insights[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/, '提示区未改为单列逐行显示');
+  assert.match(block, /am-crowd-matrix-insight-item[\s\S]*justify-content:\s*flex-start;[\s\S]*text-align:\s*left;/, '提示文案未改为左对齐逐行阅读');
   assert.match(block, /if \(animateBars\) \{[\s\S]*fill\.style\.height = '0%';[\s\S]*fill\.style\.opacity = '0\.38';/, '柱状图切换动画初始状态缺失');
   assert.match(block, /requestAnimationFrame\(applyHeight\)/, '柱状图切换动画缺少 requestAnimationFrame 过渡');
 });
