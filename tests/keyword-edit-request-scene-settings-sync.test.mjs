@@ -16,7 +16,7 @@ test('编辑计划场景下，关键词策略会用 sceneSettingValues 回填 sc
   const block = getBuildRequestFromWizardBlock();
   assert.match(
     block,
-    /let strategySceneSettings = normalizeSceneSettingsObject\(strategy\?\.sceneSettings \|\| \{\}\);[\s\S]*?if \(!Object\.keys\(strategySceneSettings\)\.length && isPlainObject\(strategy\?\.sceneSettingValues\)\) \{[\s\S]*?normalizeSceneSettingBucketValues\(strategy\.sceneSettingValues \|\| \{\}\)[\s\S]*?\}[\s\S]*?if \(!Object\.keys\(strategySceneSettings\)\.length\) \{[\s\S]*?getSceneSettingsForRequest\(strategySceneName\)/,
+    /let strategySceneSettings = normalizeSceneSettingsObject\(strategy\?\.sceneSettings \|\| \{\}\);[\s\S]*?if \(!Object\.keys\(strategySceneSettings\)\.length && isPlainObject\(strategy\?\.sceneSettingValues\)\) \{[\s\S]*?normalizeSceneSettingBucketValues\(strategy\.sceneSettingValues \|\| \{\}(?:,\s*strategySceneName)?\)[\s\S]*?\}[\s\S]*?if \(!Object\.keys\(strategySceneSettings\)\.length\) \{[\s\S]*?getSceneSettingsForRequest\(strategySceneName\)/,
     '缺少 sceneSettingValues -> sceneSettings 的兜底回填，可能导致编辑策略设置丢失'
   );
 });
