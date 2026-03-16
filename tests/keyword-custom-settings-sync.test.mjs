@@ -39,6 +39,20 @@ function getKeywordCustomCampaignAllowListBlock() {
   return source.slice(start, end);
 }
 
+function getPruneKeywordCampaignForCustomSceneBlock() {
+  const start = source.indexOf('const pruneKeywordCampaignForCustomScene = (campaign = {}, options = {}) => {');
+  const end = source.indexOf('const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null, options = {}) => {', start);
+  assert.ok(start > -1 && end > start, '无法定位 pruneKeywordCampaignForCustomScene 代码块');
+  return source.slice(start, end);
+}
+
+function getResolveStrategyMarketingGoalBlock() {
+  const start = source.indexOf('const resolveStrategyMarketingGoal = (strategy = {}, sceneSettings = {}, sceneName = \'\') => {');
+  const end = source.indexOf('const getStrategyMainLabel = (strategy = {}) => {', start);
+  assert.ok(start > -1 && end > start, '无法定位 resolveStrategyMarketingGoal 代码块');
+  return source.slice(start, end);
+}
+
 function extractBraceBlock(text, anchorIndex, label = '代码块') {
   const openIndex = text.indexOf('{', anchorIndex);
   assert.ok(openIndex > -1, `无法定位${label}起始大括号`);
@@ -77,12 +91,12 @@ function getKeywordCustomBidModeBranchesFromRenderBlock() {
   };
 }
 
-test('自定义推广静态设置与提交流程已接入选品方式/冷启加速', () => {
+test('自定义推广静态设置已隐藏选品方式并保留冷启加速提交流程', () => {
   const renderBlock = getRenderSceneDynamicConfigBlock();
-  assert.match(
+  assert.doesNotMatch(
     renderBlock,
     /label:\s*'选品方式'/,
-    '编辑计划缺少“选品方式”按钮行'
+    '编辑计划仍展示“选品方式”按钮行'
   );
   assert.match(
     renderBlock,
@@ -166,6 +180,11 @@ test('自定义推广手动出价启用人群弹窗并保留提交流程映射',
   );
   assert.match(
     manualBranch,
+    /label:\s*'人群设置'[\s\S]*defaultValue:\s*hasCrowdData\s*\?\s*'添加精选人群'\s*:\s*'关闭'/,
+    '编辑计划手动出价“人群设置”默认值未按已选人群数据回填'
+  );
+  assert.match(
+    manualBranch,
     /label:\s*'人群设置'[\s\S]*title:\s*'添加精选人群'/,
     '编辑计划手动出价“人群设置”弹窗标题未对齐原生'
   );
@@ -188,8 +207,304 @@ test('自定义推广手动出价启用人群弹窗并保留提交流程映射',
   );
   assert.match(
     mappingBlock,
+    /const preferManualCrowdMode = normalizedSceneName === '人群推广'[\s\S]*\|\| normalizedSceneName === '关键词推广';/,
+    '关键词推广“添加精选人群”未纳入手动人群模式判定'
+  );
+  assert.match(
+    mappingBlock,
+    /isSelectedCrowd[\s\S]*aiXiaowanCrowdListSwitch',\s*preferManualCrowdMode \? '0' : '1'/,
+    '“添加精选人群”未按手动模式映射 aiXiaowanCrowdListSwitch'
+  );
+  assert.match(
+    mappingBlock,
     /const crowdTargetEntry = findSceneSettingEntry\(entries,\s*\[\/人群优化目标\/,\s*\/客户口径设置\/,\s*\/人群价值设置\//,
     '缺少人群优化目标独立映射入口'
+  );
+});
+
+test('自定义推广智能出价保持独立人群设置，不复用手动人群弹窗', () => {
+  const { smartBranch } = getKeywordCustomBidModeBranchesFromRenderBlock();
+  assert.match(
+    smartBranch,
+    /buildKeywordSmartCrowdPriorityRow\(/,
+    '智能出价人群设置未切换为原生同构行渲染'
+  );
+  assert.match(
+    smartBranch,
+    /keywordSmartCrowdSettingValue\s*=\s*isPriorityCrowdEnabled\s*\?\s*'设置优先投放客户'\s*:\s*'关闭'/,
+    '智能出价人群设置默认值未按优先投放开关回填'
+  );
+  assert.match(
+    smartBranch,
+    /description:\s*'支持对特定客户设置更高权重，进行优先获取。'/,
+    '智能出价人群设置缺少原生说明文案'
+  );
+  assert.match(
+    smartBranch,
+    /detailUrl:\s*'https:\/\/alidocs\.dingtalk\.com\/i\/nodes\/Y1OQX0akWmzdBowLFk0vRgKlVGlDd3mE'/,
+    '智能出价人群设置缺少原生“了解详情”链接'
+  );
+  assert.match(
+    smartBranch,
+    /buildKeywordSmartCrowdTargetPanelRow\(/,
+    '智能出价缺少人群优化目标面板'
+  );
+  assert.match(
+    smartBranch,
+    /targetFieldKey:\s*keywordCrowdTargetFieldKey[\s\S]*clientFieldKey:\s*keywordCrowdClientFieldKey[\s\S]*valueFieldKey:\s*keywordCrowdValueFieldKey/,
+    '人群优化目标面板未绑定人群优化目标/客户口径/人群价值字段'
+  );
+  assert.doesNotMatch(
+    smartBranch,
+    /label:\s*'人群设置'[\s\S]*?trigger:\s*'crowd'/,
+    '智能出价人群设置错误复用手动出价“人群设置”弹窗'
+  );
+
+  const renderBlock = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    renderBlock,
+    /const sceneCrowdPriorityToggles = wizardState\.els\.sceneDynamic\.querySelectorAll\('\[data-scene-crowd-priority-toggle\]'\);/,
+    '智能出价人群设置缺少 checkbox 事件绑定'
+  );
+  assert.match(
+    renderBlock,
+    /hiddenControl\.value = toggle\.checked \? onValue : offValue;/,
+    '智能出价人群设置 checkbox 切换后未同步隐藏值'
+  );
+  assert.match(
+    renderBlock,
+    /const keywordSmartCrowdPanels = wizardState\.els\.sceneDynamic\.querySelectorAll\('\[data-keyword-smart-crowd-panel=\"1\"\]'\);/,
+    '人群优化目标面板缺少事件绑定'
+  );
+  assert.match(
+    renderBlock,
+    /campaignControl\.value = JSON\.stringify\(nextCampaignList\);/,
+    '人群优化目标面板未回写 campaign.crowdList'
+  );
+});
+
+test('编辑计划会优先根据关键词自定义场景提示回填营销目标，避免误判丢失人群设置', () => {
+  const block = getResolveStrategyMarketingGoalBlock();
+  assert.match(
+    block,
+    /const currentSceneSettings = normalizeSceneSettingBucketValues\(sceneSettings,\s*currentScene\);/,
+    '未先按当前场景归一 sceneSettings'
+  );
+  assert.match(
+    block,
+    /const keywordSceneHint = normalizeSceneSettingValue\([\s\S]*?campaign\.promotionScene[\s\S]*?\);/,
+    '缺少 campaign.promotionScene 场景提示读取'
+  );
+  assert.match(
+    block,
+    /const keywordItemModeHint = normalizeSceneSettingValue\([\s\S]*?campaign\.itemSelectedMode[\s\S]*?\);/,
+    '缺少 campaign.itemSelectedMode 场景提示读取'
+  );
+  assert.match(
+    block,
+    /promotion_scene_search_user_define[\s\S]*?return '自定义推广';/,
+    '未在关键词自定义场景提示命中时优先回填“自定义推广”'
+  );
+});
+
+test('关键词自定义推广提交流程会按预算类型裁剪字段并对齐每日预算契约', () => {
+  const block = getPruneKeywordCampaignForCustomSceneBlock();
+  assert.match(
+    block,
+    /const forceKeywordDailyBudget = !isManual[\s\S]*keywordMarketingGoal === '自定义推广'[\s\S]*!keywordRoiContract;/,
+    '缺少关键词自定义推广非ROI场景的每日预算契约兜底'
+  );
+  assert.match(
+    block,
+    /if \(forceKeywordDailyBudget\) normalizedDmcType = 'normal';/,
+    '关键词自定义推广非ROI场景未强制对齐 normal 预算类型'
+  );
+  assert.match(
+    block,
+    /if \(keywordRoiContract\) normalizedDmcType = 'day_average';/,
+    '关键词ROI场景未保持 day_average 预算类型'
+  );
+  assert.match(
+    block,
+    /BUDGET_FIELDS\.forEach\(field => \{\s*if \(field !== targetBudgetField\) delete out\[field\];\s*\}\);/,
+    '关键词提交前未按目标预算字段裁剪互斥预算字段'
+  );
+  assert.match(
+    source,
+    /pruneKeywordCampaignForCustomScene\(merged\.campaign,\s*\{[\s\S]*request,\s*plan,\s*bidMode:/,
+    '关键词提交净化未透传 plan，无法识别当前计划营销目标'
+  );
+});
+
+test('关键词自定义推广提交流程会同步计划MCB出价模型字段', () => {
+  const block = getPruneKeywordCampaignForCustomSceneBlock();
+  assert.match(
+    block,
+    /'planMcbBidModel'/,
+    '未识别 planMcbBidModel 字段来源'
+  );
+  assert.match(
+    block,
+    /out\.mcbBidModel = 'coll_cart';\s*out\.planMcbBidModel = 'coll_cart';/,
+    '收藏加购目标未同步写入 planMcbBidModel'
+  );
+  assert.match(
+    block,
+    /out\.mcbBidModel = resolvedMcbBidModel;\s*out\.planMcbBidModel = resolvedMcbBidModel;/,
+    '智能出价目标未同步写入 planMcbBidModel'
+  );
+  assert.match(
+    block,
+    /else if \(keywordClickContract\) \{[\s\S]*out\.bidTargetV2 = 'click';[\s\S]*delete out\.optimizeTarget;[\s\S]*out\.constraintType = 'click';/,
+    '点击量目标未对齐原生 click\+constraint 合同'
+  );
+  assert.match(
+    block,
+    /else if \(keywordClickContract\) \{[\s\S]*delete out\.mcbBidModel;[\s\S]*delete out\.planMcbBidModel;/,
+    '点击量目标未清理 mcb 字段，可能触发手动出价降级'
+  );
+});
+
+test('关键词自定义推广收藏加购目标成本为空不兜底，填写时必须 >=5', () => {
+  const block = getPruneKeywordCampaignForCustomSceneBlock();
+  assert.match(
+    block,
+    /const keywordFavCartMinConstraintValue = 5;/,
+    '收藏加购目标缺少最低成本阈值'
+  );
+  assert.match(
+    block,
+    /const hasFavCartConstraintValue = Number\.isFinite\(favCartConstraintSeed\);/,
+    '收藏加购目标成本“填写判断”仍按 >0 处理，导致 0 被当成空值'
+  );
+  assert.match(
+    block,
+    /if \(hasFavCartConstraintValue && favCartConstraintSeed < keywordFavCartMinConstraintValue\) \{[\s\S]*throw new Error\('增加收藏加购量目标成本需填写 5-9999\.99 的数值'\);/,
+    '收藏加购目标成本低于 5 时未本地阻断'
+  );
+  assert.match(
+    block,
+    /if \(favCartSingleCostEnabled && hasFavCartConstraintValue\) \{[\s\S]*out\.setSingleCostV2 = true;[\s\S]*out\.constraintValue = favCartConstraintSeed;[\s\S]*\} else \{[\s\S]*out\.setSingleCostV2 = false;[\s\S]*delete out\.constraintValue;/,
+    '收藏加购目标未按“空值不传、非空才传”处理'
+  );
+  assert.doesNotMatch(
+    block,
+    /Math\.max\(keywordFavCartMinConstraintValue,\s*favCartConstraintSeed\)/,
+    '收藏加购目标仍存在自动兜底逻辑'
+  );
+  assert.doesNotMatch(
+    block,
+    /const hasFavCartConstraintValue = Number\.isFinite\(favCartConstraintSeed\) && favCartConstraintSeed > 0;/,
+    '收藏加购目标成本仍把 0 当成空值而不是非法值'
+  );
+});
+
+test('关键词自定义推广增加点击量目标成本为空不兜底，且不强制 >=5', () => {
+  const block = getPruneKeywordCampaignForCustomSceneBlock();
+  assert.match(
+    block,
+    /const hasClickSingleCostValue = Number\.isFinite\(clickSingleCostSeed\) && clickSingleCostSeed > 0;/,
+    '点击量目标成本未按正数判断“是否填写”'
+  );
+  assert.match(
+    block,
+    /if \(clickSingleCostEnabled && hasClickSingleCostValue\) \{[\s\S]*out\.setSingleCostV2 = true;[\s\S]*out\.constraintValue = clickSingleCostSeed;[\s\S]*\} else \{[\s\S]*out\.setSingleCostV2 = false;[\s\S]*delete out\.constraintValue;/,
+    '点击量目标未按原生 click 合同写入 constraintValue'
+  );
+  assert.match(
+    block,
+    /delete out\.singleCostV2;/,
+    '点击量目标未清理 singleCostV2，可能与原生契约冲突'
+  );
+  assert.match(
+    block,
+    /if \(!keywordFavCartContract && !keywordClickContract\) \{[\s\S]*delete out\.constraintType;[\s\S]*delete out\.constraintValue;/,
+    '点击量目标 contract 字段被误删'
+  );
+  assert.match(
+    block,
+    /const clickSingleCostSeed = toNumber\([\s\S]*?NaN\);/,
+    '点击量目标缺少单值成本数值解析'
+  );
+  assert.doesNotMatch(
+    block,
+    /keywordClickMinSingleCostValue/,
+    '点击量目标仍残留 >=5 的阈值限制'
+  );
+  assert.doesNotMatch(
+    block,
+    /增加点击量目标成本需填写 5-9999\.99 的数值/,
+    '点击量目标仍残留 5-9999.99 阈值报错'
+  );
+  assert.doesNotMatch(
+    block,
+    /Math\.max\(keywordClickMinSingleCostValue,\s*clickSingleCostSeed\)/,
+    '点击量目标仍存在自动兜底逻辑'
+  );
+});
+
+test('关键词批量构建阶段会收集本地校验失败并继续返回失败明细', () => {
+  assert.match(
+    source,
+    /const prebuildFailures = \[\];/,
+    '缺少构建前失败收集容器'
+  );
+  assert.match(
+    source,
+    /emitProgress\(options,\s*'build_solution_failed',\s*\{/,
+    '构建失败未输出进度事件'
+  );
+  assert.match(
+    source,
+    /const failures = prebuildFailures\.slice\(\);/,
+    '最终失败列表未合并本地校验失败'
+  );
+});
+
+test('关键词自定义推广获取成交量会对齐原生 dir_conv 合同并清理冲突字段', () => {
+  const block = getPruneKeywordCampaignForCustomSceneBlock();
+  assert.match(
+    block,
+    /const keywordConvContract = keywordBidTargetCode === 'conv';/,
+    '缺少 conv 合同判定'
+  );
+  assert.match(
+    block,
+    /if \(keywordConvContract\) \{[\s\S]*out\.constraintType = 'dir_conv';[\s\S]*out\.setSingleCostV2 = true;/,
+    'conv 合同未映射为 constraintType=dir_conv 且开启 setSingleCostV2'
+  );
+  assert.match(
+    block,
+    /if \(keywordConvContract\) \{[\s\S]*delete out\.optimizeTarget;[\s\S]*delete out\.subOptimizeTarget;[\s\S]*delete out\.singleCostV2;/,
+    'conv 合同未清理 optimizeTarget/subOptimizeTarget/singleCostV2'
+  );
+  assert.match(
+    block,
+    /if \(keywordConvContract\) \{[\s\S]*delete out\.mcbBidModel;[\s\S]*delete out\.planMcbBidModel;/,
+    'conv 合同未清理 mcb 字段'
+  );
+});
+
+test('编辑计划会从按场景嵌套的 sceneSettingValues 中回填关键词自定义目标', () => {
+  assert.match(
+    source,
+    /const resolveSceneSettingBucketSource = \(rawValues = \{\}, sceneName = ''\) => \{/,
+    '缺少 sceneSettingValues 场景桶解析 helper'
+  );
+  assert.match(
+    source,
+    /if \(normalizedSceneName && isPlainObject\(rawValues\[normalizedSceneName\]\)\) \{\s*return rawValues\[normalizedSceneName\];\s*\}/,
+    '场景桶解析未优先命中当前场景'
+  );
+  assert.match(
+    source,
+    /const strategySceneSettingValues = normalizeSceneSettingBucketValues\(\s*strategy\.sceneSettingValues \|\| \{\},\s*strategyScene\s*\);/,
+    'applyStrategyToDetailForm 未按策略场景读取 sceneSettingValues'
+  );
+  assert.match(
+    source,
+    /normalizeSceneSettingBucketValues\(strategy\.sceneSettingValues \|\| \{\}, strategySceneName\)/,
+    'buildRequestFromWizard 未按策略场景读取 sceneSettingValues'
   );
 });
 

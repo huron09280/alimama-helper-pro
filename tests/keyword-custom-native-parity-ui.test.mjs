@@ -54,22 +54,17 @@ function getKeywordCustomBidModeBranches() {
   };
 }
 
-test('关键词自定义推广选品方式文案对齐原生好货快投', () => {
+test('关键词自定义推广隐藏选品方式配置项', () => {
   const block = getKeywordCustomSceneBlock();
-  assert.match(
+  assert.doesNotMatch(
     block,
-    /options:\s*\[\s*'自定义选品'\s*,\s*'好货快投-大家电专享'\s*\]/,
-    '自定义推广选品方式未对齐原生“好货快投-大家电专享”'
+    /label:\s*'选品方式'/,
+    '自定义推广分支仍展示“选品方式”配置项'
   );
   assert.doesNotMatch(
     block,
-    /options:\s*\[\s*'自定义选品'\s*,\s*'行业推荐选品'\s*\]/,
-    '自定义推广仍展示旧文案“行业推荐选品”'
-  );
-  assert.match(
-    block,
-    /label:\s*'选品方式'[\s\S]*?strictOptions:\s*true/,
-    '选品方式未启用严格选项模式，可能混入非原生选项'
+    /options:\s*\[\s*'自定义选品'\s*,\s*'好货快投-大家电专享'\s*\]/,
+    '自定义推广分支仍展示“选品方式”选项'
   );
 });
 
@@ -82,22 +77,17 @@ test('关键词自定义推广隐藏无效创意设置分段按钮', () => {
   );
 });
 
-test('关键词自定义推广智能出价保留人群优化目标并映射到 crowd 开关字段', () => {
+test('关键词自定义推广智能出价展示人群优化目标面板并保留 crowd 开关映射兼容', () => {
   const { smartBranch } = getKeywordCustomBidModeBranches();
   assert.match(
     smartBranch,
-    /label:\s*'人群优化目标'/,
-    '自定义推广智能出价分支缺少“人群优化目标”配置项'
+    /buildKeywordSmartCrowdTargetPanelRow\(/,
+    '自定义推广智能出价分支缺少“人群优化目标”同构面板'
   );
   assert.match(
     smartBranch,
-    /options:\s*\[\s*'开启'\s*,\s*'关闭'\s*\]/,
-    '“人群优化目标”缺少开关选项'
-  );
-  assert.match(
-    smartBranch,
-    /label:\s*'人群优化目标'[\s\S]*?strictOptions:\s*true/,
-    '“人群优化目标”未启用严格选项模式，可能混入无关选项'
+    /targetFieldKey:\s*keywordCrowdTargetFieldKey[\s\S]*campaignFieldKey:\s*crowdCampaignField/,
+    '人群优化目标面板未绑定目标字段与 campaign.crowdList'
   );
 
   const mappingBlock = getResolveSceneSettingOverridesBlock();
@@ -105,6 +95,49 @@ test('关键词自定义推广智能出价保留人群优化目标并映射到 c
     mappingBlock,
     /const crowdTargetEntry = findSceneSettingEntry\(entries,\s*\[\/人群优化目标\/,\s*\/客户口径设置\/,\s*\/人群价值设置\//,
     '提交流程未识别“人群优化目标”'
+  );
+});
+
+test('关键词自定义推广智能出价人群设置复刻原生 checkbox 结构', () => {
+  const { smartBranch } = getKeywordCustomBidModeBranches();
+  assert.match(
+    smartBranch,
+    /buildKeywordSmartCrowdPriorityRow\(/,
+    '智能出价人群设置未切到原生 checkbox 行渲染'
+  );
+  assert.match(
+    smartBranch,
+    /helpText:\s*'智能出价方式下，可通过人群设置，提高特定客户的投放权重。特别的，价值设置用于调整算法的出价系数，并不等于最终的出价。'/,
+    '智能出价人群设置缺少原生提示文案'
+  );
+  assert.match(
+    smartBranch,
+    /description:\s*'支持对特定客户设置更高权重，进行优先获取。'/,
+    '智能出价人群设置缺少原生说明文案'
+  );
+  assert.match(
+    smartBranch,
+    /detailUrl:\s*'https:\/\/alidocs\.dingtalk\.com\/i\/nodes\/Y1OQX0akWmzdBowLFk0vRgKlVGlDd3mE'/,
+    '智能出价人群设置缺少原生“了解详情”跳转'
+  );
+  assert.doesNotMatch(
+    smartBranch,
+    /options:\s*\[\s*'设置优先投放客户'\s*,\s*'关闭'\s*\]/,
+    '智能出价人群设置仍在使用旧的分段按钮结构'
+  );
+});
+
+test('关键词自定义推广增加点击量默认目标成本为0.5，且不覆盖手动清空', () => {
+  const { smartBranch } = getKeywordCustomBidModeBranches();
+  assert.match(
+    smartBranch,
+    /const keywordAvgClickCostTouched = !!\([\s\S]*touchedBucket\[keywordAvgClickCostFieldKey\][\s\S]*touchedBucket\[keywordAvgClickCostFieldLabel\][\s\S]*\);/,
+    '增加点击量目标成本缺少手动编辑保护判断'
+  );
+  assert.match(
+    smartBranch,
+    /if \(!keywordAvgClickCostValue && !keywordAvgClickCostTouched\) \{[\s\S]*keywordAvgClickCostValue = '0\.5';[\s\S]*\}/,
+    '增加点击量目标成本未默认回填 0.5'
   );
 });
 
