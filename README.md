@@ -40,6 +40,12 @@
 
 ## 更新日志（最近）
 
+### v6.05 (2026-03-18)
+- extension 清单增强：新增 MV3 `icons` 与 `action.default_icon`，补齐浏览器扩展图标声明
+- 构建链路增强：build 阶段自动复制 `src/entries/extension-icons/*` 到 `dist/extension/`
+- 构建门禁补齐：`--check` 增加 extension 图标文件存在性校验
+- 回归测试补齐：新增 manifest 图标配置断言，防止后续回归
+
 ### v6.04 (2026-03-17)
 - 开发入口标准化：新增零依赖 `package.json` 脚本入口，统一 `build/test/review/dev` 常用命令
 - 构建装配维护性优化：抽出共享 runtime segments，减少 userscript 与 extension 拼接列表重复维护

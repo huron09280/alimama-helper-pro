@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, watch, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, watch, readdirSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -10,6 +10,8 @@ export const ROOT_SCRIPT_FILE = '阿里妈妈多合一助手.js';
 export const DIST_DIR = path.join(ROOT_DIR, 'dist');
 export const PACKAGE_DIR = path.join(DIST_DIR, 'packages');
 export const EXTENSION_DIR = path.join(DIST_DIR, 'extension');
+export const EXTENSION_ICON_DIR = path.join(ROOT_DIR, 'src', 'entries', 'extension-icons');
+export const EXTENSION_ICON_FILES = ['icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-128.png'];
 const USERSCRIPT_UPDATE_URL = 'https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.meta.js';
 const USERSCRIPT_DOWNLOAD_URL = 'https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.user.js';
 
@@ -179,6 +181,20 @@ export const renderExtensionManifest = (version) => {
         name: '阿里妈妈多合一助手 (Pro版)',
         version,
         description: '阿里妈妈投放平台增强工具，支持主面板、万能查数、算法护航与计划辅助能力。',
+        icons: {
+            16: 'icon-16.png',
+            32: 'icon-32.png',
+            48: 'icon-48.png',
+            128: 'icon-128.png'
+        },
+        action: {
+            default_title: '阿里妈妈多合一助手 (Pro版)',
+            default_icon: {
+                16: 'icon-16.png',
+                32: 'icon-32.png',
+                48: 'icon-48.png'
+            }
+        },
         content_scripts: [
             {
                 matches: [
@@ -243,6 +259,13 @@ export const checkBuildOutputs = () => {
     if (!extensionBundle.includes('GM_getValue')) {
         throw new Error('extension page bundle 缺少 GM 兼容层');
     }
+
+    EXTENSION_ICON_FILES.forEach((filename) => {
+        if (!existsSync(path.join(EXTENSION_ICON_DIR, filename))) {
+            throw new Error(`extension icon 文件缺失: src/entries/extension-icons/${filename}`);
+        }
+    });
+
     return outputs;
 };
 
@@ -259,6 +282,10 @@ export const writeBuildOutputs = () => {
         writeFileSync(path.join(EXTENSION_DIR, filename), content, 'utf8');
     });
 
+    EXTENSION_ICON_FILES.forEach((filename) => {
+        copyFileSync(path.join(EXTENSION_ICON_DIR, filename), path.join(EXTENSION_DIR, filename));
+    });
+
     return outputs;
 };
 
@@ -267,7 +294,7 @@ const printSummary = (outputs, mode = 'build') => {
     console.log(`[build] version=${outputs.version}`);
     console.log(`[build] root=${ROOT_SCRIPT_FILE}`);
     console.log('[build] packages=dist/packages/alimama-helper-pro.user.js, dist/packages/alimama-helper-pro.meta.js');
-    console.log('[build] extension=dist/extension/manifest.json, dist/extension/content.js, dist/extension/page.bundle.js');
+    console.log('[build] extension=dist/extension/manifest.json, dist/extension/content.js, dist/extension/page.bundle.js, dist/extension/icon-16.png, dist/extension/icon-32.png, dist/extension/icon-48.png, dist/extension/icon-128.png');
 };
 
 const runWatch = () => {

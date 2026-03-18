@@ -9,6 +9,17 @@ const pageBundle = outputs.extensionFiles['page.bundle.js'];
 
 test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
   assert.equal(manifest.manifest_version, 3, 'manifest_version 必须为 3');
+  assert.deepEqual(manifest.icons, {
+    16: 'icon-16.png',
+    32: 'icon-32.png',
+    48: 'icon-48.png',
+    128: 'icon-128.png'
+  }, '扩展图标配置缺失或不正确');
+  assert.deepEqual(manifest.action.default_icon, {
+    16: 'icon-16.png',
+    32: 'icon-32.png',
+    48: 'icon-48.png'
+  }, '工具栏图标配置缺失或不正确');
   assert.deepEqual(manifest.content_scripts[0].js, ['content.js']);
   assert.ok(manifest.content_scripts[0].matches.includes('*://*.alimama.com/*'), '缺少阿里妈妈子域匹配');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('page.bundle.js'), '缺少 page bundle 暴露');
