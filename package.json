@@ -1,0 +1,13 @@
+{
+    "name": "alimama-helper-pro",
+    "private": true,
+    "scripts": {
+        "build": "node scripts/build.mjs",
+        "build:check": "node scripts/build.mjs --check",
+        "build:watch": "node scripts/build.mjs --watch",
+        "check:syntax": "node --check \"阿里妈妈多合一助手.js\"",
+        "test": "node --test tests/*.test.mjs",
+        "review": "bash scripts/review-team.sh",
+        "dev:serve": "python3 -m http.server 5173"
+    }
+}

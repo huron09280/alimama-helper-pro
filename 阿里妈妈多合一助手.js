@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      6.03
+// @version      6.04
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,12 @@
 // ==/UserScript==
 /**
  * 更新日志
+ *
+ * v6.04 (2026-03-17)
+ * - ✨ 开发入口标准化：新增零依赖 package.json 脚本入口，统一 build/test/review/dev 命令入口
+ * - 🔧 构建装配维护性优化：抽出共享 runtime segments，减少 userscript 与 extension 装配重复维护
+ * - ✅ 仓库卫生门禁增强：review-team 新增 tracked .DS_Store 检查，阻止 macOS 噪音文件入库
+ * - ✅ 回归测试补齐：新增 build segment 装配关系与 review-team 仓库卫生断言
  *
  * v6.03 (2026-03-16)
  * - 🐛 人群看板悬停性能修复：预构建指标索引，移除 mousemove 热路径全表扫描
@@ -148,7 +154,6 @@ const resolveScriptVersion = () => {
 if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ !== 'function') {
     globalThis.__AM_GET_SCRIPT_VERSION__ = resolveScriptVersion;
 }
-
 (function () {
     'use strict';
 
@@ -1249,10 +1254,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
             const itemIdCandidates = this.extractItemIdCandidatesFromCampaignPayload(json, normalizedCampaignId);
             const fallbackCandidates = this.collectItemIdCandidatesFromSources([
-                    json?.data?.adgroup,
-                    json?.data?.adgroup?.material,
-                    json?.data?.adgroup?.material?.linkUrl
-                ], 12);
+                json?.data?.adgroup,
+                json?.data?.adgroup?.material,
+                json?.data?.adgroup?.material?.linkUrl
+            ], 12);
             const mergedCandidates = [];
             const seen = new Set();
             [...itemIdCandidates, ...fallbackCandidates].forEach((raw) => {
@@ -20547,7 +20552,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'dayBudget',
             'dayAverageBudget',
             'totalBudget',
-            'futureBudget'
+            'futureBudget',
+            // NOTE: 对齐原生「优质计划防停投」，避免被白名单裁剪
+            'enableRuleAuto',
+            'ruleCommand'
         ]);
         // 关键词创建口偶发新增 MCB 相关字段，按关键字兜底透传，避免被白名单裁剪导致服务端参数缺失。
         const KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE = /(mcb|bidmodel)/i;
@@ -30836,9 +30844,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 ? 'text'
                 : (
                     isMatrixDimensionNumericValueLabel(normalizedFieldLabel)
-                    || [currentValue]
-                        .concat(suggestedValues)
-                        .some(item => Number.isFinite(parseNumberFromSceneValue(item)))
+                        || [currentValue]
+                            .concat(suggestedValues)
+                            .some(item => Number.isFinite(parseNumberFromSceneValue(item)))
                         ? 'number'
                         : 'text'
                 );
@@ -31281,8 +31289,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const getMatrixDimensionValueBatchIntervalPlaceholder = (baseValue = NaN) => (
             baseValue < 3 ? '0.1'
                 : baseValue < 10 ? '0.5'
-                : baseValue < 80 ? '1'
-                : '5'
+                    : baseValue < 80 ? '1'
+                        : '5'
         );
 
         const getMatrixBatchDraftInputState = (intervalValue = '', countValue = '') => {
@@ -31474,10 +31482,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     data-matrix-dimension-value-batch-menu="1"
                                 >
                                     ${buildMatrixDimensionValueBatchMenuHtml(preset, rowMaxValue, {
-                                        hasPendingValue,
-                                        interval: batchDraft.interval,
-                                        count: batchDraft.count
-                                    })}
+                hasPendingValue,
+                interval: batchDraft.interval,
+                count: batchDraft.count
+            })}
                                 </div>
                             </div>
                         </div>
@@ -31535,10 +31543,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 summary.textContent = values.length && pendingCount
                     ? `已填写 ${values.length} 个值，另有 ${pendingCount} 个空位`
                     : values.length
-                    ? `已填写 ${values.length} 个值`
-                    : pendingCount
-                    ? `已新增 ${pendingCount} 个待填值`
-                    : '先填写 1 个值';
+                        ? `已填写 ${values.length} 个值`
+                        : pendingCount
+                            ? `已新增 ${pendingCount} 个待填值`
+                            : '先填写 1 个值';
             }
             return values;
         };
@@ -31834,8 +31842,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const getMatrixBidTargetCostPackageBatchIntervalPlaceholder = (baseCost = NaN) => (
             baseCost < 3 ? '0.1'
                 : baseCost < 10 ? '0.5'
-                : baseCost < 80 ? '1'
-                : '5'
+                    : baseCost < 80 ? '1'
+                        : '5'
         );
 
         const buildMatrixBidTargetCostPackageBatchMenuHtml = (targetOptionValue = '', baseCost = NaN, options = {}) => {
@@ -32030,8 +32038,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     <div class="am-wxt-matrix-bid-package-row-body">
                         <div class="am-wxt-matrix-bid-package-cost-list" data-matrix-bid-package-cost-list="1">
                             ${costValues.map((item, costIndex) => (
-                                buildMatrixBidTargetCostPackageCostItemHtml(item, targetOption.value, costIndex)
-                            )).join('')}
+                buildMatrixBidTargetCostPackageCostItemHtml(item, targetOption.value, costIndex)
+            )).join('')}
                             <div
                                 class="am-wxt-matrix-dimension-picker am-wxt-matrix-bid-package-cost-actions"
                                 data-matrix-dimension-picker="1"
@@ -32052,10 +32060,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     data-matrix-bid-package-cost-batch-menu="1"
                                 >
                                     ${buildMatrixBidTargetCostPackageBatchMenuHtml(targetOption.value, rowMaxCost, {
-                                        hasPendingCost,
-                                        interval: batchDraft.interval,
-                                        count: batchDraft.count
-                                    })}
+                hasPendingCost,
+                interval: batchDraft.interval,
+                count: batchDraft.count
+            })}
                                 </div>
                             </div>
                         </div>
@@ -32250,10 +32258,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 summary.textContent = values.length && pendingCount
                     ? `已配置 ${values.length} 组目标包，另有 ${pendingCount} 组待填写`
                     : values.length
-                    ? `已配置 ${values.length} 组目标包`
-                    : pendingCount
-                    ? `已新增 ${pendingCount} 组待填写`
-                    : '先选目标，再在下方填写目标成本';
+                        ? `已配置 ${values.length} 组目标包`
+                        : pendingCount
+                            ? `已新增 ${pendingCount} 组待填写`
+                            : '先选目标，再在下方填写目标成本';
             }
             return values;
         };
@@ -32409,11 +32417,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const targetKey = String(presetKey || '').trim();
             if (!targetKey) return;
             if (!(wizardState?.els?.matrixDimensionList instanceof HTMLElement)) return;
-                const targetRow = Array.from(
-                    wizardState.els.matrixDimensionList.querySelectorAll('[data-matrix-dimension-row="1"]')
-                ).find((row) => (
-                    String(row.querySelector('[data-matrix-dimension-key="1"]')?.value || '').trim() === targetKey
-                ));
+            const targetRow = Array.from(
+                wizardState.els.matrixDimensionList.querySelectorAll('[data-matrix-dimension-row="1"]')
+            ).find((row) => (
+                String(row.querySelector('[data-matrix-dimension-key="1"]')?.value || '').trim() === targetKey
+            ));
             if (!(targetRow instanceof HTMLElement)) return;
             requestAnimationFrame(() => {
                 targetRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -45133,15 +45141,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         Object.assign(strategySceneSettingValues, fromPayload);
                     }
                 }
-                    const draft = ensureWizardDraft();
-                    if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
-                        draft.sceneSettingValues = {};
-                    }
-                    wizardState.draft.sceneSettingValues[strategyScene] = mergeDeep({}, strategySceneSettingValues);
-                    if (!isPlainObject(draft.sceneSettingTouched)) {
-                        draft.sceneSettingTouched = {};
-                    }
-                    wizardState.draft.sceneSettingTouched[strategyScene] = mergeDeep({}, strategySceneSettingTouched);
+                const draft = ensureWizardDraft();
+                if (!isPlainObject(wizardState.draft.sceneSettingValues)) {
+                    draft.sceneSettingValues = {};
+                }
+                wizardState.draft.sceneSettingValues[strategyScene] = mergeDeep({}, strategySceneSettingValues);
+                if (!isPlainObject(draft.sceneSettingTouched)) {
+                    draft.sceneSettingTouched = {};
+                }
+                wizardState.draft.sceneSettingTouched[strategyScene] = mergeDeep({}, strategySceneSettingTouched);
                 const currentSceneName = getCurrentEditorSceneName();
                 if (currentSceneName === '关键词推广') {
                     const strategyGoal = normalizeGoalLabel(
@@ -46947,7 +46955,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const valueEditorHtml = usePackageRows
                         ? buildMatrixBidTargetCostPackageEditorHtml(normalizedValues, preset?.suggestedValues || [])
                         : (useMultiSelect
-                        ? `
+                            ? `
                             <div class="am-wxt-matrix-dimension-picker" data-matrix-dimension-picker="1">
                                 <button
                                     type="button"
@@ -46962,13 +46970,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 </button>
                                 <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
                                     ${valueOptions.length
-                                        ? valueOptions.map(option => `
+                                ? valueOptions.map(option => `
                                             <label class="am-wxt-matrix-dimension-picker-option">
                                                 <input type="checkbox" data-matrix-dimension-value-option="1" value="${Utils.escapeHtml(option.value)}" ${selectedValueSet.has(option.value) ? 'checked' : ''} />
                                                 <span class="am-wxt-matrix-dimension-picker-option-text">${Utils.escapeHtml(option.label || option.value)}</span>
                                             </label>
                                         `).join('')
-                                        : '<div class="am-wxt-matrix-dimension-picker-empty">暂无可选项</div>'}
+                                : '<div class="am-wxt-matrix-dimension-picker-empty">暂无可选项</div>'}
                                 </div>
                                 <select
                                     class="am-wxt-matrix-dimension-value-select am-wxt-hidden-control"
@@ -46978,14 +46986,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     tabindex="-1"
                                     aria-hidden="true"
                                 >${valueOptions.length
-                                    ? valueOptions.map(option => `
+                                ? valueOptions.map(option => `
                                         <option value="${Utils.escapeHtml(option.value)}" ${selectedValueSet.has(option.value) ? 'selected' : ''}>${Utils.escapeHtml(option.label || option.value)}</option>
                                     `).join('')
-                                    : '<option value="" disabled>暂无可选项</option>'}
+                                : '<option value="" disabled>暂无可选项</option>'}
                                 </select>
                             </div>
                         `
-                        : buildMatrixStructuredDimensionEditorHtml(normalizedValues, preset));
+                            : buildMatrixStructuredDimensionEditorHtml(normalizedValues, preset));
                     return `
                         <div class="am-wxt-matrix-dimension-row" data-matrix-dimension-row="1" data-matrix-dimension-index="${index}">
                             <div class="am-wxt-matrix-dimension-top">
@@ -47074,8 +47082,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.matrixIntro.textContent = !canEditMatrixDimensions
                         ? '先在上方切换场景，矩阵维度会按该场景同步展示。'
                         : currentSceneName === '关键词推广'
-                        ? '推荐先配预算、出价方式、智能出价目标包、计划名前缀、商品，再补充匹配方式等场景维度。'
-                        : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。';
+                            ? '推荐先配预算、出价方式、智能出价目标包、计划名前缀、商品，再补充匹配方式等场景维度。'
+                            : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。';
                 }
                 if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
                     wizardState.els.matrixApplyRecommendedBtn.disabled = !canEditMatrixDimensions;
@@ -50681,7 +50689,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 : {
                     strategy: rawStrategy,
                     sceneSettingsPatch: rawSceneSettingsPatch
-            };
+                };
             const strategy = parityCostSeed.strategy;
             const sceneSettingsPatch = parityCostSeed.sceneSettingsPatch;
             const draft = KeywordPlanWizardStore.createWizardDraft(wizardState.draft || {});
