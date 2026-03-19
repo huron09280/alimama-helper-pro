@@ -11960,7 +11960,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         DEFAULT: {
             bizCode: 'universalBP',
             customPrompt: '深度拿量',
-            concurrency: 3
+            concurrency: 3,
+            manualEscortSetting: {
+                enabled: true,
+                bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
+                budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
+                addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                switchKeywordMatchType: { enabled: true },
+                shieldKeyword: { enabled: true }
+            }
         }
     };
 
@@ -52590,6 +52598,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             th: `padding:5px 6px;text-align:left;font-weight:600;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.4));background:rgba(255,255,255,.14);color:var(--am26-text,#1b2438);`,
             td: `padding:4px 6px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.28));color:var(--am26-text-soft,#505a74);`
         },
+        manualKeywordOutsideHandler: null,
 
         // 全局状态日志（用于非计划相关的消息）
         updateStatus: (text, color = '#aaa') => {
@@ -52598,6 +52607,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
             const line = document.createElement('div');
+            line.className = 'am26-log-status-line';
+            line.style.cssText = `
+                display:block;width:100%;box-sizing:border-box;margin:0 0 8px;padding:6px 8px;
+                border-radius:8px;background:rgba(255,255,255,.16);border:1px solid var(--am26-border,rgba(255,255,255,.32));
+                break-inside:avoid;-webkit-column-break-inside:avoid;column-span:all;
+            `;
             const timeSpan = document.createElement('span');
             timeSpan.style.cssText = 'color:#666;margin-right:4px;';
             timeSpan.textContent = `[${time}]`;
@@ -52622,7 +52637,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const safeCampaignId = Utils.escapeHtml(campaignId);
             const card = document.createElement('div');
             card.id = cardId;
+            card.className = 'am26-campaign-card';
             card.style.cssText = `
+                display:inline-block;width:100%;box-sizing:border-box;vertical-align:top;
+                break-inside:avoid;-webkit-column-break-inside:avoid;
                 background:var(--am26-surface,rgba(255,255,255,.25));
                 border:1px solid var(--am26-border,rgba(255,255,255,.4));
                 border-radius:12px;margin-bottom:8px;overflow:hidden;transition:all 0.3s ease;
@@ -52788,36 +52806,158 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         // 渲染新链路护航配置（escortSettingTable）
-        renderEscortSettingTableToCard: (cardLogger, settingData) => {
+        renderEscortSettingTableToCard: (cardLogger, settingData, options = {}) => {
             if (!settingData || typeof settingData !== 'object') return;
 
             const operationList = Array.isArray(settingData.operationList) ? settingData.operationList : [];
             const userSetting = settingData.userSetting && typeof settingData.userSetting === 'object'
                 ? settingData.userSetting
                 : {};
-
-            const rows = operationList.map((key, index) => {
-                const cfg = userSetting[key] && typeof userSetting[key] === 'object' ? userSetting[key] : {};
-                const lower = cfg.lowerLimit ?? '-';
-                const upper = cfg.upperType === 0 ? '不限' : (cfg.upperLimit ?? '-');
-                const limit = cfg.modifyTimesLimit ?? '-';
-                const dailyResetText = cfg.dailyReset ? '次日恢复初始值' : '次日不恢复';
-
-                let actionText = key;
-                if (key === 'budget') actionText = '预算调优';
-                if (key === 'bidConstraintValue') actionText = cfg.targetName ? `${cfg.targetName}调优` : '投产比调优';
-
-                const detailParts = [];
-                if (key === 'budget' || key === 'bidConstraintValue') {
-                    detailParts.push(`范围 ${lower}-${upper}`);
+            const keyAliasMap = {
+                bidConstraintValue: ['bidConstraintValue'],
+                budget: ['budget'],
+                addKeyword: ['addKeyword', 'keywordAdd'],
+                keywordAdd: ['keywordAdd', 'addKeyword'],
+                switchKeywordMatchType: ['switchKeywordMatchType', 'keywordSwitch'],
+                keywordSwitch: ['keywordSwitch', 'switchKeywordMatchType'],
+                shieldKeyword: ['shieldKeyword', 'keywordMask'],
+                keywordMask: ['keywordMask', 'shieldKeyword']
+            };
+            const normalizeOperationKey = (key) => {
+                if (key === 'addKeyword' || key === 'keywordAdd') return 'keywordAdd';
+                if (key === 'switchKeywordMatchType' || key === 'keywordSwitch') return 'keywordSwitch';
+                if (key === 'shieldKeyword' || key === 'keywordMask') return 'keywordMask';
+                return key;
+            };
+            const findConfigByKey = (key) => {
+                const candidates = keyAliasMap[key] || [key];
+                for (const candidate of candidates) {
+                    const cfg = userSetting[candidate];
+                    if (cfg && typeof cfg === 'object') return cfg;
                 }
-                if (limit !== '-') detailParts.push(`最多 ${limit} 次/日`);
-                detailParts.push(dailyResetText);
+                return {};
+            };
+            const toFiniteNumber = (value) => {
+                if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+                if (value === null || value === undefined) return null;
+                const text = String(value).trim();
+                if (!text) return null;
+                const num = Number(text);
+                return Number.isFinite(num) ? num : null;
+            };
+            const resolveKeywordPreferenceText = (value) => {
+                if (value === null || value === undefined) return '';
+                const code = toFiniteNumber(value);
+                if (code === 2) return '类目流量飙升词';
+                const text = String(value).trim();
+                return text || '';
+            };
+            const resolveKeywordMatchText = (value) => {
+                const code = toFiniteNumber(value);
+                if (code === 1) return '广泛匹配';
+                if (code === 4) return '精准匹配';
+                const text = String(value || '').trim();
+                if (!text) return '';
+                if (text.includes('精准')) return '精准匹配';
+                if (text.includes('广泛')) return '广泛匹配';
+                return text;
+            };
+            const formatRangeUpper = (cfg) => {
+                if (cfg.upperType === 0 || cfg.upperLimit === '不限') return '不限';
+                const upperNum = toFiniteNumber(cfg.upperLimit);
+                if (upperNum !== null) return upperNum;
+                const text = String(cfg.upperLimit ?? '').trim();
+                return text || '-';
+            };
+            const getActionTextByKey = (key, cfg) => {
+                if (key === 'bidConstraintValue') {
+                    const targetName = String(cfg.targetName || cfg.targetDisplayName || '').trim();
+                    if (targetName) return targetName.endsWith('调控') ? targetName : `${targetName}调控`;
+                    return '出价调控';
+                }
+                if (key === 'budget') return '预算调控';
+                if (key === 'keywordAdd') return '添加关键词';
+                if (key === 'keywordSwitch') return '切换关键词匹配方式';
+                if (key === 'keywordMask') return '屏蔽关键词';
+                return key;
+            };
+            const resolveExecutionIcon = (rawKey, normalizedKey) => {
+                const executionState = options?.executionState;
+                if (executionState === undefined || executionState === null) return '';
+                if (typeof executionState === 'boolean') return executionState ? '✅' : '❌';
+                if (typeof executionState === 'object') {
+                    const keyCandidates = [rawKey, normalizedKey];
+                    for (const candidate of keyCandidates) {
+                        if (!candidate) continue;
+                        if (typeof executionState[candidate] === 'boolean') {
+                            return executionState[candidate] ? '✅' : '❌';
+                        }
+                    }
+                }
+                return '';
+            };
+
+            const sourceKeys = operationList.length
+                ? operationList
+                : Object.keys(userSetting).filter(key => {
+                    const cfg = userSetting[key];
+                    return cfg && typeof cfg === 'object' && cfg.enabled !== false;
+                });
+
+            const rows = sourceKeys.map((rawKey, index) => {
+                const cfg = findConfigByKey(rawKey);
+                const key = normalizeOperationKey(rawKey);
+                const actionText = getActionTextByKey(key, cfg);
+                const detailParts = [];
+
+                switch (key) {
+                    case 'bidConstraintValue':
+                    case 'budget': {
+                        const lowerNum = toFiniteNumber(cfg.lowerLimit);
+                        const lower = lowerNum !== null ? lowerNum : '-';
+                        const upper = formatRangeUpper(cfg);
+                        if (lower !== '-' || upper !== '-') detailParts.push(`范围 ${lower}-${upper}`);
+
+                        const limitNum = toFiniteNumber(cfg.modifyTimesLimit);
+                        if (limitNum !== null) detailParts.push(`最多 ${limitNum} 次/日`);
+
+                        if (typeof cfg.dailyReset === 'boolean') {
+                            detailParts.push(cfg.dailyReset ? '次日恢复初始值' : '次日不恢复');
+                        }
+                        break;
+                    }
+                    case 'keywordAdd': {
+                        const preferenceText = resolveKeywordPreferenceText(
+                            cfg.preference ?? cfg.keywordPreference ?? cfg.buyWordPreference
+                        );
+                        if (preferenceText) detailParts.push(`买词偏好：${preferenceText}`);
+
+                        const matchText = resolveKeywordMatchText(cfg.matchPattern ?? cfg.matchType ?? cfg.pattern);
+                        if (matchText) detailParts.push(`匹配方式：${matchText}`);
+
+                        const keywordLimit = toFiniteNumber(
+                            cfg.wordCntLimit ?? cfg.keywordLimit ?? cfg.upperLimit ?? cfg.limit
+                        );
+                        if (keywordLimit !== null) detailParts.push(`自选词上限：${keywordLimit}个`);
+
+                        if (!detailParts.length) detailParts.push('按默认策略补词');
+                        break;
+                    }
+                    case 'keywordSwitch':
+                        detailParts.push(cfg.enabled === false ? '未开启' : '自动在广泛匹配与精准匹配间切换');
+                        break;
+                    case 'keywordMask':
+                        detailParts.push(cfg.enabled === false ? '未开启' : '自动屏蔽低转化关键词');
+                        break;
+                    default:
+                        if (typeof cfg.enabled === 'boolean') detailParts.push(cfg.enabled ? '已开启' : '未开启');
+                        break;
+                }
 
                 return {
                     order: index + 1,
-                    actionText,
-                    detail: detailParts.join('；')
+                    actionText: `${resolveExecutionIcon(rawKey, key)}${resolveExecutionIcon(rawKey, key) ? ' ' : ''}${actionText}`,
+                    detail: detailParts.join('；') || '-'
                 };
             }).filter(row => row.actionText && row.actionText !== '-');
 
@@ -52836,6 +52976,901 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const actionTypeText = settingData.actionType ? `提交类型：${settingData.actionType}` : '';
             const hintText = [footerText, actionTypeText].filter(Boolean).join('，');
             if (hintText) cardLogger.log(`新链路提交信息：${hintText}`, '#4b5563');
+        },
+
+        // 从护航弹窗读取最新设置（用于主面板展示）
+        readLatestEscortSettingPreview: () => {
+            const selectorList = [
+                '#ai_analyst_action_modal > div > div.dialog-modal-body.flex-1.min-height-0 > div',
+                '#ai_analyst_action_modal .dialog-modal-body.flex-1.min-height-0 > div',
+                '#ai_analyst_action_modal .dialog-modal-body > div'
+            ];
+
+            let root = null;
+            let matchedSelector = '';
+            for (const selector of selectorList) {
+                const el = document.querySelector(selector);
+                if (el instanceof HTMLElement) {
+                    root = el;
+                    matchedSelector = selector;
+                    break;
+                }
+            }
+
+            if (!(root instanceof HTMLElement)) {
+                return {
+                    found: false,
+                    selector: '',
+                    userSetting: {}
+                };
+            }
+
+            const normalize = (value) => String(value || '').replace(/\s+/g, '').toLowerCase();
+            const toDisplayValue = (value) => {
+                if (typeof value === 'boolean') return value;
+                if (value === null || value === undefined) return '';
+                const text = String(value).trim();
+                if (!text) return '';
+                const num = Number(text);
+                if (Number.isFinite(num) && /^-?\d+(?:\.\d+)?$/.test(text)) return num;
+                return text;
+            };
+            const findLabelNode = (label, scope = root) => {
+                const needle = normalize(label);
+                if (!needle) return null;
+                const candidates = Array.from(scope.querySelectorAll('.mxform-name, label, span, div'));
+                return candidates.find(node => normalize(node.textContent) === needle) || null;
+            };
+            const findLineByLabel = (label, scope = root) => {
+                const labelNode = findLabelNode(label, scope);
+                if (!(labelNode instanceof Element)) return null;
+                return labelNode.closest('.mxform-line') || labelNode.closest('[data-adc-comp]') || labelNode.closest('div');
+            };
+            const findLinesByLabel = (label, scope = root) => {
+                const needle = normalize(label);
+                const candidates = Array.from(scope.querySelectorAll('.mxform-name, label, span, div'))
+                    .filter(node => normalize(node.textContent) === needle)
+                    .map(node => node.closest('.mxform-line') || node.closest('[data-adc-comp]') || node.closest('div'))
+                    .filter(Boolean);
+                const unique = [];
+                const seen = new Set();
+                candidates.forEach(line => {
+                    if (!(line instanceof Element)) return;
+                    if (seen.has(line)) return;
+                    seen.add(line);
+                    unique.push(line);
+                });
+                return unique;
+            };
+            const readTextInputsInLine = (line) => {
+                if (!(line instanceof Element)) return [];
+                return Array.from(line.querySelectorAll('input'))
+                    .filter(input => input instanceof HTMLInputElement)
+                    .filter(input => {
+                        const type = String(input.type || '').toLowerCase();
+                        return type === 'text' || type === 'number' || type === '';
+                    });
+            };
+            const readNumberFromInput = (input) => {
+                if (!(input instanceof HTMLInputElement)) return undefined;
+                const value = toDisplayValue(input.value);
+                if (value === '') return undefined;
+                if (typeof value === 'number') return value;
+                const num = Number(value);
+                return Number.isFinite(num) ? num : undefined;
+            };
+            const readCheckboxByLabel = (label, scope = root) => {
+                const needle = normalize(label);
+                const candidates = Array.from(scope.querySelectorAll('input[type="checkbox"]'))
+                    .filter(input => !input.disabled)
+                    .filter(input => {
+                        const container = input.closest('label,.display-flex,.mxform-line,[data-adc-comp],div');
+                        return normalize(container?.textContent).includes(needle);
+                    });
+                if (!candidates.length) return undefined;
+                return !!candidates[0].checked;
+            };
+            const readSwitchByLabel = (label, scope = root) => {
+                const line = findLineByLabel(label, scope);
+                if (!(line instanceof Element)) return undefined;
+                const switchInner = line.querySelector('.mxgc-switch > span');
+                if (!(switchInner instanceof HTMLElement)) return undefined;
+                const styleText = String(switchInner.getAttribute('style') || '').toLowerCase();
+                const classText = String(switchInner.className || '');
+                if (styleText.includes('#c3c9d9')) return false;
+                if (styleText.includes('#4554e5')) return true;
+                if (/asiyysfazn/i.test(classText)) return false;
+                if (/asiyysfazo/i.test(classText)) return true;
+                return undefined;
+            };
+            const readKeywordPreference = () => {
+                const line = findLineByLabel('买词偏好');
+                if (!(line instanceof Element)) return undefined;
+                const picked = line.querySelector('.asiYysfafj');
+                if (picked instanceof HTMLElement) {
+                    const text = String(picked.textContent || '').trim();
+                    if (text) return text;
+                }
+                const lineText = String(line.textContent || '');
+                const match = lineText.match(/我希望增加[:：]\s*([^\s]+)/);
+                return match && match[1] ? String(match[1]).trim() : undefined;
+            };
+            const readKeywordMatchType = () => {
+                const line = findLineByLabel('匹配方式');
+                if (!(line instanceof Element)) return undefined;
+                const optionList = Array.from(line.querySelectorAll('[data-index], .mxgc-dropdown-box [mx-click], .mxgc-dropdown-box div'))
+                    .map(node => ({
+                        text: String(node.textContent || '').trim(),
+                        classText: String(node.className || '')
+                    }))
+                    .filter(item => /广泛匹配|精准匹配/.test(item.text));
+                const selected = optionList.find(item => /selected|active|checked|asiyysfafj/i.test(item.classText));
+                const chosen = selected ? selected.text : (optionList[0] ? optionList[0].text : '');
+                if (/精准匹配/.test(chosen)) return '精准匹配';
+                if (/广泛匹配/.test(chosen)) return '广泛匹配';
+                return undefined;
+            };
+
+            const preciseSetting = {};
+            const bidSetting = {};
+            const bidEnabled = readCheckboxByLabel('成本调控');
+            if (typeof bidEnabled === 'boolean') bidSetting.enabled = bidEnabled;
+            const bidRangeLine = findLineByLabel('平均点击成本');
+            const bidRangeInputs = readTextInputsInLine(bidRangeLine).filter(input => !input.disabled);
+            const bidLower = readNumberFromInput(bidRangeInputs[0]);
+            const bidUpper = readNumberFromInput(bidRangeInputs[1]);
+            if (typeof bidLower === 'number') bidSetting.lowerLimit = bidLower;
+            if (typeof bidUpper === 'number') bidSetting.upperLimit = bidUpper;
+            const timesLines = findLinesByLabel('修改次数上限');
+            const bidTimes = readNumberFromInput(readTextInputsInLine(timesLines[0])[0]);
+            if (typeof bidTimes === 'number') bidSetting.modifyTimesLimit = bidTimes;
+            const bidDailyReset = readSwitchByLabel('次日恢复初始出价');
+            if (typeof bidDailyReset === 'boolean') bidSetting.dailyReset = bidDailyReset;
+            if (Object.keys(bidSetting).length) preciseSetting.bidConstraintValue = bidSetting;
+
+            const budgetSetting = {};
+            const budgetEnabled = readCheckboxByLabel('预算调控');
+            if (typeof budgetEnabled === 'boolean') budgetSetting.enabled = budgetEnabled;
+            const budgetRangeLine = findLineByLabel('每日预算调控区间');
+            const budgetInputs = readTextInputsInLine(budgetRangeLine);
+            const budgetEnabledInputs = budgetInputs.filter(input => !input.disabled);
+            const budgetLower = readNumberFromInput(budgetEnabledInputs[0]);
+            if (typeof budgetLower === 'number') budgetSetting.lowerLimit = budgetLower;
+            const budgetLineText = normalize(budgetRangeLine?.textContent || '');
+            if (budgetLineText.includes('不限')) {
+                budgetSetting.upperLimit = '不限';
+            } else {
+                const budgetUpper = readNumberFromInput(budgetEnabledInputs[1]);
+                if (typeof budgetUpper === 'number') budgetSetting.upperLimit = budgetUpper;
+            }
+            const budgetTimes = readNumberFromInput(readTextInputsInLine(timesLines[1])[0]);
+            if (typeof budgetTimes === 'number') budgetSetting.modifyTimesLimit = budgetTimes;
+            const budgetDailyReset = readSwitchByLabel('次日恢复初始预算');
+            if (typeof budgetDailyReset === 'boolean') budgetSetting.dailyReset = budgetDailyReset;
+            if (Object.keys(budgetSetting).length) preciseSetting.budget = budgetSetting;
+
+            const keywordSetting = {};
+            const keywordEnabled = readCheckboxByLabel('添加关键词');
+            if (typeof keywordEnabled === 'boolean') keywordSetting.enabled = keywordEnabled;
+            const keywordPreference = readKeywordPreference();
+            if (keywordPreference) keywordSetting.keywordPreference = keywordPreference;
+            const keywordLimit = readNumberFromInput(readTextInputsInLine(findLineByLabel('自选词上限'))[0]);
+            if (typeof keywordLimit === 'number') keywordSetting.keywordLimit = keywordLimit;
+            const keywordMatchType = readKeywordMatchType();
+            if (keywordMatchType) keywordSetting.matchType = keywordMatchType;
+            if (Object.keys(keywordSetting).length) preciseSetting.addKeyword = keywordSetting;
+
+            const switchKeywordValue = readCheckboxByLabel('切换关键词匹配方式');
+            if (typeof switchKeywordValue === 'boolean') {
+                preciseSetting.switchKeywordMatchType = { enabled: switchKeywordValue };
+            }
+            const shieldKeywordValue = readCheckboxByLabel('屏蔽关键词');
+            if (typeof shieldKeywordValue === 'boolean') {
+                preciseSetting.shieldKeyword = { enabled: shieldKeywordValue };
+            }
+
+            if (Object.keys(preciseSetting).length) {
+                return {
+                    found: true,
+                    selector: matchedSelector,
+                    userSetting: preciseSetting
+                };
+            }
+
+            const findContextNode = (control) => {
+                let node = control.closest('label,li,tr');
+                if (node instanceof Element) return node;
+
+                let cursor = control.parentElement;
+                while (cursor && cursor !== root) {
+                    if (!(cursor instanceof Element)) break;
+                    const text = normalize(cursor.textContent);
+                    const controlCount = cursor.querySelectorAll('input,select,textarea').length;
+                    if (text && text.length <= 180 && controlCount <= 4) return cursor;
+                    cursor = cursor.parentElement;
+                }
+                return control.parentElement || control;
+            };
+            const collectContexts = (control) => {
+                const contexts = [];
+                const pushText = (value) => {
+                    const normalized = normalize(value);
+                    if (!normalized) return;
+                    contexts.push(normalized);
+                };
+
+                pushText(control.getAttribute('aria-label'));
+                pushText(control.getAttribute('placeholder'));
+                pushText(control.getAttribute('name'));
+                pushText(control.getAttribute('id'));
+                pushText(control.className);
+
+                const contextNode = findContextNode(control);
+                if (contextNode instanceof Element) pushText(contextNode.textContent);
+
+                let cursor = contextNode instanceof Element ? contextNode.parentElement : control.parentElement;
+                let step = 0;
+                while (cursor && cursor instanceof Element && cursor !== root && step < 6) {
+                    const text = normalize(cursor.textContent);
+                    if (text && /(预算调控|投产比|添加关键词|切换关键词匹配方式|屏蔽关键词|自选词上限)/.test(text)) {
+                        pushText(text);
+                        break;
+                    }
+                    cursor = cursor.parentElement;
+                    step += 1;
+                }
+                return contexts;
+            };
+
+            const keyRuleList = [
+                { key: 'budget', tokens: ['budget', '预算调控', '每日预算调控区间', '每日预算', 'budget.enabled', 'budget.modifytimeslimit', 'budget.dailyreset'] },
+                { key: 'bidConstraintValue', tokens: ['bidconstraintvalue', '成本调控', '平均点击成本', '出价调控', 'bidconstraintvalue.enabled', 'bidconstraintvalue.modifytimeslimit', 'bidconstraintvalue.dailyreset'] },
+                { key: 'addKeyword', tokens: ['keywordadd', 'addkeyword', '添加关键词', '买词偏好', '自选词上限', '关键词调控', 'keywordadd.wordcntlimit', 'keywordadd.preference', 'keywordadd.matchpattern'] },
+                { key: 'switchKeywordMatchType', tokens: ['keywordswitch', 'switchkeywordmatchtype', '切换关键词匹配方式', '切换匹配方式'] },
+                { key: 'shieldKeyword', tokens: ['keywordmask', 'shieldkeyword', '屏蔽关键词', '流量智选关键词'] }
+            ];
+            const resolveKey = (contexts) => {
+                const text = contexts.join(' ');
+                let bestKey = '';
+                let bestScore = 0;
+                keyRuleList.forEach(rule => {
+                    const score = rule.tokens.reduce((sum, token) => {
+                        const normalizedToken = normalize(token);
+                        if (!normalizedToken || !text.includes(normalizedToken)) return sum;
+                        const isLongToken = normalizedToken.length >= 4;
+                        return sum + (isLongToken ? 2 : 1);
+                    }, 0);
+                    if (score > bestScore) {
+                        bestKey = rule.key;
+                        bestScore = score;
+                    }
+                });
+                return bestKey;
+            };
+            const resolveField = (contexts, control) => {
+                const text = contexts.join(' ');
+                if (control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio')) {
+                    return 'enabled';
+                }
+                if (/wordcntlimit|自选词上限|关键词上限|词上限/.test(text)) return 'keywordLimit';
+                if (/preference|买词偏好|我希望增加/.test(text)) return 'keywordPreference';
+                if (/matchpattern|匹配方式/.test(text)) return 'matchType';
+                if (/modifytimeslimit|修改次数上限|次数上限|频次|次\/日|times/.test(text)) return 'modifyTimesLimit';
+                if (/下限|最小|lower/.test(text)) return 'lowerLimit';
+                if (/上限|最大|upper/.test(text)) return 'upperLimit';
+                if (/次日|恢复|dailyreset/.test(text)) return 'dailyReset';
+                return '';
+            };
+            const ensureSetting = (bucket, key) => {
+                if (!bucket[key] || typeof bucket[key] !== 'object') bucket[key] = {};
+                return bucket[key];
+            };
+            const userSetting = {};
+            const controlList = Array.from(root.querySelectorAll('input,select,textarea'));
+
+            controlList.forEach(control => {
+                if (!(control instanceof Element)) return;
+                if (control instanceof HTMLInputElement) {
+                    const type = String(control.type || '').toLowerCase();
+                    if (type === 'hidden' || type === 'button' || type === 'submit' || type === 'reset') return;
+                    if (control.disabled && type !== 'checkbox' && type !== 'radio') return;
+                }
+                if ((control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) && control.disabled) {
+                    return;
+                }
+                const contexts = collectContexts(control);
+                const key = resolveKey(contexts);
+                if (!key) return;
+                const field = resolveField(contexts, control);
+                if (!field) return;
+
+                let value = '';
+                if (control instanceof HTMLInputElement) {
+                    if (control.type === 'checkbox' || control.type === 'radio') value = !!control.checked;
+                    else value = toDisplayValue(control.value);
+                } else if (control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+                    value = toDisplayValue(control.value);
+                }
+                if (value === '') return;
+
+                if (field === 'upperLimit') {
+                    const contextText = contexts.join(' ');
+                    if (/不限/.test(contextText)) value = '不限';
+                }
+                if (field === 'dailyReset') value = !!value;
+
+                const bucket = ensureSetting(userSetting, key);
+                bucket[field] = value;
+            });
+
+            Array.from(root.querySelectorAll('[role="switch"],[aria-checked]')).forEach(node => {
+                if (!(node instanceof Element)) return;
+                const ariaChecked = node.getAttribute('aria-checked');
+                if (ariaChecked !== 'true' && ariaChecked !== 'false') return;
+                const contexts = collectContexts(node);
+                const key = resolveKey(contexts);
+                const checked = ariaChecked === 'true';
+                if (key) {
+                    const bucket = ensureSetting(userSetting, key);
+                    if (typeof bucket.enabled !== 'boolean') bucket.enabled = checked;
+                    if (/次日|恢复|dailyreset/.test(contexts.join(' '))) bucket.dailyReset = checked;
+                } else if (/次日|恢复|dailyreset/.test(contexts.join(' '))) {
+                    const budgetSetting = ensureSetting(userSetting, 'budget');
+                    budgetSetting.dailyReset = checked;
+                }
+            });
+
+            return {
+                found: true,
+                selector: matchedSelector,
+                userSetting
+            };
+        },
+
+        // 从面板读取“手动设置”参数（提交时优先）
+        readManualEscortSettingOverride: () => {
+            const readChecked = (id, fallback = false) => {
+                const node = document.getElementById(id);
+                return node instanceof HTMLInputElement ? !!node.checked : fallback;
+            };
+            const readNumber = (id, fallback = null) => {
+                const node = document.getElementById(id);
+                if (!(node instanceof HTMLInputElement)) return fallback;
+                const raw = String(node.value || '').trim();
+                if (!raw) return fallback;
+                const value = Number(raw);
+                return Number.isFinite(value) ? value : fallback;
+            };
+            const readText = (id, fallback = '') => {
+                const node = document.getElementById(id);
+                if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLSelectElement) && !(node instanceof HTMLTextAreaElement)) return fallback;
+                return String(node.value || '').trim() || fallback;
+            };
+
+            const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, true);
+            if (!manualEnabled) return null;
+
+            const bidUpperRaw = readText(`${CONFIG.UI_ID}-manual-bid-upper`, '不限');
+            const bidSetting = {
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-bid-enabled`, false),
+                lowerLimit: readNumber(`${CONFIG.UI_ID}-manual-bid-lower`, 0.15),
+                modifyTimesLimit: readNumber(`${CONFIG.UI_ID}-manual-bid-times`, 10),
+                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-bid-reset`, false)
+            };
+            if (bidUpperRaw === '不限') {
+                bidSetting.upperLimit = '不限';
+            } else {
+                const upperLimit = Number(bidUpperRaw);
+                if (Number.isFinite(upperLimit)) bidSetting.upperLimit = upperLimit;
+            }
+
+            const budgetUpperRaw = readText(`${CONFIG.UI_ID}-manual-budget-upper`, '不限');
+            const budgetSetting = {
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-budget-enabled`, true),
+                lowerLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-lower`, 200),
+                modifyTimesLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-times`, 20),
+                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-budget-reset`, true)
+            };
+            if (budgetUpperRaw === '不限') {
+                budgetSetting.upperLimit = '不限';
+            } else {
+                const upperLimit = Number(budgetUpperRaw);
+                if (Number.isFinite(upperLimit)) budgetSetting.upperLimit = upperLimit;
+            }
+
+            const addKeywordSetting = {
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, true),
+                keywordPreference: readText(`${CONFIG.UI_ID}-manual-keyword-preference`, '类目流量飙升词'),
+                matchType: readText(`${CONFIG.UI_ID}-manual-keyword-match`, '广泛匹配'),
+                keywordLimit: readNumber(`${CONFIG.UI_ID}-manual-keyword-limit`, 200)
+            };
+            const switchKeywordMatchType = {
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, true)
+            };
+            const shieldKeyword = {
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-shield-enabled`, true)
+            };
+
+            const operationList = [];
+            if (bidSetting.enabled) operationList.push('bidConstraintValue');
+            if (budgetSetting.enabled) operationList.push('budget');
+            if (addKeywordSetting.enabled) operationList.push('addKeyword');
+            if (switchKeywordMatchType.enabled) operationList.push('switchKeywordMatchType');
+            if (shieldKeyword.enabled) operationList.push('shieldKeyword');
+
+            return {
+                enabled: true,
+                actionType: 'openInDialog',
+                operationList,
+                userSetting: {
+                    bidConstraintValue: bidSetting,
+                    budget: budgetSetting,
+                    addKeyword: addKeywordSetting,
+                    switchKeywordMatchType,
+                    shieldKeyword
+                }
+            };
+        },
+
+        fillManualEscortSettingForm: (settingData = {}) => {
+            const setting = settingData && typeof settingData === 'object' ? settingData : {};
+            const bid = setting.bidConstraintValue && typeof setting.bidConstraintValue === 'object' ? setting.bidConstraintValue : {};
+            const budget = setting.budget && typeof setting.budget === 'object' ? setting.budget : {};
+            const addKeyword = setting.addKeyword && typeof setting.addKeyword === 'object' ? setting.addKeyword : {};
+            const switchKeywordMatchType = setting.switchKeywordMatchType && typeof setting.switchKeywordMatchType === 'object'
+                ? setting.switchKeywordMatchType
+                : {};
+            const shieldKeyword = setting.shieldKeyword && typeof setting.shieldKeyword === 'object' ? setting.shieldKeyword : {};
+            const setInputValue = (id, value) => {
+                const node = document.getElementById(id);
+                if (!(node instanceof HTMLInputElement)) return;
+                node.value = value === null || value === undefined ? '' : String(value);
+            };
+            const setControlValue = (id, value) => {
+                const node = document.getElementById(id);
+                if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLSelectElement) && !(node instanceof HTMLTextAreaElement)) return;
+                node.value = value === null || value === undefined ? '' : String(value);
+            };
+            const setCheckboxValue = (id, value, fallback = false) => {
+                const node = document.getElementById(id);
+                if (!(node instanceof HTMLInputElement)) return;
+                node.checked = typeof value === 'boolean' ? value : fallback;
+            };
+
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-enable`, setting.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-enabled`, bid.enabled, false);
+            setInputValue(`${CONFIG.UI_ID}-manual-bid-lower`, bid.lowerLimit ?? 0.15);
+            setInputValue(`${CONFIG.UI_ID}-manual-bid-upper`, bid.upperLimit === undefined ? '不限' : bid.upperLimit);
+            setInputValue(`${CONFIG.UI_ID}-manual-bid-times`, bid.modifyTimesLimit ?? 10);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-reset`, bid.dailyReset, false);
+
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, true);
+            setInputValue(`${CONFIG.UI_ID}-manual-budget-lower`, budget.lowerLimit ?? 200);
+            setInputValue(`${CONFIG.UI_ID}-manual-budget-upper`, budget.upperLimit === undefined ? '不限' : budget.upperLimit);
+            setInputValue(`${CONFIG.UI_ID}-manual-budget-times`, budget.modifyTimesLimit ?? 20);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-reset`, budget.dailyReset, true);
+
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, addKeyword.enabled, true);
+            setControlValue(`${CONFIG.UI_ID}-manual-keyword-preference`, addKeyword.keywordPreference ?? addKeyword.preference ?? addKeyword.buyWordPreference ?? '类目流量飙升词');
+            setControlValue(`${CONFIG.UI_ID}-manual-keyword-match`, addKeyword.matchType ?? addKeyword.matchPattern ?? '广泛匹配');
+            setInputValue(`${CONFIG.UI_ID}-manual-keyword-limit`, addKeyword.keywordLimit ?? 200);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, switchKeywordMatchType.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-shield-enabled`, shieldKeyword.enabled, true);
+            UI.refreshManualKeywordControls();
+        },
+
+        closeManualKeywordPreferenceMenu: () => {
+            const menu = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference-menu`);
+            const trigger = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference-trigger`);
+            if (menu instanceof HTMLElement) {
+                menu.style.display = 'none';
+                menu.dataset.open = 'false';
+            }
+            if (trigger instanceof HTMLButtonElement) {
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        },
+
+        refreshManualKeywordControls: () => {
+            const preferenceInput = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference`);
+            const preferenceValue = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference-value`);
+            const preferenceRaw = preferenceInput instanceof HTMLInputElement
+                ? String(preferenceInput.value || '').trim()
+                : '';
+            const preference = preferenceRaw || '类目流量飙升词';
+            if (preferenceInput instanceof HTMLInputElement && !preferenceRaw) {
+                preferenceInput.value = preference;
+            }
+            if (preferenceValue) preferenceValue.textContent = preference;
+
+            const preferenceMenu = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference-menu`);
+            if (preferenceMenu) {
+                preferenceMenu.querySelectorAll('button[data-pref-value]').forEach(node => {
+                    if (!(node instanceof HTMLButtonElement)) return;
+                    const active = node.dataset.prefValue === preference;
+                    node.classList.toggle('is-selected', active);
+                });
+            }
+
+            const matchInput = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-match`);
+            const matchRaw = matchInput instanceof HTMLInputElement ? String(matchInput.value || '').trim() : '';
+            const matchValue = matchRaw === '精准匹配' ? '精准匹配' : '广泛匹配';
+            if (matchInput instanceof HTMLInputElement) {
+                matchInput.value = matchValue;
+            }
+
+            const segment = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-match-segment`);
+            if (segment) {
+                segment.querySelectorAll('button[data-match-value]').forEach(node => {
+                    if (!(node instanceof HTMLButtonElement)) return;
+                    const active = node.dataset.matchValue === matchValue;
+                    node.classList.toggle('is-active', active);
+                    node.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+            }
+        },
+
+        bindManualKeywordControls: () => {
+            const preferenceInput = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference`);
+            const preferenceTrigger = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference-trigger`);
+            const preferenceMenu = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference-menu`);
+            const preferenceDropdown = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-preference-dropdown`);
+            if (
+                preferenceInput instanceof HTMLInputElement
+                && preferenceTrigger instanceof HTMLButtonElement
+                && preferenceMenu instanceof HTMLElement
+            ) {
+                preferenceTrigger.onclick = (event) => {
+                    event.preventDefault();
+                    const open = preferenceMenu.dataset.open === 'true';
+                    if (open) {
+                        UI.closeManualKeywordPreferenceMenu();
+                    } else {
+                        preferenceMenu.style.display = 'block';
+                        preferenceMenu.dataset.open = 'true';
+                        preferenceTrigger.setAttribute('aria-expanded', 'true');
+                    }
+                };
+
+                preferenceMenu.querySelectorAll('button[data-pref-value]').forEach(node => {
+                    if (!(node instanceof HTMLButtonElement)) return;
+                    node.onclick = () => {
+                        const value = String(node.dataset.prefValue || '').trim();
+                        if (!value) return;
+                        preferenceInput.value = value;
+                        UI.refreshManualKeywordControls();
+                        UI.closeManualKeywordPreferenceMenu();
+                        preferenceInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                });
+            }
+
+            const matchInput = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-match`);
+            const segment = document.getElementById(`${CONFIG.UI_ID}-manual-keyword-match-segment`);
+            if (matchInput instanceof HTMLInputElement && segment instanceof HTMLElement) {
+                segment.querySelectorAll('button[data-match-value]').forEach(node => {
+                    if (!(node instanceof HTMLButtonElement)) return;
+                    node.onclick = () => {
+                        const value = String(node.dataset.matchValue || '').trim();
+                        if (!value) return;
+                        matchInput.value = value;
+                        UI.refreshManualKeywordControls();
+                        matchInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                });
+            }
+
+            if (UI.manualKeywordOutsideHandler) {
+                document.removeEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
+            }
+            UI.manualKeywordOutsideHandler = (event) => {
+                if (!(preferenceMenu instanceof HTMLElement) || preferenceMenu.dataset.open !== 'true') return;
+                if (
+                    preferenceDropdown instanceof HTMLElement
+                    && event.target instanceof Node
+                    && preferenceDropdown.contains(event.target)
+                ) {
+                    return;
+                }
+                UI.closeManualKeywordPreferenceMenu();
+            };
+            document.addEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
+            UI.refreshManualKeywordControls();
+        },
+
+        persistManualEscortSettingFromForm: () => {
+            const manual = UI.readManualEscortSettingOverride();
+            userConfig.manualEscortSetting = manual || { enabled: false };
+            GM_setValue('config', userConfig);
+            return manual;
+        },
+
+        syncManualEscortSettingFromDialog: () => {
+            const preview = UI.readLatestEscortSettingPreview();
+            const hint = document.getElementById(`${CONFIG.UI_ID}-manual-setting-hint`);
+            if (!preview.found) {
+                if (hint) hint.textContent = '未检测到护航弹窗，无法带入。';
+                return false;
+            }
+
+            const setting = preview.userSetting && typeof preview.userSetting === 'object' ? preview.userSetting : {};
+            const bidSetting = setting.bidConstraintValue && typeof setting.bidConstraintValue === 'object'
+                ? setting.bidConstraintValue
+                : {};
+            const budgetSetting = setting.budget && typeof setting.budget === 'object'
+                ? setting.budget
+                : {};
+            const addKeywordSetting = setting.addKeyword && typeof setting.addKeyword === 'object'
+                ? setting.addKeyword
+                : (setting.keywordAdd && typeof setting.keywordAdd === 'object' ? setting.keywordAdd : {});
+            const switchKeywordSetting = setting.switchKeywordMatchType && typeof setting.switchKeywordMatchType === 'object'
+                ? setting.switchKeywordMatchType
+                : (setting.keywordSwitch && typeof setting.keywordSwitch === 'object' ? setting.keywordSwitch : {});
+            const shieldKeywordSetting = setting.shieldKeyword && typeof setting.shieldKeyword === 'object'
+                ? setting.shieldKeyword
+                : (setting.keywordMask && typeof setting.keywordMask === 'object' ? setting.keywordMask : {});
+            UI.fillManualEscortSettingForm({
+                enabled: true,
+                bidConstraintValue: {
+                    enabled: bidSetting.enabled,
+                    lowerLimit: bidSetting.lowerLimit,
+                    upperLimit: bidSetting.upperLimit,
+                    modifyTimesLimit: bidSetting.modifyTimesLimit,
+                    dailyReset: bidSetting.dailyReset
+                },
+                budget: {
+                    enabled: budgetSetting.enabled,
+                    lowerLimit: budgetSetting.lowerLimit,
+                    upperLimit: budgetSetting.upperLimit,
+                    modifyTimesLimit: budgetSetting.modifyTimesLimit,
+                    dailyReset: budgetSetting.dailyReset
+                },
+                addKeyword: {
+                    enabled: addKeywordSetting.enabled,
+                    keywordPreference: addKeywordSetting.keywordPreference ?? addKeywordSetting.preference ?? addKeywordSetting.buyWordPreference,
+                    matchType: addKeywordSetting.matchType ?? addKeywordSetting.matchPattern,
+                    keywordLimit: addKeywordSetting.keywordLimit ?? addKeywordSetting.upperLimit ?? addKeywordSetting.wordCntLimit
+                },
+                switchKeywordMatchType: {
+                    enabled: switchKeywordSetting.enabled
+                },
+                shieldKeyword: {
+                    enabled: shieldKeywordSetting.enabled
+                }
+            });
+            UI.persistManualEscortSettingFromForm();
+            if (hint) {
+                const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+                hint.textContent = `已从弹窗带入（${time}）`;
+            }
+            return true;
+        },
+
+        renderLatestEscortSettingPreview: () => {
+            const content = document.getElementById(`${CONFIG.UI_ID}-latest-setting-content`);
+            if (!content) return null;
+
+            content.innerHTML = `
+                <style>
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-waterfall { column-count:2; column-gap:10px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card {
+                        display:inline-block; width:100%; box-sizing:border-box; margin:0 0 10px;
+                        break-inside:avoid; -webkit-column-break-inside:avoid;
+                        padding:10px 12px; border:1px solid #d7e2fb; border-radius:12px;
+                        background:linear-gradient(180deg,#f9fbff,#f4f7ff);
+                        box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-toggle { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1f2638; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline { display:flex; align-items:center; gap:6px; color:#5b6785; font-size:11px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline input[type="number"],
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline input[type="text"] {
+                        width:68px; box-sizing:border-box; padding:5px 8px; height:18px;
+                        border:1px solid #d7dfef; border-radius:8px; background:#fff; color:#1f2638;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field { display:grid; gap:4px; font-size:10px; color:#5f6c8e; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field.full { grid-column:1 / -1; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field input {
+                        width:100%; box-sizing:border-box; padding:5px 8px; height:28px;
+                        border:1px solid #d7dfef; border-radius:8px; background:#fff; color:#1f2638;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-switch-item {
+                        display:flex; align-items:center; gap:6px; padding:7px 8px;
+                        background:#fff; border:1px solid #dbe3f1; border-radius:9px; color:#5b6785; font-size:11px;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown { position:relative; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger {
+                        width:100%; height:26px; padding:0 10px; border:1px solid #d7dfef; border-radius:8px;
+                        background:#fff; color:#1f2638; display:flex; align-items:center; gap:6px; cursor:pointer;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-prefix { color:#5f6c8e; font-size:11px; white-space:nowrap; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-value { flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-arrow { font-size:10px; color:#5f6c8e; transition:transform .2s ease; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger[aria-expanded="true"] .am26-dropdown-arrow { transform:rotate(180deg); }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-menu {
+                        display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:20;
+                        border:1px solid #d7dfef; border-radius:10px; background:#fff;
+                        box-shadow:0 8px 24px rgba(30,64,175,.16); padding:6px;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-group-title {
+                        font-size:10px; color:#7b86a6; font-weight:600; padding:4px 8px; margin-top:2px;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item {
+                        width:100%; border:none; background:transparent; border-radius:8px; cursor:pointer;
+                        padding:6px 8px; text-align:left; font-size:11px; color:#1f2638;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:hover { background:#f3f6ff; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item.is-selected { background:#ebf2ff; color:#2a5bff; font-weight:600; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-segment {
+                        height:30px; display:flex; border:1px solid #d7dfef; border-radius:9px; overflow:hidden; background:#fff;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-segment button {
+                        flex:1; border:none; background:transparent; font-size:11px; color:#5f6c8e; cursor:pointer;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-segment button.is-active {
+                        background:linear-gradient(180deg,#2a5bff,#1f49d4); color:#fff; font-weight:600;
+                    }
+                    @media (max-width:760px) {
+                        #${CONFIG.UI_ID}-latest-setting-content .am26-manual-waterfall { column-count:1; }
+                    }
+                </style>
+                <div class="am26-manual-root">
+                    <div class="am26-manual-top">
+                        <label class="am26-manual-main-switch">
+                            <input id="${CONFIG.UI_ID}-manual-enable" type="checkbox" />
+                            <span>使用手动设置提交</span>
+                        </label>
+                    </div>
+                    <div class="am26-manual-waterfall">
+                        <div class="am26-manual-card">
+                            <div class="am26-manual-card-head">
+                                <label class="am26-manual-toggle">
+                                    <input id="${CONFIG.UI_ID}-manual-bid-enabled" type="checkbox" />
+                                    <span>出价调控（成本）</span>
+                                </label>
+                                <label class="am26-manual-inline">
+                                    <input id="${CONFIG.UI_ID}-manual-bid-reset" type="checkbox" />
+                                    <span>次日恢复</span>
+                                </label>
+                            </div>
+                            <div class="am26-manual-grid">
+                                <label class="am26-manual-field">
+                                    <span>下限（元）</span>
+                                    <input id="${CONFIG.UI_ID}-manual-bid-lower" type="number" min="0" step="0.01" />
+                                </label>
+                                <label class="am26-manual-field">
+                                    <span>上限（元）</span>
+                                    <input id="${CONFIG.UI_ID}-manual-bid-upper" type="text" placeholder="不限" />
+                                </label>
+                                <label class="am26-manual-field full">
+                                    <span>修改次数上限（次/日）</span>
+                                    <input id="${CONFIG.UI_ID}-manual-bid-times" type="number" min="0" step="1" />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="am26-manual-card">
+                            <div class="am26-manual-card-head">
+                                <label class="am26-manual-toggle">
+                                    <input id="${CONFIG.UI_ID}-manual-budget-enabled" type="checkbox" />
+                                    <span>预算调控</span>
+                                </label>
+                                <label class="am26-manual-inline">
+                                    <input id="${CONFIG.UI_ID}-manual-budget-reset" type="checkbox" />
+                                    <span>次日恢复</span>
+                                </label>
+                            </div>
+                            <div class="am26-manual-grid">
+                                <label class="am26-manual-field">
+                                    <span>下限（元）</span>
+                                    <input id="${CONFIG.UI_ID}-manual-budget-lower" type="number" min="0" step="1" />
+                                </label>
+                                <label class="am26-manual-field">
+                                    <span>上限（元）</span>
+                                    <input id="${CONFIG.UI_ID}-manual-budget-upper" type="text" placeholder="不限" />
+                                </label>
+                                <label class="am26-manual-field full">
+                                    <span>修改次数上限（次/日）</span>
+                                    <input id="${CONFIG.UI_ID}-manual-budget-times" type="number" min="0" step="1" />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="am26-manual-card">
+                            <div class="am26-manual-card-head">
+                                <label class="am26-manual-toggle">
+                                    <input id="${CONFIG.UI_ID}-manual-addkeyword-enabled" type="checkbox" />
+                                    <span>添加关键词</span>
+                                </label>
+                                <label class="am26-manual-inline">
+                                    <span>词上限</span>
+                                    <input id="${CONFIG.UI_ID}-manual-keyword-limit" type="number" min="0" step="1" />
+                                </label>
+                            </div>
+                            <div class="am26-manual-grid">
+                                <div class="am26-manual-field full">
+                                    <span>买词偏好</span>
+                                    <input id="${CONFIG.UI_ID}-manual-keyword-preference" type="hidden" />
+                                    <div id="${CONFIG.UI_ID}-manual-keyword-preference-dropdown" class="am26-dropdown">
+                                        <button id="${CONFIG.UI_ID}-manual-keyword-preference-trigger" type="button" class="am26-dropdown-trigger" aria-expanded="false">
+                                            <span class="am26-dropdown-prefix">我希望增加：</span>
+                                            <span id="${CONFIG.UI_ID}-manual-keyword-preference-value" class="am26-dropdown-value">类目流量飙升词</span>
+                                            <span class="am26-dropdown-arrow">▼</span>
+                                        </button>
+                                        <div id="${CONFIG.UI_ID}-manual-keyword-preference-menu" class="am26-dropdown-menu" data-open="false">
+                                            <div class="am26-dropdown-group-title">相似商家买词</div>
+                                            <button type="button" class="am26-dropdown-item" data-pref-value="类目流量飙升词">类目流量飙升词</button>
+                                            <button type="button" class="am26-dropdown-item" data-pref-value="类目精准词">类目精准词</button>
+                                            <button type="button" class="am26-dropdown-item" data-pref-value="趋势机会词">趋势机会词</button>
+                                            <div class="am26-dropdown-group-title">宝贝相关词</div>
+                                            <button type="button" class="am26-dropdown-item" data-pref-value="宝贝适投关键词，要求相关性好">宝贝适投关键词，要求相关性好</button>
+                                            <button type="button" class="am26-dropdown-item" data-pref-value="优势好词扩写，要求相关性好">优势好词扩写，要求相关性好</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="am26-manual-field full">
+                                    <span>匹配方式</span>
+                                    <input id="${CONFIG.UI_ID}-manual-keyword-match" type="hidden" />
+                                    <div id="${CONFIG.UI_ID}-manual-keyword-match-segment" class="am26-segment">
+                                        <button type="button" data-match-value="广泛匹配">广泛匹配</button>
+                                        <button type="button" data-match-value="精准匹配">精准匹配</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="am26-manual-card">
+                            <div class="am26-manual-card-head">
+                                <label class="am26-manual-toggle">
+                                    <input id="${CONFIG.UI_ID}-manual-switchmatch-enabled" type="checkbox" />
+                                    <span>切换匹配方式</span>
+                                </label>
+                            </div>
+                            <div class="am26-manual-switch-item">
+                                <span>自动在广泛匹配与精准匹配间切换</span>
+                            </div>
+                        </div>
+
+                        <div class="am26-manual-card">
+                            <div class="am26-manual-card-head">
+                                <label class="am26-manual-toggle">
+                                    <input id="${CONFIG.UI_ID}-manual-shield-enabled" type="checkbox" />
+                                    <span>屏蔽关键词</span>
+                                </label>
+                            </div>
+                            <div class="am26-manual-switch-item">
+                                <span>自动屏蔽低转化关键词</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:#7f8bab;line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
+            `;
+
+            const manualSetting = userConfig.manualEscortSetting && typeof userConfig.manualEscortSetting === 'object'
+                ? userConfig.manualEscortSetting
+                : {
+                    enabled: true,
+                    bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
+                    budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
+                    addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                    switchKeywordMatchType: { enabled: true },
+                    shieldKeyword: { enabled: true }
+                };
+            UI.fillManualEscortSettingForm(manualSetting);
+            UI.bindManualKeywordControls();
+
+            content.querySelectorAll('input,select,textarea').forEach(control => {
+                control.addEventListener('change', () => {
+                    UI.persistManualEscortSettingFromForm();
+                });
+            });
+
+            return manualSetting;
         },
 
         // 渲染护航方案表格（到卡片）
@@ -52986,7 +54021,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const panel = document.createElement('div');
             panel.id = CONFIG.UI_ID;
             panel.style.cssText = `
-                position:fixed;top:20px;right:20px;width:250px;min-width:250px;max-width:600px;
+                position:fixed;top:20px;right:20px;width:500px;min-width:500px;max-width:1200px;
                 padding:15px;background:var(--am26-panel-strong,rgba(255,255,255,.45));
                 color:var(--am26-text,#1b2438);border-radius:18px;z-index:1000001;
                 font-size:13px;box-shadow:var(--am26-shadow,0 8px 32px rgba(31,38,135,.15));border:1px solid var(--am26-border,rgba(255,255,255,.4));
@@ -52998,6 +54033,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
 
             panel.innerHTML = `
+                <style>
+                    #${CONFIG.UI_ID}-log.am26-log-waterfall { column-count:2; column-gap:10px; }
+                    #${CONFIG.UI_ID}-log .am26-campaign-card { width:100%; }
+                    #${CONFIG.UI_ID}-log .am26-log-status-line { width:100%; }
+                    @media (max-width:1100px) {
+                        #${CONFIG.UI_ID}-log.am26-log-waterfall { column-count:1; }
+                    }
+                </style>
                 <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
                     <span style="color:var(--am26-primary,#2a5bff);">🛡️ 小万护航 v${CONFIG.VERSION}</span>
                     <div style="display:flex;align-items:center;gap:2px;">
@@ -53014,7 +54057,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     </div>
                 </div>
                 <div id="${CONFIG.UI_ID}-log-wrapper" style="background:rgba(255,255,255,.22);padding:0;border-radius:12px;font-size:11px;height:0;max-height:500px;overflow:hidden;margin-bottom:0;border:1px solid var(--am26-border,rgba(255,255,255,.35));font-family:Monaco,Consolas,monospace;opacity:0;transform:scaleY(0.8);transform-origin:top;transition:all 0.6s ease-out;">
-                    <div id="${CONFIG.UI_ID}-log" style="color:var(--am26-text-soft,#505a74);display:flex;flex-direction:column;gap:3px;line-height:1.5;padding:10px;"></div>
+                    <div id="${CONFIG.UI_ID}-log" style="color:var(--am26-text-soft,#505a74);line-height:1.5;padding:10px;"></div>
+                </div>
+                <div id="${CONFIG.UI_ID}-latest-setting-panel" style="margin-bottom:8px;padding:8px;border:1px solid var(--am26-border,rgba(255,255,255,.35));border-radius:10px;background:rgba(255,255,255,.24);">
+                    <div id="${CONFIG.UI_ID}-latest-setting-content" style="font-size:10px;line-height:1.45;color:#4d5875;">正在读取...</div>
                 </div>
                 <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
@@ -53038,6 +54084,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (promptInput) promptInput.value = userConfig.customPrompt || CONFIG.DEFAULT.customPrompt;
             const concurrencyInput = document.getElementById(`${CONFIG.UI_ID}-concurrency`);
             if (concurrencyInput) concurrencyInput.value = userConfig.concurrency || 3;
+            UI.renderLatestEscortSettingPreview();
 
             // 事件绑定
             ['center', 'maximize', 'close'].forEach(key => {
@@ -53076,6 +54123,56 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             };
 
+            const getLogAreaAvailableHeight = (screenHeight) => {
+                const settingPanel = document.getElementById(`${CONFIG.UI_ID}-latest-setting-panel`);
+                const reservedHeight = settingPanel && settingPanel.style.display !== 'none' ? 300 : 180;
+                return Math.max(200, screenHeight - 40 - reservedHeight);
+            };
+            const runBtn = document.getElementById(`${CONFIG.UI_ID}-run`);
+            const setRunButtonMode = (mode = 'run') => {
+                // 跨 userscript/extension 运行上下文时，instanceof 可能失效，这里只做最小可用检查。
+                if (!runBtn || runBtn.nodeType !== 1) return;
+                if (mode === 'back') {
+                    runBtn.dataset.mode = 'back';
+                    runBtn.textContent = '返回';
+                    runBtn.style.background = 'linear-gradient(135deg,#6b7280,#4b5563)';
+                    return;
+                }
+                runBtn.dataset.mode = 'run';
+                runBtn.textContent = '立即扫描并优化';
+                runBtn.style.background = 'linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf))';
+            };
+            const restoreIdlePanelView = ({ clearLog = true } = {}) => {
+                const wrapper = document.getElementById(`${CONFIG.UI_ID}-log-wrapper`);
+                const logEl = document.getElementById(`${CONFIG.UI_ID}-log`);
+                const settingPanel = document.getElementById(`${CONFIG.UI_ID}-latest-setting-panel`);
+
+                if (settingPanel) settingPanel.style.display = '';
+                if (logEl) {
+                    logEl.classList.remove('am26-log-waterfall');
+                    if (clearLog) logEl.textContent = '';
+                }
+                if (wrapper) {
+                    wrapper.dataset.expanded = '';
+                    wrapper.style.height = '0';
+                    wrapper.style.maxHeight = '500px';
+                    wrapper.style.opacity = '0';
+                    wrapper.style.marginBottom = '0';
+                    wrapper.style.transform = 'scaleY(0.8)';
+                    wrapper.style.overflow = 'hidden';
+                }
+
+                panel.style.width = '500px';
+                panel.style.height = 'auto';
+                panel.style.top = '20px';
+                panel.style.right = '20px';
+                panel.style.left = 'auto';
+                panel.dataset.maximized = 'false';
+                panel.dataset.centered = 'false';
+                setRunButtonMode('run');
+            };
+            setRunButtonMode('run');
+
             // 最大化按钮事件
             document.getElementById(`${CONFIG.UI_ID}-maximize`).onclick = () => {
                 const wrapper = document.getElementById(`${CONFIG.UI_ID}-log-wrapper`);
@@ -53097,9 +54194,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     panel.style.height = `${screenHeight - 40}px`;  // 上下各留 20px 边距
                     if (wrapper) {
                         wrapper.dataset.expanded = 'true';
-                        // 计算日志区域可用高度：额外预留 100px 给下方配置区，避免遮挡
-                        const availableHeight = screenHeight - 40 - 300;
-                        wrapper.style.height = `${Math.max(200, availableHeight)}px`;
+                        // 计算日志区域可用高度：根据参数区可见状态动态预留空间
+                        wrapper.style.height = `${getLogAreaAvailableHeight(screenHeight)}px`;
                         wrapper.style.maxHeight = 'none';
                         wrapper.style.opacity = '1';
                         wrapper.style.marginBottom = '12px';
@@ -53110,17 +54206,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             };
 
-            document.getElementById(`${CONFIG.UI_ID}-run`).onclick = () => {
+            if (runBtn) runBtn.onclick = () => {
+                if (runBtn.dataset.mode === 'back') {
+                    try {
+                        if (State.runAbortController) State.runAbortController.abort();
+                    } catch { }
+                    State.currentRunId++;
+                    restoreIdlePanelView({ clearLog: true });
+                    return;
+                }
+
+                UI.persistManualEscortSettingFromForm();
+                const settingPanel = document.getElementById(`${CONFIG.UI_ID}-latest-setting-panel`);
+                if (settingPanel) settingPanel.style.display = 'none';
+                const logEl = document.getElementById(`${CONFIG.UI_ID}-log`);
+                if (logEl) logEl.classList.add('am26-log-waterfall');
                 // 展开日志区域（使用最大化效果）
                 const wrapper = document.getElementById(`${CONFIG.UI_ID}-log-wrapper`);
-                if (!wrapper.dataset.expanded || panel.dataset.maximized !== 'true') {
+                if (wrapper && (!wrapper.dataset.expanded || panel.dataset.maximized !== 'true')) {
                     const screenHeight = window.innerHeight;
                     panel.style.top = '20px';
                     panel.style.height = `${screenHeight - 40}px`;
-                    panel.style.width = '600px';
+                    panel.style.width = '1000px';
                     wrapper.dataset.expanded = 'true';
-                    const availableHeight = screenHeight - 40 - 300;
-                    wrapper.style.height = `${Math.max(200, availableHeight)}px`;
+                    wrapper.style.height = `${getLogAreaAvailableHeight(screenHeight)}px`;
                     wrapper.style.maxHeight = 'none';
                     wrapper.style.opacity = '1';
                     wrapper.style.marginBottom = '12px';
@@ -53128,6 +54237,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     setTimeout(() => wrapper.style.overflow = 'auto', 300);
                     panel.dataset.maximized = 'true';
                 }
+                setRunButtonMode('back');
 
                 // 保存配置
                 const prompt = document.getElementById(`${CONFIG.UI_ID}-prompt`).value.trim();
@@ -53178,7 +54288,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const onResizeMove = e => {
                 const wrapper = document.getElementById(`${CONFIG.UI_ID}-log-wrapper`);
                 if (resizeState.active === 'width' || resizeState.active === 'both') {
-                    panel.style.width = Math.min(800, Math.max(200, resizeState.startW + resizeState.startX - e.clientX)) + 'px';
+                    panel.style.width = Math.min(1400, Math.max(400, resizeState.startW + resizeState.startX - e.clientX)) + 'px';
                 }
                 if ((resizeState.active === 'height' || resizeState.active === 'both') && wrapper) {
                     wrapper.style.height = Math.min(500, Math.max(100, resizeState.startH + e.clientY - resizeState.startY)) + 'px';
@@ -53311,40 +54421,605 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (rule.re.test(text)) escortFlowSignals.add(rule.name);
                     });
                 };
+                const normalizeMatchText = (value) => String(value || '').replace(/\s+/g, '').toLowerCase();
+                const deepCloneObject = (value) => {
+                    if (!value || typeof value !== 'object') return {};
+                    try {
+                        return JSON.parse(JSON.stringify(value));
+                    } catch {
+                        return {};
+                    }
+                };
+                const toFiniteNumber = (value) => {
+                    if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+                    if (value === null || value === undefined) return NaN;
+                    const text = String(value).trim();
+                    if (!text) return NaN;
+                    const num = Number(text);
+                    return Number.isFinite(num) ? num : NaN;
+                };
+                const normalizeActionType = (value, fallback = 'openInDialog') => {
+                    const text = String(value || '').trim();
+                    if (text === 'openInDialog' || text === 'updateInDialog') return text;
+                    return fallback;
+                };
+                const resolveKeywordPreferenceCode = (value) => {
+                    const directNum = toFiniteNumber(value);
+                    if (Number.isFinite(directNum)) return directNum;
+                    const text = normalizeMatchText(value);
+                    if (!text) return null;
+                    const map = {
+                        '类目流量飙升词': 2,
+                        '类目流量词': 2,
+                        '类目飙升词': 2
+                    };
+                    return map[text] ?? null;
+                };
+                const resolveKeywordMatchPatternCode = (value) => {
+                    const directNum = toFiniteNumber(value);
+                    if (Number.isFinite(directNum)) return directNum;
+                    const text = normalizeMatchText(value);
+                    if (!text) return null;
+                    if (text.includes('精准')) return 4;
+                    if (text.includes('广泛')) return 1;
+                    return null;
+                };
+                const normalizeOpenV3SettingKey = (key) => {
+                    const keyMap = {
+                        addKeyword: 'keywordAdd',
+                        keywordAdd: 'keywordAdd',
+                        switchKeywordMatchType: 'keywordSwitch',
+                        keywordSwitch: 'keywordSwitch',
+                        shieldKeyword: 'keywordMask',
+                        keywordMask: 'keywordMask',
+                        bidConstraintValue: 'bidConstraintValue',
+                        budget: 'budget'
+                    };
+                    return keyMap[key] || key;
+                };
+                const normalizeUserSettingForOpenV3 = (userSettingRaw) => {
+                    const userSetting = userSettingRaw && typeof userSettingRaw === 'object' ? userSettingRaw : {};
+                    const normalized = {};
+                    const mergeConfig = (key, cfg) => {
+                        if (!normalized[key] || typeof normalized[key] !== 'object') normalized[key] = {};
+                        Object.assign(normalized[key], cfg);
+                    };
+                    const normalizeKeywordAddConfig = (cfgRaw) => {
+                        const cfg = deepCloneObject(cfgRaw);
+                        const wordCntLimit = toFiniteNumber(
+                            cfg.wordCntLimit ?? cfg.keywordLimit ?? cfg.wordLimit ?? cfg.selfWordLimit ?? cfg.upperLimit
+                        );
+                        if (Number.isFinite(wordCntLimit)) cfg.wordCntLimit = wordCntLimit;
+
+                        const preference = resolveKeywordPreferenceCode(cfg.preference ?? cfg.keywordPreference ?? cfg.buyWordPreference);
+                        if (typeof preference === 'number') cfg.preference = preference;
+
+                        const matchPattern = resolveKeywordMatchPatternCode(cfg.matchPattern ?? cfg.matchType ?? cfg.pattern);
+                        if (typeof matchPattern === 'number') cfg.matchPattern = matchPattern;
+
+                        delete cfg.keywordLimit;
+                        delete cfg.wordLimit;
+                        delete cfg.selfWordLimit;
+                        delete cfg.upperLimit;
+                        delete cfg.keywordPreference;
+                        delete cfg.buyWordPreference;
+                        delete cfg.matchType;
+                        delete cfg.pattern;
+                        return cfg;
+                    };
+                    const normalizeBudgetConfig = (cfgRaw) => {
+                        const cfg = deepCloneObject(cfgRaw);
+                        const lowerLimit = toFiniteNumber(cfg.lowerLimit);
+                        if (Number.isFinite(lowerLimit)) cfg.lowerLimit = lowerLimit;
+
+                        const modifyTimesLimit = toFiniteNumber(cfg.modifyTimesLimit);
+                        if (Number.isFinite(modifyTimesLimit)) cfg.modifyTimesLimit = modifyTimesLimit;
+
+                        if (cfg.upperLimit === '不限') {
+                            cfg.upperType = 0;
+                        } else {
+                            const upperLimit = toFiniteNumber(cfg.upperLimit);
+                            if (Number.isFinite(upperLimit)) {
+                                cfg.upperLimit = upperLimit;
+                                if (cfg.upperType !== 0) cfg.upperType = 1;
+                            }
+                        }
+                        return cfg;
+                    };
+                    const normalizeBidConfig = (cfgRaw) => {
+                        const cfg = deepCloneObject(cfgRaw);
+                        const lowerLimit = toFiniteNumber(cfg.lowerLimit);
+                        if (Number.isFinite(lowerLimit)) cfg.lowerLimit = lowerLimit;
+
+                        const upperLimit = toFiniteNumber(cfg.upperLimit);
+                        if (Number.isFinite(upperLimit)) cfg.upperLimit = upperLimit;
+
+                        const modifyTimesLimit = toFiniteNumber(cfg.modifyTimesLimit);
+                        if (Number.isFinite(modifyTimesLimit)) cfg.modifyTimesLimit = modifyTimesLimit;
+
+                        delete cfg.upperType;
+                        return cfg;
+                    };
+
+                    Object.entries(userSetting).forEach(([rawKey, rawCfg]) => {
+                        if (!rawKey || !rawCfg || typeof rawCfg !== 'object') return;
+                        const key = normalizeOpenV3SettingKey(rawKey);
+                        let cfg = deepCloneObject(rawCfg);
+                        if (key === 'keywordAdd') cfg = normalizeKeywordAddConfig(cfg);
+                        if (key === 'budget') cfg = normalizeBudgetConfig(cfg);
+                        if (key === 'bidConstraintValue') cfg = normalizeBidConfig(cfg);
+                        mergeConfig(key, cfg);
+                    });
+                    return normalized;
+                };
+                const getModalEscortSettingRoot = () => {
+                    const selectorList = [
+                        '#ai_analyst_action_modal > div > div.dialog-modal-body.flex-1.min-height-0 > div',
+                        '#ai_analyst_action_modal .dialog-modal-body.flex-1.min-height-0 > div',
+                        '#ai_analyst_action_modal .dialog-modal-body > div'
+                    ];
+                    for (const selector of selectorList) {
+                        const el = document.querySelector(selector);
+                        if (el instanceof HTMLElement) return el;
+                    }
+                    return null;
+                };
+                const buildOperationAliases = (key, cfg = {}) => {
+                    const aliases = new Set();
+                    const pushAlias = (text) => {
+                        const normalized = normalizeMatchText(text);
+                        if (!normalized) return;
+                        aliases.add(normalized);
+                        aliases.add(normalized.replace(/调优/g, ''));
+                    };
+                    pushAlias(key);
+                    pushAlias(cfg.targetName);
+                    pushAlias(cfg.targetDisplayName);
+                    pushAlias(cfg.operationName);
+                    pushAlias(cfg.name);
+                    if (key === 'budget') {
+                        ['budget', '预算', '预算调优', '预算优化', '预算控制', '每日预算调控区间'].forEach(pushAlias);
+                    } else if (key === 'bidConstraintValue') {
+                        ['bidconstraintvalue', '投产比', '投产比调优', 'roi', '目标投产比', '出价约束', '成本调控', '平均点击成本', '出价调控'].forEach(pushAlias);
+                    } else if (key === 'addKeyword' || key === 'keywordAdd') {
+                        ['addkeyword', 'keywordadd', '添加关键词', '买词偏好', '自选词上限', '关键词调控', '匹配方式'].forEach(pushAlias);
+                    } else if (key === 'switchKeywordMatchType' || key === 'keywordSwitch') {
+                        ['switchkeywordmatchtype', 'keywordswitch', '切换关键词匹配方式', '切换匹配方式'].forEach(pushAlias);
+                    } else if (key === 'shieldKeyword' || key === 'keywordMask') {
+                        ['shieldkeyword', 'keywordmask', '屏蔽关键词', '流量智选关键词'].forEach(pushAlias);
+                    } else if (/bid/i.test(key)) {
+                        ['出价', '出价调优', '智能出价'].forEach(pushAlias);
+                    }
+                    return Array.from(aliases).filter(Boolean);
+                };
+                const detectEnabledFromNode = (node) => {
+                    if (!(node instanceof Element)) return null;
+                    const input = node.querySelector('input[type="checkbox"],input[type="radio"]');
+                    if (input instanceof HTMLInputElement) return !!input.checked;
+
+                    const switchEl = node.querySelector('[role="switch"],[aria-checked]');
+                    if (switchEl instanceof Element) {
+                        const raw = switchEl.getAttribute('aria-checked');
+                        if (raw === 'true') return true;
+                        if (raw === 'false') return false;
+                    }
+
+                    const compact = normalizeMatchText(node.textContent || '');
+                    if (/未开启|关闭|停用|禁用/.test(compact)) return false;
+                    if (/开启|已开启|启用/.test(compact)) return true;
+                    return null;
+                };
+                const extractModalSettingPatch = (root, findSettingKeyByText) => {
+                    if (!(root instanceof HTMLElement)) return new Map();
+                    const fieldByHint = (hint = '') => {
+                        if (/wordcntlimit|keywordlimit|自选词上限|关键词上限|词上限/.test(hint)) return 'keywordLimit';
+                        if (/preference|买词偏好|我希望增加/.test(hint)) return 'keywordPreference';
+                        if (/matchpattern|匹配方式/.test(hint)) return 'matchType';
+                        if (/lower|low|down|下限|最小/.test(hint)) return 'lowerLimit';
+                        if (/upper|high|up|上限|最大/.test(hint)) return 'upperLimit';
+                        if (/times|limit|次数|频次/.test(hint)) return 'modifyTimesLimit';
+                        if (/dailyreset|次日|恢复/.test(hint)) return 'dailyReset';
+                        if (/targetname|目标名称/.test(hint)) return 'targetName';
+                        return '';
+                    };
+
+                    const patchByKey = new Map();
+                    const controlList = root.querySelectorAll('input,select,textarea');
+                    controlList.forEach(control => {
+                        if (!(control instanceof Element)) return;
+                        const rowNode = control.closest('tr,li,label,div') || control.parentElement;
+                        const matchContext = [
+                            rowNode?.textContent || '',
+                            control.getAttribute('aria-label') || '',
+                            control.getAttribute('placeholder') || '',
+                            control.getAttribute('name') || '',
+                            control.getAttribute('id') || '',
+                            control.className || ''
+                        ].join(' ');
+                        const key = findSettingKeyByText(matchContext);
+                        if (!key) return;
+
+                        const hint = normalizeMatchText(matchContext);
+                        const field = fieldByHint(hint);
+                        if (!field) return;
+
+                        let value = '';
+                        if (control instanceof HTMLInputElement) {
+                            if (control.type === 'checkbox' || control.type === 'radio') value = control.checked;
+                            else value = control.value;
+                        } else if (control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+                            value = control.value;
+                        } else {
+                            value = control.getAttribute('value') || '';
+                        }
+                        if (field === 'lowerLimit' || field === 'upperLimit' || field === 'modifyTimesLimit' || field === 'keywordLimit') {
+                            const num = Number(value);
+                            if (Number.isFinite(num)) value = num;
+                            else return;
+                        }
+                        if (field === 'dailyReset') value = !!value;
+
+                        const patch = patchByKey.get(key) || {};
+                        patch[field] = value;
+                        patchByKey.set(key, patch);
+                    });
+                    return patchByKey;
+                };
+                const resolveOpenV3Setting = () => {
+                    const responseSetting = normalizeEscortSettingTable(latestEscortSettingTable);
+                    const defaultUserSetting = {
+                        bidConstraintValue: { enabled: false },
+                        budget: { enabled: false }
+                    };
+                    const ensureUserSettingEnabled = (settingTable) => {
+                        if (!settingTable || typeof settingTable !== 'object') return null;
+                        const baseUserSetting = settingTable.userSetting && typeof settingTable.userSetting === 'object'
+                            ? deepCloneObject(settingTable.userSetting)
+                            : {};
+                        const operationList = Array.isArray(settingTable.operationList)
+                            ? settingTable.operationList.filter(Boolean)
+                            : [];
+                        const allKeys = Array.from(new Set([
+                            ...Object.keys(baseUserSetting),
+                            ...operationList
+                        ])).filter(Boolean);
+                        if (!allKeys.length) return null;
+                        allKeys.forEach(key => {
+                            const cfg = baseUserSetting[key] && typeof baseUserSetting[key] === 'object'
+                                ? baseUserSetting[key]
+                                : {};
+                            if (typeof cfg.enabled !== 'boolean') cfg.enabled = operationList.includes(key);
+                            baseUserSetting[key] = cfg;
+                        });
+                        return baseUserSetting;
+                    };
+                    const readSettingFromModal = (settingTable) => {
+                        if (!settingTable) return null;
+                        const modalRoot = getModalEscortSettingRoot();
+                        if (!(modalRoot instanceof HTMLElement)) return null;
+                        const candidateKeys = Array.from(new Set([
+                            ...(Array.isArray(settingTable.operationList) ? settingTable.operationList : []),
+                            ...Object.keys(settingTable.userSetting || {})
+                        ])).filter(Boolean);
+                        if (!candidateKeys.length) return null;
+
+                        const aliasList = candidateKeys.map(key => ({
+                            key,
+                            alias: buildOperationAliases(key, settingTable.userSetting?.[key] || {})
+                        }));
+                        const findSettingKeyByText = (text) => {
+                            const normalized = normalizeMatchText(text);
+                            if (!normalized) return '';
+                            let bestKey = '';
+                            let bestLength = 0;
+                            aliasList.forEach(item => {
+                                item.alias.forEach(alias => {
+                                    if (!alias || !normalized.includes(alias)) return;
+                                    if (alias.length > bestLength) {
+                                        bestKey = item.key;
+                                        bestLength = alias.length;
+                                    }
+                                });
+                            });
+                            return bestKey;
+                        };
+
+                        const stateByKey = new Map();
+                        const rootText = normalizeMatchText(modalRoot.textContent || '');
+                        aliasList.forEach(item => {
+                            if (item.alias.some(alias => alias && rootText.includes(alias))) {
+                                stateByKey.set(item.key, { matched: true, enabled: true });
+                            }
+                        });
+
+                        modalRoot.querySelectorAll('tr,li,label,div').forEach(node => {
+                            if (!(node instanceof Element)) return;
+                            const rowText = normalizeMatchText(node.textContent || '');
+                            if (!rowText || rowText.length < 2) return;
+                            const key = findSettingKeyByText(rowText);
+                            if (!key) return;
+                            const prev = stateByKey.get(key) || { matched: true };
+                            prev.matched = true;
+                            const enabled = detectEnabledFromNode(node);
+                            if (typeof enabled === 'boolean') prev.enabled = enabled;
+                            stateByKey.set(key, prev);
+                        });
+
+                        const patchByKey = extractModalSettingPatch(modalRoot, findSettingKeyByText);
+                        const mergedSetting = normalizeEscortSettingTable({
+                            actionType: settingTable.actionType || '',
+                            operationList: [],
+                            userSetting: {},
+                            footerInfo: settingTable.footerInfo || {}
+                        });
+                        if (!mergedSetting) return null;
+
+                        candidateKeys.forEach(key => {
+                            const baseCfg = deepCloneObject(settingTable.userSetting?.[key] || {});
+                            const keyState = stateByKey.get(key);
+                            const enabled = typeof keyState?.enabled === 'boolean'
+                                ? keyState.enabled
+                                : (Array.isArray(settingTable.operationList) && settingTable.operationList.includes(key));
+                            baseCfg.enabled = enabled;
+
+                            const patch = patchByKey.get(key);
+                            if (patch && typeof patch === 'object') Object.assign(baseCfg, patch);
+
+                            mergedSetting.userSetting[key] = baseCfg;
+                            if (enabled) mergedSetting.operationList.push(key);
+                        });
+
+                        if (!Object.keys(mergedSetting.userSetting).length) return null;
+                        return mergedSetting;
+                    };
+                    const applyManualSetting = (settingTable, manualOverride) => {
+                        if (!manualOverride || !manualOverride.enabled) return settingTable;
+                        const base = normalizeEscortSettingTable(settingTable) || normalizeEscortSettingTable({
+                            actionType: 'openInDialog',
+                            operationList: [],
+                            userSetting: {},
+                            footerInfo: {}
+                        });
+                        if (!base) return null;
+
+                        const mergedSetting = normalizeEscortSettingTable({
+                            actionType: normalizeActionType(manualOverride.actionType, normalizeActionType(base.actionType, 'openInDialog')),
+                            operationList: [],
+                            userSetting: deepCloneObject(base.userSetting || {}),
+                            footerInfo: base.footerInfo || {}
+                        });
+                        if (!mergedSetting) return null;
+
+                        const setNumericField = (cfg, field, value) => {
+                            const num = Number(value);
+                            if (Number.isFinite(num)) cfg[field] = num;
+                        };
+                        const setEnabledField = (cfg, value) => {
+                            if (typeof value === 'boolean') cfg.enabled = value;
+                        };
+                        const patchKeywordLimitField = (cfg, value) => {
+                            const num = Number(value);
+                            if (!Number.isFinite(num)) return;
+                            const candidateFieldList = ['wordCntLimit', 'keywordLimit', 'upperLimit', 'limit', 'wordLimit', 'selfWordLimit'];
+                            const targetField = candidateFieldList.find(field => field in cfg) || 'keywordLimit';
+                            cfg[targetField] = num;
+                        };
+                        const patchKeywordPreferenceField = (cfg, value) => {
+                            const candidateFieldList = ['preference', 'keywordPreference', 'buyWordPreference'];
+                            const targetField = candidateFieldList.find(field => field in cfg) || 'keywordPreference';
+                            const preferenceCode = resolveKeywordPreferenceCode(value);
+                            if (targetField === 'preference' || typeof cfg[targetField] === 'number') {
+                                if (typeof preferenceCode === 'number') cfg[targetField] = preferenceCode;
+                                return;
+                            }
+                            const text = String(value || '').trim();
+                            if (!text) return;
+                            cfg[targetField] = text;
+                        };
+                        const patchKeywordMatchTypeField = (cfg, value) => {
+                            const candidateFieldList = ['matchPattern', 'matchType', 'pattern'];
+                            const targetField = candidateFieldList.find(field => field in cfg) || 'matchType';
+                            const matchPattern = resolveKeywordMatchPatternCode(value);
+                            if (targetField === 'matchPattern' || targetField === 'pattern' || typeof cfg[targetField] === 'number') {
+                                if (typeof matchPattern === 'number') cfg[targetField] = matchPattern;
+                                return;
+                            }
+                            const text = String(value || '').trim();
+                            if (!text) return;
+                            cfg[targetField] = text;
+                        };
+                        const resolveTargetKey = (sourceKey) => {
+                            const aliasMap = {
+                                bidConstraintValue: ['bidConstraintValue'],
+                                budget: ['budget'],
+                                addKeyword: ['addKeyword', 'keywordAdd'],
+                                keywordAdd: ['keywordAdd', 'addKeyword'],
+                                switchKeywordMatchType: ['switchKeywordMatchType', 'keywordSwitch'],
+                                keywordSwitch: ['keywordSwitch', 'switchKeywordMatchType'],
+                                shieldKeyword: ['shieldKeyword', 'keywordMask'],
+                                keywordMask: ['keywordMask', 'shieldKeyword']
+                            };
+                            const candidateList = aliasMap[sourceKey] || [sourceKey];
+                            return candidateList.find(key => key in (mergedSetting.userSetting || {})) || sourceKey;
+                        };
+
+                        const manualUserSetting = manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
+                            ? manualOverride.userSetting
+                            : {};
+                        Object.entries(manualUserSetting).forEach(([key, manualCfgRaw]) => {
+                            if (!key || !manualCfgRaw || typeof manualCfgRaw !== 'object') return;
+                            const manualCfg = manualCfgRaw;
+                            const targetKey = resolveTargetKey(key);
+                            const baseCfg = mergedSetting.userSetting[targetKey] && typeof mergedSetting.userSetting[targetKey] === 'object'
+                                ? mergedSetting.userSetting[targetKey]
+                                : {};
+                            setEnabledField(baseCfg, manualCfg.enabled);
+
+                            if (targetKey === 'budget' || targetKey === 'bidConstraintValue') {
+                                setNumericField(baseCfg, 'lowerLimit', manualCfg.lowerLimit);
+                                setNumericField(baseCfg, 'modifyTimesLimit', manualCfg.modifyTimesLimit);
+                                if (typeof manualCfg.dailyReset === 'boolean') baseCfg.dailyReset = manualCfg.dailyReset;
+                                if (manualCfg.upperLimit === '不限') {
+                                    if (targetKey === 'budget') baseCfg.upperType = 0;
+                                    if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                } else {
+                                    const upperLimit = Number(manualCfg.upperLimit);
+                                    if (Number.isFinite(upperLimit)) {
+                                        baseCfg.upperLimit = upperLimit;
+                                        if (targetKey === 'budget') baseCfg.upperType = 1;
+                                        if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                    }
+                                }
+                            }
+
+                            if (targetKey === 'addKeyword' || targetKey === 'keywordAdd') {
+                                patchKeywordLimitField(baseCfg, manualCfg.keywordLimit);
+                                patchKeywordPreferenceField(baseCfg, manualCfg.keywordPreference);
+                                patchKeywordMatchTypeField(baseCfg, manualCfg.matchType);
+                            }
+
+                            mergedSetting.userSetting[targetKey] = baseCfg;
+                        });
+
+                        const operationKeySet = new Set();
+                        Object.entries(mergedSetting.userSetting).forEach(([key, cfg]) => {
+                            if (cfg && typeof cfg === 'object' && cfg.enabled === true) operationKeySet.add(key);
+                        });
+                        mergedSetting.operationList = Array.from(operationKeySet);
+                        return mergedSetting;
+                    };
+
+                    const modalSetting = readSettingFromModal(responseSetting);
+                    const manualSetting = typeof UI.readManualEscortSettingOverride === 'function'
+                        ? UI.readManualEscortSettingOverride()
+                        : null;
+                    let finalSetting = modalSetting || responseSetting;
+                    let sourceLabel = modalSetting
+                        ? '弹窗最新设置'
+                        : (responseSetting ? '诊断返回设置' : '默认护航设置');
+                    let fromModal = !!modalSetting;
+                    let fromManual = false;
+                    const hasEscortSettingTable = !!finalSetting;
+                    if (manualSetting?.enabled && hasEscortSettingTable) {
+                        const mergedByManual = applyManualSetting(finalSetting, manualSetting);
+                        if (mergedByManual) {
+                            finalSetting = mergedByManual;
+                            sourceLabel = '手动设置参数';
+                            fromManual = true;
+                            fromModal = false;
+                        }
+                    }
+                    const userSetting = normalizeUserSettingForOpenV3(ensureUserSettingEnabled(finalSetting) || defaultUserSetting);
+                    const actionType = normalizeActionType(finalSetting?.actionType || (manualSetting?.enabled ? manualSetting.actionType : ''), 'openInDialog');
+
+                    return {
+                        actionType,
+                        userSetting,
+                        displaySetting: finalSetting,
+                        sourceLabel,
+                        fromModal,
+                        fromManual
+                    };
+                };
                 const submitEscortOpenV3 = async (reasonText = '') => {
                     if (reasonText) card.log(reasonText, 'orange');
-                    card.log('提交护航权益授权（不勾选其他调控）...', 'orange');
+                    const resolvedOpenV3Setting = resolveOpenV3Setting();
+                    const displayOperationCount = Array.isArray(resolvedOpenV3Setting.displaySetting?.operationList)
+                        ? resolvedOpenV3Setting.displaySetting.operationList.length
+                        : 0;
+                    const displaySettingCount = displayOperationCount || Object.keys(resolvedOpenV3Setting.displaySetting?.userSetting || {}).length;
+                    if (displaySettingCount) {
+                        card.log(`使用${resolvedOpenV3Setting.sourceLabel}：${displaySettingCount} 个设置项`, '#1890ff');
+                    }
+                    card.log(`提交护航权益授权（${resolvedOpenV3Setting.sourceLabel}）...`, 'orange');
                     card.setStatus('提交中', 'info');
-                    const openV3ActionType = (() => {
-                        const candidate = String(latestEscortSettingTable?.actionType || '').trim();
-                        return candidate === 'openInDialog' || candidate === 'updateInDialog'
-                            ? candidate
-                            : 'updateInDialog';
-                    })();
+                    const openV3BizCode = talkData?.contextParam?.bizCode || talkData?.contextParam?.mx_bizCode || 'onebpSearch';
 
-                    const openV3Res = await API.request('https://ai.alimama.com/ai/escort/openV3.json', {
-                        bizCode: 'onebpSite',
-                        campaignId: String(campaignId),
-                        userSetting: {
-                            bidConstraintValue: { enabled: false },
-                            budget: { enabled: false }
-                        },
-                        actionType: openV3ActionType,
-                        timeStr: Date.now(),
-                        dynamicToken: State.tokens.dynamicToken || '',
-                        csrfID: State.tokens.csrfID || '',
-                        loginPointId: State.tokens.loginPointId || ''
-                    }, {
-                        signal: State.runAbortController?.signal
-                    });
+                    const isDuplicateEscortMessage = (message) => /已开启护航|请勿重复开启|重复开启|已在护航|正在护航/.test(String(message || ''));
+                    const requestOpenV3ByActionType = async (actionType) => {
+                        const openV3Res = await API.request('https://ai.alimama.com/ai/escort/openV3.json', {
+                            bizCode: openV3BizCode,
+                            campaignId: String(campaignId),
+                            userSetting: resolvedOpenV3Setting.userSetting,
+                            actionType,
+                            timeStr: Date.now(),
+                            dynamicToken: State.tokens.dynamicToken || '',
+                            csrfID: '',
+                            loginPointId: State.tokens.loginPointId || ''
+                        }, {
+                            signal: State.runAbortController?.signal
+                        });
+                        const success = openV3Res?.success || openV3Res?.ok || openV3Res?.info?.ok;
+                        const msg = openV3Res?.info?.message || (success ? '护航开启成功' : '护航开启失败');
+                        return {
+                            success,
+                            msg,
+                            actionType
+                        };
+                    };
+                    const buildExecutionStateMap = (displaySetting, success) => {
+                        if (!displaySetting || typeof displaySetting !== 'object') return {};
+                        const keySet = new Set();
+                        if (Array.isArray(displaySetting.operationList)) {
+                            displaySetting.operationList.forEach(key => keySet.add(key));
+                        }
+                        if (displaySetting.userSetting && typeof displaySetting.userSetting === 'object') {
+                            Object.keys(displaySetting.userSetting).forEach(key => keySet.add(key));
+                        }
+                        const map = {};
+                        const stateValue = !!success;
+                        keySet.forEach(key => {
+                            if (!key) return;
+                            map[key] = stateValue;
+                            map[normalizeOpenV3SettingKey(key)] = stateValue;
+                        });
+                        return map;
+                    };
 
-                    const openV3Success = openV3Res?.success || openV3Res?.ok || openV3Res?.info?.ok;
-                    const openV3Msg = openV3Res?.info?.message || (openV3Success ? '护航开启成功' : '护航开启失败');
+                    let submitResult = await requestOpenV3ByActionType(resolvedOpenV3Setting.actionType);
+                    if (!submitResult.success && isDuplicateEscortMessage(submitResult.msg)) {
+                        if (resolvedOpenV3Setting.actionType !== 'updateInDialog') {
+                            card.log('检测到计划可能已在护航中，改用 updateInDialog 强制执行一次...', '#fa8c16');
+                            const forceResult = await requestOpenV3ByActionType('updateInDialog');
+                            if (forceResult.success) {
+                                submitResult = {
+                                    ...forceResult,
+                                    forced: true
+                                };
+                            } else if (isDuplicateEscortMessage(forceResult.msg)) {
+                                submitResult = {
+                                    ...forceResult,
+                                    success: true,
+                                    msg: '当前计划已开启护航，视为执行成功',
+                                    forced: true
+                                };
+                            } else {
+                                submitResult = {
+                                    ...forceResult,
+                                    forced: true
+                                };
+                            }
+                        } else {
+                            submitResult = {
+                                ...submitResult,
+                                success: true,
+                                msg: '当前计划已开启护航，视为执行成功'
+                            };
+                        }
+                    }
 
-                    card.log(`${openV3Success ? '✓' : '✗'} ${openV3Msg}`, openV3Success ? 'green' : 'red');
-                    card.setStatus(openV3Success ? '护航中' : '失败', openV3Success ? 'success' : 'error');
+                    const executionState = buildExecutionStateMap(resolvedOpenV3Setting.displaySetting, submitResult.success);
+                    if (Object.keys(executionState).length) {
+                        UI.renderEscortSettingTableToCard(card, resolvedOpenV3Setting.displaySetting, { executionState });
+                    }
+
+                    if (submitResult.forced) {
+                        card.log(`已按强制模式重提：${submitResult.actionType}`, '#4b5563');
+                    }
+                    card.log(`${submitResult.success ? '✓' : '✗'} ${submitResult.msg}`, submitResult.success ? 'green' : 'red');
+                    card.setStatus(submitResult.success ? '护航中' : '失败', submitResult.success ? 'success' : 'error');
                     card.collapse();
-                    return { success: openV3Success, msg: openV3Msg };
+                    return { success: submitResult.success, msg: submitResult.msg };
                 };
 
                 const collect = (obj, depth = 0) => {
@@ -53433,7 +55108,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         card.log(`识别到小万护航新流程：${matchedSignals.join('、')}`, '#1890ff');
                         if (latestEscortSettingTable?.operationList?.length) {
                             card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
-                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
                         }
                         return await submitEscortOpenV3();
                     }
@@ -53452,7 +55126,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             : '计划当前处于小万护航中（页面状态识别）';
                         if (latestEscortSettingTable?.operationList?.length) {
                             card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
-                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
                         }
                         return await submitEscortOpenV3(`ℹ️ ${rowStatusText}，按配置强制重新提交护航`);
                     }

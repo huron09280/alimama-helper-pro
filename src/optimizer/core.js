@@ -96,40 +96,605 @@
                         if (rule.re.test(text)) escortFlowSignals.add(rule.name);
                     });
                 };
+                const normalizeMatchText = (value) => String(value || '').replace(/\s+/g, '').toLowerCase();
+                const deepCloneObject = (value) => {
+                    if (!value || typeof value !== 'object') return {};
+                    try {
+                        return JSON.parse(JSON.stringify(value));
+                    } catch {
+                        return {};
+                    }
+                };
+                const toFiniteNumber = (value) => {
+                    if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+                    if (value === null || value === undefined) return NaN;
+                    const text = String(value).trim();
+                    if (!text) return NaN;
+                    const num = Number(text);
+                    return Number.isFinite(num) ? num : NaN;
+                };
+                const normalizeActionType = (value, fallback = 'openInDialog') => {
+                    const text = String(value || '').trim();
+                    if (text === 'openInDialog' || text === 'updateInDialog') return text;
+                    return fallback;
+                };
+                const resolveKeywordPreferenceCode = (value) => {
+                    const directNum = toFiniteNumber(value);
+                    if (Number.isFinite(directNum)) return directNum;
+                    const text = normalizeMatchText(value);
+                    if (!text) return null;
+                    const map = {
+                        '类目流量飙升词': 2,
+                        '类目流量词': 2,
+                        '类目飙升词': 2
+                    };
+                    return map[text] ?? null;
+                };
+                const resolveKeywordMatchPatternCode = (value) => {
+                    const directNum = toFiniteNumber(value);
+                    if (Number.isFinite(directNum)) return directNum;
+                    const text = normalizeMatchText(value);
+                    if (!text) return null;
+                    if (text.includes('精准')) return 4;
+                    if (text.includes('广泛')) return 1;
+                    return null;
+                };
+                const normalizeOpenV3SettingKey = (key) => {
+                    const keyMap = {
+                        addKeyword: 'keywordAdd',
+                        keywordAdd: 'keywordAdd',
+                        switchKeywordMatchType: 'keywordSwitch',
+                        keywordSwitch: 'keywordSwitch',
+                        shieldKeyword: 'keywordMask',
+                        keywordMask: 'keywordMask',
+                        bidConstraintValue: 'bidConstraintValue',
+                        budget: 'budget'
+                    };
+                    return keyMap[key] || key;
+                };
+                const normalizeUserSettingForOpenV3 = (userSettingRaw) => {
+                    const userSetting = userSettingRaw && typeof userSettingRaw === 'object' ? userSettingRaw : {};
+                    const normalized = {};
+                    const mergeConfig = (key, cfg) => {
+                        if (!normalized[key] || typeof normalized[key] !== 'object') normalized[key] = {};
+                        Object.assign(normalized[key], cfg);
+                    };
+                    const normalizeKeywordAddConfig = (cfgRaw) => {
+                        const cfg = deepCloneObject(cfgRaw);
+                        const wordCntLimit = toFiniteNumber(
+                            cfg.wordCntLimit ?? cfg.keywordLimit ?? cfg.wordLimit ?? cfg.selfWordLimit ?? cfg.upperLimit
+                        );
+                        if (Number.isFinite(wordCntLimit)) cfg.wordCntLimit = wordCntLimit;
+
+                        const preference = resolveKeywordPreferenceCode(cfg.preference ?? cfg.keywordPreference ?? cfg.buyWordPreference);
+                        if (typeof preference === 'number') cfg.preference = preference;
+
+                        const matchPattern = resolveKeywordMatchPatternCode(cfg.matchPattern ?? cfg.matchType ?? cfg.pattern);
+                        if (typeof matchPattern === 'number') cfg.matchPattern = matchPattern;
+
+                        delete cfg.keywordLimit;
+                        delete cfg.wordLimit;
+                        delete cfg.selfWordLimit;
+                        delete cfg.upperLimit;
+                        delete cfg.keywordPreference;
+                        delete cfg.buyWordPreference;
+                        delete cfg.matchType;
+                        delete cfg.pattern;
+                        return cfg;
+                    };
+                    const normalizeBudgetConfig = (cfgRaw) => {
+                        const cfg = deepCloneObject(cfgRaw);
+                        const lowerLimit = toFiniteNumber(cfg.lowerLimit);
+                        if (Number.isFinite(lowerLimit)) cfg.lowerLimit = lowerLimit;
+
+                        const modifyTimesLimit = toFiniteNumber(cfg.modifyTimesLimit);
+                        if (Number.isFinite(modifyTimesLimit)) cfg.modifyTimesLimit = modifyTimesLimit;
+
+                        if (cfg.upperLimit === '不限') {
+                            cfg.upperType = 0;
+                        } else {
+                            const upperLimit = toFiniteNumber(cfg.upperLimit);
+                            if (Number.isFinite(upperLimit)) {
+                                cfg.upperLimit = upperLimit;
+                                if (cfg.upperType !== 0) cfg.upperType = 1;
+                            }
+                        }
+                        return cfg;
+                    };
+                    const normalizeBidConfig = (cfgRaw) => {
+                        const cfg = deepCloneObject(cfgRaw);
+                        const lowerLimit = toFiniteNumber(cfg.lowerLimit);
+                        if (Number.isFinite(lowerLimit)) cfg.lowerLimit = lowerLimit;
+
+                        const upperLimit = toFiniteNumber(cfg.upperLimit);
+                        if (Number.isFinite(upperLimit)) cfg.upperLimit = upperLimit;
+
+                        const modifyTimesLimit = toFiniteNumber(cfg.modifyTimesLimit);
+                        if (Number.isFinite(modifyTimesLimit)) cfg.modifyTimesLimit = modifyTimesLimit;
+
+                        delete cfg.upperType;
+                        return cfg;
+                    };
+
+                    Object.entries(userSetting).forEach(([rawKey, rawCfg]) => {
+                        if (!rawKey || !rawCfg || typeof rawCfg !== 'object') return;
+                        const key = normalizeOpenV3SettingKey(rawKey);
+                        let cfg = deepCloneObject(rawCfg);
+                        if (key === 'keywordAdd') cfg = normalizeKeywordAddConfig(cfg);
+                        if (key === 'budget') cfg = normalizeBudgetConfig(cfg);
+                        if (key === 'bidConstraintValue') cfg = normalizeBidConfig(cfg);
+                        mergeConfig(key, cfg);
+                    });
+                    return normalized;
+                };
+                const getModalEscortSettingRoot = () => {
+                    const selectorList = [
+                        '#ai_analyst_action_modal > div > div.dialog-modal-body.flex-1.min-height-0 > div',
+                        '#ai_analyst_action_modal .dialog-modal-body.flex-1.min-height-0 > div',
+                        '#ai_analyst_action_modal .dialog-modal-body > div'
+                    ];
+                    for (const selector of selectorList) {
+                        const el = document.querySelector(selector);
+                        if (el instanceof HTMLElement) return el;
+                    }
+                    return null;
+                };
+                const buildOperationAliases = (key, cfg = {}) => {
+                    const aliases = new Set();
+                    const pushAlias = (text) => {
+                        const normalized = normalizeMatchText(text);
+                        if (!normalized) return;
+                        aliases.add(normalized);
+                        aliases.add(normalized.replace(/调优/g, ''));
+                    };
+                    pushAlias(key);
+                    pushAlias(cfg.targetName);
+                    pushAlias(cfg.targetDisplayName);
+                    pushAlias(cfg.operationName);
+                    pushAlias(cfg.name);
+                    if (key === 'budget') {
+                        ['budget', '预算', '预算调优', '预算优化', '预算控制', '每日预算调控区间'].forEach(pushAlias);
+                    } else if (key === 'bidConstraintValue') {
+                        ['bidconstraintvalue', '投产比', '投产比调优', 'roi', '目标投产比', '出价约束', '成本调控', '平均点击成本', '出价调控'].forEach(pushAlias);
+                    } else if (key === 'addKeyword' || key === 'keywordAdd') {
+                        ['addkeyword', 'keywordadd', '添加关键词', '买词偏好', '自选词上限', '关键词调控', '匹配方式'].forEach(pushAlias);
+                    } else if (key === 'switchKeywordMatchType' || key === 'keywordSwitch') {
+                        ['switchkeywordmatchtype', 'keywordswitch', '切换关键词匹配方式', '切换匹配方式'].forEach(pushAlias);
+                    } else if (key === 'shieldKeyword' || key === 'keywordMask') {
+                        ['shieldkeyword', 'keywordmask', '屏蔽关键词', '流量智选关键词'].forEach(pushAlias);
+                    } else if (/bid/i.test(key)) {
+                        ['出价', '出价调优', '智能出价'].forEach(pushAlias);
+                    }
+                    return Array.from(aliases).filter(Boolean);
+                };
+                const detectEnabledFromNode = (node) => {
+                    if (!(node instanceof Element)) return null;
+                    const input = node.querySelector('input[type="checkbox"],input[type="radio"]');
+                    if (input instanceof HTMLInputElement) return !!input.checked;
+
+                    const switchEl = node.querySelector('[role="switch"],[aria-checked]');
+                    if (switchEl instanceof Element) {
+                        const raw = switchEl.getAttribute('aria-checked');
+                        if (raw === 'true') return true;
+                        if (raw === 'false') return false;
+                    }
+
+                    const compact = normalizeMatchText(node.textContent || '');
+                    if (/未开启|关闭|停用|禁用/.test(compact)) return false;
+                    if (/开启|已开启|启用/.test(compact)) return true;
+                    return null;
+                };
+                const extractModalSettingPatch = (root, findSettingKeyByText) => {
+                    if (!(root instanceof HTMLElement)) return new Map();
+                    const fieldByHint = (hint = '') => {
+                        if (/wordcntlimit|keywordlimit|自选词上限|关键词上限|词上限/.test(hint)) return 'keywordLimit';
+                        if (/preference|买词偏好|我希望增加/.test(hint)) return 'keywordPreference';
+                        if (/matchpattern|匹配方式/.test(hint)) return 'matchType';
+                        if (/lower|low|down|下限|最小/.test(hint)) return 'lowerLimit';
+                        if (/upper|high|up|上限|最大/.test(hint)) return 'upperLimit';
+                        if (/times|limit|次数|频次/.test(hint)) return 'modifyTimesLimit';
+                        if (/dailyreset|次日|恢复/.test(hint)) return 'dailyReset';
+                        if (/targetname|目标名称/.test(hint)) return 'targetName';
+                        return '';
+                    };
+
+                    const patchByKey = new Map();
+                    const controlList = root.querySelectorAll('input,select,textarea');
+                    controlList.forEach(control => {
+                        if (!(control instanceof Element)) return;
+                        const rowNode = control.closest('tr,li,label,div') || control.parentElement;
+                        const matchContext = [
+                            rowNode?.textContent || '',
+                            control.getAttribute('aria-label') || '',
+                            control.getAttribute('placeholder') || '',
+                            control.getAttribute('name') || '',
+                            control.getAttribute('id') || '',
+                            control.className || ''
+                        ].join(' ');
+                        const key = findSettingKeyByText(matchContext);
+                        if (!key) return;
+
+                        const hint = normalizeMatchText(matchContext);
+                        const field = fieldByHint(hint);
+                        if (!field) return;
+
+                        let value = '';
+                        if (control instanceof HTMLInputElement) {
+                            if (control.type === 'checkbox' || control.type === 'radio') value = control.checked;
+                            else value = control.value;
+                        } else if (control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+                            value = control.value;
+                        } else {
+                            value = control.getAttribute('value') || '';
+                        }
+                        if (field === 'lowerLimit' || field === 'upperLimit' || field === 'modifyTimesLimit' || field === 'keywordLimit') {
+                            const num = Number(value);
+                            if (Number.isFinite(num)) value = num;
+                            else return;
+                        }
+                        if (field === 'dailyReset') value = !!value;
+
+                        const patch = patchByKey.get(key) || {};
+                        patch[field] = value;
+                        patchByKey.set(key, patch);
+                    });
+                    return patchByKey;
+                };
+                const resolveOpenV3Setting = () => {
+                    const responseSetting = normalizeEscortSettingTable(latestEscortSettingTable);
+                    const defaultUserSetting = {
+                        bidConstraintValue: { enabled: false },
+                        budget: { enabled: false }
+                    };
+                    const ensureUserSettingEnabled = (settingTable) => {
+                        if (!settingTable || typeof settingTable !== 'object') return null;
+                        const baseUserSetting = settingTable.userSetting && typeof settingTable.userSetting === 'object'
+                            ? deepCloneObject(settingTable.userSetting)
+                            : {};
+                        const operationList = Array.isArray(settingTable.operationList)
+                            ? settingTable.operationList.filter(Boolean)
+                            : [];
+                        const allKeys = Array.from(new Set([
+                            ...Object.keys(baseUserSetting),
+                            ...operationList
+                        ])).filter(Boolean);
+                        if (!allKeys.length) return null;
+                        allKeys.forEach(key => {
+                            const cfg = baseUserSetting[key] && typeof baseUserSetting[key] === 'object'
+                                ? baseUserSetting[key]
+                                : {};
+                            if (typeof cfg.enabled !== 'boolean') cfg.enabled = operationList.includes(key);
+                            baseUserSetting[key] = cfg;
+                        });
+                        return baseUserSetting;
+                    };
+                    const readSettingFromModal = (settingTable) => {
+                        if (!settingTable) return null;
+                        const modalRoot = getModalEscortSettingRoot();
+                        if (!(modalRoot instanceof HTMLElement)) return null;
+                        const candidateKeys = Array.from(new Set([
+                            ...(Array.isArray(settingTable.operationList) ? settingTable.operationList : []),
+                            ...Object.keys(settingTable.userSetting || {})
+                        ])).filter(Boolean);
+                        if (!candidateKeys.length) return null;
+
+                        const aliasList = candidateKeys.map(key => ({
+                            key,
+                            alias: buildOperationAliases(key, settingTable.userSetting?.[key] || {})
+                        }));
+                        const findSettingKeyByText = (text) => {
+                            const normalized = normalizeMatchText(text);
+                            if (!normalized) return '';
+                            let bestKey = '';
+                            let bestLength = 0;
+                            aliasList.forEach(item => {
+                                item.alias.forEach(alias => {
+                                    if (!alias || !normalized.includes(alias)) return;
+                                    if (alias.length > bestLength) {
+                                        bestKey = item.key;
+                                        bestLength = alias.length;
+                                    }
+                                });
+                            });
+                            return bestKey;
+                        };
+
+                        const stateByKey = new Map();
+                        const rootText = normalizeMatchText(modalRoot.textContent || '');
+                        aliasList.forEach(item => {
+                            if (item.alias.some(alias => alias && rootText.includes(alias))) {
+                                stateByKey.set(item.key, { matched: true, enabled: true });
+                            }
+                        });
+
+                        modalRoot.querySelectorAll('tr,li,label,div').forEach(node => {
+                            if (!(node instanceof Element)) return;
+                            const rowText = normalizeMatchText(node.textContent || '');
+                            if (!rowText || rowText.length < 2) return;
+                            const key = findSettingKeyByText(rowText);
+                            if (!key) return;
+                            const prev = stateByKey.get(key) || { matched: true };
+                            prev.matched = true;
+                            const enabled = detectEnabledFromNode(node);
+                            if (typeof enabled === 'boolean') prev.enabled = enabled;
+                            stateByKey.set(key, prev);
+                        });
+
+                        const patchByKey = extractModalSettingPatch(modalRoot, findSettingKeyByText);
+                        const mergedSetting = normalizeEscortSettingTable({
+                            actionType: settingTable.actionType || '',
+                            operationList: [],
+                            userSetting: {},
+                            footerInfo: settingTable.footerInfo || {}
+                        });
+                        if (!mergedSetting) return null;
+
+                        candidateKeys.forEach(key => {
+                            const baseCfg = deepCloneObject(settingTable.userSetting?.[key] || {});
+                            const keyState = stateByKey.get(key);
+                            const enabled = typeof keyState?.enabled === 'boolean'
+                                ? keyState.enabled
+                                : (Array.isArray(settingTable.operationList) && settingTable.operationList.includes(key));
+                            baseCfg.enabled = enabled;
+
+                            const patch = patchByKey.get(key);
+                            if (patch && typeof patch === 'object') Object.assign(baseCfg, patch);
+
+                            mergedSetting.userSetting[key] = baseCfg;
+                            if (enabled) mergedSetting.operationList.push(key);
+                        });
+
+                        if (!Object.keys(mergedSetting.userSetting).length) return null;
+                        return mergedSetting;
+                    };
+                    const applyManualSetting = (settingTable, manualOverride) => {
+                        if (!manualOverride || !manualOverride.enabled) return settingTable;
+                        const base = normalizeEscortSettingTable(settingTable) || normalizeEscortSettingTable({
+                            actionType: 'openInDialog',
+                            operationList: [],
+                            userSetting: {},
+                            footerInfo: {}
+                        });
+                        if (!base) return null;
+
+                        const mergedSetting = normalizeEscortSettingTable({
+                            actionType: normalizeActionType(manualOverride.actionType, normalizeActionType(base.actionType, 'openInDialog')),
+                            operationList: [],
+                            userSetting: deepCloneObject(base.userSetting || {}),
+                            footerInfo: base.footerInfo || {}
+                        });
+                        if (!mergedSetting) return null;
+
+                        const setNumericField = (cfg, field, value) => {
+                            const num = Number(value);
+                            if (Number.isFinite(num)) cfg[field] = num;
+                        };
+                        const setEnabledField = (cfg, value) => {
+                            if (typeof value === 'boolean') cfg.enabled = value;
+                        };
+                        const patchKeywordLimitField = (cfg, value) => {
+                            const num = Number(value);
+                            if (!Number.isFinite(num)) return;
+                            const candidateFieldList = ['wordCntLimit', 'keywordLimit', 'upperLimit', 'limit', 'wordLimit', 'selfWordLimit'];
+                            const targetField = candidateFieldList.find(field => field in cfg) || 'keywordLimit';
+                            cfg[targetField] = num;
+                        };
+                        const patchKeywordPreferenceField = (cfg, value) => {
+                            const candidateFieldList = ['preference', 'keywordPreference', 'buyWordPreference'];
+                            const targetField = candidateFieldList.find(field => field in cfg) || 'keywordPreference';
+                            const preferenceCode = resolveKeywordPreferenceCode(value);
+                            if (targetField === 'preference' || typeof cfg[targetField] === 'number') {
+                                if (typeof preferenceCode === 'number') cfg[targetField] = preferenceCode;
+                                return;
+                            }
+                            const text = String(value || '').trim();
+                            if (!text) return;
+                            cfg[targetField] = text;
+                        };
+                        const patchKeywordMatchTypeField = (cfg, value) => {
+                            const candidateFieldList = ['matchPattern', 'matchType', 'pattern'];
+                            const targetField = candidateFieldList.find(field => field in cfg) || 'matchType';
+                            const matchPattern = resolveKeywordMatchPatternCode(value);
+                            if (targetField === 'matchPattern' || targetField === 'pattern' || typeof cfg[targetField] === 'number') {
+                                if (typeof matchPattern === 'number') cfg[targetField] = matchPattern;
+                                return;
+                            }
+                            const text = String(value || '').trim();
+                            if (!text) return;
+                            cfg[targetField] = text;
+                        };
+                        const resolveTargetKey = (sourceKey) => {
+                            const aliasMap = {
+                                bidConstraintValue: ['bidConstraintValue'],
+                                budget: ['budget'],
+                                addKeyword: ['addKeyword', 'keywordAdd'],
+                                keywordAdd: ['keywordAdd', 'addKeyword'],
+                                switchKeywordMatchType: ['switchKeywordMatchType', 'keywordSwitch'],
+                                keywordSwitch: ['keywordSwitch', 'switchKeywordMatchType'],
+                                shieldKeyword: ['shieldKeyword', 'keywordMask'],
+                                keywordMask: ['keywordMask', 'shieldKeyword']
+                            };
+                            const candidateList = aliasMap[sourceKey] || [sourceKey];
+                            return candidateList.find(key => key in (mergedSetting.userSetting || {})) || sourceKey;
+                        };
+
+                        const manualUserSetting = manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
+                            ? manualOverride.userSetting
+                            : {};
+                        Object.entries(manualUserSetting).forEach(([key, manualCfgRaw]) => {
+                            if (!key || !manualCfgRaw || typeof manualCfgRaw !== 'object') return;
+                            const manualCfg = manualCfgRaw;
+                            const targetKey = resolveTargetKey(key);
+                            const baseCfg = mergedSetting.userSetting[targetKey] && typeof mergedSetting.userSetting[targetKey] === 'object'
+                                ? mergedSetting.userSetting[targetKey]
+                                : {};
+                            setEnabledField(baseCfg, manualCfg.enabled);
+
+                            if (targetKey === 'budget' || targetKey === 'bidConstraintValue') {
+                                setNumericField(baseCfg, 'lowerLimit', manualCfg.lowerLimit);
+                                setNumericField(baseCfg, 'modifyTimesLimit', manualCfg.modifyTimesLimit);
+                                if (typeof manualCfg.dailyReset === 'boolean') baseCfg.dailyReset = manualCfg.dailyReset;
+                                if (manualCfg.upperLimit === '不限') {
+                                    if (targetKey === 'budget') baseCfg.upperType = 0;
+                                    if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                } else {
+                                    const upperLimit = Number(manualCfg.upperLimit);
+                                    if (Number.isFinite(upperLimit)) {
+                                        baseCfg.upperLimit = upperLimit;
+                                        if (targetKey === 'budget') baseCfg.upperType = 1;
+                                        if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                    }
+                                }
+                            }
+
+                            if (targetKey === 'addKeyword' || targetKey === 'keywordAdd') {
+                                patchKeywordLimitField(baseCfg, manualCfg.keywordLimit);
+                                patchKeywordPreferenceField(baseCfg, manualCfg.keywordPreference);
+                                patchKeywordMatchTypeField(baseCfg, manualCfg.matchType);
+                            }
+
+                            mergedSetting.userSetting[targetKey] = baseCfg;
+                        });
+
+                        const operationKeySet = new Set();
+                        Object.entries(mergedSetting.userSetting).forEach(([key, cfg]) => {
+                            if (cfg && typeof cfg === 'object' && cfg.enabled === true) operationKeySet.add(key);
+                        });
+                        mergedSetting.operationList = Array.from(operationKeySet);
+                        return mergedSetting;
+                    };
+
+                    const modalSetting = readSettingFromModal(responseSetting);
+                    const manualSetting = typeof UI.readManualEscortSettingOverride === 'function'
+                        ? UI.readManualEscortSettingOverride()
+                        : null;
+                    let finalSetting = modalSetting || responseSetting;
+                    let sourceLabel = modalSetting
+                        ? '弹窗最新设置'
+                        : (responseSetting ? '诊断返回设置' : '默认护航设置');
+                    let fromModal = !!modalSetting;
+                    let fromManual = false;
+                    const hasEscortSettingTable = !!finalSetting;
+                    if (manualSetting?.enabled && hasEscortSettingTable) {
+                        const mergedByManual = applyManualSetting(finalSetting, manualSetting);
+                        if (mergedByManual) {
+                            finalSetting = mergedByManual;
+                            sourceLabel = '手动设置参数';
+                            fromManual = true;
+                            fromModal = false;
+                        }
+                    }
+                    const userSetting = normalizeUserSettingForOpenV3(ensureUserSettingEnabled(finalSetting) || defaultUserSetting);
+                    const actionType = normalizeActionType(finalSetting?.actionType || (manualSetting?.enabled ? manualSetting.actionType : ''), 'openInDialog');
+
+                    return {
+                        actionType,
+                        userSetting,
+                        displaySetting: finalSetting,
+                        sourceLabel,
+                        fromModal,
+                        fromManual
+                    };
+                };
                 const submitEscortOpenV3 = async (reasonText = '') => {
                     if (reasonText) card.log(reasonText, 'orange');
-                    card.log('提交护航权益授权（不勾选其他调控）...', 'orange');
+                    const resolvedOpenV3Setting = resolveOpenV3Setting();
+                    const displayOperationCount = Array.isArray(resolvedOpenV3Setting.displaySetting?.operationList)
+                        ? resolvedOpenV3Setting.displaySetting.operationList.length
+                        : 0;
+                    const displaySettingCount = displayOperationCount || Object.keys(resolvedOpenV3Setting.displaySetting?.userSetting || {}).length;
+                    if (displaySettingCount) {
+                        card.log(`使用${resolvedOpenV3Setting.sourceLabel}：${displaySettingCount} 个设置项`, '#1890ff');
+                    }
+                    card.log(`提交护航权益授权（${resolvedOpenV3Setting.sourceLabel}）...`, 'orange');
                     card.setStatus('提交中', 'info');
-                    const openV3ActionType = (() => {
-                        const candidate = String(latestEscortSettingTable?.actionType || '').trim();
-                        return candidate === 'openInDialog' || candidate === 'updateInDialog'
-                            ? candidate
-                            : 'updateInDialog';
-                    })();
+                    const openV3BizCode = talkData?.contextParam?.bizCode || talkData?.contextParam?.mx_bizCode || 'onebpSearch';
 
-                    const openV3Res = await API.request('https://ai.alimama.com/ai/escort/openV3.json', {
-                        bizCode: 'onebpSite',
-                        campaignId: String(campaignId),
-                        userSetting: {
-                            bidConstraintValue: { enabled: false },
-                            budget: { enabled: false }
-                        },
-                        actionType: openV3ActionType,
-                        timeStr: Date.now(),
-                        dynamicToken: State.tokens.dynamicToken || '',
-                        csrfID: State.tokens.csrfID || '',
-                        loginPointId: State.tokens.loginPointId || ''
-                    }, {
-                        signal: State.runAbortController?.signal
-                    });
+                    const isDuplicateEscortMessage = (message) => /已开启护航|请勿重复开启|重复开启|已在护航|正在护航/.test(String(message || ''));
+                    const requestOpenV3ByActionType = async (actionType) => {
+                        const openV3Res = await API.request('https://ai.alimama.com/ai/escort/openV3.json', {
+                            bizCode: openV3BizCode,
+                            campaignId: String(campaignId),
+                            userSetting: resolvedOpenV3Setting.userSetting,
+                            actionType,
+                            timeStr: Date.now(),
+                            dynamicToken: State.tokens.dynamicToken || '',
+                            csrfID: '',
+                            loginPointId: State.tokens.loginPointId || ''
+                        }, {
+                            signal: State.runAbortController?.signal
+                        });
+                        const success = openV3Res?.success || openV3Res?.ok || openV3Res?.info?.ok;
+                        const msg = openV3Res?.info?.message || (success ? '护航开启成功' : '护航开启失败');
+                        return {
+                            success,
+                            msg,
+                            actionType
+                        };
+                    };
+                    const buildExecutionStateMap = (displaySetting, success) => {
+                        if (!displaySetting || typeof displaySetting !== 'object') return {};
+                        const keySet = new Set();
+                        if (Array.isArray(displaySetting.operationList)) {
+                            displaySetting.operationList.forEach(key => keySet.add(key));
+                        }
+                        if (displaySetting.userSetting && typeof displaySetting.userSetting === 'object') {
+                            Object.keys(displaySetting.userSetting).forEach(key => keySet.add(key));
+                        }
+                        const map = {};
+                        const stateValue = !!success;
+                        keySet.forEach(key => {
+                            if (!key) return;
+                            map[key] = stateValue;
+                            map[normalizeOpenV3SettingKey(key)] = stateValue;
+                        });
+                        return map;
+                    };
 
-                    const openV3Success = openV3Res?.success || openV3Res?.ok || openV3Res?.info?.ok;
-                    const openV3Msg = openV3Res?.info?.message || (openV3Success ? '护航开启成功' : '护航开启失败');
+                    let submitResult = await requestOpenV3ByActionType(resolvedOpenV3Setting.actionType);
+                    if (!submitResult.success && isDuplicateEscortMessage(submitResult.msg)) {
+                        if (resolvedOpenV3Setting.actionType !== 'updateInDialog') {
+                            card.log('检测到计划可能已在护航中，改用 updateInDialog 强制执行一次...', '#fa8c16');
+                            const forceResult = await requestOpenV3ByActionType('updateInDialog');
+                            if (forceResult.success) {
+                                submitResult = {
+                                    ...forceResult,
+                                    forced: true
+                                };
+                            } else if (isDuplicateEscortMessage(forceResult.msg)) {
+                                submitResult = {
+                                    ...forceResult,
+                                    success: true,
+                                    msg: '当前计划已开启护航，视为执行成功',
+                                    forced: true
+                                };
+                            } else {
+                                submitResult = {
+                                    ...forceResult,
+                                    forced: true
+                                };
+                            }
+                        } else {
+                            submitResult = {
+                                ...submitResult,
+                                success: true,
+                                msg: '当前计划已开启护航，视为执行成功'
+                            };
+                        }
+                    }
 
-                    card.log(`${openV3Success ? '✓' : '✗'} ${openV3Msg}`, openV3Success ? 'green' : 'red');
-                    card.setStatus(openV3Success ? '护航中' : '失败', openV3Success ? 'success' : 'error');
+                    const executionState = buildExecutionStateMap(resolvedOpenV3Setting.displaySetting, submitResult.success);
+                    if (Object.keys(executionState).length) {
+                        UI.renderEscortSettingTableToCard(card, resolvedOpenV3Setting.displaySetting, { executionState });
+                    }
+
+                    if (submitResult.forced) {
+                        card.log(`已按强制模式重提：${submitResult.actionType}`, '#4b5563');
+                    }
+                    card.log(`${submitResult.success ? '✓' : '✗'} ${submitResult.msg}`, submitResult.success ? 'green' : 'red');
+                    card.setStatus(submitResult.success ? '护航中' : '失败', submitResult.success ? 'success' : 'error');
                     card.collapse();
-                    return { success: openV3Success, msg: openV3Msg };
+                    return { success: submitResult.success, msg: submitResult.msg };
                 };
 
                 const collect = (obj, depth = 0) => {
@@ -218,7 +783,6 @@
                         card.log(`识别到小万护航新流程：${matchedSignals.join('、')}`, '#1890ff');
                         if (latestEscortSettingTable?.operationList?.length) {
                             card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
-                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
                         }
                         return await submitEscortOpenV3();
                     }
@@ -237,7 +801,6 @@
                             : '计划当前处于小万护航中（页面状态识别）';
                         if (latestEscortSettingTable?.operationList?.length) {
                             card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
-                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
                         }
                         return await submitEscortOpenV3(`ℹ️ ${rowStatusText}，按配置强制重新提交护航`);
                     }
