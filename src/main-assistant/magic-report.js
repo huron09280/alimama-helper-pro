@@ -1120,6 +1120,314 @@
             return `${prompt} 过去${days}天`;
         },
 
+        buildCrowdPanelTimeMode(timeModeValue = '', periodDays = 7) {
+            const days = Number(periodDays);
+            const periodText = Number.isFinite(days) && days > 0 ? `过去${days}天` : '过去7天';
+            const fallback = JSON.stringify({
+                timeInfo: periodText,
+                timeMode: 'slidedTime'
+            });
+
+            const syncNodeTimeInfo = (node) => {
+                if (!node || typeof node !== 'object') return;
+                if (Object.prototype.hasOwnProperty.call(node, 'timeInfo')) {
+                    node.timeInfo = periodText;
+                }
+                if (Array.isArray(node.period)) {
+                    node.period = node.period.map((item) => {
+                        if (item && typeof item === 'object') {
+                            return {
+                                ...item,
+                                timeInfo: periodText
+                            };
+                        }
+                        return { timeInfo: periodText };
+                    });
+                }
+                Object.keys(node).forEach((key) => {
+                    const value = node[key];
+                    if (!value || typeof value !== 'object') return;
+                    syncNodeTimeInfo(value);
+                });
+            };
+
+            let normalized = timeModeValue;
+            if (normalized && typeof normalized === 'object') {
+                try {
+                    normalized = JSON.stringify(normalized);
+                } catch {
+                    normalized = '';
+                }
+            }
+            const text = String(normalized || '').trim();
+            if (!text) return fallback;
+
+            try {
+                const parsed = JSON.parse(text);
+                if (parsed && typeof parsed === 'object') {
+                    const cloned = JSON.parse(JSON.stringify(parsed));
+                    syncNodeTimeInfo(cloned);
+                    const rootMode = String(cloned.timeMode || '').trim();
+                    if (!rootMode || rootMode === 'noTimeMode') {
+                        cloned.timeMode = 'slidedTime';
+                    }
+                    if (!String(cloned.timeInfo || '').trim()) {
+                        cloned.timeInfo = periodText;
+                    }
+                    if (!Array.isArray(cloned.period) || !cloned.period.length) {
+                        cloned.period = [{ timeInfo: periodText }];
+                    }
+                    return JSON.stringify(cloned);
+                }
+            } catch { }
+
+            const replaced = text.replace(/过去\s*\d+\s*天/g, periodText);
+            if (replaced !== text) return replaced;
+            return fallback;
+        },
+
+        parseCrowdPlanDate(value = '') {
+            const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return null;
+            const year = Number(match[1]);
+            const month = Number(match[2]);
+            const day = Number(match[3]);
+            if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+            const date = new Date(Date.UTC(year, month - 1, day));
+            if (
+                date.getUTCFullYear() !== year
+                || date.getUTCMonth() + 1 !== month
+                || date.getUTCDate() !== day
+            ) {
+                return null;
+            }
+            return date;
+        },
+
+        formatCrowdPlanDate(date) {
+            if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+            const year = date.getUTCFullYear();
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        },
+
+        buildCrowdPanelQueryExecutePlan(queryExecutePlanValue = '', periodDays = 7) {
+            const source = String(queryExecutePlanValue || '').trim();
+            const days = Number(periodDays);
+            if (!source) return '';
+            if (!Number.isFinite(days) || days <= 0) return source;
+            const normalizedDays = Math.max(1, Math.floor(days));
+            const periodText = `过去${normalizedDays}天`;
+            const MAX_PLAN_STRING_DEPTH = 3;
+
+            const rewriteDateWindow = (startTime = '', endTime = '') => {
+                const endDate = this.parseCrowdPlanDate(endTime);
+                if (!endDate) {
+                    return {
+                        startTime: String(startTime || ''),
+                        endTime: String(endTime || ''),
+                        changed: false
+                    };
+                }
+                const nextStartDate = new Date(endDate.getTime());
+                nextStartDate.setUTCDate(nextStartDate.getUTCDate() - (normalizedDays - 1));
+                const nextStart = this.formatCrowdPlanDate(nextStartDate);
+                const nextEnd = this.formatCrowdPlanDate(endDate);
+                const prevStart = String(startTime || '').trim();
+                const prevEnd = String(endTime || '').trim();
+                const changed = prevStart !== nextStart || prevEnd !== nextEnd;
+                return {
+                    startTime: nextStart,
+                    endTime: nextEnd,
+                    changed
+                };
+            };
+
+            const decodeBase64Text = (text = '') => {
+                const sourceText = String(text || '');
+                if (!sourceText) return '';
+                try {
+                    const binary = atob(sourceText);
+                    if (typeof TextDecoder === 'function') {
+                        const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+                        return new TextDecoder('utf-8').decode(bytes);
+                    }
+                    return binary;
+                } catch {
+                    return '';
+                }
+            };
+
+            const encodeBase64Text = (text = '') => {
+                const sourceText = String(text || '');
+                try {
+                    if (typeof TextEncoder === 'function') {
+                        const bytes = new TextEncoder().encode(sourceText);
+                        let binary = '';
+                        bytes.forEach((byte) => {
+                            binary += String.fromCharCode(byte);
+                        });
+                        return btoa(binary);
+                    }
+                } catch { }
+                try {
+                    return btoa(unescape(encodeURIComponent(sourceText)));
+                } catch {
+                    return '';
+                }
+            };
+
+            const rewritePlanObject = (planObject, depth = 0) => {
+                let changed = false;
+                const rewritePlanString = (value = '', depth = 0) => {
+                    const text = String(value || '');
+                    if (!text || depth >= MAX_PLAN_STRING_DEPTH) {
+                        return {
+                            value: text,
+                            changed: false
+                        };
+                    }
+                    const directParsed = tryParseJson(text);
+                    if (directParsed && typeof directParsed === 'object') {
+                        const copied = JSON.parse(JSON.stringify(directParsed));
+                        if (!rewritePlanObject(copied, depth + 1)) {
+                            return {
+                                value: text,
+                                changed: false
+                            };
+                        }
+                        try {
+                            return {
+                                value: JSON.stringify(copied),
+                                changed: true
+                            };
+                        } catch {
+                            return {
+                                value: text,
+                                changed: false
+                            };
+                        }
+                    }
+                    const base64Result = tryParseBase64Json(text);
+                    if (base64Result) {
+                        const copied = JSON.parse(JSON.stringify(base64Result.parsed));
+                        if (!rewritePlanObject(copied, depth + 1)) {
+                            return {
+                                value: text,
+                                changed: false
+                            };
+                        }
+                        try {
+                            const encoded = encodeBase64Text(JSON.stringify(copied));
+                            if (!encoded) {
+                                return {
+                                    value: text,
+                                    changed: false
+                                };
+                            }
+                            return {
+                                value: encoded,
+                                changed: true
+                            };
+                        } catch {
+                            return {
+                                value: text,
+                                changed: false
+                            };
+                        }
+                    }
+                    return {
+                        value: text,
+                        changed: false
+                    };
+                };
+
+                const visit = (node, currentDepth = depth) => {
+                    if (!node || typeof node !== 'object') return;
+                    if (!Array.isArray(node)) {
+                        if (typeof node.query === 'string') {
+                            const nextQuery = this.buildCrowdPeriodPrompt(node.query, normalizedDays);
+                            if (nextQuery && nextQuery !== node.query) {
+                                node.query = nextQuery;
+                                changed = true;
+                            }
+                        }
+                        if (typeof node.timeInfo === 'string' && node.timeInfo !== periodText) {
+                            node.timeInfo = periodText;
+                            changed = true;
+                        }
+                        const hasStartTime = Object.prototype.hasOwnProperty.call(node, 'startTime');
+                        const hasEndTime = Object.prototype.hasOwnProperty.call(node, 'endTime');
+                        if (hasStartTime && hasEndTime) {
+                            const rewritten = rewriteDateWindow(node.startTime, node.endTime);
+                            if (rewritten.changed) {
+                                node.startTime = rewritten.startTime;
+                                node.endTime = rewritten.endTime;
+                                changed = true;
+                            }
+                        }
+                    }
+                    Object.keys(node).forEach((key) => {
+                        const value = node[key];
+                        if (!value) return;
+                        if (typeof value === 'object') {
+                            visit(value, currentDepth);
+                            return;
+                        }
+                        if (typeof value !== 'string') return;
+                        const rewritten = rewritePlanString(value, currentDepth);
+                        if (!rewritten.changed) return;
+                        node[key] = rewritten.value;
+                        changed = true;
+                    });
+                };
+                visit(planObject, depth);
+                return changed;
+            };
+
+            const tryParseJson = (text) => {
+                try {
+                    return JSON.parse(text);
+                } catch {
+                    return null;
+                }
+            };
+
+            const tryParseBase64Json = (text) => {
+                const decoded = decodeBase64Text(text);
+                if (!decoded) return null;
+                const parsed = tryParseJson(decoded);
+                if (!parsed || typeof parsed !== 'object') return null;
+                return { decoded, parsed };
+            };
+
+            const directParsed = tryParseJson(source);
+            if (directParsed && typeof directParsed === 'object') {
+                const copied = JSON.parse(JSON.stringify(directParsed));
+                if (!rewritePlanObject(copied)) return source;
+                try {
+                    return JSON.stringify(copied);
+                } catch {
+                    return source;
+                }
+            }
+
+            const base64Result = tryParseBase64Json(source);
+            if (base64Result) {
+                const copied = JSON.parse(JSON.stringify(base64Result.parsed));
+                if (!rewritePlanObject(copied)) return source;
+                try {
+                    const encoded = encodeBase64Text(JSON.stringify(copied));
+                    if (!encoded) return source;
+                    return encoded;
+                } catch {
+                    return source;
+                }
+            }
+            return source;
+        },
+
         parseSseEvents(rawText) {
             const text = String(rawText || '');
             if (!text) return [];
@@ -1586,14 +1894,18 @@
             if (!this.CROWD_PERIODS.includes(days)) {
                 throw new Error(`不支持的周期: ${periodDays}`);
             }
+            const periodText = `过去${days}天`;
+            const normalizedTitle = this.buildCrowdPeriodPrompt(String(title || '').trim(), days);
+            const normalizedTimeMode = this.buildCrowdPanelTimeMode(timeMode, days);
+            const normalizedQueryExecutePlan = this.buildCrowdPanelQueryExecutePlan(queryExecutePlan, days);
             const payload = {
-                title: String(title || '').trim(),
+                title: normalizedTitle,
                 needTitle: false,
                 queryConf: {
-                    period: [{ timeInfo: `过去${days}天` }],
-                    queryExecutePlan: String(queryExecutePlan || '').trim(),
-                    timeMode: String(timeMode || '{"timeInfo":"过去7天","timeMode":"slidedTime"}'),
-                    timeInfo: `过去${days}天`
+                    period: [{ timeInfo: periodText }],
+                    queryExecutePlan: String(normalizedQueryExecutePlan || '').trim(),
+                    timeMode: normalizedTimeMode,
+                    timeInfo: periodText
                 }
             };
             const response = await this.requestCrowdApi('/ai/report/panelDataQuery.json', payload);
@@ -4499,4 +4811,3 @@
             UI.updateState();
         }
     };
-
