@@ -59,16 +59,104 @@
                     signal: State.runAbortController?.signal
                 });
 
-                // 收集所有 actionList
+                // 收集所有 actionList 与新链路文本信号
                 const allActionLists = [];
                 const seenKeys = new Set();
+                let latestEscortSettingTable = null;
+                const flowSignalRules = [
+                    { name: '护航工作授权', re: /护航工作授权|授权小万开始护航/ },
+                    { name: '确认修改规划', re: /确认修改规划/ },
+                    { name: '护航诊断上下文', re: /(?:小万护航|护航诉求|护航操作记录|历史护航诉求|当前护航诉求)/ }
+                ];
+                const escortFlowSignals = new Set();
+                const normalizeEscortSettingTable = (value) => {
+                    if (!value || typeof value !== 'object') return null;
+                    const operationList = Array.isArray(value.operationList)
+                        ? value.operationList.filter(Boolean)
+                        : [];
+                    const userSetting = value.userSetting && typeof value.userSetting === 'object'
+                        ? value.userSetting
+                        : null;
+
+                    if (!operationList.length && !userSetting) return null;
+
+                    return {
+                        actionType: value.actionType || '',
+                        operationList,
+                        userSetting: userSetting || {},
+                        footerInfo: value.footerInfo && typeof value.footerInfo === 'object'
+                            ? value.footerInfo
+                            : {}
+                    };
+                };
+                const collectFlowSignalText = (value) => {
+                    const text = String(value || '');
+                    if (!text) return;
+                    flowSignalRules.forEach(rule => {
+                        if (rule.re.test(text)) escortFlowSignals.add(rule.name);
+                    });
+                };
+                const submitEscortOpenV3 = async (reasonText = '') => {
+                    if (reasonText) card.log(reasonText, 'orange');
+                    card.log('提交护航权益授权（不勾选其他调控）...', 'orange');
+                    card.setStatus('提交中', 'info');
+                    const openV3ActionType = (() => {
+                        const candidate = String(latestEscortSettingTable?.actionType || '').trim();
+                        return candidate === 'openInDialog' || candidate === 'updateInDialog'
+                            ? candidate
+                            : 'updateInDialog';
+                    })();
+
+                    const openV3Res = await API.request('https://ai.alimama.com/ai/escort/openV3.json', {
+                        bizCode: 'onebpSite',
+                        campaignId: String(campaignId),
+                        userSetting: {
+                            bidConstraintValue: { enabled: false },
+                            budget: { enabled: false }
+                        },
+                        actionType: openV3ActionType,
+                        timeStr: Date.now(),
+                        dynamicToken: State.tokens.dynamicToken || '',
+                        csrfID: State.tokens.csrfID || '',
+                        loginPointId: State.tokens.loginPointId || ''
+                    }, {
+                        signal: State.runAbortController?.signal
+                    });
+
+                    const openV3Success = openV3Res?.success || openV3Res?.ok || openV3Res?.info?.ok;
+                    const openV3Msg = openV3Res?.info?.message || (openV3Success ? '护航开启成功' : '护航开启失败');
+
+                    card.log(`${openV3Success ? '✓' : '✗'} ${openV3Msg}`, openV3Success ? 'green' : 'red');
+                    card.setStatus(openV3Success ? '护航中' : '失败', openV3Success ? 'success' : 'error');
+                    card.collapse();
+                    return { success: openV3Success, msg: openV3Msg };
+                };
 
                 const collect = (obj, depth = 0) => {
                     if (!obj || depth > 20) return;
+                    if (typeof obj === 'string') {
+                        collectFlowSignalText(obj);
+                        return;
+                    }
                     if (Array.isArray(obj)) {
                         obj.forEach(item => collect(item, depth + 1));
                         return;
                     }
+                    if (typeof obj !== 'object') return;
+
+                    for (const field of ['title', 'summary', 'content', 'text', 'actionText']) {
+                        if (typeof obj[field] === 'string') collectFlowSignalText(obj[field]);
+                    }
+
+                    const escortSettingFromRender = obj.renderCode === 'escortSettingTable'
+                        ? normalizeEscortSettingTable(obj.data)
+                        : null;
+                    const escortSettingCandidate = escortSettingFromRender || normalizeEscortSettingTable(obj);
+                    if (escortSettingCandidate) {
+                        latestEscortSettingTable = escortSettingCandidate;
+                        collectFlowSignalText(escortSettingCandidate.footerInfo?.enterText);
+                    }
+
                     if (Array.isArray(obj.actionList) && obj.actionList.length) {
                         const key = obj.actionList.map(i => {
                             const infoStr = typeof i.actionInfo === 'string'
@@ -81,9 +169,7 @@
                             allActionLists.push(obj.actionList);
                         }
                     }
-                    if (typeof obj === 'object') {
-                        for (const k in obj) collect(obj[k], depth + 1);
-                    }
+                    for (const k in obj) collect(obj[k], depth + 1);
                 };
 
                 if (talkRes.isStream) {
@@ -105,10 +191,10 @@
                     UI.renderAllActionsToCard(card, allActionLists);
                 }
 
-                // 寻找算法护航
+                // 寻找护航方案（兼容平台新旧文案）
                 let actionList = null, targetInfo = null;
                 for (const list of allActionLists) {
-                    const escort = list.find(i => i.actionText?.includes('算法护航'));
+                    const escort = list.find(i => Utils.isEscortActionText(i?.actionText));
                     if (escort?.actionInfo) {
                         try {
                             const info = JSON.parse(escort.actionInfo);
@@ -121,8 +207,44 @@
                     }
                 }
 
+                // 无旧 actionList 时，兼容小万护航新链路（需要用户在右侧面板确认授权）
                 if (!actionList?.length) {
-                    card.log('⚠️ 未发现"算法护航"方案', 'orange');
+                    const matchedSignals = Array.from(escortFlowSignals);
+                    const isNewEscortFlow = escortFlowSignals.has('护航工作授权')
+                        || escortFlowSignals.has('确认修改规划');
+
+                    if (isNewEscortFlow) {
+                        Logger.info('命中新护航链路信号:', matchedSignals);
+                        card.log(`识别到小万护航新流程：${matchedSignals.join('、')}`, '#1890ff');
+                        if (latestEscortSettingTable?.operationList?.length) {
+                            card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
+                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
+                        }
+                        return await submitEscortOpenV3();
+                    }
+                }
+
+                // 无 actionList 且未命中新链路关键词时，读取计划行状态避免误判
+                if (!actionList?.length) {
+                    const rowByCheckbox = document.querySelector(`input[type="checkbox"][value="${campaignId}"]`)?.closest('tr');
+                    const rowByPlanId = Array.from(document.querySelectorAll('tr'))
+                        .find(tr => (tr.textContent || '').includes(`计划ID：${campaignId}`));
+                    const rowText = (rowByCheckbox?.textContent || rowByPlanId?.textContent || '').replace(/\s+/g, '');
+
+                    if (/护航调优中|护航中|护航工作报告/.test(rowText) || /护航已结束/.test(rowText)) {
+                        const rowStatusText = /护航已结束/.test(rowText)
+                            ? '计划护航已结束（页面状态识别）'
+                            : '计划当前处于小万护航中（页面状态识别）';
+                        if (latestEscortSettingTable?.operationList?.length) {
+                            card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
+                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
+                        }
+                        return await submitEscortOpenV3(`ℹ️ ${rowStatusText}，按配置强制重新提交护航`);
+                    }
+                }
+
+                if (!actionList?.length) {
+                    card.log('⚠️ 未发现护航方案（算法护航/小万护航）', 'orange');
                     card.setStatus('无方案', 'warning');
                     card.collapse();
                     return { success: false, msg: '无护航方案' };
@@ -140,7 +262,7 @@
                     actionList,
                     campaignId: campaignId.toString(),
                     continueDays: 3650,
-                    target: targetInfo?.target || '深度诊断拿量',
+                    target: targetInfo?.target || '深度拿量',
                     timeStr: Date.now(),
                     bizCode: userConfig.bizCode,
                     ...State.tokens
