@@ -104,6 +104,9 @@ npm run review
 npm run build
 npm run build:check
 npm run check:syntax
+npm run codex:map
+npm run codex:find -- "__AM_HOOK_MANAGER__"
+npm run codex:changed
 npm run test
 npm run review
 ```
@@ -117,6 +120,26 @@ node --check "阿里妈妈多合一助手.js"
 node --test tests/*.test.mjs
 bash scripts/review-team.sh
 ```
+
+### Codex 小上下文开发
+
+针对“大文件占上下文”和“反馈慢”的问题，仓库内置了 Codex 快速定位命令：
+
+```bash
+npm run codex:map
+npm run codex:find -- "<关键词>"
+npm run codex:changed
+```
+
+工作流建议：
+
+1. 先定位（map/find）再改动，避免扫描生成产物。
+2. 开发中只跑最小相关测试。
+3. 提交前统一跑 `npm run review`。
+
+完整规则见：
+
+- [`docs/CODEX_WORKFLOW.md`](./docs/CODEX_WORKFLOW.md)
 
 ### Dev Loader 工作流
 
