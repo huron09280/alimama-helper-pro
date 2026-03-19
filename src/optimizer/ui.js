@@ -198,8 +198,59 @@
                 { title: '方案名称', render: row => row.actionText },
                 { title: '详情', render: row => Utils.extractDetail(row) }
             ], {
-                highlight: row => row.actionText?.includes('算法护航')
+                highlight: row => Utils.isEscortActionText(row?.actionText)
             });
+        },
+
+        // 渲染新链路护航配置（escortSettingTable）
+        renderEscortSettingTableToCard: (cardLogger, settingData) => {
+            if (!settingData || typeof settingData !== 'object') return;
+
+            const operationList = Array.isArray(settingData.operationList) ? settingData.operationList : [];
+            const userSetting = settingData.userSetting && typeof settingData.userSetting === 'object'
+                ? settingData.userSetting
+                : {};
+
+            const rows = operationList.map((key, index) => {
+                const cfg = userSetting[key] && typeof userSetting[key] === 'object' ? userSetting[key] : {};
+                const lower = cfg.lowerLimit ?? '-';
+                const upper = cfg.upperType === 0 ? '不限' : (cfg.upperLimit ?? '-');
+                const limit = cfg.modifyTimesLimit ?? '-';
+                const dailyResetText = cfg.dailyReset ? '次日恢复初始值' : '次日不恢复';
+
+                let actionText = key;
+                if (key === 'budget') actionText = '预算调优';
+                if (key === 'bidConstraintValue') actionText = cfg.targetName ? `${cfg.targetName}调优` : '投产比调优';
+
+                const detailParts = [];
+                if (key === 'budget' || key === 'bidConstraintValue') {
+                    detailParts.push(`范围 ${lower}-${upper}`);
+                }
+                if (limit !== '-') detailParts.push(`最多 ${limit} 次/日`);
+                detailParts.push(dailyResetText);
+
+                return {
+                    order: index + 1,
+                    actionText,
+                    detail: detailParts.join('；')
+                };
+            }).filter(row => row.actionText && row.actionText !== '-');
+
+            if (!rows.length) return;
+
+            UI.renderTableToCard(cardLogger, rows, [
+                { title: '#', width: '24px', render: row => row.order },
+                { title: '方案名称', render: row => row.actionText },
+                { title: '详情', render: row => row.detail }
+            ], {
+                headerBg: 'rgba(42,91,255,.12)',
+                headerColor: 'var(--am26-primary,#2a5bff)'
+            });
+
+            const footerText = settingData.footerInfo?.enterText ? `提交按钮：${settingData.footerInfo.enterText}` : '';
+            const actionTypeText = settingData.actionType ? `提交类型：${settingData.actionType}` : '';
+            const hintText = [footerText, actionTypeText].filter(Boolean).join('，');
+            if (hintText) cardLogger.log(`新链路提交信息：${hintText}`, '#4b5563');
         },
 
         // 渲染护航方案表格（到卡片）
@@ -363,7 +414,7 @@
 
             panel.innerHTML = `
                 <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="color:var(--am26-primary,#2a5bff);">🛡️ 算法护航 v${CONFIG.VERSION}</span>
+                    <span style="color:var(--am26-primary,#2a5bff);">🛡️ 小万护航 v${CONFIG.VERSION}</span>
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
                         <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
@@ -383,7 +434,7 @@
                 <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
                     <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">诊断话术:</label>
-                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" placeholder="例: 帮我进行深度诊断" />
+                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" placeholder="例: 深度拿量" />
                 </div>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
                     <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">同时执行:</label>

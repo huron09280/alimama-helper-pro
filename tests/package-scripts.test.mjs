@@ -10,6 +10,9 @@ test('package.json 暴露常用开发脚本入口', () => {
     assert.equal(packageJson.scripts['build:check'], 'node scripts/build.mjs --check');
     assert.equal(packageJson.scripts['build:watch'], 'node scripts/build.mjs --watch');
     assert.equal(packageJson.scripts['check:syntax'], 'node --check "阿里妈妈多合一助手.js"');
+    assert.equal(packageJson.scripts['codex:map'], 'bash scripts/codex-context.sh map');
+    assert.equal(packageJson.scripts['codex:find'], 'bash scripts/codex-context.sh find');
+    assert.equal(packageJson.scripts['codex:changed'], 'bash scripts/codex-context.sh changed');
     assert.equal(packageJson.scripts.test, 'node --test tests/*.test.mjs');
     assert.equal(packageJson.scripts.review, 'bash scripts/review-team.sh');
     assert.equal(packageJson.scripts['dev:serve'], 'python3 -m http.server 5173');

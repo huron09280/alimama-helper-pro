@@ -12,12 +12,18 @@
         VERSION: CURRENT_VERSION,
         DEFAULT: {
             bizCode: 'universalBP',
-            customPrompt: '帮我进行深度诊断',
+            customPrompt: '深度拿量',
             concurrency: 3
         }
     };
 
     let userConfig = { ...CONFIG.DEFAULT, ...GM_getValue('config', {}) };
+    const normalizedPrompt = typeof userConfig.customPrompt === 'string'
+        ? userConfig.customPrompt.trim()
+        : '';
+    if (!normalizedPrompt || normalizedPrompt === '帮我进行深度诊断' || normalizedPrompt === '深度诊断拿量') {
+        userConfig.customPrompt = CONFIG.DEFAULT.customPrompt;
+    }
 
     // ==================== 日志模块 ====================
     const Logger = {
@@ -152,7 +158,12 @@
             return action.actionTitle || action.title || action.actionText || '未知方案';
         },
 
+        // 判断是否为护航入口文案（兼容平台新旧文案）
+        isEscortActionText: (text) => {
+            const normalized = String(text || '');
+            return /(?:算法护航|小万护航|实时护航)/.test(normalized);
+        },
+
         // 判断是否为有效方案（非未知）
         isValidAction: (name) => name && name !== '未知方案' && name !== '未知'
     };
-

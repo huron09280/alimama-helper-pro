@@ -11867,12 +11867,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         VERSION: CURRENT_VERSION,
         DEFAULT: {
             bizCode: 'universalBP',
-            customPrompt: '帮我进行深度诊断',
+            customPrompt: '深度拿量',
             concurrency: 3
         }
     };
 
     let userConfig = { ...CONFIG.DEFAULT, ...GM_getValue('config', {}) };
+    const normalizedPrompt = typeof userConfig.customPrompt === 'string'
+        ? userConfig.customPrompt.trim()
+        : '';
+    if (!normalizedPrompt || normalizedPrompt === '帮我进行深度诊断' || normalizedPrompt === '深度诊断拿量') {
+        userConfig.customPrompt = CONFIG.DEFAULT.customPrompt;
+    }
 
     // ==================== 日志模块 ====================
     const Logger = {
@@ -12007,10 +12013,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return action.actionTitle || action.title || action.actionText || '未知方案';
         },
 
+        // 判断是否为护航入口文案（兼容平台新旧文案）
+        isEscortActionText: (text) => {
+            const normalized = String(text || '');
+            return /(?:算法护航|小万护航|实时护航)/.test(normalized);
+        },
+
         // 判断是否为有效方案（非未知）
         isValidAction: (name) => name && name !== '未知方案' && name !== '未知'
     };
-
     // ==================== Token 管理模块 ====================
     const TokenManager = {
         hookReady: false,
@@ -52680,8 +52691,59 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 { title: '方案名称', render: row => row.actionText },
                 { title: '详情', render: row => Utils.extractDetail(row) }
             ], {
-                highlight: row => row.actionText?.includes('算法护航')
+                highlight: row => Utils.isEscortActionText(row?.actionText)
             });
+        },
+
+        // 渲染新链路护航配置（escortSettingTable）
+        renderEscortSettingTableToCard: (cardLogger, settingData) => {
+            if (!settingData || typeof settingData !== 'object') return;
+
+            const operationList = Array.isArray(settingData.operationList) ? settingData.operationList : [];
+            const userSetting = settingData.userSetting && typeof settingData.userSetting === 'object'
+                ? settingData.userSetting
+                : {};
+
+            const rows = operationList.map((key, index) => {
+                const cfg = userSetting[key] && typeof userSetting[key] === 'object' ? userSetting[key] : {};
+                const lower = cfg.lowerLimit ?? '-';
+                const upper = cfg.upperType === 0 ? '不限' : (cfg.upperLimit ?? '-');
+                const limit = cfg.modifyTimesLimit ?? '-';
+                const dailyResetText = cfg.dailyReset ? '次日恢复初始值' : '次日不恢复';
+
+                let actionText = key;
+                if (key === 'budget') actionText = '预算调优';
+                if (key === 'bidConstraintValue') actionText = cfg.targetName ? `${cfg.targetName}调优` : '投产比调优';
+
+                const detailParts = [];
+                if (key === 'budget' || key === 'bidConstraintValue') {
+                    detailParts.push(`范围 ${lower}-${upper}`);
+                }
+                if (limit !== '-') detailParts.push(`最多 ${limit} 次/日`);
+                detailParts.push(dailyResetText);
+
+                return {
+                    order: index + 1,
+                    actionText,
+                    detail: detailParts.join('；')
+                };
+            }).filter(row => row.actionText && row.actionText !== '-');
+
+            if (!rows.length) return;
+
+            UI.renderTableToCard(cardLogger, rows, [
+                { title: '#', width: '24px', render: row => row.order },
+                { title: '方案名称', render: row => row.actionText },
+                { title: '详情', render: row => row.detail }
+            ], {
+                headerBg: 'rgba(42,91,255,.12)',
+                headerColor: 'var(--am26-primary,#2a5bff)'
+            });
+
+            const footerText = settingData.footerInfo?.enterText ? `提交按钮：${settingData.footerInfo.enterText}` : '';
+            const actionTypeText = settingData.actionType ? `提交类型：${settingData.actionType}` : '';
+            const hintText = [footerText, actionTypeText].filter(Boolean).join('，');
+            if (hintText) cardLogger.log(`新链路提交信息：${hintText}`, '#4b5563');
         },
 
         // 渲染护航方案表格（到卡片）
@@ -52845,7 +52907,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             panel.innerHTML = `
                 <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="color:var(--am26-primary,#2a5bff);">🛡️ 算法护航 v${CONFIG.VERSION}</span>
+                    <span style="color:var(--am26-primary,#2a5bff);">🛡️ 小万护航 v${CONFIG.VERSION}</span>
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
                         <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
@@ -52865,7 +52927,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
                     <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">诊断话术:</label>
-                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" placeholder="例: 帮我进行深度诊断" />
+                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" placeholder="例: 深度拿量" />
                 </div>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
                     <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">同时执行:</label>
@@ -53120,16 +53182,104 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     signal: State.runAbortController?.signal
                 });
 
-                // 收集所有 actionList
+                // 收集所有 actionList 与新链路文本信号
                 const allActionLists = [];
                 const seenKeys = new Set();
+                let latestEscortSettingTable = null;
+                const flowSignalRules = [
+                    { name: '护航工作授权', re: /护航工作授权|授权小万开始护航/ },
+                    { name: '确认修改规划', re: /确认修改规划/ },
+                    { name: '护航诊断上下文', re: /(?:小万护航|护航诉求|护航操作记录|历史护航诉求|当前护航诉求)/ }
+                ];
+                const escortFlowSignals = new Set();
+                const normalizeEscortSettingTable = (value) => {
+                    if (!value || typeof value !== 'object') return null;
+                    const operationList = Array.isArray(value.operationList)
+                        ? value.operationList.filter(Boolean)
+                        : [];
+                    const userSetting = value.userSetting && typeof value.userSetting === 'object'
+                        ? value.userSetting
+                        : null;
+
+                    if (!operationList.length && !userSetting) return null;
+
+                    return {
+                        actionType: value.actionType || '',
+                        operationList,
+                        userSetting: userSetting || {},
+                        footerInfo: value.footerInfo && typeof value.footerInfo === 'object'
+                            ? value.footerInfo
+                            : {}
+                    };
+                };
+                const collectFlowSignalText = (value) => {
+                    const text = String(value || '');
+                    if (!text) return;
+                    flowSignalRules.forEach(rule => {
+                        if (rule.re.test(text)) escortFlowSignals.add(rule.name);
+                    });
+                };
+                const submitEscortOpenV3 = async (reasonText = '') => {
+                    if (reasonText) card.log(reasonText, 'orange');
+                    card.log('提交护航权益授权（不勾选其他调控）...', 'orange');
+                    card.setStatus('提交中', 'info');
+                    const openV3ActionType = (() => {
+                        const candidate = String(latestEscortSettingTable?.actionType || '').trim();
+                        return candidate === 'openInDialog' || candidate === 'updateInDialog'
+                            ? candidate
+                            : 'updateInDialog';
+                    })();
+
+                    const openV3Res = await API.request('https://ai.alimama.com/ai/escort/openV3.json', {
+                        bizCode: 'onebpSite',
+                        campaignId: String(campaignId),
+                        userSetting: {
+                            bidConstraintValue: { enabled: false },
+                            budget: { enabled: false }
+                        },
+                        actionType: openV3ActionType,
+                        timeStr: Date.now(),
+                        dynamicToken: State.tokens.dynamicToken || '',
+                        csrfID: State.tokens.csrfID || '',
+                        loginPointId: State.tokens.loginPointId || ''
+                    }, {
+                        signal: State.runAbortController?.signal
+                    });
+
+                    const openV3Success = openV3Res?.success || openV3Res?.ok || openV3Res?.info?.ok;
+                    const openV3Msg = openV3Res?.info?.message || (openV3Success ? '护航开启成功' : '护航开启失败');
+
+                    card.log(`${openV3Success ? '✓' : '✗'} ${openV3Msg}`, openV3Success ? 'green' : 'red');
+                    card.setStatus(openV3Success ? '护航中' : '失败', openV3Success ? 'success' : 'error');
+                    card.collapse();
+                    return { success: openV3Success, msg: openV3Msg };
+                };
 
                 const collect = (obj, depth = 0) => {
                     if (!obj || depth > 20) return;
+                    if (typeof obj === 'string') {
+                        collectFlowSignalText(obj);
+                        return;
+                    }
                     if (Array.isArray(obj)) {
                         obj.forEach(item => collect(item, depth + 1));
                         return;
                     }
+                    if (typeof obj !== 'object') return;
+
+                    for (const field of ['title', 'summary', 'content', 'text', 'actionText']) {
+                        if (typeof obj[field] === 'string') collectFlowSignalText(obj[field]);
+                    }
+
+                    const escortSettingFromRender = obj.renderCode === 'escortSettingTable'
+                        ? normalizeEscortSettingTable(obj.data)
+                        : null;
+                    const escortSettingCandidate = escortSettingFromRender || normalizeEscortSettingTable(obj);
+                    if (escortSettingCandidate) {
+                        latestEscortSettingTable = escortSettingCandidate;
+                        collectFlowSignalText(escortSettingCandidate.footerInfo?.enterText);
+                    }
+
                     if (Array.isArray(obj.actionList) && obj.actionList.length) {
                         const key = obj.actionList.map(i => {
                             const infoStr = typeof i.actionInfo === 'string'
@@ -53142,9 +53292,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             allActionLists.push(obj.actionList);
                         }
                     }
-                    if (typeof obj === 'object') {
-                        for (const k in obj) collect(obj[k], depth + 1);
-                    }
+                    for (const k in obj) collect(obj[k], depth + 1);
                 };
 
                 if (talkRes.isStream) {
@@ -53166,10 +53314,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     UI.renderAllActionsToCard(card, allActionLists);
                 }
 
-                // 寻找算法护航
+                // 寻找护航方案（兼容平台新旧文案）
                 let actionList = null, targetInfo = null;
                 for (const list of allActionLists) {
-                    const escort = list.find(i => i.actionText?.includes('算法护航'));
+                    const escort = list.find(i => Utils.isEscortActionText(i?.actionText));
                     if (escort?.actionInfo) {
                         try {
                             const info = JSON.parse(escort.actionInfo);
@@ -53182,8 +53330,44 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 }
 
+                // 无旧 actionList 时，兼容小万护航新链路（需要用户在右侧面板确认授权）
                 if (!actionList?.length) {
-                    card.log('⚠️ 未发现"算法护航"方案', 'orange');
+                    const matchedSignals = Array.from(escortFlowSignals);
+                    const isNewEscortFlow = escortFlowSignals.has('护航工作授权')
+                        || escortFlowSignals.has('确认修改规划');
+
+                    if (isNewEscortFlow) {
+                        Logger.info('命中新护航链路信号:', matchedSignals);
+                        card.log(`识别到小万护航新流程：${matchedSignals.join('、')}`, '#1890ff');
+                        if (latestEscortSettingTable?.operationList?.length) {
+                            card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
+                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
+                        }
+                        return await submitEscortOpenV3();
+                    }
+                }
+
+                // 无 actionList 且未命中新链路关键词时，读取计划行状态避免误判
+                if (!actionList?.length) {
+                    const rowByCheckbox = document.querySelector(`input[type="checkbox"][value="${campaignId}"]`)?.closest('tr');
+                    const rowByPlanId = Array.from(document.querySelectorAll('tr'))
+                        .find(tr => (tr.textContent || '').includes(`计划ID：${campaignId}`));
+                    const rowText = (rowByCheckbox?.textContent || rowByPlanId?.textContent || '').replace(/\s+/g, '');
+
+                    if (/护航调优中|护航中|护航工作报告/.test(rowText) || /护航已结束/.test(rowText)) {
+                        const rowStatusText = /护航已结束/.test(rowText)
+                            ? '计划护航已结束（页面状态识别）'
+                            : '计划当前处于小万护航中（页面状态识别）';
+                        if (latestEscortSettingTable?.operationList?.length) {
+                            card.log(`获取到 ${latestEscortSettingTable.operationList.length} 个护航方案（新链路）`, '#1890ff');
+                            UI.renderEscortSettingTableToCard(card, latestEscortSettingTable);
+                        }
+                        return await submitEscortOpenV3(`ℹ️ ${rowStatusText}，按配置强制重新提交护航`);
+                    }
+                }
+
+                if (!actionList?.length) {
+                    card.log('⚠️ 未发现护航方案（算法护航/小万护航）', 'orange');
                     card.setStatus('无方案', 'warning');
                     card.collapse();
                     return { success: false, msg: '无护航方案' };
@@ -53201,7 +53385,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     actionList,
                     campaignId: campaignId.toString(),
                     continueDays: 3650,
-                    target: targetInfo?.target || '深度诊断拿量',
+                    target: targetInfo?.target || '深度拿量',
                     timeStr: Date.now(),
                     bizCode: userConfig.bizCode,
                     ...State.tokens
