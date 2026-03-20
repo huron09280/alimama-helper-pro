@@ -56,8 +56,8 @@
             { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '🛒 加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🏙️ 省份占比', value: '计划ID：{campaignId}，点击人群（加购人群或者成交人群）在各个省份的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🌆 城市占比', value: '计划ID：{campaignId}，点击人群（加购人群或者成交人群）在各个城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { label: '🏙️ 省份占比', value: '计划ID：{campaignId}，在各个省份的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { label: '🌆 城市占比', value: '计划ID：{campaignId}，在各个城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
             { label: '✨商品ID成交', value: '商品ID：{商品ID}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true }
         ],
 
@@ -166,6 +166,8 @@
             ];
 
             for (const source of normalized) {
+                const compact = String(source || '').trim();
+                if (/^\d{6,}$/.test(compact)) return compact;
                 for (const reg of patterns) {
                     const match = source.match(reg);
                     if (match?.[1]) return match[1];
@@ -543,13 +545,12 @@
                 }
             }
 
-            const checkedBox = document.querySelector('input[type="checkbox"][value]:checked');
-            if (checkedBox) {
+            const checkedBoxes = document.querySelectorAll('input[type="checkbox"][value]:checked');
+            for (const checkedBox of checkedBoxes) {
                 const id = this.extractCampaignIdFromElement(checkedBox);
-                if (id) {
-                    this.lastCampaignId = id;
-                    return id;
-                }
+                if (!id) continue;
+                this.lastCampaignId = id;
+                return id;
             }
 
             const selectedSelectors = [
@@ -607,26 +608,26 @@
                 }
             }
 
-            const checkedBox = document.querySelector('input[type="checkbox"][value]:checked');
-            if (checkedBox) {
+            const checkedBoxes = document.querySelectorAll('input[type="checkbox"][value]:checked');
+            for (const checkedBox of checkedBoxes) {
                 const row = checkedBox.closest('tr, [role="row"], li, [class*="row"], [class*="item"]');
-                if (row) {
-                    const strictNameNode = row.querySelector('span.wO_WXndakU + a[title].wO_WXndakU, span[class*="wO_WXndakU"] + a[title][href="javascript:;"], .asiYysqLgo .ellipsis a[title][href="javascript:;"]');
-                    if (strictNameNode) {
-                        const strictName = this.extractCampaignNameFromElement(strictNameNode);
-                        if (strictName) {
-                            this.lastCampaignName = strictName;
-                            return strictName;
-                        }
-                    }
+                if (!row) continue;
 
-                    const nameNode = row.querySelector('[data-campaign-name], [campaignname], [class*="campaign-name"], [class*="campaignName"], [class*="plan-name"], [class*="planName"], a[title][href="javascript:;"], span[title], div[title]');
-                    if (nameNode) {
-                        const name = this.extractCampaignNameFromElement(nameNode);
-                        if (name) {
-                            this.lastCampaignName = name;
-                            return name;
-                        }
+                const strictNameNode = row.querySelector('span.wO_WXndakU + a[title].wO_WXndakU, span[class*="wO_WXndakU"] + a[title][href="javascript:;"], .asiYysqLgo .ellipsis a[title][href="javascript:;"]');
+                if (strictNameNode) {
+                    const strictName = this.extractCampaignNameFromElement(strictNameNode);
+                    if (strictName) {
+                        this.lastCampaignName = strictName;
+                        return strictName;
+                    }
+                }
+
+                const nameNode = row.querySelector('[data-campaign-name], [campaignname], [class*="campaign-name"], [class*="campaignName"], [class*="plan-name"], [class*="planName"], a[title][href="javascript:;"], span[title], div[title]');
+                if (nameNode) {
+                    const name = this.extractCampaignNameFromElement(nameNode);
+                    if (name) {
+                        this.lastCampaignName = name;
+                        return name;
                     }
                 }
             }
@@ -815,6 +816,20 @@
             return MagicPromptDriver.trySubmitPromptInDocument(iframeDoc, promptText);
         },
 
+        async tryFallbackSubmitPrompt(promptText) {
+            const fallbackCampaignId = this.extractCampaignId(promptText)
+                || this.getCurrentCampaignId()
+                || this.lastCampaignId;
+            if (!/^\d{6,}$/.test(String(fallbackCampaignId || '').trim())) {
+                return false;
+            }
+            try {
+                return await this.openNativeAndSubmit(fallbackCampaignId, promptText);
+            } catch {
+                return false;
+            }
+        },
+
         runQuickPrompt(promptText) {
             const maxRetries = 16;
             const tryRun = (retriesLeft) => {
@@ -828,11 +843,14 @@
                     return;
                 }
                 if (retriesLeft <= 0) {
-                    if (result.reason === 'input-not-found' || result.reason === 'iframe-not-ready') {
-                        Logger.log('⚠️ 万能查数尚未加载完成，请稍后重试', true);
-                    } else {
-                        Logger.log('⚠️ 未识别到可用查询按钮，请手动点一次查询后重试', true);
-                    }
+                    this.tryFallbackSubmitPrompt(promptText).then((fallbackOk) => {
+                        if (fallbackOk) return;
+                        if (result.reason === 'input-not-found' || result.reason === 'iframe-not-ready') {
+                            Logger.log('⚠️ 万能查数尚未加载完成，请稍后重试', true);
+                        } else {
+                            Logger.log('⚠️ 未识别到可用查询按钮，请手动点一次查询后重试', true);
+                        }
+                    });
                     return;
                 }
                 setTimeout(() => tryRun(retriesLeft - 1), 500);
@@ -3743,7 +3761,13 @@
         },
 
         createPopup() {
-            if (this.popup) return;
+            if (this.popup instanceof HTMLElement && this.popup.isConnected) return;
+            this.popup = null;
+
+            const stalePopup = document.getElementById('am-magic-report-popup');
+            if (stalePopup instanceof HTMLElement) stalePopup.remove();
+            const staleStyle = document.getElementById('am-magic-report-popup-style');
+            if (staleStyle instanceof HTMLElement) staleStyle.remove();
 
             const div = document.createElement('div');
             div.id = 'am-magic-report-popup';
@@ -4479,6 +4503,7 @@
                 }
                 @keyframes am-spin { to { transform: rotate(360deg); } }
             `;
+            style.id = 'am-magic-report-popup-style';
             document.head.appendChild(style);
 
             const quickPromptHtml = this.QUICK_PROMPTS
@@ -4789,6 +4814,9 @@
         },
 
         toggle(show) {
+            if (!(this.popup instanceof HTMLElement) || !this.popup.isConnected) {
+                this.popup = null;
+            }
             if (this.popup) {
                 this.popup.style.display = show ? 'flex' : 'none';
             } else if (show) {

@@ -1171,6 +1171,10 @@
         },
 
         createElements() {
+            // 容错：脚本被重复注入时先清理旧主面板，避免同 ID 节点并存导致按钮事件失效
+            document.querySelectorAll('#am-helper-icon, #am-helper-panel').forEach((node) => {
+                if (node instanceof HTMLElement) node.remove();
+            });
             const root = document.createElement('div');
             root.innerHTML = `
                 <div id="am-helper-icon" title="点击展开助手面板">
@@ -1486,4 +1490,3 @@
             }
         }
     };
-

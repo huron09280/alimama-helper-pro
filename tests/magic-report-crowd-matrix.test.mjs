@@ -106,8 +106,14 @@ test('万能查数快捷话术包含“✨商品ID成交占比分析”，并支
 
 test('万能查数快捷话术补充计划ID省份/城市花费占比模板', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /label:\s*'🏙️ 省份占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，点击人群（加购人群或者成交人群）在各个省份的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID省份花费占比模板');
-  assert.match(block, /label:\s*'🌆 城市占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，点击人群（加购人群或者成交人群）在各个城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID城市花费占比模板');
+  assert.match(block, /label:\s*'🏙️ 省份占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个省份的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID省份花费占比模板');
+  assert.match(block, /label:\s*'🌆 城市占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID城市花费占比模板');
+});
+
+test('快捷查询在 iframe 提交失败后会回退原生查数入口', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /async tryFallbackSubmitPrompt\(promptText\)\s*\{[\s\S]*this\.openNativeAndSubmit\(fallbackCampaignId,\s*promptText\)/, '缺少原生查数回退提交流程');
+  assert.match(block, /if \(retriesLeft <= 0\) \{[\s\S]*this\.tryFallbackSubmitPrompt\(promptText\)\.then\(\(fallbackOk\) => \{/, 'runQuickPrompt 未在重试耗尽后触发原生回退');
 });
 
 test('buildCrowdDimensionPrompt 按计划ID/商品ID与省市维度构造花费占比分析话术', () => {

@@ -1343,10 +1343,84 @@
     };
 
     const MagicPromptDriver = {
+        isElementNode(el) {
+            return !!el && typeof el === 'object' && el.nodeType === 1;
+        },
+
+        buildPromptWordList(promptText) {
+            return [{
+                word: String(promptText || '').trim(),
+                wordType: 'text',
+                subjectId: null,
+                subjectType: null,
+                isTemplate: false,
+                placeholder: ''
+            }];
+        },
+
+        getMagixVframe(doc) {
+            try {
+                const view = doc?.defaultView || window;
+                const cache = view?.seajs?.cache;
+                if (!cache || typeof cache !== 'object') return null;
+                const magixModule = Object.values(cache).find((mod) => {
+                    if (!mod || typeof mod !== 'object') return false;
+                    const uri = String(mod.uri || '');
+                    if (!uri) return false;
+                    return /mlog\/magix\.js$/.test(uri);
+                });
+                const Vframe = magixModule?.exports?.Vframe;
+                return Vframe && typeof Vframe.get === 'function' ? Vframe : null;
+            } catch {
+                return null;
+            }
+        },
+
+        submitPromptViaVframe(doc, inputEl, promptText) {
+            const cleanPrompt = String(promptText || '').trim();
+            if (!cleanPrompt) return { ok: false, reason: 'empty-prompt' };
+
+            const Vframe = this.getMagixVframe(doc);
+            if (!Vframe) return { ok: false, reason: 'vframe-not-ready' };
+
+            const inputId = String(inputEl?.id || '').trim();
+            const inputVframeCandidates = [];
+            if (inputId.endsWith('_ai_input')) {
+                inputVframeCandidates.push(inputId.replace(/_ai_input$/, ''));
+            }
+            inputVframeCandidates.push('ai-input-magic-report_magic_input');
+
+            let inputVframe = null;
+            for (const id of inputVframeCandidates) {
+                if (!id) continue;
+                const candidate = Vframe.get(id);
+                if (candidate && typeof candidate.invoke === 'function') {
+                    inputVframe = candidate;
+                    break;
+                }
+            }
+            if (!inputVframe) return { ok: false, reason: 'vframe-input-missing' };
+
+            try {
+                const wordList = this.buildPromptWordList(cleanPrompt);
+                inputVframe.invoke('setData', [wordList, false]);
+                const searchResult = inputVframe.invoke('search');
+                if (searchResult && searchResult.isEmpty) {
+                    return { ok: false, reason: 'vframe-empty-question' };
+                }
+                return { ok: true, method: 'vframe-search' };
+            } catch {
+                return { ok: false, reason: 'vframe-submit-failed' };
+            }
+        },
+
         isEditablePromptElement(el) {
-            if (!(el instanceof Element)) return false;
-            if (el instanceof HTMLTextAreaElement) return !el.disabled && !el.readOnly;
-            if (el instanceof HTMLInputElement) {
+            if (!this.isElementNode(el)) return false;
+            const view = el.ownerDocument?.defaultView || window;
+            if (view.HTMLTextAreaElement && el instanceof view.HTMLTextAreaElement) {
+                return !el.disabled && !el.readOnly;
+            }
+            if (view.HTMLInputElement && el instanceof view.HTMLInputElement) {
                 const t = (el.type || 'text').toLowerCase();
                 return !el.disabled && !el.readOnly && (t === 'text' || t === 'search' || t === 'url');
             }
@@ -1354,7 +1428,7 @@
         },
 
         isVisibleElement(el) {
-            if (!(el instanceof Element)) return false;
+            if (!this.isElementNode(el)) return false;
             const style = el.ownerDocument?.defaultView?.getComputedStyle(el);
             if (!style) return true;
             if (style.display === 'none' || style.visibility === 'hidden') return false;
@@ -1409,8 +1483,11 @@
                 return true;
             }
 
-            const proto = inputEl instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-            const valueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            const view = inputEl.ownerDocument?.defaultView || window;
+            const proto = (view.HTMLTextAreaElement && inputEl instanceof view.HTMLTextAreaElement)
+                ? view.HTMLTextAreaElement.prototype
+                : view.HTMLInputElement?.prototype;
+            const valueSetter = proto ? Object.getOwnPropertyDescriptor(proto, 'value')?.set : null;
             if (valueSetter) {
                 valueSetter.call(inputEl, promptText);
             } else {
@@ -1423,7 +1500,7 @@
         },
 
         triggerClick(el) {
-            if (!(el instanceof Element)) return;
+            if (!this.isElementNode(el)) return;
             const mouseOpts = { bubbles: true, cancelable: true };
             ['mousedown', 'mouseup', 'click'].forEach(type => {
                 try {
@@ -1451,8 +1528,23 @@
             if (text.includes('查询')) score += 90;
             if (text.includes('发送') || text.includes('提问')) score += 80;
             if (/query|search|send|submit/i.test(merged)) score += 40;
+            if (text.includes('一键查数')) score += 220;
+            else if (text.includes('查数')) score += 150;
+            if (/查数|一键查数/.test(`${title} ${aria}`)) score += 150;
+            if (/magic[_-]?report|ai[_-]?report|magix-ports|report/i.test(merged)) score += 45;
             if (/next-btn-primary/.test(cls)) score += 15;
+            if (inputEl && el.closest('#ai-input-magic-report')) score += 220;
             if (inputEl?.form && el.closest('form') === inputEl.form) score += 20;
+            if (this.isElementNode(inputEl)) {
+                const inputRect = inputEl.getBoundingClientRect();
+                const targetRect = el.getBoundingClientRect();
+                const dx = (targetRect.left + targetRect.width / 2) - (inputRect.left + inputRect.width / 2);
+                const dy = (targetRect.top + targetRect.height / 2) - (inputRect.top + inputRect.height / 2);
+                const distance = Math.hypot(dx, dy);
+                if (distance < 130) score += 80;
+                else if (distance < 260) score += 40;
+            }
+            if (el.tagName === 'BUTTON') score += 8;
             return score;
         },
 
@@ -1460,7 +1552,8 @@
             const doc = rootDoc && typeof rootDoc.querySelector === 'function' ? rootDoc : null;
             if (!doc) return null;
             const roots = [];
-            const nearest = inputEl?.closest?.('[id*="magic"], [class*="magic"], [class*="query"], form');
+            let nearest = inputEl?.closest?.('#ai-input-magic-report, [id*="magic-report"], [class*="magic-report"], [id*="magic"], [class*="magic"], [class*="query"], [class*="report"], form');
+            if (nearest === inputEl && inputEl?.parentElement) nearest = inputEl.parentElement;
             if (nearest) roots.push(nearest);
             roots.push(doc);
 
@@ -1469,15 +1562,22 @@
                 'button[mx-click*="query"]',
                 'button[mx-click*="search"]',
                 'button[mx-click*="send"]',
+                'button[mx-click*="report"]',
                 '[role="button"][mx-click*="query"]',
                 '[role="button"][mx-click*="search"]',
                 '[role="button"][mx-click*="send"]',
+                '[role="button"][mx-click*="report"]',
                 '[mx-click*="query"]',
                 '[mx-click*="search"]',
                 '[mx-click*="send"]',
+                '[mx-click*="report"]',
                 'button[class*="query"]',
                 'button[class*="search"]',
                 'button[class*="send"]',
+                'button[class*="report"]',
+                '[id*="input_btn"]',
+                '[aria-label*="查数"]',
+                '[title*="查数"]',
                 '.next-btn-primary',
                 '.next-btn'
             ];
@@ -1495,6 +1595,16 @@
                     });
                 });
             });
+            if (!candidates.length && nearest) {
+                nearest.querySelectorAll('button, [role="button"], [mx-click], [tabindex]').forEach(el => {
+                    if (seen.has(el) || !this.isVisibleElement(el)) return;
+                    if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return;
+                    const text = `${(el.textContent || '').trim()} ${(el.getAttribute('title') || '').trim()} ${(el.getAttribute('aria-label') || '').trim()} ${(el.getAttribute('mx-click') || '').trim()}`;
+                    if (!/查数|查询|search|query|submit|send|report/i.test(text)) return;
+                    seen.add(el);
+                    candidates.push(el);
+                });
+            }
             if (!candidates.length) return null;
 
             return candidates
@@ -1509,6 +1619,9 @@
 
             const inputEl = this.findPromptInput(doc);
             if (!inputEl) return { ok: false, reason: 'input-not-found' };
+
+            const vframeResult = this.submitPromptViaVframe(doc, inputEl, promptText);
+            if (vframeResult.ok) return vframeResult;
 
             if (!this.setPromptInputValue(inputEl, promptText)) {
                 return { ok: false, reason: 'input-set-failed' };
@@ -1565,7 +1678,7 @@
             const seen = new Set();
 
             nodes.forEach(el => {
-                if (!(el instanceof Element) || seen.has(el)) return;
+                if (!this.isElementNode(el) || seen.has(el)) return;
                 if (ignoredSelector && el.closest(ignoredSelector)) return;
                 if (!this.isVisibleElement(el)) return;
                 if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return;
@@ -1655,4 +1768,3 @@
         }, 0);
         return true;
     };
-
