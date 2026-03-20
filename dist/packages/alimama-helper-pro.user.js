@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      6.05
+// @version      6.06
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,12 @@
 // ==/UserScript==
 /**
  * 更新日志
+ *
+ * v6.06 (2026-03-21)
+ * - ✨ 万能查数快捷提交增强：优先走 Magix `setData/search` 提交，减少“点击上方按钮无响应/串话术”问题
+ * - 🐛 快捷占比话术修订：省份/城市占比模板移除“点击人群（加购人群或者成交人群）”冗余描述
+ * - 🛡️ 提交兜底增强：iframe 提交失败时自动回退原生查数入口，提升按钮可用性
+ * - ✅ 回归测试补齐：新增触发器提交流程与弹窗失联恢复测试
  *
  * v6.05 (2026-03-18)
  * - ✨ extension 清单增强：新增 MV3 `icons` 与 `action.default_icon`，补齐浏览器扩展图标声明
