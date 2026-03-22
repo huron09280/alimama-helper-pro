@@ -3616,6 +3616,9 @@
             if (this.quickPromptsEl instanceof HTMLElement) {
                 this.quickPromptsEl.style.display = next === 'query' ? 'flex' : 'none';
             }
+            if (this.matrixCampaignEl instanceof HTMLElement) {
+                this.matrixCampaignEl.style.display = next === 'matrix' ? '' : 'none';
+            }
             if (next === 'matrix' && options.skipLoad !== true) {
                 this.ensureCrowdMatrixLoaded(false);
             }
@@ -3783,7 +3786,7 @@
             const style = document.createElement('style');
             style.textContent = `
                 #am-magic-report-popup .am-magic-header {
-                    padding: 10px 20px 8px;
+                    padding: 10px 20px 10px;
                     display: flex; flex-direction: column; gap: 8px;
                     cursor: move; border-bottom: 1px solid var(--am26-border);
                     flex-shrink: 0;
@@ -3867,57 +3870,85 @@
                 #am-magic-report-popup .am-magic-header .am-quick-prompt.active {
                     background: rgba(42, 91, 255, 0.16); border-color: rgba(42, 91, 255, 0.44); color: var(--am26-primary-strong);
                 }
-                #am-magic-report-popup .am-magic-header .am-magic-view-tabs {
-                    display: flex; gap: 8px; cursor: default;
+                #am-magic-report-popup .am-magic-header .am-magic-view-meta {
+                    display: flex;
+                    align-items: flex-end;
+                    gap: 10px;
+                    min-width: 0;
                 }
-                #am-magic-report-popup .am-magic-header .am-magic-view-tab {
-                    border: 1px solid rgba(42, 91, 255, 0.24);
-                    background: rgba(255, 255, 255, 0.9);
-                    color: #3f4b68;
-                    border-radius: 999px;
-                    padding: 4px 12px;
-                    font-size: 11px;
-                    line-height: 1.4;
-                    cursor: pointer;
-                    transition: all 0.2s;
+                #am-magic-report-popup .am-magic-header .am-magic-view-tabs {
                     display: inline-flex;
                     align-items: center;
-                    gap: 6px;
+                    align-self: auto;
+                    flex-shrink: 0;
+                    gap: 4px;
+                    padding: 4px;
+                    border-radius: 20px;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 250, 255, 0.85));
+                    border: 1px solid rgba(255, 255, 255, 0.68);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56), 0 4px 12px rgba(15, 23, 42, 0.06);
+                    backdrop-filter: blur(8px);
+                    cursor: default;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab {
+                    position: relative;
+                    border: none;
+                    background: transparent;
+                    color: #6b7280;
+                    border-radius: 16px;
+                    padding: 7px 22px 7px 16px;
+                    min-height: 34px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    line-height: 1;
+                    cursor: pointer;
+                    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab .am-magic-view-tab-label {
                     white-space: nowrap;
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab .am-magic-view-default-icon {
+                    position: absolute;
+                    right: 5px;
+                    top: 3px;
                     width: 14px;
                     height: 14px;
-                    border-radius: 50%;
-                    display: inline-flex;
+                    border-radius: 999px;
+                    display: flex;
                     align-items: center;
                     justify-content: center;
                     font-size: 10px;
                     line-height: 1;
-                    color: #8c96b1;
-                    background: transparent;
-                    transition: all 0.2s;
+                    color: #7f8798;
+                    background: rgba(31, 41, 55, 0.08);
+                    opacity: 0;
+                    transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
                 }
-                #am-magic-report-popup .am-magic-header .am-magic-view-tab:hover .am-magic-view-default-icon {
-                    color: #66708c;
-                    background: transparent;
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 1px;
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab:hover {
-                    border-color: rgba(42, 91, 255, 0.42);
-                    color: var(--am26-primary);
-                    transform: translateY(-1px);
+                    color: #404756;
+                    background: rgba(255, 255, 255, 0.42);
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab.active {
-                    background: rgba(42, 91, 255, 0.14);
-                    border-color: rgba(42, 91, 255, 0.48);
-                    color: var(--am26-primary-strong);
-                    font-weight: 600;
+                    background: rgba(255, 255, 255, 0.88);
+                    color: #111827;
+                    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+                    font-weight: 700;
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab.is-default-view .am-magic-view-default-icon {
-                    color: var(--am26-primary-strong);
-                    background: transparent;
+                    color: #2563eb;
+                    background: rgba(37, 99, 235, 0.16);
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab:hover .am-magic-view-default-icon,
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab:focus-visible .am-magic-view-default-icon,
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab.is-default-view .am-magic-view-default-icon {
+                    opacity: 1;
                 }
                 #am-magic-report-popup .am-magic-content {
                     position: relative; flex: 1; min-height: 0;
@@ -3980,16 +4011,23 @@
                     text-overflow: ellipsis;
                 }
                 #am-magic-report-popup .am-crowd-matrix-campaign {
-                    font-size: 13px;
-                    line-height: 1.45;
-                    font-weight: 700;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-width: 0;
+                    max-width: 100%;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    font-weight: 600;
                     color: #1a2a47;
-                    background: rgba(255, 255, 255, 0.75);
-                    backdrop-filter: blur(12px);
-                    border: 1px solid rgba(42, 91, 255, 0.22);
-                    border-radius: 12px;
-                    padding: 10px 12px;
-                    box-shadow: 0 4px 12px rgba(31, 53, 109, 0.04);
+                    background: rgba(255, 255, 255, 0.9);
+                    border: 1px solid transparent;
+                    border-radius: 999px;
+                    padding: 5px 12px;
+                    box-shadow: 0 2px 6px rgba(31, 53, 109, 0.06);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-loading {
                     color: #2a5bff;
@@ -4533,18 +4571,21 @@
                             </span>
                         </div>
                     </div>
+                    <div class="am-magic-view-meta">
+                        <div class="am-magic-view-tabs" id="am-magic-view-tabs">
+                            <button type="button" class="am-magic-view-tab" data-view="query">
+                                <span class="am-magic-view-tab-label">万能查数</span>
+                                <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">☆</span>
+                            </button>
+                            <button type="button" class="am-magic-view-tab active" data-view="matrix">
+                                <span class="am-magic-view-tab-label">人群对比看板</span>
+                                <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">☆</span>
+                            </button>
+                        </div>
+                        <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">计划名：未识别 ｜ 计划ID：-- ｜ 商品ID：--</div>
+                    </div>
                     <div class="am-quick-prompts" id="am-magic-quick-prompts">
                         ${quickPromptHtml}
-                    </div>
-                    <div class="am-magic-view-tabs" id="am-magic-view-tabs">
-                        <button type="button" class="am-magic-view-tab" data-view="query">
-                            <span class="am-magic-view-tab-label">万能查数</span>
-                            <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">☆</span>
-                        </button>
-                        <button type="button" class="am-magic-view-tab active" data-view="matrix">
-                            <span class="am-magic-view-tab-label">人群对比看板</span>
-                            <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">☆</span>
-                        </button>
                     </div>
                 </div>
                 <div class="am-magic-content am-magic-content-query" data-view-panel="query">
@@ -4559,7 +4600,6 @@
                     ></iframe>
                 </div>
                 <div class="am-magic-content am-magic-content-matrix" data-view-panel="matrix">
-                    <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">计划名：未识别 ｜ 计划ID：-- ｜ 商品ID：--</div>
                     <div class="am-crowd-matrix-state is-info" id="am-crowd-matrix-state"><span class="am-crowd-matrix-state-text">点击“人群对比看板”开始加载</span></div>
                     <div class="am-crowd-matrix-toolbar">
                         <div class="am-crowd-matrix-legend-global" id="am-crowd-matrix-global-legend"></div>
@@ -4780,7 +4820,7 @@
             this.header.onmousedown = (e) => {
                 const target = e.target;
                 if (!(target instanceof Element)) return;
-                if (target.closest('.am-btn-group') || target.closest('.am-quick-prompts') || target.closest('.am-magic-view-tabs')) return;
+                if (target.closest('.am-btn-group') || target.closest('.am-quick-prompts') || target.closest('.am-magic-view-meta')) return;
                 if (this.activeView === 'matrix' || this.popupMatrixMaximized) return;
                 isDragging = true;
                 startX = e.clientX;

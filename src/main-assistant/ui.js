@@ -3,7 +3,8 @@
     // ==========================================
     const UI = {
         runtime: {
-            assistExpanded: false
+            assistExpanded: false,
+            scrollChainGuardBound: false
         },
 
         init() {
@@ -11,6 +12,39 @@
             this.createElements();
             this.bindEvents();
             this.updateState();
+        },
+
+        bindPluginScrollChainGuard() {
+            if (this.runtime.scrollChainGuardBound) return;
+            this.runtime.scrollChainGuardBound = true;
+            document.addEventListener('wheel', (event) => {
+                if (event.defaultPrevented || event.ctrlKey) return;
+                const target = event.target;
+                if (!(target instanceof Element)) return;
+                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-report-capture-panel');
+                if (!(pluginRoot instanceof HTMLElement)) return;
+                if (!this.shouldBlockPluginWheel(pluginRoot, target, event.deltaY)) return;
+                event.preventDefault();
+                event.stopPropagation();
+            }, { capture: true, passive: false });
+        },
+
+        shouldBlockPluginWheel(pluginRoot, startNode, deltaY) {
+            if (!Number.isFinite(deltaY) || deltaY === 0) return false;
+            let node = startNode;
+            while (node instanceof HTMLElement) {
+                const style = window.getComputedStyle(node);
+                const overflowY = style.overflowY;
+                const isScrollable = /(auto|scroll|overlay)/.test(overflowY) && node.scrollHeight > node.clientHeight + 1;
+                if (isScrollable) {
+                    const atTop = node.scrollTop <= 0;
+                    const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+                    if ((deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom)) return false;
+                }
+                if (node === pluginRoot) break;
+                node = node.parentElement;
+            }
+            return true;
         },
 
         injectStyles() {
@@ -56,6 +90,7 @@
                     -webkit-backdrop-filter: blur(20px);
                     box-shadow: var(--am26-shadow) !important;
                     border: 1px solid var(--am26-border) !important;
+                    overscroll-behavior: contain;
                 }
 
                 /* 悬浮球（最小化按钮） */
@@ -390,6 +425,7 @@
                 #am-campaign-concurrent-log-popup .am-concurrent-log-body {
                     flex: 1;
                     overflow: auto;
+                    overscroll-behavior: contain;
                     background: #0f172a;
                     padding: 10px 12px;
                     font-family: var(--am26-mono);
@@ -420,6 +456,7 @@
                     top: 50% !important; left: 50% !important;
                     transform: translate(-50%, -50%) !important;
                     max-height: 90vh; overflow-y: auto;
+                    overscroll-behavior: contain;
                 }
 
                 /* 日志区 */
@@ -436,6 +473,7 @@
                 .am-action-btn:hover { background: rgba(255, 255, 255, 0.5); color: var(--am26-primary-strong); }
                 #am-log-content {
                     height: 100px; overflow-y: auto;
+                    overscroll-behavior: contain;
                     background: rgba(0, 0, 0, 0.03);
                     border: 1px solid inset rgba(0,0,0,0.05);
                     border-radius: 10px;
@@ -1245,6 +1283,7 @@
         },
 
         bindEvents() {
+            this.bindPluginScrollChainGuard();
             const icon = document.getElementById('am-helper-icon');
             const panel = document.getElementById('am-helper-panel');
             const closeBtn = panel.querySelector('.am-close-btn');
