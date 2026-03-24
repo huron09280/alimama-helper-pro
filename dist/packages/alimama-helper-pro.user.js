@@ -9674,11 +9674,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border: 1px solid rgba(26, 42, 71, 0.14);
                     background: #fff;
                     box-shadow: 0 8px 22px rgba(31, 53, 109, 0.16);
+                    white-space: normal;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-dropdown {
                     display: block;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-option {
+                    display: block;
                     width: 100%;
                     border: none;
                     background: transparent;

@@ -1,3 +1,24 @@
+# TODO - 2026-03-25 人群看板商品ID下拉横排异常热修（改回竖排）
+
+## 需求规格
+- 目标：修复自定义商品下拉选项“横向一排”问题，恢复为竖向列表。
+- 根因：父容器 `white-space: nowrap` 被继承到下拉区域，选项按钮仍是内联布局，导致同一行横排。
+- 范围：`src/main-assistant/magic-report.js`（样式）与构建产物同步。
+
+## 执行计划（含校验）
+- [x] 1. 在下拉容器显式重置换行策略。
+  - 摘要：`.am-crowd-matrix-item-dropdown` 增加 `white-space: normal`。
+- [x] 2. 在下拉选项显式固定块级布局。
+  - 摘要：`.am-crowd-matrix-item-option` 增加 `display: block`，确保逐行竖排。
+- [x] 3. 构建与定向回归校验。
+  - 摘要：执行 `build + magic-report-crowd-matrix.test.mjs`，确认无回归。
+
+## 结果复盘
+- 修复结果：下拉项布局策略已从“继承内联流”改为“容器可换行 + 选项块级”，可稳定竖排显示。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+
 # TODO - 2026-03-25 人群看板商品ID下拉改为网页自定义样式（非系统下拉）
 
 ## 需求规格
