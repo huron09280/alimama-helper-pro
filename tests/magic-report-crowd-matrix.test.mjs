@@ -458,6 +458,8 @@ test('buildMatrixDataset 生成固定 4x8 结构并包含四系列与 raw/noData
   assert.match(block, /const stableGroupSet = new Set\(/, '缺少省份\/城市稳定标签集合初始化');
   assert.match(block, /const stableLabelMap = new Map\(\);/, '缺少稳定标签映射缓存');
   assert.match(block, /if \(!stableGroupSet\.has\(normalizedGroupName\)\) return;/, '稳定标签计算未限定在省份\/城市');
+  assert.match(block, /const periodSortPriority = \[90,\s*30,\s*7,\s*3\];/, '稳定标签排序未声明 90\/30\/7\/3 优先级');
+  assert.match(block, /for \(const period of periodSortPriority\) \{[\s\S]*periodDiff[\s\S]*if \(Math\.abs\(periodDiff\) > 1e-9\) return periodDiff;/, '稳定标签排序未按主周期优先比较');
   assert.match(block, /const scoreDiff = this\.toNumericValue\(rightMeta\.score\) - this\.toNumericValue\(leftMeta\.score\);/, '稳定标签排序未按累计值降序');
   assert.match(block, /const stableLabels = stableLabelMap\.get\(groupName\);/, '周期渲染未读取稳定标签映射');
   assert.match(block, /const labelList = Array\.isArray\(stableLabels\) && stableLabels\.length[\s\S]*\? stableLabels\.slice\(\)[\s\S]*: \[\];/, '周期标签列表未优先使用稳定顺序');

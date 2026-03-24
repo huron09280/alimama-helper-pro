@@ -7889,6 +7889,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
                 if (!stableGroupSet.has(normalizedGroupName)) return;
                 const labelScoreMap = new Map();
+                const periodSortPriority = [90, 30, 7, 3];
                 let orderIndex = 0;
                 periods.forEach((period) => {
                     metricOrder.forEach((metric) => {
@@ -7901,11 +7902,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const score = Number.isFinite(value) ? Math.max(0, value) : 0;
                             const existing = labelScoreMap.get(normalizedLabel);
                             if (existing && typeof existing === 'object') {
-                                existing.score = this.toNumericValue(existing.score || 0) + score;
+                                const nextScore = this.toNumericValue(existing.score || 0) + score;
+                                existing.score = nextScore;
+                                existing[`period_${period}`] = this.toNumericValue(existing[`period_${period}`] || 0) + score;
                                 return;
                             }
                             labelScoreMap.set(normalizedLabel, {
                                 score,
+                                [`period_${period}`]: score,
                                 order: orderIndex++
                             });
                         });
@@ -7915,6 +7919,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     .sort((left, right) => {
                         const leftMeta = left?.[1] || {};
                         const rightMeta = right?.[1] || {};
+                        for (const period of periodSortPriority) {
+                            const periodDiff = this.toNumericValue(rightMeta[`period_${period}`] || 0) - this.toNumericValue(leftMeta[`period_${period}`] || 0);
+                            if (Math.abs(periodDiff) > 1e-9) return periodDiff;
+                        }
                         const scoreDiff = this.toNumericValue(rightMeta.score) - this.toNumericValue(leftMeta.score);
                         if (Math.abs(scoreDiff) > 1e-9) return scoreDiff;
                         const orderDiff = this.toNumericValue(leftMeta.order) - this.toNumericValue(rightMeta.order);

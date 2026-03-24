@@ -1,3 +1,25 @@
+# TODO - 2026-03-25 人群看板省份/城市稳定排序改为90天优先
+
+## 需求规格
+- 目标：在已完成“跨周期同标签对齐”基础上，将省份/城市稳定标签顺序改为“按90天数据优先”，缺失时再按 30/7/3 天兜底。
+- 背景：仅按全周期累计值排序会让“90天核心对比”的业务语义不够直观。
+- 范围：`src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs` 与构建产物同步。
+
+## 执行计划（含校验）
+- [x] 1. 调整稳定标签排序策略为主周期优先。
+  - 摘要：在 `buildMatrixDataset` 中新增 `periodSortPriority = [90, 30, 7, 3]`，排序先比较各周期分值，再回退总分与原顺序。
+- [x] 2. 更新契约测试覆盖新排序规则。
+  - 摘要：为 `magic-report-crowd-matrix` 新增“主周期优先”相关源码断言，避免后续回归到累计值优先。
+- [x] 3. 构建与回归验证。
+  - 摘要：执行 `build + 定向测试 + 全量测试`，确认无回归后补齐结论。
+
+## 结果复盘
+- 状态：已完成。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+  - `node --test tests/*.test.mjs`
+
 # TODO - 2026-03-25 人群看板省份/城市跨周期标签错位修复
 
 ## 需求规格
