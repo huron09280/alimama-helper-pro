@@ -452,11 +452,8 @@
                     const fallbackGoal = sceneName === '关键词推广'
                         ? (normalizeBidMode(request?.common?.bidMode || 'smart', 'smart') === 'manual' ? '自定义推广' : '趋势明星')
                         : normalizeGoalLabel(request?.marketingGoal || '');
-                    const isSiteScene = sceneName === '货品全站推广';
                     const plansForSync = Array.isArray(plans) ? plans : [];
-                    const sceneParallelSubmitTimes = isSiteScene
-                        ? SITE_SCENE_PARALLEL_SUBMIT_TIMES
-                        : configuredParallelSubmitTimes;
+                    const sceneParallelSubmitTimes = configuredParallelSubmitTimes;
                     plansForSync.forEach(plan => {
                         const planGoal = normalizeGoalLabel(plan?.marketingGoal || '');
                         const sceneMarketingGoal = sceneGoalFromSettings || planGoal || fallbackGoal;
@@ -2438,7 +2435,7 @@
                 const runCount = req.plans.length || 0;
                 KeywordPlanPreviewExecutor.renderPreview(req);
                 const sceneSummaryText = sceneRequests.map(item => `${item.sceneName}×${item.plans.length}`).join('、');
-                const submitMode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'parallel');
+                const submitMode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'serial');
                 const serialIntervalMs = Math.max(300, SERIAL_PLAN_SUBMIT_INTERVAL_MS);
                 appendWizardLog(`开始批量创建 ${runCount} 个计划（${sceneSummaryText}，模式=${submitModeLabel(submitMode)}）...`);
                 wizardState.els.runBtn.disabled = true;
@@ -2493,7 +2490,12 @@
                         appendWizardLog(`${sceneTag}批次重试 #${payload.attempt}：${payload.error}`, 'error');
                     } else if (event === 'submit_batch_success') {
                         if (payload.failedCount > 0) {
-                            appendWizardLog(`${sceneTag}批次部分成功：成功 ${payload.createdCount}，失败 ${payload.failedCount}${payload.error ? `（${payload.error}）` : ''}`, 'error');
+                            const duplicateSubmitError = /(请勿重复提交|重复提交|duplicate\s*submit)/i.test(String(payload.error || ''));
+                            if (duplicateSubmitError) {
+                                appendWizardLog(`${sceneTag}批次返回重复提交通知：成功 ${payload.createdCount}，失败 ${payload.failedCount}（汇总阶段会按同计划成功结果去重）`);
+                            } else {
+                                appendWizardLog(`${sceneTag}批次部分成功：成功 ${payload.createdCount}，失败 ${payload.failedCount}${payload.error ? `（${payload.error}）` : ''}`, 'error');
+                            }
                         } else {
                             appendWizardLog(`${sceneTag}批次成功：${payload.createdCount} 个`, 'success');
                         }
@@ -2630,6 +2632,30 @@
                                 result.ok = false;
                             }
                         });
+                    const DUPLICATE_SUBMIT_ERROR_RE = /(请勿重复提交|重复提交|duplicate\s*submit)/i;
+                    if (result.failures.length && result.successes.length) {
+                        const successPlanNameSet = new Set(
+                            result.successes
+                                .map(item => String(item?.planName || '').trim())
+                                .filter(Boolean)
+                        );
+                        if (successPlanNameSet.size) {
+                            const beforeFailCount = result.failures.length;
+                            result.failures = result.failures.filter((item) => {
+                                const planName = String(item?.planName || '').trim();
+                                const errorText = String(item?.error || '').trim();
+                                if (!planName || !errorText) return true;
+                                if (!successPlanNameSet.has(planName)) return true;
+                                return !DUPLICATE_SUBMIT_ERROR_RE.test(errorText);
+                            });
+                            const removedFailCount = beforeFailCount - result.failures.length;
+                            if (removedFailCount > 0) {
+                                result.failCount = Math.max(0, result.failCount - removedFailCount);
+                                appendWizardLog(`检测到 ${removedFailCount} 条重复提交通知已由同计划成功覆盖，已按成功结果去重`, 'success');
+                            }
+                        }
+                    }
+                    result.ok = result.failCount === 0;
                     result.partial = result.successCount > 0 && result.failCount > 0;
                     appendWizardLog(`完成：成功 ${result.successCount}，失败 ${result.failCount}`, result.ok ? 'success' : 'error');
                     if (result.failures.length) {
@@ -2831,4 +2857,3 @@
             setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
             wizardState.mounted = true;
         };
-

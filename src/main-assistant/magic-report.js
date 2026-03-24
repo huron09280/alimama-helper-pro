@@ -14,6 +14,9 @@
         matrixRetryBtn: null,
         matrixLegendEl: null,
         matrixCampaignEl: null,
+        matrixCampaignNameEl: null,
+        matrixCampaignIdEl: null,
+        matrixCampaignItemSelectEl: null,
         matrixHoverTipEl: null,
         matrixHoverActiveBar: null,
         matrixHoverActiveBars: [],
@@ -34,8 +37,13 @@
         crowdMatrixStateHideTimer: null,
         crowdMatrixLoadedCampaignId: '',
         crowdMatrixDataset: null,
+        crowdMatrixResultMap: null,
+        crowdMatrixPendingMetricReload: null,
         crowdMatrixTaskProgressHandler: null,
         crowdCampaignItemIdMap: new Map(),
+        crowdCampaignItemOptionsMap: new Map(),
+        crowdCampaignSelectedItemIdMap: new Map(),
+        crowdCampaignManualItemSelectionMap: new Map(),
         crowdInsightRunContext: null,
         crowdRequestSlotPromise: null,
         crowdRequestLastAt: 0,
@@ -732,12 +740,65 @@
             });
         },
 
+        renderCrowdCampaignItemSelect(campaignId = '') {
+            if (!(this.matrixCampaignItemSelectEl instanceof HTMLSelectElement)) return;
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const selectedItemId = this.getCrowdCampaignSelectedItemId(id);
+            const options = this.getCrowdCampaignItemOptions(id);
+            this.matrixCampaignItemSelectEl.innerHTML = '';
+
+            if (!id) {
+                const optionEl = document.createElement('option');
+                optionEl.value = '';
+                optionEl.textContent = '--';
+                this.matrixCampaignItemSelectEl.appendChild(optionEl);
+                this.matrixCampaignItemSelectEl.disabled = true;
+                return;
+            }
+
+            const normalizedOptions = options.filter(item => /^\d{6,}$/.test(String(item?.itemId || '').trim()));
+
+            if (!normalizedOptions.length) {
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = '--';
+                this.matrixCampaignItemSelectEl.appendChild(emptyOption);
+                this.matrixCampaignItemSelectEl.disabled = true;
+                return;
+            }
+
+            normalizedOptions.forEach((item) => {
+                const optionEl = document.createElement('option');
+                optionEl.value = item.itemId;
+                const spend = this.toNumericValue(item?.spend || 0);
+                const itemTitle = this.normalizeCrowdItemTitle(item?.itemTitle || '') || `商品${item.itemId}`;
+                optionEl.textContent = spend > 0
+                    ? `${itemTitle}（${item.itemId}，花费${this.formatCrowdSpendAmount(spend)}）`
+                    : `${itemTitle}（${item.itemId}）`;
+                this.matrixCampaignItemSelectEl.appendChild(optionEl);
+            });
+
+            const pickedItemId = selectedItemId && normalizedOptions.some(item => item.itemId === selectedItemId)
+                ? selectedItemId
+                : normalizedOptions[0].itemId;
+            if (pickedItemId !== selectedItemId) {
+                this.setCrowdCampaignSelectedItemId(id, pickedItemId, { manual: false });
+            }
+            this.matrixCampaignItemSelectEl.value = pickedItemId;
+            this.matrixCampaignItemSelectEl.disabled = false;
+        },
+
         refreshCrowdMatrixCampaignMeta(campaignId = '') {
             if (!(this.matrixCampaignEl instanceof HTMLElement)) return;
             const id = String(campaignId || this.getCurrentCampaignId() || this.lastCampaignId || '').trim();
             const name = this.getCurrentCampaignName() || this.lastCampaignName || '';
-            const itemId = this.getCrowdCampaignItemId(id);
-            this.matrixCampaignEl.textContent = `计划名：${name || '未识别'} ｜ 计划ID：${id || '--'} ｜ 商品ID：${itemId || '--'}`;
+            if (this.matrixCampaignNameEl instanceof HTMLElement) {
+                this.matrixCampaignNameEl.textContent = `计划名：${name || '未识别'}`;
+            }
+            if (this.matrixCampaignIdEl instanceof HTMLElement) {
+                this.matrixCampaignIdEl.textContent = `计划ID：${id || '--'}`;
+            }
+            this.renderCrowdCampaignItemSelect(id);
         },
 
         async resolvePromptText(promptItem) {
@@ -770,7 +831,11 @@
                     Logger.log('⚠️ 未识别到当前计划ID，无法解析商品ID，请先进入计划详情页或勾选计划后重试', true);
                     return '';
                 }
-                let itemId = this.getCrowdCampaignItemId(campaignId);
+                let itemId = this.getCrowdCampaignSelectedItemId(campaignId) || this.getCrowdCampaignItemId(campaignId);
+                if (!/^\d{6,}$/.test(itemId)) {
+                    await this.refreshCrowdCampaignItemOptions(campaignId);
+                    itemId = this.getCrowdCampaignSelectedItemId(campaignId) || this.getCrowdCampaignItemId(campaignId);
+                }
                 if (!/^\d{6,}$/.test(itemId)) {
                     itemId = await this.resolveCrowdItemIdByCampaign(campaignId);
                 }
@@ -978,6 +1043,613 @@
             }
         },
 
+        getCrowdCampaignItemOptions(campaignId) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return [];
+            if (!(this.crowdCampaignItemOptionsMap instanceof Map)) {
+                this.crowdCampaignItemOptionsMap = new Map();
+            }
+            const list = this.crowdCampaignItemOptionsMap.get(id);
+            return Array.isArray(list) ? list.slice() : [];
+        },
+
+        getCrowdCampaignSelectedItemId(campaignId) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return '';
+            if (this.crowdCampaignSelectedItemIdMap instanceof Map) {
+                const selected = PlanIdentityUtils.normalizeItemId(this.crowdCampaignSelectedItemIdMap.get(id) || '');
+                if (selected) return selected;
+            }
+            return '';
+        },
+
+        isCrowdCampaignItemManuallySelected(campaignId) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return false;
+            if (!(this.crowdCampaignManualItemSelectionMap instanceof Map)) return false;
+            return this.crowdCampaignManualItemSelectionMap.get(id) === true;
+        },
+
+        setCrowdCampaignSelectedItemId(campaignId, itemId, options = {}) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const normalizedItemId = PlanIdentityUtils.normalizeItemId(itemId);
+            if (!id) return '';
+            if (!(this.crowdCampaignSelectedItemIdMap instanceof Map)) {
+                this.crowdCampaignSelectedItemIdMap = new Map();
+            }
+            if (!(this.crowdCampaignManualItemSelectionMap instanceof Map)) {
+                this.crowdCampaignManualItemSelectionMap = new Map();
+            }
+            if (normalizedItemId) {
+                this.crowdCampaignSelectedItemIdMap.set(id, normalizedItemId);
+                this.crowdCampaignManualItemSelectionMap.set(id, options?.manual === true);
+                this.cacheCrowdCampaignItemId(id, normalizedItemId);
+                return normalizedItemId;
+            }
+            this.crowdCampaignSelectedItemIdMap.delete(id);
+            this.crowdCampaignManualItemSelectionMap.delete(id);
+            return '';
+        },
+
+        formatCrowdSpendAmount(rawValue) {
+            const value = this.toNumericValue(rawValue);
+            if (value <= 0) return '0';
+            if (value >= 10000) return value.toFixed(0);
+            if (value >= 1000) return value.toFixed(1).replace(/\.0$/, '');
+            return value.toFixed(2).replace(/\.?0+$/, '');
+        },
+
+        normalizeCrowdItemTitle(rawTitle = '') {
+            const title = String(rawTitle || '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!title) return '';
+            if (/^(?:--|-|null|undefined)$/i.test(title)) return '';
+            if (/^\d{6,}$/.test(title)) return '';
+            return title;
+        },
+
+        resolveCrowdItemActiveState(meta = {}) {
+            if (!meta || typeof meta !== 'object') return null;
+            const onlineNum = Number(meta.onlineStatus ?? meta.isOnline ?? meta.online ?? '');
+            if (Number.isFinite(onlineNum)) {
+                if (onlineNum === 1) return true;
+                if (onlineNum === 0) return false;
+            }
+            const text = [
+                meta.displayStatus,
+                meta.status,
+                meta.onlineStatus,
+                meta.itemStatus,
+                meta.adgroupStatus,
+                meta.planStatus,
+                meta.campaignStatus,
+                meta.statusDesc,
+                meta.state
+            ].map(item => String(item || '').trim().toLowerCase()).join('|');
+            if (!text) return null;
+            if (/(start|online|active|running|enable|在投|投放|推广中|开启|生效)/.test(text)) return true;
+            if (/(pause|stop|offline|suspend|disable|暂停|关闭|下线|失效|停投)/.test(text)) return false;
+            return null;
+        },
+
+        mergeCrowdItemActiveState(current, next) {
+            const currentState = current === true ? true : (current === false ? false : null);
+            const nextState = next === true ? true : (next === false ? false : null);
+            if (nextState === true) return true;
+            if (nextState === false) return currentState === true ? true : false;
+            return currentState;
+        },
+
+        collectCrowdItemMetaFromNode(node = {}, campaignId = '') {
+            if (!node || typeof node !== 'object') return [];
+            const normalizedCampaignId = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const itemIds = this.collectCrowdDirectItemIdCandidates(node);
+            if (!itemIds.length) return [];
+            const titleCandidates = [
+                node.materialName,
+                node.itemName,
+                node.itemTitle,
+                node.title,
+                node.name,
+                node.goodsTitle,
+                node.auctionTitle,
+                node?.material?.materialName,
+                node?.material?.itemName,
+                node?.material?.itemTitle,
+                node?.material?.title,
+                node?.item?.materialName,
+                node?.item?.itemName,
+                node?.item?.itemTitle,
+                node?.item?.title
+            ];
+            let itemTitle = '';
+            for (let i = 0; i < titleCandidates.length; i++) {
+                const normalizedTitle = this.normalizeCrowdItemTitle(titleCandidates[i]);
+                if (!normalizedTitle) continue;
+                itemTitle = normalizedTitle;
+                break;
+            }
+            let active = this.resolveCrowdItemActiveState(node);
+            if (active === null && node.material && typeof node.material === 'object') {
+                active = this.resolveCrowdItemActiveState(node.material);
+            }
+            if (active === null && node.adgroup && typeof node.adgroup === 'object') {
+                active = this.resolveCrowdItemActiveState(node.adgroup);
+            }
+            if (active === null && node.campaign && typeof node.campaign === 'object') {
+                active = this.resolveCrowdItemActiveState(node.campaign);
+            }
+            return itemIds.map((itemId) => ({
+                campaignId: normalizedCampaignId,
+                itemId,
+                itemTitle,
+                active
+            }));
+        },
+
+        collectCrowdItemMetaFromPayload(payload = {}, campaignId = '') {
+            const data = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
+                ? payload.data
+                : {};
+            const rows = this.collectCrowdSpendRowsFromPayload(payload);
+            const nodes = rows.slice();
+            if (data.campaign && typeof data.campaign === 'object') nodes.push(data.campaign);
+            if (payload?.campaign && typeof payload.campaign === 'object') nodes.push(payload.campaign);
+            if (data.adgroup && typeof data.adgroup === 'object') nodes.push(data.adgroup);
+            if (payload?.adgroup && typeof payload.adgroup === 'object') nodes.push(payload.adgroup);
+            if (Array.isArray(data.adgroupList)) nodes.push(...data.adgroupList);
+            if (Array.isArray(payload?.adgroupList)) nodes.push(...payload.adgroupList);
+            const metaMap = new Map();
+            nodes.forEach((node) => {
+                this.collectCrowdItemMetaFromNode(node, campaignId).forEach((itemMeta) => {
+                    const itemId = PlanIdentityUtils.normalizeItemId(itemMeta?.itemId || '');
+                    if (!itemId) return;
+                    const prev = metaMap.get(itemId) || {
+                        campaignId: PlanIdentityUtils.normalizeCampaignId(campaignId),
+                        itemId,
+                        itemTitle: '',
+                        active: null
+                    };
+                    const title = this.normalizeCrowdItemTitle(itemMeta?.itemTitle || '');
+                    const prevTitle = this.normalizeCrowdItemTitle(prev.itemTitle || '');
+                    if (!prevTitle && title) {
+                        prev.itemTitle = title;
+                    } else if (title && /^商品\d{6,}$/.test(prevTitle) && !/^商品\d{6,}$/.test(title)) {
+                        prev.itemTitle = title;
+                    }
+                    prev.active = this.mergeCrowdItemActiveState(prev.active, itemMeta?.active);
+                    metaMap.set(itemId, prev);
+                });
+            });
+            return Array.from(metaMap.values());
+        },
+
+        collectCrowdDirectItemIdCandidates(node) {
+            if (!node || typeof node !== 'object') return [];
+            return PlanIdentityUtils.collectItemIdCandidatesFromSources([
+                node.itemId,
+                node.materialId,
+                node.auctionId,
+                node.targetItemId,
+                node.targetMaterialId,
+                node.item_id,
+                node.material_id,
+                node.itemid,
+                node.materialid,
+                node.item,
+                node.material,
+                node.itemUrl,
+                node.materialUrl,
+                node.linkUrl,
+                node.url
+            ], 12);
+        },
+
+        extractCrowdSpendFromReportNode(node) {
+            if (!node || typeof node !== 'object') return 0;
+            const values = [
+                node.charge,
+                node.cost,
+                node.consume,
+                node.spend,
+                node.payAmount,
+                node.amount
+            ].map(item => this.toNumericValue(item)).filter(num => num > 0);
+            if (!values.length) return 0;
+            return Math.max(...values);
+        },
+
+        extractCrowdSpendFromNode(node) {
+            if (!node || typeof node !== 'object') return 0;
+            const reportList = Array.isArray(node.reportInfoList) ? node.reportInfoList : [];
+            if (reportList.length) {
+                const reportTotal = reportList.reduce((sum, reportItem) => {
+                    return sum + this.extractCrowdSpendFromReportNode(reportItem);
+                }, 0);
+                if (reportTotal > 0) return reportTotal;
+            }
+            const direct = this.extractCrowdSpendFromReportNode(node);
+            if (direct > 0) return direct;
+            if (node.reportInfo && typeof node.reportInfo === 'object') {
+                return this.extractCrowdSpendFromReportNode(node.reportInfo);
+            }
+            return 0;
+        },
+
+        collectCrowdSpendRowsFromPayload(payload = {}) {
+            const rows = [];
+            const pushRows = (list) => {
+                if (!Array.isArray(list) || !list.length) return;
+                list.forEach((item) => {
+                    if (!item || typeof item !== 'object') return;
+                    rows.push(item);
+                });
+            };
+            const data = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
+                ? payload.data
+                : {};
+            pushRows(data.list);
+            pushRows(payload?.list);
+            pushRows(data.rows);
+            pushRows(payload?.rows);
+            pushRows(data.adgroupList);
+            pushRows(payload?.adgroupList);
+
+            const campaignRows = Array.isArray(data.list) ? data.list : [];
+            campaignRows.forEach((campaignRow) => {
+                if (!campaignRow || typeof campaignRow !== 'object') return;
+                pushRows(campaignRow.adgroupList);
+                pushRows(campaignRow.groupList);
+                if (campaignRow.adgroup && typeof campaignRow.adgroup === 'object') {
+                    rows.push(campaignRow.adgroup);
+                }
+            });
+            return rows;
+        },
+
+        collectCrowdItemSpendSummaryFromRow(row = {}, campaignId = '') {
+            if (!row || typeof row !== 'object') return [];
+            const normalizedCampaignId = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const itemIds = this.collectCrowdDirectItemIdCandidates(row);
+            if (!itemIds.length) return [];
+            const reportList = Array.isArray(row.reportInfoList) ? row.reportInfoList : [];
+            const reportSpend = reportList.reduce((maxValue, reportItem) => {
+                return Math.max(maxValue, this.extractCrowdSpendFromReportNode(reportItem));
+            }, 0);
+            const spend = Math.max(
+                reportSpend,
+                this.extractCrowdSpendFromReportNode(row?.reportInfo || {}),
+                this.extractCrowdSpendFromReportNode(row)
+            );
+            if (spend <= 0) return [];
+            return itemIds.map((itemId) => ({
+                campaignId: normalizedCampaignId,
+                itemId,
+                spend
+            }));
+        },
+
+        collectCrowdItemSpendSummaryFromPayload(payload = {}, campaignId = '') {
+            const summaryMap = new Map();
+            const rows = this.collectCrowdSpendRowsFromPayload(payload);
+            rows.forEach((row) => {
+                this.collectCrowdItemSpendSummaryFromRow(row, campaignId).forEach((item) => {
+                    const itemId = PlanIdentityUtils.normalizeItemId(item?.itemId || '');
+                    const spend = this.toNumericValue(item?.spend || 0);
+                    if (!itemId || spend <= 0) return;
+                    const prev = summaryMap.get(itemId) || 0;
+                    summaryMap.set(itemId, prev + spend);
+                });
+            });
+            const normalizedCampaignId = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const out = Array.from(summaryMap.entries())
+                .map(([itemId, spend]) => ({
+                    campaignId: normalizedCampaignId,
+                    itemId: PlanIdentityUtils.normalizeItemId(itemId),
+                    spend: this.toNumericValue(spend)
+                }))
+                .filter(item => item.itemId && item.spend > 0);
+            out.sort((left, right) => {
+                if (right.spend !== left.spend) return right.spend - left.spend;
+                return String(left.itemId || '').localeCompare(String(right.itemId || ''));
+            });
+            return out;
+        },
+
+        async queryCrowdCampaignSpendPayload(campaignId, bizCode, authContext) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const normalizedBizCode = PlanIdentityUtils.normalizeBizCode(bizCode)
+                || authContext?.bizCode
+                || PlanIdentityUtils.DEFAULT_BIZ_CODE;
+            if (!id || !normalizedBizCode) return null;
+            const url = OneApiTransport.buildOneUrl('/campaign/horizontal/findPage.json', {
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: normalizedBizCode
+            });
+            const endDate = PlanIdentityUtils.formatDateYmd(new Date());
+            const startDateObj = new Date();
+            startDateObj.setDate(startDateObj.getDate() - 29);
+            const startDate = PlanIdentityUtils.formatDateYmd(startDateObj);
+            return OneApiTransport.postJson(url, {
+                mx_bizCode: normalizedBizCode,
+                bizCode: normalizedBizCode,
+                offset: 0,
+                pageSize: 200,
+                orderField: '',
+                orderBy: '',
+                queryRuleAuto: '1',
+                adgroupRequired: true,
+                adzoneRequired: false,
+                campaignId: Number(id),
+                campaignIdList: [Number(id)],
+                rptQuery: {
+                    fields: 'charge,click,ecpc,roi',
+                    conditionList: [{
+                        sourceList: ['scene', 'campaign_list'],
+                        adzonePkgIdList: [],
+                        effectEqual: '15',
+                        unifyType: 'last_click_by_effect_time',
+                        startTime: startDate,
+                        endTime: endDate,
+                        isRt: false
+                    }]
+                },
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            }, {
+                actionName: '查询计划商品花费失败',
+                businessErrorMessage: '查询计划商品花费失败'
+            });
+        },
+
+        async collectCrowdCampaignItemIdsByDetail(campaignId, bizCode, authContext) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const normalizedBizCode = PlanIdentityUtils.normalizeBizCode(bizCode);
+            if (!id || !normalizedBizCode) {
+                return {
+                    itemIds: [],
+                    spendSummary: [],
+                    itemMetaList: []
+                };
+            }
+
+            const itemIdSet = new Set();
+            const pushItemId = (rawItemId) => {
+                const normalizedItemId = PlanIdentityUtils.normalizeItemId(rawItemId);
+                if (!normalizedItemId || itemIdSet.has(normalizedItemId)) return;
+                itemIdSet.add(normalizedItemId);
+            };
+            const spendSummary = [];
+            const itemMetaMap = new Map();
+            const upsertItemMeta = (rawItemId, meta = {}) => {
+                const itemId = PlanIdentityUtils.normalizeItemId(rawItemId);
+                if (!itemId) return;
+                const prev = itemMetaMap.get(itemId) || {
+                    campaignId: id,
+                    itemId,
+                    itemTitle: '',
+                    active: null
+                };
+                const nextTitle = this.normalizeCrowdItemTitle(meta?.itemTitle || '');
+                const prevTitle = this.normalizeCrowdItemTitle(prev.itemTitle || '');
+                if (!prevTitle && nextTitle) {
+                    prev.itemTitle = nextTitle;
+                } else if (nextTitle && /^商品\d{6,}$/.test(prevTitle) && !/^商品\d{6,}$/.test(nextTitle)) {
+                    prev.itemTitle = nextTitle;
+                }
+                prev.active = this.mergeCrowdItemActiveState(prev.active, meta?.active);
+                itemMetaMap.set(itemId, prev);
+            };
+            const mergeSpendSummary = (summaryList = []) => {
+                (Array.isArray(summaryList) ? summaryList : []).forEach((item) => {
+                    const itemId = PlanIdentityUtils.normalizeItemId(item?.itemId || '');
+                    const spend = this.toNumericValue(item?.spend || 0);
+                    if (!itemId || spend <= 0) return;
+                    spendSummary.push({
+                        campaignId: id,
+                        itemId,
+                        spend
+                    });
+                });
+            };
+            const mergeItemMetaList = (list = []) => {
+                (Array.isArray(list) ? list : []).forEach((item) => {
+                    const itemId = PlanIdentityUtils.normalizeItemId(item?.itemId || '');
+                    if (!itemId) return;
+                    pushItemId(itemId);
+                    upsertItemMeta(itemId, item);
+                });
+            };
+
+            const detail = await PlanIdentityUtils.queryCampaignDetail(id, normalizedBizCode, authContext);
+            (Array.isArray(detail?.itemIdCandidates) ? detail.itemIdCandidates : []).forEach(pushItemId);
+            mergeSpendSummary(this.collectCrowdItemSpendSummaryFromPayload(detail?.response || {}, id));
+            mergeItemMetaList(this.collectCrowdItemMetaFromPayload(detail?.response || {}, id));
+            const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
+            if (adgroupIds.length) {
+                const tasks = adgroupIds.map((adgroupId) => async () => {
+                    try {
+                        return await PlanIdentityUtils.queryAdgroupDetail(id, adgroupId, normalizedBizCode, authContext);
+                    } catch {
+                        return null;
+                    }
+                });
+                const settled = await this.runTasksWithConcurrency(tasks, 4);
+                settled.forEach((item) => {
+                    if (item.status !== 'fulfilled' || !item.value) return;
+                    const adgroupDetail = item.value;
+                    pushItemId(adgroupDetail?.itemId || '');
+                    (Array.isArray(adgroupDetail?.itemIdCandidates) ? adgroupDetail.itemIdCandidates : []).forEach(pushItemId);
+                    mergeSpendSummary(this.collectCrowdItemSpendSummaryFromPayload(adgroupDetail?.response || {}, id));
+                    mergeItemMetaList(this.collectCrowdItemMetaFromPayload(adgroupDetail?.response || {}, id));
+                });
+            }
+
+            return {
+                itemIds: Array.from(itemIdSet),
+                spendSummary,
+                itemMetaList: Array.from(itemMetaMap.values())
+            };
+        },
+
+        async refreshCrowdCampaignItemOptions(campaignId, options = {}) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return [];
+            const forceRefresh = options?.forceRefresh === true;
+            if (!(this.crowdCampaignItemOptionsMap instanceof Map)) {
+                this.crowdCampaignItemOptionsMap = new Map();
+            }
+            if (!forceRefresh) {
+                const cachedOptions = this.getCrowdCampaignItemOptions(id);
+                if (cachedOptions.length) return cachedOptions;
+            }
+            const spendMap = new Map();
+            const itemIdSet = new Set();
+            const itemMetaMap = new Map();
+            const pushItemId = (rawItemId) => {
+                const itemId = PlanIdentityUtils.normalizeItemId(rawItemId);
+                if (!itemId || itemIdSet.has(itemId)) return;
+                itemIdSet.add(itemId);
+                this.cacheCrowdCampaignItemId(id, itemId);
+            };
+            const upsertItemMeta = (rawItemId, meta = {}) => {
+                const itemId = PlanIdentityUtils.normalizeItemId(rawItemId);
+                if (!itemId) return;
+                const prev = itemMetaMap.get(itemId) || {
+                    campaignId: id,
+                    itemId,
+                    itemTitle: '',
+                    active: null
+                };
+                const nextTitle = this.normalizeCrowdItemTitle(meta?.itemTitle || '');
+                const prevTitle = this.normalizeCrowdItemTitle(prev.itemTitle || '');
+                if (!prevTitle && nextTitle) {
+                    prev.itemTitle = nextTitle;
+                } else if (nextTitle && /^商品\d{6,}$/.test(prevTitle) && !/^商品\d{6,}$/.test(nextTitle)) {
+                    prev.itemTitle = nextTitle;
+                }
+                prev.active = this.mergeCrowdItemActiveState(prev.active, meta?.active);
+                itemMetaMap.set(itemId, prev);
+            };
+            const mergeSummary = (list = []) => {
+                (Array.isArray(list) ? list : []).forEach((item) => {
+                    const itemId = PlanIdentityUtils.normalizeItemId(item?.itemId || '');
+                    const spend = this.toNumericValue(item?.spend || 0);
+                    if (!itemId) return;
+                    pushItemId(itemId);
+                    if (spend <= 0) return;
+                    const prev = spendMap.get(itemId) || 0;
+                    spendMap.set(itemId, prev + spend);
+                });
+            };
+            const mergeItemMetaList = (list = []) => {
+                (Array.isArray(list) ? list : []).forEach((item) => {
+                    const itemId = PlanIdentityUtils.normalizeItemId(item?.itemId || '');
+                    if (!itemId) return;
+                    pushItemId(itemId);
+                    upsertItemMeta(itemId, item);
+                });
+            };
+
+            try {
+                const authContext = PlanIdentityUtils.resolveAuthContext(PlanIdentityUtils.DEFAULT_BIZ_CODE);
+                const bizList = [];
+                const pushBiz = (value) => {
+                    const normalized = PlanIdentityUtils.normalizeBizCode(value);
+                    if (!normalized) return;
+                    if (bizList.includes(normalized)) return;
+                    bizList.push(normalized);
+                };
+                PlanIdentityUtils.BIZ_CODE_LIST.forEach(pushBiz);
+                pushBiz(authContext?.bizCode || '');
+                if (!bizList.length) pushBiz(PlanIdentityUtils.DEFAULT_BIZ_CODE);
+
+                for (let i = 0; i < bizList.length; i++) {
+                    const bizCode = bizList[i];
+                    try {
+                        const payload = await this.queryCrowdCampaignSpendPayload(id, bizCode, authContext);
+                        mergeSummary(this.collectCrowdItemSpendSummaryFromPayload(payload, id));
+                        mergeItemMetaList(this.collectCrowdItemMetaFromPayload(payload, id));
+                    } catch {
+                        // ignore and keep trying other biz
+                    }
+                }
+
+                for (let i = 0; i < bizList.length; i++) {
+                    const bizCode = bizList[i];
+                    try {
+                        const detailResult = await this.collectCrowdCampaignItemIdsByDetail(id, bizCode, authContext);
+                        (Array.isArray(detailResult?.itemIds) ? detailResult.itemIds : []).forEach(pushItemId);
+                        mergeSummary(detailResult?.spendSummary || []);
+                        mergeItemMetaList(detailResult?.itemMetaList || []);
+                        if (itemIdSet.size) {
+                            PlanIdentityUtils.rememberCampaignItemIdCandidates(id, Array.from(itemIdSet), {
+                                prepend: true,
+                                maxCount: 120
+                            });
+                            break;
+                        }
+                    } catch {
+                        // ignore and keep trying other biz
+                    }
+                }
+            } catch (err) {
+                Logger.warn(`🔮 商品花费列表识别失败：${err?.message || '未知错误'}`);
+            }
+
+            this.getCrowdCampaignItemCandidates(id).forEach(pushItemId);
+            const spendItemIds = Array.from(spendMap.keys());
+            spendItemIds.forEach(pushItemId);
+
+            let itemOptions = Array.from(itemIdSet.values())
+                .map((itemId) => ({
+                    itemId,
+                    spend: this.toNumericValue(spendMap.get(itemId) || 0),
+                    itemTitle: this.normalizeCrowdItemTitle(itemMetaMap.get(itemId)?.itemTitle || ''),
+                    active: itemMetaMap.get(itemId)?.active === true
+                        ? true
+                        : (itemMetaMap.get(itemId)?.active === false ? false : null)
+                }))
+                .sort((left, right) => {
+                    if (right.spend !== left.spend) return right.spend - left.spend;
+                    return String(left.itemId || '').localeCompare(String(right.itemId || ''));
+                });
+
+            itemOptions = itemOptions
+                .filter(item => item.active !== false)
+                .sort((left, right) => {
+                    const leftRank = left?.active === true ? 0 : 1;
+                    const rightRank = right?.active === true ? 0 : 1;
+                    if (leftRank !== rightRank) return leftRank - rightRank;
+                    if (right.spend !== left.spend) return right.spend - left.spend;
+                    return String(left.itemId || '').localeCompare(String(right.itemId || ''));
+                });
+
+            if (!itemOptions.length) {
+                const fallbackCandidates = this.getCrowdCampaignItemCandidates(id);
+                itemOptions = fallbackCandidates.map((itemId) => ({
+                    itemId,
+                    spend: 0,
+                    itemTitle: '',
+                    active: null
+                }));
+            }
+
+            this.crowdCampaignItemOptionsMap.set(id, itemOptions);
+            const selectedItemId = this.getCrowdCampaignSelectedItemId(id);
+            const isManualSelected = this.isCrowdCampaignItemManuallySelected(id);
+            const selectedExists = itemOptions.some(item => item.itemId === selectedItemId);
+            if (!selectedItemId || !selectedExists) {
+                const nextSelectedItemId = itemOptions[0]?.itemId || this.getCrowdCampaignItemId(id);
+                this.setCrowdCampaignSelectedItemId(id, nextSelectedItemId, { manual: false });
+            } else if (!isManualSelected) {
+                this.setCrowdCampaignSelectedItemId(id, selectedItemId, { manual: false });
+            }
+
+            return this.getCrowdCampaignItemOptions(id);
+        },
+
         getCrowdCampaignItemCandidates(campaignId, preferredItemId = '') {
             const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
             if (!id) return [];
@@ -994,6 +1666,7 @@
                 (Array.isArray(sharedCandidates) ? sharedCandidates : []).forEach(pushItem);
             }
             pushItem(preferredItemId);
+            pushItem(this.getCrowdCampaignSelectedItemId(id));
             pushItem(this.getCrowdCampaignItemId(id));
             return out;
         },
@@ -1003,9 +1676,17 @@
             if (!id) return '';
             const preferCache = options?.preferCache !== false;
             const allowCacheFallback = options?.allowCacheFallback !== false;
+            const syncSelectedItemIfNeeded = (itemId) => {
+                const normalizedItemId = PlanIdentityUtils.normalizeItemId(itemId);
+                if (!normalizedItemId) return '';
+                if (this.getCrowdCampaignSelectedItemId(id)) return normalizedItemId;
+                this.setCrowdCampaignSelectedItemId(id, normalizedItemId, { manual: false });
+                return normalizedItemId;
+            };
             const fromCache = PlanIdentityUtils.getCampaignItemId(id);
             if (fromCache && preferCache) {
                 this.cacheCrowdCampaignItemId(id, fromCache);
+                syncSelectedItemIfNeeded(fromCache);
                 this.refreshCrowdMatrixCampaignMeta(id);
                 return fromCache;
             }
@@ -1034,17 +1715,20 @@
                 if (!normalized) {
                     if (fromCache && allowCacheFallback) {
                         this.cacheCrowdCampaignItemId(id, fromCache);
+                        syncSelectedItemIfNeeded(fromCache);
                         this.refreshCrowdMatrixCampaignMeta(id);
                         return fromCache;
                     }
                     return '';
                 }
                 this.cacheCrowdCampaignItemId(id, normalized);
+                syncSelectedItemIfNeeded(normalized);
                 this.refreshCrowdMatrixCampaignMeta(id);
                 return normalized;
             } catch (err) {
                 if (fromCache && allowCacheFallback) {
                     this.cacheCrowdCampaignItemId(id, fromCache);
+                    syncSelectedItemIfNeeded(fromCache);
                     this.refreshCrowdMatrixCampaignMeta(id);
                     Logger.warn(`🔮 商品ID识别失败，使用缓存兜底：${err?.message || '未知错误'}`);
                     return fromCache;
@@ -2000,8 +2684,11 @@
                             unsupportedReason: ''
                         };
                     };
-                    const queryItemDealByCandidate = async (seedItemId = '') => {
-                        const candidates = this.getCrowdCampaignItemCandidates(id, seedItemId);
+                    const queryItemDealByCandidate = async (seedItemId = '', options = {}) => {
+                        const lockedItemId = PlanIdentityUtils.normalizeItemId(options?.lockedItemId || '');
+                        const candidates = lockedItemId
+                            ? [lockedItemId]
+                            : this.getCrowdCampaignItemCandidates(id, seedItemId);
                         if (!candidates.length) return null;
                         const unsupportedResults = [];
                         let lastQueryExecutePlanError = null;
@@ -2026,6 +2713,9 @@
                                     continue;
                                 }
                                 this.cacheCrowdCampaignItemId(id, candidateItemId);
+                                if (options?.allowAutoPick === true) {
+                                    this.setCrowdCampaignSelectedItemId(id, candidateItemId, { manual: false });
+                                }
                                 return {
                                     itemId: candidateItemId,
                                     prompt: candidatePrompt,
@@ -2050,8 +2740,14 @@
                     };
 
                     let itemId = '';
+                    const selectedItemId = this.getCrowdCampaignSelectedItemId(id);
+                    const lockToSelectedItem = metric === 'itemdeal'
+                        && this.isCrowdCampaignItemManuallySelected(id)
+                        && /^\d{6,}$/.test(selectedItemId);
                     if (metric === 'itemdeal') {
-                        itemId = await this.resolveCrowdItemIdByCampaign(id);
+                        itemId = /^\d{6,}$/.test(selectedItemId)
+                            ? selectedItemId
+                            : await this.resolveCrowdItemIdByCampaign(id);
                         if (!/^\d{6,}$/.test(itemId)) {
                             throw new Error(`未识别到计划 ${id} 对应商品ID`);
                         }
@@ -2063,7 +2759,10 @@
                     let baseQueryResult = null;
                     try {
                         if (metric === 'itemdeal') {
-                            const resolvedByCandidates = await queryItemDealByCandidate(itemId);
+                            const resolvedByCandidates = await queryItemDealByCandidate(itemId, {
+                                lockedItemId: lockToSelectedItem ? selectedItemId : '',
+                                allowAutoPick: !lockToSelectedItem
+                            });
                             if (resolvedByCandidates) {
                                 itemId = resolvedByCandidates.itemId;
                                 prompt = resolvedByCandidates.prompt;
@@ -2076,7 +2775,7 @@
                         }
                     } catch (err) {
                         const message = String(err?.message || '');
-                        const shouldRetryByRefreshingItem = metric === 'itemdeal' && /queryExecutePlan/.test(message);
+                        const shouldRetryByRefreshingItem = metric === 'itemdeal' && !lockToSelectedItem && /queryExecutePlan/.test(message);
                         if (!shouldRetryByRefreshingItem) throw err;
 
                         const refreshedItemId = await this.resolveCrowdItemIdByCampaign(id, {
@@ -2097,7 +2796,10 @@
                         itemId = refreshedItemId;
                         prompt = refreshedPrompt;
                         if (metric === 'itemdeal') {
-                            const refreshedByCandidates = await queryItemDealByCandidate(itemId);
+                            const refreshedByCandidates = await queryItemDealByCandidate(itemId, {
+                                lockedItemId: '',
+                                allowAutoPick: true
+                            });
                             if (!refreshedByCandidates) throw err;
                             itemId = refreshedByCandidates.itemId;
                             prompt = refreshedByCandidates.prompt;
@@ -3624,7 +4326,72 @@
             }
         },
 
-        async runCrowdMatrixLoad({ campaignId }) {
+        buildCrowdMatrixResultKey(metricType, periodDays) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            const period = this.normalizeCrowdPeriod(periodDays);
+            if (!metric || !period) return '';
+            return `${metric}|${period}`;
+        },
+
+        collectCrowdMatrixResultList() {
+            if (!(this.crowdMatrixResultMap instanceof Map)) return [];
+            return Array.from(this.crowdMatrixResultMap.values()).filter(Boolean);
+        },
+
+        upsertCrowdMatrixResults(results = [], options = {}) {
+            if (options?.replace === true || !(this.crowdMatrixResultMap instanceof Map)) {
+                this.crowdMatrixResultMap = new Map();
+            }
+            (Array.isArray(results) ? results : []).forEach((item) => {
+                const key = this.buildCrowdMatrixResultKey(item?.metricType, item?.periodDays);
+                if (!key || !item) return;
+                this.crowdMatrixResultMap.set(key, item);
+            });
+            return this.collectCrowdMatrixResultList();
+        },
+
+        replaceCrowdMatrixMetricResults(metricType, results = []) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!(this.crowdMatrixResultMap instanceof Map)) {
+                this.crowdMatrixResultMap = new Map();
+            }
+            if (!metric) return this.collectCrowdMatrixResultList();
+            const metricPrefix = `${metric}|`;
+            Array.from(this.crowdMatrixResultMap.keys()).forEach((key) => {
+                if (String(key || '').startsWith(metricPrefix)) {
+                    this.crowdMatrixResultMap.delete(key);
+                }
+            });
+            (Array.isArray(results) ? results : []).forEach((item) => {
+                const key = this.buildCrowdMatrixResultKey(item?.metricType, item?.periodDays);
+                if (!key || !item) return;
+                this.crowdMatrixResultMap.set(key, item);
+            });
+            return this.collectCrowdMatrixResultList();
+        },
+
+        scheduleCrowdMatrixMetricReload(campaignId, metricType) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!id || !metric) return;
+            this.crowdMatrixPendingMetricReload = {
+                campaignId: id,
+                metricType: metric
+            };
+        },
+
+        flushPendingCrowdMatrixMetricReload() {
+            if (this.crowdMatrixLoading) return;
+            const pending = this.crowdMatrixPendingMetricReload;
+            if (!pending || typeof pending !== 'object') return;
+            this.crowdMatrixPendingMetricReload = null;
+            this.reloadCrowdMatrixMetric({
+                campaignId: pending.campaignId,
+                metricType: pending.metricType
+            });
+        },
+
+        async runCrowdMatrixLoad({ campaignId, forceRefreshItems = false }) {
             const id = String(campaignId || '').trim();
             this.refreshCrowdMatrixCampaignMeta(id);
             this.crowdMatrixTaskProgressHandler = null;
@@ -3637,6 +4404,8 @@
             this.crowdMatrixProgress = 0;
             this.crowdMatrixLoadedCampaignId = '';
             this.crowdMatrixDataset = null;
+            this.crowdMatrixResultMap = null;
+            this.crowdMatrixPendingMetricReload = null;
             this.crowdInsightRunContext = null;
             this.crowdRequestSlotPromise = Promise.resolve();
             this.crowdRequestLastAt = 0;
@@ -3644,6 +4413,8 @@
             if (this.matrixGridEl instanceof HTMLElement) this.matrixGridEl.innerHTML = '';
 
             try {
+                await this.refreshCrowdCampaignItemOptions(id, { forceRefresh: forceRefreshItems });
+                this.refreshCrowdMatrixCampaignMeta(id);
                 const taskFns = [];
                 this.CROWD_METRICS.forEach((metricType) => {
                     this.CROWD_PERIODS.forEach((periodDays) => {
@@ -3688,7 +4459,8 @@
                     return;
                 }
 
-                const dataset = this.buildMatrixDataset(successResults);
+                const mergedResults = this.upsertCrowdMatrixResults(successResults, { replace: true });
+                const dataset = this.buildMatrixDataset(mergedResults);
                 this.crowdMatrixDataset = dataset;
                 this.crowdMatrixLoadedCampaignId = id;
                 this.renderCrowdMatrixCharts(dataset);
@@ -3710,6 +4482,107 @@
                     this.crowdMatrixTaskProgressHandler = null;
                     this.crowdInsightRunContext = null;
                 }
+                this.flushPendingCrowdMatrixMetricReload();
+            }
+        },
+
+        async reloadCrowdMatrixMetric({ campaignId, metricType }) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!id || !metric) return;
+            if (this.crowdMatrixLoading) {
+                this.scheduleCrowdMatrixMetricReload(id, metric);
+                return;
+            }
+            const hasExistingDataset = this.crowdMatrixDataset
+                && this.crowdMatrixLoadedCampaignId === id
+                && this.crowdMatrixResultMap instanceof Map
+                && this.crowdMatrixResultMap.size > 0;
+            if (!hasExistingDataset) {
+                this.runCrowdMatrixLoad({ campaignId: id, forceRefreshItems: false });
+                return;
+            }
+
+            const runId = ++this.crowdMatrixRunId;
+            this.crowdMatrixLoading = true;
+            this.crowdMatrixPendingMetricReload = null;
+            this.crowdMatrixProgress = 0;
+            this.crowdInsightRunContext = null;
+            this.crowdRequestSlotPromise = Promise.resolve();
+            this.crowdRequestLastAt = 0;
+            const metricMeta = this.getCrowdMetricMeta(metric);
+            this.setCrowdMatrixStatus(`正在刷新${metricMeta.seriesLabel}...`, 'loading', { showRetry: false, progress: 0 });
+            try {
+                const taskFns = this.CROWD_PERIODS.map((periodDays) => {
+                    const task = async () => this.queryCrowdInsight({ campaignId: id, metricType: metric, periodDays });
+                    task.__amCrowdTaskLabel = `${metricMeta.seriesLabel} · 过去${periodDays}天`;
+                    return task;
+                });
+                const totalTaskCount = taskFns.length;
+                this.crowdMatrixTaskProgressHandler = (progressInfo) => {
+                    if (runId !== this.crowdMatrixRunId) return;
+                    const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
+                    const status = String(progressInfo?.status || '').trim();
+                    const taskLabel = String(progressInfo?.label || '').trim();
+                    const stepText = status === 'fulfilled' ? '完成' : '失败';
+                    const detailText = taskLabel ? `${stepText} ${taskLabel}` : `${stepText}一项请求`;
+                    const ratio = totalTaskCount > 0 ? (done / totalTaskCount) * 100 : 0;
+                    this.setCrowdMatrixStatus(`刷新中 ${done}/${totalTaskCount} · ${detailText}`, 'loading', { showRetry: false, progress: ratio });
+                };
+                const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
+                if (runId !== this.crowdMatrixRunId) return;
+
+                const successResults = [];
+                let failCount = 0;
+                const unsupportedReasonSet = new Set();
+                settled.forEach((item) => {
+                    if (item.status === 'fulfilled' && item.value) {
+                        successResults.push(item.value);
+                        const reason = String(item.value?.rawMeta?.unsupportedReason || '').trim();
+                        if (reason) unsupportedReasonSet.add(reason);
+                    } else {
+                        failCount += 1;
+                    }
+                });
+                const mergedResults = this.replaceCrowdMatrixMetricResults(metric, successResults);
+                const dataset = this.buildMatrixDataset(mergedResults);
+                this.crowdMatrixDataset = dataset;
+                this.crowdMatrixLoadedCampaignId = id;
+                this.renderCrowdMatrixCharts(dataset);
+                if (!successResults.length) {
+                    this.setCrowdMatrixStatus(`刷新${metricMeta.seriesLabel}失败，请稍后重试`, 'error', { showRetry: true, progress: 100 });
+                    return;
+                }
+                const unsupportedNotice = Array.from(unsupportedReasonSet).filter(Boolean).join('；');
+                if (failCount > 0) {
+                    this.setCrowdMatrixStatus(`${metricMeta.seriesLabel}已刷新（失败 ${failCount}/${totalTaskCount}）${unsupportedNotice ? `；${unsupportedNotice}` : ''}`, 'warn', {
+                        showRetry: true,
+                        progress: 100,
+                        autoHide: true
+                    });
+                } else if (unsupportedNotice) {
+                    this.setCrowdMatrixStatus(`${metricMeta.seriesLabel}已刷新；${unsupportedNotice}`, 'warn', {
+                        showRetry: false,
+                        progress: 100,
+                        autoHide: true
+                    });
+                } else {
+                    this.setCrowdMatrixStatus(`${metricMeta.seriesLabel}已刷新`, 'success', {
+                        showRetry: false,
+                        progress: 100,
+                        autoHide: true
+                    });
+                }
+            } catch (err) {
+                if (runId !== this.crowdMatrixRunId) return;
+                this.setCrowdMatrixStatus(`刷新${metricMeta.seriesLabel}失败：${err?.message || '未知错误'}`, 'error', { showRetry: true, progress: this.crowdMatrixProgress || 0 });
+            } finally {
+                if (runId === this.crowdMatrixRunId) {
+                    this.crowdMatrixLoading = false;
+                    this.crowdMatrixTaskProgressHandler = null;
+                    this.crowdInsightRunContext = null;
+                }
+                this.flushPendingCrowdMatrixMetricReload();
             }
         },
 
@@ -3726,7 +4599,7 @@
                 this.setCrowdMatrixStatus('已展示最近一次加载结果', 'success', { showRetry: false, progress: 100, autoHide: true, hideDelayMs: 800 });
                 return;
             }
-            this.runCrowdMatrixLoad({ campaignId });
+            this.runCrowdMatrixLoad({ campaignId, forceRefreshItems: forceReload });
         },
 
         /**
@@ -4027,7 +4900,44 @@
                     box-shadow: 0 2px 6px rgba(31, 53, 109, 0.06);
                     white-space: nowrap;
                     overflow: hidden;
+                }
+                #am-magic-report-popup .am-crowd-matrix-campaign-part {
+                    min-width: 0;
+                    overflow: hidden;
                     text-overflow: ellipsis;
+                }
+                #am-magic-report-popup .am-crowd-matrix-campaign-sep {
+                    color: #7f8ca9;
+                    flex: 0 0 auto;
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-select-wrap {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    min-width: 0;
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-label {
+                    color: #3f4e6f;
+                    flex: 0 0 auto;
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-select {
+                    min-width: 116px;
+                    max-width: min(320px, 42vw);
+                    height: 22px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(42, 91, 255, 0.24);
+                    background: rgba(255, 255, 255, 0.98);
+                    color: #1a2a47;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    font-weight: 600;
+                    padding: 0 6px;
+                    outline: none;
+                    box-shadow: inset 0 1px 2px rgba(42, 91, 255, 0.08);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-select:disabled {
+                    cursor: not-allowed;
+                    opacity: 0.62;
                 }
                 #am-magic-report-popup .am-crowd-matrix-state.is-loading {
                     color: #2a5bff;
@@ -4582,7 +5492,18 @@
                                 <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">☆</span>
                             </button>
                         </div>
-                        <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">计划名：未识别 ｜ 计划ID：-- ｜ 商品ID：--</div>
+                        <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">
+                            <span class="am-crowd-matrix-campaign-part" data-crowd-campaign-name>计划名：未识别</span>
+                            <span class="am-crowd-matrix-campaign-sep" aria-hidden="true">｜</span>
+                            <span class="am-crowd-matrix-campaign-part" data-crowd-campaign-id>计划ID：--</span>
+                            <span class="am-crowd-matrix-campaign-sep" aria-hidden="true">｜</span>
+                            <label class="am-crowd-matrix-item-select-wrap">
+                                <span class="am-crowd-matrix-item-label">商品ID：</span>
+                                <select class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
+                                    <option value="">--</option>
+                                </select>
+                            </label>
+                        </div>
                     </div>
                     <div class="am-quick-prompts" id="am-magic-quick-prompts">
                         ${quickPromptHtml}
@@ -4624,6 +5545,9 @@
             this.matrixRetryBtn = div.querySelector('#am-crowd-matrix-retry');
             this.matrixLegendEl = div.querySelector('#am-crowd-matrix-global-legend');
             this.matrixCampaignEl = div.querySelector('#am-crowd-matrix-campaign');
+            this.matrixCampaignNameEl = div.querySelector('[data-crowd-campaign-name]');
+            this.matrixCampaignIdEl = div.querySelector('[data-crowd-campaign-id]');
+            this.matrixCampaignItemSelectEl = div.querySelector('#am-crowd-matrix-item-select');
             this.bindCrowdMatrixHoverTipEvents();
             this.refreshQuickPromptLabels();
             this.refreshCrowdMatrixCampaignMeta();
@@ -4764,6 +5688,25 @@
                     const period = this.normalizeCrowdPeriod(periodBtn.dataset.crowdPeriod || '');
                     if (!period) return;
                     this.toggleCrowdPeriodVisibility(period);
+                });
+            }
+            if (this.matrixCampaignItemSelectEl instanceof HTMLSelectElement) {
+                this.matrixCampaignItemSelectEl.addEventListener('change', () => {
+                    const campaignId = this.getCurrentCampaignId() || this.lastCampaignId;
+                    const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+                    if (!id) return;
+                    const selectedItemId = PlanIdentityUtils.normalizeItemId(this.matrixCampaignItemSelectEl.value || '');
+                    if (!selectedItemId) return;
+                    const prevItemId = this.getCrowdCampaignSelectedItemId(id);
+                    this.setCrowdCampaignSelectedItemId(id, selectedItemId, { manual: true });
+                    this.refreshCrowdMatrixCampaignMeta(id);
+                    if (this.activeView !== 'matrix') return;
+                    if (prevItemId === selectedItemId) return;
+                    this.setCrowdMatrixStatus(`已切换商品ID ${selectedItemId}，正在刷新商品成交人群...`, 'loading', {
+                        showRetry: false,
+                        progress: 0
+                    });
+                    this.reloadCrowdMatrixMetric({ campaignId: id, metricType: 'itemdeal' });
                 });
             }
 

@@ -563,16 +563,10 @@
                     wizardState?.draft?.parallelSubmitTimes,
                     DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
                 );
-                const siteOnlyCount = Math.max(1, toNumber(SITE_SCENE_PARALLEL_SUBMIT_TIMES, 1));
-                const strategyList = Array.isArray(wizardState?.strategyList) ? wizardState.strategyList : [];
-                if (!strategyList.length) return defaultCount;
-                const hasNonSiteScene = strategyList.some(item => (
-                    !isSceneLabelMatch(item?.sceneName, '货品全站推广')
-                ));
-                return hasNonSiteScene ? defaultCount : siteOnlyCount;
+                return defaultCount;
             };
             const renderRunModeMenu = () => {
-                const mode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'parallel');
+                const mode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'serial');
                 if (wizardState.els.runQuickBtn instanceof HTMLButtonElement) {
                     wizardState.els.runQuickBtn.title = `提交方式：${submitModeLabel(mode)}`;
                 }
@@ -591,10 +585,10 @@
                     button.classList.toggle('active', itemMode === mode);
                 });
             };
-            const setSubmitModeFromUI = (mode = 'parallel', options = {}) => {
+            const setSubmitModeFromUI = (mode = 'serial', options = {}) => {
                 const nextMode = normalizeSubmitMode(mode);
                 const draft = ensureWizardDraft();
-                const prevMode = normalizeSubmitMode(draft.submitMode || 'parallel');
+                const prevMode = normalizeSubmitMode(draft.submitMode || 'serial');
                 draft.submitMode = nextMode;
                 renderRunModeMenu();
                 commitDraftState(options.syncDraft !== false ? null : draft);
@@ -2915,4 +2909,3 @@
 
                 return sceneSettings;
             };
-

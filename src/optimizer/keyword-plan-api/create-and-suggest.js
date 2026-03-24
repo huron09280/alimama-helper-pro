@@ -1296,6 +1296,62 @@
                     failCopies: failureList.length
                 };
             };
+            const submitBatchPlansInParallel = async (entries = [], endpoint = '', submitTimes = 1, meta = {}) => {
+                if (!Array.isArray(entries) || !entries.length || submitTimes <= 1) {
+                    return {
+                        successes: [],
+                        failedEntries: [],
+                        successCopies: 0,
+                        failCopies: 0
+                    };
+                }
+                const parallelTasks = entries.map((entry) => (async () => {
+                    emitProgress(options, 'submit_batch_parallel_start', {
+                        batchIndex: meta.batchIndex || 1,
+                        batchTotal: meta.batchTotal || 1,
+                        endpoint,
+                        submitTimes,
+                        planName: entry?.meta?.planName || ''
+                    });
+                    const result = await submitSinglePlanInParallel(
+                        entry,
+                        endpoint,
+                        submitTimes
+                    );
+                    return {
+                        entry,
+                        result
+                    };
+                })());
+                const parallelSettled = await Promise.all(parallelTasks);
+                const successes = [];
+                const failedEntries = [];
+                let successCopies = 0;
+                let failCopies = 0;
+                parallelSettled.forEach((item) => {
+                    const entry = item?.entry || null;
+                    const result = item?.result || null;
+                    successCopies += Math.max(0, toNumber(result?.successCopies, 0));
+                    failCopies += Math.max(0, toNumber(result?.failCopies, 0));
+                    if (result?.ok && result?.success) {
+                        successes.push(result.success);
+                        return;
+                    }
+                    const errorText = String(result?.error || 'parallel_submit_failed');
+                    failedEntries.push(mergeDeep({}, entry, {
+                        lastError: errorText
+                    }));
+                });
+                return {
+                    successes,
+                    failedEntries,
+                    successCopies,
+                    failCopies,
+                    errorSummary: failedEntries
+                        .map(entry => `${entry?.meta?.planName || '-'}: ${String(entry?.lastError || 'parallel_submit_failed')}`)
+                        .join('；')
+                };
+            };
 
             for (let batchIndex = 0; batchIndex < groupedBatches.length; batchIndex++) {
                 const batchPayload = groupedBatches[batchIndex] || {};
@@ -1311,48 +1367,46 @@
                 let remainingEntries = batch.slice();
                 let batchError = null;
                 for (let attempt = 1; attempt <= batchRetry + 1; attempt++) {
-                    const useParallelSingleSubmit = remainingEntries.length === 1 && parallelSubmitTimes > 1;
-                    if (useParallelSingleSubmit) {
-                        const parallelEntry = remainingEntries[0];
-                        emitProgress(options, 'submit_batch_parallel_start', {
-                            batchIndex: batchIndex + 1,
-                            batchTotal: groupedBatches.length,
-                            endpoint: batchEndpoint,
-                            submitTimes: parallelSubmitTimes,
-                            planName: parallelEntry?.meta?.planName || ''
-                        });
-                        const parallelResult = await submitSinglePlanInParallel(
-                            parallelEntry,
+                    const useParallelSubmit = parallelSubmitTimes > 1;
+                    if (useParallelSubmit) {
+                        const parallelResult = await submitBatchPlansInParallel(
+                            remainingEntries,
                             batchEndpoint,
-                            parallelSubmitTimes
+                            parallelSubmitTimes,
+                            {
+                                batchIndex: batchIndex + 1,
+                                batchTotal: groupedBatches.length
+                            }
                         );
-                        if (parallelResult?.ok && parallelResult.success) {
-                            successes.push(parallelResult.success);
+                        if (Array.isArray(parallelResult?.successes) && parallelResult.successes.length) {
+                            successes.push(...parallelResult.successes);
+                        }
+                        if (!parallelResult?.failedEntries?.length) {
                             emitProgress(options, 'submit_batch_success', {
                                 batchIndex: batchIndex + 1,
-                                createdCount: 1,
+                                createdCount: parallelResult?.successes?.length || 0,
                                 failedCount: 0,
                                 endpoint: batchEndpoint,
                                 submitTimes: parallelSubmitTimes,
-                                successCopies: parallelResult.successCopies,
-                                failCopies: parallelResult.failCopies
+                                successCopies: parallelResult?.successCopies || 0,
+                                failCopies: parallelResult?.failCopies || 0
                             });
                             remainingEntries = [];
                             break;
                         }
-                        const parallelErrorText = parallelResult?.error || 'parallel_submit_failed';
+                        const parallelErrorText = parallelResult?.errorSummary || 'parallel_submit_failed';
                         batchError = new Error(parallelErrorText);
                         emitProgress(options, 'submit_batch_success', {
                             batchIndex: batchIndex + 1,
-                            createdCount: 0,
-                            failedCount: 1,
+                            createdCount: parallelResult?.successes?.length || 0,
+                            failedCount: parallelResult?.failedEntries?.length || 0,
                             endpoint: batchEndpoint,
                             submitTimes: parallelSubmitTimes,
                             successCopies: parallelResult?.successCopies || 0,
                             failCopies: parallelResult?.failCopies || 0,
                             error: parallelErrorText
                         });
-                        if (attempt < batchRetry + 1) {
+                        if (!(parallelResult?.successes?.length) && attempt < batchRetry + 1) {
                             emitProgress(options, 'submit_batch_retry', {
                                 batchIndex: batchIndex + 1,
                                 attempt,
@@ -1362,9 +1416,7 @@
                             await sleep(1200);
                             continue;
                         }
-                        remainingEntries = [mergeDeep({}, parallelEntry, {
-                            lastError: parallelErrorText
-                        })];
+                        remainingEntries = parallelResult.failedEntries;
                         break;
                     }
                     const solutionList = remainingEntries.map(entry => entry.solution);

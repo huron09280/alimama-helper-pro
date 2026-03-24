@@ -469,7 +469,7 @@
             itemSplitExpanded: false,
             candidateListExpanded: false,
             fallbackPolicy: normalizeWizardFallbackPolicy('auto'),
-            submitMode: 'parallel',
+            submitMode: 'serial',
             parallelSubmitTimes: normalizeParallelSubmitTimes(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES),
             matrixConfig: buildDefaultMatrixConfig(),
             strategyList: getDefaultStrategyList(),
@@ -554,4 +554,3 @@
                 isStale
             });
         };
-

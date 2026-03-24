@@ -1,3 +1,227 @@
+# TODO - 2026-03-24 Review 修复：商品成交人群局部刷新一致性
+
+## 需求规格
+- 目标：修复 code review 提出的 3 个问题，避免商品成交人群切换后出现旧数据残留、刷新中切换丢请求、未知状态商品被误过滤。
+- 范围：`src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs`。
+- 验收：
+  - 局部刷新不会混入旧商品周期数据；
+  - 刷新中切换商品会在结束后自动补跑最新请求；
+  - 商品下拉仅过滤明确暂停项，未知状态可保留。
+
+## 执行计划（含校验）
+- [x] 1. 修复局部刷新缓存替换语义。
+  - 摘要：新增 `replaceCrowdMatrixMetricResults`，局部刷新时先清理 `metric|period` 旧缓存再回写新结果，避免残留旧商品周期。
+- [x] 2. 修复刷新中切换商品丢请求问题。
+  - 摘要：新增 `scheduleCrowdMatrixMetricReload/flushPendingCrowdMatrixMetricReload`，刷新中切换会排队，当前刷新结束后自动补跑最新请求。
+- [x] 3. 修复未知状态商品过滤过严问题。
+  - 摘要：下拉候选改为仅过滤 `active === false`，并保持 `active === true` 优先排序，保留未知状态商品。
+- [x] 4. 更新契约测试并执行验证。
+  - 摘要：更新 `magic-report-crowd-matrix` 相关断言，覆盖缓存替换、排队补跑、状态过滤规则。
+
+## 结果复盘
+- 局部刷新一致性：`itemdeal` 切换后不会再混入历史商品周期结果；刷新失败周期会按“该指标无数据”表现。
+- 并发交互一致性：刷新进行中用户再次切换商品，会排队并在当前刷新结束后自动触发最新请求。
+- 候选完整性：商品下拉保留未知状态候选，仅剔除明确暂停项，减少因状态字段不完整导致的漏项。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+  - `node --test tests/*.test.mjs`
+
+# TODO - 2026-03-24 人群看板修正：商品下拉为空（状态误判导致全过滤）
+
+## 需求规格
+- 目标：修复人群看板商品下拉“为空”的问题，保证推广中商品能正常展示。
+- 根因：商品状态判断把通用 `status` 数值字段直接当成暂停/开启，导致正常商品被误判为暂停并被过滤。
+- 修复策略：仅将 `onlineStatus/isOnline/online` 作为数值状态来源；`status/itemStatus` 等仅参与文本关键词判断，不再直接数值判定。
+- 范围：`src/main-assistant/magic-report.js` 状态判定函数。
+
+## 执行计划（含校验）
+- [x] 1. 定位下拉空列表的过滤路径与状态判定来源。
+  - 摘要：确认空列表发生在 `activeOptions/itemOptions` 过滤后；误判点在 `resolveCrowdItemActiveState` 对 `status` 数值判断。
+- [x] 2. 收紧状态判定，移除 `status` 数值强判定。
+  - 摘要：只保留 `onlineStatus` 数值判定和状态文本关键词判定，避免通用 `status=0` 误判为暂停。
+- [x] 3. 构建与定向测试验证。
+  - 摘要：构建与 `magic-report-crowd-matrix` 定向测试通过。
+
+## 结果复盘
+- 修复后：商品状态误判显著降低，避免推广中商品被错误过滤成空下拉。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+- 浏览器验证：已按 `$alimama-devtools-profile` 启动专用 profile，并确认 `127.0.0.1:9222/json/version` 可用；但当前 `chrome-devtools` MCP 仍报 `Could not find DevToolsActivePort`，暂无法完成线上页面自动化复测。
+
+# TODO - 2026-03-24 人群看板商品下拉二次增强：显示标题 + 仅推广中 + 切换仅刷新商品成交人群
+
+## 需求规格
+- 目标：人群看板中的商品下拉在展示 `itemdeal` 商品时，显示商品标题；并过滤掉暂停推广商品，仅保留推广中商品。
+- 交互规则：切换商品时只重新查询 `商品成交人群(itemdeal)`，不再全量重跑 click/cart/deal。
+- 默认规则：下拉默认仍为计划内花费最高商品（在“可展示商品集合”内按 `spend DESC, itemId ASC`）。
+- 范围：`src/main-assistant/magic-report.js` 与 `tests/magic-report-crowd-matrix.test.mjs`。
+
+## 执行计划（含校验）
+- [x] 1. 扩展商品候选聚合，补充标题与推广状态信息。
+  - 摘要：新增商品标题归一化与状态判定（推广中/暂停）逻辑，聚合 `findPage + campaign/get + adgroup/get` 的商品元信息。
+- [x] 2. 调整下拉展示与过滤规则。
+  - 摘要：下拉文案改为“商品标题（商品ID，花费）”；候选列表优先保留 `active === true`，兜底过滤显式暂停 `active === false`。
+- [x] 3. 改造切换行为为仅刷新 `itemdeal`。
+  - 摘要：新增 `reloadCrowdMatrixMetric` 和结果缓存 Map，切换商品后只重跑 `itemdeal` 四周期并合并渲染。
+- [x] 4. 更新回归断言并执行验证。
+  - 摘要：更新 `tests/magic-report-crowd-matrix.test.mjs` 契约断言；构建/定向测试/语法检查全部通过。
+
+## 结果复盘
+- 展示变化：商品下拉现在显示商品标题 + 商品ID + 花费，标题缺失时兜底为 `商品{ID}`。
+- 过滤变化：暂停推广商品不会进入下拉；推广中商品优先展示，避免误选暂停商品做商品成交人群分析。
+- 切换变化：切换商品时仅刷新 `itemdeal`，其它三类指标保持现有结果，不再触发全量重跑。
+- 浏览器验证：尝试通过 `chrome-devtools` MCP 做线上页面回归，但当前环境仍无法连接 Chrome（`Could not find DevToolsActivePort`），暂未完成真实页面走查。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+
+# TODO - 2026-03-24 人群看板：商品成交人群支持按计划花费商品下拉切换
+
+## 需求规格
+- 目标：在人群看板中，`商品成交人群(itemdeal)` 的商品ID不再固定文本展示，改为“当前推广计划下有花费商品ID”的单选下拉。
+- 默认规则：默认选中该计划内花费最高的商品ID。
+- 交互规则：切换下拉项后，重新加载并展示所选商品ID对应的商品成交人群数据。
+- 范围：`src/main-assistant/magic-report.js` UI/状态/请求链路与 `tests/magic-report-crowd-matrix.test.mjs` 回归断言。
+- 验证：构建成功、定向测试通过、根脚本语法检查通过。
+
+## 执行计划（含校验）
+- [x] 1. 完成现状梳理并确认改造点。
+  - 摘要：已定位 `refreshCrowdMatrixCampaignMeta`、`queryCrowdInsight(itemdeal)`、popup 头部 DOM 与回归测试断言位置。
+- [x] 2. 增加“计划内有花费商品ID”解析与缓存，支持默认选中花费最高商品。
+  - 摘要：新增 `collectCrowdItemSpendSummaryFromPayload` + `queryCrowdCampaignSpendPayload` + `refreshCrowdCampaignItemOptions`，默认按 `spend` 降序取首项作为当前商品。
+- [x] 3. 将“商品ID：XXXX”改为下拉单选，并绑定切换后重载逻辑。
+  - 摘要：`am-crowd-matrix-campaign` 改为“计划名/计划ID + 商品ID下拉”；切换下拉后写入手动选中态并 `ensureCrowdMatrixLoaded(true)` 重载看板；`itemdeal` 查询支持锁定手动所选商品。
+- [x] 4. 更新回归测试并执行验证命令。
+  - 摘要：已更新 `tests/magic-report-crowd-matrix.test.mjs`，并通过构建/定向测试/语法检查。
+
+## 结果复盘
+- 交互变化：人群看板头部“商品ID”从静态文本改为单选下拉，展示当前计划下可识别的商品ID（含花费信息）。
+- 默认策略：自动选中该计划中花费最高的商品ID（若花费数据不可得，回退候选商品列表首项）。
+- 查询行为：用户手动切换后，`itemdeal` 查询锁定该商品ID，避免自动跳回其他候选；切换即触发看板重载，展示对应商品成交人群数据。
+- 浏览器验证：已尝试使用 `chrome-devtools` MCP 打开阿里妈妈线上页面进行真实验证，但当前环境无法连接到 Chrome（`Could not find DevToolsActivePort`），因此未完成线上页面走查。
+- 二次修正（用户反馈默认排序/全量商品异常）：
+  - 商品花费提取从“递归全对象扫描”改为“结构化列表行提取”，避免误把非商品级 `charge` 纳入排序。
+  - 商品ID补齐链路增加“计划详情 + 全量单元详情（adgroup/get）”遍历，确保计划下商品ID尽可能全量回收。
+  - 默认选择逻辑改为对“全量商品集合”按 `spend DESC, itemId ASC` 排序后取首项。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+
+# TODO - 2026-03-24 并发提交流程修正：全站场景并发数生效 + 重复提交失败去重
+
+## 需求规格
+- 目标：修正并发提交行为，确保全站场景也使用配置并发数，并在汇总结果中对“同计划已成功但出现重复提交失败”做去重。
+- 范围：`request-builder-preview` 并发数透传与结果汇总、`wizard-mount-intro` 并发数提示、对应回归测试。
+- 验证：构建通过，`tests/site-scene-submit-mode.test.mjs` 通过。
+
+## 执行计划（含校验）
+- [x] 1. 移除全站场景并发数强制为 1 的分流逻辑。
+  - 摘要：`buildSceneRequestsFromWizard` 改为统一使用 `configuredParallelSubmitTimes`。
+- [x] 2. 修正并发数 UI 提示逻辑，避免全站场景被固定显示为 1。
+  - 摘要：`resolveParallelSubmitHintCount` 改为直接返回草稿并发数。
+- [x] 3. 在结果汇总阶段增加“同计划重复提交失败去重”。
+  - 摘要：若同计划存在成功且失败错误命中“请勿重复提交/重复提交/duplicate submit”，则从 failures 中剔除并回写 failCount。
+- [x] 4. 构建与定向测试验证并回填复盘。
+  - 摘要：`node scripts/build.mjs`、`node --test tests/site-scene-submit-mode.test.mjs`、`node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"` 全部通过。
+
+## 结果复盘
+- 并发数透传：全站场景不再强制降到 `1`，点击并发后会按菜单里的并发数执行。
+- 结果统计收敛：同计划出现“重复提交”失败但已有成功时，最终汇总会自动去重，避免“成功同时又记失败”的误导统计。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/site-scene-submit-mode.test.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+
+# TODO - 2026-03-24 版本号升级到 v6.08
+
+## 需求规格
+- 目标：将仓库版本从 `v6.07` 升级到 `v6.08`，并同步版本相关文档与发布头信息。
+- 范围：`src/entries/userscript-meta.js`、`src/shared/script-preamble.js`、`README.md`、`CLAUDE.md` 及构建产物。
+- 验证：构建与校验命令通过，根脚本版本号与更新日志一致。
+
+## 执行计划（含校验）
+- [x] 1. 同步源码版本号与更新日志条目到 `v6.08`。
+  - 摘要：已更新 `src/entries/userscript-meta.js`、`src/shared/script-preamble.js`、`README.md`、`CLAUDE.md`。
+- [x] 2. 运行构建并刷新根脚本与 dist 产物。
+  - 摘要：已执行 `node scripts/build.mjs`，根脚本与 `dist/packages`、`dist/extension` 产物同步到 `6.08`。
+- [x] 3. 执行校验命令并回填结果。
+  - 摘要：`node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"` 全部通过。
+
+## 结果复盘
+- 版本已从 `v6.07` 升级到 `v6.08`，版本号与更新日志三处（userscript 头、脚本 preamble、README）一致。
+- `CLAUDE.md` 当前版本已同步为 `v6.08`。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+
+# TODO - 2026-03-24 并发语义修复：所有计划同时提交 + 按并发数复制同计划
+
+## 需求规格
+- 目标：修复“并发”提交语义，确保并发模式下是所有计划同时提交，且每个计划按并发数复制并发提交。
+- 范围：调整 `createPlansBatch` 并发分支逻辑与回归测试，不改非并发（单条）行为。
+- 验证：定向测试覆盖并发语义，构建与语法检查通过。
+
+## 执行计划（含校验）
+- [x] 1. 定位并发语义偏差点与当前限制条件。
+  - 摘要：已定位 `create-and-suggest.js` 中 `remainingEntries.length === 1 && parallelSubmitTimes > 1` 导致仅单计划走并发复制。
+- [x] 2. 改造并发分支为“批次内所有计划并发复制提交”。
+  - 摘要：`createPlansBatch` 新增批次并发 helper，`parallelSubmitTimes > 1` 时对 remainingEntries 全量并发提交，每个计划按并发数复制提交。
+- [x] 3. 更新回归测试断言并同步构建产物。
+  - 摘要：已更新 `tests/site-scene-submit-mode.test.mjs` 并发语义断言，`node scripts/build.mjs` 同步根脚本与 dist 产物。
+- [x] 4. 运行定向测试与构建校验并复盘。
+  - 摘要：`node --test tests/site-scene-submit-mode.test.mjs`、`node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"` 全部通过。
+
+## 结果复盘
+- 根因：并发复制逻辑仅在 `remainingEntries.length === 1` 时触发，导致多计划批次无法按“每个计划复制并发提交”执行。
+- 修复：并发条件改为 `parallelSubmitTimes > 1`，并新增“批次内所有计划并发复制提交”逻辑，失败计划继续进入现有失败收集/兜底单条链路。
+- 影响范围：
+  - `src/optimizer/keyword-plan-api/create-and-suggest.js`
+  - `tests/site-scene-submit-mode.test.mjs`
+- 验证命令（顺序执行）：
+  - `node scripts/build.mjs`
+  - `node --test tests/site-scene-submit-mode.test.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+
+# TODO - 2026-03-24 批量建计划“立即投放”默认提交方式改为单条
+
+## 需求规格
+- 目标：在“关键词推广批量建计划 API 向导”中，点击“立即投放”时默认提交方式从“并发”调整为“单条”。
+- 范围：仅调整默认值与兜底值（`submitMode`）及对应测试断言，不改变手动切换菜单行为。
+- 验证：构建产物同步后，定向回归测试通过，且根脚本包含新默认值。
+
+## 执行计划（含校验）
+- [x] 1. 定位“立即投放”默认提交方式的状态来源与兜底链路。
+  - 摘要：已定位 `matrix.js` 默认草稿值与 `wizard-mount-intro.js` / `strategy-state-and-draft.js` / `request-builder-preview.js` 多处 `|| 'parallel'` 兜底。
+- [x] 2. 将默认与兜底统一改为 `serial`（单条），保持菜单可切换并发。
+  - 摘要：已修改 `matrix.js` 默认草稿值，以及 `wizard-mount-intro.js` / `strategy-state-and-draft.js` / `request-builder-preview.js` 的 submitMode 空值兜底。
+- [x] 3. 更新对应测试断言并同步构建产物。
+  - 摘要：已更新 `tests/site-scene-submit-mode.test.mjs` 里默认值/兜底断言并执行构建同步根脚本与 dist 产物。
+- [x] 4. 运行定向测试与构建校验，回填复盘。
+  - 摘要：`node --test tests/site-scene-submit-mode.test.mjs`、`node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"` 全部通过。
+
+## 结果复盘
+- 行为变化：首次进入向导且未手动切换提交方式时，“立即投放”默认按“单条”提交；用户仍可在下拉菜单切回“并发数”。
+- 改动文件：
+  - `src/optimizer/keyword-plan-api/matrix.js`
+  - `src/optimizer/keyword-plan-api/wizard-mount-intro.js`
+  - `src/optimizer/keyword-plan-api/wizard-scene-config/strategy-state-and-draft.js`
+  - `src/optimizer/keyword-plan-api/request-builder-preview.js`
+  - `tests/site-scene-submit-mode.test.mjs`
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/site-scene-submit-mode.test.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+
 # TODO - 2026-03-23 全仓收口验证（全量 tests + review-team）
 
 ## 需求规格
@@ -885,3 +1109,18 @@
 - 交付结果：新增 `tests/keyword-create-strict-goal-runtime.test.mjs`，以 `Function + stub` 运行时切片方式执行 `createPlansBatch`，验证 plan 级 strict 早退路径的 `allowFuzzyGoalMatch` 返回值与输入归一化一致。
 - 最小依赖清单：`validate`、`isSceneLikelyRequireItem`、`mergeDeep`、`normalizeFallbackPolicy`、`REPAIR_DEFAULTS`、`isPlainObject`、`normalizeSceneSettingEntries`、`findSceneSettingEntry`、`normalizeGoalLabel`、`normalizeBidMode`、`DEFAULTS`、`normalizeSceneBizCode`、`resolveSceneBizCodeHint`、`getRuntimeDefaults`、`isRuntimeBizCodeMatched`、`normalizeGoalCreateEndpoint`、`SCENE_CREATE_ENDPOINT_FALLBACK`、`resolveGoalContextForPlan`、`buildStrictRequestGoalFailureResult`、`SCENE_BIDTYPE_V2_ONLY`、`mergeRuntimeWithGoalPatch`、`resolveSceneDefaultPromotionScene`、`resolveSceneSettingOverrides`、`SCENE_BIDTYPE_V2_DEFAULT`、`resolveSceneCapabilities`、`emitProgress`、`resolvePreferredItems`、`normalizePlans`、`buildDroppedPlanFailure`、`buildStrictGoalFailureError`、`mergeGoalWarnings`。
 - 验证结果：`node --test tests/keyword-create-strict-goal-runtime.test.mjs` 与 `node --test tests/keyword-create-strict-goal-match.test.mjs tests/keyword-create-strict-goal-runtime.test.mjs` 全部通过。
+
+# TODO - 2026-03-24 同步指定 commit cf30463 到本地
+
+## 需求规格
+- 目标：将远端提交 `cf30463fa5d1a3c9fc6eeb6bbe130516cba15d83` 同步到当前本地工作树。
+- 约束：不破坏当前未提交改动；同步方式可复现、可验证。
+- 验证：确认提交已可在本地 `git log`/`git show` 中查看，并给出受影响文件摘要。
+
+## 执行计划（含校验）
+- [ ] 1. 校验当前分支状态、远程可达性与目标提交存在性。
+  - 摘要：待执行。
+- [ ] 2. 采用安全方式将目标提交应用到当前工作树（优先 cherry-pick，必要时改为补丁三方应用）。
+  - 摘要：待执行。
+- [ ] 3. 验证同步结果并输出差异摘要。
+  - 摘要：待执行。

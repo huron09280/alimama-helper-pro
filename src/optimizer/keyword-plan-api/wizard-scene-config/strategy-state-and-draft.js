@@ -518,7 +518,7 @@
                 KeywordPlanWizardStore.syncDraftSceneIdentity(draft, editingStrategy);
                 KeywordPlanWizardStore.syncDraftGlobalDefaults(draft, syncGlobalDefaults);
                 syncDraftMetaState(draft);
-                wizardState.draft.submitMode = normalizeSubmitMode(wizardState.draft.submitMode || 'parallel');
+                wizardState.draft.submitMode = normalizeSubmitMode(wizardState.draft.submitMode || 'serial');
                 wizardState.draft.parallelSubmitTimes = normalizeParallelSubmitTimes(
                     wizardState.draft.parallelSubmitTimes,
                     DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
@@ -545,7 +545,7 @@
                 const sceneName = SCENE_OPTIONS.includes(nextDraft.sceneName) ? nextDraft.sceneName : '关键词推广';
                 nextDraft.sceneName = sceneName || '关键词推广';
                 nextDraft.useWordPackage = nextDraft.useWordPackage !== false;
-                nextDraft.submitMode = normalizeSubmitMode(nextDraft.submitMode || 'parallel');
+                nextDraft.submitMode = normalizeSubmitMode(nextDraft.submitMode || 'serial');
                 nextDraft.parallelSubmitTimes = normalizeParallelSubmitTimes(
                     nextDraft.parallelSubmitTimes,
                     DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES
@@ -598,4 +598,3 @@
                 KeywordPlanRuntime.applyDraftStateToWizard(draft);
                 KeywordPlanRuntime.applyDraftValuesToControls(draft);
             };
-
