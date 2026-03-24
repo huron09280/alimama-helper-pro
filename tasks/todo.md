@@ -1,3 +1,34 @@
+# TODO - 2026-03-25 人群看板商品ID下拉改为网页自定义样式（非系统下拉）
+
+## 需求规格
+- 目标：将人群看板“商品ID”从原生 `<select>` 改为网页自定义下拉弹层，避免系统/浏览器默认下拉样式。
+- 范围：`src/main-assistant/magic-report.js` 与 `tests/magic-report-crowd-matrix.test.mjs`。
+- 验收：
+  - 不再依赖 `HTMLSelectElement`/`change` 事件；
+  - 下拉触发器、选项列表、选中态均由页面样式控制；
+  - 选择商品后仍只刷新 `itemdeal` 指标，不影响既有并发排队逻辑。
+
+## 执行计划（含校验）
+- [x] 1. 改造头部 DOM：替换原生 `<select>` 为自定义触发器 + 选项面板结构。
+  - 摘要：保留 `id="am-crowd-matrix-item-select"` 作为锚点，新增展示文本和下拉箭头节点。
+- [x] 2. 改造渲染逻辑：`renderCrowdCampaignItemSelect` 改为渲染按钮列表并维护选中态。
+  - 摘要：不再写入 `<option>`，改用 `data-item-id` 的自定义选项节点。
+- [x] 3. 改造交互：点击展开/收起、点击选项完成选择、点击外部关闭。
+  - 摘要：复用现有 `setCrowdCampaignSelectedItemId` 与 `reloadCrowdMatrixMetric(itemdeal)` 业务链路。
+- [x] 4. 更新契约测试并执行构建/回归。
+  - 摘要：同步替换 `select/change` 相关断言，验证新的自定义下拉结构与点击事件。
+
+## 结果复盘
+- 实现结果：商品ID下拉已改为网页自定义弹层组件（触发器 + 选项列表），不再依赖浏览器/系统原生下拉控件。
+- 交互结果：点击触发器可展开/收起；点击选项后保持“仅刷新 `itemdeal`”链路；点击外部或按 `Esc` 会关闭下拉。
+- 样式结果：看板头部维持原有视觉语言，选中态、悬浮态和弹层阴影均由页面 CSS 控制。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+  - `node --test tests/*.test.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+
 # TODO - 2026-03-24 Review 修复：商品成交人群局部刷新一致性
 
 ## 需求规格

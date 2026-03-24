@@ -4736,6 +4736,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         matrixCampaignNameEl: null,
         matrixCampaignIdEl: null,
         matrixCampaignItemSelectEl: null,
+        matrixCampaignItemTriggerEl: null,
+        matrixCampaignItemTriggerTextEl: null,
+        matrixCampaignItemDropdownEl: null,
         matrixHoverTipEl: null,
         matrixHoverActiveBar: null,
         matrixHoverActiveBars: [],
@@ -5459,42 +5462,83 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
         },
 
+        buildCrowdCampaignItemOptionLabel(item) {
+            const spend = this.toNumericValue(item?.spend || 0);
+            const itemTitle = this.normalizeCrowdItemTitle(item?.itemTitle || '') || `商品${item?.itemId || ''}`;
+            return spend > 0
+                ? `${itemTitle}（${item.itemId}，花费${this.formatCrowdSpendAmount(spend)}）`
+                : `${itemTitle}（${item.itemId}）`;
+        },
+
+        setCrowdCampaignItemDropdownOpen(open) {
+            if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
+            const next = open === true;
+            this.matrixCampaignItemSelectEl.classList.toggle('is-open', next);
+            if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
+                this.matrixCampaignItemTriggerEl.setAttribute('aria-expanded', next ? 'true' : 'false');
+            }
+        },
+
+        toggleCrowdCampaignItemDropdown(forceOpen) {
+            if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
+            if (this.matrixCampaignItemSelectEl.classList.contains('is-disabled')) {
+                this.setCrowdCampaignItemDropdownOpen(false);
+                return;
+            }
+            const nextOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : !this.matrixCampaignItemSelectEl.classList.contains('is-open');
+            this.setCrowdCampaignItemDropdownOpen(nextOpen);
+        },
+
         renderCrowdCampaignItemSelect(campaignId = '') {
-            if (!(this.matrixCampaignItemSelectEl instanceof HTMLSelectElement)) return;
+            if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
+            if (!(this.matrixCampaignItemTriggerEl instanceof HTMLButtonElement)) return;
+            if (!(this.matrixCampaignItemTriggerTextEl instanceof HTMLElement)) return;
+            if (!(this.matrixCampaignItemDropdownEl instanceof HTMLElement)) return;
             const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
             const selectedItemId = this.getCrowdCampaignSelectedItemId(id);
             const options = this.getCrowdCampaignItemOptions(id);
-            this.matrixCampaignItemSelectEl.innerHTML = '';
+            this.matrixCampaignItemDropdownEl.innerHTML = '';
+
+            const applyDisabledState = (disabled) => {
+                this.matrixCampaignItemSelectEl.classList.toggle('is-disabled', disabled);
+                this.matrixCampaignItemTriggerEl.disabled = disabled;
+                if (disabled) {
+                    this.setCrowdCampaignItemDropdownOpen(false);
+                }
+            };
 
             if (!id) {
-                const optionEl = document.createElement('option');
-                optionEl.value = '';
-                optionEl.textContent = '--';
-                this.matrixCampaignItemSelectEl.appendChild(optionEl);
-                this.matrixCampaignItemSelectEl.disabled = true;
+                this.matrixCampaignItemTriggerTextEl.textContent = '--';
+                this.matrixCampaignItemTriggerEl.title = '--';
+                applyDisabledState(true);
                 return;
             }
 
             const normalizedOptions = options.filter(item => /^\d{6,}$/.test(String(item?.itemId || '').trim()));
 
             if (!normalizedOptions.length) {
-                const emptyOption = document.createElement('option');
-                emptyOption.value = '';
-                emptyOption.textContent = '--';
-                this.matrixCampaignItemSelectEl.appendChild(emptyOption);
-                this.matrixCampaignItemSelectEl.disabled = true;
+                this.matrixCampaignItemTriggerTextEl.textContent = '--';
+                this.matrixCampaignItemTriggerEl.title = '--';
+                applyDisabledState(true);
                 return;
             }
 
-            normalizedOptions.forEach((item) => {
-                const optionEl = document.createElement('option');
-                optionEl.value = item.itemId;
-                const spend = this.toNumericValue(item?.spend || 0);
-                const itemTitle = this.normalizeCrowdItemTitle(item?.itemTitle || '') || `商品${item.itemId}`;
-                optionEl.textContent = spend > 0
-                    ? `${itemTitle}（${item.itemId}，花费${this.formatCrowdSpendAmount(spend)}）`
-                    : `${itemTitle}（${item.itemId}）`;
-                this.matrixCampaignItemSelectEl.appendChild(optionEl);
+            const optionViews = normalizedOptions.map((item) => ({
+                itemId: item.itemId,
+                label: this.buildCrowdCampaignItemOptionLabel(item)
+            }));
+
+            optionViews.forEach((item) => {
+                const optionBtn = document.createElement('button');
+                optionBtn.type = 'button';
+                optionBtn.className = 'am-crowd-matrix-item-option';
+                optionBtn.dataset.crowdItemId = item.itemId;
+                optionBtn.textContent = item.label;
+                optionBtn.title = item.label;
+                optionBtn.setAttribute('role', 'option');
+                this.matrixCampaignItemDropdownEl.appendChild(optionBtn);
             });
 
             const pickedItemId = selectedItemId && normalizedOptions.some(item => item.itemId === selectedItemId)
@@ -5503,8 +5547,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (pickedItemId !== selectedItemId) {
                 this.setCrowdCampaignSelectedItemId(id, pickedItemId, { manual: false });
             }
-            this.matrixCampaignItemSelectEl.value = pickedItemId;
-            this.matrixCampaignItemSelectEl.disabled = false;
+
+            optionViews.forEach((item) => {
+                const node = this.matrixCampaignItemDropdownEl.querySelector(`[data-crowd-item-id="${item.itemId}"]`);
+                if (!(node instanceof HTMLElement)) return;
+                const isActive = item.itemId === pickedItemId;
+                node.classList.toggle('is-active', isActive);
+                node.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+
+            const pickedOption = optionViews.find(item => item.itemId === pickedItemId) || optionViews[0];
+            this.matrixCampaignItemTriggerTextEl.textContent = pickedOption?.label || '--';
+            this.matrixCampaignItemTriggerEl.title = pickedOption?.label || '--';
+            applyDisabledState(false);
+        },
+
+        handleCrowdCampaignItemSelect(itemId = '') {
+            const campaignId = this.getCurrentCampaignId() || this.lastCampaignId;
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return;
+            const selectedItemId = PlanIdentityUtils.normalizeItemId(itemId);
+            if (!selectedItemId) return;
+            const prevItemId = this.getCrowdCampaignSelectedItemId(id);
+            this.setCrowdCampaignSelectedItemId(id, selectedItemId, { manual: true });
+            this.refreshCrowdMatrixCampaignMeta(id);
+            this.setCrowdCampaignItemDropdownOpen(false);
+            if (this.activeView !== 'matrix') return;
+            if (prevItemId === selectedItemId) return;
+            this.setCrowdMatrixStatus(`已切换商品ID ${selectedItemId}，正在刷新商品成交人群...`, 'loading', {
+                showRetry: false,
+                progress: 0
+            });
+            this.reloadCrowdMatrixMetric({ campaignId: id, metricType: 'itemdeal' });
         },
 
         refreshCrowdMatrixCampaignMeta(campaignId = '') {
@@ -9618,7 +9692,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 5px 12px;
                     box-shadow: 0 2px 6px rgba(31, 53, 109, 0.06);
                     white-space: nowrap;
-                    overflow: hidden;
+                    overflow: visible;
                 }
                 #am-magic-report-popup .am-crowd-matrix-campaign-part {
                     min-width: 0;
@@ -9640,21 +9714,86 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     flex: 0 0 auto;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-select {
-                    min-width: 116px;
-                    max-width: min(320px, 42vw);
+                    position: relative;
+                    min-width: 176px;
+                    max-width: min(360px, 58vw);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-trigger {
+                    width: 100%;
                     height: 22px;
-                    border-radius: 8px;
-                    border: 1px solid rgba(42, 91, 255, 0.24);
-                    background: rgba(255, 255, 255, 0.98);
+                    border: none;
+                    background: transparent;
                     color: #1a2a47;
                     font-size: 11px;
                     line-height: 1.2;
                     font-weight: 600;
-                    padding: 0 6px;
+                    padding: 0 2px;
                     outline: none;
-                    box-shadow: inset 0 1px 2px rgba(42, 91, 255, 0.08);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    cursor: pointer;
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-select:disabled {
+                #am-magic-report-popup .am-crowd-matrix-item-trigger-text {
+                    min-width: 0;
+                    flex: 1 1 auto;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    text-align: left;
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-trigger-arrow {
+                    flex: 0 0 auto;
+                    color: #6e7f9f;
+                    font-size: 10px;
+                    transition: transform 0.16s ease;
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-trigger-arrow {
+                    transform: rotate(180deg);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-dropdown {
+                    position: absolute;
+                    top: calc(100% + 6px);
+                    left: 0;
+                    z-index: 35;
+                    min-width: 100%;
+                    max-width: min(420px, 70vw);
+                    max-height: 260px;
+                    overflow-y: auto;
+                    display: none;
+                    padding: 6px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(26, 42, 71, 0.14);
+                    background: #fff;
+                    box-shadow: 0 8px 22px rgba(31, 53, 109, 0.16);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-dropdown {
+                    display: block;
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-option {
+                    width: 100%;
+                    border: none;
+                    background: transparent;
+                    border-radius: 8px;
+                    color: #1a2a47;
+                    font-size: 11px;
+                    line-height: 1.35;
+                    font-weight: 600;
+                    text-align: left;
+                    padding: 6px 8px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-option:hover {
+                    background: rgba(42, 91, 255, 0.08);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-option.is-active {
+                    color: #1e4de8;
+                    background: rgba(42, 91, 255, 0.14);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-select.is-disabled .am-crowd-matrix-item-trigger {
                     cursor: not-allowed;
                     opacity: 0.62;
                 }
@@ -10218,9 +10357,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <span class="am-crowd-matrix-campaign-sep" aria-hidden="true">｜</span>
                             <label class="am-crowd-matrix-item-select-wrap">
                                 <span class="am-crowd-matrix-item-label">商品ID：</span>
-                                <select class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
-                                    <option value="">--</option>
-                                </select>
+                                <div class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
+                                    <button type="button" class="am-crowd-matrix-item-trigger" data-crowd-item-trigger aria-expanded="false" aria-haspopup="listbox">
+                                        <span class="am-crowd-matrix-item-trigger-text" data-crowd-item-trigger-text>--</span>
+                                        <span class="am-crowd-matrix-item-trigger-arrow" aria-hidden="true">▾</span>
+                                    </button>
+                                    <div class="am-crowd-matrix-item-dropdown" data-crowd-item-dropdown role="listbox"></div>
+                                </div>
                             </label>
                         </div>
                     </div>
@@ -10267,6 +10410,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.matrixCampaignNameEl = div.querySelector('[data-crowd-campaign-name]');
             this.matrixCampaignIdEl = div.querySelector('[data-crowd-campaign-id]');
             this.matrixCampaignItemSelectEl = div.querySelector('#am-crowd-matrix-item-select');
+            this.matrixCampaignItemTriggerEl = div.querySelector('[data-crowd-item-trigger]');
+            this.matrixCampaignItemTriggerTextEl = div.querySelector('[data-crowd-item-trigger-text]');
+            this.matrixCampaignItemDropdownEl = div.querySelector('[data-crowd-item-dropdown]');
             this.bindCrowdMatrixHoverTipEvents();
             this.refreshQuickPromptLabels();
             this.refreshCrowdMatrixCampaignMeta();
@@ -10409,25 +10555,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     this.toggleCrowdPeriodVisibility(period);
                 });
             }
-            if (this.matrixCampaignItemSelectEl instanceof HTMLSelectElement) {
-                this.matrixCampaignItemSelectEl.addEventListener('change', () => {
-                    const campaignId = this.getCurrentCampaignId() || this.lastCampaignId;
-                    const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
-                    if (!id) return;
-                    const selectedItemId = PlanIdentityUtils.normalizeItemId(this.matrixCampaignItemSelectEl.value || '');
-                    if (!selectedItemId) return;
-                    const prevItemId = this.getCrowdCampaignSelectedItemId(id);
-                    this.setCrowdCampaignSelectedItemId(id, selectedItemId, { manual: true });
-                    this.refreshCrowdMatrixCampaignMeta(id);
-                    if (this.activeView !== 'matrix') return;
-                    if (prevItemId === selectedItemId) return;
-                    this.setCrowdMatrixStatus(`已切换商品ID ${selectedItemId}，正在刷新商品成交人群...`, 'loading', {
-                        showRetry: false,
-                        progress: 0
-                    });
-                    this.reloadCrowdMatrixMetric({ campaignId: id, metricType: 'itemdeal' });
+            if (this.matrixCampaignEl instanceof HTMLElement) {
+                this.matrixCampaignEl.addEventListener('click', (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const trigger = target.closest('[data-crowd-item-trigger]');
+                    if (trigger instanceof HTMLElement) {
+                        e.preventDefault();
+                        this.toggleCrowdCampaignItemDropdown();
+                        return;
+                    }
+                    const option = target.closest('[data-crowd-item-id]');
+                    if (!(option instanceof HTMLElement)) return;
+                    const optionItemId = PlanIdentityUtils.normalizeItemId(option.dataset.crowdItemId || '');
+                    if (!optionItemId) return;
+                    this.handleCrowdCampaignItemSelect(optionItemId);
                 });
             }
+
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!(target instanceof Node)) return;
+                if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
+                if (this.matrixCampaignItemSelectEl.contains(target)) return;
+                this.setCrowdCampaignItemDropdownOpen(false);
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                this.setCrowdCampaignItemDropdownOpen(false);
+            });
 
             // 头部快捷话术
             const quickPrompts = div.querySelector('#am-magic-quick-prompts');
@@ -10526,7 +10682,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 this.popup.style.display = 'flex';
             }
 
-            if (!show) this.hideCrowdMatrixHoverTip();
+            if (!show) {
+                this.hideCrowdMatrixHoverTip();
+                this.setCrowdCampaignItemDropdownOpen(false);
+            }
 
             if (show) {
                 this.refreshQuickPromptLabels();

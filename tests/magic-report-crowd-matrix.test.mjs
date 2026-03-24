@@ -281,14 +281,17 @@ test('看板计划信息展示计划名/计划ID，并将商品ID改为下拉单
   assert.match(block, /data-crowd-campaign-name/, '计划信息缺少计划名节点');
   assert.match(block, /data-crowd-campaign-id/, '计划信息缺少计划ID节点');
   assert.match(block, /id="am-crowd-matrix-item-select"/, '计划信息缺少商品ID下拉节点');
+  assert.match(block, /data-crowd-item-trigger/, '商品ID缺少自定义下拉触发器节点');
+  assert.match(block, /data-crowd-item-dropdown/, '商品ID缺少自定义下拉菜单节点');
   assert.match(block, /this\.matrixCampaignNameEl\.textContent = `计划名：\$\{name \|\| '未识别'\}`;/, '计划名文案未按节点更新');
   assert.match(block, /this\.matrixCampaignIdEl\.textContent = `计划ID：\$\{id \|\| '--'\}`;/, '计划ID文案未按节点更新');
   assert.match(block, /this\.renderCrowdCampaignItemSelect\(id\);/, '计划信息刷新未触发商品ID下拉渲染');
-  assert.match(block, /const itemTitle = this\.normalizeCrowdItemTitle\(item\?\.itemTitle \|\| ''\) \|\| `商品\$\{item\.itemId\}`;/, '商品ID下拉未展示商品标题');
-  assert.match(block, /optionEl\.textContent = spend > 0[\s\S]*花费/, '商品ID下拉未展示花费信息');
+  assert.match(block, /buildCrowdCampaignItemOptionLabel\(item\)\s*\{[\s\S]*normalizeCrowdItemTitle[\s\S]*花费/, '商品ID下拉未展示商品标题和花费信息');
+  assert.match(block, /optionBtn\.dataset\.crowdItemId = item\.itemId;/, '商品ID下拉未写入选项 data-item-id');
   assert.match(block, /itemOptions = itemOptions[\s\S]*\.filter\(item => item\.active !== false\)/, '商品候选未过滤暂停推广状态');
   assert.match(block, /const leftRank = left\?\.active === true \? 0 : 1;[\s\S]*const rightRank = right\?\.active === true \? 0 : 1;/, '商品候选排序未优先推广中状态');
-  assert.match(block, /this\.matrixCampaignItemSelectEl\.addEventListener\('change', \(\) => \{[\s\S]*this\.setCrowdCampaignSelectedItemId\(id,\s*selectedItemId,\s*\{\s*manual:\s*true\s*\}\);[\s\S]*this\.reloadCrowdMatrixMetric\(\{\s*campaignId:\s*id,\s*metricType:\s*'itemdeal'\s*\}\);/, '商品ID下拉切换后未仅刷新商品成交人群');
+  assert.match(block, /this\.matrixCampaignEl\.addEventListener\('click', \(e\) => \{[\s\S]*target\.closest\('\[data-crowd-item-trigger\]'\)[\s\S]*target\.closest\('\[data-crowd-item-id\]'\)/, '商品ID下拉未绑定触发器/选项点击事件');
+  assert.match(block, /handleCrowdCampaignItemSelect\(itemId = ''\)\s*\{[\s\S]*this\.setCrowdCampaignSelectedItemId\(id,\s*selectedItemId,\s*\{\s*manual:\s*true\s*\}\);[\s\S]*this\.reloadCrowdMatrixMetric\(\{\s*campaignId:\s*id,\s*metricType:\s*'itemdeal'\s*\}\);/, '商品ID下拉切换后未仅刷新商品成交人群');
 });
 
 test('商品成交人群局部刷新会替换同指标缓存，避免旧周期残留', () => {
