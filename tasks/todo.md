@@ -1,3 +1,27 @@
+# TODO - 2026-03-25 省份/城市排序改为默认独立并支持图标切换主周期优先
+
+## 需求规格
+- 目标：省份/城市维度默认按“各周期自身标签顺序”渲染；在省份/城市行头增加排序图标，点击后切换为“主周期优先（90→30→7→3）”。
+- 范围：`src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs` 与构建产物同步。
+- 约束：其它维度排序逻辑不变；切换后需即时重绘，无需重跑查数请求。
+
+## 执行计划（含校验）
+- [x] 1. 增加省份/城市排序模式状态与切换逻辑。
+  - 摘要：新增 `crowdMatrixGroupSortModeMap`（默认空），通过 `toggleCrowdGroupSortMode` 在 `period/priority` 两种模式间切换。
+- [x] 2. 调整数据构建为“按模式分支”。
+  - 摘要：`buildMatrixDataset` 新增 `groupSortModeMap` 读取；默认走各周期独立标签，`priority` 模式才使用稳定标签并按 `90/30/7/3` 比较。
+- [x] 3. 在省份/城市行头增加排序图标并绑定事件。
+  - 摘要：`renderCrowdMatrixCharts` 为省份/城市行头渲染 `⇅` 按钮，`matrixGrid` 监听点击后切换模式并重绘。
+- [x] 4. 更新契约测试并执行回归。
+  - 摘要：新增“默认独立排序 + 图标切换主周期优先”断言，完成定向与全量测试。
+
+## 结果复盘
+- 交付结果：省份/城市默认回到“各周期独立排序”；点击行头排序图标后可切到“主周期优先（90→30→7→3）”，再次点击可切回默认。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+  - `node --test tests/*.test.mjs`
+
 # TODO - 2026-03-25 人群看板省份/城市稳定排序改为90天优先
 
 ## 需求规格

@@ -4669,6 +4669,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         crowdMatrixDataset: null,
         crowdMatrixResultMap: null,
         crowdMatrixPendingMetricReload: null,
+        crowdMatrixGroupSortModeMap: {},
         crowdMatrixTaskProgressHandler: null,
         crowdCampaignItemIdMap: new Map(),
         crowdCampaignItemOptionsMap: new Map(),
@@ -4682,6 +4683,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         CROWD_PERIODS: [3, 7, 30, 90],
         CROWD_GROUP_ORDER: ['消费能力等级', '月均消费金额', '用户年龄', '用户性别', '城市等级', '店铺潜新老客', '省份', '城市'],
         CROWD_EXTRA_DIMENSION_GROUPS: ['省份', '城市'],
+        CROWD_GROUP_SORT_PERIOD_PRIORITY: [90, 30, 7, 3],
         CROWD_METRICS: ['click', 'cart', 'deal', 'itemdeal'],
         CROWD_REQUEST_CONCURRENCY: 2,
         CROWD_REQUEST_THROTTLE_MS: 340,
@@ -6467,6 +6469,42 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return name;
         },
 
+        isCrowdExtraDimensionGroup(groupName = '') {
+            const normalizedGroup = this.normalizeCrowdGroupName(groupName);
+            if (!normalizedGroup) return false;
+            return this.CROWD_EXTRA_DIMENSION_GROUPS
+                .map(name => this.normalizeCrowdGroupName(name))
+                .filter(Boolean)
+                .includes(normalizedGroup);
+        },
+
+        getCrowdGroupSortMode(groupName = '') {
+            const normalizedGroup = this.normalizeCrowdGroupName(groupName);
+            if (!this.isCrowdExtraDimensionGroup(normalizedGroup)) return 'period';
+            const modeMap = this.crowdMatrixGroupSortModeMap && typeof this.crowdMatrixGroupSortModeMap === 'object'
+                ? this.crowdMatrixGroupSortModeMap
+                : {};
+            return modeMap[normalizedGroup] === 'priority' ? 'priority' : 'period';
+        },
+
+        setCrowdGroupSortMode(groupName = '', mode = 'period') {
+            const normalizedGroup = this.normalizeCrowdGroupName(groupName);
+            if (!this.isCrowdExtraDimensionGroup(normalizedGroup)) return false;
+            const nextMode = String(mode || '').trim().toLowerCase() === 'priority' ? 'priority' : 'period';
+            const currentMode = this.getCrowdGroupSortMode(normalizedGroup);
+            if (currentMode === nextMode) return false;
+            const modeMap = this.crowdMatrixGroupSortModeMap && typeof this.crowdMatrixGroupSortModeMap === 'object'
+                ? { ...this.crowdMatrixGroupSortModeMap }
+                : {};
+            if (nextMode === 'priority') {
+                modeMap[normalizedGroup] = 'priority';
+            } else {
+                delete modeMap[normalizedGroup];
+            }
+            this.crowdMatrixGroupSortModeMap = modeMap;
+            return true;
+        },
+
         mergeCrowdGroupMaps(...groupMaps) {
             const merged = {};
             groupMaps.forEach((groupMap) => {
@@ -7843,7 +7881,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return Promise.allSettled(results);
         },
 
-        buildMatrixDataset(results) {
+        buildMatrixDataset(results, options = {}) {
             const periods = this.CROWD_PERIODS.slice();
             const groups = this.CROWD_GROUP_ORDER.slice();
             const metricOrder = this.CROWD_METRICS.slice();
@@ -7884,12 +7922,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     .map(name => this.normalizeCrowdGroupName(name))
                     .filter(Boolean)
             );
+            const groupSortModeMap = options?.groupSortModeMap && typeof options.groupSortModeMap === 'object'
+                ? options.groupSortModeMap
+                : (this.crowdMatrixGroupSortModeMap && typeof this.crowdMatrixGroupSortModeMap === 'object'
+                    ? this.crowdMatrixGroupSortModeMap
+                    : {});
+            const isPriorityGroupSort = (groupName) => {
+                const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
+                if (!stableGroupSet.has(normalizedGroupName)) return false;
+                const mode = String(groupSortModeMap[normalizedGroupName] || '').trim().toLowerCase();
+                return mode === 'priority';
+            };
             const stableLabelMap = new Map();
+            const periodSortPriority = Array.isArray(this.CROWD_GROUP_SORT_PERIOD_PRIORITY) && this.CROWD_GROUP_SORT_PERIOD_PRIORITY.length
+                ? this.CROWD_GROUP_SORT_PERIOD_PRIORITY.slice()
+                : [90, 30, 7, 3];
             groups.forEach((groupName) => {
                 const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
                 if (!stableGroupSet.has(normalizedGroupName)) return;
                 const labelScoreMap = new Map();
-                const periodSortPriority = [90, 30, 7, 3];
                 let orderIndex = 0;
                 periods.forEach((period) => {
                     metricOrder.forEach((metric) => {
@@ -7932,13 +7983,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     .map(([label]) => String(label || '').trim())
                     .filter(Boolean);
                 if (stableLabels.length) {
-                    stableLabelMap.set(groupName, stableLabels);
+                    stableLabelMap.set(normalizedGroupName, stableLabels);
                 }
             });
 
             groups.forEach((groupName) => {
                 periods.forEach((period) => {
-                    const stableLabels = stableLabelMap.get(groupName);
+                    const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
+                    const shouldUseStableSort = isPriorityGroupSort(groupName);
+                    const stableLabels = shouldUseStableSort ? stableLabelMap.get(normalizedGroupName) : null;
                     const labelList = Array.isArray(stableLabels) && stableLabels.length
                         ? stableLabels.slice()
                         : [];
@@ -8807,6 +8860,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.applyCrowdMetricVisibility();
         },
 
+        rebuildCrowdMatrixDataset(options = {}) {
+            const resultList = this.collectCrowdMatrixResultList();
+            if (!resultList.length) return false;
+            const dataset = this.buildMatrixDataset(resultList, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+            this.crowdMatrixDataset = dataset;
+            this.renderCrowdMatrixCharts(dataset, options);
+            return true;
+        },
+
+        toggleCrowdGroupSortMode(groupName = '') {
+            const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
+            if (!this.isCrowdExtraDimensionGroup(normalizedGroupName)) return;
+            const nextMode = this.getCrowdGroupSortMode(normalizedGroupName) === 'priority' ? 'period' : 'priority';
+            const changed = this.setCrowdGroupSortMode(normalizedGroupName, nextMode);
+            if (!changed) return;
+            this.rebuildCrowdMatrixDataset({ animate: true });
+            const modeText = nextMode === 'priority' ? '主周期优先（90→30→7→3）' : '各周期独立排序';
+            this.setCrowdMatrixStatus(`${normalizedGroupName}排序已切换为${modeText}`, 'success', { showRetry: false, progress: 100, autoHide: true, hideDelayMs: 1000 });
+        },
+
         createCrowdMatrixCell(period, groupName, cell, options = {}) {
             const wrap = document.createElement('div');
             wrap.className = 'am-crowd-matrix-cell am-crowd-matrix-cell-chart';
@@ -8981,7 +9054,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             groups.forEach((groupName) => {
                 const rowHeader = document.createElement('div');
                 rowHeader.className = 'am-crowd-matrix-cell am-crowd-matrix-row-header';
-                rowHeader.textContent = groupName;
+                const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
+                const enableSortToggle = this.isCrowdExtraDimensionGroup(normalizedGroupName);
+                if (enableSortToggle) {
+                    rowHeader.classList.add('has-sort-toggle');
+                    const title = document.createElement('span');
+                    title.className = 'am-crowd-matrix-row-header-label';
+                    title.textContent = groupName;
+                    rowHeader.appendChild(title);
+                    const sortBtn = document.createElement('button');
+                    sortBtn.type = 'button';
+                    sortBtn.className = 'am-crowd-matrix-group-sort-toggle';
+                    sortBtn.dataset.crowdGroupSortToggle = normalizedGroupName;
+                    sortBtn.setAttribute('aria-label', `${groupName}排序方式切换`);
+                    sortBtn.textContent = '⇅';
+                    const isPriority = this.getCrowdGroupSortMode(normalizedGroupName) === 'priority';
+                    sortBtn.classList.toggle('is-priority', isPriority);
+                    sortBtn.title = isPriority
+                        ? `${groupName}：主周期优先（90→30→7→3），点击切回各周期独立排序`
+                        : `${groupName}：各周期独立排序，点击切换主周期优先（90→30→7→3）`;
+                    rowHeader.appendChild(sortBtn);
+                } else {
+                    rowHeader.textContent = groupName;
+                }
                 table.appendChild(rowHeader);
 
                 periods.forEach((period) => {
@@ -9169,6 +9264,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.crowdMatrixDataset = null;
             this.crowdMatrixResultMap = null;
             this.crowdMatrixPendingMetricReload = null;
+            this.crowdMatrixGroupSortModeMap = {};
             this.crowdInsightRunContext = null;
             this.crowdRequestSlotPromise = Promise.resolve();
             this.crowdRequestLastAt = 0;
@@ -9223,7 +9319,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
 
                 const mergedResults = this.upsertCrowdMatrixResults(successResults, { replace: true });
-                const dataset = this.buildMatrixDataset(mergedResults);
+                const dataset = this.buildMatrixDataset(mergedResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
                 this.crowdMatrixDataset = dataset;
                 this.crowdMatrixLoadedCampaignId = id;
                 this.renderCrowdMatrixCharts(dataset);
@@ -9308,7 +9404,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 });
                 const mergedResults = this.replaceCrowdMatrixMetricResults(metric, successResults);
-                const dataset = this.buildMatrixDataset(mergedResults);
+                const dataset = this.buildMatrixDataset(mergedResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
                 this.crowdMatrixDataset = dataset;
                 this.crowdMatrixLoadedCampaignId = id;
                 this.renderCrowdMatrixCharts(dataset);
@@ -9956,6 +10052,46 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     z-index: 3;
                     box-shadow: 2px 0 6px rgba(31, 53, 109, 0.04);
                 }
+                #am-magic-report-popup .am-crowd-matrix-row-header.has-sort-toggle {
+                    justify-content: space-between;
+                    gap: 8px;
+                }
+                #am-magic-report-popup .am-crowd-matrix-row-header-label {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-magic-report-popup .am-crowd-matrix-group-sort-toggle {
+                    flex: 0 0 auto;
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(124, 141, 174, 0.42);
+                    background: rgba(255, 255, 255, 0.88);
+                    color: #7a879f;
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 1;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    box-shadow: 0 1px 4px rgba(31, 53, 109, 0.08);
+                }
+                #am-magic-report-popup .am-crowd-matrix-group-sort-toggle:hover {
+                    color: #3f4f6f;
+                    border-color: rgba(99, 118, 155, 0.52);
+                    background: rgba(255, 255, 255, 0.96);
+                    transform: translateY(-1px);
+                }
+                #am-magic-report-popup .am-crowd-matrix-group-sort-toggle.is-priority {
+                    color: #2f54eb;
+                    border-color: rgba(47, 84, 235, 0.36);
+                    background: linear-gradient(135deg, rgba(230, 239, 255, 0.95), rgba(244, 248, 255, 0.92));
+                    box-shadow: 0 2px 6px rgba(47, 84, 235, 0.16);
+                }
                 #am-magic-report-popup .am-crowd-matrix-cell-chart {
                     padding: 14px;
                     display: flex;
@@ -10532,6 +10668,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const period = this.normalizeCrowdPeriod(periodBtn.dataset.crowdPeriod || '');
                     if (!period) return;
                     this.toggleCrowdPeriodVisibility(period);
+                });
+            }
+            if (this.matrixGridEl instanceof HTMLElement) {
+                this.matrixGridEl.addEventListener('click', (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const sortBtn = target.closest('[data-crowd-group-sort-toggle]');
+                    if (!(sortBtn instanceof HTMLElement)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const groupName = this.normalizeCrowdGroupName(sortBtn.dataset.crowdGroupSortToggle || '');
+                    if (!groupName) return;
+                    this.toggleCrowdGroupSortMode(groupName);
                 });
             }
             if (this.matrixCampaignEl instanceof HTMLElement) {
