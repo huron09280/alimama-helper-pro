@@ -455,6 +455,12 @@ test('buildMatrixDataset 生成固定 4x8 结构并包含四系列与 raw/noData
   const block = getMagicReportBlock();
   assert.match(block, /const periods = this\.CROWD_PERIODS\.slice\(\);/, '缺少周期列表初始化');
   assert.match(block, /const groups = this\.CROWD_GROUP_ORDER\.slice\(\);/, '缺少维度列表初始化');
+  assert.match(block, /const stableGroupSet = new Set\(/, '缺少省份\/城市稳定标签集合初始化');
+  assert.match(block, /const stableLabelMap = new Map\(\);/, '缺少稳定标签映射缓存');
+  assert.match(block, /if \(!stableGroupSet\.has\(normalizedGroupName\)\) return;/, '稳定标签计算未限定在省份\/城市');
+  assert.match(block, /const scoreDiff = this\.toNumericValue\(rightMeta\.score\) - this\.toNumericValue\(leftMeta\.score\);/, '稳定标签排序未按累计值降序');
+  assert.match(block, /const stableLabels = stableLabelMap\.get\(groupName\);/, '周期渲染未读取稳定标签映射');
+  assert.match(block, /const labelList = Array\.isArray\(stableLabels\) && stableLabels\.length[\s\S]*\? stableLabels\.slice\(\)[\s\S]*: \[\];/, '周期标签列表未优先使用稳定顺序');
   assert.match(block, /cell\[\`\$\{metric\}Raw`\] = \[\];/, 'cellData 未动态初始化 raw 字段');
   assert.match(block, /cell\.noData\[metric\] = true;/, 'cellData 未动态初始化 noData 字段');
   assert.match(block, /nextCell\[`\$\{metric\}Raw`\] = rawList\.length \? rawList : rawValues;/, 'cellData 未写入动态 raw 数据');

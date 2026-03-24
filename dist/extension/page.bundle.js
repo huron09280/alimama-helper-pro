@@ -7971,20 +7971,74 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 });
             });
 
+            const stableGroupSet = new Set(
+                this.CROWD_EXTRA_DIMENSION_GROUPS
+                    .map(name => this.normalizeCrowdGroupName(name))
+                    .filter(Boolean)
+            );
+            const stableLabelMap = new Map();
             groups.forEach((groupName) => {
+                const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
+                if (!stableGroupSet.has(normalizedGroupName)) return;
+                const labelScoreMap = new Map();
+                let orderIndex = 0;
                 periods.forEach((period) => {
-                    const labelList = [];
-                    const labelSet = new Set();
                     metricOrder.forEach((metric) => {
                         const detail = insightMap.get(`${period}|${groupName}|${metric}`);
                         if (!detail || typeof detail !== 'object') return;
-                        Object.keys(detail).forEach((label) => {
-                            const normalized = String(label || '').trim();
-                            if (!normalized || labelSet.has(normalized)) return;
-                            labelSet.add(normalized);
-                            labelList.push(normalized);
+                        Object.entries(detail).forEach(([label, payload]) => {
+                            const normalizedLabel = String(label || '').trim();
+                            if (!normalizedLabel) return;
+                            const value = this.toNumericValue(payload?.value ?? payload?.raw ?? 0);
+                            const score = Number.isFinite(value) ? Math.max(0, value) : 0;
+                            const existing = labelScoreMap.get(normalizedLabel);
+                            if (existing && typeof existing === 'object') {
+                                existing.score = this.toNumericValue(existing.score || 0) + score;
+                                return;
+                            }
+                            labelScoreMap.set(normalizedLabel, {
+                                score,
+                                order: orderIndex++
+                            });
                         });
                     });
+                });
+                const stableLabels = Array.from(labelScoreMap.entries())
+                    .sort((left, right) => {
+                        const leftMeta = left?.[1] || {};
+                        const rightMeta = right?.[1] || {};
+                        const scoreDiff = this.toNumericValue(rightMeta.score) - this.toNumericValue(leftMeta.score);
+                        if (Math.abs(scoreDiff) > 1e-9) return scoreDiff;
+                        const orderDiff = this.toNumericValue(leftMeta.order) - this.toNumericValue(rightMeta.order);
+                        if (Math.abs(orderDiff) > 1e-9) return orderDiff;
+                        return String(left?.[0] || '').localeCompare(String(right?.[0] || ''), 'zh-Hans-CN', { numeric: true, sensitivity: 'base' });
+                    })
+                    .map(([label]) => String(label || '').trim())
+                    .filter(Boolean);
+                if (stableLabels.length) {
+                    stableLabelMap.set(groupName, stableLabels);
+                }
+            });
+
+            groups.forEach((groupName) => {
+                periods.forEach((period) => {
+                    const stableLabels = stableLabelMap.get(groupName);
+                    const labelList = Array.isArray(stableLabels) && stableLabels.length
+                        ? stableLabels.slice()
+                        : [];
+                    if (!labelList.length) {
+                        const labelSet = new Set();
+                        metricOrder.forEach((metric) => {
+                            const detail = insightMap.get(`${period}|${groupName}|${metric}`);
+                            if (!detail || typeof detail !== 'object') return;
+                            Object.keys(detail).forEach((label) => {
+                                const normalized = String(label || '').trim();
+                                if (!normalized || labelSet.has(normalized)) return;
+                                labelSet.add(normalized);
+                                labelList.push(normalized);
+                            });
+                        });
+                    }
 
                     const nextCell = cellData[period][groupName];
                     nextCell.labels = labelList;
