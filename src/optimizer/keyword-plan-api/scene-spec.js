@@ -3718,7 +3718,8 @@
             sceneName = '',
             sceneSpec = null,
             marketingGoal = '',
-            runtime = {}
+            runtime = {},
+            allowFuzzyMatch = false
         } = {}) => {
             const warnings = [];
             const targetScene = String(sceneName || '').trim();
@@ -3781,12 +3782,19 @@
                     availableGoalLabels: availableGoals.map(goal => goal.goalLabel)
                 };
             }
-            const fuzzyMatch = availableGoals.find(goal => goal.goalLabel.includes(requestGoalRaw) || requestGoalRaw.includes(goal.goalLabel));
+            const fuzzyCandidates = allowFuzzyMatch
+                ? availableGoals.filter(goal => goal.goalLabel.includes(requestGoalRaw) || requestGoalRaw.includes(goal.goalLabel))
+                : [];
+            const fuzzyMatch = fuzzyCandidates.length === 1 ? fuzzyCandidates[0] : null;
+            if (allowFuzzyMatch && fuzzyCandidates.length > 1) {
+                warnings.push(`marketingGoal「${requestGoalRaw}」匹配到多个候选，已回退默认目标`);
+            }
             if (fuzzyMatch) {
+                warnings.push(`marketingGoal「${requestGoalRaw}」模糊匹配为「${fuzzyMatch.goalLabel}」，已标记为回退`);
                 return {
                     goalSpec: fuzzyMatch,
                     resolvedMarketingGoal: fuzzyMatch.goalLabel,
-                    goalFallbackUsed: false,
+                    goalFallbackUsed: true,
                     goalWarnings: warnings,
                     availableGoalLabels: availableGoals.map(goal => goal.goalLabel)
                 };
@@ -3924,13 +3932,15 @@
             runtime = {},
             marketingGoal = '',
             planName = '',
-            planIndex = 0
+            planIndex = 0,
+            allowFuzzyMatch = false
         } = {}) => {
             const resolution = resolveGoalSpecForScene({
                 sceneName,
                 sceneSpec,
                 marketingGoal,
-                runtime
+                runtime,
+                allowFuzzyMatch
             });
             const defaults = buildGoalContractDefaults(resolution.goalSpec, {
                 sceneName: String(sceneName || '').trim(),
@@ -4019,7 +4029,8 @@
                 sceneName: targetScene,
                 sceneSpec,
                 marketingGoal,
-                runtime
+                runtime,
+                allowFuzzyMatch: options.allowFuzzyMatch === true
             });
             return {
                 ok: !!sceneSpec?.ok,

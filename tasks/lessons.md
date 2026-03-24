@@ -1,5 +1,21 @@
 # Lessons
 
+## 2026-03-23 用户修正：每轮修复都要继续 3+ AGENTS 并行
+- 问题：连续“继续”修复场景里，如果只做单线程修复，容易遗漏并行排查与风险复核。
+- 纠偏规则：每完成一个修复点后，立即继续建立不少于 3 个 AGENTS 分工（失败根因、最小补丁、回归风险）并行推进。
+- 输出规则：阶段更新中明确写出“继续建立不少于 3 个 AGENTS 去高效修复”，形成可核对执行痕迹。
+
+## 2026-03-23 测试提取边界不可绑定远端 marker
+- 问题：`mergeGoalWarnings` 测试用 `const validate =` 作为截取终点，helper 重构插入后导致函数源码切片污染并触发语法错误。
+- 纠偏规则：源码切片测试优先使用“紧邻下一个定义”作为终点，避免跨越多段 helper；必要时加双 marker 兜底。
+- 验证规则：切片函数执行前先验证 `typeof fn === 'function'`，并覆盖一个边界输入，防止仅靠静态正则误报。
+
+## 2026-03-23 早退分支必须保持结果结构一致
+- 问题：`createPlansBatch` 多个早退分支只返回最小计数字段，缺少 runtime/策略开关/submitEndpoint 等上下文，导致排障信息不对齐。
+- 纠偏规则：在业务允许的前提下，早退分支统一返回公共字段：`runtime`、`marketingGoal`、`goalWarnings`、`submitEndpoint`、`fallbackPolicy/conflictPolicy/stopScope`、`strictGoalMatch/allowFuzzyGoalMatch`、`rawResponses`。
+- 测试规则：为每类早退路径保留独立契约测试（本轮为 `keyword-create-early-return-shape.test.mjs`），避免仅靠单分支测试覆盖。
+- failure 规则：`failures[*]` 默认维持统一五字段（`planName/item/marketingGoal/submitEndpoint/error`），禁止仅返回 `error`。
+
 ## 2026-03-22 用户修正：万能查数头部层级与视觉收敛
 - 问题：首次实现把 `am-magic-view-tabs` 提到 header 最顶层，未满足用户对 `am-magic-header-main` 顶部优先级的明确要求。
 - 纠偏规则：当用户给出精确选择器级别的布局要求时，优先按该 DOM 层级执行，不做主观“更优”重排。

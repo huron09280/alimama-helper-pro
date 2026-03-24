@@ -2224,16 +2224,24 @@
 
         const normalizePlans = (request, preferredItems, options = {}) => {
             const requiresItem = options.requiresItem !== false;
+            const onDroppedPlan = typeof options.onDroppedPlan === 'function'
+                ? options.onDroppedPlan
+                : null;
             const commonBidMode = normalizeBidMode(request?.common?.bidMode || request?.bidMode || '', 'smart');
             const plans = Array.isArray(request?.plans) ? request.plans.map(plan => ({ ...plan })) : [];
             const fallbackRequestItemId = String(toIdValue(request?.itemId || request?.materialId || '')).trim();
             const fallbackRequestItemName = String(request?.itemName || request?.materialName || '').trim();
+            const hasRequestedPlanCount = request?.planCount !== undefined || request?.count !== undefined;
+            const requestedPlanCount = hasRequestedPlanCount
+                ? Math.max(1, Math.min(50, toNumber(request?.planCount ?? request?.count, 1)))
+                : null;
+            // request.itemId/materialId 只作为单计划兜底，避免多计划被同一商品批量回填。
+            const allowRequestItemFallback = !!fallbackRequestItemId && plans.length <= 1;
             if (!plans.length) {
                 const prefix = resolvePlanNamePrefix(request);
                 if (!preferredItems.length) {
                     if (requiresItem) return [];
-                    const rawCount = request?.planCount ?? request?.count ?? 1;
-                    const planCount = Math.max(1, Math.min(50, toNumber(rawCount, 1)));
+                    const planCount = requestedPlanCount ?? 1;
                     return Array.from({ length: planCount }).map((_, idx) => ({
                         planName: `${prefix}_${String(idx + 1).padStart(2, '0')}`,
                         bidMode: commonBidMode,
@@ -2241,7 +2249,10 @@
                         keywordSource: request?.keywordSource || {}
                     }));
                 }
-                return preferredItems.map((item, idx) => ({
+                const autoItems = requestedPlanCount === null
+                    ? preferredItems
+                    : preferredItems.slice(0, requestedPlanCount);
+                return autoItems.map((item, idx) => ({
                     planName: `${prefix}_${String(idx + 1).padStart(2, '0')}`,
                     item,
                     bidMode: commonBidMode,
@@ -2251,7 +2262,7 @@
             }
 
             let fillCursor = 0;
-            return plans.map((plan, idx) => {
+            const normalizedPlans = plans.map((plan, idx) => {
                 const normalized = { ...plan };
                 if (!normalized.planName) {
                     const prefix = resolvePlanNamePrefix(request);
@@ -2265,13 +2276,15 @@
                 );
                 if (normalized.item) {
                     normalized.item = normalizeItem(normalized.item);
-                } else if (normalized.itemId) {
+                } else if (normalized.itemId || normalized.materialId) {
+                    const normalizedItemId = String(toIdValue(normalized.itemId || normalized.materialId || '')).trim();
+                    normalized.itemId = normalizedItemId;
                     normalized.item = normalizeItem({
-                        materialId: normalized.itemId,
-                        itemId: normalized.itemId,
-                        materialName: normalized.itemName || ''
+                        materialId: normalizedItemId,
+                        itemId: normalizedItemId,
+                        materialName: normalized.itemName || normalized.materialName || ''
                     });
-                } else if (fallbackRequestItemId) {
+                } else if (allowRequestItemFallback) {
                     normalized.itemId = fallbackRequestItemId;
                     normalized.item = normalizeItem({
                         materialId: fallbackRequestItemId,
@@ -2283,10 +2296,26 @@
                     fillCursor++;
                 }
                 return normalized;
-            }).filter(plan => {
-                if (!requiresItem) return true;
-                return !!plan.item?.materialId;
             });
+            if (!requiresItem) return normalizedPlans;
+            const keptPlans = [];
+            normalizedPlans.forEach((plan, idx) => {
+                if (plan?.item?.materialId) {
+                    keptPlans.push(plan);
+                    return;
+                }
+                if (!onDroppedPlan) return;
+                onDroppedPlan({
+                    planIndex: idx,
+                    planName: String(plan?.planName || '').trim(),
+                    item: isPlainObject(plan?.item) ? deepClone(plan.item) : null,
+                    itemId: String(toIdValue(plan?.itemId || plan?.materialId || '')).trim(),
+                    marketingGoal: String(plan?.marketingGoal || '').trim(),
+                    submitEndpoint: String(plan?.submitEndpoint || '').trim(),
+                    error: '计划缺少商品参数（item/itemId/materialId），且未能从请求或已选商品补齐'
+                });
+            });
+            return keptPlans;
         };
 
         const applyOverrides = (target, request, plan) => {
@@ -2317,15 +2346,17 @@
                 return {};
             };
 
-            // 合并顺序：模板基底(已在 buildSolutionFromPlan) -> GoalSpec 默认 -> 场景映射 -> common/plan override -> rawOverrides。
+            // 合并顺序：模板基底(已在 buildSolutionFromPlan) -> GoalSpec 默认 -> 场景映射
+            // -> common override/passthrough -> plan override -> rawOverrides。
+            // 这样可保证 plan 级显式设置优先于 common 级兜底透传。
             target.campaign = mergeDeep(
                 target.campaign,
                 goalForcedCampaignOverride,
                 planGoalCampaignOverride,
                 sceneForcedCampaignOverride,
                 commonCampaignOverride,
-                planCampaignOverride,
                 commonPassthrough,
+                planCampaignOverride,
                 pickCampaignRaw(requestRawOverrides),
                 pickCampaignRaw(commonRawOverrides),
                 pickCampaignRaw(planRawOverrides)
@@ -3646,6 +3677,96 @@
             };
         };
 
+        const resolveLeadTemplateTriplet = ({ campaign = {}, runtimeStoreData = {} } = {}) => {
+            const normalizeLeadTemplateIdText = (value) => {
+                const idText = String(toIdValue(value)).trim();
+                return /^\d+$/.test(idText) ? idText : '';
+            };
+            const normalizedCampaign = isPlainObject(campaign) ? campaign : {};
+            const normalizedOrderInfo = isPlainObject(normalizedCampaign.orderInfo) ? normalizedCampaign.orderInfo : {};
+            const normalizedRuntimeStore = isPlainObject(runtimeStoreData) ? runtimeStoreData : {};
+            const candidateSources = [
+                {
+                    source: 'campaign',
+                    values: {
+                        planId: normalizeLeadTemplateIdText(normalizedCampaign.planId),
+                        planTemplateId: normalizeLeadTemplateIdText(normalizedCampaign.planTemplateId),
+                        packageTemplateId: normalizeLeadTemplateIdText(normalizedCampaign.packageTemplateId)
+                    }
+                },
+                {
+                    source: 'orderInfo',
+                    values: {
+                        planId: normalizeLeadTemplateIdText(normalizedOrderInfo.planId),
+                        planTemplateId: normalizeLeadTemplateIdText(normalizedOrderInfo.planTemplateId),
+                        packageTemplateId: normalizeLeadTemplateIdText(normalizedOrderInfo.packageTemplateId)
+                    }
+                },
+                {
+                    source: 'runtime.storeData',
+                    values: {
+                        planId: normalizeLeadTemplateIdText(normalizedRuntimeStore.planId),
+                        planTemplateId: normalizeLeadTemplateIdText(normalizedRuntimeStore.planTemplateId),
+                        packageTemplateId: normalizeLeadTemplateIdText(normalizedRuntimeStore.packageTemplateId)
+                    }
+                }
+            ];
+            const hasAnyValue = (values = {}) => !!(values.planId || values.planTemplateId || values.packageTemplateId);
+            const isCompleteValues = (values = {}) => !!(values.planId && values.planTemplateId && values.packageTemplateId);
+            const explicitSources = candidateSources.filter(entry => entry.source !== 'runtime.storeData' && hasAnyValue(entry.values));
+            const selectedSource = explicitSources.find(entry => isCompleteValues(entry.values))
+                || explicitSources[0]
+                || candidateSources[2];
+            const selectedValues = selectedSource?.values || {};
+            const missingFields = [];
+            if (!selectedValues.planId) missingFields.push('planId');
+            if (!selectedValues.planTemplateId) missingFields.push('planTemplateId');
+            if (!selectedValues.packageTemplateId) missingFields.push('packageTemplateId');
+            return {
+                source: selectedSource?.source || 'runtime.storeData',
+                planId: selectedValues.planId || '',
+                planTemplateId: selectedValues.planTemplateId || '',
+                packageTemplateId: selectedValues.packageTemplateId || '',
+                missingFields
+            };
+        };
+
+        const applyNonKeywordOptionalCampaignPrune = ({
+            campaign = {},
+            templateCampaign = {},
+            hasItem = false,
+            sceneCapabilities = {},
+            hasExplicitCampaignField = () => false
+        } = {}) => {
+            const targetCampaign = isPlainObject(campaign) ? campaign : {};
+            const runtimeTemplateCampaign = isPlainObject(templateCampaign) ? templateCampaign : {};
+            const sceneName = String(sceneCapabilities?.sceneName || '').trim();
+            const optionalKeys = [
+                'bidTypeV2',
+                'adzoneList',
+                'launchAreaStrList',
+                'launchPeriodList',
+                'crowdList',
+                'itemIdList',
+                'promotionStrategy',
+                'needTargetCrowd',
+                'aiXiaowanCrowdListSwitch',
+                'creativeSetMode',
+                'user_level',
+                'orderChargeType'
+            ];
+            optionalKeys.forEach(key => {
+                if (key === 'itemIdList' && hasItem && sceneCapabilities.hasItemIdList) return;
+                if (hasOwn(runtimeTemplateCampaign, key)) return;
+                if (hasExplicitCampaignField(key)) return;
+                if (sceneName === '人群推广' && key === 'bidTypeV2') return;
+                if ((sceneName === '内容营销' || sceneName === '线索推广')
+                    && (key === 'launchPeriodList' || key === 'launchAreaStrList')) return;
+                delete targetCampaign[key];
+            });
+            return targetCampaign;
+        };
+
         const buildSolutionFromPlan = async ({ plan, request, runtime, requestOptions }) => {
             const sceneCapabilities = resolveSceneCapabilities({
                 sceneName: request?.sceneName || '',
@@ -3869,11 +3990,6 @@
             if (sceneBizCodeHint) {
                 merged.campaign.bizCode = sceneBizCodeHint;
             }
-            if (hasItem && sceneCapabilities.hasItemIdList) {
-                merged.campaign.itemIdList = [toIdValue(item.materialId || item.itemId)];
-            } else if (!sceneCapabilities.hasItemIdList && hasOwn(merged.campaign, 'itemIdList')) {
-                delete merged.campaign.itemIdList;
-            }
             const hasExplicitCampaignField = (key = '') => {
                 const sourceValues = [
                     request?.[key],
@@ -3892,6 +4008,13 @@
                 ];
                 return sourceValues.some(value => value !== undefined && value !== null && value !== '');
             };
+            if (hasItem && sceneCapabilities.hasItemIdList) {
+                merged.campaign.itemIdList = [toIdValue(item.materialId || item.itemId)];
+            } else if (!sceneCapabilities.hasItemIdList && hasOwn(merged.campaign, 'itemIdList')) {
+                if (!hasExplicitCampaignField('itemIdList')) {
+                    delete merged.campaign.itemIdList;
+                }
+            }
             if (sceneCapabilities.enableKeywords && !keywordBundle.useWordPackage) {
                 merged.campaign = stripWordPackageArtifacts(merged.campaign);
                 merged.adgroup = stripWordPackageArtifacts(merged.adgroup);
@@ -3924,6 +4047,7 @@
                 const explicitBidTypeV2 = hasExplicitCampaignField('bidTypeV2');
                 const explicitBidType = hasExplicitCampaignField('bidType');
                 const explicitOptimizeTarget = hasExplicitCampaignField('optimizeTarget');
+                const explicitBidTargetV2 = hasExplicitCampaignField('bidTargetV2');
                 const scenePrefersBidTypeV2 = SCENE_BIDTYPE_V2_ONLY.has(sceneCapabilities.sceneName);
                 const supportsTemplateBidTypeV2 = hasOwn(runtimeTemplateCampaign, 'bidTypeV2');
                 const shouldKeepBidTypeV2 = scenePrefersBidTypeV2 || supportsTemplateBidTypeV2;
@@ -3948,8 +4072,10 @@
                 const keepOptimizeTarget = sceneCapabilities.sceneName === '内容营销'
                     || sceneCapabilities.sceneName === '线索推广';
                 if (!supportsBidTargetFields || !bidTarget) {
-                    delete merged.campaign.bidTargetV2;
-                    if (!keepOptimizeTarget) {
+                    if (!explicitBidTargetV2) {
+                        delete merged.campaign.bidTargetV2;
+                    }
+                    if (!keepOptimizeTarget && !explicitOptimizeTarget) {
                         delete merged.campaign.optimizeTarget;
                     }
                 } else {
@@ -4266,15 +4392,23 @@
                     if (!isPlainObject(merged.campaign.launchTime)) {
                         merged.campaign.launchTime = buildDefaultLaunchTime({ days: 7, forever: false });
                     }
-                    if (merged.campaign.planId === undefined || merged.campaign.planId === null || merged.campaign.planId === '') {
-                        merged.campaign.planId = runtimeForScene?.storeData?.planId || 308;
+                    const normalizeLeadTemplateIdText = (value) => {
+                        const idText = String(toIdValue(value)).trim();
+                        return /^\d+$/.test(idText) ? idText : '';
+                    };
+                    const leadTemplateTriplet = resolveLeadTemplateTriplet({
+                        campaign: merged.campaign,
+                        runtimeStoreData: runtimeForScene?.storeData || {}
+                    });
+                    if (leadTemplateTriplet.missingFields.length) {
+                        throw new Error(`线索推广缺少关键模板参数: ${leadTemplateTriplet.missingFields.join(', ')}`);
                     }
-                    if (merged.campaign.planTemplateId === undefined || merged.campaign.planTemplateId === null || merged.campaign.planTemplateId === '') {
-                        merged.campaign.planTemplateId = runtimeForScene?.storeData?.planTemplateId || merged.campaign.planId || 308;
-                    }
-                    if (merged.campaign.packageTemplateId === undefined || merged.campaign.packageTemplateId === null || merged.campaign.packageTemplateId === '') {
-                        merged.campaign.packageTemplateId = runtimeForScene?.storeData?.packageTemplateId || 74;
-                    }
+                    const leadPlanId = leadTemplateTriplet.planId;
+                    const leadPlanTemplateId = leadTemplateTriplet.planTemplateId;
+                    const leadPackageTemplateId = leadTemplateTriplet.packageTemplateId;
+                    merged.campaign.planId = leadPlanId;
+                    merged.campaign.planTemplateId = leadPlanTemplateId;
+                    merged.campaign.packageTemplateId = leadPackageTemplateId;
                     const orderAmountBase = Math.max(1500, toNumber(
                         merged.campaign.orderAmount
                         || merged.campaign.totalBudget
@@ -4292,9 +4426,9 @@
                         merged.campaign.orderInfo = {};
                     }
                     merged.campaign.orderInfo.orderAmount = Math.max(1500, toNumber(merged.campaign.orderInfo.orderAmount, orderAmountBase));
-                    merged.campaign.orderInfo.planId = merged.campaign.orderInfo.planId || merged.campaign.planId;
-                    merged.campaign.orderInfo.planTemplateId = merged.campaign.orderInfo.planTemplateId || merged.campaign.planTemplateId;
-                    merged.campaign.orderInfo.packageTemplateId = merged.campaign.orderInfo.packageTemplateId || merged.campaign.packageTemplateId;
+                    merged.campaign.orderInfo.planId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planId) || leadPlanId;
+                    merged.campaign.orderInfo.planTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planTemplateId) || leadPlanTemplateId;
+                    merged.campaign.orderInfo.packageTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.packageTemplateId) || leadPackageTemplateId;
                     merged.campaign.orderInfo.launchTimeType = merged.campaign.orderInfo.launchTimeType || 'adjustable';
                     merged.campaign.orderInfo.isCustom = merged.campaign.orderInfo.isCustom !== undefined
                         ? merged.campaign.orderInfo.isCustom
@@ -4315,29 +4449,12 @@
 
                 // 非关键词场景按当前模板剔除可选字段，避免把上一个场景字段串到当前场景。
                 if (hasRuntimeTemplateCampaign) {
-                    const templateCampaign = runtimeForScene.solutionTemplate.campaign || {};
-                    const optionalKeys = [
-                        'bidTypeV2',
-                        'adzoneList',
-                        'launchAreaStrList',
-                        'launchPeriodList',
-                        'crowdList',
-                        'itemIdList',
-                        'promotionStrategy',
-                        'needTargetCrowd',
-                        'aiXiaowanCrowdListSwitch',
-                        'creativeSetMode',
-                        'user_level',
-                        'orderChargeType'
-                    ];
-                    optionalKeys.forEach(key => {
-                        if (key === 'itemIdList' && hasItem && sceneCapabilities.hasItemIdList) return;
-                        if (hasOwn(templateCampaign, key)) return;
-                        if (hasExplicitCampaignField(key)) return;
-                        if (sceneCapabilities.sceneName === '人群推广' && key === 'bidTypeV2') return;
-                        if ((sceneCapabilities.sceneName === '内容营销' || sceneCapabilities.sceneName === '线索推广')
-                            && (key === 'launchPeriodList' || key === 'launchAreaStrList')) return;
-                        delete merged.campaign[key];
+                    merged.campaign = applyNonKeywordOptionalCampaignPrune({
+                        campaign: merged.campaign,
+                        templateCampaign: runtimeForScene.solutionTemplate.campaign || {},
+                        hasItem,
+                        sceneCapabilities,
+                        hasExplicitCampaignField
                     });
                 } else if (sceneCapabilities.sceneName !== '人群推广') {
                     // 无可用模板时，保守移除高频报错字段。
@@ -4525,4 +4642,3 @@
 
             return { successes, failures, failedEntries };
         };
-

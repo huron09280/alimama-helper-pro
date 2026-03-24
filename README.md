@@ -40,6 +40,12 @@
 
 ## 更新日志（最近）
 
+### v6.07 (2026-03-23)
+- 批量建计划目标策略加固：`strictGoalMatch` 默认开启，request/plan 级 fallback 统一提前失败，避免静默回退继续提交
+- 目标匹配策略收敛：`allowFuzzyGoalMatch` 默认关闭；仅显式开启时才允许 fuzzy，且多候选改为告警后回退默认目标
+- 计划归一化与失败可观测性增强：支持 `plan.materialId`，多计划禁用 request 级同商品批量回填，drop 计划进入明确失败明细
+- 回归测试扩充：新增 `createPlansBatch` strict runtime harness、多计划 strict 隔离断言、早退结果/失败条目结构契约测试
+
 ### v6.06 (2026-03-21)
 - 万能查数快捷提交增强：优先走 Magix `setData/search` 提交，减少“点击上方按钮无响应/串话术”问题
 - 快捷占比话术修订：省份/城市占比模板移除“点击人群（加购人群或者成交人群）”冗余描述

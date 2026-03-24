@@ -1,5 +1,5 @@
 (() => {
-    const SCRIPT_VERSION = "6.06";
+    const SCRIPT_VERSION = "6.07";
     const STORAGE_KEY = '__AM_EXTENSION_GM_STORE__';
 
     const readStore = () => {
@@ -109,6 +109,12 @@
 })();
 /**
  * 更新日志
+ *
+ * v6.07 (2026-03-23)
+ * - 🔧 批量建计划目标策略加固：`strictGoalMatch` 默认开启，request/plan 级 fallback 统一提前失败，避免静默回退继续提交
+ * - 🔧 目标匹配策略收敛：`allowFuzzyGoalMatch` 默认关闭；仅显式开启时才允许 fuzzy，且多候选改为告警后回退默认目标
+ * - 🔧 计划归一化与失败可观测性增强：支持 `plan.materialId`，多计划禁用 request 级同商品批量回填，drop 计划进入明确失败明细
+ * - ✅ 回归测试扩充：新增 `createPlansBatch` strict runtime harness、多计划 strict 隔离断言、早退结果/失败条目结构契约测试
  *
  * v6.06 (2026-03-21)
  * - ✨ 万能查数快捷提交增强：优先走 Magix `setData/search` 提交，减少“点击上方按钮无响应/串话术”问题
@@ -17824,7 +17830,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             sceneName = '',
             sceneSpec = null,
             marketingGoal = '',
-            runtime = {}
+            runtime = {},
+            allowFuzzyMatch = false
         } = {}) => {
             const warnings = [];
             const targetScene = String(sceneName || '').trim();
@@ -17887,12 +17894,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     availableGoalLabels: availableGoals.map(goal => goal.goalLabel)
                 };
             }
-            const fuzzyMatch = availableGoals.find(goal => goal.goalLabel.includes(requestGoalRaw) || requestGoalRaw.includes(goal.goalLabel));
+            const fuzzyCandidates = allowFuzzyMatch
+                ? availableGoals.filter(goal => goal.goalLabel.includes(requestGoalRaw) || requestGoalRaw.includes(goal.goalLabel))
+                : [];
+            const fuzzyMatch = fuzzyCandidates.length === 1 ? fuzzyCandidates[0] : null;
+            if (allowFuzzyMatch && fuzzyCandidates.length > 1) {
+                warnings.push(`marketingGoal「${requestGoalRaw}」匹配到多个候选，已回退默认目标`);
+            }
             if (fuzzyMatch) {
+                warnings.push(`marketingGoal「${requestGoalRaw}」模糊匹配为「${fuzzyMatch.goalLabel}」，已标记为回退`);
                 return {
                     goalSpec: fuzzyMatch,
                     resolvedMarketingGoal: fuzzyMatch.goalLabel,
-                    goalFallbackUsed: false,
+                    goalFallbackUsed: true,
                     goalWarnings: warnings,
                     availableGoalLabels: availableGoals.map(goal => goal.goalLabel)
                 };
@@ -18030,13 +18044,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             runtime = {},
             marketingGoal = '',
             planName = '',
-            planIndex = 0
+            planIndex = 0,
+            allowFuzzyMatch = false
         } = {}) => {
             const resolution = resolveGoalSpecForScene({
                 sceneName,
                 sceneSpec,
                 marketingGoal,
-                runtime
+                runtime,
+                allowFuzzyMatch
             });
             const defaults = buildGoalContractDefaults(resolution.goalSpec, {
                 sceneName: String(sceneName || '').trim(),
@@ -18125,7 +18141,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 sceneName: targetScene,
                 sceneSpec,
                 marketingGoal,
-                runtime
+                runtime,
+                allowFuzzyMatch: options.allowFuzzyMatch === true
             });
             return {
                 ok: !!sceneSpec?.ok,
@@ -22227,16 +22244,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const normalizePlans = (request, preferredItems, options = {}) => {
             const requiresItem = options.requiresItem !== false;
+            const onDroppedPlan = typeof options.onDroppedPlan === 'function'
+                ? options.onDroppedPlan
+                : null;
             const commonBidMode = normalizeBidMode(request?.common?.bidMode || request?.bidMode || '', 'smart');
             const plans = Array.isArray(request?.plans) ? request.plans.map(plan => ({ ...plan })) : [];
             const fallbackRequestItemId = String(toIdValue(request?.itemId || request?.materialId || '')).trim();
             const fallbackRequestItemName = String(request?.itemName || request?.materialName || '').trim();
+            const hasRequestedPlanCount = request?.planCount !== undefined || request?.count !== undefined;
+            const requestedPlanCount = hasRequestedPlanCount
+                ? Math.max(1, Math.min(50, toNumber(request?.planCount ?? request?.count, 1)))
+                : null;
+            // request.itemId/materialId 只作为单计划兜底，避免多计划被同一商品批量回填。
+            const allowRequestItemFallback = !!fallbackRequestItemId && plans.length <= 1;
             if (!plans.length) {
                 const prefix = resolvePlanNamePrefix(request);
                 if (!preferredItems.length) {
                     if (requiresItem) return [];
-                    const rawCount = request?.planCount ?? request?.count ?? 1;
-                    const planCount = Math.max(1, Math.min(50, toNumber(rawCount, 1)));
+                    const planCount = requestedPlanCount ?? 1;
                     return Array.from({ length: planCount }).map((_, idx) => ({
                         planName: `${prefix}_${String(idx + 1).padStart(2, '0')}`,
                         bidMode: commonBidMode,
@@ -22244,7 +22269,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         keywordSource: request?.keywordSource || {}
                     }));
                 }
-                return preferredItems.map((item, idx) => ({
+                const autoItems = requestedPlanCount === null
+                    ? preferredItems
+                    : preferredItems.slice(0, requestedPlanCount);
+                return autoItems.map((item, idx) => ({
                     planName: `${prefix}_${String(idx + 1).padStart(2, '0')}`,
                     item,
                     bidMode: commonBidMode,
@@ -22254,7 +22282,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
 
             let fillCursor = 0;
-            return plans.map((plan, idx) => {
+            const normalizedPlans = plans.map((plan, idx) => {
                 const normalized = { ...plan };
                 if (!normalized.planName) {
                     const prefix = resolvePlanNamePrefix(request);
@@ -22268,13 +22296,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 );
                 if (normalized.item) {
                     normalized.item = normalizeItem(normalized.item);
-                } else if (normalized.itemId) {
+                } else if (normalized.itemId || normalized.materialId) {
+                    const normalizedItemId = String(toIdValue(normalized.itemId || normalized.materialId || '')).trim();
+                    normalized.itemId = normalizedItemId;
                     normalized.item = normalizeItem({
-                        materialId: normalized.itemId,
-                        itemId: normalized.itemId,
-                        materialName: normalized.itemName || ''
+                        materialId: normalizedItemId,
+                        itemId: normalizedItemId,
+                        materialName: normalized.itemName || normalized.materialName || ''
                     });
-                } else if (fallbackRequestItemId) {
+                } else if (allowRequestItemFallback) {
                     normalized.itemId = fallbackRequestItemId;
                     normalized.item = normalizeItem({
                         materialId: fallbackRequestItemId,
@@ -22286,10 +22316,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     fillCursor++;
                 }
                 return normalized;
-            }).filter(plan => {
-                if (!requiresItem) return true;
-                return !!plan.item?.materialId;
             });
+            if (!requiresItem) return normalizedPlans;
+            const keptPlans = [];
+            normalizedPlans.forEach((plan, idx) => {
+                if (plan?.item?.materialId) {
+                    keptPlans.push(plan);
+                    return;
+                }
+                if (!onDroppedPlan) return;
+                onDroppedPlan({
+                    planIndex: idx,
+                    planName: String(plan?.planName || '').trim(),
+                    item: isPlainObject(plan?.item) ? deepClone(plan.item) : null,
+                    itemId: String(toIdValue(plan?.itemId || plan?.materialId || '')).trim(),
+                    marketingGoal: String(plan?.marketingGoal || '').trim(),
+                    submitEndpoint: String(plan?.submitEndpoint || '').trim(),
+                    error: '计划缺少商品参数（item/itemId/materialId），且未能从请求或已选商品补齐'
+                });
+            });
+            return keptPlans;
         };
 
         const applyOverrides = (target, request, plan) => {
@@ -22320,15 +22366,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return {};
             };
 
-            // 合并顺序：模板基底(已在 buildSolutionFromPlan) -> GoalSpec 默认 -> 场景映射 -> common/plan override -> rawOverrides。
+            // 合并顺序：模板基底(已在 buildSolutionFromPlan) -> GoalSpec 默认 -> 场景映射
+            // -> common override/passthrough -> plan override -> rawOverrides。
+            // 这样可保证 plan 级显式设置优先于 common 级兜底透传。
             target.campaign = mergeDeep(
                 target.campaign,
                 goalForcedCampaignOverride,
                 planGoalCampaignOverride,
                 sceneForcedCampaignOverride,
                 commonCampaignOverride,
-                planCampaignOverride,
                 commonPassthrough,
+                planCampaignOverride,
                 pickCampaignRaw(requestRawOverrides),
                 pickCampaignRaw(commonRawOverrides),
                 pickCampaignRaw(planRawOverrides)
@@ -23649,6 +23697,96 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         };
 
+        const resolveLeadTemplateTriplet = ({ campaign = {}, runtimeStoreData = {} } = {}) => {
+            const normalizeLeadTemplateIdText = (value) => {
+                const idText = String(toIdValue(value)).trim();
+                return /^\d+$/.test(idText) ? idText : '';
+            };
+            const normalizedCampaign = isPlainObject(campaign) ? campaign : {};
+            const normalizedOrderInfo = isPlainObject(normalizedCampaign.orderInfo) ? normalizedCampaign.orderInfo : {};
+            const normalizedRuntimeStore = isPlainObject(runtimeStoreData) ? runtimeStoreData : {};
+            const candidateSources = [
+                {
+                    source: 'campaign',
+                    values: {
+                        planId: normalizeLeadTemplateIdText(normalizedCampaign.planId),
+                        planTemplateId: normalizeLeadTemplateIdText(normalizedCampaign.planTemplateId),
+                        packageTemplateId: normalizeLeadTemplateIdText(normalizedCampaign.packageTemplateId)
+                    }
+                },
+                {
+                    source: 'orderInfo',
+                    values: {
+                        planId: normalizeLeadTemplateIdText(normalizedOrderInfo.planId),
+                        planTemplateId: normalizeLeadTemplateIdText(normalizedOrderInfo.planTemplateId),
+                        packageTemplateId: normalizeLeadTemplateIdText(normalizedOrderInfo.packageTemplateId)
+                    }
+                },
+                {
+                    source: 'runtime.storeData',
+                    values: {
+                        planId: normalizeLeadTemplateIdText(normalizedRuntimeStore.planId),
+                        planTemplateId: normalizeLeadTemplateIdText(normalizedRuntimeStore.planTemplateId),
+                        packageTemplateId: normalizeLeadTemplateIdText(normalizedRuntimeStore.packageTemplateId)
+                    }
+                }
+            ];
+            const hasAnyValue = (values = {}) => !!(values.planId || values.planTemplateId || values.packageTemplateId);
+            const isCompleteValues = (values = {}) => !!(values.planId && values.planTemplateId && values.packageTemplateId);
+            const explicitSources = candidateSources.filter(entry => entry.source !== 'runtime.storeData' && hasAnyValue(entry.values));
+            const selectedSource = explicitSources.find(entry => isCompleteValues(entry.values))
+                || explicitSources[0]
+                || candidateSources[2];
+            const selectedValues = selectedSource?.values || {};
+            const missingFields = [];
+            if (!selectedValues.planId) missingFields.push('planId');
+            if (!selectedValues.planTemplateId) missingFields.push('planTemplateId');
+            if (!selectedValues.packageTemplateId) missingFields.push('packageTemplateId');
+            return {
+                source: selectedSource?.source || 'runtime.storeData',
+                planId: selectedValues.planId || '',
+                planTemplateId: selectedValues.planTemplateId || '',
+                packageTemplateId: selectedValues.packageTemplateId || '',
+                missingFields
+            };
+        };
+
+        const applyNonKeywordOptionalCampaignPrune = ({
+            campaign = {},
+            templateCampaign = {},
+            hasItem = false,
+            sceneCapabilities = {},
+            hasExplicitCampaignField = () => false
+        } = {}) => {
+            const targetCampaign = isPlainObject(campaign) ? campaign : {};
+            const runtimeTemplateCampaign = isPlainObject(templateCampaign) ? templateCampaign : {};
+            const sceneName = String(sceneCapabilities?.sceneName || '').trim();
+            const optionalKeys = [
+                'bidTypeV2',
+                'adzoneList',
+                'launchAreaStrList',
+                'launchPeriodList',
+                'crowdList',
+                'itemIdList',
+                'promotionStrategy',
+                'needTargetCrowd',
+                'aiXiaowanCrowdListSwitch',
+                'creativeSetMode',
+                'user_level',
+                'orderChargeType'
+            ];
+            optionalKeys.forEach(key => {
+                if (key === 'itemIdList' && hasItem && sceneCapabilities.hasItemIdList) return;
+                if (hasOwn(runtimeTemplateCampaign, key)) return;
+                if (hasExplicitCampaignField(key)) return;
+                if (sceneName === '人群推广' && key === 'bidTypeV2') return;
+                if ((sceneName === '内容营销' || sceneName === '线索推广')
+                    && (key === 'launchPeriodList' || key === 'launchAreaStrList')) return;
+                delete targetCampaign[key];
+            });
+            return targetCampaign;
+        };
+
         const buildSolutionFromPlan = async ({ plan, request, runtime, requestOptions }) => {
             const sceneCapabilities = resolveSceneCapabilities({
                 sceneName: request?.sceneName || '',
@@ -23872,11 +24010,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (sceneBizCodeHint) {
                 merged.campaign.bizCode = sceneBizCodeHint;
             }
-            if (hasItem && sceneCapabilities.hasItemIdList) {
-                merged.campaign.itemIdList = [toIdValue(item.materialId || item.itemId)];
-            } else if (!sceneCapabilities.hasItemIdList && hasOwn(merged.campaign, 'itemIdList')) {
-                delete merged.campaign.itemIdList;
-            }
             const hasExplicitCampaignField = (key = '') => {
                 const sourceValues = [
                     request?.[key],
@@ -23895,6 +24028,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 ];
                 return sourceValues.some(value => value !== undefined && value !== null && value !== '');
             };
+            if (hasItem && sceneCapabilities.hasItemIdList) {
+                merged.campaign.itemIdList = [toIdValue(item.materialId || item.itemId)];
+            } else if (!sceneCapabilities.hasItemIdList && hasOwn(merged.campaign, 'itemIdList')) {
+                if (!hasExplicitCampaignField('itemIdList')) {
+                    delete merged.campaign.itemIdList;
+                }
+            }
             if (sceneCapabilities.enableKeywords && !keywordBundle.useWordPackage) {
                 merged.campaign = stripWordPackageArtifacts(merged.campaign);
                 merged.adgroup = stripWordPackageArtifacts(merged.adgroup);
@@ -23927,6 +24067,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const explicitBidTypeV2 = hasExplicitCampaignField('bidTypeV2');
                 const explicitBidType = hasExplicitCampaignField('bidType');
                 const explicitOptimizeTarget = hasExplicitCampaignField('optimizeTarget');
+                const explicitBidTargetV2 = hasExplicitCampaignField('bidTargetV2');
                 const scenePrefersBidTypeV2 = SCENE_BIDTYPE_V2_ONLY.has(sceneCapabilities.sceneName);
                 const supportsTemplateBidTypeV2 = hasOwn(runtimeTemplateCampaign, 'bidTypeV2');
                 const shouldKeepBidTypeV2 = scenePrefersBidTypeV2 || supportsTemplateBidTypeV2;
@@ -23951,8 +24092,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const keepOptimizeTarget = sceneCapabilities.sceneName === '内容营销'
                     || sceneCapabilities.sceneName === '线索推广';
                 if (!supportsBidTargetFields || !bidTarget) {
-                    delete merged.campaign.bidTargetV2;
-                    if (!keepOptimizeTarget) {
+                    if (!explicitBidTargetV2) {
+                        delete merged.campaign.bidTargetV2;
+                    }
+                    if (!keepOptimizeTarget && !explicitOptimizeTarget) {
                         delete merged.campaign.optimizeTarget;
                     }
                 } else {
@@ -24269,15 +24412,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!isPlainObject(merged.campaign.launchTime)) {
                         merged.campaign.launchTime = buildDefaultLaunchTime({ days: 7, forever: false });
                     }
-                    if (merged.campaign.planId === undefined || merged.campaign.planId === null || merged.campaign.planId === '') {
-                        merged.campaign.planId = runtimeForScene?.storeData?.planId || 308;
+                    const normalizeLeadTemplateIdText = (value) => {
+                        const idText = String(toIdValue(value)).trim();
+                        return /^\d+$/.test(idText) ? idText : '';
+                    };
+                    const leadTemplateTriplet = resolveLeadTemplateTriplet({
+                        campaign: merged.campaign,
+                        runtimeStoreData: runtimeForScene?.storeData || {}
+                    });
+                    if (leadTemplateTriplet.missingFields.length) {
+                        throw new Error(`线索推广缺少关键模板参数: ${leadTemplateTriplet.missingFields.join(', ')}`);
                     }
-                    if (merged.campaign.planTemplateId === undefined || merged.campaign.planTemplateId === null || merged.campaign.planTemplateId === '') {
-                        merged.campaign.planTemplateId = runtimeForScene?.storeData?.planTemplateId || merged.campaign.planId || 308;
-                    }
-                    if (merged.campaign.packageTemplateId === undefined || merged.campaign.packageTemplateId === null || merged.campaign.packageTemplateId === '') {
-                        merged.campaign.packageTemplateId = runtimeForScene?.storeData?.packageTemplateId || 74;
-                    }
+                    const leadPlanId = leadTemplateTriplet.planId;
+                    const leadPlanTemplateId = leadTemplateTriplet.planTemplateId;
+                    const leadPackageTemplateId = leadTemplateTriplet.packageTemplateId;
+                    merged.campaign.planId = leadPlanId;
+                    merged.campaign.planTemplateId = leadPlanTemplateId;
+                    merged.campaign.packageTemplateId = leadPackageTemplateId;
                     const orderAmountBase = Math.max(1500, toNumber(
                         merged.campaign.orderAmount
                         || merged.campaign.totalBudget
@@ -24295,9 +24446,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         merged.campaign.orderInfo = {};
                     }
                     merged.campaign.orderInfo.orderAmount = Math.max(1500, toNumber(merged.campaign.orderInfo.orderAmount, orderAmountBase));
-                    merged.campaign.orderInfo.planId = merged.campaign.orderInfo.planId || merged.campaign.planId;
-                    merged.campaign.orderInfo.planTemplateId = merged.campaign.orderInfo.planTemplateId || merged.campaign.planTemplateId;
-                    merged.campaign.orderInfo.packageTemplateId = merged.campaign.orderInfo.packageTemplateId || merged.campaign.packageTemplateId;
+                    merged.campaign.orderInfo.planId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planId) || leadPlanId;
+                    merged.campaign.orderInfo.planTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planTemplateId) || leadPlanTemplateId;
+                    merged.campaign.orderInfo.packageTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.packageTemplateId) || leadPackageTemplateId;
                     merged.campaign.orderInfo.launchTimeType = merged.campaign.orderInfo.launchTimeType || 'adjustable';
                     merged.campaign.orderInfo.isCustom = merged.campaign.orderInfo.isCustom !== undefined
                         ? merged.campaign.orderInfo.isCustom
@@ -24318,29 +24469,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 // 非关键词场景按当前模板剔除可选字段，避免把上一个场景字段串到当前场景。
                 if (hasRuntimeTemplateCampaign) {
-                    const templateCampaign = runtimeForScene.solutionTemplate.campaign || {};
-                    const optionalKeys = [
-                        'bidTypeV2',
-                        'adzoneList',
-                        'launchAreaStrList',
-                        'launchPeriodList',
-                        'crowdList',
-                        'itemIdList',
-                        'promotionStrategy',
-                        'needTargetCrowd',
-                        'aiXiaowanCrowdListSwitch',
-                        'creativeSetMode',
-                        'user_level',
-                        'orderChargeType'
-                    ];
-                    optionalKeys.forEach(key => {
-                        if (key === 'itemIdList' && hasItem && sceneCapabilities.hasItemIdList) return;
-                        if (hasOwn(templateCampaign, key)) return;
-                        if (hasExplicitCampaignField(key)) return;
-                        if (sceneCapabilities.sceneName === '人群推广' && key === 'bidTypeV2') return;
-                        if ((sceneCapabilities.sceneName === '内容营销' || sceneCapabilities.sceneName === '线索推广')
-                            && (key === 'launchPeriodList' || key === 'launchAreaStrList')) return;
-                        delete merged.campaign[key];
+                    merged.campaign = applyNonKeywordOptionalCampaignPrune({
+                        campaign: merged.campaign,
+                        templateCampaign: runtimeForScene.solutionTemplate.campaign || {},
+                        hasItem,
+                        sceneCapabilities,
+                        hasExplicitCampaignField
                     });
                 } else if (sceneCapabilities.sceneName !== '人群推广') {
                     // 无可用模板时，保守移除高频报错字段。
@@ -24528,6 +24662,97 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             return { successes, failures, failedEntries };
         };
+        const mergeGoalWarnings = (requestWarnings = [], planWarnings = [], limit = 50) => {
+            const normalizedLimit = Math.max(1, toNumber(limit, 50));
+            return uniqueBy(
+                []
+                    .concat(Array.isArray(requestWarnings) ? requestWarnings : [])
+                    .concat(Array.isArray(planWarnings) ? planWarnings : [])
+                    .map(item => String(item || '').trim())
+                    .filter(Boolean),
+                item => item
+            ).slice(0, normalizedLimit);
+        };
+
+        const buildStrictGoalFailureError = (requestedGoal = '', resolvedGoal = '', availableGoalLabels = []) => {
+            const normalizedRequestedGoal = normalizeGoalLabel(requestedGoal || '');
+            const normalizedResolvedGoal = normalizeGoalLabel(resolvedGoal || '');
+            const availableGoals = Array.isArray(availableGoalLabels)
+                ? availableGoalLabels.map(item => String(item || '').trim()).filter(Boolean).slice(0, 8)
+                : [];
+            return `营销目标严格匹配失败：请求=${normalizedRequestedGoal || '未提供'}，解析=${normalizedResolvedGoal || '未命中'}${availableGoals.length ? `，可用目标=${availableGoals.join('，')}` : ''}`;
+        };
+
+        const buildStrictRequestGoalFailureResult = ({
+            validation,
+            runtime = {},
+            mergedRequest = {},
+            requestGoalContext = {},
+            fallbackPolicy = 'confirm',
+            conflictPolicy = 'none',
+            stopScope = 'same_item_only',
+            allowFuzzyGoalMatch = false
+        } = {}) => {
+            const failureSubmitEndpoint = normalizeGoalCreateEndpoint(
+                mergedRequest.submitEndpoint
+                || requestGoalContext.endpoint
+                || SCENE_CREATE_ENDPOINT_FALLBACK
+            );
+            return {
+                ok: false,
+                partial: false,
+                validation,
+                runtime: {
+                    bizCode: runtime.bizCode,
+                    promotionScene: runtime.promotionScene,
+                    itemSelectedMode: runtime.itemSelectedMode,
+                    bidTypeV2: runtime.bidTypeV2,
+                    bidTargetV2: runtime.bidTargetV2,
+                    dmcType: runtime.dmcType
+                },
+                marketingGoal: normalizeGoalLabel(mergedRequest.marketingGoal || ''),
+                goalFallbackUsed: true,
+                goalWarnings: requestGoalContext.goalWarnings || [],
+                submitEndpoint: failureSubmitEndpoint,
+                fallbackPolicy,
+                conflictPolicy,
+                stopScope,
+                strictGoalMatch: true,
+                allowFuzzyGoalMatch: !!allowFuzzyGoalMatch,
+                successCount: 0,
+                failCount: 1,
+                successes: [],
+                failures: [{
+                    planName: '',
+                    item: null,
+                    marketingGoal: normalizeGoalLabel(mergedRequest.marketingGoal || ''),
+                    submitEndpoint: failureSubmitEndpoint,
+                    error: buildStrictGoalFailureError(
+                        mergedRequest.marketingGoal || '',
+                        requestGoalContext.resolvedMarketingGoal || '',
+                        requestGoalContext.availableGoalLabels || []
+                    )
+                }],
+                rawResponses: []
+            };
+        };
+
+        const buildDroppedPlanFailure = (droppedPlan = {}, mergedRequest = {}) => ({
+            planName: String(droppedPlan?.planName || '').trim(),
+            item: isPlainObject(droppedPlan?.item) ? deepClone(droppedPlan.item) : null,
+            marketingGoal: normalizeGoalLabel(
+                droppedPlan?.marketingGoal
+                || mergedRequest?.marketingGoal
+                || mergedRequest?.common?.marketingGoal
+                || ''
+            ),
+            submitEndpoint: normalizeGoalCreateEndpoint(
+                droppedPlan?.submitEndpoint
+                || mergedRequest?.submitEndpoint
+                || SCENE_CREATE_ENDPOINT_FALLBACK
+            ),
+            error: String(droppedPlan?.error || '计划缺少商品参数，且未能补齐').trim()
+        });
 
         const validate = (request, options = {}) => {
             const result = { ok: true, errors: [], warnings: [] };
@@ -24554,7 +24779,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!plan.planName) {
                         result.warnings.push(`plans[${idx}] 未提供 planName，将自动生成`);
                     }
-                    if (!plan.item && !plan.itemId) {
+                    if (!plan.item && !plan.itemId && !plan.materialId) {
                         if (requiresItem) {
                             result.warnings.push(`plans[${idx}] 未提供 item，将尝试从页面已添加商品补齐`);
                         }
@@ -24865,6 +25090,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             );
             const shouldSyncSceneRuntime = options.syncSceneRuntime === true;
             const strictSceneRuntimeMatch = options.strictSceneRuntimeMatch === true;
+            const strictGoalMatch = options.strictGoalMatch !== false
+                && mergedRequest.strictGoalMatch !== false;
+            const allowFuzzyGoalMatch = options.allowFuzzyGoalMatch === true
+                || mergedRequest.allowFuzzyGoalMatch === true;
+            mergedRequest.strictGoalMatch = strictGoalMatch;
+            mergedRequest.allowFuzzyGoalMatch = allowFuzzyGoalMatch;
             if (shouldSyncSceneRuntime
                 && requestedSceneName
                 && expectedSceneBizCode
@@ -24929,12 +25160,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ok: false,
                     partial: false,
                     validation,
+                    runtime: {
+                        bizCode: runtime.bizCode,
+                        promotionScene: runtime.promotionScene,
+                        itemSelectedMode: runtime.itemSelectedMode,
+                        bidTypeV2: runtime.bidTypeV2,
+                        bidTargetV2: runtime.bidTargetV2,
+                        dmcType: runtime.dmcType
+                    },
+                    marketingGoal: normalizeGoalLabel(mergedRequest.marketingGoal || mergedRequest?.common?.marketingGoal || ''),
+                    goalFallbackUsed: false,
+                    goalWarnings: [],
+                    submitEndpoint: normalizeGoalCreateEndpoint(
+                        mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK
+                    ),
+                    fallbackPolicy,
+                    conflictPolicy,
+                    stopScope,
+                    strictGoalMatch,
+                    allowFuzzyGoalMatch,
                     successCount: 0,
                     failCount: 1,
                     successes: [],
                     failures: [{
+                        planName: '',
+                        item: null,
+                        marketingGoal: normalizeGoalLabel(mergedRequest.marketingGoal || mergedRequest?.common?.marketingGoal || ''),
+                        submitEndpoint: normalizeGoalCreateEndpoint(
+                            mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK
+                        ),
                         error: `场景运行时同步失败：当前 ${currentRuntimeBizCode || 'unknown'}，期望 ${expectedSceneBizCode}（${requestedSceneName}）`
-                    }]
+                    }],
+                    rawResponses: []
                 };
             }
             if (sceneRuntimeMismatch && !strictSceneRuntimeMatch) {
@@ -24958,12 +25215,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ok: false,
                     partial: false,
                     validation,
+                    runtime: {
+                        bizCode: runtime.bizCode,
+                        promotionScene: runtime.promotionScene,
+                        itemSelectedMode: runtime.itemSelectedMode,
+                        bidTypeV2: runtime.bidTypeV2,
+                        bidTargetV2: runtime.bidTargetV2,
+                        dmcType: runtime.dmcType
+                    },
+                    marketingGoal: normalizeGoalLabel(mergedRequest.marketingGoal || mergedRequest?.common?.marketingGoal || ''),
+                    goalFallbackUsed: false,
+                    goalWarnings: [],
+                    submitEndpoint: normalizeGoalCreateEndpoint(
+                        mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK
+                    ),
+                    fallbackPolicy,
+                    conflictPolicy,
+                    stopScope,
+                    strictGoalMatch,
+                    allowFuzzyGoalMatch,
                     successCount: 0,
                     failCount: 1,
                     successes: [],
                     failures: [{
+                        planName: '',
+                        item: null,
+                        marketingGoal: normalizeGoalLabel(mergedRequest.marketingGoal || mergedRequest?.common?.marketingGoal || ''),
+                        submitEndpoint: normalizeGoalCreateEndpoint(
+                            mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK
+                        ),
                         error: `场景运行时模板未就绪：当前模板 ${runtimeTemplateBizCode || 'unknown'}，期望 ${expectedSceneBizCode}（${requestedSceneName}）`
-                    }]
+                    }],
+                    rawResponses: []
                 };
             }
 
@@ -25006,7 +25289,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 runtime,
                 marketingGoal: mergedRequest.marketingGoal || mergedRequest?.common?.marketingGoal || mergedRequest?.__goalResolution?.resolvedMarketingGoal || '',
                 planName: '',
-                planIndex: -1
+                planIndex: -1,
+                allowFuzzyMatch: allowFuzzyGoalMatch
             });
             if (requestGoalContext.goalWarnings.length) {
                 emitProgress(options, 'goal_resolution_warning', {
@@ -25024,6 +25308,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 goalSpec: requestGoalContext.goalSpec ? deepClone(requestGoalContext.goalSpec) : null,
                 endpoint: requestGoalContext.endpoint || ''
             };
+            if (strictGoalMatch && requestGoalContext.goalFallbackUsed) {
+                return buildStrictRequestGoalFailureResult({
+                    validation,
+                    runtime,
+                    mergedRequest,
+                    requestGoalContext,
+                    fallbackPolicy,
+                    conflictPolicy,
+                    stopScope,
+                    allowFuzzyGoalMatch
+                });
+            }
             if (requestGoalContext.resolvedMarketingGoal) {
                 mergedRequest.marketingGoal = requestGoalContext.resolvedMarketingGoal;
                 mergedRequest.common.marketingGoal = mergedRequest.common.marketingGoal || requestGoalContext.resolvedMarketingGoal;
@@ -25182,7 +25478,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 request: mergedRequest
             });
             const inputPlans = Array.isArray(mergedRequest.plans) ? mergedRequest.plans : [];
-            const hasPlansWithoutItem = inputPlans.some(plan => isPlainObject(plan) && !plan.item && !plan.itemId);
+            const hasPlansWithoutItem = inputPlans.some(plan => isPlainObject(plan) && !plan.item && !plan.itemId && !plan.materialId);
             const shouldResolvePreferredItems = sceneCapabilities.requiresItem || !!mergedRequest.itemSearch || hasPlansWithoutItem;
 
             emitProgress(options, 'resolve_items_start', {
@@ -25193,21 +25489,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const preferredItems = shouldResolvePreferredItems
                 ? await resolvePreferredItems(mergedRequest, runtime)
                 : [];
+            const normalizedPlanDropFailures = [];
+            const strictGoalFailures = [];
             let plans = normalizePlans(mergedRequest, preferredItems, {
-                requiresItem: sceneCapabilities.requiresItem
+                requiresItem: sceneCapabilities.requiresItem,
+                onDroppedPlan: (droppedPlan = {}) => {
+                    normalizedPlanDropFailures.push(buildDroppedPlanFailure(droppedPlan, mergedRequest));
+                }
             });
             const planGoalWarnings = [];
             plans = plans.map((plan, idx) => {
+                const requestedPlanGoal = normalizeGoalLabel(
+                    plan?.marketingGoal
+                    || mergedRequest.marketingGoal
+                    || mergedRequest?.common?.marketingGoal
+                    || ''
+                );
                 const goalContext = resolveGoalContextForPlan({
                     sceneName: sceneCapabilities.sceneName || sceneNameForRuntime,
                     sceneSpec: sceneSpecForGoal,
                     runtime,
-                    marketingGoal: plan?.marketingGoal || mergedRequest.marketingGoal || mergedRequest?.common?.marketingGoal || '',
+                    marketingGoal: requestedPlanGoal,
                     planName: plan?.planName || '',
-                    planIndex: idx
+                    planIndex: idx,
+                    allowFuzzyMatch: allowFuzzyGoalMatch
                 });
                 if (goalContext.goalWarnings.length) {
                     planGoalWarnings.push(...goalContext.goalWarnings);
+                }
+                if (strictGoalMatch && goalContext.goalFallbackUsed) {
+                    strictGoalFailures.push({
+                        planName: String(plan?.planName || '').trim(),
+                        item: isPlainObject(plan?.item) ? deepClone(plan.item) : null,
+                        marketingGoal: requestedPlanGoal,
+                        submitEndpoint: normalizeGoalCreateEndpoint(
+                            plan?.submitEndpoint
+                            || goalContext.endpoint
+                            || mergedRequest?.submitEndpoint
+                            || SCENE_CREATE_ENDPOINT_FALLBACK
+                        ),
+                        error: buildStrictGoalFailureError(
+                            requestedPlanGoal,
+                            goalContext.resolvedMarketingGoal || '',
+                            goalContext.availableGoalLabels || []
+                        )
+                    });
                 }
                 const planGoalCampaignOverride = mergeDeep(
                     {},
@@ -25250,12 +25576,47 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 };
             });
+            const mergedGoalWarnings = mergeGoalWarnings(
+                mergedRequest?.__goalResolution?.goalWarnings,
+                planGoalWarnings,
+                50
+            );
+            if (strictGoalMatch && strictGoalFailures.length) {
+                const strictFailures = normalizedPlanDropFailures.concat(strictGoalFailures);
+                return {
+                    ok: false,
+                    partial: false,
+                    validation,
+                    runtime: {
+                        bizCode: runtime.bizCode,
+                        promotionScene: runtime.promotionScene,
+                        itemSelectedMode: runtime.itemSelectedMode,
+                        bidTypeV2: runtime.bidTypeV2,
+                        bidTargetV2: runtime.bidTargetV2,
+                        dmcType: runtime.dmcType
+                    },
+                    marketingGoal: mergedRequest?.__goalResolution?.resolvedMarketingGoal || mergedRequest.marketingGoal || '',
+                    goalFallbackUsed: true,
+                    submitEndpoint: mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK,
+                    fallbackPolicy,
+                    conflictPolicy,
+                    stopScope,
+                    strictGoalMatch: true,
+                    allowFuzzyGoalMatch,
+                    goalWarnings: mergedGoalWarnings,
+                    successCount: 0,
+                    failCount: strictFailures.length,
+                    successes: [],
+                    failures: strictFailures,
+                    rawResponses: []
+                };
+            }
             if (planGoalWarnings.length) {
                 emitProgress(options, 'goal_resolution_warning', {
                     sceneName: sceneCapabilities.sceneName || sceneNameForRuntime,
                     resolvedMarketingGoal: mergedRequest.marketingGoal || '',
                     goalFallbackUsed: false,
-                    warnings: uniqueBy(planGoalWarnings, item => item).slice(0, 50)
+                    warnings: mergedGoalWarnings
                 });
             }
             const forcedDmcType = mappedCampaignOverride.dmcType || '';
@@ -25274,24 +25635,82 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 });
             }
             if (!plans.length) {
+                if (normalizedPlanDropFailures.length) {
+                    return {
+                        ok: false,
+                        partial: false,
+                        validation,
+                        runtime: {
+                            bizCode: runtime.bizCode,
+                            promotionScene: runtime.promotionScene,
+                            itemSelectedMode: runtime.itemSelectedMode,
+                            bidTypeV2: runtime.bidTypeV2,
+                            bidTargetV2: runtime.bidTargetV2,
+                            dmcType: runtime.dmcType
+                        },
+                        marketingGoal: mergedRequest?.__goalResolution?.resolvedMarketingGoal || mergedRequest.marketingGoal || '',
+                        goalFallbackUsed: !!mergedRequest?.__goalResolution?.goalFallbackUsed,
+                        goalWarnings: mergedGoalWarnings,
+                        submitEndpoint: mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK,
+                        fallbackPolicy,
+                        conflictPolicy,
+                        stopScope,
+                        strictGoalMatch,
+                        allowFuzzyGoalMatch,
+                        successCount: 0,
+                        failCount: normalizedPlanDropFailures.length,
+                        successes: [],
+                        failures: normalizedPlanDropFailures,
+                        rawResponses: []
+                    };
+                }
                 return {
                     ok: false,
                     partial: false,
                     validation,
+                    runtime: {
+                        bizCode: runtime.bizCode,
+                        promotionScene: runtime.promotionScene,
+                        itemSelectedMode: runtime.itemSelectedMode,
+                        bidTypeV2: runtime.bidTypeV2,
+                        bidTargetV2: runtime.bidTargetV2,
+                        dmcType: runtime.dmcType
+                    },
+                    marketingGoal: mergedRequest?.__goalResolution?.resolvedMarketingGoal || mergedRequest.marketingGoal || '',
+                    goalFallbackUsed: !!mergedRequest?.__goalResolution?.goalFallbackUsed,
+                    goalWarnings: mergedGoalWarnings,
+                    submitEndpoint: mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK,
+                    fallbackPolicy,
+                    conflictPolicy,
+                    stopScope,
+                    strictGoalMatch,
+                    allowFuzzyGoalMatch,
                     successCount: 0,
                     failCount: 1,
                     successes: [],
                     failures: [{
+                        planName: '',
+                        item: null,
+                        marketingGoal: normalizeGoalLabel(
+                            mergedRequest?.__goalResolution?.resolvedMarketingGoal
+                            || mergedRequest.marketingGoal
+                            || mergedRequest?.common?.marketingGoal
+                            || ''
+                        ),
+                        submitEndpoint: normalizeGoalCreateEndpoint(
+                            mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK
+                        ),
                         error: sceneCapabilities.requiresItem
                             ? '未找到可用商品，请先添加商品或提供 plans/itemSearch'
                             : '未生成可提交计划，请检查 plans 或 planCount 参数'
-                    }]
+                    }],
+                    rawResponses: []
                 };
             }
 
             emitProgress(options, 'build_solution_start', { planCount: plans.length });
             const builtList = [];
-            const prebuildFailures = [];
+            const prebuildFailures = normalizedPlanDropFailures.slice();
             for (let i = 0; i < plans.length; i++) {
                 const plan = plans[i];
                 emitProgress(options, 'build_solution_item', { index: i + 1, total: plans.length, planName: plan.planName });
@@ -25334,12 +25753,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     ok: false,
                     partial: false,
                     validation,
+                    runtime: {
+                        bizCode: runtime.bizCode,
+                        promotionScene: runtime.promotionScene,
+                        itemSelectedMode: runtime.itemSelectedMode,
+                        bidTypeV2: runtime.bidTypeV2,
+                        bidTargetV2: runtime.bidTargetV2,
+                        dmcType: runtime.dmcType
+                    },
+                    marketingGoal: mergedRequest?.__goalResolution?.resolvedMarketingGoal || mergedRequest.marketingGoal || '',
+                    goalFallbackUsed: !!mergedRequest?.__goalResolution?.goalFallbackUsed,
+                    goalWarnings: mergedGoalWarnings,
+                    submitEndpoint: mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK,
+                    fallbackPolicy,
+                    conflictPolicy,
+                    stopScope,
+                    strictGoalMatch,
+                    allowFuzzyGoalMatch,
                     successCount: 0,
                     failCount: prebuildFailures.length || 1,
                     successes: [],
                     failures: prebuildFailures.length
                         ? prebuildFailures
-                        : [{ error: '未生成可提交计划，请检查场景配置' }]
+                        : [{
+                            planName: '',
+                            item: null,
+                            marketingGoal: normalizeGoalLabel(
+                                mergedRequest?.__goalResolution?.resolvedMarketingGoal
+                                || mergedRequest.marketingGoal
+                                || mergedRequest?.common?.marketingGoal
+                                || ''
+                            ),
+                            submitEndpoint: normalizeGoalCreateEndpoint(
+                                mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK
+                            ),
+                            error: '未生成可提交计划，请检查场景配置'
+                        }],
+                    rawResponses: []
                 };
             }
             if (builtList.length) {
@@ -25759,13 +26209,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 },
                 marketingGoal: mergedRequest?.__goalResolution?.resolvedMarketingGoal || mergedRequest.marketingGoal || '',
                 goalFallbackUsed: !!mergedRequest?.__goalResolution?.goalFallbackUsed,
-                goalWarnings: Array.isArray(mergedRequest?.__goalResolution?.goalWarnings)
-                    ? mergedRequest.__goalResolution.goalWarnings.slice(0, 50)
-                    : [],
+                goalWarnings: mergedGoalWarnings,
                 submitEndpoint: mergedRequest.submitEndpoint || SCENE_CREATE_ENDPOINT_FALLBACK,
                 fallbackPolicy,
                 conflictPolicy,
                 stopScope,
+                strictGoalMatch,
+                allowFuzzyGoalMatch,
                 successCount: successes.length,
                 failCount: failures.length,
                 successes,
@@ -25916,7 +26366,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 crowdList: crowdList.slice(0, Math.max(1, Math.min(100, toNumber(request.limit, 50))))
             };
         };
-
         const ensureWizardStyle = () => {
             if (document.getElementById('am-wxt-keyword-style')) return;
             const style = document.createElement('style');
