@@ -6469,6 +6469,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return name;
         },
 
+        normalizeCrowdLabelKey(labelName = '') {
+            return String(labelName || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLocaleLowerCase('zh-Hans-CN');
+        },
+
         isCrowdExtraDimensionGroup(groupName = '') {
             const normalizedGroup = this.normalizeCrowdGroupName(groupName);
             if (!normalizedGroup) return false;
@@ -8165,16 +8172,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!(anchorBar instanceof HTMLElement)) return [];
             if (!(this.matrixGridEl instanceof HTMLElement)) return [anchorBar];
             const metric = String(anchorBar.dataset.metric || '').trim();
-            const labelIndex = String(anchorBar.dataset.labelIndex || '').trim();
-            const crowdGroup = String(anchorBar.dataset.crowdGroup || '').trim();
+            const labelIndex = this.normalizeCrowdLabelKey(anchorBar.dataset.labelKey || anchorBar.dataset.labelName || '');
+            const crowdGroup = this.normalizeCrowdGroupName(anchorBar.dataset.crowdGroup || '');
             if (!metric || !labelIndex || !crowdGroup) return [anchorBar];
             const linkedBars = [];
             this.matrixGridEl.querySelectorAll('.am-crowd-matrix-bar').forEach((node) => {
                 if (!(node instanceof HTMLElement)) return;
                 if (node.offsetParent === null) return;
                 if (String(node.dataset.metric || '').trim() !== metric) return;
-                if (String(node.dataset.labelIndex || '').trim() !== labelIndex) return;
-                if (String(node.dataset.crowdGroup || '').trim() !== crowdGroup) return;
+                const nodeLabelIndex = this.normalizeCrowdLabelKey(node.dataset.labelKey || node.dataset.labelName || '');
+                const nodeCrowdGroup = this.normalizeCrowdGroupName(node.dataset.crowdGroup || '');
+                if (nodeLabelIndex !== labelIndex) return;
+                if (nodeCrowdGroup !== crowdGroup) return;
                 linkedBars.push(node);
             });
             return linkedBars.length ? linkedBars : [anchorBar];
@@ -8185,8 +8194,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!(this.matrixGridEl instanceof HTMLElement)) return;
             this.matrixGridEl.querySelectorAll('.am-crowd-matrix-bar').forEach((node) => {
                 if (!(node instanceof HTMLElement)) return;
-                const labelIndex = String(node.dataset.labelIndex || '').trim();
-                const crowdGroup = String(node.dataset.crowdGroup || '').trim();
+                const labelIndex = this.normalizeCrowdLabelKey(node.dataset.labelKey || node.dataset.labelName || '');
+                const crowdGroup = this.normalizeCrowdGroupName(node.dataset.crowdGroup || '');
                 const metric = this.normalizeCrowdMetricType(node.dataset.metric || '');
                 const period = this.normalizeCrowdPeriod(node.dataset.period || '');
                 const periodKey = period || String(node.dataset.period || '').trim();
@@ -8233,8 +8242,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const crowdGroup = this.normalizeCrowdGroupName(anchorBar.dataset.crowdGroup || '');
             const shouldAppendYuan = crowdGroup === '省份' || crowdGroup === '城市';
             const anchorMetric = this.normalizeCrowdMetricType(anchorBar.dataset.metric || '');
-            const anchorLabelIndex = String(anchorBar.dataset.labelIndex || '').trim();
-            const anchorCrowdGroup = String(anchorBar.dataset.crowdGroup || '').trim();
+            const anchorLabelIndex = this.normalizeCrowdLabelKey(anchorBar.dataset.labelKey || labelName || anchorBar.dataset.labelIndex || '');
+            const anchorCrowdGroup = this.normalizeCrowdGroupName(anchorBar.dataset.crowdGroup || '');
             const visibleMetrics = this.CROWD_METRICS.filter(metric => this.getCrowdMetricVisible(metric));
             const orderedMetrics = anchorMetric
                 ? [anchorMetric, ...visibleMetrics.filter(metric => metric !== anchorMetric)]
@@ -8938,6 +8947,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bar.className = 'am-crowd-matrix-bar';
                     bar.dataset.metric = metric;
                     bar.dataset.labelIndex = String(labelIdx);
+                    bar.dataset.labelKey = this.normalizeCrowdLabelKey(label);
                     bar.dataset.crowdGroup = String(groupName || '');
                     bar.dataset.period = String(period || '');
                     bar.dataset.metricLabel = String(metricMeta.seriesLabel || '');

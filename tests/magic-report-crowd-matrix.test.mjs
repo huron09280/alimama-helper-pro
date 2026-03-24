@@ -375,10 +375,12 @@ test('柱状图悬停提示使用即时 tooltip（data-tooltip）并绑定网格
   assert.match(block, /showCrowdMatrixHoverTip\(tipText,\s*event\.clientX,\s*event\.clientY\);/, '悬停时未即时显示 tooltip');
   assert.match(block, /const linkedBars = this\.activateCrowdMatrixHoverBars\(bar\);/, '悬停时未先获取跨周期联动柱集合');
   assert.match(block, /const tipText = this\.buildCrowdMatrixHoverTipText\(bar,\s*linkedBars\);/, '悬停时未构造跨周期提示文案');
+  assert.match(block, /const labelIndex = this\.normalizeCrowdLabelKey\(anchorBar\.dataset\.labelKey \|\| anchorBar\.dataset\.labelName[\s\S]*\);/, '跨周期联动未按标签内容键对齐');
   assert.match(block, /bar\.dataset\.tooltip\s*=\s*tooltipText;/, '柱状图未写入 data-tooltip');
   assert.match(block, /const shouldAppendYuan = crowdGroup === '省份' \|\| crowdGroup === '城市';/, '省份\/城市悬停提示未启用金额单位逻辑');
   assert.match(block, /const countDisplay = shouldAppendYuan && !\/元\$\/\.test\(rawCountDisplay\) \? `\$\{rawCountDisplay\}元` : rawCountDisplay;/, '跨周期悬停提示未为省份\/城市追加元单位');
   assert.match(block, /bar\.dataset\.labelIndex = String\(labelIdx\);/, '柱状图未写入标签索引');
+  assert.match(block, /bar\.dataset\.labelKey = this\.normalizeCrowdLabelKey\(label\);/, '柱状图未写入标签内容键');
   assert.match(block, /bar\.dataset\.crowdGroup = String\(groupName \|\| ''\);/, '柱状图未写入维度分组标记');
   assert.match(block, /bar\.dataset\.metricLabel = String\(metricMeta\.seriesLabel \|\| ''\);/, '柱状图未写入系列名称');
   assert.match(block, /bar\.dataset\.ratio = String\(ratio\);/, '柱状图未写入占比数值');

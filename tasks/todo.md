@@ -1,3 +1,25 @@
+# TODO - 2026-03-25 tooltip/柱子联动改为按标签内容对齐
+
+## 需求规格
+- 目标：tooltip 与跨周期柱子高亮联动按“标签内容”对齐，不再依赖同索引位置对齐。
+- 背景：在各周期独立排序场景下，同索引不一定代表同一省份/城市，导致对比错位。
+- 范围：`src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs` 与构建产物同步。
+
+## 执行计划（含校验）
+- [x] 1. 新增标签内容键并写入柱节点。
+  - 摘要：新增 `normalizeCrowdLabelKey`，在柱节点写入 `data-label-key`。
+- [x] 2. 悬停联动索引从 labelIndex 改为 labelKey。
+  - 摘要：`getCrowdMatrixLinkedBars`、`buildCrowdMatrixHoverMetricIndex`、`buildCrowdMatrixHoverTipText` 改为按标签内容键聚合。
+- [x] 3. 更新契约测试并执行回归。
+  - 摘要：新增“按标签内容键对齐”断言，完成 `build + 定向测试 + 全量测试`。
+
+## 结果复盘
+- 交付结果：跨周期排序不一致时，tooltip 与柱子联动仍按同一标签内容对齐，不会出现“同索引错位比较”。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node --test tests/magic-report-crowd-matrix.test.mjs`
+  - `node --test tests/*.test.mjs`
+
 # TODO - 2026-03-25 省份/城市排序改为默认独立并支持图标切换主周期优先
 
 ## 需求规格
