@@ -9720,28 +9720,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-trigger {
                     width: 100%;
-                    min-height: 24px;
-                    border: 1px solid rgba(255, 255, 255, 0.8);
-                    border-radius: 999px;
-                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 250, 255, 0.85));
+                    height: 22px;
+                    border: none;
+                    background: transparent;
                     color: #1a2a47;
                     font-size: 11px;
                     line-height: 1.2;
                     font-weight: 600;
-                    padding: 5px 10px;
+                    padding: 0 2px;
                     outline: none;
                     display: inline-flex;
                     align-items: center;
                     gap: 4px;
                     cursor: pointer;
-                    backdrop-filter: blur(8px);
-                    box-shadow: 0 2px 6px rgba(42, 91, 255, 0.05);
-                    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-                }
-                #am-magic-report-popup .am-crowd-matrix-item-trigger:hover {
-                    transform: translateY(-1px);
-                    border-color: rgba(42, 91, 255, 0.2);
-                    box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-trigger-text {
                     min-width: 0;
@@ -9757,10 +9748,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 10px;
                     transition: transform 0.16s ease;
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-trigger {
-                    border-color: rgba(42, 91, 255, 0.26);
-                    box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
-                }
                 #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-trigger-arrow {
                     transform: rotate(180deg);
                 }
@@ -9774,12 +9761,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     max-height: 260px;
                     overflow-y: auto;
                     display: none;
-                    padding: 6px;
-                    border-radius: 10px;
+                    padding: 8px;
+                    border-radius: 14px;
                     border: 1px solid rgba(255, 255, 255, 0.8);
-                    background: rgba(255, 255, 255, 0.9);
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 250, 255, 0.85));
                     backdrop-filter: blur(8px);
-                    box-shadow: 0 8px 22px rgba(31, 53, 109, 0.16), 0 2px 6px rgba(42, 91, 255, 0.05);
+                    box-shadow: 0 8px 20px rgba(31, 53, 109, 0.08), 0 2px 6px rgba(42, 91, 255, 0.05);
                     white-space: normal;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-dropdown {
@@ -9788,27 +9775,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-item-option {
                     display: block;
                     width: 100%;
-                    border: none;
-                    background: rgba(255, 255, 255, 0.7);
-                    border-radius: 8px;
+                    border: 1px solid transparent;
+                    background: rgba(255, 255, 255, 0.85);
+                    border-radius: 10px;
                     color: #1a2a47;
-                    font-size: 11px;
-                    line-height: 1.35;
-                    font-weight: 600;
+                    font-size: 12px;
+                    line-height: 1.3;
+                    font-weight: 700;
                     text-align: left;
-                    padding: 6px 8px;
+                    padding: 8px 10px;
                     cursor: pointer;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
+                #am-magic-report-popup .am-crowd-matrix-item-option + .am-crowd-matrix-item-option {
+                    margin-top: 6px;
+                }
                 #am-magic-report-popup .am-crowd-matrix-item-option:hover {
+                    border-color: rgba(42, 91, 255, 0.2);
                     background: rgba(255, 255, 255, 0.95);
                     box-shadow: 0 2px 6px rgba(42, 91, 255, 0.08);
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-option.is-active {
                     color: #1e4de8;
                     background: linear-gradient(135deg, rgba(42, 91, 255, 0.12), rgba(42, 91, 255, 0.06));
+                    border-color: rgba(42, 91, 255, 0.22);
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-select.is-disabled .am-crowd-matrix-item-trigger {
                     cursor: not-allowed;
