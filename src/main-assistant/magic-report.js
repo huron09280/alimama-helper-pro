@@ -5450,7 +5450,7 @@
                     width: 22px;
                     height: 22px;
                     border-radius: 8px;
-                    border: 1px solid rgba(124, 141, 174, 0.42);
+                    border: 1px solid rgb(222 227 236 / 42%);
                     background: rgba(255, 255, 255, 0.88);
                     color: #7a879f;
                     font-size: 12px;
