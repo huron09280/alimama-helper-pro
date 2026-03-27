@@ -2599,6 +2599,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         init() {
+            State.config.logExpanded = false;
             this.injectStyles();
             this.createElements();
             this.bindEvents();
@@ -2677,6 +2678,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #alimama-escort-helper-ui-result-overlay > div {
                     font-family: var(--am26-font) !important;
                     color: var(--am26-text) !important;
+                    background: var(--am26-panel-strong) !important;
                     backdrop-filter: blur(20px);
                     -webkit-backdrop-filter: blur(20px);
                     box-shadow: var(--am26-shadow) !important;
@@ -2708,7 +2710,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 /* 主面板 */
                 #am-helper-panel {
                     position: fixed; top: 120px; right: 20px; z-index: 999999;
-                    background: var(--am26-panel);
+                    background: var(--am26-panel-strong);
                     border-radius: 18px;
                     width: 280px; min-width: 250px; max-width: 500px;
                     opacity: 1; transform: scale(1); transform-origin: top right;
@@ -2723,7 +2725,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 .am-header {
                     padding: 14px 18px;
                     border-bottom: 1px solid var(--am26-border);
-                    background: rgba(255, 255, 255, 0.1);
+                    background: rgba(255, 255, 255, 0.3);
                     display: flex; justify-content: space-between; align-items: center;
                 }
                 .am-title {
@@ -2740,7 +2742,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
                 }
-                .am-icon-btn:hover { background: rgba(255, 255, 255, 0.3); color: var(--am26-text); }
+                .am-icon-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--am26-primary); }
                 .am-icon-btn.danger:hover { background: rgba(234, 79, 79, 0.15); color: var(--am26-danger); }
 
                 .am-close-btn {
@@ -2748,7 +2750,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
                 }
-                .am-close-btn:hover { background: rgba(255, 255, 255, 0.3); color: var(--am26-danger); }
+                .am-close-btn:hover { background: rgba(234, 79, 79, 0.1); color: var(--am26-danger); }
 
                 /* 内容区 */
                 .am-body { padding: 18px; }
@@ -2758,38 +2760,47 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 .am-tools-row {
                     display: grid;
                     grid-template-columns: repeat(2, minmax(0, 1fr));
+                    width: 100%;
                     gap: 8px;
+                    padding: 0 4px;
                     margin-bottom: 0;
+                    box-sizing: border-box;
                 }
                 .am-tool-btn {
-                    flex: 1; text-align: center; padding: 12px 0; border-radius: 10px;
-                    background: var(--mx-number-report-brand-color1);
-                    border: 1px solid rgba(0, 0, 0, 0.1);
-                    color: var(--am26-text-soft); font-size: 12px; font-weight: 500;
-                    cursor: pointer; transition: all 0.3s;
-                    display: flex; align-items: center; justify-content: center; gap: 4px;
+                    position: relative;
+                    border: none;
+                    background: transparent;
+                    color: #6b7280;
+                    border-radius: 12px;
+                    padding: 8px 12px;
+                    min-height: 34px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    line-height: 1;
+                    cursor: pointer;
+                    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-start;
+                    gap: 6px;
                     white-space: nowrap;
-                    word-break: keep-all;
-                    flex-wrap: nowrap;
-                    line-height: 1.2;
+                    box-sizing: border-box;
                 }
                 .am-tool-btn svg {
                     width: 14px;
                     height: 14px;
                     flex: 0 0 14px;
                 }
-                .am-tool-btn:hover {
-                    background: var(--mx-number-report-brand-color10);
-                    border-color: var(--mx-number-report-brand-color);
-                    color: var(--mx-number-report-brand-color);
-                    box-shadow: 0 0 10px var(--mx-number-report-brand-color50); /* 亮灯效果 */
-                    transform: translateY(-1px);
+                .am-tool-btn:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 1px;
                 }
+                .am-tool-btn:hover,
                 .am-tool-btn.active {
-                    background: linear-gradient(135deg, var(--mx-number-report-brand-color10), rgba(69, 84, 229, 0.2));
-                    border-color: var(--mx-number-report-brand-color);
-                    color: var(--mx-number-report-brand-color);
-                    box-shadow: inset 0 0 0 1px var(--mx-number-report-brand-color10), 0 0 10px var(--mx-number-report-brand-color50);
+                    background: rgba(255, 255, 255, 0.88);
+                    color: #111827;
+                    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+                    font-weight: 700;
                 }
 
                 #am-assist-switches {
@@ -2802,7 +2813,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     padding: 0 10px;
                     border-radius: 12px;
                     border: 1px solid transparent;
-                    background: linear-gradient(135deg, rgba(69, 84, 229, 0.14), rgba(69, 84, 229, 0.04) 55%, rgba(255, 255, 255, 0.24));
+                    background: transparent;
                     transition: max-height 0.32s ease, opacity 0.24s ease, transform 0.32s ease, margin-top 0.32s ease, padding 0.32s ease, border-color 0.32s ease;
                 }
                 #am-assist-switches.open {
@@ -2810,32 +2821,64 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     opacity: 1;
                     transform: translateY(0);
                     pointer-events: auto;
-                    margin-top: 10px;
-                    padding: 12px 10px;
-                    border-color: rgba(69, 84, 229, 0.22);
+                    margin-top: 8px;
+                    padding: 4px 0;
+                    border-color: transparent;
                 }
 
                 .am-switches-grid {
-                    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 8px;
+                    background: transparent;
+                    padding: 8px 4px;
+                    border-radius: 0;
+                    border: none;
+                    box-shadow: none;
                 }
                 .am-switch-btn {
-                    height: 36px; /* 固定高度 */
-                    text-align: center; font-size: 12px; border-radius: 10px;
-                    border: 1px solid #e0e0e0; /* 默认浅灰色边框 */
-                    background: rgba(255, 255, 255, 0.4);
-                    color: var(--am26-text-soft); cursor: pointer; transition: all 0.3s;
-                    display: flex; align-items: center; justify-content: center;
+                    border: 1px solid transparent;
+                    background: rgba(255, 255, 255, 0.9);
+                    color: #1a2a47;
+                    border-radius: 999px;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    font-weight: 600;
+                    cursor: pointer;
+                    padding: 5px 12px;
+                    display: inline-flex;
+                    width: 100%;
+                    align-items: center;
+                    justify-content: flex-start;
+                    gap: 6px;
+                    box-shadow: 0 2px 6px rgba(31, 53, 109, 0.06);
+                    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+                }
+                .am-switch-btn::before {
+                    content: '';
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    display: inline-block;
+                    background: var(--am26-primary, #2f54eb);
+                    box-shadow: 0 0 6px var(--am26-primary, #2f54eb);
+                    transition: all 0.2s;
                 }
                 .am-switch-btn:hover {
-                    background: rgba(255, 255, 255, 0.8);
-                    border-color: var(--mx-number-report-brand-color);
-                    box-shadow: 0 0 8px var(--mx-number-report-brand-color10); /* 亮灯效果 */
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
+                    border-color: rgba(47, 84, 235, 0.4);
                 }
-                .am-switch-btn.active {
-                    background: var(--mx-number-report-brand-color10);
-                    border-color: var(--mx-number-report-brand-color);
-                    color: var(--mx-number-report-brand-color); font-weight: 600;
-                    box-shadow: inset 0 0 4px var(--mx-number-report-brand-color10);
+                .am-switch-btn:not(.active) {
+                    opacity: 0.5;
+                    border-color: transparent;
+                    box-shadow: none;
+                    background: transparent;
+                    transform: none;
+                }
+                .am-switch-btn:not(.active)::before {
+                    background: #cbd5e1;
+                    box-shadow: none;
                 }
 
                 .am-campaign-id-token {
@@ -3830,7 +3873,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     </div>
                     <div class="am-tool-btn" id="am-trigger-keyword-plan-api">
                         <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 176a48 48 0 0 1 48-48h672a48 48 0 0 1 48 48v80H128v-80zm0 192h768v480a48 48 0 0 1-48 48H176a48 48 0 0 1-48-48V368zm160 96v64h448v-64H288zm0 160v64h288v-64H288z"></path></svg>
-                        关键词建计划
+                        组建计划
                     </div>
                     <div class="am-tool-btn" id="am-trigger-magic-report">
                         <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 128h768v768H128z m60.8 60.8V835.2h646.4V188.8H188.8z M256 384h128v320H256V384z m192-128h128v448H448V256z m192 192h128v256H640V448z"></path></svg>
@@ -4017,7 +4060,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         } else if (openExistingKeywordOverlay()) {
                             Logger.log('ℹ️ 已打开关键词计划弹窗（兜底）');
                         } else {
-                            alert('关键词建计划模块不可用，请刷新页面重试');
+                            alert('组建计划模块不可用，请刷新页面重试');
                         }
                     }, 800);
                 };
