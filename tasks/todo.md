@@ -1378,3 +1378,43 @@
   - 目标页面：`https://one.alimama.com/index.html?...#!/manage/onesite`
   - 结果：`shopName` 已显示中文，`hasUnicodeEscape=false`。
   - 现存阻塞：授权仍会因 `AUTH_BASE_URL=https://mock-license.local` 请求失败进入 `reason=request_failed` 锁定，此为环境配置问题，与中文名修复无关。
+
+# TODO - 2026-04-01 扩展授权服务地址切换到阿里云并完成浏览器回归
+
+## 需求规格
+- 目标：将 extension 授权服务地址从 `https://mock-license.local` 切换为真实可用的阿里云地址，并完成一轮基于 `chrome-devtools` MCP 的浏览器回归。
+- 背景：当前授权请求会因 `.local` 地址不可达触发 `request_failed` 锁定，阻塞真实授权链路验证。
+- 范围：`dist/extension/page.bundle.js`、必要测试断言、任务文档回填。
+- 验收：
+  - 授权请求基础地址改为可访问的阿里云函数地址；
+  - 定向测试通过；
+  - 真实阿里妈妈页面浏览器回归可观察到 `v1/license/verify` 请求命中新地址，且不再出现 `mock-license.local` 网络失败。
+
+## 执行计划（含校验）
+- [x] 1. 确认可用阿里云授权服务地址并固化变更点。
+  - 摘要：已通过 `curl POST /v1/license/verify` 验证 `https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run` 可访问并返回授权 JSON。
+- [x] 2. 修改 extension 授权基础地址并补充回归断言。
+  - 摘要：`dist/extension/page.bundle.js` 已替换 `AUTH_BASE_URL`；`tests/extension-license-shopid-guard.test.mjs` 新增“地址已切换 + 不含 mock 域名”断言。
+- [x] 3. 执行定向测试与静态检查。
+  - 摘要：`node --check dist/extension/page.bundle.js` 与 `node --test tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs` 全部通过。
+- [x] 4. 使用 chrome-devtools MCP 做真实页面浏览器回归。
+  - 摘要：在 `one.alimama.com` 实页强制触发 `LicenseGuard.assertAuthorized({ force: true })`，抓到 `POST https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/v1/license/verify`（HTTP 200，`authorized:true`）。
+- [x] 5. 回填结果复盘与风险说明。
+  - 摘要：已补齐测试结论、浏览器证据、残留风险与回滚方式。
+
+## 结果复盘
+- 状态：已完成。
+- 交付结果：
+  - `dist/extension/page.bundle.js` 的 `AUTH_BASE_URL` 已从 `https://mock-license.local` 切换为 `https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run`。
+  - `tests/extension-license-shopid-guard.test.mjs` 新增授权地址断言，防止回退到 mock 域名。
+- 验证命令：
+  - `node --check dist/extension/page.bundle.js`
+  - `node --test tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs`
+- 浏览器回归（chrome-devtools MCP，真实页面）：
+  - 页面：`https://one.alimama.com/index.html#!/manage/onesite?orderField=charge&orderBy=desc`
+  - 运行态状态：`window.__AM_LICENSE_STATE__.build.authBaseUrl = https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run`
+  - 网络请求：`POST /v1/license/verify` 命中阿里云函数域名（reqid=92，HTTP 200）
+  - 响应结果：`authorized=true`，返回有效 `leaseToken/expiresAt/signature`，不再出现 `mock-license.local` 的 `request_failed`
+- 残留风险与回滚：
+  - 当前仓库 `src/` 构建链路不包含该授权模块，执行 `node scripts/build.mjs` 可能覆盖 `dist/extension/page.bundle.js` 的授权改动；后续需把授权模块纳入可追踪源码。
+  - 若需回滚，仅需将 `AUTH_BASE_URL` 改回 `https://mock-license.local` 并复跑本节测试。

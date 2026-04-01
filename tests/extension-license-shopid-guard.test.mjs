@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 const pageBundle = readFileSync(new URL('../dist/extension/page.bundle.js', import.meta.url), 'utf8');
 
 test('授权模块补齐 shopId 多来源识别与缓存兜底', () => {
+  assert.match(pageBundle, /const AUTH_BASE_URL = "https:\/\/am-licee-server-mpbzozflkj\.cn-hangzhou\.fcapp\.run";/, '授权服务地址未切换到阿里云可用地址');
+  assert.doesNotMatch(pageBundle, /mock-license\.local/, '授权服务地址仍指向 mock-license.local');
   assert.match(pageBundle, /const decodeUnicodeEscapes = \(value\) => \{/, '缺少 shopName Unicode 转义解码函数');
   assert.match(pageBundle, /const normalizeShopName = \(value\) => \{[\s\S]*decodeUnicodeEscapes\(raw\)\.trim\(\)/, 'shopName 归一化未接入 Unicode 解码');
   assert.match(pageBundle, /const shopName = normalizeShopName\(state\.shopName\) \|\| '-';/, '遮罩展示未使用解码后的 shopName');

@@ -277,7 +277,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         return;
     }
 
-    const AUTH_BASE_URL = "https://mock-license.local";
+    const AUTH_BASE_URL = "https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run";
     const BUILD_ID = "mcp-e2e-20260331";
     const BUILD_CHANNEL = "release";
 
