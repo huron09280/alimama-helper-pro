@@ -1309,3 +1309,72 @@
   - 摘要：待执行。
 - [ ] 3. 验证同步结果并输出差异摘要。
   - 摘要：待执行。
+
+# TODO - 2026-04-01 扩展授权误锁修复（shopId 识别失败）
+
+## 需求规格
+- 目标：修复 extension 运行时出现“店铺授权校验失败 / 未识别到店铺标识（shopId）”导致功能被误锁的问题。
+- 背景：`LicenseGuard.assertAuthorized` 在首屏过早执行，`shopId` 尚未暴露时直接锁定；当前识别来源较窄，且无缓存兜底与重试缓冲。
+- 范围：`dist/extension/page.bundle.js`、`tests/extension-license-shopid-guard.test.mjs`。
+- 验收：
+  - 首次未识别到 `shopId` 时，不再立即误锁；会先走短暂重试与缓存兜底。
+  - 识别仍失败时才执行锁定，维持授权门禁语义。
+  - 定向测试与关键构建检查通过。
+
+## 执行计划（含校验）
+- [x] 1. 扩展 `shopId` 识别来源并加入缓存兜底。
+  - 摘要：补充更多全局对象候选，且在运行态未识别时允许使用有效缓存中的 `shopId` 继续校验。
+- [x] 2. 增加 `shopId` 识别重试缓冲，避免首屏过早锁定。
+  - 摘要：对 `shop_not_found` 增加短暂重试；仅在重试后仍失败时锁定。
+- [x] 3. 新增回归测试并执行验证。
+  - 摘要：新增 extension 授权门禁契约测试，并执行定向测试 + `node scripts/build.mjs --check`。
+
+## 结果复盘
+- 状态：已完成。
+- 交付结果：
+  - `LicenseGuard` 新增多来源 `shopId` 识别（补充 `__INITIAL_STATE__` 等全局对象、cookie、local/session storage、DOM 属性、缓存候选）。
+  - `shopId` 识别新增重试链路（默认 6 次，`bootstrap_preflight` 默认提升到 8 次）并支持缓存兜底，减少首屏信息尚未就绪时的误锁。
+  - `bootstrap_preflight` 在 `shopId` 缺失时改为“仅抛错不立即 lock”，避免预热阶段直接覆盖层锁死页面。
+  - 新增 `tests/extension-license-shopid-guard.test.mjs` 回归断言。
+- 验证命令：
+  - `node --check dist/extension/page.bundle.js`
+  - `node --test tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs`
+  - `node scripts/build.mjs --check`
+- 浏览器实测（chrome-devtools MCP）：
+  - 复现旧问题：`one.alimama.com` 页面出现 `shop_not_found`，遮罩文案为“未识别到店铺标识（shopId）”。
+  - 部署修复后复测：同页面可识别 `shopId=2957960066` 与 `shopName=美的洗碗机旗舰店`，无缓存强制校验也不再报 `shop_not_found`，而是进入授权请求阶段。
+  - 当前剩余阻塞：授权请求地址仍为 `https://mock-license.local/v1/license/verify`，浏览器网络失败后会锁定（`reason=request_failed`），属于环境/配置问题而非 `shopId` 识别问题。
+
+# TODO - 2026-04-01 扩展授权显示修复（shopName Unicode 中文名）
+
+## 需求规格
+- 目标：修复授权遮罩与状态对象中 `shopName` 显示为 `\uXXXX` 转义串的问题，确保展示为中文店名。
+- 背景：部分来源返回了 Unicode 转义字符串（例如 `\u7F8E\u7684\u6D17\u7897\u673A\u65D7\u8230\u5E97`），现网展示可读性差。
+- 范围：`dist/extension/page.bundle.js`、`tests/extension-license-shopid-guard.test.mjs`、任务文档同步。
+- 验收：
+  - 遮罩 `shopName` badge 显示中文（如“美的洗碗机旗舰店”），不显示 `\uXXXX`。
+  - `window.__AM_LICENSE_STATE__.shopName` 为中文字符串。
+  - 定向测试、构建检查与浏览器实测通过。
+
+## 执行计划（含校验）
+- [x] 1. 在授权模块补充 Unicode 转义解码并接入 `shopName` 归一化链路。
+  - 摘要：新增 `decodeUnicodeEscapes`，`normalizeShopName` 统一做 `\uXXXX -> 中文` 转换。
+- [x] 2. 确保展示路径和状态快照都使用归一化后的中文名。
+  - 摘要：遮罩渲染 `renderOverlay` 与 `__AM_LICENSE_STATE__` 快照均走 `normalizeShopName`。
+- [x] 3. 更新回归断言并执行构建/测试/浏览器复测。
+  - 摘要：补充 Unicode 解码相关断言，执行 `node --check`、`node --test`、`node scripts/build.mjs --check`，并在 `one.alimama.com` 实页复测。
+
+## 结果复盘
+- 状态：已完成。
+- 交付结果：
+  - `shopName` 归一化新增 Unicode 解码，不再透传 `\uXXXX` 原文。
+  - 授权遮罩显示与全局状态快照都输出中文店名。
+  - 浏览器实测页面遮罩展示 `shopName: 美的洗碗机旗舰店`，`window.__AM_LICENSE_STATE__.shopName` 同步为中文。
+- 验证命令：
+  - `node --check dist/extension/page.bundle.js`
+  - `node --test tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs`
+  - `node scripts/build.mjs --check`
+- 浏览器实测（chrome-devtools MCP）：
+  - 目标页面：`https://one.alimama.com/index.html?...#!/manage/onesite`
+  - 结果：`shopName` 已显示中文，`hasUnicodeEscape=false`。
+  - 现存阻塞：授权仍会因 `AUTH_BASE_URL=https://mock-license.local` 请求失败进入 `reason=request_failed` 锁定，此为环境配置问题，与中文名修复无关。
