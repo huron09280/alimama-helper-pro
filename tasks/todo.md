@@ -1,3 +1,457 @@
+# TODO - 2026-04-01 浏览器自动化通道 `Transport closed` 修复（继续）
+
+## 需求规格
+- 目标：恢复当前会话 `chrome-devtools` MCP 自动化通道，消除 `Transport closed`，恢复浏览器自动化验收能力。
+- 范围：
+  - 校验 Chrome 调试端口与 profile 进程健康；
+  - 固化 Codex MCP 启动命令，避免 `npx @latest` 不确定性；
+  - 形成可重复的恢复步骤并完成复测。
+- 非目标：
+  - 不改动授权业务接口；
+  - 不改动插件功能逻辑。
+
+## 执行计划（含校验）
+- [x] 1. 复现并定位故障层级（浏览器端口 / MCP 进程 / 会话握手）。
+  - 摘要：`127.0.0.1:9222` 正常监听且 `json/version` 可达，故障定位为 MCP 会话桥接层而非 Chrome 未启动。
+- [x] 2. 固化本机 MCP 启动配置，切换为固定二进制。
+  - 摘要：已将 `~/.codex` 的 `chrome-devtools` 配置从 `npx -y chrome-devtools-mcp@latest` 切换为 `/Users/liangchao/.nvm/versions/node/v22.20.0/bin/chrome-devtools-mcp --browser-url=http://127.0.0.1:9222`。
+- [x] 3. 验证端口与调试目标可见性。
+  - 摘要：已确认 Chrome 专用 profile 进程与 `9222` 端口存活，`json/version`/`json/list` 可访问。
+- [ ] 4. 会话级重连验证。
+  - 摘要：当前线程的 MCP 连接仍保持旧会话状态，需重启/重开 Codex 会话后复测 `list_pages`。
+
+## 结果复盘
+- 状态：进行中
+- 当前结论：
+  - 浏览器与端口健康；
+  - MCP 启动配置已固定；
+  - 剩余阻塞点是“当前线程未热重载 MCP 配置”，需在新会话完成最终复测。
+
+# TODO - 2026-04-01 本地授权管理页（店铺列表/授权开关/租约管理）
+
+## 追加任务 - 2026-04-01 到期日期改到“授权到期列”直接修改
+
+### 需求规格
+- 目标：将“到期日期修改”从操作区移到“授权到期”列，点击日期直接修改生效；避免同一信息在多处重复展示。
+- 范围：
+  - `dev/license-admin.html` 调整表格结构和交互事件；
+  - 同步 `services/license-server/license-admin.html` 模板；
+  - 更新测试与文档说明。
+- 非目标：
+  - 不调整授权核心 API；
+  - 不改动吊销与租约逻辑。
+
+### 执行计划（含校验）
+- [x] 1. 调整授权到期列：显示值 + 日期输入，改为 `change` 即调用设置到期接口。
+  - 摘要：日期输入移到授权到期列，修改后自动执行 `set-expire-date` 逻辑。
+- [x] 2. 精简操作列，移除“设置到期日期”下拉项和操作区日期输入。
+  - 摘要：操作列只保留授权/吊销/店名相关动作，避免到期信息重复出现。
+- [x] 3. 同步服务端模板并更新测试文档。
+  - 摘要：`services/license-server/license-admin.html` 与 `dev` 同步；`tests/license-admin-page.test.mjs` 和文档更新为“到期列直接修改”。
+- [x] 4. 行为校验。
+  - 摘要：已通过定向测试与源码断言确认“到期列日期输入保留、操作下拉移除到期动作、日期修改走 `set-expire-date` 自动提交”。当前会话 `chrome-devtools` MCP 连接为 `Transport closed`，待连接恢复后可补一轮浏览器走查。
+
+### 结果复盘
+- 状态：已完成
+- 当前结论：
+  - 代码、模板、测试和文档已同步完成；
+  - “到期日期就地编辑 + 立即生效 + 去重显示”已落地。
+
+## 追加任务 - 2026-04-01 线上函数部署与字段生效复核（继续）
+
+### 需求规格
+- 目标：将“线上入口管理页缺少首次使用/到期字段”的代码修复发布到阿里云 FC，并完成线上实操验证。
+- 范围：
+  - 打包并上传 `am-license-server` 代码到 LATEST；
+  - 校验线上 `GET /` 返回管理页源码包含新字段；
+  - 在管理页执行一次“设置到期日期”回放并确认成功。
+- 非目标：
+  - 不修改授权业务规则；
+  - 不改动其他函数或扩展端代码。
+
+### 执行计划（含校验）
+- [x] 1. 构建线上部署 ZIP 包（包含依赖与新模板）。
+  - 摘要：生成 `/tmp/am-license-server-deploy.zip`，内容含 `index.mjs`、`license-admin.html`、`node_modules/tablestore`。
+- [x] 2. 在 FC 控制台上传 ZIP 并保存部署。
+  - 摘要：通过“上传代码 -> 上传 ZIP 包 -> 保存并部署”发布到 `LATEST`，代码大小更新为 `5.74 MB`。
+- [x] 3. 验证线上根路径与状态接口字段。
+  - 摘要：`curl /` 已匹配到“首次使用/授权到期/expiry-date-input”；`/v1/license/admin/state` 返回 `defaultAuthValidDays=3`、`activeShops.firstSeenAt`、`shops.authExpiresAt`。
+- [x] 4. 浏览器实操“设置到期日期”并回滚状态。
+  - 摘要：为 `114025783` 成功设置到 `2026-04-10`，随后执行“永久授权”恢复原状态，日志均返回成功。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 线上函数已发布新管理页能力；
+  - 管理页“首次使用/授权到期/日期直设”可用；
+  - 实操验证成功且测试改动已回滚，不影响当前授权策略。
+
+## 追加任务 - 2026-04-01 线上管理页缺少“首次使用/到期时间”字段修复
+
+### 需求规格
+- 目标：修复“线上函数根路径管理页看不到首次使用与到期时间”的问题，并支持到期日期直接设置。
+- 根因：`dev/license-admin.html` 已升级，但 `services/license-server/index.mjs` 仍在输出旧版内嵌 HTML，线上入口未使用新版模板。
+- 范围：
+  - 服务端管理页改为从模板文件加载；
+  - 同步服务端模板为新版管理页；
+  - 增加回归测试，防止再次出现“本地页和线上页不同步”。
+- 非目标：
+  - 不改动授权鉴权协议和接口路径；
+  - 不改动插件端租约逻辑。
+
+### 执行计划（含校验）
+- [x] 1. 将服务端管理页改为模板文件加载。
+  - 摘要：`renderAdminPage` 改为读取 `services/license-server/license-admin.html`，并保留模板缺失时的降级页面。
+- [x] 2. 同步服务端模板为最新管理页能力。
+  - 摘要：新增 `services/license-server/license-admin.html`，包含“首次使用/授权到期”列、日期输入框、下拉即执行。
+- [x] 3. 增加定向测试防回退。
+  - 摘要：`tests/license-admin-page.test.mjs` 新增服务端模板字段断言与入口加载方式断言。
+- [x] 4. 执行语法/测试/浏览器验证。
+  - 摘要：`node --check services/license-server/index.mjs`、`node --test tests/license-admin-page.test.mjs`、`node --test tests/extension-license-shopid-guard.test.mjs` 全通过；浏览器打开服务端模板页确认字段可见。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 线上入口页与本地管理页已对齐，不再缺失“首次使用/授权到期”；
+  - 可直接通过日期输入框设置到期日并执行；
+  - 增加了防回退测试，后续改动能自动发现不同步问题。
+
+## 追加任务 - 2026-04-01 管理页补“首次使用 + 到期日期直设”
+
+### 需求规格
+- 目标：管理页明确展示“首次使用时间”和“到期时间”，并支持在行级直接选择日期设置到期时间。
+- 范围：
+  - 服务端 `activeShops` 增加 `firstSeenAt` 持久化；
+  - 管理页列表新增“首次使用”“授权到期”列；
+  - 行级操作新增日期输入 + “设置到期日期”动作。
+- 非目标：
+  - 不改动授权短租约（lease）机制；
+  - 不改变吊销优先级。
+
+### 执行计划（含校验）
+- [x] 1. 服务端扩展首次使用时间字段并持久化。
+  - 摘要：`upsertActiveShopRecord` 首次命中时记录 `firstSeenAt`，并同步到快照读写链路。
+- [x] 2. 管理页增加首次使用与到期时间展示。
+  - 摘要：表格新增“首次使用”“授权到期”两列，状态中区分“已过期”。
+- [x] 3. 增加“到期日期直接设置”交互。
+  - 摘要：操作列新增日期输入框和“设置到期日期”动作，按当天 `23:59:59.999` 上传 `authExpiresAt`。
+- [x] 4. 文档与测试回归。
+  - 摘要：同步 `docs/授权管理页.md`、`services/license-server/README.md`、`tests/license-admin-page.test.mjs` 并执行定向验证。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 管理页可直接看到店铺首次使用时间与授权到期时间；
+  - 支持按日期直接改到期时间，无需手工拼接口时间字符串。
+
+## 追加任务 - 2026-04-01 店铺授权有效期（默认3天 + 月/季度/年）
+
+### 需求规格
+- 目标：在店铺授权层新增有效期控制，支持 `3天（默认）/1个月/3个月/1年/永久`，并在授权校验时自动拦截过期店铺。
+- 用户约束：默认激活有效期为 3 天。
+- 范围：
+  - 服务端 `admin/allow` 支持有效期参数并持久化；
+  - `verify` 增加过期判定与错误码；
+  - 管理页下拉操作增加有效期选项并展示到期时间。
+- 非目标：
+  - 不改插件端 `lease` 租约协议（仍是短租约 + 签名）；
+  - 不改吊销机制优先级。
+
+### 执行计划（含校验）
+- [x] 1. 服务端引入店铺授权到期字段并持久化。
+  - 摘要：`MEMORY_SHOP_STORE` 扩展 `authExpiresAt`，同步写入快照文件/Tablestore。
+- [x] 2. 授权判定接入“到期即失效”。
+  - 摘要：`isShopAllowed` 纳入到期判断；`verify` 新增 `shop_license_expired` 分支。
+- [x] 3. 管理页接入有效期操作与可视化。
+  - 摘要：行级操作增加“默认3天/1月/3月/1年/永久”；列表详情显示 `authExpiresAt` 与 `authExpired`。
+- [x] 4. 文档与回归验证。
+  - 摘要：同步 `docs/授权管理页.md`、`services/license-server/README.md`、`tests/license-admin-page.test.mjs`，并执行定向测试与浏览器检查。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 默认授权周期已改为 3 天；
+  - 支持授权时按月/季度/年/永久配置；
+  - 店铺过期会在 `verify` 直接返回“授权已过期”并锁定功能。
+
+## 追加任务 - 2026-04-01 下拉操作改为“选中即执行”
+
+### 需求规格
+- 目标：移除行级操作中的“执行”按钮，改为下拉选中后立即执行，减少额外点击。
+- 范围：
+  - 更新 `dev/license-admin.html` 行级操作交互；
+  - 更新测试断言与文档描述。
+- 非目标：
+  - 不调整后端接口；
+  - 不变更具体业务动作（设置店名/授权/取消授权/吊销/取消吊销）。
+
+### 执行计划（含校验）
+- [x] 1. 移除行级执行按钮，保留操作下拉并标注自动执行。
+  - 摘要：操作列改为单下拉，默认项为“选择操作（自动执行）”。
+- [x] 2. 将事件从点击执行改为监听下拉 `change` 直接触发动作。
+  - 摘要：新增 `onTableChange`，选中动作后立即调用既有授权链路，完成后自动重置下拉值。
+- [x] 3. 更新测试与文档并验证。
+  - 摘要：`tests/license-admin-page.test.mjs` 改为断言自动执行文案；`docs/授权管理页.md` 同步“选中后自动执行”；已完成定向测试与浏览器交互验证。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 行级操作已变为“下拉选中即执行”，不再需要额外点击“执行”按钮；
+  - 管理逻辑与接口调用保持兼容。
+
+## 追加任务 - 2026-04-01 管理页行级操作改为下拉执行
+
+### 需求规格
+- 目标：将 `dev/license-admin.html` 店铺列表“操作”列由多按钮改为“下拉选择 + 执行”模式，降低误触。
+- 范围：
+  - 更新行级操作渲染结构与样式；
+  - 更新点击事件分发逻辑；
+  - 同步测试与文档描述。
+- 非目标：
+  - 不改动服务端接口；
+  - 不改动店铺筛选、分页、统计逻辑。
+
+### 执行计划（含校验）
+- [x] 1. 改造行级操作 UI 为“操作下拉 + 执行按钮”。
+  - 摘要：移除每行 5 个操作按钮，改为单个下拉（设置店名/授权放行/取消授权/吊销/取消吊销）+ 执行按钮。
+- [x] 2. 改造事件逻辑读取当前行下拉值并执行对应动作。
+  - 摘要：新增 `run-selected` 分支，执行前校验“已选择操作”，再复用既有 `callAllow/callRevoke/promptAndSetShopName` 链路。
+- [x] 3. 更新定向测试与文档说明并验证。
+  - 摘要：`tests/license-admin-page.test.mjs` 改为断言下拉选项与执行按钮；`docs/授权管理页.md` 同步为“操作下拉 -> 执行”说明；完成定向测试与浏览器点击验证。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 管理页行级操作已切换为下拉执行模式；
+  - 原有授权/吊销/店名回填行为保持不变，交互更聚焦且误触风险更低。
+
+## 追加任务 - 2026-04-01 插件端店铺名称为空修复（shopName 识别与回填）
+
+### 需求规格
+- 目标：修复“插件已识别 `shopId` 但 `shopName` 为空”的上报问题，避免授权管理页长期显示 `-`。
+- 背景：用户反馈 `114025783` 在 `activeShops` 中持续空名，判断为插件端未稳定上传店名。
+- 范围：
+  - 增强 extension 端 `shopName` 识别兜底（支持 `shopId` 与 `shopName` 异源场景）；
+  - 保持授权主流程不受影响，仅做增强回填；
+  - 补齐定向断言并执行回归验证。
+- 非目标：
+  - 不改动授权服务端 API 协议；
+  - 不引入外部“shopId->shopName”查询服务。
+
+### 执行计划（含校验）
+- [x] 1. 修正授权模块回归测试中的 brittle 正则断言。
+  - 摘要：修复 `tests/extension-license-shopid-guard.test.mjs` 的“同一行店铺名解析”断言，避免误报导致定向测试失败。
+- [x] 2. 在 extension 授权模块增加“松耦合店名兜底解析”。
+  - 摘要：新增 `resolveLooseShopNameCandidate`，当 `shopId` 已识别但同源候选无名时，从 DOM 属性与“店铺名称/当前店铺”等文本行补抓店名。
+- [x] 3. 将松耦合店名兜底接入 `resolveShopIdentity` 最终返回路径。
+  - 摘要：在 `nameMatch/primary.shopName` 均为空时，使用 `fallbackShopName` 作为最后回填来源，提升上传 `shopName` 的命中率。
+- [x] 4. 执行语法 + 定向测试校验。
+  - 摘要：已执行 `node --check dist/extension/page.bundle.js`、`node --test tests/extension-license-shopid-guard.test.mjs`、`node --test tests/license-admin-page.test.mjs`，全部通过。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 扩展在“ID 与名称来自不同来源”时可自动补齐店铺名并参与后续授权上报；
+  - 回归测试恢复绿色，并新增店名松耦合兜底相关断言，后续改动可被自动守护。
+
+## 追加任务 - 2026-04-01 多店铺空店名回填（114025783）
+
+### 需求规格
+- 目标：解决“`shopId` 已上报但 `shopName` 为空”的运营可见性问题，支持在管理页直接回填店名并持久化。
+- 背景：`114025783` 属于另一店铺，服务端 `activeShops` 已有活跃记录，但该店铺上报链路未提供有效 `shopName`，列表长期显示 `-`。
+- 范围：
+  - 更新 `dev/license-admin.html`，新增行级“设置店名”操作；
+  - 通过 `POST /v1/license/admin/allow` 携带 `shopName` 回填名称；
+  - 同步文档与测试断言。
+- 非目标：
+  - 不变更线上授权协议；
+  - 不在本次接入外部“shopId -> 店名”查询服务。
+
+### 执行计划（含校验）
+- [x] 1. 管理页新增“设置店名”行级操作入口。
+  - 摘要：店铺行操作区新增 `data-action="set-name"` 按钮，支持直接弹窗输入店名。
+- [x] 2. 设置店名请求改造为可携带 `shopName`，并保持当前授权/吊销状态不被破坏。
+  - 摘要：`callAllow` 支持 `shopName` 参数；回填时按当前 `allowed/revoked` 状态执行补偿调用，避免误改授权状态。
+- [x] 3. 更新文档与定向测试。
+  - 摘要：`docs/授权管理页.md` 增补“回填店名”说明和 curl 示例；`tests/license-admin-page.test.mjs` 增加“设置店名”按钮断言。
+- [ ] 4. 浏览器回放 `114025783` 的店名回填并截图确认。
+  - 摘要：待用户提供该店铺真实名称后执行一键回填，复核列表展示。
+
+### 结果复盘
+- 状态：进行中（代码与测试已完成，待真实店名回填）
+- 当前结论：
+  - 空店名问题根因是该店铺上报链路未提供有效 `shopName`（服务端已保留空值，不再误覆盖）；
+  - 管理页已具备“手工回填店名”闭环能力，后续可在不改协议前提下快速修复展示。
+
+## 追加任务 - 2026-04-01 店铺名称缺失修复（shopName 回填与防覆盖）
+
+### 需求规格
+- 目标：修复“店铺能授权但名称为空/被清空”的问题，确保授权管理页尽可能显示真实店铺名。
+- 根因：
+  - `POST /v1/license/admin/allow` 在不传 `shopName` 时会把已有名称覆盖为空；
+  - `GET /v1/license/admin/state` 聚合 `shops` 时未优先补齐 `activeShops` 的名称；
+  - `verify` 成功后未把 `shopName` 回填到 `MEMORY_SHOP_STORE`（env 店铺首次上报名称后不落主列表）。
+- 范围：
+  - 修改 `services/license-server/index.mjs` 的 `handleAdminAllow`、`handleVerify`、`resolveAdminState` 及相关名称归一逻辑；
+  - 不改动接口路径和鉴权协议。
+- 非目标：
+  - 不引入额外“shopId -> shopName”外部查询接口；
+  - 不变更插件端授权协议。
+
+### 执行计划（含校验）
+- [x] 1. 增加 `shopName` 优先级选择逻辑，忽略无意义占位值（如 `-`）。
+  - 摘要：新增 `pickPreferredShopName`，统一处理 `shopName` 的非空/非占位优先级选择。
+- [x] 2. 修复 `admin/allow` 空名覆盖问题。
+  - 摘要：`handleAdminAllow` 改为“payload shopName > 现有内存店铺名 > active 店铺名”，不再因按钮操作把名称清空。
+- [x] 3. 在 `verify` 成功路径回填店铺名到主店铺存储。
+  - 摘要：新增 `backfillShopNameFromVerify`，对已允许店铺（含 env 店铺）在首次拿到有效名称时回填到 `MEMORY_SHOP_STORE`。
+- [x] 4. 优化 `admin/state` 店铺聚合展示。
+  - 摘要：`resolveAdminState` 使用去重 `shopMap` 合并 env/memory，并优先用 `activeShops` 名称补齐。
+- [x] 5. 执行语法与定向测试校验。
+  - 摘要：已执行 `node --check services/license-server/index.mjs` 与 `node --test tests/license-admin-page.test.mjs`，均通过。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 行级“授权放行/取消授权”不再把已有店铺名覆盖为空；
+  - 当插件上报到真实 `shopName` 后，`admin/state.shops` 会回填并稳定展示；
+  - 管理页店铺列表对同一 `shopId` 不再出现 env/memory 名称冲突导致的空名覆盖。
+
+## 追加任务 - 2026-04-01 云数据库授权链路浏览器闭环复核（继续）
+
+### 需求规格
+- 目标：在用户要求“继续”的前提下，通过浏览器实操完成授权链路最终闭环，确认“在用店铺可见 + 插件不再锁定 + 云数据库真实落库 + FC 最新日志无新 403”。
+- 范围：
+  - 在 Tablestore 控制台核对 `license_state` 数据行快照；
+  - 在本地管理页与真实页面分别回放 `allow/verify`；
+  - 在 FC 函数日志确认修复后时间段无 `OTSAuthFailed` 新增。
+- 非目标：
+  - 不改动线上函数代码；
+  - 不调整管理页功能，仅做线上链路核验与恢复操作。
+
+### 执行计划（含校验）
+- [x] 1. 核对 Tablestore `license_state` 表是否有真实快照行，并确认快照内容可读。
+  - 摘要：在 `amlicenseots01/license_state/dataManage` 查询到 `pk=license_state` 行，后续刷新后 `updatedAt` 已推进至 `2026-04-01T10:08:37.468Z`。
+- [x] 2. 在浏览器回放授权链路，补齐当前锁定店铺与刷单店铺两条链路。
+  - 摘要：已对 `114025783` 与 `2957960066` 执行 `allow/verify`，返回均为 `200 + authorized=true`；`admin/state.storage.mode=tablestore`。
+- [x] 3. 回到本地管理页确认“在用店铺”展示恢复。
+  - 摘要：`dev/license-admin.html` 刷新后显示 `全量店铺=2`、`24h 活跃=1`，并出现 `114025783` 的活跃记录（`source=state.activeShops`）。
+- [x] 4. 回到阿里妈妈真实页面确认插件不再锁定，并复核 FC 最新日志。
+  - 摘要：页面锁罩由“授权租约已过期”恢复为正常；`window.__AM_LICENSE_STATE__` 显示 `authorized=true`。FC `18:08` 后仅见 `license_audit info`，无新 `OTSAuthFailed/403`。
+
+### 结果复盘
+- 状态：已完成
+- 关键结论：
+  - 本次“店铺未授权/功能锁定”已在浏览器侧闭环恢复；
+  - 根因仍是先前的 OTS 网络访问策略（公网未放开）导致的持久化失败，放开公网后新请求已稳定写入云表；
+  - 受影响店铺不仅是 `114025783`，当前页面店铺 `2957960066` 也已同步恢复授权租约。
+
+## 追加任务 - 2026-04-01 阿里云线上 API 对齐接入
+
+### 需求规格
+- 目标：基于阿里云 FC 线上函数 `am-license-server` 的真实实现，修正本地管理页接口与文档，确保“可直接接入可用”。
+- 已确认线上地址：`https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run`
+- 已确认线上真实路由：
+  - `GET /v1/license/admin/state`
+  - `POST /v1/license/admin/allow`
+  - `POST /v1/license/admin/revoke`
+  - `POST /v1/license/verify`
+  - `POST /v1/license/revoke`（同样要求管理员鉴权）
+- 已确认管理员鉴权头：
+  - `x-am-admin-token`（兼容 `x-admin-token`）
+- 范围：
+  - 更新 `dev/license-admin.html` 的请求路径、鉴权头与列表解析逻辑；
+  - 更新 `docs/授权管理页.md` 与 `README.md` 的接口说明；
+  - 更新 `tests/license-admin-page.test.mjs` 契约断言。
+- 非目标：
+  - 不暴露或硬编码真实管理员 token；
+  - 不改动线上 FC 代码，仅对齐本地接入。
+
+### 执行计划（含校验）
+- [x] 1. 将本地管理页 API 映射改为线上真实路由，并改为 `x-am-admin-token` 鉴权。
+  - 摘要：`dev/license-admin.html` 已改为 `state/allow/revoke` 三个管理接口，并按服务端实现发送 `x-am-admin-token`。
+- [x] 2. 依据 `admin/state` 返回结构重构前端列表解析与授权操作调用。
+  - 摘要：前端列表改为解析 `allowed/revoked/shops/activeShops` 聚合数据，行级操作改为“授权/取消授权/吊销/取消吊销”。
+- [x] 3. 同步更新文档与 README 的接口契约。
+  - 摘要：`docs/授权管理页.md` 与 `README.md` 已改为真实线上协议与鉴权说明。
+- [x] 4. 更新并执行定向测试 `tests/license-admin-page.test.mjs`。
+  - 摘要：测试断言已切换到新路由与新操作按钮，定向测试通过。
+
+### 结果复盘
+- 状态：已完成
+- 验证命令：
+  - `node --test tests/license-admin-page.test.mjs`（通过）
+  - `chrome-devtools 打开 file:///.../dev/license-admin.html + 页面快照 + 控制台检查`（通过，无控制台报错）
+- 追加修正：
+  - 空列表提示改为区分“无数据”与“筛选未命中”；
+  - “重置筛选”改为 `activeWithinHours=0` 并触发重新拉取，避免误判“没有在用店铺”。
+
+## 追加任务 - 2026-04-01 License Server 状态持久化（activeShops/allow/revoke）
+
+### 需求规格
+- 目标：解决 `activeShops` 与手动授权状态仅在单实例内存可见的问题，降低函数实例切换/冷启动导致“管理页看不到在用店铺”与“授权忽隐忽现”。
+- 范围：
+  - 在 `services/license-server/index.mjs` 引入云数据库持久化层（Tablestore）；
+  - 保留文件持久化作为兜底（未配置 Tablestore 时启用）；
+  - 每次请求前同步持久化状态，写操作后落盘；
+  - 保持现有 API 契约不变（`/v1/license/admin/state|allow|revoke|verify`）。
+- 非目标：
+  - 不改动插件前端授权校验协议；
+  - 不在本次引入复杂分库分表，只做单行快照持久化。
+
+### 执行计划（含校验）
+- [x] 1. 增加 Tablestore 状态读写与同步机制（可选开启）。
+  - 摘要：新增 `syncStateFromTablestore/persistStateToTablestore`，使用 `tablestore` SDK 懒加载，并支持 AK/SK 或运行时凭证。
+- [x] 2. 将 `MEMORY_SHOP_STORE`、`MEMORY_REVOKE_STORE`、`MEMORY_ACTIVE_SHOP_STORE` 接入统一持久化流程。
+  - 摘要：三类内存状态统一序列化为快照，写操作统一 `await persistStateChanges()`（Tablestore 优先、文件兜底）。
+- [x] 3. 在 `handler` 请求入口增加“读前同步”，在写操作后执行“落盘”。
+  - 摘要：新增 `syncStateBeforeRequest(route)`，对关键管理写路由强制同步；其余按 `AM_LICENSE_STATE_SYNC_INTERVAL_MS` 节流同步。
+- [x] 4. 更新 `services/license-server/README.md` 环境变量说明与运维指引。
+  - 摘要：文档新增 Tablestore 环境变量与“云数据库优先、文件兜底、内存最后”的持久化策略说明。
+- [x] 5. 进行本地回归验证（定向脚本 + 现有测试）。
+  - 摘要：完成 `node --check services/license-server/index.mjs` 与 `node --test tests/license-admin-page.test.mjs`。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - `services/license-server` 已支持 Tablestore 持久化，解决多实例下 `activeShops`/授权状态不一致；
+  - 未配置 Tablestore 时自动回退到文件持久化，继续兼容原部署形态；
+  - `admin/state` 增加 `storage` 字段，可直接确认当前运行模式。
+
+## 需求规格
+- 目标：提供一个可本地打开的 `HTML` 管理页，用于查看“正在使用插件的店铺”并执行授权管理操作（授权/禁用/租约到期）。
+- 背景：当前插件前端仅有 `LicenseGuard` 校验入口与 `/v1/license/verify` 调用，不包含后台管理 UI 与店铺全量查询能力。
+- 范围：
+  - 新增 `dev/license-admin.html` 本地管理页；
+  - 新增 `docs/授权管理页.md` API 契约与落地说明；
+  - 新增 `tests/license-admin-page.test.mjs` 静态契约回归；
+  - 在 `README.md` 增加入口说明。
+- 非目标：
+  - 不在插件端实现绕过授权逻辑；
+  - 不在仓库内实现完整线上授权服务后端，仅定义并消费 API 契约。
+
+## 执行计划（含校验）
+- [x] 1. 设计并落地本地授权管理页。
+  - 摘要：已新增 `dev/license-admin.html`，支持店铺列表查询、关键词/状态筛选、分页、授权放行、立即禁用、到期时间/备注保存与日志追踪。
+- [x] 2. 定义管理 API 契约并补充文档。
+  - 摘要：已新增 `docs/授权管理页.md`，明确“本地 HTML + 授权服务”职责边界与最小可用 API（`GET /v1/license/admin/shops`、`POST /v1/license/admin/shops/update`）。
+- [x] 3. 增加静态契约测试。
+  - 摘要：已新增 `tests/license-admin-page.test.mjs`，覆盖管理页核心控件、固定 API 路径与文档契约断言。
+- [x] 4. 执行构建与回归验证。
+  - 摘要：已执行 `build + 定向测试 + 全量测试`；新增能力验证通过，全量测试存在既有失败（`tests/extension-license-shopid-guard.test.mjs`）。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 你可以直接使用 `dev/license-admin.html` 管理店铺授权；
+  - 可以在管理页查看店铺活跃信息（依赖服务端汇总 `verify` 日志）；
+  - 可通过“授权放行/立即禁用”实现授权状态切换。
+- 验证命令：
+  - `node scripts/build.mjs`（通过）
+  - `node --test tests/license-admin-page.test.mjs`（通过）
+  - `chrome-devtools 打开 file:///.../dev/license-admin.html + 页面快照`（通过；页面结构正常，服务端未实现管理接口时会返回 404）
+  - `node --test tests/*.test.mjs`（失败：既有 `tests/extension-license-shopid-guard.test.mjs` 2 项断言失败）
+
 # TODO - 2026-03-25 tooltip/柱子联动改为按标签内容对齐
 
 ## 需求规格
@@ -1418,3 +1872,131 @@
 - 残留风险与回滚：
   - 当前仓库 `src/` 构建链路不包含该授权模块，执行 `node scripts/build.mjs` 可能覆盖 `dist/extension/page.bundle.js` 的授权改动；后续需把授权模块纳入可追踪源码。
   - 若需回滚，仅需将 `AUTH_BASE_URL` 改回 `https://mock-license.local` 并复跑本节测试。
+
+# TODO - 2026-04-01 阿里云 Tablestore ACL 修复与授权链路复测（浏览器实操）
+
+## 需求规格
+- 目标：修复 `am-license-server` 写入 Tablestore 被实例 ACL 拒绝（`OTSAuthFailed`）问题，恢复授权状态持久化与“在使用店铺”可见性。
+- 范围：仅通过阿里云控制台（浏览器）调整 OTS 实例安全策略/权限相关配置，并对 FC 接口做在线复测。
+- 非目标：不改动插件前端协议，不做绕过授权逻辑。
+
+## 执行计划（含校验）
+- [ ] 1. 在阿里云控制台确认 FC 最新日志仍为 ACL 拒绝，并记录当前 AccessId/错误模式。
+  - 摘要：待执行。
+- [ ] 2. 修正 Tablestore 实例安全策略（从无效规则改为可生效授权），确保 FC 运行身份可读写 `license_state`。
+  - 摘要：待执行。
+- [ ] 3. 触发 `admin/allow` + `verify` 回放请求，验证状态写入。
+  - 摘要：待执行。
+- [ ] 4. 回看 FC 日志与 OTS 表数据，确认不再出现 403 ACL denied。
+  - 摘要：待执行。
+
+## 结果复盘
+- 状态：进行中
+- 交付结果：待补充。
+- 验证命令/动作：待补充。
+
+# TODO - 2026-04-01 小万护航 Token 红色误报修复
+
+## 需求规格
+- 目标：修复“小万护航 Token 指示灯长期红色、提示 Token 未就绪”的误报问题，使其能从真实页面请求中正确提取 Token。
+- 根因假设：当前 `src/optimizer/token-manager.js` 仅依赖 XHR open/send 与浅层全局变量扫描，未利用统一 Hook 管理器的 `requestHistory`；当 Token 出现在历史请求（尤其 fetch/xhr 混合链路）时无法回填。
+- 范围：
+  - 增强 `TokenManager.refresh()` 的 Token 提取链路（URL/body/object/hook history）。
+  - 保持现有 UI 与业务流程不变，仅修复 Token 判定输入数据。
+  - 补充/更新回归测试，覆盖 hook history 回填。
+- 非目标：
+  - 不改授权服务逻辑；
+  - 不改小万护航接口协议与请求参数。
+
+## 执行计划（含校验）
+- [x] 1. 在浏览器复现并固化根因证据。
+  - 摘要：已确认 `alimama-escort-helper-ui-token` 为红色且 `window.__AM_TOKENS__` 全空；同时在 Network 与 `__AM_HOOK_MANAGER__.getRequestHistory()` 中确认存在 `dynamicToken/loginPointId/csrfId`。
+- [x] 2. 增强 TokenManager 的历史请求回填能力。
+  - 摘要：`src/optimizer/token-manager.js` 已新增 URL/body/object 统一解析、hook history 回填（`getRequestHistory`）与 `fetch` 捕获；`refresh()` 已接入历史请求回填链路。
+- [x] 3. 增加回归测试覆盖新提取链路。
+  - 摘要：新增 `tests/optimizer-token-capture-history.test.mjs`，覆盖 hook history 回填、fetch/xhr 双链路捕获和 Token 指示器主动刷新逻辑。
+- [x] 4. 构建 + 测试 + 浏览器复测。
+  - 摘要：已执行 `node --test tests/optimizer-token-capture-history.test.mjs`、`node --test tests/optimizer-default-prompt.test.mjs tests/optimizer-escort-keyword-compat.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs`、`node scripts/build.mjs`、`node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`；浏览器复测显示 Token 指示器已转绿且 `__AM_TOKENS__` 三字段均已回填。
+
+## 结果复盘
+- 状态：已完成
+- 当前结论：
+  - 根因是 Token 提取链路遗漏了 hook history/fetch 场景，导致页面有 token 请求但状态未回填；
+  - 修复后在真实阿里妈妈页面验证通过，`小万护航` Token 状态恢复正常。
+
+# TODO - 2026-04-01 Code Review Findings 修复（授权守卫 / Token 容错 / MCP 脚本）
+
+## 需求规格
+- 目标：修复评审提出的 3 个问题：
+  - extension bundle 丢失 `LicenseGuard` 启动块；
+  - `parseAuthFromObject` 深搜对 getter 异常缺少兜底；
+  - `recover-chrome-devtools-mcp.sh` 硬编码 Node 版本路径导致不可移植。
+- 范围：
+  - `src/entries/*` 与 `scripts/build.mjs`（从源码层恢复授权守卫并接入构建链）；
+  - `src/optimizer/token-manager.js`（异常容错）；
+  - `scripts/recover-chrome-devtools-mcp.sh`（PATH 解析）。
+- 验收：
+  - extension 产物可看到 `AUTH_BASE_URL` 与 `LicenseGuard` 定义；
+  - Token 深搜逻辑遇到异常 getter 不会中断刷新；
+  - MCP 修复脚本不依赖固定 `~/.nvm/.../v22.20.0` 路径。
+
+## 执行计划（含校验）
+- [x] 1. 把授权守卫迁回源码并挂入 extension 构建链。
+  - 摘要：新增 `src/entries/extension-license-guard.js`，并在 `scripts/build.mjs` 的 `EXTENSION_PAGE_SEGMENTS` 注入 extension 专用 runtime 段。
+- [x] 2. 修复 Token 深搜的属性访问容错。
+  - 摘要：`parseAuthFromObject` 的 `obj[key]` 与 `value.accessInfo` 增加 `try/catch`，异常属性跳过不阻断整体扫描。
+- [x] 3. 修复 MCP 恢复脚本路径可移植性。
+  - 摘要：`MCP_BIN` 改为 `AM_CHROME_DEVTOOLS_MCP_BIN` 或 `command -v chrome-devtools-mcp` 自动解析，不再硬编码版本目录。
+- [x] 4. 重建并做定向验证。
+  - 摘要：执行构建、语法检查、定向测试与关键字符串检查。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - extension bundle 已重新包含授权守卫启动块（含 `AUTH_BASE_URL`、`LicenseGuard`、`bootstrap_preflight`）；
+  - Token 深搜已具备 getter 异常防护，降低页面对象扫描中断风险；
+  - MCP 修复脚本改为 PATH/环境变量驱动，跨机器可用性恢复。
+- 验证命令：
+  - `node scripts/build.mjs`
+  - `node scripts/build.mjs --check`
+  - `node --check "阿里妈妈多合一助手.js"`
+  - `node --test tests/extension-license-shopid-guard.test.mjs tests/optimizer-token-capture-history.test.mjs tests/license-admin-page.test.mjs`
+  - `bash -n scripts/recover-chrome-devtools-mcp.sh`
+  - `rg -n "AUTH_BASE_URL|const LicenseGuard = {" dist/extension/page.bundle.js`
+
+# TODO - 2026-04-02 店铺授权管理默认筛选导致新店铺不可见（浏览器验证闭环）
+
+## 需求规格
+- 目标：修复“新增店铺正在使用，但授权管理页默认看不到”的问题；并让新店铺默认授权 3 天，最终完成浏览器实测通过。
+- 根因候选：
+  - 管理页默认 `activeWithinHours=168` 导致无 `lastSeenAt` 的店铺被过滤；
+  - 新店铺首次进入授权链路时未自动授予默认有效期；
+  - 多实例场景下活跃数据展示依赖持久化与路由实例命中。
+- 范围：
+  - 调整管理页默认筛选行为（`dev/license-admin.html` 与 `services/license-server/license-admin.html` 同步）；
+  - 在 `services/license-server/index.mjs` 落地“新店铺默认 3 天授权”；
+  - 更新定向测试与文档说明（包含服务端说明）；
+  - 通过 `chrome-devtools` MCP 执行浏览器验证并保留证据。
+- 非目标：
+  - 不改动授权协议与后端路由；
+  - 不改动插件端业务功能。
+
+## 执行计划（含校验）
+- [x] 1. 修改管理页“最近活跃（小时）”默认值为 `0`（不默认过滤）。
+  - 摘要：已将 `dev/license-admin.html` 与 `services/license-server/license-admin.html` 的 `activeWithinInput` 默认值从 `168` 改为 `0`。
+- [x] 2. 更新自动化测试断言，覆盖默认筛选值。
+  - 摘要：`tests/license-admin-page.test.mjs` 新增本地模板与服务端模板的 `activeWithinInput value=\"0\"` 断言。
+- [x] 3. 实现“新店铺默认授权 3 天”服务端逻辑。
+  - 摘要：`handleVerify` 新增 `provisionDefaultAuthForNewShop`，仅对“首次出现且未吊销”的店铺自动写入 `enabled=true` 与 `authExpiresAt=now+DEFAULT_AUTH_VALID_DAYS`。
+- [x] 4. 增加回归测试与文档更新，覆盖新增行为。
+  - 摘要：新增 `tests/license-server-new-shop-default-auth.test.mjs`；同步 `docs/授权管理页.md` 与 `services/license-server/README.md`。
+- [ ] 5. 执行定向测试，确认页面契约与逻辑正常。
+  - 摘要：待执行。
+- [ ] 6. 执行浏览器测试（mock 状态含“新店铺无 lastSeenAt”），确认页面默认可见且新店铺默认 3 天授权。
+  - 摘要：待执行。
+- [ ] 7. 回填结果复盘与风险说明。
+  - 摘要：待执行。
+
+## 结果复盘
+- 状态：进行中
+- 交付结果：待补充。

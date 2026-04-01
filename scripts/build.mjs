@@ -81,9 +81,15 @@ export const USERSCRIPT_SEGMENTS = [
     ...CORE_RUNTIME_SEGMENTS
 ];
 
+export const EXTENSION_PAGE_RUNTIME_SEGMENTS = [
+    'src/shared/script-preamble.js',
+    'src/entries/extension-license-guard.js',
+    ...CORE_RUNTIME_SEGMENTS.filter((relativePath) => relativePath !== 'src/shared/script-preamble.js')
+];
+
 export const EXTENSION_PAGE_SEGMENTS = [
     'src/entries/extension-page-compat.js',
-    ...CORE_RUNTIME_SEGMENTS
+    ...EXTENSION_PAGE_RUNTIME_SEGMENTS
 ];
 
 export const WATCH_DIRS = [

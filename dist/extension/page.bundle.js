@@ -375,8 +375,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         return shopIdPattern.test(digits) ? digits : '';
     };
 
+    const sanitizeShopNameCandidate = (value = '') => {
+        const raw = value === null || value === undefined ? '' : String(value);
+        if (!raw) return '';
+        return raw
+            .replace(/[\r\t]/g, ' ')
+            .replace(/[|｜]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .replace(/^(店铺名称|店铺名|商家名称|商家名)\s*[:：]\s*/i, '')
+            .trim();
+    };
+
     const normalizeShopName = (value) => {
-        const raw = value === null || value === undefined ? '' : String(value).trim();
+        const raw = sanitizeShopNameCandidate(value);
         const decoded = decodeUnicodeEscapes(raw).trim();
         return shopNamePattern.test(decoded) ? decoded : '';
     };
@@ -708,6 +719,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             .map(line => String(line || '').trim())
             .filter(Boolean);
         const idLineIndex = lines.findIndex(line => /(?:店铺ID|商家ID|账号ID|ID)\s*[:：]\s*\d{6,}/.test(line));
+        if (idLineIndex >= 0 && lines[idLineIndex]) {
+            const inline = lines[idLineIndex].match(/^(.+?)(?:店铺ID|商家ID|账号ID|ID)\s*[:：]\s*\d{6,}\b/);
+            const inlineName = normalizeShopName(inline?.[1] || '');
+            if (inlineName) {
+                shopName = inlineName;
+            }
+        }
         if (idLineIndex > 0) {
             const candidate = lines[idLineIndex - 1];
             if (candidate && candidate.length <= 80 && !/\d{6,}/.test(candidate)) {
@@ -716,6 +734,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         }
 
         return { shopId, shopName, source: sourceName, confidence: 3 };
+    };
+
+    const resolveLooseShopNameCandidate = () => {
+        const candidates = [
+            document.querySelector?.('[data-shop-name]')?.getAttribute?.('data-shop-name'),
+            document.querySelector?.('[data-seller-name]')?.getAttribute?.('data-seller-name'),
+            document.querySelector?.('.shop-name')?.textContent,
+            document.querySelector?.('[class*="shop-name"]')?.textContent,
+            document.querySelector?.('h1')?.textContent,
+            document.title
+        ];
+        for (let index = 0; index < candidates.length; index++) {
+            const normalized = normalizeShopName(candidates[index] || '');
+            if (normalized && !/\d{6,}/.test(normalized)) {
+                return normalized;
+            }
+        }
+        return '';
     };
 
     const collectRequestHistoryCandidates = () => {
@@ -827,10 +863,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const shopId = normalizeShopId(primary.shopId);
         const nameMatch = candidates.find(item => normalizeShopId(item?.shopId) === shopId && normalizeShopName(item?.shopName));
+        const fallbackShopName = nameMatch ? '' : resolveLooseShopNameCandidate();
 
         return {
             shopId,
-            shopName: normalizeShopName(nameMatch?.shopName || primary.shopName || ''),
+            shopName: normalizeShopName(nameMatch?.shopName || primary.shopName || fallbackShopName || ''),
             source: String(primary.source || 'unknown'),
             confidence: Number(primary.confidence || 1)
         };
@@ -914,6 +951,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             window.localStorage?.setItem?.(CACHE_KEY, JSON.stringify(payload));
         } catch { }
+    };
+
+    const scheduleShopNameBackfill = (context = {}) => {
+        const shopId = normalizeShopId(context.shopId || '');
+        const source = String(context.source || 'shop_name_backfill');
+        if (!shopId) return;
+        if (normalizeShopName(context.shopName || '')) return;
+        setTimeout(() => {
+            try {
+                const fallbackName = resolveLooseShopNameCandidate();
+                if (!fallbackName) return;
+                if (normalizeShopId(state.shopId) !== shopId) return;
+                const cache = readCache();
+                writeCache({
+                    ...(cache && typeof cache === 'object' ? cache : {}),
+                    shopId,
+                    shopName: fallbackName,
+                    updatedAt: toNow()
+                });
+                updateState({
+                    shopId,
+                    shopName: fallbackName,
+                    source
+                });
+            } catch { }
+        }, 380);
     };
 
     const createError = (code, message, detail = null) => {
@@ -1278,6 +1341,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         updateState({
             shopId: String(shopInfo.shopId || ''),
             shopName: String(shopInfo.shopName || ''),
+            source
+        });
+        scheduleShopNameBackfill({
+            shopId: shopInfo.shopId,
+            shopName: shopInfo.shopName,
             source
         });
 
@@ -14941,16 +15009,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
     }
 
-    const bootstrapMainWithLicense = async () => {
-        if (globalThis.LicenseGuard && typeof globalThis.LicenseGuard.assertAuthorized === 'function') {
-            await globalThis.LicenseGuard.assertAuthorized({ source: 'main_assistant_bootstrap' });
-        }
-        main();
-    };
-
-    bootstrapMainWithLicense().catch((err) => {
-        console.error('[AM][License] main assistant bootstrap blocked', err?.message || err);
-    });
+    main();
 
 })();
 // ==========================================
@@ -14984,6 +15043,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
  * - ✨ API 请求超时处理（默认 30 秒）
  * - ✨ 请求失败自动重试（最多 3 次）
  */
+
 (function () {
     'use strict';
 
@@ -15173,17 +15233,179 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!/^\d+$/.test(v) && v.length >= 16) return true;
             return false;
         },
+        getCsrfScore: (value) => {
+            const v = value === null || value === undefined ? '' : String(value).trim();
+            if (!v) return -1;
+            let score = Math.min(80, v.length);
+            if (v.includes('_')) score += 30;
+            if (!/^\d+$/.test(v)) score += 20;
+            if (v.length >= 16) score += 10;
+            return score;
+        },
+        pickCsrf: (current, next) => {
+            const currentText = current === null || current === undefined ? '' : String(current).trim();
+            const nextText = next === null || next === undefined ? '' : String(next).trim();
+            if (!currentText) return nextText;
+            if (!nextText) return currentText;
+            return TokenManager.getCsrfScore(nextText) >= TokenManager.getCsrfScore(currentText)
+                ? nextText
+                : currentText;
+        },
         applyCsrf: (value) => {
             const next = value === null || value === undefined ? '' : String(value).trim();
             if (!next) return;
-            const prev = State.tokens.csrfID === null || State.tokens.csrfID === undefined
-                ? '' : String(State.tokens.csrfID).trim();
-            if (!prev || TokenManager.isStrongCsrf(next) || !TokenManager.isStrongCsrf(prev)) {
-                State.tokens.csrfID = next;
+            State.tokens.csrfID = TokenManager.pickCsrf(State.tokens.csrfID, next);
+        },
+        parseAuthFromUrl: (rawUrl) => {
+            const out = { dynamicToken: '', loginPointId: '', csrfID: '' };
+            const text = rawUrl === null || rawUrl === undefined ? '' : String(rawUrl).trim();
+            if (!text || !/(dynamicToken|loginPointId|csrfId|csrfID)/.test(text)) return out;
+            try {
+                const parsed = new URL(text, window.location.origin);
+                out.dynamicToken = String(parsed.searchParams.get('dynamicToken') || '').trim();
+                out.loginPointId = String(parsed.searchParams.get('loginPointId') || '').trim();
+                out.csrfID = String(parsed.searchParams.get('csrfId') || parsed.searchParams.get('csrfID') || '').trim();
+            } catch { }
+            return out;
+        },
+        parseAuthFromBody: (body) => {
+            const out = { dynamicToken: '', loginPointId: '', csrfID: '' };
+            if (!body) return out;
+            if (typeof body === 'string') {
+                const text = body.trim();
+                if (!text) return out;
+                if (/(dynamicToken|loginPointId|csrfId|csrfID)/.test(text)) {
+                    try {
+                        const json = JSON.parse(text);
+                        return TokenManager.parseAuthFromObject(json);
+                    } catch { }
+                    try {
+                        const params = new URLSearchParams(text);
+                        out.dynamicToken = String(params.get('dynamicToken') || '').trim();
+                        out.loginPointId = String(params.get('loginPointId') || '').trim();
+                        out.csrfID = String(params.get('csrfId') || params.get('csrfID') || '').trim();
+                    } catch { }
+                }
+                return out;
+            }
+            if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+                out.dynamicToken = String(body.get('dynamicToken') || '').trim();
+                out.loginPointId = String(body.get('loginPointId') || '').trim();
+                out.csrfID = String(body.get('csrfId') || body.get('csrfID') || '').trim();
+                return out;
+            }
+            if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                out.dynamicToken = String(body.get('dynamicToken') || '').trim();
+                out.loginPointId = String(body.get('loginPointId') || '').trim();
+                out.csrfID = String(body.get('csrfId') || body.get('csrfID') || '').trim();
+                return out;
+            }
+            return TokenManager.parseAuthFromObject(body);
+        },
+        parseAuthFromObject: (source, maxDepth = 4) => {
+            const out = { dynamicToken: '', loginPointId: '', csrfID: '' };
+            const visited = new WeakSet();
+            const readText = (value) => value === null || value === undefined ? '' : String(value).trim();
+            const walk = (obj, depth = 0) => {
+                if (!obj || typeof obj !== 'object' || depth > maxDepth) return;
+                if (visited.has(obj)) return;
+                visited.add(obj);
+                for (const key in obj) {
+                    let value = null;
+                    try {
+                        value = obj[key];
+                    } catch {
+                        continue;
+                    }
+                    if (!out.dynamicToken && key === 'dynamicToken') out.dynamicToken = readText(value);
+                    if (!out.loginPointId && key === 'loginPointId') out.loginPointId = readText(value);
+                    if (key === 'csrfId' || key === 'csrfID') out.csrfID = TokenManager.pickCsrf(out.csrfID, readText(value));
+                    if (key === 'user' && value) {
+                        let info = null;
+                        try {
+                            info = value.accessInfo;
+                        } catch { }
+                        if (info) {
+                            out.dynamicToken = out.dynamicToken || readText(info.dynamicToken);
+                            out.loginPointId = out.loginPointId || readText(info.loginPointId);
+                            out.csrfID = TokenManager.pickCsrf(out.csrfID, readText(info.csrfId || info.csrfID));
+                        }
+                    }
+                    if (value && typeof value === 'object') walk(value, depth + 1);
+                }
+            };
+            walk(source, 0);
+            return out;
+        },
+        applyAuthCandidate: (candidate) => {
+            if (!candidate || typeof candidate !== 'object') return;
+            const nextDynamic = candidate.dynamicToken === null || candidate.dynamicToken === undefined
+                ? '' : String(candidate.dynamicToken).trim();
+            const nextLoginPoint = candidate.loginPointId === null || candidate.loginPointId === undefined
+                ? '' : String(candidate.loginPointId).trim();
+            if (nextDynamic && !State.tokens.dynamicToken) {
+                State.tokens.dynamicToken = nextDynamic;
+            }
+            if (nextLoginPoint && !State.tokens.loginPointId) {
+                State.tokens.loginPointId = nextLoginPoint;
+            }
+            TokenManager.applyCsrf(candidate.csrfID);
+        },
+        syncFromUrl: (rawUrl) => {
+            TokenManager.applyAuthCandidate(TokenManager.parseAuthFromUrl(rawUrl));
+        },
+        syncFromBody: (body) => {
+            TokenManager.applyAuthCandidate(TokenManager.parseAuthFromBody(body));
+        },
+        resolveHookManagers: () => {
+            const managers = [];
+            const pushManager = (manager) => {
+                if (!manager || typeof manager.getRequestHistory !== 'function') return;
+                if (managers.includes(manager)) return;
+                managers.push(manager);
+            };
+            try {
+                pushManager(window.__AM_HOOK_MANAGER__);
+            } catch { }
+            try {
+                if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
+                    pushManager(unsafeWindow.__AM_HOOK_MANAGER__);
+                }
+            } catch { }
+            if (!managers.length && typeof createHookManager === 'function') {
+                try {
+                    pushManager(createHookManager());
+                } catch { }
+            }
+            return managers;
+        },
+        syncFromHookHistory: () => {
+            if (State.tokens.dynamicToken && State.tokens.loginPointId && TokenManager.isStrongCsrf(State.tokens.csrfID)) return;
+            const managers = TokenManager.resolveHookManagers();
+            if (!managers.length) return;
+            const history = [];
+            managers.forEach((manager) => {
+                try {
+                    const list = manager.getRequestHistory({
+                        includePattern: /\.json(?:$|\?)/i,
+                        limit: 2600
+                    });
+                    if (Array.isArray(list) && list.length) history.push(...list);
+                } catch { }
+            });
+            if (!history.length) return;
+            history.sort((left, right) => Number(right?.ts || 0) - Number(left?.ts || 0));
+            for (let i = 0; i < history.length; i++) {
+                const entry = history[i] || {};
+                TokenManager.syncFromUrl(entry.url);
+                TokenManager.syncFromBody(entry.body);
+                if (State.tokens.dynamicToken && State.tokens.loginPointId && TokenManager.isStrongCsrf(State.tokens.csrfID)) {
+                    break;
+                }
             }
         },
 
-        // Hook XHR 捕获 Token
+        // Hook XHR / Fetch 捕获 Token
         hookXHR: () => {
             if (TokenManager.hookReady) return;
             const hooks = window.__AM_HOOK_MANAGER__;
@@ -15192,96 +15414,62 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return;
             }
 
-            const syncFromUrl = (rawUrl) => {
-                try {
-                    if (!rawUrl
-                        || (!rawUrl.includes('dynamicToken')
-                            && !rawUrl.includes('loginPointId')
-                            && !rawUrl.includes('csrfId')
-                            && !rawUrl.includes('csrfID'))) return;
-                    const urlObj = new URL(rawUrl, window.location.origin);
-                    State.tokens.dynamicToken = urlObj.searchParams.get('dynamicToken') || State.tokens.dynamicToken;
-                    State.tokens.loginPointId = urlObj.searchParams.get('loginPointId') || State.tokens.loginPointId;
-                    TokenManager.applyCsrf(urlObj.searchParams.get('csrfId') || urlObj.searchParams.get('csrfID'));
-                } catch { }
-            };
-
-            const syncFromBody = (body) => {
-                if (!body || typeof body !== 'string') return;
-                try {
-                    const json = JSON.parse(body);
-                    State.tokens.dynamicToken = json.dynamicToken || State.tokens.dynamicToken;
-                    State.tokens.loginPointId = json.loginPointId || State.tokens.loginPointId;
-                    TokenManager.applyCsrf(json.csrfId || json.csrfID);
-                } catch {
-                    const params = new URLSearchParams(body);
-                    State.tokens.dynamicToken = params.get('dynamicToken') || State.tokens.dynamicToken;
-                    State.tokens.loginPointId = params.get('loginPointId') || State.tokens.loginPointId;
-                    TokenManager.applyCsrf(params.get('csrfId') || params.get('csrfID'));
-                }
-            };
-
             hooks.registerXHROpen(({ xhr, url }) => {
                 xhr._url = url;
-                syncFromUrl(url);
+                TokenManager.syncFromUrl(url);
             });
 
             hooks.registerXHRSend(({ data, url }) => {
-                syncFromUrl(url);
-                syncFromBody(data);
+                TokenManager.syncFromUrl(url);
+                TokenManager.syncFromBody(data);
             });
 
+            if (typeof hooks.registerFetch === 'function') {
+                hooks.registerFetch(({ args }) => {
+                    const firstArg = Array.isArray(args) ? args[0] : null;
+                    const secondArg = Array.isArray(args) ? args[1] : null;
+                    const requestUrl = typeof firstArg === 'string'
+                        ? firstArg
+                        : (firstArg && typeof firstArg === 'object' ? firstArg.url : '');
+                    const requestBody = secondArg?.body || firstArg?.body || null;
+                    TokenManager.syncFromUrl(requestUrl);
+                    TokenManager.syncFromBody(requestBody);
+                });
+            }
+
             TokenManager.hookReady = true;
-            Logger.info('XHR Hook 已接入统一管理器');
+            Logger.info('Token Hook 已接入统一管理器');
         },
 
         // 深度搜索全局变量
         deepSearch: () => {
             if (State.tokens.dynamicToken && State.tokens.loginPointId && TokenManager.isStrongCsrf(State.tokens.csrfID)) return;
-
-            const findInObj = (obj, depth = 0) => {
-                if (!obj || depth > 3) return;
-                try {
-                    for (const key in obj) {
-                        if (key === 'dynamicToken') State.tokens.dynamicToken = obj[key];
-                        if (key === 'loginPointId') State.tokens.loginPointId = obj[key];
-                        if (key === 'csrfId' || key === 'csrfID') TokenManager.applyCsrf(obj[key]);
-                        if (key === 'user' && obj[key]?.accessInfo) {
-                            State.tokens.dynamicToken = obj[key].accessInfo.dynamicToken || State.tokens.dynamicToken;
-                            State.tokens.loginPointId = obj[key].accessInfo.loginPointId || State.tokens.loginPointId;
-                            TokenManager.applyCsrf(obj[key].accessInfo.csrfId || obj[key].accessInfo.csrfID);
-                        }
-                        if (typeof obj[key] === 'object') findInObj(obj[key], depth + 1);
-                    }
-                } catch { }
-            };
-
             [window.g_config, window.PageConfig, window.mm, window.FEED_CONFIG, window.__magix_data__]
-                .forEach(c => findInObj(c));
+                .forEach(source => TokenManager.applyAuthCandidate(TokenManager.parseAuthFromObject(source, 3)));
         },
 
         // 刷新 Token
         refresh: () => {
             TokenManager.deepSearch();
+            TokenManager.syncFromUrl(window.location.href || '');
 
-            // 从 URL 参数补充 CSRF（如果存在）
-            try {
-                const href = window.location.href || '';
-                const urlObj = new URL(href, window.location.origin);
-                TokenManager.applyCsrf(urlObj.searchParams.get('csrfId') || urlObj.searchParams.get('csrfID'));
-                if (window.location.hash && window.location.hash.includes('?')) {
-                    const hashQuery = window.location.hash.split('?')[1] || '';
-                    const hashParams = new URLSearchParams(hashQuery);
-                    TokenManager.applyCsrf(hashParams.get('csrfId') || hashParams.get('csrfID'));
-                }
-            } catch { }
+            if (window.location.hash && window.location.hash.includes('?')) {
+                const hashQuery = window.location.hash.split('?')[1] || '';
+                TokenManager.syncFromBody(hashQuery);
+            }
+
+            TokenManager.syncFromHookHistory();
 
             // 从 cookie 获取 CSRF
             const csrfMatch = document.cookie.match(/_tb_token_=([^;]+)/);
             if (csrfMatch) {
                 // 仅当当前未拿到有效 csrfId 时，才用 _tb_token_ 兜底，避免覆盖真实 csrfId
                 if (!TokenManager.isStrongCsrf(State.tokens.csrfID)) {
-                    State.tokens.csrfID = csrfMatch[1];
+                    try {
+                        TokenManager.applyCsrf(decodeURIComponent(csrfMatch[1]));
+                    } catch {
+                        TokenManager.applyCsrf(csrfMatch[1]);
+                    }
                 }
             }
 
@@ -15293,9 +15481,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const info = vframes[id]?.view?.user?.accessInfo ||
                             vframes[id]?.$v?.$d?.$d?.user?.accessInfo;
                         if (info) {
-                            State.tokens.dynamicToken = info.dynamicToken || State.tokens.dynamicToken;
-                            State.tokens.loginPointId = info.loginPointId || State.tokens.loginPointId;
-                            TokenManager.applyCsrf(info.csrfId || info.csrfID);
+                            TokenManager.applyAuthCandidate(TokenManager.parseAuthFromObject(info, 1));
                         }
                     }
                 } catch { }
@@ -15345,7 +15531,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             } catch { }
         });
     };
-
     // ==================== API 请求模块 ====================
     const API = {
         /**
@@ -57863,7 +58048,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             resizerCorner.onmousedown = e => bindResize('both', e);
 
             // Token 状态检测
+            let lastTokenRefreshAt = 0;
             setInterval(() => {
+                const now = Date.now();
+                const tokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
+                if (!tokenReady && now - lastTokenRefreshAt >= 2500) {
+                    lastTokenRefreshAt = now;
+                    try {
+                        TokenManager.refresh();
+                    } catch { }
+                }
                 const tokenDot = document.getElementById(`${CONFIG.UI_ID}-token`);
                 if (tokenDot) {
                     tokenDot.style.color = (State.tokens.dynamicToken && State.tokens.loginPointId) ? '#52c41a' : '#ff4d4f';
@@ -58851,40 +59045,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         'getSessionDraft',
         'clearSessionDraft'
     ];
-    const assertLicenseAuthorizedForBridge = async (source = '') => {
-        if (globalThis.LicenseGuard && typeof globalThis.LicenseGuard.assertAuthorized === 'function') {
-            await globalThis.LicenseGuard.assertAuthorized({ source });
-        }
-    };
-    const createLicenseDeniedError = (source = '', error = null) => {
-        const code = String(error?.code || 'unauthorized');
-        const message = String(error?.message || '店铺未授权');
-        const denied = new Error(message);
-        denied.code = code;
-        denied.source = source;
-        return denied;
-    };
-    const createProtectedKeywordPlanApi = (api, sourcePrefix = 'keyword_plan_api') => {
-        const protectedApi = {
-            buildVersion: api?.buildVersion || ''
-        };
-        API_BRIDGE_METHODS.forEach((method) => {
-            protectedApi[method] = async (...args) => {
-                try {
-                    await assertLicenseAuthorizedForBridge(`${sourcePrefix}:${method}`);
-                } catch (error) {
-                    throw createLicenseDeniedError(`${sourcePrefix}:${method}`, error);
-                }
-                const fn = api?.[method];
-                if (typeof fn !== 'function') {
-                    throw new Error(`method_not_found:${method}`);
-                }
-                return fn(...args);
-            };
-        });
-        return protectedApi;
-    };
-    const ProtectedKeywordPlanApi = createProtectedKeywordPlanApi(KeywordPlanApi, 'global_keyword_plan_api');
     const installPageApiBridgeHost = () => {
         if (window.__AM_WXT_PLAN_API_BRIDGE_HOST__) return;
         window.__AM_WXT_PLAN_API_BRIDGE_HOST__ = true;
@@ -58946,7 +59106,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 error: ''
             };
             try {
-                await assertLicenseAuthorizedForBridge(`page_bridge:${method}`);
                 const fn = KeywordPlanApi?.[method];
                 if (typeof fn !== 'function') {
                     throw new Error(`method_not_found:${method}`);
@@ -59105,14 +59264,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     };
     if (typeof globalThis !== 'undefined') {
         globalThis.__AM_TOKENS__ = State.tokens;
-        globalThis.__AM_WXT_KEYWORD_API__ = ProtectedKeywordPlanApi;
-        globalThis.__AM_WXT_PLAN_API__ = ProtectedKeywordPlanApi;
+        globalThis.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
+        globalThis.__AM_WXT_PLAN_API__ = KeywordPlanApi;
         globalThis.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
         globalThis.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }
     if (shouldExposePageApiDebug()) {
-        window.__AM_WXT_KEYWORD_API__ = ProtectedKeywordPlanApi;
-        window.__AM_WXT_PLAN_API__ = ProtectedKeywordPlanApi;
+        window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
+        window.__AM_WXT_PLAN_API__ = KeywordPlanApi;
         installPageApiBridgeHost();
         injectPageApiBridgeClient();
     }
@@ -59124,37 +59283,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     }
 
     // [INTEGRATED] Expose toggle function
-    const assertLicenseAuthorizedForPublicApi = async (source = '') => {
-        if (globalThis.LicenseGuard && typeof globalThis.LicenseGuard.assertAuthorized === 'function') {
-            await globalThis.LicenseGuard.assertAuthorized({ source });
-        }
-    };
-
-    const buildLicenseDeniedResultForPublicApi = (error, source = '') => {
-        if (globalThis.LicenseGuard && typeof globalThis.LicenseGuard.buildDeniedResult === 'function') {
-            return globalThis.LicenseGuard.buildDeniedResult(error, source);
-        }
-        return {
-            success: false,
-            code: String(error?.code || 'unauthorized'),
-            msg: String(error?.message || '店铺未授权'),
-            source
-        };
-    };
-
     window.__ALIMAMA_OPTIMIZER_TOGGLE__ = () => {
-        try {
-            if (globalThis.LicenseGuard && typeof globalThis.LicenseGuard.requireAuthorizedSync === 'function') {
-                globalThis.LicenseGuard.requireAuthorizedSync('optimizer_toggle');
-            }
-        } catch (error) {
-            if (globalThis.LicenseGuard && typeof globalThis.LicenseGuard.assertAuthorized === 'function') {
-                globalThis.LicenseGuard.assertAuthorized({ source: 'optimizer_toggle_retry' }).catch(() => { });
-            }
-            console.error('[AM][License] optimizer toggle blocked', error?.message || error);
-            return buildLicenseDeniedResultForPublicApi(error, 'optimizer_toggle');
-        }
-
         const panel = document.getElementById(CONFIG.UI_ID);
         if (!panel) {
             UI.create();
@@ -59180,13 +59309,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
     // [INTEGRATED] Expose run campaign function for MagicReport
     window.__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__ = async (campaignId, customPrompt) => {
-        try {
-            await assertLicenseAuthorizedForPublicApi('optimizer_run_campaign');
-        } catch (error) {
-            console.error('[AM][License] optimizer run campaign blocked', error?.message || error);
-            return buildLicenseDeniedResultForPublicApi(error, 'optimizer_run_campaign');
-        }
-
         // 覆盖配置
         userConfig.customPrompt = customPrompt || userConfig.customPrompt;
 
