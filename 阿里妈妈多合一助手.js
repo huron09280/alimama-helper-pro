@@ -2705,11 +2705,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     color: var(--am26-primary);
                     transition: all 0.3s ease;
                 }
+                #am-helper-icon svg {
+                    transform-origin: center;
+                    animation: am-helper-icon-pulse 2.4s ease-in-out infinite;
+                    will-change: transform;
+                }
                 #am-helper-icon:hover {
                     transform: translateY(-1px) scale(1.08);
                     border-color: var(--am26-border-strong);
                     color: var(--am26-primary-strong);
                     background: rgba(255,255,255,0.6);
+                }
+                #am-helper-icon:hover svg {
+                    animation-duration: 1.2s;
+                }
+                @keyframes am-helper-icon-pulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.1); }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-helper-icon svg {
+                        animation: none !important;
+                    }
                 }
 
                 /* 主面板 */
