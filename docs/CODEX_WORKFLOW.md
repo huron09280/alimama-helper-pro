@@ -18,6 +18,7 @@
 npm run codex:map
 npm run codex:find -- "__AM_HOOK_MANAGER__"
 npm run codex:changed
+bash scripts/recover-chrome-devtools-mcp.sh
 ```
 
 说明：
@@ -25,6 +26,7 @@ npm run codex:changed
 - `codex:map`：列出可编辑范围文件，避免把上下文浪费在产物和 `dist/`。
 - `codex:find`：只在源码范围检索，默认排除 `阿里妈妈多合一助手.js`、`dist/`、`node_modules/`。
 - `codex:changed`：查看当前变更是否仍聚焦在目标文件。
+- `recover-chrome-devtools-mcp.sh`：一键修复 `chrome-devtools` 通道（专用 profile、9222 端口、Codex MCP 配置）。
 
 ## 推荐执行节奏
 
@@ -32,6 +34,7 @@ npm run codex:changed
 2. 开发中：只跑相关测试，例如 `node --test tests/xxx.test.mjs`。
 3. 提交前：统一执行 `npm run review`（含 `build --check`、语法检查、全量回归）。
 4. 涉及 UI 改动：必须补真实阿里妈妈页面验证（按项目约定使用 chrome-devtools MCP）。
+5. 若 MCP 报 `Transport closed`：先执行 `bash scripts/recover-chrome-devtools-mcp.sh`，再重开 Codex 会话继续验证。
 
 ## Codex 任务模板
 

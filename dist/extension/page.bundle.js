@@ -288,6 +288,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
     const shopIdPattern = /^\d{6,}$/;
     const shopNamePattern = /\S/;
+    const shopNamePlaceholderPattern = /^(?:-|--|—|——|暂无|无|未知|null|undefined|n\/a|na)$/i;
+    const shopNamePlatformNoisePattern = /(阿里妈妈|万相台|直通车|淘宝联盟|营销中心|推广中心|商家后台|广告后台|投放平台|千牛|服务市场)/i;
+    const shopNameGenericNoisePattern = /^(?:消息中心|首页|工作台|账户中心|数据看板|计划管理|计划列表|报表中心|投放管理|运营中心|管理中心)$/;
+    const shopNameStrongSignalPattern = /(店|旗舰|专营|专卖|企业|官方|品牌|工作室|商行|小店|小铺)/;
 
     const decodeUnicodeEscapes = (value) => {
         const raw = value === null || value === undefined ? '' : String(value);
@@ -366,6 +370,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     const SHOP_ID_RETRY_ATTEMPTS_DEFAULT = 6;
     const SHOP_ID_RETRY_BASE_DELAY_MS = 260;
     const SHOP_ID_RETRY_MAX_DELAY_MS = 1200;
+    const SHOP_NAME_BACKFILL_ATTEMPTS_DEFAULT = 8;
+    const SHOP_NAME_BACKFILL_BASE_DELAY_MS = 320;
+    const SHOP_NAME_BACKFILL_MAX_DELAY_MS = 2200;
 
     const normalizeShopId = (value) => {
         const raw = value === null || value === undefined ? '' : String(value).trim();
@@ -386,10 +393,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             .trim();
     };
 
+    const isLikelyShopName = (value = '') => {
+        const text = String(value || '').trim();
+        if (!text) return false;
+        if (shopNamePlaceholderPattern.test(text)) return false;
+        if (shopNameGenericNoisePattern.test(text)) return false;
+        if (shopNamePlatformNoisePattern.test(text) && !shopNameStrongSignalPattern.test(text)) return false;
+        return true;
+    };
+
+    const hasStrongShopNameSignal = (value = '') => shopNameStrongSignalPattern.test(String(value || '').trim());
+
     const normalizeShopName = (value) => {
         const raw = sanitizeShopNameCandidate(value);
         const decoded = decodeUnicodeEscapes(raw).trim();
-        return shopNamePattern.test(decoded) ? decoded : '';
+        if (!shopNamePattern.test(decoded)) return '';
+        return isLikelyShopName(decoded) ? decoded : '';
     };
 
     const safeParseJson = (value) => {
@@ -732,22 +751,175 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 shopName = normalizeShopName(candidate);
             }
         }
+        if (!shopName && idLineIndex >= 0 && idLineIndex < lines.length - 1) {
+            const candidate = lines[idLineIndex + 1];
+            if (candidate && candidate.length <= 80 && !/\d{6,}/.test(candidate)) {
+                shopName = normalizeShopName(candidate);
+            }
+        }
 
         return { shopId, shopName, source: sourceName, confidence: 3 };
     };
 
-    const resolveLooseShopNameCandidate = () => {
+    const parseShopNameFromLabeledText = (text = '') => {
+        const normalizedText = String(text || '').trim();
+        if (!normalizedText) return '';
+        const lines = normalizedText
+            .split(/\n+/)
+            .map(line => String(line || '').trim())
+            .filter(Boolean);
+        const namePatterns = [
+            /(?:店铺名称|店铺名|当前店铺|商家名称|商家名|掌柜名|店铺昵称)\s*[:：]\s*(.+)$/i,
+            /(?:shopName|sellerName|shopTitle|nick|userNick)\s*[:=]\s*(.+)$/i
+        ];
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+            for (let patternIndex = 0; patternIndex < namePatterns.length; patternIndex++) {
+                const matched = line.match(namePatterns[patternIndex]);
+                const candidate = normalizeShopName(matched?.[1] || '');
+                if (candidate && candidate.length <= 80 && !/\d{6,}/.test(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        return '';
+    };
+
+    const escapeRegExp = (value = '') => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const parseShopNameNearShopId = (shopId = '', text = '') => {
+        const normalizedShopId = normalizeShopId(shopId);
+        const normalizedText = String(text || '').trim();
+        if (!normalizedShopId || !normalizedText) return '';
+        const lines = normalizedText
+            .split(/\n+/)
+            .map(line => String(line || '').trim())
+            .filter(Boolean);
+        if (!lines.length) return '';
+
+        const escapedShopId = escapeRegExp(normalizedShopId);
+        const lineHasShopIdPattern = new RegExp(`(?:^|\\b)(?:店铺ID|商家ID|账号ID|ID)?\\s*[:：#]?\\s*${escapedShopId}\\b`, 'i');
+        const stripShopIdPattern = new RegExp(`(?:店铺ID|商家ID|账号ID|ID)?\\s*[:：#]?\\s*${escapedShopId}\\b`, 'ig');
+        const lineHasShopNameLabelPattern = /(?:店铺名称|店铺名|当前店铺|商家名称|商家名|掌柜名|店铺昵称|shopName|sellerName|shopTitle|nick|userNick)/i;
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+            if (!lineHasShopIdPattern.test(line)) continue;
+
+            const inlineCandidate = normalizeShopName(line.replace(stripShopIdPattern, ' ').trim());
+            if (
+                inlineCandidate
+                && inlineCandidate.length <= 80
+                && !/\d{6,}/.test(inlineCandidate)
+                && (hasStrongShopNameSignal(inlineCandidate) || lineHasShopNameLabelPattern.test(line))
+            ) {
+                return inlineCandidate;
+            }
+
+            const nearLineOffsets = [-2, -1, 1, 2];
+            for (let offsetIndex = 0; offsetIndex < nearLineOffsets.length; offsetIndex++) {
+                const targetIndex = lineIndex + nearLineOffsets[offsetIndex];
+                if (targetIndex < 0 || targetIndex >= lines.length) continue;
+                const targetLine = lines[targetIndex];
+                if (!targetLine || lineHasShopIdPattern.test(targetLine)) continue;
+                const nearCandidate = normalizeShopName(targetLine);
+                if (
+                    nearCandidate
+                    && nearCandidate.length <= 80
+                    && !/\d{6,}/.test(nearCandidate)
+                    && hasStrongShopNameSignal(nearCandidate)
+                ) {
+                    return nearCandidate;
+                }
+            }
+        }
+        return '';
+    };
+
+    const collectShopIdAnchoredTextBlocks = (shopId = '') => {
+        const normalizedShopId = normalizeShopId(shopId);
+        if (!normalizedShopId) return [];
+        const blocks = [];
+        const seen = new Set();
+        const push = (value) => {
+            const text = String(value || '').trim();
+            if (!text || text.length < 2) return;
+            if (seen.has(text)) return;
+            seen.add(text);
+            blocks.push(text);
+        };
+
+        const attrSelectors = [
+            `[data-shop-id="${normalizedShopId}"]`,
+            `[data-shopid="${normalizedShopId}"]`,
+            `[data-seller-id="${normalizedShopId}"]`,
+            `[data-sellerid="${normalizedShopId}"]`,
+            `[data-member-id="${normalizedShopId}"]`,
+            `[data-owner-id="${normalizedShopId}"]`
+        ];
+        attrSelectors.forEach((selector) => {
+            const nodes = Array.from(document.querySelectorAll(selector) || []).slice(0, 20);
+            nodes.forEach((node) => {
+                if (!node) return;
+                push(node.textContent || '');
+                push(node.getAttribute?.('title') || '');
+                push(node.parentElement?.textContent || '');
+                push(node.parentElement?.getAttribute?.('title') || '');
+            });
+        });
+
+        const root = document.body || document.documentElement;
+        const nodeFilterShowText = window.NodeFilter?.SHOW_TEXT || 4;
+        if (!root || !document.createTreeWalker) return blocks;
+        let textNodeCount = 0;
+        let matchCount = 0;
+        const walker = document.createTreeWalker(root, nodeFilterShowText, null);
+        while (walker.nextNode() && textNodeCount < 2600 && matchCount < 24) {
+            textNodeCount += 1;
+            const rawText = String(walker.currentNode?.nodeValue || '').trim();
+            if (!rawText || rawText.length > 160) continue;
+            if (!rawText.includes(normalizedShopId)) continue;
+            matchCount += 1;
+            const parent = walker.currentNode.parentElement;
+            push(parent?.textContent || '');
+            push(parent?.getAttribute?.('title') || '');
+            push(parent?.parentElement?.textContent || '');
+        }
+        return blocks;
+    };
+
+    const resolveLooseShopNameCandidate = (shopId = '') => {
+        const normalizedShopId = normalizeShopId(shopId);
+        const pageText = document.body?.innerText || document.documentElement?.innerText || '';
+        const shopIdAnchoredBlocks = collectShopIdAnchoredTextBlocks(normalizedShopId);
+        const shopIdAnchoredCandidates = shopIdAnchoredBlocks
+            .map(block => parseShopNameNearShopId(normalizedShopId, block))
+            .filter(Boolean);
+
         const candidates = [
+            ...shopIdAnchoredCandidates,
+            parseShopNameNearShopId(normalizedShopId, pageText),
+            parseShopNameFromLabeledText(pageText),
             document.querySelector?.('[data-shop-name]')?.getAttribute?.('data-shop-name'),
+            document.querySelector?.('[data-shopname]')?.getAttribute?.('data-shopname'),
             document.querySelector?.('[data-seller-name]')?.getAttribute?.('data-seller-name'),
+            document.querySelector?.('[data-sellername]')?.getAttribute?.('data-sellername'),
+            document.querySelector?.('[data-nick]')?.getAttribute?.('data-nick'),
             document.querySelector?.('.shop-name')?.textContent,
             document.querySelector?.('[class*="shop-name"]')?.textContent,
+            document.querySelector?.('[class*="shopname"]')?.textContent,
+            document.querySelector?.('[class*="shopName"]')?.textContent,
+            document.querySelector?.('.seller-name')?.textContent,
+            document.querySelector?.('[class*="seller-name"]')?.textContent,
+            document.querySelector?.('[class*="sellername"]')?.textContent,
+            document.querySelector?.('[class*="sellerName"]')?.textContent,
+            document.querySelector?.('.nick')?.textContent,
+            document.querySelector?.('[class*="nick"]')?.textContent,
             document.querySelector?.('h1')?.textContent,
             document.title
         ];
         for (let index = 0; index < candidates.length; index++) {
             const normalized = normalizeShopName(candidates[index] || '');
-            if (normalized && !/\d{6,}/.test(normalized)) {
+            if (normalized && normalized.length <= 80 && !/\d{6,}/.test(normalized)) {
                 return normalized;
             }
         }
@@ -863,7 +1035,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const shopId = normalizeShopId(primary.shopId);
         const nameMatch = candidates.find(item => normalizeShopId(item?.shopId) === shopId && normalizeShopName(item?.shopName));
-        const fallbackShopName = nameMatch ? '' : resolveLooseShopNameCandidate();
+        const fallbackShopName = nameMatch ? '' : resolveLooseShopNameCandidate(shopId);
 
         return {
             shopId,
@@ -956,27 +1128,64 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     const scheduleShopNameBackfill = (context = {}) => {
         const shopId = normalizeShopId(context.shopId || '');
         const source = String(context.source || 'shop_name_backfill');
+        const force = !!context.force;
+        const attemptsRaw = Number(context.maxAttempts);
+        const maxAttempts = Math.max(
+            1,
+            Math.min(20, Number.isFinite(attemptsRaw) ? attemptsRaw : SHOP_NAME_BACKFILL_ATTEMPTS_DEFAULT)
+        );
+        const baseDelayRaw = Number(context.baseDelayMs);
+        const baseDelayMs = Math.max(
+            120,
+            Number.isFinite(baseDelayRaw) ? baseDelayRaw : SHOP_NAME_BACKFILL_BASE_DELAY_MS
+        );
+        const maxDelayRaw = Number(context.maxDelayMs);
+        const maxDelayMs = Math.max(
+            baseDelayMs,
+            Number.isFinite(maxDelayRaw) ? maxDelayRaw : SHOP_NAME_BACKFILL_MAX_DELAY_MS
+        );
+        const initialDelayRaw = Number(context.initialDelayMs);
+        const initialDelayMs = Math.min(
+            maxDelayMs,
+            Math.max(0, Number.isFinite(initialDelayRaw) ? initialDelayRaw : 380)
+        );
         if (!shopId) return;
-        if (normalizeShopName(context.shopName || '')) return;
-        setTimeout(() => {
+        if (!force && normalizeShopName(context.shopName || '')) return;
+
+        let attempt = 0;
+        const run = () => {
+            attempt += 1;
+            let resolved = false;
             try {
-                const fallbackName = resolveLooseShopNameCandidate();
-                if (!fallbackName) return;
                 if (normalizeShopId(state.shopId) !== shopId) return;
-                const cache = readCache();
-                writeCache({
-                    ...(cache && typeof cache === 'object' ? cache : {}),
-                    shopId,
-                    shopName: fallbackName,
-                    updatedAt: toNow()
-                });
-                updateState({
-                    shopId,
-                    shopName: fallbackName,
-                    source
-                });
+                if (normalizeShopName(state.shopName || '')) return;
+                const fallbackName = resolveLooseShopNameCandidate(shopId);
+                if (fallbackName) {
+                    const cache = readCache();
+                    writeCache({
+                        ...(cache && typeof cache === 'object' ? cache : {}),
+                        shopId,
+                        shopName: fallbackName,
+                        updatedAt: toNow()
+                    });
+                    updateState({
+                        shopId,
+                        shopName: fallbackName,
+                        source
+                    });
+                    if (!state.authorized || document.getElementById(OVERLAY_ID)) {
+                        renderOverlay();
+                    }
+                    resolved = true;
+                }
             } catch { }
-        }, 380);
+            if (resolved) return;
+            if (attempt >= maxAttempts) return;
+            const nextDelay = Math.min(maxDelayMs, baseDelayMs * attempt);
+            setTimeout(run, nextDelay);
+        };
+
+        setTimeout(run, initialDelayMs);
     };
 
     const createError = (code, message, detail = null) => {
@@ -1371,9 +1580,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         try {
             const normalized = await requestVerify(payload);
+            const verifiedShopName = normalizeShopName(shopInfo.shopName || normalized?.policy?.shopName || '');
             writeCache({
                 shopId: shopInfo.shopId,
-                shopName: shopInfo.shopName,
+                shopName: verifiedShopName,
                 leaseToken: normalized.leaseToken,
                 expiresAt: normalized.expiresAt,
                 policy: normalized.policy || {},
@@ -1382,7 +1592,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             unlock({
                 source,
                 shopId: shopInfo.shopId,
-                shopName: shopInfo.shopName,
+                shopName: verifiedShopName,
                 expiresAt: normalized.expiresAt,
                 leaseToken: normalized.leaseToken,
                 policy: normalized.policy || {}
@@ -1391,7 +1601,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         } catch (err) {
             const code = String(err?.code || 'verify_failed');
             const msg = String(err?.message || '授权校验失败');
+            const detailShopId = normalizeShopId(err?.detail?.shopId || shopInfo.shopId || '');
+            const detailShopName = normalizeShopName(
+                err?.detail?.shopName
+                || err?.detail?.policy?.shopName
+                || shopInfo.shopName
+                || ''
+            );
+            if (detailShopId || detailShopName) {
+                updateState({
+                    shopId: detailShopId || state.shopId || '',
+                    shopName: detailShopName || state.shopName || '',
+                    source
+                });
+            }
             lock(code, msg, source);
+            if (detailShopId && !detailShopName) {
+                scheduleShopNameBackfill({
+                    shopId: detailShopId,
+                    shopName: '',
+                    source: `${source}+after_lock`,
+                    force: true,
+                    initialDelayMs: 460,
+                    maxAttempts: 12,
+                    baseDelayMs: 360,
+                    maxDelayMs: 2400
+                });
+            }
             throw createError(code, msg, err?.detail || null);
         }
     };

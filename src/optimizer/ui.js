@@ -1720,7 +1720,16 @@
             resizerCorner.onmousedown = e => bindResize('both', e);
 
             // Token 状态检测
+            let lastTokenRefreshAt = 0;
             setInterval(() => {
+                const now = Date.now();
+                const tokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
+                if (!tokenReady && now - lastTokenRefreshAt >= 2500) {
+                    lastTokenRefreshAt = now;
+                    try {
+                        TokenManager.refresh();
+                    } catch { }
+                }
                 const tokenDot = document.getElementById(`${CONFIG.UI_ID}-token`);
                 if (tokenDot) {
                     tokenDot.style.color = (State.tokens.dynamicToken && State.tokens.loginPointId) ? '#52c41a' : '#ff4d4f';

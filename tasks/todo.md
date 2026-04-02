@@ -1990,13 +1990,315 @@
   - 摘要：`handleVerify` 新增 `provisionDefaultAuthForNewShop`，仅对“首次出现且未吊销”的店铺自动写入 `enabled=true` 与 `authExpiresAt=now+DEFAULT_AUTH_VALID_DAYS`。
 - [x] 4. 增加回归测试与文档更新，覆盖新增行为。
   - 摘要：新增 `tests/license-server-new-shop-default-auth.test.mjs`；同步 `docs/授权管理页.md` 与 `services/license-server/README.md`。
-- [ ] 5. 执行定向测试，确认页面契约与逻辑正常。
-  - 摘要：待执行。
-- [ ] 6. 执行浏览器测试（mock 状态含“新店铺无 lastSeenAt”），确认页面默认可见且新店铺默认 3 天授权。
-  - 摘要：待执行。
-- [ ] 7. 回填结果复盘与风险说明。
-  - 摘要：待执行。
+- [x] 5. 执行定向测试，确认页面契约与逻辑正常。
+  - 摘要：`node --check services/license-server/index.mjs` 与 `node --test tests/license-admin-page.test.mjs tests/license-server-new-shop-default-auth.test.mjs` 全通过。
+- [x] 6. 执行浏览器测试（mock 状态含“新店铺无 lastSeenAt”），确认页面默认可见且新店铺默认 3 天授权。
+  - 摘要：通过 `chrome-devtools` 打开 `dev/license-admin.html`，切换 Base URL 到本地临时服务；先调用 `POST /v1/license/verify` 上报新店铺 `900000123`，再刷新管理页，确认默认 `最近活跃=0` 下列表可见该店铺、状态“已授权”、`authExpiresAt` 为默认 3 天有效期。
+- [x] 7. 回填结果复盘与风险说明。
+  - 摘要：已补充浏览器与接口双重证据，说明当前行为与残留风险。
+- [x] 8. 发布到线上 FC `am-license-server`（LATEST）。
+  - 摘要：通过 FC 控制台“上传代码 -> 上传 ZIP 包 -> 保存并部署”发布 `/tmp/am-license-server-deploy.zip`；代码大小由 `5.74 MB` 更新为 `5.78 MB`。
+- [x] 9. 线上浏览器回归验证（真实域名）。
+  - 摘要：`POST /v1/license/verify` 上报新店铺 `900000456` 后，`GET /v1/license/admin/state` 返回 `defaultAuthValidDays=3`、`shop.enabled=true`、`authExpiresAt=+3天`；`dev/license-admin.html` 指向线上地址后可见该店铺且状态“已授权”。
 
 ## 结果复盘
-- 状态：进行中
-- 交付结果：待补充。
+- 状态：已完成
+- 交付结果：
+  - 管理页默认“最近活跃（小时）”由 `168` 改为 `0`，新店铺不会因默认筛选被隐藏；
+  - 新店铺首次命中 `/v1/license/verify` 会自动授权默认 3 天（受 `AM_LICENSE_DEFAULT_AUTH_VALID_DAYS` 控制）；
+  - 浏览器实测已闭环通过（`verify -> admin/state -> 管理页展示`）。
+- 浏览器证据：
+  - 页面字段：`activeWithinInput=0`；
+  - 新店铺样例：`shopId=900000123` 显示为“已授权”，到期时间为 +3 天；
+  - `GET /v1/license/admin/state` 返回 `defaultAuthValidDays=3`，并包含该店铺的 `shops/activeShops` 记录。
+- 线上补充证据：
+  - FC 控制台函数 `am-license-server` `LATEST` 代码大小更新为 `5.78 MB`；
+  - 线上样例：`shopId=900000456`，`verify` 后管理页可见“已授权”，`authExpiresAt` 为 +3 天；
+  - 线上存储模式为 `tablestore`，新店铺授权状态可跨实例持久化。
+- 残留风险：
+  - 自动授权策略会让“首次出现且未吊销”店铺直接进入临时放行；若未来需更严格准入，建议改为“首次出现进入待审核”并配白名单策略开关。
+
+# TODO - 2026-04-02 extension 授权遮罩 shopName 为空修复（shopId=30747760）
+
+## 需求规格
+- 目标：修复 extension 运行时授权遮罩中 `shopName` 显示为 `-` 的问题，在已识别 `shopId`（例：`30747760`）时尽可能补齐真实店铺名。
+- 背景：用户反馈遮罩显示 `shopId` 正常但 `shopName` 为空，影响授权排障与运营识别。
+- 范围：
+  - `src/entries/extension-license-guard.js`：增强 `shopName` 识别与回填策略；
+  - `tests/extension-license-shopid-guard.test.mjs`：补充契约断言防回退；
+  - `dist/extension/page.bundle.js`：通过构建产物同步。
+- 验收：
+  - 授权链路在 `shopId` 已识别但名称缺失时，新增“按 `shopId` 锚定 + 文本标签解析”的店铺名兜底；
+  - `scheduleShopNameBackfill` 支持带 `shopId` 的定向回填，不再只做泛化候选；
+  - 定向测试与构建检查通过；
+  - 若可访问真实页面，完成 chrome-devtools MCP 浏览器验证。
+
+## 执行计划（含校验）
+- [x] 1. 增强店铺名候选解析能力（含标签文本解析与更多 DOM 候选）。
+  - 摘要：新增 `parseShopNameFromLabeledText`，扩展 `resolveLooseShopNameCandidate` 的 DOM/属性候选，并补充店名噪音过滤（占位值、平台词、通用导航词）。
+- [x] 2. 增加基于当前 `shopId` 的定向店铺名提取与回填入口。
+  - 摘要：新增 `parseShopNameNearShopId` 与 `collectShopIdAnchoredTextBlocks`，`resolveShopIdentity` 与 `scheduleShopNameBackfill` 均改为 `resolveLooseShopNameCandidate(shopId)` 定向回填。
+- [x] 3. 更新回归测试断言并执行验证命令。
+  - 摘要：`tests/extension-license-shopid-guard.test.mjs` 新增按 `shopId` 锚定函数与定向回填断言；已执行构建、语法检查、定向测试、`build --check` 并全部通过。
+- [x] 4. 回填结果复盘与教训沉淀。
+  - 摘要：新增“锁定遮罩下店名回填后自动重渲染 + 授权失败后二次回填重试”修复，并补充 `tasks/lessons.md` 防退化规则。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - extension 授权 guard 新增“`shopId` 锚定 + 标签文本 + DOM 候选”三层店铺名兜底链路；
+  - 对 `shopName` 候选增加泛化噪音拦截（如“消息中心/工作台”等），避免误填非店名；
+  - 授权状态回填由泛化解析改为携带 `shopId` 的定向解析，降低空名与错名概率；
+  - 修复“异步回填命中后遮罩仍显示 `shopName: -`”问题：店名回填成功时会刷新锁定遮罩；授权失败后会追加一轮更长的店名回填重试。
+- 验证命令：
+  - `node --check src/entries/extension-license-guard.js`
+  - `node scripts/build.mjs`
+  - `node --check dist/extension/page.bundle.js`
+  - `node --test tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs`
+  - `node scripts/build.mjs --check`
+- 浏览器验证（chrome-devtools MCP，真实阿里妈妈页面）：
+  - 页面：`https://one.alimama.com/index.html#!/manage/onesite?orderField=charge&orderBy=desc`
+  - 结果：在真实页面文本中，按新算法对 `shopId=2957960066` 可提取到 `nearCandidate=美的洗碗机旗舰店`，验证“按 shopId 锚定文本块提取店名”链路生效。
+
+# TODO - 2026-04-02 授权管理台交互精简（去重到期展示/永久按钮/删当前行/紧凑列）
+
+## 需求规格
+- 目标：按最新反馈优化店铺授权管理台交互，去掉授权到期重复展示，弹窗改圆角并新增“永久”快捷按钮，支持删除当前行，并让表格列更紧凑。
+- 范围：
+  - 管理页模板：`dev/license-admin.html` 与 `services/license-server/license-admin.html`；
+  - 服务端接口：`services/license-server/index.mjs` 增加删除接口；
+  - 契约测试与文档：`tests/license-admin-page.test.mjs`、`docs/授权管理页.md`、`services/license-server/README.md`；
+  - 浏览器实测（chrome-devtools MCP）闭环验证。
+- 非目标：
+  - 不改动插件端授权协议；
+  - 不改动与授权管理页无关模块。
+
+## 执行计划（含校验）
+- [x] 1. 同步管理页模板改动（去重到期展示、圆角 + 永久按钮、删除当前行、列更紧凑）。
+  - 摘要：已将 `dev/license-admin.html` 同步到 `services/license-server/license-admin.html`，确保线上模板与本地模板一致（到期列不重复显示时间、圆角到期编辑器、永久按钮、删除当前行选项、紧凑列宽）。
+- [x] 2. 服务端新增 `POST /v1/license/admin/delete` 并接入路由/持久化同步。
+  - 摘要：`services/license-server/index.mjs` 新增 `handleAdminDelete`，删除 `MEMORY_SHOP_STORE`/`MEMORY_REVOKE_STORE`/`MEMORY_ACTIVE_SHOP_STORE` 对应记录并持久化；已接入 handler 路由分发与 `shouldForceStateSync`。
+- [x] 3. 更新测试与文档契约。
+  - 摘要：`tests/license-admin-page.test.mjs` 新增 delete 路径、永久按钮、删除行选项断言并同步“日期修改后自动生效”文案；`docs/授权管理页.md` 与 `services/license-server/README.md` 增补 `POST /v1/license/admin/delete` 与行级交互说明。
+- [x] 4. 执行 `node --check` 与定向 `node --test`。
+  - 摘要：`node --check services/license-server/index.mjs`、`node --test tests/license-admin-page.test.mjs tests/license-server-new-shop-default-auth.test.mjs` 全通过。
+- [x] 5. 使用 chrome-devtools MCP 进行浏览器验证，确认所有交互通过。
+  - 摘要：本地包装服务 `http://127.0.0.1:8787` 下实测通过：到期列无重复时间文本；`永久` 按钮触发成功并将 `authExpiresAt` 置空；“删除当前行”触发确认后成功删除记录并从列表移除；表格列宽与单元格间距保持紧凑。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 授权到期列已消除重复展示，仅保留日期输入 + 永久按钮 + 自动生效提示；
+  - 行级新增“删除当前行”，并接入真实后端删除接口；
+  - 页面模板、服务端路由、测试与文档均已对齐，避免前后端行为分叉。
+- 验证命令/浏览器证据：
+  - 命令：
+    - `node --check services/license-server/index.mjs`
+    - `node --test tests/license-admin-page.test.mjs tests/license-server-new-shop-default-auth.test.mjs`
+  - 浏览器（chrome-devtools MCP）：
+    - 页面：`http://127.0.0.1:8787/`
+    - 证据 1：`evaluate_script` 返回 `duplicateDateText=false`，`editorRadius=12px`，`btnRadius=999px`；
+    - 证据 2：点击“永久”后日志出现 `设置到期日期为永久成功`，`admin/state` 中目标店铺 `authExpiresAt` 变为空串；
+    - 证据 3：触发“删除当前行”后日志出现 `删除当前行成功`，`admin/state` 中 `shops/activeShops/revoked` 对应记录被移除。
+
+# TODO - 2026-04-02 授权管理台文案与行级下拉精简
+
+## 需求规格
+- 目标：按反馈精简授权管理台文案与行级操作下拉，避免误导与无效操作。
+- 范围：
+  - `dev/license-admin.html`
+  - `services/license-server/license-admin.html`
+  - `tests/license-admin-page.test.mjs`
+- 变更要求：
+  - 去掉“日期修改后自动生效”；
+  - 去掉“选择后将立即执行。”；
+  - 行级下拉仅保留：`授权（默认3天）`、`授权1个月`、`授权3个月`、`授权1年`。
+- 非目标：
+  - 不改动授权服务接口与数据结构。
+
+## 执行计划（含校验）
+- [x] 1. 同步更新本地与服务端管理页模板，删除指定文案并精简行级下拉选项。
+  - 摘要：`dev/license-admin.html` 与 `services/license-server/license-admin.html` 已删除“日期修改后自动生效”“选择后将立即执行。”，并将行级下拉精简为 4 个授权项。
+- [x] 2. 更新页面契约测试断言，移除与已删除文案/选项相关检查。
+  - 摘要：`tests/license-admin-page.test.mjs` 已移除旧文案/旧选项断言，新增“选择授权时长”提示项断言。
+- [x] 3. 执行定向测试验证改动正确。
+  - 摘要：`node --test tests/license-admin-page.test.mjs` 通过（6/6）。
+- [x] 4. 回填结果复盘，并同步 lessons 纠偏规则。
+  - 摘要：已补充结果复盘与 `tasks/lessons.md` 新规则，约束授权管理页文案与行级下拉精简行为。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 两句提示文案“日期修改后自动生效”“选择后将立即执行。”已从本地与服务端模板同步移除；
+  - 行级下拉已精简为 4 个授权项：默认3天、1个月、3个月、1年；
+  - 契约测试已更新并通过，避免后续回归到旧文案/旧选项。
+- 验证命令：
+  - `node --test tests/license-admin-page.test.mjs`
+- 残留说明：
+  - `allow-permanent/allow-off/revoke/delete` 逻辑分支仍保留在脚本中（当前 UI 不再提供入口），用于兼容历史能力与后续可能恢复。
+
+# TODO - 2026-04-02 授权状态/吊销状态改为网页内下拉直改
+
+## 需求规格
+- 目标：在“授权状态”“吊销状态”列提供网页内自定义下拉，支持直接修改状态。
+- 约束：
+  - 不使用浏览器默认下拉（原生 `select`）作为这两列操作入口；
+  - 不使用浏览器默认弹窗（`window.prompt/confirm/alert`）作为这两列操作流程。
+- 范围：
+  - `dev/license-admin.html`
+  - `services/license-server/license-admin.html`
+  - `tests/license-admin-page.test.mjs`
+- 非目标：
+  - 不改动授权服务端接口协议。
+
+## 执行计划（含校验）
+- [x] 1. 重构表格两列交互：授权状态/吊销状态改为网页内自定义下拉菜单并接入现有 action。
+  - 摘要：授权状态支持“已授权/未授权”二选一；吊销状态支持“已吊销/未吊销”二选一，均由网页内下拉触发并直接执行。
+- [x] 2. 移除原生行级下拉入口与浏览器弹窗依赖，保留页面内直接操作链路。
+  - 摘要：已移除 `row-action-select` 与 `window.prompt/window.confirm` 交互入口，状态改动全部走页面内按钮下拉。
+- [x] 3. 同步更新契约测试断言，覆盖新的 DOM 与交互入口。
+  - 摘要：`tests/license-admin-page.test.mjs` 已更新为断言 `inline-menu` + 新状态选项文本，且保持双模板一致性。
+- [x] 4. 执行定向测试验证并回填复盘/lessons。
+  - 摘要：`node --test tests/license-admin-page.test.mjs` 通过（6/6）；chrome-devtools 实测可通过状态下拉直接改状态。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - “已授权/未授权”“已吊销/未吊销”改为可点击状态下拉，符合“直接修改”交互；
+  - 授权日期“永久”入口已改为网页内下拉，仅保留 4 个授权时长；
+  - 本地模板与服务端模板保持同源同步。
+- 验证命令/浏览器证据：
+  - `node --test tests/license-admin-page.test.mjs`
+  - 浏览器（chrome-devtools MCP）：点击“未授权 ▾”后可见“已授权/未授权”，选择后日志出现 `授权放行（默认3天）成功`，状态按钮更新为“已授权 ▾”。
+
+# TODO - 2026-04-02 授权管理台行悬浮删除与下拉样式统一
+
+## 需求规格
+- 目标：
+  - 鼠标悬浮行时，在 `shopId` 旁显示 `X` 图标，支持直接删除当前行；
+  - 下拉触发器样式与下拉项文字风格统一，提升一致性。
+- 范围：
+  - `dev/license-admin.html`
+  - `services/license-server/license-admin.html`
+  - `tests/license-admin-page.test.mjs`
+- 约束：
+  - 不使用浏览器默认弹窗做删除确认；
+  - 删除动作沿用现有 `POST /v1/license/admin/delete`。
+
+## 执行计划（含校验）
+- [x] 1. 在 `shopId` 单元格增加 hover 显示的 `X` 删除按钮并接入删除 action。
+  - 摘要：新增 `data-role=\"delete-row-btn\"` 删除按钮，默认隐藏、行 hover/focus 时显示，点击直接调用 `delete-row` action。
+- [x] 2. 调整状态/日期下拉触发器样式，使其与下拉项文字风格一致。
+  - 摘要：统一为 `12px` 字号、`6px 8px` 内边距与近似圆角；状态触发器与下拉项视觉语义一致，减少风格割裂。
+- [x] 3. 更新契约测试断言并执行定向测试。
+  - 摘要：测试新增删除按钮断言；`node --test tests/license-admin-page.test.mjs` 通过（6/6）。
+- [x] 4. 浏览器验证（hover 显示删除按钮、点击删除生效、下拉样式与选项一致）并回填复盘/lessons。
+  - 摘要：chrome-devtools 下验证删除动作日志与样式参数均符合预期。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 行悬浮可见 `X` 删除按钮，支持直接删除当前行；
+  - 下拉触发器样式与下拉项文本风格统一（字号/间距/圆角对齐）；
+  - `dev/license-admin.html` 与 `services/license-server/license-admin.html` 已同步一致。
+- 浏览器证据（chrome-devtools MCP）：
+  - 删除动作：日志出现 `删除当前行成功：shopId=30747760`；
+  - 样式一致：`evaluate_script` 返回 `trigger.fontSize=12px`、`item.fontSize=12px`、`trigger.padding=6px 8px`、`item.padding=6px 8px`；
+  - hover 规则：`evaluate_script` 返回 `hasHoverDeleteRule=true`（存在 `tbody tr:hover .shop-id-delete` 规则）。
+
+# TODO - 2026-04-02 授权时长高度与删除链路补修（浏览器复测通过）
+
+## 需求规格
+- 目标：
+  - 让“授权时长”触发器与日期输入框高度一致；
+  - 让下拉面板宽度适配下拉文案；
+  - 修复 `X` 点击后“当前行删不掉”的前端可见性问题。
+- 范围：
+  - `dev/license-admin.html`
+  - `services/license-server/license-admin.html`
+
+## 执行计划（含校验）
+- [x] 1. 对齐日期输入与“授权时长”触发器高度。
+  - 摘要：两者统一为 `34px`，浏览器测得 `heightDelta=0`。
+- [x] 2. 调整下拉面板宽度策略，按文案自适应。
+  - 摘要：面板改为 `width:max-content` + `min-width:100%`，并为菜单项加 `white-space: nowrap`。
+- [x] 3. 修复删除按钮点击后前端可见性。
+  - 摘要：新增 `hiddenShopIds`，删除成功后前端立即过滤该行；失败会回滚显示。
+- [x] 4. 浏览器复测到通过。
+  - 摘要：mock 服务下验证通过：`rowsBefore=1 -> rowsAfter=0`，日志出现 `删除当前行成功：shopId=30747760`。
+
+## 结果复盘
+- 状态：已完成
+- 浏览器量化证据（chrome-devtools MCP）：
+  - 尺寸：`dateHeight=34`、`durationHeight=34`、`heightDelta=0`；
+  - 菜单：`panelFitsText=true`（`panelWidth=117.20` 覆盖 `maxItemWidth=107`）；
+  - 删除：`removedFromFrontend=true`、`hasEmptyTip=true`、`deleteSuccessLogged=true`。
+- 线上接口现状说明：
+  - 你提供的线上地址当前对 `POST /v1/license/admin/delete` 仍返回 `404 not_found`（已在日志复现）；
+  - 本次页面逻辑已在支持该接口的服务上验证通过，若要“服务器端也删除”在该线上地址生效，需要先部署包含 delete 路由的服务版本。
+
+# TODO - 2026-04-02 真实环境删行闭环（线上 delete 路由复核）
+
+## 需求规格
+- 目标：按用户要求在真实环境完成“点击 `X` 删除当前行”，并验证服务端真实删除成功。
+- 约束：
+  - 不以 mock/本地假接口作为最终结论；
+  - 必须在浏览器页面触发删除动作，再用线上状态接口复核。
+- 范围：
+  - 浏览器页面：`file:///Users/liangchao/.codex/worktrees/f500/alimama-helper-pro/dev/license-admin.html`（Base URL 指向线上服务）；
+  - 线上服务：`https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run`。
+
+## 执行计划（含校验）
+- [x] 1. 浏览器悬浮 `shopId` 行，点击 `X` 删除按钮触发真实请求。
+  - 摘要：在 `shopId=900000456` 行旁点击 `删除当前行`，页面计数从 4 行降到 3 行。
+- [x] 2. 校验页面日志是否返回成功。
+  - 摘要：日志出现 `删除当前行成功：shopId=900000456`（时间 `01:15:54`）。
+- [x] 3. 校验线上状态接口已移除该店铺。
+  - 摘要：`GET /v1/license/admin/state` 返回 `state_has_900000456=no`、`state_total_shops=3`。
+
+## 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 真实环境删行已打通，`X` 点击后前端与服务端均删除成功；
+  - 之前 `POST /v1/license/admin/delete` 的 `404 not_found` 已不再出现于本次实测。
+- 关键证据：
+  - 浏览器日志：`[01:15:54] [INFO ] 删除当前行成功：shopId=900000456`；
+  - 线上接口复核：`state_has_900000456=no`。
+
+# TODO - 2026-04-02 管理页元信息空值修正 + 浏览器/系统版本展示
+
+## 需求规格
+- 目标：
+  - 解释并修正管理页 `reason/code` 等元信息常为空的问题；
+  - 新增“浏览器版本 / 操作系统版本”展示。
+- 范围：
+  - `services/license-server/index.mjs`
+  - `dev/license-admin.html`
+  - `services/license-server/license-admin.html`
+  - `src/entries/extension-license-guard.js`
+  - `docs/授权管理页.md`
+  - `tests/license-admin-page.test.mjs`
+- 非目标：
+  - 不改变授权放行/吊销/删除业务语义。
+
+## 执行计划（含校验）
+- [x] 1. 修复 `reason/code` 空值映射。
+  - 摘要：管理页聚合改为 `reason <- reason/lastReason`、`code <- code/lastCode`；服务端 active 记录补 `reason/code` 兼容字段。
+- [x] 2. 增加浏览器/系统版本字段采集与落库。
+  - 摘要：服务端在 verify 链路记录 `userAgent/browserVersion/osVersion`；插件 verify payload 同步上报该信息兜底。
+- [x] 3. 管理页展示新增字段并保持双模板一致。
+  - 摘要：详情区新增 `browser` 与 `os` 两行；`dev` 与 `services` 模板同步。
+- [x] 4. 文档和测试同步 + 实测。
+  - 摘要：定向测试通过；线上函数已重新部署并在浏览器页面看到 `browser/os` 实际展示。
+
+## 结果复盘
+- 状态：已完成
+- 结论：
+  - `reason/code` 在有 verify 记录的店铺上已正常展示（如 `ok/ok`）；
+  - 管理页已可展示 `browser/os`，示例：`Chrome 135.0.0.0`、`macOS 14.5`；
+  - 对于仅来自 `allowed env`、尚无 verify 活跃记录的店铺，`browser/os/reason/code` 仍会显示 `-`，属于预期。
+- 关键验证：
+  - `node --check services/license-server/index.mjs`
+  - `node --check src/entries/extension-license-guard.js`
+  - `node --test tests/license-admin-page.test.mjs`
+  - 浏览器（chrome-devtools）刷新后可见：`browser: Chrome 135.0.0.0`、`os: macOS 14.5`。

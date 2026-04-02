@@ -191,6 +191,26 @@ node scripts/build.mjs
 
 然后在 Chrome / Edge 扩展页加载 `dist/extension/`。当前 v1 不提供 popup/options 页面，访问阿里妈妈页面即自动生效。
 
+### 本地授权管理页（店铺授权）
+
+仓库提供了本地管理页面：
+
+- [`dev/license-admin.html`](./dev/license-admin.html)
+- 配套 API 契约文档：[`docs/授权管理页.md`](./docs/授权管理页.md)
+
+推荐通过本地静态服务打开：
+
+```bash
+python3 -m http.server 8173
+```
+
+然后访问：`http://127.0.0.1:8173/dev/license-admin.html`
+
+说明：
+- 该页面只负责“授权管理前端”，真实数据仍由你的授权服务端提供。
+- 页面默认调用 `GET /v1/license/admin/state`、`POST /v1/license/admin/allow`、`POST /v1/license/admin/revoke`。
+- 管理鉴权头使用 `x-am-admin-token`（兼容 `x-admin-token`）。
+
 ## 代码检查团队（Review Team）
 
 仓库内置“5 角色检查团队”机制（架构、安全、测试、UI/交互、发布），用于统一代码审查口径。
