@@ -285,6 +285,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     const AUTH_BASE_URL = "https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run";
     const BUILD_ID = "mcp-e2e-20260331";
     const BUILD_CHANNEL = "release";
+    const POLICY_TOKEN_PUBLIC_KEY_PEM = [
+        '-----BEGIN PUBLIC KEY-----',
+        'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEl9dnep6QIyORHbfzlPFcggzLGBXy',
+        'tq++VJp0r9MI/VYiUv/3K8beRUjeGWZIHIs1VoAFlubm8bBD3rHsA844Kw==',
+        '-----END PUBLIC KEY-----'
+    ].join('\n');
 
     const CACHE_KEY = '__AM_LICENSE_CACHE_V1__';
     const STATE_KEY = '__AM_LICENSE_STATE__';
@@ -325,12 +331,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
     let expiryTimer = 0;
     let renewTimer = 0;
+    let onDemandVerifyInstalled = false;
+    let onDemandVerifyInFlight = false;
 
     const LEASE_RENEW_DEFAULT_LEAD_MS = 60 * 1000;
     const LEASE_RENEW_MIN_LEAD_MS = 15 * 1000;
     const LEASE_RENEW_MAX_LEAD_MS = 2 * 60 * 1000;
     const LEASE_RENEW_RETRY_MIN_MS = 2 * 1000;
     const LEASE_RENEW_RETRY_MAX_MS = 10 * 1000;
+    const ON_DEMAND_VERIFY_INTERACTION_SELECTOR = [
+        '[id^="am-"]',
+        '[class*="am-"]',
+        '[data-am-helper]',
+        '[data-am-license]',
+        '#am-license-lock-overlay'
+    ].join(',');
 
     const toNow = () => Date.now();
 
@@ -387,6 +402,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
     const scheduleExpiryCheck = () => {
         clearLeaseTimers();
+        // Extension mode uses interaction-triggered verification only; no background checks.
+        if (resolveRuntimeMode() === 'extension') return;
         const expireAt = Number(state.expiresAt || 0);
         if (!state.authorized || !Number.isFinite(expireAt) || expireAt <= 0) return;
         const remainingMs = Math.max(0, expireAt - toNow());
@@ -1278,6 +1295,133 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         return `fallback_${Math.abs(hash)}`;
     };
 
+    const base64ToBytes = (value = '') => {
+        const text = String(value || '').replace(/\s+/g, '');
+        if (!text) return new Uint8Array(0);
+        const binary = atob(text);
+        const out = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            out[i] = binary.charCodeAt(i);
+        }
+        return out;
+    };
+
+    const base64UrlToBytes = (value = '') => {
+        const raw = String(value || '').trim();
+        if (!raw) return new Uint8Array(0);
+        const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+        return base64ToBytes(padded);
+    };
+
+    const bytesToText = (bytes) => {
+        try {
+            return new TextDecoder().decode(bytes || new Uint8Array(0));
+        } catch {
+            return '';
+        }
+    };
+
+    const decodeBase64UrlJson = (value = '') => {
+        const text = bytesToText(base64UrlToBytes(value));
+        const parsed = safeParseJson(text);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    };
+
+    const parsePolicyToken = (token = '') => {
+        const raw = String(token || '').trim();
+        if (!raw) return null;
+        const parts = raw.split('.');
+        if (parts.length !== 3) return null;
+        const header = decodeBase64UrlJson(parts[0]);
+        const payload = decodeBase64UrlJson(parts[1]);
+        if (!header || !payload) return null;
+        return {
+            raw,
+            parts,
+            header,
+            payload,
+            signatureBytes: base64UrlToBytes(parts[2]),
+            signingInput: `${parts[0]}.${parts[1]}`
+        };
+    };
+
+    let policyPublicKeyPromise = null;
+
+    const importPolicyPublicKey = async () => {
+        if (policyPublicKeyPromise) return policyPublicKeyPromise;
+        policyPublicKeyPromise = (async () => {
+            if (!window.crypto?.subtle) return null;
+            const pem = String(POLICY_TOKEN_PUBLIC_KEY_PEM || '').trim();
+            if (!pem) return null;
+            const body = pem
+                .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+                .replace(/-----END PUBLIC KEY-----/g, '')
+                .replace(/\s+/g, '');
+            if (!body) return null;
+            const keyData = base64ToBytes(body);
+            return window.crypto.subtle.importKey(
+                'spki',
+                keyData.buffer,
+                { name: 'ECDSA', namedCurve: 'P-256' },
+                false,
+                ['verify']
+            );
+        })().catch(() => null);
+        return policyPublicKeyPromise;
+    };
+
+    const verifyPolicyToken = async (shopId = '', normalizedResult = {}) => {
+        const token = String(normalizedResult?.policyToken || '').trim();
+        if (!token) {
+            throw createError('policy_token_missing', '授权返回缺少 policyToken');
+        }
+        const parsed = parsePolicyToken(token);
+        if (!parsed) {
+            throw createError('policy_token_invalid', 'policyToken 格式非法');
+        }
+        const alg = String(parsed?.header?.alg || '').trim();
+        if (alg !== 'ES256') {
+            throw createError('policy_token_alg_invalid', 'policyToken 算法非法');
+        }
+        const publicKey = await importPolicyPublicKey();
+        if (!publicKey) {
+            throw createError('policy_key_unavailable', 'policyToken 公钥不可用');
+        }
+        const verified = await window.crypto.subtle.verify(
+            { name: 'ECDSA', hash: { name: 'SHA-256' } },
+            publicKey,
+            parsed.signatureBytes,
+            new TextEncoder().encode(parsed.signingInput)
+        ).catch(() => false);
+        if (!verified) {
+            throw createError('policy_token_signature_invalid', 'policyToken 验签失败');
+        }
+
+        const payload = parsed.payload || {};
+        const payloadShopId = normalizeShopId(payload.sid || '');
+        const payloadLeaseToken = String(payload.ltk || '').trim();
+        const payloadExpiresAt = normalizeTimestamp(payload.exp);
+        const payloadBuildId = String(payload.bid || '').trim();
+        const payloadBuildChannel = String(payload.bch || '').trim();
+
+        if (!payloadShopId || payloadShopId !== normalizeShopId(shopId || '')) {
+            throw createError('policy_token_shop_mismatch', 'policyToken 店铺不匹配');
+        }
+        if (!payloadLeaseToken || payloadLeaseToken !== String(normalizedResult.leaseToken || '')) {
+            throw createError('policy_token_lease_mismatch', 'policyToken 租约不匹配');
+        }
+        if (!payloadExpiresAt || payloadExpiresAt !== Number(normalizedResult.expiresAt || 0)) {
+            throw createError('policy_token_exp_mismatch', 'policyToken 过期时间不匹配');
+        }
+        if (payloadBuildId !== String(BUILD_ID || '') || payloadBuildChannel !== String(BUILD_CHANNEL || '')) {
+            throw createError('policy_token_build_mismatch', 'policyToken 构建标识不匹配');
+        }
+        if (payloadExpiresAt <= toNow()) {
+            throw createError('policy_token_expired', 'policyToken 已过期');
+        }
+    };
+
     const computeDeviceHash = async () => {
         const seed = [
             navigator.userAgent || '',
@@ -1387,6 +1531,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         if (!signature) {
             throw createError('signature_missing', '授权返回缺少签名', json);
         }
+        const policyToken = String(json?.policy?.token || json?.policyToken || '').trim();
 
         return {
             authorized,
@@ -1394,6 +1539,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             leaseToken,
             expiresAt,
             signature,
+            policyToken,
             policy: json.policy && typeof json.policy === 'object' ? json.policy : {}
         };
     };
@@ -1449,6 +1595,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const normalized = verifyLeasePayloadShape(json, payload);
         await verifySignature(payload, normalized);
+        if (normalized.policyToken) {
+            await verifyPolicyToken(payload.shopId, normalized);
+        }
         return normalized;
     };
 
@@ -1645,6 +1794,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const cacheShopId = normalizeShopId(cache?.shopId);
         const cacheShopName = normalizeShopName(cache?.shopName || '');
         const cacheExpiresAt = normalizeTimestamp(cache?.expiresAt);
+        const cachePolicyToken = String(cache?.policyToken || cache?.policy?.token || '').trim();
         const stateShopId = normalizeShopId(state.shopId || '');
         const stateShopName = normalizeShopName(state.shopName || '');
 
@@ -1694,15 +1844,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         if (!force && cache && typeof cache === 'object') {
             if (cacheShopId && cacheShopId === shopInfo.shopId && cacheExpiresAt > toNow()) {
-                unlock({
-                    source,
-                    shopId: shopInfo.shopId,
-                    shopName: shopInfo.shopName || cache.shopName || '',
-                    expiresAt: cacheExpiresAt,
-                    leaseToken: String(cache.leaseToken || ''),
-                    policy: cache.policy || {}
-                });
-                return { ...state };
+                const cacheLeaseToken = String(cache.leaseToken || '').trim();
+                if (cacheLeaseToken && cachePolicyToken) {
+                    try {
+                        await verifyPolicyToken(shopInfo.shopId, {
+                            leaseToken: cacheLeaseToken,
+                            expiresAt: cacheExpiresAt,
+                            policyToken: cachePolicyToken
+                        });
+                        unlock({
+                            source,
+                            shopId: shopInfo.shopId,
+                            shopName: shopInfo.shopName || cache.shopName || '',
+                            expiresAt: cacheExpiresAt,
+                            leaseToken: cacheLeaseToken,
+                            policy: {
+                                ...(cache.policy || {}),
+                                token: cachePolicyToken
+                            }
+                        });
+                        return { ...state };
+                    } catch {
+                        writeCache(null);
+                    }
+                } else {
+                    writeCache(null);
+                }
             }
         }
 
@@ -1716,6 +1883,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 shopName: verifiedShopName,
                 leaseToken: normalized.leaseToken,
                 expiresAt: normalized.expiresAt,
+                policyToken: normalized.policyToken || '',
                 policy: normalized.policy || {},
                 updatedAt: toNow()
             });
@@ -1762,6 +1930,50 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         }
     };
 
+    const isPluginInteractionTarget = (target) => {
+        if (!(target instanceof Element)) return false;
+        if (String(target.id || '').startsWith('am-')) return true;
+        const className = typeof target.className === 'string' ? target.className : '';
+        if (/\bam-[a-z0-9_-]+/i.test(className)) return true;
+        return !!target.closest(ON_DEMAND_VERIFY_INTERACTION_SELECTOR);
+    };
+
+    const triggerOnDemandVerify = (source = 'on_demand_interaction') => {
+        if (onDemandVerifyInFlight || isCurrentLeaseValid()) return;
+        onDemandVerifyInFlight = true;
+        assertAuthorized({
+            source,
+            shopIdRetryAttempts: 2,
+            shopIdRetryBaseDelayMs: 180,
+            shopIdRetryMaxDelayMs: 620
+        })
+            .catch(() => { })
+            .finally(() => {
+                onDemandVerifyInFlight = false;
+            });
+    };
+
+    const installOnDemandVerifyHooks = () => {
+        if (onDemandVerifyInstalled || resolveRuntimeMode() !== 'extension') return;
+        onDemandVerifyInstalled = true;
+
+        document.addEventListener('pointerdown', (event) => {
+            if (!isPluginInteractionTarget(event?.target)) return;
+            triggerOnDemandVerify('on_demand_pointerdown');
+        }, true);
+
+        document.addEventListener('keydown', (event) => {
+            const key = String(event?.key || '');
+            if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') return;
+            if (!isPluginInteractionTarget(event?.target)) return;
+            triggerOnDemandVerify('on_demand_keydown');
+        }, true);
+
+        window.addEventListener('am-helper:license-check', () => {
+            triggerOnDemandVerify('on_demand_custom_event');
+        });
+    };
+
     const requireAuthorizedSync = (source = 'sync_gate') => {
         if (isCurrentLeaseValid()) return true;
         lock('lease_expired', '授权已失效，功能已锁定', source);
@@ -1793,6 +2005,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     const LicenseGuard = {
         resolveShopIdentity,
         assertAuthorized,
+        triggerOnDemandVerify,
         requireAuthorizedSync,
         lock,
         getState,
@@ -1806,8 +2019,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         source: 'bootstrap'
     });
 
-    // 预热授权，确保启动前就完成首轮校验；失败会自动锁定。
-    LicenseGuard.assertAuthorized({ source: 'bootstrap_preflight' }).catch(() => { });
+    if (resolveRuntimeMode() === 'extension') {
+        installOnDemandVerifyHooks();
+    } else {
+        // userscript 模式保持启动预热校验。
+        LicenseGuard.assertAuthorized({ source: 'bootstrap_preflight' }).catch(() => { });
+    }
 })();
 (function () {
     'use strict';

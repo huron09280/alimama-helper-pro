@@ -1,3 +1,123 @@
+# TODO - 2026-04-03 extension 授权改为“使用时校验”
+
+## 需求规格
+- 目标：按用户要求将 extension 授权校验从“页面空闲预检/后台轮询”改为“用户使用插件时才触发”。
+- 范围：
+  - `extension-license-guard` 在 extension 模式停用空闲期自动续租与启动预检；
+  - 新增交互触发按需校验（点击/键盘触发插件 UI）；
+  - 补充契约测试并重建 extension 产物。
+- 非目标：
+  - 不改 userscript 模式的启动预热策略；
+  - 不修改服务端授权规则与 token 验签逻辑。
+
+## 执行计划（含校验）
+- [x] 1. 调整 extension 模式校验时机。
+  - 摘要：extension 模式下 `scheduleExpiryCheck` 直接返回，停用空闲期后台校验。
+- [x] 2. 增加按需触发链路。
+  - 摘要：新增 `installOnDemandVerifyHooks/triggerOnDemandVerify`，仅在交互命中插件 UI（`am-*`）时触发授权校验。
+- [x] 3. 保留 userscript 现有行为。
+  - 摘要：userscript 模式仍保留 `bootstrap_preflight` 预热校验。
+- [x] 4. 测试与构建验证。
+  - 摘要：定向测试通过并执行 `node scripts/build.mjs` 生成最新 extension 包。
+
+## 结果复盘
+- 状态：已完成
+- 当前结论：
+  - extension 模式不再在平时空闲阶段触发授权请求；
+  - 仅在用户实际触发插件交互时才发起授权校验，降低 `request_failed` 对日常浏览的干扰。
+
+# TODO - 2026-04-02 policyToken 验签失败（DER vs JOSE）修复
+
+## 需求规格
+- 目标：修复“后台已授权但 extension 仍提示 `policyToken 验签失败` 并锁定”的线上问题。
+- 范围：
+  - 服务端 `createPolicyToken` 签名编码从 DER 改为 P-256 原始签名（JOSE/JWT 兼容）；
+  - 通过浏览器上传 ZIP 包重新部署 FC；
+  - 以 extension 实际参数（`build=mcp-e2e-20260331`、`channel=release`、`runtime=extension`）完成线上复验。
+- 非目标：
+  - 不修改店铺授权判定逻辑；
+  - 不修改扩展端公钥与验签规则。
+
+## 执行计划（含校验）
+- [x] 1. 复现并确认根因。
+  - 摘要：复现到 `crypto.sign` 默认 DER（71/72 字节）与 WebCrypto ECDSA 验签预期（64 字节 raw）不一致，导致稳定验签失败。
+- [x] 2. 修复服务端签名编码并补回归测试。
+  - 摘要：`services/license-server/index.mjs` 改为 `dsaEncoding: 'ieee-p1363'`，并在 `tests/license-server-hardening.test.mjs` 新增签名编码断言。
+- [x] 3. 浏览器部署并验证生效。
+  - 摘要：已在 FC 控制台上传 `/tmp/am-license-server-fc.zip` 并“保存并部署”；页面“上次修改时间”更新为 `2026-04-02 15:54:19`。
+- [x] 4. 线上联调与回归。
+  - 摘要：`verify` 返回 token 签名长度 `64`，WebCrypto 验签通过；`claims.bid/bch` 与扩展构建一致；`nonce_replayed`/`timestamp_out_of_window` 回归通过。
+
+## 结果复盘
+- 状态：已完成
+- 关键结论：
+  - 问题本质是签名格式不兼容，不是“未授权”或“build/channel 不一致”；
+  - 修复后 extension 路径下 policy token 可正常验签，不再误锁。
+
+# TODO - 2026-04-02 policy token 私钥加载兜底修复
+
+## 需求规格
+- 目标：修复线上 `policyTokenEnabled=false` 的最后卡点，确保 `verify` 返回 `policy.token`。
+- 范围：
+  - 服务端新增单行 Base64 私钥环境变量兜底；
+  - 保持原 `AM_LICENSE_POLICY_PRIVATE_KEY_PEM` 兼容；
+  - 浏览器控制台补充变量并完成线上联调验证。
+- 非目标：
+  - 不改动授权路由与鉴权协议；
+  - 不调整已有 nonce/timestamp 规则。
+
+## 执行计划（含校验）
+- [x] 1. 服务端私钥加载增强（PEM + Base64 双来源）。
+  - 摘要：解决控制台多行转义导致的私钥解析失败问题。
+- [x] 2. 回归测试与最小验证。
+  - 摘要：更新定向契约测试并执行。
+- [x] 3. 浏览器部署与环境变量补齐。
+  - 摘要：已在 FC 控制台完成部署，确认 `fc3-api__UpdateFunction` 请求体携带 `AM_LICENSE_POLICY_PRIVATE_KEY_BASE64` 非空值（请求 `reqid=4104`）。
+- [x] 4. 线上联调验收。
+  - 摘要：`admin/state.authHardening.policyTokenEnabled=true`；`verify` 返回 `policy.token` 非空且 `tokenAlg=ES256`；`nonce_replayed` 与 `timestamp_out_of_window` 复验通过。
+
+## 结果复盘
+- 状态：已完成
+- 关键结论：
+  - 根因不是后端解析失败，而是浏览器自动填值未触发表单状态同步，导致 `UpdateFunction` 持续提交空值；
+  - 改为浏览器真实键盘输入后，私钥已成功落入函数环境变量并生效；
+  - 当前授权链路已恢复 policy token 签发能力，且时间窗/防重放加固未回退。
+
+# TODO - 2026-04-02 授权防复制加固（第一阶段）
+
+## 需求规格
+- 目标：降低“复制脚本 + 篡改本地缓存/请求”绕过授权的成功率，完成第一阶段可落地加固。
+- 范围：
+  - 服务端：关闭“新店自动授权”默认放行；管理接口必须配置管理员令牌；`verify` 增加时间窗与 nonce 去重防重放；
+  - 客户端：本地缓存改为“服务端签发 token + 客户端公钥验签”后才可离线放行；
+  - 文档与测试：同步更新授权服务文档与定向回归测试。
+- 非目标：
+  - 不承诺“绝对不可破解”；
+  - 不在本轮迁移核心业务到服务端执行。
+
+## 执行计划（含校验）
+- [x] 1. 服务端安全开关改造。
+  - 摘要：默认关闭新店自动授权；管理员 token 未配置时拒绝管理接口；新增可配置的时间窗与 nonce 缓存上限。
+- [x] 2. `verify` 防重放与签发能力改造。
+  - 摘要：增加 timestamp 漂移校验与 nonce 一次性校验；服务端支持返回 ES256 签发 token（可配置私钥）。
+- [x] 3. 客户端缓存验签改造。
+  - 摘要：读取缓存时仅信任“可验签且未过期且 shopId 匹配”的 token，不再仅依赖本地明文缓存字段。
+- [x] 4. 文档与测试更新并执行验证。
+  - 摘要：已更新 `services/license-server/README.md` 与 `docs/授权管理页.md`；执行了语法检查、全量回归、`build --check` 和 `review-team`。
+- [x] 5. 结果复盘归档。
+  - 摘要：已补充本节复盘，记录风险收敛项与下一步建议。
+
+## 结果复盘
+- 状态：已完成
+- 已收敛：
+  - 新店首次 `verify` 默认不再自动放行（可配置开启）；
+  - 管理接口在 `AM_LICENSE_ADMIN_TOKEN` 缺失时强制拒绝；
+  - `verify` 增加时间窗与 nonce 防重放；
+  - 服务端可签发 `policy.token`，客户端缓存命中前会先做 ES256 验签。
+- 剩余风险：
+  - 客户端脚本依旧属于可逆向资产，无法达到“绝对不可破解”；
+  - 若未配置 `AM_LICENSE_POLICY_PRIVATE_KEY_PEM`，客户端将回退为“仅在线校验可用、离线缓存不可用”。
+
 # TODO - 2026-04-01 浏览器自动化通道 `Transport closed` 修复（继续）
 
 ## 追加任务 - 2026-04-02 云库写入故障回溯与修复（Tablestore SDK 缺失）

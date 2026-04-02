@@ -22,6 +22,7 @@ const REVOKED_SHOP_IDS = new Set(
 const MEMORY_SHOP_STORE = new Map();
 const MEMORY_REVOKE_STORE = new Set();
 const MEMORY_ACTIVE_SHOP_STORE = new Map();
+const VERIFY_NONCE_CACHE = new Map();
 
 const resolvePositiveInt = (value, fallback) => {
     const numeric = Number(value);
@@ -29,8 +30,63 @@ const resolvePositiveInt = (value, fallback) => {
     return Math.floor(numeric);
 };
 
+const resolveBooleanEnv = (value, fallback = false) => {
+    if (value == null) return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['1', 'true', 'yes', 'on', 'enable', 'enabled'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off', 'disable', 'disabled'].includes(normalized)) return false;
+    return fallback;
+};
+
+const normalizePemMultilineEnv = (value = '') => {
+    let normalized = String(value || '').trim();
+    if (!normalized) return '';
+    if (
+        (normalized.startsWith('"') && normalized.endsWith('"'))
+        || (normalized.startsWith("'") && normalized.endsWith("'"))
+    ) {
+        normalized = normalized.slice(1, -1).trim();
+    }
+    normalized = normalized
+        .replace(/\r\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\+\n/g, '\n');
+    return normalized.trim();
+};
+
+const decodePemBase64Env = (value = '') => {
+    const encoded = String(value || '').trim();
+    if (!encoded) return '';
+    try {
+        return Buffer.from(encoded, 'base64').toString('utf8').trim();
+    } catch {
+        return '';
+    }
+};
+
+const createPolicySignKey = ({ rawPem = '', rawPemBase64 = '' } = {}) => {
+    const pemCandidates = [
+        normalizePemMultilineEnv(rawPem),
+        normalizePemMultilineEnv(decodePemBase64Env(rawPemBase64))
+    ].filter(Boolean);
+
+    for (const pem of pemCandidates) {
+        try {
+            return crypto.createPrivateKey(pem);
+        } catch (error) {
+            console.error('[license_policy] invalid private key pem', error);
+        }
+    }
+    return null;
+};
+
 const MAX_ACTIVE_SHOP_ENTRIES = resolvePositiveInt(process.env.AM_LICENSE_ACTIVE_SHOP_LIMIT, 500);
 const DEFAULT_AUTH_VALID_DAYS = resolvePositiveInt(process.env.AM_LICENSE_DEFAULT_AUTH_VALID_DAYS, 3);
+const AUTO_PROVISION_NEW_SHOP_ENABLED = resolveBooleanEnv(process.env.AM_LICENSE_AUTO_PROVISION_NEW_SHOP, false);
+const VERIFY_TIMESTAMP_DRIFT_MS = resolvePositiveInt(process.env.AM_LICENSE_VERIFY_TIMESTAMP_DRIFT_MS, 60 * 1000);
+const NONCE_WINDOW_MS = resolvePositiveInt(process.env.AM_LICENSE_NONCE_WINDOW_MS, 5 * 60 * 1000);
+const NONCE_CACHE_LIMIT = resolvePositiveInt(process.env.AM_LICENSE_NONCE_CACHE_LIMIT, 20000);
 const STATE_SYNC_INTERVAL_MS = resolvePositiveInt(process.env.AM_LICENSE_STATE_SYNC_INTERVAL_MS, 1500);
 const TABLESTORE_ENDPOINT = String(process.env.AM_LICENSE_TABLESTORE_ENDPOINT || '').trim();
 const TABLESTORE_INSTANCE = String(process.env.AM_LICENSE_TABLESTORE_INSTANCE || '').trim();
@@ -39,6 +95,11 @@ const TABLESTORE_STATE_PK = String(process.env.AM_LICENSE_TABLESTORE_STATE_PK ||
 const TABLESTORE_AK = String(process.env.AM_LICENSE_TABLESTORE_AK || process.env.ALIBABA_CLOUD_ACCESS_KEY_ID || '').trim();
 const TABLESTORE_SK = String(process.env.AM_LICENSE_TABLESTORE_SK || process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '').trim();
 const TABLESTORE_STS_TOKEN = String(process.env.AM_LICENSE_TABLESTORE_STS_TOKEN || process.env.ALIBABA_CLOUD_SECURITY_TOKEN || '').trim();
+const POLICY_SIGN_KEY = createPolicySignKey({
+    rawPem: process.env.AM_LICENSE_POLICY_PRIVATE_KEY_PEM || '',
+    rawPemBase64: process.env.AM_LICENSE_POLICY_PRIVATE_KEY_BASE64 || ''
+});
+const POLICY_TOKEN_ALG = 'ES256';
 const TABLESTORE_ENABLED = !!(TABLESTORE_ENDPOINT && TABLESTORE_INSTANCE && TABLESTORE_TABLE);
 const TABLESTORE_META = {
     runtimePromise: null,
@@ -281,6 +342,18 @@ const responseStorageUnavailable = (req = {}, error = null) => (
     responseJson(req, 503, resolveStorageFailureBody(error))
 );
 
+const toBase64Url = (value = '') => Buffer.from(String(value || ''), 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+
+const bufferToBase64Url = (buffer = Buffer.alloc(0)) => Buffer.from(buffer)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+
 const buildSignature = ({ shopId, leaseToken, expiresAt, buildId, buildChannel }) => {
     const payload = {
         authorized: true,
@@ -291,6 +364,79 @@ const buildSignature = ({ shopId, leaseToken, expiresAt, buildId, buildChannel }
         buildChannel: String(buildChannel || '')
     };
     return crypto.createHash('sha256').update(JSON.stringify(payload), 'utf8').digest('hex');
+};
+
+const createPolicyToken = ({ shopId, leaseToken, expiresAt, buildId, buildChannel }) => {
+    if (!POLICY_SIGN_KEY) return '';
+    const nowMs = toNow();
+    const header = {
+        typ: 'JWT',
+        alg: POLICY_TOKEN_ALG
+    };
+    const payload = {
+        v: 1,
+        sid: String(shopId || ''),
+        ltk: String(leaseToken || ''),
+        exp: Number(expiresAt || 0),
+        bid: String(buildId || ''),
+        bch: String(buildChannel || ''),
+        iat: nowMs
+    };
+    const signingInput = `${toBase64Url(JSON.stringify(header))}.${toBase64Url(JSON.stringify(payload))}`;
+    try {
+        const signature = crypto.sign('sha256', Buffer.from(signingInput, 'utf8'), {
+            key: POLICY_SIGN_KEY,
+            // WebCrypto ECDSA verify expects P-256 raw signature (r||s), not DER.
+            dsaEncoding: 'ieee-p1363'
+        });
+        return `${signingInput}.${bufferToBase64Url(signature)}`;
+    } catch (error) {
+        console.error('[license_policy] failed to sign token', error);
+        return '';
+    }
+};
+
+const cleanupNonceReplayCache = (nowMs = toNow()) => {
+    const expireBefore = Math.max(0, nowMs - NONCE_WINDOW_MS);
+    for (const [key, ts] of VERIFY_NONCE_CACHE.entries()) {
+        if (Number(ts || 0) <= expireBefore) {
+            VERIFY_NONCE_CACHE.delete(key);
+        }
+    }
+    if (VERIFY_NONCE_CACHE.size <= NONCE_CACHE_LIMIT) return;
+    const sortedEntries = Array.from(VERIFY_NONCE_CACHE.entries())
+        .sort((a, b) => Number(a[1] || 0) - Number(b[1] || 0));
+    const overflow = VERIFY_NONCE_CACHE.size - NONCE_CACHE_LIMIT;
+    for (let i = 0; i < overflow; i++) {
+        const [key] = sortedEntries[i] || [];
+        if (!key) continue;
+        VERIFY_NONCE_CACHE.delete(key);
+    }
+};
+
+const checkVerifyReplayGuard = ({ shopId, nonce, timestamp }) => {
+    const nowMs = toNow();
+    const driftMs = Math.abs(nowMs - Number(timestamp || 0));
+    if (driftMs > VERIFY_TIMESTAMP_DRIFT_MS) {
+        return {
+            ok: false,
+            code: 'timestamp_out_of_window',
+            reason: `timestamp 超出允许时间窗（±${Math.floor(VERIFY_TIMESTAMP_DRIFT_MS / 1000)}秒）`
+        };
+    }
+
+    cleanupNonceReplayCache(nowMs);
+    const key = `${String(shopId || '')}::${String(nonce || '')}`;
+    const lastSeenAt = Number(VERIFY_NONCE_CACHE.get(key) || 0);
+    if (lastSeenAt > 0 && (nowMs - lastSeenAt) <= NONCE_WINDOW_MS) {
+        return {
+            ok: false,
+            code: 'nonce_replayed',
+            reason: 'nonce 已被使用，请重试'
+        };
+    }
+    VERIFY_NONCE_CACHE.set(key, nowMs);
+    return { ok: true };
 };
 
 const resolveLeaseTtl = () => {
@@ -931,6 +1077,7 @@ const isShopRevoked = (shopId = '') => {
 };
 
 const provisionDefaultAuthForNewShop = (payload = {}) => {
+    if (!AUTO_PROVISION_NEW_SHOP_ENABLED) return { applied: false, reason: 'disabled' };
     const shopId = normalizeShopId(payload.shopId || '');
     if (!shopId) return { applied: false };
     if (ALLOWED_SHOP_ID_SET.has(shopId) || MEMORY_SHOP_STORE.has(shopId)) {
@@ -980,6 +1127,8 @@ const verifyLicensePayload = (payload = {}) => {
     if (!deviceHash) return { ok: false, code: 'device_hash_missing', reason: '缺少 deviceHash' };
     if (!Number.isFinite(timestamp) || timestamp <= 0) return { ok: false, code: 'timestamp_invalid', reason: 'timestamp 非法' };
     if (!nonce) return { ok: false, code: 'nonce_missing', reason: '缺少 nonce' };
+    const replayChecked = checkVerifyReplayGuard({ shopId, nonce, timestamp });
+    if (!replayChecked.ok) return replayChecked;
 
     return {
         ok: true,
@@ -1020,7 +1169,13 @@ const timingSafeEqualText = (a = '', b = '') => {
 
 const checkAdminAuthorization = (req = {}) => {
     if (!ADMIN_TOKEN) {
-        return { ok: true, configured: false };
+        return {
+            ok: false,
+            configured: false,
+            statusCode: 503,
+            code: 'admin_token_not_configured',
+            reason: '服务端未配置 AM_LICENSE_ADMIN_TOKEN'
+        };
     }
 
     const event = toEventObject(req);
@@ -1184,6 +1339,14 @@ const resolveAdminState = () => {
         activeShops: activeEntries,
         leaseTtlMs: resolveLeaseTtl(),
         defaultAuthValidDays: DEFAULT_AUTH_VALID_DAYS,
+        authHardening: {
+            autoProvisionNewShopEnabled: AUTO_PROVISION_NEW_SHOP_ENABLED,
+            verifyTimestampDriftMs: VERIFY_TIMESTAMP_DRIFT_MS,
+            nonceWindowMs: NONCE_WINDOW_MS,
+            nonceCacheLimit: NONCE_CACHE_LIMIT,
+            policyTokenEnabled: !!POLICY_SIGN_KEY,
+            policyTokenAlg: POLICY_TOKEN_ALG
+        },
         storage: {
             mode: storageMode,
             syncIntervalMs: STATE_SYNC_INTERVAL_MS,
@@ -1283,6 +1446,13 @@ const handleVerify = async (req = {}) => {
         buildId: checked.buildId,
         buildChannel: checked.buildChannel
     });
+    const policyToken = createPolicyToken({
+        shopId: checked.shopId,
+        leaseToken,
+        expiresAt,
+        buildId: checked.buildId,
+        buildChannel: checked.buildChannel
+    });
 
     backfillShopNameFromVerify(checked.shopId, checked.shopName);
     upsertActiveShopRecord(checked, {
@@ -1299,6 +1469,8 @@ const handleVerify = async (req = {}) => {
         expiresAt,
         policy: {
             signature,
+            token: policyToken,
+            tokenAlg: policyToken ? POLICY_TOKEN_ALG : '',
             ttlMs: leaseTtl,
             shopId: checked.shopId,
             shopName: checked.shopName,

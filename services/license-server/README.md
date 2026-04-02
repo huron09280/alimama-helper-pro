@@ -28,7 +28,7 @@
 - 仅使用 Tablestore（云数据库）持久化授权状态，不再提供文件或纯内存兜底。
 - 若 Tablestore 未配置或不可用，状态相关接口会返回 `503`（`code=license_storage_unavailable`）。
 - 所有写操作（`verify`/`revoke`/`admin allow`/`admin revoke`/`admin delete`）都会触发持久化；请求入口会先执行状态同步。
-- 新店铺首次调用 `POST /v1/license/verify` 时，会按默认有效期自动授权（默认 `3` 天，可通过 `AM_LICENSE_DEFAULT_AUTH_VALID_DAYS` 调整）。
+- 新店自动授权默认关闭；如需开启，设置 `AM_LICENSE_AUTO_PROVISION_NEW_SHOP=1`。
 
 ## 请求/响应契约
 
@@ -57,6 +57,8 @@
   "expiresAt": 1711860300000,
   "policy": {
     "signature": "sha256hex",
+    "token": "eyJ...<policy token>...",
+    "tokenAlg": "ES256",
     "ttlMs": 300000,
     "shopId": "123456789",
     "shopName": "示例店铺",
@@ -65,6 +67,7 @@
   }
 }
 ```
+> `timestamp` 需落在服务端时间窗内（默认 ±60 秒）；`nonce` 在窗口期内只能使用一次（默认 5 分钟），重放会返回 `nonce_replayed`。
 
 失败响应：
 ```json
@@ -210,10 +213,16 @@
 - `AM_LICENSE_REVOKED_SHOPS`: 吊销店铺列表，逗号分隔。
 - `AM_LICENSE_LEASE_TTL_MS`: 租约毫秒数，默认 300000。
 - `AM_LICENSE_DEFAULT_AUTH_VALID_DAYS`: 店铺授权默认有效天数（`admin/allow enabled=true` 未显式指定时生效），默认 `3`。
+- `AM_LICENSE_AUTO_PROVISION_NEW_SHOP`: 是否开启“新店首次 verify 自动授权”；默认 `false`（关闭），设为 `1/true` 可开启。
 - `AM_LICENSE_AUDIT_STDOUT`: 设为 `1` 时输出审计日志到 stdout。
-- `AM_LICENSE_ADMIN_TOKEN`: 管理端 token。配置后，`/v1/license/revoke` 与所有 `/v1/license/admin/*` 接口必须携带请求头 `x-am-admin-token`。
+- `AM_LICENSE_ADMIN_TOKEN`: 管理端 token（必填）。未配置时，`/v1/license/revoke` 与所有 `/v1/license/admin/*` 会返回 `503 admin_token_not_configured`。
 - `AM_LICENSE_ACTIVE_SHOP_LIMIT`: 最近使用店铺内存缓存上限，默认 `500`。
 - `AM_LICENSE_STATE_SYNC_INTERVAL_MS`: 状态同步最小间隔（毫秒），默认 `1500`。
+- `AM_LICENSE_VERIFY_TIMESTAMP_DRIFT_MS`: `verify` 请求允许的时间漂移窗口（毫秒），默认 `60000`。
+- `AM_LICENSE_NONCE_WINDOW_MS`: nonce 防重放窗口（毫秒），默认 `300000`。
+- `AM_LICENSE_NONCE_CACHE_LIMIT`: nonce 内存缓存上限，默认 `20000`。
+- `AM_LICENSE_POLICY_PRIVATE_KEY_PEM`: ES256 私钥 PEM（支持 `\\n` 换行）；配置后服务端会在 `policy.token` 返回签名 token，供客户端缓存验签。
+- `AM_LICENSE_POLICY_PRIVATE_KEY_BASE64`: ES256 私钥 PEM 的 Base64（单行），当控制台多行转义不稳定时可优先使用该变量。
 
 ### Tablestore（必选）
 - 部署依赖：函数代码包必须包含 `tablestore` npm 包（建议在 `services/license-server` 执行 `npm ci --omit=dev` 后再打包部署）。
