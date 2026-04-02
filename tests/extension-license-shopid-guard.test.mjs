@@ -25,7 +25,9 @@ test('授权模块补齐 shopId 多来源识别与缓存兜底', () => {
   assert.match(pageBundle, /const fromDomText = parseShopFromDomText\('dom_text'\);/, 'resolveShopIdentity 未接入 DOM 文本候选');
   assert.match(pageBundle, /const fallbackShopName = nameMatch \? '' : resolveLooseShopNameCandidate\(shopId\);/, 'resolveShopIdentity 未接入带 shopId 的店铺名松耦合兜底');
   assert.match(pageBundle, /const cacheShopId = normalizeShopId\(cache\?\.shopId\);/, '缺少 cache shopId 兜底读取');
-  assert.match(pageBundle, /if \(!shopInfo\.shopId && !force && cacheShopId\) \{[\s\S]*license_cache_fallback/, '缺少 shopId 缓存兜底分支');
+  assert.match(pageBundle, /const stateShopId = normalizeShopId\(state\.shopId \|\| ''\);/, '缺少 state shopId 兜底读取');
+  assert.match(pageBundle, /if \(!shopInfo\.shopId && stateShopId\) \{[\s\S]*license_state_fallback/, '缺少 state shopId 兜底分支');
+  assert.match(pageBundle, /else if \(!shopInfo\.shopId && cacheShopId\) \{[\s\S]*license_cache_fallback/, '缺少 cache shopId 兜底分支');
   assert.match(pageBundle, /const scheduleShopNameBackfill = \(context = \{\}\) => \{/, '缺少店铺名异步回填任务');
   assert.match(pageBundle, /const SHOP_NAME_BACKFILL_ATTEMPTS_DEFAULT = 8;/, '缺少店铺名回填重试默认配置');
   assert.match(pageBundle, /const fallbackName = resolveLooseShopNameCandidate\(shopId\);/, '店铺名异步回填未使用 shopId 定向兜底');
@@ -41,5 +43,21 @@ test('bootstrap 预热阶段未识别 shopId 时不应立即锁定', () => {
     pageBundle,
     /if \(!shopInfo\.shopId && source === 'bootstrap_preflight'\) \{\s*throw createError\('shop_not_found', '未识别到店铺标识（shopId）'\);\s*\}/,
     'bootstrap 预热缺少非锁定早退'
+  );
+});
+
+test('授权租约到期前会自动续租并失败重试', () => {
+  assert.match(pageBundle, /const LEASE_RENEW_DEFAULT_LEAD_MS = 60 \* 1000;/, '缺少租约续租提前量默认值');
+  assert.match(pageBundle, /let renewTimer = 0;/, '缺少租约续租计时器');
+  assert.match(pageBundle, /clearLeaseTimers/, '缺少租约双计时器清理函数');
+  assert.match(
+    pageBundle,
+    /assertAuthorized\(\{\s*source: 'lease_renew',\s*force: true,[\s\S]*?\}\)\.catch\(\(\) => \{/,
+    '租约到期前未触发强制续租'
+  );
+  assert.match(
+    pageBundle,
+    /assertAuthorized\(\{\s*source: 'lease_renew_retry',\s*force: true,[\s\S]*?\}\)\.catch\(\(\) => \{ \}\);/,
+    '续租失败后未触发补偿重试'
   );
 });

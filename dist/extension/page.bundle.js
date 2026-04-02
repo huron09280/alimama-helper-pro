@@ -319,6 +319,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     };
 
     let expiryTimer = 0;
+    let renewTimer = 0;
+
+    const LEASE_RENEW_DEFAULT_LEAD_MS = 60 * 1000;
+    const LEASE_RENEW_MIN_LEAD_MS = 15 * 1000;
+    const LEASE_RENEW_MAX_LEAD_MS = 2 * 60 * 1000;
+    const LEASE_RENEW_RETRY_MIN_MS = 2 * 1000;
+    const LEASE_RENEW_RETRY_MAX_MS = 10 * 1000;
 
     const toNow = () => Date.now();
 
@@ -351,17 +358,67 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         setReadonlyState();
     };
 
-    const clearExpiryTimer = () => {
-        if (!expiryTimer) return;
-        clearTimeout(expiryTimer);
-        expiryTimer = 0;
+    const clearLeaseTimers = () => {
+        if (expiryTimer) {
+            clearTimeout(expiryTimer);
+            expiryTimer = 0;
+        }
+        if (renewTimer) {
+            clearTimeout(renewTimer);
+            renewTimer = 0;
+        }
+    };
+
+    const resolveLeaseRenewLeadMs = () => {
+        const ttlMs = Number(state?.policy?.ttlMs || 0);
+        if (Number.isFinite(ttlMs) && ttlMs > 0) {
+            return Math.max(
+                LEASE_RENEW_MIN_LEAD_MS,
+                Math.min(LEASE_RENEW_MAX_LEAD_MS, Math.floor(ttlMs * 0.2))
+            );
+        }
+        return LEASE_RENEW_DEFAULT_LEAD_MS;
     };
 
     const scheduleExpiryCheck = () => {
-        clearExpiryTimer();
+        clearLeaseTimers();
         const expireAt = Number(state.expiresAt || 0);
         if (!state.authorized || !Number.isFinite(expireAt) || expireAt <= 0) return;
-        const delay = Math.max(0, expireAt - toNow());
+        const remainingMs = Math.max(0, expireAt - toNow());
+        const renewLeadMs = resolveLeaseRenewLeadMs();
+        const renewDelayMs = Math.max(0, remainingMs - renewLeadMs);
+
+        if (renewDelayMs > 0) {
+            renewTimer = setTimeout(() => {
+                assertAuthorized({
+                    source: 'lease_renew',
+                    force: true,
+                    shopIdRetryAttempts: 2,
+                    shopIdRetryBaseDelayMs: 160,
+                    shopIdRetryMaxDelayMs: 520
+                }).catch(() => {
+                    if (!state.authorized) return;
+                    const retryRemaining = Number(state.expiresAt || 0) - toNow();
+                    if (!Number.isFinite(retryRemaining) || retryRemaining <= 1200) return;
+                    const retryDelay = Math.min(
+                        LEASE_RENEW_RETRY_MAX_MS,
+                        Math.max(LEASE_RENEW_RETRY_MIN_MS, Math.floor(retryRemaining / 2))
+                    );
+                    renewTimer = setTimeout(() => {
+                        if (!state.authorized) return;
+                        assertAuthorized({
+                            source: 'lease_renew_retry',
+                            force: true,
+                            shopIdRetryAttempts: 1,
+                            shopIdRetryBaseDelayMs: 140,
+                            shopIdRetryMaxDelayMs: 360
+                        }).catch(() => { });
+                    }, retryDelay);
+                });
+            }, renewDelayMs);
+        }
+
+        const delay = remainingMs;
         expiryTimer = setTimeout(() => {
             lock('lease_expired', '授权租约已过期，请联系管理员续期', state.source || 'lease_timer');
         }, delay + 50);
@@ -1230,6 +1287,60 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         return sha256Hex(seed);
     };
 
+    const resolveBrowserVersion = () => {
+        const ua = String(navigator.userAgent || '');
+        if (!ua) return '';
+
+        const edge = ua.match(/Edg\/([\d.]+)/i);
+        if (edge) return `Edge ${edge[1]}`;
+
+        const opera = ua.match(/OPR\/([\d.]+)/i);
+        if (opera) return `Opera ${opera[1]}`;
+
+        const chrome = ua.match(/Chrome\/([\d.]+)/i);
+        if (chrome && !/Edg\/|OPR\//i.test(ua)) return `Chrome ${chrome[1]}`;
+
+        const firefox = ua.match(/Firefox\/([\d.]+)/i);
+        if (firefox) return `Firefox ${firefox[1]}`;
+
+        const safari = ua.match(/Version\/([\d.]+).*Safari\//i);
+        if (safari && !/Chrome\/|Chromium\/|Edg\/|OPR\//i.test(ua)) return `Safari ${safari[1]}`;
+
+        const ie = ua.match(/(?:MSIE |rv:)([\d.]+).*Trident/i);
+        if (ie) return `IE ${ie[1]}`;
+
+        return '';
+    };
+
+    const resolveOsVersion = () => {
+        const ua = String(navigator.userAgent || '');
+        if (!ua) return '';
+
+        const windows = ua.match(/Windows NT ([\d.]+)/i);
+        if (windows) {
+            if (windows[1] === '10.0') return 'Windows 10/11';
+            if (windows[1] === '6.3') return 'Windows 8.1';
+            if (windows[1] === '6.2') return 'Windows 8';
+            if (windows[1] === '6.1') return 'Windows 7';
+            return `Windows NT ${windows[1]}`;
+        }
+
+        const ios = ua.match(/(?:iPhone OS|CPU (?:iPhone )?OS|CPU OS) ([\d_]+)/i);
+        if (ios) return `iOS ${ios[1].replace(/_/g, '.')}`;
+
+        const android = ua.match(/Android ([\d.]+)/i);
+        if (android) return `Android ${android[1]}`;
+
+        const mac = ua.match(/Mac OS X ([\d_]+)/i);
+        if (mac) return `macOS ${mac[1].replace(/_/g, '.')}`;
+
+        const chromeOs = ua.match(/CrOS [^ ]+ ([\d.]+)/i);
+        if (chromeOs) return `ChromeOS ${chromeOs[1]}`;
+
+        if (/Linux/i.test(ua)) return 'Linux';
+        return '';
+    };
+
     const normalizeBaseUrl = (value) => {
         const raw = String(value || '').trim();
         if (!raw) return '';
@@ -1443,7 +1554,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     };
 
     const lock = (reasonCode = 'unauthorized', message = '', source = 'unknown') => {
-        clearExpiryTimer();
+        clearLeaseTimers();
         const nextMessage = String(message || '').trim() || '授权失败，功能已锁定';
         updateState({
             authorized: false,
@@ -1491,6 +1602,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             buildChannel: String(BUILD_CHANNEL || ''),
             runtimeMode,
             deviceHash,
+            userAgent: String(navigator.userAgent || ''),
+            browserVersion: resolveBrowserVersion(),
+            osVersion: resolveOsVersion(),
             timestamp,
             nonce
         };
@@ -1526,11 +1640,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const cacheShopId = normalizeShopId(cache?.shopId);
         const cacheShopName = normalizeShopName(cache?.shopName || '');
         const cacheExpiresAt = normalizeTimestamp(cache?.expiresAt);
+        const stateShopId = normalizeShopId(state.shopId || '');
+        const stateShopName = normalizeShopName(state.shopName || '');
 
-        if (!shopInfo.shopId && !force && cacheShopId) {
+        if (!shopInfo.shopId && stateShopId) {
+            shopInfo = {
+                shopId: stateShopId,
+                shopName: shopInfo.shopName || stateShopName || cacheShopName,
+                source: shopInfo.source && shopInfo.source !== 'none'
+                    ? `${shopInfo.source}+license_state_fallback`
+                    : 'license_state_fallback',
+                confidence: Math.max(1, Number(shopInfo.confidence || 0))
+            };
+        } else if (!shopInfo.shopId && cacheShopId) {
             shopInfo = {
                 shopId: cacheShopId,
-                shopName: shopInfo.shopName || cacheShopName,
+                shopName: shopInfo.shopName || cacheShopName || stateShopName,
                 source: shopInfo.source && shopInfo.source !== 'none'
                     ? `${shopInfo.source}+license_cache_fallback`
                     : 'license_cache_fallback',

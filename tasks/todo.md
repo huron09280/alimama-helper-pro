@@ -2459,3 +2459,38 @@
 - 结论：
   - License Server 发布流程已新增“运行时依赖契约”硬门禁，后续若漏带 `tablestore` 会在本地/CI 阶段被阻断；
   - 文档、脚本、测试三侧已同步，降低“线上实例偶发退回 env 数据导致店铺丢失/店名为 `-`”的复发概率。
+
+# TODO - 2026-04-02 扩展端授权租约自动续期修复（已授权仍被锁定）
+
+## 需求规格
+- 目标：修复“店铺已授权，但 5 分钟后弹出『授权租约已过期，请联系管理员续期』并锁定功能”的问题。
+- 根因：
+  - 服务端 `verify` 返回的是短租约（默认 `AM_LICENSE_LEASE_TTL_MS=300000`）；
+  - 扩展端此前仅在 `bootstrap_preflight` 做一次 `verify`，没有到期前续租；
+  - 到期定时器触发后直接 `lock('lease_expired')`，表现为“授权在管理台有效，但页面被锁定”。
+- 范围：
+  - `src/entries/extension-license-guard.js`（续租调度 + 续租失败补偿 + force 场景 shopId 兜底）
+  - `tests/extension-license-shopid-guard.test.mjs`（契约测试更新）
+- 非目标：
+  - 不调整授权业务规则（allow/revoke/expire）；
+  - 不更改服务端签名协议。
+
+## 执行计划（含校验）
+- [x] 1. 在扩展端加入“租约到期前自动续租”机制。
+  - 摘要：新增续租计时器，在租约到期前按 `policy.ttlMs` 动态提前量触发 `assertAuthorized({ source: 'lease_renew', force: true })`。
+- [x] 2. 增加续租失败补偿重试，降低瞬时网络抖动误锁风险。
+  - 摘要：续租失败后在剩余租约窗口内触发一次补偿重试 `lease_renew_retry`，过期后仍由到期定时器兜底锁定。
+- [x] 3. 修复 force 场景 shopId 兜底链路。
+  - 摘要：当 DOM 暂时读不到 `shopId` 时，优先回退 `state.shopId`，其次回退 `cache.shopId`，避免续租时误判 `shop_not_found`。
+- [x] 4. 更新契约测试并执行回归校验。
+  - 摘要：`tests/extension-license-shopid-guard.test.mjs` 新增续租断言并更新兜底断言；`node --test` 定向通过，`bash scripts/review-team.sh` 全量通过。
+
+## 结果复盘
+- 状态：已完成
+- 结论：
+  - “已授权但 5 分钟后自动锁定”的主因已修复，扩展会在租约到期前主动续租；
+  - 续租链路具备 state/cache 双兜底，减少页面状态切换时 `shopId` 暂不可见导致的误锁。
+- 关键验证：
+  - `node scripts/build.mjs`
+  - `node --test tests/extension-license-shopid-guard.test.mjs tests/license-server-runtime-deps.test.mjs tests/license-server-cloud-storage-only.test.mjs tests/license-server-new-shop-default-auth.test.mjs`
+  - `bash scripts/review-team.sh`
