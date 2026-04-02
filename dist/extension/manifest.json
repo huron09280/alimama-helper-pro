@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "阿里妈妈多合一助手 (Pro版)",
-    "version": "6.08",
+    "version": "6.09",
     "description": "阿里妈妈投放平台增强工具，支持主面板、万能查数、算法护航与计划辅助能力。",
     "icons": {
         "16": "icon-16.png",

@@ -2494,3 +2494,30 @@
   - `node scripts/build.mjs`
   - `node --test tests/extension-license-shopid-guard.test.mjs tests/license-server-runtime-deps.test.mjs tests/license-server-cloud-storage-only.test.mjs tests/license-server-new-shop-default-auth.test.mjs`
   - `bash scripts/review-team.sh`
+
+# TODO - 2026-04-02 版本号与更新日志同步（v6.09）
+
+## 需求规格
+- 目标：按用户要求更新版本号与更新日志，保证 userscript 头、脚本内日志、README、CLAUDE 版本一致。
+- 范围：
+  - `src/entries/userscript-meta.js`
+  - `src/shared/script-preamble.js`
+  - `README.md`
+  - `CLAUDE.md`
+- 非目标：
+  - 不调整功能逻辑；
+  - 不改动授权 API 契约。
+
+## 执行计划（含校验）
+- [x] 1. 统一升级版本号到 `6.09`。
+  - 摘要：已同步 `src/entries/userscript-meta.js`、`README.md`、`CLAUDE.md` 为 `6.09`，并通过构建生成根脚本与发布产物版本。
+- [x] 2. 新增 `v6.09` 更新日志，覆盖本轮关键修复（依赖固化、云端强依赖、租约自动续期）。
+  - 摘要：已在 `src/shared/script-preamble.js` 与 `README.md` 顶部新增 `v6.09 (2026-04-02)` 日志条目。
+- [x] 3. 构建产物并执行发布门禁校验，确认版本一致性。
+  - 摘要：`node scripts/build.mjs` 与 `bash scripts/review-team.sh` 均通过，版本一致性检查显示 `README/CLAUDE/script = 6.09`。
+
+## 结果复盘
+- 状态：已完成
+- 结论：
+  - 版本号与更新日志已按发布要求同步到源码、文档和构建产物；
+  - 当前分支已满足发版前一致性门禁，可直接打 `v6.09` 标签发布。

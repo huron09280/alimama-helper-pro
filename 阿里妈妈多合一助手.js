@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      6.08
+// @version      6.09
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,11 @@
 // ==/UserScript==
 /**
  * 更新日志
+ *
+ * v6.09 (2026-04-02)
+ * - 🔧 授权守卫稳定性修复：新增租约到期前自动续租与失败补偿重试，修复“已授权但租约到期后被锁定”问题
+ * - 🔧 授权续租兜底增强：force 场景增加 `state/cache shopId` 兜底，减少页面切换瞬态导致的 `shop_not_found` 误锁
+ * - ✅ 云端发布门禁加固：License Server 新增 `tablestore` 依赖契约检查，发布流程强制校验依赖清单与锁文件
  *
  * v6.08 (2026-03-24)
  * - 🔧 批量建计划默认提交方式调整：立即投放默认改为“单条”，降低多计划并发误触发风险

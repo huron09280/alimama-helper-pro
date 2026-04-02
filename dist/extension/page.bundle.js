@@ -1,5 +1,5 @@
 (() => {
-    const SCRIPT_VERSION = "6.08";
+    const SCRIPT_VERSION = "6.09";
     const STORAGE_KEY = '__AM_EXTENSION_GM_STORE__';
 
     const readStore = () => {
@@ -109,6 +109,11 @@
 })();
 /**
  * 更新日志
+ *
+ * v6.09 (2026-04-02)
+ * - 🔧 授权守卫稳定性修复：新增租约到期前自动续租与失败补偿重试，修复“已授权但租约到期后被锁定”问题
+ * - 🔧 授权续租兜底增强：force 场景增加 `state/cache shopId` 兜底，减少页面切换瞬态导致的 `shop_not_found` 误锁
+ * - ✅ 云端发布门禁加固：License Server 新增 `tablestore` 依赖契约检查，发布流程强制校验依赖清单与锁文件
  *
  * v6.08 (2026-03-24)
  * - 🔧 批量建计划默认提交方式调整：立即投放默认改为“单条”，降低多计划并发误触发风险
