@@ -31,15 +31,7 @@ const resolvePositiveInt = (value, fallback) => {
 
 const MAX_ACTIVE_SHOP_ENTRIES = resolvePositiveInt(process.env.AM_LICENSE_ACTIVE_SHOP_LIMIT, 500);
 const DEFAULT_AUTH_VALID_DAYS = resolvePositiveInt(process.env.AM_LICENSE_DEFAULT_AUTH_VALID_DAYS, 3);
-const STATE_FILE_PATH = String(process.env.AM_LICENSE_STATE_FILE || '').trim();
 const STATE_SYNC_INTERVAL_MS = resolvePositiveInt(process.env.AM_LICENSE_STATE_SYNC_INTERVAL_MS, 1500);
-const STATE_FILE_ENABLED = !!STATE_FILE_PATH;
-const STATE_FILE_META = {
-    lastSyncAtMs: 0,
-    lastLoadAtMs: 0,
-    lastPersistAtMs: 0,
-    lastMtimeMs: 0
-};
 const TABLESTORE_ENDPOINT = String(process.env.AM_LICENSE_TABLESTORE_ENDPOINT || '').trim();
 const TABLESTORE_INSTANCE = String(process.env.AM_LICENSE_TABLESTORE_INSTANCE || '').trim();
 const TABLESTORE_TABLE = String(process.env.AM_LICENSE_TABLESTORE_TABLE || '').trim();
@@ -54,6 +46,8 @@ const TABLESTORE_META = {
     lastLoadAtMs: 0,
     lastPersistAtMs: 0
 };
+const STORAGE_UNAVAILABLE_REASON = '授权状态云存储不可用，请检查 Tablestore 配置与权限';
+const STORAGE_UNAVAILABLE_CODE = 'license_storage_unavailable';
 const SERVICE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ADMIN_PAGE_TEMPLATE_PATH = path.join(SERVICE_DIR, 'license-admin.html');
 
@@ -268,6 +262,25 @@ const responseNoContent = (req = {}) => ({
     body: ''
 });
 
+const resolveStorageFailureBody = (error = null) => {
+    const details = String(
+        error?.code ||
+        error?.name ||
+        error?.message ||
+        ''
+    ).trim();
+    return {
+        ok: false,
+        code: STORAGE_UNAVAILABLE_CODE,
+        reason: STORAGE_UNAVAILABLE_REASON,
+        ...(details ? { details } : {})
+    };
+};
+
+const responseStorageUnavailable = (req = {}, error = null) => (
+    responseJson(req, 503, resolveStorageFailureBody(error))
+);
+
 const buildSignature = ({ shopId, leaseToken, expiresAt, buildId, buildChannel }) => {
     const payload = {
         authorized: true,
@@ -411,8 +424,6 @@ const resolveAuthExpiresAtUpdate = ({ payload = {}, existingProfile = {}, enable
     return { ok: true, authExpiresAt: currentAuthExpiresAt, source: 'keep', touched };
 };
 
-const resolveStateFileTargetPath = () => path.resolve(STATE_FILE_PATH);
-
 const buildStateSnapshot = () => ({
     version: 1,
     updatedAt: new Date().toISOString(),
@@ -546,80 +557,6 @@ const applyStateSnapshot = (snapshot = {}) => {
     });
 };
 
-const syncStateFromFile = ({ force = false } = {}) => {
-    if (!STATE_FILE_ENABLED) return false;
-
-    const nowMs = toNow();
-    if (!force && nowMs - STATE_FILE_META.lastSyncAtMs < STATE_SYNC_INTERVAL_MS) {
-        return false;
-    }
-    STATE_FILE_META.lastSyncAtMs = nowMs;
-
-    const targetPath = resolveStateFileTargetPath();
-    let stats;
-    try {
-        stats = fs.statSync(targetPath);
-    } catch (error) {
-        if (error?.code === 'ENOENT') {
-            STATE_FILE_META.lastMtimeMs = 0;
-            return false;
-        }
-        console.error('[license_state] failed to stat state file', error);
-        return false;
-    }
-
-    const fileMtimeMs = resolveNonNegativeInt(stats?.mtimeMs || 0);
-    if (!force && fileMtimeMs > 0 && fileMtimeMs <= STATE_FILE_META.lastMtimeMs) {
-        return false;
-    }
-
-    let snapshot;
-    try {
-        const raw = fs.readFileSync(targetPath, 'utf8');
-        snapshot = raw.trim() ? JSON.parse(raw) : {};
-    } catch (error) {
-        console.error('[license_state] failed to read state file', error);
-        return false;
-    }
-
-    applyStateSnapshot(snapshot);
-    STATE_FILE_META.lastLoadAtMs = nowMs;
-    STATE_FILE_META.lastMtimeMs = fileMtimeMs || nowMs;
-    return true;
-};
-
-const persistStateToFile = ({ force = false } = {}) => {
-    if (!STATE_FILE_ENABLED) return false;
-
-    const nowMs = toNow();
-    if (!force && nowMs - STATE_FILE_META.lastPersistAtMs < STATE_SYNC_INTERVAL_MS) {
-        return false;
-    }
-
-    const targetPath = resolveStateFileTargetPath();
-    const parentDir = path.dirname(targetPath);
-    const tempPath = path.join(parentDir, `.${path.basename(targetPath)}.${process.pid}.${nowMs}.tmp`);
-
-    try {
-        fs.mkdirSync(parentDir, { recursive: true });
-        fs.writeFileSync(tempPath, JSON.stringify(buildStateSnapshot(), null, 2), 'utf8');
-        fs.renameSync(tempPath, targetPath);
-        const stats = fs.statSync(targetPath);
-        const persistedAtMs = toNow();
-        STATE_FILE_META.lastPersistAtMs = persistedAtMs;
-        STATE_FILE_META.lastLoadAtMs = persistedAtMs;
-        STATE_FILE_META.lastSyncAtMs = persistedAtMs;
-        STATE_FILE_META.lastMtimeMs = resolveNonNegativeInt(stats?.mtimeMs || 0, persistedAtMs);
-        return true;
-    } catch (error) {
-        try {
-            fs.unlinkSync(tempPath);
-        } catch {}
-        console.error('[license_state] failed to persist state file', error);
-        return false;
-    }
-};
-
 const resolveTablestoreRuntime = async () => {
     if (!TABLESTORE_ENABLED) return null;
     if (TABLESTORE_META.runtimePromise) {
@@ -666,6 +603,13 @@ const resolveTablestoreRuntime = async () => {
     return TABLESTORE_META.runtimePromise;
 };
 
+const assertTablestoreEnabled = () => {
+    if (TABLESTORE_ENABLED) return;
+    const error = new Error('tablestore_not_configured');
+    error.code = 'tablestore_not_configured';
+    throw error;
+};
+
 const runTablestoreCall = async (client, methodName, params) => (
     new Promise((resolve, reject) => {
         const method = client?.[methodName];
@@ -710,7 +654,7 @@ const resolveTablestoreAttribute = (row = {}, columnName = '') => {
 };
 
 const syncStateFromTablestore = async ({ force = false } = {}) => {
-    if (!TABLESTORE_ENABLED) return false;
+    assertTablestoreEnabled();
 
     const nowMs = toNow();
     if (!force && nowMs - TABLESTORE_META.lastSyncAtMs < STATE_SYNC_INTERVAL_MS) {
@@ -719,7 +663,11 @@ const syncStateFromTablestore = async ({ force = false } = {}) => {
     TABLESTORE_META.lastSyncAtMs = nowMs;
 
     const runtime = await resolveTablestoreRuntime();
-    if (!runtime?.client) return false;
+    if (!runtime?.client) {
+        const error = new Error('tablestore_client_unavailable');
+        error.code = 'tablestore_client_unavailable';
+        throw error;
+    }
 
     const params = {
         tableName: TABLESTORE_TABLE,
@@ -736,7 +684,7 @@ const syncStateFromTablestore = async ({ force = false } = {}) => {
             return false;
         }
         console.error('[license_state] failed to load state from tablestore', error);
-        return false;
+        throw error;
     }
 
     const row = result?.row || result?.rowData || null;
@@ -756,7 +704,9 @@ const syncStateFromTablestore = async ({ force = false } = {}) => {
         snapshot = JSON.parse(payloadText);
     } catch (error) {
         console.error('[license_state] invalid payload json from tablestore', error);
-        return false;
+        const payloadError = new Error('tablestore_payload_invalid');
+        payloadError.code = 'tablestore_payload_invalid';
+        throw payloadError;
     }
 
     applyStateSnapshot(snapshot);
@@ -765,7 +715,7 @@ const syncStateFromTablestore = async ({ force = false } = {}) => {
 };
 
 const persistStateToTablestore = async ({ force = false } = {}) => {
-    if (!TABLESTORE_ENABLED) return false;
+    assertTablestoreEnabled();
 
     const nowMs = toNow();
     if (!force && nowMs - TABLESTORE_META.lastPersistAtMs < STATE_SYNC_INTERVAL_MS) {
@@ -773,7 +723,11 @@ const persistStateToTablestore = async ({ force = false } = {}) => {
     }
 
     const runtime = await resolveTablestoreRuntime();
-    if (!runtime?.client) return false;
+    if (!runtime?.client) {
+        const error = new Error('tablestore_client_unavailable');
+        error.code = 'tablestore_client_unavailable';
+        throw error;
+    }
 
     const snapshot = buildStateSnapshot();
     const condition = (() => {
@@ -805,21 +759,21 @@ const persistStateToTablestore = async ({ force = false } = {}) => {
         return true;
     } catch (error) {
         console.error('[license_state] failed to persist state to tablestore', error);
-        return false;
+        throw error;
     }
 };
 
 const syncStateBeforeRequest = async (route = {}) => {
     const force = shouldForceStateSync(route);
-    const loadedFromCloud = await syncStateFromTablestore({ force });
-    if (loadedFromCloud) return true;
-    return syncStateFromFile({ force });
+    return syncStateFromTablestore({ force });
 };
 
 const persistStateChanges = async () => {
     const persistedToCloud = await persistStateToTablestore({ force: true });
     if (persistedToCloud) return true;
-    return persistStateToFile({ force: true });
+    const error = new Error('tablestore_persist_failed');
+    error.code = 'tablestore_persist_failed';
+    throw error;
 };
 
 const upsertActiveShopRecord = (payload = {}, verifyResult = {}) => {
@@ -1210,7 +1164,7 @@ const resolveAdminState = () => {
     const revokedEnv = Array.from(REVOKED_SHOP_IDS).sort();
     const revokedMemory = Array.from(MEMORY_REVOKE_STORE).sort();
     const revokedEffective = Array.from(new Set([...revokedEnv, ...revokedMemory])).sort();
-    const storageMode = TABLESTORE_ENABLED ? 'tablestore' : (STATE_FILE_ENABLED ? 'file' : 'memory');
+    const storageMode = TABLESTORE_ENABLED ? 'tablestore' : 'tablestore_unconfigured';
 
     return {
         ok: true,
@@ -1238,9 +1192,6 @@ const resolveAdminState = () => {
                 instance: TABLESTORE_INSTANCE,
                 table: TABLESTORE_TABLE,
                 statePk: TABLESTORE_STATE_PK
-            } : null,
-            file: STATE_FILE_ENABLED ? {
-                path: resolveStateFileTargetPath()
             } : null
         }
     };
@@ -1631,6 +1582,16 @@ const shouldForceStateSync = (route = {}) => {
     return false;
 };
 
+const isStateRoute = (route = {}) => {
+    if (route.method === 'GET' && route.path.endsWith('/v1/license/admin/state')) return true;
+    if (route.method === 'POST' && route.path.endsWith('/v1/license/admin/allow')) return true;
+    if (route.method === 'POST' && route.path.endsWith('/v1/license/admin/revoke')) return true;
+    if (route.method === 'POST' && route.path.endsWith('/v1/license/admin/delete')) return true;
+    if (route.method === 'POST' && route.path.endsWith('/v1/license/verify')) return true;
+    if (route.method === 'POST' && route.path.endsWith('/v1/license/revoke')) return true;
+    return false;
+};
+
 export const handler = async (req = {}) => {
     const route = resolveRoute(req);
 
@@ -1638,10 +1599,24 @@ export const handler = async (req = {}) => {
         return responseNoContent(req);
     }
 
-    await syncStateBeforeRequest(route);
-
     if (route.method === 'GET' && isAdminPagePath(route.path)) {
         return responseHtml(req, 200, renderAdminPage());
+    }
+
+    if (!isStateRoute(route)) {
+        return responseJson(req, 404, {
+            ok: false,
+            code: 'not_found',
+            reason: `${route.method} ${route.path}`
+        });
+    }
+
+    try {
+        assertTablestoreEnabled();
+        await syncStateBeforeRequest(route);
+    } catch (error) {
+        console.error('[license_state] cloud storage unavailable', error);
+        return responseStorageUnavailable(req, error);
     }
 
     if (route.method === 'GET' && route.path.endsWith('/v1/license/admin/state')) {

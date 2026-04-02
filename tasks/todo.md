@@ -1,5 +1,63 @@
 # TODO - 2026-04-01 浏览器自动化通道 `Transport closed` 修复（继续）
 
+## 追加任务 - 2026-04-02 云库写入故障回溯与修复（Tablestore SDK 缺失）
+
+### 需求规格
+- 目标：定位“昨天授权店铺消失”的真实根因，并在浏览器里直接完成线上修复，确保授权状态稳定写入云端。
+- 范围：
+  - 回溯 FC 日志，确认 `admin_allow/admin_delete` 与存储异常的时间关系；
+  - 通过 FC 控制台上传包含 `tablestore` 依赖的 ZIP 重新部署；
+  - 部署后用真实 `verify` 请求与函数日志确认“不再报 `ERR_MODULE_NOT_FOUND`”。
+- 非目标：
+  - 不修改授权 API 协议；
+  - 不对未确认意图的店铺做批量恢复授权。
+
+### 执行计划（含校验）
+- [x] 1. 回溯昨天日志并提取证据。
+  - 摘要：在 `2026-04-01 09:32:12 ~ 2026-04-02 23:59:59` 区间抓到 `admin_allow/admin_delete/admin_revoke` 记录，同时存在 `[license_state] failed to import tablestore sdk` 与 `ERR_MODULE_NOT_FOUND`。
+- [x] 2. 构建包含依赖的部署包并在 FC 浏览器控制台发布。
+  - 摘要：生成 `/tmp/am-license-server-deploy.zip`（含 `index.mjs`、`license-admin.html`、`package.json`、`node_modules/tablestore`），在控制台执行“上传 ZIP 包 -> 保存并部署”，提示“代码部署成功！”。
+- [x] 3. 部署后在线验证授权链路。
+  - 摘要：`POST /v1/license/verify`（shopId `2957960066`）返回 `authorized=true`；`admin/state` 返回 `storage.mode=tablestore` 且 `allowed.memory` 已包含多店铺。
+- [x] 4. 部署后日志验收。
+  - 摘要：新请求时间点 `2026-04-02 10:38:54`、`2026-04-02 10:39:11` 仅出现 `license_audit` 成功日志，未出现新的 `ERR_MODULE_NOT_FOUND` 或 `failed to import tablestore sdk`。
+
+### 结果复盘
+- 状态：已完成
+- 交付结果：
+  - 根因已确认：旧部署包缺少 `tablestore` 依赖，导致云持久化在运行时导入失败；
+  - 线上已通过浏览器完成重部署并恢复依赖；
+  - 新请求链路已验证不再出现 SDK 导入错误，云端写入链路恢复。
+
+## 追加任务 - 2026-04-02 阿里云 FC 浏览器直配（授权状态全量上云）
+
+### 需求规格
+- 目标：按用户要求“直接浏览器里配置”，在阿里云 FC 控制台直接确认并落地授权服务的云端持久化配置。
+- 范围：
+  - 进入 `am-license-server` 函数配置页；
+  - 校验并保留 Tablestore 关键环境变量；
+  - 补充 `AM_LICENSE_DEFAULT_AUTH_VALID_DAYS=3` 并部署；
+  - 部署后回查 `admin/state` 验证运行模式。
+- 非目标：
+  - 不修改线上函数代码；
+  - 不改动 API 路由与鉴权协议。
+
+### 执行计划（含校验）
+- [x] 1. 在浏览器打开阿里云 FC 函数配置并进入高级配置编辑。
+  - 摘要：已在 `cn-hangzhou/functions/am-license-server?section=configure` 打开“高级配置 -> 环境变量”。
+- [x] 2. 核对云端持久化变量并补齐默认授权天数变量。
+  - 摘要：确认存在 `AM_LICENSE_TABLESTORE_ENDPOINT/INSTANCE/TABLE/STATE_PK`；新增 `AM_LICENSE_DEFAULT_AUTH_VALID_DAYS=3`。
+- [x] 3. 提交部署并确认生效。
+  - 摘要：控制台部署完成，函数“上次修改时间”更新为 `2026-04-02 10:00:57`。
+- [x] 4. 通过线上接口验证状态模式。
+  - 摘要：`GET /v1/license/admin/state` 返回 `storage.mode=tablestore` 且 `defaultAuthValidDays=3`。
+
+### 结果复盘
+- 状态：已完成
+- 当前结论：
+  - 线上授权服务已按“全量上云”运行；
+  - 当前可见持久化链路为 Tablestore（非文件/内存模式）。
+
 ## 需求规格
 - 目标：恢复当前会话 `chrome-devtools` MCP 自动化通道，消除 `Transport closed`，恢复浏览器自动化验收能力。
 - 范围：
@@ -28,6 +86,35 @@
   - 剩余阻塞点是“当前线程未热重载 MCP 配置”，需在新会话完成最终复测。
 
 # TODO - 2026-04-01 本地授权管理页（店铺列表/授权开关/租约管理）
+
+## 追加任务 - 2026-04-02 授权状态云端唯一（禁用本地兜底）
+
+### 需求规格
+- 目标：按用户要求“不要本地的，都上云”，将授权状态持久化改为 Tablestore 强依赖，禁止文件/内存兜底持久化。
+- 范围：
+  - 修改 `services/license-server/index.mjs`：状态同步与持久化仅走 Tablestore；
+  - 云存储不可用时返回统一 `503` 错误；
+  - 更新 `services/license-server/README.md` 的持久化策略；
+  - 增加回归测试防止再次引入文件回退。
+- 非目标：
+  - 不变更授权 API 路径与鉴权头；
+  - 不改动插件端 `verify` 协议字段。
+
+### 执行计划（含校验）
+- [x] 1. 改造服务端为云端强依赖存储链路。
+  - 摘要：`syncStateBeforeRequest/persistStateChanges` 已去除 `file` 回退，只允许 `sync/persist` Tablestore。
+- [x] 2. 增加云存储不可用统一失败响应。
+  - 摘要：当 Tablestore 未配置或不可用时，状态接口统一返回 `503 + code=license_storage_unavailable`。
+- [x] 3. 更新文档到“云端唯一”策略。
+  - 摘要：`services/license-server/README.md` 删除文件持久化兜底说明，并改为 Tablestore 必选。
+- [x] 4. 补充测试并执行定向回归。
+  - 摘要：新增 `tests/license-server-cloud-storage-only.test.mjs`，覆盖“无文件回退 + 503 统一错误”契约。
+
+### 结果复盘
+- 状态：已完成
+- 当前结论：
+  - 授权状态链路已收敛为云端唯一，不再写入本地文件兜底；
+  - 云存储不可用将显式失败，避免“静默回退导致状态漂移”。
 
 ## 追加任务 - 2026-04-01 到期日期改到“授权到期列”直接修改
 
@@ -2302,3 +2389,73 @@
   - `node --check src/entries/extension-license-guard.js`
   - `node --test tests/license-admin-page.test.mjs`
   - 浏览器（chrome-devtools）刷新后可见：`browser: Chrome 135.0.0.0`、`os: macOS 14.5`。
+
+# TODO - 2026-04-02 授权管理台“Tablestore有记录但列表未显示”排查
+
+## 需求规格
+- 目标：解释“Tablestore 已有 `license_state` 快照，但管理台有时只显示 1 条且店铺名为 `-`”的原因。
+- 要求：必须以真实线上请求与浏览器页面证据为准，不做本地推断。
+
+## 执行计划（含校验）
+- [x] 1. 在浏览器管理台复现实况并抓取 `GET /v1/license/admin/state` 响应体。
+  - 摘要：`2026-04-02 10:29:37` 响应仅 1 条（`shopId=2957960066`，`shopName=\"\"`，`source=env`）。
+- [x] 2. 对照 FC 函数日志，确认同时间段是否存在云库读取异常。
+  - 摘要：日志出现 `ERR_MODULE_NOT_FOUND: Cannot find package 'tablestore' imported from /code/index.mjs`。
+- [x] 3. 再次连通性检查与刷新，确认当前是否恢复读取云库快照。
+  - 摘要：`2026-04-02 10:53:35` 连通性检查返回 `shops=3`；页面显示 3 家店且店名正常。
+
+## 结果复盘
+- 状态：已完成
+- 根因结论：
+  - 管理台“读不出店铺名/只剩 1 条”的根因不是前端筛选，而是当次命中的函数实例未正确加载 `tablestore` 依赖，导致状态同步失败并退回 `allowed env` 数据；
+  - `allowed env` 只有 `shopId` 无 `shopName`，因此页面会出现 `店铺名称 = -`。
+- 关键证据：
+  - 异常响应时间：`2026-04-02 10:29:37`（1 条，`source=env`）；
+  - 恢复响应时间：`2026-04-02 10:53:35`（3 条，含 `美的洗碗机旗舰店` / `美的永恒利信专卖店:梁超` / `美的厨房大家电旗舰店:梁超`）；
+  - 浏览器日志：`连通性检查通过：shops=3 generatedAt=2026-04-02T02:53:35.033Z`。
+
+# TODO - 2026-04-02 云端函数重启（禁用/启用）与稳定性回归
+
+## 需求规格
+- 目标：按用户要求直接在浏览器中重启 FC 函数，清理异常实例并验证授权管理台稳定读取云库。
+- 约束：仅操作线上云端，不走本地 mock。
+
+## 执行计划（含校验）
+- [x] 1. 在 FC 控制台执行禁用函数，再启用函数。
+  - 摘要：`am-license-server` 已完成禁用并重新启用，控制台提示禁用成功/状态恢复。
+- [x] 2. 重启后连续压测 `GET /v1/license/admin/state`。
+  - 摘要：连续 30 次请求全部 `200`，且 `shops=3`（`ok3=30, ok1=0, err=0`）。
+- [x] 3. 在授权管理台页面刷新验证展示。
+  - 摘要：`11:00:10` 刷新后页面统计 `全量店铺=3`，3 家店名均正常显示。
+
+## 结果复盘
+- 状态：已完成
+- 结论：
+  - 本次云端重启后，管理台读取已恢复稳定，未再复现“仅 1 条/店铺名为 -”。
+  - 当前线上状态与 Tablestore 快照一致（3 家店）。
+
+# TODO - 2026-04-02 License Server 打包依赖固化（tablestore 必带）
+
+## 需求规格
+- 目标：将 `tablestore` 依赖纳入 `services/license-server` 的可校验发布契约，避免 FC 部署包漏带依赖。
+- 范围：
+  - `services/license-server/package.json`（新增）
+  - `scripts/review-team.sh`（新增依赖校验）
+  - `tests/`（新增或更新契约测试）
+  - `services/license-server/README.md`（补部署校验说明）
+
+## 执行计划（含校验）
+- [x] 1. 新增 `services/license-server/package.json`，声明 `tablestore` 依赖版本。
+  - 摘要：已新增 `services/license-server/package.json`，固定 `dependencies.tablestore=^5.6.3`；并生成 `services/license-server/package-lock.json` 锁定安装结果。
+- [x] 2. 在 `scripts/review-team.sh` 增加 License Server 依赖契约检查。
+  - 摘要：已接入 `node scripts/check-license-server-deps.mjs`；当清单或锁文件缺失/未锁定 `tablestore` 时会直接 fail。
+- [x] 3. 增加自动化测试，防止未来移除依赖或改坏校验。
+  - 摘要：新增 `tests/license-server-runtime-deps.test.mjs`，覆盖 `package.json` 依赖声明、`package-lock.json` 锁定条目、`review-team.sh` 必含依赖检查脚本三项契约。
+- [x] 4. 执行定向测试并回填复盘。
+  - 摘要：已通过 `node scripts/check-license-server-deps.mjs`、`node --test tests/license-server-runtime-deps.test.mjs tests/license-server-cloud-storage-only.test.mjs tests/license-server-new-shop-default-auth.test.mjs`、`bash scripts/review-team.sh`。
+
+## 结果复盘
+- 状态：已完成
+- 结论：
+  - License Server 发布流程已新增“运行时依赖契约”硬门禁，后续若漏带 `tablestore` 会在本地/CI 阶段被阻断；
+  - 文档、脚本、测试三侧已同步，降低“线上实例偶发退回 env 数据导致店铺丢失/店名为 `-`”的复发概率。

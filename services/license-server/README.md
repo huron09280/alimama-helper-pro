@@ -25,9 +25,8 @@
   - 在线触发 `verify` 自检
 
 ## 持久化策略
-- 优先使用 Tablestore（云数据库）持久化授权状态。
-- 若未配置 Tablestore，则回退到文件持久化（`AM_LICENSE_STATE_FILE`）。
-- 若两者都未配置，回退到纯内存模式（仅当前实例有效）。
+- 仅使用 Tablestore（云数据库）持久化授权状态，不再提供文件或纯内存兜底。
+- 若 Tablestore 未配置或不可用，状态相关接口会返回 `503`（`code=license_storage_unavailable`）。
 - 所有写操作（`verify`/`revoke`/`admin allow`/`admin revoke`/`admin delete`）都会触发持久化；请求入口会先执行状态同步。
 - 新店铺首次调用 `POST /v1/license/verify` 时，会按默认有效期自动授权（默认 `3` 天，可通过 `AM_LICENSE_DEFAULT_AUTH_VALID_DAYS` 调整）。
 
@@ -216,8 +215,10 @@
 - `AM_LICENSE_ACTIVE_SHOP_LIMIT`: 最近使用店铺内存缓存上限，默认 `500`。
 - `AM_LICENSE_STATE_SYNC_INTERVAL_MS`: 状态同步最小间隔（毫秒），默认 `1500`。
 
-### Tablestore（推荐）
-- 部署依赖：函数代码包需包含 `tablestore` npm 包（例如在服务目录执行 `npm i tablestore` 后再打包部署）。
+### Tablestore（必选）
+- 部署依赖：函数代码包必须包含 `tablestore` npm 包（建议在 `services/license-server` 执行 `npm ci --omit=dev` 后再打包部署）。
+- 发布前校验：在仓库根目录执行 `node scripts/check-license-server-deps.mjs`，若失败说明依赖清单或锁文件不完整，禁止发布。
+- 打包时至少包含：`index.mjs`、`license-admin.html`、`package.json`、`package-lock.json`、`node_modules/`（含 `tablestore`）。
 - `AM_LICENSE_TABLESTORE_ENDPOINT`: Tablestore Endpoint（例如 `https://xxx.cn-hangzhou.ots.aliyuncs.com`）。
 - `AM_LICENSE_TABLESTORE_INSTANCE`: Tablestore 实例名。
 - `AM_LICENSE_TABLESTORE_TABLE`: 存储表名（建议单行快照表）。
@@ -225,8 +226,3 @@
 - `AM_LICENSE_TABLESTORE_AK`: AccessKey ID（可选；在 FC RAM 角色可用时可不填）。
 - `AM_LICENSE_TABLESTORE_SK`: AccessKey Secret（可选）。
 - `AM_LICENSE_TABLESTORE_STS_TOKEN`: STS Token（可选）。
-
-### 文件持久化（兜底）
-- `AM_LICENSE_STATE_FILE`: 状态文件路径；建议在 FC 多实例场景配置到 NAS 挂载目录，例如 `/mnt/auto/license/state.json`。
-
-> 线上建议优先启用 Tablestore，文件持久化仅作为过渡或兜底方案。
