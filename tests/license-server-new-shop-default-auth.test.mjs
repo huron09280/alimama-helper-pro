@@ -12,9 +12,10 @@ test('新店默认授权开关默认关闭且可配置开启', () => {
     );
     assert.match(source, /const provisionDefaultAuthForNewShop = \(payload = \{\}\) => \{/, '缺少新店铺默认授权入口');
     assert.match(source, /if \(!AUTO_PROVISION_NEW_SHOP_ENABLED\) return \{ applied: false, reason: 'disabled' \};/, '缺少新店自动授权开关保护');
+    assert.match(source, /const wasDeleted = MEMORY_DELETED_SHOP_STORE\.has\(shopId\);/, '缺少删除重置店铺识别');
     assert.match(
         source,
-        /if \(ALLOWED_SHOP_ID_SET\.has\(shopId\) \|\| MEMORY_SHOP_STORE\.has\(shopId\)\) \{\s*return \{ applied: false \};\s*\}/,
+        /if \(\(ALLOWED_SHOP_ID_SET\.has\(shopId\) && !wasDeleted\) \|\| MEMORY_SHOP_STORE\.has\(shopId\)\) \{\s*return \{ applied: false \};\s*\}/,
         '缺少已存在店铺跳过默认授权保护'
     );
     assert.match(source, /if \(isShopRevoked\(shopId\)\) return \{ applied: false \};/, '缺少吊销店铺跳过默认授权保护');

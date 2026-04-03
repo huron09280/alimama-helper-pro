@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      6.09
+// @version      7.00
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
@@ -17,6 +17,9 @@
 // ==/UserScript==
 /**
  * 更新日志
+ *
+ * v7.00 (2026-04-03)
+ * - 🔖 版本升级：发布版本号更新为 v7.00，统一 userscript 与 extension 构建产物版本标识
  *
  * v6.09 (2026-04-02)
  * - 🔧 授权守卫稳定性修复：新增租约到期前自动续租与失败补偿重试，修复“已授权但租约到期后被锁定”问题

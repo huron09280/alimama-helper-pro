@@ -22,6 +22,7 @@ const REVOKED_SHOP_IDS = new Set(
 const MEMORY_SHOP_STORE = new Map();
 const MEMORY_REVOKE_STORE = new Set();
 const MEMORY_ACTIVE_SHOP_STORE = new Map();
+const MEMORY_DELETED_SHOP_STORE = new Set();
 const VERIFY_NONCE_CACHE = new Map();
 
 const resolvePositiveInt = (value, fallback) => {
@@ -414,6 +415,19 @@ const cleanupNonceReplayCache = (nowMs = toNow()) => {
     }
 };
 
+const clearNonceReplayCacheByShopId = (shopId = '') => {
+    const normalizedShopId = normalizeShopId(shopId);
+    if (!normalizedShopId) return 0;
+    const prefix = `${normalizedShopId}::`;
+    let removedCount = 0;
+    for (const key of VERIFY_NONCE_CACHE.keys()) {
+        if (!String(key || '').startsWith(prefix)) continue;
+        VERIFY_NONCE_CACHE.delete(key);
+        removedCount += 1;
+    }
+    return removedCount;
+};
+
 const checkVerifyReplayGuard = ({ shopId, nonce, timestamp }) => {
     const nowMs = toNow();
     const driftMs = Math.abs(nowMs - Number(timestamp || 0));
@@ -588,6 +602,10 @@ const buildStateSnapshot = () => ({
             .map(item => normalizeShopId(item))
             .filter(Boolean)
             .sort(),
+        deletedShops: Array.from(MEMORY_DELETED_SHOP_STORE.values())
+            .map(item => normalizeShopId(item))
+            .filter(Boolean)
+            .sort(),
         activeShops: Array.from(MEMORY_ACTIVE_SHOP_STORE.values())
             .map((entry = {}) => ({
                 shopId: normalizeShopId(entry.shopId || ''),
@@ -624,6 +642,7 @@ const applyStateSnapshot = (snapshot = {}) => {
 
     const shops = Array.isArray(stores.shops) ? stores.shops : [];
     const revoked = Array.isArray(stores.revoked) ? stores.revoked : [];
+    const deletedShops = Array.isArray(stores.deletedShops) ? stores.deletedShops : [];
     const activeShops = Array.isArray(stores.activeShops) ? stores.activeShops : [];
 
     const nextShopEntries = shops
@@ -644,6 +663,10 @@ const applyStateSnapshot = (snapshot = {}) => {
         .sort((a, b) => a.shopId.localeCompare(b.shopId));
 
     const nextRevokedIds = revoked
+        .map(item => normalizeShopId(item))
+        .filter(Boolean)
+        .sort();
+    const nextDeletedShopIds = deletedShops
         .map(item => normalizeShopId(item))
         .filter(Boolean)
         .sort();
@@ -695,6 +718,11 @@ const applyStateSnapshot = (snapshot = {}) => {
     MEMORY_REVOKE_STORE.clear();
     nextRevokedIds.forEach((shopId) => {
         MEMORY_REVOKE_STORE.add(shopId);
+    });
+
+    MEMORY_DELETED_SHOP_STORE.clear();
+    nextDeletedShopIds.forEach((shopId) => {
+        MEMORY_DELETED_SHOP_STORE.add(shopId);
     });
 
     MEMORY_ACTIVE_SHOP_STORE.clear();
@@ -1060,6 +1088,7 @@ const isShopAuthorizationExpired = (shopId = '') => {
 const isShopAllowed = (shopId = '') => {
     const normalizedShopId = normalizeShopId(shopId);
     if (!normalizedShopId) return false;
+    if (MEMORY_DELETED_SHOP_STORE.has(normalizedShopId)) return false;
     if (MEMORY_SHOP_STORE.has(normalizedShopId)) {
         const profile = MEMORY_SHOP_STORE.get(normalizedShopId);
         if (!profile || profile.enabled === false) return false;
@@ -1073,6 +1102,7 @@ const isShopAllowed = (shopId = '') => {
 const isShopRevoked = (shopId = '') => {
     const normalizedShopId = normalizeShopId(shopId);
     if (!normalizedShopId) return true;
+    if (MEMORY_DELETED_SHOP_STORE.has(normalizedShopId)) return false;
     return REVOKED_SHOP_IDS.has(normalizedShopId) || MEMORY_REVOKE_STORE.has(normalizedShopId);
 };
 
@@ -1080,13 +1110,17 @@ const provisionDefaultAuthForNewShop = (payload = {}) => {
     if (!AUTO_PROVISION_NEW_SHOP_ENABLED) return { applied: false, reason: 'disabled' };
     const shopId = normalizeShopId(payload.shopId || '');
     if (!shopId) return { applied: false };
-    if (ALLOWED_SHOP_ID_SET.has(shopId) || MEMORY_SHOP_STORE.has(shopId)) {
+    const wasDeleted = MEMORY_DELETED_SHOP_STORE.has(shopId);
+    if ((ALLOWED_SHOP_ID_SET.has(shopId) && !wasDeleted) || MEMORY_SHOP_STORE.has(shopId)) {
         return { applied: false };
     }
     if (isShopRevoked(shopId)) return { applied: false };
 
     const shopName = pickPreferredShopName(payload.shopName);
     const authExpiresAt = addDaysToNowIso(DEFAULT_AUTH_VALID_DAYS);
+    if (wasDeleted) {
+        MEMORY_DELETED_SHOP_STORE.delete(shopId);
+    }
     MEMORY_SHOP_STORE.set(shopId, {
         enabled: true,
         shopName,
@@ -1221,6 +1255,7 @@ const backfillShopNameFromVerify = (shopId = '', shopName = '') => {
     const normalizedShopId = normalizeShopId(shopId);
     const normalizedShopName = pickPreferredShopName(shopName);
     if (!normalizedShopId || !normalizedShopName) return false;
+    if (MEMORY_DELETED_SHOP_STORE.has(normalizedShopId)) return false;
 
     const existingProfile = MEMORY_SHOP_STORE.get(normalizedShopId);
     if (existingProfile) {
@@ -1246,14 +1281,23 @@ const backfillShopNameFromVerify = (shopId = '', shopName = '') => {
 };
 
 const resolveAdminState = () => {
-    const memoryEntries = resolveMemoryShopEntries();
+    const deletedMemory = Array.from(MEMORY_DELETED_SHOP_STORE)
+        .map(item => normalizeShopId(item))
+        .filter(Boolean)
+        .sort();
+    const deletedMemorySet = new Set(deletedMemory);
+    const memoryEntries = resolveMemoryShopEntries()
+        .filter((entry) => !deletedMemorySet.has(entry.shopId));
     const activeEntries = resolveActiveShopEntries();
     const activeShopNameMap = new Map(
         activeEntries
             .map((entry) => [entry.shopId, pickPreferredShopName(entry.shopName)])
             .filter(([, shopName]) => !!shopName)
     );
-    const effectiveAllowed = new Set(ALLOWED_SHOP_IDS);
+    const allowedEnv = ALLOWED_SHOP_IDS
+        .filter((shopId) => !deletedMemorySet.has(shopId))
+        .sort();
+    const effectiveAllowed = new Set(allowedEnv);
     memoryEntries.forEach((entry) => {
         if (entry.enabled && !entry.authExpired) {
             effectiveAllowed.add(entry.shopId);
@@ -1301,7 +1345,7 @@ const resolveAdminState = () => {
         });
     };
 
-    ALLOWED_SHOP_IDS.forEach((shopId) => {
+    allowedEnv.forEach((shopId) => {
         upsertShopEntry({
             shopId,
             shopName: activeShopNameMap.get(shopId) || '',
@@ -1316,8 +1360,12 @@ const resolveAdminState = () => {
 
     const shops = Array.from(shopMap.values()).sort((a, b) => a.shopId.localeCompare(b.shopId));
 
-    const revokedEnv = Array.from(REVOKED_SHOP_IDS).sort();
-    const revokedMemory = Array.from(MEMORY_REVOKE_STORE).sort();
+    const revokedEnv = Array.from(REVOKED_SHOP_IDS)
+        .filter((shopId) => !deletedMemorySet.has(shopId))
+        .sort();
+    const revokedMemory = Array.from(MEMORY_REVOKE_STORE)
+        .filter((shopId) => !deletedMemorySet.has(shopId))
+        .sort();
     const revokedEffective = Array.from(new Set([...revokedEnv, ...revokedMemory])).sort();
     const storageMode = TABLESTORE_ENABLED ? 'tablestore' : 'tablestore_unconfigured';
 
@@ -1326,7 +1374,7 @@ const resolveAdminState = () => {
         adminTokenConfigured: !!ADMIN_TOKEN,
         generatedAt: new Date().toISOString(),
         allowed: {
-            env: ALLOWED_SHOP_IDS.slice().sort(),
+            env: allowedEnv,
             memory: memoryEntries.filter(item => item.enabled && !item.authExpired).map(item => item.shopId),
             effective: Array.from(effectiveAllowed).sort()
         },
@@ -1334,6 +1382,9 @@ const resolveAdminState = () => {
             env: revokedEnv,
             memory: revokedMemory,
             effective: revokedEffective
+        },
+        deleted: {
+            memory: deletedMemory
         },
         shops,
         activeShops: activeEntries,
@@ -1491,6 +1542,7 @@ const handleRevoke = async (req = {}) => {
     }
 
     MEMORY_REVOKE_STORE.add(shopId);
+    MEMORY_DELETED_SHOP_STORE.delete(shopId);
     await persistStateChanges();
     writeAuditLog({ shopId, action: 'revoke', result: 'ok', reason: 'manual_revoke' });
     return responseJson(req, 200, {
@@ -1539,6 +1591,7 @@ const handleAdminAllow = async (req = {}) => {
         authExpiresAt,
         updatedAt: new Date().toISOString()
     });
+    MEMORY_DELETED_SHOP_STORE.delete(shopId);
     if (shopName && MEMORY_ACTIVE_SHOP_STORE.has(shopId)) {
         const activeRecord = MEMORY_ACTIVE_SHOP_STORE.get(shopId) || {};
         MEMORY_ACTIVE_SHOP_STORE.set(shopId, {
@@ -1581,6 +1634,7 @@ const handleAdminRevoke = async (req = {}) => {
     } else {
         MEMORY_REVOKE_STORE.delete(shopId);
     }
+    MEMORY_DELETED_SHOP_STORE.delete(shopId);
     await persistStateChanges();
     writeAuditLog({ shopId, action: 'admin_revoke', result: revoked ? 'revoke' : 'unrevoke', reason: 'manual_admin' });
 
@@ -1602,10 +1656,13 @@ const handleAdminDelete = async (req = {}) => {
         return responseJson(req, 400, { ok: false, code: 'shop_not_found', reason: '缺少 shopId' });
     }
 
+    MEMORY_DELETED_SHOP_STORE.add(shopId);
     const removed = {
         shop: MEMORY_SHOP_STORE.delete(shopId),
         revoked: MEMORY_REVOKE_STORE.delete(shopId),
-        active: MEMORY_ACTIVE_SHOP_STORE.delete(shopId)
+        active: MEMORY_ACTIVE_SHOP_STORE.delete(shopId),
+        deleted: true,
+        nonceReplay: clearNonceReplayCacheByShopId(shopId)
     };
 
     await persistStateChanges();

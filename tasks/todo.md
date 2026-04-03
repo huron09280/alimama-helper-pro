@@ -1,3 +1,29 @@
+# TODO - 2026-04-03 版本号升级到 v7.00
+
+## 需求规格
+- 目标：按用户要求将项目发布版本升级到 `7.00`，并确保 userscript 与 extension 产物版本一致。
+- 范围：
+  - 更新 userscript 元信息版本号；
+  - 同步脚本内更新日志与 README 最近版本记录；
+  - 通过构建校验生成并验证版本同步后的产物。
+- 非目标：
+  - 不变更业务功能逻辑；
+  - 不调整授权或网络请求链路。
+
+## 执行计划（含校验）
+- [x] 1. 更新源码版本入口。
+  - 摘要：将 `src/entries/userscript-meta.js` 的 `@version` 更新为 `7.00`。
+- [x] 2. 同步版本文档说明。
+  - 摘要：在 `src/shared/script-preamble.js` 和 `README.md` 顶部更新日志新增 `v7.00` 条目。
+- [x] 3. 构建并校验产物。
+  - 摘要：执行 `node scripts/build.mjs --check`，确认根脚本、dist 包和 extension 版本号一致。
+
+## 结果复盘
+- 状态：已完成
+- 当前结论：
+  - 构建主版本已升级到 `7.00`；
+  - userscript 头、根脚本、dist 包、extension manifest 版本号已同步一致。
+
 # TODO - 2026-04-03 extension 授权改为“使用时校验”
 
 ## 需求规格
@@ -204,6 +230,38 @@
   - 浏览器与端口健康；
   - MCP 启动配置已固定；
   - 剩余阻塞点是“当前线程未热重载 MCP 配置”，需在新会话完成最终复测。
+
+# TODO - 2026-04-03 店铺授权管理台 X 删除后按新店铺重连
+
+## 需求规格
+- 目标：在店铺授权管理台点击 `X` 删除行后，彻底清理该店铺授权态信息；该店铺后续再次 `verify` 时按“新店铺”语义处理。
+- 范围：
+  - 服务端 `POST /v1/license/admin/delete` 补齐“删除即重置”状态语义；
+  - 状态快照持久化（Tablestore）同步保留该重置语义；
+  - 补充回归测试锁定删除后重连行为，防止回退。
+- 非目标：
+  - 不改动授权接口路径与管理鉴权方式；
+  - 不改 userscript/extension 客户端授权协议字段。
+
+## 执行计划（含校验）
+- [x] 1. 设计并实现“删除重置标记”状态。
+  - 摘要：新增服务端内存集合用于表达“该店铺已被管理台删除，后续按新店铺重新接入”。
+- [x] 2. 打通授权判定与重连链路。
+  - 摘要：`isShopAllowed/isShopRevoked/provisionDefaultAuthForNewShop/admin_allow/admin_delete` 接入重置标记语义，确保删除后不残留旧授权态。
+- [x] 3. 状态快照持久化同步。
+  - 摘要：`buildStateSnapshot/applyStateSnapshot` 纳入重置标记集合，确保跨实例/重启后语义一致。
+- [x] 4. 补充测试并执行定向验证。
+  - 摘要：新增/更新测试断言删除后“清空授权信息 + 重连按新店铺”的契约，并执行定向 `node --test`。
+
+## 结果复盘
+- 状态：已完成
+- 变更结论：
+  - 管理台 `X` 删除后不再只是“删当前内存行”，会写入删除重置态，阻断旧授权/旧吊销信息残留；
+  - 删除后再次 `verify` 将按“新店铺”语义参与判定（是否自动放行取决于 `AM_LICENSE_AUTO_PROVISION_NEW_SHOP` 配置）；
+  - 删除动作会同步清理该店铺的 nonce 防重放缓存，避免误把历史 replay 状态带入新会话。
+- 验证记录：
+  - `node --test tests/license-server-admin-delete-reset.test.mjs tests/license-admin-page.test.mjs tests/license-server-new-shop-default-auth.test.mjs` 通过；
+  - `node --check services/license-server/index.mjs` 通过。
 
 # TODO - 2026-04-01 本地授权管理页（店铺列表/授权开关/租约管理）
 

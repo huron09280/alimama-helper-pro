@@ -86,7 +86,9 @@ test('授权管理文档包含管理页入口与核心接口说明', () => {
     assert.match(doc, /POST \/v1\/license\/admin\/allow/, '文档缺少授权接口');
     assert.match(doc, /POST \/v1\/license\/admin\/revoke/, '文档缺少吊销接口');
     assert.match(doc, /POST \/v1\/license\/admin\/delete/, '文档缺少删除接口');
+    assert.match(doc, /按新店铺语义重新接入/, '文档缺少删除后按新店铺重连说明');
     assert.match(doc, /\/v1\/license\/verify/, '文档缺少与插件校验接口的联动说明');
     assert.match(doc, /browserVersion/, '文档缺少浏览器版本字段说明');
     assert.match(doc, /osVersion/, '文档缺少操作系统版本字段说明');
+    assert.match(doc, /deleted\.memory/, '文档缺少删除重置字段说明');
 });
