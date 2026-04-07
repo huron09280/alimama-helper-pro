@@ -61,10 +61,18 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
     'refreshMagicViewTabDefaultState',
     'cacheCrowdCampaignItemId',
     'getCrowdCampaignItemId',
+    'getCrowdCampaignSelectedItemId',
+    'setCrowdCampaignSelectedItemId',
+    'collectCrowdItemSpendSummaryFromPayload',
+    'queryCrowdCampaignSpendPayload',
+    'refreshCrowdCampaignItemOptions',
+    'renderCrowdCampaignItemSelect',
     'maximizePopupForMatrix',
     'restorePopupFromMatrix',
     'buildMetricPrompt',
     'buildCrowdPeriodPrompt',
+    'buildCrowdPanelTimeMode',
+    'buildCrowdPanelQueryExecutePlan',
     'resolveCrowdItemIdByCampaign',
     'extractPanelQueryConfFromDataQuery',
     'queryPanelPeriod',
@@ -77,6 +85,7 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
 test('人群看板默认仅显示加购人群，并默认显示占比/关闭提示', () => {
   const block = getMagicReportBlock();
   assert.match(block, /matrixHoverMetricIndex:\s*null/, '悬停提示指标索引缓存未初始化');
+  assert.match(block, /crowdMatrixGroupSortModeMap:\s*\{\s*\}/, '省份/城市排序模式默认值未初始化为空');
   assert.match(block, /crowdMetricVisibility:\s*\{\s*click:\s*false,\s*cart:\s*true,\s*deal:\s*false,\s*itemdeal:\s*false\s*\}/, '默认人群显隐未设置为仅加购可见');
   assert.match(block, /crowdRatioVisibility:\s*true/, '默认占比显示未开启');
   assert.match(block, /crowdInsightsVisibility:\s*false/, '默认提示显示未关闭');
@@ -104,8 +113,14 @@ test('万能查数快捷话术包含“✨商品ID成交占比分析”，并支
 
 test('万能查数快捷话术补充计划ID省份/城市花费占比模板', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /label:\s*'🏙️ 省份占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，点击人群（加购人群或者成交人群）在各个省份的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID省份花费占比模板');
-  assert.match(block, /label:\s*'🌆 城市占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，点击人群（加购人群或者成交人群）在各个城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID城市花费占比模板');
+  assert.match(block, /label:\s*'🏙️ 省份占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个省份的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID省份花费占比模板');
+  assert.match(block, /label:\s*'🌆 城市占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID城市花费占比模板');
+});
+
+test('快捷查询在 iframe 提交失败后会回退原生查数入口', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /async tryFallbackSubmitPrompt\(promptText\)\s*\{[\s\S]*this\.openNativeAndSubmit\(fallbackCampaignId,\s*promptText\)/, '缺少原生查数回退提交流程');
+  assert.match(block, /if \(retriesLeft <= 0\) \{[\s\S]*this\.tryFallbackSubmitPrompt\(promptText\)\.then\(\(fallbackOk\) => \{/, 'runQuickPrompt 未在重试耗尽后触发原生回退');
 });
 
 test('buildCrowdDimensionPrompt 按计划ID/商品ID与省市维度构造花费占比分析话术', () => {
@@ -118,10 +133,26 @@ test('buildCrowdDimensionPrompt 按计划ID/商品ID与省市维度构造花费�
 test('周期覆写使用 panelDataQuery，且请求体包含 queryConf.period/queryExecutePlan/timeMode', () => {
   const block = getMagicReportBlock();
   assert.match(block, /requestCrowdApi\('\/ai\/report\/panelDataQuery\.json'/, '未调用 panelDataQuery 接口');
-  assert.match(block, /queryConf:\s*\{[\s\S]*period:\s*\[\s*\{\s*timeInfo:\s*`过去\$\{days\}天`\s*\}\s*\]/, 'queryConf.period 未按周期写入');
-  assert.match(block, /queryExecutePlan:\s*String\(queryExecutePlan\s*\|\|\s*''\)\.trim\(\)/, 'queryConf 缺少 queryExecutePlan');
-  assert.match(block, /timeMode:\s*String\(timeMode\s*\|\|\s*'\{"timeInfo":"过去7天","timeMode":"slidedTime"\}'\)/, 'queryConf 缺少 timeMode');
-  assert.match(block, /timeInfo:\s*`过去\$\{days\}天`/, 'queryConf 缺少 timeInfo 覆写');
+  assert.match(block, /const periodText = `过去\$\{days\}天`;/, '缺少周期文本变量 periodText');
+  assert.match(block, /const normalizedTitle = this\.buildCrowdPeriodPrompt\(String\(title \|\| ''\)\.trim\(\),\s*days\);/, 'panelDataQuery title 未按周期改写');
+  assert.match(block, /const normalizedTimeMode = this\.buildCrowdPanelTimeMode\(timeMode,\s*days\);/, 'panelDataQuery 未按周期重写 timeMode');
+  assert.match(block, /const rootMode = String\(cloned\.timeMode \|\| ''\)\.trim\(\);[\s\S]*if \(!rootMode \|\| rootMode === 'noTimeMode'\) \{\s*cloned\.timeMode = 'slidedTime';/, 'timeMode 未将 noTimeMode 归一为 slidedTime');
+  assert.match(block, /if \(!String\(cloned\.timeInfo \|\| ''\)\.trim\(\)\) \{\s*cloned\.timeInfo = periodText;\s*\}/, 'timeMode 缺少 timeInfo 兜底覆写');
+  assert.match(block, /if \(!Array\.isArray\(cloned\.period\) \|\| !cloned\.period\.length\) \{\s*cloned\.period = \[\{\s*timeInfo:\s*periodText\s*\}\];\s*\}/, 'timeMode 缺少 period 数组兜底覆写');
+  assert.match(block, /const normalizedQueryExecutePlan = this\.buildCrowdPanelQueryExecutePlan\(queryExecutePlan,\s*days\);/, 'panelDataQuery 未按周期重写 queryExecutePlan');
+  assert.match(block, /title:\s*normalizedTitle/, 'query payload.title 未使用按周期改写后的标题');
+  assert.match(block, /queryConf:\s*\{[\s\S]*period:\s*\[\s*\{\s*timeInfo:\s*periodText\s*\}\s*\]/, 'queryConf.period 未按周期写入');
+  assert.match(block, /queryExecutePlan:\s*String\(normalizedQueryExecutePlan\s*\|\|\s*''\)\.trim\(\)/, 'queryConf 缺少按周期重写后的 queryExecutePlan');
+  assert.match(block, /timeMode:\s*normalizedTimeMode/, 'queryConf.timeMode 未使用按周期重写后的值');
+  assert.match(block, /timeInfo:\s*periodText/, 'queryConf 缺少 timeInfo 覆写');
+  assert.match(block, /const rewritePlanString = \(value = '', depth = 0\) => \{/, 'queryExecutePlan 缺少嵌套字符串计划改写逻辑');
+  assert.match(block, /const directParsed = tryParseJson\(text\);[\s\S]*rewritePlanObject\(copied,\s*depth \+ 1\)/, 'queryExecutePlan 未递归改写嵌套 JSON 字符串');
+  assert.match(block, /const encodeBase64Text = \(text = ''\) => \{/, 'queryExecutePlan 缺少 UTF-8 安全 base64 编码 helper');
+  assert.match(block, /const encoded = encodeBase64Text\(JSON\.stringify\(copied\)\);[\s\S]*value:\s*encoded/, 'queryExecutePlan 未使用 UTF-8 安全编码回写 base64 计划');
+  assert.doesNotMatch(block, /return btoa\(JSON\.stringify\(copied\)\);/, 'queryExecutePlan 仍在直接 btoa JSON，中文会导致重写失效');
+  assert.match(block, /if \(typeof node\.query === 'string'\) \{[\s\S]*this\.buildCrowdPeriodPrompt\(node\.query,\s*normalizedDays\)/, 'queryExecutePlan 未按周期改写 query 文本');
+  assert.match(block, /if \(typeof node\.timeInfo === 'string' && node\.timeInfo !== periodText\) \{[\s\S]*node\.timeInfo = periodText;/, 'queryExecutePlan 未按周期同步 timeInfo');
+  assert.match(block, /if \(typeof value !== 'string'\) return;[\s\S]*const rewritten = rewritePlanString\(value,\s*currentDepth\);[\s\S]*node\[key\] = rewritten\.value;/, 'queryExecutePlan 未将嵌套字符串改写结果回写到原对象');
 });
 
 test('extractGroupList 同时兼容 CHART_GROUP.groupList 与 subComponentList.properties.groupList', () => {
@@ -151,7 +182,7 @@ test('buildGroupMapFromGroupList 支持按 fallbackGroupName 兜底城市分组�
 test('queryCrowdInsight 采用 dataQuery 首查 + panelDataQuery 周期覆写的混合链路', () => {
   const block = getMagicReportBlock();
   assert.match(block, /requestCrowdApi\('\/ai\/report\/dataQuery\.json'/, '缺少 dataQuery 首查调用');
-  assert.match(block, /itemId = await this\.resolveCrowdItemIdByCampaign\(id\);/, '商品成交人群未先按计划识别商品ID');
+  assert.match(block, /itemId = \/\^\\d\{6,\}\$\/\.test\(selectedItemId\)\s*\?\s*selectedItemId\s*:\s*await this\.resolveCrowdItemIdByCampaign\(id\);/, '商品成交人群未优先使用已选商品ID并按计划识别兜底');
   assert.match(block, /throw new Error\(`未识别到计划 \$\{id\} 对应商品ID`\);/, '商品成交人群缺少商品ID识别失败提示');
   assert.match(block, /const scopePrompt = this\.buildCrowdDimensionPrompt\(\{ campaignId: id, metricType: metric, groupName, itemId \}\);/, '未按省份\/城市构造额外查数话术');
   assert.match(block, /const mergedGroupMap = this\.mergeCrowdGroupMaps\(/, '多话术结果未合并成统一 groupMap');
@@ -176,7 +207,7 @@ test('省份/城市缺少 queryExecutePlan 时会按周期直查兜底', () => {
 
 test('itemdeal 缺少 queryExecutePlan 时会强制刷新商品ID并重试首查', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /const shouldRetryByRefreshingItem = metric === 'itemdeal' && \/queryExecutePlan\/\.test\(message\);/, '未按 itemdeal + queryExecutePlan 缺失条件触发重试');
+  assert.match(block, /const shouldRetryByRefreshingItem = metric === 'itemdeal' && !lockToSelectedItem && \/queryExecutePlan\/\.test\(message\);/, '未按 itemdeal + queryExecutePlan 缺失条件触发重试');
   assert.match(block, /this\.resolveCrowdItemIdByCampaign\(id,\s*\{\s*preferCache:\s*false,\s*allowCacheFallback:\s*false\s*\}\)/, '缺少强制刷新商品ID重试逻辑');
   assert.match(block, /if \(!\/\^\\d\{6,\}\$\/\.test\(refreshedItemId\) \|\| refreshedItemId === itemId\) \{[\s\S]*throw err;/, '缺少无效/未变化商品ID的失败保护');
 });
@@ -246,10 +277,46 @@ test('顶部统一图例将人群与时间按钮分组，并用竖线分隔', ()
   assert.match(block, /divider\.textContent = '｜';/, '图例分隔符未使用竖线');
 });
 
-test('看板计划信息展示计划名/计划ID/商品ID', () => {
+test('看板计划信息展示计划名/计划ID，并将商品ID改为下拉单选', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /const itemId = this\.getCrowdCampaignItemId\(id\);/, '计划信息未读取商品ID');
-  assert.match(block, /`计划名：\$\{name \|\| '未识别'\} ｜ 计划ID：\$\{id \|\| '--'\} ｜ 商品ID：\$\{itemId \|\| '--'\}`/, '计划信息文案缺少商品ID展示');
+  assert.match(block, /data-crowd-campaign-name/, '计划信息缺少计划名节点');
+  assert.match(block, /data-crowd-campaign-id/, '计划信息缺少计划ID节点');
+  assert.match(block, /id="am-crowd-matrix-item-select"/, '计划信息缺少商品ID下拉节点');
+  assert.match(block, /data-crowd-item-trigger/, '商品ID缺少自定义下拉触发器节点');
+  assert.match(block, /data-crowd-item-dropdown/, '商品ID缺少自定义下拉菜单节点');
+  assert.match(block, /this\.matrixCampaignNameEl\.textContent = `计划名：\$\{name \|\| '未识别'\}`;/, '计划名文案未按节点更新');
+  assert.match(block, /this\.matrixCampaignIdEl\.textContent = `计划ID：\$\{id \|\| '--'\}`;/, '计划ID文案未按节点更新');
+  assert.match(block, /this\.renderCrowdCampaignItemSelect\(id\);/, '计划信息刷新未触发商品ID下拉渲染');
+  assert.match(block, /buildCrowdCampaignItemOptionLabel\(item\)\s*\{[\s\S]*normalizeCrowdItemTitle[\s\S]*花费/, '商品ID下拉未展示商品标题和花费信息');
+  assert.match(block, /optionBtn\.dataset\.crowdItemId = item\.itemId;/, '商品ID下拉未写入选项 data-item-id');
+  assert.match(block, /itemOptions = itemOptions[\s\S]*\.filter\(item => item\.active !== false\)/, '商品候选未过滤暂停推广状态');
+  assert.match(block, /const leftRank = left\?\.active === true \? 0 : 1;[\s\S]*const rightRank = right\?\.active === true \? 0 : 1;/, '商品候选排序未优先推广中状态');
+  assert.match(block, /this\.matrixCampaignEl\.addEventListener\('click', \(e\) => \{[\s\S]*target\.closest\('\[data-crowd-item-trigger\]'\)[\s\S]*target\.closest\('\[data-crowd-item-id\]'\)/, '商品ID下拉未绑定触发器/选项点击事件');
+  assert.match(block, /handleCrowdCampaignItemSelect\(itemId = ''\)\s*\{[\s\S]*this\.setCrowdCampaignSelectedItemId\(id,\s*selectedItemId,\s*\{\s*manual:\s*true\s*\}\);[\s\S]*this\.reloadCrowdMatrixMetric\(\{\s*campaignId:\s*id,\s*metricType:\s*'itemdeal'\s*\}\);/, '商品ID下拉切换后未仅刷新商品成交人群');
+});
+
+test('商品成交人群局部刷新会替换同指标缓存，避免旧周期残留', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /replaceCrowdMatrixMetricResults\(metricType,\s*results = \[\]\)\s*\{/, '缺少按指标替换结果缓存方法');
+  assert.match(block, /const metricPrefix = `\$\{metric\}\\|`;/, '按指标清理缓存缺少 key 前缀');
+  assert.match(block, /this\.crowdMatrixResultMap\.delete\(key\);/, '按指标清理缓存未删除旧周期结果');
+  assert.match(block, /const mergedResults = this\.replaceCrowdMatrixMetricResults\(metric,\s*successResults\);/, '局部刷新未替换同指标缓存');
+});
+
+test('刷新进行中切换商品会排队并在完成后补跑最新请求', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /if \(this\.crowdMatrixLoading\) \{[\s\S]*this\.scheduleCrowdMatrixMetricReload\(id,\s*metric\);[\s\S]*return;[\s\S]*\}/, '刷新进行中未排队最新指标请求');
+  assert.match(block, /scheduleCrowdMatrixMetricReload\(campaignId,\s*metricType\)\s*\{/, '缺少排队重刷方法');
+  assert.match(block, /flushPendingCrowdMatrixMetricReload\(\)\s*\{/, '缺少排队请求冲刷方法');
+  assert.match(block, /this\.flushPendingCrowdMatrixMetricReload\(\);/, '刷新完成后未冲刷排队请求');
+});
+
+test('商品成交人群支持手动锁定所选商品ID，避免自动切换到其他候选', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const lockToSelectedItem = metric === 'itemdeal'[\s\S]*this\.isCrowdCampaignItemManuallySelected\(id\)[\s\S]*\/\^\\d\{6,\}\$\/\.test\(selectedItemId\);/, 'itemdeal 未识别手动选中锁定条件');
+  assert.match(block, /const candidates = lockedItemId[\s\S]*\?\s*\[lockedItemId\][\s\S]*:\s*this\.getCrowdCampaignItemCandidates\(id,\s*seedItemId\);/, 'itemdeal 未按锁定状态构造候选商品集合');
+  assert.match(block, /lockedItemId:\s*lockToSelectedItem \?\s*selectedItemId\s*:\s*''/, 'itemdeal 首查未透传锁定商品ID');
+  assert.match(block, /const shouldRetryByRefreshingItem = metric === 'itemdeal' && !lockToSelectedItem && \/queryExecutePlan\/\.test\(message\);/, '锁定商品ID后仍会触发刷新重试，可能串商品');
 });
 
 test('看板状态区仅展示最新一行日志，并支持进度条背景变量', () => {
@@ -290,16 +357,30 @@ test('省份/城市维度支持横向拖拽浏览，且占比显示逻辑与其�
   assert.doesNotMatch(block, /am-show-ratio-values[\s\S]*am-crowd-matrix-cell-chart\.is-horizontal-scroll \.am-crowd-matrix-bar-ratio[\s\S]*opacity:\s*0;/, '省份\/城市占比不应单独覆盖为悬停显示');
 });
 
+test('省份/城市默认各周期独立排序，并可点击表头图标切换到主周期优先', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const shouldUseStableSort = isPriorityGroupSort\(groupName\);/, '未按分组排序模式控制稳定标签开关');
+  assert.match(block, /const stableLabels = shouldUseStableSort \? stableLabelMap\.get\(normalizedGroupName\) : null;/, '默认排序未回落到各周期独立标签');
+  assert.match(block, /rowHeader\.classList\.add\('has-sort-toggle'\);/, '省份\/城市行头未启用排序开关布局');
+  assert.match(block, /sortBtn\.dataset\.crowdGroupSortToggle = normalizedGroupName;/, '排序图标未写入分组标识');
+  assert.match(block, /sortBtn\.textContent = '⇅';/, '排序图标字符未渲染');
+  assert.match(block, /this\.matrixGridEl\.addEventListener\('click', \(e\) => \{[\s\S]*target\.closest\('\[data-crowd-group-sort-toggle\]'\)[\s\S]*this\.toggleCrowdGroupSortMode\(groupName\);/, '排序图标点击未绑定模式切换');
+  assert.match(block, /const nextMode = this\.getCrowdGroupSortMode\(normalizedGroupName\) === 'priority' \? 'period' : 'priority';/, '排序切换逻辑未在默认与主周期优先之间切换');
+  assert.match(block, /const modeText = nextMode === 'priority' \? '主周期优先（90→30→7→3）' : '各周期独立排序';/, '排序切换后的状态文案未区分两种模式');
+});
+
 test('柱状图悬停提示使用即时 tooltip（data-tooltip）并绑定网格鼠标事件', () => {
   const block = getMagicReportBlock();
   assert.match(block, /bindCrowdMatrixHoverTipEvents\(\)\s*\{/, '缺少柱状图悬停事件绑定方法');
   assert.match(block, /showCrowdMatrixHoverTip\(tipText,\s*event\.clientX,\s*event\.clientY\);/, '悬停时未即时显示 tooltip');
   assert.match(block, /const linkedBars = this\.activateCrowdMatrixHoverBars\(bar\);/, '悬停时未先获取跨周期联动柱集合');
   assert.match(block, /const tipText = this\.buildCrowdMatrixHoverTipText\(bar,\s*linkedBars\);/, '悬停时未构造跨周期提示文案');
+  assert.match(block, /const labelIndex = this\.normalizeCrowdLabelKey\(anchorBar\.dataset\.labelKey \|\| anchorBar\.dataset\.labelName[\s\S]*\);/, '跨周期联动未按标签内容键对齐');
   assert.match(block, /bar\.dataset\.tooltip\s*=\s*tooltipText;/, '柱状图未写入 data-tooltip');
   assert.match(block, /const shouldAppendYuan = crowdGroup === '省份' \|\| crowdGroup === '城市';/, '省份\/城市悬停提示未启用金额单位逻辑');
   assert.match(block, /const countDisplay = shouldAppendYuan && !\/元\$\/\.test\(rawCountDisplay\) \? `\$\{rawCountDisplay\}元` : rawCountDisplay;/, '跨周期悬停提示未为省份\/城市追加元单位');
   assert.match(block, /bar\.dataset\.labelIndex = String\(labelIdx\);/, '柱状图未写入标签索引');
+  assert.match(block, /bar\.dataset\.labelKey = this\.normalizeCrowdLabelKey\(label\);/, '柱状图未写入标签内容键');
   assert.match(block, /bar\.dataset\.crowdGroup = String\(groupName \|\| ''\);/, '柱状图未写入维度分组标记');
   assert.match(block, /bar\.dataset\.metricLabel = String\(metricMeta\.seriesLabel \|\| ''\);/, '柱状图未写入系列名称');
   assert.match(block, /bar\.dataset\.ratio = String\(ratio\);/, '柱状图未写入占比数值');
@@ -389,6 +470,15 @@ test('buildMatrixDataset 生成固定 4x8 结构并包含四系列与 raw/noData
   const block = getMagicReportBlock();
   assert.match(block, /const periods = this\.CROWD_PERIODS\.slice\(\);/, '缺少周期列表初始化');
   assert.match(block, /const groups = this\.CROWD_GROUP_ORDER\.slice\(\);/, '缺少维度列表初始化');
+  assert.match(block, /const stableGroupSet = new Set\(/, '缺少省份\/城市稳定标签集合初始化');
+  assert.match(block, /const groupSortModeMap = options\?\.groupSortModeMap && typeof options\.groupSortModeMap === 'object'/, '缺少分组排序模式映射读取');
+  assert.match(block, /const stableLabelMap = new Map\(\);/, '缺少稳定标签映射缓存');
+  assert.match(block, /if \(!stableGroupSet\.has\(normalizedGroupName\)\) return;/, '稳定标签计算未限定在省份\/城市');
+  assert.match(block, /const periodSortPriority = Array\.isArray\(this\.CROWD_GROUP_SORT_PERIOD_PRIORITY\) && this\.CROWD_GROUP_SORT_PERIOD_PRIORITY\.length/, '稳定标签排序未读取主周期优先配置');
+  assert.match(block, /for \(const period of periodSortPriority\) \{[\s\S]*periodDiff[\s\S]*if \(Math\.abs\(periodDiff\) > 1e-9\) return periodDiff;/, '稳定标签排序未按主周期优先比较');
+  assert.match(block, /const scoreDiff = this\.toNumericValue\(rightMeta\.score\) - this\.toNumericValue\(leftMeta\.score\);/, '稳定标签排序未按累计值降序');
+  assert.match(block, /const stableLabels = shouldUseStableSort \? stableLabelMap\.get\(normalizedGroupName\) : null;/, '周期渲染未按模式读取稳定标签映射');
+  assert.match(block, /const labelList = Array\.isArray\(stableLabels\) && stableLabels\.length[\s\S]*\? stableLabels\.slice\(\)[\s\S]*: \[\];/, '周期标签列表未优先使用稳定顺序');
   assert.match(block, /cell\[\`\$\{metric\}Raw`\] = \[\];/, 'cellData 未动态初始化 raw 字段');
   assert.match(block, /cell\.noData\[metric\] = true;/, 'cellData 未动态初始化 noData 字段');
   assert.match(block, /nextCell\[`\$\{metric\}Raw`\] = rawList\.length \? rawList : rawValues;/, 'cellData 未写入动态 raw 数据');
@@ -479,10 +569,10 @@ test('itemdeal 会遍历候选商品ID并优先使用可查询结果', () => {
   assert.match(source, /rememberCampaignItemIdCandidates\(campaignId,\s*itemIds = \[\],\s*options = \{\}\)\s*\{/, 'PlanIdentity 缺少候选商品缓存写入方法');
   assert.match(source, /extractItemIdCandidatesFromCampaignPayload\(payload = \{\},\s*expectedCampaignId = ''\)\s*\{/, 'PlanIdentity 缺少计划详情候选商品提取方法');
   assert.match(block, /getCrowdCampaignItemCandidates\(campaignId,\s*preferredItemId = ''\)\s*\{/, 'MagicReport 缺少候选商品聚合方法');
-  assert.match(block, /const queryItemDealByCandidate = async \(seedItemId = ''\) => \{/, 'itemdeal 缺少候选商品逐个探测逻辑');
-  assert.match(block, /const candidates = this\.getCrowdCampaignItemCandidates\(id,\s*seedItemId\);/, 'itemdeal 未读取候选商品列表');
-  assert.match(block, /const resolvedByCandidates = await queryItemDealByCandidate\(itemId\);/, 'itemdeal 首查未走候选商品探测');
-  assert.match(block, /const refreshedByCandidates = await queryItemDealByCandidate\(itemId\);/, 'itemdeal 强刷后未走候选商品探测');
+  assert.match(block, /const queryItemDealByCandidate = async \(seedItemId = '',\s*options = \{\}\) => \{/, 'itemdeal 缺少候选商品逐个探测逻辑');
+  assert.match(block, /const candidates = lockedItemId[\s\S]*:\s*this\.getCrowdCampaignItemCandidates\(id,\s*seedItemId\);/, 'itemdeal 未读取候选商品列表');
+  assert.match(block, /const resolvedByCandidates = await queryItemDealByCandidate\(itemId,\s*\{[\s\S]*allowAutoPick:\s*!lockToSelectedItem[\s\S]*\}\);/, 'itemdeal 首查未走候选商品探测');
+  assert.match(block, /const refreshedByCandidates = await queryItemDealByCandidate\(itemId,\s*\{[\s\S]*allowAutoPick:\s*true[\s\S]*\}\);/, 'itemdeal 强刷后未走候选商品探测');
 });
 
 test('计划详情命中白名单商品时会继续查询单元详情，并仅作为回退候选', () => {

@@ -7,6 +7,8 @@ cd "$ROOT_DIR"
 SCRIPT_FILE="阿里妈妈多合一助手.js"
 README_FILE="README.md"
 CLAUDE_FILE="CLAUDE.md"
+BUILD_SCRIPT="scripts/build.mjs"
+LICENSE_SERVER_DEPS_CHECK_SCRIPT="scripts/check-license-server-deps.mjs"
 TEST_FILES=()
 
 pass() {
@@ -80,13 +82,33 @@ assert_no_pattern() {
   pass "$label"
 }
 
+assert_no_tracked_ds_store() {
+  local tracked
+  tracked="$(git ls-files -- '*.DS_Store')"
+  if [[ -n "$tracked" ]]; then
+    printf '%s\n' "$tracked" >&2
+    fail 'Tracked .DS_Store files detected'
+  fi
+  pass 'Tracked .DS_Store files absent'
+}
+
 main() {
   require_cmd node
   require_file "$SCRIPT_FILE"
   require_file "$README_FILE"
+  require_file "$BUILD_SCRIPT"
+  require_file "$LICENSE_SERVER_DEPS_CHECK_SCRIPT"
   collect_test_files
 
   printf '== Review Team Check ==\n'
+
+  printf '\n[Build] Generated artifact sync\n'
+  node "$BUILD_SCRIPT" --check
+  pass 'Build outputs are in sync'
+
+  printf '\n[License Server] Runtime dependency contract\n'
+  node "$LICENSE_SERVER_DEPS_CHECK_SCRIPT"
+  pass 'License server runtime dependencies are ready'
 
   printf '\n[Architecture] Baseline contract checks\n'
   has_match '__ALIMAMA_OPTIMIZER_TOGGLE__' "$SCRIPT_FILE" || fail 'Missing bridge: __ALIMAMA_OPTIMIZER_TOGGLE__'
@@ -96,6 +118,7 @@ main() {
   printf '\n[Security] Dangerous API checks\n'
   assert_no_pattern 'eval[[:space:]]*\(' 'No eval(...) usage'
   assert_no_pattern 'new[[:space:]]+Function[[:space:]]*\(' 'No new Function(...) usage'
+  assert_no_tracked_ds_store
 
   printf '\n[Test] Syntax and automated tests\n'
   node --check "$SCRIPT_FILE"

@@ -15,18 +15,13 @@ test('场景请求按单计划拆分并透传场景并发提交次数', () => {
   const block = getBuildSceneRequestsFromWizardBlock();
   assert.match(
     block,
-    /const isSiteScene = sceneName === '货品全站推广';/,
-    '缺少货品全站推广场景判断'
-  );
-  assert.match(
-    block,
     /const configuredParallelSubmitTimes = normalizeParallelSubmitTimes\([\s\S]*request\?\.parallelSubmitTimes[\s\S]*wizardState\?\.draft\?\.parallelSubmitTimes[\s\S]*\);/,
     '场景并发提交次数未读取可配置并发数'
   );
   assert.match(
     block,
-    /const sceneParallelSubmitTimes = isSiteScene\s*\?\s*SITE_SCENE_PARALLEL_SUBMIT_TIMES\s*:\s*configuredParallelSubmitTimes;/,
-    '场景并发提交次数未按全站\/其他场景分流'
+    /const sceneParallelSubmitTimes = configuredParallelSubmitTimes;/,
+    '场景并发提交次数未直接采用配置并发数'
   );
   assert.match(
     block,
@@ -71,6 +66,25 @@ test('货品全站推广创建时禁用冲突处理', () => {
   );
 });
 
+test('汇总结果会对同计划“重复提交”失败按成功结果去重', () => {
+  const block = getHandleRunBlock();
+  assert.match(
+    block,
+    /const DUPLICATE_SUBMIT_ERROR_RE = \/\(请勿重复提交\|重复提交\|duplicate\\s\*submit\)\/i;/,
+    '缺少重复提交失败识别规则'
+  );
+  assert.match(
+    block,
+    /successPlanNameSet\.has\(planName\)[\s\S]*DUPLICATE_SUBMIT_ERROR_RE\.test\(errorText\)/,
+    '未在汇总阶段按同计划成功去重重复提交失败'
+  );
+  assert.match(
+    block,
+    /result\.failCount = Math\.max\(0,\s*result\.failCount - removedFailCount\);/,
+    '去重后未回写失败计数'
+  );
+});
+
 test('场景分组通过 Promise.all 并发提交，支持关键词与全站同时提交', () => {
   const block = getHandleRunBlock();
   assert.match(
@@ -89,7 +103,7 @@ test('单条模式会按计划顺序提交并在计划间隔后继续', () => {
   const block = getHandleRunBlock();
   assert.match(
     block,
-    /const submitMode = normalizeSubmitMode\(wizardState\?\.draft\?\.submitMode \|\| 'parallel'\);/,
+    /const submitMode = normalizeSubmitMode\(wizardState\?\.draft\?\.submitMode \|\| 'serial'\);/,
     '未读取提交模式草稿'
   );
   assert.match(
@@ -145,7 +159,7 @@ test('立即投放操作区包含提交方式下拉菜单（并发/单条）', (
 test('向导草稿包含 submitMode 默认值并在同步时归一化', () => {
   assert.match(
     source,
-    /submitMode:\s*'parallel',/,
+    /submitMode:\s*'serial',/,
     '草稿默认值缺少 submitMode'
   );
   assert.match(
@@ -155,7 +169,7 @@ test('向导草稿包含 submitMode 默认值并在同步时归一化', () => {
   );
   assert.match(
     source,
-    /wizardState\.draft\.submitMode = normalizeSubmitMode\(wizardState\.draft\.submitMode \|\| 'parallel'\);/,
+    /wizardState\.draft\.submitMode = normalizeSubmitMode\(wizardState\.draft\.submitMode \|\| 'serial'\);/,
     '草稿同步未归一化 submitMode'
   );
   assert.match(
@@ -172,22 +186,37 @@ function getCreatePlansBatchBlock() {
   return source.slice(start, end);
 }
 
-test('非全站场景单计划支持同计划并发 3 次提交', () => {
+test('非全站场景并发模式会对每个计划按并发数复制并同时提交', () => {
   const block = getCreatePlansBatchBlock();
   assert.match(
     block,
-    /const useParallelSingleSubmit = remainingEntries\.length === 1 && parallelSubmitTimes > 1;/,
+    /const useParallelSubmit = parallelSubmitTimes > 1;/,
     '缺少并发重复提交分支'
+  );
+  assert.match(
+    block,
+    /const parallelTasks = entries\.map\(/,
+    '并发模式未按计划构建并行任务'
+  );
+  assert.match(
+    block,
+    /const parallelSettled = await Promise\.all\(parallelTasks\);/,
+    '并发模式未同时提交所有计划'
+  );
+  assert.match(
+    block,
+    /submitSinglePlanInParallel\(\s*entry,\s*endpoint,\s*submitTimes\s*\)/,
+    '并发模式未按并发次数复制同计划提交'
+  );
+  assert.match(
+    block,
+    /submitBatchPlansInParallel\(\s*remainingEntries,\s*batchEndpoint,\s*parallelSubmitTimes/,
+    '批次并发分支未按剩余计划整体并发提交'
   );
   assert.match(
     block,
     /emitProgress\(options,\s*'submit_batch_parallel_start'/,
     '并发重复提交未透出进度事件'
-  );
-  assert.match(
-    block,
-    /submitSinglePlanInParallel\(\s*parallelEntry,\s*batchEndpoint,\s*parallelSubmitTimes\s*\)/,
-    '未按并发次数执行同计划并发提交'
   );
 });
 

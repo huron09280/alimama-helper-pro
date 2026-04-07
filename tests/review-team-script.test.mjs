@@ -17,3 +17,8 @@ test('review-team 将 CLAUDE 版本校验降级为可选检查', () => {
     assert.match(source, /Optional version file missing: CLAUDE\.md \(skipped\)/, '缺少跳过 CLAUDE.md 时的通过提示');
     assert.match(source, /Version aligned with CLAUDE\.md: \$script_version/, '缺少 CLAUDE.md 存在时的版本比对');
 });
+
+test('review-team 不允许跟踪 .DS_Store', () => {
+    assert.match(source, /assert_no_tracked_ds_store/, '缺少追踪 .DS_Store 的断言');
+    assert.match(source, /git ls-files -- '\*\.DS_Store'/, '缺少列出 tracked .DS_Store 的命令');
+});

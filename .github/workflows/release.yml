@@ -14,52 +14,34 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
       - name: Verify script
         run: bash scripts/review-team.sh
 
-      - name: Build userscript assets
+      - name: Build release assets
+        run: node scripts/build.mjs
+
+      - name: Archive extension package
         run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
+          python3 <<'PY'
+          from pathlib import Path
+          import zipfile
 
-          const sourcePath = '阿里妈妈多合一助手.js';
-          const outDir = path.join('dist', 'packages');
-          const userAsset = path.join(outDir, 'alimama-helper-pro.user.js');
-          const metaAsset = path.join(outDir, 'alimama-helper-pro.meta.js');
+          ext_dir = Path('dist/extension')
+          out_path = Path('dist/packages/alimama-helper-pro-extension.zip')
+          out_path.parent.mkdir(parents=True, exist_ok=True)
 
-          const source = fs.readFileSync(sourcePath, 'utf8');
-          fs.mkdirSync(outDir, { recursive: true });
-          fs.writeFileSync(userAsset, source, 'utf8');
-
-          const headerStart = source.indexOf('// ==UserScript==');
-          const headerEnd = source.indexOf('// ==/UserScript==');
-          if (headerStart === -1 || headerEnd === -1 || headerEnd < headerStart) {
-            throw new Error('无法解析 UserScript 头部');
-          }
-
-          const endMarker = '// ==/UserScript==';
-          let meta = source.slice(headerStart, headerEnd + endMarker.length);
-          const updateUrl = 'https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.meta.js';
-          const downloadUrl = 'https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.user.js';
-
-          if (!/@updateURL\b/.test(meta)) {
-            meta = meta.replace(endMarker, `// @updateURL    ${updateUrl}\n${endMarker}`);
-          }
-          if (!/@downloadURL\b/.test(meta)) {
-            meta = meta.replace(endMarker, `// @downloadURL  ${downloadUrl}\n${endMarker}`);
-          }
-
-          if (!meta.endsWith('\n')) meta += '\n';
-          fs.writeFileSync(metaAsset, meta, 'utf8');
-          NODE
+          with zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+              for file in sorted(ext_dir.rglob('*')):
+                  if file.is_file():
+                      zf.write(file, file.relative_to(ext_dir))
+          PY
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -67,3 +49,4 @@ jobs:
           files: |
             dist/packages/alimama-helper-pro.user.js
             dist/packages/alimama-helper-pro.meta.js
+            dist/packages/alimama-helper-pro-extension.zip

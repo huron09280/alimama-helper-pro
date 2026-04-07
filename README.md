@@ -2,17 +2,31 @@
 
 [![Version](https://img.shields.io/github/v/release/huron09280/alimama-helper-pro?sort=semver&label=version)](https://github.com/huron09280/alimama-helper-pro/releases/latest)
 
-阿里妈妈投放平台增强工具，当前仓库以 **Tampermonkey 用户脚本** 为主，发布产物为 `.user.js` 与 `.meta.js`。当前绝大多数业务逻辑集中在根目录 [`阿里妈妈多合一助手.js`](./阿里妈妈多合一助手.js) 中，包括主面板、算法护航桥接、万能查数流程、关键词/人群/全站场景逻辑、日志与配置迁移。
+阿里妈妈投放平台增强工具，当前仓库采用“双产物过渡”模式：
 
-## 快速安装（推荐）
+- `src/` 是源码事实来源，按功能拆成多文件维护。
+- 根目录 [`阿里妈妈多合一助手.js`](./阿里妈妈多合一助手.js) 仍保留为最终发布的 userscript 文件名，但改为构建产物。
+- `dist/packages/` 产出 `.user.js` / `.meta.js`。
+- `dist/extension/` 产出 Chrome / Edge 可直接“加载已解压扩展程序”的 MV3 插件目录。
 
-1. 安装 Tampermonkey 扩展。  
+## 安装方式
+
+### Tampermonkey（推荐稳定版）
+
+1. 安装 Tampermonkey 扩展。
 2. 打开发布脚本链接安装：  
-`https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.user.js`
+   `https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.user.js`
 3. 保持脚本启用，访问阿里妈妈页面即可生效。
 
-更新元信息地址（用于自动更新检查）：
+更新元信息地址：  
 `https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.meta.js`
+
+### Chrome / Edge 插件（解压加载）
+
+1. 下载 release 中的 `alimama-helper-pro-extension.zip`，或本地执行 `node scripts/build.mjs`。
+2. 打开浏览器扩展管理页，启用“开发者模式”。
+3. 选择“加载已解压的扩展程序”，指向 `dist/extension/`。
+4. 访问阿里妈妈页面，插件会自动注入页面增强能力。
 
 ## 核心功能
 
@@ -22,82 +36,188 @@
 - 交互增强：自动按花费排序、Tab 切换重排、弹窗速闭
 - 下载增强：报表直连捕获、复制与一键下载
 - 日志系统：按日期分组、可折叠、可清空、自动高度适配
+- 计划辅助：批量建计划 API、场景向导、并发开启与修复链路
 
 ## 更新日志（最近）
+
+### v7.00 (2026-04-03)
+- 版本升级：统一 userscript / extension 产物版本号到 `7.00`，用于本次发布标记
+
+### v6.09 (2026-04-02)
+- 授权守卫稳定性修复：新增租约到期前自动续租与失败补偿重试，修复“已授权但租约到期后被锁定”问题
+- 授权续租兜底增强：force 场景增加 `state/cache shopId` 兜底，减少页面切换瞬态导致的 `shop_not_found` 误锁
+- 云端发布门禁加固：License Server 新增 `tablestore` 依赖契约检查，发布流程强制校验依赖清单与锁文件
+
+### v6.08 (2026-03-24)
+- 批量建计划默认提交方式调整：立即投放默认改为“单条”，降低多计划并发误触发风险
+- 并发提交语义修复：并发模式改为“批次内所有计划同时提交”，并按并发数复制同计划并发提交
+- 回归测试同步：更新提交模式与并发语义契约断言，覆盖并发分支/批次并行/同计划复制提交流程
+
+### v6.07 (2026-03-23)
+- 批量建计划目标策略加固：`strictGoalMatch` 默认开启，request/plan 级 fallback 统一提前失败，避免静默回退继续提交
+- 目标匹配策略收敛：`allowFuzzyGoalMatch` 默认关闭；仅显式开启时才允许 fuzzy，且多候选改为告警后回退默认目标
+- 计划归一化与失败可观测性增强：支持 `plan.materialId`，多计划禁用 request 级同商品批量回填，drop 计划进入明确失败明细
+- 回归测试扩充：新增 `createPlansBatch` strict runtime harness、多计划 strict 隔离断言、早退结果/失败条目结构契约测试
+
+### v6.06 (2026-03-21)
+- 万能查数快捷提交增强：优先走 Magix `setData/search` 提交，减少“点击上方按钮无响应/串话术”问题
+- 快捷占比话术修订：省份/城市占比模板移除“点击人群（加购人群或者成交人群）”冗余描述
+- 提交兜底增强：iframe 提交失败时自动回退原生查数入口，提升按钮可用性
+- 回归测试补齐：新增触发器提交流程与弹窗失联恢复测试
+
+### v6.05 (2026-03-18)
+- extension 清单增强：新增 MV3 `icons` 与 `action.default_icon`，补齐浏览器扩展图标声明
+- 构建链路增强：build 阶段自动复制 `src/entries/extension-icons/*` 到 `dist/extension/`
+- 构建门禁补齐：`--check` 增加 extension 图标文件存在性校验
+- 回归测试补齐：新增 manifest 图标配置断言，防止后续回归
+
+### v6.04 (2026-03-17)
+- 开发入口标准化：新增零依赖 `package.json` 脚本入口，统一 `build/test/review/dev` 常用命令
+- 构建装配维护性优化：抽出共享 runtime segments，减少 userscript 与 extension 拼接列表重复维护
+- 仓库卫生门禁增强：`review-team` 新增 tracked `.DS_Store` 检查，阻止 macOS 噪音文件入库
+- 回归测试补齐：新增 build segment 装配关系与 `review-team` 仓库卫生断言
 
 ### v6.03 (2026-03-16)
 - 人群看板悬停性能修复：预构建指标索引，移除 `mousemove` 热路径全表扫描
 - 周期查询链路修复：`base` 维度缺失 `queryExecutePlan` 时立即失败，不再等待额外维度请求
 - 回归测试补齐：新增悬停缓存与 `base` 快速失败断言
 
-### v6.02 (2026-03-08)
-- Dev Loader 列表增强：自定义入口支持备注名，切换列表优先显示备注名
-- Dev Loader 编辑体验升级：编辑列表改为逐条管理，可新增、编辑、删除单条入口
-- Dev Loader 交互修复：编辑列表不再依赖浏览器 `prompt/alert`，改为内置弹层
+## 项目结构
 
-### v6.01 (2026-02-27)
-- 同商品计划识别扩容：并发识别范围覆盖货品全站、关键词、线索、人群四类计划
-- 同商品计划日志增强：弹窗新增四类分类统计与全部计划明细，成功场景同样展示完整执行日志
-- 商品ID反查增强：补齐 `campaign/get` + `adgroup/get` 兜底链路，支持 `adgroupIdList/adgroupIds` 多结构提取
-- 防串商品修复：并发流程不再直接采用地址栏候选商品ID，优先接口与按钮上下文
-- 同开突破策略增强：全站与自定义计划按业务线批量并发开启，兼容多业务线混合场景
+详细目录说明和“改什么去哪里改”的速查入口见：
 
-### v6.00 (2026-02-27)
-- 版本主线升级：正式从 v5.x 进入 v6.x，后续迭代统一按 6 系列维护
-- 重点更新：主面板三入口与辅助显示交互流程进一步优化，默认操作更聚焦
-- 稳定性增强：配置迁移、版本同步与 Hook 幂等关键路径继续加固
-- 发布门禁统一：发版前检查持续收敛到 `bash scripts/review-team.sh`
-
-### v5.30 (2026-02-15)
-- 新增代码检查团队机制：引入 `CODE_REVIEW_TEAM.md` 与 PR 检查清单
-- 新增一键审查脚本：`bash scripts/review-team.sh`
-- CI/Release 统一接入团队检查脚本，避免规则分叉
-- 新增 `.github/CODEOWNERS`，自动分配审查责任
-
-### v5.29 (2026-02-15)
-- 主面板工具区重构：新增「辅助显示」入口，与「算法护航」「万能查数」形成三入口布局
-- 辅助显示体验优化：开关区改为主面板内联展开/收起，加入过渡动画并默认收起
-- 配置版本化迁移：新增 `configRevision`，升级时自动修正默认配置并持久化
-- 默认行为修订：日志区默认折叠，首次打开更聚焦核心操作区
-- 冒烟与回归增强：补充辅助显示与配置迁移相关检查，新增本地烟测页 `dev/smoke-harness.html`
-
-### v5.28 (2026-02-15)
-- 万能查数弹窗头部全量重构，统一品牌头图与文案
-- 弹窗首屏体验优化，减少初次展示闪现
-- 样式规则改为动态选择器，兼容动态 `mx_*` 节点
-- 快捷查数文案升级为“计划名：{对应计划名}”，并修复计划名识别噪音
-- 新增开发加载器脚本 `dev/dev-loader.user.js`，支持本地自动加载执行
-
-## 项目结构（当前仓库）
+- [`docs/源码结构速查.md`](./docs/源码结构速查.md)
 
 ```text
-阿里妈妈多合一助手.js                     # 主 UserScript（主助手 + 算法护航）
-dev/dev-loader.user.js                    # 本地开发加载器（刷新即生效）
-dev/smoke-harness.html                    # 本地 DOM / UI 冒烟验证页
-tests/logger-api.test.mjs                 # 关键 API 回归测试
-tests/*.test.mjs                          # 关键词 / 人群 / 场景 / UI / 安全回归测试
-scripts/review-team.sh                    # 团队自动化检查入口
-.github/workflows/ci.yml                  # CI 检查
-.github/workflows/release.yml             # Tag 发布流程
-.github/pull_request_template.md          # PR 团队检查清单
-.github/CODEOWNERS                        # 审查责任人自动分配
-AGENTS.md                                 # 仓库贡献指南
-CLAUDE.md                                # 协作上下文说明
-KNOWLEDGE.md                             # 架构与实现知识库
-README.md                               # 项目说明
-other/RELEASE.md                        # 发布说明
-docs/*.md                              # 设计/回归/实现记录
+src/
+  entries/                         # userscript / extension 入口
+  shared/                          # 版本解析、公共前置、平台兼容层
+  main-assistant/                  # 主面板、指标增强、下载拦截、万能查数、快捷入口
+  optimizer/                       # 算法护航、Token、API、KeywordPlanApi、桥接
+阿里妈妈多合一助手.js              # 生成后的主 UserScript（兼容产物）
+dev/dev-loader.user.js             # 本地开发加载器（刷新即生效）
+tests/*.test.mjs                   # Node 回归测试
+dist/packages/                     # 构建后的 userscript 产物
+dist/extension/                    # 构建后的 MV3 unpacked 插件目录
+scripts/build.mjs                  # 构建脚本
+scripts/review-team.sh             # 团队自动化检查入口
+package.json                       # 零依赖脚本入口（build/test/review/dev）
 ```
 
 ## 本地开发与联调
 
+### 5 分钟上手（推荐入口）
+
+仓库为零依赖脚本项目，不需要 `npm install`。推荐优先使用 `package.json` 封装入口：
+
 ```bash
-node --check "阿里妈妈多合一助手.js"
-node --test tests/logger-api.test.mjs
-node --test tests/*.test.mjs
+npm run build
+npm run test
+npm run review
 ```
 
-建议先跑完整自动化回归，再使用 Dev Loader 在真实页面验证关键流程；需要快速看 DOM/样式时，可先打开 `dev/smoke-harness.html` 做本地冒烟检查。
+对应底层等价命令分别是：
+- `node scripts/build.mjs`
+- `node --test tests/*.test.mjs`
+- `bash scripts/review-team.sh`
+
+### 常用命令
+
+推荐命令（更利于 Codex 与新维护者快速发现）：
+
+```bash
+npm run build
+npm run build:check
+npm run check:syntax
+npm run codex:map
+npm run codex:find -- "__AM_HOOK_MANAGER__"
+npm run codex:changed
+npm run test
+npm run review
+```
+
+底层等价命令（保持可用）：
+
+```bash
+node scripts/build.mjs
+node scripts/build.mjs --check
+node --check "阿里妈妈多合一助手.js"
+node --test tests/*.test.mjs
+bash scripts/review-team.sh
+```
+
+### Codex 小上下文开发
+
+针对“大文件占上下文”和“反馈慢”的问题，仓库内置了 Codex 快速定位命令：
+
+```bash
+npm run codex:map
+npm run codex:find -- "<关键词>"
+npm run codex:changed
+```
+
+工作流建议：
+
+1. 先定位（map/find）再改动，避免扫描生成产物。
+2. 开发中只跑最小相关测试。
+3. 提交前统一跑 `npm run review`。
+
+完整规则见：
+
+- [`docs/CODEX_WORKFLOW.md`](./docs/CODEX_WORKFLOW.md)
+
+### Dev Loader 工作流
+
+如果你不想每次复制粘贴脚本到 Tampermonkey，可以用仓库自带开发加载器：
+
+1. 在项目根目录启动静态服务：
+
+```bash
+python3 -m http.server 5173
+```
+
+或使用 npm 别名：
+
+```bash
+npm run dev:serve
+```
+
+2. 打开 Tampermonkey，创建新脚本，把 `dev/dev-loader.user.js` 的内容完整粘贴进去并保存。
+3. 禁用线上版脚本，只保留 `Dev Loader` 启用，避免重复执行。
+4. 之后你每次修改 `src/`，先执行 `node scripts/build.mjs`，再刷新阿里妈妈页面即可加载最新生成脚本。
+5. 如果你希望持续生成，可使用 `node scripts/build.mjs --watch`。
+
+说明：
+- Dev Loader 默认从 `http://127.0.0.1:5173/阿里妈妈多合一助手.js` 拉取脚本，并附加时间戳避免缓存。
+- 若端口不同，改 `dev/dev-loader.user.js` 里的入口地址即可。
+
+### 本地 extension 联调
+
+```bash
+node scripts/build.mjs
+```
+
+然后在 Chrome / Edge 扩展页加载 `dist/extension/`。当前 v1 不提供 popup/options 页面，访问阿里妈妈页面即自动生效。
+
+### 本地授权管理页（店铺授权）
+
+仓库提供了本地管理页面：
+
+- [`dev/license-admin.html`](./dev/license-admin.html)
+- 配套 API 契约文档：[`docs/授权管理页.md`](./docs/授权管理页.md)
+
+推荐通过本地静态服务打开：
+
+```bash
+python3 -m http.server 8173
+```
+
+然后访问：`http://127.0.0.1:8173/dev/license-admin.html`
+
+说明：
+- 该页面只负责“授权管理前端”，真实数据仍由你的授权服务端提供。
+- 页面默认调用 `GET /v1/license/admin/state`、`POST /v1/license/admin/allow`、`POST /v1/license/admin/revoke`。
+- 管理鉴权头使用 `x-am-admin-token`（兼容 `x-admin-token`）。
 
 ## 代码检查团队（Review Team）
 
@@ -107,63 +227,50 @@ node --test tests/*.test.mjs
 bash scripts/review-team.sh
 ```
 
-- 贡献规范入口：`AGENTS.md`
-- PR 勾选清单：`.github/pull_request_template.md`
-
 说明：
-- `scripts/review-team.sh` 会校验 userscript 头部版本与 `README.md` 最近更新是否一致。
-- 若仓库存在 `CLAUDE.md`，脚本会额外校验其版本；缺失时会跳过，不再阻塞 CI/Release。
-- 该脚本会统一执行 `node --check "阿里妈妈多合一助手.js"` 与 `node --test tests/*.test.mjs`，作为发布门禁入口。
-
-### 刷新即生效（Dev Loader）
-
-如果你不想每次复制粘贴脚本到 Tampermonkey，可以用仓库自带开发加载器：
-
-1. 在项目根目录启动本地静态服务：
-
-```bash
-python3 -m http.server 5173
-```
-
-2. 打开 Tampermonkey，创建新脚本，把 `dev/dev-loader.user.js` 的内容完整粘贴进去并保存。
-3. 禁用线上版脚本（`阿里妈妈多合一助手 (Pro版)`），只保留 `Dev Loader` 启用，避免重复执行。
-4. 之后你每次修改 `阿里妈妈多合一助手.js`，只需刷新阿里妈妈页面即可加载最新代码。
-
-说明：
-- Dev Loader 默认从 `http://127.0.0.1:5173/阿里妈妈多合一助手.js` 拉取脚本，并附加时间戳避免缓存。
-- 若端口不同，改 `dev/dev-loader.user.js` 里的 `DEV_ENTRY_URL` 即可。
-
-### 手工回归
-
-当前仓库已包含 `dev/smoke-harness.html` 作为轻量本地烟测页，适合先验证注入节点、样式和基础交互。涉及真实投放流程、请求链路或配置持久化时，仍应在阿里妈妈真实页面配合 Dev Loader 做完整人工回归。
+- 脚本会先执行 `node scripts/build.mjs --check`，确保 `src/` 与根文件同步。
+- 若仓库存在 `CLAUDE.md`，会额外校验版本；缺失时会跳过，不阻塞 CI/Release。
+- 脚本会统一执行 `node --check "阿里妈妈多合一助手.js"` 与 `node --test tests/*.test.mjs`，作为发布门禁入口。
 
 ## 发布流程（维护者）
 
-1. 确认脚本头 `@version` 与更新日志一致。  
-2. 本地检查：
+1. 修改 `src/` 后执行构建：
+
 ```bash
+node scripts/build.mjs
+```
+
+2. 确认版本与自动化检查：
+
+```bash
+node scripts/build.mjs --check
 node --check "阿里妈妈多合一助手.js"
 node --test tests/*.test.mjs
 bash scripts/review-team.sh
 ```
+
 3. 推送代码并打 tag：
+
 ```bash
 git tag vX.YY
 git push origin vX.YY
 ```
+
 4. `release.yml` 会自动创建 GitHub Release 并上传：
 - `alimama-helper-pro.user.js`
 - `alimama-helper-pro.meta.js`
+- `alimama-helper-pro-extension.zip`
 
 ## 兼容性
 
-- Chrome / Edge：首发功能完整
-- Firefox：首版以“核心功能可用”为目标，允许少量高级行为后续补齐
+- Tampermonkey：Chrome / Edge 首发完整支持
+- MV3 插件：Chrome / Edge 首发支持
+- Firefox：当前未作为首发插件目标，后续再补
 
 ## 说明与排错
 
-- 若版本号显示不一致，优先检查脚本头 `@version`、脚本内更新日志、README 最近更新三处是否同步。
-- 若 `bash scripts/review-team.sh` 失败，先确认 `README.md` 最新版本与 userscript 头一致；若仓库存在 `CLAUDE.md`，再检查其版本记录。
+- 若 `node scripts/build.mjs --check` 失败，说明有人改了 `src/` 但没重新生成根文件，或手工改了根文件。
+- 若页面版本号显示不一致，优先检查 userscript 头 `@version`、脚本内更新日志、README 最近更新三处是否同步。
 - 若 Tampermonkey 未提示更新，手动打开 `.meta.js` 地址触发更新检查。
-- 若页面未生效，先确认脚本匹配域名是否命中、是否与旧版脚本重复启用。
+- 若 extension 未生效，优先检查 `dist/extension/manifest.json` 与 `page.bundle.js` 是否为最新构建结果，并确认浏览器扩展页已重新加载。
 - 若需要贡献约定与开发入口，优先查看根目录 `AGENTS.md`、`README.md` 与 `KNOWLEDGE.md`；发布相关说明在 `other/RELEASE.md`。
