@@ -17,7 +17,13 @@
 - 页面模板文件：`services/license-server/license-admin.html`（由 `index.mjs` 直接读取并返回）。
 - 触发器方法要求：HTTP 触发器必须允许 `GET,POST,OPTIONS`；若仅放开 `POST`，访问根路径会返回 `403 unauthorized method 'GET'`。
 - 注意：阿里云默认 `fcapp.run / aliyuncs.com` 域名会被平台强制追加 `Content-Disposition: attachment`，浏览器会下载而不是渲染页面；这是平台行为，不是代码问题。
+- 官方说明：当响应头出现 `x-oss-force-download: true`（常伴随 `x-oss-ec: 0048-00000001`）时，属于 OSS 默认域名安全策略命中。详见阿里云文档「[如何配置访问OSS文件时的预览行为？](https://help.aliyun.com/zh/oss/how-to-ensure-an-object-is-previewed-when-you-access-the-object)」。
 - 若需“在线网页可直接打开”，请改用自定义域名，或将管理页单独托管到静态站点（Vercel/Netlify/GitHub Pages/OSS 静态网站）并调用本服务 API。
+- 仓库内已提供三种默认域名托管配置：
+  - GitHub Pages：`.github/workflows/license-admin-pages.yml`
+  - Vercel：`vercel.json`
+  - Netlify：`netlify.toml`
+- 若“没有购买域名”，当前仓库推荐路径：直接打开本地 `dev/license-admin.html`，`Base URL` 指向默认 FC 地址即可（API 可正常访问，不受 HTML 下载策略影响）。
 - 页面可直接执行：
   - 授权/禁用店铺（写入持久层，立即生效）
   - 吊销/取消吊销

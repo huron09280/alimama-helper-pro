@@ -1,3 +1,170 @@
+# TODO - 2026-04-07 授权管理前端改为第三方静态托管默认域名
+
+## 需求规格
+- 目标：将授权管理前端发布到 GitHub Pages / Vercel / Netlify 默认域名，后端继续使用 FC 默认域名 API。
+- 范围：
+  - 新增 GitHub Pages 自动部署工作流；
+  - 新增 Vercel / Netlify 托管配置，使根路径直接打开管理页；
+  - 更新文档与测试，固定“前端静态托管 + FC API”路径。
+- 非目标：
+  - 不改动 FC 服务端业务逻辑；
+  - 不购买或绑定自定义域名。
+
+## 执行计划（含校验）
+- [x] 1. 新增三平台托管配置（Pages/Vercel/Netlify）。
+  - 摘要：已新增 `.github/workflows/license-admin-pages.yml`、`vercel.json`、`netlify.toml`，默认域名根路径统一指向 `dev/license-admin.html`。
+- [x] 2. 更新仓库文档，补充三平台默认域名部署步骤与 FC API 配置方式。
+  - 摘要：已更新 `README.md`、`docs/授权管理页.md` 与 `services/license-server/README.md`，明确“前端静态托管 + FC 默认域名 API”。
+- [x] 3. 更新/执行测试，验证管理页与文档契约不回退。
+  - 摘要：`tests/license-admin-page.test.mjs` 新增托管配置断言；执行 `node --test tests/license-admin-page.test.mjs`，7/7 通过。
+- [x] 4. 回填结果复盘与可用访问路径。
+  - 摘要：已补充本节复盘，固定三平台默认域名访问形态与上线后配置步骤。
+
+## 结果复盘
+- 状态：已完成
+- 关键结论：
+  - 不买域名场景下，授权管理页前端已支持通过三方托管默认域名上线（GitHub Pages/Vercel/Netlify）；
+  - 后端继续使用 FC 默认域名 API，不需要改服务端协议；
+  - 配置、文档、测试已同步，后续不会再回退到“OSS 默认 HTML 直开”路径。
+
+# TODO - 2026-04-07 店铺授权管理台“最近活动未更新”排查与修复
+
+## 需求规格
+- 目标：定位并修复“授权管理台最近活动不再更新”的问题，恢复可持续刷新。
+- 现状：
+  - 用户反馈管理台“最近活动”时间停滞，不随店铺使用行为变化；
+  - 该字段前端来自 `activeShops.lastSeenAt`，理论上应由服务端 `verify` 请求持续刷新。
+- 范围：
+  - 复现并确认“最近活动未更新”是否稳定存在；
+  - 排查服务端 `activeShops` 写入与持久化链路、前端展示与筛选链路；
+  - 在最小改动前提下修复根因并补回归测试；
+  - 完成命令行测试与浏览器验证结论回填。
+- 非目标：
+  - 不改动授权协议语义（allow/revoke 等）；
+  - 不引入新的管理页功能，仅修复“最近活动刷新”问题。
+
+## 执行计划（含校验）
+- [x] 1. 收集症状并复现实例，明确未更新时间字段与触发路径。
+  - 摘要：确认“最近活动”展示来自 `activeShops.lastSeenAt`，仅在服务端收到 `/v1/license/verify` 时刷新；extension 按需模式下会出现活跃时间停滞。
+- [x] 2. 代码级追踪 `verify -> activeShops -> admin/state -> 管理页渲染` 全链路，形成可验证根因假设。
+  - 摘要：根因确定为 extension 端 `triggerOnDemandVerify` 在租约有效时直接 `return`，且默认不 `force`，导致频繁交互期间也可能长期不触发远端 `verify`，`lastSeenAt` 不更新。
+- [x] 3. 实施最小修复并新增/更新回归测试，证明无修复会失败、有修复可通过。
+  - 摘要：`src/entries/extension-license-guard.js` 新增交互校验节流窗口（60s）与“租约有效时强制远端校验”，并在 `tests/extension-license-cache-policy-token.test.mjs` 补充回归断言。
+- [x] 4. 执行测试与必要构建检查，验证无回归。
+  - 摘要：执行 `node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/license-admin-page.test.mjs`、`node --check src/entries/extension-license-guard.js`、`node scripts/build.mjs && node scripts/build.mjs --check` 均通过。
+- [x] 5. 回填结果复盘（根因、修复点、验证证据、风险/回滚说明）。
+  - 摘要：已完成（见下方复盘）。
+
+## 结果复盘
+- 状态：已完成
+- 根因：
+  - “最近活动”依赖远端 `verify` 刷新；
+  - extension 按需校验在“租约有效”时短路，且不强制远端校验，导致活跃字段停留在历史时间。
+- 修复：
+  - 按需触发逻辑改为“并发防抖 + 60 秒节流 + 租约有效时强制远端校验”，仍保持无后台轮询。
+- 验证：
+  - 授权守卫/管理页契约定向测试 13/13 通过；
+  - 语法检查通过；
+  - 构建与构建一致性检查通过。
+- 风险与回滚：
+  - 风险：插件交互可能带来更高 `verify` 请求频率（已用 60s 节流控制）；
+  - 回滚：恢复 `triggerOnDemandVerify` 旧逻辑（租约有效直接跳过）即可退回原行为。
+
+# TODO - 2026-04-07 默认域名静态托管下载问题（无自定义域名）
+
+## 需求规格
+- 目标：在“未购买域名，仅使用阿里云默认域名”的约束下，完成授权管理页可访问方案并给出浏览器验收证据。
+- 现状：
+  - OSS 默认域名访问 `index.html` 会触发下载（`Content-Disposition: attachment`）；
+  - FC 默认 `fcapp.run` 域名返回 HTML 时同样会被强制下载，浏览器表现为 `net::ERR_ABORTED`。
+- 范围：
+  - 复测并确认默认域名限制；
+  - 明确“无域名可用方案”（本地管理页 + 默认 FC API）并更新文档；
+  - 补充测试与复盘。
+- 非目标：
+  - 不购买或绑定自定义域名；
+  - 不引入额外付费能力（如加速域名）；
+  - 不改动授权 API 协议。
+
+## 执行计划（含校验）
+- [x] 1. 浏览器复测 OSS/FC 默认域名入口，确认失败特征。
+  - 摘要：`chrome-devtools` 访问 `https://am-license-admin-web-20260401-0001.oss-cn-hangzhou.aliyuncs.com/index.html` 与 `https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/` 均复现 `net::ERR_ABORTED`；同时抓到 FC 响应头 `Content-Disposition: attachment`。
+- [x] 2. 更新文档，明确默认域名限制和无域名可用路径。
+  - 摘要：已更新 `services/license-server/README.md` 与 `docs/授权管理页.md`，补充官方文档链接、响应头判定特征与“无域名可用方案”。
+- [x] 3. 更新并执行相关测试，确保文档契约可回归。
+  - 摘要：更新 `tests/license-admin-page.test.mjs` 后执行 `node --test tests/license-admin-page.test.mjs`，6/6 通过。
+- [x] 4. 浏览器验证通过链路：本地管理页可正常访问并可连通默认 FC API。
+  - 摘要：`chrome-devtools` 复测 `file:///Users/liangchao/.codex/worktrees/55b8/alimama-helper-pro/dev/license-admin.html`，页面正常加载，状态统计显示 `全量店铺=3`，日志出现“列表刷新完成”。
+- [x] 5. 回填复盘并同步 lessons。
+  - 摘要：已新增 `tasks/lessons.md` 条目，固定“先对照 OSS 官方策略再判断是否可修复”的规则。
+
+## 结果复盘
+- 状态：已完成（默认域名限制已确认；无域名可用方案已验证通过）
+- 关键结论：
+  - 依据阿里云官方文档与实测响应头，默认 `aliyuncs.com/fcapp.run` 域名下 HTML 下载是平台策略，不是仓库代码缺陷；
+  - 在“不买域名”约束下，可用且可持续的路径是“本地管理页 + 默认 FC API”；
+  - 当前仓库文档、测试、任务记录与 lessons 已同步，后续排查会优先按该策略执行。
+
+# TODO - 2026-04-07 OSS 静态网站端点逐项复核（控制台续测）
+
+## 需求规格
+- 目标：继续在 OSS 控制台逐项复核“静态网站端点”配置，并在本机网络回测到可访问或明确不可达根因。
+- 范围：
+  - 在控制台复核静态网站托管配置、Bucket ACL、阻止公共访问；
+  - 复测 `oss-website` 与 `oss` 默认地址在浏览器/curl 的行为；
+  - 补充可执行结论，避免继续围绕失效端点排查。
+- 非目标：
+  - 不购买自定义域名；
+  - 不改动授权 API 协议和业务逻辑。
+
+## 执行计划（含校验）
+- [x] 1. 恢复控制台登录态并复核静态网站配置。
+  - 摘要：`/ajax/bucket/get_website.json` 返回 `indexFile=index.html`、`errorFile=index.html`、`httpStatus=404`；`set_website.json` 无改动保存返回成功。
+- [x] 2. 复核权限项，排除鉴权拦截。
+  - 摘要：控制台页面确认 `阻止公共访问=未开启`、`Bucket ACL=公共读(public-read)`。
+- [x] 3. 浏览器与 curl 回测默认 URL。
+  - 摘要：浏览器打开 `http://am-license-admin-web-20260401-0001.oss-website-cn-hangzhou.aliyuncs.com/` 与 `/index.html` 均 `ERR_EMPTY_RESPONSE`；对象域名 `https://...oss-cn-hangzhou.../index.html` 为 `200` 但 `Content-Disposition: attachment`（下载策略）。
+- [x] 4. 复核 DNS 维度，确认端点形态。
+  - 摘要：公共 DNS（`dns.alidns.com`、`dns.google`）对 `*.oss-website-cn-hangzhou.aliyuncs.com` 返回 `Status=3 (NXDOMAIN)`；不再作为可用默认访问入口。
+
+## 结果复盘
+- 状态：已完成
+- 关键结论：
+  - 当前“静态网站托管”已配置正确，权限项也已满足公开读；
+  - `oss-website` 主机名在公共 DNS 不可解析（NXDOMAIN），不是单一 Bucket 配置错误；
+  - 不买域名场景下，应继续使用“本地管理页 + 默认 FC API”作为稳定可用路径。
+
+# TODO - 2026-04-07 默认 URL 可行性复验与线上权限回修
+
+## 需求规格
+- 目标：在“不购买域名”的前提下，复验 OSS/FC 默认 URL 的可行性，并修复可修复的线上访问故障（403）。
+- 范围：
+  - 复测 OSS 对象域名、OSS 静态网站端点、FC 默认域名根路径与管理 API；
+  - 修复 Bucket ACL 意外回退为 `private` 导致的 403；
+  - 输出默认 URL 的最终可行清单。
+- 非目标：
+  - 不引入自定义域名；
+  - 不修改授权 API 协议和服务端业务逻辑。
+
+## 执行计划（含校验）
+- [x] 1. 复测三个默认入口并确认症状。
+  - 摘要：`https://am-license-admin-web-20260401-0001.oss-cn-hangzhou.aliyuncs.com/index.html` 浏览器 `ERR_ABORTED`；`https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/` 返回 `Content-Disposition: attachment`；`/v1/license/admin/state` 返回 200。
+- [x] 2. 在 OSS 控制台核验真实配置与响应头特征。
+  - 摘要：对象 `head_object` 显示 `contentDisposition=inline`，但公网响应仍返回 `x-oss-force-download: true` 与 `Content-Disposition: attachment`（`x-oss-ec: 0048-00000001`），确认默认对象域名下载策略生效。
+- [x] 3. 修复线上 403：将 Bucket ACL 恢复为 `public-read`。
+  - 摘要：通过控制台后端接口 `POST /ajax/bucket/set_acl.json` 将 ACL 改为 `public-read`，复验 `GET /ajax/bucket/acl.json` 返回 `public-read`。
+- [x] 4. 修复后复验公网可访问性。
+  - 摘要：`curl -I https://am-license-admin-web-20260401-0001.oss-cn-hangzhou.aliyuncs.com/index.html` 已从 403 恢复为 200，但仍带 `Content-Disposition: attachment`（浏览器继续下载，符合平台策略）。
+- [x] 5. 验证默认可用路径并给出最终结论。
+  - 摘要：默认域名下可稳定可用路径仍为“本地管理页 + 默认 FC API”；OSS 静态网站端点在当前网络解析至 `198.18.0.106` 且返回 `Empty reply`，需在用户实际网络复验。
+
+## 结果复盘
+- 状态：已完成
+- 关键结论：
+  - 403 故障已修复（根因：Bucket ACL 回退为 `private`）；
+  - 默认对象域名与 FC 默认根路径“下载而非渲染”仍是平台策略，不可通过仓库代码规避；
+  - 不买域名场景下，已验证可落地方案仍是：`dev/license-admin.html`（或本地静态服务）+ 默认 FC API。
+
 # TODO - 2026-04-07 全仓版本与更新日志同步到最新
 
 ## 需求规格

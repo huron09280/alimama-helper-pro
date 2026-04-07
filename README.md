@@ -223,6 +223,28 @@ python3 -m http.server 8173
 - 页面默认调用 `GET /v1/license/admin/state`、`POST /v1/license/admin/allow`、`POST /v1/license/admin/revoke`。
 - 管理鉴权头使用 `x-am-admin-token`（兼容 `x-admin-token`）。
 
+### 授权管理页云端托管（默认域名）
+
+当前仓库已内置三种“前端静态托管 + FC API”方案，无需购买自定义域名：
+
+1. GitHub Pages（默认域名 `https://<user>.github.io/<repo>/`）
+- 工作流文件：`.github/workflows/license-admin-pages.yml`
+- 触发方式：`main` 分支变更 `dev/license-admin.html` 后自动部署（也支持手动 `workflow_dispatch`）。
+- 页面入口：仓库 Pages 根路径（工作流会把 `dev/license-admin.html` 发布为 `index.html`）。
+
+2. Vercel（默认域名 `https://<project>.vercel.app/`）
+- 配置文件：`vercel.json`
+- 行为：将站点根路径 `/` 重写到 `/dev/license-admin.html`。
+
+3. Netlify（默认域名 `https://<project>.netlify.app/`）
+- 配置文件：`netlify.toml`
+- 行为：将站点根路径 `/` 重定向到 `/dev/license-admin.html`（200 rewrite）。
+
+上线后统一配置方式：
+- 打开托管域名页面；
+- 将 `Base URL` 设置为 FC 默认地址（例如 `https://xxx.cn-hangzhou.fcapp.run`）；
+- 使用管理员 Token 执行 `/v1/license/admin/state|allow|revoke|delete`。
+
 ## 代码检查团队（Review Team）
 
 仓库内置“5 角色检查团队”机制（架构、安全、测试、UI/交互、发布），用于统一代码审查口径。

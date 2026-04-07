@@ -1,0 +1,21 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "cleanUrls": true,
+    "rewrites": [
+        {
+            "source": "/",
+            "destination": "/dev/license-admin.html"
+        }
+    ],
+    "headers": [
+        {
+            "source": "/dev/license-admin.html",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "no-store"
+                }
+            ]
+        }
+    ]
+}

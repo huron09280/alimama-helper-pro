@@ -6,6 +6,9 @@ const html = readFileSync(new URL('../dev/license-admin.html', import.meta.url),
 const serviceHtml = readFileSync(new URL('../services/license-server/license-admin.html', import.meta.url), 'utf8');
 const serviceIndex = readFileSync(new URL('../services/license-server/index.mjs', import.meta.url), 'utf8');
 const doc = readFileSync(new URL('../docs/授权管理页.md', import.meta.url), 'utf8');
+const vercelConfig = readFileSync(new URL('../vercel.json', import.meta.url), 'utf8');
+const netlifyConfig = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
+const pagesWorkflow = readFileSync(new URL('../.github/workflows/license-admin-pages.yml', import.meta.url), 'utf8');
 
 test('本地授权管理页包含核心配置区与筛选区', () => {
     assert.match(html, /id="am-license-admin-app"/, '缺少管理页根节点');
@@ -91,4 +94,17 @@ test('授权管理文档包含管理页入口与核心接口说明', () => {
     assert.match(doc, /browserVersion/, '文档缺少浏览器版本字段说明');
     assert.match(doc, /osVersion/, '文档缺少操作系统版本字段说明');
     assert.match(doc, /deleted\.memory/, '文档缺少删除重置字段说明');
+    assert.match(doc, /x-oss-force-download/, '文档缺少默认域名强制下载特征说明');
+    assert.match(doc, /0048-00000001/, '文档缺少 OSS 错误码特征说明');
+    assert.match(doc, /how-to-ensure-an-object-is-previewed-when-you-access-the-object/, '文档缺少官方说明链接');
+    assert.match(doc, /GitHub Pages/, '文档缺少 GitHub Pages 托管说明');
+    assert.match(doc, /Vercel/, '文档缺少 Vercel 托管说明');
+    assert.match(doc, /Netlify/, '文档缺少 Netlify 托管说明');
+});
+
+test('默认域名静态托管配置指向授权管理页', () => {
+    assert.match(vercelConfig, /\"destination\":\s*\"\/dev\/license-admin\.html\"/, 'Vercel 根路径未指向授权管理页');
+    assert.match(netlifyConfig, /to = \"\/dev\/license-admin\.html\"/, 'Netlify 根路径未指向授权管理页');
+    assert.match(pagesWorkflow, /cp dev\/license-admin\.html \.pages\/index\.html/, 'GitHub Pages 工作流未发布授权管理页');
+    assert.match(pagesWorkflow, /actions\/deploy-pages@v4/, 'GitHub Pages 工作流缺少部署步骤');
 });
