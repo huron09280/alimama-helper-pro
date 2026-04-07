@@ -81,6 +81,11 @@
             align-items: end;
         }
 
+        .grid.cols-7 {
+            grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr auto auto;
+            align-items: end;
+        }
+
         label {
             display: grid;
             gap: 6px;
@@ -478,7 +483,8 @@
 
         @media (max-width: 1024px) {
             .grid.cols-4,
-            .grid.cols-6 {
+            .grid.cols-6,
+            .grid.cols-7 {
                 grid-template-columns: 1fr;
             }
 
@@ -521,7 +527,7 @@
         </section>
 
         <section class="panel">
-            <div class="grid cols-6">
+            <div class="grid cols-7">
                 <label>
                     关键词（shopId / shopName）
                     <input id="keywordInput" placeholder="例如：123456789 或 店铺昵称" />
@@ -533,6 +539,15 @@
                         <option value="authorized">已授权</option>
                         <option value="blocked">未授权</option>
                         <option value="revoked">已吊销</option>
+                        <option value="expired">已过期</option>
+                    </select>
+                </label>
+                <label>
+                    到期筛选
+                    <select id="expirySelect">
+                        <option value="all">全部</option>
+                        <option value="expired">已过期</option>
+                        <option value="not-expired">未过期</option>
                     </select>
                 </label>
                 <label>
@@ -626,6 +641,7 @@
                 reloadBtn: document.getElementById('reloadBtn'),
                 keywordInput: document.getElementById('keywordInput'),
                 statusSelect: document.getElementById('statusSelect'),
+                expirySelect: document.getElementById('expirySelect'),
                 activeWithinInput: document.getElementById('activeWithinInput'),
                 pageSizeSelect: document.getElementById('pageSizeSelect'),
                 searchBtn: document.getElementById('searchBtn'),
@@ -897,34 +913,56 @@
             const collectFilters = () => {
                 const keyword = String(dom.keywordInput.value || '').trim().toLowerCase();
                 const status = String(dom.statusSelect.value || 'all').trim();
+                const expiry = String(dom.expirySelect.value || 'all').trim();
                 const activeWithinHours = Number(dom.activeWithinInput.value || 0);
                 const pageSize = Math.max(1, Number(dom.pageSizeSelect.value || 50));
                 state.pageSize = pageSize;
                 return {
                     keyword,
                     status,
+                    expiry,
                     activeWithinHours: Number.isFinite(activeWithinHours) && activeWithinHours > 0 ? activeWithinHours : 0
                 };
             };
 
             const applyFilters = () => {
-                const { keyword, status, activeWithinHours } = collectFilters();
+                const { keyword, status, expiry, activeWithinHours } = collectFilters();
                 const now = Date.now();
 
                 let filtered = state.allItems.filter((item) => !state.hiddenShopIds.has(String(item.shopId || '').trim()));
                 if (keyword) {
                     filtered = filtered.filter((item) => {
-                        return item.shopId.toLowerCase().includes(keyword)
-                            || item.shopName.toLowerCase().includes(keyword);
+                        const searchableFields = [
+                            item.shopId,
+                            item.shopName,
+                            item.source,
+                            item.version,
+                            item.channel,
+                            item.reason,
+                            item.code,
+                            item.browserVersion,
+                            item.osVersion,
+                            item.runtimeMode,
+                            item.deviceHash
+                        ];
+                        return searchableFields.some((value) => String(value || '').toLowerCase().includes(keyword));
                     });
                 }
 
                 if (status === 'authorized') {
                     filtered = filtered.filter(item => item.authorized);
                 } else if (status === 'blocked') {
-                    filtered = filtered.filter(item => !item.authorized);
+                    filtered = filtered.filter(item => !item.authorized && !item.revoked && !item.authExpired);
                 } else if (status === 'revoked') {
                     filtered = filtered.filter(item => item.revoked);
+                } else if (status === 'expired') {
+                    filtered = filtered.filter(item => item.authExpired);
+                }
+
+                if (expiry === 'expired') {
+                    filtered = filtered.filter(item => item.authExpired);
+                } else if (expiry === 'not-expired') {
+                    filtered = filtered.filter(item => !item.authExpired);
                 }
 
                 if (activeWithinHours > 0) {
@@ -947,7 +985,8 @@
             const renderStats = () => {
                 const allAuthorized = state.allItems.filter(item => item.authorized).length;
                 const allRevoked = state.allItems.filter(item => item.revoked).length;
-                const allBlocked = state.allItems.length - allAuthorized;
+                const allExpired = state.allItems.filter(item => item.authExpired).length;
+                const allBlocked = state.allItems.filter(item => !item.authorized && !item.revoked && !item.authExpired).length;
                 const active24h = state.allItems.filter((item) => {
                     const ts = Date.parse(item.lastSeenAt || '');
                     return Number.isFinite(ts) && Date.now() - ts <= 24 * 60 * 60 * 1000;
@@ -958,6 +997,7 @@
                     `<span class="stat">全量店铺：${state.allItems.length}</span>`,
                     `<span class="stat">已授权：${allAuthorized}</span>`,
                     `<span class="stat">未授权：${allBlocked}</span>`,
+                    `<span class="stat">已过期：${allExpired}</span>`,
                     `<span class="stat">已吊销：${allRevoked}</span>`,
                     `<span class="stat">24h 活跃：${active24h}</span>`,
                     `<span class="stat">leaseTtlMs：${Number.isFinite(state.leaseTtlMs) ? state.leaseTtlMs : 0}</span>`,
@@ -978,17 +1018,18 @@
                 if (!state.items.length) {
                     const keyword = String(dom.keywordInput.value || '').trim();
                     const status = String(dom.statusSelect.value || 'all').trim();
+                    const expiry = String(dom.expirySelect.value || 'all').trim();
                     const activeWithin = Number(dom.activeWithinInput.value || 0);
-                    const hasFilter = !!keyword || status !== 'all' || (Number.isFinite(activeWithin) && activeWithin > 0);
+                    const hasFilter = !!keyword || status !== 'all' || expiry !== 'all' || (Number.isFinite(activeWithin) && activeWithin > 0);
                     const tipText = state.allItems.length > 0 && hasFilter
-                        ? `当前筛选条件未命中（keyword=${keyword || '-'}，status=${status}，activeWithinHours=${Number.isFinite(activeWithin) ? activeWithin : 0}）。请点击“重置筛选”或将“最近活跃”设为 0。`
+                        ? `当前筛选条件未命中（keyword=${keyword || '-'}，status=${status}，expiry=${expiry}，activeWithinHours=${Number.isFinite(activeWithin) ? activeWithin : 0}）。请点击“重置筛选”或将“最近活跃”设为 0。`
                         : '暂无数据。请先检查服务地址/Token，然后点击“刷新店铺”。';
                     dom.tableBody.innerHTML = `<tr><td colspan="10" class="meta">${escapeHtml(tipText)}</td></tr>`;
                     return;
                 }
 
                 dom.tableBody.innerHTML = state.items.map((item) => {
-                    const authStateText = item.authorized ? '已授权' : '未授权';
+                    const authStateText = item.authorized ? '已授权' : (item.authExpired ? '已过期' : '未授权');
                     const authStateClass = item.authorized ? 'ok' : (item.authExpired ? 'warn' : 'off');
                     const revokeStateText = item.revoked ? '已吊销' : '未吊销';
                     const revokeStateClass = item.revoked ? 'warn' : 'ok';
@@ -1375,6 +1416,14 @@
             };
 
             const bindEvents = () => {
+                const applyLocalFilters = () => {
+                    state.page = 1;
+                    applyFilters();
+                    renderStats();
+                    renderTable();
+                    renderPagination();
+                };
+
                 dom.saveSettingsBtn.addEventListener('click', () => {
                     saveSettings();
                 });
@@ -1392,6 +1441,7 @@
                 dom.resetBtn.addEventListener('click', () => {
                     dom.keywordInput.value = '';
                     dom.statusSelect.value = 'all';
+                    dom.expirySelect.value = 'all';
                     dom.activeWithinInput.value = '0';
                     dom.pageSizeSelect.value = '50';
                     state.page = 1;
@@ -1418,6 +1468,10 @@
                 });
 
                 dom.pingBtn.addEventListener('click', pingServer);
+                dom.keywordInput.addEventListener('input', applyLocalFilters);
+                dom.statusSelect.addEventListener('change', applyLocalFilters);
+                dom.expirySelect.addEventListener('change', applyLocalFilters);
+                dom.activeWithinInput.addEventListener('input', applyLocalFilters);
                 dom.tableBody.addEventListener('click', onTableClick);
                 dom.tableBody.addEventListener('change', onTableChange);
                 document.addEventListener('click', (event) => {
