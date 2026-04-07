@@ -150,7 +150,7 @@ const htmlTemplate = (type) => `
             
             // Populate fake logs cleanly
             logContent.innerHTML = 
-                '<div class="am-log-line"><span class="am-log-time">10:45:12</span> <span style="color:#0ea86f">[系统] 阿里助手 Pro v6.08 启动成功</span></div>' +
+                '<div class="am-log-line"><span class="am-log-time">10:45:12</span> <span style="color:#0ea86f">[系统] 阿里助手 Pro v7.01 启动成功</span></div>' +
                 '<div class="am-log-line"><span class="am-log-time">10:45:15</span> <span style="color:#1d3fcf">[护航] 算法护航引擎已就绪</span></div>';
             
             if (type === 'floating-ball') {
@@ -261,7 +261,7 @@ const htmlTemplate = (type) => `
                             <div class="tm-left">
                                 <div class="tm-title">
                                     阿里妈妈多合一助手 (Pro版) 
-                                    <span class="tm-version">v6.08</span>
+                                    <span class="tm-version">v7.01</span>
                                 </div>
                                 <div class="tm-meta-row">
                                     <div class="tm-meta-key">Author</div>

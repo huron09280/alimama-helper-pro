@@ -38,7 +38,7 @@
 {
   "shopId": "123456789",
   "shopName": "示例店铺",
-  "scriptVersion": "6.08",
+  "scriptVersion": "7.01",
   "buildId": "build-20260331-001",
   "buildChannel": "production",
   "runtimeMode": "userscript",
@@ -129,7 +129,7 @@
       "lastAuthorized": true,
       "lastCode": "ok",
       "runtimeMode": "extension",
-      "scriptVersion": "6.08",
+      "scriptVersion": "7.01",
       "buildId": "release-20260401-01",
       "buildChannel": "release",
       "lastSeenAt": "2026-04-01T02:00:00.000Z",

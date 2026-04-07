@@ -1,3 +1,34 @@
+# TODO - 2026-04-07 全仓版本与更新日志同步到最新
+
+## 需求规格
+- 目标：将仓库内“当前版本”相关入口与“最近更新日志”统一同步到最新发布版本，消除文档与示例中的旧版本残留。
+- 范围：
+  - 版本主线升级到 `v7.01`（userscript 头、脚本前置更新日志、README 最近更新、CLAUDE 当前版本）。
+  - 文档示例中的“当前展示版本”统一更新到 `v7.01`（不改历史版本条目）。
+  - 重新构建根脚本与 extension 产物，确保生成文件与源码一致。
+- 非目标：
+  - 不改动业务功能逻辑；
+  - 不改写历史发布记录（如 `v6.x` 历史日志内容）。
+
+## 执行计划（含校验）
+- [x] 1. 锁定并更新版本源头文件与最新日志条目。
+  - 摘要：已更新 `src/entries/userscript-meta.js`、`src/shared/script-preamble.js`、`README.md`、`CLAUDE.md` 到 `v7.01`，并新增 `v7.01 (2026-04-07)` 最新日志条目。
+- [x] 2. 同步文档示例中的当前版本展示。
+  - 摘要：已更新教程/管理页/mockup 及其生成源（`scripts/generate-mockups.mjs`、`services/license-server/README.md`）中的展示版本（`v6.08` / `6.05`）到 `v7.01`，历史发布日志段落保持不变。
+- [x] 3. 构建与自动化校验。
+  - 摘要：已执行 `node scripts/build.mjs`、`node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`、`node --test tests/*.test.mjs`、`bash scripts/review-team.sh`，全部通过。
+- [x] 4. 回填结果复盘与完成状态。
+  - 摘要：已补充验证结论与风险说明，任务闭环完成。
+
+## 结果复盘
+- 状态：已完成
+- 验证结论：
+  - 构建产物版本已统一为 `7.01`，`userscript` / `dist/packages` / `dist/extension` 与源码一致。
+  - 发布门禁通过：`review-team` 中版本一致性校验通过（README / CLAUDE / userscript 头一致）。
+  - 全量回归通过：`node --test tests/*.test.mjs` 通过，保留 2 个历史 skip（`agent-cluster` 模块缺失，非本次改动引入）。
+- 风险说明：
+  - 本次主要是版本与文档同步，不涉及业务逻辑变更；真实页面行为风险低。
+
 # TODO - 2026-04-03 版本号升级到 v7.00
 
 ## 需求规格
