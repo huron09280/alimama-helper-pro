@@ -4304,10 +4304,11 @@
                     delete merged.campaign.promotionModelMarketing;
                     delete merged.campaign.orderChargeType;
                     delete merged.campaign.orderInfo;
-                    const safeSiteCampaignName = String(merged.campaign.campaignName || '').trim();
-                    if (!/^[A-Za-z0-9]{2,64}$/.test(safeSiteCampaignName)) {
-                        merged.campaign.campaignName = `site${nowStampSeconds()}`;
-                    }
+                    merged.campaign.campaignName = String(
+                        merged.campaign.campaignName
+                        || plan.planName
+                        || ''
+                    ).trim();
                     const adgroupName = String(
                         merged.adgroup?.adgroupName
                         || merged.adgroup?.material?.materialName
