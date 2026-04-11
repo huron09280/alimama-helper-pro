@@ -609,7 +609,25 @@
             'use strict';
 
             const SETTINGS_KEY = '__AM_LICENSE_ADMIN_SETTINGS_V1__';
-            const DEFAULT_BASE_URL = 'https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run';
+            const LEGACY_DEFAULT_BASE_URL = 'https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run';
+            const STATIC_HOST_RE = /(?:^|\.)(github\.io|vercel\.app|netlify\.app)$/i;
+
+            const resolveDefaultBaseUrl = () => {
+                try {
+                    if (typeof window === 'undefined' || !window.location) return LEGACY_DEFAULT_BASE_URL;
+                    const protocol = String(window.location.protocol || '').toLowerCase();
+                    if (protocol !== 'http:' && protocol !== 'https:') return LEGACY_DEFAULT_BASE_URL;
+                    const origin = String(window.location.origin || '').trim().replace(/\/+$/, '');
+                    const hostname = String(window.location.hostname || '').trim().toLowerCase();
+                    if (!origin || origin === 'null' || !hostname) return LEGACY_DEFAULT_BASE_URL;
+                    if (STATIC_HOST_RE.test(hostname)) return LEGACY_DEFAULT_BASE_URL;
+                    return origin;
+                } catch {
+                    return LEGACY_DEFAULT_BASE_URL;
+                }
+            };
+
+            const DEFAULT_BASE_URL = resolveDefaultBaseUrl();
 
             const PATHS = {
                 state: '/v1/license/admin/state',
@@ -719,6 +737,21 @@
                 return url.toString();
             };
 
+            const normalizeErrorMessage = (error) => {
+                if (typeof error === 'string') return error.trim();
+                if (error instanceof Error) return String(error.message || '').trim();
+                return String(error || '').trim();
+            };
+
+            const buildNetworkErrorMessage = (error, method, requestUrl) => {
+                const message = normalizeErrorMessage(error) || 'network_request_failed';
+                const common = `网络请求失败：${method} ${requestUrl}`;
+                if (/Failed to fetch/i.test(message)) {
+                    return `${common}。请检查 Base URL、网络连通性或代理/DNS 配置。原始错误：${message}`;
+                }
+                return `${common}。原始错误：${message}`;
+            };
+
             const request = async (path, options = {}) => {
                 const { token } = getSettings();
                 const headers = { Accept: 'application/json' };
@@ -727,13 +760,19 @@
                     headers['x-admin-token'] = token;
                 }
                 if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-
-                const response = await fetch(buildUrl(path, options.query), {
-                    method: options.method || 'GET',
-                    headers,
-                    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-                    credentials: 'omit'
-                });
+                const method = String(options.method || 'GET').toUpperCase();
+                const requestUrl = buildUrl(path, options.query);
+                let response = null;
+                try {
+                    response = await fetch(requestUrl, {
+                        method,
+                        headers,
+                        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+                        credentials: 'omit'
+                    });
+                } catch (error) {
+                    throw new Error(buildNetworkErrorMessage(error, method, requestUrl));
+                }
 
                 const rawText = await response.text();
                 let parsed = null;
@@ -745,7 +784,7 @@
 
                 if (!response.ok) {
                     const message = parsed?.msg || parsed?.message || rawText || `HTTP ${response.status}`;
-                    throw new Error(`请求失败: ${message}`);
+                    throw new Error(`请求失败：${method} ${requestUrl} -> ${message}`);
                 }
 
                 return parsed || {};
