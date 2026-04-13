@@ -1,3 +1,41 @@
+# TODO - 2026-04-13 根据 todo 汇总更新版本与日志
+
+## 需求规格
+- 目标：基于 `tasks/todo.md` 近期已完成事项，升级发布版本并同步“最近更新”日志。
+- 范围：
+  - 版本主线升级到 `v7.02`（userscript 头、README、CLAUDE、开发文档）；
+  - 在脚本前置日志与 README 最近更新中新增 `v7.02` 条目，内容对齐 `todo` 已完成任务；
+  - 重新构建并执行发布门禁校验，确认版本一致性与产物同步。
+- 非目标：
+  - 不新增业务功能；
+  - 不改写历史版本日志条目。
+
+## 执行计划（含校验）
+- [x] 1. 从 `tasks/todo.md` 提炼 `v7.01` 之后的已完成能力变更，整理成新版本日志要点。
+  - 摘要：提炼出授权识别收敛、授权管理台店铺维度同步、小万护航手动设置修复、全站计划名一致性修复、人群看板闪烁优化。
+- [x] 2. 更新版本与日志源头文件。
+  - 摘要：已更新 `src/entries/userscript-meta.js`、`src/shared/script-preamble.js`、`README.md`、`CLAUDE.md`、`docs/阿里妈妈多合一助手开发文档.md` 到 `v7.02` 并新增对应日志条目。
+- [x] 3. 重新构建并执行一致性校验。
+  - 摘要：已执行 `node scripts/build.mjs`、`node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`、`bash scripts/review-team.sh`，均通过。
+- [x] 4. 回填结果复盘并确认无未完成项。
+  - 摘要：已完成回填（见下方“结果复盘”）。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/entries/userscript-meta.js`：`@version` 升级到 `7.02`。
+  - `src/shared/script-preamble.js`、`README.md`：新增 `v7.02 (2026-04-13)` 最近更新条目。
+  - `CLAUDE.md`、`docs/阿里妈妈多合一助手开发文档.md`：当前版本说明同步到 `v7.02`。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/packages/alimama-helper-pro.meta.js`、`dist/extension/page.bundle.js`、`dist/extension/manifest.json`。
+- 校验：
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --check "阿里妈妈多合一助手.js"` 通过。
+  - `bash scripts/review-team.sh` 通过（390 tests：388 pass / 2 skip）。
+- 风险与回滚：
+  - 风险：本次为版本与日志同步，业务行为风险低。
+  - 回滚：恢复上述版本与日志入口文件到上一提交并重新执行构建。
+
 # TODO - 2026-04-13 shopId识别收敛 + 授权台“子账号/店铺名”拆分 + 店铺维度授权
 
 ## 需求规格
