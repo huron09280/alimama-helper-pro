@@ -280,6 +280,20 @@
                     }
                     return sceneSettingsCache.get(targetScene) || {};
                 };
+                const removeStrategyById = (strategyId = '') => {
+                    if ((wizardState.strategyList || []).length <= 1) return null;
+                    const removeIndex = wizardState.strategyList.findIndex(item => item.id === strategyId);
+                    if (removeIndex < 0) return null;
+                    const removed = wizardState.strategyList.splice(removeIndex, 1)[0];
+                    if (wizardState.editingStrategyId === removed.id) {
+                        const fallback = wizardState.strategyList[Math.max(0, removeIndex - 1)] || wizardState.strategyList[0] || null;
+                        wizardState.editingStrategyId = fallback?.id || '';
+                        if (fallback && wizardState.detailVisible) {
+                            applyStrategyToDetailForm(fallback);
+                        }
+                    }
+                    return removed;
+                };
                 filteredStrategyList.forEach((strategy) => {
                     const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                         ? String(strategy.sceneName).trim()
@@ -431,8 +445,17 @@
                             clone.copyBatchCount = 1;
                             wizardState.strategyList.push(clone);
                         }
+                        const shouldDeleteOriginalAfterCopy = targetCopyCount >= 2;
+                        const removedOriginal = shouldDeleteOriginalAfterCopy
+                            ? removeStrategyById(strategy.id)
+                            : null;
                         commitStrategyUiState();
-                        appendWizardLog(`已复制计划：${targetCopyCount} 个`, 'success');
+                        appendWizardLog(
+                            removedOriginal
+                                ? `已复制计划：${targetCopyCount} 个（已删除原计划）`
+                                : `已复制计划：${targetCopyCount} 个`,
+                            'success'
+                        );
                     };
                     deleteBtn.onclick = () => {
                         commitStrategyTargetCostInput();
@@ -440,16 +463,8 @@
                             appendWizardLog('至少保留 1 个计划', 'error');
                             return;
                         }
-                        const removeIndex = wizardState.strategyList.findIndex(item => item.id === strategy.id);
-                        if (removeIndex < 0) return;
-                        const removed = wizardState.strategyList.splice(removeIndex, 1)[0];
-                        if (wizardState.editingStrategyId === removed.id) {
-                            const fallback = wizardState.strategyList[Math.max(0, removeIndex - 1)] || wizardState.strategyList[0] || null;
-                            wizardState.editingStrategyId = fallback?.id || '';
-                            if (fallback && wizardState.detailVisible) {
-                                applyStrategyToDetailForm(fallback);
-                            }
-                        }
+                        const removed = removeStrategyById(strategy.id);
+                        if (!removed) return;
                         commitStrategyUiState();
                         appendWizardLog(`已删除计划：${removed?.name || ''}`, 'success');
                     };

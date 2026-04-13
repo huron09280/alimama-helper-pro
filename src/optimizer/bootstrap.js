@@ -15,12 +15,12 @@
             customPrompt: '深度拿量',
             concurrency: 3,
             manualEscortSetting: {
-                enabled: true,
+                enabled: false,
                 bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
-                budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
-                addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
-                switchKeywordMatchType: { enabled: true },
-                shieldKeyword: { enabled: true }
+                budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
+                addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                switchKeywordMatchType: { enabled: false },
+                shieldKeyword: { enabled: false }
             }
         }
     };

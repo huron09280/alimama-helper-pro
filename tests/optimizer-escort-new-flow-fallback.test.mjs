@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const coreSource = readFileSync(new URL('../src/optimizer/core.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/optimizer/ui.js', import.meta.url), 'utf8');
+const bootstrapSource = readFileSync(new URL('../src/optimizer/bootstrap.js', import.meta.url), 'utf8');
 
 test('无 actionList 时可识别小万护航新链路信号', () => {
     assert.match(
@@ -116,6 +117,50 @@ test('openV3 提交后会把执行状态回传到方案渲染并显示 ✅/❌',
         uiSource,
         /resolveExecutionIcon[\s\S]*executionState[\s\S]*'✅'[\s\S]*'❌'[\s\S]*actionText:\s*`\$\{resolveExecutionIcon\(rawKey,\s*key\)\}/,
         '方案名称未根据 executionState 显示 ✅/❌'
+    );
+});
+
+test('手动设置面板 checkbox 有独立可见样式兜底', () => {
+    assert.match(
+        uiSource,
+        /#\$\{CONFIG\.UI_ID\}-latest-setting-content \.am26-manual-root input\[type="checkbox"\]\s*\{[\s\S]*appearance:\s*auto\s*!important;[\s\S]*display:\s*inline-block\s*!important;[\s\S]*visibility:\s*visible\s*!important;[\s\S]*\}/,
+        '手动设置面板缺少 checkbox 可见性兜底样式，部分页面可能看不到勾选框'
+    );
+    assert.match(
+        uiSource,
+        /#\$\{CONFIG\.UI_ID\}-latest-setting-content \.am26-manual-root input\[type="checkbox"\]:disabled\s*\{[\s\S]*cursor:\s*not-allowed;[\s\S]*opacity:\s*\.55\s*!important;[\s\S]*\}/,
+        '手动设置面板 checkbox 缺少 disabled 态视觉反馈'
+    );
+});
+
+test('手动设置默认勾选项全部关闭', () => {
+    assert.match(
+        bootstrapSource,
+        /manualEscortSetting:\s*\{[\s\S]*enabled:\s*false[\s\S]*bidConstraintValue:\s*\{\s*enabled:\s*false[\s\S]*budget:\s*\{\s*enabled:\s*false[\s\S]*dailyReset:\s*false[\s\S]*addKeyword:\s*\{\s*enabled:\s*false[\s\S]*switchKeywordMatchType:\s*\{\s*enabled:\s*false[\s\S]*shieldKeyword:\s*\{\s*enabled:\s*false/,
+        '默认配置仍存在开启项，未满足“默认全部关闭”'
+    );
+    assert.match(
+        uiSource,
+        /setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-enable`,\s*setting\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-budget-enabled`,\s*budget\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-budget-reset`,\s*budget\.dailyReset,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-addkeyword-enabled`,\s*addKeyword\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-switchmatch-enabled`,\s*switchKeywordMatchType\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-shield-enabled`,\s*shieldKeyword\.enabled,\s*false\);/,
+        'UI 表单 fallback 未统一改为默认关闭'
+    );
+});
+
+test('手动设置外层与内层勾选状态保持同步', () => {
+    assert.match(
+        uiSource,
+        /getManualEscortCheckboxNodes:\s*\(\)\s*=>\s*\{[\s\S]*manual-bid-enabled[\s\S]*manual-bid-reset[\s\S]*manual-budget-enabled[\s\S]*manual-budget-reset[\s\S]*manual-addkeyword-enabled[\s\S]*manual-switchmatch-enabled[\s\S]*manual-shield-enabled/,
+        '未收敛内层 checkbox 节点列表，无法实现同步'
+    );
+    assert.match(
+        uiSource,
+        /bindManualEscortCheckboxSync:\s*\(\)\s*=>\s*\{[\s\S]*master\.addEventListener\('change'[\s\S]*node\.checked = nextChecked;[\s\S]*children\.forEach\(node => \{[\s\S]*node\.addEventListener\('change'[\s\S]*UI\.syncManualEscortMasterCheckbox\(\);/,
+        '外层->内层或内层->外层同步逻辑缺失'
+    );
+    assert.match(
+        uiSource,
+        /syncManualEscortMasterCheckbox:\s*\(\)\s*=>\s*\{[\s\S]*master\.indeterminate = true;/,
+        '内层部分勾选时未回写外层半选状态'
     );
 });
 

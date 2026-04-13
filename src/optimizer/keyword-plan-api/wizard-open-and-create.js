@@ -1657,10 +1657,7 @@
             }
             const expectedPlanName = String(firstPlan?.planName || '').trim();
             const actualPlanName = String(sampleCampaign?.campaignName || '').trim();
-            const isSiteScene = targetScene === '货品全站推广';
-            const expectedPlanNameLooksSiteSafe = /^[A-Za-z0-9]{2,64}$/.test(expectedPlanName);
-            const siteNameAutoNormalized = isSiteScene && actualPlanName && /^site\d{8,}$/.test(actualPlanName) && !expectedPlanNameLooksSiteSafe;
-            if (expectedPlanName && actualPlanName && expectedPlanName !== actualPlanName && !siteNameAutoNormalized) {
+            if (expectedPlanName && actualPlanName && expectedPlanName !== actualPlanName) {
                 diffs.push({
                     field: 'planName',
                     expected: expectedPlanName,
@@ -2617,4 +2614,3 @@
                 error: unresolvedCampaignIds.length ? 'pause_not_fully_confirmed' : ''
             };
         };
-

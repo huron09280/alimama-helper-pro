@@ -57,12 +57,14 @@
     let renewTimer = 0;
     let onDemandVerifyInstalled = false;
     let onDemandVerifyInFlight = false;
+    let onDemandVerifyLastSuccessAt = 0;
 
     const LEASE_RENEW_DEFAULT_LEAD_MS = 60 * 1000;
     const LEASE_RENEW_MIN_LEAD_MS = 15 * 1000;
     const LEASE_RENEW_MAX_LEAD_MS = 2 * 60 * 1000;
     const LEASE_RENEW_RETRY_MIN_MS = 2 * 1000;
     const LEASE_RENEW_RETRY_MAX_MS = 10 * 1000;
+    const ON_DEMAND_VERIFY_REFRESH_WINDOW_MS = 60 * 1000;
     const ON_DEMAND_VERIFY_INTERACTION_SELECTOR = [
         '[id^="am-"]',
         '[class*="am-"]',
@@ -185,6 +187,22 @@
         return shopIdPattern.test(digits) ? digits : '';
     };
 
+    const normalizeShopIdKey = (value = '') => String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const PRIMARY_SHOP_ID_KEY_SET = new Set(['shopid']);
+    const SECONDARY_SHOP_ID_KEY_SET = new Set(['sellerid', 'memberid', 'merchantid', 'principalid', 'ownerid']);
+
+    const classifyShopIdKeyTier = (key = '') => {
+        const normalized = normalizeShopIdKey(key);
+        if (!normalized) return '';
+        if (PRIMARY_SHOP_ID_KEY_SET.has(normalized)) return 'primary';
+        if (SECONDARY_SHOP_ID_KEY_SET.has(normalized)) return 'secondary';
+        return '';
+    };
+
     const sanitizeShopNameCandidate = (value = '') => {
         const raw = value === null || value === undefined ? '' : String(value);
         if (!raw) return '';
@@ -270,14 +288,6 @@
         if (!root || typeof root !== 'object') return null;
         const queue = [{ node: root, depth: 0 }];
         const visited = new WeakSet();
-        const idKeys = new Set([
-            'shopid', 'shop_id',
-            'sellerid', 'seller_id',
-            'memberid', 'member_id',
-            'merchantid', 'merchant_id',
-            'principalid', 'principal_id',
-            'ownerid', 'owner_id'
-        ]);
         const nameKeys = new Set([
             'shopname', 'shop_name',
             'sellername', 'seller_name',
@@ -295,14 +305,18 @@
             if (visited.has(node)) continue;
             visited.add(node);
 
-            let localShopId = [
-                node.shopId, node.shopID, node.shop_id,
+            const explicitPrimaryShopId = [
+                node.shopId, node.shopID, node.shop_id
+            ].map(normalizeShopId).find(Boolean) || '';
+            const explicitSecondaryShopId = [
                 node.sellerId, node.sellerID, node.seller_id,
                 node.memberId, node.memberID, node.member_id,
                 node.merchantId, node.merchantID, node.merchant_id,
                 node.principalId, node.principalID, node.principal_id,
                 node.ownerId, node.ownerID, node.owner_id
             ].map(normalizeShopId).find(Boolean) || '';
+            let localShopId = explicitPrimaryShopId;
+            let idTier = localShopId ? 'primary' : '';
 
             let localShopName = [
                 node.shopName, node.shop_name, node.shopTitle,
@@ -314,12 +328,22 @@
             ].map(normalizeShopName).find(Boolean) || '';
 
             const scannedKeys = pickNodeKeysForScan(node);
+            let scannedSecondaryShopId = '';
             if (!localShopId || !localShopName) {
                 scannedKeys.forEach((key) => {
                     const lowerKey = String(key || '').toLowerCase();
                     const value = node[key];
-                    if (!localShopId && idKeys.has(lowerKey)) {
-                        localShopId = normalizeShopId(value);
+                    if (!localShopId) {
+                        const tier = classifyShopIdKeyTier(lowerKey);
+                        if (tier === 'primary') {
+                            const normalized = normalizeShopId(value);
+                            if (normalized) {
+                                localShopId = normalized;
+                                idTier = 'primary';
+                            }
+                        } else if (!scannedSecondaryShopId && tier === 'secondary') {
+                            scannedSecondaryShopId = normalizeShopId(value);
+                        }
                     }
                     if (!localShopName && nameKeys.has(lowerKey)) {
                         localShopName = normalizeShopName(value);
@@ -327,12 +351,21 @@
                 });
             }
 
+            if (!localShopId) {
+                localShopId = explicitSecondaryShopId || scannedSecondaryShopId;
+                idTier = 'secondary';
+            }
+
             if (localShopId) {
+                const confidenceBase = idTier === 'primary'
+                    ? Math.max(2, 12 - depth)
+                    : Math.max(1, 6 - depth);
                 matches.push({
                     shopId: localShopId,
                     shopName: localShopName,
                     source: sourceName,
-                    confidence: Math.max(1, 12 - depth)
+                    confidence: confidenceBase,
+                    idTier: idTier || 'secondary'
                 });
             }
 
@@ -345,7 +378,12 @@
         }
 
         if (!matches.length) return null;
-        matches.sort((a, b) => b.confidence - a.confidence);
+        const getTierScore = (item) => item?.idTier === 'primary' ? 2 : 1;
+        matches.sort((a, b) => {
+            const tierDelta = getTierScore(b) - getTierScore(a);
+            if (tierDelta !== 0) return tierDelta;
+            return Number(b.confidence || 0) - Number(a.confidence || 0);
+        });
         const top = matches[0];
         if (top.shopName) return top;
         const withName = matches.find(item => item.shopName && item.shopId === top.shopId);
@@ -354,9 +392,11 @@
 
     const parseShopFromSearchParams = (params = null, sourceName = 'searchParams') => {
         if (!params || typeof params.get !== 'function') return null;
-        const idCandidates = [
+        const primaryIdCandidates = [
             params.get('shopId'),
-            params.get('shop_id'),
+            params.get('shop_id')
+        ];
+        const secondaryIdCandidates = [
             params.get('sellerId'),
             params.get('seller_id'),
             params.get('memberId'),
@@ -364,7 +404,9 @@
             params.get('merchantId'),
             params.get('merchant_id'),
             params.get('principalId'),
-            params.get('ownerId')
+            params.get('principal_id'),
+            params.get('ownerId'),
+            params.get('owner_id')
         ];
         const nameCandidates = [
             params.get('shopName'),
@@ -376,10 +418,18 @@
             params.get('ownerName'),
             params.get('shopTitle')
         ];
-        const shopId = idCandidates.map(normalizeShopId).find(Boolean) || '';
+        const primaryShopId = primaryIdCandidates.map(normalizeShopId).find(Boolean) || '';
+        const secondaryShopId = primaryShopId ? '' : (secondaryIdCandidates.map(normalizeShopId).find(Boolean) || '');
+        const shopId = primaryShopId || secondaryShopId;
         if (!shopId) return null;
         const shopName = nameCandidates.map(normalizeShopName).find(Boolean) || '';
-        return { shopId, shopName, source: sourceName, confidence: 5 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: primaryShopId ? 5 : 2,
+            idTier: primaryShopId ? 'primary' : 'secondary'
+        };
     };
 
     const parseShopFromUrl = (rawUrl = '', sourceName = 'url') => {
@@ -436,14 +486,17 @@
             kvMap.set(key, value);
         });
         const pick = (key) => kvMap.get(String(key || '').toLowerCase()) || '';
-        const shopId = [
-            'shopId', 'shop_id',
+        const primaryShopId = [
+            'shopId', 'shop_id'
+        ].map(pick).map(normalizeShopId).find(Boolean) || '';
+        const secondaryShopId = primaryShopId ? '' : ([
             'sellerId', 'seller_id',
             'memberId', 'member_id',
             'merchantId', 'merchant_id',
             'principalId', 'principal_id',
             'ownerId', 'owner_id'
-        ].map(pick).map(normalizeShopId).find(Boolean) || '';
+        ].map(pick).map(normalizeShopId).find(Boolean) || '');
+        const shopId = primaryShopId || secondaryShopId;
         if (!shopId) return null;
         const shopName = [
             'shopName', 'shop_name',
@@ -451,12 +504,19 @@
             'nick', 'userNick',
             'ownerName', 'owner_name'
         ].map(pick).map(normalizeShopName).find(Boolean) || '';
-        return { shopId, shopName, source: sourceName, confidence: 4 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: primaryShopId ? 4 : 2,
+            idTier: primaryShopId ? 'primary' : 'secondary'
+        };
     };
 
     const parseShopFromStorage = (storage = null, sourceName = 'storage') => {
         if (!storage || typeof storage.getItem !== 'function') return null;
-        const idKeyPattern = /(shop|seller|member|merchant|principal|owner)[_-]?id/i;
+        const primaryIdKeyPattern = /^shop[_-]?id$/i;
+        const secondaryIdKeyPattern = /^(seller|member|merchant|principal|owner)[_-]?id$/i;
         const nameKeyPattern = /(shop|seller|member|merchant|principal|owner)[_-]?(name|nick|title)/i;
         const keyCount = Math.max(0, Math.min(260, Number(storage.length) || 0));
         const scannedKeys = [];
@@ -467,7 +527,9 @@
             } catch { }
         }
         let shopId = '';
+        let idTier = '';
         let shopName = '';
+        let secondaryShopId = '';
         for (let i = 0; i < scannedKeys.length; i++) {
             const key = scannedKeys[i];
             const lowerKey = key.toLowerCase();
@@ -479,8 +541,14 @@
             }
             if (!value) continue;
             const decodedValue = safeDecodeURIComponent(value);
-            if (!shopId && idKeyPattern.test(lowerKey)) {
-                shopId = normalizeShopId(decodedValue);
+            if (!shopId && primaryIdKeyPattern.test(lowerKey)) {
+                const primaryShopId = normalizeShopId(decodedValue);
+                if (primaryShopId) {
+                    shopId = primaryShopId;
+                    idTier = 'primary';
+                }
+            } else if (!secondaryShopId && secondaryIdKeyPattern.test(lowerKey)) {
+                secondaryShopId = normalizeShopId(decodedValue);
             }
             if (!shopName && nameKeyPattern.test(lowerKey)) {
                 shopName = normalizeShopName(decodedValue);
@@ -489,31 +557,58 @@
                 const parsed = safeParseJson(decodedValue);
                 const fromObject = parseShopFromObject(parsed, `${sourceName}:${key}`);
                 if (fromObject) {
-                    if (!shopId) shopId = normalizeShopId(fromObject.shopId);
+                    if (!shopId) {
+                        const fromObjectShopId = normalizeShopId(fromObject.shopId);
+                        if (fromObjectShopId) {
+                            shopId = fromObjectShopId;
+                            idTier = fromObject.idTier === 'secondary' ? 'secondary' : 'primary';
+                        }
+                    }
                     if (!shopName) shopName = normalizeShopName(fromObject.shopName);
                 }
             }
             if (shopId && shopName) break;
         }
+        if (!shopId && secondaryShopId) {
+            shopId = secondaryShopId;
+            idTier = 'secondary';
+        }
         if (!shopId) return null;
-        return { shopId, shopName, source: sourceName, confidence: 4 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: idTier === 'primary' ? 4 : 2,
+            idTier: idTier || 'secondary'
+        };
     };
 
     const parseShopFromDom = (sourceName = 'dom_attr') => {
         const nodeList = [document.documentElement, document.body].filter(Boolean);
-        const idAttrCandidates = ['data-shop-id', 'data-shopid', 'data-seller-id', 'data-sellerid', 'data-member-id'];
+        const primaryIdAttrCandidates = ['data-shop-id', 'data-shopid'];
+        const secondaryIdAttrCandidates = ['data-seller-id', 'data-sellerid', 'data-member-id'];
         const nameAttrCandidates = ['data-shop-name', 'data-shopname', 'data-seller-name', 'data-sellername', 'data-nick'];
         for (let i = 0; i < nodeList.length; i++) {
             const node = nodeList[i];
             if (!node || typeof node.getAttribute !== 'function') continue;
-            const shopId = idAttrCandidates
+            const primaryShopId = primaryIdAttrCandidates
                 .map(attr => normalizeShopId(node.getAttribute(attr)))
                 .find(Boolean) || '';
+            const secondaryShopId = primaryShopId ? '' : (secondaryIdAttrCandidates
+                .map(attr => normalizeShopId(node.getAttribute(attr)))
+                .find(Boolean) || '');
+            const shopId = primaryShopId || secondaryShopId;
             if (!shopId) continue;
             const shopName = nameAttrCandidates
                 .map(attr => normalizeShopName(node.getAttribute(attr)))
                 .find(Boolean) || '';
-            return { shopId, shopName, source: sourceName, confidence: 3 };
+            return {
+                shopId,
+                shopName,
+                source: sourceName,
+                confidence: primaryShopId ? 3 : 2,
+                idTier: primaryShopId ? 'primary' : 'secondary'
+            };
         }
         return null;
     };
@@ -561,7 +656,13 @@
             }
         }
 
-        return { shopId, shopName, source: sourceName, confidence: 3 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: 3,
+            idTier: 'primary'
+        };
     };
 
     const parseShopNameFromLabeledText = (text = '') => {
@@ -776,8 +877,56 @@
             shopId,
             shopName,
             source: sourceName,
-            confidence: 1
+            confidence: 1,
+            idTier: 'primary'
         };
+    };
+
+    const getShopIdTier = (candidate = null) => {
+        if (!candidate || typeof candidate !== 'object') return 'secondary';
+        return candidate.idTier === 'secondary' ? 'secondary' : 'primary';
+    };
+
+    const isPrimaryShopIdCandidate = (candidate = null) => {
+        const shopId = normalizeShopId(candidate?.shopId);
+        if (!shopId) return false;
+        return getShopIdTier(candidate) === 'primary';
+    };
+
+    const resolveSecondaryShopIdVerifiedSet = (candidates = [], options = {}) => {
+        const verified = new Set();
+        const stateShopId = normalizeShopId(options?.stateShopId || '');
+        const cacheShopId = normalizeShopId(options?.cacheShopId || '');
+        const domTextShopId = normalizeShopId(options?.domTextShopId || '');
+        [stateShopId, cacheShopId, domTextShopId].forEach((shopId) => {
+            if (shopId) verified.add(shopId);
+        });
+
+        const secondaryStats = new Map();
+        candidates.forEach((candidate) => {
+            const shopId = normalizeShopId(candidate?.shopId);
+            if (!shopId || getShopIdTier(candidate) !== 'secondary') return;
+            const source = String(candidate?.source || '').trim() || 'unknown';
+            if (!secondaryStats.has(shopId)) {
+                secondaryStats.set(shopId, {
+                    sources: new Set(),
+                    hasShopName: false
+                });
+            }
+            const stat = secondaryStats.get(shopId);
+            stat.sources.add(source);
+            if (normalizeShopName(candidate?.shopName)) {
+                stat.hasShopName = true;
+            }
+        });
+
+        secondaryStats.forEach((stat, shopId) => {
+            if (stat.sources.size >= 2 && stat.hasShopName) {
+                verified.add(shopId);
+            }
+        });
+
+        return verified;
     };
 
     const resolveShopIdentity = () => {
@@ -824,10 +973,27 @@
             };
         }
 
-        candidates.sort((a, b) => Number(b?.confidence || 0) - Number(a?.confidence || 0));
+        const getTierScore = (item) => getShopIdTier(item) === 'primary' ? 2 : 1;
+        candidates.sort((a, b) => {
+            const tierDelta = getTierScore(b) - getTierScore(a);
+            if (tierDelta !== 0) return tierDelta;
+            return Number(b?.confidence || 0) - Number(a?.confidence || 0);
+        });
 
-        const primary = candidates.find(item => normalizeShopId(item?.shopId)) || null;
-        if (!primary) {
+        const primary = candidates.find(item => isPrimaryShopIdCandidate(item)) || null;
+        const verifiedSecondarySet = resolveSecondaryShopIdVerifiedSet(candidates, {
+            stateShopId: state.shopId || '',
+            cacheShopId: fromCache?.shopId || '',
+            domTextShopId: fromDomText?.shopId || ''
+        });
+        const secondary = primary ? null : (candidates.find((item) => {
+            const shopId = normalizeShopId(item?.shopId);
+            if (!shopId) return false;
+            if (getShopIdTier(item) !== 'secondary') return false;
+            return verifiedSecondarySet.has(shopId);
+        }) || null);
+        const resolved = primary || secondary;
+        if (!resolved) {
             return {
                 shopId: '',
                 shopName: '',
@@ -836,15 +1002,18 @@
             };
         }
 
-        const shopId = normalizeShopId(primary.shopId);
+        const shopId = normalizeShopId(resolved.shopId);
         const nameMatch = candidates.find(item => normalizeShopId(item?.shopId) === shopId && normalizeShopName(item?.shopName));
         const fallbackShopName = nameMatch ? '' : resolveLooseShopNameCandidate(shopId);
+        const resolvedSource = getShopIdTier(resolved) === 'secondary'
+            ? `${String(resolved.source || 'unknown')}+secondary_verified`
+            : String(resolved.source || 'unknown');
 
         return {
             shopId,
-            shopName: normalizeShopName(nameMatch?.shopName || primary.shopName || fallbackShopName || ''),
-            source: String(primary.source || 'unknown'),
-            confidence: Number(primary.confidence || 1)
+            shopName: normalizeShopName(nameMatch?.shopName || resolved.shopName || fallbackShopName || ''),
+            source: resolvedSource,
+            confidence: Number(resolved.confidence || 1)
         };
     };
 
@@ -1663,14 +1832,28 @@
     };
 
     const triggerOnDemandVerify = (source = 'on_demand_interaction') => {
-        if (onDemandVerifyInFlight || isCurrentLeaseValid()) return;
+        if (onDemandVerifyInFlight) return;
+        const leaseValid = isCurrentLeaseValid();
+        const elapsedSinceLastVerify = toNow() - Number(onDemandVerifyLastSuccessAt || 0);
+        if (
+            leaseValid
+            && Number.isFinite(elapsedSinceLastVerify)
+            && elapsedSinceLastVerify >= 0
+            && elapsedSinceLastVerify < ON_DEMAND_VERIFY_REFRESH_WINDOW_MS
+        ) {
+            return;
+        }
         onDemandVerifyInFlight = true;
         assertAuthorized({
             source,
+            force: leaseValid,
             shopIdRetryAttempts: 2,
             shopIdRetryBaseDelayMs: 180,
             shopIdRetryMaxDelayMs: 620
         })
+            .then(() => {
+                onDemandVerifyLastSuccessAt = toNow();
+            })
             .catch(() => { })
             .finally(() => {
                 onDemandVerifyInFlight = false;

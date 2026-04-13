@@ -109,3 +109,19 @@ test('首页计划清空会删除已选计划，但至少保留 1 条', () => {
     '首页计划批量编辑/清空按钮未绑定点击事件'
   );
 });
+
+test('首页计划复制数量大于等于 2 时会在复制后自动删除原计划', () => {
+  assert.match(
+    source,
+    /const shouldDeleteOriginalAfterCopy = targetCopyCount >= 2;[\s\S]*?const removedOriginal = shouldDeleteOriginalAfterCopy[\s\S]*?removeStrategyById\(strategy\.id\)[\s\S]*?appendWizardLog\([\s\S]*?`已复制计划：\$\{targetCopyCount\} 个（已删除原计划）`[\s\S]*?: `已复制计划：\$\{targetCopyCount\} 个`/,
+    '复制数量大于等于 2 时未启用“复制后删除原计划”逻辑'
+  );
+});
+
+test('首页计划复制命名按末尾序号连续递增，避免 _1_2 嵌套后缀', () => {
+  assert.match(
+    source,
+    /const hasAutoTimeSuffix = \/\(\?:_\\d\{8\}\|\\d\{14\}\|_\\d\{8\}_\\d\{6\}\)\$\/\.test\(baseSeed\);[\s\S]*?const sourceSerial = !hasAutoTimeSuffix && \/_\(\\d\+\)\$\/\.test\(baseSeed\)[\s\S]*?const serialStart = sourceSerial > 0 \? sourceSerial : 0;[\s\S]*?let serialCursor = serialStart \+ Math\.max\(1, toNumber\(copyIndex, 1\)\);[\s\S]*?let candidate = `\$\{base\}_\$\{serialCursor\}`;[\s\S]*?while \(usedPlanNames\.has\(candidate\) && serialCursor < 9999\)/,
+    '复制计划命名未使用连续递增序号策略，仍可能生成嵌套后缀'
+  );
+});

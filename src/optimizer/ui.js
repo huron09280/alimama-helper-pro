@@ -754,7 +754,7 @@
                 return String(node.value || '').trim() || fallback;
             };
 
-            const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, true);
+            const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, false);
             if (!manualEnabled) return null;
 
             const bidUpperRaw = readText(`${CONFIG.UI_ID}-manual-bid-upper`, '不限');
@@ -773,10 +773,10 @@
 
             const budgetUpperRaw = readText(`${CONFIG.UI_ID}-manual-budget-upper`, '不限');
             const budgetSetting = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-budget-enabled`, true),
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-budget-enabled`, false),
                 lowerLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-lower`, 200),
                 modifyTimesLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-times`, 20),
-                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-budget-reset`, true)
+                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-budget-reset`, false)
             };
             if (budgetUpperRaw === '不限') {
                 budgetSetting.upperLimit = '不限';
@@ -786,16 +786,16 @@
             }
 
             const addKeywordSetting = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, true),
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, false),
                 keywordPreference: readText(`${CONFIG.UI_ID}-manual-keyword-preference`, '类目流量飙升词'),
                 matchType: readText(`${CONFIG.UI_ID}-manual-keyword-match`, '广泛匹配'),
                 keywordLimit: readNumber(`${CONFIG.UI_ID}-manual-keyword-limit`, 200)
             };
             const switchKeywordMatchType = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, true)
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, false)
             };
             const shieldKeyword = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-shield-enabled`, true)
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-shield-enabled`, false)
             };
 
             const operationList = [];
@@ -844,26 +844,97 @@
                 node.checked = typeof value === 'boolean' ? value : fallback;
             };
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-enable`, setting.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-enable`, setting.enabled, false);
             setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-enabled`, bid.enabled, false);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-lower`, bid.lowerLimit ?? 0.15);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-upper`, bid.upperLimit === undefined ? '不限' : bid.upperLimit);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-times`, bid.modifyTimesLimit ?? 10);
             setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-reset`, bid.dailyReset, false);
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, false);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-lower`, budget.lowerLimit ?? 200);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-upper`, budget.upperLimit === undefined ? '不限' : budget.upperLimit);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-times`, budget.modifyTimesLimit ?? 20);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-reset`, budget.dailyReset, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-reset`, budget.dailyReset, false);
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, addKeyword.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, addKeyword.enabled, false);
             setControlValue(`${CONFIG.UI_ID}-manual-keyword-preference`, addKeyword.keywordPreference ?? addKeyword.preference ?? addKeyword.buyWordPreference ?? '类目流量飙升词');
             setControlValue(`${CONFIG.UI_ID}-manual-keyword-match`, addKeyword.matchType ?? addKeyword.matchPattern ?? '广泛匹配');
             setInputValue(`${CONFIG.UI_ID}-manual-keyword-limit`, addKeyword.keywordLimit ?? 200);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, switchKeywordMatchType.enabled, true);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-shield-enabled`, shieldKeyword.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, switchKeywordMatchType.enabled, false);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-shield-enabled`, shieldKeyword.enabled, false);
             UI.refreshManualKeywordControls();
+        },
+
+        getManualEscortCheckboxNodes: () => {
+            const root = document.getElementById(`${CONFIG.UI_ID}-latest-setting-content`);
+            if (!(root instanceof Element)) {
+                return { root: null, master: null, children: [] };
+            }
+            const master = document.getElementById(`${CONFIG.UI_ID}-manual-enable`);
+            const childIdList = [
+                `${CONFIG.UI_ID}-manual-bid-enabled`,
+                `${CONFIG.UI_ID}-manual-bid-reset`,
+                `${CONFIG.UI_ID}-manual-budget-enabled`,
+                `${CONFIG.UI_ID}-manual-budget-reset`,
+                `${CONFIG.UI_ID}-manual-addkeyword-enabled`,
+                `${CONFIG.UI_ID}-manual-switchmatch-enabled`,
+                `${CONFIG.UI_ID}-manual-shield-enabled`
+            ];
+            const children = childIdList
+                .map(id => document.getElementById(id))
+                .filter(node => node instanceof HTMLInputElement);
+            return {
+                root,
+                master: master instanceof HTMLInputElement ? master : null,
+                children
+            };
+        },
+
+        syncManualEscortMasterCheckbox: () => {
+            const { master, children } = UI.getManualEscortCheckboxNodes();
+            if (!(master instanceof HTMLInputElement) || !children.length) return;
+            const enabledChildren = children.filter(node => !node.disabled);
+            if (!enabledChildren.length) {
+                master.checked = false;
+                master.indeterminate = false;
+                return;
+            }
+            const checkedCount = enabledChildren.reduce((sum, node) => sum + (node.checked ? 1 : 0), 0);
+            if (checkedCount <= 0) {
+                master.checked = false;
+                master.indeterminate = false;
+                return;
+            }
+            if (checkedCount >= enabledChildren.length) {
+                master.checked = true;
+                master.indeterminate = false;
+                return;
+            }
+            master.checked = true;
+            master.indeterminate = true;
+        },
+
+        bindManualEscortCheckboxSync: () => {
+            const { master, children } = UI.getManualEscortCheckboxNodes();
+            if (!(master instanceof HTMLInputElement) || !children.length) return;
+
+            master.addEventListener('change', () => {
+                const nextChecked = !!master.checked;
+                master.indeterminate = false;
+                children.forEach(node => {
+                    if (node.disabled) return;
+                    node.checked = nextChecked;
+                });
+            });
+
+            children.forEach(node => {
+                node.addEventListener('change', () => {
+                    UI.syncManualEscortMasterCheckbox();
+                });
+            });
+
+            UI.syncManualEscortMasterCheckbox();
         },
 
         closeManualKeywordPreferenceMenu: () => {
@@ -1062,6 +1133,30 @@
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"] {
+                        -webkit-appearance:auto !important;
+                        appearance:auto !important;
+                        accent-color:#2a5bff;
+                        display:inline-block !important;
+                        width:14px !important;
+                        height:14px !important;
+                        min-width:14px;
+                        min-height:14px;
+                        margin:0;
+                        padding:0;
+                        opacity:1 !important;
+                        visibility:visible !important;
+                        vertical-align:middle;
+                        box-sizing:border-box;
+                        border:1px solid #b8c7ec;
+                        border-radius:4px;
+                        background:#fff;
+                        box-shadow:none;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"]:disabled {
+                        cursor:not-allowed;
+                        opacity:.55 !important;
+                    }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-waterfall { column-count:2; column-gap:10px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card {
                         display:inline-block; width:100%; box-sizing:border-box; margin:0 0 10px;
@@ -1261,14 +1356,15 @@
             const manualSetting = userConfig.manualEscortSetting && typeof userConfig.manualEscortSetting === 'object'
                 ? userConfig.manualEscortSetting
                 : {
-                    enabled: true,
+                    enabled: false,
                     bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
-                    budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
-                    addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
-                    switchKeywordMatchType: { enabled: true },
-                    shieldKeyword: { enabled: true }
+                    budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
+                    addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                    switchKeywordMatchType: { enabled: false },
+                    shieldKeyword: { enabled: false }
                 };
             UI.fillManualEscortSettingForm(manualSetting);
+            UI.bindManualEscortCheckboxSync();
             UI.bindManualKeywordControls();
 
             content.querySelectorAll('input,select,textarea').forEach(control => {

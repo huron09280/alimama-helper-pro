@@ -4266,6 +4266,12 @@
             const wrap = document.createElement('div');
             wrap.className = 'am-crowd-matrix-cell am-crowd-matrix-cell-chart';
             const animateBars = options?.animate === true;
+            const progressiveReveal = options?.progressiveReveal === true;
+            if (progressiveReveal) {
+                wrap.classList.add('is-progressive-reveal');
+                const revealIndex = Math.max(0, Number(options?.revealIndex) || 0);
+                wrap.style.setProperty('--am-crowd-reveal-index', String(revealIndex));
+            }
             const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
             const enableHorizontalScroll = normalizedGroupName === '省份' || normalizedGroupName === '城市';
 
@@ -4412,6 +4418,7 @@
             this.matrixHoverMetricIndex = null;
             if (!dataset || typeof dataset !== 'object') return;
             const animateBars = options?.animate === true;
+            const progressivePeriod = this.normalizeCrowdPeriod(options?.progressivePeriod);
 
             const periods = this.getVisibleCrowdPeriods(Array.isArray(dataset.periods) ? dataset.periods : []);
             const groups = Array.isArray(dataset.groups) ? dataset.groups : [];
@@ -4434,7 +4441,7 @@
                 table.appendChild(header);
             });
 
-            groups.forEach((groupName) => {
+            groups.forEach((groupName, groupIdx) => {
                 const rowHeader = document.createElement('div');
                 rowHeader.className = 'am-crowd-matrix-cell am-crowd-matrix-row-header';
                 const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
@@ -4464,7 +4471,12 @@
 
                 periods.forEach((period) => {
                     const cell = dataset?.cellData?.[period]?.[groupName] || null;
-                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell, { animate: animateBars });
+                    const shouldProgressiveReveal = !!progressivePeriod && period === progressivePeriod;
+                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell, {
+                        animate: animateBars,
+                        progressiveReveal: shouldProgressiveReveal,
+                        revealIndex: groupIdx
+                    });
                     cellNode.dataset.period = String(period);
                     table.appendChild(cellNode);
                 });
@@ -4667,6 +4679,7 @@
                     });
                 });
                 const totalTaskCount = taskFns.length;
+                const revealedPeriodSet = new Set();
                 this.crowdMatrixTaskProgressHandler = (progressInfo) => {
                     if (runId !== this.crowdMatrixRunId) return;
                     const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
@@ -4678,6 +4691,20 @@
                     const scopeProgressText = totalTaskCount > 0
                         ? ` ｜ 省份 ${done}/${totalTaskCount} · 城市 ${done}/${totalTaskCount}`
                         : '';
+                    if (status === 'fulfilled' && progressInfo?.value) {
+                        const mergedProgressResults = this.upsertCrowdMatrixResults([progressInfo.value]);
+                        if (mergedProgressResults.length) {
+                            const progressDataset = this.buildMatrixDataset(mergedProgressResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+                            this.crowdMatrixDataset = progressDataset;
+                            this.crowdMatrixLoadedCampaignId = id;
+                            const progressPeriod = this.normalizeCrowdPeriod(progressInfo.value?.periodDays);
+                            const shouldProgressiveReveal = !!progressPeriod && !revealedPeriodSet.has(progressPeriod);
+                            this.renderCrowdMatrixCharts(progressDataset, { progressivePeriod: shouldProgressiveReveal ? progressPeriod : 0 });
+                            if (shouldProgressiveReveal) {
+                                revealedPeriodSet.add(progressPeriod);
+                            }
+                        }
+                    }
                     this.setCrowdMatrixStatus(`加载中 ${done}/${totalTaskCount} · ${detailText}${scopeProgressText}`, 'loading', { showRetry: false, progress: ratio });
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
@@ -5482,6 +5509,11 @@
                     gap: 14px;
                     min-height: clamp(228px, 26vh, 340px);
                 }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-progressive-reveal {
+                    animation: am-crowd-cell-reveal 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+                    animation-delay: calc(var(--am-crowd-reveal-index, 0) * 28ms);
+                    will-change: opacity, transform;
+                }
                 #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll {
                     overflow-x: auto;
                     overflow-y: hidden;
@@ -5804,6 +5836,16 @@
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-bar[data-metric="itemdeal"],
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-insight-item[data-metric="itemdeal"] {
                     display: none !important;
+                }
+                @keyframes am-crowd-cell-reveal {
+                    from {
+                        opacity: 0;
+                        transform: translateY(7px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
                 }
                 @keyframes am-spin { to { transform: rotate(360deg); } }
             `;

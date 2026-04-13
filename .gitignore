@@ -21,3 +21,5 @@ dist/extension.crx
 dist/extension.pem
 .keys/
 .claude/
+.omx/
+.gstack/

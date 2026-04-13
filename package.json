@@ -5,6 +5,7 @@
         "build": "node scripts/build.mjs",
         "build:check": "node scripts/build.mjs --check",
         "build:watch": "node scripts/build.mjs --watch",
+        "pack:extension": "node scripts/package-extension-zip.mjs",
         "check:syntax": "node --check \"阿里妈妈多合一助手.js\"",
         "codex:map": "bash scripts/codex-context.sh map",
         "codex:find": "bash scripts/codex-context.sh find",

@@ -9,6 +9,7 @@ test('package.json 暴露常用开发脚本入口', () => {
     assert.equal(packageJson.scripts.build, 'node scripts/build.mjs');
     assert.equal(packageJson.scripts['build:check'], 'node scripts/build.mjs --check');
     assert.equal(packageJson.scripts['build:watch'], 'node scripts/build.mjs --watch');
+    assert.equal(packageJson.scripts['pack:extension'], 'node scripts/package-extension-zip.mjs');
     assert.equal(packageJson.scripts['check:syntax'], 'node --check "阿里妈妈多合一助手.js"');
     assert.equal(packageJson.scripts['codex:map'], 'bash scripts/codex-context.sh map');
     assert.equal(packageJson.scripts['codex:find'], 'bash scripts/codex-context.sh find');

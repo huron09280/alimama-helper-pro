@@ -17,11 +17,16 @@ test('本地授权管理页包含核心配置区与筛选区', () => {
     assert.match(html, /id="operatorInput"/, '缺少操作人输入框');
     assert.match(html, /id="keywordInput"/, '缺少关键词筛选输入框');
     assert.match(html, /id="statusSelect"/, '缺少状态筛选下拉');
+    assert.match(html, /id="expirySelect"/, '缺少到期筛选下拉');
     assert.match(html, /id="activeWithinInput"[^>]*value="0"/, '最近活跃默认筛选值应为 0');
+    assert.match(html, /<option value="expired">已过期<\/option>/, '状态筛选缺少已过期项');
+    assert.match(html, /<option value="not-expired">未过期<\/option>/, '到期筛选缺少未过期项');
 });
 
 test('本地授权管理页包含店铺列表与行级授权操作', () => {
     assert.match(html, /id="tableBody"/, '缺少店铺列表容器');
+    assert.match(html, /子账号/, '缺少子账号列');
+    assert.match(html, /店铺名称/, '缺少店铺名称列');
     assert.match(html, /首次使用/, '缺少首次使用时间列');
     assert.match(html, /授权到期/, '缺少授权到期时间列');
     assert.match(html, /data-col="auth-expiry"/, '授权到期列缺少独立标记');
@@ -53,13 +58,29 @@ test('本地授权管理页调用固定管理 API 路径', () => {
     assert.match(html, /x-am-admin-token/, '管理鉴权头缺失');
     assert.match(html, /durationKey/, '授权有效期参数缺失');
     assert.match(html, /defaultAuthValidDays/, '默认授权有效期展示字段缺失');
+    assert.match(html, /status === 'expired'/, '状态筛选缺少已过期分支');
+    assert.match(html, /expiry === 'expired'/, '到期筛选缺少已过期分支');
+    assert.match(html, /expiry === 'not-expired'/, '到期筛选缺少未过期分支');
+    assert.match(html, /已授权' : \(item\.authExpired \? '已过期' : '未授权'\)/, '授权状态展示未区分已过期');
+    assert.match(html, /dom\.expirySelect\.addEventListener\('change',\s*applyLocalFilters\)/, '到期筛选未绑定本地过滤事件');
+    assert.match(html, /resolveDefaultBaseUrl/, '缺少默认 Base URL 解析逻辑');
+    assert.match(html, /STATIC_HOST_RE/, '缺少静态托管域名识别逻辑');
+    assert.match(html, /resolveStoreScopedShopIds/, '缺少店铺维度授权作用域解析');
+    assert.match(html, /runStoreScopedAllowAction/, '缺少按店铺名称维度同步授权入口');
+    assert.match(html, /按店铺名称维度同步/, '缺少店铺维度授权同步日志提示');
+    assert.match(html, /网络请求失败：\$\{method\} \$\{requestUrl\}/, '网络错误日志缺少 method 与 URL 上下文');
+    assert.match(html, /请求失败：\$\{method\} \$\{requestUrl\} ->/, 'HTTP 错误日志缺少 method 与 URL 上下文');
 });
 
 test('服务端管理页模板包含首次使用与到期日期直设能力', () => {
     assert.match(serviceHtml, /id="tableBody"/, '服务端模板缺少店铺列表容器');
+    assert.match(serviceHtml, /子账号/, '服务端模板缺少子账号列');
+    assert.match(serviceHtml, /店铺名称/, '服务端模板缺少店铺名称列');
     assert.match(serviceHtml, /首次使用/, '服务端模板缺少首次使用时间列');
     assert.match(serviceHtml, /授权到期/, '服务端模板缺少授权到期时间列');
     assert.match(serviceHtml, /id="activeWithinInput"[^>]*value="0"/, '服务端模板最近活跃默认筛选值应为 0');
+    assert.match(serviceHtml, /id="expirySelect"/, '服务端模板缺少到期筛选下拉');
+    assert.match(serviceHtml, /<option value="expired">已过期<\/option>/, '服务端模板状态筛选缺少已过期项');
     assert.match(serviceHtml, /data-col="auth-expiry"/, '服务端模板授权到期列缺少独立标记');
     assert.match(serviceHtml, /data-role="inline-menu-toggle"/, '服务端模板缺少网页内下拉触发器');
     assert.match(serviceHtml, /data-role="inline-menu-action"/, '服务端模板缺少网页内下拉操作项');
@@ -68,6 +89,10 @@ test('服务端管理页模板包含首次使用与到期日期直设能力', ()
     assert.match(serviceHtml, /授权（默认3天）/, '服务端模板缺少授权日期默认3天下拉项');
     assert.match(serviceHtml, /browser:\s*\$\{item\.browserVersion \|\| '-'\}/, '服务端模板缺少浏览器版本展示');
     assert.match(serviceHtml, /os:\s*\$\{item\.osVersion \|\| '-'\}/, '服务端模板缺少操作系统版本展示');
+    assert.match(serviceHtml, /resolveStoreScopedShopIds/, '服务端模板缺少店铺维度授权作用域解析');
+    assert.match(serviceHtml, /runStoreScopedAllowAction/, '服务端模板缺少按店铺名称维度同步授权入口');
+    assert.match(serviceHtml, /resolveDefaultBaseUrl/, '服务端模板缺少默认 Base URL 解析逻辑');
+    assert.match(serviceHtml, /网络请求失败：\$\{method\} \$\{requestUrl\}/, '服务端模板网络错误日志缺少上下文');
     assert.doesNotMatch(serviceHtml, /data-role="row-action-select"/, '服务端模板不应再使用原生 select 行级下拉');
     assert.doesNotMatch(serviceHtml, /window\.prompt\(/, '服务端模板不应使用浏览器 prompt');
     assert.doesNotMatch(serviceHtml, /window\.confirm\(/, '服务端模板不应使用浏览器 confirm');
@@ -91,6 +116,8 @@ test('授权管理文档包含管理页入口与核心接口说明', () => {
     assert.match(doc, /POST \/v1\/license\/admin\/delete/, '文档缺少删除接口');
     assert.match(doc, /按新店铺语义重新接入/, '文档缺少删除后按新店铺重连说明');
     assert.match(doc, /\/v1\/license\/verify/, '文档缺少与插件校验接口的联动说明');
+    assert.match(doc, /已过期/, '文档缺少已过期状态说明');
+    assert.match(doc, /到期筛选/, '文档缺少到期筛选说明');
     assert.match(doc, /browserVersion/, '文档缺少浏览器版本字段说明');
     assert.match(doc, /osVersion/, '文档缺少操作系统版本字段说明');
     assert.match(doc, /deleted\.memory/, '文档缺少删除重置字段说明');
