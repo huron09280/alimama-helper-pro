@@ -529,8 +529,8 @@
         <section class="panel">
             <div class="grid cols-7">
                 <label>
-                    关键词（shopId / shopName）
-                    <input id="keywordInput" placeholder="例如：123456789 或 店铺昵称" />
+                    关键词（shopId / 子账号 / 店铺名称）
+                    <input id="keywordInput" placeholder="例如：123456789 或 梁超 或 美的洗碗机旗舰店" />
                 </label>
                 <label>
                     状态
@@ -574,6 +574,7 @@
                     <thead>
                         <tr>
                             <th style="width: 130px;">shopId</th>
+                            <th style="width: 130px;">子账号</th>
                             <th style="width: 180px;">店铺名称</th>
                             <th style="width: 88px;">授权状态</th>
                             <th style="width: 88px;">吊销状态</th>
@@ -791,6 +792,30 @@
             };
 
             const normalizeShopId = (value) => String(value || '').trim();
+            const normalizeStoreNameKey = (value) => String(value || '').trim().toLowerCase();
+
+            const splitShopNameParts = (value = '') => {
+                const text = String(value || '').trim();
+                if (!text || text === '-' || text === '--') {
+                    return {
+                        storeName: '-',
+                        subAccount: '-'
+                    };
+                }
+                const parts = text.split(/[:：]/);
+                if (parts.length <= 1) {
+                    return {
+                        storeName: text,
+                        subAccount: '-'
+                    };
+                }
+                const storeName = String(parts.shift() || '').trim() || text;
+                const subAccount = String(parts.join(':') || '').trim() || '-';
+                return {
+                    storeName: storeName || '-',
+                    subAccount: subAccount || '-'
+                };
+            };
 
             const pickText = (...values) => {
                 for (const value of values) {
@@ -837,6 +862,8 @@
                         map.set(shopId, {
                             shopId,
                             shopName: '-',
+                            storeName: '-',
+                            subAccount: '-',
                             source: '',
                             updatedAt: '',
                             lastSeenAt: '',
@@ -921,8 +948,12 @@
                     const authExpiredByTime = Number.isFinite(authExpiresAtMs) && authExpiresAtMs <= Date.now();
                     const authExpired = item.authExpiredHint === true || item.currentAuthExpiredHint === true || authExpiredByTime;
                     const authorized = allowed && !revoked && !authExpired;
+                    const nameParts = splitShopNameParts(item.shopName || '');
                     return {
                         ...item,
+                        storeName: nameParts.storeName,
+                        subAccount: nameParts.subAccount,
+                        storeNameKey: normalizeStoreNameKey(nameParts.storeName === '-' ? '' : nameParts.storeName),
                         authExpiresAt,
                         authExpired,
                         allowed,
@@ -974,6 +1005,8 @@
                         const searchableFields = [
                             item.shopId,
                             item.shopName,
+                            item.subAccount,
+                            item.storeName,
                             item.source,
                             item.version,
                             item.channel,
@@ -1063,7 +1096,7 @@
                     const tipText = state.allItems.length > 0 && hasFilter
                         ? `当前筛选条件未命中（keyword=${keyword || '-'}，status=${status}，expiry=${expiry}，activeWithinHours=${Number.isFinite(activeWithin) ? activeWithin : 0}）。请点击“重置筛选”或将“最近活跃”设为 0。`
                         : '暂无数据。请先检查服务地址/Token，然后点击“刷新店铺”。';
-                    dom.tableBody.innerHTML = `<tr><td colspan="10" class="meta">${escapeHtml(tipText)}</td></tr>`;
+                    dom.tableBody.innerHTML = `<tr><td colspan="11" class="meta">${escapeHtml(tipText)}</td></tr>`;
                     return;
                 }
 
@@ -1092,7 +1125,10 @@
                                 </div>
                             </td>
                             <td>
-                                <div>${escapeHtml(item.shopName || '-')}</div>
+                                <div>${escapeHtml(item.subAccount || '-')}</div>
+                            </td>
+                            <td>
+                                <div>${escapeHtml(item.storeName || '-')}</div>
                             </td>
                             <td>
                                 <div class="status-edit">
@@ -1313,25 +1349,55 @@
                 return success;
             };
 
+            const resolveStoreScopedShopIds = (shopId = '') => {
+                const normalizedShopId = String(shopId || '').trim();
+                if (!normalizedShopId) return [];
+                const current = state.allItems.find((item) => String(item.shopId || '').trim() === normalizedShopId) || null;
+                const storeNameKey = normalizeStoreNameKey(current?.storeName || '');
+                if (!storeNameKey) return [normalizedShopId];
+                const scopedShopIds = state.allItems
+                    .filter((item) => normalizeStoreNameKey(item.storeName || '') === storeNameKey)
+                    .map((item) => String(item.shopId || '').trim())
+                    .filter(Boolean);
+                return Array.from(new Set(scopedShopIds.length ? scopedShopIds : [normalizedShopId]));
+            };
+
+            const runStoreScopedAllowAction = async (shopId, actionLabel, runner) => {
+                const scopedShopIds = resolveStoreScopedShopIds(shopId);
+                const targetShopIds = scopedShopIds.length ? scopedShopIds : [String(shopId || '').trim()].filter(Boolean);
+                if (!targetShopIds.length) return false;
+                for (let index = 0; index < targetShopIds.length; index++) {
+                    const currentShopId = targetShopIds[index];
+                    const ok = await runShopAction(currentShopId, actionLabel, () => runner(currentShopId));
+                    if (!ok) return false;
+                }
+                if (targetShopIds.length > 1) {
+                    const current = state.allItems.find((item) => String(item.shopId || '').trim() === String(shopId || '').trim()) || null;
+                    const storeName = String(current?.storeName || '-').trim() || '-';
+                    log(`${actionLabel}已按店铺名称维度同步：店铺=${storeName}，覆盖 ${targetShopIds.length} 个子账号`);
+                }
+                return true;
+            };
+
             const executeShopAction = async (shopId, action, context = {}) => {
                 if (action === 'allow-on') {
-                    await runShopAction(shopId, '授权放行（默认3天）', () => callAllow(shopId, true));
+                    await runStoreScopedAllowAction(shopId, '授权放行（默认3天）', (currentShopId) => callAllow(currentShopId, true));
                     return;
                 }
                 if (action === 'allow-1m') {
-                    await runShopAction(shopId, '授权放行（1个月）', () => callAllow(shopId, true, { durationKey: '1m' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（1个月）', (currentShopId) => callAllow(currentShopId, true, { durationKey: '1m' }));
                     return;
                 }
                 if (action === 'allow-3m') {
-                    await runShopAction(shopId, '授权放行（3个月）', () => callAllow(shopId, true, { durationKey: '3m' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（3个月）', (currentShopId) => callAllow(currentShopId, true, { durationKey: '3m' }));
                     return;
                 }
                 if (action === 'allow-1y') {
-                    await runShopAction(shopId, '授权放行（1年）', () => callAllow(shopId, true, { durationKey: '1y' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（1年）', (currentShopId) => callAllow(currentShopId, true, { durationKey: '1y' }));
                     return;
                 }
                 if (action === 'allow-permanent') {
-                    await runShopAction(shopId, '授权放行（永久）', () => callAllow(shopId, true, { durationKey: 'permanent' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（永久）', (currentShopId) => callAllow(currentShopId, true, { durationKey: 'permanent' }));
                     return;
                 }
                 if (action === 'set-expire-date') {
@@ -1341,21 +1407,21 @@
                         log(`设置到期日期失败：shopId=${shopId}，请填写有效且晚于当前时间的日期`, 'warn');
                         return;
                     }
-                    await runShopAction(shopId, `设置到期日期（${dateText}）`, () => callAllow(shopId, true, {
+                    await runStoreScopedAllowAction(shopId, `设置到期日期（${dateText}）`, (currentShopId) => callAllow(currentShopId, true, {
                         authExpiresAt,
                         applyDefaultExpiry: false
                     }));
                     return;
                 }
                 if (action === 'set-expire-permanent') {
-                    await runShopAction(shopId, '设置到期日期为永久', () => callAllow(shopId, true, {
+                    await runStoreScopedAllowAction(shopId, '设置到期日期为永久', (currentShopId) => callAllow(currentShopId, true, {
                         durationKey: 'permanent',
                         applyDefaultExpiry: false
                     }));
                     return;
                 }
                 if (action === 'allow-off') {
-                    await runShopAction(shopId, '取消授权', () => callAllow(shopId, false));
+                    await runStoreScopedAllowAction(shopId, '取消授权', (currentShopId) => callAllow(currentShopId, false));
                     return;
                 }
                 if (action === 'revoke-on') {
