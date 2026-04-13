@@ -24,4 +24,8 @@ test('extension 模式改为按需校验，不在空闲时后台轮询', () => {
     assert.match(source, /const installOnDemandVerifyHooks = \(\) => \{/, '缺少按需校验安装逻辑');
     assert.match(source, /triggerOnDemandVerify\('on_demand_pointerdown'\);/, '点击插件 UI 未触发按需校验');
     assert.match(source, /if \(resolveRuntimeMode\(\) === 'extension'\) \{\s*installOnDemandVerifyHooks\(\);/s, 'extension 启动未切换到按需校验模式');
+    assert.doesNotMatch(source, /if \(onDemandVerifyInFlight \|\| isCurrentLeaseValid\(\)\) return;/, '按需校验仍在租约有效时直接跳过，活跃时间无法刷新');
+    assert.match(source, /const ON_DEMAND_VERIFY_REFRESH_WINDOW_MS = 60 \* 1000;/, '缺少按需校验刷新窗口配置');
+    assert.match(source, /if \(onDemandVerifyInFlight\) return;/, '按需校验并发保护缺失');
+    assert.match(source, /force:\s*leaseValid,/, '租约有效时未强制远端校验，活跃时间不会刷新');
 });

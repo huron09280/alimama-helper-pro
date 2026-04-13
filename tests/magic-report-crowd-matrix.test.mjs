@@ -333,6 +333,23 @@ test('看板加载进度文案包含省份/城市维度进度', () => {
   assert.match(block, /setCrowdMatrixStatus\(`加载中 \$\{done\}\/\$\{totalTaskCount\} · \$\{detailText\}\$\{scopeProgressText\}`,\s*'loading'/, '加载状态文案未使用省份/城市进度拼接');
 });
 
+test('看板加载过程中会按已完成请求增量渲染', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const revealedPeriodSet = new Set\(\);/, '增量渲染缺少周期去重集合，可能导致重复闪烁');
+  assert.match(block, /if \(status === 'fulfilled' && progressInfo\?\.value\) \{[\s\S]*const mergedProgressResults = this\.upsertCrowdMatrixResults\(\[progressInfo\.value\]\);[\s\S]*const progressDataset = this\.buildMatrixDataset\(mergedProgressResults,\s*\{\s*groupSortModeMap:\s*this\.crowdMatrixGroupSortModeMap\s*\}\);[\s\S]*this\.crowdMatrixDataset = progressDataset;[\s\S]*this\.crowdMatrixLoadedCampaignId = id;[\s\S]*const progressPeriod = this\.normalizeCrowdPeriod\(progressInfo\.value\?\.periodDays\);[\s\S]*const shouldProgressiveReveal = !!progressPeriod && !revealedPeriodSet\.has\(progressPeriod\);[\s\S]*this\.renderCrowdMatrixCharts\(progressDataset,\s*\{\s*progressivePeriod:\s*shouldProgressiveReveal\s*\?\s*progressPeriod\s*:\s*0\s*\}\);[\s\S]*if \(shouldProgressiveReveal\) \{[\s\S]*revealedPeriodSet\.add\(progressPeriod\);/, '加载中未按已完成请求做增量渲染或未按周期去重动画');
+});
+
+test('增量渲染仅对本次周期列添加渐显动画，避免整表突兀闪动', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const progressivePeriod = this\.normalizeCrowdPeriod\(options\?\.progressivePeriod\);/, '渲染入口未读取增量渐显周期');
+  assert.match(block, /const shouldProgressiveReveal = !!progressivePeriod && period === progressivePeriod;/, '单元格未按周期列定向启用渐显');
+  assert.match(block, /const cellNode = this\.createCrowdMatrixCell\(period,\s*groupName,\s*cell,\s*\{[\s\S]*progressiveReveal:\s*shouldProgressiveReveal,[\s\S]*revealIndex:\s*groupIdx[\s\S]*\}\);/, '渲染参数未透传渐显标识/顺序');
+  assert.match(block, /const progressiveReveal = options\?\.progressiveReveal === true;/, '单元格创建未识别渐显开关');
+  assert.match(block, /if \(progressiveReveal\) \{[\s\S]*wrap\.classList\.add\('is-progressive-reveal'\);[\s\S]*wrap\.style\.setProperty\('--am-crowd-reveal-index', String\(revealIndex\)\);/, '单元格未注入渐显类与延迟顺序变量');
+  assert.match(block, /am-crowd-matrix-cell-chart\.is-progressive-reveal[\s\S]*animation:\s*am-crowd-cell-reveal\s*0\.34s/, '缺少单元格渐显动画样式');
+  assert.match(block, /@keyframes am-crowd-cell-reveal \{[\s\S]*opacity:\s*0;[\s\S]*translateY\(7px\);[\s\S]*opacity:\s*1;[\s\S]*translateY\(0\);/, '缺少单元格渐显关键帧');
+});
+
 test('看板加载完成后状态条自动隐藏', () => {
   const block = getMagicReportBlock();
   assert.match(block, /if \(options\.autoHide === true\) \{[\s\S]*setTimeout\(\(\) => \{[\s\S]*classList\.add\('is-hidden'\)/, '状态条缺少自动隐藏逻辑');

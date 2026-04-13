@@ -81,6 +81,11 @@
             align-items: end;
         }
 
+        .grid.cols-7 {
+            grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr auto auto;
+            align-items: end;
+        }
+
         label {
             display: grid;
             gap: 6px;
@@ -478,7 +483,8 @@
 
         @media (max-width: 1024px) {
             .grid.cols-4,
-            .grid.cols-6 {
+            .grid.cols-6,
+            .grid.cols-7 {
                 grid-template-columns: 1fr;
             }
 
@@ -521,10 +527,10 @@
         </section>
 
         <section class="panel">
-            <div class="grid cols-6">
+            <div class="grid cols-7">
                 <label>
-                    关键词（shopId / shopName）
-                    <input id="keywordInput" placeholder="例如：123456789 或 店铺昵称" />
+                    关键词（shopId / 子账号 / 店铺名称）
+                    <input id="keywordInput" placeholder="例如：123456789 或 梁超 或 美的洗碗机旗舰店" />
                 </label>
                 <label>
                     状态
@@ -533,6 +539,15 @@
                         <option value="authorized">已授权</option>
                         <option value="blocked">未授权</option>
                         <option value="revoked">已吊销</option>
+                        <option value="expired">已过期</option>
+                    </select>
+                </label>
+                <label>
+                    到期筛选
+                    <select id="expirySelect">
+                        <option value="all">全部</option>
+                        <option value="expired">已过期</option>
+                        <option value="not-expired">未过期</option>
                     </select>
                 </label>
                 <label>
@@ -559,6 +574,7 @@
                     <thead>
                         <tr>
                             <th style="width: 130px;">shopId</th>
+                            <th style="width: 130px;">子账号</th>
                             <th style="width: 180px;">店铺名称</th>
                             <th style="width: 88px;">授权状态</th>
                             <th style="width: 88px;">吊销状态</th>
@@ -594,7 +610,25 @@
             'use strict';
 
             const SETTINGS_KEY = '__AM_LICENSE_ADMIN_SETTINGS_V1__';
-            const DEFAULT_BASE_URL = 'https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run';
+            const LEGACY_DEFAULT_BASE_URL = 'https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run';
+            const STATIC_HOST_RE = /(?:^|\.)(github\.io|vercel\.app|netlify\.app)$/i;
+
+            const resolveDefaultBaseUrl = () => {
+                try {
+                    if (typeof window === 'undefined' || !window.location) return LEGACY_DEFAULT_BASE_URL;
+                    const protocol = String(window.location.protocol || '').toLowerCase();
+                    if (protocol !== 'http:' && protocol !== 'https:') return LEGACY_DEFAULT_BASE_URL;
+                    const origin = String(window.location.origin || '').trim().replace(/\/+$/, '');
+                    const hostname = String(window.location.hostname || '').trim().toLowerCase();
+                    if (!origin || origin === 'null' || !hostname) return LEGACY_DEFAULT_BASE_URL;
+                    if (STATIC_HOST_RE.test(hostname)) return LEGACY_DEFAULT_BASE_URL;
+                    return origin;
+                } catch {
+                    return LEGACY_DEFAULT_BASE_URL;
+                }
+            };
+
+            const DEFAULT_BASE_URL = resolveDefaultBaseUrl();
 
             const PATHS = {
                 state: '/v1/license/admin/state',
@@ -626,6 +660,7 @@
                 reloadBtn: document.getElementById('reloadBtn'),
                 keywordInput: document.getElementById('keywordInput'),
                 statusSelect: document.getElementById('statusSelect'),
+                expirySelect: document.getElementById('expirySelect'),
                 activeWithinInput: document.getElementById('activeWithinInput'),
                 pageSizeSelect: document.getElementById('pageSizeSelect'),
                 searchBtn: document.getElementById('searchBtn'),
@@ -703,6 +738,21 @@
                 return url.toString();
             };
 
+            const normalizeErrorMessage = (error) => {
+                if (typeof error === 'string') return error.trim();
+                if (error instanceof Error) return String(error.message || '').trim();
+                return String(error || '').trim();
+            };
+
+            const buildNetworkErrorMessage = (error, method, requestUrl) => {
+                const message = normalizeErrorMessage(error) || 'network_request_failed';
+                const common = `网络请求失败：${method} ${requestUrl}`;
+                if (/Failed to fetch/i.test(message)) {
+                    return `${common}。请检查 Base URL、网络连通性或代理/DNS 配置。原始错误：${message}`;
+                }
+                return `${common}。原始错误：${message}`;
+            };
+
             const request = async (path, options = {}) => {
                 const { token } = getSettings();
                 const headers = { Accept: 'application/json' };
@@ -711,13 +761,19 @@
                     headers['x-admin-token'] = token;
                 }
                 if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-
-                const response = await fetch(buildUrl(path, options.query), {
-                    method: options.method || 'GET',
-                    headers,
-                    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-                    credentials: 'omit'
-                });
+                const method = String(options.method || 'GET').toUpperCase();
+                const requestUrl = buildUrl(path, options.query);
+                let response = null;
+                try {
+                    response = await fetch(requestUrl, {
+                        method,
+                        headers,
+                        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+                        credentials: 'omit'
+                    });
+                } catch (error) {
+                    throw new Error(buildNetworkErrorMessage(error, method, requestUrl));
+                }
 
                 const rawText = await response.text();
                 let parsed = null;
@@ -729,13 +785,37 @@
 
                 if (!response.ok) {
                     const message = parsed?.msg || parsed?.message || rawText || `HTTP ${response.status}`;
-                    throw new Error(`请求失败: ${message}`);
+                    throw new Error(`请求失败：${method} ${requestUrl} -> ${message}`);
                 }
 
                 return parsed || {};
             };
 
             const normalizeShopId = (value) => String(value || '').trim();
+            const normalizeStoreNameKey = (value) => String(value || '').trim().toLowerCase();
+
+            const splitShopNameParts = (value = '') => {
+                const text = String(value || '').trim();
+                if (!text || text === '-' || text === '--') {
+                    return {
+                        storeName: '-',
+                        subAccount: '-'
+                    };
+                }
+                const parts = text.split(/[:：]/);
+                if (parts.length <= 1) {
+                    return {
+                        storeName: text,
+                        subAccount: '-'
+                    };
+                }
+                const storeName = String(parts.shift() || '').trim() || text;
+                const subAccount = String(parts.join(':') || '').trim() || '-';
+                return {
+                    storeName: storeName || '-',
+                    subAccount: subAccount || '-'
+                };
+            };
 
             const pickText = (...values) => {
                 for (const value of values) {
@@ -782,6 +862,8 @@
                         map.set(shopId, {
                             shopId,
                             shopName: '-',
+                            storeName: '-',
+                            subAccount: '-',
                             source: '',
                             updatedAt: '',
                             lastSeenAt: '',
@@ -866,8 +948,12 @@
                     const authExpiredByTime = Number.isFinite(authExpiresAtMs) && authExpiresAtMs <= Date.now();
                     const authExpired = item.authExpiredHint === true || item.currentAuthExpiredHint === true || authExpiredByTime;
                     const authorized = allowed && !revoked && !authExpired;
+                    const nameParts = splitShopNameParts(item.shopName || '');
                     return {
                         ...item,
+                        storeName: nameParts.storeName,
+                        subAccount: nameParts.subAccount,
+                        storeNameKey: normalizeStoreNameKey(nameParts.storeName === '-' ? '' : nameParts.storeName),
                         authExpiresAt,
                         authExpired,
                         allowed,
@@ -897,34 +983,58 @@
             const collectFilters = () => {
                 const keyword = String(dom.keywordInput.value || '').trim().toLowerCase();
                 const status = String(dom.statusSelect.value || 'all').trim();
+                const expiry = String(dom.expirySelect.value || 'all').trim();
                 const activeWithinHours = Number(dom.activeWithinInput.value || 0);
                 const pageSize = Math.max(1, Number(dom.pageSizeSelect.value || 50));
                 state.pageSize = pageSize;
                 return {
                     keyword,
                     status,
+                    expiry,
                     activeWithinHours: Number.isFinite(activeWithinHours) && activeWithinHours > 0 ? activeWithinHours : 0
                 };
             };
 
             const applyFilters = () => {
-                const { keyword, status, activeWithinHours } = collectFilters();
+                const { keyword, status, expiry, activeWithinHours } = collectFilters();
                 const now = Date.now();
 
                 let filtered = state.allItems.filter((item) => !state.hiddenShopIds.has(String(item.shopId || '').trim()));
                 if (keyword) {
                     filtered = filtered.filter((item) => {
-                        return item.shopId.toLowerCase().includes(keyword)
-                            || item.shopName.toLowerCase().includes(keyword);
+                        const searchableFields = [
+                            item.shopId,
+                            item.shopName,
+                            item.subAccount,
+                            item.storeName,
+                            item.source,
+                            item.version,
+                            item.channel,
+                            item.reason,
+                            item.code,
+                            item.browserVersion,
+                            item.osVersion,
+                            item.runtimeMode,
+                            item.deviceHash
+                        ];
+                        return searchableFields.some((value) => String(value || '').toLowerCase().includes(keyword));
                     });
                 }
 
                 if (status === 'authorized') {
                     filtered = filtered.filter(item => item.authorized);
                 } else if (status === 'blocked') {
-                    filtered = filtered.filter(item => !item.authorized);
+                    filtered = filtered.filter(item => !item.authorized && !item.revoked && !item.authExpired);
                 } else if (status === 'revoked') {
                     filtered = filtered.filter(item => item.revoked);
+                } else if (status === 'expired') {
+                    filtered = filtered.filter(item => item.authExpired);
+                }
+
+                if (expiry === 'expired') {
+                    filtered = filtered.filter(item => item.authExpired);
+                } else if (expiry === 'not-expired') {
+                    filtered = filtered.filter(item => !item.authExpired);
                 }
 
                 if (activeWithinHours > 0) {
@@ -947,7 +1057,8 @@
             const renderStats = () => {
                 const allAuthorized = state.allItems.filter(item => item.authorized).length;
                 const allRevoked = state.allItems.filter(item => item.revoked).length;
-                const allBlocked = state.allItems.length - allAuthorized;
+                const allExpired = state.allItems.filter(item => item.authExpired).length;
+                const allBlocked = state.allItems.filter(item => !item.authorized && !item.revoked && !item.authExpired).length;
                 const active24h = state.allItems.filter((item) => {
                     const ts = Date.parse(item.lastSeenAt || '');
                     return Number.isFinite(ts) && Date.now() - ts <= 24 * 60 * 60 * 1000;
@@ -958,6 +1069,7 @@
                     `<span class="stat">全量店铺：${state.allItems.length}</span>`,
                     `<span class="stat">已授权：${allAuthorized}</span>`,
                     `<span class="stat">未授权：${allBlocked}</span>`,
+                    `<span class="stat">已过期：${allExpired}</span>`,
                     `<span class="stat">已吊销：${allRevoked}</span>`,
                     `<span class="stat">24h 活跃：${active24h}</span>`,
                     `<span class="stat">leaseTtlMs：${Number.isFinite(state.leaseTtlMs) ? state.leaseTtlMs : 0}</span>`,
@@ -978,17 +1090,18 @@
                 if (!state.items.length) {
                     const keyword = String(dom.keywordInput.value || '').trim();
                     const status = String(dom.statusSelect.value || 'all').trim();
+                    const expiry = String(dom.expirySelect.value || 'all').trim();
                     const activeWithin = Number(dom.activeWithinInput.value || 0);
-                    const hasFilter = !!keyword || status !== 'all' || (Number.isFinite(activeWithin) && activeWithin > 0);
+                    const hasFilter = !!keyword || status !== 'all' || expiry !== 'all' || (Number.isFinite(activeWithin) && activeWithin > 0);
                     const tipText = state.allItems.length > 0 && hasFilter
-                        ? `当前筛选条件未命中（keyword=${keyword || '-'}，status=${status}，activeWithinHours=${Number.isFinite(activeWithin) ? activeWithin : 0}）。请点击“重置筛选”或将“最近活跃”设为 0。`
+                        ? `当前筛选条件未命中（keyword=${keyword || '-'}，status=${status}，expiry=${expiry}，activeWithinHours=${Number.isFinite(activeWithin) ? activeWithin : 0}）。请点击“重置筛选”或将“最近活跃”设为 0。`
                         : '暂无数据。请先检查服务地址/Token，然后点击“刷新店铺”。';
-                    dom.tableBody.innerHTML = `<tr><td colspan="10" class="meta">${escapeHtml(tipText)}</td></tr>`;
+                    dom.tableBody.innerHTML = `<tr><td colspan="11" class="meta">${escapeHtml(tipText)}</td></tr>`;
                     return;
                 }
 
                 dom.tableBody.innerHTML = state.items.map((item) => {
-                    const authStateText = item.authorized ? '已授权' : '未授权';
+                    const authStateText = item.authorized ? '已授权' : (item.authExpired ? '已过期' : '未授权');
                     const authStateClass = item.authorized ? 'ok' : (item.authExpired ? 'warn' : 'off');
                     const revokeStateText = item.revoked ? '已吊销' : '未吊销';
                     const revokeStateClass = item.revoked ? 'warn' : 'ok';
@@ -1012,7 +1125,10 @@
                                 </div>
                             </td>
                             <td>
-                                <div>${escapeHtml(item.shopName || '-')}</div>
+                                <div>${escapeHtml(item.subAccount || '-')}</div>
+                            </td>
+                            <td>
+                                <div>${escapeHtml(item.storeName || '-')}</div>
                             </td>
                             <td>
                                 <div class="status-edit">
@@ -1233,25 +1349,55 @@
                 return success;
             };
 
+            const resolveStoreScopedShopIds = (shopId = '') => {
+                const normalizedShopId = String(shopId || '').trim();
+                if (!normalizedShopId) return [];
+                const current = state.allItems.find((item) => String(item.shopId || '').trim() === normalizedShopId) || null;
+                const storeNameKey = normalizeStoreNameKey(current?.storeName || '');
+                if (!storeNameKey) return [normalizedShopId];
+                const scopedShopIds = state.allItems
+                    .filter((item) => normalizeStoreNameKey(item.storeName || '') === storeNameKey)
+                    .map((item) => String(item.shopId || '').trim())
+                    .filter(Boolean);
+                return Array.from(new Set(scopedShopIds.length ? scopedShopIds : [normalizedShopId]));
+            };
+
+            const runStoreScopedAllowAction = async (shopId, actionLabel, runner) => {
+                const scopedShopIds = resolveStoreScopedShopIds(shopId);
+                const targetShopIds = scopedShopIds.length ? scopedShopIds : [String(shopId || '').trim()].filter(Boolean);
+                if (!targetShopIds.length) return false;
+                for (let index = 0; index < targetShopIds.length; index++) {
+                    const currentShopId = targetShopIds[index];
+                    const ok = await runShopAction(currentShopId, actionLabel, () => runner(currentShopId));
+                    if (!ok) return false;
+                }
+                if (targetShopIds.length > 1) {
+                    const current = state.allItems.find((item) => String(item.shopId || '').trim() === String(shopId || '').trim()) || null;
+                    const storeName = String(current?.storeName || '-').trim() || '-';
+                    log(`${actionLabel}已按店铺名称维度同步：店铺=${storeName}，覆盖 ${targetShopIds.length} 个子账号`);
+                }
+                return true;
+            };
+
             const executeShopAction = async (shopId, action, context = {}) => {
                 if (action === 'allow-on') {
-                    await runShopAction(shopId, '授权放行（默认3天）', () => callAllow(shopId, true));
+                    await runStoreScopedAllowAction(shopId, '授权放行（默认3天）', (currentShopId) => callAllow(currentShopId, true));
                     return;
                 }
                 if (action === 'allow-1m') {
-                    await runShopAction(shopId, '授权放行（1个月）', () => callAllow(shopId, true, { durationKey: '1m' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（1个月）', (currentShopId) => callAllow(currentShopId, true, { durationKey: '1m' }));
                     return;
                 }
                 if (action === 'allow-3m') {
-                    await runShopAction(shopId, '授权放行（3个月）', () => callAllow(shopId, true, { durationKey: '3m' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（3个月）', (currentShopId) => callAllow(currentShopId, true, { durationKey: '3m' }));
                     return;
                 }
                 if (action === 'allow-1y') {
-                    await runShopAction(shopId, '授权放行（1年）', () => callAllow(shopId, true, { durationKey: '1y' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（1年）', (currentShopId) => callAllow(currentShopId, true, { durationKey: '1y' }));
                     return;
                 }
                 if (action === 'allow-permanent') {
-                    await runShopAction(shopId, '授权放行（永久）', () => callAllow(shopId, true, { durationKey: 'permanent' }));
+                    await runStoreScopedAllowAction(shopId, '授权放行（永久）', (currentShopId) => callAllow(currentShopId, true, { durationKey: 'permanent' }));
                     return;
                 }
                 if (action === 'set-expire-date') {
@@ -1261,21 +1407,21 @@
                         log(`设置到期日期失败：shopId=${shopId}，请填写有效且晚于当前时间的日期`, 'warn');
                         return;
                     }
-                    await runShopAction(shopId, `设置到期日期（${dateText}）`, () => callAllow(shopId, true, {
+                    await runStoreScopedAllowAction(shopId, `设置到期日期（${dateText}）`, (currentShopId) => callAllow(currentShopId, true, {
                         authExpiresAt,
                         applyDefaultExpiry: false
                     }));
                     return;
                 }
                 if (action === 'set-expire-permanent') {
-                    await runShopAction(shopId, '设置到期日期为永久', () => callAllow(shopId, true, {
+                    await runStoreScopedAllowAction(shopId, '设置到期日期为永久', (currentShopId) => callAllow(currentShopId, true, {
                         durationKey: 'permanent',
                         applyDefaultExpiry: false
                     }));
                     return;
                 }
                 if (action === 'allow-off') {
-                    await runShopAction(shopId, '取消授权', () => callAllow(shopId, false));
+                    await runStoreScopedAllowAction(shopId, '取消授权', (currentShopId) => callAllow(currentShopId, false));
                     return;
                 }
                 if (action === 'revoke-on') {
@@ -1375,6 +1521,14 @@
             };
 
             const bindEvents = () => {
+                const applyLocalFilters = () => {
+                    state.page = 1;
+                    applyFilters();
+                    renderStats();
+                    renderTable();
+                    renderPagination();
+                };
+
                 dom.saveSettingsBtn.addEventListener('click', () => {
                     saveSettings();
                 });
@@ -1392,6 +1546,7 @@
                 dom.resetBtn.addEventListener('click', () => {
                     dom.keywordInput.value = '';
                     dom.statusSelect.value = 'all';
+                    dom.expirySelect.value = 'all';
                     dom.activeWithinInput.value = '0';
                     dom.pageSizeSelect.value = '50';
                     state.page = 1;
@@ -1418,6 +1573,10 @@
                 });
 
                 dom.pingBtn.addEventListener('click', pingServer);
+                dom.keywordInput.addEventListener('input', applyLocalFilters);
+                dom.statusSelect.addEventListener('change', applyLocalFilters);
+                dom.expirySelect.addEventListener('change', applyLocalFilters);
+                dom.activeWithinInput.addEventListener('input', applyLocalFilters);
                 dom.tableBody.addEventListener('click', onTableClick);
                 dom.tableBody.addEventListener('change', onTableChange);
                 document.addEventListener('click', (event) => {

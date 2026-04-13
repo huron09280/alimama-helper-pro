@@ -6,7 +6,7 @@
 
 - `src/` 是源码事实来源，按功能拆成多文件维护。
 - 根目录 [`阿里妈妈多合一助手.js`](./阿里妈妈多合一助手.js) 仍保留为最终发布的 userscript 文件名，但改为构建产物。
-- `dist/packages/` 产出 `.user.js` / `.meta.js`。
+- `dist/packages/` 产出 `.user.js` / `.meta.js` / `alimama-helper-pro-extension.zip`。
 - `dist/extension/` 产出 Chrome / Edge 可直接“加载已解压扩展程序”的 MV3 插件目录。
 
 ## 安装方式
@@ -23,10 +23,16 @@
 
 ### Chrome / Edge 插件（解压加载）
 
-1. 下载 release 中的 `alimama-helper-pro-extension.zip`，或本地执行 `node scripts/build.mjs`。
-2. 打开浏览器扩展管理页，启用“开发者模式”。
-3. 选择“加载已解压的扩展程序”，指向 `dist/extension/`。
-4. 访问阿里妈妈页面，插件会自动注入页面增强能力。
+1. 下载 release 中的 `alimama-helper-pro-extension.zip`，或本地执行：
+
+```bash
+npm run pack:extension
+```
+
+2. 本地打包后，解压 `dist/packages/alimama-helper-pro-extension.zip`（也可直接使用 `dist/extension/` 目录）。
+3. 打开浏览器扩展管理页，启用“开发者模式”。
+4. 选择“加载已解压的扩展程序”，指向解压目录（或 `dist/extension/`）。
+5. 不要直接安装 `.crx`；非商店来源在 Chrome 默认会被限制，导致无法正常启用。
 
 ## 核心功能
 
@@ -101,9 +107,10 @@ src/
 阿里妈妈多合一助手.js              # 生成后的主 UserScript（兼容产物）
 dev/dev-loader.user.js             # 本地开发加载器（刷新即生效）
 tests/*.test.mjs                   # Node 回归测试
-dist/packages/                     # 构建后的 userscript 产物
+dist/packages/                     # 构建后的 userscript + extension zip 产物
 dist/extension/                    # 构建后的 MV3 unpacked 插件目录
 scripts/build.mjs                  # 构建脚本
+scripts/package-extension-zip.mjs  # 本地 extension zip 打包脚本
 scripts/review-team.sh             # 团队自动化检查入口
 package.json                       # 零依赖脚本入口（build/test/review/dev）
 ```
@@ -131,6 +138,7 @@ npm run review
 
 ```bash
 npm run build
+npm run pack:extension
 npm run build:check
 npm run check:syntax
 npm run codex:map
@@ -144,6 +152,7 @@ npm run review
 
 ```bash
 node scripts/build.mjs
+node scripts/package-extension-zip.mjs
 node scripts/build.mjs --check
 node --check "阿里妈妈多合一助手.js"
 node --test tests/*.test.mjs

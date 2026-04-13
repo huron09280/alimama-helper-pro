@@ -8965,6 +8965,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const wrap = document.createElement('div');
             wrap.className = 'am-crowd-matrix-cell am-crowd-matrix-cell-chart';
             const animateBars = options?.animate === true;
+            const progressiveReveal = options?.progressiveReveal === true;
+            if (progressiveReveal) {
+                wrap.classList.add('is-progressive-reveal');
+                const revealIndex = Math.max(0, Number(options?.revealIndex) || 0);
+                wrap.style.setProperty('--am-crowd-reveal-index', String(revealIndex));
+            }
             const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
             const enableHorizontalScroll = normalizedGroupName === '省份' || normalizedGroupName === '城市';
 
@@ -9111,6 +9117,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.matrixHoverMetricIndex = null;
             if (!dataset || typeof dataset !== 'object') return;
             const animateBars = options?.animate === true;
+            const progressivePeriod = this.normalizeCrowdPeriod(options?.progressivePeriod);
 
             const periods = this.getVisibleCrowdPeriods(Array.isArray(dataset.periods) ? dataset.periods : []);
             const groups = Array.isArray(dataset.groups) ? dataset.groups : [];
@@ -9133,7 +9140,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 table.appendChild(header);
             });
 
-            groups.forEach((groupName) => {
+            groups.forEach((groupName, groupIdx) => {
                 const rowHeader = document.createElement('div');
                 rowHeader.className = 'am-crowd-matrix-cell am-crowd-matrix-row-header';
                 const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
@@ -9163,7 +9170,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 periods.forEach((period) => {
                     const cell = dataset?.cellData?.[period]?.[groupName] || null;
-                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell, { animate: animateBars });
+                    const shouldProgressiveReveal = !!progressivePeriod && period === progressivePeriod;
+                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell, {
+                        animate: animateBars,
+                        progressiveReveal: shouldProgressiveReveal,
+                        revealIndex: groupIdx
+                    });
                     cellNode.dataset.period = String(period);
                     table.appendChild(cellNode);
                 });
@@ -9366,6 +9378,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     });
                 });
                 const totalTaskCount = taskFns.length;
+                const revealedPeriodSet = new Set();
                 this.crowdMatrixTaskProgressHandler = (progressInfo) => {
                     if (runId !== this.crowdMatrixRunId) return;
                     const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
@@ -9377,6 +9390,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const scopeProgressText = totalTaskCount > 0
                         ? ` ｜ 省份 ${done}/${totalTaskCount} · 城市 ${done}/${totalTaskCount}`
                         : '';
+                    if (status === 'fulfilled' && progressInfo?.value) {
+                        const mergedProgressResults = this.upsertCrowdMatrixResults([progressInfo.value]);
+                        if (mergedProgressResults.length) {
+                            const progressDataset = this.buildMatrixDataset(mergedProgressResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+                            this.crowdMatrixDataset = progressDataset;
+                            this.crowdMatrixLoadedCampaignId = id;
+                            const progressPeriod = this.normalizeCrowdPeriod(progressInfo.value?.periodDays);
+                            const shouldProgressiveReveal = !!progressPeriod && !revealedPeriodSet.has(progressPeriod);
+                            this.renderCrowdMatrixCharts(progressDataset, { progressivePeriod: shouldProgressiveReveal ? progressPeriod : 0 });
+                            if (shouldProgressiveReveal) {
+                                revealedPeriodSet.add(progressPeriod);
+                            }
+                        }
+                    }
                     this.setCrowdMatrixStatus(`加载中 ${done}/${totalTaskCount} · ${detailText}${scopeProgressText}`, 'loading', { showRetry: false, progress: ratio });
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
@@ -10181,6 +10208,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 14px;
                     min-height: clamp(228px, 26vh, 340px);
                 }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-progressive-reveal {
+                    animation: am-crowd-cell-reveal 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+                    animation-delay: calc(var(--am-crowd-reveal-index, 0) * 28ms);
+                    will-change: opacity, transform;
+                }
                 #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll {
                     overflow-x: auto;
                     overflow-y: hidden;
@@ -10503,6 +10535,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-bar[data-metric="itemdeal"],
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-insight-item[data-metric="itemdeal"] {
                     display: none !important;
+                }
+                @keyframes am-crowd-cell-reveal {
+                    from {
+                        opacity: 0;
+                        transform: translateY(7px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
                 }
                 @keyframes am-spin { to { transform: rotate(360deg); } }
             `;
@@ -13824,12 +13866,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             customPrompt: '深度拿量',
             concurrency: 3,
             manualEscortSetting: {
-                enabled: true,
+                enabled: false,
                 bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
-                budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
-                addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
-                switchKeywordMatchType: { enabled: true },
-                shieldKeyword: { enabled: true }
+                budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
+                addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                switchKeywordMatchType: { enabled: false },
+                shieldKeyword: { enabled: false }
             }
         }
     };
@@ -25766,10 +25808,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     delete merged.campaign.promotionModelMarketing;
                     delete merged.campaign.orderChargeType;
                     delete merged.campaign.orderInfo;
-                    const safeSiteCampaignName = String(merged.campaign.campaignName || '').trim();
-                    if (!/^[A-Za-z0-9]{2,64}$/.test(safeSiteCampaignName)) {
-                        merged.campaign.campaignName = `site${nowStampSeconds()}`;
-                    }
+                    merged.campaign.campaignName = String(
+                        merged.campaign.campaignName
+                        || plan.planName
+                        || ''
+                    ).trim();
                     const adgroupName = String(
                         merged.adgroup?.adgroupName
                         || merged.adgroup?.material?.materialName
@@ -36605,12 +36648,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const raw = String(sourcePlanName || '').trim();
                 const fallback = buildDefaultPlanPrefixByScene(sceneName || getCurrentEditorSceneName());
                 const baseSeed = raw || fallback;
-                const base = /(?:_\d{8}|\d{14}|_\d{8}_\d{6})$/.test(baseSeed)
-                    ? baseSeed
-                    : baseSeed.replace(/_\d+$/, '');
-                const suffix = Math.max(1, toNumber(copyIndex, 1));
-                const next = `${base}_${suffix}`;
-                return ensureUniqueStrategyPlanName(next);
+                const hasAutoTimeSuffix = /(?:_\d{8}|\d{14}|_\d{8}_\d{6})$/.test(baseSeed);
+                const sourceSerial = !hasAutoTimeSuffix && /_(\d+)$/.test(baseSeed)
+                    ? Math.max(0, toNumber(baseSeed.match(/_(\d+)$/)?.[1], 0))
+                    : 0;
+                let base = sourceSerial > 0 ? baseSeed.replace(/_\d+$/, '') : baseSeed;
+                if (sourceSerial > 0) {
+                    const timestampWithSerialTailMatch = base.match(/^(.*(?:_\d{8}_\d{6}))(?:_\d+)+$/)
+                        || (
+                            /_\d{8}_\d{6}$/.test(base)
+                                ? null
+                                : base.match(/^(.*(?:_\d{8}|\d{14}))(?:_\d+)+$/)
+                        );
+                    if (timestampWithSerialTailMatch?.[1]) {
+                        base = timestampWithSerialTailMatch[1];
+                    }
+                }
+                const usedPlanNames = new Set(
+                    (wizardState.strategyList || [])
+                        .map(item => String(item?.planName || '').trim())
+                        .filter(Boolean)
+                );
+                const serialStart = sourceSerial > 0 ? sourceSerial : 0;
+                let serialCursor = serialStart + Math.max(1, toNumber(copyIndex, 1));
+                let candidate = `${base}_${serialCursor}`;
+                while (usedPlanNames.has(candidate) && serialCursor < 9999) {
+                    serialCursor += 1;
+                    candidate = `${base}_${serialCursor}`;
+                }
+                return candidate;
             };
             const getStrategyTargetLabel = (strategy = {}) => {
                 const bidTargetValue = normalizeKeywordBidTargetOptionValue(
@@ -48342,6 +48408,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     return sceneSettingsCache.get(targetScene) || {};
                 };
+                const removeStrategyById = (strategyId = '') => {
+                    if ((wizardState.strategyList || []).length <= 1) return null;
+                    const removeIndex = wizardState.strategyList.findIndex(item => item.id === strategyId);
+                    if (removeIndex < 0) return null;
+                    const removed = wizardState.strategyList.splice(removeIndex, 1)[0];
+                    if (wizardState.editingStrategyId === removed.id) {
+                        const fallback = wizardState.strategyList[Math.max(0, removeIndex - 1)] || wizardState.strategyList[0] || null;
+                        wizardState.editingStrategyId = fallback?.id || '';
+                        if (fallback && wizardState.detailVisible) {
+                            applyStrategyToDetailForm(fallback);
+                        }
+                    }
+                    return removed;
+                };
                 filteredStrategyList.forEach((strategy) => {
                     const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                         ? String(strategy.sceneName).trim()
@@ -48493,8 +48573,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             clone.copyBatchCount = 1;
                             wizardState.strategyList.push(clone);
                         }
+                        const shouldDeleteOriginalAfterCopy = targetCopyCount >= 2;
+                        const removedOriginal = shouldDeleteOriginalAfterCopy
+                            ? removeStrategyById(strategy.id)
+                            : null;
                         commitStrategyUiState();
-                        appendWizardLog(`已复制计划：${targetCopyCount} 个`, 'success');
+                        appendWizardLog(
+                            removedOriginal
+                                ? `已复制计划：${targetCopyCount} 个（已删除原计划）`
+                                : `已复制计划：${targetCopyCount} 个`,
+                            'success'
+                        );
                     };
                     deleteBtn.onclick = () => {
                         commitStrategyTargetCostInput();
@@ -48502,16 +48591,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             appendWizardLog('至少保留 1 个计划', 'error');
                             return;
                         }
-                        const removeIndex = wizardState.strategyList.findIndex(item => item.id === strategy.id);
-                        if (removeIndex < 0) return;
-                        const removed = wizardState.strategyList.splice(removeIndex, 1)[0];
-                        if (wizardState.editingStrategyId === removed.id) {
-                            const fallback = wizardState.strategyList[Math.max(0, removeIndex - 1)] || wizardState.strategyList[0] || null;
-                            wizardState.editingStrategyId = fallback?.id || '';
-                            if (fallback && wizardState.detailVisible) {
-                                applyStrategyToDetailForm(fallback);
-                            }
-                        }
+                        const removed = removeStrategyById(strategy.id);
+                        if (!removed) return;
                         commitStrategyUiState();
                         appendWizardLog(`已删除计划：${removed?.name || ''}`, 'success');
                     };
@@ -53403,10 +53484,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             const expectedPlanName = String(firstPlan?.planName || '').trim();
             const actualPlanName = String(sampleCampaign?.campaignName || '').trim();
-            const isSiteScene = targetScene === '货品全站推广';
-            const expectedPlanNameLooksSiteSafe = /^[A-Za-z0-9]{2,64}$/.test(expectedPlanName);
-            const siteNameAutoNormalized = isSiteScene && actualPlanName && /^site\d{8,}$/.test(actualPlanName) && !expectedPlanNameLooksSiteSafe;
-            if (expectedPlanName && actualPlanName && expectedPlanName !== actualPlanName && !siteNameAutoNormalized) {
+            if (expectedPlanName && actualPlanName && expectedPlanName !== actualPlanName) {
                 diffs.push({
                     field: 'planName',
                     expected: expectedPlanName,
@@ -54363,7 +54441,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 error: unresolvedCampaignIds.length ? 'pause_not_fully_confirmed' : ''
             };
         };
-
         const cleanupCreatedPlansByLifecycle = async (records = [], options = {}) => {
             const list = Array.isArray(records) ? records : [];
             const deletedCampaignIds = [];
@@ -55845,7 +55922,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return String(node.value || '').trim() || fallback;
             };
 
-            const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, true);
+            const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, false);
             if (!manualEnabled) return null;
 
             const bidUpperRaw = readText(`${CONFIG.UI_ID}-manual-bid-upper`, '不限');
@@ -55864,10 +55941,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const budgetUpperRaw = readText(`${CONFIG.UI_ID}-manual-budget-upper`, '不限');
             const budgetSetting = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-budget-enabled`, true),
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-budget-enabled`, false),
                 lowerLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-lower`, 200),
                 modifyTimesLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-times`, 20),
-                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-budget-reset`, true)
+                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-budget-reset`, false)
             };
             if (budgetUpperRaw === '不限') {
                 budgetSetting.upperLimit = '不限';
@@ -55877,16 +55954,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
 
             const addKeywordSetting = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, true),
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, false),
                 keywordPreference: readText(`${CONFIG.UI_ID}-manual-keyword-preference`, '类目流量飙升词'),
                 matchType: readText(`${CONFIG.UI_ID}-manual-keyword-match`, '广泛匹配'),
                 keywordLimit: readNumber(`${CONFIG.UI_ID}-manual-keyword-limit`, 200)
             };
             const switchKeywordMatchType = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, true)
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, false)
             };
             const shieldKeyword = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-shield-enabled`, true)
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-shield-enabled`, false)
             };
 
             const operationList = [];
@@ -55935,26 +56012,97 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 node.checked = typeof value === 'boolean' ? value : fallback;
             };
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-enable`, setting.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-enable`, setting.enabled, false);
             setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-enabled`, bid.enabled, false);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-lower`, bid.lowerLimit ?? 0.15);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-upper`, bid.upperLimit === undefined ? '不限' : bid.upperLimit);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-times`, bid.modifyTimesLimit ?? 10);
             setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-reset`, bid.dailyReset, false);
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, false);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-lower`, budget.lowerLimit ?? 200);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-upper`, budget.upperLimit === undefined ? '不限' : budget.upperLimit);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-times`, budget.modifyTimesLimit ?? 20);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-reset`, budget.dailyReset, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-reset`, budget.dailyReset, false);
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, addKeyword.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, addKeyword.enabled, false);
             setControlValue(`${CONFIG.UI_ID}-manual-keyword-preference`, addKeyword.keywordPreference ?? addKeyword.preference ?? addKeyword.buyWordPreference ?? '类目流量飙升词');
             setControlValue(`${CONFIG.UI_ID}-manual-keyword-match`, addKeyword.matchType ?? addKeyword.matchPattern ?? '广泛匹配');
             setInputValue(`${CONFIG.UI_ID}-manual-keyword-limit`, addKeyword.keywordLimit ?? 200);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, switchKeywordMatchType.enabled, true);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-shield-enabled`, shieldKeyword.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, switchKeywordMatchType.enabled, false);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-shield-enabled`, shieldKeyword.enabled, false);
             UI.refreshManualKeywordControls();
+        },
+
+        getManualEscortCheckboxNodes: () => {
+            const root = document.getElementById(`${CONFIG.UI_ID}-latest-setting-content`);
+            if (!(root instanceof Element)) {
+                return { root: null, master: null, children: [] };
+            }
+            const master = document.getElementById(`${CONFIG.UI_ID}-manual-enable`);
+            const childIdList = [
+                `${CONFIG.UI_ID}-manual-bid-enabled`,
+                `${CONFIG.UI_ID}-manual-bid-reset`,
+                `${CONFIG.UI_ID}-manual-budget-enabled`,
+                `${CONFIG.UI_ID}-manual-budget-reset`,
+                `${CONFIG.UI_ID}-manual-addkeyword-enabled`,
+                `${CONFIG.UI_ID}-manual-switchmatch-enabled`,
+                `${CONFIG.UI_ID}-manual-shield-enabled`
+            ];
+            const children = childIdList
+                .map(id => document.getElementById(id))
+                .filter(node => node instanceof HTMLInputElement);
+            return {
+                root,
+                master: master instanceof HTMLInputElement ? master : null,
+                children
+            };
+        },
+
+        syncManualEscortMasterCheckbox: () => {
+            const { master, children } = UI.getManualEscortCheckboxNodes();
+            if (!(master instanceof HTMLInputElement) || !children.length) return;
+            const enabledChildren = children.filter(node => !node.disabled);
+            if (!enabledChildren.length) {
+                master.checked = false;
+                master.indeterminate = false;
+                return;
+            }
+            const checkedCount = enabledChildren.reduce((sum, node) => sum + (node.checked ? 1 : 0), 0);
+            if (checkedCount <= 0) {
+                master.checked = false;
+                master.indeterminate = false;
+                return;
+            }
+            if (checkedCount >= enabledChildren.length) {
+                master.checked = true;
+                master.indeterminate = false;
+                return;
+            }
+            master.checked = true;
+            master.indeterminate = true;
+        },
+
+        bindManualEscortCheckboxSync: () => {
+            const { master, children } = UI.getManualEscortCheckboxNodes();
+            if (!(master instanceof HTMLInputElement) || !children.length) return;
+
+            master.addEventListener('change', () => {
+                const nextChecked = !!master.checked;
+                master.indeterminate = false;
+                children.forEach(node => {
+                    if (node.disabled) return;
+                    node.checked = nextChecked;
+                });
+            });
+
+            children.forEach(node => {
+                node.addEventListener('change', () => {
+                    UI.syncManualEscortMasterCheckbox();
+                });
+            });
+
+            UI.syncManualEscortMasterCheckbox();
         },
 
         closeManualKeywordPreferenceMenu: () => {
@@ -56153,6 +56301,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"] {
+                        -webkit-appearance:auto !important;
+                        appearance:auto !important;
+                        accent-color:#2a5bff;
+                        display:inline-block !important;
+                        width:14px !important;
+                        height:14px !important;
+                        min-width:14px;
+                        min-height:14px;
+                        margin:0;
+                        padding:0;
+                        opacity:1 !important;
+                        visibility:visible !important;
+                        vertical-align:middle;
+                        box-sizing:border-box;
+                        border:1px solid #b8c7ec;
+                        border-radius:4px;
+                        background:#fff;
+                        box-shadow:none;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"]:disabled {
+                        cursor:not-allowed;
+                        opacity:.55 !important;
+                    }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-waterfall { column-count:2; column-gap:10px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card {
                         display:inline-block; width:100%; box-sizing:border-box; margin:0 0 10px;
@@ -56352,14 +56524,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const manualSetting = userConfig.manualEscortSetting && typeof userConfig.manualEscortSetting === 'object'
                 ? userConfig.manualEscortSetting
                 : {
-                    enabled: true,
+                    enabled: false,
                     bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
-                    budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
-                    addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
-                    switchKeywordMatchType: { enabled: true },
-                    shieldKeyword: { enabled: true }
+                    budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
+                    addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                    switchKeywordMatchType: { enabled: false },
+                    shieldKeyword: { enabled: false }
                 };
             UI.fillManualEscortSettingForm(manualSetting);
+            UI.bindManualEscortCheckboxSync();
             UI.bindManualKeywordControls();
 
             content.querySelectorAll('input,select,textarea').forEach(control => {

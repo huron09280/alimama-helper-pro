@@ -1,3 +1,458 @@
+# TODO - 2026-04-13 shopId识别收敛 + 授权台“子账号/店铺名”拆分 + 店铺维度授权
+
+## 需求规格
+- 目标：
+  - 浏览器实测 `shopId` 识别来源，确认“同名多 shopId”是否由识别策略引入；
+  - 识别策略改为“优先只认 `shopId/shop_id`，其余字段降级或二次校验”；
+  - 授权管理台把原“店铺名称”列改为“子账号”，新增“店铺名称”列（去掉 `:` 后子账号部分）；
+  - 授权有效期按“店铺名称”维度管理，不再按“子账号/单 shopId”维度割裂。
+- 范围：
+  - `src/entries/extension-license-guard.js`（店铺标识识别与校验）；
+  - `services/license-server/index.mjs`（授权状态聚合与授权有效期维度）；
+  - `dev/license-admin.html`、`services/license-server/license-admin.html`（管理台字段与交互）；
+  - 相关测试与文档同步更新。
+- 非目标：
+  - 不改动与授权无关的优化器/看板功能；
+  - 不引入新的管理接口路径。
+
+## 执行计划（含校验）
+- [x] 1. 在真实阿里妈妈页面用 `chrome-devtools` 采集 `shopId` 候选来源与最终命中证据。
+  - 摘要：已在 `https://one.alimama.com/index.html#!/manage/search` 实测，页头 `ID:2957960066` 与 `window.__AM_LICENSE_STATE__.shopId=2957960066` 一致；Hook 历史出现 `memberId=2957960066` 与 `shopId=2957960066`，确认存在“非 shopId 字段混入候选”场景。
+- [x] 2. 实施“`shopId/shop_id` 优先 + 其他字段降级二次校验”的识别收敛方案。
+  - 摘要：已在 `src/entries/extension-license-guard.js` 增加 `PRIMARY/SECONDARY` 分层与 `resolveSecondaryShopIdVerifiedSet` 二次校验，仅在主键缺失且满足“状态/cache/DOM锚点或多来源一致”时采用降级 ID。
+- [x] 3. 管理台列改造：`店铺名称 -> 子账号`，新增 `店铺名称`（去掉冒号后的子账号）。
+  - 摘要：已在 `dev/license-admin.html` 与 `services/license-server/license-admin.html` 增加 `splitShopNameParts`，把 `shopName` 拆分为 `subAccount/storeName` 两列展示，并更新筛选关键词提示。
+- [x] 4. 授权有效期维度改造：按店铺名称共享授权时间，不按子账号割裂。
+  - 摘要：已新增 `resolveStoreScopedShopIds/runStoreScopedAllowAction`，授权放行/取消授权/设置到期时间按同店铺名称批量同步到全部子账号。
+- [x] 5. 补测试、构建与浏览器回归验证，回填结果复盘（含风险与回滚）。
+  - 摘要：已通过定向测试与构建校验，并在浏览器验证同店铺多子账号到期时间同步生效。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/entries/extension-license-guard.js`：shopId 主键优先识别 + 降级 ID 二次校验。
+  - `dev/license-admin.html`、`services/license-server/license-admin.html`：新增“子账号/店铺名称”拆分展示；授权时间按店铺名称维度同步。
+  - `tests/extension-license-shopid-guard.test.mjs`、`tests/license-admin-page.test.mjs`：新增对应契约断言。
+  - `docs/授权管理页.md`：补充新列说明与店铺名称维度授权说明。
+- 校验：
+  - `node scripts/build.mjs` 通过。
+  - `node --test tests/extension-license-shopid-guard.test.mjs tests/license-admin-page.test.mjs` 通过（10/10）。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --check 阿里妈妈多合一助手.js` 通过。
+  - `chrome-devtools` 实页验证：
+    - `one.alimama.com`：识别命中 `shopId=2957960066`，并抓到降级候选 `memberId=2957960066`；
+    - 授权管理台：列头已变为 `shopId/子账号/店铺名称`；
+    - 同店铺 `svakom司沃康官方旗舰店` 两个子账号实测“设置到期日期 2026-08-08”后同步成功，日志显示“按店铺名称维度同步，覆盖 2 个子账号”。
+- 风险与回滚：
+  - 风险：若历史数据无店铺名称（`storeName='-'`），仍回退为单 shopId 授权。
+  - 回滚：恢复 `runStoreScopedAllowAction` 到单 shopId 调用，并移除 `resolveSecondaryShopIdVerifiedSet` 降级二次校验逻辑后重新构建。
+
+# TODO - 2026-04-13 小万护航手动勾选默认关闭与主从同步
+
+## 需求规格
+- 目标：手动设置区域所有勾选项默认关闭；外层“使用手动设置提交”与内层勾选项保持同步。
+- 范围：
+  - 默认态下所有相关 checkbox 为未勾选；
+  - 外层 checkbox 勾选/取消时，内层 checkbox 同步勾选/取消；
+  - 内层 checkbox 变更时，外层状态同步反映（全关=未勾选，全开=勾选，部分=半选）。
+- 非目标：
+  - 不修改手动设置数值输入默认值；
+  - 不改动 openV3 提交流程与字段映射逻辑。
+
+## 执行计划（含校验）
+- [x] 1. 调整默认配置与 UI fallback，统一将手动设置相关 checkbox 默认改为关闭。
+  - 摘要：已将 `src/optimizer/bootstrap.js` 与 `src/optimizer/ui.js` 的手动设置 checkbox fallback 全部改为 `false`。
+- [x] 2. 增加外层/内层 checkbox 主从同步逻辑（双向）。
+  - 摘要：已新增 `getManualEscortCheckboxNodes/syncManualEscortMasterCheckbox/bindManualEscortCheckboxSync`，实现外层驱动内层、内层反写外层（含半选）。
+- [x] 3. 补充回归测试，固定“默认全关 + 主从同步”契约。
+  - 摘要：已在 `tests/optimizer-escort-new-flow-fallback.test.mjs` 新增两条契约测试（默认全关、主从同步）。
+- [x] 4. 运行定向测试与构建校验。
+  - 摘要：已通过 `node --test tests/optimizer-escort-new-flow-fallback.test.mjs`、`node scripts/build.mjs`、`node scripts/build.mjs --check`、`node --check 阿里妈妈多合一助手.js`。
+- [x] 5. 回填结果复盘与风险说明。
+  - 摘要：已回填（见下方“结果复盘”）。
+
+## 结果复盘
+- 状态：DONE_WITH_CONCERNS
+- 变更点：
+  - `src/optimizer/bootstrap.js`：手动设置默认勾选项统一为关闭。
+  - `src/optimizer/ui.js`：手动设置读取/填充 fallback 改为默认关闭；新增外层/内层 checkbox 双向同步逻辑。
+  - `tests/optimizer-escort-new-flow-fallback.test.mjs`：新增“默认全关 + 主从同步”回归测试。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/packages/alimama-helper-pro.meta.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过（24/24）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --check 阿里妈妈多合一助手.js` 通过。
+- 风险与回滚：
+  - 风险：若历史用户本地已保存旧配置（已开启），首次打开仍会按其历史值展示，默认全关仅对新默认/无旧配置场景生效。
+  - 回滚：恢复 `src/optimizer/bootstrap.js` 与 `src/optimizer/ui.js` 中对应 fallback 为旧值并重建产物。
+- 待补验证：
+  - `chrome-devtools` MCP 当前会话连接失败（`Network.enable timed out`），未能完成真实阿里妈妈页面自动化复测。
+
+# TODO - 2026-04-13 小万护航手动设置复选框在部分电脑不可见
+
+## 需求规格
+- 目标：修复“小万护航 -> 使用手动设置提交”区域在部分电脑上复选框不可见的问题，确保显示效果与图二一致（可见且可勾选）。
+- 范围：
+  - 仅调整小万护航手动设置面板中的复选框样式兼容策略；
+  - 保持原有配置读写、提交逻辑和默认值不变；
+  - 增加回归测试，避免后续样式回退导致再次不可见。
+- 非目标：
+  - 不改动护航功能业务逻辑；
+  - 不改动关键词弹窗或其他模块的 checkbox 组件样式。
+
+## 执行计划（含校验）
+- [x] 1. 根因定位与影响面确认（逻辑 vs 样式）。
+  - 摘要：已定位为“手动设置面板缺少 checkbox 兜底样式”，在部分页面样式覆盖下会被隐藏，非业务逻辑/数据问题。
+- [x] 2. 在 `src/optimizer/ui.js` 添加最小兼容样式，强制 checkbox 在该面板内可见。
+  - 摘要：已新增 `#${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"]` 兜底样式，显式恢复 `appearance/display/visibility` 并统一尺寸。
+- [x] 3. 补充静态回归测试，固定“手动设置面板 checkbox 可见样式”契约。
+  - 摘要：已在 `tests/optimizer-escort-new-flow-fallback.test.mjs` 新增样式契约断言，校验可见性规则与 disabled 态规则。
+- [x] 4. 执行测试验证（至少覆盖新增定向测试）。
+  - 摘要：已执行 `node --test tests/optimizer-escort-new-flow-fallback.test.mjs`、`node scripts/build.mjs`、`node scripts/build.mjs --check`，均通过。
+- [x] 5. 回填结果复盘（变更点、验证结果、风险与回滚）。
+  - 摘要：已回填（见下方“结果复盘”）。
+
+## 结果复盘
+- 状态：DONE_WITH_CONCERNS
+- 变更点：
+  - `src/optimizer/ui.js`：新增手动设置面板 checkbox 可见性兜底样式，避免被页面全局样式隐藏。
+  - `tests/optimizer-escort-new-flow-fallback.test.mjs`：新增“手动设置面板 checkbox 可见样式”契约断言。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`、`dist/packages/alimama-helper-pro.meta.js`。
+- 校验：
+  - `node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过（22/22）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+- 风险与回滚：
+  - 风险：页面若继续注入更高优先级（含行内）隐藏样式，仍可能压过默认 checkbox 外观，但当前已覆盖常见全局 reset 场景。
+  - 回滚：移除 `src/optimizer/ui.js` 中 `.am26-manual-root input[type="checkbox"]` 与 `:disabled` 新增样式并重新构建。
+- 待补验证：
+  - `chrome-devtools` MCP 当前会话连接失败（`Network.enable timed out`），未能完成真实阿里妈妈页面自动化复测。
+
+# TODO - 2026-04-11 GitHub Pages 部署 dev/license-admin.html
+
+## 需求规格
+- 目标：将当前工作区的 `dev/license-admin.html` 部署到 `https://huron09280.github.io/alimama-helper-pro/`。
+- 范围：
+  - 仅发布 `dev/license-admin.html` 到 GitHub Pages 首页；
+  - 避免将当前工作区其它未提交改动混入部署提交；
+  - 完成线上可访问性校验并记录结果。
+- 非目标：
+  - 不打包 userscript/extension；
+  - 不变更 `services/license-server` 代码与线上函数配置。
+
+## 执行计划（含校验）
+- [x] 1. 核对部署链路与基线差异（`origin/main` vs 当前 `dev/license-admin.html`）。
+  - 摘要：已确认仓库使用 `.github/workflows/license-admin-pages.yml`，且 `origin/main` 落后当前页面文件改动。
+- [x] 2. 在干净 worktree 仅提交 `dev/license-admin.html` 到 `main`，避免混入其它改动。
+  - 摘要：已在临时 worktree（基于 `origin/main`）单文件提交并推送到 `main`，提交号 `a6ecc44e1fd0d4b54cb01c5eafd6ed911fa9b7de`。
+- [x] 3. 触发并等待 Pages 工作流完成，确认线上地址返回新页面。
+  - 摘要：`Deploy License Admin Page` 自动触发并成功完成（run `24279815482`）。
+- [x] 4. 回填结果复盘（提交号、工作流链接、线上校验证据）。
+  - 摘要：已回填（见下方“结果复盘”）。
+
+## 结果复盘
+- 状态：已完成
+- 部署提交：
+  - `a6ecc44e1fd0d4b54cb01c5eafd6ed911fa9b7de`（仅 `dev/license-admin.html`）
+- 工作流：
+  - `Deploy License Admin Page`：`https://github.com/huron09280/alimama-helper-pro/actions/runs/24279815482`（success）
+- 线上校验：
+  - `https://huron09280.github.io/alimama-helper-pro/` 返回 `HTTP 200`；
+  - 页面内容已包含本次改动标记：`LEGACY_DEFAULT_BASE_URL`、`buildNetworkErrorMessage`。
+- 风险与回滚：
+  - 风险：GitHub Pages CDN 可能有短暂缓存延迟（通常分钟级）。
+  - 回滚：从 `main` 回退该提交并重跑 `license-admin-pages.yml` 即可恢复上一版本页面。
+
+# TODO - 2026-04-09 批量建计划（货品全站）计划名称不一致修复
+
+## 需求规格
+- 目标：修复“批量建立计划 -> 货品全站推广”链路中，阿里妈妈后台实际创建计划名称与插件内计划名称不一致的问题。
+- 范围：
+  - 定位计划名称在 `buildSolutionFromPlan -> createPlansBatch` 链路中的变更点；
+  - 移除/调整导致计划名被强制改写为 `site时间戳` 的逻辑；
+  - 保留必要的名称清洗（仅空白/空值兜底），避免引入非法空名称；
+  - 补充回归测试，固定“货品全站推广保留插件计划名”的契约。
+- 非目标：
+  - 不改动其它场景（关键词/人群/内容/线索/店铺直达）的命名逻辑；
+  - 不改动批量提交流程、冲突处理和并发策略。
+
+## 执行计划（含校验）
+- [x] 1. 梳理并确认计划名称被改写的根因和影响面。
+  - 摘要：已定位唯一改写点在 `search-and-draft.js` 的“货品全站推广”分支，存在“非英数名 -> site 时间戳”强制替换；并确认 `wizard-open-and-create.js` 同步放过该差异。
+- [x] 2. 实现最小修复：货品全站推广创建时保持 `campaignName === plan.planName`（空名才兜底）。
+  - 摘要：已移除全站分支的英数正则改写，改为 `merged.campaign.campaignName = String(merged.campaign.campaignName || plan.planName || '').trim()`。
+- [x] 3. 补充/更新测试并执行定向验证。
+  - 摘要：`tests/site-scene-item-binding.test.mjs` 新增“保留插件计划名，不再改写 site 时间戳”断言，并加上 `siteNameAutoNormalized` 保护移除断言；定向测试通过。
+- [x] 4. 执行构建检查并回填结果复盘。
+  - 摘要：已执行构建与 `build --check`，通过。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/optimizer/keyword-plan-api/search-and-draft.js`：移除全站计划名 `site时间戳` 强制改写，保持插件计划名直传。
+  - `src/optimizer/keyword-plan-api/wizard-open-and-create.js`：移除 `siteNameAutoNormalized` 例外，计划名不一致将被显式识别。
+  - `tests/site-scene-item-binding.test.mjs`：新增全站计划名一致性回归断言。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `/opt/homebrew/bin/node scripts/build.mjs` 通过。
+  - `/opt/homebrew/bin/node --test tests/site-scene-item-binding.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs` 通过（20/20）。
+  - `/opt/homebrew/bin/node scripts/build.mjs --check` 通过。
+- 风险与回滚：
+  - 风险：若阿里妈妈后端对个别特殊字符有隐藏限制，提交可能由“自动改名成功”转为“服务端报错”，但这会更早暴露真实命名约束。
+  - 回滚：恢复 `search-and-draft.js` 中的 `safeSiteCampaignName` 正则改写和 `wizard-open-and-create.js` 的 `siteNameAutoNormalized` 例外判断。
+
+# TODO - 2026-04-08 省份/城市加载时上方闪烁修复
+
+## 需求规格
+- 目标：修复人群对比看板在省份/城市加载阶段出现的“上方区域闪烁”问题。
+- 范围：
+  - 保留增量渲染能力；
+  - 限制同一周期列的渐显动画在单次加载中只触发一次，避免重复闪烁；
+  - 更新回归测试并完成真实页面验证。
+- 非目标：
+  - 不改动人群看板指标口径；
+  - 不改动请求并发/重试策略。
+
+## 执行计划（含校验）
+- [x] 1. 确认闪烁来源并定义最小修复策略。
+  - 摘要：已定位为“同周期列在多次增量渲染中重复触发渐显”，导致上方区域视觉闪烁；采用“同周期单次渐显”最小修复方案。
+- [x] 2. 实现“同周期渐显去重”，避免重复动画触发。
+  - 摘要：在 `runCrowdMatrixLoad` 增量回调中新增 `revealedPeriodSet`，每个周期仅首次完成时传递 `progressivePeriod`，后续同周期更新不再重复动画。
+- [x] 3. 更新测试断言，固定去重逻辑契约。
+  - 摘要：`tests/magic-report-crowd-matrix.test.mjs` 新增 `revealedPeriodSet` 与 `shouldProgressiveReveal` 相关契约断言，防止回退。
+- [x] 4. 执行构建+定向测试+真实页面验证并回填复盘。
+  - 摘要：已完成构建、测试、`build --check` 与 chrome-devtools 实页验证。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/main-assistant/magic-report.js`：增量渲染加入“周期级动画去重”机制（`revealedPeriodSet`）。
+  - `tests/magic-report-crowd-matrix.test.mjs`：更新增量渲染契约，覆盖“周期只渐显一次”逻辑。
+- 校验：
+  - `node scripts/build.mjs` 通过。
+  - `node --test tests/magic-report-crowd-matrix.test.mjs` 通过（51/51）。
+  - `node scripts/build.mjs --check` 通过。
+  - `chrome-devtools` 真实页面验证（`https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`）：
+    - 重试后渐显 episode 仅出现 4 次（`7/3/30/90` 各 1 次），`duplicatePeriods=[]`；
+    - 表明同周期未重复触发动画，省份/城市后续加载阶段不会反复闪烁上方区域。
+- 风险与回滚：
+  - 风险：周期内后续指标更新不再重复动画，视觉强调频次下降（但可读性提升）。
+  - 回滚：移除 `revealedPeriodSet` 逻辑并恢复每次 `fulfilled` 都传 `progressivePeriod`。
+
+# TODO - 2026-04-08 人群对比看板增量显示过渡动画优化
+
+## 需求规格
+- 目标：人群对比看板在“加载中逐步显示”时增加平滑过渡，降低突兀感。
+- 范围：
+  - 在增量渲染场景下，仅对本次更新的周期列单元格增加短时渐显动画；
+  - 不影响既有进度文案、重试逻辑与最终完成态；
+  - 增补静态契约测试，避免动画逻辑回退。
+- 非目标：
+  - 不修改查询并发、重试与业务口径；
+  - 不引入整表级长时间动画（避免影响可读性）。
+
+## 执行计划（含校验）
+- [x] 1. 确认渲染链路中可承载“按周期列定向动画”的参数传递点。
+  - 摘要：已确认主链路插入点为 `runCrowdMatrixLoad -> crowdMatrixTaskProgressHandler(fulfilled) -> renderCrowdMatrixCharts(progressivePeriod)`，并沿用 `runId` 防串扰保护。
+- [x] 2. 实现“progressivePeriod -> cell class -> CSS keyframes”最小闭环。
+  - 摘要：已在 `renderCrowdMatrixCharts/createCrowdMatrixCell` 新增 `progressivePeriod/progressiveReveal/revealIndex` 协议，并添加 `.is-progressive-reveal + @keyframes am-crowd-cell-reveal` 样式实现定向渐显。
+- [x] 3. 更新 `magic-report-crowd-matrix` 回归断言，固定新增动画协议。
+  - 摘要：已更新 `tests/magic-report-crowd-matrix.test.mjs` 并新增“增量渲染仅对本次周期列添加渐显动画”用例，固定参数透传、DOM class 与样式关键帧契约。
+- [x] 4. 执行构建+定向测试+真实页面验证并回填复盘。
+  - 摘要：已完成 `build + test + check + chrome-devtools` 实测，确认加载中存在 `is-progressive-reveal` 与延迟阶梯。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/main-assistant/magic-report.js`：为增量渲染新增“按周期列渐显”参数链路与 CSS 动画。
+  - `tests/magic-report-crowd-matrix.test.mjs`：新增/更新动画协议回归断言。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node --test tests/magic-report-crowd-matrix.test.mjs` 通过（51/51）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `chrome-devtools` 真实阿里妈妈页面验证通过（`https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`）：
+    - 样式注入已包含 `.am-crowd-matrix-cell-chart.is-progressive-reveal` 与 `@keyframes am-crowd-cell-reveal`；
+    - 重试后加载早期状态为 `加载中 1/16 ...`，同屏单元格命中 `animationName=am-crowd-cell-reveal`、`animationDuration=0.34s`；
+    - 渐显单元格存在延迟阶梯：`revealIndex=0..5` 对应 `animationDelay=0s/0.028s/0.056s/0.084s/0.112s/0.14s`，确认显示不再突兀。
+- 风险与回滚：
+  - 风险：弱性能设备在高频重绘阶段可能出现轻微动画抖动。
+  - 回滚：移除 `progressivePeriod/progressiveReveal` 透传与 `is-progressive-reveal` 样式，恢复原有无过渡渲染。
+
+# TODO - 2026-04-08 人群对比看板按完成进度增量渲染
+
+## 需求规格
+- 目标：人群对比看板在加载过程中“每完成一项就可见一部分结果”，不再必须等待全部请求结束后才展示。
+- 范围：
+  - 在全量加载流程中基于任务完成事件做增量渲染；
+  - 保持现有进度文案、失败提示与最终完成态语义；
+  - 补充静态契约测试，防止后续回退成“一次性渲染”。
+- 非目标：
+  - 不改动看板维度/指标口径；
+  - 不改动请求并发与重试策略。
+
+## 执行计划（含校验）
+- [x] 1. 梳理加载主链路，确定可安全增量渲染的插入点（避免并发 run 串扰）。
+  - 摘要：已确认插入点位于 `runCrowdMatrixLoad -> crowdMatrixTaskProgressHandler` 的 `fulfilled` 分支，具备 `runId` 防串扰保护。
+- [x] 2. 改造 `runCrowdMatrixLoad` 进度回调：单任务成功即合并结果并重建看板。
+  - 摘要：已在进度回调中新增 `upsertCrowdMatrixResults([progressInfo.value]) -> buildMatrixDataset -> renderCrowdMatrixCharts`，实现加载中增量可视化。
+- [x] 3. 更新/新增测试断言，固定“加载中会按完成任务实时渲染”行为。
+  - 摘要：`tests/magic-report-crowd-matrix.test.mjs` 新增断言，校验 `fulfilled` 分支会即时合并结果并重渲染看板。
+- [x] 4. 执行定向验证并回填复盘（命令、结果、风险与回滚）。
+  - 摘要：已完成构建/测试/浏览器验证（见下方复盘）。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/main-assistant/magic-report.js`：看板全量加载流程改为“任务完成即增量渲染”；
+  - `tests/magic-report-crowd-matrix.test.mjs`：新增增量渲染回归断言；
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node scripts/build.mjs` 通过；
+  - `node --test tests/magic-report-crowd-matrix.test.mjs` 通过（50/50）；
+  - `node scripts/build.mjs --check` 通过；
+  - `chrome-devtools` 真实阿里妈妈页面验证通过（`https://one.alimama.com/index.html#!/manage/onesite?...`）：
+    - 重试触发后 `6098ms` 时状态为 `加载中 1/16 ...`，同时 `cellCount=32`、`nonEmptyCells=8`、`barGroupCount=156`；
+    - `8565ms` 时状态推进到 `加载中 2/16 ...`，`nonEmptyCells` 从 `8` 增至 `16`；
+    - 证明“未全量完成前已可见部分行/格数据”。
+- 风险与回滚：
+  - 风险：加载过程中会触发多次重绘，弱性能设备可能出现额外重排开销；
+  - 回滚：移除进度回调内 `fulfilled` 分支的增量渲染代码，恢复“全部完成后一次性渲染”。
+
+# TODO - 2026-04-07 本地一键打 extension zip 与安装说明
+
+## 需求规格
+- 目标：提供本地一键命令生成 extension zip，并补齐避免 CRX 侧载拦截的安装说明。
+- 范围：
+  - 新增本地打包脚本，输出 `dist/packages/alimama-helper-pro-extension.zip`；
+  - 在 `package.json` 暴露统一命令入口；
+  - README 明确“解压加载”安装路径，避免继续使用 CRX 直接安装；
+  - 补充/更新相关测试并执行验证。
+- 非目标：
+  - 不改动 extension 业务逻辑；
+  - 不改动发布流程语义（仍保留 release 资产产出）。
+
+## 执行计划（含校验）
+- [x] 1. 新增本地 zip 打包脚本（含构建联动）并验证可生成 zip。
+  - 摘要：已新增 `scripts/package-extension-zip.mjs`；执行 `npm run pack:extension` 成功生成 `dist/packages/alimama-helper-pro-extension.zip`。
+- [x] 2. 接入 `package.json` 命令入口并更新对应测试。
+  - 摘要：已新增脚本入口 `pack:extension`，并更新 `tests/package-scripts.test.mjs` 契约断言。
+- [x] 3. 更新 README 安装说明（强调“不要直接装 CRX”）并执行定向验证。
+  - 摘要：已更新 README 安装步骤与常用命令，明确“解压加载，不直接安装 CRX”；执行 `node --test tests/package-scripts.test.mjs tests/extension-static-build.test.mjs` 通过。
+- [x] 4. 回填结果复盘（产物路径、命令结果、风险说明）。
+  - 摘要：已完成（见下方复盘）。
+
+## 结果复盘
+- 状态：已完成
+- 产物：
+  - `scripts/package-extension-zip.mjs`
+  - `dist/packages/alimama-helper-pro-extension.zip`（本次验证生成 `530586` bytes）
+- 校验：
+  - `npm run pack:extension` 通过；
+  - `node --test tests/package-scripts.test.mjs tests/extension-static-build.test.mjs` 通过（4/4）。
+- 风险与回滚：
+  - 风险：本地 zip 打包依赖 `python3`（与现有仓库工具链一致）；
+  - 回滚：删除 `pack:extension` 脚本与 README 对应条目即可恢复到仅 `node scripts/build.mjs` 流程。
+
+# TODO - 2026-04-07 生成 CRX 安装包
+
+## 需求规格
+- 目标：基于当前仓库代码生成可安装的 `.crx` 插件包。
+- 范围：
+  - 使用仓库标准构建命令生成最新 `dist/extension/`；
+  - 使用本机 Chrome 打包 `dist/extension/` 生成 `.crx`；
+  - 回填产物路径与基础校验结论。
+- 非目标：
+  - 不改动业务代码逻辑；
+  - 不创建发布 tag 或 GitHub Release。
+
+## 执行计划（含校验）
+- [x] 1. 运行构建命令，确保 `dist/extension/` 产物为最新。
+  - 摘要：已执行 `node scripts/build.mjs`，构建成功并刷新 `dist/extension/manifest.json`、`content.js`、`page.bundle.js` 与图标文件。
+- [x] 2. 使用 Chrome `--pack-extension` 生成 `.crx`（并保留 `.pem` 密钥文件）。
+  - 摘要：已执行 `Google Chrome --pack-extension=dist/extension`，成功生成 `dist/extension.crx` 与 `dist/extension.pem`。
+- [x] 3. 校验 CRX 文件存在、记录大小与生成时间，补充结果复盘。
+  - 摘要：已通过 `ls/stat` 校验产物存在，记录文件大小与时间戳。
+
+## 结果复盘
+- 状态：已完成
+- 产物：
+  - `dist/extension.crx`（`534420` bytes，`2026-04-07 18:20:39`）
+  - `dist/extension.pem`（`1704` bytes，`2026-04-07 18:20:39`）
+- 校验：
+  - `node scripts/build.mjs` 通过；
+  - Chrome `--pack-extension` 返回码 `0`；
+  - `ls/stat` 可见 CRX 与 PEM 文件。
+
+# TODO - 2026-04-07 GitHub Pages 手动部署（授权管理页）
+
+## 需求规格
+- 目标：将授权管理页发布到 GitHub Pages 可访问地址。
+- 范围：
+  - 触发 `Deploy License Admin Page` 工作流；
+  - 处理环境保护规则导致的失败并完成一次成功部署；
+  - 回填部署结果与运行链接。
+- 非目标：
+  - 不改动授权服务端 API；
+  - 不处理非 Pages 相关 CI。
+
+## 执行计划（含校验）
+- [x] 1. 校验工作流触发方式并触发一次部署。
+  - 摘要：已通过 `workflow_dispatch` 触发分支部署，首次失败。
+- [x] 2. 修复部署阻塞（环境保护规则）并在允许分支完成部署。
+  - 摘要：已定位 `github-pages` 环境仅允许受保护分支部署；将发布提交同步至 `main` 后触发部署成功（run: `24071774805`，复跑 `24071863910`）。
+- [x] 3. 记录部署结果与校验信息。
+  - 摘要：已将仓库 Pages `build_type` 切为 `workflow`，并确认线上地址返回管理台页面（`curl` 返回 `店铺授权管理台` 标题，`last-modified=2026-04-07T08:25:56Z`）。
+
+## 结果复盘
+- 状态：已完成
+- 部署链路：
+  - 分支手动触发失败（环境保护拦截）：`https://github.com/huron09280/alimama-helper-pro/actions/runs/24071615654`
+  - main 分支成功部署：`https://github.com/huron09280/alimama-helper-pro/actions/runs/24071774805`
+  - 复跑确认成功：`https://github.com/huron09280/alimama-helper-pro/actions/runs/24071863910`
+- 当前线上地址：
+  - `https://huron09280.github.io/alimama-helper-pro/`
+- 关键说明：
+  - 先前 Pages 源为 `legacy`（`main/` 直接构建 README），会覆盖 Actions 产物；
+  - 已切换为 `workflow` 并完成 Actions 部署，现已返回 `dev/license-admin.html` 内容。
+
+# TODO - 2026-04-07 店铺授权管理台增加“已过期”状态与表格筛选能力
+
+## 需求规格
+- 目标：在店铺授权管理台中补充“授权状态=已过期”，并增强表格筛选能力，便于快速定位目标店铺。
+- 范围：
+  - 在授权状态筛选项中新增“已过期”；
+  - 在表格交互上补充更明确、可即时生效的筛选能力（保持与现有筛选模型兼容）；
+  - 同步本地模板与服务端模板，避免双版本漂移；
+  - 补充或更新回归测试，验证新筛选项和筛选行为。
+- 非目标：
+  - 不改动授权服务端接口协议；
+  - 不调整授权有效期计算规则，仅消费现有 `authExpired/authExpiresAt` 数据。
+
+## 执行计划（含校验）
+- [x] 1. 梳理当前授权状态与筛选逻辑，明确“已过期”判定口径与筛选交互改动点。
+  - 摘要：已确认当前页面已具备基础筛选，但授权状态显示与筛选未单独暴露“已过期”；本次将新增状态项与到期筛选，并把关键词匹配扩展到表格详情字段。
+- [x] 2. 修改管理页模板（本地 + 服务端）实现“已过期”状态展示与表格筛选能力增强。
+  - 摘要：已完成 `dev/license-admin.html` 与 `services/license-server/license-admin.html` 同步改造：状态筛选新增“已过期”，新增“到期筛选（全部/已过期/未过期）”，授权状态文案新增“已过期”，并将关键词筛选扩展到版本/来源/原因/设备信息等表格字段，筛选支持本地即时生效。
+- [x] 3. 更新并执行定向测试，验证模板与筛选逻辑不回退。
+  - 摘要：已更新 `tests/license-admin-page.test.mjs` 覆盖新状态与新筛选项；执行 `node --test tests/license-admin-page.test.mjs`，7/7 通过；并通过 `chrome-devtools MCP` 页面联调验证“已过期”状态展示与筛选后仅保留过期行。
+- [x] 4. 回填结果复盘（变更点、验证结果、风险与回滚）。
+  - 摘要：已完成（见下方复盘）。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - 授权状态新增“已过期”展示态（非授权且 `authExpired=true` 时显示“已过期”）；
+  - 筛选增强：状态筛选新增“已过期”，并新增“到期筛选（已过期/未过期）”；
+  - 表格筛选增强：关键词筛选范围从 `shopId/shopName` 扩展至版本、渠道、来源、原因、浏览器/系统、运行模式等字段，并支持输入/选择后即时筛选。
+- 验证结果：
+  - `node --test tests/license-admin-page.test.mjs` 通过（7/7）；
+  - `chrome-devtools MCP` 浏览器验证通过：页面出现“已过期”状态项；注入 3 条模拟数据后，状态切换到“已过期”时筛选后总量从 3 收敛到 1，且表格仅保留过期店铺。
+- 风险与回滚：
+  - 风险：`未授权` 筛选语义由“所有未通过授权”收敛为“非吊销且非过期的未授权”，以便与“已吊销/已过期”互斥筛选；
+  - 回滚：移除 `status=expired` 与 `expirySelect` 分支，并恢复 `status=blocked => !authorized` 即可回退旧行为。
+
 # TODO - 2026-04-07 授权管理前端改为第三方静态托管默认域名
 
 ## 需求规格
@@ -51,7 +506,7 @@
 - [x] 3. 实施最小修复并新增/更新回归测试，证明无修复会失败、有修复可通过。
   - 摘要：`src/entries/extension-license-guard.js` 新增交互校验节流窗口（60s）与“租约有效时强制远端校验”，并在 `tests/extension-license-cache-policy-token.test.mjs` 补充回归断言。
 - [x] 4. 执行测试与必要构建检查，验证无回归。
-  - 摘要：执行 `node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/license-admin-page.test.mjs`、`node --check src/entries/extension-license-guard.js`、`node scripts/build.mjs && node scripts/build.mjs --check` 均通过。
+  - 摘要：执行 `node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/license-admin-page.test.mjs`、`node --check src/entries/extension-license-guard.js`、`node scripts/build.mjs && node scripts/build.mjs --check` 均通过；并完成 `chrome-devtools MCP` 真实阿里妈妈页面联调。
 - [x] 5. 回填结果复盘（根因、修复点、验证证据、风险/回滚说明）。
   - 摘要：已完成（见下方复盘）。
 
@@ -66,6 +521,7 @@
   - 授权守卫/管理页契约定向测试 13/13 通过；
   - 语法检查通过；
   - 构建与构建一致性检查通过。
+  - 浏览器联调（`chrome-devtools MCP`）通过：在真实阿里妈妈页（`https://one.alimama.com/index.html#!/manage/onesite`）触发授权链路后，出现多次 `POST /v1/license/verify`（如 `reqid=983/801/734`）；授权管理台（`https://huron09280.github.io/alimama-helper-pro/`）刷新后同店铺 `2957960066` 的“最近活跃”已更新到 `2026-04-07 15:32:31`（此前为 `2026-04-03 09:32:13`），截图保存在 `/tmp/license-admin-recent-activity-20260407.png`。
 - 风险与回滚：
   - 风险：插件交互可能带来更高 `verify` 请求频率（已用 60s 节流控制）；
   - 回滚：恢复 `triggerOnDemandVerify` 旧逻辑（租约有效直接跳过）即可退回原行为。
@@ -2897,3 +3353,88 @@
 - 结论：
   - 版本号与更新日志已按发布要求同步到源码、文档和构建产物；
   - 当前分支已满足发版前一致性门禁，可直接打 `v6.09` 标签发布。
+
+# TODO - 2026-04-11 店铺授权管理台管理日志“[ERROR] Failed to fetch”修复
+
+## 需求规格
+- 目标：修复店铺授权管理台在请求失败时日志仅显示 `[ERROR] Failed to fetch`、缺乏可定位信息的问题，降低排障成本并减少默认地址导致的首开失败。
+- 范围：
+  - 改造授权管理页请求封装，在网络异常时输出包含 `method + URL + 排障提示` 的错误信息；
+  - 优化默认 `Base URL` 策略：优先同域（仅非静态托管域），静态托管场景保持 FC 默认地址兜底；
+  - 同步本地模板与服务端模板；
+  - 补充/更新测试并完成定向验证。
+- 非目标：
+  - 不改动授权后端 API 协议与鉴权规则；
+  - 不调整管理页业务筛选与授权操作逻辑。
+
+## 执行计划（含校验）
+- [x] 1. 复现并确认根因，形成可执行修复策略。
+  - 摘要：已确认 `request()` 在 `fetch` 抛错时直接透传浏览器原始错误，导致日志只显示 `Failed to fetch`；并确认当前默认 FC 地址在本机连通性不稳定，需补充默认地址兜底策略。
+- [x] 2. 实施最小修复：增强网络错误信息与默认 Base URL 解析逻辑（本地模板 + 服务端模板同步）。
+  - 摘要：`request()` 新增网络异常包装（包含 `method + requestUrl` 与排障提示），并把默认地址策略改为“非静态托管域同源优先 + 旧 FC 默认地址兜底”；已同步 `dev/license-admin.html` 与 `services/license-server/license-admin.html`。
+- [x] 3. 更新管理页契约测试，固定错误提示与默认地址策略。
+  - 摘要：`tests/license-admin-page.test.mjs` 新增断言，覆盖 `resolveDefaultBaseUrl`、`STATIC_HOST_RE`、网络错误/HTTP 错误日志上下文。
+- [x] 4. 执行定向测试并记录结果。
+  - 摘要：执行 `node --test tests/license-admin-page.test.mjs`，7/7 通过。
+- [x] 5. 回填结果复盘（变更点、验证、风险与回滚）。
+  - 摘要：已完成（见下方复盘）。
+
+## 结果复盘
+- 状态：已完成
+- 根因结论：
+  - 管理台前端在网络异常时只透传浏览器原始错误，日志可观察性不足，表现为 `[ERROR] Failed to fetch`；
+  - 当前环境 DNS 经 `utun` 侧解析将 FC 域名指向 `198.18.0.126`，与公网 DNS（`112.124.67.31`）不一致，TLS 握手中断会直接触发浏览器 `Failed to fetch`。
+- 变更点：
+  - `dev/license-admin.html`：新增默认 Base URL 解析策略（同域优先 + 静态托管域兜底）与网络错误包装；
+  - `services/license-server/license-admin.html`：同步同版修复；
+  - `tests/license-admin-page.test.mjs`：新增契约断言，防止错误信息与默认地址策略回退。
+- 校验：
+  - `node --test tests/license-admin-page.test.mjs` 通过（7/7）。
+  - 诊断取证：`dig @198.18.0.2` 返回 `198.18.0.126`，`dig @223.5.5.5` 返回 `112.124.67.31`，并复现 TLS 握手失败（`SSL_ERROR_SYSCALL` / `no peer certificate available`）。
+- 风险与回滚：
+  - 风险：若用户在静态托管域（`*.github.io/*.vercel.app/*.netlify.app`）且未配置正确 FC 地址，仍需手动填写可用 Base URL；
+  - 回滚：移除 `resolveDefaultBaseUrl` 与 `buildNetworkErrorMessage` 改动，恢复旧版 `DEFAULT_BASE_URL` 与原始 `request` 抛错逻辑。
+# TODO - 2026-04-11 关键词推广 API 向导复制计划后自动删除原计划（含命名递增修正）
+
+## 需求规格
+- 目标：在“关键词推广批量建计划 API 向导”中，当单行计划的复制数量设置为大于等于 2 时，执行复制后自动删除原计划，避免列表中保留原计划；并确保复制计划名按序号连续递增，不出现 `_1_2` 这种嵌套后缀。
+- 范围：
+  - 仅修改向导内单条计划“复制”按钮逻辑；
+  - 仅在复制数量 `>= 2` 且当前计划总数允许删除时删除原计划；
+  - 复制计划名需沿原计划末尾序号连续递增（如 `_1 -> _2/_3`）；
+  - 复制成功日志不再直出原计划超长名称，保持简短可读；
+  - 保持现有复制数量调节、命名、编辑态切换与日志机制。
+- 非目标：
+  - 不调整“批量编辑弹窗”的复制逻辑；
+  - 不改动提交链路与后端请求结构；
+  - 不改变复制数量 `< 2` 时的既有行为。
+
+## 执行计划（含校验）
+- [x] 1. 梳理复制按钮与删除按钮现有语义，确定“复制后删原计划”的安全触发条件。
+  - 摘要：已确认复制逻辑位于 `strategy-state-and-draft.js` 的 `copyBtn.onclick`，删除逻辑位于 `deleteBtn.onclick`，可通过抽取通用删除函数在复制后复用，保证编辑态回退一致。
+- [x] 2. 以最小改动实现：复制数量大于等于 2 时，在复制成功后自动移除原计划并维护编辑态。
+  - 摘要：已新增 `removeStrategyById` 并复用到“删除”与“复制后删除原计划”两处；复制时使用 `targetCopyCount >= 2` 判定，命中即删除原计划。
+- [x] 3. 补充回归测试，固定“>=2 复制后删原计划，<2 保持原计划 + 复制名连续递增”的契约。
+  - 摘要：已在 `tests/keyword-home-strategy-batch-actions.test.mjs` 增加源码契约断言，覆盖 `shouldDeleteOriginalAfterCopy` 阈值分支与复制命名连续递增策略。
+- [x] 4. 执行构建与测试校验，并补充结果复盘。
+  - 摘要：已完成 `build`、定向 `node:test`、`build --check` 与 `chrome-devtools` 真实页面验证。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/optimizer/keyword-plan-api/wizard-mount-intro.js`：重写 `buildCopiedStrategyPlanName`，改为基于末尾序号连续递增并规避 `_1_2` 嵌套后缀。
+  - `src/optimizer/keyword-plan-api/wizard-scene-config/strategy-state-and-draft.js`：抽取 `removeStrategyById`，并在复制数量 `>=2` 时复制后自动删除原计划；复制成功日志改为短文案 `已复制计划：N 个（已删除原计划）`。
+  - `tests/keyword-home-strategy-batch-actions.test.mjs`：新增/更新“复制数量大于等于 2 时自动删除原计划 + 复制命名连续递增”的契约测试。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node scripts/build.mjs` 通过。
+  - `node --test tests/keyword-home-strategy-batch-actions.test.mjs` 通过（7/7）。
+  - `node scripts/build.mjs --check` 通过。
+  - `chrome-devtools` 真实阿里妈妈页面验证通过：
+    - 关键词详情页打开 API 向导后，模拟 `copyBatchCount=2` 执行复制，结果 `originalRemoved=true`、`net=+1`（删 1 增 2），符合“>=2 删除原计划”；
+    - 模拟 `copyBatchCount=3` 执行复制，结果 `originalRemoved=true`、`net=+2`（删 1 增 3），符合“>=2 删除原计划”；
+    - 复制日志展示为短文案，不再拼接原计划超长名称；
+    - 复制命名保持同一前缀递增（如 `..._3 -> ..._5/..._6`、`..._4 -> ..._7/..._8/..._9`，其中 `..._4` 已存在时自动跳过），未出现新增 `_1_2` 嵌套后缀。
+- 风险与回滚：
+  - 风险：若后续引入“复制前二次确认”交互，可能影响 `copyBtn.onclick` 直接触发路径，需要同步调整 `removeStrategyById` 调用时机。
+  - 回滚：将 `shouldDeleteOriginalAfterCopy` 阈值恢复原值，并回退 `buildCopiedStrategyPlanName` 到旧命名实现，同时保留 `removeStrategyById` 供删除按钮复用。

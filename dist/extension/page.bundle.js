@@ -340,12 +340,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     let renewTimer = 0;
     let onDemandVerifyInstalled = false;
     let onDemandVerifyInFlight = false;
+    let onDemandVerifyLastSuccessAt = 0;
 
     const LEASE_RENEW_DEFAULT_LEAD_MS = 60 * 1000;
     const LEASE_RENEW_MIN_LEAD_MS = 15 * 1000;
     const LEASE_RENEW_MAX_LEAD_MS = 2 * 60 * 1000;
     const LEASE_RENEW_RETRY_MIN_MS = 2 * 1000;
     const LEASE_RENEW_RETRY_MAX_MS = 10 * 1000;
+    const ON_DEMAND_VERIFY_REFRESH_WINDOW_MS = 60 * 1000;
     const ON_DEMAND_VERIFY_INTERACTION_SELECTOR = [
         '[id^="am-"]',
         '[class*="am-"]',
@@ -468,6 +470,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         return shopIdPattern.test(digits) ? digits : '';
     };
 
+    const normalizeShopIdKey = (value = '') => String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const PRIMARY_SHOP_ID_KEY_SET = new Set(['shopid']);
+    const SECONDARY_SHOP_ID_KEY_SET = new Set(['sellerid', 'memberid', 'merchantid', 'principalid', 'ownerid']);
+
+    const classifyShopIdKeyTier = (key = '') => {
+        const normalized = normalizeShopIdKey(key);
+        if (!normalized) return '';
+        if (PRIMARY_SHOP_ID_KEY_SET.has(normalized)) return 'primary';
+        if (SECONDARY_SHOP_ID_KEY_SET.has(normalized)) return 'secondary';
+        return '';
+    };
+
     const sanitizeShopNameCandidate = (value = '') => {
         const raw = value === null || value === undefined ? '' : String(value);
         if (!raw) return '';
@@ -553,14 +571,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         if (!root || typeof root !== 'object') return null;
         const queue = [{ node: root, depth: 0 }];
         const visited = new WeakSet();
-        const idKeys = new Set([
-            'shopid', 'shop_id',
-            'sellerid', 'seller_id',
-            'memberid', 'member_id',
-            'merchantid', 'merchant_id',
-            'principalid', 'principal_id',
-            'ownerid', 'owner_id'
-        ]);
         const nameKeys = new Set([
             'shopname', 'shop_name',
             'sellername', 'seller_name',
@@ -578,14 +588,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (visited.has(node)) continue;
             visited.add(node);
 
-            let localShopId = [
-                node.shopId, node.shopID, node.shop_id,
+            const explicitPrimaryShopId = [
+                node.shopId, node.shopID, node.shop_id
+            ].map(normalizeShopId).find(Boolean) || '';
+            const explicitSecondaryShopId = [
                 node.sellerId, node.sellerID, node.seller_id,
                 node.memberId, node.memberID, node.member_id,
                 node.merchantId, node.merchantID, node.merchant_id,
                 node.principalId, node.principalID, node.principal_id,
                 node.ownerId, node.ownerID, node.owner_id
             ].map(normalizeShopId).find(Boolean) || '';
+            let localShopId = explicitPrimaryShopId;
+            let idTier = localShopId ? 'primary' : '';
 
             let localShopName = [
                 node.shopName, node.shop_name, node.shopTitle,
@@ -597,12 +611,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             ].map(normalizeShopName).find(Boolean) || '';
 
             const scannedKeys = pickNodeKeysForScan(node);
+            let scannedSecondaryShopId = '';
             if (!localShopId || !localShopName) {
                 scannedKeys.forEach((key) => {
                     const lowerKey = String(key || '').toLowerCase();
                     const value = node[key];
-                    if (!localShopId && idKeys.has(lowerKey)) {
-                        localShopId = normalizeShopId(value);
+                    if (!localShopId) {
+                        const tier = classifyShopIdKeyTier(lowerKey);
+                        if (tier === 'primary') {
+                            const normalized = normalizeShopId(value);
+                            if (normalized) {
+                                localShopId = normalized;
+                                idTier = 'primary';
+                            }
+                        } else if (!scannedSecondaryShopId && tier === 'secondary') {
+                            scannedSecondaryShopId = normalizeShopId(value);
+                        }
                     }
                     if (!localShopName && nameKeys.has(lowerKey)) {
                         localShopName = normalizeShopName(value);
@@ -610,12 +634,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 });
             }
 
+            if (!localShopId) {
+                localShopId = explicitSecondaryShopId || scannedSecondaryShopId;
+                idTier = 'secondary';
+            }
+
             if (localShopId) {
+                const confidenceBase = idTier === 'primary'
+                    ? Math.max(2, 12 - depth)
+                    : Math.max(1, 6 - depth);
                 matches.push({
                     shopId: localShopId,
                     shopName: localShopName,
                     source: sourceName,
-                    confidence: Math.max(1, 12 - depth)
+                    confidence: confidenceBase,
+                    idTier: idTier || 'secondary'
                 });
             }
 
@@ -628,7 +661,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         }
 
         if (!matches.length) return null;
-        matches.sort((a, b) => b.confidence - a.confidence);
+        const getTierScore = (item) => item?.idTier === 'primary' ? 2 : 1;
+        matches.sort((a, b) => {
+            const tierDelta = getTierScore(b) - getTierScore(a);
+            if (tierDelta !== 0) return tierDelta;
+            return Number(b.confidence || 0) - Number(a.confidence || 0);
+        });
         const top = matches[0];
         if (top.shopName) return top;
         const withName = matches.find(item => item.shopName && item.shopId === top.shopId);
@@ -637,9 +675,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
     const parseShopFromSearchParams = (params = null, sourceName = 'searchParams') => {
         if (!params || typeof params.get !== 'function') return null;
-        const idCandidates = [
+        const primaryIdCandidates = [
             params.get('shopId'),
-            params.get('shop_id'),
+            params.get('shop_id')
+        ];
+        const secondaryIdCandidates = [
             params.get('sellerId'),
             params.get('seller_id'),
             params.get('memberId'),
@@ -647,7 +687,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             params.get('merchantId'),
             params.get('merchant_id'),
             params.get('principalId'),
-            params.get('ownerId')
+            params.get('principal_id'),
+            params.get('ownerId'),
+            params.get('owner_id')
         ];
         const nameCandidates = [
             params.get('shopName'),
@@ -659,10 +701,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             params.get('ownerName'),
             params.get('shopTitle')
         ];
-        const shopId = idCandidates.map(normalizeShopId).find(Boolean) || '';
+        const primaryShopId = primaryIdCandidates.map(normalizeShopId).find(Boolean) || '';
+        const secondaryShopId = primaryShopId ? '' : (secondaryIdCandidates.map(normalizeShopId).find(Boolean) || '');
+        const shopId = primaryShopId || secondaryShopId;
         if (!shopId) return null;
         const shopName = nameCandidates.map(normalizeShopName).find(Boolean) || '';
-        return { shopId, shopName, source: sourceName, confidence: 5 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: primaryShopId ? 5 : 2,
+            idTier: primaryShopId ? 'primary' : 'secondary'
+        };
     };
 
     const parseShopFromUrl = (rawUrl = '', sourceName = 'url') => {
@@ -719,14 +769,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             kvMap.set(key, value);
         });
         const pick = (key) => kvMap.get(String(key || '').toLowerCase()) || '';
-        const shopId = [
-            'shopId', 'shop_id',
+        const primaryShopId = [
+            'shopId', 'shop_id'
+        ].map(pick).map(normalizeShopId).find(Boolean) || '';
+        const secondaryShopId = primaryShopId ? '' : ([
             'sellerId', 'seller_id',
             'memberId', 'member_id',
             'merchantId', 'merchant_id',
             'principalId', 'principal_id',
             'ownerId', 'owner_id'
-        ].map(pick).map(normalizeShopId).find(Boolean) || '';
+        ].map(pick).map(normalizeShopId).find(Boolean) || '');
+        const shopId = primaryShopId || secondaryShopId;
         if (!shopId) return null;
         const shopName = [
             'shopName', 'shop_name',
@@ -734,12 +787,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'nick', 'userNick',
             'ownerName', 'owner_name'
         ].map(pick).map(normalizeShopName).find(Boolean) || '';
-        return { shopId, shopName, source: sourceName, confidence: 4 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: primaryShopId ? 4 : 2,
+            idTier: primaryShopId ? 'primary' : 'secondary'
+        };
     };
 
     const parseShopFromStorage = (storage = null, sourceName = 'storage') => {
         if (!storage || typeof storage.getItem !== 'function') return null;
-        const idKeyPattern = /(shop|seller|member|merchant|principal|owner)[_-]?id/i;
+        const primaryIdKeyPattern = /^shop[_-]?id$/i;
+        const secondaryIdKeyPattern = /^(seller|member|merchant|principal|owner)[_-]?id$/i;
         const nameKeyPattern = /(shop|seller|member|merchant|principal|owner)[_-]?(name|nick|title)/i;
         const keyCount = Math.max(0, Math.min(260, Number(storage.length) || 0));
         const scannedKeys = [];
@@ -750,7 +810,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             } catch { }
         }
         let shopId = '';
+        let idTier = '';
         let shopName = '';
+        let secondaryShopId = '';
         for (let i = 0; i < scannedKeys.length; i++) {
             const key = scannedKeys[i];
             const lowerKey = key.toLowerCase();
@@ -762,8 +824,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             if (!value) continue;
             const decodedValue = safeDecodeURIComponent(value);
-            if (!shopId && idKeyPattern.test(lowerKey)) {
-                shopId = normalizeShopId(decodedValue);
+            if (!shopId && primaryIdKeyPattern.test(lowerKey)) {
+                const primaryShopId = normalizeShopId(decodedValue);
+                if (primaryShopId) {
+                    shopId = primaryShopId;
+                    idTier = 'primary';
+                }
+            } else if (!secondaryShopId && secondaryIdKeyPattern.test(lowerKey)) {
+                secondaryShopId = normalizeShopId(decodedValue);
             }
             if (!shopName && nameKeyPattern.test(lowerKey)) {
                 shopName = normalizeShopName(decodedValue);
@@ -772,31 +840,58 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const parsed = safeParseJson(decodedValue);
                 const fromObject = parseShopFromObject(parsed, `${sourceName}:${key}`);
                 if (fromObject) {
-                    if (!shopId) shopId = normalizeShopId(fromObject.shopId);
+                    if (!shopId) {
+                        const fromObjectShopId = normalizeShopId(fromObject.shopId);
+                        if (fromObjectShopId) {
+                            shopId = fromObjectShopId;
+                            idTier = fromObject.idTier === 'secondary' ? 'secondary' : 'primary';
+                        }
+                    }
                     if (!shopName) shopName = normalizeShopName(fromObject.shopName);
                 }
             }
             if (shopId && shopName) break;
         }
+        if (!shopId && secondaryShopId) {
+            shopId = secondaryShopId;
+            idTier = 'secondary';
+        }
         if (!shopId) return null;
-        return { shopId, shopName, source: sourceName, confidence: 4 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: idTier === 'primary' ? 4 : 2,
+            idTier: idTier || 'secondary'
+        };
     };
 
     const parseShopFromDom = (sourceName = 'dom_attr') => {
         const nodeList = [document.documentElement, document.body].filter(Boolean);
-        const idAttrCandidates = ['data-shop-id', 'data-shopid', 'data-seller-id', 'data-sellerid', 'data-member-id'];
+        const primaryIdAttrCandidates = ['data-shop-id', 'data-shopid'];
+        const secondaryIdAttrCandidates = ['data-seller-id', 'data-sellerid', 'data-member-id'];
         const nameAttrCandidates = ['data-shop-name', 'data-shopname', 'data-seller-name', 'data-sellername', 'data-nick'];
         for (let i = 0; i < nodeList.length; i++) {
             const node = nodeList[i];
             if (!node || typeof node.getAttribute !== 'function') continue;
-            const shopId = idAttrCandidates
+            const primaryShopId = primaryIdAttrCandidates
                 .map(attr => normalizeShopId(node.getAttribute(attr)))
                 .find(Boolean) || '';
+            const secondaryShopId = primaryShopId ? '' : (secondaryIdAttrCandidates
+                .map(attr => normalizeShopId(node.getAttribute(attr)))
+                .find(Boolean) || '');
+            const shopId = primaryShopId || secondaryShopId;
             if (!shopId) continue;
             const shopName = nameAttrCandidates
                 .map(attr => normalizeShopName(node.getAttribute(attr)))
                 .find(Boolean) || '';
-            return { shopId, shopName, source: sourceName, confidence: 3 };
+            return {
+                shopId,
+                shopName,
+                source: sourceName,
+                confidence: primaryShopId ? 3 : 2,
+                idTier: primaryShopId ? 'primary' : 'secondary'
+            };
         }
         return null;
     };
@@ -844,7 +939,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
         }
 
-        return { shopId, shopName, source: sourceName, confidence: 3 };
+        return {
+            shopId,
+            shopName,
+            source: sourceName,
+            confidence: 3,
+            idTier: 'primary'
+        };
     };
 
     const parseShopNameFromLabeledText = (text = '') => {
@@ -1059,8 +1160,56 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             shopId,
             shopName,
             source: sourceName,
-            confidence: 1
+            confidence: 1,
+            idTier: 'primary'
         };
+    };
+
+    const getShopIdTier = (candidate = null) => {
+        if (!candidate || typeof candidate !== 'object') return 'secondary';
+        return candidate.idTier === 'secondary' ? 'secondary' : 'primary';
+    };
+
+    const isPrimaryShopIdCandidate = (candidate = null) => {
+        const shopId = normalizeShopId(candidate?.shopId);
+        if (!shopId) return false;
+        return getShopIdTier(candidate) === 'primary';
+    };
+
+    const resolveSecondaryShopIdVerifiedSet = (candidates = [], options = {}) => {
+        const verified = new Set();
+        const stateShopId = normalizeShopId(options?.stateShopId || '');
+        const cacheShopId = normalizeShopId(options?.cacheShopId || '');
+        const domTextShopId = normalizeShopId(options?.domTextShopId || '');
+        [stateShopId, cacheShopId, domTextShopId].forEach((shopId) => {
+            if (shopId) verified.add(shopId);
+        });
+
+        const secondaryStats = new Map();
+        candidates.forEach((candidate) => {
+            const shopId = normalizeShopId(candidate?.shopId);
+            if (!shopId || getShopIdTier(candidate) !== 'secondary') return;
+            const source = String(candidate?.source || '').trim() || 'unknown';
+            if (!secondaryStats.has(shopId)) {
+                secondaryStats.set(shopId, {
+                    sources: new Set(),
+                    hasShopName: false
+                });
+            }
+            const stat = secondaryStats.get(shopId);
+            stat.sources.add(source);
+            if (normalizeShopName(candidate?.shopName)) {
+                stat.hasShopName = true;
+            }
+        });
+
+        secondaryStats.forEach((stat, shopId) => {
+            if (stat.sources.size >= 2 && stat.hasShopName) {
+                verified.add(shopId);
+            }
+        });
+
+        return verified;
     };
 
     const resolveShopIdentity = () => {
@@ -1107,10 +1256,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         }
 
-        candidates.sort((a, b) => Number(b?.confidence || 0) - Number(a?.confidence || 0));
+        const getTierScore = (item) => getShopIdTier(item) === 'primary' ? 2 : 1;
+        candidates.sort((a, b) => {
+            const tierDelta = getTierScore(b) - getTierScore(a);
+            if (tierDelta !== 0) return tierDelta;
+            return Number(b?.confidence || 0) - Number(a?.confidence || 0);
+        });
 
-        const primary = candidates.find(item => normalizeShopId(item?.shopId)) || null;
-        if (!primary) {
+        const primary = candidates.find(item => isPrimaryShopIdCandidate(item)) || null;
+        const verifiedSecondarySet = resolveSecondaryShopIdVerifiedSet(candidates, {
+            stateShopId: state.shopId || '',
+            cacheShopId: fromCache?.shopId || '',
+            domTextShopId: fromDomText?.shopId || ''
+        });
+        const secondary = primary ? null : (candidates.find((item) => {
+            const shopId = normalizeShopId(item?.shopId);
+            if (!shopId) return false;
+            if (getShopIdTier(item) !== 'secondary') return false;
+            return verifiedSecondarySet.has(shopId);
+        }) || null);
+        const resolved = primary || secondary;
+        if (!resolved) {
             return {
                 shopId: '',
                 shopName: '',
@@ -1119,15 +1285,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         }
 
-        const shopId = normalizeShopId(primary.shopId);
+        const shopId = normalizeShopId(resolved.shopId);
         const nameMatch = candidates.find(item => normalizeShopId(item?.shopId) === shopId && normalizeShopName(item?.shopName));
         const fallbackShopName = nameMatch ? '' : resolveLooseShopNameCandidate(shopId);
+        const resolvedSource = getShopIdTier(resolved) === 'secondary'
+            ? `${String(resolved.source || 'unknown')}+secondary_verified`
+            : String(resolved.source || 'unknown');
 
         return {
             shopId,
-            shopName: normalizeShopName(nameMatch?.shopName || primary.shopName || fallbackShopName || ''),
-            source: String(primary.source || 'unknown'),
-            confidence: Number(primary.confidence || 1)
+            shopName: normalizeShopName(nameMatch?.shopName || resolved.shopName || fallbackShopName || ''),
+            source: resolvedSource,
+            confidence: Number(resolved.confidence || 1)
         };
     };
 
@@ -1946,14 +2115,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     };
 
     const triggerOnDemandVerify = (source = 'on_demand_interaction') => {
-        if (onDemandVerifyInFlight || isCurrentLeaseValid()) return;
+        if (onDemandVerifyInFlight) return;
+        const leaseValid = isCurrentLeaseValid();
+        const elapsedSinceLastVerify = toNow() - Number(onDemandVerifyLastSuccessAt || 0);
+        if (
+            leaseValid
+            && Number.isFinite(elapsedSinceLastVerify)
+            && elapsedSinceLastVerify >= 0
+            && elapsedSinceLastVerify < ON_DEMAND_VERIFY_REFRESH_WINDOW_MS
+        ) {
+            return;
+        }
         onDemandVerifyInFlight = true;
         assertAuthorized({
             source,
+            force: leaseValid,
             shopIdRetryAttempts: 2,
             shopIdRetryBaseDelayMs: 180,
             shopIdRetryMaxDelayMs: 620
         })
+            .then(() => {
+                onDemandVerifyLastSuccessAt = toNow();
+            })
             .catch(() => { })
             .finally(() => {
                 onDemandVerifyInFlight = false;
@@ -10809,6 +10992,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const wrap = document.createElement('div');
             wrap.className = 'am-crowd-matrix-cell am-crowd-matrix-cell-chart';
             const animateBars = options?.animate === true;
+            const progressiveReveal = options?.progressiveReveal === true;
+            if (progressiveReveal) {
+                wrap.classList.add('is-progressive-reveal');
+                const revealIndex = Math.max(0, Number(options?.revealIndex) || 0);
+                wrap.style.setProperty('--am-crowd-reveal-index', String(revealIndex));
+            }
             const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
             const enableHorizontalScroll = normalizedGroupName === '省份' || normalizedGroupName === '城市';
 
@@ -10955,6 +11144,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.matrixHoverMetricIndex = null;
             if (!dataset || typeof dataset !== 'object') return;
             const animateBars = options?.animate === true;
+            const progressivePeriod = this.normalizeCrowdPeriod(options?.progressivePeriod);
 
             const periods = this.getVisibleCrowdPeriods(Array.isArray(dataset.periods) ? dataset.periods : []);
             const groups = Array.isArray(dataset.groups) ? dataset.groups : [];
@@ -10977,7 +11167,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 table.appendChild(header);
             });
 
-            groups.forEach((groupName) => {
+            groups.forEach((groupName, groupIdx) => {
                 const rowHeader = document.createElement('div');
                 rowHeader.className = 'am-crowd-matrix-cell am-crowd-matrix-row-header';
                 const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
@@ -11007,7 +11197,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 periods.forEach((period) => {
                     const cell = dataset?.cellData?.[period]?.[groupName] || null;
-                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell, { animate: animateBars });
+                    const shouldProgressiveReveal = !!progressivePeriod && period === progressivePeriod;
+                    const cellNode = this.createCrowdMatrixCell(period, groupName, cell, {
+                        animate: animateBars,
+                        progressiveReveal: shouldProgressiveReveal,
+                        revealIndex: groupIdx
+                    });
                     cellNode.dataset.period = String(period);
                     table.appendChild(cellNode);
                 });
@@ -11210,6 +11405,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     });
                 });
                 const totalTaskCount = taskFns.length;
+                const revealedPeriodSet = new Set();
                 this.crowdMatrixTaskProgressHandler = (progressInfo) => {
                     if (runId !== this.crowdMatrixRunId) return;
                     const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
@@ -11221,6 +11417,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const scopeProgressText = totalTaskCount > 0
                         ? ` ｜ 省份 ${done}/${totalTaskCount} · 城市 ${done}/${totalTaskCount}`
                         : '';
+                    if (status === 'fulfilled' && progressInfo?.value) {
+                        const mergedProgressResults = this.upsertCrowdMatrixResults([progressInfo.value]);
+                        if (mergedProgressResults.length) {
+                            const progressDataset = this.buildMatrixDataset(mergedProgressResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+                            this.crowdMatrixDataset = progressDataset;
+                            this.crowdMatrixLoadedCampaignId = id;
+                            const progressPeriod = this.normalizeCrowdPeriod(progressInfo.value?.periodDays);
+                            const shouldProgressiveReveal = !!progressPeriod && !revealedPeriodSet.has(progressPeriod);
+                            this.renderCrowdMatrixCharts(progressDataset, { progressivePeriod: shouldProgressiveReveal ? progressPeriod : 0 });
+                            if (shouldProgressiveReveal) {
+                                revealedPeriodSet.add(progressPeriod);
+                            }
+                        }
+                    }
                     this.setCrowdMatrixStatus(`加载中 ${done}/${totalTaskCount} · ${detailText}${scopeProgressText}`, 'loading', { showRetry: false, progress: ratio });
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
@@ -12025,6 +12235,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     gap: 14px;
                     min-height: clamp(228px, 26vh, 340px);
                 }
+                #am-magic-report-popup .am-crowd-matrix-cell-chart.is-progressive-reveal {
+                    animation: am-crowd-cell-reveal 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+                    animation-delay: calc(var(--am-crowd-reveal-index, 0) * 28ms);
+                    will-change: opacity, transform;
+                }
                 #am-magic-report-popup .am-crowd-matrix-cell-chart.is-horizontal-scroll {
                     overflow-x: auto;
                     overflow-y: hidden;
@@ -12347,6 +12562,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-bar[data-metric="itemdeal"],
                 #am-magic-report-popup .am-crowd-matrix-grid.am-hide-metric-itemdeal .am-crowd-matrix-insight-item[data-metric="itemdeal"] {
                     display: none !important;
+                }
+                @keyframes am-crowd-cell-reveal {
+                    from {
+                        opacity: 0;
+                        transform: translateY(7px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
                 }
                 @keyframes am-spin { to { transform: rotate(360deg); } }
             `;
@@ -15668,12 +15893,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             customPrompt: '深度拿量',
             concurrency: 3,
             manualEscortSetting: {
-                enabled: true,
+                enabled: false,
                 bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
-                budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
-                addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
-                switchKeywordMatchType: { enabled: true },
-                shieldKeyword: { enabled: true }
+                budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
+                addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                switchKeywordMatchType: { enabled: false },
+                shieldKeyword: { enabled: false }
             }
         }
     };
@@ -27610,10 +27835,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     delete merged.campaign.promotionModelMarketing;
                     delete merged.campaign.orderChargeType;
                     delete merged.campaign.orderInfo;
-                    const safeSiteCampaignName = String(merged.campaign.campaignName || '').trim();
-                    if (!/^[A-Za-z0-9]{2,64}$/.test(safeSiteCampaignName)) {
-                        merged.campaign.campaignName = `site${nowStampSeconds()}`;
-                    }
+                    merged.campaign.campaignName = String(
+                        merged.campaign.campaignName
+                        || plan.planName
+                        || ''
+                    ).trim();
                     const adgroupName = String(
                         merged.adgroup?.adgroupName
                         || merged.adgroup?.material?.materialName
@@ -38449,12 +38675,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const raw = String(sourcePlanName || '').trim();
                 const fallback = buildDefaultPlanPrefixByScene(sceneName || getCurrentEditorSceneName());
                 const baseSeed = raw || fallback;
-                const base = /(?:_\d{8}|\d{14}|_\d{8}_\d{6})$/.test(baseSeed)
-                    ? baseSeed
-                    : baseSeed.replace(/_\d+$/, '');
-                const suffix = Math.max(1, toNumber(copyIndex, 1));
-                const next = `${base}_${suffix}`;
-                return ensureUniqueStrategyPlanName(next);
+                const hasAutoTimeSuffix = /(?:_\d{8}|\d{14}|_\d{8}_\d{6})$/.test(baseSeed);
+                const sourceSerial = !hasAutoTimeSuffix && /_(\d+)$/.test(baseSeed)
+                    ? Math.max(0, toNumber(baseSeed.match(/_(\d+)$/)?.[1], 0))
+                    : 0;
+                let base = sourceSerial > 0 ? baseSeed.replace(/_\d+$/, '') : baseSeed;
+                if (sourceSerial > 0) {
+                    const timestampWithSerialTailMatch = base.match(/^(.*(?:_\d{8}_\d{6}))(?:_\d+)+$/)
+                        || (
+                            /_\d{8}_\d{6}$/.test(base)
+                                ? null
+                                : base.match(/^(.*(?:_\d{8}|\d{14}))(?:_\d+)+$/)
+                        );
+                    if (timestampWithSerialTailMatch?.[1]) {
+                        base = timestampWithSerialTailMatch[1];
+                    }
+                }
+                const usedPlanNames = new Set(
+                    (wizardState.strategyList || [])
+                        .map(item => String(item?.planName || '').trim())
+                        .filter(Boolean)
+                );
+                const serialStart = sourceSerial > 0 ? sourceSerial : 0;
+                let serialCursor = serialStart + Math.max(1, toNumber(copyIndex, 1));
+                let candidate = `${base}_${serialCursor}`;
+                while (usedPlanNames.has(candidate) && serialCursor < 9999) {
+                    serialCursor += 1;
+                    candidate = `${base}_${serialCursor}`;
+                }
+                return candidate;
             };
             const getStrategyTargetLabel = (strategy = {}) => {
                 const bidTargetValue = normalizeKeywordBidTargetOptionValue(
@@ -50186,6 +50435,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     return sceneSettingsCache.get(targetScene) || {};
                 };
+                const removeStrategyById = (strategyId = '') => {
+                    if ((wizardState.strategyList || []).length <= 1) return null;
+                    const removeIndex = wizardState.strategyList.findIndex(item => item.id === strategyId);
+                    if (removeIndex < 0) return null;
+                    const removed = wizardState.strategyList.splice(removeIndex, 1)[0];
+                    if (wizardState.editingStrategyId === removed.id) {
+                        const fallback = wizardState.strategyList[Math.max(0, removeIndex - 1)] || wizardState.strategyList[0] || null;
+                        wizardState.editingStrategyId = fallback?.id || '';
+                        if (fallback && wizardState.detailVisible) {
+                            applyStrategyToDetailForm(fallback);
+                        }
+                    }
+                    return removed;
+                };
                 filteredStrategyList.forEach((strategy) => {
                     const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                         ? String(strategy.sceneName).trim()
@@ -50337,8 +50600,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             clone.copyBatchCount = 1;
                             wizardState.strategyList.push(clone);
                         }
+                        const shouldDeleteOriginalAfterCopy = targetCopyCount >= 2;
+                        const removedOriginal = shouldDeleteOriginalAfterCopy
+                            ? removeStrategyById(strategy.id)
+                            : null;
                         commitStrategyUiState();
-                        appendWizardLog(`已复制计划：${targetCopyCount} 个`, 'success');
+                        appendWizardLog(
+                            removedOriginal
+                                ? `已复制计划：${targetCopyCount} 个（已删除原计划）`
+                                : `已复制计划：${targetCopyCount} 个`,
+                            'success'
+                        );
                     };
                     deleteBtn.onclick = () => {
                         commitStrategyTargetCostInput();
@@ -50346,16 +50618,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             appendWizardLog('至少保留 1 个计划', 'error');
                             return;
                         }
-                        const removeIndex = wizardState.strategyList.findIndex(item => item.id === strategy.id);
-                        if (removeIndex < 0) return;
-                        const removed = wizardState.strategyList.splice(removeIndex, 1)[0];
-                        if (wizardState.editingStrategyId === removed.id) {
-                            const fallback = wizardState.strategyList[Math.max(0, removeIndex - 1)] || wizardState.strategyList[0] || null;
-                            wizardState.editingStrategyId = fallback?.id || '';
-                            if (fallback && wizardState.detailVisible) {
-                                applyStrategyToDetailForm(fallback);
-                            }
-                        }
+                        const removed = removeStrategyById(strategy.id);
+                        if (!removed) return;
                         commitStrategyUiState();
                         appendWizardLog(`已删除计划：${removed?.name || ''}`, 'success');
                     };
@@ -55247,10 +55511,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             const expectedPlanName = String(firstPlan?.planName || '').trim();
             const actualPlanName = String(sampleCampaign?.campaignName || '').trim();
-            const isSiteScene = targetScene === '货品全站推广';
-            const expectedPlanNameLooksSiteSafe = /^[A-Za-z0-9]{2,64}$/.test(expectedPlanName);
-            const siteNameAutoNormalized = isSiteScene && actualPlanName && /^site\d{8,}$/.test(actualPlanName) && !expectedPlanNameLooksSiteSafe;
-            if (expectedPlanName && actualPlanName && expectedPlanName !== actualPlanName && !siteNameAutoNormalized) {
+            if (expectedPlanName && actualPlanName && expectedPlanName !== actualPlanName) {
                 diffs.push({
                     field: 'planName',
                     expected: expectedPlanName,
@@ -56207,7 +56468,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 error: unresolvedCampaignIds.length ? 'pause_not_fully_confirmed' : ''
             };
         };
-
         const cleanupCreatedPlansByLifecycle = async (records = [], options = {}) => {
             const list = Array.isArray(records) ? records : [];
             const deletedCampaignIds = [];
@@ -57689,7 +57949,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return String(node.value || '').trim() || fallback;
             };
 
-            const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, true);
+            const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, false);
             if (!manualEnabled) return null;
 
             const bidUpperRaw = readText(`${CONFIG.UI_ID}-manual-bid-upper`, '不限');
@@ -57708,10 +57968,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const budgetUpperRaw = readText(`${CONFIG.UI_ID}-manual-budget-upper`, '不限');
             const budgetSetting = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-budget-enabled`, true),
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-budget-enabled`, false),
                 lowerLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-lower`, 200),
                 modifyTimesLimit: readNumber(`${CONFIG.UI_ID}-manual-budget-times`, 20),
-                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-budget-reset`, true)
+                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-budget-reset`, false)
             };
             if (budgetUpperRaw === '不限') {
                 budgetSetting.upperLimit = '不限';
@@ -57721,16 +57981,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
 
             const addKeywordSetting = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, true),
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, false),
                 keywordPreference: readText(`${CONFIG.UI_ID}-manual-keyword-preference`, '类目流量飙升词'),
                 matchType: readText(`${CONFIG.UI_ID}-manual-keyword-match`, '广泛匹配'),
                 keywordLimit: readNumber(`${CONFIG.UI_ID}-manual-keyword-limit`, 200)
             };
             const switchKeywordMatchType = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, true)
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, false)
             };
             const shieldKeyword = {
-                enabled: readChecked(`${CONFIG.UI_ID}-manual-shield-enabled`, true)
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-shield-enabled`, false)
             };
 
             const operationList = [];
@@ -57779,26 +58039,97 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 node.checked = typeof value === 'boolean' ? value : fallback;
             };
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-enable`, setting.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-enable`, setting.enabled, false);
             setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-enabled`, bid.enabled, false);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-lower`, bid.lowerLimit ?? 0.15);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-upper`, bid.upperLimit === undefined ? '不限' : bid.upperLimit);
             setInputValue(`${CONFIG.UI_ID}-manual-bid-times`, bid.modifyTimesLimit ?? 10);
             setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-reset`, bid.dailyReset, false);
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, false);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-lower`, budget.lowerLimit ?? 200);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-upper`, budget.upperLimit === undefined ? '不限' : budget.upperLimit);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-times`, budget.modifyTimesLimit ?? 20);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-reset`, budget.dailyReset, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-reset`, budget.dailyReset, false);
 
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, addKeyword.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-addkeyword-enabled`, addKeyword.enabled, false);
             setControlValue(`${CONFIG.UI_ID}-manual-keyword-preference`, addKeyword.keywordPreference ?? addKeyword.preference ?? addKeyword.buyWordPreference ?? '类目流量飙升词');
             setControlValue(`${CONFIG.UI_ID}-manual-keyword-match`, addKeyword.matchType ?? addKeyword.matchPattern ?? '广泛匹配');
             setInputValue(`${CONFIG.UI_ID}-manual-keyword-limit`, addKeyword.keywordLimit ?? 200);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, switchKeywordMatchType.enabled, true);
-            setCheckboxValue(`${CONFIG.UI_ID}-manual-shield-enabled`, shieldKeyword.enabled, true);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-switchmatch-enabled`, switchKeywordMatchType.enabled, false);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-shield-enabled`, shieldKeyword.enabled, false);
             UI.refreshManualKeywordControls();
+        },
+
+        getManualEscortCheckboxNodes: () => {
+            const root = document.getElementById(`${CONFIG.UI_ID}-latest-setting-content`);
+            if (!(root instanceof Element)) {
+                return { root: null, master: null, children: [] };
+            }
+            const master = document.getElementById(`${CONFIG.UI_ID}-manual-enable`);
+            const childIdList = [
+                `${CONFIG.UI_ID}-manual-bid-enabled`,
+                `${CONFIG.UI_ID}-manual-bid-reset`,
+                `${CONFIG.UI_ID}-manual-budget-enabled`,
+                `${CONFIG.UI_ID}-manual-budget-reset`,
+                `${CONFIG.UI_ID}-manual-addkeyword-enabled`,
+                `${CONFIG.UI_ID}-manual-switchmatch-enabled`,
+                `${CONFIG.UI_ID}-manual-shield-enabled`
+            ];
+            const children = childIdList
+                .map(id => document.getElementById(id))
+                .filter(node => node instanceof HTMLInputElement);
+            return {
+                root,
+                master: master instanceof HTMLInputElement ? master : null,
+                children
+            };
+        },
+
+        syncManualEscortMasterCheckbox: () => {
+            const { master, children } = UI.getManualEscortCheckboxNodes();
+            if (!(master instanceof HTMLInputElement) || !children.length) return;
+            const enabledChildren = children.filter(node => !node.disabled);
+            if (!enabledChildren.length) {
+                master.checked = false;
+                master.indeterminate = false;
+                return;
+            }
+            const checkedCount = enabledChildren.reduce((sum, node) => sum + (node.checked ? 1 : 0), 0);
+            if (checkedCount <= 0) {
+                master.checked = false;
+                master.indeterminate = false;
+                return;
+            }
+            if (checkedCount >= enabledChildren.length) {
+                master.checked = true;
+                master.indeterminate = false;
+                return;
+            }
+            master.checked = true;
+            master.indeterminate = true;
+        },
+
+        bindManualEscortCheckboxSync: () => {
+            const { master, children } = UI.getManualEscortCheckboxNodes();
+            if (!(master instanceof HTMLInputElement) || !children.length) return;
+
+            master.addEventListener('change', () => {
+                const nextChecked = !!master.checked;
+                master.indeterminate = false;
+                children.forEach(node => {
+                    if (node.disabled) return;
+                    node.checked = nextChecked;
+                });
+            });
+
+            children.forEach(node => {
+                node.addEventListener('change', () => {
+                    UI.syncManualEscortMasterCheckbox();
+                });
+            });
+
+            UI.syncManualEscortMasterCheckbox();
         },
 
         closeManualKeywordPreferenceMenu: () => {
@@ -57997,6 +58328,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"] {
+                        -webkit-appearance:auto !important;
+                        appearance:auto !important;
+                        accent-color:#2a5bff;
+                        display:inline-block !important;
+                        width:14px !important;
+                        height:14px !important;
+                        min-width:14px;
+                        min-height:14px;
+                        margin:0;
+                        padding:0;
+                        opacity:1 !important;
+                        visibility:visible !important;
+                        vertical-align:middle;
+                        box-sizing:border-box;
+                        border:1px solid #b8c7ec;
+                        border-radius:4px;
+                        background:#fff;
+                        box-shadow:none;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"]:disabled {
+                        cursor:not-allowed;
+                        opacity:.55 !important;
+                    }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-waterfall { column-count:2; column-gap:10px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card {
                         display:inline-block; width:100%; box-sizing:border-box; margin:0 0 10px;
@@ -58196,14 +58551,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const manualSetting = userConfig.manualEscortSetting && typeof userConfig.manualEscortSetting === 'object'
                 ? userConfig.manualEscortSetting
                 : {
-                    enabled: true,
+                    enabled: false,
                     bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
-                    budget: { enabled: true, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: true },
-                    addKeyword: { enabled: true, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
-                    switchKeywordMatchType: { enabled: true },
-                    shieldKeyword: { enabled: true }
+                    budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
+                    addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
+                    switchKeywordMatchType: { enabled: false },
+                    shieldKeyword: { enabled: false }
                 };
             UI.fillManualEscortSettingForm(manualSetting);
+            UI.bindManualEscortCheckboxSync();
             UI.bindManualKeywordControls();
 
             content.querySelectorAll('input,select,textarea').forEach(control => {

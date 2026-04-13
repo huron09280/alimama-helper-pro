@@ -1011,12 +1011,35 @@
                 const raw = String(sourcePlanName || '').trim();
                 const fallback = buildDefaultPlanPrefixByScene(sceneName || getCurrentEditorSceneName());
                 const baseSeed = raw || fallback;
-                const base = /(?:_\d{8}|\d{14}|_\d{8}_\d{6})$/.test(baseSeed)
-                    ? baseSeed
-                    : baseSeed.replace(/_\d+$/, '');
-                const suffix = Math.max(1, toNumber(copyIndex, 1));
-                const next = `${base}_${suffix}`;
-                return ensureUniqueStrategyPlanName(next);
+                const hasAutoTimeSuffix = /(?:_\d{8}|\d{14}|_\d{8}_\d{6})$/.test(baseSeed);
+                const sourceSerial = !hasAutoTimeSuffix && /_(\d+)$/.test(baseSeed)
+                    ? Math.max(0, toNumber(baseSeed.match(/_(\d+)$/)?.[1], 0))
+                    : 0;
+                let base = sourceSerial > 0 ? baseSeed.replace(/_\d+$/, '') : baseSeed;
+                if (sourceSerial > 0) {
+                    const timestampWithSerialTailMatch = base.match(/^(.*(?:_\d{8}_\d{6}))(?:_\d+)+$/)
+                        || (
+                            /_\d{8}_\d{6}$/.test(base)
+                                ? null
+                                : base.match(/^(.*(?:_\d{8}|\d{14}))(?:_\d+)+$/)
+                        );
+                    if (timestampWithSerialTailMatch?.[1]) {
+                        base = timestampWithSerialTailMatch[1];
+                    }
+                }
+                const usedPlanNames = new Set(
+                    (wizardState.strategyList || [])
+                        .map(item => String(item?.planName || '').trim())
+                        .filter(Boolean)
+                );
+                const serialStart = sourceSerial > 0 ? sourceSerial : 0;
+                let serialCursor = serialStart + Math.max(1, toNumber(copyIndex, 1));
+                let candidate = `${base}_${serialCursor}`;
+                while (usedPlanNames.has(candidate) && serialCursor < 9999) {
+                    serialCursor += 1;
+                    candidate = `${base}_${serialCursor}`;
+                }
+                return candidate;
             };
             const getStrategyTargetLabel = (strategy = {}) => {
                 const bidTargetValue = normalizeKeywordBidTargetOptionValue(
