@@ -8675,6 +8675,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return visibility[metric] !== false;
         },
 
+        getCrowdMetricsByVisibilityPriority() {
+            const visibleMetrics = [];
+            const hiddenMetrics = [];
+            this.CROWD_METRICS.forEach((metric) => {
+                if (this.getCrowdMetricVisible(metric)) {
+                    visibleMetrics.push(metric);
+                    return;
+                }
+                hiddenMetrics.push(metric);
+            });
+            return visibleMetrics.length
+                ? [...visibleMetrics, ...hiddenMetrics]
+                : this.CROWD_METRICS.slice();
+        },
+
         normalizeCrowdPeriod(periodDays) {
             const days = Number(periodDays);
             return this.CROWD_PERIODS.includes(days) ? days : 0;
@@ -9106,9 +9121,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 insightItem.dataset.metric = metric;
                 insightItem.style.setProperty('--am-crowd-insight-color', metricMeta.color);
                 if (topIdx > -1 && topValue > 0 && labels[topIdx]) {
-                    insightItem.textContent = `${metricMeta.shortLabel}: ${labels[topIdx]} ${this.formatCrowdPercent(topValue)}`;
+                    insightItem.textContent = `${metricMeta.seriesLabel}: ${labels[topIdx]} ${this.formatCrowdPercent(topValue)}`;
                 } else {
-                    insightItem.textContent = `${metricMeta.shortLabel}: 无数据`;
+                    insightItem.textContent = `${metricMeta.seriesLabel}: 无数据`;
                 }
                 insights.appendChild(insightItem);
             });
@@ -9376,7 +9391,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 await this.refreshCrowdCampaignItemOptions(id, { forceRefresh: forceRefreshItems });
                 this.refreshCrowdMatrixCampaignMeta(id);
                 const taskFns = [];
-                this.CROWD_METRICS.forEach((metricType) => {
+                const prioritizedMetrics = this.getCrowdMetricsByVisibilityPriority();
+                prioritizedMetrics.forEach((metricType) => {
                     this.CROWD_PERIODS.forEach((periodDays) => {
                         const task = async () => this.queryCrowdInsight({ campaignId: id, metricType, periodDays });
                         const metricMeta = this.getCrowdMetricMeta(metricType);
