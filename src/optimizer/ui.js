@@ -6,6 +6,8 @@
             td: `padding:4px 6px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.28));color:var(--am26-text-soft,#505a74);`
         },
         manualKeywordOutsideHandler: null,
+        manualEscortExpandHandler: null,
+        manualEscortMainSwitchGuardHandler: null,
 
         // 全局状态日志（用于非计划相关的消息）
         updateStatus: (text, color = '#aaa') => {
@@ -915,6 +917,53 @@
             master.indeterminate = true;
         },
 
+        setManualEscortSettingExpanded: (expanded = false) => {
+            const toggle = document.getElementById(`${CONFIG.UI_ID}-manual-expand-toggle`);
+            const body = document.getElementById(`${CONFIG.UI_ID}-manual-setting-body`);
+            const nextExpanded = !!expanded;
+            if (toggle instanceof HTMLButtonElement) {
+                toggle.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+                toggle.classList.toggle('is-expanded', nextExpanded);
+                toggle.setAttribute('aria-label', nextExpanded ? '收起手动设置' : '展开手动设置');
+                toggle.setAttribute('title', nextExpanded ? '收起手动设置' : '展开手动设置');
+            }
+            if (body instanceof HTMLElement) {
+                body.hidden = !nextExpanded;
+                body.setAttribute('aria-hidden', nextExpanded ? 'false' : 'true');
+            }
+        },
+
+        bindManualEscortExpandToggle: (defaultExpanded = false) => {
+            const toggle = document.getElementById(`${CONFIG.UI_ID}-manual-expand-toggle`);
+            if (!(toggle instanceof HTMLButtonElement)) return;
+            if (UI.manualEscortExpandHandler) {
+                toggle.removeEventListener('click', UI.manualEscortExpandHandler);
+            }
+            UI.manualEscortExpandHandler = (event) => {
+                event.preventDefault();
+                const expanded = toggle.getAttribute('aria-expanded') === 'true';
+                UI.setManualEscortSettingExpanded(!expanded);
+            };
+            toggle.addEventListener('click', UI.manualEscortExpandHandler);
+            UI.setManualEscortSettingExpanded(!!defaultExpanded);
+        },
+
+        bindManualEscortMainSwitchGuard: () => {
+            const label = document.getElementById(`${CONFIG.UI_ID}-manual-main-switch-label`);
+            const body = document.getElementById(`${CONFIG.UI_ID}-manual-setting-body`);
+            if (!(label instanceof HTMLElement) || !(body instanceof HTMLElement)) return;
+            if (UI.manualEscortMainSwitchGuardHandler) {
+                label.removeEventListener('click', UI.manualEscortMainSwitchGuardHandler, true);
+            }
+            UI.manualEscortMainSwitchGuardHandler = (event) => {
+                if (!body.hidden) return;
+                event.preventDefault();
+                event.stopPropagation();
+                UI.setManualEscortSettingExpanded(true);
+            };
+            label.addEventListener('click', UI.manualEscortMainSwitchGuardHandler, true);
+        },
+
         bindManualEscortCheckboxSync: () => {
             const { master, children } = UI.getManualEscortCheckboxNodes();
             if (!(master instanceof HTMLInputElement) || !children.length) return;
@@ -926,6 +975,7 @@
                     if (node.disabled) return;
                     node.checked = nextChecked;
                 });
+                if (nextChecked) UI.setManualEscortSettingExpanded(true);
             });
 
             children.forEach(node => {
@@ -1116,6 +1166,7 @@
                     enabled: shieldKeywordSetting.enabled
                 }
             });
+            UI.setManualEscortSettingExpanded(true);
             UI.persistManualEscortSettingFromForm();
             if (hint) {
                 const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -1131,8 +1182,38 @@
             content.innerHTML = `
                 <style>
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:flex-start; align-items:center; gap:6px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand {
+                        width:18px;
+                        height:18px;
+                        border:none;
+                        border-radius:4px;
+                        padding:0;
+                        background:transparent;
+                        color:#6a789a;
+                        font-size:12px;
+                        line-height:18px;
+                        text-align:center;
+                        cursor:pointer;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand:hover {
+                        background:#edf2ff;
+                        color:#2a5bff;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand::before {
+                        content:'▸';
+                        display:block;
+                        transform:translateY(-1px);
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand.is-expanded::before {
+                        content:'▾';
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand[aria-expanded="true"] {
+                        color:#2a5bff;
+                        background:#edf2ff;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-body[hidden] { display:none !important; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"] {
                         -webkit-appearance:auto !important;
                         appearance:auto !important;
@@ -1222,11 +1303,20 @@
                 </style>
                 <div class="am26-manual-root">
                     <div class="am26-manual-top">
-                        <label class="am26-manual-main-switch">
+                        <label id="${CONFIG.UI_ID}-manual-main-switch-label" class="am26-manual-main-switch">
                             <input id="${CONFIG.UI_ID}-manual-enable" type="checkbox" />
                             <span>使用手动设置提交</span>
                         </label>
+                        <button
+                            id="${CONFIG.UI_ID}-manual-expand-toggle"
+                            class="am26-manual-expand"
+                            type="button"
+                            aria-expanded="false"
+                            aria-label="展开手动设置"
+                            title="展开手动设置"
+                        ></button>
                     </div>
+                    <div id="${CONFIG.UI_ID}-manual-setting-body" class="am26-manual-body" hidden aria-hidden="true">
                     <div class="am26-manual-waterfall">
                         <div class="am26-manual-card">
                             <div class="am26-manual-card-head">
@@ -1349,8 +1439,9 @@
                             </div>
                         </div>
                     </div>
+                    <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:#7f8bab;line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
+                    </div>
                 </div>
-                <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:#7f8bab;line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
             `;
 
             const manualSetting = userConfig.manualEscortSetting && typeof userConfig.manualEscortSetting === 'object'
@@ -1365,6 +1456,8 @@
                 };
             UI.fillManualEscortSettingForm(manualSetting);
             UI.bindManualEscortCheckboxSync();
+            UI.bindManualEscortExpandToggle(false);
+            UI.bindManualEscortMainSwitchGuard();
             UI.bindManualKeywordControls();
 
             content.querySelectorAll('input,select,textarea').forEach(control => {

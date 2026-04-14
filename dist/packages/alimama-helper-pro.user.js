@@ -55181,6 +55181,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             td: `padding:4px 6px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.28));color:var(--am26-text-soft,#505a74);`
         },
         manualKeywordOutsideHandler: null,
+        manualEscortExpandHandler: null,
+        manualEscortMainSwitchGuardHandler: null,
 
         // 全局状态日志（用于非计划相关的消息）
         updateStatus: (text, color = '#aaa') => {
@@ -56090,6 +56092,53 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             master.indeterminate = true;
         },
 
+        setManualEscortSettingExpanded: (expanded = false) => {
+            const toggle = document.getElementById(`${CONFIG.UI_ID}-manual-expand-toggle`);
+            const body = document.getElementById(`${CONFIG.UI_ID}-manual-setting-body`);
+            const nextExpanded = !!expanded;
+            if (toggle instanceof HTMLButtonElement) {
+                toggle.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+                toggle.classList.toggle('is-expanded', nextExpanded);
+                toggle.setAttribute('aria-label', nextExpanded ? '收起手动设置' : '展开手动设置');
+                toggle.setAttribute('title', nextExpanded ? '收起手动设置' : '展开手动设置');
+            }
+            if (body instanceof HTMLElement) {
+                body.hidden = !nextExpanded;
+                body.setAttribute('aria-hidden', nextExpanded ? 'false' : 'true');
+            }
+        },
+
+        bindManualEscortExpandToggle: (defaultExpanded = false) => {
+            const toggle = document.getElementById(`${CONFIG.UI_ID}-manual-expand-toggle`);
+            if (!(toggle instanceof HTMLButtonElement)) return;
+            if (UI.manualEscortExpandHandler) {
+                toggle.removeEventListener('click', UI.manualEscortExpandHandler);
+            }
+            UI.manualEscortExpandHandler = (event) => {
+                event.preventDefault();
+                const expanded = toggle.getAttribute('aria-expanded') === 'true';
+                UI.setManualEscortSettingExpanded(!expanded);
+            };
+            toggle.addEventListener('click', UI.manualEscortExpandHandler);
+            UI.setManualEscortSettingExpanded(!!defaultExpanded);
+        },
+
+        bindManualEscortMainSwitchGuard: () => {
+            const label = document.getElementById(`${CONFIG.UI_ID}-manual-main-switch-label`);
+            const body = document.getElementById(`${CONFIG.UI_ID}-manual-setting-body`);
+            if (!(label instanceof HTMLElement) || !(body instanceof HTMLElement)) return;
+            if (UI.manualEscortMainSwitchGuardHandler) {
+                label.removeEventListener('click', UI.manualEscortMainSwitchGuardHandler, true);
+            }
+            UI.manualEscortMainSwitchGuardHandler = (event) => {
+                if (!body.hidden) return;
+                event.preventDefault();
+                event.stopPropagation();
+                UI.setManualEscortSettingExpanded(true);
+            };
+            label.addEventListener('click', UI.manualEscortMainSwitchGuardHandler, true);
+        },
+
         bindManualEscortCheckboxSync: () => {
             const { master, children } = UI.getManualEscortCheckboxNodes();
             if (!(master instanceof HTMLInputElement) || !children.length) return;
@@ -56101,6 +56150,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (node.disabled) return;
                     node.checked = nextChecked;
                 });
+                if (nextChecked) UI.setManualEscortSettingExpanded(true);
             });
 
             children.forEach(node => {
@@ -56291,6 +56341,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     enabled: shieldKeywordSetting.enabled
                 }
             });
+            UI.setManualEscortSettingExpanded(true);
             UI.persistManualEscortSettingFromForm();
             if (hint) {
                 const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -56306,8 +56357,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             content.innerHTML = `
                 <style>
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:flex-start; align-items:center; gap:6px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand {
+                        width:18px;
+                        height:18px;
+                        border:none;
+                        border-radius:4px;
+                        padding:0;
+                        background:transparent;
+                        color:#6a789a;
+                        font-size:12px;
+                        line-height:18px;
+                        text-align:center;
+                        cursor:pointer;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand:hover {
+                        background:#edf2ff;
+                        color:#2a5bff;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand::before {
+                        content:'▸';
+                        display:block;
+                        transform:translateY(-1px);
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand.is-expanded::before {
+                        content:'▾';
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand[aria-expanded="true"] {
+                        color:#2a5bff;
+                        background:#edf2ff;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-body[hidden] { display:none !important; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"] {
                         -webkit-appearance:auto !important;
                         appearance:auto !important;
@@ -56397,11 +56478,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 </style>
                 <div class="am26-manual-root">
                     <div class="am26-manual-top">
-                        <label class="am26-manual-main-switch">
+                        <label id="${CONFIG.UI_ID}-manual-main-switch-label" class="am26-manual-main-switch">
                             <input id="${CONFIG.UI_ID}-manual-enable" type="checkbox" />
                             <span>使用手动设置提交</span>
                         </label>
+                        <button
+                            id="${CONFIG.UI_ID}-manual-expand-toggle"
+                            class="am26-manual-expand"
+                            type="button"
+                            aria-expanded="false"
+                            aria-label="展开手动设置"
+                            title="展开手动设置"
+                        ></button>
                     </div>
+                    <div id="${CONFIG.UI_ID}-manual-setting-body" class="am26-manual-body" hidden aria-hidden="true">
                     <div class="am26-manual-waterfall">
                         <div class="am26-manual-card">
                             <div class="am26-manual-card-head">
@@ -56524,8 +56614,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             </div>
                         </div>
                     </div>
+                    <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:#7f8bab;line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
+                    </div>
                 </div>
-                <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:#7f8bab;line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
             `;
 
             const manualSetting = userConfig.manualEscortSetting && typeof userConfig.manualEscortSetting === 'object'
@@ -56540,6 +56631,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 };
             UI.fillManualEscortSettingForm(manualSetting);
             UI.bindManualEscortCheckboxSync();
+            UI.bindManualEscortExpandToggle(false);
+            UI.bindManualEscortMainSwitchGuard();
             UI.bindManualKeywordControls();
 
             content.querySelectorAll('input,select,textarea').forEach(control => {
@@ -57279,55 +57372,122 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     return Array.from(aliases).filter(Boolean);
                 };
-                const detectEnabledFromNode = (node) => {
-                    if (!(node instanceof Element)) return null;
-                    const input = node.querySelector('input[type="checkbox"],input[type="radio"]');
-                    if (input instanceof HTMLInputElement) return !!input.checked;
-
-                    const switchEl = node.querySelector('[role="switch"],[aria-checked]');
-                    if (switchEl instanceof Element) {
-                        const raw = switchEl.getAttribute('aria-checked');
-                        if (raw === 'true') return true;
-                        if (raw === 'false') return false;
+                const buildControlMatchContext = (root, control) => {
+                    if (!(root instanceof HTMLElement) || !(control instanceof Element)) return '';
+                    const contextTextList = [];
+                    const seenText = new Set();
+                    const pushContextText = (value, maxLength = 220) => {
+                        const normalized = normalizeMatchText(value);
+                        if (!normalized || normalized.length > maxLength) return;
+                        if (seenText.has(normalized)) return;
+                        seenText.add(normalized);
+                        contextTextList.push(normalized);
+                    };
+                    ['aria-label', 'placeholder', 'name', 'id'].forEach(attr => {
+                        pushContextText(control.getAttribute(attr), 120);
+                    });
+                    pushContextText(control.className, 160);
+                    const contextNodes = [
+                        control.closest('label'),
+                        control.closest('.mxform-line'),
+                        control.closest('[data-adc-comp]'),
+                        control.closest('tr'),
+                        control.closest('li'),
+                        control.parentElement
+                    ].filter(node => node instanceof Element && node !== root);
+                    const seenNode = new Set();
+                    contextNodes.forEach(node => {
+                        if (seenNode.has(node)) return;
+                        seenNode.add(node);
+                        pushContextText(node.textContent || '');
+                    });
+                    let cursor = control.parentElement;
+                    let depth = 0;
+                    while (cursor && cursor instanceof Element && cursor !== root && depth < 4) {
+                        const normalized = normalizeMatchText(cursor.textContent || '');
+                        if (normalized && normalized.length <= 200 && /(预算|投产比|关键词|匹配|屏蔽|调控|出价|买词|次日|恢复|护航)/.test(normalized)) {
+                            pushContextText(normalized, 200);
+                            break;
+                        }
+                        cursor = cursor.parentElement;
+                        depth += 1;
                     }
-
-                    const compact = normalizeMatchText(node.textContent || '');
-                    if (/未开启|关闭|停用|禁用/.test(compact)) return false;
-                    if (/开启|已开启|启用/.test(compact)) return true;
+                    return contextTextList.join(' ');
+                };
+                const readEnabledFromExplicitControl = (control) => {
+                    if (!(control instanceof Element)) return null;
+                    if (control instanceof HTMLInputElement) {
+                        const type = String(control.type || '').trim().toLowerCase();
+                        if (type === 'checkbox') return !!control.checked;
+                        if (type === 'radio') return control.checked ? true : null;
+                    }
+                    const raw = control.getAttribute('aria-checked');
+                    if (raw === 'true') return true;
+                    if (raw === 'false') return false;
                     return null;
                 };
-                const extractModalSettingPatch = (root, findSettingKeyByText) => {
-                    if (!(root instanceof HTMLElement)) return new Map();
-                    const fieldByHint = (hint = '') => {
-                        if (/wordcntlimit|keywordlimit|自选词上限|关键词上限|词上限/.test(hint)) return 'keywordLimit';
-                        if (/preference|买词偏好|我希望增加/.test(hint)) return 'keywordPreference';
-                        if (/matchpattern|匹配方式/.test(hint)) return 'matchType';
-                        if (/lower|low|down|下限|最小/.test(hint)) return 'lowerLimit';
-                        if (/upper|high|up|上限|最大/.test(hint)) return 'upperLimit';
-                        if (/times|limit|次数|频次/.test(hint)) return 'modifyTimesLimit';
-                        if (/dailyreset|次日|恢复/.test(hint)) return 'dailyReset';
-                        if (/targetname|目标名称/.test(hint)) return 'targetName';
-                        return '';
+                const resolveSettingFieldByHint = (hint = '') => {
+                    if (/wordcntlimit|keywordlimit|自选词上限|关键词上限|词上限/.test(hint)) return 'keywordLimit';
+                    if (/preference|买词偏好|我希望增加/.test(hint)) return 'keywordPreference';
+                    if (/matchpattern|匹配方式/.test(hint)) return 'matchType';
+                    if (/lower|low|down|下限|最小/.test(hint)) return 'lowerLimit';
+                    if (/upper|high|up|上限|最大/.test(hint)) return 'upperLimit';
+                    if (/times|limit|次数|频次/.test(hint)) return 'modifyTimesLimit';
+                    if (/dailyreset|次日|恢复/.test(hint)) return 'dailyReset';
+                    if (/targetname|目标名称/.test(hint)) return 'targetName';
+                    return '';
+                };
+                const buildControlOwnHint = (control) => {
+                    if (!(control instanceof Element)) return '';
+                    const hintTextList = [];
+                    const seenHint = new Set();
+                    const pushHint = (value, maxLength = 180) => {
+                        const normalized = normalizeMatchText(value);
+                        if (!normalized || normalized.length > maxLength) return;
+                        if (seenHint.has(normalized)) return;
+                        seenHint.add(normalized);
+                        hintTextList.push(normalized);
                     };
-
+                    ['aria-label', 'placeholder', 'name', 'id'].forEach(attr => {
+                        pushHint(control.getAttribute(attr), 120);
+                    });
+                    if (control instanceof HTMLInputElement) pushHint(control.type, 24);
+                    pushHint(control.className, 120);
+                    const label = control.closest('label');
+                    if (label instanceof Element) pushHint(label.textContent || '');
+                    return hintTextList.join(' ');
+                };
+                const isAuxiliaryExplicitControlHint = (hint = '', key = '') => {
+                    if (!hint) return false;
+                    const normalizedKey = normalizeOpenV3SettingKey(key);
+                    const field = resolveSettingFieldByHint(hint);
+                    if (!field) return false;
+                    if (field === 'dailyReset') return true;
+                    if (field === 'keywordPreference' || field === 'keywordLimit') return true;
+                    if (field === 'lowerLimit' || field === 'upperLimit' || field === 'modifyTimesLimit' || field === 'targetName') return true;
+                    if (
+                        field === 'matchType'
+                        && normalizedKey !== 'switchkeywordmatchtype'
+                        && normalizedKey !== 'keywordswitch'
+                    ) {
+                        return true;
+                    }
+                    return false;
+                };
+                const extractModalSettingPatch = (root, findSettingKeyByText, resolveControlContextText) => {
+                    if (!(root instanceof HTMLElement)) return new Map();
                     const patchByKey = new Map();
                     const controlList = root.querySelectorAll('input,select,textarea');
                     controlList.forEach(control => {
                         if (!(control instanceof Element)) return;
-                        const rowNode = control.closest('tr,li,label,div') || control.parentElement;
-                        const matchContext = [
-                            rowNode?.textContent || '',
-                            control.getAttribute('aria-label') || '',
-                            control.getAttribute('placeholder') || '',
-                            control.getAttribute('name') || '',
-                            control.getAttribute('id') || '',
-                            control.className || ''
-                        ].join(' ');
+                        const matchContext = typeof resolveControlContextText === 'function'
+                            ? resolveControlContextText(control)
+                            : '';
                         const key = findSettingKeyByText(matchContext);
                         if (!key) return;
 
                         const hint = normalizeMatchText(matchContext);
-                        const field = fieldByHint(hint);
+                        const field = resolveSettingFieldByHint(hint);
                         if (!field) return;
 
                         let value = '';
@@ -57411,28 +57571,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             return bestKey;
                         };
 
-                        const stateByKey = new Map();
-                        const rootText = normalizeMatchText(modalRoot.textContent || '');
-                        aliasList.forEach(item => {
-                            if (item.alias.some(alias => alias && rootText.includes(alias))) {
-                                stateByKey.set(item.key, { matched: true, enabled: true });
+                        const explicitStateByKey = new Map();
+                        modalRoot.querySelectorAll('input[type="checkbox"],input[type="radio"],[role="switch"],[aria-checked]').forEach(control => {
+                            if (!(control instanceof Element)) return;
+                            if (control instanceof HTMLInputElement) {
+                                const type = String(control.type || '').trim().toLowerCase();
+                                if (type === 'radio') return;
+                            }
+                            const matchContext = buildControlMatchContext(modalRoot, control);
+                            const key = findSettingKeyByText(matchContext);
+                            if (!key) return;
+                            const ownHint = buildControlOwnHint(control);
+                            if (isAuxiliaryExplicitControlHint(ownHint, key)) return;
+                            const enabledFromControl = readEnabledFromExplicitControl(control);
+                            if (typeof enabledFromControl !== 'boolean') return;
+                            if (!explicitStateByKey.has(key)) {
+                                explicitStateByKey.set(key, enabledFromControl);
                             }
                         });
+                        const hasExplicitState = explicitStateByKey.size > 0;
 
-                        modalRoot.querySelectorAll('tr,li,label,div').forEach(node => {
-                            if (!(node instanceof Element)) return;
-                            const rowText = normalizeMatchText(node.textContent || '');
-                            if (!rowText || rowText.length < 2) return;
-                            const key = findSettingKeyByText(rowText);
-                            if (!key) return;
-                            const prev = stateByKey.get(key) || { matched: true };
-                            prev.matched = true;
-                            const enabled = detectEnabledFromNode(node);
-                            if (typeof enabled === 'boolean') prev.enabled = enabled;
-                            stateByKey.set(key, prev);
-                        });
-
-                        const patchByKey = extractModalSettingPatch(modalRoot, findSettingKeyByText);
+                        const patchByKey = extractModalSettingPatch(
+                            modalRoot,
+                            findSettingKeyByText,
+                            (control) => buildControlMatchContext(modalRoot, control)
+                        );
                         const mergedSetting = normalizeEscortSettingTable({
                             actionType: settingTable.actionType || '',
                             operationList: [],
@@ -57443,10 +57606,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                         candidateKeys.forEach(key => {
                             const baseCfg = deepCloneObject(settingTable.userSetting?.[key] || {});
-                            const keyState = stateByKey.get(key);
-                            const enabled = typeof keyState?.enabled === 'boolean'
-                                ? keyState.enabled
-                                : (Array.isArray(settingTable.operationList) && settingTable.operationList.includes(key));
+                            const explicitEnabled = explicitStateByKey.get(key);
+                            const fallbackEnabled = Array.isArray(settingTable.operationList)
+                                && settingTable.operationList.includes(key);
+                            const enabled = typeof explicitEnabled === 'boolean'
+                                ? explicitEnabled
+                                : (hasExplicitState ? false : fallbackEnabled);
                             baseCfg.enabled = enabled;
 
                             const patch = patchByKey.get(key);

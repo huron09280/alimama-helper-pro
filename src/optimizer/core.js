@@ -267,55 +267,122 @@
                     }
                     return Array.from(aliases).filter(Boolean);
                 };
-                const detectEnabledFromNode = (node) => {
-                    if (!(node instanceof Element)) return null;
-                    const input = node.querySelector('input[type="checkbox"],input[type="radio"]');
-                    if (input instanceof HTMLInputElement) return !!input.checked;
-
-                    const switchEl = node.querySelector('[role="switch"],[aria-checked]');
-                    if (switchEl instanceof Element) {
-                        const raw = switchEl.getAttribute('aria-checked');
-                        if (raw === 'true') return true;
-                        if (raw === 'false') return false;
+                const buildControlMatchContext = (root, control) => {
+                    if (!(root instanceof HTMLElement) || !(control instanceof Element)) return '';
+                    const contextTextList = [];
+                    const seenText = new Set();
+                    const pushContextText = (value, maxLength = 220) => {
+                        const normalized = normalizeMatchText(value);
+                        if (!normalized || normalized.length > maxLength) return;
+                        if (seenText.has(normalized)) return;
+                        seenText.add(normalized);
+                        contextTextList.push(normalized);
+                    };
+                    ['aria-label', 'placeholder', 'name', 'id'].forEach(attr => {
+                        pushContextText(control.getAttribute(attr), 120);
+                    });
+                    pushContextText(control.className, 160);
+                    const contextNodes = [
+                        control.closest('label'),
+                        control.closest('.mxform-line'),
+                        control.closest('[data-adc-comp]'),
+                        control.closest('tr'),
+                        control.closest('li'),
+                        control.parentElement
+                    ].filter(node => node instanceof Element && node !== root);
+                    const seenNode = new Set();
+                    contextNodes.forEach(node => {
+                        if (seenNode.has(node)) return;
+                        seenNode.add(node);
+                        pushContextText(node.textContent || '');
+                    });
+                    let cursor = control.parentElement;
+                    let depth = 0;
+                    while (cursor && cursor instanceof Element && cursor !== root && depth < 4) {
+                        const normalized = normalizeMatchText(cursor.textContent || '');
+                        if (normalized && normalized.length <= 200 && /(预算|投产比|关键词|匹配|屏蔽|调控|出价|买词|次日|恢复|护航)/.test(normalized)) {
+                            pushContextText(normalized, 200);
+                            break;
+                        }
+                        cursor = cursor.parentElement;
+                        depth += 1;
                     }
-
-                    const compact = normalizeMatchText(node.textContent || '');
-                    if (/未开启|关闭|停用|禁用/.test(compact)) return false;
-                    if (/开启|已开启|启用/.test(compact)) return true;
+                    return contextTextList.join(' ');
+                };
+                const readEnabledFromExplicitControl = (control) => {
+                    if (!(control instanceof Element)) return null;
+                    if (control instanceof HTMLInputElement) {
+                        const type = String(control.type || '').trim().toLowerCase();
+                        if (type === 'checkbox') return !!control.checked;
+                        if (type === 'radio') return control.checked ? true : null;
+                    }
+                    const raw = control.getAttribute('aria-checked');
+                    if (raw === 'true') return true;
+                    if (raw === 'false') return false;
                     return null;
                 };
-                const extractModalSettingPatch = (root, findSettingKeyByText) => {
-                    if (!(root instanceof HTMLElement)) return new Map();
-                    const fieldByHint = (hint = '') => {
-                        if (/wordcntlimit|keywordlimit|自选词上限|关键词上限|词上限/.test(hint)) return 'keywordLimit';
-                        if (/preference|买词偏好|我希望增加/.test(hint)) return 'keywordPreference';
-                        if (/matchpattern|匹配方式/.test(hint)) return 'matchType';
-                        if (/lower|low|down|下限|最小/.test(hint)) return 'lowerLimit';
-                        if (/upper|high|up|上限|最大/.test(hint)) return 'upperLimit';
-                        if (/times|limit|次数|频次/.test(hint)) return 'modifyTimesLimit';
-                        if (/dailyreset|次日|恢复/.test(hint)) return 'dailyReset';
-                        if (/targetname|目标名称/.test(hint)) return 'targetName';
-                        return '';
+                const resolveSettingFieldByHint = (hint = '') => {
+                    if (/wordcntlimit|keywordlimit|自选词上限|关键词上限|词上限/.test(hint)) return 'keywordLimit';
+                    if (/preference|买词偏好|我希望增加/.test(hint)) return 'keywordPreference';
+                    if (/matchpattern|匹配方式/.test(hint)) return 'matchType';
+                    if (/lower|low|down|下限|最小/.test(hint)) return 'lowerLimit';
+                    if (/upper|high|up|上限|最大/.test(hint)) return 'upperLimit';
+                    if (/times|limit|次数|频次/.test(hint)) return 'modifyTimesLimit';
+                    if (/dailyreset|次日|恢复/.test(hint)) return 'dailyReset';
+                    if (/targetname|目标名称/.test(hint)) return 'targetName';
+                    return '';
+                };
+                const buildControlOwnHint = (control) => {
+                    if (!(control instanceof Element)) return '';
+                    const hintTextList = [];
+                    const seenHint = new Set();
+                    const pushHint = (value, maxLength = 180) => {
+                        const normalized = normalizeMatchText(value);
+                        if (!normalized || normalized.length > maxLength) return;
+                        if (seenHint.has(normalized)) return;
+                        seenHint.add(normalized);
+                        hintTextList.push(normalized);
                     };
-
+                    ['aria-label', 'placeholder', 'name', 'id'].forEach(attr => {
+                        pushHint(control.getAttribute(attr), 120);
+                    });
+                    if (control instanceof HTMLInputElement) pushHint(control.type, 24);
+                    pushHint(control.className, 120);
+                    const label = control.closest('label');
+                    if (label instanceof Element) pushHint(label.textContent || '');
+                    return hintTextList.join(' ');
+                };
+                const isAuxiliaryExplicitControlHint = (hint = '', key = '') => {
+                    if (!hint) return false;
+                    const normalizedKey = normalizeOpenV3SettingKey(key);
+                    const field = resolveSettingFieldByHint(hint);
+                    if (!field) return false;
+                    if (field === 'dailyReset') return true;
+                    if (field === 'keywordPreference' || field === 'keywordLimit') return true;
+                    if (field === 'lowerLimit' || field === 'upperLimit' || field === 'modifyTimesLimit' || field === 'targetName') return true;
+                    if (
+                        field === 'matchType'
+                        && normalizedKey !== 'switchkeywordmatchtype'
+                        && normalizedKey !== 'keywordswitch'
+                    ) {
+                        return true;
+                    }
+                    return false;
+                };
+                const extractModalSettingPatch = (root, findSettingKeyByText, resolveControlContextText) => {
+                    if (!(root instanceof HTMLElement)) return new Map();
                     const patchByKey = new Map();
                     const controlList = root.querySelectorAll('input,select,textarea');
                     controlList.forEach(control => {
                         if (!(control instanceof Element)) return;
-                        const rowNode = control.closest('tr,li,label,div') || control.parentElement;
-                        const matchContext = [
-                            rowNode?.textContent || '',
-                            control.getAttribute('aria-label') || '',
-                            control.getAttribute('placeholder') || '',
-                            control.getAttribute('name') || '',
-                            control.getAttribute('id') || '',
-                            control.className || ''
-                        ].join(' ');
+                        const matchContext = typeof resolveControlContextText === 'function'
+                            ? resolveControlContextText(control)
+                            : '';
                         const key = findSettingKeyByText(matchContext);
                         if (!key) return;
 
                         const hint = normalizeMatchText(matchContext);
-                        const field = fieldByHint(hint);
+                        const field = resolveSettingFieldByHint(hint);
                         if (!field) return;
 
                         let value = '';
@@ -399,28 +466,31 @@
                             return bestKey;
                         };
 
-                        const stateByKey = new Map();
-                        const rootText = normalizeMatchText(modalRoot.textContent || '');
-                        aliasList.forEach(item => {
-                            if (item.alias.some(alias => alias && rootText.includes(alias))) {
-                                stateByKey.set(item.key, { matched: true, enabled: true });
+                        const explicitStateByKey = new Map();
+                        modalRoot.querySelectorAll('input[type="checkbox"],input[type="radio"],[role="switch"],[aria-checked]').forEach(control => {
+                            if (!(control instanceof Element)) return;
+                            if (control instanceof HTMLInputElement) {
+                                const type = String(control.type || '').trim().toLowerCase();
+                                if (type === 'radio') return;
+                            }
+                            const matchContext = buildControlMatchContext(modalRoot, control);
+                            const key = findSettingKeyByText(matchContext);
+                            if (!key) return;
+                            const ownHint = buildControlOwnHint(control);
+                            if (isAuxiliaryExplicitControlHint(ownHint, key)) return;
+                            const enabledFromControl = readEnabledFromExplicitControl(control);
+                            if (typeof enabledFromControl !== 'boolean') return;
+                            if (!explicitStateByKey.has(key)) {
+                                explicitStateByKey.set(key, enabledFromControl);
                             }
                         });
+                        const hasExplicitState = explicitStateByKey.size > 0;
 
-                        modalRoot.querySelectorAll('tr,li,label,div').forEach(node => {
-                            if (!(node instanceof Element)) return;
-                            const rowText = normalizeMatchText(node.textContent || '');
-                            if (!rowText || rowText.length < 2) return;
-                            const key = findSettingKeyByText(rowText);
-                            if (!key) return;
-                            const prev = stateByKey.get(key) || { matched: true };
-                            prev.matched = true;
-                            const enabled = detectEnabledFromNode(node);
-                            if (typeof enabled === 'boolean') prev.enabled = enabled;
-                            stateByKey.set(key, prev);
-                        });
-
-                        const patchByKey = extractModalSettingPatch(modalRoot, findSettingKeyByText);
+                        const patchByKey = extractModalSettingPatch(
+                            modalRoot,
+                            findSettingKeyByText,
+                            (control) => buildControlMatchContext(modalRoot, control)
+                        );
                         const mergedSetting = normalizeEscortSettingTable({
                             actionType: settingTable.actionType || '',
                             operationList: [],
@@ -431,10 +501,12 @@
 
                         candidateKeys.forEach(key => {
                             const baseCfg = deepCloneObject(settingTable.userSetting?.[key] || {});
-                            const keyState = stateByKey.get(key);
-                            const enabled = typeof keyState?.enabled === 'boolean'
-                                ? keyState.enabled
-                                : (Array.isArray(settingTable.operationList) && settingTable.operationList.includes(key));
+                            const explicitEnabled = explicitStateByKey.get(key);
+                            const fallbackEnabled = Array.isArray(settingTable.operationList)
+                                && settingTable.operationList.includes(key);
+                            const enabled = typeof explicitEnabled === 'boolean'
+                                ? explicitEnabled
+                                : (hasExplicitState ? false : fallbackEnabled);
                             baseCfg.enabled = enabled;
 
                             const patch = patchByKey.get(key);
