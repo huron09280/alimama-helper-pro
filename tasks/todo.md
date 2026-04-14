@@ -1,3 +1,210 @@
+# TODO - 2026-04-14 小万护航未展开时点击文字只展开，展开后再允许勾选
+
+## 需求规格
+- 目标：
+  - 在“使用手动设置提交”区域，未展开时点击文字不触发选择，只执行展开；
+  - 展开后再点击文字/勾选框时，恢复正常选择行为。
+- 范围：
+  - 仅调整 `src/optimizer/ui.js` 顶部主开关交互绑定；
+  - 更新 `tests/optimizer-escort-new-flow-fallback.test.mjs` 契约断言；
+  - 执行构建与浏览器实页验证。
+- 非目标：
+  - 不改 openV3 参数解析；
+  - 不改内部字段默认值与提交映射。
+
+## 执行计划（含校验）
+- [x] 1. 新增“折叠态点击主文案只展开”的事件守卫。
+  - 摘要：新增 `bindManualEscortMainSwitchGuard`，在 `manual-setting-body.hidden=true` 时拦截主文案点击并仅展开。
+- [x] 2. 保持“展开后点击主文案可正常勾选”的原有能力。
+  - 摘要：守卫只在折叠态生效；展开态不拦截，仍由 checkbox/label 默认行为处理选择。
+- [x] 3. 补充测试断言并通过定向测试。
+  - 摘要：更新 `tests/optimizer-escort-new-flow-fallback.test.mjs`，新增主文案守卫契约断言，定向测试通过（27/27）。
+- [x] 4. 执行构建、语法检查与 `chrome-devtools` 实页验证。
+  - 摘要：`build`、`build --check`、`node --check` 通过；实页验证“折叠点文字只展开、展开后点文字才勾选”成立。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/optimizer/ui.js`：新增 `manual-main-switch-label` 标识与 `bindManualEscortMainSwitchGuard` 绑定，折叠态拦截 label 点击默认选择。
+  - `tests/optimizer-escort-new-flow-fallback.test.mjs`：新增主文案守卫逻辑断言，固定交互契约。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过（27/27）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --check 阿里妈妈多合一助手.js` 通过。
+  - `chrome-devtools` 实页验证（`one.alimama.com`）：
+    - 预置状态：`checked=false`、`expanded=false`、`hidden=true`；
+    - 折叠态点击“使用手动设置提交”文字后：`checked=false`、`expanded=true`、`hidden=false`；
+    - 展开态再次点击同一文字后：`checked=true`（开始选择）。
+- 风险与回滚：
+  - 风险：折叠态下主文案点击语义从“选择”切换为“展开”，与常见 checkbox 行为不同，需要保持该规则稳定。
+  - 回滚：移除 `bindManualEscortMainSwitchGuard` 绑定并删除 `manual-main-switch-label` 拦截逻辑后重建产物。
+
+# TODO - 2026-04-14 修复审查意见：openV3 显式状态误把辅助控件当作启用开关
+
+## 需求规格
+- 目标：
+  - 修复 `readSettingFromModal` 在解析显式状态时，把 `次日恢复/匹配方式` 等辅助控件误识别为“方案启用开关”的问题；
+  - 保证 `operationList` 仅由真实“主启用控件”驱动，避免未勾选项误生效。
+- 范围：
+  - 仅调整 `src/optimizer/core.js` 的显式状态采集链路；
+  - 补充 `tests/optimizer-escort-new-flow-fallback.test.mjs` 回归断言；
+  - 运行相关测试验证。
+- 非目标：
+  - 不调整 openV3 顶层请求字段；
+  - 不改手动设置 UI 行为与默认值。
+
+## 执行计划（含校验）
+- [x] 1. 为显式状态识别新增“控件自身标签提示”提取，并过滤辅助字段控件。
+  - 摘要：仅将非辅助字段的候选控件写入 `explicitStateByKey`。
+- [x] 2. 约束显式状态采集来源，避免 `radio`/参数字段控件驱动启用态。
+  - 摘要：保留主开关可识别能力，同时屏蔽参数型输入的 enabled 影响。
+- [x] 3. 更新回归测试，固化“辅助控件不影响 enabled”契约。
+  - 摘要：新增源码契约断言，覆盖过滤链路。
+- [x] 4. 运行测试并回填结果复盘与风险说明。
+  - 摘要：已执行定向回归、构建同步、构建一致性检查与全量测试。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/optimizer/core.js`：新增 `buildControlOwnHint` 与 `isAuxiliaryExplicitControlHint`，显式状态采集时过滤 `radio` 与辅助字段控件；同 key 仅首个显式控件可写入，防止后续辅助控件覆盖主开关状态。
+  - `tests/optimizer-escort-new-flow-fallback.test.mjs`：新增“显式状态采集过滤辅助控件与 radio”契约断言。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过（28/28）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --test tests/*.test.mjs` 通过（394 tests，392 pass / 2 skip / 0 fail）。
+- 风险与回滚：
+  - 风险：若平台未来把主开关控件文案重构为辅助字段文案，本次过滤规则可能导致该项回退到 `operationList` 兜底。
+  - 回滚：恢复 `src/optimizer/core.js` 中 `explicitStateByKey` 过滤逻辑并重新构建产物。
+
+# TODO - 2026-04-14 小万护航手动设置展开入口改为紧邻图标（点击只展开）
+
+## 需求规格
+- 目标：
+  - 将“使用手动设置提交”右侧展开入口简化为紧邻图标；
+  - 点击图标只触发展开/收起，不触发“选择/勾选”。
+- 范围：
+  - 仅调整 `src/optimizer/ui.js` 手动设置头部布局与展开图标样式；
+  - 补充回归断言，固定“图标态展开入口”；
+  - 同步构建产物并执行校验。
+- 非目标：
+  - 不调整 openV3 参数逻辑；
+  - 不改手动设置内部字段与默认值。
+
+## 执行计划（含校验）
+- [x] 1. 把文本按钮“展开设置”改为紧邻图标入口，交互保持展开/收起。
+  - 摘要：`manual-expand-toggle` 改为无文字图标按钮（`▸/▾`），紧邻“使用手动设置提交”文案。
+- [x] 2. 保证图标点击不影响主勾选状态。
+  - 摘要：图标按钮保持独立 `button`，点击仅调用 `setManualEscortSettingExpanded`，不改 `manual-enable`。
+- [x] 3. 增加契约测试并回归验证。
+  - 摘要：新增图标态样式与“移除文字按钮”断言，定向测试通过（27/27）。
+- [x] 4. 执行构建与实页验证。
+  - 摘要：`build/build --check/--check js` 全通过；`chrome-devtools` 实页验证图标点击后 `masterChecked` 保持不变。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/optimizer/ui.js`：展开入口改为图标按钮，新增 `is-expanded` 图标态与简化布局。
+  - `tests/optimizer-escort-new-flow-fallback.test.mjs`：新增图标态契约断言与“移除展开文字按钮”断言。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过（27/27）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --check 阿里妈妈多合一助手.js` 通过。
+  - `chrome-devtools` 实页验证：点击图标前后 `manual-enable.checked=false` 保持不变，同时展开状态 `false->true`。
+- 风险与回滚：
+  - 风险：纯图标入口可发现性低于文字按钮。
+  - 回滚：恢复原文字按钮样式与文案后重建产物。
+
+# TODO - 2026-04-14 小万护航手动设置改为默认折叠，点击展开
+
+## 需求规格
+- 目标：
+  - 将“小万护航”里的“使用手动设置提交”区域改为默认隐藏；
+  - 用户点击后再展开内部详细设置。
+- 范围：
+  - 仅调整 `src/optimizer/ui.js` 的手动设置面板交互与样式；
+  - 新增/更新回归测试，固定“默认折叠 + 点击展开”契约；
+  - 同步构建产物并执行校验。
+- 非目标：
+  - 不改动 openV3 提交字段与参数映射；
+  - 不改动关键词向导或其它模块的折叠交互。
+
+## 执行计划（含校验）
+- [x] 1. 在手动设置面板新增折叠容器与展开按钮，默认隐藏详细设置区。
+  - 摘要：新增 `manual-expand-toggle` 按钮与 `manual-setting-body` 容器，默认 `hidden`。
+- [x] 2. 补齐展开/收起状态同步逻辑。
+  - 摘要：新增 `setManualEscortSettingExpanded` 与 `bindManualEscortExpandToggle`；支持按钮切换，并在勾选主开关/弹窗带入时自动展开。
+- [x] 3. 更新测试契约并执行定向测试。
+  - 摘要：`tests/optimizer-escort-new-flow-fallback.test.mjs` 新增“默认折叠并支持点击展开”断言，定向测试通过（27/27）。
+- [x] 4. 执行构建校验与语法检查。
+  - 摘要：`node scripts/build.mjs`、`node scripts/build.mjs --check`、`node --check 阿里妈妈多合一助手.js` 全部通过。
+
+## 结果复盘
+- 状态：已完成
+- 变更点：
+  - `src/optimizer/ui.js`：手动设置区域新增折叠交互，默认收起，点击展开内部设置。
+  - `tests/optimizer-escort-new-flow-fallback.test.mjs`：新增折叠交互回归断言。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过（27/27）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --check 阿里妈妈多合一助手.js` 通过。
+  - `chrome-devtools` 实页验证通过：
+    - 进入 `one.alimama.com` 并调用 `__ALIMAMA_OPTIMIZER_TOGGLE__` 打开小万护航面板；
+    - 默认状态 `manual-expand-toggle.aria-expanded=false` 且 `manual-setting-body.hidden=true`；
+    - 连续点击展开按钮后状态按预期在 `false/true` 与 `true/false` 间切换。
+- 风险与回滚：
+  - 风险：默认折叠后，首次使用用户可能忽略展开按钮，需靠按钮文案引导。
+  - 回滚：移除 `manual-expand-toggle/manual-setting-body` 折叠逻辑并恢复原始直出布局后重建产物。
+
+# TODO - 2026-04-14 小万护航未勾选条件误判生效修复
+
+## 需求规格
+- 目标：
+  - 修复小万护航 openV3 参数解析时“未勾选条件被自动识别为已开启并生效”的问题；
+  - 未明确识别到勾选状态时采用“默认关闭”策略，防止误开启。
+- 范围：
+  - 仅修改 `src/optimizer/core.js` 中 `resolveOpenV3Setting -> readSettingFromModal` 的状态识别与启用判定；
+  - 补充回归测试固定“显式状态优先 + 默认关闭 + 兼容兜底”契约；
+  - 构建并校验发布产物同步。
+- 非目标：
+  - 不改关键词向导“优质计划防停投”默认逻辑；
+  - 不改 openV3 顶层接口字段与协议结构。
+
+## 执行计划（含校验）
+- [x] 1. 移除“根文本命中即默认 enabled=true”逻辑，改为仅从显式控件读取状态。
+  - 摘要：已移除 `rootText -> stateByKey.enabled=true` 预设；新增显式控件状态采集（`checkbox/radio/role=switch/aria-checked`）。
+- [x] 2. 引入最近语义容器匹配，避免大容器文本误命中串位。
+  - 摘要：新增 `buildControlMatchContext`，优先读取控件邻近语义节点（`label/.mxform-line/[data-adc-comp]/tr/li`）再匹配 key。
+- [x] 3. 落地启用判定规则：显式优先；有显式但当前项无状态则默认关闭；全无显式时回退 operationList。
+  - 摘要：新增 `explicitStateByKey + hasExplicitState` 规则链，并仅用 `enabled===true` 重建 `operationList`。
+- [x] 4. 补充回归测试并执行定向验证。
+  - 摘要：`tests/optimizer-escort-new-flow-fallback.test.mjs` 新增 2 条断言（移除根文本默认开启、显式优先+默认关闭+兜底回退），定向测试通过（26/26）。
+- [x] 5. 执行构建/检查并回填复盘。
+  - 摘要：`node scripts/build.mjs`、`node scripts/build.mjs --check`、`node --check 阿里妈妈多合一助手.js` 全部通过，产物已同步。
+
+## 结果复盘
+- 状态：DONE_WITH_CONCERNS
+- 变更点：
+  - `src/optimizer/core.js`：openV3 弹窗设置解析改为显式控件驱动，移除根文本默认开启。
+  - `tests/optimizer-escort-new-flow-fallback.test.mjs`：新增“默认误开启回归”测试 2 条。
+  - 构建同步产物：`阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- 校验：
+  - `node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过（26/26）。
+  - `node scripts/build.mjs` 通过。
+  - `node scripts/build.mjs --check` 通过。
+  - `node --check 阿里妈妈多合一助手.js` 通过。
+  - `chrome-devtools` 实页尝试：已连接并进入 `one.alimama.com`，但当前会话页面未注入本地助手 UI（未检测到 `#alimama-escort-helper-ui`），无法完成“弹窗勾选->openV3 请求体”自动化闭环验证。
+- 风险与回滚：
+  - 风险：若平台弹窗结构再次变化且显式控件无法识别，本次逻辑会回退到 `operationList` 兼容模式；仍需后续观察新 DOM 变体。
+  - 回滚：恢复 `src/optimizer/core.js` 中 `readSettingFromModal` 相关逻辑并重新执行构建同步。
+
 # TODO - 2026-04-13 根据 todo 汇总更新版本与日志
 
 ## 需求规格

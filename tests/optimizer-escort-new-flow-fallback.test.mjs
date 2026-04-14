@@ -164,6 +164,39 @@ test('手动设置外层与内层勾选状态保持同步', () => {
     );
 });
 
+test('手动设置默认折叠并支持点击展开内部设置', () => {
+    assert.match(
+        uiSource,
+        /manual-main-switch-label[\s\S]*使用手动设置提交[\s\S]*manual-expand-toggle[\s\S]*aria-expanded="false"[\s\S]*manual-setting-body[\s\S]*hidden[\s\S]*aria-hidden="true"/,
+        '手动设置区域未默认折叠'
+    );
+    assert.match(
+        uiSource,
+        /setManualEscortSettingExpanded:\s*\(expanded = false\)\s*=>\s*\{[\s\S]*toggle\.setAttribute\('aria-expanded',\s*nextExpanded \? 'true' : 'false'\);[\s\S]*body\.hidden = !nextExpanded;/,
+        '缺少手动设置展开/收起状态同步函数'
+    );
+    assert.match(
+        uiSource,
+        /bindManualEscortExpandToggle:\s*\(defaultExpanded = false\)\s*=>\s*\{[\s\S]*manualEscortExpandHandler[\s\S]*UI\.setManualEscortSettingExpanded\(!expanded\);[\s\S]*UI\.setManualEscortSettingExpanded\(\!\!defaultExpanded\);[\s\S]*bindManualEscortExpandToggle\(false\);/,
+        '未绑定手动设置折叠交互或默认态'
+    );
+    assert.match(
+        uiSource,
+        /bindManualEscortMainSwitchGuard:\s*\(\)\s*=>\s*\{[\s\S]*manual-main-switch-label[\s\S]*if \(!body\.hidden\) return;[\s\S]*event\.preventDefault\(\);[\s\S]*event\.stopPropagation\(\);[\s\S]*UI\.setManualEscortSettingExpanded\(true\);[\s\S]*addEventListener\('click',\s*UI\.manualEscortMainSwitchGuardHandler,\s*true\);[\s\S]*bindManualEscortMainSwitchGuard\(\);/,
+        '缺少“未展开点击主文案只展开、不选择；展开后再可选择”的守卫逻辑'
+    );
+    assert.match(
+        uiSource,
+        /\.am26-manual-expand::before\s*\{[\s\S]*content:'▸';[\s\S]*\}[\s\S]*\.am26-manual-expand\.is-expanded::before\s*\{[\s\S]*content:'▾';/,
+        '展开入口未采用简约图标态（收起/展开）'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /manual-expand-toggle[\s\S]*>\s*展开设置\s*</,
+        '展开入口仍保留“展开设置”文本按钮，未简化为图标'
+    );
+});
+
 test('escortSettingTable 关键词类方案会显示中文名称与对应详情', () => {
     assert.match(
         uiSource,
@@ -255,5 +288,39 @@ test('openV3 会把关键词设置映射为原生字段与枚举', () => {
         coreSource,
         /'类目流量飙升词':\s*2[\s\S]*if \(text\.includes\('精准'\)\) return 4;[\s\S]*if \(text\.includes\('广泛'\)\) return 1;/,
         'openV3 未把关键词偏好/匹配方式映射为原生枚举'
+    );
+});
+
+test('openV3 弹窗解析不再通过根文本命中默认开启设置项', () => {
+    assert.doesNotMatch(
+        coreSource,
+        /rootText[\s\S]*stateByKey\.set\([\s\S]*enabled:\s*true/,
+        '仍存在根文本命中即默认 enabled=true 的逻辑，可能导致未勾选项误生效'
+    );
+});
+
+test('openV3 弹窗解析采用显式状态优先、默认关闭与兜底回退策略', () => {
+    assert.match(
+        coreSource,
+        /const explicitStateByKey = new Map\(\);[\s\S]*input\[type="checkbox"\],input\[type="radio"\],\[role="switch"\],\[aria-checked\][\s\S]*const hasExplicitState = explicitStateByKey\.size > 0;/,
+        '未按显式控件收集开关状态'
+    );
+    assert.match(
+        coreSource,
+        /const fallbackEnabled = Array\.isArray\(settingTable\.operationList\)[\s\S]*const enabled = typeof explicitEnabled === 'boolean'[\s\S]*\? explicitEnabled[\s\S]*: \(hasExplicitState \? false : fallbackEnabled\);/,
+        '缺少“显式状态优先 + 默认关闭 + operationList 兜底”判定链路'
+    );
+});
+
+test('openV3 显式状态采集会过滤辅助控件与匹配方式 radio', () => {
+    assert.match(
+        coreSource,
+        /const isAuxiliaryExplicitControlHint =[\s\S]*field === 'dailyReset'[\s\S]*field === 'keywordPreference'[\s\S]*field === 'keywordLimit'[\s\S]*field === 'matchType'[\s\S]*normalizedKey !== 'switchkeywordmatchtype'[\s\S]*normalizedKey !== 'keywordswitch'/,
+        '缺少辅助控件过滤规则，显式状态仍可能被参数字段污染'
+    );
+    assert.match(
+        coreSource,
+        /if \(control instanceof HTMLInputElement\) \{[\s\S]*if \(type === 'radio'\) return;[\s\S]*\}[\s\S]*const ownHint = buildControlOwnHint\(control\);[\s\S]*if \(isAuxiliaryExplicitControlHint\(ownHint,\s*key\)\) return;[\s\S]*if \(!explicitStateByKey\.has\(key\)\) \{[\s\S]*explicitStateByKey\.set\(key,\s*enabledFromControl\);/,
+        '显式状态采集未排除 radio/辅助控件，或未避免同 key 被后续控件覆盖'
     );
 });
