@@ -59,11 +59,16 @@ test('openV3 命中重复开启提示时会触发 updateInDialog 强制重试一
     );
 });
 
-test('仅在新链路设置表存在时才应用手动参数设置，旧版链路不强行带参数', () => {
+test('手动设置开启时即使缺少新链路设置表也会按手动参数构造 openV3 提交', () => {
     assert.match(
         coreSource,
-        /const hasEscortSettingTable = !!finalSetting;[\s\S]*if \(manualSetting\?\.enabled && hasEscortSettingTable\)/,
-        '手动参数设置未按新旧链路区分，旧版链路可能被错误带入参数'
+        /const manualFallbackSetting = normalizeEscortSettingTable\(\{[\s\S]*manualOverride\.operationList[\s\S]*manualOverride\.userSetting[\s\S]*\}\);[\s\S]*const base = normalizeEscortSettingTable\(settingTable\) \|\| manualFallbackSetting;/,
+        '无 escortSettingTable 时未回退到手动设置构造提交参数，可能退回默认全方案执行'
+    );
+    assert.match(
+        coreSource,
+        /if \(manualSetting && typeof manualSetting === 'object'\) \{[\s\S]*if \(manualSetting\.enabled\) \{[\s\S]*const mergedByManual = applyManualSetting\(finalSetting,\s*manualSetting\);/,
+        '手动设置仍受设置表存在性限制，可能被跳过'
     );
 });
 
@@ -110,13 +115,44 @@ test('escortSettingTable 渲染包含操作项与范围信息', () => {
 test('openV3 提交后会把执行状态回传到方案渲染并显示 ✅/❌', () => {
     assert.match(
         coreSource,
-        /buildExecutionStateMap[\s\S]*UI\.renderEscortSettingTableToCard\(card,\s*resolvedOpenV3Setting\.displaySetting,\s*\{\s*executionState\s*\}\)/,
+        /buildExecutionStateMap[\s\S]*UI\.renderEscortSettingTableToCard\(card,\s*resolvedOpenV3Setting\.displaySetting,\s*\{[\s\S]*executionState[\s\S]*sourceLabel[\s\S]*fromManual[\s\S]*\}\)/,
         'openV3 提交后未将 executionState 回传给方案渲染'
     );
     assert.match(
         uiSource,
-        /resolveExecutionIcon[\s\S]*executionState[\s\S]*'✅'[\s\S]*'❌'[\s\S]*actionText:\s*`\$\{resolveExecutionIcon\(rawKey,\s*key\)\}/,
+        /resolveExecutionStateValue[\s\S]*executionState[\s\S]*resolveExecutionIcon[\s\S]*'✅'[\s\S]*'❌'[\s\S]*actionText:\s*`\$\{resolveExecutionIcon\(rawKey,\s*key\)\}/,
         '方案名称未根据 executionState 显示 ✅/❌'
+    );
+});
+
+test('escortSettingTable 会全量显示方案并提供状态列', () => {
+    assert.match(
+        uiSource,
+        /const canonicalOperationOrder = \['bidConstraintValue', 'netBidConstraintValue', 'budget', 'keywordAdd', 'keywordSwitch', 'keywordMask'\];[\s\S]*canonicalOperationOrder\.forEach\(pushSourceKey\);[\s\S]*Object\.keys\(userSetting\)\.forEach\(pushSourceKey\);/,
+        '方案列表未按全量方案渲染，可能仍会隐藏未执行项'
+    );
+    assert.match(
+        uiSource,
+        /const resolveStatusText =[\s\S]*'已执行'[\s\S]*'执行失败'[\s\S]*'未勾选'[\s\S]*'未开启'[\s\S]*title:\s*'状态'/,
+        '缺少方案状态列或状态文案不完整'
+    );
+});
+
+test('方案详情保留介绍文案，不再被未开启状态覆盖', () => {
+    assert.match(
+        uiSource,
+        /defaultDetailByKey = \{[\s\S]*bidConstraintValue:\s*'根据目标区间自动调控出价'[\s\S]*netBidConstraintValue:\s*'根据目标区间自动调控净投产比'[\s\S]*budget:\s*'根据目标区间自动调控预算'[\s\S]*keywordSwitch:\s*'自动在广泛匹配与精准匹配间切换'[\s\S]*keywordMask:\s*'自动屏蔽低转化关键词'/,
+        '未保留关键词方案详情介绍文案'
+    );
+    assert.match(
+        uiSource,
+        /case 'bidConstraintValue':[\s\S]*case 'netBidConstraintValue':[\s\S]*case 'budget':[\s\S]*configDescriptionList\.forEach\(text => appendDetailPart\(detailParts,\s*text\)\);[\s\S]*if \(!detailParts\.length\) appendDetailPart\(detailParts,\s*defaultDetailByKey\[key\]\);/,
+        '出价\/净投产比\/预算详情未按“优先介绍、兜底介绍”输出'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /case 'bidConstraintValue':[\s\S]*case 'netBidConstraintValue':[\s\S]*case 'budget':[\s\S]*if \(!detailParts\.length\) detailParts\.push\(planEnabled \? '已开启' : '未开启'\);/,
+        '出价\/净投产比\/预算详情仍会被未开启分支直接覆盖'
     );
 });
 
@@ -136,12 +172,12 @@ test('手动设置面板 checkbox 有独立可见样式兜底', () => {
 test('手动设置默认勾选项全部关闭', () => {
     assert.match(
         bootstrapSource,
-        /manualEscortSetting:\s*\{[\s\S]*enabled:\s*false[\s\S]*bidConstraintValue:\s*\{\s*enabled:\s*false[\s\S]*budget:\s*\{\s*enabled:\s*false[\s\S]*dailyReset:\s*false[\s\S]*addKeyword:\s*\{\s*enabled:\s*false[\s\S]*switchKeywordMatchType:\s*\{\s*enabled:\s*false[\s\S]*shieldKeyword:\s*\{\s*enabled:\s*false/,
+        /manualEscortSetting:\s*\{[\s\S]*enabled:\s*false[\s\S]*bidConstraintValue:\s*\{\s*enabled:\s*false[\s\S]*netBidConstraintValue:\s*\{\s*enabled:\s*false[\s\S]*budget:\s*\{\s*enabled:\s*false[\s\S]*dailyReset:\s*false[\s\S]*addKeyword:\s*\{\s*enabled:\s*false[\s\S]*switchKeywordMatchType:\s*\{\s*enabled:\s*false[\s\S]*shieldKeyword:\s*\{\s*enabled:\s*false/,
         '默认配置仍存在开启项，未满足“默认全部关闭”'
     );
     assert.match(
         uiSource,
-        /setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-enable`,\s*setting\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-budget-enabled`,\s*budget\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-budget-reset`,\s*budget\.dailyReset,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-addkeyword-enabled`,\s*addKeyword\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-switchmatch-enabled`,\s*switchKeywordMatchType\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-shield-enabled`,\s*shieldKeyword\.enabled,\s*false\);/,
+        /setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-enable`,\s*setting\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-bid-enabled`,\s*bid\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-net-bid-enabled`,\s*netBid\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-budget-enabled`,\s*budget\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-addkeyword-enabled`,\s*addKeyword\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-switchmatch-enabled`,\s*switchKeywordMatchType\.enabled,\s*false\);[\s\S]*setCheckboxValue\(`\$\{CONFIG\.UI_ID\}-manual-shield-enabled`,\s*shieldKeyword\.enabled,\s*false\);/,
         'UI 表单 fallback 未统一改为默认关闭'
     );
 });
@@ -149,18 +185,18 @@ test('手动设置默认勾选项全部关闭', () => {
 test('手动设置外层与内层勾选状态保持同步', () => {
     assert.match(
         uiSource,
-        /getManualEscortCheckboxNodes:\s*\(\)\s*=>\s*\{[\s\S]*manual-bid-enabled[\s\S]*manual-bid-reset[\s\S]*manual-budget-enabled[\s\S]*manual-budget-reset[\s\S]*manual-addkeyword-enabled[\s\S]*manual-switchmatch-enabled[\s\S]*manual-shield-enabled/,
-        '未收敛内层 checkbox 节点列表，无法实现同步'
+        /getManualEscortCheckboxNodes:\s*\(\)\s*=>\s*\{[\s\S]*primaryChildIdList[\s\S]*manual-bid-enabled[\s\S]*manual-net-bid-enabled[\s\S]*manual-budget-enabled[\s\S]*manual-addkeyword-enabled[\s\S]*manual-switchmatch-enabled[\s\S]*manual-shield-enabled[\s\S]*auxiliaryChildIdList[\s\S]*manual-bid-reset[\s\S]*manual-net-bid-reset[\s\S]*manual-budget-reset/,
+        '未按“主功能开关/辅助开关”拆分节点列表，无法规避辅助项反向开启主开关'
     );
     assert.match(
         uiSource,
-        /bindManualEscortCheckboxSync:\s*\(\)\s*=>\s*\{[\s\S]*master\.addEventListener\('change'[\s\S]*node\.checked = nextChecked;[\s\S]*children\.forEach\(node => \{[\s\S]*node\.addEventListener\('change'[\s\S]*UI\.syncManualEscortMasterCheckbox\(\);/,
+        /bindManualEscortCheckboxSync:\s*\(\)\s*=>\s*\{[\s\S]*\{\s*master,\s*children,\s*auxiliaryChildren\s*\}[\s\S]*master\.addEventListener\('change'[\s\S]*children\.forEach\(node => \{[\s\S]*node\.checked = nextChecked;[\s\S]*auxiliaryChildren\.forEach\(node => \{[\s\S]*node\.checked = nextChecked;[\s\S]*children\.forEach\(node => \{[\s\S]*node\.addEventListener\('change'[\s\S]*UI\.syncManualEscortMasterCheckbox\(\);/,
         '外层->内层或内层->外层同步逻辑缺失'
     );
     assert.match(
         uiSource,
-        /syncManualEscortMasterCheckbox:\s*\(\)\s*=>\s*\{[\s\S]*master\.indeterminate = true;/,
-        '内层部分勾选时未回写外层半选状态'
+        /syncManualEscortMasterCheckbox:\s*\(\)\s*=>\s*\{[\s\S]*if \(checkedCount <= 0\) \{[\s\S]*master\.checked = false;[\s\S]*master\.indeterminate = false;[\s\S]*return;[\s\S]*\}[\s\S]*master\.checked = true;[\s\S]*master\.indeterminate = checkedCount < enabledChildren\.length;/,
+        '主开关同步逻辑未满足“子项勾选自动开启主开关，部分勾选时半选”'
     );
 });
 
@@ -218,8 +254,8 @@ test('escortSettingTable 关键词类方案会显示中文名称与对应详情'
 test('从弹窗带入优先按官方字段标签精确读取护航参数', () => {
     assert.match(
         uiSource,
-        /findLineByLabel\('平均点击成本'\)[\s\S]*findLineByLabel\('每日预算调控区间'\)/,
-        '弹窗出价/预算字段未按官方标签精确定位，容易出现参数串位'
+        /readCheckboxByLabelList\(\['出价调控',\s*'成本调控',\s*'平均点击成本'\]\)[\s\S]*findLineByLabelList\(\['出价调控区间',\s*'出价区间',\s*'平均点击成本',\s*'成本调控区间'\]\)[\s\S]*readCheckboxByLabelList\(\['净投产比调控',\s*'净投产比',\s*'净目标投产比'\]\)[\s\S]*findLineByLabelList\(\['净投产比调控区间',\s*'净投产比区间',\s*'净投产比',\s*'净目标投产比'\]\)[\s\S]*findLineByLabelList\(\['每日预算调控区间',\s*'预算调控区间',\s*'每日预算'\]\)/,
+        '弹窗出价/净投产比/预算字段未按官方标签精确定位，容易出现参数串位'
     );
     assert.match(
         uiSource,
@@ -247,7 +283,7 @@ test('预算调控区间解析会跳过 disabled 输入并识别不限上限', (
 test('手动覆盖映射仅预算使用 upperType，出价调控不再写入 upperType', () => {
     assert.match(
         coreSource,
-        /if \(manualCfg\.upperLimit === '不限'\) \{[\s\S]*if \(targetKey === 'budget'\) baseCfg\.upperType = 0;[\s\S]*if \(targetKey === 'bidConstraintValue'\) delete baseCfg\.upperType;[\s\S]*\} else \{[\s\S]*if \(targetKey === 'budget'\) baseCfg\.upperType = 1;[\s\S]*if \(targetKey === 'bidConstraintValue'\) delete baseCfg\.upperType;/,
+        /if \(manualCfg\.upperLimit === '不限'\) \{[\s\S]*if \(targetKey === 'budget'\) baseCfg\.upperType = 0;[\s\S]*if \(targetKey === 'bidConstraintValue' \|\| targetKey === 'netBidConstraintValue'\) delete baseCfg\.upperType;[\s\S]*\} else \{[\s\S]*if \(targetKey === 'budget'\) baseCfg\.upperType = 1;[\s\S]*if \(targetKey === 'bidConstraintValue' \|\| targetKey === 'netBidConstraintValue'\) delete baseCfg\.upperType;/,
         'manual 覆盖未正确按预算/出价区分 upperType 规则'
     );
 });
@@ -322,5 +358,65 @@ test('openV3 显式状态采集会过滤辅助控件与匹配方式 radio', () =
         coreSource,
         /if \(control instanceof HTMLInputElement\) \{[\s\S]*if \(type === 'radio'\) return;[\s\S]*\}[\s\S]*const ownHint = buildControlOwnHint\(control\);[\s\S]*if \(isAuxiliaryExplicitControlHint\(ownHint,\s*key\)\) return;[\s\S]*if \(!explicitStateByKey\.has\(key\)\) \{[\s\S]*explicitStateByKey\.set\(key,\s*enabledFromControl\);/,
         '显式状态采集未排除 radio/辅助控件，或未避免同 key 被后续控件覆盖'
+    );
+});
+
+test('手动子项勾选会反向开启主开关，避免出现子项已勾选但提交仍未开启', () => {
+    assert.match(
+        uiSource,
+        /syncManualEscortMasterCheckbox:\s*\(\)\s*=>\s*\{[\s\S]*if \(checkedCount <= 0\) \{[\s\S]*master\.checked = false;[\s\S]*master\.indeterminate = false;[\s\S]*return;[\s\S]*\}[\s\S]*master\.checked = true;[\s\S]*master\.indeterminate = checkedCount < enabledChildren\.length;/,
+        '子项勾选后主开关未被自动开启，仍可能导致提交按未开启处理'
+    );
+});
+
+test('手动设置未启用时仍持久化表单快照，提交层继续按未启用处理', () => {
+    assert.match(
+        uiSource,
+        /readManualEscortSettingOverride:\s*\(options = \{\}\)\s*=>\s*\{[\s\S]*const includeDisabled = !!\(options && typeof options === 'object' && options\.includeDisabled\);[\s\S]*if \(!manualEnabled && !includeDisabled\) return null;[\s\S]*enabled:\s*!!manualEnabled,/,
+        '手动设置读取未区分提交态与持久化快照态'
+    );
+    assert.match(
+        uiSource,
+        /persistManualEscortSettingFromForm:\s*\(\)\s*=>\s*\{[\s\S]*readManualEscortSettingOverride\(\{\s*includeDisabled:\s*true\s*\}\)/,
+        '主开关关闭时未持久化手动表单快照'
+    );
+    assert.match(
+        coreSource,
+        /const manualSettingMaster = document\.getElementById\(`\$\{CONFIG\.UI_ID\}-manual-enable`\);[\s\S]*readManualEscortSettingOverride\(\{\s*includeDisabled:\s*true\s*\}\)/,
+        '提交层未读取“主开关关闭”场景下的手动设置快照'
+    );
+    assert.match(
+        coreSource,
+        /if \(manualSetting && typeof manualSetting === 'object'\) \{[\s\S]*if \(manualSetting\.enabled\)[\s\S]*else \{[\s\S]*const manualDisabledOverride = buildManualDisabledOverride\([\s\S]*const manualDisabledSetting = applyManualSetting\(finalSetting,\s*manualDisabledOverride\);[\s\S]*sourceLabel = '手动设置参数（未勾选）';[\s\S]*fromManual = true;/,
+        '主开关关闭时未按“全部未勾选”手动方案提交'
+    );
+});
+
+test('手动覆盖仅执行面板中有配置的方案，未配置项默认关闭', () => {
+    assert.match(
+        coreSource,
+        /const manualTargetKeySet = new Set\(\);[\s\S]*manualTargetKeySet\.add\(targetKey\);[\s\S]*Object\.entries\(mergedSetting\.userSetting\)\.forEach\(\(\[key,\s*cfgRaw\]\) => \{[\s\S]*if \(!manualTargetKeySet\.has\(key\)\) \{[\s\S]*cfg\.enabled = false;/,
+        '手动覆盖未把“面板未配置方案”默认关闭，仍可能误执行'
+    );
+});
+
+test('出价调控与净投产比调控在方案名称与手动面板中并存可见', () => {
+    assert.match(
+        uiSource,
+        /if \(key === 'bidConstraintValue'\)[\s\S]*return '出价调控';[\s\S]*if \(key === 'netBidConstraintValue'\)[\s\S]*return '净投产比调控';/,
+        '出价调控与净投产比调控方案名称未正确并存'
+    );
+    assert.match(
+        uiSource,
+        /manual-bid-enabled[\s\S]*出价调控[\s\S]*manual-net-bid-enabled[\s\S]*净投产比调控/,
+        '手动设置面板未同时展示“出价调控/净投产比调控”配置入口'
+    );
+});
+
+test('openV3 执行状态仅标记实际启用方案，避免未启用项被误报执行', () => {
+    assert.match(
+        coreSource,
+        /const operationList = Array\.isArray\(displaySetting\.operationList\)[\s\S]*if \(operationList\.length\) \{[\s\S]*if \(!operationList\.length && displaySetting\.userSetting && typeof displaySetting\.userSetting === 'object'\) \{[\s\S]*if \(cfg\.enabled === false\) return;[\s\S]*if \(!keySet\.size\) \{[\s\S]*return \{\};/,
+        'executionState 仍会把未启用方案标记为已执行'
     );
 });

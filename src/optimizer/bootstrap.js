@@ -17,6 +17,7 @@
             manualEscortSetting: {
                 enabled: false,
                 bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
+                netBidConstraintValue: { enabled: false, lowerLimit: 20, upperLimit: '不限', modifyTimesLimit: 10, dailyReset: false },
                 budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
                 addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
                 switchKeywordMatchType: { enabled: false },

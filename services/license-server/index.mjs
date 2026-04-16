@@ -141,6 +141,50 @@ const pickPreferredShopName = (...values) => {
     }
     return '';
 };
+const splitShopNameParts = (value = '') => {
+    const text = normalizeShopName(value || '');
+    if (!text || text === '-' || text === '--') {
+        return {
+            storeName: '-',
+            subAccount: ''
+        };
+    }
+    const parts = text.split(/[:：]/);
+    if (parts.length <= 1) {
+        return {
+            storeName: text,
+            subAccount: ''
+        };
+    }
+    const storeName = normalizeShopName(parts.shift() || '') || text;
+    const subAccount = normalizeShopName(parts.join(':') || '');
+    return {
+        storeName: storeName || '-',
+        subAccount
+    };
+};
+const normalizeSubAccount = (value = '') => {
+    const text = normalizeShopName(value || '');
+    if (!text || text === '-' || text === '--') return '';
+    return text;
+};
+const normalizeSubAccountList = (value = [], shopName = '') => {
+    const sourceList = Array.isArray(value) ? value : [value];
+    const seen = new Set();
+    const output = [];
+    const push = (item) => {
+        const normalized = normalizeSubAccount(item);
+        if (!normalized) return;
+        const key = normalized.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        output.push(normalized);
+    };
+    sourceList.forEach(push);
+    const nameParts = splitShopNameParts(shopName);
+    push(nameParts.subAccount);
+    return output;
+};
 const resolveBrowserVersionFromUserAgent = (userAgent = '') => {
     const ua = String(userAgent || '');
     if (!ua) return '';
@@ -592,6 +636,7 @@ const buildStateSnapshot = () => ({
             .map(([shopId, profile = {}]) => ({
                 shopId: normalizeShopId(shopId),
                 shopName: normalizeShopName(profile.shopName || ''),
+                subAccounts: normalizeSubAccountList(profile.subAccounts, profile.shopName),
                 enabled: profile.enabled !== false,
                 authExpiresAt: resolveProfileAuthExpiresAt(profile),
                 updatedAt: normalizeIsoDatetime(profile.updatedAt || '')
@@ -610,6 +655,7 @@ const buildStateSnapshot = () => ({
             .map((entry = {}) => ({
                 shopId: normalizeShopId(entry.shopId || ''),
                 shopName: normalizeShopName(entry.shopName || ''),
+                subAccounts: normalizeSubAccountList(entry.subAccounts, entry.shopName),
                 firstSeenAt: normalizeIsoDatetime(entry.firstSeenAt || ''),
                 firstSeenAtMs: resolveNonNegativeInt(entry.firstSeenAtMs || 0),
                 runtimeMode: normalizeRuntimeMode(entry.runtimeMode || ''),
@@ -654,6 +700,7 @@ const applyStateSnapshot = (snapshot = {}) => {
                 profile: {
                     enabled: normalizeBoolean(entry.enabled, true),
                     shopName: normalizeShopName(entry.shopName || ''),
+                    subAccounts: normalizeSubAccountList(entry.subAccounts, entry.shopName),
                     authExpiresAt: normalizeIsoDatetime(entry.authExpiresAt || ''),
                     updatedAt: normalizeIsoDatetime(entry.updatedAt || '') || new Date().toISOString()
                 }
@@ -684,6 +731,7 @@ const applyStateSnapshot = (snapshot = {}) => {
             return {
                 shopId,
                 shopName: normalizeShopName(entry.shopName || ''),
+                subAccounts: normalizeSubAccountList(entry.subAccounts, entry.shopName),
                 firstSeenAt: normalizeIsoDatetime(entry.firstSeenAt || '') || (firstSeenAtMs ? new Date(firstSeenAtMs).toISOString() : ''),
                 firstSeenAtMs,
                 runtimeMode: normalizeRuntimeMode(entry.runtimeMode || ''),
@@ -950,9 +998,11 @@ const persistStateChanges = async () => {
     throw error;
 };
 
-const upsertActiveShopRecord = (payload = {}, verifyResult = {}) => {
+const upsertActiveShopRecord = (payload = {}, verifyResult = {}, options = {}) => {
     const shopId = normalizeShopId(payload.shopId || '');
     if (!shopId) return;
+    const syncShopProfile = options && typeof options === 'object' && options.syncShopProfile === true;
+    const canSyncShopProfile = syncShopProfile && verifyResult && verifyResult.authorized === true;
 
     const existing = MEMORY_ACTIVE_SHOP_STORE.get(shopId) || {};
     const nowMs = toNow();
@@ -960,9 +1010,20 @@ const upsertActiveShopRecord = (payload = {}, verifyResult = {}) => {
         existing.firstSeenAtMs || Date.parse(String(existing.firstSeenAt || '').trim()) || 0
     ) || nowMs;
     const currentShopProfile = MEMORY_SHOP_STORE.get(shopId);
+    const nextShopName = pickPreferredShopName(payload.shopName, existing.shopName, currentShopProfile?.shopName);
+    const nextSubAccounts = normalizeSubAccountList(
+        [
+            ...(Array.isArray(existing.subAccounts) ? existing.subAccounts : []),
+            ...(Array.isArray(currentShopProfile?.subAccounts) ? currentShopProfile.subAccounts : []),
+            ...(Array.isArray(payload.subAccounts) ? payload.subAccounts : []),
+            payload.subAccount
+        ],
+        nextShopName
+    );
     const nextRecord = {
         shopId,
-        shopName: pickPreferredShopName(payload.shopName, existing.shopName, currentShopProfile?.shopName),
+        shopName: nextShopName,
+        subAccounts: nextSubAccounts,
         firstSeenAt: new Date(firstSeenAtMs).toISOString(),
         firstSeenAtMs,
         runtimeMode: normalizeRuntimeMode(payload.runtimeMode || existing.runtimeMode || ''),
@@ -1012,6 +1073,22 @@ const upsertActiveShopRecord = (payload = {}, verifyResult = {}) => {
     MEMORY_ACTIVE_SHOP_STORE.delete(shopId);
     MEMORY_ACTIVE_SHOP_STORE.set(shopId, nextRecord);
 
+    if (currentShopProfile && canSyncShopProfile) {
+        const mergedShopName = pickPreferredShopName(nextShopName, currentShopProfile.shopName);
+        MEMORY_SHOP_STORE.set(shopId, {
+            ...currentShopProfile,
+            shopName: mergedShopName,
+            subAccounts: normalizeSubAccountList(
+                [
+                    ...(Array.isArray(currentShopProfile.subAccounts) ? currentShopProfile.subAccounts : []),
+                    ...nextSubAccounts
+                ],
+                mergedShopName
+            ),
+            updatedAt: currentShopProfile.updatedAt || new Date().toISOString()
+        });
+    }
+
     while (MEMORY_ACTIVE_SHOP_STORE.size > MAX_ACTIVE_SHOP_ENTRIES) {
         const oldestKey = MEMORY_ACTIVE_SHOP_STORE.keys().next().value;
         if (!oldestKey) break;
@@ -1043,6 +1120,13 @@ const resolveActiveShopEntries = () => (
             return {
                 shopId,
                 shopName: pickPreferredShopName(entry.shopName, currentShopProfile?.shopName),
+                subAccounts: normalizeSubAccountList(
+                    [
+                        ...(Array.isArray(entry.subAccounts) ? entry.subAccounts : []),
+                        ...(Array.isArray(currentShopProfile?.subAccounts) ? currentShopProfile.subAccounts : [])
+                    ],
+                    pickPreferredShopName(entry.shopName, currentShopProfile?.shopName)
+                ),
                 currentEnabled,
                 currentRevoked,
                 currentAuthExpiresAt,
@@ -1117,6 +1201,13 @@ const provisionDefaultAuthForNewShop = (payload = {}) => {
     if (isShopRevoked(shopId)) return { applied: false };
 
     const shopName = pickPreferredShopName(payload.shopName);
+    const subAccounts = normalizeSubAccountList(
+        [
+            ...(Array.isArray(payload.subAccounts) ? payload.subAccounts : []),
+            payload.subAccount
+        ],
+        shopName
+    );
     const authExpiresAt = addDaysToNowIso(DEFAULT_AUTH_VALID_DAYS);
     if (wasDeleted) {
         MEMORY_DELETED_SHOP_STORE.delete(shopId);
@@ -1124,6 +1215,7 @@ const provisionDefaultAuthForNewShop = (payload = {}) => {
     MEMORY_SHOP_STORE.set(shopId, {
         enabled: true,
         shopName,
+        subAccounts,
         authExpiresAt,
         updatedAt: new Date().toISOString()
     });
@@ -1152,6 +1244,10 @@ const verifyLicensePayload = (payload = {}) => {
         pickFirstText(payload.osVersion, payload.os, resolveOsVersionFromUserAgent(userAgent)),
         120
     );
+    const subAccount = normalizeSubAccount(payload.subAccount || '');
+    const subAccounts = Array.isArray(payload.subAccounts)
+        ? payload.subAccounts.map((item) => normalizeSubAccount(item)).filter(Boolean)
+        : [];
 
     if (!shopId) return { ok: false, code: 'shop_not_found', reason: '缺少 shopId' };
     if (!scriptVersion) return { ok: false, code: 'script_version_missing', reason: '缺少 scriptVersion' };
@@ -1177,7 +1273,9 @@ const verifyLicensePayload = (payload = {}) => {
         nonce,
         userAgent,
         browserVersion,
-        osVersion
+        osVersion,
+        subAccounts,
+        subAccount
     };
 };
 
@@ -1241,6 +1339,7 @@ const resolveMemoryShopEntries = () => (
             return {
                 shopId,
                 shopName: pickPreferredShopName(profile.shopName),
+                subAccounts: normalizeSubAccountList(profile.subAccounts, profile.shopName),
                 enabled: profile.enabled !== false,
                 authExpiresAt,
                 authExpired: isAuthExpirationReached(authExpiresAt),
@@ -1254,26 +1353,40 @@ const resolveMemoryShopEntries = () => (
 const backfillShopNameFromVerify = (shopId = '', shopName = '') => {
     const normalizedShopId = normalizeShopId(shopId);
     const normalizedShopName = pickPreferredShopName(shopName);
-    if (!normalizedShopId || !normalizedShopName) return false;
+    if (!normalizedShopId) return false;
     if (MEMORY_DELETED_SHOP_STORE.has(normalizedShopId)) return false;
 
     const existingProfile = MEMORY_SHOP_STORE.get(normalizedShopId);
+    const mergedSubAccounts = normalizeSubAccountList(
+        [
+            ...(Array.isArray(existingProfile?.subAccounts) ? existingProfile.subAccounts : [])
+        ],
+        normalizedShopName || existingProfile?.shopName || ''
+    );
     if (existingProfile) {
         const currentShopName = pickPreferredShopName(existingProfile.shopName);
-        if (currentShopName === normalizedShopName) return false;
+        const nextShopName = pickPreferredShopName(normalizedShopName, currentShopName);
+        if (
+            currentShopName === nextShopName
+            && normalizeSubAccountList(existingProfile.subAccounts, existingProfile.shopName).length === mergedSubAccounts.length
+        ) {
+            return false;
+        }
         MEMORY_SHOP_STORE.set(normalizedShopId, {
             ...existingProfile,
-            shopName: normalizedShopName,
+            shopName: nextShopName,
+            subAccounts: mergedSubAccounts,
             updatedAt: new Date().toISOString()
         });
         return true;
     }
 
-    if (!ALLOWED_SHOP_ID_SET.has(normalizedShopId)) return false;
+    if (!normalizedShopName || !ALLOWED_SHOP_ID_SET.has(normalizedShopId)) return false;
 
     MEMORY_SHOP_STORE.set(normalizedShopId, {
         enabled: true,
         shopName: normalizedShopName,
+        subAccounts: mergedSubAccounts,
         authExpiresAt: '',
         updatedAt: new Date().toISOString()
     });
@@ -1294,6 +1407,10 @@ const resolveAdminState = () => {
             .map((entry) => [entry.shopId, pickPreferredShopName(entry.shopName)])
             .filter(([, shopName]) => !!shopName)
     );
+    const activeSubAccountMap = new Map(
+        activeEntries
+            .map((entry) => [entry.shopId, normalizeSubAccountList(entry.subAccounts, entry.shopName)])
+    );
     const allowedEnv = ALLOWED_SHOP_IDS
         .filter((shopId) => !deletedMemorySet.has(shopId))
         .sort();
@@ -1313,6 +1430,7 @@ const resolveAdminState = () => {
         const current = shopMap.get(shopId) || {
             shopId,
             shopName: '',
+            subAccounts: [],
             enabled: true,
             authExpiresAt: '',
             authExpired: false,
@@ -1327,14 +1445,24 @@ const resolveAdminState = () => {
         const mergedAuthExpired = typeof entry.authExpired === 'boolean'
             ? entry.authExpired
             : isAuthExpirationReached(mergedAuthExpiresAt);
+        const mergedShopName = pickPreferredShopName(
+            entry.shopName,
+            current.shopName,
+            activeShopNameMap.get(shopId)
+        );
+        const mergedSubAccounts = normalizeSubAccountList(
+            [
+                ...(Array.isArray(current.subAccounts) ? current.subAccounts : []),
+                ...(Array.isArray(entry.subAccounts) ? entry.subAccounts : []),
+                ...((activeSubAccountMap.get(shopId) || []))
+            ],
+            mergedShopName
+        );
 
         shopMap.set(shopId, {
             shopId,
-            shopName: pickPreferredShopName(
-                entry.shopName,
-                current.shopName,
-                activeShopNameMap.get(shopId)
-            ),
+            shopName: mergedShopName,
+            subAccounts: mergedSubAccounts,
             enabled: typeof entry.enabled === 'boolean' ? entry.enabled : current.enabled,
             authExpiresAt: mergedAuthExpiresAt,
             authExpired: mergedAuthExpired,
@@ -1349,6 +1477,7 @@ const resolveAdminState = () => {
         upsertShopEntry({
             shopId,
             shopName: activeShopNameMap.get(shopId) || '',
+            subAccounts: activeSubAccountMap.get(shopId) || [],
             enabled: true,
             authExpiresAt: '',
             authExpired: false,
@@ -1510,6 +1639,8 @@ const handleVerify = async (req = {}) => {
         authorized: true,
         reason: 'ok',
         code: 'ok'
+    }, {
+        syncShopProfile: true
     });
     await persistStateChanges();
     writeAuditLog({ shopId: checked.shopId, action: 'verify', result: 'allow', reason: 'ok' });
@@ -1569,6 +1700,15 @@ const handleAdminAllow = async (req = {}) => {
         existingShopProfile.shopName,
         existingActiveProfile.shopName
     );
+    const subAccounts = normalizeSubAccountList(
+        [
+            ...(Array.isArray(existingShopProfile.subAccounts) ? existingShopProfile.subAccounts : []),
+            ...(Array.isArray(existingActiveProfile.subAccounts) ? existingActiveProfile.subAccounts : []),
+            ...(Array.isArray(payload.subAccounts) ? payload.subAccounts : []),
+            payload.subAccount
+        ],
+        shopName
+    );
     const enabled = normalizeBoolean(payload.enabled, true);
     const expiryUpdate = resolveAuthExpiresAtUpdate({
         payload,
@@ -1588,16 +1728,24 @@ const handleAdminAllow = async (req = {}) => {
     MEMORY_SHOP_STORE.set(shopId, {
         enabled,
         shopName,
+        subAccounts,
         authExpiresAt,
         updatedAt: new Date().toISOString()
     });
     MEMORY_DELETED_SHOP_STORE.delete(shopId);
-    if (shopName && MEMORY_ACTIVE_SHOP_STORE.has(shopId)) {
+    if (MEMORY_ACTIVE_SHOP_STORE.has(shopId)) {
         const activeRecord = MEMORY_ACTIVE_SHOP_STORE.get(shopId) || {};
         MEMORY_ACTIVE_SHOP_STORE.set(shopId, {
             ...activeRecord,
             shopId,
-            shopName
+            shopName: pickPreferredShopName(shopName, activeRecord.shopName),
+            subAccounts: normalizeSubAccountList(
+                [
+                    ...(Array.isArray(activeRecord.subAccounts) ? activeRecord.subAccounts : []),
+                    ...subAccounts
+                ],
+                pickPreferredShopName(shopName, activeRecord.shopName)
+            )
         });
     }
     if (enabled) {

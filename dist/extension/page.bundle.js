@@ -15918,6 +15918,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             manualEscortSetting: {
                 enabled: false,
                 bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
+                netBidConstraintValue: { enabled: false, lowerLimit: 20, upperLimit: '不限', modifyTimesLimit: 10, dailyReset: false },
                 budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
                 addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
                 switchKeywordMatchType: { enabled: false },
@@ -57440,8 +57441,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const userSetting = settingData.userSetting && typeof settingData.userSetting === 'object'
                 ? settingData.userSetting
                 : {};
+            const canonicalOperationOrder = ['bidConstraintValue', 'netBidConstraintValue', 'budget', 'keywordAdd', 'keywordSwitch', 'keywordMask'];
             const keyAliasMap = {
                 bidConstraintValue: ['bidConstraintValue'],
+                netBidConstraintValue: ['netBidConstraintValue', 'netConstraintValue', 'netRoiConstraintValue'],
+                netConstraintValue: ['netConstraintValue', 'netBidConstraintValue', 'netRoiConstraintValue'],
+                netRoiConstraintValue: ['netRoiConstraintValue', 'netBidConstraintValue', 'netConstraintValue'],
                 budget: ['budget'],
                 addKeyword: ['addKeyword', 'keywordAdd'],
                 keywordAdd: ['keywordAdd', 'addKeyword'],
@@ -57454,6 +57459,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (key === 'addKeyword' || key === 'keywordAdd') return 'keywordAdd';
                 if (key === 'switchKeywordMatchType' || key === 'keywordSwitch') return 'keywordSwitch';
                 if (key === 'shieldKeyword' || key === 'keywordMask') return 'keywordMask';
+                if (key === 'netConstraintValue' || key === 'netRoiConstraintValue') return 'netBidConstraintValue';
                 return key;
             };
             const findConfigByKey = (key) => {
@@ -57502,88 +57508,199 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (targetName) return targetName.endsWith('调控') ? targetName : `${targetName}调控`;
                     return '出价调控';
                 }
+                if (key === 'netBidConstraintValue') {
+                    const targetName = String(cfg.targetName || cfg.targetDisplayName || '').trim();
+                    if (targetName) return targetName.endsWith('调控') ? targetName : `${targetName}调控`;
+                    return '净投产比调控';
+                }
                 if (key === 'budget') return '预算调控';
                 if (key === 'keywordAdd') return '添加关键词';
                 if (key === 'keywordSwitch') return '切换关键词匹配方式';
                 if (key === 'keywordMask') return '屏蔽关键词';
                 return key;
             };
-            const resolveExecutionIcon = (rawKey, normalizedKey) => {
+            const normalizeDetailText = (value) => {
+                if (value === null || value === undefined) return '';
+                const text = String(value).replace(/\s+/g, ' ').trim();
+                if (!text || text === '-' || text === '—') return '';
+                return text;
+            };
+            const appendDetailPart = (detailParts, value) => {
+                const text = normalizeDetailText(value);
+                if (!text || detailParts.includes(text)) return;
+                detailParts.push(text);
+            };
+            const collectConfigDescriptionText = (cfg) => {
+                if (!cfg || typeof cfg !== 'object') return [];
+                const detailTexts = [];
+                const push = (value) => {
+                    if (value === null || value === undefined) return;
+                    if (Array.isArray(value)) {
+                        value.forEach(push);
+                        return;
+                    }
+                    if (typeof value === 'object') {
+                        [
+                            'text',
+                            'content',
+                            'desc',
+                            'description',
+                            'detail',
+                            'summary',
+                            'tip',
+                            'tips',
+                            'title',
+                            'name'
+                        ].forEach(field => push(value[field]));
+                        return;
+                    }
+                    const text = normalizeDetailText(value);
+                    if (!text || detailTexts.includes(text)) return;
+                    detailTexts.push(text);
+                };
+                [
+                    'description',
+                    'desc',
+                    'detail',
+                    'detailText',
+                    'intro',
+                    'introduction',
+                    'summary',
+                    'targetDescription',
+                    'targetDesc',
+                    'remark',
+                    'tip',
+                    'tips',
+                    'hint',
+                    'hints',
+                    'planDescription',
+                    'displayDesc',
+                    'explain',
+                    'explanation'
+                ].forEach(field => push(cfg[field]));
+                return detailTexts;
+            };
+            const defaultDetailByKey = {
+                bidConstraintValue: '根据目标区间自动调控出价',
+                netBidConstraintValue: '根据目标区间自动调控净投产比',
+                budget: '根据目标区间自动调控预算',
+                keywordAdd: '按默认策略补词',
+                keywordSwitch: '自动在广泛匹配与精准匹配间切换',
+                keywordMask: '自动屏蔽低转化关键词'
+            };
+            const operationKeySet = new Set(operationList.map(key => normalizeOperationKey(key)).filter(Boolean));
+            const resolveExecutionStateValue = (rawKey, normalizedKey) => {
                 const executionState = options?.executionState;
-                if (executionState === undefined || executionState === null) return '';
-                if (typeof executionState === 'boolean') return executionState ? '✅' : '❌';
+                if (executionState === undefined || executionState === null) return null;
+                if (typeof executionState === 'boolean') return executionState;
                 if (typeof executionState === 'object') {
                     const keyCandidates = [rawKey, normalizedKey];
                     for (const candidate of keyCandidates) {
                         if (!candidate) continue;
                         if (typeof executionState[candidate] === 'boolean') {
-                            return executionState[candidate] ? '✅' : '❌';
+                            return executionState[candidate];
                         }
                     }
                 }
-                return '';
+                return null;
+            };
+            const resolveExecutionIcon = (rawKey, normalizedKey) => {
+                const executionValue = resolveExecutionStateValue(rawKey, normalizedKey);
+                if (typeof executionValue !== 'boolean') return '';
+                return executionValue ? '✅' : '❌';
+            };
+            const resolvePlanEnabled = (rawKey, normalizedKey, cfg) => {
+                if (cfg && typeof cfg.enabled === 'boolean') return cfg.enabled;
+                return operationKeySet.has(normalizedKey) || operationKeySet.has(normalizeOperationKey(rawKey));
+            };
+            const resolveStatusText = (rawKey, normalizedKey, cfg, planEnabled) => {
+                const executionValue = resolveExecutionStateValue(rawKey, normalizedKey);
+                if (typeof executionValue === 'boolean') return executionValue ? '已执行' : '执行失败';
+                if (planEnabled) return '待执行';
+                if (options?.fromManual) return '未勾选';
+                if (!cfg || typeof cfg !== 'object' || !Object.keys(cfg).length) return '未配置';
+                return '未开启';
             };
 
-            const sourceKeys = operationList.length
-                ? operationList
-                : Object.keys(userSetting).filter(key => {
-                    const cfg = userSetting[key];
-                    return cfg && typeof cfg === 'object' && cfg.enabled !== false;
-                });
+            const sourceKeySet = new Set();
+            const sourceKeys = [];
+            const pushSourceKey = (key) => {
+                const normalizedKey = normalizeOperationKey(key);
+                if (!normalizedKey || sourceKeySet.has(normalizedKey)) return;
+                sourceKeySet.add(normalizedKey);
+                sourceKeys.push(normalizedKey);
+            };
+            canonicalOperationOrder.forEach(pushSourceKey);
+            operationList.forEach(pushSourceKey);
+            Object.keys(userSetting).forEach(pushSourceKey);
 
             const rows = sourceKeys.map((rawKey, index) => {
                 const cfg = findConfigByKey(rawKey);
                 const key = normalizeOperationKey(rawKey);
                 const actionText = getActionTextByKey(key, cfg);
                 const detailParts = [];
+                const planEnabled = resolvePlanEnabled(rawKey, key, cfg);
+                const status = resolveStatusText(rawKey, key, cfg, planEnabled);
+                const configDescriptionList = collectConfigDescriptionText(cfg);
 
                 switch (key) {
                     case 'bidConstraintValue':
+                    case 'netBidConstraintValue':
                     case 'budget': {
+                        configDescriptionList.forEach(text => appendDetailPart(detailParts, text));
+
                         const lowerNum = toFiniteNumber(cfg.lowerLimit);
                         const lower = lowerNum !== null ? lowerNum : '-';
                         const upper = formatRangeUpper(cfg);
-                        if (lower !== '-' || upper !== '-') detailParts.push(`范围 ${lower}-${upper}`);
+                        if (lower !== '-' || upper !== '-') appendDetailPart(detailParts, `范围 ${lower}-${upper}`);
 
                         const limitNum = toFiniteNumber(cfg.modifyTimesLimit);
-                        if (limitNum !== null) detailParts.push(`最多 ${limitNum} 次/日`);
+                        if (limitNum !== null) appendDetailPart(detailParts, `最多 ${limitNum} 次/日`);
 
                         if (typeof cfg.dailyReset === 'boolean') {
-                            detailParts.push(cfg.dailyReset ? '次日恢复初始值' : '次日不恢复');
+                            appendDetailPart(detailParts, cfg.dailyReset ? '次日恢复初始值' : '次日不恢复');
                         }
+                        if (!detailParts.length) appendDetailPart(detailParts, defaultDetailByKey[key]);
                         break;
                     }
                     case 'keywordAdd': {
+                        configDescriptionList.forEach(text => appendDetailPart(detailParts, text));
+
                         const preferenceText = resolveKeywordPreferenceText(
                             cfg.preference ?? cfg.keywordPreference ?? cfg.buyWordPreference
                         );
-                        if (preferenceText) detailParts.push(`买词偏好：${preferenceText}`);
+                        if (preferenceText) appendDetailPart(detailParts, `买词偏好：${preferenceText}`);
 
                         const matchText = resolveKeywordMatchText(cfg.matchPattern ?? cfg.matchType ?? cfg.pattern);
-                        if (matchText) detailParts.push(`匹配方式：${matchText}`);
+                        if (matchText) appendDetailPart(detailParts, `匹配方式：${matchText}`);
 
                         const keywordLimit = toFiniteNumber(
                             cfg.wordCntLimit ?? cfg.keywordLimit ?? cfg.upperLimit ?? cfg.limit
                         );
-                        if (keywordLimit !== null) detailParts.push(`自选词上限：${keywordLimit}个`);
+                        if (keywordLimit !== null) appendDetailPart(detailParts, `自选词上限：${keywordLimit}个`);
 
-                        if (!detailParts.length) detailParts.push('按默认策略补词');
+                        if (!detailParts.length) appendDetailPart(detailParts, defaultDetailByKey.keywordAdd);
                         break;
                     }
                     case 'keywordSwitch':
-                        detailParts.push(cfg.enabled === false ? '未开启' : '自动在广泛匹配与精准匹配间切换');
+                        configDescriptionList.forEach(text => appendDetailPart(detailParts, text));
+                        appendDetailPart(detailParts, defaultDetailByKey.keywordSwitch);
                         break;
                     case 'keywordMask':
-                        detailParts.push(cfg.enabled === false ? '未开启' : '自动屏蔽低转化关键词');
+                        configDescriptionList.forEach(text => appendDetailPart(detailParts, text));
+                        appendDetailPart(detailParts, defaultDetailByKey.keywordMask);
                         break;
-                    default:
-                        if (typeof cfg.enabled === 'boolean') detailParts.push(cfg.enabled ? '已开启' : '未开启');
+                    default: {
+                        configDescriptionList.forEach(text => appendDetailPart(detailParts, text));
+                        appendDetailPart(detailParts, '按方案配置执行');
                         break;
+                    }
                 }
 
                 return {
                     order: index + 1,
                     actionText: `${resolveExecutionIcon(rawKey, key)}${resolveExecutionIcon(rawKey, key) ? ' ' : ''}${actionText}`,
+                    status,
                     detail: detailParts.join('；') || '-'
                 };
             }).filter(row => row.actionText && row.actionText !== '-');
@@ -57593,6 +57710,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             UI.renderTableToCard(cardLogger, rows, [
                 { title: '#', width: '24px', render: row => row.order },
                 { title: '方案名称', render: row => row.actionText },
+                { title: '状态', width: '68px', render: row => row.status },
                 { title: '详情', render: row => row.detail }
             ], {
                 headerBg: 'rgba(42,91,255,.12)',
@@ -57601,7 +57719,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const footerText = settingData.footerInfo?.enterText ? `提交按钮：${settingData.footerInfo.enterText}` : '';
             const actionTypeText = settingData.actionType ? `提交类型：${settingData.actionType}` : '';
-            const hintText = [footerText, actionTypeText].filter(Boolean).join('，');
+            const sourceText = options?.sourceLabel ? `方案来源：${options.sourceLabel}` : '';
+            const hintText = [sourceText, footerText, actionTypeText].filter(Boolean).join('，');
             if (hintText) cardLogger.log(`新链路提交信息：${hintText}`, '#4b5563');
         },
 
@@ -57739,26 +57858,104 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const preciseSetting = {};
+            const readCheckboxByLabelList = (labels, scope = root) => {
+                const labelList = Array.isArray(labels) ? labels : [labels];
+                for (const label of labelList) {
+                    const value = readCheckboxByLabel(label, scope);
+                    if (typeof value === 'boolean') return value;
+                }
+                return undefined;
+            };
+            const findLineByLabelList = (labels, scope = root) => {
+                const labelList = Array.isArray(labels) ? labels : [labels];
+                for (const label of labelList) {
+                    const line = findLineByLabel(label, scope);
+                    if (line instanceof Element) return line;
+                }
+                return null;
+            };
+            const timesLines = findLinesByLabel('修改次数上限');
+            const switchStateFromLine = (line) => {
+                if (!(line instanceof Element)) return undefined;
+                const switchInner = line.querySelector('.mxgc-switch > span');
+                if (!(switchInner instanceof HTMLElement)) return undefined;
+                const styleText = String(switchInner.getAttribute('style') || '').toLowerCase();
+                const classText = String(switchInner.className || '');
+                if (styleText.includes('#c3c9d9')) return false;
+                if (styleText.includes('#4554e5')) return true;
+                if (/asiyysfazn/i.test(classText)) return false;
+                if (/asiyysfazo/i.test(classText)) return true;
+                return undefined;
+            };
+            const readSwitchByLabelList = (labels, scope = root) => {
+                const labelList = Array.isArray(labels) ? labels : [labels];
+                for (const label of labelList) {
+                    const value = readSwitchByLabel(label, scope);
+                    if (typeof value === 'boolean') return value;
+                }
+                return undefined;
+            };
+            const readTimesByIndex = (index) => {
+                if (!Number.isInteger(index) || index < 0) return undefined;
+                return readNumberFromInput(readTextInputsInLine(timesLines[index])[0]);
+            };
+            const resetLines = findLinesByLabel('次日恢复初始');
+            const readResetByIndex = (index) => {
+                if (!Number.isInteger(index) || index < 0) return undefined;
+                return switchStateFromLine(resetLines[index]);
+            };
+
             const bidSetting = {};
-            const bidEnabled = readCheckboxByLabel('成本调控');
-            if (typeof bidEnabled === 'boolean') bidSetting.enabled = bidEnabled;
-            const bidRangeLine = findLineByLabel('平均点击成本');
+            const bidEnabled = readCheckboxByLabelList(['出价调控', '成本调控', '平均点击成本']);
+            const bidRangeLine = findLineByLabelList(['出价调控区间', '出价区间', '平均点击成本', '成本调控区间']);
             const bidRangeInputs = readTextInputsInLine(bidRangeLine).filter(input => !input.disabled);
+            if (typeof bidEnabled === 'boolean') bidSetting.enabled = bidEnabled;
             const bidLower = readNumberFromInput(bidRangeInputs[0]);
             const bidUpper = readNumberFromInput(bidRangeInputs[1]);
             if (typeof bidLower === 'number') bidSetting.lowerLimit = bidLower;
             if (typeof bidUpper === 'number') bidSetting.upperLimit = bidUpper;
-            const timesLines = findLinesByLabel('修改次数上限');
-            const bidTimes = readNumberFromInput(readTextInputsInLine(timesLines[0])[0]);
+
+            const netBidSetting = {};
+            const netEnabled = readCheckboxByLabelList(['净投产比调控', '净投产比', '净目标投产比']);
+            const netRangeLine = findLineByLabelList(['净投产比调控区间', '净投产比区间', '净投产比', '净目标投产比']);
+            const netRangeInputs = readTextInputsInLine(netRangeLine).filter(input => !input.disabled);
+            if (typeof netEnabled === 'boolean') netBidSetting.enabled = netEnabled;
+            const netLower = readNumberFromInput(netRangeInputs[0]);
+            const netUpper = readNumberFromInput(netRangeInputs[1]);
+            if (typeof netLower === 'number') netBidSetting.lowerLimit = netLower;
+            if (typeof netUpper === 'number') netBidSetting.upperLimit = netUpper;
+
+            const hasBidSection = typeof bidEnabled === 'boolean' || bidRangeLine instanceof Element;
+            const hasNetSection = typeof netEnabled === 'boolean' || netRangeLine instanceof Element;
+            const bidTimesIndex = hasBidSection ? 0 : -1;
+            const netTimesIndex = hasNetSection ? (hasBidSection ? 1 : 0) : -1;
+            const budgetTimesIndex = (hasBidSection ? 1 : 0) + (hasNetSection ? 1 : 0);
+
+            const bidTimes = readTimesByIndex(bidTimesIndex);
             if (typeof bidTimes === 'number') bidSetting.modifyTimesLimit = bidTimes;
-            const bidDailyReset = readSwitchByLabel('次日恢复初始出价');
+            const netTimes = readTimesByIndex(netTimesIndex);
+            if (typeof netTimes === 'number') netBidSetting.modifyTimesLimit = netTimes;
+
+            const bidDailyReset = readSwitchByLabelList(['次日恢复初始出价', '次日恢复初始成本']);
+            const netDailyReset = readSwitchByLabelList(['次日恢复初始净投产比', '次日恢复初始投产比']);
             if (typeof bidDailyReset === 'boolean') bidSetting.dailyReset = bidDailyReset;
+            else {
+                const fallbackBidReset = readResetByIndex(bidTimesIndex);
+                if (typeof fallbackBidReset === 'boolean') bidSetting.dailyReset = fallbackBidReset;
+            }
+            if (typeof netDailyReset === 'boolean') netBidSetting.dailyReset = netDailyReset;
+            else {
+                const fallbackNetReset = readResetByIndex(netTimesIndex);
+                if (typeof fallbackNetReset === 'boolean') netBidSetting.dailyReset = fallbackNetReset;
+            }
+
             if (Object.keys(bidSetting).length) preciseSetting.bidConstraintValue = bidSetting;
+            if (Object.keys(netBidSetting).length) preciseSetting.netBidConstraintValue = netBidSetting;
 
             const budgetSetting = {};
             const budgetEnabled = readCheckboxByLabel('预算调控');
             if (typeof budgetEnabled === 'boolean') budgetSetting.enabled = budgetEnabled;
-            const budgetRangeLine = findLineByLabel('每日预算调控区间');
+            const budgetRangeLine = findLineByLabelList(['每日预算调控区间', '预算调控区间', '每日预算']);
             const budgetInputs = readTextInputsInLine(budgetRangeLine);
             const budgetEnabledInputs = budgetInputs.filter(input => !input.disabled);
             const budgetLower = readNumberFromInput(budgetEnabledInputs[0]);
@@ -57770,10 +57967,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const budgetUpper = readNumberFromInput(budgetEnabledInputs[1]);
                 if (typeof budgetUpper === 'number') budgetSetting.upperLimit = budgetUpper;
             }
-            const budgetTimes = readNumberFromInput(readTextInputsInLine(timesLines[1])[0]);
+            const budgetTimes = readTimesByIndex(budgetTimesIndex);
             if (typeof budgetTimes === 'number') budgetSetting.modifyTimesLimit = budgetTimes;
-            const budgetDailyReset = readSwitchByLabel('次日恢复初始预算');
-            if (typeof budgetDailyReset === 'boolean') budgetSetting.dailyReset = budgetDailyReset;
+            const budgetDailyReset = readSwitchByLabelList(['次日恢复初始预算']);
+            if (typeof budgetDailyReset === 'boolean') {
+                budgetSetting.dailyReset = budgetDailyReset;
+            } else {
+                const fallbackBudgetReset = readResetByIndex(budgetTimesIndex);
+                if (typeof fallbackBudgetReset === 'boolean') budgetSetting.dailyReset = fallbackBudgetReset;
+            }
             if (Object.keys(budgetSetting).length) preciseSetting.budget = budgetSetting;
 
             const keywordSetting = {};
@@ -57839,7 +58041,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 let step = 0;
                 while (cursor && cursor instanceof Element && cursor !== root && step < 6) {
                     const text = normalize(cursor.textContent);
-                    if (text && /(预算调控|投产比|添加关键词|切换关键词匹配方式|屏蔽关键词|自选词上限)/.test(text)) {
+                    if (text && /(预算调控|投产比|出价调控|成本调控|添加关键词|切换关键词匹配方式|屏蔽关键词|自选词上限)/.test(text)) {
                         pushText(text);
                         break;
                     }
@@ -57851,7 +58053,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const keyRuleList = [
                 { key: 'budget', tokens: ['budget', '预算调控', '每日预算调控区间', '每日预算', 'budget.enabled', 'budget.modifytimeslimit', 'budget.dailyreset'] },
-                { key: 'bidConstraintValue', tokens: ['bidconstraintvalue', '成本调控', '平均点击成本', '出价调控', 'bidconstraintvalue.enabled', 'bidconstraintvalue.modifytimeslimit', 'bidconstraintvalue.dailyreset'] },
+                {
+                    key: 'netBidConstraintValue',
+                    tokens: [
+                        'netbidconstraintvalue',
+                        'netconstraintvalue',
+                        'netroiconstraintvalue',
+                        '净投产比',
+                        '净投产比调控',
+                        '净目标投产比',
+                        'netbidconstraintvalue.enabled',
+                        'netbidconstraintvalue.modifytimeslimit',
+                        'netbidconstraintvalue.dailyreset'
+                    ]
+                },
+                {
+                    key: 'bidConstraintValue',
+                    tokens: [
+                        'bidconstraintvalue',
+                        '成本调控',
+                        '平均点击成本',
+                        '出价调控',
+                        '出价',
+                        'bidconstraintvalue.enabled',
+                        'bidconstraintvalue.modifytimeslimit',
+                        'bidconstraintvalue.dailyreset'
+                    ]
+                },
                 { key: 'addKeyword', tokens: ['keywordadd', 'addkeyword', '添加关键词', '买词偏好', '自选词上限', '关键词调控', 'keywordadd.wordcntlimit', 'keywordadd.preference', 'keywordadd.matchpattern'] },
                 { key: 'switchKeywordMatchType', tokens: ['keywordswitch', 'switchkeywordmatchtype', '切换关键词匹配方式', '切换匹配方式'] },
                 { key: 'shieldKeyword', tokens: ['keywordmask', 'shieldkeyword', '屏蔽关键词', '流量智选关键词'] }
@@ -57955,7 +58183,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         // 从面板读取“手动设置”参数（提交时优先）
-        readManualEscortSettingOverride: () => {
+        readManualEscortSettingOverride: (options = {}) => {
+            const includeDisabled = !!(options && typeof options === 'object' && options.includeDisabled);
             const readChecked = (id, fallback = false) => {
                 const node = document.getElementById(id);
                 return node instanceof HTMLInputElement ? !!node.checked : fallback;
@@ -57975,7 +58204,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const manualEnabled = readChecked(`${CONFIG.UI_ID}-manual-enable`, false);
-            if (!manualEnabled) return null;
+            if (!manualEnabled && !includeDisabled) return null;
 
             const bidUpperRaw = readText(`${CONFIG.UI_ID}-manual-bid-upper`, '不限');
             const bidSetting = {
@@ -57989,6 +58218,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             } else {
                 const upperLimit = Number(bidUpperRaw);
                 if (Number.isFinite(upperLimit)) bidSetting.upperLimit = upperLimit;
+            }
+            const netBidUpperRaw = readText(`${CONFIG.UI_ID}-manual-net-bid-upper`, '不限');
+            const netBidSetting = {
+                enabled: readChecked(`${CONFIG.UI_ID}-manual-net-bid-enabled`, false),
+                lowerLimit: readNumber(`${CONFIG.UI_ID}-manual-net-bid-lower`, 20),
+                modifyTimesLimit: readNumber(`${CONFIG.UI_ID}-manual-net-bid-times`, 10),
+                dailyReset: readChecked(`${CONFIG.UI_ID}-manual-net-bid-reset`, false)
+            };
+            if (netBidUpperRaw === '不限') {
+                netBidSetting.upperLimit = '不限';
+            } else {
+                const upperLimit = Number(netBidUpperRaw);
+                if (Number.isFinite(upperLimit)) netBidSetting.upperLimit = upperLimit;
             }
 
             const budgetUpperRaw = readText(`${CONFIG.UI_ID}-manual-budget-upper`, '不限');
@@ -58020,17 +58262,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const operationList = [];
             if (bidSetting.enabled) operationList.push('bidConstraintValue');
+            if (netBidSetting.enabled) operationList.push('netBidConstraintValue');
             if (budgetSetting.enabled) operationList.push('budget');
             if (addKeywordSetting.enabled) operationList.push('addKeyword');
             if (switchKeywordMatchType.enabled) operationList.push('switchKeywordMatchType');
             if (shieldKeyword.enabled) operationList.push('shieldKeyword');
 
             return {
-                enabled: true,
+                enabled: !!manualEnabled,
                 actionType: 'openInDialog',
                 operationList,
                 userSetting: {
                     bidConstraintValue: bidSetting,
+                    netBidConstraintValue: netBidSetting,
                     budget: budgetSetting,
                     addKeyword: addKeywordSetting,
                     switchKeywordMatchType,
@@ -58042,6 +58286,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         fillManualEscortSettingForm: (settingData = {}) => {
             const setting = settingData && typeof settingData === 'object' ? settingData : {};
             const bid = setting.bidConstraintValue && typeof setting.bidConstraintValue === 'object' ? setting.bidConstraintValue : {};
+            const netBid = setting.netBidConstraintValue && typeof setting.netBidConstraintValue === 'object'
+                ? setting.netBidConstraintValue
+                : {};
             const budget = setting.budget && typeof setting.budget === 'object' ? setting.budget : {};
             const addKeyword = setting.addKeyword && typeof setting.addKeyword === 'object' ? setting.addKeyword : {};
             const switchKeywordMatchType = setting.switchKeywordMatchType && typeof setting.switchKeywordMatchType === 'object'
@@ -58071,6 +58318,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             setInputValue(`${CONFIG.UI_ID}-manual-bid-times`, bid.modifyTimesLimit ?? 10);
             setCheckboxValue(`${CONFIG.UI_ID}-manual-bid-reset`, bid.dailyReset, false);
 
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-net-bid-enabled`, netBid.enabled, false);
+            setInputValue(`${CONFIG.UI_ID}-manual-net-bid-lower`, netBid.lowerLimit ?? 20);
+            setInputValue(`${CONFIG.UI_ID}-manual-net-bid-upper`, netBid.upperLimit === undefined ? '不限' : netBid.upperLimit);
+            setInputValue(`${CONFIG.UI_ID}-manual-net-bid-times`, netBid.modifyTimesLimit ?? 10);
+            setCheckboxValue(`${CONFIG.UI_ID}-manual-net-bid-reset`, netBid.dailyReset, false);
+
             setCheckboxValue(`${CONFIG.UI_ID}-manual-budget-enabled`, budget.enabled, false);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-lower`, budget.lowerLimit ?? 200);
             setInputValue(`${CONFIG.UI_ID}-manual-budget-upper`, budget.upperLimit === undefined ? '不限' : budget.upperLimit);
@@ -58089,25 +58342,33 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         getManualEscortCheckboxNodes: () => {
             const root = document.getElementById(`${CONFIG.UI_ID}-latest-setting-content`);
             if (!(root instanceof Element)) {
-                return { root: null, master: null, children: [] };
+                return { root: null, master: null, children: [], auxiliaryChildren: [] };
             }
             const master = document.getElementById(`${CONFIG.UI_ID}-manual-enable`);
-            const childIdList = [
+            // 仅“主功能开关”参与主从联动；辅助项（如次日恢复）不应反向开启主开关。
+            const primaryChildIdList = [
                 `${CONFIG.UI_ID}-manual-bid-enabled`,
-                `${CONFIG.UI_ID}-manual-bid-reset`,
+                `${CONFIG.UI_ID}-manual-net-bid-enabled`,
                 `${CONFIG.UI_ID}-manual-budget-enabled`,
-                `${CONFIG.UI_ID}-manual-budget-reset`,
                 `${CONFIG.UI_ID}-manual-addkeyword-enabled`,
                 `${CONFIG.UI_ID}-manual-switchmatch-enabled`,
                 `${CONFIG.UI_ID}-manual-shield-enabled`
             ];
-            const children = childIdList
+            const auxiliaryChildIdList = [
+                `${CONFIG.UI_ID}-manual-bid-reset`,
+                `${CONFIG.UI_ID}-manual-net-bid-reset`,
+                `${CONFIG.UI_ID}-manual-budget-reset`
+            ];
+            const mapToCheckboxNodes = (idList) => idList
                 .map(id => document.getElementById(id))
                 .filter(node => node instanceof HTMLInputElement);
+            const children = mapToCheckboxNodes(primaryChildIdList);
+            const auxiliaryChildren = mapToCheckboxNodes(auxiliaryChildIdList);
             return {
                 root,
                 master: master instanceof HTMLInputElement ? master : null,
-                children
+                children,
+                auxiliaryChildren
             };
         },
 
@@ -58126,13 +58387,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 master.indeterminate = false;
                 return;
             }
-            if (checkedCount >= enabledChildren.length) {
-                master.checked = true;
-                master.indeterminate = false;
-                return;
-            }
+            // 子项存在勾选时，自动激活主开关，避免“子项已勾选但提交仍按未开启”。
             master.checked = true;
-            master.indeterminate = true;
+            master.indeterminate = checkedCount < enabledChildren.length;
         },
 
         setManualEscortSettingExpanded: (expanded = false) => {
@@ -58183,13 +58440,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         bindManualEscortCheckboxSync: () => {
-            const { master, children } = UI.getManualEscortCheckboxNodes();
+            const { master, children, auxiliaryChildren } = UI.getManualEscortCheckboxNodes();
             if (!(master instanceof HTMLInputElement) || !children.length) return;
 
             master.addEventListener('change', () => {
                 const nextChecked = !!master.checked;
                 master.indeterminate = false;
                 children.forEach(node => {
+                    if (node.disabled) return;
+                    node.checked = nextChecked;
+                });
+                auxiliaryChildren.forEach(node => {
                     if (node.disabled) return;
                     node.checked = nextChecked;
                 });
@@ -58325,7 +58586,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         },
 
         persistManualEscortSettingFromForm: () => {
-            const manual = UI.readManualEscortSettingOverride();
+            const manual = UI.readManualEscortSettingOverride({ includeDisabled: true });
             userConfig.manualEscortSetting = manual || { enabled: false };
             GM_setValue('config', userConfig);
             return manual;
@@ -58343,6 +58604,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const bidSetting = setting.bidConstraintValue && typeof setting.bidConstraintValue === 'object'
                 ? setting.bidConstraintValue
                 : {};
+            const netBidSetting = setting.netBidConstraintValue && typeof setting.netBidConstraintValue === 'object'
+                ? setting.netBidConstraintValue
+                : (
+                    setting.netConstraintValue && typeof setting.netConstraintValue === 'object'
+                        ? setting.netConstraintValue
+                        : (
+                            setting.netRoiConstraintValue && typeof setting.netRoiConstraintValue === 'object'
+                                ? setting.netRoiConstraintValue
+                                : {}
+                        )
+                );
             const budgetSetting = setting.budget && typeof setting.budget === 'object'
                 ? setting.budget
                 : {};
@@ -58363,6 +58635,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     upperLimit: bidSetting.upperLimit,
                     modifyTimesLimit: bidSetting.modifyTimesLimit,
                     dailyReset: bidSetting.dailyReset
+                },
+                netBidConstraintValue: {
+                    enabled: netBidSetting.enabled,
+                    lowerLimit: netBidSetting.lowerLimit,
+                    upperLimit: netBidSetting.upperLimit,
+                    modifyTimesLimit: netBidSetting.modifyTimesLimit,
+                    dailyReset: netBidSetting.dailyReset
                 },
                 budget: {
                     enabled: budgetSetting.enabled,
@@ -58540,7 +58819,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             <div class="am26-manual-card-head">
                                 <label class="am26-manual-toggle">
                                     <input id="${CONFIG.UI_ID}-manual-bid-enabled" type="checkbox" />
-                                    <span>出价调控（成本）</span>
+                                    <span>出价调控</span>
                                 </label>
                                 <label class="am26-manual-inline">
                                     <input id="${CONFIG.UI_ID}-manual-bid-reset" type="checkbox" />
@@ -58549,16 +58828,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             </div>
                             <div class="am26-manual-grid">
                                 <label class="am26-manual-field">
-                                    <span>下限（元）</span>
+                                    <span>下限</span>
                                     <input id="${CONFIG.UI_ID}-manual-bid-lower" type="number" min="0" step="0.01" />
                                 </label>
                                 <label class="am26-manual-field">
-                                    <span>上限（元）</span>
+                                    <span>上限</span>
                                     <input id="${CONFIG.UI_ID}-manual-bid-upper" type="text" placeholder="不限" />
                                 </label>
                                 <label class="am26-manual-field full">
                                     <span>修改次数上限（次/日）</span>
                                     <input id="${CONFIG.UI_ID}-manual-bid-times" type="number" min="0" step="1" />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="am26-manual-card">
+                            <div class="am26-manual-card-head">
+                                <label class="am26-manual-toggle">
+                                    <input id="${CONFIG.UI_ID}-manual-net-bid-enabled" type="checkbox" />
+                                    <span>净投产比调控</span>
+                                </label>
+                                <label class="am26-manual-inline">
+                                    <input id="${CONFIG.UI_ID}-manual-net-bid-reset" type="checkbox" />
+                                    <span>次日恢复</span>
+                                </label>
+                            </div>
+                            <div class="am26-manual-grid">
+                                <label class="am26-manual-field">
+                                    <span>下限</span>
+                                    <input id="${CONFIG.UI_ID}-manual-net-bid-lower" type="number" min="0" step="0.01" />
+                                </label>
+                                <label class="am26-manual-field">
+                                    <span>上限</span>
+                                    <input id="${CONFIG.UI_ID}-manual-net-bid-upper" type="text" placeholder="不限" />
+                                </label>
+                                <label class="am26-manual-field full">
+                                    <span>修改次数上限（次/日）</span>
+                                    <input id="${CONFIG.UI_ID}-manual-net-bid-times" type="number" min="0" step="1" />
                                 </label>
                             </div>
                         </div>
@@ -58667,6 +58973,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 : {
                     enabled: false,
                     bidConstraintValue: { enabled: false, lowerLimit: 0.15, upperLimit: 0.54, modifyTimesLimit: 10, dailyReset: false },
+                    netBidConstraintValue: { enabled: false, lowerLimit: 20, upperLimit: '不限', modifyTimesLimit: 10, dailyReset: false },
                     budget: { enabled: false, lowerLimit: 200, upperLimit: '不限', modifyTimesLimit: 20, dailyReset: false },
                     addKeyword: { enabled: false, keywordPreference: '类目流量飙升词', matchType: '广泛匹配', keywordLimit: 200 },
                     switchKeywordMatchType: { enabled: false },
@@ -58834,8 +59141,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             // 主面板（默认隐藏，用户点击最小化按钮后显示）
             const panel = document.createElement('div');
             panel.id = CONFIG.UI_ID;
+            const idlePanelWidthPx = 667;
             panel.style.cssText = `
-                position:fixed;top:20px;right:20px;width:500px;min-width:500px;max-width:1200px;
+                position:fixed;top:20px;right:20px;width:${idlePanelWidthPx}px;min-width:${idlePanelWidthPx}px;max-width:1200px;
                 padding:15px;background:var(--am26-panel-strong,rgba(255,255,255,.45));
                 color:var(--am26-text,#1b2438);border-radius:18px;z-index:1000001;
                 font-size:13px;box-shadow:var(--am26-shadow,0 8px 32px rgba(31,38,135,.15));border:1px solid var(--am26-border,rgba(255,255,255,.4));
@@ -58976,7 +59284,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wrapper.style.overflow = 'hidden';
                 }
 
-                panel.style.width = '500px';
+                panel.style.width = `${idlePanelWidthPx}px`;
                 panel.style.height = 'auto';
                 panel.style.top = '20px';
                 panel.style.right = '20px';
@@ -59296,6 +59604,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         shieldKeyword: 'keywordMask',
                         keywordMask: 'keywordMask',
                         bidConstraintValue: 'bidConstraintValue',
+                        netBidConstraintValue: 'netBidConstraintValue',
+                        netConstraintValue: 'netBidConstraintValue',
+                        netRoiConstraintValue: 'netBidConstraintValue',
                         budget: 'budget'
                     };
                     return keyMap[key] || key;
@@ -59370,7 +59681,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         let cfg = deepCloneObject(rawCfg);
                         if (key === 'keywordAdd') cfg = normalizeKeywordAddConfig(cfg);
                         if (key === 'budget') cfg = normalizeBudgetConfig(cfg);
-                        if (key === 'bidConstraintValue') cfg = normalizeBidConfig(cfg);
+                        if (key === 'bidConstraintValue' || key === 'netBidConstraintValue') cfg = normalizeBidConfig(cfg);
                         mergeConfig(key, cfg);
                     });
                     return normalized;
@@ -59403,7 +59714,26 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (key === 'budget') {
                         ['budget', '预算', '预算调优', '预算优化', '预算控制', '每日预算调控区间'].forEach(pushAlias);
                     } else if (key === 'bidConstraintValue') {
-                        ['bidconstraintvalue', '投产比', '投产比调优', 'roi', '目标投产比', '出价约束', '成本调控', '平均点击成本', '出价调控'].forEach(pushAlias);
+                        [
+                            'bidconstraintvalue',
+                            '出价约束',
+                            '成本调控',
+                            '平均点击成本',
+                            '出价调控'
+                        ].forEach(pushAlias);
+                    } else if (key === 'netBidConstraintValue') {
+                        [
+                            'netbidconstraintvalue',
+                            'netconstraintvalue',
+                            'netroiconstraintvalue',
+                            '投产比',
+                            '净投产比',
+                            '净投产比调控',
+                            '投产比调优',
+                            'roi',
+                            '目标投产比',
+                            '净目标投产比'
+                        ].forEach(pushAlias);
                     } else if (key === 'addKeyword' || key === 'keywordAdd') {
                         ['addkeyword', 'keywordadd', '添加关键词', '买词偏好', '自选词上限', '关键词调控', '匹配方式'].forEach(pushAlias);
                     } else if (key === 'switchKeywordMatchType' || key === 'keywordSwitch') {
@@ -59559,8 +59889,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const responseSetting = normalizeEscortSettingTable(latestEscortSettingTable);
                     const defaultUserSetting = {
                         bidConstraintValue: { enabled: false },
+                        netBidConstraintValue: { enabled: false },
                         budget: { enabled: false }
                     };
+                    const defaultDisplaySetting = normalizeEscortSettingTable({
+                        actionType: 'openInDialog',
+                        operationList: [],
+                        userSetting: {
+                            bidConstraintValue: { enabled: false },
+                            netBidConstraintValue: { enabled: false },
+                            budget: { enabled: false },
+                            addKeyword: { enabled: false },
+                            switchKeywordMatchType: { enabled: false },
+                            shieldKeyword: { enabled: false }
+                        },
+                        footerInfo: {}
+                    });
                     const ensureUserSettingEnabled = (settingTable) => {
                         if (!settingTable || typeof settingTable !== 'object') return null;
                         const baseUserSetting = settingTable.userSetting && typeof settingTable.userSetting === 'object'
@@ -59667,14 +60011,38 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if (!Object.keys(mergedSetting.userSetting).length) return null;
                         return mergedSetting;
                     };
+                    const resolveSettingTargetKey = (userSettingBucket, sourceKey) => {
+                        const aliasMap = {
+                            bidConstraintValue: ['bidConstraintValue'],
+                            netBidConstraintValue: ['netBidConstraintValue', 'netConstraintValue', 'netRoiConstraintValue'],
+                            netConstraintValue: ['netConstraintValue', 'netBidConstraintValue', 'netRoiConstraintValue'],
+                            netRoiConstraintValue: ['netRoiConstraintValue', 'netBidConstraintValue', 'netConstraintValue'],
+                            budget: ['budget'],
+                            addKeyword: ['addKeyword', 'keywordAdd'],
+                            keywordAdd: ['keywordAdd', 'addKeyword'],
+                            switchKeywordMatchType: ['switchKeywordMatchType', 'keywordSwitch'],
+                            keywordSwitch: ['keywordSwitch', 'switchKeywordMatchType'],
+                            shieldKeyword: ['shieldKeyword', 'keywordMask'],
+                            keywordMask: ['keywordMask', 'shieldKeyword']
+                        };
+                        const candidateList = aliasMap[sourceKey] || [sourceKey];
+                        return candidateList.find(key => key in (userSettingBucket || {})) || sourceKey;
+                    };
                     const applyManualSetting = (settingTable, manualOverride) => {
                         if (!manualOverride || !manualOverride.enabled) return settingTable;
-                        const base = normalizeEscortSettingTable(settingTable) || normalizeEscortSettingTable({
-                            actionType: 'openInDialog',
-                            operationList: [],
-                            userSetting: {},
+                        const manualFallbackSetting = normalizeEscortSettingTable({
+                            actionType: normalizeActionType(manualOverride.actionType, 'openInDialog'),
+                            operationList: Array.isArray(manualOverride.operationList)
+                                ? manualOverride.operationList.filter(Boolean)
+                                : [],
+                            userSetting: deepCloneObject(
+                                manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
+                                    ? manualOverride.userSetting
+                                    : {}
+                            ),
                             footerInfo: {}
                         });
+                        const base = normalizeEscortSettingTable(settingTable) || manualFallbackSetting;
                         if (!base) return null;
 
                         const mergedSetting = normalizeEscortSettingTable({
@@ -59723,46 +60091,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             if (!text) return;
                             cfg[targetField] = text;
                         };
-                        const resolveTargetKey = (sourceKey) => {
-                            const aliasMap = {
-                                bidConstraintValue: ['bidConstraintValue'],
-                                budget: ['budget'],
-                                addKeyword: ['addKeyword', 'keywordAdd'],
-                                keywordAdd: ['keywordAdd', 'addKeyword'],
-                                switchKeywordMatchType: ['switchKeywordMatchType', 'keywordSwitch'],
-                                keywordSwitch: ['keywordSwitch', 'switchKeywordMatchType'],
-                                shieldKeyword: ['shieldKeyword', 'keywordMask'],
-                                keywordMask: ['keywordMask', 'shieldKeyword']
-                            };
-                            const candidateList = aliasMap[sourceKey] || [sourceKey];
-                            return candidateList.find(key => key in (mergedSetting.userSetting || {})) || sourceKey;
-                        };
 
                         const manualUserSetting = manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
                             ? manualOverride.userSetting
                             : {};
+                        const manualTargetKeySet = new Set();
                         Object.entries(manualUserSetting).forEach(([key, manualCfgRaw]) => {
                             if (!key || !manualCfgRaw || typeof manualCfgRaw !== 'object') return;
                             const manualCfg = manualCfgRaw;
-                            const targetKey = resolveTargetKey(key);
+                            const targetKey = resolveSettingTargetKey(mergedSetting.userSetting, key);
+                            manualTargetKeySet.add(targetKey);
                             const baseCfg = mergedSetting.userSetting[targetKey] && typeof mergedSetting.userSetting[targetKey] === 'object'
                                 ? mergedSetting.userSetting[targetKey]
                                 : {};
                             setEnabledField(baseCfg, manualCfg.enabled);
 
-                            if (targetKey === 'budget' || targetKey === 'bidConstraintValue') {
+                            if (targetKey === 'budget' || targetKey === 'bidConstraintValue' || targetKey === 'netBidConstraintValue') {
                                 setNumericField(baseCfg, 'lowerLimit', manualCfg.lowerLimit);
                                 setNumericField(baseCfg, 'modifyTimesLimit', manualCfg.modifyTimesLimit);
                                 if (typeof manualCfg.dailyReset === 'boolean') baseCfg.dailyReset = manualCfg.dailyReset;
                                 if (manualCfg.upperLimit === '不限') {
                                     if (targetKey === 'budget') baseCfg.upperType = 0;
-                                    if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                    if (targetKey === 'bidConstraintValue' || targetKey === 'netBidConstraintValue') delete baseCfg.upperType;
                                 } else {
                                     const upperLimit = Number(manualCfg.upperLimit);
                                     if (Number.isFinite(upperLimit)) {
                                         baseCfg.upperLimit = upperLimit;
                                         if (targetKey === 'budget') baseCfg.upperType = 1;
-                                        if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                        if (targetKey === 'bidConstraintValue' || targetKey === 'netBidConstraintValue') delete baseCfg.upperType;
                                     }
                                 }
                             }
@@ -59775,6 +60131,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                             mergedSetting.userSetting[targetKey] = baseCfg;
                         });
+                        Object.entries(mergedSetting.userSetting).forEach(([key, cfgRaw]) => {
+                            const cfg = cfgRaw && typeof cfgRaw === 'object' ? cfgRaw : {};
+                            if (!manualTargetKeySet.has(key)) {
+                                cfg.enabled = false;
+                            } else if (typeof cfg.enabled !== 'boolean') {
+                                cfg.enabled = false;
+                            }
+                            mergedSetting.userSetting[key] = cfg;
+                        });
 
                         const operationKeySet = new Set();
                         Object.entries(mergedSetting.userSetting).forEach(([key, cfg]) => {
@@ -59783,10 +60148,32 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         mergedSetting.operationList = Array.from(operationKeySet);
                         return mergedSetting;
                     };
+                    const buildManualDisabledOverride = (manualOverride) => {
+                        if (!manualOverride || typeof manualOverride !== 'object') return null;
+                        const userSettingSnapshot = deepCloneObject(
+                            manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
+                                ? manualOverride.userSetting
+                                : {}
+                        );
+                        Object.values(userSettingSnapshot).forEach(cfg => {
+                            if (!cfg || typeof cfg !== 'object') return;
+                            cfg.enabled = false;
+                        });
+                        return {
+                            ...manualOverride,
+                            enabled: true,
+                            operationList: [],
+                            userSetting: userSettingSnapshot
+                        };
+                    };
 
                     const modalSetting = readSettingFromModal(responseSetting);
-                    const manualSetting = typeof UI.readManualEscortSettingOverride === 'function'
-                        ? UI.readManualEscortSettingOverride()
+                    const manualSettingMaster = document.getElementById(`${CONFIG.UI_ID}-manual-enable`);
+                    const manualSetting = (
+                        manualSettingMaster instanceof HTMLInputElement
+                        && typeof UI.readManualEscortSettingOverride === 'function'
+                    )
+                        ? UI.readManualEscortSettingOverride({ includeDisabled: true })
                         : null;
                     let finalSetting = modalSetting || responseSetting;
                     let sourceLabel = modalSetting
@@ -59794,23 +60181,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         : (responseSetting ? '诊断返回设置' : '默认护航设置');
                     let fromModal = !!modalSetting;
                     let fromManual = false;
-                    const hasEscortSettingTable = !!finalSetting;
-                    if (manualSetting?.enabled && hasEscortSettingTable) {
-                        const mergedByManual = applyManualSetting(finalSetting, manualSetting);
-                        if (mergedByManual) {
-                            finalSetting = mergedByManual;
-                            sourceLabel = '手动设置参数';
-                            fromManual = true;
-                            fromModal = false;
+                    if (manualSetting && typeof manualSetting === 'object') {
+                        if (manualSetting.enabled) {
+                            const mergedByManual = applyManualSetting(finalSetting, manualSetting);
+                            if (mergedByManual) {
+                                finalSetting = mergedByManual;
+                                sourceLabel = '手动设置参数';
+                                fromManual = true;
+                                fromModal = false;
+                            }
+                        } else {
+                            const manualDisabledOverride = buildManualDisabledOverride({
+                                ...manualSetting,
+                                actionType: normalizeActionType(
+                                    manualSetting.actionType,
+                                    normalizeActionType(finalSetting?.actionType, 'openInDialog')
+                                )
+                            });
+                            const manualDisabledSetting = applyManualSetting(finalSetting, manualDisabledOverride);
+                            if (manualDisabledSetting) {
+                                finalSetting = manualDisabledSetting;
+                                sourceLabel = '手动设置参数（未勾选）';
+                                fromManual = true;
+                                fromModal = false;
+                            }
                         }
                     }
-                    const userSetting = normalizeUserSettingForOpenV3(ensureUserSettingEnabled(finalSetting) || defaultUserSetting);
-                    const actionType = normalizeActionType(finalSetting?.actionType || (manualSetting?.enabled ? manualSetting.actionType : ''), 'openInDialog');
+                    const submitSetting = normalizeEscortSettingTable(finalSetting);
+                    const displaySetting = submitSetting || defaultDisplaySetting;
+                    const userSetting = normalizeUserSettingForOpenV3(ensureUserSettingEnabled(submitSetting) || defaultUserSetting);
+                    const actionType = normalizeActionType(submitSetting?.actionType || manualSetting?.actionType || '', 'openInDialog');
 
                     return {
                         actionType,
                         userSetting,
-                        displaySetting: finalSetting,
+                        displaySetting,
                         sourceLabel,
                         fromModal,
                         fromManual
@@ -59855,11 +60260,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const buildExecutionStateMap = (displaySetting, success) => {
                         if (!displaySetting || typeof displaySetting !== 'object') return {};
                         const keySet = new Set();
-                        if (Array.isArray(displaySetting.operationList)) {
-                            displaySetting.operationList.forEach(key => keySet.add(key));
+                        const operationList = Array.isArray(displaySetting.operationList)
+                            ? displaySetting.operationList.filter(Boolean)
+                            : [];
+                        if (operationList.length) {
+                            operationList.forEach(key => keySet.add(key));
                         }
-                        if (displaySetting.userSetting && typeof displaySetting.userSetting === 'object') {
-                            Object.keys(displaySetting.userSetting).forEach(key => keySet.add(key));
+                        if (!operationList.length && displaySetting.userSetting && typeof displaySetting.userSetting === 'object') {
+                            Object.entries(displaySetting.userSetting).forEach(([key, cfg]) => {
+                                if (!key || !cfg || typeof cfg !== 'object') return;
+                                if (cfg.enabled === false) return;
+                                keySet.add(key);
+                            });
+                        }
+                        if (!keySet.size) {
+                            return {};
                         }
                         const map = {};
                         const stateValue = !!success;
@@ -59904,9 +60319,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
 
                     const executionState = buildExecutionStateMap(resolvedOpenV3Setting.displaySetting, submitResult.success);
-                    if (Object.keys(executionState).length) {
-                        UI.renderEscortSettingTableToCard(card, resolvedOpenV3Setting.displaySetting, { executionState });
-                    }
+                    UI.renderEscortSettingTableToCard(card, resolvedOpenV3Setting.displaySetting, {
+                        executionState,
+                        sourceLabel: resolvedOpenV3Setting.sourceLabel,
+                        fromManual: resolvedOpenV3Setting.fromManual
+                    });
 
                     if (submitResult.forced) {
                         card.log(`已按强制模式重提：${submitResult.actionType}`, '#4b5563');

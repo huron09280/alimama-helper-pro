@@ -148,6 +148,9 @@
                         shieldKeyword: 'keywordMask',
                         keywordMask: 'keywordMask',
                         bidConstraintValue: 'bidConstraintValue',
+                        netBidConstraintValue: 'netBidConstraintValue',
+                        netConstraintValue: 'netBidConstraintValue',
+                        netRoiConstraintValue: 'netBidConstraintValue',
                         budget: 'budget'
                     };
                     return keyMap[key] || key;
@@ -222,7 +225,7 @@
                         let cfg = deepCloneObject(rawCfg);
                         if (key === 'keywordAdd') cfg = normalizeKeywordAddConfig(cfg);
                         if (key === 'budget') cfg = normalizeBudgetConfig(cfg);
-                        if (key === 'bidConstraintValue') cfg = normalizeBidConfig(cfg);
+                        if (key === 'bidConstraintValue' || key === 'netBidConstraintValue') cfg = normalizeBidConfig(cfg);
                         mergeConfig(key, cfg);
                     });
                     return normalized;
@@ -255,7 +258,26 @@
                     if (key === 'budget') {
                         ['budget', '预算', '预算调优', '预算优化', '预算控制', '每日预算调控区间'].forEach(pushAlias);
                     } else if (key === 'bidConstraintValue') {
-                        ['bidconstraintvalue', '投产比', '投产比调优', 'roi', '目标投产比', '出价约束', '成本调控', '平均点击成本', '出价调控'].forEach(pushAlias);
+                        [
+                            'bidconstraintvalue',
+                            '出价约束',
+                            '成本调控',
+                            '平均点击成本',
+                            '出价调控'
+                        ].forEach(pushAlias);
+                    } else if (key === 'netBidConstraintValue') {
+                        [
+                            'netbidconstraintvalue',
+                            'netconstraintvalue',
+                            'netroiconstraintvalue',
+                            '投产比',
+                            '净投产比',
+                            '净投产比调控',
+                            '投产比调优',
+                            'roi',
+                            '目标投产比',
+                            '净目标投产比'
+                        ].forEach(pushAlias);
                     } else if (key === 'addKeyword' || key === 'keywordAdd') {
                         ['addkeyword', 'keywordadd', '添加关键词', '买词偏好', '自选词上限', '关键词调控', '匹配方式'].forEach(pushAlias);
                     } else if (key === 'switchKeywordMatchType' || key === 'keywordSwitch') {
@@ -411,8 +433,22 @@
                     const responseSetting = normalizeEscortSettingTable(latestEscortSettingTable);
                     const defaultUserSetting = {
                         bidConstraintValue: { enabled: false },
+                        netBidConstraintValue: { enabled: false },
                         budget: { enabled: false }
                     };
+                    const defaultDisplaySetting = normalizeEscortSettingTable({
+                        actionType: 'openInDialog',
+                        operationList: [],
+                        userSetting: {
+                            bidConstraintValue: { enabled: false },
+                            netBidConstraintValue: { enabled: false },
+                            budget: { enabled: false },
+                            addKeyword: { enabled: false },
+                            switchKeywordMatchType: { enabled: false },
+                            shieldKeyword: { enabled: false }
+                        },
+                        footerInfo: {}
+                    });
                     const ensureUserSettingEnabled = (settingTable) => {
                         if (!settingTable || typeof settingTable !== 'object') return null;
                         const baseUserSetting = settingTable.userSetting && typeof settingTable.userSetting === 'object'
@@ -519,14 +555,38 @@
                         if (!Object.keys(mergedSetting.userSetting).length) return null;
                         return mergedSetting;
                     };
+                    const resolveSettingTargetKey = (userSettingBucket, sourceKey) => {
+                        const aliasMap = {
+                            bidConstraintValue: ['bidConstraintValue'],
+                            netBidConstraintValue: ['netBidConstraintValue', 'netConstraintValue', 'netRoiConstraintValue'],
+                            netConstraintValue: ['netConstraintValue', 'netBidConstraintValue', 'netRoiConstraintValue'],
+                            netRoiConstraintValue: ['netRoiConstraintValue', 'netBidConstraintValue', 'netConstraintValue'],
+                            budget: ['budget'],
+                            addKeyword: ['addKeyword', 'keywordAdd'],
+                            keywordAdd: ['keywordAdd', 'addKeyword'],
+                            switchKeywordMatchType: ['switchKeywordMatchType', 'keywordSwitch'],
+                            keywordSwitch: ['keywordSwitch', 'switchKeywordMatchType'],
+                            shieldKeyword: ['shieldKeyword', 'keywordMask'],
+                            keywordMask: ['keywordMask', 'shieldKeyword']
+                        };
+                        const candidateList = aliasMap[sourceKey] || [sourceKey];
+                        return candidateList.find(key => key in (userSettingBucket || {})) || sourceKey;
+                    };
                     const applyManualSetting = (settingTable, manualOverride) => {
                         if (!manualOverride || !manualOverride.enabled) return settingTable;
-                        const base = normalizeEscortSettingTable(settingTable) || normalizeEscortSettingTable({
-                            actionType: 'openInDialog',
-                            operationList: [],
-                            userSetting: {},
+                        const manualFallbackSetting = normalizeEscortSettingTable({
+                            actionType: normalizeActionType(manualOverride.actionType, 'openInDialog'),
+                            operationList: Array.isArray(manualOverride.operationList)
+                                ? manualOverride.operationList.filter(Boolean)
+                                : [],
+                            userSetting: deepCloneObject(
+                                manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
+                                    ? manualOverride.userSetting
+                                    : {}
+                            ),
                             footerInfo: {}
                         });
+                        const base = normalizeEscortSettingTable(settingTable) || manualFallbackSetting;
                         if (!base) return null;
 
                         const mergedSetting = normalizeEscortSettingTable({
@@ -575,46 +635,34 @@
                             if (!text) return;
                             cfg[targetField] = text;
                         };
-                        const resolveTargetKey = (sourceKey) => {
-                            const aliasMap = {
-                                bidConstraintValue: ['bidConstraintValue'],
-                                budget: ['budget'],
-                                addKeyword: ['addKeyword', 'keywordAdd'],
-                                keywordAdd: ['keywordAdd', 'addKeyword'],
-                                switchKeywordMatchType: ['switchKeywordMatchType', 'keywordSwitch'],
-                                keywordSwitch: ['keywordSwitch', 'switchKeywordMatchType'],
-                                shieldKeyword: ['shieldKeyword', 'keywordMask'],
-                                keywordMask: ['keywordMask', 'shieldKeyword']
-                            };
-                            const candidateList = aliasMap[sourceKey] || [sourceKey];
-                            return candidateList.find(key => key in (mergedSetting.userSetting || {})) || sourceKey;
-                        };
 
                         const manualUserSetting = manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
                             ? manualOverride.userSetting
                             : {};
+                        const manualTargetKeySet = new Set();
                         Object.entries(manualUserSetting).forEach(([key, manualCfgRaw]) => {
                             if (!key || !manualCfgRaw || typeof manualCfgRaw !== 'object') return;
                             const manualCfg = manualCfgRaw;
-                            const targetKey = resolveTargetKey(key);
+                            const targetKey = resolveSettingTargetKey(mergedSetting.userSetting, key);
+                            manualTargetKeySet.add(targetKey);
                             const baseCfg = mergedSetting.userSetting[targetKey] && typeof mergedSetting.userSetting[targetKey] === 'object'
                                 ? mergedSetting.userSetting[targetKey]
                                 : {};
                             setEnabledField(baseCfg, manualCfg.enabled);
 
-                            if (targetKey === 'budget' || targetKey === 'bidConstraintValue') {
+                            if (targetKey === 'budget' || targetKey === 'bidConstraintValue' || targetKey === 'netBidConstraintValue') {
                                 setNumericField(baseCfg, 'lowerLimit', manualCfg.lowerLimit);
                                 setNumericField(baseCfg, 'modifyTimesLimit', manualCfg.modifyTimesLimit);
                                 if (typeof manualCfg.dailyReset === 'boolean') baseCfg.dailyReset = manualCfg.dailyReset;
                                 if (manualCfg.upperLimit === '不限') {
                                     if (targetKey === 'budget') baseCfg.upperType = 0;
-                                    if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                    if (targetKey === 'bidConstraintValue' || targetKey === 'netBidConstraintValue') delete baseCfg.upperType;
                                 } else {
                                     const upperLimit = Number(manualCfg.upperLimit);
                                     if (Number.isFinite(upperLimit)) {
                                         baseCfg.upperLimit = upperLimit;
                                         if (targetKey === 'budget') baseCfg.upperType = 1;
-                                        if (targetKey === 'bidConstraintValue') delete baseCfg.upperType;
+                                        if (targetKey === 'bidConstraintValue' || targetKey === 'netBidConstraintValue') delete baseCfg.upperType;
                                     }
                                 }
                             }
@@ -627,6 +675,15 @@
 
                             mergedSetting.userSetting[targetKey] = baseCfg;
                         });
+                        Object.entries(mergedSetting.userSetting).forEach(([key, cfgRaw]) => {
+                            const cfg = cfgRaw && typeof cfgRaw === 'object' ? cfgRaw : {};
+                            if (!manualTargetKeySet.has(key)) {
+                                cfg.enabled = false;
+                            } else if (typeof cfg.enabled !== 'boolean') {
+                                cfg.enabled = false;
+                            }
+                            mergedSetting.userSetting[key] = cfg;
+                        });
 
                         const operationKeySet = new Set();
                         Object.entries(mergedSetting.userSetting).forEach(([key, cfg]) => {
@@ -635,10 +692,32 @@
                         mergedSetting.operationList = Array.from(operationKeySet);
                         return mergedSetting;
                     };
+                    const buildManualDisabledOverride = (manualOverride) => {
+                        if (!manualOverride || typeof manualOverride !== 'object') return null;
+                        const userSettingSnapshot = deepCloneObject(
+                            manualOverride.userSetting && typeof manualOverride.userSetting === 'object'
+                                ? manualOverride.userSetting
+                                : {}
+                        );
+                        Object.values(userSettingSnapshot).forEach(cfg => {
+                            if (!cfg || typeof cfg !== 'object') return;
+                            cfg.enabled = false;
+                        });
+                        return {
+                            ...manualOverride,
+                            enabled: true,
+                            operationList: [],
+                            userSetting: userSettingSnapshot
+                        };
+                    };
 
                     const modalSetting = readSettingFromModal(responseSetting);
-                    const manualSetting = typeof UI.readManualEscortSettingOverride === 'function'
-                        ? UI.readManualEscortSettingOverride()
+                    const manualSettingMaster = document.getElementById(`${CONFIG.UI_ID}-manual-enable`);
+                    const manualSetting = (
+                        manualSettingMaster instanceof HTMLInputElement
+                        && typeof UI.readManualEscortSettingOverride === 'function'
+                    )
+                        ? UI.readManualEscortSettingOverride({ includeDisabled: true })
                         : null;
                     let finalSetting = modalSetting || responseSetting;
                     let sourceLabel = modalSetting
@@ -646,23 +725,41 @@
                         : (responseSetting ? '诊断返回设置' : '默认护航设置');
                     let fromModal = !!modalSetting;
                     let fromManual = false;
-                    const hasEscortSettingTable = !!finalSetting;
-                    if (manualSetting?.enabled && hasEscortSettingTable) {
-                        const mergedByManual = applyManualSetting(finalSetting, manualSetting);
-                        if (mergedByManual) {
-                            finalSetting = mergedByManual;
-                            sourceLabel = '手动设置参数';
-                            fromManual = true;
-                            fromModal = false;
+                    if (manualSetting && typeof manualSetting === 'object') {
+                        if (manualSetting.enabled) {
+                            const mergedByManual = applyManualSetting(finalSetting, manualSetting);
+                            if (mergedByManual) {
+                                finalSetting = mergedByManual;
+                                sourceLabel = '手动设置参数';
+                                fromManual = true;
+                                fromModal = false;
+                            }
+                        } else {
+                            const manualDisabledOverride = buildManualDisabledOverride({
+                                ...manualSetting,
+                                actionType: normalizeActionType(
+                                    manualSetting.actionType,
+                                    normalizeActionType(finalSetting?.actionType, 'openInDialog')
+                                )
+                            });
+                            const manualDisabledSetting = applyManualSetting(finalSetting, manualDisabledOverride);
+                            if (manualDisabledSetting) {
+                                finalSetting = manualDisabledSetting;
+                                sourceLabel = '手动设置参数（未勾选）';
+                                fromManual = true;
+                                fromModal = false;
+                            }
                         }
                     }
-                    const userSetting = normalizeUserSettingForOpenV3(ensureUserSettingEnabled(finalSetting) || defaultUserSetting);
-                    const actionType = normalizeActionType(finalSetting?.actionType || (manualSetting?.enabled ? manualSetting.actionType : ''), 'openInDialog');
+                    const submitSetting = normalizeEscortSettingTable(finalSetting);
+                    const displaySetting = submitSetting || defaultDisplaySetting;
+                    const userSetting = normalizeUserSettingForOpenV3(ensureUserSettingEnabled(submitSetting) || defaultUserSetting);
+                    const actionType = normalizeActionType(submitSetting?.actionType || manualSetting?.actionType || '', 'openInDialog');
 
                     return {
                         actionType,
                         userSetting,
-                        displaySetting: finalSetting,
+                        displaySetting,
                         sourceLabel,
                         fromModal,
                         fromManual
@@ -707,11 +804,21 @@
                     const buildExecutionStateMap = (displaySetting, success) => {
                         if (!displaySetting || typeof displaySetting !== 'object') return {};
                         const keySet = new Set();
-                        if (Array.isArray(displaySetting.operationList)) {
-                            displaySetting.operationList.forEach(key => keySet.add(key));
+                        const operationList = Array.isArray(displaySetting.operationList)
+                            ? displaySetting.operationList.filter(Boolean)
+                            : [];
+                        if (operationList.length) {
+                            operationList.forEach(key => keySet.add(key));
                         }
-                        if (displaySetting.userSetting && typeof displaySetting.userSetting === 'object') {
-                            Object.keys(displaySetting.userSetting).forEach(key => keySet.add(key));
+                        if (!operationList.length && displaySetting.userSetting && typeof displaySetting.userSetting === 'object') {
+                            Object.entries(displaySetting.userSetting).forEach(([key, cfg]) => {
+                                if (!key || !cfg || typeof cfg !== 'object') return;
+                                if (cfg.enabled === false) return;
+                                keySet.add(key);
+                            });
+                        }
+                        if (!keySet.size) {
+                            return {};
                         }
                         const map = {};
                         const stateValue = !!success;
@@ -756,9 +863,11 @@
                     }
 
                     const executionState = buildExecutionStateMap(resolvedOpenV3Setting.displaySetting, submitResult.success);
-                    if (Object.keys(executionState).length) {
-                        UI.renderEscortSettingTableToCard(card, resolvedOpenV3Setting.displaySetting, { executionState });
-                    }
+                    UI.renderEscortSettingTableToCard(card, resolvedOpenV3Setting.displaySetting, {
+                        executionState,
+                        sourceLabel: resolvedOpenV3Setting.sourceLabel,
+                        fromManual: resolvedOpenV3Setting.fromManual
+                    });
 
                     if (submitResult.forced) {
                         card.log(`已按强制模式重提：${submitResult.actionType}`, '#4b5563');

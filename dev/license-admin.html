@@ -793,6 +793,11 @@
 
             const normalizeShopId = (value) => String(value || '').trim();
             const normalizeStoreNameKey = (value) => String(value || '').trim().toLowerCase();
+            const normalizeSubAccount = (value) => {
+                const text = String(value || '').trim();
+                if (!text || text === '-' || text === '--') return '';
+                return text;
+            };
 
             const splitShopNameParts = (value = '') => {
                 const text = String(value || '').trim();
@@ -815,6 +820,23 @@
                     storeName: storeName || '-',
                     subAccount: subAccount || '-'
                 };
+            };
+            const normalizeSubAccountList = (value = [], shopName = '') => {
+                const sourceList = Array.isArray(value) ? value : [value];
+                const seen = new Set();
+                const output = [];
+                const push = (item) => {
+                    const normalized = normalizeSubAccount(item);
+                    if (!normalized) return;
+                    const key = normalized.toLowerCase();
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    output.push(normalized);
+                };
+                sourceList.forEach(push);
+                const nameParts = splitShopNameParts(shopName);
+                push(nameParts.subAccount);
+                return output;
             };
 
             const pickText = (...values) => {
@@ -864,6 +886,7 @@
                             shopName: '-',
                             storeName: '-',
                             subAccount: '-',
+                            subAccounts: [],
                             source: '',
                             updatedAt: '',
                             lastSeenAt: '',
@@ -892,6 +915,16 @@
                     if (!item) return;
                     Object.entries(patch).forEach(([key, value]) => {
                         if (value === null || value === undefined) return;
+                        if (key === 'subAccounts') {
+                            item.subAccounts = normalizeSubAccountList(
+                                [
+                                    ...(Array.isArray(item.subAccounts) ? item.subAccounts : []),
+                                    ...(Array.isArray(value) ? value : [value])
+                                ],
+                                patch.shopName || item.shopName
+                            );
+                            return;
+                        }
                         if (typeof value === 'string') {
                             if (!value.trim()) return;
                             item[key] = value.trim();
@@ -899,6 +932,7 @@
                         }
                         item[key] = value;
                     });
+                    item.subAccounts = normalizeSubAccountList(item.subAccounts, item.shopName);
                 };
 
                 shops.forEach((entry) => {
@@ -906,6 +940,7 @@
                     if (!shopId) return;
                     mergeItem(shopId, {
                         shopName: pickText(entry?.shopName, entry?.shop_name),
+                        subAccounts: entry?.subAccounts,
                         source: pickText(entry?.source, 'state.shops'),
                         updatedAt: pickIsoTime(entry?.updatedAt, entry?.updated_at),
                         authExpiresAt: pickIsoTime(entry?.authExpiresAt, entry?.expiresAt),
@@ -919,6 +954,7 @@
                     if (!shopId) return;
                     mergeItem(shopId, {
                         shopName: pickText(entry?.shopName, entry?.shop_name),
+                        subAccounts: entry?.subAccounts,
                         source: pickText(entry?.source, 'state.activeShops'),
                         updatedAt: pickIsoTime(entry?.updatedAt, entry?.updated_at, entry?.lastSeenAt, entry?.activeAt),
                         lastSeenAt: pickIsoTime(entry?.lastSeenAt, entry?.activeAt, entry?.updatedAt, entry?.updated_at),
@@ -940,7 +976,7 @@
                 allowedSet.forEach((shopId) => ensureItem(shopId));
                 revokedSet.forEach((shopId) => ensureItem(shopId));
 
-                const items = Array.from(map.values()).map((item) => {
+                const items = Array.from(map.values()).flatMap((item) => {
                     const allowed = allowedSet.has(item.shopId);
                     const revoked = revokedSet.has(item.shopId);
                     const authExpiresAt = pickIsoTime(item.authExpiresAt, item.currentAuthExpiresAt);
@@ -949,17 +985,20 @@
                     const authExpired = item.authExpiredHint === true || item.currentAuthExpiredHint === true || authExpiredByTime;
                     const authorized = allowed && !revoked && !authExpired;
                     const nameParts = splitShopNameParts(item.shopName || '');
-                    return {
+                    const subAccounts = normalizeSubAccountList(item.subAccounts, item.shopName);
+                    const rowSubAccounts = subAccounts.length ? subAccounts : ['-'];
+                    return rowSubAccounts.map((subAccount) => ({
                         ...item,
                         storeName: nameParts.storeName,
-                        subAccount: nameParts.subAccount,
+                        subAccount: normalizeSubAccount(subAccount) || '-',
+                        subAccounts,
                         storeNameKey: normalizeStoreNameKey(nameParts.storeName === '-' ? '' : nameParts.storeName),
                         authExpiresAt,
                         authExpired,
                         allowed,
                         revoked,
                         authorized
-                    };
+                    }));
                 }).sort((left, right) => {
                     const leftTs = Date.parse(left.lastSeenAt || '');
                     const rightTs = Date.parse(right.lastSeenAt || '');
@@ -968,7 +1007,9 @@
                     }
                     if (Number.isFinite(rightTs) && !Number.isFinite(leftTs)) return 1;
                     if (Number.isFinite(leftTs) && !Number.isFinite(rightTs)) return -1;
-                    return left.shopId.localeCompare(right.shopId);
+                    const shopCompare = left.shopId.localeCompare(right.shopId);
+                    if (shopCompare !== 0) return shopCompare;
+                    return String(left.subAccount || '').localeCompare(String(right.subAccount || ''));
                 });
 
                 return {
@@ -1055,18 +1096,42 @@
             };
 
             const renderStats = () => {
-                const allAuthorized = state.allItems.filter(item => item.authorized).length;
-                const allRevoked = state.allItems.filter(item => item.revoked).length;
-                const allExpired = state.allItems.filter(item => item.authExpired).length;
-                const allBlocked = state.allItems.filter(item => !item.authorized && !item.revoked && !item.authExpired).length;
-                const active24h = state.allItems.filter((item) => {
-                    const ts = Date.parse(item.lastSeenAt || '');
-                    return Number.isFinite(ts) && Date.now() - ts <= 24 * 60 * 60 * 1000;
-                }).length;
+                const shopStatsMap = new Map();
+                state.allItems.forEach((item) => {
+                    const storeNameKey = normalizeStoreNameKey(item.storeName || '');
+                    if (!storeNameKey) return;
+
+                    const lastSeenAtMs = Date.parse(item.lastSeenAt || '');
+                    const current = shopStatsMap.get(storeNameKey) || {
+                        authorized: false,
+                        revoked: false,
+                        authExpired: false,
+                        lastSeenAtMs: NaN
+                    };
+
+                    current.authorized = current.authorized || !!item.authorized;
+                    current.revoked = current.revoked || !!item.revoked;
+                    current.authExpired = current.authExpired || !!item.authExpired;
+                    if (Number.isFinite(lastSeenAtMs)) {
+                        if (!Number.isFinite(current.lastSeenAtMs) || lastSeenAtMs > current.lastSeenAtMs) {
+                            current.lastSeenAtMs = lastSeenAtMs;
+                        }
+                    }
+                    shopStatsMap.set(storeNameKey, current);
+                });
+
+                const shopStats = Array.from(shopStatsMap.values());
+                const allAuthorized = shopStats.filter(item => item.authorized).length;
+                const allRevoked = shopStats.filter(item => item.revoked).length;
+                const allExpired = shopStats.filter(item => item.authExpired).length;
+                const allBlocked = shopStats.filter(item => !item.authorized && !item.revoked && !item.authExpired).length;
+                const active24h = shopStats.filter((item) => (
+                    Number.isFinite(item.lastSeenAtMs) && Date.now() - item.lastSeenAtMs <= 24 * 60 * 60 * 1000
+                )).length;
                 dom.stats.innerHTML = [
                     `<span class="stat">当前页：${state.items.length}</span>`,
                     `<span class="stat">筛选后总量：${state.total}</span>`,
-                    `<span class="stat">全量店铺：${state.allItems.length}</span>`,
+                    `<span class="stat">全量店铺：${shopStats.length}</span>`,
                     `<span class="stat">已授权：${allAuthorized}</span>`,
                     `<span class="stat">未授权：${allBlocked}</span>`,
                     `<span class="stat">已过期：${allExpired}</span>`,
