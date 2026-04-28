@@ -1,3 +1,491 @@
+# TODO - 2026-04-28 `onebpSearch` API 向导编辑选项对照检查
+
+## 需求规格
+- 目标：
+  - 以 `addList.md` 作为关键词推广新建计划最终请求的唯一对照来源；
+  - 检查插件“关键词推广批量建计划 API 向导”的编辑态选择项；
+  - 明确哪些选项已正确覆盖、哪些漏配、哪些实现存在风险；
+  - 建立可执行修复清单，暂不直接修改业务逻辑。
+- 范围：
+  - `onebpSearch` 下已沉淀的 `搜索卡位`、`趋势明星`、`流量金卡`、`自定义推广`；
+  - 向导编辑 UI 的可见选择项、默认值、字段映射、提交组包相关逻辑；
+  - 已有测试中的关键词推广契约。
+- 非目标：
+  - 不重新抓真实页面流量；
+  - 不真实提交计划；
+  - 不在本轮直接实现修复，除非后续明确要求。
+
+## 执行计划（可核对）
+- [x] 阅读并提取 `addList.md` 中 `onebpSearch` 控件与字段映射。
+- [x] 定位 API 向导编辑 UI、场景配置、提交组包、测试覆盖。
+- [x] 对照四类营销目标，标记已覆盖、遗漏、问题项。
+- [x] 按优先级输出修复清单，包含预期字段与验证方式。
+- [x] 回填本文件的结果复盘。
+
+## 改动摘要
+- 已建立本轮检查计划。
+- 已完成 `addList.md` 第 17-20 章的 `onebpSearch` 样本对照，覆盖 `搜索卡位`、`趋势明星`、`流量金卡`、`自定义推广` 四个营销目标。
+- 已完成 API 向导编辑态相关代码静态检查，重点检查默认策略、营销目标运行时映射、动态表单、请求预览、最终组包与字段裁剪逻辑。
+- 本轮仅形成修复清单，未修改业务逻辑。
+
+## 验证记录
+- 已对照文档样本：
+  - `搜索卡位`：`KS01-KS10`
+  - `趋势明星`：`KT01-KT25`
+  - `流量金卡`：`GK01-GK09`
+  - `自定义推广`：`KD01-KD03`
+- 已检查实现文件：
+  - `src/optimizer/keyword-plan-api/runtime.js`
+  - `src/optimizer/keyword-plan-api/wizard-style-and-state/defaults-and-presets.js`
+  - `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-core.js`
+  - `src/optimizer/keyword-plan-api/request-builder-preview.js`
+  - `src/optimizer/keyword-plan-api/search-and-draft.js`
+- 已确认一个子代理完成 `addList.md` 字段提取；另一个实现检查子代理因额度中断，已由本轮本地静态检查补足。
+- 本轮未运行构建或测试，因为未修改业务代码；后续实现修复时必须执行 `node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`、`node --test tests/*.test.mjs`，涉及 UI 后还需通过 `chrome-devtools` MCP 做真实页面验证。
+
+## 结果复盘
+- 已设置好的部分：
+  - `关键词推广` 的营销目标候选已经包含 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广`。
+  - 营销目标切换后，运行时已有把 `promotionScene / itemSelectedMode` 同步进场景设置的基础逻辑。
+  - 编辑态已有计划名称、预算、出价方式、部分出价目标、冷启加速、投放资源位、投放时间、投放地域、手动关键词等通用控件。
+  - `自定义推广` 是当前覆盖最完整的目标，已有智能/手动出价、人群、成本约束、高级设置和手动关键词面板。
+  - `冷启加速` 到 `campaignColdStartVO.coldStartStatus` 的基础映射已经存在。
+- 总体问题：
+  - 当前实现把四个关键词营销目标过度套进同一套“自定义推广/智能出价”模型，导致 UI 选择项、默认值、字段保留和最终组包都与 `addList.md` 的真实请求不完全一致。
+  - 字段裁剪函数按通用 allowlist 处理全部关键词目标，会丢弃 `searchDetentType / trendType / trendThemeList / packageId / planId / orderInfo / orderAutoRenewalInfo / launchTime / aiMaxSwitch / aiMaxInfo` 等真实请求关键字段。
+  - 动态表单对 `趋势明星`、`流量金卡` 仍展示 `卡位方式 / 匹配方式 / 手动关键词` 这类不匹配控件，反而缺少主题、套餐、自动续投、人群目标等真实控件。
+- P0 修复清单：
+  - 为 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广` 拆分独立的关键词目标契约，不再把全部关键词目标统一走 `pruneKeywordCampaignForCustomScene`。
+  - `搜索卡位` 需要把 `卡位方式` 映射为 `searchDetentType`，补齐 `permeability`，使用真实 `bidType=max_amount` 和 `dmcType=day_average`，隐藏通用智能出价目标和平均直接成交成本。
+  - `趋势明星` 需要移除 `卡位方式 / 匹配方式 / 手动关键词`，新增并保留 `trendType / trendThemeList / itemIdList / adgroupList / crowdList / adzoneList / launchAreaStrList / launchPeriodList`。
+  - `趋势明星` 的出价目标需要按真实请求处理：`conv / click / coll_cart` 保持普通智能目标，`roi` 只保留 `bidTargetV2=roi + constraintType=roi + constraintValue`，平均直接成交成本走 `setSingleCostV2=true + constraintType=dir_conv + constraintValue` 且不提交 `optimizeTarget`。
+  - `流量金卡` 需要把运行时默认修正为 `itemSelectedMode=user_define`、`bidTargetV2=conv`，并新增套餐卡、套餐包档位、自动续投、支付方式、冷启开关等控件与字段保留。
+  - 最终组包需要按目标保留真实字段，至少补齐 `searchDetentType`、`trendType`、`trendThemeList`、`packageId`、`packageTemplateId`、`planId`、`planTemplateId`、`orderInfo`、`orderAutoRenewalInfo`、`orderChargeType`、`launchTime`、`aiMaxSwitch`、`aiMaxInfo`。
+- P1 修复清单：
+  - 默认策略列表当前只有 `趋势明星` 与 `自定义推广`，需要补齐或改造成能覆盖 `搜索卡位` 与 `流量金卡`。
+  - 矩阵兜底配置需要按营销目标分组，避免给 `趋势明星 / 流量金卡 / 自定义推广` 注入 `卡位方式 / 匹配方式`。
+  - `卡位方式` 兜底选项缺少 `位置不限提升市场渗透`，需要补齐并映射为 `permeability`。
+  - `自定义推广` 需要保留 `aiMaxSwitch / aiMaxInfo`，并修正智能出价下把预算类型强制改为 `normal` 的逻辑，文档样本为 `dmcType=day_average`。
+  - `request-builder-preview.js` 当前会用策略出价目标覆盖场景设置，后续需要改为目标感知，避免覆盖 `搜索卡位 / 流量金卡 / 趋势明星 ROI` 的原生字段。
+- P2 修复清单：
+  - 为四个营销目标分别补回归测试，断言 UI 设置到最终 `solution/addList.json` 请求体的关键字段。
+  - 后续如果要完整支持 `自定义推广` 的出价目标、成本约束、预算类型、高级设置，还需要继续补抓 `addList.md`。
+  - 后续如果要完整支持 `流量金卡` 的自动续投门槛与支付方式，还需要再次抓取有效样本，因为当前 `GK08 / GK09` 样本未观察到阈值和支付方式真实落库。
+
+---
+
+# TODO - 2026-04-28 `onebpSearch` 关键词推广提交流量摸排
+
+## 需求规格
+- 目标：
+  - 在真实 `one.alimama.com` 页面继续覆盖“下一个场景”，默认从 `关键词推广` 开始；
+  - 先确认该场景的 `bizCode`、默认营销目标、商品前置条件与提交前最后一跳接口；
+  - 继续沿用离线提交方式，逐步沉淀到 `addList.md`。
+- 范围：
+  - Chrome DevTools MCP 真实页面测试；
+  - `关键词推广` 的页面结构梳理、前置条件确认、离线提交抓包；
+  - `tasks/todo.md` 进度同步。
+- 非目标：
+  - 不真实提交计划；
+  - 不修改业务代码；
+  - 本轮先从 `关键词推广` 开始，不承诺一次覆盖完全部关键词子场景。
+
+## 执行计划（可核对）
+- [x] 恢复 DevTools 连接并切回真实阿里妈妈页面。
+- [x] 切换到下一个场景 `关键词推广`，确认 URL 与默认营销目标。
+- [x] 跑通 `关键词推广` 当前默认子场景的离线提交，确认接口与请求体结构。
+- [x] 梳理该场景的首批可确认分支，并补写到 `addList.md`。
+- [x] 回填验证记录与结果复盘。
+- [x] 补抓“核心词设置 -> 添加关键词”入口及其对 `wordList` 的影响。
+- [x] 补抓“手动输入添加关键词”入口及其对 `wordList` 的影响。
+- [x] 补抓“清空关键词”入口及页面阻塞/提交前置条件。
+- [x] 补抓“广泛 / 中心词 / 精准”切换对 `wordList.matchScope` 的影响。
+- [x] 重新验证 `位置不限提升市场渗透` 的真实选中行为与提交字段。
+- [x] 切换到下一个关键词营销目标，抓取新的基线提交结构。
+- [x] 补抓 `趋势明星 -> 设置平均直接成交成本` 的默认档、分档与自定义值。
+- [x] 补抓 `趋势明星 -> 设置优先投放客户 / 人群优化目标` 总开关对 `crowdList` 的影响。
+- [x] 补抓 `趋势明星 -> 新客户获取 / 流失老客挽回 / 高价值客户获取` 三个人群开关。
+- [x] 验证 `趋势明星` 的人群倍率输入是否真实落到提交体。
+- [x] 补抓 `趋势明星 -> 选择趋势主题` 对 `trendThemeList` 的影响。
+- [x] 补抓 `趋势明星 -> 添加自选商品` 对 `itemIdList / adgroupList` 的影响。
+- [x] 补抓 `趋势明星 -> 清空` 对 `trendThemeList / itemIdList / adgroupList` 的影响。
+- [x] 补抓 `趋势明星 -> 高级设置 -> 投放地域 / 投放时间` 的非默认提交结构。
+- [x] 复核 `趋势明星 -> 设置平均直接成交成本` 的默认档是否为动态值。
+- [x] 补抓 `流量金卡` 基线、解决方案卡切换与套餐包档位切换。
+- [x] 补抓 `流量金卡` 的冷启开关与套餐包自动续投开关。
+- [x] 补抓 `自定义推广` 基线（含加商品后可提交态）。
+- [x] 补抓 `自定义推广 -> AI点睛` 关闭后的可提交分支。
+- [x] 补抓 `趋势明星 -> 高级设置 -> 投放资源位` 的非默认结构。
+
+## 改动摘要
+- 已从 `货品全站推广` 切换到 `关键词推广`。
+- 当前页面 URL：
+  - `https://one.alimama.com/index.html#!/main/index?bizCode=onebpSearch&promotionScene=promotion_scene_search_detent`
+- 当前默认营销目标：
+  - `搜索卡位`
+- 已把 `关键词推广 -> 搜索卡位` 的基线样本与首批分支写入 `addList.md`：
+  - `KS01` 基线
+  - `KS02` 抢前三
+  - `KS03` 抢首页
+  - `KS04` 冷启加速 = 关
+  - `KS05` 添加关键词（推荐词：美的小魔方）
+  - `KS06` 手动输入关键词（方太水槽）
+  - `KS07` 手动词匹配方式 = 中心词
+  - `KS08` 手动词匹配方式 = 精准
+  - `KS09` 清空关键词
+  - `KS10` 位置不限提升市场渗透
+- 已新增 `关键词推广 -> 趋势明星` 的基线与首批分支：
+  - `KT01` 基线
+  - `KT02` 冷启加速 = 关
+  - `KT03` 出价目标 = 增加点击量
+  - `KT04` 出价目标 = 增加收藏加购量
+  - `KT05` 出价目标 = 稳定投产比（推荐档 6.89）
+  - `KT06` 稳定投产比档位 = 5.51
+  - `KT07` 稳定投产比档位 = 8.27
+  - `KT08` 稳定投产比档位 = 自定义 7.11
+- 已继续补齐 `趋势明星` 的成本与人群层：
+  - `KT09` 平均直接成交成本 = 默认档 370.9
+  - `KT10` 平均直接成交成本 = 445.08
+  - `KT11` 平均直接成交成本 = 296.72
+  - `KT12` 平均直接成交成本 = 自定义 333.33
+  - `KT13` 设置优先投放客户 = 关
+  - `KT14` 人群优化目标 = 关
+  - `KT15` 新客户获取 = 关
+  - `KT16` 流失老客挽回 = 关
+  - `KT17` 高价值客户获取 = 关
+  - `KT18` 新客户倍率 = 1.8
+  - `KT19` 高价值客户倍率 = 1.6
+- 已继续补齐 `趋势明星` 的商品与主题层：
+  - `KT20` 选择趋势主题 = 补满第 6 个主题（美的酷省电二代空调）
+  - `KT21` 清空 = 趋势主题与商品全部清空
+  - `KT22` 添加自选商品 = 新增 `1029803691231`
+- 已继续补齐 `趋势明星` 的高级设置层：
+  - `KT23` 投放地域 = 取消上海
+  - `KT24` 投放时间 = `08:00-13:00`
+- 已追加复核 `趋势明星 -> 设置平均直接成交成本`：
+  - 旧样本默认档 `constraintValue = 370.9`
+  - 当前页面在 `dayAverageBudget = 1430` 下，默认档已变为 `362.56`
+  - 结论：默认档是动态值，不能硬编码
+- 已补齐用户指出的遗漏点：
+  - `核心词设置 -> 添加关键词`
+- 已新增 `关键词推广 -> 流量金卡` 的基线与首批分支：
+  - `GK01` 类目精准词卡基线（`packageId=47, planId=171, orderAmount=500`）
+  - `GK02` 百亿秒杀节-大促成交抢量卡（`packageId=2008, planId=158, orderAmount=3000`）
+  - `GK03` 一人食炖煮家电高转化卡（补商品到 `8/30` 后可提交）
+  - `GK04` 增量畅享包（`planId=228, orderAmount=10000`）
+  - `GK05` 自定义成交包（`planId=229, orderAmount=30000`）
+  - `GK06` 冷启加速=关（`coldStartStatus=0`）
+  - `GK07` 套餐包自动续投=关（`orderAutoRenewalSwitch=0`）
+  - `GK08` 设置自动续投门槛（当前样本 `orderAutoRenewalCondition` 仍为空）
+  - `GK09` 点击支付宝支付（当前样本 `orderChargeType` 仍为 `balance_charge`）
+- 已新增 `关键词推广 -> 自定义推广` 基线：
+  - `KD01` 自定义选品基线（加商品后）：
+    - `promotionScene=promotion_scene_search_user_define`
+    - `itemSelectedMode=user_define`
+    - `bidTypeV2=smart_bid`
+    - `bidTargetV2/optimizeTarget=conv`
+    - `dmcType=day_average, dayAverageBudget=1480`
+    - `itemIdListLength=8, adgroupListLength=8`
+- 已补齐 `自定义推广` 的关键分支：
+  - `KD02` `AI点睛=关`（`aiMaxSwitch=0`）
+  - `KD03` `核心词设置->添加关键词(洗碗机家用全自动)`（新增词同步写入全部 `8` 个 adgroup）
+- 已补齐 `趋势明星` 的高级设置最后分支：
+  - `KT25` `投放资源位=仅1个开启`（`adzoneList` 呈现 `pause + start` 组合）
+
+## 验证记录
+- 浏览器连接：
+  - `http://127.0.0.1:9222/json/version` 正常返回 `webSocketDebuggerUrl`
+  - `chrome-devtools` MCP 可正常列出并切换页签
+- 页面切换：
+  - 已成功从 `onebpSite` 切到 `onebpSearch`
+  - 当前默认子目标为 `搜索卡位`
+- 离线提交：
+  - 已通过 `一键上车` 自动加入 `5` 个商品
+  - 页面自动带出 `dayAverageBudget = 1640`
+  - 离线提交命中：
+    - `POST https://one.alimama.com/solution/addList.json?...&bizCode=onebpSearch`
+- 添加关键词补抓：
+  - 已打开 `添加关键词` 弹窗并勾选推荐词 `美的小魔方`
+  - 确认后主页面从 `10` 个关键词变为 `11` 个关键词
+  - 为保证可提交态，重新通过 `一键上车` 恢复 `5` 个商品后执行离线触发
+- 手动输入与匹配方式补抓：
+  - 已通过 `点击此处可手动输入添加关键词` 新增手动词 `方太水槽`
+  - 确认后主页面从 `11` 个关键词变为 `12` 个关键词
+  - 手动词对象已确认带 `isManual = true`、`originalWord = "方太水槽"`、默认 `matchScope = "4"`
+  - 已确认 `matchScope` 映射：
+    - `广泛 = "4"`
+    - `中心词 = "16"`
+    - `精准 = "1"`
+- 清空补抓：
+  - 点击 `清空` 后无二次确认，关键词立即归零
+  - 商品区域同时回落到 `0 / 30`
+  - 即便页面进入空态，离线点击 `创建完成` 仍会发 `POST addList.json`
+- `位置不限提升市场渗透` 复抓：
+  - 已确认该分支真实可选，最终提交不是 `home_page`
+  - 真实提交字段为：
+    - `searchDetentType = permeability`
+  - 页面存在一个关键行为：
+    - 先选 `位置不限提升市场渗透` 再 `一键上车` 加商品时，页面会自动重置回 `抢首条`
+    - 提交前必须重新选一次 `位置不限提升市场渗透`
+- `趋势明星` 基线补抓：
+  - 已成功切到：
+    - `https://one.alimama.com/index.html#!/main/index?bizCode=onebpSearch&promotionScene=promotion_scene_search_trend`
+  - 离线提交仍命中：
+    - `POST https://one.alimama.com/solution/addList.json?...&bizCode=onebpSearch`
+  - 已确认基线结构核心字段：
+    - `promotionScene = promotion_scene_search_trend`
+    - `itemSelectedMode = trend`
+    - `trendType = 0`
+    - `bidTypeV2 = smart_bid`
+    - `bidTargetV2 = conv`
+    - `optimizeTarget = conv`
+    - `trendThemeListLength = 5`
+    - `itemIdListLength = 9`
+    - `adgroupListLength = 9`
+    - `crowdListLength = 5`
+    - `campaignColdStartVO.coldStartStatus = 1`
+    - `dayAverageBudget = 1640`
+- `趋势明星` 分支补抓：
+  - 已确认冷启加速关闭后：
+    - `campaignColdStartVO.coldStartStatus = 0`
+  - 页面可见 checkbox 直接点击时曾出现：
+    - `系统异常，请稍后重试。status=0`
+  - 但底层开关实际切换后，请求体会稳定带出 `coldStartStatus = 0`
+  - 已确认出价目标映射：
+    - `获取成交量 = bidTargetV2 / optimizeTarget = conv`
+    - `增加收藏加购量 = bidTargetV2 / optimizeTarget = coll_cart`
+    - `增加点击量 = bidTargetV2 / optimizeTarget = click`
+    - `稳定投产比 = bidTargetV2 = roi`，且不再提交 `optimizeTarget / setSingleCostV2`
+  - 已确认 `稳定投产比` 额外字段：
+    - `constraintType = roi`
+    - `constraintValue` 会随档位变化
+  - 已确认的 ROI 档位：
+    - `5.51`
+    - `6.89`
+    - `8.27`
+    - `自定义 7.11`
+  - 已确认 `设置平均直接成交成本` 会改写提交模型：
+    - `bidTargetV2` 仍是 `conv`
+    - 新增：
+      - `setSingleCostV2 = true`
+      - `constraintType = dir_conv`
+      - `constraintValue`
+    - `optimizeTarget` 不再提交
+  - 已确认的平均直接成交成本档位：
+    - 默认档 `370.9`
+    - `445.08`
+    - `296.72`
+    - 自定义 `333.33`
+  - 已确认人群总开关行为：
+    - `设置优先投放客户 = 关 -> crowdList = []`
+    - `人群优化目标 = 关 -> crowdList = []`
+  - 已确认客群开关到 `crowdList` 的映射：
+    - `新客户获取 = 关 -> 删除 3008_3000949_3000949`
+    - `流失老客挽回 = 关 -> 删除 3009_3000951_3000951`
+    - `高价值客户获取 = 关 -> 一次性删除 3 条 3010_*`
+  - 已确认倍率字段会真实落到 `crowdList.price.discount`：
+    - 基线 `1.3 / 1.5 / 1.3 -> 30 / 50 / 30`
+    - 自定义样本：
+      - `新客户 1.8 -> 80`
+      - `高价值 1.6 -> 60 / 60 / 60`
+  - 已确认 `选择趋势主题` 补到第 6 个主题后：
+    - `trendThemeListLength = 6`
+    - 新增主题：
+      - `895617013 / 美的酷省电二代空调 / itemCount = 0`
+    - `itemIdListLength / adgroupListLength` 仍保持 `9`
+  - 已确认 `清空` 后：
+    - `trendThemeList = []`
+    - `itemIdList = []`
+    - `adgroupList = []`
+    - `campaignColdStartVO.coldStartStatus = 0`
+    - `crowdList / adzoneList / launchAreaStrList / launchPeriodList` 仍保留默认值
+  - 已确认 `添加自选商品` 样本：
+    - 为避免真实提交，改用页面内拦截 `addList.json` 的方式取最终请求体
+    - 新增商品：
+      - `1029803691231 / 美的洗碗机V6pro灶下家用15套大容量全自动热风烘干消毒一体机`
+    - `itemIdListLength = 10`
+    - `adgroupListLength = 10`
+    - `trendThemeListLength` 仍为 `6`
+    - 页面“将暂停全站推场景计划”提示未进入请求体
+  - 页面存在一个重要联动异常：
+    - 关闭单个客群时，界面上的 `人群优化目标` 会被联动取消选中
+    - 但真实提交仍会保留剩余 `crowdList`
+- `流量金卡` 分支补抓：
+  - 已确认三张解决方案卡会整体切换模板（包/词/货/周期联动变化）：
+    - `类目精准词卡`：`packageId=47, planId=171, itemIdListLength=5, wordListLength=0`
+    - `百亿秒杀节-大促成交抢量卡`：`packageId=2008, planId=158, itemIdListLength=3`
+    - `一人食炖煮家电高转化卡`：先补商品到 `8/30` 后可提交，`packageId=2004, planId=227, wordListLength=49`
+  - 已确认套餐包档位映射（基于一人食卡）：
+    - `基础起量包 -> planId=227, orderAmount=3000`
+    - `增量畅享包 -> planId=228, orderAmount=10000`
+    - `自定义成交包 -> planId=229, orderAmount=30000`
+  - 已确认开关行为：
+    - `冷启加速=关 -> campaignColdStartVO.coldStartStatus=0`
+    - `套餐包自动续投=关 -> orderAutoRenewalInfo.orderAutoRenewalSwitch=0`
+  - 已确认当前限制：
+    - `设置自动续投门槛` 当前样本未写入有效阈值（`orderAutoRenewalCondition` 仍为空）
+    - 点击 `支付宝支付` 后当前样本仍是 `orderChargeType=balance_charge`
+- `自定义推广` 补抓：
+  - 已确认可提交基线 `KD01`（需先加商品到 `8/30`）
+  - 已确认 `AI点睛=关` 可稳定触发 `addList.json`
+  - 已确认 `核心词设置 -> 添加关键词` 会改写 `adgroupList[*].wordList`
+- 已确认字段：
+  - `promotionScene = promotion_scene_search_detent`
+  - `itemSelectedMode = search_detent`
+  - `searchDetentType`
+  - `campaignColdStartVO.coldStartStatus`
+  - `wordList`
+  - `wordPackageList`
+  - `itemIdList`
+  - `adzoneList`
+  - `launchAreaStrList`
+  - `launchPeriodList`
+  - `dmcType = day_average`
+  - `dayAverageBudget = 1640`
+- 已确认分支：
+  - `抢首条 -> searchDetentType = first_place`
+  - `抢前三 -> searchDetentType = third_place`
+  - `抢首页 -> searchDetentType = home_page`
+  - `冷启加速 = 关 -> campaignColdStartVO.coldStartStatus = 0`
+  - `添加关键词（推荐词：美的小魔方） -> wordListCount = 11，新增词插入 wordList[0]，matchScope = "4"，recReason = "aiRecWord"`
+  - `手动输入关键词（方太水槽） -> wordListCount = 12，wordList[0].isManual = true，originalWord = "方太水槽"`
+  - `手动词切到中心词 -> wordList[0].matchScope = "16"`
+  - `手动词切到精准 -> wordList[0].matchScope = "1"`
+  - `清空关键词 -> wordList = []，itemIdList = []，adgroupList = []，但仍会 POST addList.json`
+  - `位置不限提升市场渗透 -> searchDetentType = permeability`
+  - `趋势明星基线 -> bidTypeV2 = smart_bid，bidTargetV2 = conv，optimizeTarget = conv，trendThemeListLength = 5，itemIdListLength = 9，crowdListLength = 5`
+  - `趋势明星冷启加速 = 关 -> campaignColdStartVO.coldStartStatus = 0`
+  - `趋势明星出价目标 = 增加收藏加购量 -> bidTargetV2 / optimizeTarget = coll_cart`
+  - `趋势明星出价目标 = 增加点击量 -> bidTargetV2 / optimizeTarget = click`
+  - `趋势明星出价目标 = 稳定投产比 -> bidTargetV2 = roi，新增 constraintType = roi / constraintValue，且不再提交 optimizeTarget / setSingleCostV2`
+  - `趋势明星稳定投产比档位 5.51 -> constraintValue = 5.51`
+  - `趋势明星稳定投产比档位 8.27 -> constraintValue = 8.27`
+  - `趋势明星稳定投产比自定义 7.11 -> constraintValue = 7.11`
+  - `趋势明星平均直接成交成本默认档 370.9 -> setSingleCostV2 = true，constraintType = dir_conv，constraintValue = 370.9，且不再提交 optimizeTarget`
+  - `趋势明星平均直接成交成本 445.08 -> constraintValue = 445.08`
+  - `趋势明星平均直接成交成本 296.72 -> constraintValue = 296.72`
+  - `趋势明星平均直接成交成本自定义 333.33 -> constraintValue = 333.33`
+  - `趋势明星设置优先投放客户 = 关 -> crowdList = []`
+  - `趋势明星人群优化目标 = 关 -> crowdList = []`
+  - `趋势明星新客户获取 = 关 -> crowdList 删除 3008_3000949_3000949`
+  - `趋势明星流失老客挽回 = 关 -> crowdList 删除 3009_3000951_3000951`
+  - `趋势明星高价值客户获取 = 关 -> crowdList 仅剩 3008 / 3009 两条`
+  - `趋势明星新客户倍率 1.8 -> 3008 对应 discount = 80`
+  - `趋势明星高价值客户倍率 1.6 -> 全部 3010_* 对应 discount = 60`
+  - `趋势明星选择趋势主题补到 6 个 -> trendThemeList[5] = 895617013 / 美的酷省电二代空调 / itemCount = 0，itemIdListLength 仍为 9`
+  - `趋势明星清空 -> trendThemeList = []，itemIdList = []，adgroupList = []，coldStartStatus = 0`
+  - `趋势明星添加自选商品 1029803691231 -> itemIdListLength = 10，adgroupListLength = 10，trendThemeListLength 仍为 6`
+  - `流量金卡类目精准词卡基线 -> packageId=47，planId=171，orderAmount=500，wordListLength=0，itemIdListLength=5`
+  - `流量金卡百亿秒杀节基线 -> packageId=2008，planId=158，orderAmount=3000，itemIdListLength=3`
+  - `流量金卡一人食基线（补商品后） -> packageId=2004，planId=227，orderAmount=3000，wordListLength=49，itemIdListLength=8`
+  - `流量金卡一人食增量畅享包 -> planId=228，orderAmount=10000`
+  - `流量金卡一人食自定义成交包 -> planId=229，orderAmount=30000`
+  - `流量金卡冷启加速=关 -> coldStartStatus=0`
+  - `流量金卡自动续投=关 -> orderAutoRenewalSwitch=0，且无二次确认弹窗`
+  - `流量金卡自动续投门槛勾选 -> orderAutoRenewalCondition 仍为空`
+  - `流量金卡点击支付宝支付 -> 当前样本 orderChargeType 仍为 balance_charge`
+  - `自定义推广基线（KD01） -> promotionScene=promotion_scene_search_user_define，bidTypeV2=smart_bid，bidTargetV2/optimizeTarget=conv，dayAverageBudget=1480，itemIdListLength=8`
+  - `自定义推广 AI点睛=关（KD02） -> aiMaxSwitch=0，aiMaxInfo.aiMaxSwitch=0，itemIdListLength=8，adgroupListLength=8`
+  - `自定义推广添加关键词（KD03） -> 新词“洗碗机家用全自动”进入全部8个adgroup.wordList，matchScope=1，isManual=true`
+  - `趋势明星高级设置投放资源位（KT25） -> adzoneList: 114790550288=status pause，114786650498=status start`
+
+## 结果复盘
+- `onebpSearch` 的默认 `搜索卡位` 和 `onebpSite` 结构差异很大，后续开发不能复用全站推广的 ROI/起量模型。
+- 这个场景的核心不是 ROI，而是：
+  - `wordList`
+  - `wordPackageList`
+  - `searchDetentType`
+  - `campaignColdStartVO`
+  - `adzoneList / launchAreaStrList / launchPeriodList`
+- 已补齐本轮明确遗漏点：
+  - `核心词设置 -> 添加关键词` 已单独记录，且确认它不会改写商品、卡位方式、预算类型等基线结构，只会扩展 `wordList` 并追加 `aiword` 恢复信息。
+- 核心词设置这组高频分支目前已补齐：
+  - 推荐词新增
+  - 手动输入新增
+  - `广泛 / 中心词 / 精准` 三档映射
+  - 清空关键词
+- `位置不限提升市场渗透` 也已从“待确认”转为“已确认”：
+  - 真实值是 `permeability`
+  - 但“先选卡位再加商品”会被页面重置，自动化顺序必须调整为“加商品后再选卡位”
+- `趋势明星` 与 `搜索卡位` 的结构差异已经明确：
+  - `搜索卡位` 以 `wordList / searchDetentType` 为核心
+  - `趋势明星` 以 `trendThemeList / crowdList / bidTargetV2` 为核心
+- `趋势明星 -> 高级设置` 追加验证：
+  - `投放地域` 从 `["all"]` 切为部分地域后，会改成数值型 `launchAreaStrList`
+  - `投放时间` 编辑态虽然是半小时网格，但提交体会压缩成 `launchPeriodList`
+  - `08:00-13:00` 样本已确认会序列化为每周 `7` 条、每条 `3` 段的 `timeSpanList`
+  - `投放资源位` 关闭单个资源位后，提交体不是删项，而是对应 `adzone.status` 由 `start` 变为 `pause`
+- `趋势明星 -> 稳定投产比` 还存在一层子配置：
+  - 同样是 `bidTargetV2 = roi`，真正决定 ROI 强弱的是 `constraintValue`
+  - 后续开发不能只识别“是否 ROI”，还要序列化具体档位或自定义值
+- `趋势明星 -> 设置平均直接成交成本` 是另一条独立的 `conv` 约束链路：
+  - 它不是简单布尔开关，而是改为 `setSingleCostV2 + constraintType = dir_conv + constraintValue`
+  - 后续开发不能把它和普通 `conv / optimizeTarget` 混成同一结构
+  - 补充复核已确认 `constraintValue` 会随页面当前预算/商品状态变化，默认档并不固定
+- `趋势明星 -> crowdList` 不是按 UI 行数一一对应：
+  - `新客户获取 = 1` 条
+  - `流失老客挽回 = 1` 条
+  - `高价值客户获取 = 3` 条
+- `趋势明星` 的剩余商品层也已经明确：
+  - `补主题` 只改 `trendThemeList`
+  - `加自选商品` 只扩 `itemIdList / adgroupList`
+  - `清空` 会一起清空 `trendThemeList / itemIdList / adgroupList`
+- 从多组样本可推断倍率与折扣的换算规则是：
+  - `price.discount ≈ (倍率 - 1) * 100`
+- 单个人群关闭会把 `人群优化目标` 的视觉状态一起取消，但请求体仍会带剩余人群：
+  - 自动化与后续开发必须以真实请求字段为准，不能只靠页面选中态判断
+- 离线断网并不总能稳定拿到提交体：
+  - `添加自选商品` 这条分支在断网下出现过状态回退且不发 `addList.json`
+  - 后续若仍要求“只模拟不提交”，优先用页面内拦截 `addList.json` 的方式取参数，再阻断真实发送
+- 当前仍待继续覆盖的上层分支：
+  - `自定义推广 -> 出价目标 / 成本约束 / 预算类型` 分支
+  - `流量金卡 -> 关键词设置 / 人群屏蔽` 的提交体差异
+
+---
+
+# TODO - 2026-04-28 `addList.md` 整理为开发文档
+
+## 需求规格
+- 目标：
+  - 将仓库根目录 `addList.md` 从“抓包流水账”整理成“后续开发可直接查阅”的开发文档；
+  - 保留真实页面抓取得到的关键请求结构、字段映射、分支差异、异常样本与覆盖范围；
+  - 让后续开发在不回看会话的情况下，也能直接据此实现 `addList.json` 组包、字段映射与异常兼容。
+- 范围：
+  - 重构 `addList.md` 文档结构与章节表达；
+  - 在 `tasks/todo.md` 回填计划、执行摘要与整理结果。
+- 非目标：
+  - 不新增新的页面抓包；
+  - 不修改业务代码；
+  - 不改动既有样本含义，仅调整表达与归类方式。
+
+## 执行计划（可核对）
+- [x] 盘点 `addList.md` 现有信息，区分“接口事实”“分支样本”“开发注意事项”三类内容。
+- [x] 按开发文档格式重组 `addList.md`，补齐总览、字段映射、覆盖矩阵、异常说明与样本附录。
+- [x] 自检文档可读性与信息完整度，并回填本节结果复盘。
+
+## 改动摘要
+- `addList.md`
+  - 标题从“提交流量记录”重构为“`addList.json` 开发文档”；
+  - 新增“开发先读”“接口总览”“字段映射”“样本索引”“已知异常”“后续追加规则”等章节；
+  - 原有 `onebpSite` 13 条样本全部保留，但重排为“基线 + 分支附录”的开发向结构；
+  - 把 `algoPredictionExtraInfo` 独立为附录，并明确其“结构可参考、数值不可硬编码”的开发语义。
+
+## 验证记录
+- 文档结构自检：
+  - 已确认 `addList.md` 具备 13 个一级/二级开发章节，覆盖“抓取方式、接口结构、字段映射、样本附录、异常说明、追加规则”。
+  - 已确认 `S01` 到 `S13` 样本索引与详细附录均保留，未丢失已有抓包结论。
+  - 已确认关键异常样本仍保留：
+    - `campaignGroupId = null`
+    - `campaignGroupName = "小白鲸"`
+- 自动化测试：
+  - 本次仅整理文档，未修改业务代码，未运行测试。
+
+## 结果复盘
+- `addList.md` 已从“按时间堆叠的抓包流水账”转成“面向开发实现的结构化文档”，后续做 `addList.json` 组包时可先看字段映射，再按样本附录核对分支差异。
+- 这次整理保留了全部已抓取事实，但把“接口事实”“字段语义”“分支样本”“已知异常”四类信息拆开，后续查文档不需要再全文扫读。
+
+---
+
 # TODO - 2026-04-15 出价调控保留 + 新增净投产比调控并存
 
 ## 需求规格
@@ -293,3 +781,83 @@
 ## 结果复盘
 - 这次改动为纯 UI 与默认值层，不影响执行协议；
 - 初始宽度与返回态宽度已统一，避免“优化后返回时宽度不一致”。
+# TODO - 2026-04-27 `sycm.taobao.com` 插件真实页面测试
+
+## 需求规格
+- 目标：
+  - 打开真实 `sycm.taobao.com` 页面，验证当前仓库插件能否正常加载；
+  - 确认页面侧是否出现插件注入痕迹、控制台是否有报错、基础交互是否可用；
+  - 输出明确的测试结论与阻塞点，避免只停留在“页面能打开”层面。
+- 范围：
+  - 当前仓库构建产物 `dist/extension/`；
+  - Chrome DevTools MCP 真实浏览器测试；
+  - `sycm.taobao.com` 页面加载、注入、控制台、网络与页面痕迹检查。
+- 非目标：
+  - 不在本轮修改业务逻辑；
+  - 不替代后续更细的功能专项回归。
+
+## 执行计划（可核对）
+- [ ] 回顾仓库说明、历史教训与当前插件加载方式。
+- [ ] 构建最新扩展产物，确保浏览器加载的是当前代码。
+- [ ] 打开真实 `sycm.taobao.com` 页面并确认页面完成刷新。
+- [ ] 检查插件注入痕迹、控制台日志与关键页面交互。
+- [ ] 在本文档回填测试结果、结论与后续动作。
+
+## 改动摘要
+- 待执行。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待执行。
+
+---
+
+# TODO - 2026-04-27 `one.alimama.com` 新建计划提交流量摸排
+
+## 需求规格
+- 目标：
+  - 打开真实 `https://one.alimama.com/index.html#!/main/index?bizCode=onebpSite` 新建计划页面；
+  - 在“不真实提交”的前提下，按“每个计划类型 × 每个可选分支”逐一尝试，并尽可能触发到提交前最后一步；
+  - 记录每类计划显示条件、点击路径、是否依赖先添加商品，以及提交前请求的 URL、Method、Query、Body、Header/鉴权关键信息；
+  - 输出后续开发可直接复用的参数清单与差异点。
+- 范围：
+  - Chrome DevTools MCP 真实页面测试；
+  - 页面 UI 路径梳理、网络请求抓取、提交前参数归档；
+  - `tasks/todo.md` 结果回填。
+- 非目标：
+  - 不真实提交计划；
+  - 不在本轮直接修改业务代码；
+  - 不伪造不存在的入口，若页面因账号/商品状态不展示，只记录阻塞条件。
+
+## 执行计划（可核对）
+- [x] 回顾仓库约束、任务文档与现有脏工作树，避免覆盖无关改动。
+- [x] 连接 Chrome DevTools，打开目标页面并确认运行态已刷新。
+- [ ] 梳理新建计划入口，记录每个计划类型的显示前提与全部可选分支。
+- [ ] 对每个可进入的计划类型、每个可选分支分别模拟填写到最后一步，逐次抓取提交前相关网络参数。
+- [ ] 整理参数差异、公共字段、阻塞点与建议，回填本文档结果复盘。
+
+## 改动摘要
+- 已根据用户补充，把范围从“计划抽样”收紧为“每个计划 × 每个分支都要各自模拟提交并记录”。
+- 记录载体已切换为仓库根目录 `addList.md`，后续提交流量参数与分支差异统一沉淀到该文件，`tasks/todo.md` 只保留任务管理与复盘。
+
+## 验证记录
+- `onebpSite` 全站推广页面已完成真实页面离线抓取，抓取方式为 `chrome-devtools` MCP + 页面内 `window.__AM_HOOK_MANAGER__`。
+- 本轮新增覆盖分支：
+  - `起量时间地域设置 = 8点~13点`
+  - `起量地域 = 部分地域（取消上海）`
+  - `设置计划组 = 归属到已有计划组（小白鲸）`
+  - `设置计划组 = 不归属任何计划组`
+  - `设置计划组 = 新建计划组并归属`
+- 全部新增记录已集中写入仓库根目录 `addList.md`，未再散落到其它文档。
+
+## 结果复盘
+- 当前 `onebpSite` 全站推广页面可见的结构性分支已补齐，后续开发可以直接对照 `addList.md` 里的 13 条样本做组包。
+- `起量时间地域设置` 最终都落在 `quickLiftBudgetCommand`：
+  - 时间段字段是 `quickLiftTimeSlot`
+  - 地域字段是 `quickLiftLaunchArea`
+- `设置计划组` 有一条关键异常：
+  - 选择“不归属任何计划组”后，`campaignGroupId` 会变成 `null`
+  - 但 `campaignGroupName` 仍残留上一条已有组名称 `小白鲸`
+  - 这意味着后续开发不能只看 `campaignGroupName` 判断是否真的归属了计划组。
