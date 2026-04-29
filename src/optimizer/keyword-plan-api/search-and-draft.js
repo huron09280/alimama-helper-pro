@@ -1144,6 +1144,21 @@
         };
 
         const KEYWORD_TRAFFIC_PACKAGE_FIELD_RE = /(golden|detent|trend|traffic|kr|card|flow|package|词包|卡位|趋势|流量金卡)/i;
+        const KEYWORD_NATIVE_CAMPAIGN_CONTRACT_KEYS = new Set([
+            'searchDetentType',
+            'trendType',
+            'trendThemeList',
+            'packageId',
+            'packageTemplateId',
+            'planId',
+            'planTemplateId',
+            'orderInfo',
+            'orderAutoRenewalInfo',
+            'orderChargeType',
+            'launchTime',
+            'aiMaxSwitch',
+            'aiMaxInfo'
+        ]);
         const stripKeywordTrafficArtifacts = (value) => {
             if (Array.isArray(value)) {
                 return value
@@ -1159,6 +1174,7 @@
                     && key !== 'promotionType'
                     && key !== 'itemSelectedMode'
                     && key !== 'campaignName'
+                    && !KEYWORD_NATIVE_CAMPAIGN_CONTRACT_KEYS.has(key)
                     && KEYWORD_TRAFFIC_PACKAGE_FIELD_RE.test(lower)) {
                     return;
                 }
@@ -1176,6 +1192,7 @@
             'subPromotionType',
             'promotionType',
             'itemSelectedMode',
+            'bidType',
             'bidTypeV2',
             'bidTargetV2',
             'campaignCycleBudgetInfo',
@@ -1206,6 +1223,19 @@
             'dayAverageBudget',
             'totalBudget',
             'futureBudget',
+            'searchDetentType',
+            'trendType',
+            'trendThemeList',
+            'packageId',
+            'packageTemplateId',
+            'planId',
+            'planTemplateId',
+            'orderInfo',
+            'orderAutoRenewalInfo',
+            'orderChargeType',
+            'launchTime',
+            'aiMaxSwitch',
+            'aiMaxInfo',
             // NOTE: 对齐原生「优质计划防停投」，避免被白名单裁剪
             'enableRuleAuto',
             'ruleCommand'
@@ -1220,6 +1250,29 @@
             if (raw === 'manual' || raw === 'custom' || raw === 'custom_bid' || raw === 'manual_bid') return 'manual';
             if (fallback === '') return '';
             return fallback === 'manual' ? 'manual' : 'smart';
+        };
+
+        const resolveKeywordCampaignContractType = ({ campaign = {}, goalText = '' } = {}) => {
+            const goal = normalizeGoalLabel(goalText);
+            const scene = String(campaign?.promotionScene || '').trim();
+            const itemMode = String(campaign?.itemSelectedMode || '').trim();
+            if (scene === 'promotion_scene_search_detent' || itemMode === 'search_detent' || goal === '搜索卡位') return 'search_detent';
+            if (scene === 'promotion_scene_search_trend' || itemMode === 'trend' || goal === '趋势明星') return 'trend';
+            if (scene === 'promotion_scene_golden_traffic_card_package' || goal === '流量金卡') return 'golden_traffic_card';
+            if (scene === 'promotion_scene_search_user_define' || itemMode === 'user_define' || goal === '自定义推广') return 'user_define';
+            return '';
+        };
+
+        const mapKeywordSearchDetentTypeValue = (text = '') => {
+            const value = normalizeSceneSettingValue(text);
+            if (!value) return '';
+            const token = String(value).trim().toLowerCase();
+            if (/^(first_place|third_place|home_page|permeability)$/i.test(token)) return token;
+            if (/位置不限|市场渗透|渗透|permeability/i.test(value)) return 'permeability';
+            if (/前三|top\s*3|third/i.test(value)) return 'third_place';
+            if (/首页|home/i.test(value)) return 'home_page';
+            if (/首条|第一|first|top\s*1/i.test(value)) return 'first_place';
+            return '';
         };
 
         const normalizeFallbackPolicy = (value, fallback = 'confirm') => {
@@ -1340,6 +1393,13 @@
             const runtimeDefaults = isPlainObject(options?.runtimeDefaults) ? options.runtimeDefaults : {};
             const templateCampaign = isPlainObject(options?.templateCampaign) ? options.templateCampaign : {};
             const runtimeStoreData = isPlainObject(runtimeDefaults?.storeData) ? runtimeDefaults.storeData : {};
+            const keywordMarketingGoal = normalizeGoalLabel(
+                plan?.marketingGoal
+                || plan?.__goalResolution?.resolvedMarketingGoal
+                || request?.marketingGoal
+                || request?.common?.marketingGoal
+                || ''
+            );
             const bidMode = normalizeBidMode(
                 options?.bidMode
                 || request?.common?.bidMode
@@ -1461,7 +1521,96 @@
             out.promotionType = out.promotionType || DEFAULTS.promotionType;
             out.itemSelectedMode = resolveCampaignField('itemSelectedMode', DEFAULTS.itemSelectedMode) || DEFAULTS.itemSelectedMode;
             out.bidTypeV2 = bidModeToBidType(bidMode);
-            if (isManual) {
+            const keywordContractType = resolveKeywordCampaignContractType({
+                campaign: out,
+                goalText: keywordMarketingGoal
+            });
+            const isSearchDetentContract = keywordContractType === 'search_detent';
+            const isTrendContract = keywordContractType === 'trend';
+            const isGoldenTrafficCardContract = keywordContractType === 'golden_traffic_card';
+            if (isSearchDetentContract) {
+                out.promotionScene = 'promotion_scene_search_detent';
+                out.itemSelectedMode = 'search_detent';
+                out.bidType = 'max_amount';
+                delete out.bidTypeV2;
+                delete out.bidTargetV2;
+                delete out.optimizeTarget;
+                delete out.subOptimizeTarget;
+                out.dmcType = 'day_average';
+                out.searchDetentType = mapKeywordSearchDetentTypeValue(out.searchDetentType) || 'first_place';
+                out.setSingleCostV2 = false;
+                delete out.singleCostV2;
+                delete out.constraintType;
+                delete out.constraintValue;
+            } else if (isGoldenTrafficCardContract) {
+                out.promotionScene = 'promotion_scene_golden_traffic_card_package';
+                out.itemSelectedMode = 'user_define';
+                out.bidTypeV2 = 'smart_bid';
+                out.bidTargetV2 = 'conv';
+                delete out.optimizeTarget;
+                delete out.subOptimizeTarget;
+                out.setSingleCostV2 = false;
+                delete out.singleCostV2;
+                delete out.constraintType;
+                delete out.constraintValue;
+                out.orderChargeType = String(out.orderChargeType || runtimeStoreData.orderChargeType || 'balance_charge').trim() || 'balance_charge';
+                if (!isPlainObject(out.orderInfo)) {
+                    const sourceOrderInfo = isPlainObject(templateCampaign.orderInfo)
+                        ? templateCampaign.orderInfo
+                        : (isPlainObject(runtimeStoreData.orderInfo) ? runtimeStoreData.orderInfo : {});
+                    out.orderInfo = deepClone(sourceOrderInfo);
+                }
+                if (!isPlainObject(out.orderAutoRenewalInfo)) {
+                    const sourceRenewalInfo = isPlainObject(templateCampaign.orderAutoRenewalInfo)
+                        ? templateCampaign.orderAutoRenewalInfo
+                        : (isPlainObject(runtimeStoreData.orderAutoRenewalInfo) ? runtimeStoreData.orderAutoRenewalInfo : {});
+                    out.orderAutoRenewalInfo = Object.keys(sourceRenewalInfo || {}).length
+                        ? deepClone(sourceRenewalInfo)
+                        : { orderAutoRenewalSwitch: '1', orderAutoRenewalCondition: '' };
+                }
+            } else if (isTrendContract) {
+                out.promotionScene = 'promotion_scene_search_trend';
+                out.itemSelectedMode = 'trend';
+                out.bidTypeV2 = 'smart_bid';
+                out.trendType = String(out.trendType || goalRuntime.trendType || runtimeStoreData.trendType || templateCampaign.trendType || '0').trim() || '0';
+                const normalizedTrendTarget = normalizeKeywordBidTargetCode(
+                    out.bidTargetV2 || out.optimizeTarget || goalRuntime.bidTargetV2 || DEFAULTS.bidTargetV2
+                ) || DEFAULTS.bidTargetV2;
+                const trendBidTarget = normalizedTrendTarget === 'fav_cart' ? 'coll_cart' : normalizedTrendTarget;
+                const trendSingleCostSeed = toNumber(
+                    out.singleCostV2
+                    ?? out.constraintValue
+                    ?? goalRuntime?.constraintValue
+                    ?? runtimeStoreData?.constraintValue
+                    ?? templateCampaign?.constraintValue,
+                    NaN
+                );
+                out.bidTargetV2 = trendBidTarget;
+                if (trendBidTarget === 'roi') {
+                    out.constraintType = 'roi';
+                    if (Number.isFinite(trendSingleCostSeed) && trendSingleCostSeed > 0) {
+                        out.constraintValue = trendSingleCostSeed;
+                    }
+                    out.setSingleCostV2 = false;
+                    delete out.optimizeTarget;
+                    delete out.singleCostV2;
+                    delete out.subOptimizeTarget;
+                } else if (trendBidTarget === 'conv' && out.setSingleCostV2 && Number.isFinite(trendSingleCostSeed) && trendSingleCostSeed > 0) {
+                    out.setSingleCostV2 = true;
+                    out.constraintType = 'dir_conv';
+                    out.constraintValue = trendSingleCostSeed;
+                    delete out.optimizeTarget;
+                    delete out.singleCostV2;
+                    delete out.subOptimizeTarget;
+                } else {
+                    out.optimizeTarget = trendBidTarget;
+                    out.setSingleCostV2 = false;
+                    delete out.singleCostV2;
+                    delete out.constraintType;
+                    delete out.constraintValue;
+                    delete out.subOptimizeTarget;
+                }
+            } else if (isManual) {
                 delete out.bidTargetV2;
                 delete out.optimizeTarget;
                 delete out.subOptimizeTarget;
@@ -1638,13 +1787,6 @@
                     }
                 }
             }
-            const keywordMarketingGoal = normalizeGoalLabel(
-                plan?.marketingGoal
-                || plan?.__goalResolution?.resolvedMarketingGoal
-                || request?.marketingGoal
-                || request?.common?.marketingGoal
-                || ''
-            );
             const forceKeywordDailyBudget = !isManual
                 && keywordMarketingGoal === '自定义推广'
                 && !keywordRoiContract;
@@ -1738,6 +1880,24 @@
             out.launchPeriodList = Array.isArray(resolvedLaunchPeriodList) && resolvedLaunchPeriodList.length
                 ? resolvedLaunchPeriodList
                 : buildDefaultLaunchPeriodList();
+            if (isTrendContract) {
+                out.trendThemeList = resolveNonEmptyArrayField(
+                    'trendThemeList',
+                    Array.isArray(out.trendThemeList) ? out.trendThemeList : []
+                );
+            }
+            if (isSearchDetentContract) {
+                out.searchDetentType = mapKeywordSearchDetentTypeValue(out.searchDetentType) || 'first_place';
+            }
+            if (isGoldenTrafficCardContract) {
+                if (!isPlainObject(out.orderInfo)) out.orderInfo = {};
+                if (!isPlainObject(out.orderAutoRenewalInfo)) {
+                    out.orderAutoRenewalInfo = { orderAutoRenewalSwitch: '1', orderAutoRenewalCondition: '' };
+                } else if (!out.orderAutoRenewalInfo.orderAutoRenewalSwitch) {
+                    out.orderAutoRenewalInfo.orderAutoRenewalSwitch = '1';
+                }
+                out.orderChargeType = String(out.orderChargeType || 'balance_charge').trim() || 'balance_charge';
+            }
             return out;
         };
 
@@ -2602,12 +2762,22 @@
             if (!normalizedGoal) return {};
             const matched = KEYWORD_GOAL_RUNTIME_FALLBACK_MAP.find(item => item.pattern.test(normalizedGoal));
             if (!matched) return {};
-            const out = {
-                promotionScene: String(matched.promotionScene || '').trim(),
-                itemSelectedMode: String(matched.itemSelectedMode || '').trim(),
-                bidTargetV2: String(matched.bidTargetV2 || '').trim()
-            };
-            if (out.bidTargetV2) {
+            const out = {};
+            [
+                'promotionScene',
+                'itemSelectedMode',
+                'bidType',
+                'bidTypeV2',
+                'bidTargetV2',
+                'dmcType',
+                'searchDetentType',
+                'trendType',
+                'orderChargeType'
+            ].forEach(key => {
+                const value = String(matched?.[key] || '').trim();
+                if (value) out[key] = value;
+            });
+            if (out.bidTargetV2 && matched.omitOptimizeTarget !== true) {
                 out.optimizeTarget = out.bidTargetV2;
             }
             return out;
@@ -2884,6 +3054,18 @@
                 'user_level',
                 'orderChargeType',
                 'subOptimizeTarget',
+                'searchDetentType',
+                'trendType',
+                'trendThemeList',
+                'packageId',
+                'packageTemplateId',
+                'planId',
+                'planTemplateId',
+                'orderInfo',
+                'orderAutoRenewalInfo',
+                'launchTime',
+                'aiMaxSwitch',
+                'aiMaxInfo',
                 'dayBudget',
                 'dayAverageBudget',
                 'totalBudget',
@@ -3343,6 +3525,39 @@
                         coldStartEntry.key,
                         coldStartEntry.value
                     );
+                }
+            }
+
+            if (normalizedSceneName === '关键词推广') {
+                const keywordContractType = resolveKeywordCampaignContractType({
+                    campaign: mergeDeep({}, mapping.campaignOverride, keywordGoalRuntime),
+                    goalText: keywordGoalEntry?.value || ''
+                });
+                if (keywordContractType === 'search_detent') {
+                    const detentTypeEntry = findSceneSettingEntry(entries, [/卡位方式/]);
+                    const detentTypeCode = mapKeywordSearchDetentTypeValue(detentTypeEntry?.value || '');
+                    if (detentTypeEntry && detentTypeCode) {
+                        applyCampaign('searchDetentType', detentTypeCode, detentTypeEntry.key, detentTypeEntry.value);
+                    }
+                    applyCampaign('bidType', 'max_amount', detentTypeEntry?.key || keywordGoalEntry?.key || '营销目标', detentTypeEntry?.value || keywordGoalEntry?.value || '搜索卡位');
+                    applyCampaign('dmcType', 'day_average', detentTypeEntry?.key || keywordGoalEntry?.key || '营销目标', detentTypeEntry?.value || keywordGoalEntry?.value || '搜索卡位');
+                }
+                if (keywordContractType === 'golden_traffic_card') {
+                    const renewalEntry = findSceneSettingEntry(entries, [/套餐包自动续投/, /自动续投/]);
+                    if (renewalEntry) {
+                        const renewalText = normalizeSceneSettingValue(renewalEntry.value || '');
+                        const renewalOff = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(renewalText)
+                            && !/(开|开启|启用|是|on|true|1)/i.test(renewalText);
+                        applyCampaign(
+                            'orderAutoRenewalInfo',
+                            {
+                                orderAutoRenewalSwitch: renewalOff ? '0' : '1',
+                                orderAutoRenewalCondition: ''
+                            },
+                            renewalEntry.key,
+                            renewalEntry.value
+                        );
+                    }
                 }
             }
 
@@ -3821,9 +4036,9 @@
             const runtimeSceneName = sceneCapabilities.sceneName || request?.sceneName || '';
             const runtimeScenePromotionScene = isKeywordScene
                 ? String(
-                    runtime?.promotionScene
+                    keywordGoalRuntime?.promotionScene
                     || request?.promotionScene
-                    || keywordGoalRuntime?.promotionScene
+                    || runtime?.promotionScene
                     || resolveSceneDefaultPromotionScene(runtimeSceneName, '')
                 ).trim()
                 : (
@@ -3834,6 +4049,21 @@
             const runtimeForScene = mergeDeep({}, runtime, {
                 bizCode: sceneBizCodeHint || runtime?.bizCode || DEFAULTS.bizCode,
                 promotionScene: runtimeScenePromotionScene,
+                itemSelectedMode: isKeywordScene
+                    ? (keywordGoalRuntime?.itemSelectedMode || runtime?.itemSelectedMode || DEFAULTS.itemSelectedMode)
+                    : (runtime?.itemSelectedMode || ''),
+                bidType: isKeywordScene
+                    ? (keywordGoalRuntime?.bidType || runtime?.bidType || '')
+                    : (runtime?.bidType || ''),
+                bidTypeV2: isKeywordScene
+                    ? (keywordGoalRuntime?.bidTypeV2 || runtime?.bidTypeV2 || DEFAULTS.bidTypeV2)
+                    : (runtime?.bidTypeV2 || ''),
+                bidTargetV2: isKeywordScene
+                    ? (keywordGoalRuntime?.bidTargetV2 || runtime?.bidTargetV2 || DEFAULTS.bidTargetV2)
+                    : (runtime?.bidTargetV2 || ''),
+                optimizeTarget: isKeywordScene
+                    ? (keywordGoalRuntime?.optimizeTarget || runtime?.optimizeTarget || '')
+                    : (runtime?.optimizeTarget || ''),
                 solutionTemplate: templateMatchesScene ? runtime?.solutionTemplate : null
             });
             const template = runtimeForScene.solutionTemplate || buildFallbackSolutionTemplate(runtimeForScene, request?.sceneName || '');

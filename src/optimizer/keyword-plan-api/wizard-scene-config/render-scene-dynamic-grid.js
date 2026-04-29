@@ -11,7 +11,19 @@
                     const key = normalizeSceneFieldKey(normalizedFieldLabel);
                     const renderFieldToken = normalizeSceneRenderFieldToken(normalizedFieldLabel);
                     if (bidConstraintFieldToken && renderFieldToken === bidConstraintFieldToken) return '';
-                    const options = resolveSceneFieldOptions(profile, normalizedFieldLabel);
+                    let options = resolveSceneFieldOptions(profile, normalizedFieldLabel);
+                    if (
+                        sceneName === '关键词推广'
+                        && detectKeywordGoalFromText(activeMarketingGoal || '') === '搜索卡位'
+                        && normalizeSceneRenderFieldToken(normalizedFieldLabel) === '卡位方式'
+                    ) {
+                        options = uniqueBy(
+                            options.concat(['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'])
+                                .map(item => normalizeSceneSettingValue(item))
+                                .filter(Boolean),
+                            item => item
+                        );
+                    }
                     let value = normalizeSceneSettingValue(bucket[key] || '');
                     const fieldMeta = profile?.fieldMeta?.[key] || {};
                     const token = normalizeSceneLabelToken(normalizedFieldLabel);

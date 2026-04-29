@@ -3857,22 +3857,40 @@
                 if (keywordGoalRuntime.itemSelectedMode && !campaignOverride.itemSelectedMode) {
                     campaignOverride.itemSelectedMode = keywordGoalRuntime.itemSelectedMode;
                 }
+                if (keywordGoalRuntime.bidType && !campaignOverride.bidType) {
+                    campaignOverride.bidType = keywordGoalRuntime.bidType;
+                }
+                if (keywordGoalRuntime.bidTypeV2 && !campaignOverride.bidTypeV2) {
+                    campaignOverride.bidTypeV2 = keywordGoalRuntime.bidTypeV2;
+                }
+                if (keywordGoalRuntime.dmcType && !campaignOverride.dmcType) {
+                    campaignOverride.dmcType = keywordGoalRuntime.dmcType;
+                }
                 if (keywordGoalRuntime.bidTargetV2 && !campaignOverride.bidTargetV2) {
                     campaignOverride.bidTargetV2 = keywordGoalRuntime.bidTargetV2;
                 }
                 if (keywordGoalRuntime.optimizeTarget && !campaignOverride.optimizeTarget) {
                     campaignOverride.optimizeTarget = keywordGoalRuntime.optimizeTarget;
                 }
+                if (keywordGoalRuntime.searchDetentType && !campaignOverride.searchDetentType) {
+                    campaignOverride.searchDetentType = keywordGoalRuntime.searchDetentType;
+                }
+                if (keywordGoalRuntime.trendType && !campaignOverride.trendType) {
+                    campaignOverride.trendType = keywordGoalRuntime.trendType;
+                }
             }
 
             if (campaignOverride.promotionScene) runtimePatch.promotionScene = campaignOverride.promotionScene;
             if (campaignOverride.itemSelectedMode) runtimePatch.itemSelectedMode = campaignOverride.itemSelectedMode;
+            if (campaignOverride.bidType) runtimePatch.bidType = campaignOverride.bidType;
             if (campaignOverride.bidTypeV2) runtimePatch.bidTypeV2 = campaignOverride.bidTypeV2;
             if (campaignOverride.bidTargetV2) runtimePatch.bidTargetV2 = campaignOverride.bidTargetV2;
             if (campaignOverride.dmcType) runtimePatch.dmcType = campaignOverride.dmcType;
             if (campaignOverride.subPromotionType) runtimePatch.subPromotionType = campaignOverride.subPromotionType;
             if (campaignOverride.promotionType) runtimePatch.promotionType = campaignOverride.promotionType;
             if (campaignOverride.optimizeTarget) runtimePatch.optimizeTarget = campaignOverride.optimizeTarget;
+            if (campaignOverride.searchDetentType) runtimePatch.searchDetentType = campaignOverride.searchDetentType;
+            if (campaignOverride.trendType) runtimePatch.trendType = campaignOverride.trendType;
 
             if (Array.isArray(defaultAdgroup.rightList)) {
                 adgroupOverride.rightList = deepClone(defaultAdgroup.rightList);

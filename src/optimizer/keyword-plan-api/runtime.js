@@ -150,7 +150,7 @@
             '线索推广': true
         };
         const SCENE_SKIP_TEXT_RE = /^(上手指南|了解更多|了解详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开)$/;
-        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
+        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|趋势主题|趋势主题列表|套餐卡|套餐包|套餐包档位|自动续投|套餐包自动续投|种子人群|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
         const SCENE_SECTION_ONLY_LABEL_RE = /^(营销场景与目标|营销场景|推广方案设置(?:-.+)?|推广方案设置|设置预算(?:及排期)?|设置基础信息|高级设置|创建完成|收集销售线索|行业解决方案|自定义方案)$/;
         const SCENE_LABEL_NOISE_RE = /[，。,！？!；;]/;
         const SCENE_LABEL_NOISE_PREFIX_RE = /^(请|建议|支持|算法|未添加|如有|当前|完成后|符合条件|在投商品|想探测|卡位客户都在玩|流量规模)/;
@@ -191,6 +191,7 @@
             'bizCode',
             'promotionScene',
             'optimizeTarget',
+            'bidType',
             'bidTypeV2',
             'bidTargetV2',
             'orderChargeType',
@@ -226,7 +227,9 @@
             'specialSourceForMainStep',
             'bpStrategyId',
             'bpStrategyType',
-            'subOptimizeTarget'
+            'subOptimizeTarget',
+            'searchDetentType',
+            'trendType'
         ];
         const SCENE_SPEC_CACHE_STORAGE_KEY = 'am.wxt.plan_api.scene_spec_cache.v2';
         const SCENE_SPEC_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -298,20 +301,28 @@
             {
                 pattern: /(流量金卡|金卡)/,
                 promotionScene: 'promotion_scene_golden_traffic_card_package',
-                itemSelectedMode: 'shop',
-                bidTargetV2: 'click'
+                itemSelectedMode: 'user_define',
+                bidTypeV2: 'smart_bid',
+                bidTargetV2: 'conv',
+                orderChargeType: 'balance_charge',
+                omitOptimizeTarget: true
             },
             {
                 pattern: /(搜索卡位|卡位)/,
                 promotionScene: 'promotion_scene_search_detent',
                 itemSelectedMode: 'search_detent',
-                bidTargetV2: 'search_rank'
+                bidType: 'max_amount',
+                dmcType: 'day_average',
+                searchDetentType: 'first_place',
+                omitOptimizeTarget: true
             },
             {
                 pattern: /(趋势明星|趋势|渗透)/,
                 promotionScene: 'promotion_scene_search_trend',
                 itemSelectedMode: 'trend',
-                bidTargetV2: 'market_penetration'
+                bidTypeV2: 'smart_bid',
+                bidTargetV2: 'conv',
+                trendType: '0'
             },
             {
                 pattern: /(自定义推广|自定义|手动)/,
@@ -346,20 +357,46 @@
                     { label: '预算类型', options: ['每日预算', '日均预算'], defaultValue: '每日预算' }
                 ],
                 搜索卡位: [
+                    { label: '出价方式', options: ['最大化拿量'], defaultValue: '最大化拿量' },
                     { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'], defaultValue: '抢首条' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' },
+                    { label: '冷启加速', options: ['开启', '关闭'], defaultValue: '开启' }
                 ],
                 趋势明星: [
-                    { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'], defaultValue: '抢前三' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '出价目标', options: ['获取成交量', '增加点击量', '增加收藏加购量', '稳定投产比'], defaultValue: '获取成交量' },
+                    { label: '平均直接成交成本', defaultValue: '' },
+                    { label: '冷启加速', options: ['开启', '关闭'], defaultValue: '开启' },
+                    { label: '人群设置', options: ['设置优先投放客户', '关闭'], defaultValue: '设置优先投放客户' },
+                    { label: '人群优化目标', options: ['人群优化目标', '关闭'], defaultValue: '人群优化目标' },
+                    { label: 'campaign.trendType', options: ['0'], defaultValue: '0' },
+                    { label: 'campaign.trendThemeList', defaultValue: '[]' },
+                    { label: 'campaign.itemIdList', defaultValue: '[]' },
+                    { label: 'campaign.crowdList', defaultValue: '[]' },
+                    { label: 'campaign.adzoneList', defaultValue: '[]' },
+                    { label: 'campaign.launchAreaStrList', defaultValue: '["all"]' },
+                    { label: 'campaign.launchPeriodList', defaultValue: '' }
                 ],
                 流量金卡: [
-                    { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页'], defaultValue: '抢首页' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '套餐卡', options: ['类目精准词卡', '大促成交抢量卡', '高转化卡'], defaultValue: '类目精准词卡' },
+                    { label: '套餐包档位', options: ['自定义预算包', '增量畅享包', '自定义成交包'], defaultValue: '自定义预算包' },
+                    { label: '套餐包自动续投', options: ['开启', '关闭'], defaultValue: '开启' },
+                    { label: '支付方式', options: ['余额支付', '支付宝支付'], defaultValue: '余额支付' },
+                    { label: '冷启加速', options: ['开启', '关闭'], defaultValue: '开启' },
+                    { label: 'campaign.packageId', defaultValue: '' },
+                    { label: 'campaign.packageTemplateId', defaultValue: '' },
+                    { label: 'campaign.planId', defaultValue: '' },
+                    { label: 'campaign.planTemplateId', defaultValue: '' },
+                    { label: 'campaign.orderInfo', defaultValue: '{}' },
+                    { label: 'campaign.orderAutoRenewalInfo', defaultValue: '{"orderAutoRenewalSwitch":"1","orderAutoRenewalCondition":""}' },
+                    { label: 'campaign.orderChargeType', options: ['balance_charge', 'alipay_charge'], defaultValue: 'balance_charge' },
+                    { label: 'campaign.launchTime', defaultValue: '' },
+                    { label: 'campaign.aiMaxSwitch', defaultValue: '' },
+                    { label: 'campaign.aiMaxInfo', defaultValue: '' }
                 ],
                 自定义推广: [
-                    { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页'], defaultValue: '抢首条' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' },
+                    { label: 'campaign.aiMaxSwitch', defaultValue: '' },
+                    { label: 'campaign.aiMaxInfo', defaultValue: '' }
                 ]
             },
             '人群推广': [

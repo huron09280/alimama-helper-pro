@@ -15367,7 +15367,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '线索推广': true
         };
         const SCENE_SKIP_TEXT_RE = /^(上手指南|了解更多|了解详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开)$/;
-        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|种子人群|套餐包|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
+        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|趋势主题|趋势主题列表|套餐卡|套餐包|套餐包档位|自动续投|套餐包自动续投|种子人群|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
         const SCENE_SECTION_ONLY_LABEL_RE = /^(营销场景与目标|营销场景|推广方案设置(?:-.+)?|推广方案设置|设置预算(?:及排期)?|设置基础信息|高级设置|创建完成|收集销售线索|行业解决方案|自定义方案)$/;
         const SCENE_LABEL_NOISE_RE = /[，。,！？!；;]/;
         const SCENE_LABEL_NOISE_PREFIX_RE = /^(请|建议|支持|算法|未添加|如有|当前|完成后|符合条件|在投商品|想探测|卡位客户都在玩|流量规模)/;
@@ -15408,6 +15408,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'bizCode',
             'promotionScene',
             'optimizeTarget',
+            'bidType',
             'bidTypeV2',
             'bidTargetV2',
             'orderChargeType',
@@ -15443,7 +15444,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'specialSourceForMainStep',
             'bpStrategyId',
             'bpStrategyType',
-            'subOptimizeTarget'
+            'subOptimizeTarget',
+            'searchDetentType',
+            'trendType'
         ];
         const SCENE_SPEC_CACHE_STORAGE_KEY = 'am.wxt.plan_api.scene_spec_cache.v2';
         const SCENE_SPEC_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -15515,20 +15518,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             {
                 pattern: /(流量金卡|金卡)/,
                 promotionScene: 'promotion_scene_golden_traffic_card_package',
-                itemSelectedMode: 'shop',
-                bidTargetV2: 'click'
+                itemSelectedMode: 'user_define',
+                bidTypeV2: 'smart_bid',
+                bidTargetV2: 'conv',
+                orderChargeType: 'balance_charge',
+                omitOptimizeTarget: true
             },
             {
                 pattern: /(搜索卡位|卡位)/,
                 promotionScene: 'promotion_scene_search_detent',
                 itemSelectedMode: 'search_detent',
-                bidTargetV2: 'search_rank'
+                bidType: 'max_amount',
+                dmcType: 'day_average',
+                searchDetentType: 'first_place',
+                omitOptimizeTarget: true
             },
             {
                 pattern: /(趋势明星|趋势|渗透)/,
                 promotionScene: 'promotion_scene_search_trend',
                 itemSelectedMode: 'trend',
-                bidTargetV2: 'market_penetration'
+                bidTypeV2: 'smart_bid',
+                bidTargetV2: 'conv',
+                trendType: '0'
             },
             {
                 pattern: /(自定义推广|自定义|手动)/,
@@ -15563,20 +15574,46 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     { label: '预算类型', options: ['每日预算', '日均预算'], defaultValue: '每日预算' }
                 ],
                 搜索卡位: [
+                    { label: '出价方式', options: ['最大化拿量'], defaultValue: '最大化拿量' },
                     { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'], defaultValue: '抢首条' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' },
+                    { label: '冷启加速', options: ['开启', '关闭'], defaultValue: '开启' }
                 ],
                 趋势明星: [
-                    { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'], defaultValue: '抢前三' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '出价目标', options: ['获取成交量', '增加点击量', '增加收藏加购量', '稳定投产比'], defaultValue: '获取成交量' },
+                    { label: '平均直接成交成本', defaultValue: '' },
+                    { label: '冷启加速', options: ['开启', '关闭'], defaultValue: '开启' },
+                    { label: '人群设置', options: ['设置优先投放客户', '关闭'], defaultValue: '设置优先投放客户' },
+                    { label: '人群优化目标', options: ['人群优化目标', '关闭'], defaultValue: '人群优化目标' },
+                    { label: 'campaign.trendType', options: ['0'], defaultValue: '0' },
+                    { label: 'campaign.trendThemeList', defaultValue: '[]' },
+                    { label: 'campaign.itemIdList', defaultValue: '[]' },
+                    { label: 'campaign.crowdList', defaultValue: '[]' },
+                    { label: 'campaign.adzoneList', defaultValue: '[]' },
+                    { label: 'campaign.launchAreaStrList', defaultValue: '["all"]' },
+                    { label: 'campaign.launchPeriodList', defaultValue: '' }
                 ],
                 流量金卡: [
-                    { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页'], defaultValue: '抢首页' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '套餐卡', options: ['类目精准词卡', '大促成交抢量卡', '高转化卡'], defaultValue: '类目精准词卡' },
+                    { label: '套餐包档位', options: ['自定义预算包', '增量畅享包', '自定义成交包'], defaultValue: '自定义预算包' },
+                    { label: '套餐包自动续投', options: ['开启', '关闭'], defaultValue: '开启' },
+                    { label: '支付方式', options: ['余额支付', '支付宝支付'], defaultValue: '余额支付' },
+                    { label: '冷启加速', options: ['开启', '关闭'], defaultValue: '开启' },
+                    { label: 'campaign.packageId', defaultValue: '' },
+                    { label: 'campaign.packageTemplateId', defaultValue: '' },
+                    { label: 'campaign.planId', defaultValue: '' },
+                    { label: 'campaign.planTemplateId', defaultValue: '' },
+                    { label: 'campaign.orderInfo', defaultValue: '{}' },
+                    { label: 'campaign.orderAutoRenewalInfo', defaultValue: '{"orderAutoRenewalSwitch":"1","orderAutoRenewalCondition":""}' },
+                    { label: 'campaign.orderChargeType', options: ['balance_charge', 'alipay_charge'], defaultValue: 'balance_charge' },
+                    { label: 'campaign.launchTime', defaultValue: '' },
+                    { label: 'campaign.aiMaxSwitch', defaultValue: '' },
+                    { label: 'campaign.aiMaxInfo', defaultValue: '' }
                 ],
                 自定义推广: [
-                    { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页'], defaultValue: '抢首条' },
-                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' }
+                    { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' },
+                    { label: 'campaign.aiMaxSwitch', defaultValue: '' },
+                    { label: 'campaign.aiMaxInfo', defaultValue: '' }
                 ]
             },
             '人群推广': [
@@ -19477,22 +19514,40 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (keywordGoalRuntime.itemSelectedMode && !campaignOverride.itemSelectedMode) {
                     campaignOverride.itemSelectedMode = keywordGoalRuntime.itemSelectedMode;
                 }
+                if (keywordGoalRuntime.bidType && !campaignOverride.bidType) {
+                    campaignOverride.bidType = keywordGoalRuntime.bidType;
+                }
+                if (keywordGoalRuntime.bidTypeV2 && !campaignOverride.bidTypeV2) {
+                    campaignOverride.bidTypeV2 = keywordGoalRuntime.bidTypeV2;
+                }
+                if (keywordGoalRuntime.dmcType && !campaignOverride.dmcType) {
+                    campaignOverride.dmcType = keywordGoalRuntime.dmcType;
+                }
                 if (keywordGoalRuntime.bidTargetV2 && !campaignOverride.bidTargetV2) {
                     campaignOverride.bidTargetV2 = keywordGoalRuntime.bidTargetV2;
                 }
                 if (keywordGoalRuntime.optimizeTarget && !campaignOverride.optimizeTarget) {
                     campaignOverride.optimizeTarget = keywordGoalRuntime.optimizeTarget;
                 }
+                if (keywordGoalRuntime.searchDetentType && !campaignOverride.searchDetentType) {
+                    campaignOverride.searchDetentType = keywordGoalRuntime.searchDetentType;
+                }
+                if (keywordGoalRuntime.trendType && !campaignOverride.trendType) {
+                    campaignOverride.trendType = keywordGoalRuntime.trendType;
+                }
             }
 
             if (campaignOverride.promotionScene) runtimePatch.promotionScene = campaignOverride.promotionScene;
             if (campaignOverride.itemSelectedMode) runtimePatch.itemSelectedMode = campaignOverride.itemSelectedMode;
+            if (campaignOverride.bidType) runtimePatch.bidType = campaignOverride.bidType;
             if (campaignOverride.bidTypeV2) runtimePatch.bidTypeV2 = campaignOverride.bidTypeV2;
             if (campaignOverride.bidTargetV2) runtimePatch.bidTargetV2 = campaignOverride.bidTargetV2;
             if (campaignOverride.dmcType) runtimePatch.dmcType = campaignOverride.dmcType;
             if (campaignOverride.subPromotionType) runtimePatch.subPromotionType = campaignOverride.subPromotionType;
             if (campaignOverride.promotionType) runtimePatch.promotionType = campaignOverride.promotionType;
             if (campaignOverride.optimizeTarget) runtimePatch.optimizeTarget = campaignOverride.optimizeTarget;
+            if (campaignOverride.searchDetentType) runtimePatch.searchDetentType = campaignOverride.searchDetentType;
+            if (campaignOverride.trendType) runtimePatch.trendType = campaignOverride.trendType;
 
             if (Array.isArray(defaultAdgroup.rightList)) {
                 adgroupOverride.rightList = deepClone(defaultAdgroup.rightList);
@@ -22672,6 +22727,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         };
 
         const KEYWORD_TRAFFIC_PACKAGE_FIELD_RE = /(golden|detent|trend|traffic|kr|card|flow|package|词包|卡位|趋势|流量金卡)/i;
+        const KEYWORD_NATIVE_CAMPAIGN_CONTRACT_KEYS = new Set([
+            'searchDetentType',
+            'trendType',
+            'trendThemeList',
+            'packageId',
+            'packageTemplateId',
+            'planId',
+            'planTemplateId',
+            'orderInfo',
+            'orderAutoRenewalInfo',
+            'orderChargeType',
+            'launchTime',
+            'aiMaxSwitch',
+            'aiMaxInfo'
+        ]);
         const stripKeywordTrafficArtifacts = (value) => {
             if (Array.isArray(value)) {
                 return value
@@ -22687,6 +22757,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     && key !== 'promotionType'
                     && key !== 'itemSelectedMode'
                     && key !== 'campaignName'
+                    && !KEYWORD_NATIVE_CAMPAIGN_CONTRACT_KEYS.has(key)
                     && KEYWORD_TRAFFIC_PACKAGE_FIELD_RE.test(lower)) {
                     return;
                 }
@@ -22704,6 +22775,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'subPromotionType',
             'promotionType',
             'itemSelectedMode',
+            'bidType',
             'bidTypeV2',
             'bidTargetV2',
             'campaignCycleBudgetInfo',
@@ -22734,6 +22806,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             'dayAverageBudget',
             'totalBudget',
             'futureBudget',
+            'searchDetentType',
+            'trendType',
+            'trendThemeList',
+            'packageId',
+            'packageTemplateId',
+            'planId',
+            'planTemplateId',
+            'orderInfo',
+            'orderAutoRenewalInfo',
+            'orderChargeType',
+            'launchTime',
+            'aiMaxSwitch',
+            'aiMaxInfo',
             // NOTE: 对齐原生「优质计划防停投」，避免被白名单裁剪
             'enableRuleAuto',
             'ruleCommand'
@@ -22748,6 +22833,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (raw === 'manual' || raw === 'custom' || raw === 'custom_bid' || raw === 'manual_bid') return 'manual';
             if (fallback === '') return '';
             return fallback === 'manual' ? 'manual' : 'smart';
+        };
+
+        const resolveKeywordCampaignContractType = ({ campaign = {}, goalText = '' } = {}) => {
+            const goal = normalizeGoalLabel(goalText);
+            const scene = String(campaign?.promotionScene || '').trim();
+            const itemMode = String(campaign?.itemSelectedMode || '').trim();
+            if (scene === 'promotion_scene_search_detent' || itemMode === 'search_detent' || goal === '搜索卡位') return 'search_detent';
+            if (scene === 'promotion_scene_search_trend' || itemMode === 'trend' || goal === '趋势明星') return 'trend';
+            if (scene === 'promotion_scene_golden_traffic_card_package' || goal === '流量金卡') return 'golden_traffic_card';
+            if (scene === 'promotion_scene_search_user_define' || itemMode === 'user_define' || goal === '自定义推广') return 'user_define';
+            return '';
+        };
+
+        const mapKeywordSearchDetentTypeValue = (text = '') => {
+            const value = normalizeSceneSettingValue(text);
+            if (!value) return '';
+            const token = String(value).trim().toLowerCase();
+            if (/^(first_place|third_place|home_page|permeability)$/i.test(token)) return token;
+            if (/位置不限|市场渗透|渗透|permeability/i.test(value)) return 'permeability';
+            if (/前三|top\s*3|third/i.test(value)) return 'third_place';
+            if (/首页|home/i.test(value)) return 'home_page';
+            if (/首条|第一|first|top\s*1/i.test(value)) return 'first_place';
+            return '';
         };
 
         const normalizeFallbackPolicy = (value, fallback = 'confirm') => {
@@ -22868,6 +22976,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const runtimeDefaults = isPlainObject(options?.runtimeDefaults) ? options.runtimeDefaults : {};
             const templateCampaign = isPlainObject(options?.templateCampaign) ? options.templateCampaign : {};
             const runtimeStoreData = isPlainObject(runtimeDefaults?.storeData) ? runtimeDefaults.storeData : {};
+            const keywordMarketingGoal = normalizeGoalLabel(
+                plan?.marketingGoal
+                || plan?.__goalResolution?.resolvedMarketingGoal
+                || request?.marketingGoal
+                || request?.common?.marketingGoal
+                || ''
+            );
             const bidMode = normalizeBidMode(
                 options?.bidMode
                 || request?.common?.bidMode
@@ -22989,7 +23104,96 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             out.promotionType = out.promotionType || DEFAULTS.promotionType;
             out.itemSelectedMode = resolveCampaignField('itemSelectedMode', DEFAULTS.itemSelectedMode) || DEFAULTS.itemSelectedMode;
             out.bidTypeV2 = bidModeToBidType(bidMode);
-            if (isManual) {
+            const keywordContractType = resolveKeywordCampaignContractType({
+                campaign: out,
+                goalText: keywordMarketingGoal
+            });
+            const isSearchDetentContract = keywordContractType === 'search_detent';
+            const isTrendContract = keywordContractType === 'trend';
+            const isGoldenTrafficCardContract = keywordContractType === 'golden_traffic_card';
+            if (isSearchDetentContract) {
+                out.promotionScene = 'promotion_scene_search_detent';
+                out.itemSelectedMode = 'search_detent';
+                out.bidType = 'max_amount';
+                delete out.bidTypeV2;
+                delete out.bidTargetV2;
+                delete out.optimizeTarget;
+                delete out.subOptimizeTarget;
+                out.dmcType = 'day_average';
+                out.searchDetentType = mapKeywordSearchDetentTypeValue(out.searchDetentType) || 'first_place';
+                out.setSingleCostV2 = false;
+                delete out.singleCostV2;
+                delete out.constraintType;
+                delete out.constraintValue;
+            } else if (isGoldenTrafficCardContract) {
+                out.promotionScene = 'promotion_scene_golden_traffic_card_package';
+                out.itemSelectedMode = 'user_define';
+                out.bidTypeV2 = 'smart_bid';
+                out.bidTargetV2 = 'conv';
+                delete out.optimizeTarget;
+                delete out.subOptimizeTarget;
+                out.setSingleCostV2 = false;
+                delete out.singleCostV2;
+                delete out.constraintType;
+                delete out.constraintValue;
+                out.orderChargeType = String(out.orderChargeType || runtimeStoreData.orderChargeType || 'balance_charge').trim() || 'balance_charge';
+                if (!isPlainObject(out.orderInfo)) {
+                    const sourceOrderInfo = isPlainObject(templateCampaign.orderInfo)
+                        ? templateCampaign.orderInfo
+                        : (isPlainObject(runtimeStoreData.orderInfo) ? runtimeStoreData.orderInfo : {});
+                    out.orderInfo = deepClone(sourceOrderInfo);
+                }
+                if (!isPlainObject(out.orderAutoRenewalInfo)) {
+                    const sourceRenewalInfo = isPlainObject(templateCampaign.orderAutoRenewalInfo)
+                        ? templateCampaign.orderAutoRenewalInfo
+                        : (isPlainObject(runtimeStoreData.orderAutoRenewalInfo) ? runtimeStoreData.orderAutoRenewalInfo : {});
+                    out.orderAutoRenewalInfo = Object.keys(sourceRenewalInfo || {}).length
+                        ? deepClone(sourceRenewalInfo)
+                        : { orderAutoRenewalSwitch: '1', orderAutoRenewalCondition: '' };
+                }
+            } else if (isTrendContract) {
+                out.promotionScene = 'promotion_scene_search_trend';
+                out.itemSelectedMode = 'trend';
+                out.bidTypeV2 = 'smart_bid';
+                out.trendType = String(out.trendType || goalRuntime.trendType || runtimeStoreData.trendType || templateCampaign.trendType || '0').trim() || '0';
+                const normalizedTrendTarget = normalizeKeywordBidTargetCode(
+                    out.bidTargetV2 || out.optimizeTarget || goalRuntime.bidTargetV2 || DEFAULTS.bidTargetV2
+                ) || DEFAULTS.bidTargetV2;
+                const trendBidTarget = normalizedTrendTarget === 'fav_cart' ? 'coll_cart' : normalizedTrendTarget;
+                const trendSingleCostSeed = toNumber(
+                    out.singleCostV2
+                    ?? out.constraintValue
+                    ?? goalRuntime?.constraintValue
+                    ?? runtimeStoreData?.constraintValue
+                    ?? templateCampaign?.constraintValue,
+                    NaN
+                );
+                out.bidTargetV2 = trendBidTarget;
+                if (trendBidTarget === 'roi') {
+                    out.constraintType = 'roi';
+                    if (Number.isFinite(trendSingleCostSeed) && trendSingleCostSeed > 0) {
+                        out.constraintValue = trendSingleCostSeed;
+                    }
+                    out.setSingleCostV2 = false;
+                    delete out.optimizeTarget;
+                    delete out.singleCostV2;
+                    delete out.subOptimizeTarget;
+                } else if (trendBidTarget === 'conv' && out.setSingleCostV2 && Number.isFinite(trendSingleCostSeed) && trendSingleCostSeed > 0) {
+                    out.setSingleCostV2 = true;
+                    out.constraintType = 'dir_conv';
+                    out.constraintValue = trendSingleCostSeed;
+                    delete out.optimizeTarget;
+                    delete out.singleCostV2;
+                    delete out.subOptimizeTarget;
+                } else {
+                    out.optimizeTarget = trendBidTarget;
+                    out.setSingleCostV2 = false;
+                    delete out.singleCostV2;
+                    delete out.constraintType;
+                    delete out.constraintValue;
+                    delete out.subOptimizeTarget;
+                }
+            } else if (isManual) {
                 delete out.bidTargetV2;
                 delete out.optimizeTarget;
                 delete out.subOptimizeTarget;
@@ -23166,13 +23370,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 }
             }
-            const keywordMarketingGoal = normalizeGoalLabel(
-                plan?.marketingGoal
-                || plan?.__goalResolution?.resolvedMarketingGoal
-                || request?.marketingGoal
-                || request?.common?.marketingGoal
-                || ''
-            );
             const forceKeywordDailyBudget = !isManual
                 && keywordMarketingGoal === '自定义推广'
                 && !keywordRoiContract;
@@ -23266,6 +23463,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             out.launchPeriodList = Array.isArray(resolvedLaunchPeriodList) && resolvedLaunchPeriodList.length
                 ? resolvedLaunchPeriodList
                 : buildDefaultLaunchPeriodList();
+            if (isTrendContract) {
+                out.trendThemeList = resolveNonEmptyArrayField(
+                    'trendThemeList',
+                    Array.isArray(out.trendThemeList) ? out.trendThemeList : []
+                );
+            }
+            if (isSearchDetentContract) {
+                out.searchDetentType = mapKeywordSearchDetentTypeValue(out.searchDetentType) || 'first_place';
+            }
+            if (isGoldenTrafficCardContract) {
+                if (!isPlainObject(out.orderInfo)) out.orderInfo = {};
+                if (!isPlainObject(out.orderAutoRenewalInfo)) {
+                    out.orderAutoRenewalInfo = { orderAutoRenewalSwitch: '1', orderAutoRenewalCondition: '' };
+                } else if (!out.orderAutoRenewalInfo.orderAutoRenewalSwitch) {
+                    out.orderAutoRenewalInfo.orderAutoRenewalSwitch = '1';
+                }
+                out.orderChargeType = String(out.orderChargeType || 'balance_charge').trim() || 'balance_charge';
+            }
             return out;
         };
 
@@ -24130,12 +24345,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!normalizedGoal) return {};
             const matched = KEYWORD_GOAL_RUNTIME_FALLBACK_MAP.find(item => item.pattern.test(normalizedGoal));
             if (!matched) return {};
-            const out = {
-                promotionScene: String(matched.promotionScene || '').trim(),
-                itemSelectedMode: String(matched.itemSelectedMode || '').trim(),
-                bidTargetV2: String(matched.bidTargetV2 || '').trim()
-            };
-            if (out.bidTargetV2) {
+            const out = {};
+            [
+                'promotionScene',
+                'itemSelectedMode',
+                'bidType',
+                'bidTypeV2',
+                'bidTargetV2',
+                'dmcType',
+                'searchDetentType',
+                'trendType',
+                'orderChargeType'
+            ].forEach(key => {
+                const value = String(matched?.[key] || '').trim();
+                if (value) out[key] = value;
+            });
+            if (out.bidTargetV2 && matched.omitOptimizeTarget !== true) {
                 out.optimizeTarget = out.bidTargetV2;
             }
             return out;
@@ -24412,6 +24637,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 'user_level',
                 'orderChargeType',
                 'subOptimizeTarget',
+                'searchDetentType',
+                'trendType',
+                'trendThemeList',
+                'packageId',
+                'packageTemplateId',
+                'planId',
+                'planTemplateId',
+                'orderInfo',
+                'orderAutoRenewalInfo',
+                'launchTime',
+                'aiMaxSwitch',
+                'aiMaxInfo',
                 'dayBudget',
                 'dayAverageBudget',
                 'totalBudget',
@@ -24871,6 +25108,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         coldStartEntry.key,
                         coldStartEntry.value
                     );
+                }
+            }
+
+            if (normalizedSceneName === '关键词推广') {
+                const keywordContractType = resolveKeywordCampaignContractType({
+                    campaign: mergeDeep({}, mapping.campaignOverride, keywordGoalRuntime),
+                    goalText: keywordGoalEntry?.value || ''
+                });
+                if (keywordContractType === 'search_detent') {
+                    const detentTypeEntry = findSceneSettingEntry(entries, [/卡位方式/]);
+                    const detentTypeCode = mapKeywordSearchDetentTypeValue(detentTypeEntry?.value || '');
+                    if (detentTypeEntry && detentTypeCode) {
+                        applyCampaign('searchDetentType', detentTypeCode, detentTypeEntry.key, detentTypeEntry.value);
+                    }
+                    applyCampaign('bidType', 'max_amount', detentTypeEntry?.key || keywordGoalEntry?.key || '营销目标', detentTypeEntry?.value || keywordGoalEntry?.value || '搜索卡位');
+                    applyCampaign('dmcType', 'day_average', detentTypeEntry?.key || keywordGoalEntry?.key || '营销目标', detentTypeEntry?.value || keywordGoalEntry?.value || '搜索卡位');
+                }
+                if (keywordContractType === 'golden_traffic_card') {
+                    const renewalEntry = findSceneSettingEntry(entries, [/套餐包自动续投/, /自动续投/]);
+                    if (renewalEntry) {
+                        const renewalText = normalizeSceneSettingValue(renewalEntry.value || '');
+                        const renewalOff = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(renewalText)
+                            && !/(开|开启|启用|是|on|true|1)/i.test(renewalText);
+                        applyCampaign(
+                            'orderAutoRenewalInfo',
+                            {
+                                orderAutoRenewalSwitch: renewalOff ? '0' : '1',
+                                orderAutoRenewalCondition: ''
+                            },
+                            renewalEntry.key,
+                            renewalEntry.value
+                        );
+                    }
                 }
             }
 
@@ -25349,9 +25619,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const runtimeSceneName = sceneCapabilities.sceneName || request?.sceneName || '';
             const runtimeScenePromotionScene = isKeywordScene
                 ? String(
-                    runtime?.promotionScene
+                    keywordGoalRuntime?.promotionScene
                     || request?.promotionScene
-                    || keywordGoalRuntime?.promotionScene
+                    || runtime?.promotionScene
                     || resolveSceneDefaultPromotionScene(runtimeSceneName, '')
                 ).trim()
                 : (
@@ -25362,6 +25632,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const runtimeForScene = mergeDeep({}, runtime, {
                 bizCode: sceneBizCodeHint || runtime?.bizCode || DEFAULTS.bizCode,
                 promotionScene: runtimeScenePromotionScene,
+                itemSelectedMode: isKeywordScene
+                    ? (keywordGoalRuntime?.itemSelectedMode || runtime?.itemSelectedMode || DEFAULTS.itemSelectedMode)
+                    : (runtime?.itemSelectedMode || ''),
+                bidType: isKeywordScene
+                    ? (keywordGoalRuntime?.bidType || runtime?.bidType || '')
+                    : (runtime?.bidType || ''),
+                bidTypeV2: isKeywordScene
+                    ? (keywordGoalRuntime?.bidTypeV2 || runtime?.bidTypeV2 || DEFAULTS.bidTypeV2)
+                    : (runtime?.bidTypeV2 || ''),
+                bidTargetV2: isKeywordScene
+                    ? (keywordGoalRuntime?.bidTargetV2 || runtime?.bidTargetV2 || DEFAULTS.bidTargetV2)
+                    : (runtime?.bidTargetV2 || ''),
+                optimizeTarget: isKeywordScene
+                    ? (keywordGoalRuntime?.optimizeTarget || runtime?.optimizeTarget || '')
+                    : (runtime?.optimizeTarget || ''),
                 solutionTemplate: templateMatchesScene ? runtime?.solutionTemplate : null
             });
             const template = runtimeForScene.solutionTemplate || buildFallbackSolutionTemplate(runtimeForScene, request?.sceneName || '');
@@ -37358,7 +37643,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
-            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|匹配方式|流量智选|开启冷启加速|冷启加速|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|起量时间地域设置|投放地域\/投放时间|资源位溢价|计划组|设置计划组|选品方式|选择推广商品|人群设置|人群优化目标|客户口径设置|人群价值设置|设置拉新人群|设置人群|种子人群|方案选择|套餐包)$/;
+            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|匹配方式|流量智选|开启冷启加速|冷启加速|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|起量时间地域设置|投放地域\/投放时间|资源位溢价|计划组|设置计划组|选品方式|选择推广商品|人群设置|人群优化目标|客户口径设置|人群价值设置|设置拉新人群|设置人群|种子人群|趋势主题|趋势主题列表|方案选择|套餐卡|套餐包|套餐包档位|自动续投|套餐包自动续投)$/;
             const SCENE_RENDER_FIELD_ALIAS_RULES = [
                 { pattern: /^(关键词设置|核心词设置)$/, label: '核心词设置' },
                 { pattern: /^(开启冷启加速|冷启加速)$/, label: '冷启加速' },
@@ -38603,7 +38888,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .filter(Boolean)
                     : [];
                 const GOAL_SELECTOR_LABEL_RE = /^(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式|选择方式|卡位方式)$/;
-                const isGoalSelectorField = (label = '') => GOAL_SELECTOR_LABEL_RE.test(normalizeSceneLabelToken(label));
+                const isGoalSelectorField = (label = '') => {
+                    const token = normalizeSceneLabelToken(label);
+                    if (sceneName === '关键词推广' && token === '卡位方式') return false;
+                    return GOAL_SELECTOR_LABEL_RE.test(token);
+                };
                 const collectGoalFieldLabels = (goal = null) => {
                     const labels = [];
                     if (Array.isArray(goal?.fieldRows)) {
@@ -38749,6 +39038,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         '投放时间',
                         '投放地域'
                     ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    const activeKeywordGoalForRender = detectKeywordGoalFromText(activeMarketingGoal || '');
+                    if (['趋势明星', '流量金卡'].includes(activeKeywordGoalForRender)) {
+                        [
+                            '核心词设置',
+                            '关键词设置',
+                            '匹配方式',
+                            '关键词匹配方式',
+                            '默认匹配方式',
+                            '流量智选'
+                        ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    }
+                    if (activeKeywordGoalForRender !== '搜索卡位') {
+                        [
+                            '卡位方式',
+                            '选择卡位方案'
+                        ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    }
                 }
                 if (sceneName === '货品全站推广') {
                     [
@@ -39943,14 +40249,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         'smart'
                     );
                     const activeKeywordGoal = detectKeywordGoalFromText(activeMarketingGoal || '');
+                    const isFixedKeywordBidContract = activeKeywordGoal === '搜索卡位' || activeKeywordGoal === '流量金卡';
                     let keywordBidTargetLinkedInsertIndex = -1;
-                    staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
-                    if (keywordBidMode !== 'manual') {
+                    if (!isFixedKeywordBidContract) {
+                        staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
+                    }
+                    if (keywordBidMode !== 'manual' && !isFixedKeywordBidContract) {
                         const keywordCustomBidTargetAllowedValues = ['conv', 'similar_item', 'market_penetration', 'fav_cart', 'click', 'roi'];
+                        const keywordTrendBidTargetAllowedValues = ['conv', 'click', 'fav_cart', 'roi'];
                         staticRows.push(buildProxySelectRow('出价目标', 'am-wxt-keyword-bid-target', wizardState.els.bidTargetSelect, {
                             segmented: true,
-                            allowedValues: activeKeywordGoal === '自定义推广' ? keywordCustomBidTargetAllowedValues : [],
-                            enforceFilteredSelection: activeKeywordGoal === '自定义推广',
+                            allowedValues: activeKeywordGoal === '自定义推广'
+                                ? keywordCustomBidTargetAllowedValues
+                                : (activeKeywordGoal === '趋势明星' ? keywordTrendBidTargetAllowedValues : []),
+                            enforceFilteredSelection: activeKeywordGoal === '自定义推广' || activeKeywordGoal === '趋势明星',
                             resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
                         }));
                         if (normalizeSceneSettingValue(activeKeywordGoal) === '自定义推广') {
@@ -39968,7 +40280,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             )
                             : ''
                     }));
-                    if (activeKeywordGoal !== '自定义推广') {
+                    if (activeKeywordGoal === '趋势明星') {
                         staticRows.push(`
                             <div class="am-wxt-scene-setting-row">
                                 <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
@@ -41556,7 +41868,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (shouldRenderStandaloneBudgetRow) {
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
-                if (isKeywordScene) {
+                if (isKeywordScene && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''))) {
                     staticRows.push(buildManualKeywordDesignerRow('手动关键词'));
                 }
                 const staticGridHtml = staticRows.join('');
@@ -41579,7 +41891,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const key = normalizeSceneFieldKey(normalizedFieldLabel);
                     const renderFieldToken = normalizeSceneRenderFieldToken(normalizedFieldLabel);
                     if (bidConstraintFieldToken && renderFieldToken === bidConstraintFieldToken) return '';
-                    const options = resolveSceneFieldOptions(profile, normalizedFieldLabel);
+                    let options = resolveSceneFieldOptions(profile, normalizedFieldLabel);
+                    if (
+                        sceneName === '关键词推广'
+                        && detectKeywordGoalFromText(activeMarketingGoal || '') === '搜索卡位'
+                        && normalizeSceneRenderFieldToken(normalizedFieldLabel) === '卡位方式'
+                    ) {
+                        options = uniqueBy(
+                            options.concat(['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'])
+                                .map(item => normalizeSceneSettingValue(item))
+                                .filter(Boolean),
+                            item => item
+                        );
+                    }
                     let value = normalizeSceneSettingValue(bucket[key] || '');
                     const fieldMeta = profile?.fieldMeta?.[key] || {};
                     const token = normalizeSceneLabelToken(normalizedFieldLabel);
@@ -49064,6 +49388,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             'smart'
                         );
                         strategy.bidMode = strategyBidMode;
+                        const strategyMarketingGoal = normalizeGoalLabel(
+                            resolveStrategyMarketingGoal(strategy, strategySceneSettings, strategySceneName)
+                        );
+                        const strategyKeywordContractType = isKeywordScene
+                            ? resolveKeywordCampaignContractType({
+                                campaign: resolveKeywordGoalRuntimeFallback(strategyMarketingGoal),
+                                goalText: strategyMarketingGoal
+                            })
+                            : '';
                         const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
                         const strategyBidTargetOptionValue = normalizeKeywordBidTargetOptionValue(strategyBidTargetV2) || strategyBidTargetV2;
                         if (isKeywordScene) {
@@ -49073,6 +49406,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             delete strategySceneSettings['campaign.bidTargetV2'];
                             delete strategySceneSettings['campaign.optimizeTarget'];
                             if (strategyBidMode === 'manual') {
+                                delete strategySceneSettings.出价目标;
+                                delete strategySceneSettings.优化目标;
+                            } else if (strategyKeywordContractType === 'search_detent' || strategyKeywordContractType === 'golden_traffic_card') {
                                 delete strategySceneSettings.出价目标;
                                 delete strategySceneSettings.优化目标;
                             } else {
@@ -49099,9 +49435,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             explicitPlanName
                             || autoPlanName
                             || `${prefix}_${String(strategyIdx + 1).padStart(2, '0')}`
-                        );
-                        const strategyMarketingGoal = normalizeGoalLabel(
-                            resolveStrategyMarketingGoal(strategy, strategySceneSettings, strategySceneName)
                         );
                         if (isKeywordScene && strategyMarketingGoal) {
                             strategySceneSettings = mergeDeep({}, strategySceneSettings, {
@@ -49218,7 +49551,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const campaignOverride = {};
                         if (isKeywordScene) {
                             campaignOverride.bidTypeV2 = bidModeToBidType(strategyBidMode);
-                            if (strategyBidMode === 'smart') {
+                            if (strategyKeywordContractType === 'search_detent') {
+                                campaignOverride.promotionScene = 'promotion_scene_search_detent';
+                                campaignOverride.itemSelectedMode = 'search_detent';
+                                campaignOverride.bidType = 'max_amount';
+                                campaignOverride.dmcType = 'day_average';
+                                campaignOverride.searchDetentType = mapKeywordSearchDetentTypeValue(
+                                    strategySceneSettings.卡位方式
+                                    || strategySceneSettings[normalizeSceneFieldKey('卡位方式')]
+                                    || '抢首条'
+                                ) || 'first_place';
+                                delete campaignOverride.bidTypeV2;
+                            } else if (strategyKeywordContractType === 'golden_traffic_card') {
+                                campaignOverride.promotionScene = 'promotion_scene_golden_traffic_card_package';
+                                campaignOverride.itemSelectedMode = 'user_define';
+                                campaignOverride.bidTypeV2 = 'smart_bid';
+                                campaignOverride.bidTargetV2 = 'conv';
+                                campaignOverride.orderChargeType = mapSceneOrderChargeTypeValue(
+                                    strategySceneSettings.支付方式
+                                    || strategySceneSettings[normalizeSceneFieldKey('支付方式')]
+                                    || strategySceneSettings['campaign.orderChargeType']
+                                    || '余额支付',
+                                    runtimeCache?.value || {}
+                                ) || 'balance_charge';
+                            } else if (strategyBidMode === 'smart') {
                                 if (strategySubmitBidTargetV2) {
                                     campaignOverride.bidTargetV2 = strategySubmitBidTargetV2;
                                     campaignOverride.optimizeTarget = strategySubmitBidTargetV2;

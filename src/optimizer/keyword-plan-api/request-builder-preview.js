@@ -72,6 +72,15 @@
                             'smart'
                         );
                         strategy.bidMode = strategyBidMode;
+                        const strategyMarketingGoal = normalizeGoalLabel(
+                            resolveStrategyMarketingGoal(strategy, strategySceneSettings, strategySceneName)
+                        );
+                        const strategyKeywordContractType = isKeywordScene
+                            ? resolveKeywordCampaignContractType({
+                                campaign: resolveKeywordGoalRuntimeFallback(strategyMarketingGoal),
+                                goalText: strategyMarketingGoal
+                            })
+                            : '';
                         const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
                         const strategyBidTargetOptionValue = normalizeKeywordBidTargetOptionValue(strategyBidTargetV2) || strategyBidTargetV2;
                         if (isKeywordScene) {
@@ -81,6 +90,9 @@
                             delete strategySceneSettings['campaign.bidTargetV2'];
                             delete strategySceneSettings['campaign.optimizeTarget'];
                             if (strategyBidMode === 'manual') {
+                                delete strategySceneSettings.出价目标;
+                                delete strategySceneSettings.优化目标;
+                            } else if (strategyKeywordContractType === 'search_detent' || strategyKeywordContractType === 'golden_traffic_card') {
                                 delete strategySceneSettings.出价目标;
                                 delete strategySceneSettings.优化目标;
                             } else {
@@ -107,9 +119,6 @@
                             explicitPlanName
                             || autoPlanName
                             || `${prefix}_${String(strategyIdx + 1).padStart(2, '0')}`
-                        );
-                        const strategyMarketingGoal = normalizeGoalLabel(
-                            resolveStrategyMarketingGoal(strategy, strategySceneSettings, strategySceneName)
                         );
                         if (isKeywordScene && strategyMarketingGoal) {
                             strategySceneSettings = mergeDeep({}, strategySceneSettings, {
@@ -226,7 +235,30 @@
                         const campaignOverride = {};
                         if (isKeywordScene) {
                             campaignOverride.bidTypeV2 = bidModeToBidType(strategyBidMode);
-                            if (strategyBidMode === 'smart') {
+                            if (strategyKeywordContractType === 'search_detent') {
+                                campaignOverride.promotionScene = 'promotion_scene_search_detent';
+                                campaignOverride.itemSelectedMode = 'search_detent';
+                                campaignOverride.bidType = 'max_amount';
+                                campaignOverride.dmcType = 'day_average';
+                                campaignOverride.searchDetentType = mapKeywordSearchDetentTypeValue(
+                                    strategySceneSettings.卡位方式
+                                    || strategySceneSettings[normalizeSceneFieldKey('卡位方式')]
+                                    || '抢首条'
+                                ) || 'first_place';
+                                delete campaignOverride.bidTypeV2;
+                            } else if (strategyKeywordContractType === 'golden_traffic_card') {
+                                campaignOverride.promotionScene = 'promotion_scene_golden_traffic_card_package';
+                                campaignOverride.itemSelectedMode = 'user_define';
+                                campaignOverride.bidTypeV2 = 'smart_bid';
+                                campaignOverride.bidTargetV2 = 'conv';
+                                campaignOverride.orderChargeType = mapSceneOrderChargeTypeValue(
+                                    strategySceneSettings.支付方式
+                                    || strategySceneSettings[normalizeSceneFieldKey('支付方式')]
+                                    || strategySceneSettings['campaign.orderChargeType']
+                                    || '余额支付',
+                                    runtimeCache?.value || {}
+                                ) || 'balance_charge';
+                            } else if (strategyBidMode === 'smart') {
                                 if (strategySubmitBidTargetV2) {
                                     campaignOverride.bidTargetV2 = strategySubmitBidTargetV2;
                                     campaignOverride.optimizeTarget = strategySubmitBidTargetV2;

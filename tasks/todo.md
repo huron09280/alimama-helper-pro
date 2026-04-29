@@ -1,3 +1,66 @@
+# TODO - 2026-04-29 `onebpSearch` API 向导 P0 修复
+
+## 需求规格
+- 目标：
+  - 修复关键词推广 API 向导 P0 问题，使 `搜索卡位`、`趋势明星`、`流量金卡`、`自定义推广` 的最终组包按各自真实请求契约保留关键字段；
+  - 避免四类关键词营销目标继续统一套用 `自定义推广/智能出价` 的字段裁剪逻辑；
+  - 补齐 P0 中明确要求的运行时默认值、字段映射、控件展示/隐藏和最终请求保留字段。
+- 范围：
+  - `src/optimizer/keyword-plan-api/` 下默认值、场景动态表单、请求预览、草稿组包与字段裁剪；
+  - 覆盖 P0 关键字段的回归测试；
+  - 构建、语法、单测和 review-team 验证。
+- 非目标：
+  - 不重新抓真实页面流量；
+  - 不真实提交计划；
+  - 不处理 P1/P2 中未被 P0 依赖的完整体验增强。
+
+## 执行计划（可核对）
+- [x] 定位 P0 涉及代码路径和现有测试契约，确认最小侵入方案。
+- [x] 为四类关键词营销目标拆分目标感知的字段保留和默认映射。
+- [x] 修复 `搜索卡位`、`趋势明星`、`流量金卡` 的 P0 运行时默认值、UI 控件和请求字段组包。
+- [x] 补充或更新关键回归测试，覆盖 P0 字段不丢失与目标特异映射。
+- [x] 运行 `node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`、`node --test tests/*.test.mjs`、`bash scripts/review-team.sh`。
+- [x] 通过 `chrome-devtools` MCP 复验刷新插件后的真实页面 UI。
+- [x] 回填验证记录、结果复盘和剩余风险。
+
+## 改动摘要
+- 已建立本次 P0 修复计划，待进入代码定位。
+- 已确认核心落点：
+  - `src/optimizer/keyword-plan-api/runtime.js`：关键词目标默认契约与动态字段兜底；
+  - `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-core.js`：编辑态控件展示/隐藏；
+  - `src/optimizer/keyword-plan-api/request-builder-preview.js`：策略预览层对出价目标的通用覆盖；
+  - `src/optimizer/keyword-plan-api/search-and-draft.js`：最终请求组包、字段保留和目标契约裁剪。
+- 已完成四类关键词目标的目标感知运行时契约拆分：
+  - `搜索卡位` 固定 `promotion_scene_search_detent / itemSelectedMode=search_detent / bidType=max_amount / dmcType=day_average / searchDetentType`；
+  - `趋势明星` 固定 `promotion_scene_search_trend / itemSelectedMode=trend / trendType`，并区分普通智能目标、ROI 与平均直接成交成本契约；
+  - `流量金卡` 固定 `promotion_scene_golden_traffic_card_package / itemSelectedMode=user_define / bidTargetV2=conv`，并保留套餐、订单与续投字段；
+  - `自定义推广` 继续保留自定义智能/手动出价链路，并补齐 `aiMaxSwitch / aiMaxInfo` 等原生字段保留。
+- 已修复真实页面复验暴露的 UI 残留：`趋势明星 / 流量金卡` 不再从通用关键词兜底里显示 `核心词设置 / 匹配方式 / 卡位方式 / 流量智选`。
+- 已修复最终复验暴露的搜索卡位细节：`卡位方式` 只在 `搜索卡位` 下展示，并强制补齐 `位置不限提升市场渗透`；`自定义推广` 不再残留 `卡位方式`。
+- 已新增 `tests/keyword-search-p0-contract.test.mjs`，并更新既有 UI 契约测试，覆盖 P0 默认值、字段保留、目标分支组包、编辑态隐藏和请求预览覆盖。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，已重新生成根 userscript、packages 与 extension page bundle。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/keyword-search-p0-contract.test.mjs`：通过，5/5。
+- `node --test tests/*.test.mjs`：通过，412 个测试，410 通过，2 个跳过；跳过项为既有可选 `agent-cluster/index.mjs` 缺失。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP：已确认真实 `one.alimama.com` 页面、插件面板与 API 向导可打开；清空旧草稿后发现并修复了 `趋势明星` 仍显示通用 `匹配方式` 的 UI 残留。
+- `chrome-devtools` MCP 最终复验：通过，真实页面 URL 为 `https://one.alimama.com/index.html#!/main/index?bizCode=onebpSearch&promotionScene=promotion_scene_search_detent&stepIndex=1&subStepIndex=0`。
+  - `搜索卡位`：不显示通用 `出价方式 / 出价目标`，显示 `卡位方式`，并包含 `位置不限提升市场渗透`；保留 `匹配方式 / 手动关键词`。
+  - `趋势明星`：显示 `出价方式 / 出价目标 / 平均直接成交成本`，不显示 `卡位方式 / 匹配方式 / 手动关键词`。
+  - `流量金卡`：显示 `套餐卡 / 套餐包档位 / 套餐包自动续投 / 支付方式`，不显示 `出价方式 / 出价目标 / 卡位方式 / 匹配方式 / 手动关键词`。
+  - `自定义推广`：显示 `出价方式 / 出价目标 / 匹配方式 / 手动关键词`，不显示 `卡位方式`。
+
+## 结果复盘
+- 本次根因是关键词推广四个营销目标此前共用“自定义推广/智能出价”模型，导致默认值、字段裁剪、请求预览和最终组包都会覆盖或丢弃非自定义目标的原生字段。
+- 修复策略采用目标感知分支，而不是继续扩大单一 allowlist：默认值、UI 过滤、请求预览与最终裁剪均按 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广` 分别处理。
+- 真实页面复验发现旧草稿与通用兜底字段会掩盖新逻辑；后续复验必须先清空或切换到新草稿，避免用历史草稿判断当前实现。
+- 本轮剩余风险：未真实提交计划，避免影响线上投放；最终请求契约通过自动化回归覆盖，真实页面复验覆盖到向导 UI 字段收敛。
+
+---
+
 # TODO - 2026-04-28 `onebpSearch` API 向导编辑选项对照检查
 
 ## 需求规格

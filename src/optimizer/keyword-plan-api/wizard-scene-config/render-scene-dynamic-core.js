@@ -8,7 +8,11 @@
                         .filter(Boolean)
                     : [];
                 const GOAL_SELECTOR_LABEL_RE = /^(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式|选择方式|卡位方式)$/;
-                const isGoalSelectorField = (label = '') => GOAL_SELECTOR_LABEL_RE.test(normalizeSceneLabelToken(label));
+                const isGoalSelectorField = (label = '') => {
+                    const token = normalizeSceneLabelToken(label);
+                    if (sceneName === '关键词推广' && token === '卡位方式') return false;
+                    return GOAL_SELECTOR_LABEL_RE.test(token);
+                };
                 const collectGoalFieldLabels = (goal = null) => {
                     const labels = [];
                     if (Array.isArray(goal?.fieldRows)) {
@@ -154,6 +158,23 @@
                         '投放时间',
                         '投放地域'
                     ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    const activeKeywordGoalForRender = detectKeywordGoalFromText(activeMarketingGoal || '');
+                    if (['趋势明星', '流量金卡'].includes(activeKeywordGoalForRender)) {
+                        [
+                            '核心词设置',
+                            '关键词设置',
+                            '匹配方式',
+                            '关键词匹配方式',
+                            '默认匹配方式',
+                            '流量智选'
+                        ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    }
+                    if (activeKeywordGoalForRender !== '搜索卡位') {
+                        [
+                            '卡位方式',
+                            '选择卡位方案'
+                        ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    }
                 }
                 if (sceneName === '货品全站推广') {
                     [
@@ -1348,14 +1369,20 @@
                         'smart'
                     );
                     const activeKeywordGoal = detectKeywordGoalFromText(activeMarketingGoal || '');
+                    const isFixedKeywordBidContract = activeKeywordGoal === '搜索卡位' || activeKeywordGoal === '流量金卡';
                     let keywordBidTargetLinkedInsertIndex = -1;
-                    staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
-                    if (keywordBidMode !== 'manual') {
+                    if (!isFixedKeywordBidContract) {
+                        staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
+                    }
+                    if (keywordBidMode !== 'manual' && !isFixedKeywordBidContract) {
                         const keywordCustomBidTargetAllowedValues = ['conv', 'similar_item', 'market_penetration', 'fav_cart', 'click', 'roi'];
+                        const keywordTrendBidTargetAllowedValues = ['conv', 'click', 'fav_cart', 'roi'];
                         staticRows.push(buildProxySelectRow('出价目标', 'am-wxt-keyword-bid-target', wizardState.els.bidTargetSelect, {
                             segmented: true,
-                            allowedValues: activeKeywordGoal === '自定义推广' ? keywordCustomBidTargetAllowedValues : [],
-                            enforceFilteredSelection: activeKeywordGoal === '自定义推广',
+                            allowedValues: activeKeywordGoal === '自定义推广'
+                                ? keywordCustomBidTargetAllowedValues
+                                : (activeKeywordGoal === '趋势明星' ? keywordTrendBidTargetAllowedValues : []),
+                            enforceFilteredSelection: activeKeywordGoal === '自定义推广' || activeKeywordGoal === '趋势明星',
                             resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
                         }));
                         if (normalizeSceneSettingValue(activeKeywordGoal) === '自定义推广') {
@@ -1373,7 +1400,7 @@
                             )
                             : ''
                     }));
-                    if (activeKeywordGoal !== '自定义推广') {
+                    if (activeKeywordGoal === '趋势明星') {
                         staticRows.push(`
                             <div class="am-wxt-scene-setting-row">
                                 <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
@@ -2961,7 +2988,7 @@
                 if (shouldRenderStandaloneBudgetRow) {
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
-                if (isKeywordScene) {
+                if (isKeywordScene && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''))) {
                     staticRows.push(buildManualKeywordDesignerRow('手动关键词'));
                 }
                 const staticGridHtml = staticRows.join('');
