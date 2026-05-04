@@ -81,7 +81,25 @@
                                 goalText: strategyMarketingGoal
                             })
                             : '';
-                        const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
+                        const strategySceneBidTargetSeed = isKeywordScene
+                            ? normalizeSceneSettingValue(
+                                strategySceneSettings[normalizeSceneFieldKey('出价目标')]
+                                || strategySceneSettings.出价目标
+                                || strategySceneSettings[normalizeSceneFieldKey('优化目标')]
+                                || strategySceneSettings.优化目标
+                                || ''
+                            )
+                            : '';
+                        const strategySceneBidTargetV2 = isKeywordScene
+                            ? (normalizeKeywordBidTargetOptionValue(
+                                mapSceneBidTargetValue(strategySceneBidTargetSeed) || strategySceneBidTargetSeed
+                            ) || '')
+                            : '';
+                        const strategyBidTargetV2 = String(
+                            strategyMarketingGoal === '趋势明星' && strategySceneBidTargetV2
+                                ? strategySceneBidTargetV2
+                                : (strategy.bidTargetV2 || strategySceneBidTargetV2 || DEFAULTS.bidTargetV2)
+                        ).trim() || DEFAULTS.bidTargetV2;
                         const strategyBidTargetOptionValue = normalizeKeywordBidTargetOptionValue(strategyBidTargetV2) || strategyBidTargetV2;
                         if (isKeywordScene) {
                             strategySceneSettings = mergeDeep({}, strategySceneSettings);

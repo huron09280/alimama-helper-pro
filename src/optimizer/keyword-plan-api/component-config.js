@@ -795,10 +795,20 @@
             const source = isPlainObject(item?.raw) ? item.raw : (isPlainObject(item) ? item : {});
             const materialId = String(source.materialId || source.itemId || item.materialId || item.itemId || '').trim();
             const itemId = String(source.itemId || source.materialId || item.itemId || item.materialId || '').trim();
+            const picUrl = source.picUrl
+                || source.imgUrl
+                || source.imageUrl
+                || source.pictUrl
+                || source.itemPicUrl
+                || source.materialPicUrl
+                || source.materialImageUrl
+                || source.mainPic
+                || '';
             return {
                 materialId: materialId || itemId,
                 itemId: itemId || materialId,
                 materialName: source.materialName || source.title || source.name || '',
+                picUrl,
                 shopId: source.shopId || '',
                 shopName: source.shopName || '',
                 linkUrl: source.linkUrl || '',
@@ -810,10 +820,29 @@
         const normalizeItem = (item = {}) => {
             const materialId = String(item.materialId || item.itemId || '').trim();
             const itemId = String(item.itemId || item.materialId || '').trim();
+            const raw = isPlainObject(item?.raw) ? item.raw : {};
+            const picUrl = item.picUrl
+                || item.imgUrl
+                || item.imageUrl
+                || item.pictUrl
+                || item.itemPicUrl
+                || item.materialPicUrl
+                || item.materialImageUrl
+                || item.mainPic
+                || raw.picUrl
+                || raw.imgUrl
+                || raw.imageUrl
+                || raw.pictUrl
+                || raw.itemPicUrl
+                || raw.materialPicUrl
+                || raw.materialImageUrl
+                || raw.mainPic
+                || '';
             return {
                 materialId: materialId || itemId,
                 itemId: itemId || materialId,
                 materialName: item.materialName || item.title || item.name || '',
+                picUrl,
                 shopId: item.shopId || '',
                 shopName: item.shopName || '',
                 linkUrl: item.linkUrl || '',
@@ -839,4 +868,3 @@
             if (candidates.every(v => /^\d{6,}$/.test(v))) return uniqueBy(candidates, id => id);
             return [];
         };
-

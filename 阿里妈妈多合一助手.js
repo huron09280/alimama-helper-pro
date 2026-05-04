@@ -21536,10 +21536,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const source = isPlainObject(item?.raw) ? item.raw : (isPlainObject(item) ? item : {});
             const materialId = String(source.materialId || source.itemId || item.materialId || item.itemId || '').trim();
             const itemId = String(source.itemId || source.materialId || item.itemId || item.materialId || '').trim();
+            const picUrl = source.picUrl
+                || source.imgUrl
+                || source.imageUrl
+                || source.pictUrl
+                || source.itemPicUrl
+                || source.materialPicUrl
+                || source.materialImageUrl
+                || source.mainPic
+                || '';
             return {
                 materialId: materialId || itemId,
                 itemId: itemId || materialId,
                 materialName: source.materialName || source.title || source.name || '',
+                picUrl,
                 shopId: source.shopId || '',
                 shopName: source.shopName || '',
                 linkUrl: source.linkUrl || '',
@@ -21551,10 +21561,29 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const normalizeItem = (item = {}) => {
             const materialId = String(item.materialId || item.itemId || '').trim();
             const itemId = String(item.itemId || item.materialId || '').trim();
+            const raw = isPlainObject(item?.raw) ? item.raw : {};
+            const picUrl = item.picUrl
+                || item.imgUrl
+                || item.imageUrl
+                || item.pictUrl
+                || item.itemPicUrl
+                || item.materialPicUrl
+                || item.materialImageUrl
+                || item.mainPic
+                || raw.picUrl
+                || raw.imgUrl
+                || raw.imageUrl
+                || raw.pictUrl
+                || raw.itemPicUrl
+                || raw.materialPicUrl
+                || raw.materialImageUrl
+                || raw.mainPic
+                || '';
             return {
                 materialId: materialId || itemId,
                 itemId: itemId || materialId,
                 materialName: item.materialName || item.title || item.name || '',
+                picUrl,
                 shopId: item.shopId || '',
                 shopName: item.shopName || '',
                 linkUrl: item.linkUrl || '',
@@ -21580,7 +21609,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (candidates.every(v => /^\d{6,}$/.test(v))) return uniqueBy(candidates, id => id);
             return [];
         };
-
         const searchItems = async (params = {}) => {
             const runtime = await getRuntimeDefaults(false);
             const bizCode = params.bizCode || runtime.bizCode || DEFAULTS.bizCode;
@@ -23370,9 +23398,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 }
             }
-            const forceKeywordDailyBudget = !isManual
-                && keywordMarketingGoal === '自定义推广'
-                && !keywordRoiContract;
             const normalizeKeywordBudgetType = (value = '') => {
                 const token = String(value || '').trim().toLowerCase();
                 if (!token) return '';
@@ -23418,7 +23443,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             let normalizedDmcType = normalizeKeywordBudgetType(out.dmcType)
                 || normalizeKeywordBudgetType(DEFAULTS.dmcType)
                 || 'day_average';
-            if (forceKeywordDailyBudget) normalizedDmcType = 'normal';
             if (keywordRoiContract) normalizedDmcType = 'day_average';
             out.dmcType = normalizedDmcType;
             if (normalizedDmcType === 'unlimit') {
@@ -31018,9 +31042,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout {
                     min-height: min(560px, 66vh);
-                    display: grid;
-                    grid-template-columns: minmax(0, 1.6fr) minmax(290px, 1fr);
-                    gap: 12px;
+                    display: block;
                     min-width: 0;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-left,
@@ -31032,6 +31054,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     overflow: hidden;
                     display: flex;
                     flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-left.am-wxt-scene-trend-main {
+                    position: static;
+                    padding-bottom: 180px;
+                    overflow: visible;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-right {
+                    max-width: 280px;
+                    justify-self: end;
+                    width: 100%;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-tabs {
                     display: flex;
@@ -31109,6 +31141,166 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-top: 1px dashed rgba(148,163,184,0.26);
                     border-bottom: 1px solid rgba(148,163,184,0.2);
                 }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-toolbar .am-wxt-input,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-manual .am-wxt-input {
+                    border: 1px solid rgba(148,163,184,0.38);
+                    height: 30px;
+                    min-height: 30px;
+                    line-height: 28px;
+                    padding-top: 0;
+                    padding-bottom: 0;
+                    box-shadow: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-toolbar .am-wxt-input:focus,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-manual .am-wxt-input:focus {
+                    border-color: rgba(148,163,184,0.42);
+                    box-shadow: none;
+                    outline: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout[data-scene-popup-trend-layout="1"] .am-wxt-scene-crowd-native-toolbar .am-wxt-input {
+                    justify-self: start;
+                    width: min(260px, 100%);
+                    border: none;
+                    border-radius: 7px;
+                    padding: 3px 12px;
+                    background: rgba(79,104,255,0.12);
+                    color: #4f68ff;
+                    font-size: 12px;
+                    font-weight: 600;
+                    height: 30px;
+                    min-height: 30px;
+                    line-height: 24px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout[data-scene-popup-trend-layout="1"] .am-wxt-scene-crowd-native-toolbar .am-wxt-input::placeholder {
+                    color: rgba(79,104,255,0.56);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout[data-scene-popup-trend-layout="1"] .am-wxt-scene-crowd-native-toolbar .am-wxt-input:focus {
+                    border: none;
+                    box-shadow: none;
+                    outline: none;
+                    background: rgba(79,104,255,0.16);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-dock {
+                    position: fixed;
+                    left: max(24px, calc((100vw - min(1320px, 98vw)) / 2 + 38px));
+                    right: max(24px, calc((100vw - min(1320px, 98vw)) / 2 + 38px));
+                    bottom: 24px;
+                    z-index: 2147483502;
+                    border: 1px solid rgba(148,163,184,0.26);
+                    border-radius: 12px;
+                    background: rgba(255,255,255,0.99);
+                    box-shadow: 0 14px 34px rgba(15,23,42,0.14);
+                    padding: 10px 12px;
+                    pointer-events: auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-summary {
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                    font-size: 13px;
+                    line-height: 1.35;
+                    color: #334155;
+                    font-weight: 600;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-summary b {
+                    color: #3f4ddb;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-summary a {
+                    margin-left: auto;
+                    color: #3b82f6;
+                    text-decoration: none;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-actions {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-left: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-actions .am-wxt-btn {
+                    min-width: 72px;
+                    padding: 6px 14px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-chip-list {
+                    margin-top: 8px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-chip {
+                    border: none;
+                    background: rgba(236,240,252,0.95);
+                    color: #334155;
+                    border-radius: 10px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                    line-height: 1.25;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-chip i {
+                    font-style: normal;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-empty {
+                    color: #94a3b8;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-board {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 10px;
+                    padding: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column {
+                    border: 1px solid rgba(226,232,240,0.7);
+                    border-radius: 12px;
+                    background: linear-gradient(180deg, rgba(248,250,252,0.98), rgba(241,245,249,0.96));
+                    min-height: 0;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column[data-scene-popup-trend-rank-column="trend"] {
+                    background: linear-gradient(180deg, rgba(252,242,247,0.98), rgba(247,238,245,0.95));
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column[data-scene-popup-trend-rank-column="effect"] {
+                    background: linear-gradient(180deg, rgba(252,245,240,0.98), rgba(248,241,236,0.95));
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column[data-scene-popup-trend-rank-column="traffic"] {
+                    background: linear-gradient(180deg, rgba(241,244,254,0.98), rgba(236,240,252,0.95));
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-title {
+                    padding: 10px 12px 8px;
+                    color: #1f2937;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-title strong {
+                    font-size: 16px;
+                    line-height: 1.25;
+                    font-weight: 700;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-title small {
+                    font-size: 11px;
+                    line-height: 1.35;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-content {
+                    margin: 0 10px 10px;
+                    border: 1px solid rgba(226,232,240,0.86);
+                    border-radius: 12px;
+                    background: rgba(255,255,255,0.96);
+                    min-height: 0;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-head {
                     display: grid;
                     grid-template-columns: minmax(0, 1fr) 150px 112px 86px;
@@ -31140,6 +31332,502 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-radius: 8px;
                     padding: 8px;
                     background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-head.am-wxt-scene-trend-candidate-head,
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-row.am-wxt-scene-trend-candidate-row {
+                    grid-template-columns: minmax(0, 1fr) 52px 64px 112px;
+                    gap: 6px;
+                    font-size: 11px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-candidate-head .am-wxt-scene-trend-check i {
+                    font-style: normal;
+                    font-size: 12px;
+                    color: #334155;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    user-select: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input {
+                    position: absolute;
+                    opacity: 0;
+                    pointer-events: none;
+                    width: 0;
+                    height: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check-icon {
+                    width: 16px;
+                    height: 16px;
+                    border: 1px solid rgba(148,163,184,0.62);
+                    border-radius: 5px;
+                    background: #fff;
+                    position: relative;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input:checked + .am-wxt-scene-trend-check-icon {
+                    border-color: #4f68ff;
+                    background: #4f68ff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input:checked + .am-wxt-scene-trend-check-icon::after {
+                    content: '';
+                    position: absolute;
+                    left: 4px;
+                    top: 1px;
+                    width: 5px;
+                    height: 9px;
+                    border: solid #fff;
+                    border-width: 0 2px 2px 0;
+                    transform: rotate(45deg);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input:disabled + .am-wxt-scene-trend-check-icon {
+                    border-color: rgba(203,213,225,0.9);
+                    background: rgba(241,245,249,0.9);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-candidate-name-cell {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-list {
+                    padding: 0;
+                    gap: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column .am-wxt-scene-trend-candidate-row {
+                    border: none;
+                    border-radius: 0;
+                    border-bottom: 1px solid rgba(226,232,240,0.82);
+                    padding: 8px 10px;
+                    background: transparent;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column .am-wxt-scene-trend-candidate-row:last-child {
+                    border-bottom: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column .am-wxt-scene-crowd-native-candidate-name .name {
+                    font-size: 11px;
+                    line-height: 1.28;
+                    font-weight: 600;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                    word-break: break-word;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column .am-wxt-scene-crowd-native-candidate-name .meta {
+                    margin-top: 1px;
+                    font-size: 10px;
+                    line-height: 1.2;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column .am-wxt-scene-crowd-native-candidate-scale {
+                    font-size: 11px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag {
+                    justify-self: stretch;
+                    max-width: none;
+                    min-width: 0;
+                    border-radius: 999px;
+                    padding: 4px 8px;
+                    background: rgba(255,237,237,0.92);
+                    color: #ef4444;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    font-weight: 600;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    text-align: center;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag[data-rank-tag-tone="growth"] {
+                    background: rgba(220,252,231,0.92);
+                    color: #16a34a;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag[data-rank-tag-tone="up"] {
+                    background: rgba(255,228,230,0.96);
+                    color: #ff314a;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag[data-rank-tag-tone="industry"] {
+                    background: rgba(238,242,255,0.92);
+                    color: #4f46e5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag[data-rank-tag-tone="taobao"] {
+                    background: rgba(255,237,213,0.92);
+                    color: #ff5a3d;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag[data-rank-tag-tone="hot"] {
+                    background: rgba(255,228,230,0.96);
+                    color: #ff314a;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag[data-rank-tag-tone="effect"] {
+                    background: rgba(255,237,213,0.92);
+                    color: #f97316;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-tag[data-rank-tag-tone="traffic"] {
+                    background: rgba(238,242,255,0.92);
+                    color: #4f46e5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-column .am-wxt-btn {
+                    min-width: 0;
+                    padding: 4px 6px;
+                    font-size: 11px;
+                    border-radius: 999px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association {
+                    flex: 0 0 auto;
+                    height: auto;
+                    max-height: none;
+                    min-height: 0;
+                    margin: 0 10px 10px;
+                    border: 1px solid rgba(99,102,241,0.3);
+                    border-radius: 14px;
+                    background: linear-gradient(#fff,#fff) padding-box, linear-gradient(135deg, #42d9ff, #8b5cf6) border-box;
+                    box-shadow: 0 8px 24px rgba(79,70,229,0.08);
+                    overflow: visible;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association.has-item-panel {
+                    flex-basis: auto;
+                    min-height: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-main:has(.am-wxt-scene-trend-association.has-item-panel) .am-wxt-scene-trend-rank-board {
+                    min-height: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-search {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 10px;
+                    padding: 10px 12px 8px;
+                    align-items: center;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-query {
+                    display: flex;
+                    align-items: center;
+                    gap: 7px;
+                    min-width: 0;
+                    color: #334155;
+                    font-size: 13px;
+                    line-height: 1.35;
+                    flex-wrap: wrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-type {
+                    border: none;
+                    border-radius: 7px;
+                    padding: 5px 10px;
+                    background: rgba(241,245,249,0.95);
+                    color: #94a3b8;
+                    font-size: 12px;
+                    line-height: 1.2;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-height: 30px;
+                    box-sizing: border-box;
+                }
+                #am-wxt-scene-popup-mask label.am-wxt-scene-trend-association-type {
+                    padding: 3px 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-type.active {
+                    background: rgba(79,104,255,0.12);
+                    color: #4f68ff;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-type input {
+                    width: 0;
+                    height: 24px;
+                    min-width: 0;
+                    border: none;
+                    background: transparent;
+                    color: #334155;
+                    outline: none;
+                    font-size: 12px;
+                    padding: 0;
+                    opacity: 0;
+                    transition: width 0.16s ease, opacity 0.16s ease;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-type.active input {
+                    width: 150px;
+                    opacity: 1;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-query em[data-scene-popup-trend-association-picked] {
+                    color: #4f68ff;
+                    font-style: normal;
+                    font-size: 12px;
+                    max-width: 320px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-actions {
+                    display: grid;
+                    grid-template-columns: auto 32px;
+                    gap: 8px;
+                    align-items: center;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-arrow {
+                    width: 32px;
+                    height: 32px;
+                    border: none;
+                    border-radius: 999px;
+                    background: linear-gradient(135deg, #4f68ff, #7c3aed);
+                    color: #fff;
+                    font-size: 16px;
+                    line-height: 32px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 12px rgba(79,70,229,0.28);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-panel {
+                    margin: 0 12px 10px;
+                    border: 1px solid rgba(226,232,240,0.95);
+                    border-radius: 12px;
+                    background: #fff;
+                    box-shadow: 0 12px 28px rgba(15,23,42,0.08);
+                    overflow: hidden;
+                    flex: 0 0 260px;
+                    min-height: 220px;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-panel.hidden {
+                    display: none;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                    padding: 10px 12px;
+                    border-bottom: 1px solid rgba(226,232,240,0.95);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-head strong {
+                    color: #334155;
+                    font-size: 13px;
+                    line-height: 1.3;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-head label {
+                    width: 240px;
+                    height: 34px;
+                    border-radius: 10px;
+                    background: rgba(241,245,249,0.95);
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 0 12px;
+                    box-sizing: border-box;
+                    color: #64748b;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-head input {
+                    flex: 1;
+                    min-width: 0;
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                    color: #334155;
+                    font-size: 12px;
+                    height: 100%;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-list {
+                    min-height: 0;
+                    overflow: auto;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-row {
+                    display: grid;
+                    grid-template-columns: 28px 46px minmax(0, 1fr);
+                    align-items: center;
+                    gap: 12px;
+                    padding: 9px 12px;
+                    border-bottom: 1px solid rgba(226,232,240,0.82);
+                    color: #334155;
+                    cursor: pointer;
+                    min-height: 70px;
+                    box-sizing: border-box;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-row.selected {
+                    background: rgba(79,104,255,0.06);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-radio input {
+                    width: 14px;
+                    height: 14px;
+                    margin: 0;
+                    accent-color: #4f68ff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-thumb {
+                    width: 42px;
+                    height: 42px;
+                    border-radius: 6px;
+                    background: #f1f5f9;
+                    overflow: hidden;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #94a3b8;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-thumb img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    display: block;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-thumb i {
+                    font-style: normal;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-info {
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-info strong {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 13px;
+                    line-height: 1.35;
+                    color: #334155;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-item-info em {
+                    color: #94a3b8;
+                    font-size: 12px;
+                    line-height: 1.2;
+                    font-style: normal;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-quick {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 0 12px 8px;
+                    color: #94a3b8;
+                    font-size: 12px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-quick > div {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    min-width: 0;
+                    overflow: hidden;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-quick button {
+                    border: none;
+                    background: transparent;
+                    color: #475569;
+                    font-size: 12px;
+                    white-space: nowrap;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-quick button span {
+                    width: 13px;
+                    height: 13px;
+                    border-radius: 999px;
+                    border: 1px solid rgba(203,213,225,0.95);
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-quick button.active span {
+                    border-color: #4f68ff;
+                    box-shadow: inset 0 0 0 4px #4f68ff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-quick em {
+                    color: #94a3b8;
+                    font-style: normal;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-status {
+                    padding: 0 12px 7px;
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.25;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-table {
+                    border-top: 1px solid rgba(226,232,240,0.9);
+                    overflow: visible;
+                    min-height: 0;
+                    flex: 0 0 auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-head,
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-row {
+                    display: grid;
+                    grid-template-columns: minmax(150px, 1.25fr) 98px 74px 74px 74px 92px 74px 74px 56px;
+                    gap: 8px;
+                    align-items: center;
+                    min-width: 860px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-head {
+                    position: sticky;
+                    top: 0;
+                    z-index: 1;
+                    padding: 9px 12px;
+                    background: #fff;
+                    border-bottom: 1px solid rgba(226,232,240,0.9);
+                    color: #334155;
+                    font-size: 12px;
+                    font-weight: 700;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-list {
+                    display: flex;
+                    flex-direction: column;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-row {
+                    padding: 8px 12px;
+                    border-bottom: 1px solid rgba(226,232,240,0.82);
+                    color: #475569;
+                    font-size: 12px;
+                    line-height: 1.3;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-row.selected {
+                    background: rgba(79,104,255,0.06);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-theme {
+                    display: flex;
+                    align-items: center;
+                    gap: 7px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-theme i {
+                    flex: 0 0 auto;
+                    border-radius: 999px;
+                    background: rgba(241,245,249,0.95);
+                    color: #94a3b8;
+                    font-style: normal;
+                    padding: 2px 7px;
+                    font-size: 11px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-theme span {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    color: #334155;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-op {
+                    border: none;
+                    background: transparent;
+                    color: #4f68ff;
+                    font-size: 12px;
+                    cursor: pointer;
+                    padding: 0;
+                    white-space: nowrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-op:disabled {
+                    color: #cbd5e1;
+                    cursor: not-allowed;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-name .name,
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-name {
@@ -31190,7 +31878,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-table-head {
                     display: grid;
-                    grid-template-columns: minmax(0, 1fr) 92px 56px;
+                    grid-template-columns: minmax(0, 1fr) 68px 48px;
                     gap: 8px;
                     align-items: center;
                     padding: 8px 10px;
@@ -31201,12 +31889,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-row {
                     display: grid;
-                    grid-template-columns: minmax(0, 1fr) 92px 56px;
+                    grid-template-columns: minmax(0, 1fr) 68px 48px;
                     gap: 8px;
                     align-items: center;
                     border: 1px solid rgba(148,163,184,0.24);
                     border-radius: 8px;
                     padding: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-row .am-wxt-btn {
+                    min-width: 0;
+                    padding: 4px 6px;
+                    font-size: 11px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-source {
                     font-size: 11px;
@@ -31231,7 +31924,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     line-height: 1.45;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-filter {
-                    width: min(1180px, 96vw);
+                    width: min(1320px, 98vw);
                     max-height: 90vh;
                     border-radius: 14px;
                     padding: 14px;
@@ -31241,6 +31934,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-filter .am-wxt-scene-popup-body {
                     gap: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-trend-theme {
+                    position: relative;
+                    height: auto;
+                    max-height: calc(100vh - 16px);
+                    overflow: auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-trend-theme .am-wxt-scene-popup-body {
+                    flex: 0 0 auto;
+                    min-height: 0;
+                    overflow: visible;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout[data-scene-popup-trend-layout="1"] {
+                    flex: 0 0 auto;
+                    height: auto;
+                    min-height: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout[data-scene-popup-trend-layout="1"] .am-wxt-scene-trend-main {
+                    height: auto;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-filter-layout {
                     min-height: min(560px, 68vh);
@@ -32422,7 +33134,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         width: min(96vw, 940px);
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-layout {
-                        grid-template-columns: minmax(0, 1fr);
+                        display: block;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-right {
+                        max-width: none;
+                        justify-self: stretch;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-left.am-wxt-scene-trend-main {
+                        padding-bottom: 176px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-dock {
+                        left: 8px;
+                        right: 8px;
+                        bottom: 64px;
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-toolbar {
                         grid-template-columns: minmax(0, 1fr) auto;
@@ -32439,9 +33163,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-row {
                         grid-template-columns: minmax(0, 1fr) 120px 88px 72px;
                     }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-head.am-wxt-scene-trend-candidate-head,
+                    #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-row.am-wxt-scene-trend-candidate-row {
+                        grid-template-columns: minmax(0, 1fr) 46px 54px 100px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-board {
+                        grid-template-columns: minmax(0, 1fr);
+                        min-height: 520px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-title strong {
+                        font-size: 14px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-trend-rank-content {
+                        margin: 0 8px 8px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-trend-association {
+                        height: 100%;
+                        max-height: 100%;
+                        min-height: 0;
+                        margin: 0 8px 8px;
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-search {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-actions {
+                        grid-template-columns: minmax(0, 1fr) auto 32px;
+                    }
                     #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-table-head,
                     #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-row {
-                        grid-template-columns: minmax(0, 1fr) 76px 48px;
+                        grid-template-columns: minmax(0, 1fr) 64px 44px;
                     }
                     #am-wxt-scene-popup-mask .am-wxt-scene-time-recommend-cards {
                         grid-template-columns: minmax(0, 1fr);
@@ -33218,10 +33968,74 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             `;
             document.head.appendChild(style);
         };
-
         const getDefaultStrategyList = () => ([
-            { id: 'trend_star', name: '关键词推广-趋势明星', marketingGoal: '趋势明星', enabled: true, dayAverageBudget: '100', bidMode: 'smart', useWordPackage: DEFAULTS.useWordPackage },
-            { id: 'custom_define', name: '关键词推广-自定义推广', marketingGoal: '自定义推广', enabled: true, dayAverageBudget: '100', bidMode: 'smart', useWordPackage: DEFAULTS.useWordPackage }
+            {
+                id: 'search_detent',
+                name: '关键词推广-搜索卡位',
+                marketingGoal: '搜索卡位',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '搜索卡位',
+                    选择卡位方案: '搜索卡位',
+                    卡位方式: '抢首条'
+                }
+            },
+            {
+                id: 'trend_star',
+                name: '关键词推广-趋势明星',
+                marketingGoal: '趋势明星',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                bidTargetV2: 'conv',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '趋势明星',
+                    选择卡位方案: '趋势明星',
+                    出价目标: '获取成交量'
+                }
+            },
+            {
+                id: 'golden_traffic_card',
+                name: '关键词推广-流量金卡',
+                marketingGoal: '流量金卡',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                bidTargetV2: 'conv',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '流量金卡',
+                    选择卡位方案: '流量金卡',
+                    套餐卡: '类目精准词卡',
+                    套餐包档位: '自定义预算包',
+                    套餐包自动续投: '开启',
+                    支付方式: '余额支付'
+                }
+            },
+            {
+                id: 'custom_define',
+                name: '关键词推广-自定义推广',
+                marketingGoal: '自定义推广',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                bidTargetV2: 'conv',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '自定义推广',
+                    选择卡位方案: '自定义推广',
+                    出价目标: '获取成交量',
+                    匹配方式: '广泛'
+                }
+            }
         ]);
 
         const buildDefaultMatrixConfig = () => ({
@@ -33306,7 +34120,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const MATRIX_SCENE_FIELD_EXCLUDE_LABEL_RE = /^(场景名称|计划名称|计划名|预算值|每日预算|日均预算|总预算|出价方式|出价目标|商品|手动关键词|核心词设置|创意设置|设置创意|人群设置|设置拉新人群|设置人群|种子人群|投放资源位\/投放地域\/分时折扣|投放资源位\/投放地域\/投放时间|投放资源位|资源位设置|高级设置)$/;
         const MATRIX_SCENE_DIMENSION_FALLBACK_LABELS = {
             '货品全站推广': ['预算类型', '目标投产比', '投放时间', '投放地域', '计划组'],
-            '关键词推广': ['匹配方式', '卡位方式', '流量智选', '冷启加速', '预算类型'],
+            '关键词推广': {
+                __default: ['流量智选', '冷启加速', '预算类型'],
+                搜索卡位: ['卡位方式', '匹配方式', '冷启加速', '预算类型'],
+                趋势明星: ['冷启加速', '预算类型', '人群设置', '人群优化目标'],
+                流量金卡: ['套餐卡', '套餐包档位', '套餐包自动续投', '支付方式', '冷启加速'],
+                自定义推广: ['流量智选', '冷启加速', '预算类型']
+            },
             '人群推广': ['预算类型', '资源位溢价', '投放地域/投放时间', '人群设置', '出价目标'],
             '店铺直达': ['预算类型', '投放时间', '创意设置', '推广模式', '计划组'],
             '内容营销': ['投放时间', '出价方式', '优化目标', '人群设置', '创意设置'],
@@ -33322,10 +34142,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             },
             '关键词推广': {
                 '匹配方式': ['广泛', '中心词', '精准'],
-                '卡位方式': ['抢首条', '抢前三', '抢首页'],
+                '卡位方式': ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'],
                 '流量智选': ['开启', '关闭'],
                 '冷启加速': ['开启', '关闭'],
-                '预算类型': ['每日预算', '日均预算']
+                '预算类型': ['每日预算', '日均预算'],
+                '人群设置': ['设置优先投放客户', '关闭'],
+                '人群优化目标': ['人群优化目标', '关闭'],
+                '套餐卡': ['类目精准词卡', '大促成交抢量卡', '高转化卡'],
+                '套餐包档位': ['自定义预算包', '增量畅享包', '自定义成交包'],
+                '套餐包自动续投': ['开启', '关闭'],
+                '支付方式': ['余额支付', '支付宝支付']
             },
             '人群推广': {
                 '预算类型': ['每日预算', '日均预算'],
@@ -33414,7 +34240,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             { pattern: /^(方案选择|选择方案)$/, label: '选择方案' },
             { pattern: /^(设置计划组|计划组设置)$/, label: '计划组' }
         ];
-
         const getMatrixSceneName = (sceneName = '') => {
             const normalizedSceneName = String(sceneName || '').trim();
             return SCENE_NAME_LIST.includes(normalizedSceneName) ? normalizedSceneName : '';
@@ -33513,6 +34338,43 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     .filter(Boolean),
                 item => normalizeMatrixSceneFieldToken(item)
             );
+        };
+
+        const getMatrixSceneScopedFallbackLabels = (sceneName = '', marketingGoal = '') => {
+            const normalizedSceneName = getMatrixSceneName(sceneName);
+            if (!normalizedSceneName) return [];
+            const sceneConfig = MATRIX_SCENE_DIMENSION_FALLBACK_LABELS[normalizedSceneName];
+            if (Array.isArray(sceneConfig)) return sceneConfig;
+            if (!isPlainObject(sceneConfig)) return [];
+            const normalizedGoal = normalizeMatrixGoalCandidateLabel(marketingGoal)
+                || (normalizedSceneName === '关键词推广' ? '自定义推广' : '');
+            const matchedGoalKey = Object.keys(sceneConfig).find(key => (
+                key !== '__default'
+                && key !== 'default'
+                && normalizeMatrixGoalCandidateLabel(key) === normalizedGoal
+            ));
+            const scopedLabels = matchedGoalKey && Array.isArray(sceneConfig[matchedGoalKey])
+                ? sceneConfig[matchedGoalKey]
+                : [];
+            const defaultLabels = Array.isArray(sceneConfig.__default)
+                ? sceneConfig.__default
+                : (Array.isArray(sceneConfig.default) ? sceneConfig.default : []);
+            return uniqueBy(
+                [].concat(scopedLabels.length ? scopedLabels : defaultLabels)
+                    .map(item => normalizeMatrixSceneFieldLabel(item))
+                    .filter(Boolean),
+                item => normalizeMatrixSceneFieldToken(item)
+            );
+        };
+
+        const shouldHideMatrixKeywordGoalField = (fieldLabel = '', sceneName = '', marketingGoal = '') => {
+            if (getMatrixSceneName(sceneName) !== '关键词推广') return false;
+            const normalizedGoal = normalizeMatrixGoalCandidateLabel(marketingGoal) || '自定义推广';
+            const token = normalizeMatrixSceneFieldToken(fieldLabel);
+            if (!token) return false;
+            if (normalizedGoal !== '搜索卡位' && token === '卡位方式') return true;
+            if (['趋势明星', '流量金卡', '自定义推广'].includes(normalizedGoal) && token === '匹配方式') return true;
+            return false;
         };
 
         const resolveMatrixSceneFieldOptionType = (fieldLabel = '') => {
@@ -33614,32 +34476,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     .map(key => normalizeText(profile.fieldMeta[key]?.label || '').replace(/[：:]/g, '').trim())
                     .filter(Boolean)
                 : [];
-            const preferredFieldLabels = (Array.isArray(MATRIX_SCENE_DIMENSION_FALLBACK_LABELS[normalizedSceneName])
-                ? MATRIX_SCENE_DIMENSION_FALLBACK_LABELS[normalizedSceneName]
-                : []
-            ).map(item => normalizeMatrixSceneFieldLabel(item)).filter(Boolean);
-            const preferredFieldTokenSet = new Set(
-                preferredFieldLabels
-                    .map(item => normalizeMatrixSceneFieldToken(item))
-                    .filter(Boolean)
-            );
             const goalSelectorLabelRe = /^(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式)$/;
-            const collectGoalFieldLabels = (goal = null) => {
-                const labels = [];
-                if (Array.isArray(goal?.fieldRows)) {
-                    goal.fieldRows.forEach(row => {
-                        const text = normalizeText(row?.label || row?.settingKey || '').replace(/[：:]/g, '').trim();
-                        if (text) labels.push(text);
-                    });
-                }
-                if (isPlainObject(goal?.fieldMatrix)) {
-                    Object.keys(goal.fieldMatrix).forEach(label => {
-                        const text = normalizeText(label).replace(/[：:]/g, '').trim();
-                        if (text) labels.push(text);
-                    });
-                }
-                return uniqueBy(labels, item => normalizeMatrixSceneFieldToken(item));
-            };
             const goalFieldKey = normalizeMatrixSceneFieldKey('营销目标') || '营销目标';
             const goalAliasKeys = [
                 '选择卡位方案',
@@ -33663,6 +34500,28 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 || goalAliasKeys.map(key => bucket?.[key]).find(Boolean)
                 || ''
             );
+            const preferredFieldLabels = getMatrixSceneScopedFallbackLabels(normalizedSceneName, activeMarketingGoal);
+            const preferredFieldTokenSet = new Set(
+                preferredFieldLabels
+                    .map(item => normalizeMatrixSceneFieldToken(item))
+                    .filter(Boolean)
+            );
+            const collectGoalFieldLabels = (goal = null) => {
+                const labels = [];
+                if (Array.isArray(goal?.fieldRows)) {
+                    goal.fieldRows.forEach(row => {
+                        const text = normalizeText(row?.label || row?.settingKey || '').replace(/[：:]/g, '').trim();
+                        if (text) labels.push(text);
+                    });
+                }
+                if (isPlainObject(goal?.fieldMatrix)) {
+                    Object.keys(goal.fieldMatrix).forEach(label => {
+                        const text = normalizeText(label).replace(/[：:]/g, '').trim();
+                        if (text) labels.push(text);
+                    });
+                }
+                return uniqueBy(labels, item => normalizeMatrixSceneFieldToken(item));
+            };
             const sceneGoalSpecs = typeof getSceneCachedGoalSpecs === 'function'
                 ? getSceneCachedGoalSpecs(normalizedSceneName)
                 : [];
@@ -33707,6 +34566,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (!normalizedFieldLabel || !fieldKey || !fieldToken) return false;
                 if (goalSelectorLabelRe.test(normalizeMatrixSceneFieldToken(normalizedFieldLabel))) return false;
                 if (MATRIX_SCENE_FIELD_EXCLUDE_LABEL_RE.test(normalizedFieldLabel)) return false;
+                if (shouldHideMatrixKeywordGoalField(normalizedFieldLabel, normalizedSceneName, activeMarketingGoal)) return false;
                 if (shouldHideMatrixKeywordBidTargetCostField(normalizedFieldLabel, normalizedSceneName, activeMarketingGoal)) return false;
                 if (/^(campaign\.|adgroup\.)/i.test(normalizedFieldLabel)) return false;
                 if (!preferredFieldTokenSet.has(fieldToken) && !isMatrixSceneFieldConnected(normalizedFieldLabel)) return false;
@@ -34090,7 +34950,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 item => item
             );
         };
-
         const MATRIX_DIMENSION_NUMERIC_LABEL_RE = /^(?:预算值|每日预算|日均预算|总预算|预算|平均成交成本|平均直接成交成本|直接成交成本|单次成交成本|目标成交成本|目标成本|平均收藏加购成本|收藏加购成本|平均点击成本|点击成本|目标投产比|ROI目标值|出价目标值|约束值|出价|溢价|折扣|比例|数量|金额|单价)$/;
         const MATRIX_DIMENSION_NON_NUMERIC_LABEL_RE = /^(?:预算类型|出价方式|出价目标|优化目标|匹配方式|计划名前缀|计划组|投放时间|投放日期|分时折扣|投放地域|投放地域\/投放时间|资源位设置|投放资源位|选品方式|商品|人群设置|创意设置|设置创意|套餐包|种子人群|关键词设置|核心词设置|卡位方式|流量智选|冷启加速|推广模式|营销目标|选择方案|选择解决方案)$/;
 
@@ -39049,6 +39908,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             '流量智选'
                         ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                     }
+                    if (activeKeywordGoalForRender === '趋势明星') {
+                        [
+                            '趋势主题',
+                            '选择趋势主题',
+                            '趋势主题列表'
+                        ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    }
                     if (activeKeywordGoalForRender !== '搜索卡位') {
                         [
                             '卡位方式',
@@ -39113,7 +39979,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const hiddenKeywordFieldTokenSet = new Set(
                     [
                         'campaign.promotionScene',
-                        'campaign.itemSelectedMode'
+                        'campaign.itemSelectedMode',
+                        'campaign.trendThemeList'
                     ].map(item => normalizeSceneRenderFieldToken(item)).filter(Boolean)
                 );
                 let fields = allSceneFields.filter((fieldLabel) => {
@@ -39739,6 +40606,195 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (itemIdList.length === 1) return `已添加 1 个（${itemIdList[0]}）`;
                     return `已添加 ${itemIdList.length} 个（首个 ${itemIdList[0]}）`;
                 };
+                const normalizeTrendThemeIdValue = (value = '') => {
+                    const normalized = String(toIdValue(value) || '').trim();
+                    return normalized || '';
+                };
+                const normalizeTrendThemeNameValue = (item = {}, index = 0) => (
+                    normalizeSceneSettingValue(
+                        item?.trendThemeName
+                        || item?.themeName
+                        || item?.name
+                        || item?.label
+                        || item?.title
+                        || item?.query
+                        || item?.word
+                        || ''
+                    ) || `趋势主题${index + 1}`
+                );
+                const normalizeTrendThemeMetricValue = (value) => {
+                    if (value === undefined || value === null || value === '') return undefined;
+                    const num = Number(value);
+                    if (Number.isFinite(num)) return num;
+                    return normalizeSceneSettingValue(value);
+                };
+                const normalizeTrendThemeItem = (item = {}, index = 0) => {
+                    const source = isPlainObject(item)
+                        ? item
+                        : { trendThemeName: normalizeSceneSettingValue(item) };
+                    const trendThemeName = normalizeTrendThemeNameValue(source, index);
+                    const trendThemeId = normalizeTrendThemeIdValue(
+                        source.trendThemeId
+                        ?? source.themeId
+                        ?? source.id
+                        ?? source.value
+                        ?? source.themeIdStr
+                        ?? ''
+                    ) || trendThemeName;
+                    if (!trendThemeId && !trendThemeName) return null;
+                    const normalized = {
+                        trendThemeId,
+                        trendThemeName: trendThemeName || trendThemeId
+                    };
+                    [
+                        'itemCount',
+                        'recommendItemCount',
+                        'trend',
+                        'trendIndex',
+                        'capacity',
+                        'searchIndex',
+                        'competition',
+                        'competitionHeat',
+                        'favCartIndex',
+                        'collectCartIndex',
+                        'wcvr',
+                        'cvr',
+                        'convertIndex',
+                        'roi',
+                        'roiIndex',
+                        'capacityChangeRatio',
+                        'trendChangeRatio',
+                        'roiChangeRatio',
+                        'cvrChangeRatio',
+                        'wcvrChangeRatio',
+                        'competitionChangeRatio',
+                        'weekCapacityChangeRatio',
+                        'weekTrendChangeRatio',
+                        'weekRoiChangeRatio',
+                        'weekCvrChangeRatio',
+                        'weekWcvrChangeRatio',
+                        'weekCompetitionChangeRatio'
+                    ].forEach(key => {
+                        const value = normalizeTrendThemeMetricValue(source[key]);
+                        if (value !== undefined) normalized[key] = value;
+                    });
+                    if (isPlainObject(source.resourceType)) {
+                        normalized.resourceType = Object.assign({}, source.resourceType);
+                    }
+                    if (isPlainObject(source.trendLv)) {
+                        normalized.trendLv = Object.assign({}, source.trendLv);
+                    }
+                    const tagText = normalizeSceneSettingValue(
+                        normalized.resourceType?.tagText
+                        || normalized.resourceType?.operateText
+                        || normalized.resourceType?.name
+                        || normalized.trendLv?.tagText
+                        || normalized.trendLv?.name
+                        || source.tagText
+                        || source.statusText
+                        || ''
+                    );
+                    if (tagText) normalized.tagText = tagText;
+                    return normalized;
+                };
+                const getTrendThemeKey = (item = {}, index = 0) => {
+                    const trendThemeId = normalizeTrendThemeIdValue(item?.trendThemeId ?? item?.themeId ?? item?.id ?? '');
+                    if (trendThemeId) return `id:${trendThemeId}`;
+                    const trendThemeName = normalizeSceneSettingValue(item?.trendThemeName || item?.themeName || item?.name || '');
+                    return trendThemeName ? `name:${trendThemeName}` : `idx:${index}`;
+                };
+                const uniqueTrendThemeList = (list = [], limit = 6) => uniqueBy(
+                    (Array.isArray(list) ? list : [])
+                        .map((item, index) => normalizeTrendThemeItem(item, index))
+                        .filter(Boolean),
+                    (item, index) => getTrendThemeKey(item, index)
+                ).slice(0, Math.max(0, Number(limit) || 6));
+                const normalizeTrendThemeList = (rawValue = '', limit = 6) => {
+                    const parsed = Array.isArray(rawValue) || isPlainObject(rawValue)
+                        ? rawValue
+                        : tryParseMaybeJSON(String(rawValue || '').trim());
+                    const sourceList = Array.isArray(parsed)
+                        ? parsed
+                        : parseScenePopupJsonArray(rawValue, []);
+                    return uniqueTrendThemeList(sourceList, limit);
+                };
+                const serializeTrendThemeList = (list = []) => JSON.stringify(normalizeTrendThemeList(list, 6));
+                const describeTrendThemeSummary = (rawValue = '') => {
+                    const trendThemeList = normalizeTrendThemeList(rawValue, 6);
+                    if (!trendThemeList.length) return '未选择主题';
+                    const names = trendThemeList
+                        .map(item => normalizeSceneSettingValue(item?.trendThemeName || item?.trendThemeId || ''))
+                        .filter(Boolean);
+                    const preview = names.slice(0, 3).join('、');
+                    return `已选 ${trendThemeList.length}/6${preview ? `：${preview}${names.length > 3 ? '等' : ''}` : ''}`;
+                };
+                const collectTrendThemeResponseList = (response = {}) => {
+                    const data = isPlainObject(response?.data) ? response.data : {};
+                    const candidates = [
+                        data.trendThemeInfo,
+                        data.trendThemeList,
+                        data.themeList,
+                        data.list,
+                        data.result,
+                        response?.trendThemeInfo,
+                        response?.trendThemeList,
+                        response?.list
+                    ];
+                    const list = candidates.find(item => Array.isArray(item));
+                    return Array.isArray(list) ? list : [];
+                };
+                const collectTrendThemeRankLists = (response = {}) => {
+                    const data = isPlainObject(response?.data) ? response.data : {};
+                    return {
+                        trend: Array.isArray(data.trendThemeInfo) ? data.trendThemeInfo : [],
+                        effect: Array.isArray(data.effectThemeInfo) ? data.effectThemeInfo : [],
+                        traffic: Array.isArray(data.capacityThemeInfo) ? data.capacityThemeInfo : []
+                    };
+                };
+                const fetchNativeTrendThemeBundle = async (bizCode = '') => {
+                    const targetBizCode = normalizeSceneBizCode(bizCode || DEFAULTS.bizCode) || DEFAULTS.bizCode;
+                    const output = {
+                        defaultList: [],
+                        candidateList: [],
+                        trendRankList: [],
+                        effectRankList: [],
+                        trafficRankList: []
+                    };
+                    try {
+                        const response = await requestOne('/trendtheme/recommendThemeDefault.json', targetBizCode, {
+                            bizCode: targetBizCode
+                        }, {});
+                        output.defaultList = normalizeTrendThemeList(collectTrendThemeResponseList(response), 6);
+                    } catch (err) {
+                        log.warn('加载默认趋势主题失败:', err?.message || err);
+                    }
+                    try {
+                        const response = await requestOne('/trendtheme/recommendTheme.json', targetBizCode, {
+                            bizCode: targetBizCode
+                        }, {});
+                        const rankLists = collectTrendThemeRankLists(response);
+                        output.trendRankList = normalizeTrendThemeList(rankLists.trend, 160);
+                        output.effectRankList = normalizeTrendThemeList(rankLists.effect, 160);
+                        output.trafficRankList = normalizeTrendThemeList(rankLists.traffic, 160);
+                        output.candidateList = uniqueTrendThemeList(
+                            output.trendRankList
+                                .concat(output.effectRankList)
+                                .concat(output.trafficRankList)
+                                .concat(collectTrendThemeResponseList(response)),
+                            160
+                        );
+                    } catch (err) {
+                        log.warn('加载推荐趋势主题失败:', err?.message || err);
+                    }
+                    if (!output.trendRankList.length) output.trendRankList = output.candidateList;
+                    if (!output.effectRankList.length) output.effectRankList = output.candidateList;
+                    if (!output.trafficRankList.length) output.trafficRankList = output.candidateList;
+                    output.candidateList = uniqueTrendThemeList(
+                        output.defaultList.concat(output.candidateList),
+                        160
+                    );
+                    return output;
+                };
                 const CROWD_FILTER_GENDER_OPTIONS = [
                     { value: 'female', label: '女性用户' },
                     { value: 'male', label: '男性用户' }
@@ -40281,6 +41337,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             : ''
                     }));
                     if (activeKeywordGoal === '趋势明星') {
+                        const trendThemeField = 'campaign.trendThemeList';
+                        const trendThemeFieldKey = normalizeSceneFieldKey(trendThemeField);
+                        const trendThemeRaw = serializeTrendThemeList(
+                            bucket[trendThemeField]
+                            || bucket[trendThemeFieldKey]
+                            || '[]'
+                        );
+                        bucket[trendThemeField] = trendThemeRaw;
+                        if (trendThemeFieldKey && !touchedBucket[trendThemeFieldKey]) {
+                            bucket[trendThemeFieldKey] = trendThemeRaw;
+                        }
                         staticRows.push(`
                             <div class="am-wxt-scene-setting-row">
                                 <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
@@ -40300,6 +41367,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         placeholder="成本上限"
                                         ${wizardState.els.singleCostInput?.disabled ? 'disabled' : ''}
                                     />
+                                </div>
+                            </div>
+                        `);
+                        staticRows.push(`
+                            <div class="am-wxt-scene-setting-row">
+                                <div class="am-wxt-scene-setting-label">趋势主题</div>
+                                <div class="am-wxt-setting-control">
+                                    ${buildScenePopupControl({
+                                        trigger: 'trendTheme',
+                                        title: '选择趋势主题',
+                                        buttonLabel: '选择趋势主题',
+                                        summary: describeTrendThemeSummary(trendThemeRaw),
+                                        hiddenFields: [
+                                            { fieldKey: trendThemeField, value: trendThemeRaw }
+                                        ]
+                                    })}
                                 </div>
                             </div>
                         `);
@@ -40889,49 +41972,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 staticRows.splice(keywordLinkedInsertAt, 0, ...keywordBidTargetLinkedRows);
                             }
                             pushKeywordCustomSettingRow({
-                                label: '投放资源位',
-                                aliases: ['资源位设置', '投放资源位/投放地域/投放时间', '投放资源位/投放地域/分时折扣', '高级设置'],
-                                options: ['平台优选', '自定义资源位'],
-                                defaultValue: '平台优选',
+                                label: '投放资源位/投放地域/分时折扣',
+                                aliases: [
+                                    '高级设置',
+                                    '投放资源位/投放地域/投放时间',
+                                    '资源位设置',
+                                    '投放资源位',
+                                    '投放时间',
+                                    '投放日期',
+                                    '发布日期',
+                                    '分时折扣',
+                                    '投放地域',
+                                    '地域设置'
+                                ],
+                                options: ['默认投放', '自定义设置'],
+                                defaultValue: advancedDefaultMode ? '默认投放' : '自定义设置',
                                 strictOptions: true,
                                 popup: {
                                     trigger: 'adzone',
                                     title: '高级设置',
-                                    buttonLabel: '配置资源位',
-                                    summary: describeAdzoneSummary(adzoneRaw),
+                                    buttonLabel: '编辑设置',
+                                    summary: describeKeywordAdvancedSummary({
+                                        adzoneRaw,
+                                        launchAreaRaw,
+                                        launchPeriodRaw
+                                    }),
                                     hiddenFields: [
-                                        { fieldKey: adzoneField, value: adzoneRaw }
-                                    ]
-                                }
-                            });
-                            pushKeywordCustomSettingRow({
-                                label: '投放时间',
-                                aliases: ['投放日期', '发布日期', '分时折扣'],
-                                options: ['长期投放', '不限时段', '固定时段'],
-                                defaultValue: '长期投放',
-                                strictOptions: true,
-                                popup: {
-                                    trigger: 'launchPeriod',
-                                    title: '高级设置',
-                                    buttonLabel: '配置时段',
-                                    summary: describeLaunchPeriodSummary(launchPeriodRaw),
-                                    hiddenFields: [
-                                        { fieldKey: launchPeriodField, value: launchPeriodRaw }
-                                    ]
-                                }
-                            });
-                            pushKeywordCustomSettingRow({
-                                label: '投放地域',
-                                aliases: ['地域设置'],
-                                options: ['全部地域'],
-                                defaultValue: '全部地域',
-                                strictOptions: true,
-                                popup: {
-                                    trigger: 'launchArea',
-                                    title: '高级设置',
-                                    buttonLabel: '配置地域',
-                                    summary: describeLaunchAreaSummary(launchAreaRaw),
-                                    hiddenFields: [
+                                        { fieldKey: adzoneField, value: adzoneRaw },
+                                        { fieldKey: launchPeriodField, value: launchPeriodRaw },
                                         { fieldKey: launchAreaField, value: launchAreaRaw }
                                     ]
                                 }
@@ -44476,6 +45544,1286 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         launchAreaControl
                     };
                 };
+                const openKeywordTrendThemeSettingPopup = async () => {
+                    const trendThemeControl = resolveScenePopupControl('campaign.trendThemeList', 'trendTheme');
+                    if (!(trendThemeControl instanceof HTMLInputElement)) return null;
+                    const runtime = await getRuntimeDefaults(false).catch(() => ({}));
+                    const expectedBizCode = normalizeSceneBizCode(
+                        wizardState?.draft?.bizCode
+                        || runtime?.bizCode
+                        || parseRouteParamFromHash('bizCode')
+                        || DEFAULTS.bizCode
+                    ) || DEFAULTS.bizCode;
+                    let selectedThemes = normalizeTrendThemeList(trendThemeControl.value || '[]', 6);
+                    let defaultThemes = [];
+                    let candidateThemes = selectedThemes;
+                    let rankThemeMap = {
+                        trend: [],
+                        effect: [],
+                        traffic: []
+                    };
+                    const associationThemeCache = new Map();
+                    const fetchAssociationThemes = async (query = '') => {
+                        const normalizedQuery = normalizeSceneSettingValue(query);
+                        if (!normalizedQuery) return [];
+                        const cacheKey = normalizedQuery.toLowerCase();
+                        if (associationThemeCache.has(cacheKey)) {
+                            return associationThemeCache.get(cacheKey) || [];
+                        }
+                        try {
+                            const response = await requestOne('/trendtheme/themeAssociation.json', expectedBizCode, {
+                                bizCode: expectedBizCode,
+                                query: normalizedQuery
+                            }, {});
+                            const list = normalizeTrendThemeList(collectTrendThemeResponseList(response), 120);
+                            associationThemeCache.set(cacheKey, list);
+                            return list;
+                        } catch (err) {
+                            log.warn('加载趋势主题联想失败:', err?.message || err);
+                            associationThemeCache.set(cacheKey, []);
+                            return [];
+                        }
+                    };
+                    const resolveTrendAssociationItemId = (item = {}) => String(
+                        toIdValue(item?.materialId || item?.itemId || item?.id || item?.auctionId || '')
+                    ).trim();
+                    const resolveTrendAssociationItemPic = (item = {}) => {
+                        const raw = isPlainObject(item?.raw) ? item.raw : {};
+                        return normalizeSceneSettingValue(
+                            item?.picUrl
+                            || item?.imgUrl
+                            || item?.imageUrl
+                            || item?.pictUrl
+                            || item?.itemPicUrl
+                            || item?.materialPicUrl
+                            || item?.materialImageUrl
+                            || item?.mainPic
+                            || raw?.picUrl
+                            || raw?.imgUrl
+                            || raw?.imageUrl
+                            || raw?.pictUrl
+                            || raw?.itemPicUrl
+                            || raw?.materialPicUrl
+                            || raw?.materialImageUrl
+                            || raw?.mainPic
+                            || ''
+                        );
+                    };
+                    const normalizeTrendAssociationItem = (item = null) => {
+                        if (!isPlainObject(item)) return null;
+                        const normalized = normalizeItem(item);
+                        const itemId = resolveTrendAssociationItemId(normalized) || resolveTrendAssociationItemId(item);
+                        if (!/^\d{4,}$/.test(itemId)) return null;
+                        const raw = isPlainObject(item.raw) ? item.raw : {};
+                        const materialName = normalizeSceneSettingValue(
+                            normalized.materialName
+                            || item?.materialName
+                            || item?.title
+                            || item?.name
+                            || raw?.materialName
+                            || raw?.title
+                            || raw?.name
+                            || ''
+                        ) || `宝贝${itemId}`;
+                        return {
+                            ...normalized,
+                            materialId: itemId,
+                            itemId,
+                            materialName,
+                            picUrl: resolveTrendAssociationItemPic(item) || resolveTrendAssociationItemPic(normalized)
+                        };
+                    };
+                    const uniqueTrendAssociationItems = (list = [], limit = 120) => uniqueBy(
+                        (Array.isArray(list) ? list : [])
+                            .map(item => normalizeTrendAssociationItem(item))
+                            .filter(Boolean),
+                        item => resolveTrendAssociationItemId(item)
+                    ).slice(0, limit);
+                    const collectTrendAssociationItemResponseList = (response = {}) => {
+                        const data = isPlainObject(response?.data) ? response.data : {};
+                        const nestedData = isPlainObject(data?.data) ? data.data : {};
+                        const candidates = [
+                            data.list,
+                            data.itemList,
+                            data.records,
+                            data.result,
+                            data.resultList,
+                            data.items,
+                            nestedData.list,
+                            nestedData.itemList,
+                            nestedData.records,
+                            response?.list,
+                            response?.itemList
+                        ];
+                        const list = candidates.find(item => Array.isArray(item));
+                        return Array.isArray(list) ? list : [];
+                    };
+                    const filterTrendAssociationItems = (list = [], query = '') => {
+                        const normalizedQuery = normalizeSceneSettingValue(query).toLowerCase();
+                        if (!normalizedQuery) return Array.isArray(list) ? list : [];
+                        const tokens = uniqueBy(
+                            normalizedQuery.split(/[\s,，]+/g).map(token => token.trim()).filter(Boolean),
+                            token => token
+                        );
+                        if (!tokens.length) return Array.isArray(list) ? list : [];
+                        return (Array.isArray(list) ? list : []).filter((item) => {
+                            const haystack = [
+                                item?.materialName,
+                                item?.itemId,
+                                item?.materialId
+                            ].map(value => normalizeSceneSettingValue(value).toLowerCase()).join(' ');
+                            return tokens.every(token => haystack.includes(token));
+                        });
+                    };
+                    const resolveTrendAssociationItemQuery = (item = {}) => normalizeSceneSettingValue(
+                        item?.materialName || item?.title || item?.name || item?.itemId || item?.materialId || ''
+                    );
+                    const normalizeTrendAssociationQueryCandidate = (query = '') => normalizeSceneSettingValue(query)
+                        .replace(/[｜|【】\[\]（）()「」《》,，;；:：]/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    const TREND_ASSOCIATION_CORE_TERMS = [
+                        '消毒碗柜',
+                        '嵌入式消毒柜',
+                        '嵌入式洗碗机',
+                        '台式洗碗机',
+                        '水槽洗碗机',
+                        '全自动洗碗机',
+                        '家用洗碗机',
+                        '洗碗机',
+                        '消毒柜',
+                        '洗碗粉',
+                        '洗碗块',
+                        '清洁剂',
+                        '空调',
+                        '冰箱',
+                        '洗衣机',
+                        '烟机',
+                        '灶具',
+                        '热水器',
+                        '净水器'
+                    ];
+                    const collectTrendAssociationThemeNames = () => uniqueBy(
+                        []
+                            .concat(selectedThemes || [])
+                            .concat(defaultThemes || [])
+                            .concat(candidateThemes || [])
+                            .concat(rankThemeMap?.trend || [])
+                            .concat(rankThemeMap?.effect || [])
+                            .concat(rankThemeMap?.traffic || [])
+                            .map(item => normalizeTrendAssociationQueryCandidate(item?.trendThemeName || item?.themeName || item?.name || ''))
+                            .filter(item => item.length >= 2),
+                        item => item.toLowerCase()
+                    );
+                    const buildTrendAssociationCoreQueries = (text = '') => {
+                        const normalizedText = normalizeTrendAssociationQueryCandidate(text);
+                        const haystack = normalizedText.toLowerCase();
+                        if (!haystack) return [];
+                        const themeMatches = collectTrendAssociationThemeNames()
+                            .filter(name => haystack.includes(name.toLowerCase()))
+                            .sort((left, right) => right.length - left.length);
+                        const coreMatches = TREND_ASSOCIATION_CORE_TERMS
+                            .filter(name => haystack.includes(name.toLowerCase()));
+                        return uniqueBy(
+                            themeMatches.concat(coreMatches),
+                            item => item.toLowerCase()
+                        ).slice(0, 8);
+                    };
+                    const fetchCompetitorAssociationItems = async (query = '') => {
+                        const normalizedQuery = normalizeSceneSettingValue(query);
+                        if (!normalizedQuery) return [];
+                        const token = ensureTokens();
+                        const params = new URLSearchParams();
+                        params.set('csrfId', token.csrfId);
+                        params.set('bizCode', expectedBizCode);
+                        if (token.loginPointId) params.set('loginPointId', token.loginPointId);
+                        const url = `https://ai.alimama.com/ai/common/searchItemPage.json?${params.toString()}`;
+                        const payload = {
+                            bizCode: expectedBizCode,
+                            similarItemQueryStr: normalizedQuery,
+                            offset: 0,
+                            pageNo: 1,
+                            pageSize: 80
+                        };
+                        const response = await API.request(url, payload, {
+                            maxRetries: 1,
+                            timeout: 15000
+                        });
+                        assertResponseOk(response, '/ai/common/searchItemPage.json');
+                        return uniqueTrendAssociationItems(
+                            collectTrendAssociationItemResponseList(response),
+                            120
+                        );
+                    };
+                    const nativeBundle = await fetchNativeTrendThemeBundle(expectedBizCode);
+                    defaultThemes = normalizeTrendThemeList(nativeBundle.defaultList || [], 6);
+                    if (!selectedThemes.length && defaultThemes.length) {
+                        selectedThemes = defaultThemes.slice(0, 6);
+                    }
+                    rankThemeMap = {
+                        trend: normalizeTrendThemeList(nativeBundle.trendRankList || nativeBundle.candidateList || [], 160),
+                        effect: normalizeTrendThemeList(nativeBundle.effectRankList || nativeBundle.candidateList || [], 160),
+                        traffic: normalizeTrendThemeList(nativeBundle.trafficRankList || nativeBundle.candidateList || [], 160)
+                    };
+                    const associationSeedQuery = normalizeSceneSettingValue(
+                        selectedThemes[0]?.trendThemeName
+                        || defaultThemes[0]?.trendThemeName
+                        || ''
+                    );
+                    const associationThemes = associationSeedQuery
+                        ? await fetchAssociationThemes(associationSeedQuery)
+                        : [];
+                    candidateThemes = uniqueTrendThemeList(
+                        associationThemes
+                            .concat(selectedThemes)
+                            .concat(defaultThemes)
+                            .concat(nativeBundle.candidateList || []),
+                        160
+                    );
+                    let associationSearchType = 'keyword';
+                    let associationKeyword = associationSeedQuery;
+                    let associationSelectedItem = null;
+                    let associationSelectedItemType = '';
+                    let associationItemPanelType = '';
+                    let associationItemSearchKeyword = '';
+                    let associationItemLoadStatus = '';
+                    let associationItemLoadToken = '';
+                    let associationShopItems = uniqueTrendAssociationItems(
+                        []
+                            .concat(Array.isArray(wizardState?.addedItems) ? wizardState.addedItems : [])
+                            .concat(Array.isArray(wizardState?.draft?.addedItems) ? wizardState.draft.addedItems : [])
+                            .concat(Array.isArray(wizardState?.candidates) ? wizardState.candidates : []),
+                        120
+                    );
+                    let associationCompetitorItems = [];
+                    let associationSearchThemes = associationThemes;
+                    let associationSearchStatus = associationSearchThemes.length
+                        ? `搜索完毕，共找到${associationSearchThemes.length}个趋势热点`
+                        : '输入关键词后深度搜索，或点击已选趋势快捷联想';
+                    let associationQuickActiveQuery = associationSeedQuery;
+
+                    const result = await openScenePopupDialog({
+                        title: '选择趋势主题',
+                        dialogClassName: 'am-wxt-scene-popup-dialog-filter am-wxt-scene-popup-dialog-trend-theme',
+                        closeLabel: '×',
+                        cancelLabel: '取消',
+                        saveLabel: '确定',
+                        saveFirst: true,
+                        bodyHtml: `
+                            <div class="am-wxt-scene-popup-tips">对齐原生“选择趋势主题”逻辑：最多 6 个，确认后写入 campaign.trendThemeList，最终创建计划按完整主题对象提交。</div>
+                            <div class="am-wxt-scene-crowd-native-layout" data-scene-popup-trend-layout="1">
+                                <section class="am-wxt-scene-crowd-native-left am-wxt-scene-trend-main">
+                                    <div class="am-wxt-scene-crowd-native-tabs">
+                                        <button type="button" class="am-wxt-scene-crowd-native-tab active">
+                                            <span>趋势排行榜</span>
+                                            <i>原生推荐</i>
+                                        </button>
+                                        <button type="button" class="am-wxt-scene-crowd-native-tab">
+                                            <span>趋势AI联想</span>
+                                        </button>
+                                    </div>
+                                    <div class="am-wxt-scene-crowd-native-toolbar">
+                                        <input
+                                            type="text"
+                                            class="am-wxt-input"
+                                            data-scene-popup-trend-search="1"
+                                            placeholder="搜索趋势主题名称或ID"
+                                        />
+                                        <button type="button" class="am-wxt-btn" data-scene-popup-trend-refresh="1">刷新原生推荐</button>
+                                        <button type="button" class="am-wxt-btn" data-scene-popup-trend-fill-default="1">补齐默认</button>
+                                    </div>
+                                    <div class="am-wxt-scene-trend-rank-board">
+                                        <section class="am-wxt-scene-trend-rank-column" data-scene-popup-trend-rank-column="trend">
+                                            <div class="am-wxt-scene-trend-rank-title">
+                                                <strong>趋势红榜</strong>
+                                                <small>提前布局新趋势赛道</small>
+                                            </div>
+                                            <div class="am-wxt-scene-trend-rank-content">
+                                                <div class="am-wxt-scene-crowd-native-candidate-head am-wxt-scene-trend-candidate-head">
+                                                    <span>
+                                                        <label class="am-wxt-scene-trend-check">
+                                                            <input type="checkbox" data-scene-popup-trend-select-all="trend" />
+                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <i>主题</i>
+                                                        </label>
+                                                    </span>
+                                                    <span>趋势指数</span>
+                                                    <span>推荐商品数</span>
+                                                    <span>状态</span>
+                                                </div>
+                                                <div class="am-wxt-scene-crowd-native-candidate-list am-wxt-scene-trend-rank-list" data-scene-popup-trend-candidate-list="trend"></div>
+                                            </div>
+                                        </section>
+                                        <section class="am-wxt-scene-trend-rank-column" data-scene-popup-trend-rank-column="effect">
+                                            <div class="am-wxt-scene-trend-rank-title">
+                                                <strong>效果红榜</strong>
+                                                <small>助力店铺获得更多成交</small>
+                                            </div>
+                                            <div class="am-wxt-scene-trend-rank-content">
+                                                <div class="am-wxt-scene-crowd-native-candidate-head am-wxt-scene-trend-candidate-head">
+                                                    <span>
+                                                        <label class="am-wxt-scene-trend-check">
+                                                            <input type="checkbox" data-scene-popup-trend-select-all="effect" />
+                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <i>主题</i>
+                                                        </label>
+                                                    </span>
+                                                    <span>投产指数</span>
+                                                    <span>推荐商品数</span>
+                                                    <span>标签</span>
+                                                </div>
+                                                <div class="am-wxt-scene-crowd-native-candidate-list am-wxt-scene-trend-rank-list" data-scene-popup-trend-candidate-list="effect"></div>
+                                            </div>
+                                        </section>
+                                        <section class="am-wxt-scene-trend-rank-column" data-scene-popup-trend-rank-column="traffic">
+                                            <div class="am-wxt-scene-trend-rank-title">
+                                                <strong>流量红榜</strong>
+                                                <small>流量潜力大，触达更多新客</small>
+                                            </div>
+                                            <div class="am-wxt-scene-trend-rank-content">
+                                                <div class="am-wxt-scene-crowd-native-candidate-head am-wxt-scene-trend-candidate-head">
+                                                    <span>
+                                                        <label class="am-wxt-scene-trend-check">
+                                                            <input type="checkbox" data-scene-popup-trend-select-all="traffic" />
+                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <i>主题</i>
+                                                        </label>
+                                                    </span>
+                                                    <span>搜索指数</span>
+                                                    <span>推荐商品数</span>
+                                                    <span>标签</span>
+                                                </div>
+                                                <div class="am-wxt-scene-crowd-native-candidate-list am-wxt-scene-trend-rank-list" data-scene-popup-trend-candidate-list="traffic"></div>
+                                            </div>
+                                        </section>
+                                    </div>
+                                    <section class="am-wxt-scene-trend-association" data-scene-popup-trend-association="1">
+                                        <div class="am-wxt-scene-trend-association-search">
+                                            <div class="am-wxt-scene-trend-association-query">
+                                                <span>通过</span>
+                                                <label class="am-wxt-scene-trend-association-type active" data-scene-popup-trend-association-type="keyword">
+                                                    <span>关键词</span>
+                                                    <input
+                                                        type="text"
+                                                        data-scene-popup-trend-association-keyword-input="1"
+                                                        placeholder="请输入"
+                                                    />
+                                                </label>
+                                                <span>或</span>
+                                                <button type="button" class="am-wxt-scene-trend-association-type" data-scene-popup-trend-association-type="shopItem">本店宝贝</button>
+                                                <span>或</span>
+                                                <button type="button" class="am-wxt-scene-trend-association-type" data-scene-popup-trend-association-type="competitorItem">竞店宝贝</button>
+                                                <span>联想相关趋势主题</span>
+                                                <em data-scene-popup-trend-association-picked="1"></em>
+                                            </div>
+                                            <div class="am-wxt-scene-trend-association-actions">
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-trend-association-search="1">深度搜索</button>
+                                                <button type="button" class="am-wxt-scene-trend-association-arrow" data-scene-popup-trend-association-search-arrow="1">↑</button>
+                                            </div>
+                                        </div>
+                                        <div class="am-wxt-scene-trend-association-item-panel hidden" data-scene-popup-trend-association-item-panel="1">
+                                            <div class="am-wxt-scene-trend-association-item-head">
+                                                <strong>宝贝/主体信息</strong>
+                                                <label>
+                                                    <span>搜索</span>
+                                                    <input
+                                                        type="text"
+                                                        data-scene-popup-trend-association-item-search="1"
+                                                        placeholder="宝贝标题"
+                                                    />
+                                                </label>
+                                            </div>
+                                            <div class="am-wxt-scene-trend-association-item-list" data-scene-popup-trend-association-item-list="1"></div>
+                                        </div>
+                                        <div class="am-wxt-scene-trend-association-quick">
+                                            <span>快捷联想已选趋势：</span>
+                                            <div data-scene-popup-trend-association-quick="1"></div>
+                                        </div>
+                                        <div class="am-wxt-scene-trend-association-status" data-scene-popup-trend-association-status="1"></div>
+                                        <div class="am-wxt-scene-trend-association-table">
+                                            <div class="am-wxt-scene-trend-association-head">
+                                                <span>趋势主题</span>
+                                                <span>推荐店铺商品数</span>
+                                                <span>趋势指数</span>
+                                                <span>搜索指数</span>
+                                                <span>竞争热度</span>
+                                                <span>收藏加购指数</span>
+                                                <span>转化指数</span>
+                                                <span>投产指数</span>
+                                                <span>操作</span>
+                                            </div>
+                                            <div class="am-wxt-scene-trend-association-list" data-scene-popup-trend-association-list="1"></div>
+                                        </div>
+                                    </section>
+                                    <div class="am-wxt-scene-trend-selected-dock" data-scene-popup-trend-selected-dock="1">
+                                        <div class="am-wxt-scene-trend-selected-summary">
+                                            <span>已选明星趋势主题 <b data-scene-popup-trend-selected-count="1">0</b>/6</span>
+                                            <span>含相关宝贝 <b data-scene-popup-trend-selected-item-count="1">0</b></span>
+                                            <a href="javascript:;" data-scene-popup-trend-clear="1">全部移除</a>
+                                            <span class="am-wxt-scene-trend-selected-actions" data-scene-popup-trend-actions="1"></span>
+                                        </div>
+                                        <div class="am-wxt-scene-trend-selected-chip-list" data-scene-popup-trend-selected-list="1"></div>
+                                    </div>
+                                </section>
+                            </div>
+                        `,
+                        onMounted: (mask) => {
+                            const searchInput = mask.querySelector('[data-scene-popup-trend-search="1"]');
+                            const refreshBtn = mask.querySelector('[data-scene-popup-trend-refresh="1"]');
+                            const fillDefaultBtn = mask.querySelector('[data-scene-popup-trend-fill-default="1"]');
+                            const selectedListEl = mask.querySelector('[data-scene-popup-trend-selected-list="1"]');
+                            const selectedCountEl = mask.querySelector('[data-scene-popup-trend-selected-count="1"]');
+                            const selectedItemCountEl = mask.querySelector('[data-scene-popup-trend-selected-item-count="1"]');
+                            const clearBtn = mask.querySelector('[data-scene-popup-trend-clear="1"]');
+                            const selectedActionsEl = mask.querySelector('[data-scene-popup-trend-actions="1"]');
+                            const associationRootEl = mask.querySelector('[data-scene-popup-trend-association="1"]');
+                            const associationKeywordInput = mask.querySelector('[data-scene-popup-trend-association-keyword-input="1"]');
+                            const associationSearchBtn = mask.querySelector('[data-scene-popup-trend-association-search="1"]');
+                            const associationSearchArrowBtn = mask.querySelector('[data-scene-popup-trend-association-search-arrow="1"]');
+                            const associationQuickEl = mask.querySelector('[data-scene-popup-trend-association-quick="1"]');
+                            const associationStatusEl = mask.querySelector('[data-scene-popup-trend-association-status="1"]');
+                            const associationListEl = mask.querySelector('[data-scene-popup-trend-association-list="1"]');
+                            const associationPickedEl = mask.querySelector('[data-scene-popup-trend-association-picked="1"]');
+                            const associationItemPanelEl = mask.querySelector('[data-scene-popup-trend-association-item-panel="1"]');
+                            const associationItemSearchInput = mask.querySelector('[data-scene-popup-trend-association-item-search="1"]');
+                            const associationItemListEl = mask.querySelector('[data-scene-popup-trend-association-item-list="1"]');
+                            const associationTypeEls = Array.from(mask.querySelectorAll('[data-scene-popup-trend-association-type]'));
+                            const rankTabs = ['trend', 'effect', 'traffic'];
+                            const candidateListEls = rankTabs.reduce((acc, rankTab) => {
+                                const listEl = mask.querySelector(`[data-scene-popup-trend-candidate-list="${rankTab}"]`);
+                                if (listEl instanceof HTMLElement) {
+                                    acc[rankTab] = listEl;
+                                }
+                                return acc;
+                            }, {});
+                            const selectAllEls = rankTabs.reduce((acc, rankTab) => {
+                                const checkboxEl = mask.querySelector(`[data-scene-popup-trend-select-all="${rankTab}"]`);
+                                if (checkboxEl instanceof HTMLInputElement) {
+                                    acc[rankTab] = checkboxEl;
+                                }
+                                return acc;
+                            }, {});
+                            const popupFootEl = mask.querySelector('.am-wxt-scene-popup-foot');
+                            if (selectedActionsEl instanceof HTMLElement && popupFootEl instanceof HTMLElement) {
+                                const actionButtons = Array.from(popupFootEl.querySelectorAll('[data-scene-popup-save], [data-scene-popup-cancel]'));
+                                actionButtons.forEach(button => selectedActionsEl.appendChild(button));
+                                popupFootEl.style.display = 'none';
+                            }
+
+                            const syncPopupState = () => {
+                                mask._scenePopupTrendThemeState = {
+                                    getSelectedThemes: () => normalizeTrendThemeList(selectedThemes, 6)
+                                };
+                            };
+                            const isThemeSelected = (item = {}) => {
+                                const key = getTrendThemeKey(item);
+                                return selectedThemes.some(candidate => getTrendThemeKey(candidate) === key);
+                            };
+                            const getMetricText = (item = {}, keys = []) => {
+                                const value = keys
+                                    .map(key => item?.[key])
+                                    .find(candidate => candidate !== undefined && candidate !== null && candidate !== '');
+                                if (value === undefined || value === null || value === '') return '-';
+                                return String(value);
+                            };
+                            const getMetricNumber = (item = {}, keys = []) => {
+                                const value = keys
+                                    .map(key => item?.[key])
+                                    .find(candidate => candidate !== undefined && candidate !== null && candidate !== '');
+                                const num = Number(value);
+                                return Number.isFinite(num) ? num : 0;
+                            };
+                            const formatTrendRatio = (value) => {
+                                const num = Number(value);
+                                if (!Number.isFinite(num) || num <= 0) return '';
+                                const rounded = Math.abs(num - Math.round(num)) < 0.05
+                                    ? String(Math.round(num))
+                                    : num.toFixed(1).replace(/\.0$/, '');
+                                return `周增幅 ${rounded}%`;
+                            };
+                            const getRankTagText = (item = {}, rankTab = 'trend') => {
+                                const directTag = normalizeSceneSettingValue(
+                                    item?.resourceType?.tagText
+                                    || item?.resourceType?.operateText
+                                    || item?.tagText
+                                    || item?.trendLv?.tagText
+                                    || item?.statusText
+                                    || ''
+                                );
+                                if (rankTab === 'trend') {
+                                    return formatTrendRatio(
+                                        item?.weekCapacityChangeRatio
+                                        ?? item?.weekTrendChangeRatio
+                                        ?? item?.capacityChangeRatio
+                                        ?? item?.trendChangeRatio
+                                    ) || (/^[A-Z]$/i.test(directTag) ? '' : directTag) || '趋势增长中';
+                                }
+                                if (directTag) return directTag;
+                                return '-';
+                            };
+                            const getRankTagTone = (text = '', rankTab = 'trend') => {
+                                const normalized = normalizeSceneSettingValue(text);
+                                if (rankTab === 'trend') {
+                                    return normalized.includes('周增幅') ? 'up' : 'growth';
+                                }
+                                if (normalized.includes('行业趋势')) return 'industry';
+                                if (normalized.includes('大促热销')) return 'hot';
+                                if (normalized.includes('淘宝热搜')) return 'taobao';
+                                return rankTab === 'traffic' ? 'traffic' : 'effect';
+                            };
+                            const getRankScore = (item = {}, rankTab = 'trend') => {
+                                if (rankTab === 'effect') {
+                                    return getMetricNumber(item, ['roi', 'roiIndex', 'cvr', 'convertIndex', 'wcvr', 'favCartIndex']);
+                                }
+                                if (rankTab === 'traffic') {
+                                    return getMetricNumber(item, ['capacity', 'searchIndex', 'trend', 'trendIndex', 'itemCount', 'recommendItemCount']);
+                                }
+                                return getMetricNumber(item, ['trend', 'trendIndex', 'capacity', 'searchIndex']);
+                            };
+                            const getRankLabel = (rankTab = 'trend') => {
+                                if (rankTab === 'effect') return '效果红榜';
+                                if (rankTab === 'traffic') return '流量红榜';
+                                return '趋势红榜';
+                            };
+                            const getRankMetricText = (item = {}, rankTab = 'trend') => {
+                                if (rankTab === 'effect') {
+                                    return getMetricText(item, ['roi', 'roiIndex', 'cvr', 'convertIndex', 'wcvr', 'favCartIndex']);
+                                }
+                                if (rankTab === 'traffic') {
+                                    return getMetricText(item, ['searchIndex', 'capacity', 'trend', 'trendIndex']);
+                                }
+                                return getMetricText(item, ['trendIndex', 'trend']);
+                            };
+                            const findThemeByKey = (key = '') => {
+                                const sourceThemes = []
+                                    .concat(candidateThemes || [])
+                                    .concat(associationSearchThemes || [])
+                                    .concat(selectedThemes || [])
+                                    .concat(defaultThemes || [])
+                                    .concat(rankThemeMap?.trend || [])
+                                    .concat(rankThemeMap?.effect || [])
+                                    .concat(rankThemeMap?.traffic || []);
+                                return sourceThemes.find((candidate, index) => getTrendThemeKey(candidate, index) === key) || null;
+                            };
+                            const buildVisibleThemes = (rankTab = 'trend') => {
+                                const keyword = normalizeSceneSettingValue(
+                                    searchInput instanceof HTMLInputElement ? searchInput.value : ''
+                                ).toLowerCase();
+                                const nativeRankThemes = rankThemeMap?.[rankTab] || [];
+                                const sourceThemes = nativeRankThemes.length ? nativeRankThemes : candidateThemes;
+                                const filteredThemes = sourceThemes
+                                    .filter(item => {
+                                        if (!keyword) return true;
+                                        const haystack = [
+                                            item?.trendThemeId,
+                                            item?.trendThemeName
+                                        ].map(value => normalizeSceneSettingValue(value).toLowerCase()).join(' ');
+                                        return haystack.includes(keyword);
+                                    });
+                                if (nativeRankThemes.length) {
+                                    return filteredThemes.slice(0, 80);
+                                }
+                                return filteredThemes
+                                    .sort((a, b) => {
+                                        const scoreDiff = getRankScore(b, rankTab) - getRankScore(a, rankTab);
+                                        if (scoreDiff !== 0) return scoreDiff;
+                                        const itemCountDiff = getMetricNumber(b, ['itemCount', 'recommendItemCount']) - getMetricNumber(a, ['itemCount', 'recommendItemCount']);
+                                        if (itemCountDiff !== 0) return itemCountDiff;
+                                        return normalizeSceneSettingValue(a?.trendThemeName || '').localeCompare(
+                                            normalizeSceneSettingValue(b?.trendThemeName || ''),
+                                            'zh-Hans-CN'
+                                        );
+                                    })
+                                    .slice(0, 80);
+                            };
+                            const syncSelectAllState = (rankTab = 'trend', visibleThemes = []) => {
+                                const checkboxEl = selectAllEls?.[rankTab];
+                                if (!(checkboxEl instanceof HTMLInputElement)) return;
+                                if (!visibleThemes.length) {
+                                    checkboxEl.checked = false;
+                                    checkboxEl.indeterminate = false;
+                                    checkboxEl.disabled = true;
+                                    return;
+                                }
+                                checkboxEl.disabled = false;
+                                const selectedCount = visibleThemes.filter(item => isThemeSelected(item)).length;
+                                checkboxEl.checked = selectedCount > 0 && selectedCount === visibleThemes.length;
+                                checkboxEl.indeterminate = selectedCount > 0 && selectedCount < visibleThemes.length;
+                            };
+                            const renderCandidateList = (rankTab = 'trend') => {
+                                const candidateListEl = candidateListEls?.[rankTab];
+                                if (!(candidateListEl instanceof HTMLElement)) return;
+                                const visibleThemes = buildVisibleThemes(rankTab);
+                                syncSelectAllState(rankTab, visibleThemes);
+                                if (!visibleThemes.length) {
+                                    candidateListEl.innerHTML = `<div class="am-wxt-scene-crowd-empty">${getRankLabel(rankTab)}暂无可添加趋势主题</div>`;
+                                    return;
+                                }
+                                candidateListEl.innerHTML = visibleThemes.map((item, index) => {
+                                    const key = getTrendThemeKey(item, index);
+                                    const selected = isThemeSelected(item);
+                                    const disabled = !selected && selectedThemes.length >= 6;
+                                    const rankMetricText = getRankMetricText(item, rankTab);
+                                    const itemCountText = getMetricText(item, ['itemCount', 'recommendItemCount']);
+                                    const rankTagText = getRankTagText(item, rankTab);
+                                    const rankTagTone = getRankTagTone(rankTagText, rankTab);
+                                        return `
+                                            <div class="am-wxt-scene-crowd-native-candidate-row am-wxt-scene-trend-candidate-row">
+                                                <div class="am-wxt-scene-crowd-native-candidate-name am-wxt-scene-trend-candidate-name-cell">
+                                                    <label class="am-wxt-scene-trend-check">
+                                                        <input
+                                                            type="checkbox"
+                                                            data-scene-popup-trend-toggle="${Utils.escapeHtml(key)}"
+                                                            ${selected ? 'checked' : ''}
+                                                            ${disabled ? 'disabled' : ''}
+                                                        />
+                                                        <span class="am-wxt-scene-trend-check-icon"></span>
+                                                    </label>
+                                                    <div class="name">${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</div>
+                                                </div>
+                                                <div class="am-wxt-scene-crowd-native-candidate-scale">${Utils.escapeHtml(rankMetricText)}</div>
+                                                <div class="am-wxt-scene-crowd-native-candidate-scale">${Utils.escapeHtml(itemCountText)}</div>
+                                                <div class="am-wxt-scene-trend-rank-tag" data-rank-tag-type="${Utils.escapeHtml(rankTab)}" data-rank-tag-tone="${Utils.escapeHtml(rankTagTone)}">${Utils.escapeHtml(rankTagText)}</div>
+                                            </div>
+                                    `;
+                                }).join('');
+                            };
+                            const renderCandidateLists = () => {
+                                rankTabs.forEach(rankTab => renderCandidateList(rankTab));
+                            };
+                            const renderSelectedList = () => {
+                                if (selectedCountEl instanceof HTMLElement) {
+                                    selectedCountEl.textContent = String(selectedThemes.length);
+                                }
+                                if (selectedItemCountEl instanceof HTMLElement) {
+                                    const selectedItemCount = selectedThemes.reduce((sum, item) => {
+                                        const value = getMetricNumber(item, ['itemCount', 'recommendItemCount']);
+                                        return sum + (Number.isFinite(value) ? value : 0);
+                                    }, 0);
+                                    selectedItemCountEl.textContent = String(selectedItemCount);
+                                }
+                                if (!(selectedListEl instanceof HTMLElement)) return;
+                                if (!selectedThemes.length) {
+                                    selectedListEl.innerHTML = '<span class="am-wxt-scene-trend-selected-empty">暂无已选趋势主题</span>';
+                                    syncPopupState();
+                                    return;
+                                }
+                                selectedListEl.innerHTML = selectedThemes.map((item, index) => {
+                                    const key = getTrendThemeKey(item, index);
+                                    return `
+                                        <button type="button" class="am-wxt-scene-trend-selected-chip" data-scene-popup-trend-remove="${Utils.escapeHtml(key)}">
+                                            <span>${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</span>
+                                            <i>×</i>
+                                        </button>
+                                    `;
+                                }).join('');
+                                syncPopupState();
+                            };
+                            const getAssociationItemTypeLabel = (type = associationSearchType) => (
+                                type === 'competitorItem' ? '竞店宝贝' : '本店宝贝'
+                            );
+                            const getAssociationItemsByType = (type = associationSearchType) => (
+                                type === 'competitorItem' ? associationCompetitorItems : associationShopItems
+                            );
+                            const findAssociationItemByKey = (key = '') => {
+                                const normalizedKey = String(key || '').trim();
+                                if (!normalizedKey) return null;
+                                const sourceItems = []
+                                    .concat(associationShopItems || [])
+                                    .concat(associationCompetitorItems || [])
+                                    .concat(associationSelectedItem ? [associationSelectedItem] : []);
+                                return sourceItems.find(item => resolveTrendAssociationItemId(item) === normalizedKey) || null;
+                            };
+                            const renderAssociationItemPanel = () => {
+                                const panelType = associationItemPanelType || '';
+                                const panelVisible = panelType === 'shopItem' || panelType === 'competitorItem';
+                                if (associationRootEl instanceof HTMLElement) {
+                                    associationRootEl.classList.toggle('has-item-panel', panelVisible);
+                                }
+                                if (associationItemPanelEl instanceof HTMLElement) {
+                                    associationItemPanelEl.classList.toggle('hidden', !panelVisible);
+                                    associationItemPanelEl.setAttribute('data-panel-type', panelType || '');
+                                }
+                                if (associationItemSearchInput instanceof HTMLInputElement) {
+                                    const placeholderPrefix = panelType === 'competitorItem' ? '竞店' : '本店';
+                                    associationItemSearchInput.placeholder = `${placeholderPrefix}宝贝标题`;
+                                    if (document.activeElement !== associationItemSearchInput && associationItemSearchInput.value !== associationItemSearchKeyword) {
+                                        associationItemSearchInput.value = associationItemSearchKeyword || '';
+                                    }
+                                }
+                                if (!(associationItemListEl instanceof HTMLElement)) return;
+                                if (!panelVisible) {
+                                    associationItemListEl.innerHTML = '';
+                                    return;
+                                }
+                                if (associationItemLoadStatus) {
+                                    associationItemListEl.innerHTML = `<div class="am-wxt-scene-crowd-empty">${Utils.escapeHtml(associationItemLoadStatus)}</div>`;
+                                    return;
+                                }
+                                const typeLabel = getAssociationItemTypeLabel(panelType);
+                                const visibleItems = filterTrendAssociationItems(
+                                    getAssociationItemsByType(panelType),
+                                    associationItemSearchKeyword
+                                ).slice(0, 80);
+                                if (!visibleItems.length) {
+                                    associationItemListEl.innerHTML = `<div class="am-wxt-scene-crowd-empty">暂无${Utils.escapeHtml(typeLabel)}，可输入宝贝标题后回车搜索</div>`;
+                                    return;
+                                }
+                                const selectedItemId = associationSelectedItemType === panelType
+                                    ? resolveTrendAssociationItemId(associationSelectedItem || {})
+                                    : '';
+                                associationItemListEl.innerHTML = visibleItems.map((item) => {
+                                    const itemId = resolveTrendAssociationItemId(item);
+                                    const itemName = normalizeSceneSettingValue(item?.materialName || item?.name || item?.title || '') || `宝贝${itemId}`;
+                                    const picUrl = resolveTrendAssociationItemPic(item);
+                                    const selected = itemId && itemId === selectedItemId;
+                                    return `
+                                        <label class="am-wxt-scene-trend-association-item-row ${selected ? 'selected' : ''}" data-scene-popup-trend-association-item-select="${Utils.escapeHtml(itemId)}">
+                                            <span class="am-wxt-scene-trend-association-item-radio">
+                                                <input type="radio" name="am-wxt-trend-association-item" ${selected ? 'checked' : ''} />
+                                            </span>
+                                            <span class="am-wxt-scene-trend-association-item-thumb">
+                                                ${picUrl ? `<img src="${Utils.escapeHtml(picUrl)}" alt="" />` : '<i>宝</i>'}
+                                            </span>
+                                            <span class="am-wxt-scene-trend-association-item-info">
+                                                <strong>${Utils.escapeHtml(itemName)}</strong>
+                                                <em>ID:${Utils.escapeHtml(itemId)}</em>
+                                            </span>
+                                        </label>
+                                    `;
+                                }).join('');
+                            };
+                            const renderAssociationSearch = () => {
+                                associationTypeEls.forEach((item) => {
+                                    if (!(item instanceof HTMLElement)) return;
+                                    const type = String(item.getAttribute('data-scene-popup-trend-association-type') || '').trim();
+                                    item.classList.toggle('active', type === associationSearchType);
+                                });
+                                if (associationKeywordInput instanceof HTMLInputElement) {
+                                    if (document.activeElement !== associationKeywordInput && associationKeywordInput.value !== associationKeyword) {
+                                        associationKeywordInput.value = associationKeyword || '';
+                                    }
+                                    associationKeywordInput.tabIndex = associationSearchType === 'keyword' ? 0 : -1;
+                                }
+                                if (associationPickedEl instanceof HTMLElement) {
+                                    const activePickedItem = associationSelectedItemType === associationSearchType
+                                        ? associationSelectedItem
+                                        : null;
+                                    const pickedName = resolveTrendAssociationItemQuery(activePickedItem || {});
+                                    associationPickedEl.textContent = associationSearchType === 'keyword' || !pickedName
+                                        ? ''
+                                        : `已选${getAssociationItemTypeLabel(associationSearchType)}：${pickedName}`;
+                                }
+                                renderAssociationItemPanel();
+                                if (associationStatusEl instanceof HTMLElement) {
+                                    associationStatusEl.textContent = associationSearchStatus || '';
+                                }
+                                if (associationQuickEl instanceof HTMLElement) {
+                                    const quickThemes = (selectedThemes.length ? selectedThemes : defaultThemes).slice(0, 6);
+                                    const activeQuickQuery = normalizeSceneSettingValue(associationQuickActiveQuery);
+                                    associationQuickEl.innerHTML = quickThemes.length
+                                        ? quickThemes.map((item, index) => {
+                                            const name = normalizeSceneSettingValue(item?.trendThemeName || item?.trendThemeId || `趋势主题${index + 1}`);
+                                            const isActive = activeQuickQuery && name === activeQuickQuery;
+                                            return `
+                                                <button type="button" class="${isActive ? 'active' : ''}" data-scene-popup-trend-association-quick-query="${Utils.escapeHtml(name)}">
+                                                    <span></span>${Utils.escapeHtml(name)}
+                                                </button>
+                                            `;
+                                        }).join('')
+                                        : '<em>暂无已选趋势，可先从红榜勾选</em>';
+                                }
+                                if (!(associationListEl instanceof HTMLElement)) return;
+                                const list = Array.isArray(associationSearchThemes) ? associationSearchThemes.slice(0, 40) : [];
+                                if (!list.length) {
+                                    associationListEl.innerHTML = '<div class="am-wxt-scene-crowd-empty">暂无联想结果，输入关键词后点击“深度搜索”</div>';
+                                    return;
+                                }
+                                associationListEl.innerHTML = list.map((item, index) => {
+                                    const key = getTrendThemeKey(item, index);
+                                    const selected = isThemeSelected(item);
+                                    const disabled = !selected && selectedThemes.length >= 6;
+                                    const itemCountText = getMetricText(item, ['itemCount', 'recommendItemCount']);
+                                    const trendText = getMetricText(item, ['trendIndex', 'trend']);
+                                    const searchText = getMetricText(item, ['searchIndex', 'capacity']);
+                                    const competitionText = getMetricText(item, ['competition', 'competitionHeat']);
+                                    const wcvrText = getMetricText(item, ['wcvr', 'favCartIndex', 'collectCartIndex']);
+                                    const cvrText = getMetricText(item, ['cvr', 'convertIndex']);
+                                    const roiText = getMetricText(item, ['roi', 'roiIndex']);
+                                    const tagText = normalizeSceneSettingValue(item?.tagText || item?.resourceType?.tagText || '');
+                                    return `
+                                        <div class="am-wxt-scene-trend-association-row ${selected ? 'selected' : ''}">
+                                            <div class="am-wxt-scene-trend-association-theme">
+                                                ${tagText ? `<i>${Utils.escapeHtml(tagText)}</i>` : ''}
+                                                <span>${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</span>
+                                            </div>
+                                            <div>宝贝：${Utils.escapeHtml(itemCountText)}</div>
+                                            <div>${Utils.escapeHtml(trendText)}</div>
+                                            <div>${Utils.escapeHtml(searchText)}</div>
+                                            <div>${Utils.escapeHtml(competitionText)}</div>
+                                            <div>${Utils.escapeHtml(wcvrText)}</div>
+                                            <div>${Utils.escapeHtml(cvrText)}</div>
+                                            <div>${Utils.escapeHtml(roiText)}</div>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-scene-trend-association-op"
+                                                data-scene-popup-trend-association-toggle="${Utils.escapeHtml(key)}"
+                                                ${disabled ? 'disabled' : ''}
+                                            >${selected ? '移除' : '添加'}</button>
+                                        </div>
+                                    `;
+                                }).join('');
+                            };
+                            const renderAll = () => {
+                                selectedThemes = normalizeTrendThemeList(selectedThemes, 6);
+                                candidateThemes = uniqueTrendThemeList(
+                                    selectedThemes
+                                        .concat(associationSearchThemes || [])
+                                        .concat(candidateThemes),
+                                    160
+                                );
+                                renderCandidateLists();
+                                renderAssociationSearch();
+                                renderSelectedList();
+                            };
+                            const addTheme = (item = {}) => {
+                                const normalized = normalizeTrendThemeItem(item, selectedThemes.length);
+                                if (!normalized) return;
+                                if (isThemeSelected(normalized)) return;
+                                if (selectedThemes.length >= 6) {
+                                    appendWizardLog('趋势主题最多选择 6 个', 'error');
+                                    return;
+                                }
+                                selectedThemes = uniqueTrendThemeList(selectedThemes.concat([normalized]), 6);
+                                candidateThemes = uniqueTrendThemeList(candidateThemes.concat([normalized]), 160);
+                                renderAll();
+                            };
+                            const removeTheme = (item = {}) => {
+                                const key = getTrendThemeKey(item);
+                                selectedThemes = selectedThemes.filter(candidate => getTrendThemeKey(candidate) !== key);
+                                renderAll();
+                            };
+                            const toggleTheme = (item = {}) => {
+                                if (isThemeSelected(item)) {
+                                    removeTheme(item);
+                                    return;
+                                }
+                                addTheme(item);
+                            };
+                            const fillDefaultThemes = () => {
+                                const sourceThemes = defaultThemes.length ? defaultThemes : candidateThemes;
+                                sourceThemes.forEach(item => {
+                                    if (selectedThemes.length >= 6) return;
+                                    if (!isThemeSelected(item)) {
+                                        selectedThemes = uniqueTrendThemeList(selectedThemes.concat([item]), 6);
+                                    }
+                                });
+                                renderAll();
+                            };
+                            const loadAssociationItems = async (type = associationSearchType, query = associationItemSearchKeyword) => {
+                                const itemType = type === 'competitorItem' ? 'competitorItem' : 'shopItem';
+                                const normalizedQuery = normalizeSceneSettingValue(query);
+                                const competitorQuery = itemType === 'competitorItem'
+                                    ? normalizeSceneSettingValue(
+                                        normalizedQuery
+                                        || associationKeyword
+                                        || selectedThemes[0]?.trendThemeName
+                                        || defaultThemes[0]?.trendThemeName
+                                        || ''
+                                    )
+                                    : '';
+                                const requestToken = `${itemType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                                associationItemLoadToken = requestToken;
+                                associationItemPanelType = itemType;
+                                associationItemLoadStatus = `正在加载${getAssociationItemTypeLabel(itemType)}...`;
+                                renderAssociationSearch();
+                                try {
+                                    const localShopItems = uniqueTrendAssociationItems(
+                                        []
+                                            .concat(Array.isArray(wizardState?.addedItems) ? wizardState.addedItems : [])
+                                            .concat(Array.isArray(wizardState?.draft?.addedItems) ? wizardState.draft.addedItems : [])
+                                            .concat(Array.isArray(wizardState?.candidates) ? wizardState.candidates : []),
+                                        120
+                                    );
+                                    const response = itemType === 'competitorItem'
+                                        ? { list: await fetchCompetitorAssociationItems(competitorQuery) }
+                                        : await searchItems({
+                                            bizCode: expectedBizCode,
+                                            promotionScene: 'promotion_scene_search_trend',
+                                            itemSelectedMode: 'trend',
+                                            query: normalizedQuery,
+                                            pageSize: 80,
+                                            tagId: '101111310',
+                                            channelKey: !normalizedQuery ? 'effect' : ''
+                                        });
+                                    if (associationItemLoadToken !== requestToken) return;
+                                    const remoteItems = Array.isArray(response?.list) ? response.list : [];
+                                    if (itemType === 'competitorItem') {
+                                        associationCompetitorItems = uniqueTrendAssociationItems(remoteItems, 120);
+                                    } else {
+                                        associationShopItems = uniqueTrendAssociationItems(localShopItems.concat(remoteItems), 120);
+                                    }
+                                    associationItemLoadStatus = '';
+                                } catch (err) {
+                                    if (associationItemLoadToken !== requestToken) return;
+                                    const fallbackShopItems = uniqueTrendAssociationItems(
+                                        []
+                                            .concat(associationShopItems || [])
+                                            .concat(Array.isArray(wizardState?.addedItems) ? wizardState.addedItems : [])
+                                            .concat(Array.isArray(wizardState?.draft?.addedItems) ? wizardState.draft.addedItems : []),
+                                        120
+                                    );
+                                    if (itemType === 'shopItem') {
+                                        associationShopItems = fallbackShopItems;
+                                    }
+                                    associationItemLoadStatus = itemType === 'shopItem' && fallbackShopItems.length
+                                        ? ''
+                                        : `加载${getAssociationItemTypeLabel(itemType)}失败，可换一个宝贝标题重试`;
+                                    appendWizardLog(`趋势主题${getAssociationItemTypeLabel(itemType)}加载失败：${err?.message || err}`, 'error');
+                                } finally {
+                                    if (associationItemLoadToken === requestToken) {
+                                        renderAssociationSearch();
+                                    }
+                                }
+                            };
+                            const resolveAssociationSearchQuery = (query = '') => {
+                                const directQuery = normalizeSceneSettingValue(query);
+                                if (directQuery) return directQuery;
+                                if (associationSearchType === 'keyword') {
+                                    return normalizeSceneSettingValue(
+                                        (associationKeywordInput instanceof HTMLInputElement ? associationKeywordInput.value : '')
+                                        || associationKeyword
+                                        || selectedThemes[0]?.trendThemeName
+                                        || defaultThemes[0]?.trendThemeName
+                                        || ''
+                                    );
+                                }
+                                if (associationSelectedItemType !== associationSearchType) return '';
+                                return resolveTrendAssociationItemQuery(associationSelectedItem || {});
+                            };
+                            const resolveAssociationSearchQueries = (query = '') => {
+                                const directQuery = resolveAssociationSearchQuery(query);
+                                if (!directQuery) return [];
+                                if (associationSearchType === 'keyword') {
+                                    return [directQuery];
+                                }
+                                const selectedItemText = associationSelectedItemType === associationSearchType
+                                    ? resolveTrendAssociationItemQuery(associationSelectedItem || {})
+                                    : '';
+                                const itemSearchQuery = normalizeSceneSettingValue(associationItemSearchKeyword);
+                                const coreQueries = buildTrendAssociationCoreQueries(`${selectedItemText} ${directQuery}`);
+                                return uniqueBy(
+                                    []
+                                        .concat(itemSearchQuery ? [itemSearchQuery] : [])
+                                        .concat(coreQueries)
+                                        .concat([directQuery])
+                                        .map(item => normalizeTrendAssociationQueryCandidate(item))
+                                        .filter(Boolean),
+                                    item => item.toLowerCase()
+                                ).slice(0, 8);
+                            };
+                            const runAssociationSearch = async (query = '') => {
+                                const normalizedQuery = resolveAssociationSearchQuery(query);
+                                if (!normalizedQuery) {
+                                    if (associationSearchType !== 'keyword') {
+                                        associationItemPanelType = associationSearchType;
+                                        renderAssociationSearch();
+                                        appendWizardLog(`请先选择${getAssociationItemTypeLabel(associationSearchType)}`, 'error');
+                                        return;
+                                    }
+                                    appendWizardLog('请输入关键词或先选择一个趋势主题', 'error');
+                                    return;
+                                }
+                                const searchQueries = resolveAssociationSearchQueries(query);
+                                if (associationSearchType === 'keyword') {
+                                    associationKeyword = normalizedQuery;
+                                    const quickQuerySet = new Set(
+                                        (selectedThemes.length ? selectedThemes : defaultThemes)
+                                            .slice(0, 6)
+                                            .map(item => normalizeSceneSettingValue(item?.trendThemeName || item?.trendThemeId || ''))
+                                    );
+                                    associationQuickActiveQuery = quickQuerySet.has(normalizedQuery) ? normalizedQuery : '';
+                                    if (associationKeywordInput instanceof HTMLInputElement) {
+                                        associationKeywordInput.value = normalizedQuery;
+                                    }
+                                }
+                                associationSearchStatus = '搜索中...';
+                                renderAssociationSearch();
+                                [associationSearchBtn, associationSearchArrowBtn].forEach((btn) => {
+                                    if (btn instanceof HTMLButtonElement) btn.disabled = true;
+                                });
+                                try {
+                                    let usedQuery = normalizedQuery;
+                                    associationSearchThemes = [];
+                                    for (const queryCandidate of (searchQueries.length ? searchQueries : [normalizedQuery])) {
+                                        usedQuery = queryCandidate;
+                                        associationSearchThemes = await fetchAssociationThemes(queryCandidate);
+                                        if (associationSearchThemes.length) break;
+                                    }
+                                    candidateThemes = uniqueTrendThemeList(
+                                        associationSearchThemes.concat(candidateThemes),
+                                        160
+                                    );
+                                    associationSearchStatus = associationSearchThemes.length
+                                        ? `搜索完毕，共找到${associationSearchThemes.length}个趋势热点${usedQuery && usedQuery !== normalizedQuery ? `（联想词：${usedQuery}）` : ''}`
+                                        : '搜索完毕，暂无相关趋势热点';
+                                } finally {
+                                    [associationSearchBtn, associationSearchArrowBtn].forEach((btn) => {
+                                        if (btn instanceof HTMLButtonElement) btn.disabled = false;
+                                    });
+                                    renderAll();
+                                }
+                            };
+
+                            if (searchInput instanceof HTMLInputElement) {
+                                searchInput.addEventListener('input', renderCandidateLists);
+                            }
+                            if (refreshBtn instanceof HTMLButtonElement) {
+                                refreshBtn.onclick = async () => {
+                                    refreshBtn.disabled = true;
+                                    try {
+                                        const refreshedBundle = await fetchNativeTrendThemeBundle(expectedBizCode);
+                                        defaultThemes = normalizeTrendThemeList(refreshedBundle.defaultList || [], 6);
+                                        rankThemeMap = {
+                                            trend: normalizeTrendThemeList(refreshedBundle.trendRankList || refreshedBundle.candidateList || [], 160),
+                                            effect: normalizeTrendThemeList(refreshedBundle.effectRankList || refreshedBundle.candidateList || [], 160),
+                                            traffic: normalizeTrendThemeList(refreshedBundle.trafficRankList || refreshedBundle.candidateList || [], 160)
+                                        };
+                                        const fallbackQuery = normalizeSceneSettingValue(
+                                            selectedThemes[0]?.trendThemeName
+                                            || defaultThemes[0]?.trendThemeName
+                                            || ''
+                                        );
+                                        const associationList = fallbackQuery
+                                            ? await fetchAssociationThemes(fallbackQuery)
+                                            : [];
+                                        associationSearchThemes = associationList;
+                                        associationSearchStatus = associationSearchThemes.length
+                                            ? `搜索完毕，共找到${associationSearchThemes.length}个趋势热点`
+                                            : '输入关键词后深度搜索，或点击已选趋势快捷联想';
+                                        candidateThemes = uniqueTrendThemeList(
+                                            associationList
+                                                .concat(selectedThemes)
+                                                .concat(defaultThemes)
+                                                .concat(refreshedBundle.candidateList || []),
+                                            160
+                                        );
+                                        if (!selectedThemes.length && defaultThemes.length) {
+                                            selectedThemes = defaultThemes.slice(0, 6);
+                                        }
+                                        appendWizardLog('已刷新原生趋势主题推荐', 'info');
+                                        renderAll();
+                                    } finally {
+                                        refreshBtn.disabled = false;
+                                    }
+                                };
+                            }
+                            if (fillDefaultBtn instanceof HTMLButtonElement) {
+                                fillDefaultBtn.onclick = fillDefaultThemes;
+                            }
+                            if (clearBtn instanceof HTMLElement) {
+                                clearBtn.onclick = (event) => {
+                                    event.preventDefault();
+                                    selectedThemes = [];
+                                    renderAll();
+                                };
+                            }
+                            associationTypeEls.forEach((item) => {
+                                if (!(item instanceof HTMLElement)) return;
+                                item.addEventListener('click', (event) => {
+                                    const nextType = String(item.getAttribute('data-scene-popup-trend-association-type') || 'keyword').trim() || 'keyword';
+                                    associationSearchType = nextType;
+                                    if (nextType === 'keyword') {
+                                        associationItemPanelType = '';
+                                        associationSelectedItemType = '';
+                                        renderAssociationSearch();
+                                        if (event.target === item && associationKeywordInput instanceof HTMLInputElement) {
+                                            associationKeywordInput.focus();
+                                        }
+                                        return;
+                                    }
+                                    if (associationSelectedItemType !== nextType) {
+                                        associationSelectedItem = null;
+                                        associationSelectedItemType = '';
+                                    }
+                                    associationItemPanelType = nextType;
+                                    renderAssociationSearch();
+                                    void loadAssociationItems(nextType, associationItemSearchKeyword);
+                                });
+                            });
+                            [associationSearchBtn, associationSearchArrowBtn].forEach((btn) => {
+                                if (btn instanceof HTMLButtonElement) {
+                                    btn.onclick = () => {
+                                        if (associationSearchType !== 'keyword' && (
+                                            associationSelectedItemType !== associationSearchType
+                                            || !resolveTrendAssociationItemId(associationSelectedItem || {})
+                                        )) {
+                                            associationItemPanelType = associationSearchType;
+                                            renderAssociationSearch();
+                                            void loadAssociationItems(associationSearchType, associationItemSearchKeyword);
+                                            appendWizardLog(`请先选择${getAssociationItemTypeLabel(associationSearchType)}`, 'error');
+                                            return;
+                                        }
+                                        void runAssociationSearch();
+                                    };
+                                }
+                            });
+                            if (associationKeywordInput instanceof HTMLInputElement) {
+                                associationKeywordInput.addEventListener('input', () => {
+                                    associationSearchType = 'keyword';
+                                    associationKeyword = associationKeywordInput.value || '';
+                                    associationQuickActiveQuery = '';
+                                    associationItemPanelType = '';
+                                    associationSelectedItemType = '';
+                                    renderAssociationSearch();
+                                });
+                                associationKeywordInput.addEventListener('keydown', (event) => {
+                                    if (event.key !== 'Enter') return;
+                                    event.preventDefault();
+                                    void runAssociationSearch();
+                                });
+                            }
+                            if (associationItemSearchInput instanceof HTMLInputElement) {
+                                associationItemSearchInput.addEventListener('input', () => {
+                                    associationItemSearchKeyword = associationItemSearchInput.value || '';
+                                    renderAssociationItemPanel();
+                                });
+                                associationItemSearchInput.addEventListener('keydown', (event) => {
+                                    if (event.key !== 'Enter') return;
+                                    event.preventDefault();
+                                    void loadAssociationItems(associationItemPanelType || associationSearchType, associationItemSearchKeyword);
+                                });
+                            }
+                            if (associationQuickEl instanceof HTMLElement) {
+                                associationQuickEl.addEventListener('click', (event) => {
+                                    const target = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-trend-association-quick-query]')
+                                        : null;
+                                    if (!(target instanceof HTMLElement)) return;
+                                    const query = String(target.getAttribute('data-scene-popup-trend-association-quick-query') || '').trim();
+                                    if (!query) return;
+                                    associationSearchType = 'keyword';
+                                    associationItemPanelType = '';
+                                    associationKeyword = query;
+                                    associationQuickActiveQuery = query;
+                                    associationSelectedItemType = '';
+                                    if (associationKeywordInput instanceof HTMLInputElement) {
+                                        associationKeywordInput.value = query;
+                                    }
+                                    void runAssociationSearch(query);
+                                });
+                            }
+                            if (associationItemListEl instanceof HTMLElement) {
+                                associationItemListEl.addEventListener('click', (event) => {
+                                    const target = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-trend-association-item-select]')
+                                        : null;
+                                    if (!(target instanceof HTMLElement)) return;
+                                    const itemId = String(target.getAttribute('data-scene-popup-trend-association-item-select') || '').trim();
+                                    if (!itemId) return;
+                                    const item = findAssociationItemByKey(itemId);
+                                    if (!item) return;
+                                    associationSelectedItem = item;
+                                    associationSelectedItemType = associationItemPanelType || associationSearchType;
+                                    associationItemPanelType = '';
+                                    const itemQuery = resolveTrendAssociationItemQuery(item);
+                                    associationSearchStatus = itemQuery
+                                        ? `已选择${getAssociationItemTypeLabel(associationSearchType)}：${itemQuery}，正在联想趋势主题...`
+                                        : `已选择${getAssociationItemTypeLabel(associationSearchType)}`;
+                                    renderAssociationSearch();
+                                    if (itemQuery) {
+                                        void runAssociationSearch(itemQuery);
+                                    }
+                                });
+                            }
+                            if (associationListEl instanceof HTMLElement) {
+                                associationListEl.addEventListener('click', (event) => {
+                                    const target = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-trend-association-toggle]')
+                                        : null;
+                                    if (!(target instanceof HTMLElement)) return;
+                                    const key = String(target.getAttribute('data-scene-popup-trend-association-toggle') || '').trim();
+                                    if (!key) return;
+                                    const item = findThemeByKey(key);
+                                    if (!item) return;
+                                    toggleTheme(item);
+                                });
+                            }
+                            rankTabs.forEach((rankTab) => {
+                                const candidateListEl = candidateListEls?.[rankTab];
+                                if (!(candidateListEl instanceof HTMLElement)) return;
+                                candidateListEl.addEventListener('click', (event) => {
+                                    if (!(event.target instanceof HTMLElement)) return;
+                                    const target = event.target.closest('[data-scene-popup-trend-toggle]');
+                                    const key = target instanceof HTMLElement
+                                        ? String(target.getAttribute('data-scene-popup-trend-toggle') || '').trim()
+                                        : String(
+                                            event.target.closest('.am-wxt-scene-trend-check')
+                                                ?.querySelector('[data-scene-popup-trend-toggle]')
+                                                ?.getAttribute('data-scene-popup-trend-toggle') || ''
+                                        ).trim();
+                                    if (!key) return;
+                                    const item = findThemeByKey(key);
+                                    if (!item) return;
+                                    toggleTheme(item);
+                                });
+                                const selectAllEl = selectAllEls?.[rankTab];
+                                if (selectAllEl instanceof HTMLInputElement) {
+                                    selectAllEl.addEventListener('change', () => {
+                                        const visibleThemes = buildVisibleThemes(rankTab);
+                                        if (!visibleThemes.length) return;
+                                        if (selectAllEl.checked) {
+                                            visibleThemes.forEach(item => {
+                                                if (selectedThemes.length >= 6) return;
+                                                if (!isThemeSelected(item)) {
+                                                    selectedThemes = uniqueTrendThemeList(selectedThemes.concat([item]), 6);
+                                                }
+                                            });
+                                            renderAll();
+                                            return;
+                                        }
+                                        const keySet = new Set(
+                                            visibleThemes.map((item) => getTrendThemeKey(item))
+                                        );
+                                        selectedThemes = selectedThemes.filter((item, index) => !keySet.has(getTrendThemeKey(item, index)));
+                                        renderAll();
+                                    });
+                                }
+                            });
+                            if (selectedListEl instanceof HTMLElement) {
+                                selectedListEl.addEventListener('click', (event) => {
+                                    const target = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-trend-remove]')
+                                        : null;
+                                    if (!(target instanceof HTMLElement)) return;
+                                    const key = String(target.getAttribute('data-scene-popup-trend-remove') || '').trim();
+                                    selectedThemes = selectedThemes.filter((item, index) => getTrendThemeKey(item, index) !== key);
+                                    renderAll();
+                                });
+                            }
+
+                            renderAll();
+                        },
+                        onSave: (mask) => {
+                            const state = mask._scenePopupTrendThemeState || {};
+                            const nextThemes = typeof state.getSelectedThemes === 'function'
+                                ? state.getSelectedThemes()
+                                : [];
+                            const trendThemeRaw = serializeTrendThemeList(nextThemes);
+                            return {
+                                ok: true,
+                                trendThemeRaw,
+                                summary: describeTrendThemeSummary(trendThemeRaw)
+                            };
+                        }
+                    });
+                    if (!result || result.ok !== true) return null;
+                    return {
+                        ok: true,
+                        result,
+                        trendThemeControl
+                    };
+                };
                 const openCrowdItemSettingPopup = async () => {
                     const itemIdListControl = resolveScenePopupControl('campaign.itemIdList', 'itemSelect');
                     if (!(itemIdListControl instanceof HTMLInputElement)) return null;
@@ -45210,7 +47558,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         adzoneControl
                     };
                 };
-
                 const openCrowdLaunchSettingPopup = async () => {
                     const popupPayload = await openKeywordAdvancedSettingPopup('launchArea');
                     if (!popupPayload || popupPayload.ok !== true) return null;
@@ -46048,6 +48395,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 row,
                                 trigger,
                                 result.summary || describeCrowdItemSummary(result.itemIdListRaw || '[]')
+                            );
+                        } else if (trigger === 'trendTheme') {
+                            const popupPayload = await openKeywordTrendThemeSettingPopup();
+                            if (!popupPayload || popupPayload.ok !== true) return;
+                            const { result, trendThemeControl } = popupPayload;
+                            dispatchSceneControlUpdate(trendThemeControl, result.trendThemeRaw || '[]');
+                            updateScenePopupSummary(
+                                row,
+                                trigger,
+                                result.summary || describeTrendThemeSummary(result.trendThemeRaw || '[]')
                             );
                         } else if (trigger === 'crowd') {
                             const crowdCampaignControl = findPopupControl('campaign.crowdList');
@@ -49397,7 +51754,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 goalText: strategyMarketingGoal
                             })
                             : '';
-                        const strategyBidTargetV2 = String(strategy.bidTargetV2 || DEFAULTS.bidTargetV2).trim() || DEFAULTS.bidTargetV2;
+                        const strategySceneBidTargetSeed = isKeywordScene
+                            ? normalizeSceneSettingValue(
+                                strategySceneSettings[normalizeSceneFieldKey('出价目标')]
+                                || strategySceneSettings.出价目标
+                                || strategySceneSettings[normalizeSceneFieldKey('优化目标')]
+                                || strategySceneSettings.优化目标
+                                || ''
+                            )
+                            : '';
+                        const strategySceneBidTargetV2 = isKeywordScene
+                            ? (normalizeKeywordBidTargetOptionValue(
+                                mapSceneBidTargetValue(strategySceneBidTargetSeed) || strategySceneBidTargetSeed
+                            ) || '')
+                            : '';
+                        const strategyBidTargetV2 = String(
+                            strategyMarketingGoal === '趋势明星' && strategySceneBidTargetV2
+                                ? strategySceneBidTargetV2
+                                : (strategy.bidTargetV2 || strategySceneBidTargetV2 || DEFAULTS.bidTargetV2)
+                        ).trim() || DEFAULTS.bidTargetV2;
                         const strategyBidTargetOptionValue = normalizeKeywordBidTargetOptionValue(strategyBidTargetV2) || strategyBidTargetV2;
                         if (isKeywordScene) {
                             strategySceneSettings = mergeDeep({}, strategySceneSettings);

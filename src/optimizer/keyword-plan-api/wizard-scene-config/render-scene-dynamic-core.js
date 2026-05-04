@@ -169,6 +169,13 @@
                             '流量智选'
                         ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
                     }
+                    if (activeKeywordGoalForRender === '趋势明星') {
+                        [
+                            '趋势主题',
+                            '选择趋势主题',
+                            '趋势主题列表'
+                        ].forEach(item => staticFieldTokenSet.add(normalizeSceneRenderFieldToken(item)));
+                    }
                     if (activeKeywordGoalForRender !== '搜索卡位') {
                         [
                             '卡位方式',
@@ -233,7 +240,8 @@
                 const hiddenKeywordFieldTokenSet = new Set(
                     [
                         'campaign.promotionScene',
-                        'campaign.itemSelectedMode'
+                        'campaign.itemSelectedMode',
+                        'campaign.trendThemeList'
                     ].map(item => normalizeSceneRenderFieldToken(item)).filter(Boolean)
                 );
                 let fields = allSceneFields.filter((fieldLabel) => {
@@ -859,6 +867,195 @@
                     if (itemIdList.length === 1) return `已添加 1 个（${itemIdList[0]}）`;
                     return `已添加 ${itemIdList.length} 个（首个 ${itemIdList[0]}）`;
                 };
+                const normalizeTrendThemeIdValue = (value = '') => {
+                    const normalized = String(toIdValue(value) || '').trim();
+                    return normalized || '';
+                };
+                const normalizeTrendThemeNameValue = (item = {}, index = 0) => (
+                    normalizeSceneSettingValue(
+                        item?.trendThemeName
+                        || item?.themeName
+                        || item?.name
+                        || item?.label
+                        || item?.title
+                        || item?.query
+                        || item?.word
+                        || ''
+                    ) || `趋势主题${index + 1}`
+                );
+                const normalizeTrendThemeMetricValue = (value) => {
+                    if (value === undefined || value === null || value === '') return undefined;
+                    const num = Number(value);
+                    if (Number.isFinite(num)) return num;
+                    return normalizeSceneSettingValue(value);
+                };
+                const normalizeTrendThemeItem = (item = {}, index = 0) => {
+                    const source = isPlainObject(item)
+                        ? item
+                        : { trendThemeName: normalizeSceneSettingValue(item) };
+                    const trendThemeName = normalizeTrendThemeNameValue(source, index);
+                    const trendThemeId = normalizeTrendThemeIdValue(
+                        source.trendThemeId
+                        ?? source.themeId
+                        ?? source.id
+                        ?? source.value
+                        ?? source.themeIdStr
+                        ?? ''
+                    ) || trendThemeName;
+                    if (!trendThemeId && !trendThemeName) return null;
+                    const normalized = {
+                        trendThemeId,
+                        trendThemeName: trendThemeName || trendThemeId
+                    };
+                    [
+                        'itemCount',
+                        'recommendItemCount',
+                        'trend',
+                        'trendIndex',
+                        'capacity',
+                        'searchIndex',
+                        'competition',
+                        'competitionHeat',
+                        'favCartIndex',
+                        'collectCartIndex',
+                        'wcvr',
+                        'cvr',
+                        'convertIndex',
+                        'roi',
+                        'roiIndex',
+                        'capacityChangeRatio',
+                        'trendChangeRatio',
+                        'roiChangeRatio',
+                        'cvrChangeRatio',
+                        'wcvrChangeRatio',
+                        'competitionChangeRatio',
+                        'weekCapacityChangeRatio',
+                        'weekTrendChangeRatio',
+                        'weekRoiChangeRatio',
+                        'weekCvrChangeRatio',
+                        'weekWcvrChangeRatio',
+                        'weekCompetitionChangeRatio'
+                    ].forEach(key => {
+                        const value = normalizeTrendThemeMetricValue(source[key]);
+                        if (value !== undefined) normalized[key] = value;
+                    });
+                    if (isPlainObject(source.resourceType)) {
+                        normalized.resourceType = Object.assign({}, source.resourceType);
+                    }
+                    if (isPlainObject(source.trendLv)) {
+                        normalized.trendLv = Object.assign({}, source.trendLv);
+                    }
+                    const tagText = normalizeSceneSettingValue(
+                        normalized.resourceType?.tagText
+                        || normalized.resourceType?.operateText
+                        || normalized.resourceType?.name
+                        || normalized.trendLv?.tagText
+                        || normalized.trendLv?.name
+                        || source.tagText
+                        || source.statusText
+                        || ''
+                    );
+                    if (tagText) normalized.tagText = tagText;
+                    return normalized;
+                };
+                const getTrendThemeKey = (item = {}, index = 0) => {
+                    const trendThemeId = normalizeTrendThemeIdValue(item?.trendThemeId ?? item?.themeId ?? item?.id ?? '');
+                    if (trendThemeId) return `id:${trendThemeId}`;
+                    const trendThemeName = normalizeSceneSettingValue(item?.trendThemeName || item?.themeName || item?.name || '');
+                    return trendThemeName ? `name:${trendThemeName}` : `idx:${index}`;
+                };
+                const uniqueTrendThemeList = (list = [], limit = 6) => uniqueBy(
+                    (Array.isArray(list) ? list : [])
+                        .map((item, index) => normalizeTrendThemeItem(item, index))
+                        .filter(Boolean),
+                    (item, index) => getTrendThemeKey(item, index)
+                ).slice(0, Math.max(0, Number(limit) || 6));
+                const normalizeTrendThemeList = (rawValue = '', limit = 6) => {
+                    const parsed = Array.isArray(rawValue) || isPlainObject(rawValue)
+                        ? rawValue
+                        : tryParseMaybeJSON(String(rawValue || '').trim());
+                    const sourceList = Array.isArray(parsed)
+                        ? parsed
+                        : parseScenePopupJsonArray(rawValue, []);
+                    return uniqueTrendThemeList(sourceList, limit);
+                };
+                const serializeTrendThemeList = (list = []) => JSON.stringify(normalizeTrendThemeList(list, 6));
+                const describeTrendThemeSummary = (rawValue = '') => {
+                    const trendThemeList = normalizeTrendThemeList(rawValue, 6);
+                    if (!trendThemeList.length) return '未选择主题';
+                    const names = trendThemeList
+                        .map(item => normalizeSceneSettingValue(item?.trendThemeName || item?.trendThemeId || ''))
+                        .filter(Boolean);
+                    const preview = names.slice(0, 3).join('、');
+                    return `已选 ${trendThemeList.length}/6${preview ? `：${preview}${names.length > 3 ? '等' : ''}` : ''}`;
+                };
+                const collectTrendThemeResponseList = (response = {}) => {
+                    const data = isPlainObject(response?.data) ? response.data : {};
+                    const candidates = [
+                        data.trendThemeInfo,
+                        data.trendThemeList,
+                        data.themeList,
+                        data.list,
+                        data.result,
+                        response?.trendThemeInfo,
+                        response?.trendThemeList,
+                        response?.list
+                    ];
+                    const list = candidates.find(item => Array.isArray(item));
+                    return Array.isArray(list) ? list : [];
+                };
+                const collectTrendThemeRankLists = (response = {}) => {
+                    const data = isPlainObject(response?.data) ? response.data : {};
+                    return {
+                        trend: Array.isArray(data.trendThemeInfo) ? data.trendThemeInfo : [],
+                        effect: Array.isArray(data.effectThemeInfo) ? data.effectThemeInfo : [],
+                        traffic: Array.isArray(data.capacityThemeInfo) ? data.capacityThemeInfo : []
+                    };
+                };
+                const fetchNativeTrendThemeBundle = async (bizCode = '') => {
+                    const targetBizCode = normalizeSceneBizCode(bizCode || DEFAULTS.bizCode) || DEFAULTS.bizCode;
+                    const output = {
+                        defaultList: [],
+                        candidateList: [],
+                        trendRankList: [],
+                        effectRankList: [],
+                        trafficRankList: []
+                    };
+                    try {
+                        const response = await requestOne('/trendtheme/recommendThemeDefault.json', targetBizCode, {
+                            bizCode: targetBizCode
+                        }, {});
+                        output.defaultList = normalizeTrendThemeList(collectTrendThemeResponseList(response), 6);
+                    } catch (err) {
+                        log.warn('加载默认趋势主题失败:', err?.message || err);
+                    }
+                    try {
+                        const response = await requestOne('/trendtheme/recommendTheme.json', targetBizCode, {
+                            bizCode: targetBizCode
+                        }, {});
+                        const rankLists = collectTrendThemeRankLists(response);
+                        output.trendRankList = normalizeTrendThemeList(rankLists.trend, 160);
+                        output.effectRankList = normalizeTrendThemeList(rankLists.effect, 160);
+                        output.trafficRankList = normalizeTrendThemeList(rankLists.traffic, 160);
+                        output.candidateList = uniqueTrendThemeList(
+                            output.trendRankList
+                                .concat(output.effectRankList)
+                                .concat(output.trafficRankList)
+                                .concat(collectTrendThemeResponseList(response)),
+                            160
+                        );
+                    } catch (err) {
+                        log.warn('加载推荐趋势主题失败:', err?.message || err);
+                    }
+                    if (!output.trendRankList.length) output.trendRankList = output.candidateList;
+                    if (!output.effectRankList.length) output.effectRankList = output.candidateList;
+                    if (!output.trafficRankList.length) output.trafficRankList = output.candidateList;
+                    output.candidateList = uniqueTrendThemeList(
+                        output.defaultList.concat(output.candidateList),
+                        160
+                    );
+                    return output;
+                };
                 const CROWD_FILTER_GENDER_OPTIONS = [
                     { value: 'female', label: '女性用户' },
                     { value: 'male', label: '男性用户' }
@@ -1401,6 +1598,17 @@
                             : ''
                     }));
                     if (activeKeywordGoal === '趋势明星') {
+                        const trendThemeField = 'campaign.trendThemeList';
+                        const trendThemeFieldKey = normalizeSceneFieldKey(trendThemeField);
+                        const trendThemeRaw = serializeTrendThemeList(
+                            bucket[trendThemeField]
+                            || bucket[trendThemeFieldKey]
+                            || '[]'
+                        );
+                        bucket[trendThemeField] = trendThemeRaw;
+                        if (trendThemeFieldKey && !touchedBucket[trendThemeFieldKey]) {
+                            bucket[trendThemeFieldKey] = trendThemeRaw;
+                        }
                         staticRows.push(`
                             <div class="am-wxt-scene-setting-row">
                                 <div class="am-wxt-scene-setting-label">平均直接成交成本</div>
@@ -1420,6 +1628,22 @@
                                         placeholder="成本上限"
                                         ${wizardState.els.singleCostInput?.disabled ? 'disabled' : ''}
                                     />
+                                </div>
+                            </div>
+                        `);
+                        staticRows.push(`
+                            <div class="am-wxt-scene-setting-row">
+                                <div class="am-wxt-scene-setting-label">趋势主题</div>
+                                <div class="am-wxt-setting-control">
+                                    ${buildScenePopupControl({
+                                        trigger: 'trendTheme',
+                                        title: '选择趋势主题',
+                                        buttonLabel: '选择趋势主题',
+                                        summary: describeTrendThemeSummary(trendThemeRaw),
+                                        hiddenFields: [
+                                            { fieldKey: trendThemeField, value: trendThemeRaw }
+                                        ]
+                                    })}
                                 </div>
                             </div>
                         `);
@@ -2009,49 +2233,34 @@
                                 staticRows.splice(keywordLinkedInsertAt, 0, ...keywordBidTargetLinkedRows);
                             }
                             pushKeywordCustomSettingRow({
-                                label: '投放资源位',
-                                aliases: ['资源位设置', '投放资源位/投放地域/投放时间', '投放资源位/投放地域/分时折扣', '高级设置'],
-                                options: ['平台优选', '自定义资源位'],
-                                defaultValue: '平台优选',
+                                label: '投放资源位/投放地域/分时折扣',
+                                aliases: [
+                                    '高级设置',
+                                    '投放资源位/投放地域/投放时间',
+                                    '资源位设置',
+                                    '投放资源位',
+                                    '投放时间',
+                                    '投放日期',
+                                    '发布日期',
+                                    '分时折扣',
+                                    '投放地域',
+                                    '地域设置'
+                                ],
+                                options: ['默认投放', '自定义设置'],
+                                defaultValue: advancedDefaultMode ? '默认投放' : '自定义设置',
                                 strictOptions: true,
                                 popup: {
                                     trigger: 'adzone',
                                     title: '高级设置',
-                                    buttonLabel: '配置资源位',
-                                    summary: describeAdzoneSummary(adzoneRaw),
+                                    buttonLabel: '编辑设置',
+                                    summary: describeKeywordAdvancedSummary({
+                                        adzoneRaw,
+                                        launchAreaRaw,
+                                        launchPeriodRaw
+                                    }),
                                     hiddenFields: [
-                                        { fieldKey: adzoneField, value: adzoneRaw }
-                                    ]
-                                }
-                            });
-                            pushKeywordCustomSettingRow({
-                                label: '投放时间',
-                                aliases: ['投放日期', '发布日期', '分时折扣'],
-                                options: ['长期投放', '不限时段', '固定时段'],
-                                defaultValue: '长期投放',
-                                strictOptions: true,
-                                popup: {
-                                    trigger: 'launchPeriod',
-                                    title: '高级设置',
-                                    buttonLabel: '配置时段',
-                                    summary: describeLaunchPeriodSummary(launchPeriodRaw),
-                                    hiddenFields: [
-                                        { fieldKey: launchPeriodField, value: launchPeriodRaw }
-                                    ]
-                                }
-                            });
-                            pushKeywordCustomSettingRow({
-                                label: '投放地域',
-                                aliases: ['地域设置'],
-                                options: ['全部地域'],
-                                defaultValue: '全部地域',
-                                strictOptions: true,
-                                popup: {
-                                    trigger: 'launchArea',
-                                    title: '高级设置',
-                                    buttonLabel: '配置地域',
-                                    summary: describeLaunchAreaSummary(launchAreaRaw),
-                                    hiddenFields: [
+                                        { fieldKey: adzoneField, value: adzoneRaw },
+                                        { fieldKey: launchPeriodField, value: launchPeriodRaw },
                                         { fieldKey: launchAreaField, value: launchAreaRaw }
                                     ]
                                 }

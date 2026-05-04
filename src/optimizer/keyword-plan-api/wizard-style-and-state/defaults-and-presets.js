@@ -1,6 +1,71 @@
         const getDefaultStrategyList = () => ([
-            { id: 'trend_star', name: '关键词推广-趋势明星', marketingGoal: '趋势明星', enabled: true, dayAverageBudget: '100', bidMode: 'smart', useWordPackage: DEFAULTS.useWordPackage },
-            { id: 'custom_define', name: '关键词推广-自定义推广', marketingGoal: '自定义推广', enabled: true, dayAverageBudget: '100', bidMode: 'smart', useWordPackage: DEFAULTS.useWordPackage }
+            {
+                id: 'search_detent',
+                name: '关键词推广-搜索卡位',
+                marketingGoal: '搜索卡位',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '搜索卡位',
+                    选择卡位方案: '搜索卡位',
+                    卡位方式: '抢首条'
+                }
+            },
+            {
+                id: 'trend_star',
+                name: '关键词推广-趋势明星',
+                marketingGoal: '趋势明星',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                bidTargetV2: 'conv',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '趋势明星',
+                    选择卡位方案: '趋势明星',
+                    出价目标: '获取成交量'
+                }
+            },
+            {
+                id: 'golden_traffic_card',
+                name: '关键词推广-流量金卡',
+                marketingGoal: '流量金卡',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                bidTargetV2: 'conv',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '流量金卡',
+                    选择卡位方案: '流量金卡',
+                    套餐卡: '类目精准词卡',
+                    套餐包档位: '自定义预算包',
+                    套餐包自动续投: '开启',
+                    支付方式: '余额支付'
+                }
+            },
+            {
+                id: 'custom_define',
+                name: '关键词推广-自定义推广',
+                marketingGoal: '自定义推广',
+                enabled: true,
+                dayAverageBudget: '100',
+                bidMode: 'smart',
+                budgetType: 'day_average',
+                bidTargetV2: 'conv',
+                useWordPackage: DEFAULTS.useWordPackage,
+                sceneSettings: {
+                    营销目标: '自定义推广',
+                    选择卡位方案: '自定义推广',
+                    出价目标: '获取成交量',
+                    匹配方式: '广泛'
+                }
+            }
         ]);
 
         const buildDefaultMatrixConfig = () => ({
@@ -85,7 +150,13 @@
         const MATRIX_SCENE_FIELD_EXCLUDE_LABEL_RE = /^(场景名称|计划名称|计划名|预算值|每日预算|日均预算|总预算|出价方式|出价目标|商品|手动关键词|核心词设置|创意设置|设置创意|人群设置|设置拉新人群|设置人群|种子人群|投放资源位\/投放地域\/分时折扣|投放资源位\/投放地域\/投放时间|投放资源位|资源位设置|高级设置)$/;
         const MATRIX_SCENE_DIMENSION_FALLBACK_LABELS = {
             '货品全站推广': ['预算类型', '目标投产比', '投放时间', '投放地域', '计划组'],
-            '关键词推广': ['匹配方式', '卡位方式', '流量智选', '冷启加速', '预算类型'],
+            '关键词推广': {
+                __default: ['流量智选', '冷启加速', '预算类型'],
+                搜索卡位: ['卡位方式', '匹配方式', '冷启加速', '预算类型'],
+                趋势明星: ['冷启加速', '预算类型', '人群设置', '人群优化目标'],
+                流量金卡: ['套餐卡', '套餐包档位', '套餐包自动续投', '支付方式', '冷启加速'],
+                自定义推广: ['流量智选', '冷启加速', '预算类型']
+            },
             '人群推广': ['预算类型', '资源位溢价', '投放地域/投放时间', '人群设置', '出价目标'],
             '店铺直达': ['预算类型', '投放时间', '创意设置', '推广模式', '计划组'],
             '内容营销': ['投放时间', '出价方式', '优化目标', '人群设置', '创意设置'],
@@ -101,10 +172,16 @@
             },
             '关键词推广': {
                 '匹配方式': ['广泛', '中心词', '精准'],
-                '卡位方式': ['抢首条', '抢前三', '抢首页'],
+                '卡位方式': ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'],
                 '流量智选': ['开启', '关闭'],
                 '冷启加速': ['开启', '关闭'],
-                '预算类型': ['每日预算', '日均预算']
+                '预算类型': ['每日预算', '日均预算'],
+                '人群设置': ['设置优先投放客户', '关闭'],
+                '人群优化目标': ['人群优化目标', '关闭'],
+                '套餐卡': ['类目精准词卡', '大促成交抢量卡', '高转化卡'],
+                '套餐包档位': ['自定义预算包', '增量畅享包', '自定义成交包'],
+                '套餐包自动续投': ['开启', '关闭'],
+                '支付方式': ['余额支付', '支付宝支付']
             },
             '人群推广': {
                 '预算类型': ['每日预算', '日均预算'],
@@ -193,4 +270,3 @@
             { pattern: /^(方案选择|选择方案)$/, label: '选择方案' },
             { pattern: /^(设置计划组|计划组设置)$/, label: '计划组' }
         ];
-

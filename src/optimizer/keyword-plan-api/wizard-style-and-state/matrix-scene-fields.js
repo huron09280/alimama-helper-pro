@@ -98,6 +98,43 @@
             );
         };
 
+        const getMatrixSceneScopedFallbackLabels = (sceneName = '', marketingGoal = '') => {
+            const normalizedSceneName = getMatrixSceneName(sceneName);
+            if (!normalizedSceneName) return [];
+            const sceneConfig = MATRIX_SCENE_DIMENSION_FALLBACK_LABELS[normalizedSceneName];
+            if (Array.isArray(sceneConfig)) return sceneConfig;
+            if (!isPlainObject(sceneConfig)) return [];
+            const normalizedGoal = normalizeMatrixGoalCandidateLabel(marketingGoal)
+                || (normalizedSceneName === '关键词推广' ? '自定义推广' : '');
+            const matchedGoalKey = Object.keys(sceneConfig).find(key => (
+                key !== '__default'
+                && key !== 'default'
+                && normalizeMatrixGoalCandidateLabel(key) === normalizedGoal
+            ));
+            const scopedLabels = matchedGoalKey && Array.isArray(sceneConfig[matchedGoalKey])
+                ? sceneConfig[matchedGoalKey]
+                : [];
+            const defaultLabels = Array.isArray(sceneConfig.__default)
+                ? sceneConfig.__default
+                : (Array.isArray(sceneConfig.default) ? sceneConfig.default : []);
+            return uniqueBy(
+                [].concat(scopedLabels.length ? scopedLabels : defaultLabels)
+                    .map(item => normalizeMatrixSceneFieldLabel(item))
+                    .filter(Boolean),
+                item => normalizeMatrixSceneFieldToken(item)
+            );
+        };
+
+        const shouldHideMatrixKeywordGoalField = (fieldLabel = '', sceneName = '', marketingGoal = '') => {
+            if (getMatrixSceneName(sceneName) !== '关键词推广') return false;
+            const normalizedGoal = normalizeMatrixGoalCandidateLabel(marketingGoal) || '自定义推广';
+            const token = normalizeMatrixSceneFieldToken(fieldLabel);
+            if (!token) return false;
+            if (normalizedGoal !== '搜索卡位' && token === '卡位方式') return true;
+            if (['趋势明星', '流量金卡', '自定义推广'].includes(normalizedGoal) && token === '匹配方式') return true;
+            return false;
+        };
+
         const resolveMatrixSceneFieldOptionType = (fieldLabel = '') => {
             if (typeof resolveSceneFieldOptionType === 'function') {
                 return resolveSceneFieldOptionType(fieldLabel);
@@ -197,32 +234,7 @@
                     .map(key => normalizeText(profile.fieldMeta[key]?.label || '').replace(/[：:]/g, '').trim())
                     .filter(Boolean)
                 : [];
-            const preferredFieldLabels = (Array.isArray(MATRIX_SCENE_DIMENSION_FALLBACK_LABELS[normalizedSceneName])
-                ? MATRIX_SCENE_DIMENSION_FALLBACK_LABELS[normalizedSceneName]
-                : []
-            ).map(item => normalizeMatrixSceneFieldLabel(item)).filter(Boolean);
-            const preferredFieldTokenSet = new Set(
-                preferredFieldLabels
-                    .map(item => normalizeMatrixSceneFieldToken(item))
-                    .filter(Boolean)
-            );
             const goalSelectorLabelRe = /^(营销目标|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|推广模式)$/;
-            const collectGoalFieldLabels = (goal = null) => {
-                const labels = [];
-                if (Array.isArray(goal?.fieldRows)) {
-                    goal.fieldRows.forEach(row => {
-                        const text = normalizeText(row?.label || row?.settingKey || '').replace(/[：:]/g, '').trim();
-                        if (text) labels.push(text);
-                    });
-                }
-                if (isPlainObject(goal?.fieldMatrix)) {
-                    Object.keys(goal.fieldMatrix).forEach(label => {
-                        const text = normalizeText(label).replace(/[：:]/g, '').trim();
-                        if (text) labels.push(text);
-                    });
-                }
-                return uniqueBy(labels, item => normalizeMatrixSceneFieldToken(item));
-            };
             const goalFieldKey = normalizeMatrixSceneFieldKey('营销目标') || '营销目标';
             const goalAliasKeys = [
                 '选择卡位方案',
@@ -246,6 +258,28 @@
                 || goalAliasKeys.map(key => bucket?.[key]).find(Boolean)
                 || ''
             );
+            const preferredFieldLabels = getMatrixSceneScopedFallbackLabels(normalizedSceneName, activeMarketingGoal);
+            const preferredFieldTokenSet = new Set(
+                preferredFieldLabels
+                    .map(item => normalizeMatrixSceneFieldToken(item))
+                    .filter(Boolean)
+            );
+            const collectGoalFieldLabels = (goal = null) => {
+                const labels = [];
+                if (Array.isArray(goal?.fieldRows)) {
+                    goal.fieldRows.forEach(row => {
+                        const text = normalizeText(row?.label || row?.settingKey || '').replace(/[：:]/g, '').trim();
+                        if (text) labels.push(text);
+                    });
+                }
+                if (isPlainObject(goal?.fieldMatrix)) {
+                    Object.keys(goal.fieldMatrix).forEach(label => {
+                        const text = normalizeText(label).replace(/[：:]/g, '').trim();
+                        if (text) labels.push(text);
+                    });
+                }
+                return uniqueBy(labels, item => normalizeMatrixSceneFieldToken(item));
+            };
             const sceneGoalSpecs = typeof getSceneCachedGoalSpecs === 'function'
                 ? getSceneCachedGoalSpecs(normalizedSceneName)
                 : [];
@@ -290,6 +324,7 @@
                 if (!normalizedFieldLabel || !fieldKey || !fieldToken) return false;
                 if (goalSelectorLabelRe.test(normalizeMatrixSceneFieldToken(normalizedFieldLabel))) return false;
                 if (MATRIX_SCENE_FIELD_EXCLUDE_LABEL_RE.test(normalizedFieldLabel)) return false;
+                if (shouldHideMatrixKeywordGoalField(normalizedFieldLabel, normalizedSceneName, activeMarketingGoal)) return false;
                 if (shouldHideMatrixKeywordBidTargetCostField(normalizedFieldLabel, normalizedSceneName, activeMarketingGoal)) return false;
                 if (/^(campaign\.|adgroup\.)/i.test(normalizedFieldLabel)) return false;
                 if (!preferredFieldTokenSet.has(fieldToken) && !isMatrixSceneFieldConnected(normalizedFieldLabel)) return false;
@@ -673,4 +708,3 @@
                 item => item
             );
         };
-

@@ -35,8 +35,23 @@ test('矩阵会把当前场景字段提升为维度，并物化回 sceneSettings
   assert.match(source, /const MATRIX_SCENE_FIELD_KEY_PREFIX = 'scene_field:'/, '缺少场景字段矩阵 key 前缀');
   assert.match(
     source,
-    /const MATRIX_SCENE_DIMENSION_FALLBACK_LABELS = \{[\s\S]*?'关键词推广': \['匹配方式', '卡位方式', '流量智选', '冷启加速', '预算类型'\]/,
-    '关键词场景缺少稳定矩阵维度兜底'
+    /const MATRIX_SCENE_DIMENSION_FALLBACK_LABELS = \{[\s\S]*?'关键词推广': \{[\s\S]*?__default:\s*\['流量智选',\s*'冷启加速',\s*'预算类型'\][\s\S]*?搜索卡位:\s*\['卡位方式',\s*'匹配方式',\s*'冷启加速',\s*'预算类型'\][\s\S]*?趋势明星:\s*\['冷启加速',\s*'预算类型',\s*'人群设置',\s*'人群优化目标'\][\s\S]*?流量金卡:\s*\['套餐卡',\s*'套餐包档位',\s*'套餐包自动续投',\s*'支付方式',\s*'冷启加速'\][\s\S]*?自定义推广:\s*\['流量智选',\s*'冷启加速',\s*'预算类型'\]/,
+    '关键词场景缺少按营销目标分组的矩阵维度兜底'
+  );
+  assert.match(
+    source,
+    /'卡位方式': \['抢首条',\s*'抢前三',\s*'抢首页',\s*'位置不限提升市场渗透'\]/,
+    '矩阵卡位方式兜底缺少位置不限提升市场渗透'
+  );
+  assert.match(
+    source,
+    /const getMatrixSceneScopedFallbackLabels = \(sceneName = '', marketingGoal = ''\) => \{[\s\S]*?normalizeMatrixGoalCandidateLabel\(marketingGoal\)[\s\S]*?'自定义推广'[\s\S]*?sceneConfig\[matchedGoalKey\][\s\S]*?sceneConfig\.__default/,
+    '矩阵场景维度未按营销目标选择兜底字段'
+  );
+  assert.match(
+    source,
+    /const shouldHideMatrixKeywordGoalField = \(fieldLabel = '', sceneName = '', marketingGoal = ''\) => \{[\s\S]*?normalizedGoal !== '搜索卡位' && token === '卡位方式'[\s\S]*?\['趋势明星', '流量金卡', '自定义推广'\]\.includes\(normalizedGoal\) && token === '匹配方式'/,
+    '关键词矩阵未按目标隐藏不匹配的卡位方式/匹配方式'
   );
   assert.match(
     source,
@@ -45,8 +60,13 @@ test('矩阵会把当前场景字段提升为维度，并物化回 sceneSettings
   );
   assert.match(
     source,
-    /const preferredFieldLabels = \(Array\.isArray\(MATRIX_SCENE_DIMENSION_FALLBACK_LABELS\[normalizedSceneName\]\)[\s\S]*?preferredFieldTokenSet\.has\(fieldToken\) && optionList\.length\) return true;/,
-    '矩阵场景维度缺少稳定优先展示兜底'
+    /const preferredFieldLabels = getMatrixSceneScopedFallbackLabels\(normalizedSceneName, activeMarketingGoal\);[\s\S]*?preferredFieldTokenSet\.has\(fieldToken\) && optionList\.length\) return true;/,
+    '矩阵场景维度缺少目标感知的稳定优先展示兜底'
+  );
+  assert.match(
+    source,
+    /if \(shouldHideMatrixKeywordGoalField\(normalizedFieldLabel, normalizedSceneName, activeMarketingGoal\)\) return false;/,
+    '矩阵字段过滤未调用关键词目标隐藏规则'
   );
   assert.match(
     source,

@@ -1,3 +1,402 @@
+# TODO - 2026-05-04 `关键词推广 -> 自定义推广` 高级设置/人群/词包收口
+
+## 需求规格
+- 目标：
+  - 基于当前未提交工作树继续收口，不回退既有趋势明星与关键词四目标改造；
+  - 先审读现有改动并确认它们补齐的真实页面能力，再补齐 `关键词推广 -> 自定义推广` 的高级设置、人群、词包和请求一致性缺口；
+  - 最终插件配置、请求预览、实际提交裁剪和真实 `one.alimama.com` 页面运行态表现一致。
+- 范围：
+  - 自定义推广的 `投放资源位 / 投放地域 / 分时折扣` 组合弹窗；
+  - 手动出价与智能出价下的人群设置入口分流；
+  - `流量智选` 词包在编辑态/预览态保留，提交态按原生契约裁剪；
+  - 默认策略与请求预览一致性；
+  - 自动化回归、构建校验与 `chrome-devtools` MCP 真实页面复验。
+- 非目标：
+  - 不真实创建或提交线上计划；
+  - 不重构整个关键词计划 API 向导；
+  - 不修改未跟踪临时目录、构建产物以外的无关文件。
+
+## 当前未提交改动审读结论
+- `defaults-and-presets.js / matrix-scene-fields.js`：已开始把关键词默认策略从 2 类扩展为搜索卡位、趋势明星、流量金卡、自定义推广 4 类，并让矩阵维度按营销目标展示，避免自定义推广看到不属于它的卡位/匹配字段。
+- `search-and-draft.js / request-builder-preview.js`：已开始修正自定义推广智能出价预算类型不应强制切每日预算，并让趋势明星 ROI 出价目标不被策略默认值覆盖。
+- `render-scene-dynamic-core.js / render-scene-dynamic-item-adzone-popup.js / style.js`：大量改动集中在趋势明星趋势主题原生弹窗，同步补了推荐接口、三红榜、联想搜索、底部已选浮层等真实页面能力。
+- `component-config.js`：补齐商品素材图片字段归一化，服务于本店/竞店宝贝选择类弹窗展示。
+- 当前缺口集中在自定义推广高级设置组合弹窗、人群设置按出价模式分流、流量智选词包保留/提交裁剪，以及默认策略和请求预览的一致性断言。
+
+## 执行计划（可核对）
+- [x] 审读当前未提交改动，按真实页面能力归类并写入本计划。
+- [x] 定位自定义推广高级设置、人群设置、词包、请求预览和提交裁剪的现有链路。
+- [x] 补齐 `投放资源位 / 投放地域 / 分时折扣` 组合弹窗：三块设置同窗编辑、摘要回填、隐藏字段同步。
+- [x] 补齐手动/智能出价的人群设置分流：手动出价展示优先投放客户，智能出价展示人群优化目标，并保证提交字段互不串扰。
+- [x] 补齐流量智选词包逻辑：编辑态/预览态保留词包，提交态按原生契约裁剪不应提交的冗余字段。
+- [x] 对齐默认策略与请求预览：默认自定义推广策略、预算类型、出价目标、词包和高级设置预览保持一致。
+- [x] 增加/更新回归测试，覆盖上述四类能力。
+- [x] 运行 `node scripts/build.mjs`、`node scripts/build.mjs --check`、相关 `node --test` 与必要语法检查。
+- [x] 使用 `chrome-devtools` MCP 在真实 `one.alimama.com` 自定义推广页面复验弹窗入口、摘要、分流和预览。
+- [x] 回填验证记录与结果复盘。
+
+## 改动摘要
+- 已建立本轮收口计划。
+- 已审读当前工作树并确认既有改动主要在补关键词四目标默认/矩阵契约、趋势明星趋势主题弹窗、商品图片字段归一化和预算/预览一致性。
+- 已将自定义推广智能出价下的 `投放资源位 / 投放地域 / 分时折扣` 从三个独立入口收敛为和手动出价一致的组合弹窗，统一写回 `campaign.adzoneList`、`campaign.launchPeriodList`、`campaign.launchAreaStrList`。
+- 已补充回归测试：组合弹窗手动/智能双分支、流量智选预览保留与提交裁剪、默认策略与请求预览/最终提交一致性。
+- 已在真实页面验证自定义推广智能/手动出价分支：智能出价展示“设置优先投放客户”与“人群优化目标”；手动出价展示“添加精选人群”弹窗入口；两者均保留统一高级设置组合入口。
+
+## 验证记录
+- `node scripts/build.mjs`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/keyword-custom-popup-config.test.mjs`：通过，25/25。
+- `node --test tests/keyword-custom-mode-wordpackage.test.mjs tests/keyword-custom-preview-submit-parity.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，46/46。
+- `node scripts/build.mjs --check`：通过。
+- `node --test tests/keyword-custom-popup-config.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs tests/keyword-custom-preview-submit-parity.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-search-p0-contract.test.mjs tests/matrix-plan-config.test.mjs`：通过，99/99。
+- `node --test tests/*.test.mjs`：通过，423 个测试，421 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP（2026-05-04）：在真实 `one.alimama.com` 页面复验，页面为 `计划创建_万相台无界版`，店铺为 `美的洗碗机旗舰店`，插件向导切到 `关键词推广 -> 自定义推广`。
+- `chrome-devtools` MCP（2026-05-04）：智能出价分支确认存在 `投放资源位/投放地域/分时折扣` 组合行，触发器为 `adzone`，摘要为 `资源位:默认｜地域:全部｜分时:全时段`，隐藏字段同步 `campaign.adzoneList`、`campaign.launchPeriodList`、`campaign.launchAreaStrList`。
+- `chrome-devtools` MCP（2026-05-04）：组合弹窗打开后为 `高级设置`，插件弹窗内三个页签为 `投放资源位 / 投放地域 / 分时折扣`。
+- `chrome-devtools` MCP（2026-05-04）：手动出价分支确认 `人群设置` 切到 `添加精选人群`，触发器为 `crowd`，并继续保留同一个高级设置组合入口；未触发真实计划提交。
+
+## 结果复盘
+- 本轮现有工作树主要在补趋势明星趋势主题与关键词四目标默认能力；自定义推广缺口集中在动态配置层的入口形态与请求层的字段裁剪一致性。
+- 最小收口点是把智能出价下分散的资源位、地域、时段入口合并到既有高级设置弹窗，而不是新增第二套弹窗状态；这样手动/智能共享同一组隐藏字段和摘要生成逻辑。
+- 词包链路按“预览保留、提交裁剪”处理：预览继续表达 `流量智选` 开关，最终请求只在 adgroup 保留受控的 `wordPackageList`，campaign 不放行词包噪音字段。
+- 本轮未真实创建或提交线上计划；真实页面验证只覆盖插件运行态、弹窗和分支切换。
+
+# TODO - 2026-04-30 `趋势明星` 新增趋势主题设置
+
+## 需求规格
+- 目标：
+  - 浏览真实 `one.alimama.com` 原生 `关键词推广 -> 趋势明星` 页面，弄清“新增趋势主题”的入口、选择逻辑、数据结构和提交字段；
+  - 在插件 API 向导中按现有配置风格新增趋势主题设置；
+  - 最终组包必须能把插件设置映射到原生 `trendThemeList` 等字段，不影响 P0/P1 已修复的其他关键词目标。
+- 范围：
+  - 原生页面交互观察与网络/运行态字段确认；
+  - `src/optimizer/keyword-plan-api/` 中趋势明星动态配置、草稿、预览和最终组包；
+  - 自动化回归测试与 `chrome-devtools` 真实页面复验。
+- 非目标：
+  - 不真实提交计划；
+  - 不重新设计整套趋势明星主题管理；
+  - 不触碰用户未跟踪目录或无关业务模块。
+
+## 执行计划（可核对）
+- [x] 关闭插件弹窗，切到原生 `趋势明星` 并观察“新增趋势主题”入口与弹窗/列表结构。
+- [x] 捕获或推断趋势主题选择后的页面状态与请求字段，确认 `trendThemeList` 元素结构。
+- [x] 定位插件中趋势明星场景字段、弹窗组件、预览与最终组包路径。
+- [x] 按现有向导风格新增“趋势主题”设置入口，支持选择、展示摘要、保存到草稿与 sceneSettings。
+- [x] 将趋势主题设置映射到最终请求的 `campaign.trendThemeList`，并保证请求预览一致。
+- [x] 增加回归测试覆盖 UI 入口、草稿字段、预览和组包字段。
+- [x] 运行构建、语法、目标测试、全量测试和 `review-team`。
+- [x] 用 `chrome-devtools` MCP 刷新真实页面复验插件趋势明星配置入口。
+- [x] 回填验证记录和结果复盘。
+
+## 改动摘要
+- 已建立本轮修复计划。
+- 已通过 `chrome-devtools` MCP 观察真实 `one.alimama.com` 原生 `关键词推广 -> 趋势明星` 页面：
+  - 页面入口为 `选择趋势主题 5 / 6`，弹窗标题为 `选择趋势主题`，包含趋势排行榜、快捷联想、已选趋势和候选主题表格；
+  - 弹窗打开会请求 `recommendTheme.json`、`recommendThemeExclude.json`、`themeAssociation.json`；
+  - 确认选择后会请求 `recommendItem.json`，请求体包含 `trendThemeList` 与 `themeIdList`，并刷新主题数量与推荐商品。
+- 已确认趋势主题上限为 6 个；`trendThemeList` 元素结构至少包含 `trendThemeId`、`trendThemeName`，默认推荐主题通常还包含 `itemCount`。
+- 已在趋势明星编辑态新增“趋势主题 / 选择趋势主题”专属设置入口，隐藏底层 `campaign.trendThemeList` 原始 JSON 字段。
+- 已新增趋势主题弹窗：进入时读取原生 `recommendThemeDefault.json` 与 `recommendTheme.json` 推荐主题，支持搜索、补齐默认、手动添加、移除和清空，确认后写回完整 `trendThemeList` 对象数组。
+- 已新增 `tests/keyword-trend-theme-setting.test.mjs` 覆盖 UI 入口、原生推荐接口、6 个主题上限和 `campaign.trendThemeList` 写回链路。
+- 根据用户修正，趋势主题候选区已演进为原生同屏三榜单；最新实现保留 4 列信息（`趋势主题 / 指标列 / 推荐商品数 / 操作`），其中指标列按榜单显示 `趋势指数 / 投产指数 / 搜索指数`。
+
+## 验证记录
+- `node scripts/build.mjs`：通过。
+- `node scripts/build.mjs --check`：通过。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+- `node --test tests/*.test.mjs`：通过，417 个测试，415 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP（2026-04-30）：已重新连接调试浏览器并打开原生 `关键词推广 -> 趋势明星` 页面。
+- `chrome-devtools` MCP（2026-04-30）：插件弹窗 `选择趋势主题` 已验证为 3 列表头，且无“趋势指数”列；表头顺序为 `趋势主题 / 推荐商品数 / 操作`。
+
+## 结果复盘
+- 本轮根因是“提交字段同构”优先于“列表结构同构”，导致首版趋势主题弹窗虽然字段正确，但列布局与原生不一致。
+- 修复策略是以原生列结构为准，把候选表头和行网格收敛到 3 列，并补充自动化断言防回退。
+- 当前趋势主题链路已同时满足：原生接口拉取、6 个上限控制、完整对象写回、3 列 UI 同构。
+
+## 增补修复（用户二次修正：三红榜缺失）
+
+### 执行计划（可核对）
+- [x] 对齐原生榜单入口，确认“趋势红榜 / 效果红榜 / 流量红榜”均在弹窗中可见。
+- [x] 补齐榜单切换行为，切换后按对应指标重排候选趋势主题。
+- [x] 增加回归测试断言三红榜入口与切换逻辑，防止后续回退。
+- [x] 运行构建与目标测试，确认无语法/契约回归。
+- [x] 通过 `chrome-devtools` MCP 在真实页面复验三红榜入口与切换。
+
+### 增补改动摘要
+- 已在趋势主题弹窗头部增加三红榜入口：`趋势红榜 / 效果红榜 / 流量红榜`，沿用现有插件 tab 视觉风格。
+- 已补齐三红榜切换逻辑：切换榜单后按对应指标分组重排候选主题，再按推荐商品数与主题名稳定排序。
+- 已更新 `tests/keyword-trend-theme-setting.test.mjs`，新增三红榜入口、切换事件、排序逻辑断言。
+- 已增强测试切块工具：当结束锚点缺失时自动回退到尾部切块，避免构建产物结构变更导致假失败。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+
+## 增补修复（用户八次修正：已选浮条固定在底部，不随列表滚动）
+
+### 执行计划（可核对）
+- [x] 把已选主题浮条从顶部改到底部悬浮位置。
+- [x] 保证浮条固定在弹窗底部，不随榜单列表滚动漂移。
+- [x] 预留底部内容空间，避免浮条遮挡列表末尾行。
+- [x] 构建并跑趋势主题专项测试。
+
+### 增补改动摘要
+- 结构上将 `am-wxt-scene-trend-selected-dock` 移到趋势主区域底部。
+- 样式改为 `position:absolute; left/right/bottom` 固定在主区域底部，替换原 `sticky top`。
+- 为主区域增加 `padding-bottom`，给底部浮条留出可滚动可见空间。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/*.test.mjs`：通过，417 个测试，415 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP（2026-04-30）：真实页面插件弹窗存在三红榜入口，`document.querySelectorAll('[data-scene-popup-trend-rank-tab]')` 返回 `趋势红榜 / 效果红榜 / 流量红榜`。
+- `chrome-devtools` MCP（2026-04-30）：切换 `trend -> effect -> traffic` 后 active tab 正常变更，候选主题前 8 条顺序三组均不相同，证明切换后重排生效。
+
+## 增补修复（用户三次修正：同屏三列 + 趋势指数 + 原生视觉对齐）
+
+### 执行计划（可核对）
+- [x] 改造三榜单为同屏并排卡片，不再依赖 tab 切换视图。
+- [x] 增加并保留榜单指标列，满足趋势指数可视化诉求。
+- [x] 参考原生截图对齐三列标题、副文案、卡片层级和列表行样式。
+- [x] 更新回归测试断言三榜单对应指标列与并行渲染逻辑。
+- [x] 运行构建、目标测试、全量测试与 `review-team`。
+- [x] 通过 `chrome-devtools` MCP 在真实页面复验三列内容与指标标题。
+
+### 增补改动摘要
+- 趋势主题弹窗候选区升级为三列同屏卡片：`趋势红榜 / 效果红榜 / 流量红榜`，每列独立滚动，便于并排对比选择。
+- 每列指标标题按原生语义区分：趋势列显示 `趋势指数`，效果列显示 `投产指数`，流量列显示 `搜索指数`。
+- 三列卡片新增副文案与分列底色；列表主体改为“彩色卡片 + 白色表格区 + 分隔行”结构，视觉更贴近原生截图。
+- 指标取值按榜单维度读取：趋势列优先 `trendIndex/trend`，效果列优先 `roi/roiIndex/...`，流量列优先 `searchIndex/capacity/...`。
+- 更新 `tests/keyword-trend-theme-setting.test.mjs` 断言，覆盖三榜单指标标题与分榜指标输出逻辑。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+- `node --test tests/*.test.mjs`：通过，417 个测试，415 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP（2026-04-30）：真实页面弹窗复验通过，检测到三列榜单且指标列分别为 `趋势指数 / 投产指数 / 搜索指数`。
+- `chrome-devtools` MCP（2026-04-30）：运行态校验结果 `count=3`，列标识为 `trend/effect/traffic`，每列均包含副文案与对应指标标题。
+
+## 增补修复（用户四次修正：趋势主题文字可见性 + 已选面板宽度）
+
+### 执行计划（可核对）
+- [x] 缩窄右侧“已选趋势”面板宽度，为左侧三榜单释放主内容空间。
+- [x] 收紧趋势榜单数值列和操作列固定宽度，优先保证“趋势主题”文本显示。
+- [x] 复验移动端断点，避免窄屏出现右侧面板被限宽问题。
+- [x] 运行构建和趋势主题专项回归测试。
+- [x] 用 `chrome-devtools` MCP 在真实页面测量渲染宽度与首行主题文本可见宽度。
+
+### 增补改动摘要
+- `am-wxt-scene-crowd-native-layout` 主栅格调整为左宽右窄（`2.15fr / 0.78fr`），右侧 `am-wxt-scene-crowd-native-right` 限宽 `280px`。
+- 趋势榜单行网格调整为 `主题 / 指标 / 商品数 / 操作 = 1fr / 32px / 38px / 34px`（移动端 `1fr / 30px / 34px / 32px`），并对指标列增加省略处理，避免挤压主题文本。
+- 已选列表头/行宽度同步收窄为 `1fr / 68px / 48px`（移动端 `1fr / 64px / 44px`），`移除`按钮尺寸下调。
+- 移动端媒体查询新增右侧面板复位规则：`max-width:none`、`justify-self:stretch`，保证单列堆叠时不被限宽。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `chrome-devtools` MCP（2026-04-30）：弹窗测量结果 `layoutWidth=1144`，`leftWidth=830.65`，`rightWidth=280`。
+- `chrome-devtools` MCP（2026-04-30）：趋势榜单行列模板为 `96.88px 32px 38px 34px`，首行主题文本可见宽度提升到 `97px`，已可直接阅读。
+
+## 增补修复（用户五次修正：弹窗继续加宽 + 输入框边框统一灰色）
+
+### 执行计划（可核对）
+- [x] 把趋势主题弹窗最大宽度从 `1180` 提升到更大档位。
+- [x] 将“搜索输入框”和“手动添加输入框”边框与聚焦态统一为灰色。
+- [x] 构建并运行趋势主题专项测试，确认无回归。
+- [x] 页面运行态检查新样式规则已注入。
+
+### 增补改动摘要
+- `am-wxt-scene-popup-dialog-filter` 宽度改为 `min(1320px, 98vw)`，同屏可视区域更大。
+- 新增输入框样式覆盖：
+  - `.am-wxt-scene-crowd-native-toolbar .am-wxt-input`
+  - `.am-wxt-scene-crowd-native-manual .am-wxt-input`
+  统一为灰色边框，并在 `:focus` 维持灰色与无高亮阴影。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `chrome-devtools` MCP（2026-04-30）：运行态样式检测 `has1320=true`、`hasGrayInputRule=true`，确认新宽度与灰色边框规则生效。
+
+## 增补修复（用户六次修正：输入框高度与按钮对齐）
+
+### 执行计划（可核对）
+- [x] 对搜索输入框和手动添加输入框设置固定高度，与同排按钮一致。
+- [x] 同步调整输入框行高与垂直内边距，避免“看起来仍不齐”。
+- [x] 构建并做趋势主题专项测试。
+
+### 增补改动摘要
+- 两个输入框统一新增：`height:30px`、`min-height:30px`、`line-height:28px`、`padding-top/bottom:0`，与同排按钮高度对齐。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+
+## 增补修复（用户七次修正：改勾选方式 + 去操作列 + 已选主题置顶浮条）
+
+### 执行计划（可核对）
+- [x] 三榜单候选主题从“添加按钮”改为“复选框勾选”交互。
+- [x] 去掉候选区“操作”列，仅保留 `主题 / 指标 / 推荐商品数` 三列。
+- [x] 移除右侧已选面板，改为顶部置顶已选浮条（含数量、宝贝计数、可移除标签）。
+- [x] 支持三榜单表头全选/取消全选（受最多 6 个上限约束）。
+- [x] 更新回归测试断言并运行构建、目标测试。
+
+### 增补改动摘要
+- 弹窗结构改造：
+  - 新增 `am-wxt-scene-trend-selected-dock` 置顶浮条，已选主题以 chip 方式展示，点击 `x` 即移除；
+  - 右侧 `am-wxt-scene-crowd-native-right` 已选表格区域移除；
+  - 三榜单表头改为勾选样式，加入 `data-scene-popup-trend-select-all` 全选入口。
+- 候选行交互改造：
+  - 原 `data-scene-popup-trend-add` 按钮逻辑替换为 `data-scene-popup-trend-toggle` 勾选逻辑；
+  - 新增 `buildVisibleThemes / syncSelectAllState / toggleTheme`，按当前过滤结果维护“全选/半选”状态；
+  - 继续保留最多 6 个主题限制。
+- 样式改造：
+  - 新增勾选控件视觉 `am-wxt-scene-trend-check*`；
+  - 新增顶部浮条和 chip 样式 `am-wxt-scene-trend-selected-*`；
+  - 三榜单网格列由 4 列收敛到 3 列，移动端同步收敛。
+- 测试改造：
+  - `tests/keyword-trend-theme-setting.test.mjs` 新增勾选入口、置顶浮条、移除旧“添加操作列”断言。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+
+## 增补修复（用户十次修正：已选浮条立即可见 + 效果红榜投产指数无数据）
+
+### 执行计划（可核对）
+- [x] 修复趋势主题弹窗底部已选浮条未固定显示问题。
+- [x] 补充效果红榜数据来源，修复投产指数显示空值问题。
+- [x] 运行构建与趋势主题相关回归测试。
+
+### 增补改动摘要
+- 趋势主题弹窗改为专属对话框类名 `am-wxt-scene-popup-dialog-trend-theme`，并将弹窗滚动收敛到内部列表区域，避免整窗滚动导致“需要滚到底部才看到已选浮条”。
+- 对趋势主题弹窗补接 `themeAssociation.json` 联想结果（按已选/默认主题种子查询并并入候选池，刷新时同步补拉），作为 AI 联想候选补充。
+- 二次修正：趋势主题弹窗必须设置明确高度 `height: min(760px, calc(100vh - 32px))`，并让 `popup-body / trend-layout / trend-main` 逐层撑满，否则 `height:100%` 在 auto 高度父容器下不生效。
+- 二次修正：候选合并顺序调整为 `associationThemes -> selectedThemes -> defaultThemes -> nativeBundle.candidateList`，避免带投产指标的联想主题被无指标推荐主题去重覆盖。
+- 三次修正：原生 `recommendTheme.json` 同时返回 `trendThemeInfo / effectThemeInfo / capacityThemeInfo` 三个分榜；插件现在分别保存为 `trendRankList / effectRankList / trafficRankList`，并按分榜原始顺序渲染，不再用统一候选池排序模拟三红榜。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+- `chrome-devtools` MCP（2026-04-30）：真实页面弹窗快照已看到 `已选明星趋势主题 5/6` 在当前弹窗可视区域内直接显示。
+- `chrome-devtools` MCP（2026-04-30）：已确认原生 `recommendTheme.json` 响应字段：`trendThemeInfo` 对应趋势红榜，`effectThemeInfo` 对应效果红榜，`capacityThemeInfo` 对应流量红榜。
+
+## 增补修复（用户十一次修正：红榜最右标签列 + 手动联想搜索区）
+
+### 执行计划（可核对）
+- [x] 补齐三红榜列表最右侧标签/状态列，并保留原生分榜顺序。
+- [x] 保留原生响应中的标签、周增幅、收藏加购等字段，避免渲染时丢指标。
+- [x] 在红榜下方新增原生风格手动联想搜索区，展示快捷联想与结果表格。
+- [x] 将手动联想结果接入当前勾选/已选主题逻辑，支持添加、移除和 6 个上限。
+- [x] 更新回归测试覆盖新列、新搜索区和指标字段。
+- [x] 构建、运行专项回归与语法检查，并用 `chrome-devtools` MCP 做真实页面复验。
+
+### 增补改动摘要
+- `normalizeTrendThemeItem` 现在保留 `recommendItemCount`、`wcvr`、周变化比例、`resourceType`、`trendLv` 和 `tagText` 等原生字段，避免红榜标签和手动联想指标在归一化时丢失。
+- 三红榜表格新增最右列：趋势红榜显示 `趋势增长中 / 周增幅 ...`，效果红榜与流量红榜显示 `淘宝热搜 / 行业趋势 / 大促热销` 等原生标签。
+- 修复趋势红榜状态列误用 `trendLv` 单字母等级的问题，趋势列优先读取周增幅与趋势状态，不再显示 `A`。
+- 红榜下方新增原生风格手动联想搜索区，包含 `关键词 / 本店宝贝 / 竞店宝贝` 入口、`深度搜索`、快捷联想已选趋势、结果表格和添加/移除操作。
+- 手动联想结果已并入候选池，和红榜勾选、底部已选浮条、6 个上限共用同一套选择逻辑。
+- 回归测试新增红榜标签列、联想搜索区、联想结果勾选和指标字段保留断言。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `chrome-devtools` MCP（2026-04-30）：真实 `one.alimama.com` 页面刷新后打开插件趋势主题弹窗，检测到红榜标签列前 8 项为 `趋势增长中 / 周增幅 13.8% / 周增幅 270.4% / ...`，不再显示 `A`。
+- `chrome-devtools` MCP（2026-04-30）：真实页面弹窗检测到手动联想区，表头为 `趋势主题 / 推荐店铺商品数 / 趋势指数 / 搜索指数 / 竞争热度 / 收藏加购指数 / 转化指数 / 投产指数 / 操作`。
+- `chrome-devtools` MCP（2026-04-30）：真实页面弹窗底部已选浮条仍为 `absolute` 固定在弹窗内部底部，当前显示 `已选明星趋势主题 5/6`。
+
+## 增补修复（用户十二次修正：红榜标签完整显示 + 区域增高 + 已选浮条固定）
+
+### 执行计划（可核对）
+- [x] 放宽趋势红榜最右列宽度，确保 `趋势增长中 / 周增幅 xx%` 完整显示。
+- [x] 按原生语义修正趋势标签颜色：增长状态为绿色，周增幅为红色；效果/流量标签按标签类型区分颜色。
+- [x] 将红榜区域和下方手动联想搜索区高度提高约一倍，减少滚动压缩。
+- [x] 把已选明星趋势主题浮条改为弹窗内悬浮固定层，不受弹窗内容滚动影响。
+- [x] 更新回归测试并完成构建、专项测试、真实页面复验。
+
+### 增补改动摘要
+- 红榜行网格最右列从 `70px` 放宽到 `112px`，并为趋势红榜标签增加 `data-rank-tag-tone`，避免 `周增幅 270.4%` 等文案被截断。
+- 标签颜色按语义区分：`趋势增长中` 为绿色，`周增幅` 为红色，`淘宝热搜` 为橙色，`行业趋势` 为蓝紫色，`大促热销` 为红色。
+- 红榜区高度放大到 `420px`，手动联想区高度放大到 `380px`，弹窗高度提升到 `min(960px, calc(100vh - 16px))`。
+- 已选明星趋势主题条改为相对专属弹窗的悬浮层，定位在底部操作按钮上方（`bottom:62px`），内容区滚动时不随内容移动。
+- 更新趋势主题专项测试，覆盖悬浮层、放大高度和标签 tone 输出。
+
+### 增补验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- `chrome-devtools` MCP（2026-04-30）：真实页面刷新后复验，弹窗尺寸 `1320x960`，红榜区域高度 `420px`，手动联想区高度 `380px`。
+- `chrome-devtools` MCP（2026-04-30）：趋势红榜前 12 个标签均完整显示，示例 `趋势增长中 / 周增幅 13.8% / 周增幅 270.4%`；增长状态为绿色，周增幅为红色。
+- `chrome-devtools` MCP（2026-04-30）：已选主题条 `position:absolute`，相对趋势主题弹窗悬浮在操作按钮上方，`bottom:62px`，内容滚动不改变位置。
+
+---
+
+# TODO - 2026-04-30 `onebpSearch` API 向导 P1 修复
+
+## 需求规格
+- 目标：
+  - 完成上一轮对照检查中标记的 P1 问题，补齐关键词推广四类营销目标在默认策略、矩阵兜底、预算类型与请求预览层的目标感知行为；
+  - 保持 P0 已修好的 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广` UI 与最终请求契约不回退；
+  - 用自动化回归和真实页面 `chrome-devtools` MCP 验证证明修复有效。
+- 范围：
+  - 默认策略列表、矩阵字段兜底、卡位方式兜底选项、自定义推广预算类型、请求预览覆盖逻辑；
+  - `src/optimizer/keyword-plan-api/` 相关实现与 `tests/*.test.mjs` 回归测试；
+  - 构建、语法、单测、review-team 和真实页面浏览器复验。
+- 非目标：
+  - 不真实提交计划；
+  - 不重新摸排 `addList.md` 未覆盖的新分支；
+  - 不处理 P2 的完整控件体验增强。
+
+## 执行计划（可核对）
+- [x] 静态核查 P1 五项清单，区分 P0 已覆盖项与仍需修复项。
+- [x] 补齐或重构默认策略列表，使 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广` 均有目标感知默认策略。
+- [x] 按营销目标收敛矩阵兜底字段，确保四目标混合默认矩阵不注入 `卡位方式 / 匹配方式`。
+- [x] 修正自定义推广智能出价预算类型，不再把文档样本应为 `day_average` 的链路强制为 `normal`。
+- [x] 复核 `request-builder-preview.js` 的策略覆盖逻辑，确保不会覆盖 `搜索卡位 / 流量金卡 / 趋势明星 ROI` 原生字段。
+- [x] 补充或更新回归测试，覆盖 P1 默认策略、矩阵兜底、预算类型和预览覆盖。
+- [x] 运行构建、语法、全量测试和 `bash scripts/review-team.sh`。
+- [x] 通过 `chrome-devtools` MCP 刷新真实页面并复验 P1 相关 UI/运行态。
+- [x] 回填验证记录、结果复盘和剩余风险。
+
+## 改动摘要
+- 已补齐关键词推广默认策略列表，默认草稿现在直接包含 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广` 四类目标，并为搜索卡位、流量金卡补齐目标感知的基础场景设置。
+- 已把关键词推广矩阵兜底从场景级数组改为目标感知配置：四目标混合默认状态只展示安全维度；`卡位方式` 兜底选项补齐 `位置不限提升市场渗透`；趋势明星、流量金卡、自定义推广不会被矩阵默认注入 `卡位方式 / 匹配方式`。
+- 已移除自定义推广智能出价下强制 `dmcType=normal` 的最终组包逻辑，恢复按真实来源与 `DEFAULTS.dmcType=day_average` 兜底。
+- 已修正请求预览层的趋势明星出价目标读取优先级：趋势明星优先使用场景里的 `出价目标 / 优化目标`，避免策略默认 `conv` 覆盖 ROI。
+- 已更新回归测试，覆盖默认策略四目标、矩阵目标感知兜底、`permeability` 选项、自定义推广预算类型、搜索/金卡固定目标与趋势明星 ROI 预览。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，已重新生成根 userscript、packages 与 extension page bundle。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/matrix-plan-config.test.mjs`：通过，61/61。
+- `node --test tests/*.test.mjs`：通过，414 个测试，412 通过，2 个跳过；跳过项仍为既有可选 `agent-cluster/index.mjs` 缺失。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP：已刷新真实 `one.alimama.com` 页面并确认插件运行态存在 `__AM_WXT_KEYWORD_API__`。
+- `chrome-devtools` MCP：清空旧草稿后打开向导，默认策略列表为 4 个目标：`搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广`，且预算类型均为 `day_average`。
+- `chrome-devtools` MCP：矩阵页四目标混合默认状态未展示可注入的 `卡位方式 / 匹配方式` 场景维度，仅展示安全兜底维度。
+- `chrome-devtools` MCP：搜索卡位编辑态仍展示 `卡位方式 / 匹配方式`，并包含 `位置不限提升市场渗透`。
+
+## 结果复盘
+- P1 的根因分成两类：默认策略仍停留在两目标时代，矩阵兜底仍按“关键词推广”整体注入字段，导致四目标默认策略扩展后更容易把 `卡位方式 / 匹配方式` 错写进不匹配目标。
+- 修复策略采用“安全默认 + 目标感知”：默认策略补四目标；矩阵在混合目标默认状态只暴露不会污染目标契约的维度，目标相关字段必须由目标上下文明确驱动。
+- 自定义推广预算类型不再在智能出价下强制改成 `normal`；后续若要支持用户显式选择每日预算，仍应通过场景预算字段进入，而不是在最终裁剪层无条件覆盖。
+- 本轮未真实提交计划，避免影响线上投放；请求契约通过自动化测试和预览层源码契约覆盖，UI 运行态通过真实页面刷新复验。
+
+---
+
 # TODO - 2026-04-29 `onebpSearch` API 向导 P0 修复
 
 ## 需求规格
@@ -924,3 +1323,136 @@
   - 选择“不归属任何计划组”后，`campaignGroupId` 会变成 `null`
   - 但 `campaignGroupName` 仍残留上一条已有组名称 `小白鲸`
   - 这意味着后续开发不能只看 `campaignGroupName` 判断是否真的归属了计划组。
+
+---
+
+# TODO - 2026-04-30 趋势主题联想入口对齐原生关键词/本店宝贝/竞店宝贝
+
+## 需求规格
+- 目标：
+  - 将趋势主题手动联想区从“静态三按钮 + 通用输入框”改为原生同构交互；
+  - `关键词` 支持直接输入并触发深度搜索；
+  - `本店宝贝` 弹出本店商品列表，可按宝贝标题过滤并选择后联想趋势主题；
+  - `竞店宝贝` 弹出全网商品搜索列表，可按宝贝标题搜索并选择后联想趋势主题。
+- 范围：
+  - 趋势主题弹窗 DOM、状态与事件；
+  - 商品列表归一化与搜索；
+  - 对应样式、回归测试、构建产物与浏览器实测。
+- 非目标：
+  - 不改变趋势主题最终提交字段；
+  - 不改动非趋势明星目标的商品选择流程。
+
+## 执行计划（可核对）
+- [x] 复核原生截图与当前插件差异，明确三类入口的交互边界。
+- [x] 改造趋势主题联想区：关键词输入内嵌、宝贝入口可打开选择面板。
+- [x] 接入本店商品与竞店商品搜索，选择宝贝后用宝贝标题/ID 调用趋势联想接口。
+- [x] 补充样式与回归断言，确保不退回静态按钮方案。
+- [x] 运行构建、语法检查、目标测试。
+- [x] 通过 Chrome DevTools 在真实 `one.alimama.com` 页面验证弹窗交互。
+
+## 改动摘要
+- 趋势主题联想区已改成原生同构入口：`关键词` 可直接输入，`本店宝贝` / `竞店宝贝` 打开宝贝选择面板。
+- `本店宝贝` 继续使用趋势明星上下文的店内物料接口，保留店内商品与标题搜索。
+- `竞店宝贝` 独立接入 `https://ai.alimama.com/ai/common/searchItemPage.json`，使用 `similarItemQueryStr` 搜索全网商品，不再复用本店商品接口。
+- 商品归一化补充图片字段与多层响应列表解析，确保宝贝标题、ID、缩略图能稳定展示。
+- 回归测试新增对关键词输入、宝贝面板、竞店 AI 全网搜索接口、本店/竞店数据源分离的断言。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，生成根 userscript、packages 与 extension 产物。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过 3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs && node --check "阿里妈妈多合一助手.js" && node scripts/build.mjs --check`：通过 9/9、语法检查通过、构建同步检查通过。
+- Chrome DevTools 真实页面 `one.alimama.com` 验证：
+  - `关键词` 输入 `洗碗机` 后返回 20 个趋势热点，首行包含 `洗碗机`、趋势指数 `334`、搜索指数 `35919`。
+  - `本店宝贝` 面板显示 `本店宝贝标题` 搜索框，返回 40 条店内商品。
+  - `竞店宝贝` 面板显示 `竞店宝贝标题` 搜索框，输入 `洗碗机` 后返回 79 条全网商品，并捕获到 `ai/common/searchItemPage.json` 请求。
+  - 选择竞店商品后，已选文案显示 `已选竞店宝贝：...`，面板收起并触发趋势主题联想。
+
+## 结果复盘
+- 竞店宝贝的根因不是 UI，而是错误复用了本店/可投商品接口；修复后已按原生 AI 全网商品搜索链路独立实现。
+- 后续类似“本店/竞店/全网”入口，必须先确认数据源和请求字段，再复刻 UI，避免同形控件误用同一接口。
+
+## 缺陷修复计划 - 宝贝联想无趋势结果与快捷联想选中态
+- [x] 复核当前宝贝选中后的联想查询方式，避免只用完整宝贝标题导致 `themeAssociation` 无结果。
+- [x] 为本店/竞店宝贝选中后增加可联想关键词降级：完整标题无结果时提取类目/核心商品词继续查询。
+- [x] 修复“快捷联想已选趋势”点击后的当前选中圆点状态，确保点击哪个趋势就高亮哪个趋势。
+- [x] 更新回归断言覆盖宝贝联想降级查询与快捷联想 active 状态。
+- [x] 重新构建、运行测试，并用真实 `one.alimama.com` 页面验证。
+
+### 缺陷修复结果
+- 宝贝联想不再只用完整标题：会按“宝贝搜索词 -> 已选/红榜中匹配的趋势词 -> 核心商品词 -> 完整标题”的顺序尝试，避免长标题导致无结果。
+- 快捷联想已选趋势新增当前选中态，点击 `pro套` 后圆点切换到 `pro套`，不再固定第一个。
+- 真实页面验证：
+  - 选择本店宝贝 `美的消毒柜150R02...` 后返回 20 条趋势热点，状态显示 `联想词：美的消毒柜`。
+  - 选择竞店宝贝 `304不锈钢筷子筒...洗碗机专用` 后返回 20 条趋势热点，状态显示 `联想词：洗碗机`。
+  - 快捷联想点击第二个趋势后 active 圆点切换到 `pro套`。
+
+## 缺陷修复计划 - 移除趋势旧手动入口并固定联想区高度
+- [x] 删除趋势主题弹窗里多余的旧 `am-wxt-scene-crowd-native-manual` 手动添加区域及对应事件逻辑。
+- [x] 为趋势主题专项测试补充旧入口不存在的回归断言。
+- [x] 将趋势联想区设置为 `height:100%`、`overflow:hidden`，不再依赖滚动才能看到下方内容。
+- [x] 重新构建、运行专项测试与契约检查。
+- [x] 用真实 `one.alimama.com` 页面验证旧入口不存在且联想区完整可见。
+
+### 缺陷修复结果
+- 趋势主题弹窗旧手动添加区已移除，源码和生成后的 userscript 不再包含 `data-scene-popup-trend-manual` / `data-scene-popup-trend-manual-add` / `添加自定义主题`。
+- 趋势联想区样式已改为 `flex:1 1 0`、`height:100%`、`overflow:hidden`，主内容区不再需要滚动才能看到联想区下方内容。
+- 真实页面验证：
+  - 旧 `.am-wxt-scene-crowd-native-manual` 不存在；
+  - 联想区 CSSOM 规则为 `height: 100%`、`overflow: hidden`；
+  - `mainScroll` 与 `associationScroll` 均无外层滚动，红榜、联想搜索、结果表头和已选悬浮条均在当前弹窗窗口内可见。
+
+### 二次修复 - 联想区只露一行
+- [x] 将红榜区固定压缩到 `180px`，释放纵向空间给下方联想区。
+- [x] 按用户最新要求允许趋势主题弹窗整窗滚动，不再强制固定窗口内全部压缩展示。
+- [x] 去掉联想区和联想结果表内部滚动/截断，让“联想相关趋势主题”下方结果自然展开显示全。
+- [x] 重新构建并在真实页面确认联想区不再只露一行。
+
+### 二次修复验证结果
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- Chrome DevTools 真实页面验证：
+  - 旧手动入口仍不存在；
+  - 弹窗外层 `overflow:auto`，允许整窗滚动；
+  - 联想区 `overflow:visible`，结果表 `overflow:visible`；
+  - 联想结果共 20 行，联想区内展开 20 行；
+  - 联想区、结果表均 `clientHeight == scrollHeight`，没有内部滚动条。
+
+### 三次修复 - 红榜增高与已选主题底部悬浮
+- [x] 将三列红榜区域从 `180px` 增高到 `900px`，每个红榜卡片按当前压缩高度放大 5 倍。
+- [x] 将“已选明星趋势主题”从弹窗内容绝对定位改成视窗底部 `fixed` 悬浮层。
+- [x] 将趋势主题主内容底部避让空间增加到 `180px`，避免底部悬浮条遮住列表内容。
+- [x] 重新构建、运行专项测试，并在真实页面确认红榜高度和底部悬浮条。
+
+### 三次修复验证结果
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- Chrome DevTools 真实页面验证：
+  - 红榜区 CSS 为 `flex: 0 0 900px`、`min-height: 900px`；
+  - 三个红榜卡片实际高度约 `880px`；
+  - 已选主题条 CSS 为 `position: fixed`、`bottom: 24px`；
+  - 弹窗滚动前后已选主题条位置不变；
+  - 联想区与结果表仍为 `overflow: visible`，结果表没有内部滚动条。
+
+### 四次修复 - 红榜高度回归自然流与底部按钮合并
+- [x] 删除红榜区 `flex: 0 0 900px` 与 `min-height: 900px/800px` 固定高度，恢复内容自然撑开。
+- [x] 将顶部趋势主题搜索框改成与联想区“关键词”一致的胶囊样式。
+- [x] 将“确定/取消”按钮移动到已选浮条中“全部移除”的右侧，按钮原有保存/取消逻辑不变。
+- [x] 重新构建、运行专项测试，并在真实页面确认样式与按钮位置。
+
+### 四次修复验证结果
+- `node scripts/build.mjs`：通过。
+- `node --test tests/keyword-trend-theme-setting.test.mjs`：通过，3/3。
+- `node --test tests/keyword-search-p0-contract.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，9/9。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- Chrome DevTools 真实页面验证：
+  - 红榜容器为 `flex: 0 1 auto`、`min-height: auto`，固定 `900px/800px` 已删除；
+  - 顶部趋势主题搜索框与联想区“关键词”标签同为蓝色胶囊样式，圆角 `7px`、无边框、字重 `600`；
+  - “确定/取消”显示在“全部移除”右侧；
+  - 两个按钮仍是原 `data-scene-popup-save/cancel` 节点，父级已移动到 `data-scene-popup-trend-actions`；
+  - 原底部 footer 已隐藏，已选主题条仍 `position: fixed` 固定在视窗底部。

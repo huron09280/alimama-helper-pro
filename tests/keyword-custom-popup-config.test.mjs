@@ -20,6 +20,35 @@ function getResolveSceneSettingOverridesBlock() {
 
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+function extractBraceBlock(text, anchorIndex, label = '代码块') {
+  const openIndex = text.indexOf('{', anchorIndex);
+  assert.ok(openIndex > -1, `无法定位${label}起始大括号`);
+  let depth = 0;
+  for (let idx = openIndex; idx < text.length; idx += 1) {
+    const ch = text[idx];
+    if (ch === '{') depth += 1;
+    if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(openIndex + 1, idx);
+    }
+  }
+  assert.fail(`无法定位${label}结束位置`);
+}
+
+function getKeywordCustomBidModeBranches() {
+  const renderBlock = getRenderSceneDynamicConfigBlock();
+  const customStart = renderBlock.indexOf("if (activeKeywordGoal === '自定义推广') {");
+  assert.ok(customStart > -1, '无法定位自定义推广场景渲染分支');
+  const customBlock = extractBraceBlock(renderBlock, customStart, '自定义推广分支');
+  const manualStart = customBlock.indexOf("if (keywordBidMode === 'manual') {");
+  assert.ok(manualStart > -1, '自定义推广缺少手动出价分支');
+  const manualBranch = extractBraceBlock(customBlock, manualStart, '手动出价分支');
+  const elseStart = customBlock.indexOf('else {', manualStart + manualBranch.length);
+  assert.ok(elseStart > -1, '自定义推广缺少智能出价分支');
+  const smartBranch = extractBraceBlock(customBlock, elseStart, '智能出价分支');
+  return { manualBranch, smartBranch };
+}
+
 test('自定义推广已提供弹窗配置入口并绑定到 API 字段', () => {
   const block = getRenderSceneDynamicConfigBlock();
   assert.match(
@@ -28,7 +57,7 @@ test('自定义推广已提供弹窗配置入口并绑定到 API 字段', () => 
     '缺少弹窗触发器渲染逻辑'
   );
 
-  for (const trigger of ['adzone', 'launchPeriod', 'launchArea', 'crowd']) {
+  for (const trigger of ['adzone', 'crowd']) {
     assert.match(
       block,
       new RegExp(`trigger:\\s*'${escapeRegExp(trigger)}'`),
@@ -47,6 +76,39 @@ test('自定义推广已提供弹窗配置入口并绑定到 API 字段', () => 
     block,
     /label:\s*'投放资源位\/投放地域\/分时折扣'/,
     '手动出价缺少原生“投放资源位/投放地域/分时折扣”组合设置'
+  );
+});
+
+test('自定义推广手动/智能出价都使用高级设置组合弹窗', () => {
+  const { manualBranch, smartBranch } = getKeywordCustomBidModeBranches();
+  for (const [name, branch] of [['手动出价', manualBranch], ['智能出价', smartBranch]]) {
+    assert.match(
+      branch,
+      /label:\s*'投放资源位\/投放地域\/分时折扣'[\s\S]*trigger:\s*'adzone'/,
+      `${name}缺少投放资源位/投放地域/分时折扣组合入口`
+    );
+    assert.match(
+      branch,
+      /describeKeywordAdvancedSummary\(\{[\s\S]*adzoneRaw,[\s\S]*launchAreaRaw,[\s\S]*launchPeriodRaw[\s\S]*\}\)/,
+      `${name}高级设置摘要未同时汇总资源位、地域和分时折扣`
+    );
+    for (const fieldKey of ['adzoneField', 'launchPeriodField', 'launchAreaField']) {
+      assert.match(
+        branch,
+        new RegExp(`\\{ fieldKey: ${fieldKey}, value:`),
+        `${name}高级设置隐藏字段缺少 ${fieldKey}`
+      );
+    }
+  }
+  assert.doesNotMatch(
+    smartBranch,
+    /label:\s*'投放时间'[\s\S]*trigger:\s*'launchPeriod'/,
+    '智能出价仍退回独立“投放时间”弹窗入口'
+  );
+  assert.doesNotMatch(
+    smartBranch,
+    /label:\s*'投放地域'[\s\S]*trigger:\s*'launchArea'/,
+    '智能出价仍退回独立“投放地域”弹窗入口'
   );
 });
 

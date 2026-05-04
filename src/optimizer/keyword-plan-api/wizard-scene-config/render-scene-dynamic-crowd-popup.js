@@ -836,6 +836,16 @@
                                 trigger,
                                 result.summary || describeCrowdItemSummary(result.itemIdListRaw || '[]')
                             );
+                        } else if (trigger === 'trendTheme') {
+                            const popupPayload = await openKeywordTrendThemeSettingPopup();
+                            if (!popupPayload || popupPayload.ok !== true) return;
+                            const { result, trendThemeControl } = popupPayload;
+                            dispatchSceneControlUpdate(trendThemeControl, result.trendThemeRaw || '[]');
+                            updateScenePopupSummary(
+                                row,
+                                trigger,
+                                result.summary || describeTrendThemeSummary(result.trendThemeRaw || '[]')
+                            );
                         } else if (trigger === 'crowd') {
                             const crowdCampaignControl = findPopupControl('campaign.crowdList');
                             const crowdAdgroupControl = findPopupControl('adgroup.rightList');

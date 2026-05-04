@@ -1787,9 +1787,6 @@
                     }
                 }
             }
-            const forceKeywordDailyBudget = !isManual
-                && keywordMarketingGoal === '自定义推广'
-                && !keywordRoiContract;
             const normalizeKeywordBudgetType = (value = '') => {
                 const token = String(value || '').trim().toLowerCase();
                 if (!token) return '';
@@ -1835,7 +1832,6 @@
             let normalizedDmcType = normalizeKeywordBudgetType(out.dmcType)
                 || normalizeKeywordBudgetType(DEFAULTS.dmcType)
                 || 'day_average';
-            if (forceKeywordDailyBudget) normalizedDmcType = 'normal';
             if (keywordRoiContract) normalizedDmcType = 'day_average';
             out.dmcType = normalizedDmcType;
             if (normalizedDmcType === 'unlimit') {
