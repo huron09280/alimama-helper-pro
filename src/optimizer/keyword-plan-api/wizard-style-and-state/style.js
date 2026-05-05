@@ -637,6 +637,22 @@
                     font-size: 10.5px;
                     line-height: 1.45;
                 }
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-error,
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-success {
+                    border-radius: 6px;
+                    padding: 6px 8px;
+                    font-size: 11px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-error {
+                    border: 1px solid #fecaca;
+                    background: #fef2f2;
+                    color: #b91c1c;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-success {
+                    border: 1px solid #bbf7d0;
+                    background: #f0fdf4;
+                    color: #15803d;
+                }
                 #am-wxt-keyword-modal .am-wxt-matrix-preset-grid .am-wxt-btn {
                     width: 100%;
                     min-height: 30px;

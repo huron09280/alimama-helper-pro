@@ -28875,6 +28875,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     font-size: 10.5px;
                     line-height: 1.45;
                 }
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-error,
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-success {
+                    border-radius: 6px;
+                    padding: 6px 8px;
+                    font-size: 11px;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-error {
+                    border: 1px solid #fecaca;
+                    background: #fef2f2;
+                    color: #b91c1c;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-success {
+                    border: 1px solid #bbf7d0;
+                    background: #f0fdf4;
+                    color: #15803d;
+                }
                 #am-wxt-keyword-modal .am-wxt-matrix-preset-grid .am-wxt-btn {
                     width: 100%;
                     min-height: 30px;
@@ -52720,6 +52736,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return true;
             };
 
+            const setMatrixActionNote = (text = '', type = '') => {
+                const el = wizardState?.els?.matrixActionNote;
+                if (!(el instanceof HTMLElement)) return;
+                const normalizedType = String(type || '').trim();
+                el.textContent = String(text || '').trim();
+                el.classList.toggle('is-error', normalizedType === 'error');
+                el.classList.toggle('is-success', normalizedType === 'success');
+            };
+
             const renderWorkbenchMatrixSummary = (request = null) => {
                 if (!(wizardState?.els?.matrixSummary instanceof HTMLElement)) return;
                 if (typeof syncMatrixScenePresetContextFromEditor === 'function') {
@@ -52837,7 +52862,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             </label>
                                         `).join('')
                                 : '<div class="am-wxt-matrix-dimension-picker-empty">暂无可选项</div>'}
-                                    ${trendThemeEditorHtml}
                                 </div>
                                 <select
                                     class="am-wxt-matrix-dimension-value-select am-wxt-hidden-control"
@@ -52896,6 +52920,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 value="${Utils.escapeHtml(dimension.label || preset?.label || dimension.key || '')}"
                             />
                             ${valueEditorHtml}
+                            ${trendThemeEditorHtml}
                         </div>
                     `;
                 };
@@ -52950,13 +52975,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     wizardState.els.matrixApplyRecommendedBtn.disabled = !canEditMatrixDimensions;
                 }
                 if (wizardState.els.matrixGenerateBtn instanceof HTMLButtonElement) {
-                    const canGenerateMatrixPlans = canEditMatrixDimensions
-                        && matrixConfig.enabled === true
-                        && matrixStats.combinations.length > 0
-                        && enabledStrategyCount > 0
-                        && Array.isArray(wizardState?.addedItems)
-                        && wizardState.addedItems.length > 0;
-                    wizardState.els.matrixGenerateBtn.disabled = !canGenerateMatrixPlans;
+                    const canAttemptMatrixGeneration = canEditMatrixDimensions;
+                    wizardState.els.matrixGenerateBtn.disabled = !canAttemptMatrixGeneration;
+                    wizardState.els.matrixGenerateBtn.title = !canAttemptMatrixGeneration
+                        ? '请先选择场景'
+                        : (!matrixConfig.enabled || !matrixStats.combinations.length
+                            ? '点击查看矩阵配置缺口'
+                            : (!enabledStrategyCount || !Array.isArray(wizardState?.addedItems) || !wizardState.addedItems.length
+                                ? '点击查看生成前置条件'
+                                : '生成矩阵计划'));
                 }
                 if (wizardState.els.matrixClearBtn instanceof HTMLButtonElement) {
                     wizardState.els.matrixClearBtn.disabled = !canEditMatrixDimensions && !dimensionList.length;
@@ -52997,22 +53024,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (wizardState.els.matrixBatchCountValue instanceof HTMLElement) {
                     wizardState.els.matrixBatchCountValue.textContent = String(displayMatrixBatchCount);
                 }
-                if (wizardState.els.matrixActionNote instanceof HTMLElement) {
-                    if (!canEditMatrixDimensions) {
-                        wizardState.els.matrixActionNote.textContent = '请先在上方切换场景，再添加矩阵维度。';
-                    } else {
-                        const recommendedKeys = getMatrixRecommendedPresetKeys(currentSceneName);
-                        const configuredKeys = new Set(dimensionList.map(item => item.key));
-                        const readyCount = recommendedKeys.filter(key => configuredKeys.has(key)).length;
-                        const missingLabels = recommendedKeys
-                            .filter(key => !configuredKeys.has(key))
-                            .map(key => getMatrixDimensionPresetByKey(key, currentSceneName)?.label || key);
-                        wizardState.els.matrixActionNote.textContent = recommendedKeys.length
-                            ? (readyCount >= recommendedKeys.length
-                                ? `推荐维度 ${readyCount}/${recommendedKeys.length}`
-                                : `推荐维度 ${readyCount}/${recommendedKeys.length} · 缺 ${missingLabels.join('、')}`)
-                            : '当前场景暂无推荐维度，可按需手动添加。';
-                    }
+                if (!canEditMatrixDimensions) {
+                    setMatrixActionNote('请先在上方切换场景，再添加矩阵维度。');
+                } else {
+                    const recommendedKeys = getMatrixRecommendedPresetKeys(currentSceneName);
+                    const configuredKeys = new Set(dimensionList.map(item => item.key));
+                    const readyCount = recommendedKeys.filter(key => configuredKeys.has(key)).length;
+                    const missingLabels = recommendedKeys
+                        .filter(key => !configuredKeys.has(key))
+                        .map(key => getMatrixDimensionPresetByKey(key, currentSceneName)?.label || key);
+                    const needsItemSelection = !Array.isArray(wizardState?.addedItems) || !wizardState.addedItems.length;
+                    const baseNote = recommendedKeys.length
+                        ? (readyCount >= recommendedKeys.length
+                            ? `推荐维度 ${readyCount}/${recommendedKeys.length}`
+                            : `推荐维度 ${readyCount}/${recommendedKeys.length} · 缺 ${missingLabels.join('、')}`)
+                        : '当前场景暂无推荐维度，可按需手动添加。';
+                    setMatrixActionNote(needsItemSelection
+                        ? `${baseNote}；请先回首页添加商品`
+                        : baseNote);
                 }
                 if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
                     wizardState.els.matrixDimensionList.classList.toggle('is-empty', !canEditMatrixDimensions);
@@ -53915,11 +53944,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             }
             if (wizardState.els.matrixGenerateBtn instanceof HTMLButtonElement) {
                 wizardState.els.matrixGenerateBtn.addEventListener('click', () => {
+                    const showMatrixGenerateFeedback = (message = '', type = 'error') => {
+                        const normalizedMessage = String(message || '').trim();
+                        if (!normalizedMessage) return;
+                        appendWizardLog(normalizedMessage, type === 'success' ? 'success' : 'error');
+                        setMatrixActionNote(normalizedMessage, type);
+                    };
                     try {
-                        const currentSceneName = getMatrixSceneName(wizardState.draft?.sceneName || '');
+                        const currentSceneName = typeof syncMatrixScenePresetContextFromEditor === 'function'
+                            ? syncMatrixScenePresetContextFromEditor()
+                            : getMatrixSceneName(wizardState.draft?.sceneName || '');
                         if (!currentSceneName) {
-                            appendWizardLog('请先在编辑页选择场景，再生成计划', 'error');
+                            showMatrixGenerateFeedback('请先在编辑页选择场景，再生成计划');
                             return;
+                        }
+                        if (typeof syncMatrixConfigFromUI === 'function') {
+                            syncMatrixConfigFromUI();
                         }
                         const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, currentSceneName);
                         const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
@@ -53931,17 +53971,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             itemCount: Array.isArray(wizardState?.addedItems) ? wizardState.addedItems.length : 0
                         });
                         if (!matrixConfig.enabled || !matrixStats.combinations.length) {
-                            appendWizardLog('请先开启矩阵并补齐至少 1 组有效组合，再生成计划', 'error');
+                            showMatrixGenerateFeedback('请先开启矩阵并补齐至少 1 组有效组合，再生成计划');
+                            return;
+                        }
+                        if (!Array.isArray(wizardState?.addedItems) || !wizardState.addedItems.length) {
+                            showMatrixGenerateFeedback('请先回首页添加商品，再回矩阵页点击“补齐5维”或添加“商品”维度后生成计划');
+                            return;
+                        }
+                        if (!enabledStrategyCount) {
+                            showMatrixGenerateFeedback('请先勾选至少 1 个计划策略后再生成矩阵计划');
                             return;
                         }
                         const req = KeywordPlanRequestBuilder.buildRequestFromWizard();
                         if (!Array.isArray(req?.plans) || !req.plans.length) {
-                            appendWizardLog('请先添加商品并勾选策略后再生成计划', 'error');
+                            showMatrixGenerateFeedback('当前矩阵没有生成可用计划，请检查商品维度、策略勾选和维度取值');
                             return;
                         }
                         const materializedStrategies = materializeStrategyListFromPlans(req.plans);
                         if (!materializedStrategies.length) {
-                            appendWizardLog('当前矩阵组合未生成有效计划，请检查维度值', 'error');
+                            showMatrixGenerateFeedback('当前矩阵组合未生成有效计划，请检查维度值');
                             return;
                         }
                         const draft = ensureWizardDraft();
@@ -53962,7 +54010,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         commitStrategyUiState();
                         appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个）`, 'success');
                     } catch (err) {
-                        appendWizardLog(`生成计划失败：${err?.message || err}`, 'error');
+                        showMatrixGenerateFeedback(`生成计划失败：${err?.message || err}`);
                     }
                 });
             }

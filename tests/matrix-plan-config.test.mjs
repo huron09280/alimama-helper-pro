@@ -65,8 +65,15 @@ test('矩阵会把当前场景字段提升为维度，并物化回 sceneSettings
   );
   assert.match(
     source,
-    /const isTrendThemeDimension = useMultiSelect && isMatrixTrendThemeFieldLabel\([\s\S]*?data-matrix-trend-theme-edit="1"[\s\S]*?添加趋势主题组合/,
-    '矩阵趋势主题维度卡片缺少新增趋势主题组合入口'
+    /const trendThemeEditorHtml = isTrendThemeDimension[\s\S]*?data-matrix-trend-theme-edit="1"[\s\S]*?添加趋势主题组合[\s\S]*?\$\{valueEditorHtml\}\s*\$\{trendThemeEditorHtml\}/,
+    '矩阵趋势主题维度卡片缺少外置常驻新增趋势主题组合入口'
+  );
+  const valuePanelStart = source.indexOf('data-matrix-dimension-picker-panel="1">\n                                    ${valueOptions.length');
+  const valuePanelEnd = source.indexOf('<select\n                                    class="am-wxt-matrix-dimension-value-select', valuePanelStart);
+  assert.ok(valuePanelStart > -1 && valuePanelEnd > valuePanelStart, '未定位到矩阵维度值下拉面板片段');
+  assert.ok(
+    !source.slice(valuePanelStart, valuePanelEnd).includes('${trendThemeEditorHtml}'),
+    '新增趋势主题组合入口仍被放在值下拉面板里，用户需要先展开下拉才能添加'
   );
   assert.match(
     source,
@@ -421,9 +428,20 @@ test('矩阵页支持一键补齐推荐 5 维并自动聚焦新增卡片', () =>
 test('矩阵页支持把组合直接物化回首页计划列表', () => {
   assert.match(
     source,
-    /wizardState\.els\.matrixGenerateBtn\.addEventListener\('click',[\s\S]*?const matrixConfig = normalizeMatrixConfig\(wizardState\?\.draft\?\.matrixConfig,\s*currentSceneName\);[\s\S]*?const req = KeywordPlanRequestBuilder\.buildRequestFromWizard\(\);[\s\S]*?const materializedStrategies = materializeStrategyListFromPlans\(req\.plans\);[\s\S]*?draft\.matrixConfig = normalizeMatrixConfig\(\{[\s\S]*?enabled:\s*false[\s\S]*?\},\s*currentSceneName\);[\s\S]*?const existingStrategyList = Array\.isArray\(wizardState\?\.strategyList\)[\s\S]*?wizardState\.strategyList = \[\.\.\.existingStrategyList,\s*\.\.\.materializedStrategies\];[\s\S]*?setWorkbenchPage\('home'\);[\s\S]*?commitStrategyUiState\(\);/,
+    /const canAttemptMatrixGeneration = canEditMatrixDimensions;[\s\S]*?wizardState\.els\.matrixGenerateBtn\.disabled = !canAttemptMatrixGeneration;[\s\S]*?点击查看生成前置条件/,
+    '矩阵页生成按钮仍被缺商品/缺策略等可诊断条件提前禁用'
+  );
+  assert.match(
+    source,
+    /const setMatrixActionNote = \(text = '', type = ''\) => \{[\s\S]*?classList\.toggle\('is-error', normalizedType === 'error'\);[\s\S]*?classList\.toggle\('is-success', normalizedType === 'success'\);/,
+    '矩阵页生成前置错误未同步显示到按钮附近'
+  );
+  assert.match(
+    source,
+    /wizardState\.els\.matrixGenerateBtn\.addEventListener\('click',[\s\S]*?const showMatrixGenerateFeedback = \(message = '', type = 'error'\) => \{[\s\S]*?appendWizardLog\(normalizedMessage, type === 'success' \? 'success' : 'error'\);[\s\S]*?setMatrixActionNote\(normalizedMessage, type\);[\s\S]*?syncMatrixScenePresetContextFromEditor\(\)[\s\S]*?syncMatrixConfigFromUI\(\);[\s\S]*?const matrixConfig = normalizeMatrixConfig\(wizardState\?\.draft\?\.matrixConfig,\s*currentSceneName\);[\s\S]*?请先回首页添加商品，再回矩阵页点击“补齐5维”或添加“商品”维度后生成计划[\s\S]*?const req = KeywordPlanRequestBuilder\.buildRequestFromWizard\(\);[\s\S]*?const materializedStrategies = materializeStrategyListFromPlans\(req\.plans\);[\s\S]*?draft\.matrixConfig = normalizeMatrixConfig\(\{[\s\S]*?enabled:\s*false[\s\S]*?\},\s*currentSceneName\);[\s\S]*?const existingStrategyList = Array\.isArray\(wizardState\?\.strategyList\)[\s\S]*?wizardState\.strategyList = \[\.\.\.existingStrategyList,\s*\.\.\.materializedStrategies\];[\s\S]*?setWorkbenchPage\('home'\);[\s\S]*?commitStrategyUiState\(\);/,
     '矩阵页生成计划按钮未把组合物化回首页列表'
   );
+  assert.match(source, /\.am-wxt-matrix-action-note\.is-error/, '矩阵页前置错误缺少可见错误态样式');
 });
 
 test('矩阵物化后的计划会绑定回具体商品，避免首页再次按商品池展开', () => {
