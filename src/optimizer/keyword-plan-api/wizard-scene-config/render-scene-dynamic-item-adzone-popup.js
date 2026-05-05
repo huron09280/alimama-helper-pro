@@ -145,27 +145,6 @@
                         .replace(/[｜|【】\[\]（）()「」《》,，;；:：]/g, ' ')
                         .replace(/\s+/g, ' ')
                         .trim();
-                    const TREND_ASSOCIATION_CORE_TERMS = [
-                        '消毒碗柜',
-                        '嵌入式消毒柜',
-                        '嵌入式洗碗机',
-                        '台式洗碗机',
-                        '水槽洗碗机',
-                        '全自动洗碗机',
-                        '家用洗碗机',
-                        '洗碗机',
-                        '消毒柜',
-                        '洗碗粉',
-                        '洗碗块',
-                        '清洁剂',
-                        '空调',
-                        '冰箱',
-                        '洗衣机',
-                        '烟机',
-                        '灶具',
-                        '热水器',
-                        '净水器'
-                    ];
                     const collectTrendAssociationThemeNames = () => uniqueBy(
                         []
                             .concat(selectedThemes || [])
@@ -178,17 +157,54 @@
                             .filter(item => item.length >= 2),
                         item => item.toLowerCase()
                     );
-                    const buildTrendAssociationCoreQueries = (text = '') => {
+                    const extractTrendAssociationCandidateTerms = (text = '') => {
+                        const normalizedText = normalizeTrendAssociationQueryCandidate(text);
+                        if (!normalizedText) return [];
+                        const terms = [];
+                        normalizedText
+                            .split(/\s+/g)
+                            .map(token => token.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]+/g, '').trim())
+                            .filter(token => token && !/^\d+$/.test(token))
+                            .forEach((token) => {
+                                if (token.length >= 2 && token.length <= 18) {
+                                    terms.push(token);
+                                }
+                                const cjkSegments = token.match(/[\u4e00-\u9fa5]{2,}/g) || [];
+                                cjkSegments.forEach((segment) => {
+                                    if (segment.length <= 4) {
+                                        terms.push(segment);
+                                        return;
+                                    }
+                                    [8, 6, 4].forEach((size) => {
+                                        if (segment.length < size) return;
+                                        terms.push(segment.slice(0, size));
+                                        terms.push(segment.slice(-size));
+                                    });
+                                });
+                            });
+                        return uniqueBy(
+                            terms
+                                .map(item => normalizeTrendAssociationQueryCandidate(item))
+                                .filter(item => item.length >= 2 && item.length <= 18),
+                            item => item.toLowerCase()
+                        ).slice(0, 24);
+                    };
+                    const collectTrendAssociationDynamicTerms = (text = '') => {
                         const normalizedText = normalizeTrendAssociationQueryCandidate(text);
                         const haystack = normalizedText.toLowerCase();
-                        if (!haystack) return [];
                         const themeMatches = collectTrendAssociationThemeNames()
-                            .filter(name => haystack.includes(name.toLowerCase()))
+                            .filter(name => haystack && haystack.includes(name.toLowerCase()))
                             .sort((left, right) => right.length - left.length);
-                        const coreMatches = TREND_ASSOCIATION_CORE_TERMS
-                            .filter(name => haystack.includes(name.toLowerCase()));
                         return uniqueBy(
-                            themeMatches.concat(coreMatches),
+                            themeMatches.concat(extractTrendAssociationCandidateTerms(normalizedText)),
+                            item => item.toLowerCase()
+                        ).slice(0, 12);
+                    };
+                    const buildTrendAssociationCoreQueries = (text = '') => {
+                        const normalizedText = normalizeTrendAssociationQueryCandidate(text);
+                        return uniqueBy(
+                            collectTrendAssociationDynamicTerms(normalizedText)
+                                .filter(item => item !== normalizedText),
                             item => item.toLowerCase()
                         ).slice(0, 8);
                     };

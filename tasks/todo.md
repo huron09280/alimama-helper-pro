@@ -1,3 +1,96 @@
+# TODO - 2026-05-05 修复最近提交审查发现
+
+## 需求规格
+- 目标：
+  - 修复审查发现的 5 个问题：场景字段矩阵维度未物化、生成矩阵计划后源策略仍可提交、矩阵测试缺少行为覆盖、build check 未逐项校验 dist、趋势联想降级词硬编码单一类目；
+  - 保持矩阵页现有 UI、趋势主题弹窗、关键词推广目标契约不退化；
+  - 不真实提交线上计划，验证到构建产物、行为测试和静态检查。
+- 成功标准：
+  - `scene_field:*` 维度在 `materializePlansFromMatrix` 输出中写入 `sceneSettings/sceneSettingValues`，趋势主题写入 `campaign.trendThemeList`；
+  - 矩阵页生成计划后，本次参与物化的模板策略不会继续作为 enabled 策略提交；
+  - 新增行为测试能在 P1 漏洞复现时失败；
+  - `node scripts/build.mjs --check` 会逐项比对根 userscript、dist package 与 extension 产物内容；
+  - 趋势联想降级候选不再依赖硬编码家电词表；
+  - 目标测试、全量测试、构建同步检查和 `review-team` 通过。
+
+## 执行计划（可核对）
+- [x] 回顾审查 finding 与历史 lessons，确认修复边界。
+- [x] 修复矩阵 `scene_field:*` 物化链路。
+- [x] 修复矩阵生成后源模板策略仍可提交的问题。
+- [x] 补充矩阵物化行为测试，避免源码正则误判通过。
+- [x] 强化 `scripts/build.mjs --check`，逐项比较已提交构建产物。
+- [x] 将趋势联想降级词改为动态候选生成。
+- [x] 运行构建、语法、目标测试、全量测试、`review-team` 和 `git diff --check`。
+- [x] 更新改动摘要、验证记录、结果复盘和 lessons。
+
+## 改动摘要
+- `src/optimizer/keyword-plan-api/matrix.js`：`applyMatrixCombinationBindingsToPlan` 在固定维度后遍历动态 `scene_field:*`，复用既有 `applyMatrixDimensionBindingToPlan` 写回 `sceneSettings/sceneSettingValues`，趋势主题会同步到 `campaign.trendThemeList`。
+- `src/optimizer/keyword-plan-api/request-builder-preview.js`：矩阵页生成计划成功后，先暂停当前所有 enabled 源策略，再追加物化策略，避免后续提交模板计划与矩阵计划并存；成功日志补充源模板暂停数量。
+- `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-item-adzone-popup.js`：移除家电类目硬编码降级词，改为从已选/默认/候选/红榜主题和商品标题动态提取候选词。
+- `scripts/build.mjs`：新增 `listExpectedBuildOutputs` 与 `assertBuildOutputsSynced`，`--check` 逐项比对根 userscript、`dist/packages`、`dist/extension` 文本产物与 icon 二进制产物。
+- 测试：新增 `tests/matrix-scene-field-materialize-behavior.test.mjs` 行为测试；更新矩阵、趋势主题和构建同步契约测试；重新生成根 userscript、package userscript 和 extension page bundle。
+
+## 验证记录
+- `node --test tests/matrix-scene-field-materialize-behavior.test.mjs`：通过，2/2。
+- `node scripts/build.mjs`：通过，已生成根脚本、package 和 extension 产物。
+- `node --test tests/build-output-sync.test.mjs tests/matrix-plan-config.test.mjs tests/matrix-scene-field-materialize-behavior.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，32/32。
+- `node scripts/build.mjs --check`：通过，逐项校验构建产物同步。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `git diff --check`：通过。
+- `node --test tests/*.test.mjs`：通过，426 个测试，424 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP（2026-05-05）：真实 `one.alimama.com` 页面确认阿里助手 Pro v7.02 已运行；打开 `关键词推广批量建计划 API 向导`，进入矩阵页，点击 `生成计划` 后在当前矩阵页可见前置提示 `请先开启矩阵并补齐至少 1 组有效组合，再生成计划`；未点击 `立即投放`，未真实创建或提交线上计划。
+
+## 结果复盘
+- 这次修复的关键是把断言从“代码片段存在”推进到“最终物化输出正确”：新增行为测试直接构造 `scene_field:冷启加速` 和 `scene_field:趋势主题` 组合，证明 `materializePlansFromMatrix()` 输出包含最终请求所需字段。
+- 矩阵生成计划后，源模板策略的提交语义必须立即处理；否则 UI 已显示矩阵计划，但提交层仍会按 enabled 策略额外创建模板计划。
+- `build --check` 必须覆盖所有已提交发布产物，不能只比较根脚本和内存 bundle 关键字；否则 release 产物漂移会被遗漏。
+- 通用趋势主题联想不能继续堆行业词表，应优先复用当前主题和商品标题上下文生成降级候选。
+
+# TODO - 2026-05-05 最近提交正确性与维护性审查
+
+## 需求规格
+- 目标：
+  - 审查最近提交记录，重点评估矩阵页生成计划、趋势主题组合、关键词推广目标契约相关改动的正确性风险；
+  - 识别可能导致线上行为退化、测试覆盖不足或后续维护困难的隐患；
+  - 只做审查与风险评估，不改业务代码，除非发现必须立即修复的确定缺陷。
+- 成功标准：
+  - 明确本次审查覆盖的提交范围；
+  - 对每个高风险发现给出文件、行号、影响说明和建议方向；
+  - 核对相关测试与构建记录是否足以支撑交付；
+  - 在本文件记录审查摘要和复盘。
+
+## 执行计划（可核对）
+- [x] 确定最近提交范围和各提交意图。
+- [x] 并行审查核心业务 diff、测试 diff 与构建产物同步风险。
+- [x] 汇总正确性风险、可维护性隐患和残余测试缺口。
+- [x] 更新本节改动摘要、验证记录和结果复盘。
+- [x] 向用户输出 code review 风格结论。
+
+## 改动摘要
+- 本次覆盖最近 4 个提交：`aaf6782`、`4a6d14a`、`9456685`、`3898234`。
+- 主要正确性风险：
+  - P1：`scene_field:*` 矩阵维度没有进入 `applyMatrixCombinationBindingsToPlan` 的物化循环，导致 `选择趋势主题`、冷启加速、预算类型等场景字段维度只影响 UI/摘要，不写入最终计划。
+  - P2：矩阵页点击 `生成计划` 后把物化策略追加到原策略列表，但未禁用或排除源模板策略，后续提交可能同时包含原始计划和矩阵计划。
+- 主要可维护性风险：
+  - 多个新增测试仍以生成 userscript 的源码正则为主，能证明代码片段存在，但不能证明请求组包、矩阵物化和趋势主题序列化真实执行正确。
+  - `scripts/build.mjs --check` 当前没有逐项比较已提交的 `dist/packages/*` 与 `dist/extension/*` 内容，当前 HEAD 实际同步，但守卫不完整。
+  - 趋势主题联想降级词硬编码为家电类目词，后续扩展到其它行业会继续堆积领域词。
+
+## 验证记录
+- `git show --stat --summary --find-renames --date=iso-strict --format=fuller -n 4`：已确认最近 4 个提交范围。
+- `node --test tests/matrix-plan-config.test.mjs tests/keyword-trend-theme-setting.test.mjs tests/keyword-search-p0-contract.test.mjs tests/keyword-custom-preview-submit-parity.test.mjs`：通过，36/36。
+- `node scripts/build.mjs --check`：通过。
+- 子代理只读审查：
+  - 矩阵生成链路审查确认 P1 `scene_field:*` 未物化、P2 源策略仍参与后续提交。
+  - 趋势主题链路审查确认 P1 同根因，并指出家电类目降级词硬编码。
+  - 测试/构建审查确认当前产物同步，但测试和 build check 守卫不足。
+
+## 结果复盘
+- 最近提交的 UI 验证和源码契约测试覆盖了入口、按钮、弹窗和草稿写回，但没有覆盖“矩阵组合字段真实进入最终 payload”的行为路径。
+- 最高优先级修复应先让 `applyMatrixCombinationBindingsToPlan` 遍历并应用 `scene_field:*`，再补行为测试；否则趋势主题组合等矩阵新增能力会停留在界面层。
+- 第二优先级是明确矩阵生成后源策略的状态语义：追加矩阵计划时是否应禁用模板、替换模板或给模板加不可提交状态。
+
 # TODO - 2026-05-05 矩阵页趋势主题组合常驻入口
 
 ## 需求规格

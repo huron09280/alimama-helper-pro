@@ -2013,7 +2013,16 @@
                         const existingStrategyList = Array.isArray(wizardState?.strategyList)
                             ? wizardState.strategyList
                             : [];
-                        wizardState.strategyList = [...existingStrategyList, ...materializedStrategies];
+                        const disabledTemplateCount = existingStrategyList.filter(item => item?.enabled !== false).length;
+                        const nextExistingStrategyList = existingStrategyList.map((strategy) => {
+                            if (!isPlainObject(strategy)) return strategy;
+                            if (strategy.enabled === false) return strategy;
+                            return {
+                                ...strategy,
+                                enabled: false
+                            };
+                        });
+                        wizardState.strategyList = [...nextExistingStrategyList, ...materializedStrategies];
                         wizardState.editingStrategyId = materializedStrategies[0]?.id || wizardState.strategyList[0]?.id || '';
                         if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
                             wizardState.els.matrixEnabledInput.checked = false;
@@ -2021,7 +2030,7 @@
                         setDetailVisible(false);
                         setWorkbenchPage('home');
                         commitStrategyUiState();
-                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个）`, 'success');
+                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个），源模板已暂停 ${disabledTemplateCount} 个`, 'success');
                     } catch (err) {
                         showMatrixGenerateFeedback(`生成计划失败：${err?.message || err}`);
                     }

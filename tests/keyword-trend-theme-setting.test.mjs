@@ -138,8 +138,13 @@ test('趋势主题弹窗读取原生推荐并按对象结构保存', () => {
     );
     assert.match(
         popupBlock,
-        /const buildTrendAssociationCoreQueries = \(text = ''\)[\s\S]*collectTrendAssociationThemeNames\(\)[\s\S]*TREND_ASSOCIATION_CORE_TERMS[\s\S]*const resolveAssociationSearchQueries = \(query = ''\)[\s\S]*buildTrendAssociationCoreQueries\(`\$\{selectedItemText\} \$\{directQuery\}`\)[\s\S]*fetchAssociationThemes\(queryCandidate\)[\s\S]*联想词/,
-        '趋势主题联想区未在宝贝完整标题无结果时降级到核心趋势词继续搜索'
+        /const collectTrendAssociationThemeNames = \(\) => uniqueBy[\s\S]*?const extractTrendAssociationCandidateTerms = \(text = ''\)[\s\S]*?const collectTrendAssociationDynamicTerms = \(text = ''\)[\s\S]*?collectTrendAssociationThemeNames\(\)[\s\S]*?extractTrendAssociationCandidateTerms\(normalizedText\)[\s\S]*?const buildTrendAssociationCoreQueries = \(text = ''\)[\s\S]*?collectTrendAssociationDynamicTerms\(normalizedText\)[\s\S]*?const resolveAssociationSearchQueries = \(query = ''\)[\s\S]*?buildTrendAssociationCoreQueries\(`\$\{selectedItemText\} \$\{directQuery\}`\)[\s\S]*?fetchAssociationThemes\(queryCandidate\)[\s\S]*?联想词/,
+        '趋势主题联想区未在宝贝完整标题无结果时基于主题与标题动态降级搜索'
+    );
+    assert.doesNotMatch(
+        popupBlock,
+        /TREND_ASSOCIATION_CORE_TERMS|消毒碗柜|洗碗机|消毒柜|空调|冰箱|洗衣机|烟机|灶具|热水器|净水器/,
+        '趋势主题联想区仍残留单一类目的硬编码降级词'
     );
     assert.match(
         popupBlock,

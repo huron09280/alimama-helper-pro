@@ -103,6 +103,7 @@ const readText = (relativePath) => readFileSync(path.join(ROOT_DIR, relativePath
 const ensureDir = (dir) => mkdirSync(dir, { recursive: true });
 const normalizeTrailingNewline = (text) => (text.endsWith('\n') ? text : `${text}\n`);
 const toPosixRelativePath = (absolutePath) => path.relative(ROOT_DIR, absolutePath).split(path.sep).join('/');
+const formatBuildOutputPath = (absolutePath) => toPosixRelativePath(absolutePath) || absolutePath;
 
 const collectJsFilesRecursively = (absoluteDir) => {
     const stack = [absoluteDir];
@@ -249,14 +250,63 @@ export const renderBuildOutputs = () => {
 };
 
 const readExisting = (absolutePath) => (existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null);
+const readExistingBuffer = (absolutePath) => (existsSync(absolutePath) ? readFileSync(absolutePath) : null);
+
+export const listExpectedBuildOutputs = (outputs = renderBuildOutputs()) => ([
+    {
+        type: 'text',
+        path: path.join(ROOT_DIR, ROOT_SCRIPT_FILE),
+        expected: outputs.userscriptSource
+    },
+    {
+        type: 'text',
+        path: path.join(PACKAGE_DIR, 'alimama-helper-pro.user.js'),
+        expected: outputs.userscriptSource
+    },
+    {
+        type: 'text',
+        path: path.join(PACKAGE_DIR, 'alimama-helper-pro.meta.js'),
+        expected: outputs.metaSource
+    },
+    ...Object.entries(outputs.extensionFiles).map(([filename, content]) => ({
+        type: 'text',
+        path: path.join(EXTENSION_DIR, filename),
+        expected: content
+    })),
+    ...EXTENSION_ICON_FILES.map((filename) => {
+        const sourcePath = path.join(EXTENSION_ICON_DIR, filename);
+        if (!existsSync(sourcePath)) {
+            throw new Error(`extension icon 源文件缺失: src/entries/extension-icons/${filename}`);
+        }
+        return {
+            type: 'binary',
+            path: path.join(EXTENSION_DIR, filename),
+            sourcePath,
+            expected: readFileSync(sourcePath)
+        };
+    })
+]);
+
+export const assertBuildOutputsSynced = (outputs = renderBuildOutputs()) => {
+    listExpectedBuildOutputs(outputs).forEach((entry) => {
+        if (entry.type === 'binary') {
+            const current = readExistingBuffer(entry.path);
+            if (!current || Buffer.compare(current, entry.expected) !== 0) {
+                throw new Error(`构建产物未与 src 同步，请先运行 node scripts/build.mjs: ${formatBuildOutputPath(entry.path)}`);
+            }
+            return;
+        }
+        const current = readExisting(entry.path);
+        if (current !== entry.expected) {
+            throw new Error(`构建产物未与 src 同步，请先运行 node scripts/build.mjs: ${formatBuildOutputPath(entry.path)}`);
+        }
+    });
+    return outputs;
+};
 
 export const checkBuildOutputs = () => {
     const outputs = renderBuildOutputs();
-    const rootScriptPath = path.join(ROOT_DIR, ROOT_SCRIPT_FILE);
-    const currentRoot = readExisting(rootScriptPath);
-    if (currentRoot !== outputs.userscriptSource) {
-        throw new Error(`根文件未与 src 同步，请先运行 node scripts/build.mjs: ${ROOT_SCRIPT_FILE}`);
-    }
+    assertBuildOutputsSynced(outputs);
 
     const extensionBundle = outputs.extensionFiles['page.bundle.js'];
     if (!extensionBundle.includes('__ALIMAMA_OPTIMIZER_TOGGLE__')) {
@@ -265,12 +315,6 @@ export const checkBuildOutputs = () => {
     if (!extensionBundle.includes('GM_getValue')) {
         throw new Error('extension page bundle 缺少 GM 兼容层');
     }
-
-    EXTENSION_ICON_FILES.forEach((filename) => {
-        if (!existsSync(path.join(EXTENSION_ICON_DIR, filename))) {
-            throw new Error(`extension icon 文件缺失: src/entries/extension-icons/${filename}`);
-        }
-    });
 
     return outputs;
 };

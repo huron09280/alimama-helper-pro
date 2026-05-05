@@ -172,6 +172,11 @@ test('矩阵会把当前场景字段提升为维度，并物化回 sceneSettings
   );
   assert.match(
     source,
+    /const applyMatrixCombinationBindingsToPlan = \(plan = \{\}, combination = \{\}, options = \{\}\) => \{[\s\S]*?matrixValues[\s\S]*?\.filter\(item => isMatrixSceneFieldBindingKey\(item\.bindingKey\)\)[\s\S]*?applyMatrixDimensionBindingToPlan\(plan,\s*item,\s*options\);/,
+    '矩阵组合物化未遍历动态 scene_field:* 维度，场景字段仍可能只影响 UI'
+  );
+  assert.match(
+    source,
     /const SCENE_CONNECTED_SETTING_LABEL_RE = \/.*匹配方式.*流量智选.*开启冷启加速.*冷启加速.*套餐包.*\$\//,
     '场景连通字段白名单未放开矩阵场景维度'
   );
@@ -438,8 +443,13 @@ test('矩阵页支持把组合直接物化回首页计划列表', () => {
   );
   assert.match(
     source,
-    /wizardState\.els\.matrixGenerateBtn\.addEventListener\('click',[\s\S]*?const showMatrixGenerateFeedback = \(message = '', type = 'error'\) => \{[\s\S]*?appendWizardLog\(normalizedMessage, type === 'success' \? 'success' : 'error'\);[\s\S]*?setMatrixActionNote\(normalizedMessage, type\);[\s\S]*?syncMatrixScenePresetContextFromEditor\(\)[\s\S]*?syncMatrixConfigFromUI\(\);[\s\S]*?const matrixConfig = normalizeMatrixConfig\(wizardState\?\.draft\?\.matrixConfig,\s*currentSceneName\);[\s\S]*?请先回首页添加商品，再回矩阵页点击“补齐5维”或添加“商品”维度后生成计划[\s\S]*?const req = KeywordPlanRequestBuilder\.buildRequestFromWizard\(\);[\s\S]*?const materializedStrategies = materializeStrategyListFromPlans\(req\.plans\);[\s\S]*?draft\.matrixConfig = normalizeMatrixConfig\(\{[\s\S]*?enabled:\s*false[\s\S]*?\},\s*currentSceneName\);[\s\S]*?const existingStrategyList = Array\.isArray\(wizardState\?\.strategyList\)[\s\S]*?wizardState\.strategyList = \[\.\.\.existingStrategyList,\s*\.\.\.materializedStrategies\];[\s\S]*?setWorkbenchPage\('home'\);[\s\S]*?commitStrategyUiState\(\);/,
-    '矩阵页生成计划按钮未把组合物化回首页列表'
+    /wizardState\.els\.matrixGenerateBtn\.addEventListener\('click',[\s\S]*?const showMatrixGenerateFeedback = \(message = '', type = 'error'\) => \{[\s\S]*?appendWizardLog\(normalizedMessage, type === 'success' \? 'success' : 'error'\);[\s\S]*?setMatrixActionNote\(normalizedMessage, type\);[\s\S]*?syncMatrixScenePresetContextFromEditor\(\)[\s\S]*?syncMatrixConfigFromUI\(\);[\s\S]*?const matrixConfig = normalizeMatrixConfig\(wizardState\?\.draft\?\.matrixConfig,\s*currentSceneName\);[\s\S]*?请先回首页添加商品，再回矩阵页点击“补齐5维”或添加“商品”维度后生成计划[\s\S]*?const req = KeywordPlanRequestBuilder\.buildRequestFromWizard\(\);[\s\S]*?const materializedStrategies = materializeStrategyListFromPlans\(req\.plans\);[\s\S]*?draft\.matrixConfig = normalizeMatrixConfig\(\{[\s\S]*?enabled:\s*false[\s\S]*?\},\s*currentSceneName\);[\s\S]*?const existingStrategyList = Array\.isArray\(wizardState\?\.strategyList\)[\s\S]*?const disabledTemplateCount = existingStrategyList\.filter\(item => item\?\.enabled !== false\)\.length;[\s\S]*?const nextExistingStrategyList = existingStrategyList\.map[\s\S]*?strategy\.enabled === false[\s\S]*?enabled:\s*false[\s\S]*?wizardState\.strategyList = \[\.\.\.nextExistingStrategyList,\s*\.\.\.materializedStrategies\];[\s\S]*?setWorkbenchPage\('home'\);[\s\S]*?commitStrategyUiState\(\);/,
+    '矩阵页生成计划按钮未暂停源模板并把组合物化回首页列表'
+  );
+  assert.doesNotMatch(
+    source,
+    /wizardState\.strategyList = \[\.\.\.existingStrategyList,\s*\.\.\.materializedStrategies\];/,
+    '矩阵页生成计划后仍会保留源模板启用态，可能重复提交'
   );
   assert.match(source, /\.am-wxt-matrix-action-note\.is-error/, '矩阵页前置错误缺少可见错误态样式');
 });
