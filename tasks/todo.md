@@ -1,3 +1,239 @@
+# TODO - 2026-05-04 维度卡片支持新增趋势主题组合
+
+## 需求规格
+- 目标：
+  - 修复矩阵页 `选择趋势主题` 维度卡只能选择 `清空趋势主题` 的问题；
+  - 在维度卡片内提供新增/编辑趋势主题组合的入口，复用已有趋势主题选择能力；
+  - 新增组合后进入该维度卡的可选值，并可被勾选为矩阵组合值；
+  - 保持最终写回 `campaign.trendThemeList`。
+- 成功标准：
+  - `选择趋势主题` 维度卡中，值下拉除 `清空趋势主题` 外有可新增趋势主题组合的入口；
+  - 从卡片入口选择趋势主题后，卡片值摘要显示 `已选 N/6：...`，而不是只有 `清空趋势主题`；
+  - 回归测试、构建同步和真实页面 UI 验证通过；
+  - 不真实提交线上计划。
+
+## 执行计划（可核对）
+- [x] 回顾 lessons，确认矩阵字段修复要覆盖维度卡片完整交互。
+- [x] 定位编辑页趋势主题弹窗打开、确认、写回链路。
+  - 已确认编辑页 `openKeywordTrendThemeSettingPopup` 返回 `trendThemeRaw/summary`，现有实现只依赖 `campaign.trendThemeList` 隐藏控件，需要改成可接收外部初始值的复用入口。
+- [x] 为矩阵趋势主题维度卡增加新增/编辑组合入口，并将结果写回当前行。
+  - 已在 `选择趋势主题` 多选面板中加入 `添加趋势主题组合`，确认后写回当前维度并刷新矩阵摘要。
+- [x] 更新回归测试覆盖卡片入口和写回摘要。
+  - 已覆盖矩阵卡片入口、脱离隐藏字段模式复用趋势主题弹窗、保存后写回当前维度。
+- [x] 运行构建、语法、目标测试、全量测试和 `review-team`。
+- [x] 使用 `chrome-devtools` MCP 在真实 `one.alimama.com` 页面复验。
+- [x] 更新 lessons 与结果复盘。
+
+## 改动摘要
+- 已将编辑页趋势主题弹窗改成可复用入口：保留原隐藏控件写回方式，同时支持矩阵页传入 `initialRaw` 的 detached 模式。
+- 已在矩阵趋势主题维度卡片的值下拉面板中增加 `添加趋势主题组合` 按钮，复用同一个趋势主题弹窗。
+- 已在矩阵维度卡片点击链路中处理弹窗确认结果，将 `trendThemeRaw` 加入当前维度值，移除默认 `清空趋势主题`，并刷新草稿/摘要/预览。
+- 已补充趋势主题弹窗和矩阵配置回归测试。
+
+## 验证记录
+- `node scripts/build.mjs`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/matrix-plan-config.test.mjs tests/keyword-trend-theme-setting.test.mjs tests/matrix-bid-target-cost-package.test.mjs`：通过，36/36。
+- `node scripts/build.mjs --check`：通过。
+- `node --test tests/*.test.mjs`：通过，423 个测试，421 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `git diff --check`：通过。
+- `chrome-devtools` MCP（2026-05-04）：刷新 unpacked extension 后，在真实 `one.alimama.com` 页面打开 API 向导，矩阵页切到 `关键词推广 -> 趋势明星`，维度卡片新增 `选择趋势主题` 后，值下拉除 `清空趋势主题` 外已显示 `添加趋势主题组合`。
+- `chrome-devtools` MCP（2026-05-04）：点击 `添加趋势主题组合` 后成功打开趋势主题弹窗；确认默认推荐后，卡片值摘要显示 `已选 1 项：已选 5/6：美的消毒碗柜、消毒碗柜、消毒碗柜家用等`，可选项中同步出现当前 JSON 组合值；验证后已清理向导草稿，未触发真实计划提交。
+
+## 结果复盘
+- 根因是前两轮已经让矩阵页能添加 `选择趋势主题` 维度，但维度值编辑器仍只按已有值渲染；当编辑页没有预先保存趋势主题时，候选列表自然只剩 `清空趋势主题`。
+- 修复策略是把编辑页趋势主题弹窗改成可复用的 detached 模式，并通过窄桥暴露给矩阵页；矩阵卡片确认后把 `trendThemeRaw` 序列化为当前维度值，再复用现有矩阵物化写回 `campaign.trendThemeList`。
+- 本轮未真实创建或提交线上计划；真实页面验证只覆盖插件运行态、矩阵维度值入口、弹窗选择、卡片摘要和草稿清理。
+
+# TODO - 2026-05-04 维度卡片补齐 `趋势主题` 添加入口
+
+## 需求规格
+- 目标：
+  - 修复矩阵页 `维度卡片` 中不能自然增加 `趋势主题` 的问题；
+  - 在 `关键词推广 -> 趋势明星` 下，除快捷预设外，维度卡片的新增/选择路径也必须能选到 `选择趋势主题`；
+  - 保持最终写回 `campaign.trendThemeList` 与可读摘要逻辑不变。
+- 成功标准：
+  - 点击 `添加维度` 时，若当前目标为 `趋势明星` 且尚未添加趋势主题，应优先新增 `选择趋势主题`；
+  - 维度卡片的维度类型下拉可见 `选择趋势主题`；
+  - 回归测试、构建同步和真实页面 UI 验证通过；
+  - 不真实提交线上计划。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md`，确认矩阵页不能只验证快捷预设路径。
+- [x] 定位维度卡片 `添加维度` 与维度类型下拉的候选生成链路。
+- [x] 将 `选择趋势主题` 接入维度卡片新增优先级与类型候选。
+- [x] 更新回归测试覆盖维度卡片添加路径。
+- [x] 运行构建、语法、目标测试、全量测试和 `review-team`。
+- [x] 使用 `chrome-devtools` MCP 在真实 `one.alimama.com` 页面复验。
+- [x] 更新 `tasks/lessons.md` 与结果复盘。
+
+## 改动摘要
+- 已确认维度卡片底部 `添加维度` 只取 `getNextAvailableMatrixPresetKey` 的第一个结果；此前排序先给预算、出价、前缀、商品，导致 `选择趋势主题` 虽在候选目录内，但用户很难从卡片路径直接新增。
+- 已新增当前营销目标专属字段优先级：`getMatrixAppendablePresetKeys` 会先取当前目标的场景字段，再取通用推荐维度。
+- 在 `关键词推广 -> 趋势明星` 下，维度卡片 `添加维度` 会优先新增 `选择趋势主题`；维度类型下拉仍保留 `选择趋势主题` 可选。
+- 已补充回归断言，防止维度卡片添加入口再次只按通用推荐维度排序。
+
+## 验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，24/24。
+- `node --test tests/matrix-plan-config.test.mjs tests/keyword-trend-theme-setting.test.mjs tests/matrix-bid-target-cost-package.test.mjs`：通过，36/36。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- `node --test tests/*.test.mjs`：通过，423 个测试，421 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `git diff --check`：通过。
+- `chrome-devtools` MCP（2026-05-04）：刷新 unpacked extension 后，在真实 `one.alimama.com` 页面打开 API 向导，矩阵页 `关键词推广 -> 趋势明星` 下，维度卡片 `添加维度` 显示 `下一个可加：选择趋势主题`，其 `data-matrix-preset-key` 为 `scene_field:趋势主题`。
+- `chrome-devtools` MCP（2026-05-04）：点击维度卡片 `添加维度` 后新增 `选择趋势主题` 行，维度类型下拉包含 `选择趋势主题`；新增后下一张添加卡显示 `冷启加速`，未再暴露 `scene_field:*` 内部 key；随后已移除验证行，未触发真实计划提交。
+
+## 结果复盘
+- 根因是上一轮只把当前目标专属字段前置到了快捷预设目录，维度卡片底部 `添加维度` 仍按通用推荐维度排序，所以趋势主题被排在预算/出价/前缀/商品之后。
+- 修复策略是把“当前营销目标专属字段”抽成维度卡片追加优先级，并且只保留当前 catalog 中真实可编辑的 key，避免 `scene_field:出价目标` 这类被固定维度承接的内部 key 显示出来。
+- 本轮未真实创建或提交线上计划；真实页面验证只覆盖插件运行态、维度卡片添加入口、维度行新增和清理。
+
+# TODO - 2026-05-04 矩阵页补齐 `趋势明星` 的 `选择趋势主题`
+
+## 需求规格
+- 目标：
+  - 修复批量建计划 API 向导矩阵页中 `关键词推广 -> 趋势明星` 的预设条件缺口；
+  - 让矩阵页在切到 `趋势明星` 后可以看到编辑页已有的 `选择趋势主题` 能力；
+  - 矩阵组合写回时保留 `campaign.trendThemeList`，避免只写中文展示字段导致最终请求丢失趋势主题。
+- 成功标准：
+  - 矩阵页 `关键词推广 -> 趋势明星` 快捷预设出现 `选择趋势主题`；
+  - 新增维度后默认带入当前编辑页已选趋势主题集合，可作为矩阵组合值使用；
+  - 矩阵物化计划时同步写入 `campaign.trendThemeList`；
+  - 回归测试、构建同步和真实页面 UI 验证通过；
+  - 不真实提交线上计划。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md`，确认目标专属原生控件不能只靠通用字段兜底。
+- [x] 定位编辑页 `选择趋势主题` 的控件、隐藏字段和最终请求映射。
+- [x] 将 `选择趋势主题` 纳入矩阵页 `趋势明星` 目标专属预设。
+- [x] 增加矩阵趋势主题值的安全写回逻辑，保证落到 `campaign.trendThemeList`。
+- [x] 更新回归测试覆盖矩阵预设、默认值和物化写回。
+- [x] 运行构建、语法、目标测试、全量测试和 `review-team`。
+- [x] 使用 `chrome-devtools` MCP 在真实 `one.alimama.com` 页面复验。
+- [x] 更新 `tasks/lessons.md` 与结果复盘。
+
+## 改动摘要
+- 已将 `关键词推广 -> 趋势明星` 的矩阵快捷预设补齐 `选择趋势主题`，并保留目标专属顺序：`选择趋势主题 / 出价目标 / 冷启加速 / 预算类型 / 人群设置 / 人群优化目标`。
+- 已为趋势主题增加矩阵专用适配：从编辑页当前 `campaign.trendThemeList` 生成可选组合值，摘要显示 `已选 N 项` 或 `清空趋势主题`，避免把底层 JSON 直接展示给用户。
+- 已在矩阵物化计划时把该维度同步写回 `campaign.trendThemeList`，同时兼容中文展示字段，确保最终请求不会丢失趋势主题。
+- 已更新矩阵回归测试，覆盖预设出现、复杂值不过滤、可选值生成和计划物化写回。
+
+## 验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，24/24。
+- `node --test tests/matrix-plan-config.test.mjs tests/keyword-trend-theme-setting.test.mjs tests/matrix-bid-target-cost-package.test.mjs`：通过，36/36。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- `node --test tests/*.test.mjs`：通过，423 个测试，421 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `git diff --check`：通过。
+- `chrome-devtools` MCP（2026-05-04）：刷新 unpacked extension 后，在真实 `one.alimama.com` `关键词推广 -> 搜索卡位` 页面打开 API 向导，矩阵页切到 `关键词推广 -> 趋势明星`，快捷预设已显示 `选择趋势主题`，其 key 为 `scene_field:趋势主题`。
+- `chrome-devtools` MCP（2026-05-04）：点击 `选择趋势主题` 预设后新增维度行，展示为 `选择趋势主题`，值摘要为 `清空趋势主题`，未出现底层 JSON；随后已移除该验证维度，未触发真实计划提交。
+
+## 结果复盘
+- 根因是趋势主题属于目标专属复杂弹窗字段，底层请求字段为 `campaign.trendThemeList`；矩阵页原有的通用场景字段过滤会排除 JSON 复杂值，且只写中文字段不足以驱动最终请求。
+- 修复策略是在矩阵层为趋势主题建立轻量适配：UI 预设、可读摘要、值选项和请求写回一起补齐，不把它伪装成普通文本维度。
+- 本轮未真实创建或提交线上计划；真实页面验证只覆盖插件运行态、矩阵预设展示和维度添加/移除。
+
+# TODO - 2026-05-04 矩阵页补充 `营销目标` 选择
+
+## 需求规格
+- 目标：
+  - 在批量建计划 API 向导矩阵页的 `场景选择` 区域补充 `营销目标`；
+  - 让矩阵页可直接切换 `关键词推广` 下的 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广` 等目标；
+  - 切换后同步编辑页同一份场景条件，并刷新快捷预设与维度可选项。
+- 成功标准：
+  - 矩阵页在 `场景选择` 下方可见 `营销目标` 行；
+  - 点击目标后，编辑页 `营销目标` 和矩阵页快捷预设保持一致；
+  - 回归测试、构建同步和真实页面 UI 验证通过；
+  - 不真实提交线上计划。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md`，确认浏览器复测前必须刷新运行态。
+- [x] 定位矩阵页场景卡片模板、编辑页营销目标行和目标同步链路。
+- [x] 实现矩阵页 `营销目标` 行，并接入场景条件 bucket。
+- [x] 更新回归测试覆盖矩阵页目标行、选项和点击后刷新链路。
+- [x] 运行构建、语法、目标测试、全量测试和 `review-team`。
+- [x] 使用 `chrome-devtools` MCP 在真实 `one.alimama.com` 页面复验矩阵页目标行。
+- [x] 回填验证记录和结果复盘。
+
+## 改动摘要
+- 已在矩阵页 `场景选择` 下方新增 `营销目标` 行，用于直接切换 `关键词推广` 的 `搜索卡位 / 趋势明星 / 流量金卡 / 自定义推广`。
+- 已让矩阵页目标切换写回同一份 `sceneSettingValues` bucket，并同步当前编辑策略的 `marketingGoal / sceneSettings`，随后刷新动态配置、矩阵摘要和请求预览。
+- 已修正矩阵快捷预设目录：渲染时优先读取矩阵页当前高亮的营销目标，再读编辑 bucket，避免刚切换目标后仍展示旧目标字段。
+- 已更新矩阵回归测试，覆盖目标行渲染、点击链路、当前目标优先级和目标专属快捷预设前置。
+
+## 验证记录
+- `node scripts/build.mjs`：通过。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，24/24。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- `node --test tests/*.test.mjs`：通过，423 个测试，421 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `git diff --check`：通过。
+- `chrome-devtools` MCP（2026-05-04）：刷新 unpacked extension 后，在真实 `one.alimama.com` `关键词推广 -> 搜索卡位` 页面打开 API 向导，矩阵页 `场景选择` 下方已显示 `营销目标` 行。
+- `chrome-devtools` MCP（2026-05-04）：点击矩阵页 `流量金卡` 后，编辑动态字段变为 `套餐卡 / 套餐包档位 / 套餐包自动续投 / 支付方式`，快捷预设同步显示这些流量金卡专属字段。
+- `chrome-devtools` MCP（2026-05-04）：点击矩阵页 `自定义推广` 后，快捷预设恢复 `流量智选 / 冷启加速 / 预算类型 / 人群设置 / 人群优化目标`；未触发真实计划提交。
+
+## 结果复盘
+- 根因是矩阵页原本只有场景选择，没有暴露编辑页的 `营销目标` 分支；用户需要在矩阵页做目标切换时，预设目录仍只能从旧的场景默认值或 bucket 推断。
+- 修复点选择在 `场景选择` 正下方，和“先选场景、再选该场景下目标”的心智一致，也避免把目标混入维度卡片造成误解。
+- 真实页复验时发现扩展运行态可能缓存旧 bundle，因此浏览器验证前必须先在 `chrome://extensions` 重载 unpacked extension，再刷新 `one.alimama.com` 页面。
+
+# TODO - 2026-05-04 `关键词推广` 矩阵页场景预设条件同步编辑页
+
+## 需求规格
+- 目标：
+  - 修复批量建计划 API 向导矩阵页中 `关键词推广` 的场景选择预设条件；
+  - 让矩阵页预设条件与编辑页中已有的条件/字段定义保持同步；
+  - 避免后续编辑页新增条件后矩阵页继续遗漏。
+- 成功标准：
+  - `关键词推广` 在矩阵页选择场景时，可见的预设条件覆盖编辑页同目标条件；
+  - 预设条件不会引入其他营销目标不适用的字段；
+  - 构建产物与源码同步，相关回归测试通过；
+  - 若改动影响 userscript 入口，完成语法与构建校验。
+- 非目标：
+  - 不重构整个 API 向导；
+  - 不真实提交线上计划；
+  - 不处理未跟踪临时目录和无关业务文件。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md`，确认本轮要避免只补通用兜底而遗漏真实编辑页条件。
+- [x] 建立本轮需求规格、成功标准和验证计划。
+- [x] 定位矩阵页场景选择的预设条件生成链路。
+- [x] 定位编辑页条件定义和已有同步/复用模式。
+- [x] 对比缺失字段，选择最小且可复用的同步修复方案。
+- [x] 实现修复并补充/更新回归测试。
+- [x] 运行构建、语法和目标/全量测试。
+- [x] 使用 `chrome-devtools` MCP 在真实 `one.alimama.com` 页面复验矩阵页预设条件。
+- [x] 回填改动摘要、验证记录和结果复盘。
+
+## 改动摘要
+- 已建立本轮 goal-driven 计划，并启动只读子代理并行定位矩阵页与编辑页条件链路。
+- 已确认矩阵预设来源为固定维度 + `scene_field:*` 场景字段目录，编辑页条件来源为 `sceneSettings / sceneSettingValues`。
+- 已在矩阵预设渲染、点击预设和“补齐5维”前同步编辑页当前 `data-scene-field` 控件，避免矩阵页读取旧 bucket。
+- 已补齐关键词推广各目标可矩阵化的编辑页条件：`流量智选`、`冷启加速`、`预算类型`、`人群设置`、`人群优化目标` 等；保留高级设置这类复杂弹窗字段的排除，不把 JSON 弹窗误当普通文本维度。
+- 已更新 `tests/matrix-plan-config.test.mjs` 覆盖矩阵预设与编辑页条件同步。
+
+## 验证记录
+- `node scripts/build.mjs`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，24/24。
+- `node --test tests/matrix-bid-target-cost-package.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，49/49。
+- `node scripts/build.mjs --check`：通过。
+- `node --test tests/*.test.mjs`：通过，423 个测试，421 通过，2 个跳过（既有 `agent-cluster/index.mjs` 缺失）。
+- `bash scripts/review-team.sh`：通过，最终输出 `All automated review checks passed.`。
+- `chrome-devtools` MCP（2026-05-04）：刷新真实 `one.alimama.com` `关键词推广 -> 搜索卡位` 页面后打开 `关键词推广批量建计划 API 向导`，矩阵页 `关键词推广` 预设已显示 `流量智选`、`冷启加速`、`预算类型`、`人群设置`、`人群优化目标`。
+- `chrome-devtools` MCP（2026-05-04）：点击 `人群设置` 预设后，维度值下拉包含 `设置优先投放客户`、`添加精选人群`、`关闭`，未触发真实计划提交。
+
+## 结果复盘
+- 根因是矩阵页预设目录读取了静态场景字段目录，但渲染/应用预设前没有先同步编辑页当前 `sceneSettings`，且关键词推广默认矩阵候选遗漏了部分可直接映射的编辑页条件。
+- 修复策略是把“同步编辑页字段”收口成矩阵预设入口前置步骤，并只开放能稳定映射请求字段的普通条件；复杂高级设置弹窗继续保持排除，避免把 JSON 配置误作为普通文本维度。
+- 本轮未真实创建或提交线上计划；真实页面验证只覆盖插件运行态、矩阵预设展示和值选择。
+
 # TODO - 2026-05-04 `关键词推广 -> 自定义推广` 高级设置/人群/词包收口
 
 ## 需求规格

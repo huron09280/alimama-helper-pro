@@ -1,6 +1,22 @@
+        const syncMatrixScenePresetContextFromEditor = () => {
+            const draft = ensureWizardDraft();
+            const currentSceneName = getMatrixSceneName(
+                wizardState?.els?.sceneSelect?.value
+                || draft?.sceneName
+                || ''
+            );
+            if (currentSceneName) {
+                draft.sceneName = currentSceneName;
+            }
+            if (typeof syncSceneSettingValuesFromUI === 'function') {
+                syncSceneSettingValuesFromUI();
+            }
+            return currentSceneName;
+        };
+
         const applyMatrixPreset = (presetKey = '') => {
             const draft = ensureWizardDraft();
-            const currentSceneName = getMatrixSceneName(draft.sceneName || '');
+            const currentSceneName = syncMatrixScenePresetContextFromEditor();
             const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, currentSceneName);
             if (!currentSceneName) {
                 nextMatrixConfig.enabled = false;
@@ -43,7 +59,7 @@
 
         const applyMatrixPresetBundle = (presetKeys = [], options = {}) => {
             const draft = ensureWizardDraft();
-            const currentSceneName = getMatrixSceneName(draft.sceneName || '');
+            const currentSceneName = syncMatrixScenePresetContextFromEditor();
             const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, currentSceneName);
             if (!currentSceneName) {
                 nextMatrixConfig.enabled = false;
@@ -252,6 +268,20 @@
                     ? mergeDeep({}, plan.sceneSettings)
                     : {};
                 plan.sceneSettings[fieldLabel] = rawValue;
+                if (typeof isMatrixTrendThemeFieldLabel === 'function' && isMatrixTrendThemeFieldLabel(fieldLabel)) {
+                    const trendThemeRaw = typeof serializeMatrixTrendThemeRawValue === 'function'
+                        ? serializeMatrixTrendThemeRawValue(rawValue)
+                        : rawValue;
+                    if (trendThemeRaw) {
+                        const trendThemeField = 'campaign.trendThemeList';
+                        const trendThemeFieldKey = normalizeSceneFieldKey(trendThemeField);
+                        plan.sceneSettingValues[trendThemeField] = trendThemeRaw;
+                        if (trendThemeFieldKey) {
+                            plan.sceneSettingValues[trendThemeFieldKey] = trendThemeRaw;
+                        }
+                        plan.sceneSettings[trendThemeField] = trendThemeRaw;
+                    }
+                }
                 return plan;
             }
             if (bindingKey === 'material_id') {

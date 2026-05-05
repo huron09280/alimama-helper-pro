@@ -1,6 +1,9 @@
-                const openKeywordTrendThemeSettingPopup = async () => {
+                const openKeywordTrendThemeSettingPopup = async (options = {}) => {
+                    const popupOptions = isPlainObject(options) ? options : {};
+                    const isDetachedTrendThemePopup = popupOptions.detached === true
+                        || typeof popupOptions.onSave === 'function';
                     const trendThemeControl = resolveScenePopupControl('campaign.trendThemeList', 'trendTheme');
-                    if (!(trendThemeControl instanceof HTMLInputElement)) return null;
+                    if (!(trendThemeControl instanceof HTMLInputElement) && !isDetachedTrendThemePopup) return null;
                     const runtime = await getRuntimeDefaults(false).catch(() => ({}));
                     const expectedBizCode = normalizeSceneBizCode(
                         wizardState?.draft?.bizCode
@@ -8,7 +11,13 @@
                         || parseRouteParamFromHash('bizCode')
                         || DEFAULTS.bizCode
                     ) || DEFAULTS.bizCode;
-                    let selectedThemes = normalizeTrendThemeList(trendThemeControl.value || '[]', 6);
+                    const initialTrendThemeRaw = normalizeSceneSettingValue(
+                        popupOptions.initialRaw
+                        || popupOptions.trendThemeRaw
+                        || popupOptions.value
+                        || ''
+                    ) || (trendThemeControl instanceof HTMLInputElement ? trendThemeControl.value : '[]') || '[]';
+                    let selectedThemes = normalizeTrendThemeList(initialTrendThemeRaw, 6);
                     let defaultThemes = [];
                     let candidateThemes = selectedThemes;
                     let rankThemeMap = {
@@ -1272,12 +1281,16 @@
                         }
                     });
                     if (!result || result.ok !== true) return null;
+                    if (typeof popupOptions.onSave === 'function') {
+                        await popupOptions.onSave(result);
+                    }
                     return {
                         ok: true,
                         result,
                         trendThemeControl
                     };
                 };
+                KeywordPlanPreviewExecutor.openKeywordTrendThemeSettingPopup = openKeywordTrendThemeSettingPopup;
                 const openCrowdItemSettingPopup = async () => {
                     const itemIdListControl = resolveScenePopupControl('campaign.itemIdList', 'itemSelect');
                     if (!(itemIdListControl instanceof HTMLInputElement)) return null;

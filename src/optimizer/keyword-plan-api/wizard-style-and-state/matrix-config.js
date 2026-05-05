@@ -16,6 +16,9 @@
             if (String(preset?.key || '').trim() === 'bid_target_cost_package') {
                 return parseMatrixBidTargetCostPackageValue(value)?.displayLabel || String(value || '').trim();
             }
+            if (typeof isMatrixTrendThemeFieldLabel === 'function' && isMatrixTrendThemeFieldLabel(preset?.label || preset?.key || '')) {
+                return describeMatrixTrendThemeRawValue(value);
+            }
             return String(value || '').trim();
         };
 
@@ -138,4 +141,3 @@
                 }
             });
         };
-

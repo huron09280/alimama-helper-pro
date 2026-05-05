@@ -35,13 +35,68 @@ test('矩阵会把当前场景字段提升为维度，并物化回 sceneSettings
   assert.match(source, /const MATRIX_SCENE_FIELD_KEY_PREFIX = 'scene_field:'/, '缺少场景字段矩阵 key 前缀');
   assert.match(
     source,
-    /const MATRIX_SCENE_DIMENSION_FALLBACK_LABELS = \{[\s\S]*?'关键词推广': \{[\s\S]*?__default:\s*\['流量智选',\s*'冷启加速',\s*'预算类型'\][\s\S]*?搜索卡位:\s*\['卡位方式',\s*'匹配方式',\s*'冷启加速',\s*'预算类型'\][\s\S]*?趋势明星:\s*\['冷启加速',\s*'预算类型',\s*'人群设置',\s*'人群优化目标'\][\s\S]*?流量金卡:\s*\['套餐卡',\s*'套餐包档位',\s*'套餐包自动续投',\s*'支付方式',\s*'冷启加速'\][\s\S]*?自定义推广:\s*\['流量智选',\s*'冷启加速',\s*'预算类型'\]/,
+    /const MATRIX_SCENE_DIMENSION_FALLBACK_LABELS = \{[\s\S]*?'关键词推广': \{[\s\S]*?__default:\s*\['流量智选',\s*'冷启加速',\s*'预算类型',\s*'人群设置',\s*'人群优化目标'\][\s\S]*?搜索卡位:\s*\['卡位方式',\s*'匹配方式',\s*'流量智选',\s*'冷启加速',\s*'预算类型'\][\s\S]*?趋势明星:\s*\['趋势主题',\s*'出价目标',\s*'冷启加速',\s*'预算类型',\s*'人群设置',\s*'人群优化目标'\][\s\S]*?流量金卡:\s*\['套餐卡',\s*'套餐包档位',\s*'套餐包自动续投',\s*'支付方式',\s*'冷启加速',\s*'预算类型'\][\s\S]*?自定义推广:\s*\['流量智选',\s*'冷启加速',\s*'预算类型',\s*'人群设置',\s*'人群优化目标'\]/,
     '关键词场景缺少按营销目标分组的矩阵维度兜底'
   );
   assert.match(
     source,
     /'卡位方式': \['抢首条',\s*'抢前三',\s*'抢首页',\s*'位置不限提升市场渗透'\]/,
     '矩阵卡位方式兜底缺少位置不限提升市场渗透'
+  );
+  assert.match(
+    source,
+    /'人群设置': \['设置优先投放客户',\s*'添加精选人群',\s*'关闭'\]/,
+    '矩阵人群设置选项未同步编辑页的优先投放/精选人群/关闭条件'
+  );
+  assert.match(
+    source,
+    /'人群优化目标': '人群优化目标'/,
+    '矩阵场景默认值缺少人群优化目标'
+  );
+  assert.match(
+    source,
+    /const isMatrixTrendThemeFieldLabel = \(fieldLabel = ''\) => \{[\s\S]*?选择趋势主题[\s\S]*?趋势主题列表/,
+    '矩阵页缺少趋势主题字段识别，无法同步编辑页“选择趋势主题”'
+  );
+  assert.match(
+    source,
+    /const getMatrixTrendThemeOptionValues = \(\{ bucket = \{\}, sceneSettings = \{\} \} = \{\}\) => \{[\s\S]*?describeMatrixTrendThemeRawValue\(value\)[\s\S]*?清空趋势主题/,
+    '矩阵页趋势主题维度缺少当前已选主题集合的下拉值'
+  );
+  assert.match(
+    source,
+    /const isTrendThemeDimension = useMultiSelect && isMatrixTrendThemeFieldLabel\([\s\S]*?data-matrix-trend-theme-edit="1"[\s\S]*?添加趋势主题组合/,
+    '矩阵趋势主题维度卡片缺少新增趋势主题组合入口'
+  );
+  assert.match(
+    source,
+    /closest\('\[data-matrix-trend-theme-edit="1"\]'\)[\s\S]*?const openTrendThemeSettingPopup = typeof openKeywordTrendThemeSettingPopup === 'function'[\s\S]*?KeywordPlanPreviewExecutor\.openKeywordTrendThemeSettingPopup[\s\S]*?openTrendThemeSettingPopup\(\{[\s\S]*?detached:\s*true,[\s\S]*?initialRaw[\s\S]*?serializeMatrixTrendThemeRawValue\([\s\S]*?popupPayload\?\.result\?\.trendThemeRaw[\s\S]*?nextMatrixConfig\.dimensions = nextMatrixConfig\.dimensions\.map/,
+    '矩阵趋势主题维度卡片新增入口未复用趋势主题弹窗并写回当前维度'
+  );
+  assert.doesNotMatch(
+    source,
+    /const MATRIX_SCENE_FIELD_EXCLUDE_LABEL_RE = \/[^\n]*人群设置/,
+    '矩阵字段排除规则仍屏蔽人群设置，无法同步编辑页条件'
+  );
+  assert.match(
+    source,
+    /const syncMatrixScenePresetContextFromEditor = \(\) => \{[\s\S]*?syncSceneSettingValuesFromUI\(\);[\s\S]*?return currentSceneName;/,
+    '矩阵预设读取前未同步编辑页场景字段'
+  );
+  assert.match(
+    source,
+    /const resolveMatrixSceneActiveMarketingGoal = \(\{[\s\S]*?const activeGoalFromMatrixUi = \(\(\) => \{[\s\S]*?querySelector\('\[data-matrix-goal-option\]\.active'\)[\s\S]*?activeGoalFromMatrixUi[\s\S]*?bucket\?\.\[goalFieldKey\][\s\S]*?sceneSettings\?\.营销目标/,
+    '矩阵场景字段目录应优先读取矩阵页当前高亮的营销目标，其次再读取编辑 bucket'
+  );
+  assert.match(
+    source,
+    /const renderWorkbenchMatrixSummary = \(request = null\) => \{[\s\S]*?syncMatrixScenePresetContextFromEditor\(\);[\s\S]*?getMatrixDimensionPresetCatalog\(currentSceneName\)/,
+    '矩阵预设渲染前未同步编辑页条件'
+  );
+  assert.match(
+    source,
+    /const applyMatrixPreset = \(presetKey = ''\) => \{[\s\S]*?const currentSceneName = syncMatrixScenePresetContextFromEditor\(\);/,
+    '点击矩阵预设前未同步编辑页条件'
   );
   assert.match(
     source,
@@ -65,13 +120,33 @@ test('矩阵会把当前场景字段提升为维度，并物化回 sceneSettings
   );
   assert.match(
     source,
+    /const rawLabels = uniqueBy\(\s*\[\]\s*\.concat\(preferredFieldLabels\)\s*\.concat\(activeGoalFieldLabels\)\s*\.concat\(profile\?\.requiredFields \|\| \[\]\)/,
+    '矩阵快捷预设应优先展示当前营销目标专属字段，避免被通用字段截断'
+  );
+  assert.match(
+    source,
+    /const preferredScenePresets = getMatrixSceneScopedFallbackLabels\(normalizedSceneName, activeMarketingGoal\)[\s\S]*?buildMatrixSceneDimensionPreset\(fieldLabel, normalizedSceneName\)[\s\S]*?\.\.\.preferredSceneFieldKeys/,
+    '矩阵快捷预设未显式前置当前营销目标专属字段'
+  );
+  assert.match(
+    source,
+    /const getMatrixActiveGoalScenePresetKeys = \(sceneName = ''\) => \{[\s\S]*?const availablePresetKeys = new Set\([\s\S]*?getMatrixDimensionPresetCatalog\(normalizedSceneName\)\.map\(item => item\.key\)[\s\S]*?resolveMatrixSceneActiveMarketingGoal\(\{[\s\S]*?getMatrixSceneScopedFallbackLabels\(normalizedSceneName, activeMarketingGoal\)[\s\S]*?buildMatrixSceneDimensionPreset\(fieldLabel, normalizedSceneName\)[\s\S]*?isMatrixSceneFieldBindingKey\(item\.key \|\| ''\) && availablePresetKeys\.has\(item\.key\)[\s\S]*?\.map\(item => item\.key\);[\s\S]*?const getMatrixAppendablePresetKeys = \(sceneName = '', dimensions = \[\]\) => \{[\s\S]*?\.\.\.getMatrixActiveGoalScenePresetKeys\(sceneName\),[\s\S]*?\.\.\.getMatrixRecommendedPresetKeys\(sceneName\)/,
+    '维度卡片添加入口未前置当前营销目标专属字段，趋势明星下无法直接添加选择趋势主题'
+  );
+  assert.match(
+    source,
     /if \(shouldHideMatrixKeywordGoalField\(normalizedFieldLabel, normalizedSceneName, activeMarketingGoal\)\) return false;/,
     '矩阵字段过滤未调用关键词目标隐藏规则'
   );
   assert.match(
     source,
-    /const buildMatrixSceneDimensionPreset = \(fieldLabel = '', sceneName = ''\) => \{[\s\S]*?valueInputMode:\s*shouldUseMultiSelect \? 'multi_select' : 'text'/,
-    '场景字段未映射成矩阵 preset'
+    /if \(isMatrixKeywordTrendThemeField\(normalizedSceneName, activeMarketingGoal, normalizedFieldLabel\)\) return true;[\s\S]*?if \(currentValue && \/\^\[\\\[\{\]\/\.test\(currentValue\)\) return false;/,
+    '趋势明星的趋势主题 JSON 字段仍会被矩阵复杂值过滤掉'
+  );
+  assert.match(
+    source,
+    /const buildMatrixSceneDimensionPreset = \(fieldLabel = '', sceneName = ''\) => \{[\s\S]*?const isTrendThemePreset = isMatrixTrendThemeFieldLabel\(normalizedFieldLabel\);[\s\S]*?label:\s*isTrendThemePreset \? '选择趋势主题' : normalizedFieldLabel,[\s\S]*?valueInputMode:\s*shouldUseMultiSelect \? 'multi_select' : 'text'/,
+    '场景字段未映射成矩阵 preset，或趋势主题未显示为选择趋势主题'
   );
   assert.match(
     source,
@@ -82,6 +157,11 @@ test('矩阵会把当前场景字段提升为维度，并物化回 sceneSettings
     source,
     /if \(isMatrixSceneFieldBindingKey\(bindingKey\)\) \{[\s\S]*?plan\.sceneSettingValues = isPlainObject\(plan\?\.sceneSettingValues\)[\s\S]*?plan\.sceneSettingValues\[fieldKey\] = rawValue;[\s\S]*?plan\.sceneSettings = isPlainObject\(plan\?\.sceneSettings\)[\s\S]*?plan\.sceneSettings\[fieldLabel\] = rawValue;/,
     '场景矩阵维度未回写到 plan.sceneSettings / plan.sceneSettingValues'
+  );
+  assert.match(
+    source,
+    /isMatrixTrendThemeFieldLabel\(fieldLabel\)[\s\S]*?serializeMatrixTrendThemeRawValue\(rawValue\)[\s\S]*?const trendThemeField = 'campaign\.trendThemeList';[\s\S]*?plan\.sceneSettingValues\[trendThemeField\] = trendThemeRaw;[\s\S]*?plan\.sceneSettings\[trendThemeField\] = trendThemeRaw;/,
+    '矩阵趋势主题维度未同步写回 campaign.trendThemeList，最终请求会丢失主题'
   );
   assert.match(
     source,
@@ -202,13 +282,33 @@ test('矩阵场景切换与绑定 helper 暴露到 CoreUtils', () => {
   );
   assert.match(
     source,
-    /class="am-wxt-matrix-main">[\s\S]*?class="am-wxt-matrix-card am-wxt-matrix-scene-card"[\s\S]*?<div class="am-wxt-scene-setting-label">场景选择<\/div>[\s\S]*?data-bind-select="am-wxt-keyword-scene-select"[\s\S]*?<div class="am-wxt-crowd-box am-wxt-matrix-dimension-box">/,
-    '矩阵页未把场景切换放到维度卡片上方'
+    /class="am-wxt-matrix-main">[\s\S]*?class="am-wxt-matrix-card am-wxt-matrix-scene-card"[\s\S]*?<div class="am-wxt-scene-setting-label">场景选择<\/div>[\s\S]*?data-bind-select="am-wxt-keyword-scene-select"[\s\S]*?id="am-wxt-matrix-goal-row"[\s\S]*?<div class="am-wxt-crowd-box am-wxt-matrix-dimension-box">/,
+    '矩阵页未把场景切换与营销目标放到维度卡片上方'
   );
   assert.match(
     source,
     /const lineList = Array\.from\(wizardState\?\.\s*els\?\.\s*overlay\?\.querySelectorAll\?\.\(`\[data-bind-select="\$\{selectEl\.id\}"\]`\) \|\| \[\]\)[\s\S]*?lineList\.forEach\(\(line\) => \{/,
     '矩阵页未复用场景切换代理渲染链路'
+  );
+  assert.match(
+    source,
+    /matrixGoalRow:\s*overlay\.querySelector\('#am-wxt-matrix-goal-row'\)/,
+    '矩阵页营销目标行未挂到 wizardState.els'
+  );
+  assert.match(
+    source,
+    /const renderWorkbenchMatrixGoalSelector = \(sceneName = ''\) => \{[\s\S]*?data-matrix-goal-option="1"[\s\S]*?<div class="am-wxt-scene-setting-label">营销目标<\/div>/,
+    '矩阵页未渲染营销目标选择行'
+  );
+  assert.match(
+    source,
+    /const applyMatrixMarketingGoal = \(sceneName = '', nextGoal = ''\) => \{[\s\S]*?bucket\[goalFieldKey\] = normalizedGoal;[\s\S]*?renderSceneDynamicConfig\(\);[\s\S]*?renderWorkbenchMatrixSummary\(\);/,
+    '矩阵页营销目标切换未同步编辑页场景条件并刷新矩阵摘要'
+  );
+  assert.match(
+    source,
+    /wizardState\.els\.matrixGoalRow\.addEventListener\('click',[\s\S]*?closest\('\[data-matrix-goal-option\]'\)[\s\S]*?applyMatrixMarketingGoal\(currentSceneName,\s*nextGoal\);/,
+    '矩阵页营销目标按钮未接入点击切换链路'
   );
   assert.match(
     source,
@@ -308,7 +408,7 @@ test('矩阵页支持一键补齐推荐 5 维并自动聚焦新增卡片', () =>
   );
   assert.match(
     source,
-    /wizardState\.els\.matrixApplyRecommendedBtn\.addEventListener\('click',[\s\S]*?const currentSceneName = getMatrixSceneName\(wizardState\.draft\?\.sceneName \|\| ''\);[\s\S]*?const presetKeys = getMatrixRecommendedPresetKeys\(currentSceneName\);[\s\S]*?applyMatrixPresetBundle\(presetKeys,\s*\{[\s\S]*?focusKey:\s*presetKeys\[presetKeys\.length - 1\] \|\| ''[\s\S]*?\}\);/,
+    /wizardState\.els\.matrixApplyRecommendedBtn\.addEventListener\('click',[\s\S]*?const currentSceneName = typeof syncMatrixScenePresetContextFromEditor === 'function'[\s\S]*?syncMatrixScenePresetContextFromEditor\(\)[\s\S]*?getMatrixSceneName\(wizardState\.draft\?\.sceneName \|\| ''\);[\s\S]*?const presetKeys = getMatrixRecommendedPresetKeys\(currentSceneName\);[\s\S]*?applyMatrixPresetBundle\(presetKeys,\s*\{[\s\S]*?focusKey:\s*presetKeys\[presetKeys\.length - 1\] \|\| ''[\s\S]*?\}\);/,
     '一键补齐推荐 5 维按钮未接到批量注入链路'
   );
   assert.match(

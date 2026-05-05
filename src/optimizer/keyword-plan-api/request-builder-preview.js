@@ -629,9 +629,133 @@
                 };
             };
 
+            const getMatrixGoalSelectorOptions = (sceneName = '', selectedGoal = '') => {
+                const currentSceneName = getMatrixSceneName(sceneName || wizardState?.draft?.sceneName || '');
+                if (!currentSceneName) return [];
+                const profile = typeof getSceneProfile === 'function' ? getSceneProfile(currentSceneName) : {};
+                const profileOptions = typeof resolveSceneFieldOptions === 'function'
+                    ? resolveSceneFieldOptions(profile, '营销目标')
+                    : [];
+                const fallbackOptions = (
+                    (Array.isArray(SCENE_SPEC_FIELD_FALLBACK?.[currentSceneName]?.营销目标)
+                        ? SCENE_SPEC_FIELD_FALLBACK[currentSceneName].营销目标
+                        : [])
+                ).concat(
+                    typeof getSceneMarketingGoalFallbackList === 'function'
+                        ? getSceneMarketingGoalFallbackList(currentSceneName)
+                        : []
+                );
+                return uniqueBy(
+                    profileOptions
+                        .concat(fallbackOptions)
+                        .concat([selectedGoal])
+                        .map(item => normalizeGoalCandidateLabel(item))
+                        .filter(Boolean),
+                    item => item
+                ).slice(0, 24);
+            };
+
+            const getMatrixActiveMarketingGoal = (sceneName = '') => {
+                const currentSceneName = getMatrixSceneName(sceneName || wizardState?.draft?.sceneName || '');
+                if (!currentSceneName) return '';
+                const bucket = ensureSceneSettingBucket(currentSceneName);
+                const goalFieldKey = normalizeSceneFieldKey('营销目标') || '营销目标';
+                const strategyFieldKey = normalizeSceneFieldKey('选择卡位方案') || '选择卡位方案';
+                const resolvedGoal = currentSceneName === '关键词推广' && typeof resolveKeywordGoalFromSceneSettings === 'function'
+                    ? resolveKeywordGoalFromSceneSettings(bucket)
+                    : (typeof resolveGenericGoalFromSceneSettings === 'function' ? resolveGenericGoalFromSceneSettings(bucket) : '');
+                return normalizeGoalCandidateLabel(
+                    resolvedGoal
+                    || bucket[goalFieldKey]
+                    || bucket.营销目标
+                    || bucket[strategyFieldKey]
+                    || bucket.选择卡位方案
+                    || ''
+                );
+            };
+
+            const renderWorkbenchMatrixGoalSelector = (sceneName = '') => {
+                if (!(wizardState?.els?.matrixGoalRow instanceof HTMLElement)) return;
+                const currentSceneName = getMatrixSceneName(sceneName || wizardState?.draft?.sceneName || '');
+                const selectedGoal = getMatrixActiveMarketingGoal(currentSceneName);
+                const optionList = getMatrixGoalSelectorOptions(currentSceneName, selectedGoal);
+                if (!currentSceneName || !optionList.length) {
+                    wizardState.els.matrixGoalRow.hidden = true;
+                    wizardState.els.matrixGoalRow.innerHTML = '';
+                    return;
+                }
+                const activeGoal = optionList.includes(selectedGoal) ? selectedGoal : optionList[0];
+                const optionHtml = optionList.map(opt => `
+                    <button
+                        type="button"
+                        class="am-wxt-option-chip ${opt === activeGoal ? 'active' : ''}"
+                        data-matrix-goal-option="1"
+                        data-matrix-goal-value="${Utils.escapeHtml(opt)}"
+                    >${Utils.escapeHtml(opt)}</button>
+                `).join('');
+                wizardState.els.matrixGoalRow.hidden = false;
+                wizardState.els.matrixGoalRow.innerHTML = `
+                    <div class="am-wxt-scene-setting-label">营销目标</div>
+                    <div class="am-wxt-setting-control">
+                        <div class="am-wxt-option-line segmented">${optionHtml}</div>
+                    </div>
+                `;
+            };
+
+            const applyMatrixMarketingGoal = (sceneName = '', nextGoal = '') => {
+                const currentSceneName = getMatrixSceneName(sceneName || wizardState?.draft?.sceneName || '');
+                const normalizedGoal = normalizeGoalCandidateLabel(nextGoal);
+                if (!currentSceneName || !normalizedGoal) return false;
+                const goalFieldKey = normalizeSceneFieldKey('营销目标') || '营销目标';
+                const strategyFieldKey = normalizeSceneFieldKey('选择卡位方案') || '选择卡位方案';
+                const bucket = ensureSceneSettingBucket(currentSceneName);
+                bucket[goalFieldKey] = normalizedGoal;
+                if (currentSceneName === '关键词推广') {
+                    bucket[strategyFieldKey] = normalizedGoal;
+                }
+                const touchedBucket = ensureSceneTouchedBucket(currentSceneName);
+                touchedBucket[goalFieldKey] = true;
+                if (currentSceneName === '关键词推广') {
+                    touchedBucket[strategyFieldKey] = true;
+                }
+
+                const editingStrategy = getStrategyById(wizardState.editingStrategyId)
+                    || wizardState.strategyList?.[0]
+                    || null;
+                if (isPlainObject(editingStrategy)) {
+                    editingStrategy.marketingGoal = normalizedGoal;
+                    editingStrategy.sceneName = currentSceneName;
+                    editingStrategy.sceneSettingValues = isPlainObject(editingStrategy.sceneSettingValues)
+                        ? editingStrategy.sceneSettingValues
+                        : {};
+                    editingStrategy.sceneSettings = isPlainObject(editingStrategy.sceneSettings)
+                        ? editingStrategy.sceneSettings
+                        : {};
+                    [editingStrategy.sceneSettingValues, editingStrategy.sceneSettings].forEach(targetBucket => {
+                        targetBucket[goalFieldKey] = normalizedGoal;
+                        if (currentSceneName === '关键词推广') {
+                            targetBucket[strategyFieldKey] = normalizedGoal;
+                        }
+                    });
+                }
+
+                renderSceneDynamicConfig();
+                commitStrategyUiState({
+                    refreshPreview: false
+                });
+                renderWorkbenchMatrixSummary();
+                refreshWizardPreview();
+                appendWizardLog(`矩阵页营销目标已切换：${normalizedGoal}`, 'success');
+                return true;
+            };
+
             const renderWorkbenchMatrixSummary = (request = null) => {
                 if (!(wizardState?.els?.matrixSummary instanceof HTMLElement)) return;
+                if (typeof syncMatrixScenePresetContextFromEditor === 'function') {
+                    syncMatrixScenePresetContextFromEditor();
+                }
                 const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
+                renderWorkbenchMatrixGoalSelector(currentSceneName);
                 const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, currentSceneName);
                 const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
                     ? wizardState.strategyList.filter(item => item?.enabled !== false).length
@@ -696,12 +820,27 @@
                     });
                     const useMultiSelect = String(preset?.valueInputMode || '').trim() === 'multi_select';
                     const usePackageRows = String(preset?.valueInputMode || '').trim() === 'package_rows';
+                    const isTrendThemeDimension = useMultiSelect && isMatrixTrendThemeFieldLabel(
+                        preset?.label || dimension.label || dimension.key || ''
+                    );
                     const selectedValueSet = new Set(normalizedValues);
-                    const pickerSummaryText = buildMatrixDimensionPickerSummaryText(normalizedValues);
+                    const pickerSummaryText = buildMatrixDimensionPickerSummaryText(normalizedValues, { preset });
                     const rowHintText = buildMatrixDimensionHint(dimension);
                     const pickerHintText = preset?.key === 'material_id'
                         ? '从已添加商品里下拉勾选；如无可选项，请先回首页添加商品。'
                         : '固定维度改为下拉勾选；不带搜索。';
+                    const trendThemeEditorHtml = isTrendThemeDimension
+                        ? `
+                                    <div class="am-wxt-matrix-trend-theme-actions">
+                                        <button
+                                            type="button"
+                                            class="am-wxt-matrix-trend-theme-edit"
+                                            data-matrix-trend-theme-edit="1"
+                                            title="打开选择趋势主题"
+                                        >添加趋势主题组合</button>
+                                    </div>
+                                `
+                        : '';
                     const valueEditorHtml = usePackageRows
                         ? buildMatrixBidTargetCostPackageEditorHtml(normalizedValues, preset?.suggestedValues || [])
                         : (useMultiSelect
@@ -727,6 +866,7 @@
                                             </label>
                                         `).join('')
                                 : '<div class="am-wxt-matrix-dimension-picker-empty">暂无可选项</div>'}
+                                    ${trendThemeEditorHtml}
                                 </div>
                                 <select
                                     class="am-wxt-matrix-dimension-value-select am-wxt-hidden-control"
@@ -1750,7 +1890,9 @@
                         ? event.target.closest('[data-matrix-preset-key]')
                         : null;
                     if (!(target instanceof Element)) return;
-                    const currentSceneName = getMatrixSceneName(wizardState.draft?.sceneName || '');
+                    const currentSceneName = typeof syncMatrixScenePresetContextFromEditor === 'function'
+                        ? syncMatrixScenePresetContextFromEditor()
+                        : getMatrixSceneName(wizardState.draft?.sceneName || '');
                     if (!currentSceneName) {
                         appendWizardLog('请先在编辑页选择场景，再添加矩阵维度', 'error');
                         return;
@@ -1759,9 +1901,28 @@
                     applyMatrixPreset(presetKey);
                 });
             }
+            if (wizardState.els.matrixGoalRow instanceof HTMLElement) {
+                wizardState.els.matrixGoalRow.addEventListener('click', (event) => {
+                    const target = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-goal-option]')
+                        : null;
+                    if (!(target instanceof Element)) return;
+                    const currentSceneName = typeof syncMatrixScenePresetContextFromEditor === 'function'
+                        ? syncMatrixScenePresetContextFromEditor()
+                        : getMatrixSceneName(wizardState.draft?.sceneName || '');
+                    if (!currentSceneName) {
+                        appendWizardLog('请先在矩阵页选择场景，再切换营销目标', 'error');
+                        return;
+                    }
+                    const nextGoal = String(target.getAttribute('data-matrix-goal-value') || '').trim();
+                    applyMatrixMarketingGoal(currentSceneName, nextGoal);
+                });
+            }
             if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
                 wizardState.els.matrixApplyRecommendedBtn.addEventListener('click', () => {
-                    const currentSceneName = getMatrixSceneName(wizardState.draft?.sceneName || '');
+                    const currentSceneName = typeof syncMatrixScenePresetContextFromEditor === 'function'
+                        ? syncMatrixScenePresetContextFromEditor()
+                        : getMatrixSceneName(wizardState.draft?.sceneName || '');
                     if (!currentSceneName) {
                         appendWizardLog('请先在编辑页选择场景，再补齐矩阵维度', 'error');
                         return;
@@ -1841,7 +2002,7 @@
                 });
             }
             if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
-                wizardState.els.matrixDimensionList.addEventListener('click', (event) => {
+                wizardState.els.matrixDimensionList.addEventListener('click', async (event) => {
                     const toggleBtn = event.target instanceof Element
                         ? event.target.closest('[data-matrix-dimension-picker-toggle="1"], [data-matrix-dimension-key-picker-toggle="1"], [data-matrix-bid-package-picker-toggle="1"]')
                         : null;
@@ -1886,6 +2047,87 @@
                         const costInput = Array.from(activeRow.querySelectorAll('[data-matrix-bid-package-cost="1"]')).slice(-1)[0];
                         if (costInput instanceof HTMLInputElement) {
                             costInput.focus({ preventScroll: true });
+                        }
+                        return;
+                    }
+                    const trendThemeEditBtn = event.target instanceof Element
+                        ? event.target.closest('[data-matrix-trend-theme-edit="1"]')
+                        : null;
+                    if (trendThemeEditBtn instanceof HTMLButtonElement) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const row = trendThemeEditBtn.closest('[data-matrix-dimension-row="1"]');
+                        const currentSceneName = typeof syncMatrixScenePresetContextFromEditor === 'function'
+                            ? syncMatrixScenePresetContextFromEditor()
+                            : getMatrixSceneName(wizardState?.draft?.sceneName || '');
+                        if (!(row instanceof HTMLElement) || !currentSceneName) {
+                            appendWizardLog('请先在矩阵页选择场景，再添加趋势主题组合', 'error');
+                            return;
+                        }
+                        const dimensionKey = String(row.querySelector('[data-matrix-dimension-key="1"]')?.value || '').trim();
+                        const dimensionLabel = String(row.querySelector('[data-matrix-dimension-label="1"]')?.value || '').trim();
+                        const preset = getMatrixDimensionPresetByKey(dimensionKey, currentSceneName);
+                        if (!isMatrixTrendThemeFieldLabel(preset?.label || dimensionLabel || dimensionKey)) return;
+                        const openTrendThemeSettingPopup = typeof openKeywordTrendThemeSettingPopup === 'function'
+                            ? openKeywordTrendThemeSettingPopup
+                            : KeywordPlanPreviewExecutor.openKeywordTrendThemeSettingPopup;
+                        if (typeof openTrendThemeSettingPopup !== 'function') {
+                            appendWizardLog('趋势主题选择器暂不可用，请先切到编辑页同步场景条件', 'error');
+                            return;
+                        }
+                        const selectedValues = readMatrixDimensionValuesFromRow(row, currentSceneName);
+                        const initialRaw = selectedValues.find((value) => {
+                            const normalizedRaw = serializeMatrixTrendThemeRawValue(value);
+                            return normalizedRaw && normalizedRaw !== '[]';
+                        }) || '';
+                        closeMatrixDimensionPickers(wizardState.els.matrixDimensionList);
+                        try {
+                            const popupPayload = await openTrendThemeSettingPopup({
+                                detached: true,
+                                initialRaw
+                            });
+                            if (!popupPayload || popupPayload.ok !== true) return;
+                            const trendThemeRaw = serializeMatrixTrendThemeRawValue(
+                                popupPayload?.result?.trendThemeRaw || ''
+                            );
+                            if (!trendThemeRaw) return;
+                            syncMatrixConfigFromUI();
+                            const draft = ensureWizardDraft();
+                            const nextMatrixConfig = normalizeMatrixConfig(draft.matrixConfig, currentSceneName);
+                            nextMatrixConfig.dimensions = nextMatrixConfig.dimensions.map((dimension) => {
+                                if (dimension?.key !== dimensionKey) return dimension;
+                                const currentValues = normalizeMatrixDimensionValues(dimension.values || selectedValues);
+                                const nextValues = trendThemeRaw === '[]'
+                                    ? ['[]']
+                                    : uniqueBy(
+                                        currentValues
+                                            .filter(value => value && value !== '[]')
+                                            .concat([trendThemeRaw]),
+                                        item => item
+                                    );
+                                return normalizeMatrixDimension({
+                                    ...dimension,
+                                    label: dimension.label || preset?.label || '选择趋势主题',
+                                    values: nextValues,
+                                    enabled: true
+                                }, currentSceneName) || {
+                                    ...dimension,
+                                    values: nextValues,
+                                    enabled: true
+                                };
+                            });
+                            nextMatrixConfig.enabled = nextMatrixConfig.dimensions.length > 0;
+                            draft.matrixConfig = nextMatrixConfig;
+                            if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
+                                wizardState.els.matrixEnabledInput.checked = nextMatrixConfig.enabled === true;
+                            }
+                            KeywordPlanWizardStore.persistDraft(draft);
+                            renderWorkbenchMatrixSummary();
+                            refreshWizardPreview();
+                            appendWizardLog(`已添加趋势主题组合：${describeMatrixTrendThemeRawValue(trendThemeRaw)}`, 'success');
+                            scrollMatrixDimensionRowIntoView(dimensionKey);
+                        } catch (err) {
+                            appendWizardLog(`添加趋势主题组合失败：${err?.message || err}`, 'error');
                         }
                         return;
                     }

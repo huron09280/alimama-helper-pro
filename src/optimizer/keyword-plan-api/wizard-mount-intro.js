@@ -313,6 +313,7 @@
                                                 <div class="am-wxt-option-line segmented" data-bind-select="am-wxt-keyword-scene-select"></div>
                                             </div>
                                         </div>
+                                        <div class="am-wxt-scene-setting-row" id="am-wxt-matrix-goal-row"></div>
                                     </div>
                                     <div class="am-wxt-crowd-box am-wxt-matrix-dimension-box">
                                         <div class="am-wxt-crowd-title">
@@ -411,6 +412,7 @@
                 matrixGenerateBtn: overlay.querySelector('#am-wxt-matrix-generate-plans'),
                 matrixClearBtn: overlay.querySelector('#am-wxt-matrix-clear-dimensions'),
                 matrixActionNote: overlay.querySelector('#am-wxt-matrix-action-note'),
+                matrixGoalRow: overlay.querySelector('#am-wxt-matrix-goal-row'),
                 matrixDimensionList: overlay.querySelector('#am-wxt-matrix-dimension-list'),
                 matrixSummary: overlay.querySelector('#am-wxt-matrix-summary'),
                 matrixStatusValue: overlay.querySelector('#am-wxt-matrix-stat-enabled'),

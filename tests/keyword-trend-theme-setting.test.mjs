@@ -42,7 +42,7 @@ test('趋势主题弹窗读取原生推荐并按对象结构保存', () => {
         'const CROWD_FILTER_GENDER_OPTIONS = ['
     );
     const popupBlock = getBlock(
-        'const openKeywordTrendThemeSettingPopup = async () => {',
+        'const openKeywordTrendThemeSettingPopup = async (options = {}) => {',
         'const openCrowdItemSettingPopup = async () => {'
     );
     const styleBlock = getBlock(
@@ -250,6 +250,21 @@ test('趋势主题弹窗读取原生推荐并按对象结构保存', () => {
         popupBlock,
         /const trendThemeRaw = serializeTrendThemeList\(nextThemes\);[\s\S]*summary: describeTrendThemeSummary\(trendThemeRaw\)/,
         '趋势主题弹窗保存时未序列化完整趋势主题对象'
+    );
+    assert.match(
+        popupBlock,
+        /const isDetachedTrendThemePopup = popupOptions\.detached === true[\s\S]*trendThemeControl instanceof HTMLInputElement\) && !isDetachedTrendThemePopup[\s\S]*initialTrendThemeRaw[\s\S]*popupOptions\.initialRaw/,
+        '趋势主题弹窗未支持矩阵页传入外部初始值的脱离隐藏字段模式'
+    );
+    assert.match(
+        popupBlock,
+        /if \(typeof popupOptions\.onSave === 'function'\) \{[\s\S]*await popupOptions\.onSave\(result\);/,
+        '趋势主题弹窗未给复用方保留保存回调'
+    );
+    assert.match(
+        popupBlock,
+        /KeywordPlanPreviewExecutor\.openKeywordTrendThemeSettingPopup = openKeywordTrendThemeSettingPopup;/,
+        '趋势主题弹窗未通过窄桥暴露给矩阵页复用'
     );
 });
 

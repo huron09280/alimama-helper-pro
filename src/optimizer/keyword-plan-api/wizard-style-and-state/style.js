@@ -1677,6 +1677,27 @@
                     font-size: 12px;
                     line-height: 1.45;
                 }
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-actions {
+                    margin-top: 6px;
+                    padding-top: 6px;
+                    border-top: 1px solid rgba(148,163,184,0.18);
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-edit {
+                    width: 100%;
+                    min-height: 34px;
+                    padding: 7px 10px;
+                    border: 1px solid rgba(79,104,255,0.22);
+                    border-radius: 8px;
+                    background: rgba(79,104,255,0.08);
+                    color: #3354d1;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-edit:hover {
+                    border-color: rgba(79,104,255,0.34);
+                    background: rgba(79,104,255,0.13);
+                }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select {
                     width: 100%;
                     min-height: 92px;
