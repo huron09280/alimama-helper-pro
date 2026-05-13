@@ -67,7 +67,8 @@
                         wizardState.addedItems = uniqueBy(wizardState.addedItems, x => String(x.materialId)).slice(0, WIZARD_MAX_ITEMS);
                         commitItemSelectionUiState({
                             renderAdded: true,
-                            renderCandidate: true
+                            renderCandidate: true,
+                            renderSceneDynamic: true
                         });
                     };
                     candidateListEl.appendChild(row);
@@ -137,20 +138,27 @@
                         const clone = wizardState.addedItems.slice();
                         [clone[idx - 1], clone[idx]] = [clone[idx], clone[idx - 1]];
                         wizardState.addedItems = clone;
-                        commitItemSelectionUiState({ renderAdded: true });
+                        commitItemSelectionUiState({
+                            renderAdded: true,
+                            renderSceneDynamic: true
+                        });
                     };
                     downBtn.onclick = () => {
                         if (idx >= wizardState.addedItems.length - 1) return;
                         const clone = wizardState.addedItems.slice();
                         [clone[idx + 1], clone[idx]] = [clone[idx], clone[idx + 1]];
                         wizardState.addedItems = clone;
-                        commitItemSelectionUiState({ renderAdded: true });
+                        commitItemSelectionUiState({
+                            renderAdded: true,
+                            renderSceneDynamic: true
+                        });
                     };
                     removeBtn.onclick = () => {
                         wizardState.addedItems = wizardState.addedItems.filter((_, i) => i !== idx);
                         commitItemSelectionUiState({
                             renderAdded: true,
-                            renderCandidate: true
+                            renderCandidate: true,
+                            renderSceneDynamic: true
                         });
                     };
                     wizardState.els.addedList.appendChild(row);
@@ -222,4 +230,3 @@
                     appendWizardLog(`加载候选商品失败：${err?.message || err}`, 'error');
                 }
             };
-

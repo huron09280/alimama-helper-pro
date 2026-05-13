@@ -79,6 +79,60 @@ test('自定义推广已提供弹窗配置入口并绑定到 API 字段', () => 
   );
 });
 
+test('AI点睛提供原生同构流量诉求、模板、屏蔽词和已选需求设置', () => {
+  const block = getRenderSceneDynamicConfigBlock();
+  assert.match(
+    block,
+    /trigger === 'keywordAiMaxSetting'/,
+    'AI点睛缺少独立设置弹窗分支'
+  );
+  assert.match(
+    block,
+    /openKeywordAiMaxSettingPopup/,
+    'AI点睛缺少设置弹窗实现'
+  );
+  assert.match(
+    block,
+    /表达更多流量诉求[\s\S]*模板推荐（6）[\s\S]*屏蔽词设置[\s\S]*已选需求/,
+    'AI点睛弹窗未覆盖原生流量诉求、模板、屏蔽词和需求选择'
+  );
+  assert.match(
+    block,
+    /中心词屏蔽[\s\S]*10[\s\S]*精确词屏蔽[\s\S]*100/,
+    'AI点睛屏蔽词缺少中心词 10 个和精确词 100 个容量'
+  );
+  assert.match(
+    block,
+    /data-ai-max-demand-all[\s\S]*data-ai-max-demand-check/,
+    'AI点睛已选需求缺少全选与单项 checkbox'
+  );
+  assert.match(
+    source,
+    /openKeywordAiMaxDemandPopover[\s\S]*am-wxt-ai-max-demand-popover[\s\S]*已选：<b>\$\{checkedCount\}<\/b>[\s\S]*确定[\s\S]*取消/,
+    'AI点睛右侧“5个需求”没有复刻原生小浮层'
+  );
+  assert.match(
+    source,
+    /activeBucket\[fieldKey\] = nextInfoRaw[\s\S]*activeBucket\[normalizedFieldKey\] = nextInfoRaw[\s\S]*activeTouchedBucket\[fieldKey\] = true[\s\S]*activeTouchedBucket\[normalizedFieldKey\] = true[\s\S]*getKeywordAiMaxGenerationMap[\s\S]*selectedDemandList/,
+    'AI点睛需求小浮层确认后未同步场景状态和生成缓存，重渲染会丢失勾选'
+  );
+  assert.match(
+    source,
+    /querySelectorAll\(`\[data-scene-field="\$\{fieldKey\}"\]`\)[\s\S]*control\.value = nextInfoRaw[\s\S]*dispatchSceneControlUpdate\(infoControl, nextInfoRaw\)/,
+    'AI点睛需求小浮层确认后未同步同字段隐藏控件，状态提交会被旧值覆盖'
+  );
+  assert.match(
+    source,
+    /const keywordAiMaxInfoTouched = !!\([\s\S]*touchedBucket\[keywordAiMaxInfoField\][\s\S]*touchedBucket\[keywordAiMaxInfoFieldKey\][\s\S]*!keywordAiMaxInfoTouched && keywordAiMaxGeneration\?\.status === 'ready'/,
+    'AI点睛需求小浮层确认后的用户选择未优先于接口生成缓存'
+  );
+  assert.match(
+    block,
+    /dispatchSceneControlUpdate\(aiMaxInfoControl,\s*result\.aiMaxInfoRaw/,
+    'AI点睛设置保存后未回写 campaign.aiMaxInfo'
+  );
+});
+
 test('自定义推广手动/智能出价都使用高级设置组合弹窗', () => {
   const { manualBranch, smartBranch } = getKeywordCustomBidModeBranches();
   for (const [name, branch] of [['手动出价', manualBranch], ['智能出价', smartBranch]]) {
@@ -158,6 +212,11 @@ test('弹窗保存会回写隐藏字段并触发场景配置联动刷新', () =>
     /dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/,
     '弹窗保存后未触发 change 事件'
   );
+  assert.match(
+    block,
+    /row\?\.isConnected[\s\S]*?wizardState\.els\.sceneDynamic\?\.querySelector\?\.\(`\[data-scene-popup-summary="\$\{trigger\}"\]`\)/,
+    '弹窗保存后摘要更新缺少当前动态区域兜底，重渲染后可能写到旧行'
+  );
 });
 
 test('弹窗摘要支持点击与键盘触发对应配置按钮', () => {
@@ -208,7 +267,7 @@ test('资源位与时段使用原站同构高级设置弹窗（三 Tab）', () =
   );
   assert.match(
     block,
-    /data-scene-popup-advanced-tab="launchPeriod">分时折扣</,
+    /const advancedLaunchPeriodTabLabel = normalizeSceneSettingValue\(advancedPopupOptions\.launchPeriodTabLabel \|\| '分时折扣'\)[\s\S]*data-scene-popup-advanced-tab="launchPeriod">\$\{Utils\.escapeHtml\(advancedLaunchPeriodTabLabel\)\}</,
     '缺少“分时折扣”Tab'
   );
   assert.match(

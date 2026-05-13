@@ -144,8 +144,8 @@ test('手动关键词面板默认收起，并支持展开状态同步', () => {
   const renderBlock = getRenderSceneDynamicConfigBlock();
   assert.match(
     renderBlock,
-    /const manualKeywordPanelCollapsed = wizardState\.manualKeywordPanelCollapsed !== false;/,
-    '手动关键词面板默认收起状态未定义'
+    /const manualKeywordPanelCollapsed = Object\.prototype\.hasOwnProperty\.call\(options \|\| \{\}, 'collapsed'\)[\s\S]*wizardState\.manualKeywordPanelCollapsed !== false;/,
+    '手动关键词面板未支持默认收起和外部折叠状态'
   );
   assert.match(
     renderBlock,
@@ -157,16 +157,46 @@ test('手动关键词面板默认收起，并支持展开状态同步', () => {
     /manualKeywordPanelCollapsed \? '展开' : '收起'/,
     '手动关键词面板未根据状态显示展开\/收起文案'
   );
+  assert.match(
+    renderBlock,
+    /staticRows\.push\(buildKeywordCustomKeywordSettingRow\([\s\S]*staticRows\.push\(buildManualKeywordDesignerRow\('手动关键词',\s*\{[\s\S]*collapsed:\s*!keywordSettingEnabled/,
+    '自定义推广智能出价下手动关键词未紧跟关键词设置渲染'
+  );
+  assert.match(
+    renderBlock,
+    /let keywordManualPanelInsertedAfterSetting = false;[\s\S]*keywordManualPanelInsertedAfterSetting = true;[\s\S]*&& !keywordManualPanelInsertedAfterSetting[\s\S]*staticRows\.push\(buildManualKeywordDesignerRow\('手动关键词'\)\);/,
+    '已在关键词设置下方渲染时未阻止底部重复追加手动关键词'
+  );
+  assert.match(
+    renderBlock,
+    /data-keyword-setting-open-manual="1"[\s\S]*data-keyword-setting-open-manual-field="\$\{Utils\.escapeHtml\(normalizedFieldKey\)\}"/,
+    '关键词设置“查看和添加关键词”文案未绑定原生展开入口'
+  );
+  assert.match(
+    renderBlock,
+    /onValue === '查看和添加关键词'[\s\S]*manualPanel\.classList\.toggle\('is-collapsed', nextCollapsed\);[\s\S]*manualToggle\.textContent = nextCollapsed \? '展开' : '收起';/,
+    '关键词设置勾选状态未同步展开/收起手动关键词面板'
+  );
 
   const collapseBlock = getManualCollapseToggleBlock();
   assert.match(
     collapseBlock,
-    /wizardState\.manualKeywordPanelCollapsed = nextCollapsed;/,
+    /syncManualKeywordPanelCollapsed\(panel,\s*nextCollapsed\);/,
     '手动关键词展开\/收起后未同步到草稿状态'
   );
   assert.match(
-    collapseBlock,
-    /panel\.classList\.toggle\('is-collapsed', nextCollapsed\);/,
+    source,
+    /data-keyword-setting-open-manual="1"[\s\S]*syncManualKeywordPanelCollapsed\(manualPanel,\s*false\);/,
+    '点击“查看和添加关键词”未展开已有手动关键词面板'
+  );
+  assert.match(
+    source,
+    /hiddenControl\.value = '查看和添加关键词';[\s\S]*manualPanel\.scrollIntoView/,
+    '点击“查看和添加关键词”未保持关键词设置开启并滚动到面板'
+  );
+  assert.match(
+    source,
+    /const syncManualKeywordPanelCollapsed = \(panel, nextCollapsed\) =>[\s\S]*panel\.classList\.toggle\('is-collapsed', nextCollapsed\);[\s\S]*wizardState\.manualKeywordPanelCollapsed = nextCollapsed;/,
     '手动关键词展开\/收起后未更新面板折叠样式'
   );
 });

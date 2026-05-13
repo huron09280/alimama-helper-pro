@@ -188,6 +188,9 @@
             const commitItemSelectionUiState = (options = {}) => {
                 syncDraftFromUI();
                 renderItemSelectionLists(options);
+                if (options.renderSceneDynamic === true) {
+                    renderSceneDynamicConfig();
+                }
                 if (options.refreshPreview === true) {
                     refreshWizardPreview();
                 }

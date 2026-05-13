@@ -77,7 +77,27 @@
         scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
     }
 
-    main();
+    let hasBootstrapped = false;
+    const bootstrapMain = () => {
+        if (hasBootstrapped) return;
+        if (!document.body) return;
+        hasBootstrapped = true;
+        main();
+    };
+
+    bootstrapMain();
+
+    if (!hasBootstrapped) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootstrapMain, { once: true });
+        } else {
+            const timer = setInterval(() => {
+                bootstrapMain();
+                if (hasBootstrapped) clearInterval(timer);
+            }, 16);
+            setTimeout(() => clearInterval(timer), 10000);
+        }
+    }
 
 })();
 // ==========================================
@@ -111,4 +131,3 @@
  * - ✨ API 请求超时处理（默认 30 秒）
  * - ✨ 请求失败自动重试（最多 3 次）
  */
-

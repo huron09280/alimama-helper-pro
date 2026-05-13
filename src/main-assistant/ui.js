@@ -1469,21 +1469,41 @@
                     overlay.classList.add('open');
                     return true;
                 };
+                const reportKeywordPlanOpenFailure = (err) => {
+                    const message = err?.message || String(err || '未知错误');
+                    Logger.log(`⚠️ 组建计划打开失败：${message}`, true);
+                    if (openExistingKeywordOverlay()) {
+                        Logger.log('ℹ️ 已打开已有关键词计划弹窗（兜底）');
+                        return;
+                    }
+                    alert(`组建计划模块打开失败：${message}，请刷新页面重试`);
+                };
+                const openKeywordPlanWizard = (targetApi) => {
+                    if (!targetApi || typeof targetApi.openWizard !== 'function') return false;
+                    try {
+                        const result = targetApi.openWizard();
+                        if (result && typeof result.catch === 'function') {
+                            result.catch(reportKeywordPlanOpenFailure);
+                        }
+                        return true;
+                    } catch (err) {
+                        reportKeywordPlanOpenFailure(err);
+                        return true;
+                    }
+                };
 
                 keywordPlanBtn.onclick = () => {
                     const api = resolveKeywordPlanApi();
-                    if (api && typeof api.openWizard === 'function') {
-                        api.openWizard();
-                        return;
-                    }
+                    if (openKeywordPlanWizard(api)) return;
                     if (openExistingKeywordOverlay()) return;
 
                     Logger.log('⚠️ 关键词建计划模块初始化中...', true);
                     setTimeout(() => {
                         const retryApi = resolveKeywordPlanApi();
-                        if (retryApi && typeof retryApi.openWizard === 'function') {
-                            retryApi.openWizard();
-                        } else if (openExistingKeywordOverlay()) {
+                        if (openKeywordPlanWizard(retryApi)) {
+                            return;
+                        }
+                        if (openExistingKeywordOverlay()) {
                             Logger.log('ℹ️ 已打开关键词计划弹窗（兜底）');
                         } else {
                             alert('组建计划模块不可用，请刷新页面重试');

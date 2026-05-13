@@ -49,6 +49,255 @@
             };
         };
 
+        const KEYWORD_AI_MAX_NATIVE_PROMPT = '快速积累精准成交流量。如投放叶子类目成交词，与商品卖点精准匹配的搜索词，与商品历史成交人群相似的人群';
+        const parseAiMaxJsonList = (value) => {
+            if (Array.isArray(value)) return value;
+            const text = String(value || '').trim();
+            if (!text) return [];
+            try {
+                const parsed = JSON.parse(text);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        };
+        const parseAiMaxEventStream = (rawText = '') => {
+            const list = [];
+            String(rawText || '').split(/\r?\n/).forEach((line) => {
+                if (!line.startsWith('data:')) return;
+                const body = line.slice(5).trim();
+                if (!body || body === '[DONE]') return;
+                try {
+                    const parsed = JSON.parse(body);
+                    if (parsed && typeof parsed === 'object') list.push(parsed);
+                } catch { }
+            });
+            return list;
+        };
+        const pickFinalAiMaxEventData = (events = []) => {
+            const completed = events
+                .map(event => event?.data)
+                .filter(data => data?.additionalData?.complete && data?.additionalData?.aiMaxInfo);
+            if (completed.length) return completed[completed.length - 1];
+            const withInfo = events
+                .map(event => event?.data)
+                .filter(data => data?.additionalData?.aiMaxInfo);
+            return withInfo.length ? withInfo[withInfo.length - 1] : null;
+        };
+        const normalizeNativeAiMaxInfo = ({
+            item = {},
+            aiData = {},
+            budgetData = {},
+            effectData = {}
+        } = {}) => {
+            const itemId = String(toIdValue(item?.materialId || item?.itemId || item?.id || '') || '').trim();
+            const itemTitle = String(item?.materialName || item?.itemTitle || item?.title || item?.name || item?.itemName || '').trim();
+            const additionalData = isPlainObject(aiData?.additionalData) ? aiData.additionalData : {};
+            const nativeInfo = isPlainObject(additionalData.aiMaxInfo) ? additionalData.aiMaxInfo : {};
+            const crowdList = Array.isArray(additionalData.crowdList) ? additionalData.crowdList : [];
+            const firstCrowd = crowdList.find(entry => entry?.crowd?.properties) || crowdList[0] || {};
+            const firstProperties = isPlainObject(firstCrowd?.crowd?.properties) ? firstCrowd.crowd.properties : {};
+            const demandList = uniqueBy(
+                crowdList
+                    .map(entry => String(entry?.crowd?.crowdName || entry?.crowd?.label?.optionList?.[0]?.optionName || '').trim())
+                    .filter(Boolean),
+                value => value
+            );
+            const searchWordList = uniqueBy(
+                crowdList.flatMap((entry) => {
+                    const properties = isPlainObject(entry?.crowd?.properties) ? entry.crowd.properties : {};
+                    return parseAiMaxJsonList(properties.searchWordList)
+                        .map(word => String(word?.name || word?.word || word || '').trim())
+                        .filter(Boolean);
+                }),
+                value => value
+            ).slice(0, 30);
+            const personaList = parseAiMaxJsonList(firstProperties.crowdProfileList)
+                .map(profile => ({
+                    title: String(profile?.name || profile?.title || '').trim(),
+                    desc: String(profile?.desc || profile?.description || '').trim()
+                }))
+                .filter(profile => profile.title || profile.desc)
+                .slice(0, 6);
+            const budgetAmount = String(
+                budgetData?.budgetDefault
+                || budgetData?.algoBudget
+                || budgetData?.budgetMiddle
+                || ''
+            ).trim();
+            const clickEstimate = String(effectData?.click || '').trim();
+            return {
+                itemId,
+                itemTitle,
+                aiMaxSwitch: 1,
+                nativeGenerated: true,
+                nativeSource: 'businessTalk',
+                nativeTraceId: String(aiData?.traceId || budgetData?.traceId || effectData?.traceId || '').trim(),
+                trafficAppeal: String(nativeInfo.aiMaxPureUserInput || KEYWORD_AI_MAX_NATIVE_PROMPT).trim(),
+                aiMaxReason: String(nativeInfo.aiMaxReason || '').trim(),
+                aiMaxDeliveryPlan: String(nativeInfo.aiMaxDeliveryPlan || '').trim(),
+                selectedDemandList: demandList,
+                demandList,
+                centerShieldWordList: Array.isArray(additionalData.shieldCenterWords) ? additionalData.shieldCenterWords : [],
+                exactShieldWordList: Array.isArray(additionalData.shieldWords) ? additionalData.shieldWords : [],
+                searchWordList,
+                personaList,
+                analysis: String(firstProperties.description || nativeInfo.aiMaxReason || '').trim(),
+                budgetSuggestion: {
+                    amount: budgetAmount,
+                    clickEstimate,
+                    rawBudget: isPlainObject(budgetData) ? budgetData : {},
+                    rawEffect: isPlainObject(effectData) ? effectData : {}
+                },
+                nativeCrowdList: crowdList
+            };
+        };
+        const requestAiMaxBusinessTalk = async ({ bizCode, item, requestOptions } = {}) => {
+            const token = ensureTokens();
+            const itemId = toIdValue(item?.materialId || item?.itemId || item?.id || '');
+            const itemTitle = String(item?.materialName || item?.itemTitle || item?.title || item?.name || '').trim();
+            const sessionId = Utils.uuid();
+            const body = {
+                fromPage: '/main/index',
+                entrance: 'talk_aimaxOnebpSearch@main@promotion_scene_search_user_define@smart_bid',
+                business: 'aimaxOnebpSearch@main@promotion_scene_search_user_define@smart_bid',
+                contextParam: {
+                    bizCode: 'onebpSearch',
+                    promotionScene: 'promotion_scene_search_user_define',
+                    business: 'aimaxOnebpSearch@main@promotion_scene_search_user_define@smart_bid',
+                    bpSolution: {
+                        campaign: {
+                            itemIdList: [itemId],
+                            bizCode: 'onebpSearch',
+                            bidTypeV2: 'smart_bid',
+                            promotionScene: 'promotion_scene_search_user_define',
+                            aiMaxInfo: { aiMaxSwitch: '1' },
+                            crowdList: [],
+                            complete: false,
+                            dropdownSelected: []
+                        },
+                        adgroupList: [{
+                            material: {
+                                materialId: itemId,
+                                materialName: itemTitle,
+                                promotionType: 'item',
+                                subPromotionType: 'item',
+                                linkUrl: item?.linkUrl || `http://detail.tmall.com/item.htm?id=${itemId}`
+                            }
+                        }]
+                    }
+                },
+                bizCode: 'universalBP',
+                requestType: 'NlAnalysis',
+                client: 'pc_uni_bp',
+                product: 'aimaxOnebpSearch',
+                sessionId,
+                prompt: {
+                    promptType: 'text',
+                    autoAsk: true,
+                    wordList: [{ word: KEYWORD_AI_MAX_NATIVE_PROMPT }]
+                },
+                promptType: 'text',
+                triggerMode: 'autoAsk',
+                timeStr: Date.now(),
+                dynamicToken: token.dynamicToken || '',
+                csrfID: '',
+                loginPointId: token.loginPointId
+            };
+            const url = 'https://ai.alimama.com/ai/chat/businessTalk.json';
+            recordApiRequestToHookHistory(url, 'POST', body, 'keyword_ai_max_business_talk');
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    Accept: 'text/event-stream',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body),
+                signal: requestOptions?.signal
+            });
+            const rawText = await response.text();
+            if (!response.ok) {
+                throw new Error(`AI点睛生成失败(${response.status}): ${rawText.slice(0, 160)}`);
+            }
+            const events = parseAiMaxEventStream(rawText);
+            const finalData = pickFinalAiMaxEventData(events);
+            if (!finalData?.additionalData?.aiMaxInfo) {
+                throw new Error('AI点睛生成失败：原生接口未返回 aiMaxInfo');
+            }
+            return finalData;
+        };
+        const fetchKeywordAiMaxInfo = async ({ bizCode, item, requestOptions } = {}) => {
+            const runtime = await getRuntimeDefaults(false);
+            const targetBizCode = bizCode || runtime.bizCode || DEFAULTS.bizCode;
+            const idValue = toIdValue(item?.materialId || item?.itemId || item?.id || '');
+            if (!idValue) throw new Error('AI点睛生成失败：缺少商品ID');
+            const defaults = {
+                itemSelectedMode: 'user_define',
+                bidTypeV2: 'smart_bid',
+                bidTargetV2: 'conv',
+                promotionScene: 'promotion_scene_search_user_define',
+                optimizeTarget: 'conv'
+            };
+            const material = {
+                ...(isPlainObject(item?.raw) ? item.raw : {}),
+                materialId: idValue,
+                materialName: item?.materialName || item?.itemTitle || item?.title || item?.name || '',
+                promotionType: 'item',
+                subPromotionType: 'item'
+            };
+            const aiData = await requestAiMaxBusinessTalk({ bizCode: targetBizCode, item, requestOptions });
+            let budgetData = {};
+            let effectData = {};
+            try {
+                const budgetResponse = await requestOne(ENDPOINTS.budgetSuggestion, targetBizCode, {
+                    cache: 1000,
+                    bizCode: targetBizCode,
+                    campaign: {
+                        itemSelectedMode: defaults.itemSelectedMode,
+                        itemIdList: [idValue],
+                        bizCode: targetBizCode,
+                        bidTypeV2: defaults.bidTypeV2,
+                        bidTargetV2: defaults.bidTargetV2,
+                        promotionScene: defaults.promotionScene,
+                        optimizeTarget: defaults.optimizeTarget,
+                        dmcType: 'day_average'
+                    },
+                    adgroupList: [{ material }]
+                }, requestOptions || {});
+                budgetData = isPlainObject(budgetResponse?.data) ? budgetResponse.data : {};
+            } catch (err) {
+                log.warn('AI点睛预算建议接口失败:', err?.message || err);
+            }
+            try {
+                const dayAverageBudget = String(budgetData.budgetDefault || budgetData.algoBudget || budgetData.budgetMiddle || '');
+                if (dayAverageBudget) {
+                    const effectResponse = await requestOne(ENDPOINTS.effectPrediction, targetBizCode, {
+                        cache: 1000,
+                        from: 'OnebpSearch_LLMEffectPredict',
+                        dayAverageBudget,
+                        algoPredictionExtraInfo: { dayAverageBudget_obj: budgetData },
+                        bizCode: targetBizCode,
+                        campaign: {
+                            itemSelectedMode: defaults.itemSelectedMode,
+                            optimizeTarget: defaults.optimizeTarget,
+                            dmcType: 'day_average',
+                            subOptimizeTarget: 'retained_buy',
+                            itemIdList: [idValue],
+                            from: 'OnebpSearch_LLMEffectPredict',
+                            dayAverageBudget,
+                            algoPredictionExtraInfo: { dayAverageBudget_obj: budgetData }
+                        },
+                        adgroupList: [{ material: { materialId: idValue, promotionType: 'item', subPromotionType: 'item' } }]
+                    }, requestOptions || {});
+                    effectData = isPlainObject(effectResponse?.data) ? effectResponse.data : {};
+                }
+            } catch (err) {
+                log.warn('AI点睛效果预估接口失败:', err?.message || err);
+            }
+            return normalizeNativeAiMaxInfo({ item, aiData, budgetData, effectData });
+        };
+
         const parseMatchScope = (value, fallback = DEFAULTS.matchScope) => {
             if (value === undefined || value === null || value === '') return fallback;
             if (value === 1 || value === '1' || value === 'exact' || value === '精准' || value === '精确') return 1;
@@ -2708,10 +2957,9 @@
         const mapSiteMultiTargetOptimizeTargetValue = (text = '') => {
             const value = normalizeSceneSettingValue(text);
             if (!value) return '';
-            if (/^\d{3,6}$/.test(value)) return value;
+            if (/^\d{3,6}$/.test(value)) return ['1034', '1230'].includes(value) ? value : '';
             if (/优化加购|收藏加购|加购/.test(value)) return '1034';
             if (/优化直接成交|增加净成交金额|净成交金额|直接成交/.test(value)) return '1230';
-            if (/增加总成交金额|总成交金额/.test(value)) return '1231';
             return '';
         };
 
@@ -2721,13 +2969,16 @@
             if (!value) return fullHours;
             if (/长期|全天|24小时|不限/.test(value)) return fullHours;
 
-            const rangeMatch = value.match(/(\d{1,2})\s*(?:点|时)?\s*(?:~|-|至|到)\s*(\d{1,2})/);
-            if (rangeMatch) {
-                const start = Math.max(0, Math.min(23, toNumber(rangeMatch[1], 0)));
-                const endRaw = toNumber(rangeMatch[2], 24);
-                const end = Math.max(start + 1, Math.min(24, endRaw));
-                const list = [];
-                for (let i = start; i < end; i += 1) list.push(String(i));
+            const rangeMatches = Array.from(value.matchAll(/(\d{1,2})\s*(?:点|时)?\s*(?:~|-|至|到)\s*(\d{1,2})/g));
+            if (rangeMatches.length) {
+                const hourSet = new Set();
+                rangeMatches.forEach(match => {
+                    const start = Math.max(0, Math.min(23, toNumber(match[1], 0)));
+                    const endRaw = toNumber(match[2], 24);
+                    const end = Math.max(start + 1, Math.min(24, endRaw));
+                    for (let i = start; i < end; i += 1) hourSet.add(String(i));
+                });
+                const list = Array.from(hourSet).sort((left, right) => toNumber(left, 0) - toNumber(right, 0));
                 if (list.length) return list.join(',');
             }
 
@@ -3066,6 +3317,8 @@
                 'dayAverageBudget',
                 'totalBudget',
                 'futureBudget',
+                'enableRuleAuto',
+                'ruleCommand',
                 'sourceChannel',
                 'channelLocation',
                 'selectedTargetBizCode',
@@ -3123,6 +3376,25 @@
 
             const applyCampaign = (key, value, sourceKey = '', sourceValue = '') => {
                 if (value === undefined || value === null || value === '') return;
+                if (!canUseCampaignField(key, sourceKey)) {
+                    mapping.skipped.push({
+                        sourceKey,
+                        sourceValue,
+                        targetKey: key,
+                        reason: 'campaign字段不在当前模板中'
+                    });
+                    return;
+                }
+                setValueByPath(mapping.campaignOverride, key, value);
+                mapping.applied.push({
+                    sourceKey,
+                    sourceValue,
+                    targetKey: key,
+                    targetValue: deepClone(value)
+                });
+            };
+            const applyCampaignExact = (key, value, sourceKey = '', sourceValue = '') => {
+                if (value === undefined) return;
                 if (!canUseCampaignField(key, sourceKey)) {
                     mapping.skipped.push({
                         sourceKey,
@@ -3378,7 +3650,10 @@
             const campaignGroupEntry = findSceneSettingEntry(entries, [/计划组/, /设置计划组/]);
             if (campaignGroupEntry) {
                 const campaignGroupValue = normalizeSceneSettingValue(campaignGroupEntry.value || '');
-                if (campaignGroupValue && !/^(不设置计划组|不设置|默认|无|none|null)$/i.test(campaignGroupValue)) {
+                if (/^(不归属任何计划组|不设置计划组|不设置|默认|无|none|null)$/i.test(campaignGroupValue)) {
+                    applyCampaignExact('campaignGroupId', null, campaignGroupEntry.key, campaignGroupEntry.value);
+                    applyCampaignExact('campaignGroupName', '', campaignGroupEntry.key, campaignGroupEntry.value);
+                } else if (campaignGroupValue) {
                     if (/^\d{1,20}$/.test(campaignGroupValue)) {
                         applyCampaign('campaignGroupId', campaignGroupValue, campaignGroupEntry.key, campaignGroupEntry.value);
                     } else {
@@ -3494,12 +3769,22 @@
                 applySceneSingleCostEntries(singleCostSwitchEntry, singleCostEntry);
             }
 
-            const smartCreativeEntry = findSceneSettingEntry(entries, [/创意优选/, /封面智能创意/]);
+            const smartCreativeEntry = findSceneSettingEntry(entries, [/智能创意/, /创意优选/, /封面智能创意/]);
             if (smartCreativeEntry) {
                 if (/关/.test(smartCreativeEntry.value) && !/开/.test(smartCreativeEntry.value)) {
                     applyCampaign('smartCreative', 0, smartCreativeEntry.key, smartCreativeEntry.value);
                 } else if (/开/.test(smartCreativeEntry.value)) {
                     applyCampaign('smartCreative', 1, smartCreativeEntry.key, smartCreativeEntry.value);
+                }
+            }
+
+            const budgetGuardEntry = findSceneSettingEntry(entries, [/优质计划防停投/, /预算自动提升/, /防停投/]);
+            if (budgetGuardEntry) {
+                const budgetGuardText = normalizeSceneSettingValue(budgetGuardEntry.value || '');
+                const budgetGuardOff = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(budgetGuardText)
+                    && !/(开|开启|启用|是|on|true|1)/i.test(budgetGuardText);
+                if (budgetGuardOff) {
+                    applyCampaign('enableRuleAuto', false, budgetGuardEntry.key, budgetGuardEntry.value);
                 }
             }
 
@@ -3520,6 +3805,24 @@
                         isColdStartOff ? '0' : '1',
                         coldStartEntry.key,
                         coldStartEntry.value
+                    );
+                }
+            }
+            const keywordAiMaxEntry = normalizedSceneName === '关键词推广'
+                ? findSceneSettingEntry(entries, [/AI点睛/])
+                : null;
+            if (keywordAiMaxEntry) {
+                const keywordAiMaxText = normalizeSceneSettingValue(keywordAiMaxEntry.value || '');
+                if (keywordAiMaxText) {
+                    const keywordAiMaxOff = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(keywordAiMaxText)
+                        && !/(开|开启|启用|是|on|true|1)/i.test(keywordAiMaxText);
+                    const keywordAiMaxSwitch = keywordAiMaxOff ? 0 : 1;
+                    applyCampaign('aiMaxSwitch', keywordAiMaxSwitch, keywordAiMaxEntry.key, keywordAiMaxEntry.value);
+                    applyCampaign(
+                        'aiMaxInfo',
+                        { aiMaxSwitch: keywordAiMaxSwitch },
+                        keywordAiMaxEntry.key,
+                        keywordAiMaxEntry.value
                     );
                 }
             }
@@ -4474,7 +4777,7 @@
                         merged.campaign.quickLiftBudgetCommand = quickLiftCommand;
                         merged.campaign.dmcTypeElement = 'quickLiftBudgetCommand.quickLiftBudget';
                     } else {
-                        delete merged.campaign.quickLiftBudgetCommand;
+                        merged.campaign.quickLiftBudgetCommand = { quickLiftSwitch: 'false' };
                         delete merged.campaign.isQuickLift;
                         if (merged.campaign.isMultiTarget) {
                             merged.campaign.dmcTypeElement = 'multiTarget.multiTargetConfigList';

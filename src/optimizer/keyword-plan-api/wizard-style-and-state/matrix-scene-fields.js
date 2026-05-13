@@ -303,7 +303,7 @@
             if (/(人群设置|种子人群|设置拉新人群|设置人群)/.test(token)) return 'crowd';
             if (/(选择趋势主题|趋势主题|趋势主题列表)/.test(token)) return 'trendTheme';
             if (/(投放调优|优化模式)/.test(token)) return 'strategy';
-            if (/(投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|投放地域\/投放时间|资源位溢价|流量智选|冷启加速)/.test(token)) return 'schedule';
+            if (/(投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|投放地域\/投放时间|资源位溢价|流量智选|AI点睛|冷启加速)/.test(token)) return 'schedule';
             return '';
         };
 
@@ -818,10 +818,30 @@
         };
 
         const getMatrixRecommendedPresetKeys = (sceneName = '') => {
-            const catalog = getMatrixDimensionPresetCatalog(sceneName);
+            const normalizedSceneName = getMatrixSceneName(sceneName);
+            const catalog = getMatrixDimensionPresetCatalog(normalizedSceneName);
             const availableKeys = new Set(catalog.map(item => item.key));
-            const preferredPresetKeys = sceneName === '关键词推广'
-                ? ['budget', 'bid_mode', 'bid_target_cost_package', 'plan_prefix', 'material_id', 'bid_target', 'day_budget', 'day_average_budget']
+            const sceneSettings = typeof buildSceneSettingsPayload === 'function'
+                ? buildSceneSettingsPayload(normalizedSceneName)
+                : {};
+            const bucket = typeof ensureSceneSettingBucket === 'function'
+                ? ensureSceneSettingBucket(normalizedSceneName)
+                : {};
+            const activeMarketingGoal = resolveMatrixSceneActiveMarketingGoal({
+                sceneName: normalizedSceneName,
+                bucket,
+                sceneSettings
+            });
+            const activeGoalScenePresetKeys = getMatrixSceneScopedFallbackLabels(normalizedSceneName, activeMarketingGoal)
+                .map(fieldLabel => buildMatrixSceneDimensionPreset(fieldLabel, normalizedSceneName))
+                .filter(item => item && isMatrixSceneFieldBindingKey(item.key || '') && availableKeys.has(item.key))
+                .map(item => item.key);
+            const preferredPresetKeys = normalizedSceneName === '关键词推广'
+                ? (activeMarketingGoal === '自定义推广'
+                    ? ['budget', 'bid_mode', 'bid_target_cost_package', 'plan_prefix', 'material_id', 'bid_target']
+                    : ['budget', 'bid_mode', 'plan_prefix', 'material_id']
+                        .concat(activeGoalScenePresetKeys)
+                        .concat(['bid_target']))
                 : ['budget', 'bid_mode', 'bid_target', 'plan_prefix', 'material_id', 'day_budget', 'day_average_budget'];
             return uniqueBy(
                 preferredPresetKeys

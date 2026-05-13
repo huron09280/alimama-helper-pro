@@ -257,6 +257,172 @@
                     });
                 });
 
+                const syncAiMaxDetailButtonLabel = (button = null) => {
+                    if (!(button instanceof HTMLButtonElement)) return;
+                    const panel = button.closest('.am-wxt-ai-max-panel');
+                    if (!(panel instanceof HTMLElement)) return;
+                    const detailSections = Array.from(panel.querySelectorAll('[data-ai-max-detail-section="deep"]'))
+                        .filter(section => section instanceof HTMLElement);
+                    if (!detailSections.length) return;
+                    const expanded = detailSections.some(section => !section.classList.contains('hidden'));
+                    button.classList.toggle('is-expanded', expanded);
+                    button.textContent = expanded ? '收起详情' : '展开详情';
+                };
+                const runAiMaxTypewriter = (panel = null) => {
+                    if (!(panel instanceof HTMLElement)) return;
+                    const targets = Array.from(panel.querySelectorAll('[data-ai-max-typewriter-text]'))
+                        .filter(target => target instanceof HTMLElement);
+                    targets.forEach((target, targetIndex) => {
+                        if (target.matches('[data-ai-max-step-detail="1"].hidden')) return;
+                        const fullText = normalizeSceneSettingValue(target.getAttribute('data-ai-max-typewriter-text') || target.textContent || '');
+                        if (!fullText) return;
+                        if (target.dataset.aiMaxTyped === '1' && target.textContent === fullText) return;
+                        if (target.dataset.aiMaxTypeTimer) {
+                            clearInterval(Number(target.dataset.aiMaxTypeTimer));
+                            delete target.dataset.aiMaxTypeTimer;
+                        }
+                        target.dataset.aiMaxTyped = '1';
+                        target.textContent = '';
+                        let cursor = 0;
+                        const startDelay = Math.min(targetIndex * 90, 420);
+                        window.setTimeout(() => {
+                            const timer = window.setInterval(() => {
+                                cursor += 1;
+                                target.textContent = fullText.slice(0, cursor);
+                                if (cursor >= fullText.length) {
+                                    clearInterval(timer);
+                                    delete target.dataset.aiMaxTypeTimer;
+                                }
+                            }, 14);
+                            target.dataset.aiMaxTypeTimer = String(timer);
+                        }, startDelay);
+                    });
+                };
+
+                if (!(wizardState.aiMaxDetailDelegatedBound)) {
+                    wizardState.aiMaxDetailDelegatedBound = true;
+                    document.addEventListener('click', (event) => {
+                        const target = event.target instanceof Element
+                            ? event.target.closest('button[data-ai-max-detail-toggle="1"]')
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) return;
+                        const panel = target.closest('.am-wxt-ai-max-panel');
+                        if (!(panel instanceof HTMLElement)) return;
+                        const detailSections = Array.from(panel.querySelectorAll('[data-ai-max-detail-section="deep"]'))
+                            .filter(section => section instanceof HTMLElement);
+                        if (!detailSections.length) return;
+                        const expanded = detailSections.some(section => !section.classList.contains('hidden'));
+                        detailSections.forEach(section => {
+                            section.classList.toggle('hidden', expanded);
+                        });
+                        syncAiMaxDetailButtonLabel(target);
+                        if (!expanded) runAiMaxTypewriter(panel);
+                    });
+                    document.addEventListener('click', (event) => {
+                        const target = event.target instanceof Element
+                            ? event.target.closest('button[data-ai-max-step-toggle="1"]')
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) return;
+                        const step = target.closest('[data-ai-max-deep-step]');
+                        if (!(step instanceof HTMLElement)) return;
+                        const desc = step.querySelector('[data-ai-max-step-detail="1"]');
+                        if (!(desc instanceof HTMLElement)) return;
+                        const expanded = !desc.classList.contains('hidden');
+                        desc.classList.toggle('hidden', expanded);
+                        target.textContent = expanded ? '展开详情' : '收起详情';
+                        target.classList.toggle('is-expanded', !expanded);
+                        if (!expanded) runAiMaxTypewriter(step);
+                    });
+                    document.addEventListener('click', (event) => {
+                        const target = event.target instanceof Element
+                            ? event.target.closest('button[data-ai-max-demand-next="1"]')
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) return;
+                        const panel = target.closest('.am-wxt-ai-max-panel');
+                        const list = panel?.querySelector('[data-ai-max-demand-list="1"]');
+                        if (!(list instanceof HTMLElement)) return;
+                        const card = list.querySelector('[data-ai-max-demand-preview]');
+                        const step = card instanceof HTMLElement
+                            ? Math.max(card.getBoundingClientRect().width + 12, list.clientWidth / 3)
+                            : Math.max(240, list.clientWidth / 3);
+                        if (list.scrollLeft + list.clientWidth >= list.scrollWidth - 4) {
+                            list.scrollTo({ left: 0, behavior: 'smooth' });
+                        } else {
+                            list.scrollBy({ left: step, behavior: 'smooth' });
+                        }
+                    });
+                }
+
+                const aiMaxDetailToggleButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-detail-toggle="1"]');
+                aiMaxDetailToggleButtons.forEach(button => {
+                    syncAiMaxDetailButtonLabel(button);
+                });
+                const aiMaxDemandSelectorTriggers = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-demand-selector-trigger="1"]');
+                aiMaxDemandSelectorTriggers.forEach(button => {
+                    if (!(button instanceof HTMLElement)) return;
+                    button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openKeywordAiMaxDemandPopover(button);
+                    });
+                    button.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        openKeywordAiMaxDemandPopover(button);
+                    });
+                });
+
+                const renderAiMaxSearchWords = (words = []) => (Array.isArray(words) ? words : []).slice(0, 6).map((word, index) => {
+                    const safeWord = Utils.escapeHtml(normalizeSceneSettingValue(word || ''));
+                    if (!safeWord) return '';
+                    return `<span class="am-wxt-ai-max-word word-${(index % 3) + 1}">${safeWord}</span>`;
+                }).join('');
+                const renderAiMaxPersonas = (personas = []) => (Array.isArray(personas) ? personas : []).slice(0, 3).map((item) => {
+                    const title = Utils.escapeHtml(normalizeSceneSettingValue(item?.title || item?.name || '搜索人群'));
+                    const desc = Utils.escapeHtml(normalizeSceneSettingValue(item?.desc || item?.description || ''));
+                    return `
+                        <div class="am-wxt-ai-max-persona">
+                            <span class="am-wxt-ai-max-persona-icon">P</span>
+                            <span>
+                                <b>${title}</b>
+                                <em>${desc}</em>
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+                const parseAiMaxDemandPayload = (rawValue = '', fallback = []) => {
+                    try {
+                        const parsed = JSON.parse(String(rawValue || '[]'));
+                        return Array.isArray(parsed) ? parsed : fallback;
+                    } catch {
+                        return fallback;
+                    }
+                };
+                const aiMaxDemandCards = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-demand-preview]');
+                aiMaxDemandCards.forEach(card => {
+                    if (!(card instanceof HTMLButtonElement)) return;
+                    card.addEventListener('click', () => {
+                        const panel = card.closest('.am-wxt-ai-max-panel');
+                        if (!(panel instanceof HTMLElement)) return;
+                        panel.querySelectorAll('[data-ai-max-demand-preview]').forEach(peer => {
+                            peer.classList.toggle('active', peer === card);
+                        });
+                        const analysis = normalizeSceneSettingValue(card.getAttribute('data-ai-max-demand-analysis') || '');
+                        const analysisTarget = panel.querySelector('[data-ai-max-analysis-target="1"]');
+                        if (analysisTarget instanceof HTMLElement) {
+                            analysisTarget.innerHTML = analysis ? `<b>AI解析：</b>${Utils.escapeHtml(analysis)}` : '';
+                        }
+                        const wordTarget = panel.querySelector('[data-ai-max-word-target="1"]');
+                        if (wordTarget instanceof HTMLElement) {
+                            wordTarget.innerHTML = renderAiMaxSearchWords(parseAiMaxDemandPayload(card.getAttribute('data-ai-max-demand-search-words') || '[]'));
+                        }
+                        const personaTarget = panel.querySelector('[data-ai-max-persona-target="1"]');
+                        if (personaTarget instanceof HTMLElement) {
+                            personaTarget.innerHTML = renderAiMaxPersonas(parseAiMaxDemandPayload(card.getAttribute('data-ai-max-demand-personas') || '[]'));
+                        }
+                    });
+                });
+
                 const sceneOptionButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-option]');
                 sceneOptionButtons.forEach(button => {
                     button.addEventListener('click', (event) => {
@@ -339,6 +505,25 @@
                         hiddenControl.value = toggle.checked ? onValue : offValue;
                         hiddenControl.dispatchEvent(new Event('input', { bubbles: true }));
                         hiddenControl.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (onValue === '查看和添加关键词') {
+                            const manualPanel = wizardState.els.sceneDynamic?.querySelector?.('[data-manual-keyword-panel]');
+                            const manualToggle = manualPanel?.querySelector?.('button[data-manual-keyword-collapse-toggle]');
+                            if (manualPanel instanceof HTMLElement) {
+                                const nextCollapsed = !toggle.checked;
+                                manualPanel.classList.toggle('is-collapsed', nextCollapsed);
+                                manualPanel.setAttribute('data-manual-keyword-collapsed', nextCollapsed ? '1' : '0');
+                                if (manualToggle instanceof HTMLButtonElement) {
+                                    manualToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+                                    manualToggle.textContent = nextCollapsed ? '展开' : '收起';
+                                }
+                                wizardState.manualKeywordPanelCollapsed = nextCollapsed;
+                                ensureWizardDraft().manualKeywordPanelCollapsed = nextCollapsed;
+                                commitDraftState();
+                                if (toggle.checked && typeof manualPanel.scrollIntoView === 'function') {
+                                    manualPanel.scrollIntoView({ block: 'nearest' });
+                                }
+                            }
+                        }
                     });
                 });
 
@@ -427,9 +612,13 @@
                 });
 
                 const updateScenePopupSummary = (row, trigger, text) => {
-                    const summaryEl = row?.querySelector?.(`[data-scene-popup-summary="${trigger}"]`);
-                    if (summaryEl instanceof HTMLElement) {
-                        summaryEl.textContent = String(text || '').trim() || '未配置';
+                    const summaryEl = row?.isConnected
+                        ? row?.querySelector?.(`[data-scene-popup-summary="${trigger}"]`)
+                        : null;
+                    const fallbackSummaryEl = summaryEl
+                        || wizardState.els.sceneDynamic?.querySelector?.(`[data-scene-popup-summary="${trigger}"]`);
+                    if (fallbackSummaryEl instanceof HTMLElement) {
+                        fallbackSummaryEl.textContent = String(text || '').trim() || '未配置';
                     }
                 };
                 const dispatchSceneControlUpdate = (control, nextValue = '') => {
@@ -437,6 +626,192 @@
                     control.value = String(nextValue || '');
                     control.dispatchEvent(new Event('input', { bubbles: true }));
                     control.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+                const updateKeywordAiMaxDemandSummaryLabel = (triggerButton = null, count = 0) => {
+                    if (!(triggerButton instanceof HTMLElement)) return;
+                    const countText = `${Math.max(0, Number(count) || 0)}个需求`;
+                    const countEl = triggerButton.querySelector('b');
+                    if (countEl instanceof HTMLElement) {
+                        countEl.textContent = countText;
+                    } else {
+                        triggerButton.textContent = `已选：${countText}`;
+                    }
+                };
+                const closeKeywordAiMaxDemandPopover = () => {
+                    const existing = document.getElementById('am-wxt-ai-max-demand-popover');
+                    if (existing) existing.remove();
+                    document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                    document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    wizardState.aiMaxDemandPopoverOutsideClick = null;
+                    wizardState.aiMaxDemandPopoverEscClose = null;
+                };
+                const openKeywordAiMaxDemandPopover = (triggerButton = null) => {
+                    if (!(triggerButton instanceof HTMLElement)) return;
+                    const fieldKey = String(triggerButton.getAttribute('data-ai-max-info-field') || '').trim();
+                    if (!fieldKey || !wizardState.els.sceneDynamic) return;
+                    const infoControl = wizardState.els.sceneDynamic.querySelector(`input[data-scene-field="${fieldKey}"]`);
+                    if (!(infoControl instanceof HTMLInputElement || infoControl instanceof HTMLTextAreaElement)) return;
+                    let info = {};
+                    try {
+                        info = JSON.parse(infoControl.value || '{}') || {};
+                    } catch {
+                        info = {};
+                    }
+                    const allDemandList = Array.isArray(info.demandList) && info.demandList.length
+                        ? info.demandList
+                        : (Array.isArray(info.selectedDemandList) ? info.selectedDemandList : []);
+                    const uniqueDemandList = uniqueBy(
+                        allDemandList.map(item => normalizeSceneSettingValue(item || '')).filter(Boolean),
+                        item => item
+                    ).slice(0, 20);
+                    const selectedSet = new Set(
+                        (Array.isArray(info.selectedDemandList) ? info.selectedDemandList : uniqueDemandList)
+                            .map(item => normalizeSceneSettingValue(item || ''))
+                            .filter(Boolean)
+                    );
+                    closeKeywordAiMaxDemandPopover();
+                    const popover = document.createElement('div');
+                    popover.id = 'am-wxt-ai-max-demand-popover';
+                    popover.className = 'am-wxt-ai-max-demand-popover';
+                    const renderCheck = (title = '', checked = true, isAll = false) => `
+                        <label class="am-wxt-ai-max-demand-popover-item${isAll ? ' all' : ''}">
+                            <input
+                                type="checkbox"
+                                ${checked ? 'checked' : ''}
+                                ${isAll ? 'data-ai-max-demand-popover-all="1"' : `data-ai-max-demand-popover-item="${Utils.escapeHtml(title)}"`}
+                            />
+                            <span class="am-wxt-ai-max-demand-popover-check">✓</span>
+                            <span class="am-wxt-ai-max-demand-popover-text">${Utils.escapeHtml(title)}</span>
+                        </label>
+                    `;
+                    const checkedCount = uniqueDemandList.filter(item => selectedSet.has(item)).length;
+                    popover.innerHTML = `
+                        <div class="am-wxt-ai-max-demand-popover-body">
+                            <div class="am-wxt-ai-max-demand-popover-head">
+                                ${renderCheck('全选', uniqueDemandList.length > 0 && checkedCount === uniqueDemandList.length, true)}
+                                <span class="am-wxt-ai-max-demand-popover-count">已选：<b>${checkedCount}</b></span>
+                            </div>
+                            <div class="am-wxt-ai-max-demand-popover-list">
+                                ${uniqueDemandList.map(title => renderCheck(title, selectedSet.has(title))).join('')}
+                            </div>
+                        </div>
+                        <div class="am-wxt-ai-max-demand-popover-foot">
+                            <button type="button" class="am-wxt-btn primary" data-ai-max-demand-popover-confirm="1">确定</button>
+                            <button type="button" class="am-wxt-btn" data-ai-max-demand-popover-cancel="1">取消</button>
+                        </div>
+                    `;
+                    document.body.appendChild(popover);
+                    const positionPopover = () => {
+                        const rect = triggerButton.getBoundingClientRect();
+                        const popRect = popover.getBoundingClientRect();
+                        const gap = 8;
+                        const left = Math.min(
+                            Math.max(8, rect.right - popRect.width),
+                            Math.max(8, window.innerWidth - popRect.width - 8)
+                        );
+                        const top = Math.min(
+                            rect.bottom + gap,
+                            Math.max(8, window.innerHeight - popRect.height - 8)
+                        );
+                        popover.style.left = `${left + window.scrollX}px`;
+                        popover.style.top = `${top + window.scrollY}px`;
+                    };
+                    positionPopover();
+                    const countEl = popover.querySelector('.am-wxt-ai-max-demand-popover-count b');
+                    const syncPopoverState = () => {
+                        const checks = Array.from(popover.querySelectorAll('[data-ai-max-demand-popover-item]'))
+                            .filter(item => item instanceof HTMLInputElement);
+                        const allCheck = popover.querySelector('[data-ai-max-demand-popover-all="1"]');
+                        const selectedCount = checks.filter(item => item.checked).length;
+                        if (countEl instanceof HTMLElement) countEl.textContent = String(selectedCount);
+                        if (allCheck instanceof HTMLInputElement) {
+                            allCheck.checked = checks.length > 0 && selectedCount === checks.length;
+                            allCheck.indeterminate = selectedCount > 0 && selectedCount < checks.length;
+                        }
+                    };
+                    const allCheck = popover.querySelector('[data-ai-max-demand-popover-all="1"]');
+                    if (allCheck instanceof HTMLInputElement) {
+                        allCheck.addEventListener('change', () => {
+                            popover.querySelectorAll('[data-ai-max-demand-popover-item]').forEach(item => {
+                                if (item instanceof HTMLInputElement) item.checked = allCheck.checked;
+                            });
+                            syncPopoverState();
+                        });
+                    }
+                    popover.querySelectorAll('[data-ai-max-demand-popover-item]').forEach(item => {
+                        if (item instanceof HTMLInputElement) {
+                            item.addEventListener('change', syncPopoverState);
+                        }
+                    });
+                    const cancelButton = popover.querySelector('[data-ai-max-demand-popover-cancel="1"]');
+                    if (cancelButton instanceof HTMLButtonElement) {
+                        cancelButton.addEventListener('click', closeKeywordAiMaxDemandPopover);
+                    }
+                    const confirmButton = popover.querySelector('[data-ai-max-demand-popover-confirm="1"]');
+                    if (confirmButton instanceof HTMLButtonElement) {
+                        confirmButton.addEventListener('click', () => {
+                            const selectedDemandList = Array.from(popover.querySelectorAll('[data-ai-max-demand-popover-item]'))
+                                .filter(item => item instanceof HTMLInputElement && item.checked)
+                                .map(item => normalizeSceneSettingValue(item.getAttribute('data-ai-max-demand-popover-item') || ''))
+                                .filter(Boolean);
+                            const nextInfo = {
+                                ...info,
+                                selectedDemandList
+                            };
+                            const nextInfoRaw = JSON.stringify(nextInfo);
+                            const activeSceneName = String(wizardState.els.sceneSelect?.value || wizardState.draft?.sceneName || '关键词推广').trim();
+                            const activeBucket = ensureSceneSettingBucket(activeSceneName);
+                            const activeTouchedBucket = ensureSceneTouchedBucket(activeSceneName);
+                            const normalizedFieldKey = normalizeSceneFieldKey(fieldKey);
+                            activeBucket[fieldKey] = nextInfoRaw;
+                            if (normalizedFieldKey) activeBucket[normalizedFieldKey] = nextInfoRaw;
+                            activeTouchedBucket[fieldKey] = true;
+                            if (normalizedFieldKey) activeTouchedBucket[normalizedFieldKey] = true;
+                            try {
+                                const generationMap = typeof getKeywordAiMaxGenerationMap === 'function'
+                                    ? getKeywordAiMaxGenerationMap()
+                                    : null;
+                                if (generationMap && typeof generationMap === 'object') {
+                                    Object.keys(generationMap).forEach(key => {
+                                        const entry = generationMap[key];
+                                        if (!isPlainObject(entry?.info)) return;
+                                        const sameItem = normalizeSceneSettingValue(entry.info.itemId || '') === normalizeSceneSettingValue(nextInfo.itemId || '');
+                                        const sameTitle = normalizeSceneSettingValue(entry.info.itemTitle || '') === normalizeSceneSettingValue(nextInfo.itemTitle || '');
+                                        if (!sameItem && !sameTitle) return;
+                                        entry.info = {
+                                            ...entry.info,
+                                            selectedDemandList
+                                        };
+                                    });
+                                }
+                            } catch { }
+                            Array.from(wizardState.els.sceneDynamic.querySelectorAll(`[data-scene-field="${fieldKey}"]`))
+                                .forEach(control => {
+                                    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+                                        control.value = nextInfoRaw;
+                                    }
+                                });
+                            dispatchSceneControlUpdate(infoControl, nextInfoRaw);
+                            updateKeywordAiMaxDemandSummaryLabel(triggerButton, selectedDemandList.length);
+                            closeKeywordAiMaxDemandPopover();
+                            renderSceneDynamicConfig();
+                        });
+                    }
+                    wizardState.aiMaxDemandPopoverOutsideClick = (event) => {
+                        const target = event.target;
+                        if (target instanceof Node && (popover.contains(target) || triggerButton.contains(target))) return;
+                        closeKeywordAiMaxDemandPopover();
+                    };
+                    wizardState.aiMaxDemandPopoverEscClose = (event) => {
+                        if (event?.key !== 'Escape') return;
+                        event.preventDefault();
+                        closeKeywordAiMaxDemandPopover();
+                    };
+                    setTimeout(() => {
+                        document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                        document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    }, 0);
+                    syncPopoverState();
                 };
                 const openScenePopupDialog = ({
                     title = '',
@@ -989,12 +1364,4 @@
                         });
                     });
                     return output;
-                };
-                const isLaunchPeriodAllDay = (rawValue = '') => {
-                    const list = parseScenePopupJsonArray(rawValue, []);
-                    if (!list.length) return false;
-                    return list.every(item => {
-                        const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
-                        return spanList.length === 1 && String(spanList[0]?.time || '').trim() === '00:00-24:00';
-                    });
                 };

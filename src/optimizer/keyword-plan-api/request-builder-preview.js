@@ -719,25 +719,30 @@
                     touchedBucket[strategyFieldKey] = true;
                 }
 
-                const editingStrategy = getStrategyById(wizardState.editingStrategyId)
+                const activeStrategies = (Array.isArray(wizardState.strategyList) ? wizardState.strategyList : [])
+                    .filter(strategy => isPlainObject(strategy) && strategy.enabled !== false);
+                const fallbackStrategy = getStrategyById(wizardState.editingStrategyId)
                     || wizardState.strategyList?.[0]
                     || null;
-                if (isPlainObject(editingStrategy)) {
-                    editingStrategy.marketingGoal = normalizedGoal;
-                    editingStrategy.sceneName = currentSceneName;
-                    editingStrategy.sceneSettingValues = isPlainObject(editingStrategy.sceneSettingValues)
-                        ? editingStrategy.sceneSettingValues
+                const targetStrategies = activeStrategies.length
+                    ? activeStrategies
+                    : (isPlainObject(fallbackStrategy) ? [fallbackStrategy] : []);
+                targetStrategies.forEach((strategy) => {
+                    strategy.marketingGoal = normalizedGoal;
+                    strategy.sceneName = currentSceneName;
+                    strategy.sceneSettingValues = isPlainObject(strategy.sceneSettingValues)
+                        ? strategy.sceneSettingValues
                         : {};
-                    editingStrategy.sceneSettings = isPlainObject(editingStrategy.sceneSettings)
-                        ? editingStrategy.sceneSettings
+                    strategy.sceneSettings = isPlainObject(strategy.sceneSettings)
+                        ? strategy.sceneSettings
                         : {};
-                    [editingStrategy.sceneSettingValues, editingStrategy.sceneSettings].forEach(targetBucket => {
+                    [strategy.sceneSettingValues, strategy.sceneSettings].forEach(targetBucket => {
                         targetBucket[goalFieldKey] = normalizedGoal;
                         if (currentSceneName === '关键词推广') {
                             targetBucket[strategyFieldKey] = normalizedGoal;
                         }
                     });
-                }
+                });
 
                 renderSceneDynamicConfig();
                 commitStrategyUiState({
@@ -765,6 +770,7 @@
                 }
                 const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
                 renderWorkbenchMatrixGoalSelector(currentSceneName);
+                const activeMarketingGoal = getMatrixActiveMarketingGoal(currentSceneName);
                 const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, currentSceneName);
                 const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
                     ? wizardState.strategyList.filter(item => item?.enabled !== false).length
@@ -980,9 +986,11 @@
                 if (wizardState.els.matrixIntro instanceof HTMLElement) {
                     wizardState.els.matrixIntro.textContent = !canEditMatrixDimensions
                         ? '先在上方切换场景，矩阵维度会按该场景同步展示。'
-                        : currentSceneName === '关键词推广'
+                        : currentSceneName === '关键词推广' && activeMarketingGoal === '自定义推广'
                             ? '推荐先配预算、出价方式、智能出价目标包、计划名前缀、商品，再补充匹配方式等场景维度。'
-                            : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。';
+                            : (currentSceneName === '关键词推广'
+                                ? '推荐先配预算、出价方式、计划名前缀、商品，再补充当前营销目标维度。'
+                                : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。');
                 }
                 if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
                     wizardState.els.matrixApplyRecommendedBtn.disabled = !canEditMatrixDimensions;
@@ -1864,7 +1872,8 @@
                 wizardState.addedItems = wizardState.addedItems.concat(pick);
                 commitItemSelectionUiState({
                     renderAdded: true,
-                    renderCandidate: true
+                    renderCandidate: true,
+                    renderSceneDynamic: true
                 });
                 appendWizardLog(`已批量添加 ${pick.length} 个商品`, 'success');
             };
@@ -1872,7 +1881,8 @@
                 wizardState.addedItems = [];
                 commitItemSelectionUiState({
                     renderAdded: true,
-                    renderCandidate: true
+                    renderCandidate: true,
+                    renderSceneDynamic: true
                 });
             };
             (Array.isArray(wizardState.els.workbenchTabs) ? wizardState.els.workbenchTabs : []).forEach((btn) => {
@@ -2013,7 +2023,16 @@
                         const existingStrategyList = Array.isArray(wizardState?.strategyList)
                             ? wizardState.strategyList
                             : [];
-                        wizardState.strategyList = [...existingStrategyList, ...materializedStrategies];
+                        const disabledTemplateCount = existingStrategyList.filter(item => item?.enabled !== false).length;
+                        const nextExistingStrategyList = existingStrategyList.map((strategy) => {
+                            if (!isPlainObject(strategy)) return strategy;
+                            if (strategy.enabled === false) return strategy;
+                            return {
+                                ...strategy,
+                                enabled: false
+                            };
+                        });
+                        wizardState.strategyList = [...nextExistingStrategyList, ...materializedStrategies];
                         wizardState.editingStrategyId = materializedStrategies[0]?.id || wizardState.strategyList[0]?.id || '';
                         if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
                             wizardState.els.matrixEnabledInput.checked = false;
@@ -2021,7 +2040,7 @@
                         setDetailVisible(false);
                         setWorkbenchPage('home');
                         commitStrategyUiState();
-                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个）`, 'success');
+                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个），源模板已暂停 ${disabledTemplateCount} 个`, 'success');
                     } catch (err) {
                         showMatrixGenerateFeedback(`生成计划失败：${err?.message || err}`);
                     }

@@ -232,16 +232,21 @@ test('矩阵物化顺序支持智能出价目标包覆盖普通出价目标', ()
   );
 });
 
-test('关键词矩阵推荐优先露出智能出价目标包', () => {
+test('关键词矩阵仅在自定义推广推荐优先露出智能出价目标包', () => {
   assert.match(
     source,
-    /const preferredPresetKeys = sceneName === '关键词推广'[\s\S]*?'budget',\s*'bid_mode',\s*'bid_target_cost_package',\s*'plan_prefix',\s*'material_id',\s*'bid_target'/,
-    '关键词矩阵推荐维度未优先露出智能出价目标包'
+    /const preferredPresetKeys = normalizedSceneName === '关键词推广'[\s\S]*?activeMarketingGoal === '自定义推广'[\s\S]*?'budget',\s*'bid_mode',\s*'bid_target_cost_package',\s*'plan_prefix',\s*'material_id',\s*'bid_target'[\s\S]*?: \['budget',\s*'bid_mode',\s*'plan_prefix',\s*'material_id'\][\s\S]*?\.concat\(activeGoalScenePresetKeys\)/,
+    '关键词矩阵推荐维度未按营销目标区分自定义推广目标包与其他目标专属字段'
   );
   assert.match(
     source,
     /推荐先配预算、出价方式、智能出价目标包、计划名前缀、商品，再补充匹配方式等场景维度。/,
-    '矩阵页提示文案未同步到智能出价目标包'
+    '自定义推广矩阵页提示文案未保留智能出价目标包'
+  );
+  assert.match(
+    source,
+    /推荐先配预算、出价方式、计划名前缀、商品，再补充当前营销目标维度。/,
+    '非自定义关键词目标矩阵页提示文案未避开智能出价目标包'
   );
 });
 

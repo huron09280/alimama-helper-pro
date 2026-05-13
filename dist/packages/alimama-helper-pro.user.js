@@ -4079,21 +4079,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     overlay.classList.add('open');
                     return true;
                 };
+                const reportKeywordPlanOpenFailure = (err) => {
+                    const message = err?.message || String(err || '未知错误');
+                    Logger.log(`⚠️ 组建计划打开失败：${message}`, true);
+                    if (openExistingKeywordOverlay()) {
+                        Logger.log('ℹ️ 已打开已有关键词计划弹窗（兜底）');
+                        return;
+                    }
+                    alert(`组建计划模块打开失败：${message}，请刷新页面重试`);
+                };
+                const openKeywordPlanWizard = (targetApi) => {
+                    if (!targetApi || typeof targetApi.openWizard !== 'function') return false;
+                    try {
+                        const result = targetApi.openWizard();
+                        if (result && typeof result.catch === 'function') {
+                            result.catch(reportKeywordPlanOpenFailure);
+                        }
+                        return true;
+                    } catch (err) {
+                        reportKeywordPlanOpenFailure(err);
+                        return true;
+                    }
+                };
 
                 keywordPlanBtn.onclick = () => {
                     const api = resolveKeywordPlanApi();
-                    if (api && typeof api.openWizard === 'function') {
-                        api.openWizard();
-                        return;
-                    }
+                    if (openKeywordPlanWizard(api)) return;
                     if (openExistingKeywordOverlay()) return;
 
                     Logger.log('⚠️ 关键词建计划模块初始化中...', true);
                     setTimeout(() => {
                         const retryApi = resolveKeywordPlanApi();
-                        if (retryApi && typeof retryApi.openWizard === 'function') {
-                            retryApi.openWizard();
-                        } else if (openExistingKeywordOverlay()) {
+                        if (openKeywordPlanWizard(retryApi)) {
+                            return;
+                        }
+                        if (openExistingKeywordOverlay()) {
                             Logger.log('ℹ️ 已打开关键词计划弹窗（兜底）');
                         } else {
                             alert('组建计划模块不可用，请刷新页面重试');
@@ -13837,7 +13857,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
     }
 
-    main();
+    let hasBootstrapped = false;
+    const bootstrapMain = () => {
+        if (hasBootstrapped) return;
+        if (!document.body) return;
+        hasBootstrapped = true;
+        main();
+    };
+
+    bootstrapMain();
+
+    if (!hasBootstrapped) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootstrapMain, { once: true });
+        } else {
+            const timer = setInterval(() => {
+                bootstrapMain();
+                if (hasBootstrapped) clearInterval(timer);
+            }, 16);
+            setTimeout(() => clearInterval(timer), 10000);
+        }
+    }
 
 })();
 // ==========================================
@@ -13871,7 +13911,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
  * - ✨ API 请求超时处理（默认 30 秒）
  * - ✨ 请求失败自动重试（最多 3 次）
  */
-
 (function () {
     'use strict';
 
@@ -14614,7 +14653,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             wordPackageSuggestDefault: '/wordpackage/suggest/default/list.json',
             bidwordAdd: '/bidword/add.json',
             labelFindList: '/label/findList.json',
-            crowdFindRecommend: '/crowd/findRecommendCrowd.json'
+            crowdFindRecommend: '/crowd/findRecommendCrowd.json',
+            budgetSuggestion: '/algo/getBudgetSuggestion.json',
+            effectPrediction: '/algo/getEffectPrediction.json'
         };
         const runtimeCache = {
             value: null,
@@ -14672,6 +14713,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             manualKeywordDelegatedBound: false,
             manualKeywordPanelCollapsed: true,
             keywordMetricMap: {},
+            keywordAiMaxGenerationMap: {},
             crowdCustomDefaultItemPending: null,
             els: {}
         };
@@ -15214,7 +15256,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 dayAverageBudget
             };
         };
-
         const getRuntimeDefaults = async (forceRefresh = false) => {
             if (!forceRefresh && runtimeCache.value) {
                 return deepClone(runtimeCache.value);
@@ -15367,7 +15408,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '线索推广': true
         };
         const SCENE_SKIP_TEXT_RE = /^(上手指南|了解更多|了解详情|思考过程|立即投放|生成其他策略|创建完成|保存并关闭|清空|升级|收起|展开)$/;
-        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|趋势主题|趋势主题列表|套餐卡|套餐包|套餐包档位|自动续投|套餐包自动续投|种子人群|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
+        const SCENE_FIELD_LABEL_RE = /^(场景名称|营销目标|营销场景|计划名称|预算类型|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|选品方式|关键词设置|核心词设置|关键词匹配方式|默认匹配方式|匹配方式|流量智选|AI点睛|开启冷启加速|冷启加速|人群设置|过滤人群|优质计划防停投|资源位溢价|投放地域\/投放时间|人群优化目标|客户口径设置|人群价值设置|创意设置|智能创意|添加商品|选择推广商品|选择解决方案|设置计划组|计划组|收集销售线索|投放资源位\/投放地域\/投放时间|投放资源位\/投放地域\/分时折扣|推广模式|投放策略|投放调优|优化模式|优化目标|投放日期|投放时间|分时折扣|发布日期|投放地域|起量时间地域设置|选择卡位方案|卡位方式|趋势主题|趋势主题列表|套餐卡|套餐包|套餐包档位|自动续投|套餐包自动续投|种子人群|选择拉新方案|选择方式|选择方案|选择优化方向|选择推广主体|设置拉新人群|设置词包|设置人群|设置创意|设置落地页|设置宝贝落地页|设置出价及预算|设置预算及排期|设置商品推广方案)$/;
         const SCENE_SECTION_ONLY_LABEL_RE = /^(营销场景与目标|营销场景|推广方案设置(?:-.+)?|推广方案设置|设置预算(?:及排期)?|设置基础信息|高级设置|创建完成|收集销售线索|行业解决方案|自定义方案)$/;
         const SCENE_LABEL_NOISE_RE = /[，。,！？!；;]/;
         const SCENE_LABEL_NOISE_PREFIX_RE = /^(请|建议|支持|算法|未添加|如有|当前|完成后|符合条件|在投商品|想探测|卡位客户都在玩|流量规模)/;
@@ -15470,6 +15511,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 一键起量预算: '50',
                 投放时间: '长期投放',
                 投放地域: '全部地域',
+                优质计划防停投: '开启',
+                智能创意: '开启',
                 计划组: '不设置计划组'
             },
             '关键词推广': {
@@ -15480,6 +15523,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 核心词设置: '添加关键词',
                 匹配方式: '广泛',
                 流量智选: '开启',
+                AI点睛: '开启',
                 开启冷启加速: '开启',
                 卡位方式: '抢首条'
             },
@@ -15556,6 +15600,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 { label: '出价目标', options: ['增加总成交金额', '增加净成交金额'], defaultValue: '增加净成交金额' },
                 { label: '预算类型', options: ['不限预算', '每日预算', '日均预算'], defaultValue: '不限预算' },
                 { label: '投放调优', options: ['多目标优化', '日常优化'], defaultValue: '多目标优化' },
+                { label: '优质计划防停投', options: ['开启', '关闭'], defaultValue: '开启' },
+                { label: '智能创意', options: ['开启', '关闭'], defaultValue: '开启' },
                 { label: '发布日期', options: ['长期投放', '立即投放'], defaultValue: '长期投放' },
                 { label: '投放时间', options: ['长期投放', '不限时段', '固定时段'], defaultValue: '长期投放' },
                 { label: '投放地域', options: ['全部地域'], defaultValue: '全部地域' },
@@ -15568,6 +15614,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     { label: '核心词设置', options: ['添加关键词', '系统推荐词', '手动自选词'], defaultValue: '添加关键词' },
                     { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' },
                     { label: '流量智选', options: ['开启', '关闭'], defaultValue: '开启' },
+                    { label: 'AI点睛', options: ['开启', '关闭'], defaultValue: '开启' },
                     { label: '开启冷启加速', options: ['开启', '关闭'], defaultValue: '开启' },
                     { label: '卡位方式', options: ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'], defaultValue: '抢首条' },
                     { label: '添加商品', options: ['全部商品', '机会品推荐', '自定义选品'], defaultValue: '全部商品' },
@@ -15611,9 +15658,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     { label: 'campaign.aiMaxInfo', defaultValue: '' }
                 ],
                 自定义推广: [
+                    { label: 'AI点睛', options: ['开启', '关闭'], defaultValue: '开启' },
                     { label: '匹配方式', options: ['广泛', '中心词', '精准'], defaultValue: '广泛' },
-                    { label: 'campaign.aiMaxSwitch', defaultValue: '' },
-                    { label: 'campaign.aiMaxInfo', defaultValue: '' }
+                    { label: 'campaign.aiMaxSwitch', defaultValue: '1' },
+                    { label: 'campaign.aiMaxInfo', defaultValue: '{"aiMaxSwitch":1}' }
                 ]
             },
             '人群推广': [
@@ -21660,6 +21708,255 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
         };
 
+        const KEYWORD_AI_MAX_NATIVE_PROMPT = '快速积累精准成交流量。如投放叶子类目成交词，与商品卖点精准匹配的搜索词，与商品历史成交人群相似的人群';
+        const parseAiMaxJsonList = (value) => {
+            if (Array.isArray(value)) return value;
+            const text = String(value || '').trim();
+            if (!text) return [];
+            try {
+                const parsed = JSON.parse(text);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        };
+        const parseAiMaxEventStream = (rawText = '') => {
+            const list = [];
+            String(rawText || '').split(/\r?\n/).forEach((line) => {
+                if (!line.startsWith('data:')) return;
+                const body = line.slice(5).trim();
+                if (!body || body === '[DONE]') return;
+                try {
+                    const parsed = JSON.parse(body);
+                    if (parsed && typeof parsed === 'object') list.push(parsed);
+                } catch { }
+            });
+            return list;
+        };
+        const pickFinalAiMaxEventData = (events = []) => {
+            const completed = events
+                .map(event => event?.data)
+                .filter(data => data?.additionalData?.complete && data?.additionalData?.aiMaxInfo);
+            if (completed.length) return completed[completed.length - 1];
+            const withInfo = events
+                .map(event => event?.data)
+                .filter(data => data?.additionalData?.aiMaxInfo);
+            return withInfo.length ? withInfo[withInfo.length - 1] : null;
+        };
+        const normalizeNativeAiMaxInfo = ({
+            item = {},
+            aiData = {},
+            budgetData = {},
+            effectData = {}
+        } = {}) => {
+            const itemId = String(toIdValue(item?.materialId || item?.itemId || item?.id || '') || '').trim();
+            const itemTitle = String(item?.materialName || item?.itemTitle || item?.title || item?.name || item?.itemName || '').trim();
+            const additionalData = isPlainObject(aiData?.additionalData) ? aiData.additionalData : {};
+            const nativeInfo = isPlainObject(additionalData.aiMaxInfo) ? additionalData.aiMaxInfo : {};
+            const crowdList = Array.isArray(additionalData.crowdList) ? additionalData.crowdList : [];
+            const firstCrowd = crowdList.find(entry => entry?.crowd?.properties) || crowdList[0] || {};
+            const firstProperties = isPlainObject(firstCrowd?.crowd?.properties) ? firstCrowd.crowd.properties : {};
+            const demandList = uniqueBy(
+                crowdList
+                    .map(entry => String(entry?.crowd?.crowdName || entry?.crowd?.label?.optionList?.[0]?.optionName || '').trim())
+                    .filter(Boolean),
+                value => value
+            );
+            const searchWordList = uniqueBy(
+                crowdList.flatMap((entry) => {
+                    const properties = isPlainObject(entry?.crowd?.properties) ? entry.crowd.properties : {};
+                    return parseAiMaxJsonList(properties.searchWordList)
+                        .map(word => String(word?.name || word?.word || word || '').trim())
+                        .filter(Boolean);
+                }),
+                value => value
+            ).slice(0, 30);
+            const personaList = parseAiMaxJsonList(firstProperties.crowdProfileList)
+                .map(profile => ({
+                    title: String(profile?.name || profile?.title || '').trim(),
+                    desc: String(profile?.desc || profile?.description || '').trim()
+                }))
+                .filter(profile => profile.title || profile.desc)
+                .slice(0, 6);
+            const budgetAmount = String(
+                budgetData?.budgetDefault
+                || budgetData?.algoBudget
+                || budgetData?.budgetMiddle
+                || ''
+            ).trim();
+            const clickEstimate = String(effectData?.click || '').trim();
+            return {
+                itemId,
+                itemTitle,
+                aiMaxSwitch: 1,
+                nativeGenerated: true,
+                nativeSource: 'businessTalk',
+                nativeTraceId: String(aiData?.traceId || budgetData?.traceId || effectData?.traceId || '').trim(),
+                trafficAppeal: String(nativeInfo.aiMaxPureUserInput || KEYWORD_AI_MAX_NATIVE_PROMPT).trim(),
+                aiMaxReason: String(nativeInfo.aiMaxReason || '').trim(),
+                aiMaxDeliveryPlan: String(nativeInfo.aiMaxDeliveryPlan || '').trim(),
+                selectedDemandList: demandList,
+                demandList,
+                centerShieldWordList: Array.isArray(additionalData.shieldCenterWords) ? additionalData.shieldCenterWords : [],
+                exactShieldWordList: Array.isArray(additionalData.shieldWords) ? additionalData.shieldWords : [],
+                searchWordList,
+                personaList,
+                analysis: String(firstProperties.description || nativeInfo.aiMaxReason || '').trim(),
+                budgetSuggestion: {
+                    amount: budgetAmount,
+                    clickEstimate,
+                    rawBudget: isPlainObject(budgetData) ? budgetData : {},
+                    rawEffect: isPlainObject(effectData) ? effectData : {}
+                },
+                nativeCrowdList: crowdList
+            };
+        };
+        const requestAiMaxBusinessTalk = async ({ bizCode, item, requestOptions } = {}) => {
+            const token = ensureTokens();
+            const itemId = toIdValue(item?.materialId || item?.itemId || item?.id || '');
+            const itemTitle = String(item?.materialName || item?.itemTitle || item?.title || item?.name || '').trim();
+            const sessionId = Utils.uuid();
+            const body = {
+                fromPage: '/main/index',
+                entrance: 'talk_aimaxOnebpSearch@main@promotion_scene_search_user_define@smart_bid',
+                business: 'aimaxOnebpSearch@main@promotion_scene_search_user_define@smart_bid',
+                contextParam: {
+                    bizCode: 'onebpSearch',
+                    promotionScene: 'promotion_scene_search_user_define',
+                    business: 'aimaxOnebpSearch@main@promotion_scene_search_user_define@smart_bid',
+                    bpSolution: {
+                        campaign: {
+                            itemIdList: [itemId],
+                            bizCode: 'onebpSearch',
+                            bidTypeV2: 'smart_bid',
+                            promotionScene: 'promotion_scene_search_user_define',
+                            aiMaxInfo: { aiMaxSwitch: '1' },
+                            crowdList: [],
+                            complete: false,
+                            dropdownSelected: []
+                        },
+                        adgroupList: [{
+                            material: {
+                                materialId: itemId,
+                                materialName: itemTitle,
+                                promotionType: 'item',
+                                subPromotionType: 'item',
+                                linkUrl: item?.linkUrl || `http://detail.tmall.com/item.htm?id=${itemId}`
+                            }
+                        }]
+                    }
+                },
+                bizCode: 'universalBP',
+                requestType: 'NlAnalysis',
+                client: 'pc_uni_bp',
+                product: 'aimaxOnebpSearch',
+                sessionId,
+                prompt: {
+                    promptType: 'text',
+                    autoAsk: true,
+                    wordList: [{ word: KEYWORD_AI_MAX_NATIVE_PROMPT }]
+                },
+                promptType: 'text',
+                triggerMode: 'autoAsk',
+                timeStr: Date.now(),
+                dynamicToken: token.dynamicToken || '',
+                csrfID: '',
+                loginPointId: token.loginPointId
+            };
+            const url = 'https://ai.alimama.com/ai/chat/businessTalk.json';
+            recordApiRequestToHookHistory(url, 'POST', body, 'keyword_ai_max_business_talk');
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    Accept: 'text/event-stream',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body),
+                signal: requestOptions?.signal
+            });
+            const rawText = await response.text();
+            if (!response.ok) {
+                throw new Error(`AI点睛生成失败(${response.status}): ${rawText.slice(0, 160)}`);
+            }
+            const events = parseAiMaxEventStream(rawText);
+            const finalData = pickFinalAiMaxEventData(events);
+            if (!finalData?.additionalData?.aiMaxInfo) {
+                throw new Error('AI点睛生成失败：原生接口未返回 aiMaxInfo');
+            }
+            return finalData;
+        };
+        const fetchKeywordAiMaxInfo = async ({ bizCode, item, requestOptions } = {}) => {
+            const runtime = await getRuntimeDefaults(false);
+            const targetBizCode = bizCode || runtime.bizCode || DEFAULTS.bizCode;
+            const idValue = toIdValue(item?.materialId || item?.itemId || item?.id || '');
+            if (!idValue) throw new Error('AI点睛生成失败：缺少商品ID');
+            const defaults = {
+                itemSelectedMode: 'user_define',
+                bidTypeV2: 'smart_bid',
+                bidTargetV2: 'conv',
+                promotionScene: 'promotion_scene_search_user_define',
+                optimizeTarget: 'conv'
+            };
+            const material = {
+                ...(isPlainObject(item?.raw) ? item.raw : {}),
+                materialId: idValue,
+                materialName: item?.materialName || item?.itemTitle || item?.title || item?.name || '',
+                promotionType: 'item',
+                subPromotionType: 'item'
+            };
+            const aiData = await requestAiMaxBusinessTalk({ bizCode: targetBizCode, item, requestOptions });
+            let budgetData = {};
+            let effectData = {};
+            try {
+                const budgetResponse = await requestOne(ENDPOINTS.budgetSuggestion, targetBizCode, {
+                    cache: 1000,
+                    bizCode: targetBizCode,
+                    campaign: {
+                        itemSelectedMode: defaults.itemSelectedMode,
+                        itemIdList: [idValue],
+                        bizCode: targetBizCode,
+                        bidTypeV2: defaults.bidTypeV2,
+                        bidTargetV2: defaults.bidTargetV2,
+                        promotionScene: defaults.promotionScene,
+                        optimizeTarget: defaults.optimizeTarget,
+                        dmcType: 'day_average'
+                    },
+                    adgroupList: [{ material }]
+                }, requestOptions || {});
+                budgetData = isPlainObject(budgetResponse?.data) ? budgetResponse.data : {};
+            } catch (err) {
+                log.warn('AI点睛预算建议接口失败:', err?.message || err);
+            }
+            try {
+                const dayAverageBudget = String(budgetData.budgetDefault || budgetData.algoBudget || budgetData.budgetMiddle || '');
+                if (dayAverageBudget) {
+                    const effectResponse = await requestOne(ENDPOINTS.effectPrediction, targetBizCode, {
+                        cache: 1000,
+                        from: 'OnebpSearch_LLMEffectPredict',
+                        dayAverageBudget,
+                        algoPredictionExtraInfo: { dayAverageBudget_obj: budgetData },
+                        bizCode: targetBizCode,
+                        campaign: {
+                            itemSelectedMode: defaults.itemSelectedMode,
+                            optimizeTarget: defaults.optimizeTarget,
+                            dmcType: 'day_average',
+                            subOptimizeTarget: 'retained_buy',
+                            itemIdList: [idValue],
+                            from: 'OnebpSearch_LLMEffectPredict',
+                            dayAverageBudget,
+                            algoPredictionExtraInfo: { dayAverageBudget_obj: budgetData }
+                        },
+                        adgroupList: [{ material: { materialId: idValue, promotionType: 'item', subPromotionType: 'item' } }]
+                    }, requestOptions || {});
+                    effectData = isPlainObject(effectResponse?.data) ? effectResponse.data : {};
+                }
+            } catch (err) {
+                log.warn('AI点睛效果预估接口失败:', err?.message || err);
+            }
+            return normalizeNativeAiMaxInfo({ item, aiData, budgetData, effectData });
+        };
+
         const parseMatchScope = (value, fallback = DEFAULTS.matchScope) => {
             if (value === undefined || value === null || value === '') return fallback;
             if (value === 1 || value === '1' || value === 'exact' || value === '精准' || value === '精确') return 1;
@@ -24319,10 +24616,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const mapSiteMultiTargetOptimizeTargetValue = (text = '') => {
             const value = normalizeSceneSettingValue(text);
             if (!value) return '';
-            if (/^\d{3,6}$/.test(value)) return value;
+            if (/^\d{3,6}$/.test(value)) return ['1034', '1230'].includes(value) ? value : '';
             if (/优化加购|收藏加购|加购/.test(value)) return '1034';
             if (/优化直接成交|增加净成交金额|净成交金额|直接成交/.test(value)) return '1230';
-            if (/增加总成交金额|总成交金额/.test(value)) return '1231';
             return '';
         };
 
@@ -24332,13 +24628,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (!value) return fullHours;
             if (/长期|全天|24小时|不限/.test(value)) return fullHours;
 
-            const rangeMatch = value.match(/(\d{1,2})\s*(?:点|时)?\s*(?:~|-|至|到)\s*(\d{1,2})/);
-            if (rangeMatch) {
-                const start = Math.max(0, Math.min(23, toNumber(rangeMatch[1], 0)));
-                const endRaw = toNumber(rangeMatch[2], 24);
-                const end = Math.max(start + 1, Math.min(24, endRaw));
-                const list = [];
-                for (let i = start; i < end; i += 1) list.push(String(i));
+            const rangeMatches = Array.from(value.matchAll(/(\d{1,2})\s*(?:点|时)?\s*(?:~|-|至|到)\s*(\d{1,2})/g));
+            if (rangeMatches.length) {
+                const hourSet = new Set();
+                rangeMatches.forEach(match => {
+                    const start = Math.max(0, Math.min(23, toNumber(match[1], 0)));
+                    const endRaw = toNumber(match[2], 24);
+                    const end = Math.max(start + 1, Math.min(24, endRaw));
+                    for (let i = start; i < end; i += 1) hourSet.add(String(i));
+                });
+                const list = Array.from(hourSet).sort((left, right) => toNumber(left, 0) - toNumber(right, 0));
                 if (list.length) return list.join(',');
             }
 
@@ -24677,6 +24976,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 'dayAverageBudget',
                 'totalBudget',
                 'futureBudget',
+                'enableRuleAuto',
+                'ruleCommand',
                 'sourceChannel',
                 'channelLocation',
                 'selectedTargetBizCode',
@@ -24734,6 +25035,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             const applyCampaign = (key, value, sourceKey = '', sourceValue = '') => {
                 if (value === undefined || value === null || value === '') return;
+                if (!canUseCampaignField(key, sourceKey)) {
+                    mapping.skipped.push({
+                        sourceKey,
+                        sourceValue,
+                        targetKey: key,
+                        reason: 'campaign字段不在当前模板中'
+                    });
+                    return;
+                }
+                setValueByPath(mapping.campaignOverride, key, value);
+                mapping.applied.push({
+                    sourceKey,
+                    sourceValue,
+                    targetKey: key,
+                    targetValue: deepClone(value)
+                });
+            };
+            const applyCampaignExact = (key, value, sourceKey = '', sourceValue = '') => {
+                if (value === undefined) return;
                 if (!canUseCampaignField(key, sourceKey)) {
                     mapping.skipped.push({
                         sourceKey,
@@ -24989,7 +25309,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const campaignGroupEntry = findSceneSettingEntry(entries, [/计划组/, /设置计划组/]);
             if (campaignGroupEntry) {
                 const campaignGroupValue = normalizeSceneSettingValue(campaignGroupEntry.value || '');
-                if (campaignGroupValue && !/^(不设置计划组|不设置|默认|无|none|null)$/i.test(campaignGroupValue)) {
+                if (/^(不归属任何计划组|不设置计划组|不设置|默认|无|none|null)$/i.test(campaignGroupValue)) {
+                    applyCampaignExact('campaignGroupId', null, campaignGroupEntry.key, campaignGroupEntry.value);
+                    applyCampaignExact('campaignGroupName', '', campaignGroupEntry.key, campaignGroupEntry.value);
+                } else if (campaignGroupValue) {
                     if (/^\d{1,20}$/.test(campaignGroupValue)) {
                         applyCampaign('campaignGroupId', campaignGroupValue, campaignGroupEntry.key, campaignGroupEntry.value);
                     } else {
@@ -25105,12 +25428,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 applySceneSingleCostEntries(singleCostSwitchEntry, singleCostEntry);
             }
 
-            const smartCreativeEntry = findSceneSettingEntry(entries, [/创意优选/, /封面智能创意/]);
+            const smartCreativeEntry = findSceneSettingEntry(entries, [/智能创意/, /创意优选/, /封面智能创意/]);
             if (smartCreativeEntry) {
                 if (/关/.test(smartCreativeEntry.value) && !/开/.test(smartCreativeEntry.value)) {
                     applyCampaign('smartCreative', 0, smartCreativeEntry.key, smartCreativeEntry.value);
                 } else if (/开/.test(smartCreativeEntry.value)) {
                     applyCampaign('smartCreative', 1, smartCreativeEntry.key, smartCreativeEntry.value);
+                }
+            }
+
+            const budgetGuardEntry = findSceneSettingEntry(entries, [/优质计划防停投/, /预算自动提升/, /防停投/]);
+            if (budgetGuardEntry) {
+                const budgetGuardText = normalizeSceneSettingValue(budgetGuardEntry.value || '');
+                const budgetGuardOff = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(budgetGuardText)
+                    && !/(开|开启|启用|是|on|true|1)/i.test(budgetGuardText);
+                if (budgetGuardOff) {
+                    applyCampaign('enableRuleAuto', false, budgetGuardEntry.key, budgetGuardEntry.value);
                 }
             }
 
@@ -25131,6 +25464,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         isColdStartOff ? '0' : '1',
                         coldStartEntry.key,
                         coldStartEntry.value
+                    );
+                }
+            }
+            const keywordAiMaxEntry = normalizedSceneName === '关键词推广'
+                ? findSceneSettingEntry(entries, [/AI点睛/])
+                : null;
+            if (keywordAiMaxEntry) {
+                const keywordAiMaxText = normalizeSceneSettingValue(keywordAiMaxEntry.value || '');
+                if (keywordAiMaxText) {
+                    const keywordAiMaxOff = /(关|关闭|不启用|禁用|否|off|false|0)/i.test(keywordAiMaxText)
+                        && !/(开|开启|启用|是|on|true|1)/i.test(keywordAiMaxText);
+                    const keywordAiMaxSwitch = keywordAiMaxOff ? 0 : 1;
+                    applyCampaign('aiMaxSwitch', keywordAiMaxSwitch, keywordAiMaxEntry.key, keywordAiMaxEntry.value);
+                    applyCampaign(
+                        'aiMaxInfo',
+                        { aiMaxSwitch: keywordAiMaxSwitch },
+                        keywordAiMaxEntry.key,
+                        keywordAiMaxEntry.value
                     );
                 }
             }
@@ -26085,7 +26436,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         merged.campaign.quickLiftBudgetCommand = quickLiftCommand;
                         merged.campaign.dmcTypeElement = 'quickLiftBudgetCommand.quickLiftBudget';
                     } else {
-                        delete merged.campaign.quickLiftBudgetCommand;
+                        merged.campaign.quickLiftBudgetCommand = { quickLiftSwitch: 'false' };
                         delete merged.campaign.isQuickLift;
                         if (merged.campaign.isMultiTarget) {
                             merged.campaign.dmcTypeElement = 'multiTarget.multiTargetConfigList';
@@ -30316,6 +30667,694 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     outline-offset: 2px;
                     border-radius: 4px;
                 }
+                #am-wxt-keyword-modal .am-wxt-ai-max-setting-row {
+                    align-items: flex-start;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-setting-row .am-wxt-setting-control {
+                    width: 100%;
+                    max-width: 100%;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-switch-row {
+                    align-items: center;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-switch-label {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-help-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: #eef2ff;
+                    color: #64748b;
+                    font-size: 10px;
+                    line-height: 1;
+                    cursor: help;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-switch-control {
+                    flex-direction: row;
+                    align-items: center;
+                    gap: 8px;
+                    min-height: 32px;
+                    overflow: hidden;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-switch-control .am-wxt-option-line.segmented {
+                    flex: 0 0 auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-switch-desc {
+                    flex: 1 1 auto;
+                    min-width: 0;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    text-overflow: ellipsis;
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.4;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-doc-link {
+                    flex: 0 0 auto;
+                    color: #4f68ff;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    text-decoration: none;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-doc-link::after {
+                    content: " ↗";
+                    font-size: 11px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-panel {
+                    width: 100%;
+                    border: none;
+                    border-radius: 6px;
+                    background: #f7f9fc;
+                    padding: 12px 16px;
+                    color: #1f2937;
+                    box-sizing: border-box;
+                    box-shadow: inset 0 0 0 1px rgba(226,232,240,0.9);
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-panel-pending {
+                    background: #f8fafc;
+                    border-color: rgba(148,163,184,0.45);
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-head {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    font-size: 13px;
+                    line-height: 1.45;
+                    color: #475569;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-link {
+                    border: 0;
+                    background: transparent;
+                    color: #4f68ff;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    padding: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-status {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    margin-top: 14px;
+                    min-height: 32px;
+                    border-radius: 0;
+                    background: transparent;
+                    padding: 0 0 0 16px;
+                    color: #334155;
+                    font-size: 13px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-status-title {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-status-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 50%;
+                    background: #e8f7ef;
+                    color: #16a34a;
+                    font-size: 11px;
+                    font-weight: 700;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn {
+                    border: 0;
+                    background: transparent;
+                    color: #4f68ff;
+                    font-size: 13px;
+                    cursor: pointer;
+                    padding: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn::after {
+                    content: "⌄";
+                    display: inline-block;
+                    margin-left: 3px;
+                    font-size: 12px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn.is-expanded::after {
+                    content: "^";
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn:not(:empty) {
+                    min-width: 70px;
+                    text-align: right;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-detail {
+                    margin: 14px 8px 18px;
+                    border-radius: 18px;
+                    background: linear-gradient(110deg, rgba(248,250,255,0.96), rgba(252,247,255,0.96));
+                    padding: 16px 18px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-detail.hidden {
+                    display: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-box {
+                    display: grid;
+                    gap: 2px;
+                    border-radius: 18px;
+                    background: #fff;
+                    padding: 12px 18px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-step {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    align-items: start;
+                    gap: 14px;
+                    min-height: 40px;
+                    padding: 10px 0;
+                    color: #1f2937;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-step-main {
+                    display: grid;
+                    gap: 6px;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-step-title {
+                    font-size: 14px;
+                    font-weight: 700;
+                    line-height: 1.45;
+                    min-height: 20px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-step-desc {
+                    max-width: 760px;
+                    font-size: 12px;
+                    line-height: 1.55;
+                    color: #64748b;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-deep-step-desc.hidden {
+                    display: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-step-btn {
+                    border: 0;
+                    background: transparent;
+                    color: #4f68ff;
+                    padding: 0;
+                    font-size: 13px;
+                    line-height: 1.45;
+                    cursor: pointer;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-step-btn::after {
+                    content: "⌄";
+                    display: inline-block;
+                    margin-left: 4px;
+                    font-size: 12px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-step-btn.is-expanded::after {
+                    content: "^";
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-copy {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 10px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    line-height: 1.5;
+                    color: #1f2937;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-copy-row {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    align-items: center;
+                    gap: 12px;
+                    margin-top: 12px;
+                    padding: 0 16px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-summary {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    min-height: 32px;
+                    border: 1px solid rgba(79,104,255,0.42);
+                    border-radius: 999px;
+                    background: #fff;
+                    color: #4f68ff;
+                    padding: 0 12px;
+                    font-size: 13px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-summary span {
+                    color: #94a3b8;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-summary b {
+                    font-weight: 600;
+                    color: #4f68ff;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-summary::after {
+                    content: "⌄";
+                    font-size: 12px;
+                    color: #4f68ff;
+                }
+                #am-wxt-ai-max-demand-popover {
+                    position: absolute;
+                    width: 270px;
+                    border-radius: 10px;
+                    background: #fff;
+                    box-shadow: 0 10px 30px rgba(15,23,42,0.18);
+                    border: 1px solid rgba(226,232,240,0.9);
+                    color: #4f68ff;
+                    z-index: 2147483647;
+                    overflow: hidden;
+                    font-size: 15px;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-body {
+                    padding: 12px 18px 10px;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 10px;
+                    margin-bottom: 8px;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-list {
+                    display: grid;
+                    gap: 8px;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-item {
+                    display: grid;
+                    grid-template-columns: 18px minmax(0, 1fr);
+                    align-items: center;
+                    gap: 6px;
+                    min-width: 0;
+                    cursor: pointer;
+                    color: #4f68ff;
+                    line-height: 1.35;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-item.all {
+                    flex: 1 1 auto;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-item input {
+                    position: absolute;
+                    opacity: 0;
+                    pointer-events: none;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-check {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 4px;
+                    border: 1px solid #4f68ff;
+                    background: #4f68ff;
+                    color: #fff;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 1;
+                    box-sizing: border-box;
+                }
+                #am-wxt-ai-max-demand-popover input:not(:checked) + .am-wxt-ai-max-demand-popover-check {
+                    background: #fff;
+                    color: transparent;
+                    border-color: #cbd5e1;
+                }
+                #am-wxt-ai-max-demand-popover input:indeterminate + .am-wxt-ai-max-demand-popover-check {
+                    background: #4f68ff;
+                    color: transparent;
+                    border-color: #4f68ff;
+                    position: relative;
+                }
+                #am-wxt-ai-max-demand-popover input:indeterminate + .am-wxt-ai-max-demand-popover-check::after {
+                    content: "";
+                    width: 8px;
+                    height: 2px;
+                    border-radius: 99px;
+                    background: #fff;
+                    position: absolute;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-text {
+                    min-width: 0;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    text-overflow: ellipsis;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-count {
+                    flex: 0 0 auto;
+                    color: #94a3b8;
+                    font-size: 14px;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-count b {
+                    color: #64748b;
+                    font-weight: 500;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-foot {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    border-top: 1px solid rgba(226,232,240,0.95);
+                    padding: 10px 18px;
+                    background: #fff;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-btn {
+                    min-width: 62px;
+                    height: 34px;
+                    border-radius: 18px;
+                    padding: 0 16px;
+                    font-size: 14px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-list-wrap {
+                    position: relative;
+                    margin-top: 12px;
+                    padding: 0 16px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-list {
+                    display: flex;
+                    gap: 10px;
+                    overflow-x: auto;
+                    overflow-y: visible;
+                    scroll-behavior: smooth;
+                    scrollbar-width: none;
+                    padding: 0 0 2px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-list::-webkit-scrollbar {
+                    display: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-card {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 8px;
+                    flex: 0 0 calc((100% - 20px) / 3);
+                    min-width: calc((100% - 20px) / 3);
+                    border: 1px solid rgba(226,232,240,0.95);
+                    border-radius: 8px;
+                    background: rgba(255,255,255,0.86);
+                    padding: 12px;
+                    text-align: left;
+                    cursor: pointer;
+                    color: #334155;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-card:hover {
+                    border-color: rgba(79,104,255,0.45);
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-card.active {
+                    border-color: #4f46e5;
+                    box-shadow: inset 0 0 0 1px rgba(79,70,229,0.24);
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-next {
+                    position: absolute;
+                    top: 50%;
+                    right: 0;
+                    transform: translate(50%, -50%);
+                    width: 34px;
+                    height: 58px;
+                    border: 0;
+                    border-radius: 4px;
+                    background: rgba(71,85,105,0.66);
+                    color: #fff;
+                    font-size: 34px;
+                    line-height: 1;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 2;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-next:hover {
+                    background: rgba(51,65,85,0.78);
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-icon {
+                    color: #4f46e5;
+                    font-weight: 700;
+                    line-height: 1.2;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-main {
+                    display: grid;
+                    gap: 6px;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-main b {
+                    font-size: 14px;
+                    color: #1f2937;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-main em {
+                    font-style: normal;
+                    font-size: 12px;
+                    line-height: 1.45;
+                    color: #64748b;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-analysis {
+                    margin-top: 12px;
+                    padding: 0 16px;
+                    font-size: 13px;
+                    color: #475569;
+                    line-height: 1.5;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-budget {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin: 10px 16px 0;
+                    border-radius: 8px;
+                    background: rgba(255,255,255,0.78);
+                    border: 1px solid rgba(191,219,254,0.8);
+                    padding: 10px 12px;
+                    font-size: 13px;
+                    color: #334155;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-budget b {
+                    color: #1d4ed8;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-detail-grid {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                    margin: 12px 16px 0;
+                    border: 1px solid rgba(203,213,225,0.75);
+                    border-radius: 8px;
+                    overflow: hidden;
+                    background: rgba(255,255,255,0.86);
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-detail-grid.hidden {
+                    display: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word-cloud,
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona-list {
+                    padding: 16px;
+                    min-width: 0;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word-cloud {
+                    border-right: 1px solid rgba(203,213,225,0.72);
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word-cloud > b,
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona-list > b {
+                    display: block;
+                    margin-bottom: 14px;
+                    font-size: 13px;
+                    color: #1f2937;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word-cloud > div {
+                    min-height: 126px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word {
+                    font-weight: 800;
+                    line-height: 1.05;
+                    color: #2563eb;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word.word-1 {
+                    font-size: 28px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word.word-2 {
+                    font-size: 24px;
+                    color: #7c3aed;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-word.word-3 {
+                    font-size: 22px;
+                    color: #0891b2;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona-list {
+                    display: grid;
+                    gap: 12px;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona {
+                    display: grid;
+                    grid-template-columns: 34px minmax(0, 1fr);
+                    gap: 10px;
+                    align-items: flex-start;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 8px;
+                    background: #f1f5f9;
+                    color: #4f46e5;
+                    font-size: 13px;
+                    font-weight: 700;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona b,
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona em {
+                    display: block;
+                    font-style: normal;
+                    line-height: 1.45;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona b {
+                    font-size: 13px;
+                    color: #334155;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona em {
+                    margin-top: 2px;
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-ai-max {
+                    width: min(920px, calc(100vw - 48px));
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-popup {
+                    display: grid;
+                    gap: 14px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-popup-section {
+                    border: 1px solid rgba(226,232,240,0.9);
+                    border-radius: 8px;
+                    background: #fff;
+                    padding: 14px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-popup-title {
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: #1f2937;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-popup-help {
+                    margin-top: 6px;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-popup textarea {
+                    width: 100%;
+                    min-height: 86px;
+                    margin-top: 10px;
+                    resize: vertical;
+                    box-sizing: border-box;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-template-list {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 10px;
+                    margin-top: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-template-card {
+                    display: grid;
+                    gap: 8px;
+                    border: 1px solid rgba(203,213,225,0.85);
+                    border-radius: 8px;
+                    padding: 12px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-template-card b {
+                    font-size: 13px;
+                    color: #1f2937;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-template-card p {
+                    margin: 0;
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 12px;
+                    margin-top: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-box {
+                    display: grid;
+                    gap: 10px;
+                    border: 1px solid rgba(226,232,240,0.9);
+                    border-radius: 8px;
+                    padding: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-head {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 8px;
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-head b {
+                    color: #334155;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-add {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 8px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-list {
+                    display: flex;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    min-height: 28px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-tag {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    border-radius: 999px;
+                    background: #eef2ff;
+                    color: #3730a3;
+                    padding: 4px 8px;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-tag button {
+                    border: 0;
+                    background: transparent;
+                    color: inherit;
+                    cursor: pointer;
+                    padding: 0;
+                    line-height: 1;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-empty {
+                    color: #94a3b8;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-demand-check-list {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 8px;
+                    margin-top: 10px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-demand-check {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    color: #334155;
+                    font-size: 13px;
+                    line-height: 1.4;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-demand-check.all {
+                    margin-top: 10px;
+                }
                 #am-wxt-keyword-modal .am-wxt-scene-label-main {
                     display: inline-flex;
                     align-items: center;
@@ -32402,6 +33441,134 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: #fff;
                     justify-content: flex-start;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-quick-lift {
+                    width: min(1248px, 96vw);
+                    max-height: 94vh;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-quick-lift .am-wxt-scene-popup-body {
+                    padding: 16px 24px;
+                    overflow: auto;
+                    min-height: min(720px, 74vh);
+                    background: #fff;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-quick-lift .am-wxt-scene-popup-foot {
+                    justify-content: flex-start;
+                    padding-left: 24px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-layout {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 18px;
+                    color: #1f2937;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-section {
+                    display: grid;
+                    grid-template-columns: 72px minmax(0, 1fr);
+                    gap: 8px;
+                    align-items: flex-start;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-label {
+                    color: #666;
+                    font-size: 13px;
+                    line-height: 32px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-control {
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-summary-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    min-height: 32px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-summary {
+                    color: #666;
+                    font-size: 13px;
+                    line-height: 20px;
+                    white-space: nowrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-toggle {
+                    border: 0;
+                    background: transparent;
+                    padding: 0;
+                    color: #4554e5;
+                    font-size: 13px;
+                    line-height: 18px;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-panel {
+                    margin-top: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-card {
+                    border: 1px solid #e4e7f0;
+                    border-radius: 6px;
+                    padding: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-row {
+                    display: flex;
+                    align-items: stretch;
+                    gap: 12px;
+                    min-width: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-label {
+                    width: 104px;
+                    min-width: 104px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 4px;
+                    color: #fff;
+                    background: #4554e5;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-hours {
+                    flex: 1;
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: repeat(25, minmax(22px, 1fr));
+                    border: 1px solid #e4e7f0;
+                    border-radius: 4px;
+                    overflow: hidden;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-hour {
+                    min-width: 0;
+                    height: 36px;
+                    border: 0;
+                    border-right: 1px solid #e4e7f0;
+                    background: #fff;
+                    color: #667085;
+                    font-size: 12px;
+                    cursor: pointer;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-hour:last-child {
+                    border-right: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-hour.active {
+                    background: rgba(69,84,229,0.12);
+                    color: #4554e5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-hour.endpoint {
+                    background: #4554e5;
+                    color: #fff;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-hour.boundary:not(.endpoint) {
+                    color: #4554e5;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-top: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-time-error {
+                    color: #d9480f;
+                    font-size: 12px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-panel .am-wxt-scene-advanced-area-selector {
+                    max-height: none;
+                }
                 #am-wxt-scene-popup-mask .am-wxt-scene-advanced-layout {
                     height: 100%;
                     display: flex;
@@ -34158,11 +35325,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         const MATRIX_SCENE_DIMENSION_FALLBACK_LABELS = {
             '货品全站推广': ['预算类型', '目标投产比', '投放时间', '投放地域', '计划组'],
             '关键词推广': {
-                __default: ['流量智选', '冷启加速', '预算类型', '人群设置', '人群优化目标'],
+                __default: ['AI点睛', '流量智选', '冷启加速', '预算类型', '人群设置', '人群优化目标'],
                 搜索卡位: ['卡位方式', '匹配方式', '流量智选', '冷启加速', '预算类型'],
                 趋势明星: ['趋势主题', '出价目标', '冷启加速', '预算类型', '人群设置', '人群优化目标'],
                 流量金卡: ['套餐卡', '套餐包档位', '套餐包自动续投', '支付方式', '冷启加速', '预算类型'],
-                自定义推广: ['流量智选', '冷启加速', '预算类型', '人群设置', '人群优化目标']
+                自定义推广: ['AI点睛', '流量智选', '冷启加速', '预算类型', '人群设置', '人群优化目标']
             },
             '人群推广': ['预算类型', '资源位溢价', '投放地域/投放时间', '人群设置', '出价目标'],
             '店铺直达': ['预算类型', '投放时间', '创意设置', '推广模式', '计划组'],
@@ -34180,6 +35347,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '关键词推广': {
                 '匹配方式': ['广泛', '中心词', '精准'],
                 '卡位方式': ['抢首条', '抢前三', '抢首页', '位置不限提升市场渗透'],
+                'AI点睛': ['开启', '关闭'],
                 '流量智选': ['开启', '关闭'],
                 '冷启加速': ['开启', '关闭'],
                 '预算类型': ['每日预算', '日均预算'],
@@ -34230,6 +35398,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             '关键词推广': {
                 '匹配方式': '广泛',
                 '卡位方式': '抢首条',
+                'AI点睛': '开启',
                 '流量智选': '开启',
                 '冷启加速': '开启',
                 '预算类型': '每日预算',
@@ -34585,7 +35754,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             if (/(人群设置|种子人群|设置拉新人群|设置人群)/.test(token)) return 'crowd';
             if (/(选择趋势主题|趋势主题|趋势主题列表)/.test(token)) return 'trendTheme';
             if (/(投放调优|优化模式)/.test(token)) return 'strategy';
-            if (/(投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|投放地域\/投放时间|资源位溢价|流量智选|冷启加速)/.test(token)) return 'schedule';
+            if (/(投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|投放地域\/投放时间|资源位溢价|流量智选|AI点睛|冷启加速)/.test(token)) return 'schedule';
             return '';
         };
 
@@ -35100,10 +36269,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         };
 
         const getMatrixRecommendedPresetKeys = (sceneName = '') => {
-            const catalog = getMatrixDimensionPresetCatalog(sceneName);
+            const normalizedSceneName = getMatrixSceneName(sceneName);
+            const catalog = getMatrixDimensionPresetCatalog(normalizedSceneName);
             const availableKeys = new Set(catalog.map(item => item.key));
-            const preferredPresetKeys = sceneName === '关键词推广'
-                ? ['budget', 'bid_mode', 'bid_target_cost_package', 'plan_prefix', 'material_id', 'bid_target', 'day_budget', 'day_average_budget']
+            const sceneSettings = typeof buildSceneSettingsPayload === 'function'
+                ? buildSceneSettingsPayload(normalizedSceneName)
+                : {};
+            const bucket = typeof ensureSceneSettingBucket === 'function'
+                ? ensureSceneSettingBucket(normalizedSceneName)
+                : {};
+            const activeMarketingGoal = resolveMatrixSceneActiveMarketingGoal({
+                sceneName: normalizedSceneName,
+                bucket,
+                sceneSettings
+            });
+            const activeGoalScenePresetKeys = getMatrixSceneScopedFallbackLabels(normalizedSceneName, activeMarketingGoal)
+                .map(fieldLabel => buildMatrixSceneDimensionPreset(fieldLabel, normalizedSceneName))
+                .filter(item => item && isMatrixSceneFieldBindingKey(item.key || '') && availableKeys.has(item.key))
+                .map(item => item.key);
+            const preferredPresetKeys = normalizedSceneName === '关键词推广'
+                ? (activeMarketingGoal === '自定义推广'
+                    ? ['budget', 'bid_mode', 'bid_target_cost_package', 'plan_prefix', 'material_id', 'bid_target']
+                    : ['budget', 'bid_mode', 'plan_prefix', 'material_id']
+                        .concat(activeGoalScenePresetKeys)
+                        .concat(['bid_target']))
                 : ['budget', 'bid_mode', 'bid_target', 'plan_prefix', 'material_id', 'day_budget', 'day_average_budget'];
             return uniqueBy(
                 preferredPresetKeys
@@ -36961,6 +38150,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         applyMatrixDimensionBindingToPlan(plan, item, options);
                     });
             });
+            matrixValues
+                .filter(item => isMatrixSceneFieldBindingKey(item.bindingKey))
+                .forEach((item) => {
+                    applyMatrixDimensionBindingToPlan(plan, item, options);
+                });
             return plan;
         };
 
@@ -38461,6 +39655,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 { pattern: /(关键词设置|核心词设置|设置词包)/, options: ['添加关键词', '系统推荐词', '手动自选词'] },
                 { pattern: /(匹配方式)/, options: ['广泛', '中心词', '精准'] },
                 { pattern: /(流量智选)/, options: ['开启', '关闭'] },
+                { pattern: /(AI点睛)/, options: ['开启', '关闭'] },
                 { pattern: /(冷启加速)/, options: ['开启', '关闭'] },
                 { pattern: /(人群设置|种子人群|设置拉新人群|设置人群)/, options: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'] },
                 { pattern: /(资源位溢价)/, options: ['默认溢价', '自定义溢价'] },
@@ -38493,6 +39688,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     卡位方式: ['抢首条', '抢前三', '抢首页'],
                     匹配方式: ['广泛', '中心词', '精准'],
                     流量智选: ['开启', '关闭'],
+                    AI点睛: ['开启', '关闭'],
                     开启冷启加速: ['开启', '关闭'],
                     冷启加速: ['开启', '关闭'],
                     人群设置: ['智能人群', '添加种子人群', '设置优先投放客户', '关闭'],
@@ -38803,7 +39999,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const normalizeSceneLabelToken = (text = '') => normalizeText(String(text || '').replace(/[：:]/g, ''));
-            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|匹配方式|流量智选|开启冷启加速|冷启加速|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|优化目标|多目标预算|一键起量预算|专属权益|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|起量时间地域设置|投放地域\/投放时间|资源位溢价|计划组|设置计划组|选品方式|选择推广商品|人群设置|人群优化目标|客户口径设置|人群价值设置|设置拉新人群|设置人群|种子人群|趋势主题|趋势主题列表|方案选择|套餐卡|套餐包|套餐包档位|自动续投|套餐包自动续投)$/;
+            const SCENE_CONNECTED_SETTING_LABEL_RE = /^(营销目标|营销场景|选择卡位方案|选择拉新方案|选择方案|选择优化方向|选择解决方案|投放策略|投放调优|优化模式|推广模式|卡位方式|选择方式|匹配方式|流量智选|AI点睛|开启冷启加速|冷启加速|出价方式|出价目标|目标投产比|净目标投产比|ROI目标值|出价目标值|约束值|设置7日投产比|设置平均成交成本|设置平均收藏加购成本|设置平均点击成本|优化目标|多目标预算|一键起量预算|专属权益|优质计划防停投|预算类型|每日预算|日均预算|总预算|冻结预算|未来预算|预算值|平均直接成交成本|平均成交成本|平均收藏加购成本|平均点击成本|扣费方式|计费方式|收费方式|支付方式|创意设置|设置创意|创意模式|创意优选|封面智能创意|智能创意|投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|起量时间地域设置|投放地域\/投放时间|资源位溢价|计划组|设置计划组|选品方式|选择推广商品|人群设置|人群优化目标|客户口径设置|人群价值设置|设置拉新人群|设置人群|种子人群|趋势主题|趋势主题列表|方案选择|套餐卡|套餐包|套餐包档位|自动续投|套餐包自动续投)$/;
             const SCENE_RENDER_FIELD_ALIAS_RULES = [
                 { pattern: /^(关键词设置|核心词设置)$/, label: '核心词设置' },
                 { pattern: /^(开启冷启加速|冷启加速)$/, label: '冷启加速' },
@@ -38932,7 +40128,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (/(关键词设置|核心词设置|设置词包|匹配方式)/.test(token)) return 'keyword';
                 if (/(人群设置|种子人群|设置拉新人群|设置人群)/.test(token)) return 'crowd';
                 if (/(投放调优|优化模式)/.test(token)) return 'strategy';
-                if (/(投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|投放地域\/投放时间|资源位溢价|流量智选|冷启加速)/.test(token)) return 'schedule';
+                if (/(投放时间|投放日期|分时折扣|发布日期|排期|投放地域|地域设置|投放地域\/投放时间|资源位溢价|流量智选|AI点睛|冷启加速)/.test(token)) return 'schedule';
                 return '';
             };
 
@@ -39781,7 +40977,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         .filter(Boolean)
                 );
                 const preserveDynamicKeySet = new Set(
-                    ['投放调优', '优化目标', '多目标预算', '一键起量预算', '专属权益', '发布日期', '投放时间', '投放地域', '计划组', '目标投产比']
+                    ['投放调优', '优化目标', '多目标预算', '一键起量预算', '优质计划防停投', '智能创意', '发布日期', '投放时间', '投放地域', '计划组', '目标投产比']
                         .map(label => normalizeSceneFieldKey(label))
                         .filter(Boolean)
                 );
@@ -40023,6 +41219,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 if (targetSceneName === '货品全站推广') {
                     delete sceneSettings.营销场景;
+                    delete sceneSettings.专属权益;
                     const siteBidType = normalizeSceneSettingValue(sceneSettings.出价方式 || '');
                     if (/最大化拿量/.test(siteBidType)) {
                         delete sceneSettings.目标投产比;
@@ -40119,6 +41316,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (touchedBucket[key]) return;
                     bucket[key] = value;
                 };
+                const isLaunchPeriodAllDay = (rawValue = '') => {
+                    const list = parseScenePopupJsonArray(rawValue, []);
+                    if (!list.length) return false;
+                    return list.every(item => {
+                        const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                        return spanList.length === 1 && String(spanList[0]?.time || '').trim() === '00:00-24:00';
+                    });
+                };
                 if (sceneName === '关键词推广' && activeMarketingGoal) {
                     syncGoalRuntimeBucket('campaign.promotionScene', keywordGoalRuntime.promotionScene || '');
                     syncGoalRuntimeBucket('campaign.itemSelectedMode', keywordGoalRuntime.itemSelectedMode || '');
@@ -40193,6 +41398,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         '冷启加速',
                         '开启冷启加速',
                         '流量智选',
+                        'AI点睛',
                         '人群设置',
                         '创意设置',
                         '投放时间',
@@ -40229,6 +41435,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         '出价目标',
                         '预算类型',
                         '专属权益',
+                        '优质计划防停投',
+                        '智能创意',
                         '投放调优',
                         '优化目标',
                         '多目标预算',
@@ -40338,6 +41546,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const resolveBadgeText = typeof rowOptions.resolveBadgeText === 'function'
                         ? rowOptions.resolveBadgeText
                         : (() => '');
+                    const resolveOptionText = typeof rowOptions.resolveOptionText === 'function'
+                        ? rowOptions.resolveOptionText
+                        : ({ text }) => text;
                     const inlineControlHtml = String(rowOptions.inlineControlHtml || '').trim();
                     const allowedValues = Array.isArray(rowOptions.allowedValues)
                         ? new Set(rowOptions.allowedValues.map(item => String(item || '').trim()).filter(Boolean))
@@ -40358,7 +41569,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                     const optionHtml = safeOptionList.map(option => {
                         const value = String(option?.value || '');
-                        const text = String(option?.textContent || option?.label || value);
+                        const sourceText = String(option?.textContent || option?.label || value);
+                        const text = String(resolveOptionText({ value, text: sourceText, label }) || sourceText);
                         const badgeText = String(resolveBadgeText({ value, text, label }) || '').trim();
                         const textHtml = Utils.escapeHtml(text);
                         const badgeHtml = badgeText ? `<span class="am-wxt-option-badge">${Utils.escapeHtml(badgeText)}</span>` : '';
@@ -40445,6 +41657,539 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <div class="am-wxt-option-line${segmented ? ' segmented' : ''}">${optionHtml}</div>
                                 <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(fieldKey)}" value="${Utils.escapeHtml(safeValue)}" />
                                 ${inlineControlHtml}
+                            </div>
+                        </div>
+                    `;
+                };
+
+                const buildKeywordAiMaxSwitchRow = ({
+                    fieldKey = '',
+                    selectedValue = '',
+                    switchValue = '',
+                    infoRaw = ''
+                } = {}) => {
+                    const label = 'AI点睛';
+                    const helpText = '借助AI点睛开“搜索外挂”，智能识别您表达的搜索流量诉求，精准触达目标客群，有效提升精准流量比例';
+                    const optionList = ['开启', '关闭'];
+                    const safeValue = optionList.find(opt => isSceneOptionMatch(opt, selectedValue)) || optionList[0];
+                    const optionHtml = optionList.map(opt => `
+                        <button
+                            type="button"
+                            class="am-wxt-option-chip ${isSceneOptionMatch(opt, safeValue) ? 'active' : ''}"
+                            data-scene-option="1"
+                            data-scene-option-field="${Utils.escapeHtml(fieldKey)}"
+                            data-scene-option-value="${Utils.escapeHtml(opt)}"
+                        >${Utils.escapeHtml(opt)}</button>
+                    `).join('');
+                    return `
+                        <div class="am-wxt-scene-setting-row am-wxt-ai-max-switch-row">
+                            <div class="am-wxt-scene-setting-label am-wxt-ai-max-switch-label">
+                                <span>${Utils.escapeHtml(label)}</span>
+                                <span class="am-wxt-ai-max-help-icon" title="${Utils.escapeHtml(helpText)}">?</span>
+                            </div>
+                            <div class="am-wxt-setting-control am-wxt-ai-max-switch-control">
+                                <div class="am-wxt-option-line segmented">${optionHtml}</div>
+                                <span class="am-wxt-ai-max-switch-desc">${Utils.escapeHtml(helpText)}</span>
+                                <a
+                                    class="am-wxt-ai-max-doc-link"
+                                    href="https://alidocs.dingtalk.com/i/nodes/N7dx2rn0JbxOaqnACQ5kRDGvWMGjLRb3"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >介绍文档</a>
+                                <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(fieldKey)}" value="${Utils.escapeHtml(safeValue)}" />
+                                <input class="am-wxt-hidden-control" data-scene-field="campaign.aiMaxSwitch" value="${Utils.escapeHtml(switchValue)}" />
+                                <input class="am-wxt-hidden-control" data-scene-field="campaign.aiMaxInfo" value="${Utils.escapeHtml(infoRaw)}" />
+                            </div>
+                        </div>
+                    `;
+                };
+
+                const KEYWORD_AI_MAX_DEFAULT_PROMPT = '快速积累精准成交流量。如投放叶子类目成交词，与商品卖点精准匹配的搜索词，与商品历史成交人群相似的人群';
+                const KEYWORD_AI_MAX_TEMPLATE_LIST = [
+                    {
+                        title: '提升商品质量分',
+                        text: '快速积累精准成交流量。如投放叶子类目成交词，与商品卖点精准匹配的搜索词，与商品历史成交人群相似的人群'
+                    },
+                    {
+                        title: '核心流量竞争',
+                        text: '渗透核心竞品流量，放大流量规模。如投放同叶子类目排名相近商品的搜索词，商品叶子类目感兴趣人群'
+                    },
+                    {
+                        title: '热门流量追踪',
+                        text: '实时投放商品相关的热门流量，如商品属性相关的行业热搜词；并提前投放趋势流量'
+                    },
+                    {
+                        title: '低成本稳增长',
+                        text: '触达高点击率、低点击成本的流量。如商品历史成交词，同叶子类目高点击率词或搜索量和竞争力适中的长尾词'
+                    },
+                    {
+                        title: '爆品拉新破圈',
+                        text: '触达经常同展现商品的点击词和竞店兴趣潜客；触达关联品类人群和叶子类目的新客'
+                    },
+                    {
+                        title: '新品快速测款',
+                        text: '快速积累精准的点击流量。如与商品卖点相关性好的高搜索量词、浏览或点击过相似商品的消费者、店铺专有词'
+                    }
+                ];
+                const normalizeKeywordAiMaxItemTitle = (item = {}) => normalizeSceneSettingValue(
+                    item?.materialName
+                    || item?.itemTitle
+                    || item?.title
+                    || item?.name
+                    || item?.itemName
+                    || ''
+                );
+                const resolveKeywordAiMaxPrimaryItem = () => {
+                    const sourceList = []
+                        .concat(Array.isArray(wizardState?.addedItems) ? wizardState.addedItems : [])
+                        .concat(Array.isArray(wizardState?.draft?.addedItems) ? wizardState.draft.addedItems : [])
+                        .filter(item => item && typeof item === 'object');
+                    const hit = sourceList.find(item => {
+                        const itemId = String(toIdValue(item?.materialId || item?.itemId || item?.id || '') || '').trim();
+                        return !!itemId || !!normalizeKeywordAiMaxItemTitle(item);
+                    });
+                    return hit || null;
+                };
+                const normalizeKeywordAiMaxWordList = (value = [], limit = 100) => (
+                    uniqueBy(
+                        (Array.isArray(value) ? value : String(value || '').split(/[,，\n]/))
+                            .map(item => normalizeSceneSettingValue(item))
+                            .filter(Boolean),
+                        item => item
+                    ).slice(0, limit)
+                );
+                const normalizeKeywordAiMaxInfo = (rawSource = '', enabled = true, itemContext = {}) => {
+                    let parsed = {};
+                    if (rawSource && typeof rawSource === 'string') {
+                        try {
+                            parsed = JSON.parse(rawSource);
+                        } catch { }
+                    } else if (isPlainObject(rawSource)) {
+                        parsed = deepClone(rawSource);
+                    }
+                    if (!isPlainObject(parsed)) parsed = {};
+                    const parsedItemId = normalizeSceneSettingValue(parsed.itemId || parsed.materialId || '');
+                    const contextItemId = normalizeSceneSettingValue(toIdValue(itemContext?.materialId || itemContext?.itemId || itemContext?.id || '') || '');
+                    const itemChanged = !!(contextItemId && parsedItemId && parsedItemId !== contextItemId);
+                    if (itemChanged || (parsedItemId && !parsed.nativeGenerated && !parsed.nativeSource)) {
+                        parsed = {};
+                    }
+                    const blockWordConfig = isPlainObject(parsed.blockWordConfig) ? parsed.blockWordConfig : {};
+                    const demandList = normalizeKeywordAiMaxWordList(
+                        parsed.demandList || [],
+                        20
+                    );
+                    const hasSelectedDemandList = Object.prototype.hasOwnProperty.call(parsed, 'selectedDemandList')
+                        && Array.isArray(parsed.selectedDemandList);
+                    const selectedDemandList = normalizeKeywordAiMaxWordList(
+                        hasSelectedDemandList ? parsed.selectedDemandList : demandList,
+                        20
+                    )
+                        .filter(item => demandList.includes(item));
+                    return {
+                        ...parsed,
+                        itemId: contextItemId || parsedItemId,
+                        aiMaxSwitch: enabled ? 1 : 0,
+                        trafficAppeal: normalizeSceneSettingValue(parsed.trafficAppeal || parsed.prompt || parsed.userInput || KEYWORD_AI_MAX_DEFAULT_PROMPT),
+                        demandList,
+                        selectedDemandList: hasSelectedDemandList ? selectedDemandList : demandList,
+                        centerShieldWordList: normalizeKeywordAiMaxWordList(
+                            parsed.centerShieldWordList || blockWordConfig.centerShieldWordList || blockWordConfig.centerWordList || [],
+                            10
+                        ),
+                        exactShieldWordList: normalizeKeywordAiMaxWordList(
+                            parsed.exactShieldWordList || blockWordConfig.exactShieldWordList || blockWordConfig.exactWordList || [],
+                            100
+                        ),
+                        searchWordList: normalizeKeywordAiMaxWordList(
+                            parsed.searchWordList || [],
+                            20
+                        ),
+                        personaList: Array.isArray(parsed.personaList) && parsed.personaList.length
+                            ? parsed.personaList.filter(item => isPlainObject(item)).slice(0, 6)
+                            : [],
+                        analysis: normalizeSceneSettingValue(parsed.analysis || ''),
+                        itemTitle: normalizeSceneSettingValue(parsed.itemTitle || normalizeKeywordAiMaxItemTitle(itemContext || {})),
+                        budgetSuggestion: isPlainObject(parsed.budgetSuggestion) ? parsed.budgetSuggestion : {}
+                    };
+                };
+                const serializeKeywordAiMaxInfo = (info = {}, enabled = true) => JSON.stringify({
+                    itemId: normalizeSceneSettingValue(info.itemId || ''),
+                    aiMaxSwitch: enabled ? 1 : 0,
+                    trafficAppeal: normalizeSceneSettingValue(info.trafficAppeal || KEYWORD_AI_MAX_DEFAULT_PROMPT),
+                    nativeGenerated: !!info.nativeGenerated,
+                    nativeSource: normalizeSceneSettingValue(info.nativeSource || ''),
+                    nativeTraceId: normalizeSceneSettingValue(info.nativeTraceId || ''),
+                    selectedDemandList: normalizeKeywordAiMaxWordList(info.selectedDemandList || [], 20),
+                    demandList: normalizeKeywordAiMaxWordList(info.demandList || [], 20),
+                    centerShieldWordList: normalizeKeywordAiMaxWordList(info.centerShieldWordList || [], 10),
+                    exactShieldWordList: normalizeKeywordAiMaxWordList(info.exactShieldWordList || [], 100),
+                    searchWordList: normalizeKeywordAiMaxWordList(info.searchWordList || [], 20),
+                    personaList: Array.isArray(info.personaList) && info.personaList.length
+                        ? info.personaList.filter(item => isPlainObject(item)).slice(0, 6)
+                        : [],
+                    analysis: normalizeSceneSettingValue(info.analysis || ''),
+                    aiMaxReason: normalizeSceneSettingValue(info.aiMaxReason || ''),
+                    aiMaxDeliveryPlan: normalizeSceneSettingValue(info.aiMaxDeliveryPlan || ''),
+                    itemTitle: normalizeSceneSettingValue(info.itemTitle || ''),
+                    budgetSuggestion: isPlainObject(info.budgetSuggestion) ? info.budgetSuggestion : {},
+                    nativeCrowdList: Array.isArray(info.nativeCrowdList) ? info.nativeCrowdList.slice(0, 20) : []
+                });
+                const getKeywordAiMaxGenerationKey = (item = {}) => {
+                    const itemId = normalizeSceneSettingValue(toIdValue(item?.materialId || item?.itemId || item?.id || '') || '');
+                    return itemId || normalizeKeywordAiMaxItemTitle(item || {});
+                };
+                const getKeywordAiMaxGenerationMap = () => {
+                    if (!isPlainObject(wizardState.keywordAiMaxGenerationMap)) {
+                        wizardState.keywordAiMaxGenerationMap = {};
+                    }
+                    return wizardState.keywordAiMaxGenerationMap;
+                };
+                const KEYWORD_AI_MAX_ERROR_RETRY_COOLDOWN_MS = 5000;
+                const ensureKeywordAiMaxGeneration = (item = {}) => {
+                    const generationKey = getKeywordAiMaxGenerationKey(item);
+                    const itemId = normalizeSceneSettingValue(toIdValue(item?.materialId || item?.itemId || item?.id || '') || '');
+                    if (!generationKey || !itemId) return null;
+                    const generationMap = getKeywordAiMaxGenerationMap();
+                    const current = generationMap[generationKey];
+                    if (current?.status === 'pending' || current?.status === 'ready') return current;
+                    if (
+                        current?.status === 'error'
+                        && Date.now() - toNumber(current.finishedAt, 0) < KEYWORD_AI_MAX_ERROR_RETRY_COOLDOWN_MS
+                    ) {
+                        return current;
+                    }
+                    const pending = {
+                        status: 'pending',
+                        itemId,
+                        itemTitle: normalizeKeywordAiMaxItemTitle(item),
+                        startedAt: Date.now()
+                    };
+                    generationMap[generationKey] = pending;
+                    Promise.resolve()
+                        .then(() => fetchKeywordAiMaxInfo({
+                            bizCode: 'onebpSearch',
+                            item
+                        }))
+                        .then((info) => {
+                            generationMap[generationKey] = {
+                                status: 'ready',
+                                itemId,
+                                itemTitle: normalizeKeywordAiMaxItemTitle(item),
+                                info,
+                                finishedAt: Date.now()
+                            };
+                            renderSceneDynamicConfig();
+                        })
+                        .catch((err) => {
+                            generationMap[generationKey] = {
+                                status: 'error',
+                                itemId,
+                                itemTitle: normalizeKeywordAiMaxItemTitle(item),
+                                message: normalizeSceneSettingValue(err?.message || err || 'AI点睛生成失败'),
+                                finishedAt: Date.now()
+                            };
+                            renderSceneDynamicConfig();
+                        });
+                    return pending;
+                };
+                const describeKeywordAiMaxInfo = (info = {}) => {
+                    const selectedCount = Array.isArray(info.selectedDemandList) ? info.selectedDemandList.length : 0;
+                    const shieldCount = (Array.isArray(info.centerShieldWordList) ? info.centerShieldWordList.length : 0)
+                        + (Array.isArray(info.exactShieldWordList) ? info.exactShieldWordList.length : 0);
+                    return `已选：${selectedCount || 0}个需求｜屏蔽词 ${shieldCount}`;
+                };
+                const parseKeywordAiMaxJsonList = (rawValue = '') => {
+                    if (Array.isArray(rawValue)) return rawValue;
+                    const text = normalizeSceneSettingValue(rawValue || '');
+                    if (!text) return [];
+                    try {
+                        const parsed = JSON.parse(text);
+                        return Array.isArray(parsed) ? parsed : [];
+                    } catch {
+                        return [];
+                    }
+                };
+                const resolveKeywordAiMaxDemandDetail = (info = {}, demandTitle = '') => {
+                    const title = normalizeSceneSettingValue(demandTitle || '');
+                    const crowdList = Array.isArray(info.nativeCrowdList) ? info.nativeCrowdList : [];
+                    const matched = crowdList.find(entry => {
+                        const crowd = isPlainObject(entry?.crowd) ? entry.crowd : {};
+                        const name = normalizeSceneSettingValue(
+                            crowd.crowdName
+                            || crowd.label?.optionList?.[0]?.optionName
+                            || ''
+                        );
+                        return title && name === title;
+                    }) || crowdList[0] || {};
+                    const properties = isPlainObject(matched?.crowd?.properties) ? matched.crowd.properties : {};
+                    const searchWordList = parseKeywordAiMaxJsonList(properties.searchWordList)
+                        .map(word => normalizeSceneSettingValue(word?.name || word?.word || word || ''))
+                        .filter(Boolean);
+                    const personaList = parseKeywordAiMaxJsonList(properties.crowdProfileList)
+                        .map(profile => ({
+                            title: normalizeSceneSettingValue(profile?.name || profile?.title || ''),
+                            desc: normalizeSceneSettingValue(profile?.desc || profile?.description || '')
+                        }))
+                        .filter(profile => profile.title || profile.desc);
+                    return {
+                        analysis: normalizeSceneSettingValue(properties.description || info.analysis || info.aiMaxReason || ''),
+                        searchWordList: searchWordList.length ? searchWordList : (Array.isArray(info.searchWordList) ? info.searchWordList : []),
+                        personaList: personaList.length ? personaList : (Array.isArray(info.personaList) ? info.personaList : [])
+                    };
+                };
+                const buildKeywordAiMaxInsightPanelRow = ({
+                    infoRaw = '',
+                    info = {},
+                    infoField = '',
+                    popupTrigger = 'keywordAiMaxSetting'
+                } = {}) => {
+                    const normalizedInfoField = normalizeSceneSettingValue(infoField);
+                    if (!normalizedInfoField) return '';
+                    const demandList = Array.isArray(info.selectedDemandList) && info.selectedDemandList.length
+                        ? info.selectedDemandList
+                        : [];
+                    if (!info.nativeGenerated && !info.nativeSource) {
+                        return buildKeywordAiMaxPendingPanelRow({
+                            infoRaw,
+                            infoField,
+                            message: 'AI点睛正在按原生接口生成投放内容，请稍候...'
+                        });
+                    }
+                    if (!demandList.length && !normalizeSceneSettingValue(info.analysis || info.aiMaxReason || '')) {
+                        return buildKeywordAiMaxPendingPanelRow({
+                            infoRaw,
+                            infoField,
+                            message: 'AI点睛原生接口暂未返回可展示内容，请稍候重试。'
+                        });
+                    }
+                    const renderSearchWordHtml = (wordList = []) => (Array.isArray(wordList) ? wordList : []).slice(0, 6).map((word, index) => `
+                        <span class="am-wxt-ai-max-word word-${(index % 3) + 1}">${Utils.escapeHtml(word)}</span>
+                    `).join('');
+                    const renderPersonaHtml = (list = []) => (Array.isArray(list) ? list : []).slice(0, 3).map(item => `
+                        <div class="am-wxt-ai-max-persona">
+                            <span class="am-wxt-ai-max-persona-icon">P</span>
+                            <span>
+                                <b>${Utils.escapeHtml(normalizeSceneSettingValue(item?.title || item?.name || '搜索人群'))}</b>
+                                <em>${Utils.escapeHtml(normalizeSceneSettingValue(item?.desc || item?.description || ''))}</em>
+                            </span>
+                        </div>
+                    `).join('');
+                    const firstDemandDetail = resolveKeywordAiMaxDemandDetail(info, demandList[0]);
+                    const demandCards = demandList.map((title, index) => `
+                        <button
+                            type="button"
+                            class="am-wxt-ai-max-demand-card ${index === 0 ? 'active' : ''}"
+                            data-ai-max-demand-preview="${Utils.escapeHtml(title)}"
+                            data-ai-max-demand-analysis="${Utils.escapeHtml(resolveKeywordAiMaxDemandDetail(info, title).analysis || '')}"
+                            data-ai-max-demand-search-words="${Utils.escapeHtml(JSON.stringify(resolveKeywordAiMaxDemandDetail(info, title).searchWordList || []))}"
+                            data-ai-max-demand-personas="${Utils.escapeHtml(JSON.stringify(resolveKeywordAiMaxDemandDetail(info, title).personaList || []))}"
+                        >
+                            <span class="am-wxt-ai-max-demand-icon">*</span>
+                            <span class="am-wxt-ai-max-demand-main">
+                                <b>${Utils.escapeHtml(title)}</b>
+                                <em>"${Utils.escapeHtml(info.itemTitle || '已选商品标题')}"</em>
+                            </span>
+                        </button>
+                    `).join('');
+                    const demandNextButton = demandList.length > 3 ? `
+                        <button
+                            type="button"
+                            class="am-wxt-ai-max-demand-next"
+                            data-ai-max-demand-next="1"
+                            aria-label="查看更多AI点睛需求"
+                        >›</button>
+                    ` : '';
+                    const searchWordHtml = renderSearchWordHtml(firstDemandDetail.searchWordList);
+                    const personaHtml = renderPersonaHtml(firstDemandDetail.personaList);
+                    const budgetSuggestion = isPlainObject(info.budgetSuggestion) ? info.budgetSuggestion : {};
+                    const budgetAmount = normalizeSceneSettingValue(budgetSuggestion.amount || '');
+                    const clickEstimate = normalizeSceneSettingValue(budgetSuggestion.clickEstimate || '');
+                    const reasonText = normalizeSceneSettingValue(info.aiMaxReason || info.aiMaxDeliveryPlan || info.trafficAppeal || '');
+                    const analysisText = normalizeSceneSettingValue(firstDemandDetail.analysis || info.analysis || info.aiMaxReason || '');
+                    const demandTitleText = demandList.slice(0, 5).join('、');
+                    const searchWordText = firstDemandDetail.searchWordList.slice(0, 4).join('、');
+                    const personaText = firstDemandDetail.personaList.slice(0, 3)
+                        .map(item => normalizeSceneSettingValue(item?.title || item?.name || ''))
+                        .filter(Boolean)
+                        .join('、');
+                    const aiMaxDeepSteps = [
+                        {
+                            title: '第1步：计划定向画像分析',
+                            desc: `基于${info.itemTitle || '当前商品'}的标题、历史成交和投放目标，识别可承接的高意向搜索人群。`
+                        },
+                        {
+                            title: '第2步：关键词深度分析',
+                            desc: searchWordText
+                                ? `围绕${searchWordText}等热门搜索词扩展搜索意图，优先承接强相关需求。`
+                                : '围绕商品核心卖点和成交词扩展搜索意图，优先承接强相关需求。'
+                        },
+                        {
+                            title: '第3步：流入流失竞对分析',
+                            desc: '结合类目搜索竞争和成交相似路径，过滤低相关流量，提升精准转化比例。'
+                        },
+                        {
+                            title: '第4步：同行定向画像分析',
+                            desc: personaText
+                                ? `参考${personaText}等人群画像，匹配更接近成交链路的搜索客群。`
+                                : '参考同行成交相似人群画像，匹配更接近成交链路的搜索客群。'
+                        },
+                        {
+                            title: '第5步：搜索需求分析',
+                            desc: demandTitleText
+                                ? `已生成${demandList.length}个搜索需求：${demandTitleText}，用于后续精准投放。`
+                                : '已结合商品卖点生成搜索需求，用于后续精准投放。'
+                        }
+                    ];
+                    const aiMaxDeepStepHtml = aiMaxDeepSteps.map((step, index) => `
+                        <div class="am-wxt-ai-max-deep-step" data-ai-max-deep-step="${index + 1}">
+                            <div class="am-wxt-ai-max-deep-step-main">
+                                <span
+                                    class="am-wxt-ai-max-deep-step-title"
+                                    data-ai-max-typewriter="1"
+                                    data-ai-max-typewriter-text="${Utils.escapeHtml(step.title)}"
+                                >${Utils.escapeHtml(step.title)}</span>
+                                <div
+                                    class="am-wxt-ai-max-deep-step-desc hidden"
+                                    data-ai-max-step-detail="1"
+                                    data-ai-max-typewriter-text="${Utils.escapeHtml(step.desc)}"
+                                >${Utils.escapeHtml(step.desc)}</div>
+                            </div>
+                            <button type="button" class="am-wxt-ai-max-step-btn" data-ai-max-step-toggle="1">展开详情</button>
+                        </div>
+                    `).join('');
+                    return `
+                        <div class="am-wxt-scene-setting-row am-wxt-ai-max-setting-row">
+                            <div class="am-wxt-scene-setting-label">AI点睛设置</div>
+                            <div class="am-wxt-setting-control">
+                                <section class="am-wxt-ai-max-panel" data-ai-max-panel="1">
+                                    <input
+                                        class="am-wxt-hidden-control"
+                                        data-scene-field="${Utils.escapeHtml(normalizedInfoField)}"
+                                        data-scene-popup-field="${Utils.escapeHtml(popupTrigger)}"
+                                        value="${Utils.escapeHtml(infoRaw)}"
+                                    />
+                                    <div class="am-wxt-ai-max-head">
+                                        <span>深度解析主要销量商品的标题和历史成交数据，为你生成以下投放内容</span>
+                                        <button type="button" class="am-wxt-ai-max-link" data-scene-popup-trigger="${Utils.escapeHtml(popupTrigger)}">表达更多流量诉求</button>
+                                    </div>
+                                    <div class="am-wxt-ai-max-status">
+                                        <span class="am-wxt-ai-max-status-title">
+                                            <span class="am-wxt-ai-max-status-icon">✓</span>
+                                            <span>已完成深度搜索</span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-ai-max-detail-btn"
+                                            data-ai-max-detail-toggle="1"
+                                        >展开详情</button>
+                                    </div>
+                                    <div class="am-wxt-ai-max-deep-detail hidden" data-ai-max-detail-section="deep">
+                                        <div class="am-wxt-ai-max-deep-box">
+                                            ${aiMaxDeepStepHtml}
+                                        </div>
+                                    </div>
+                                    <div class="am-wxt-ai-max-copy-row">
+                                        ${reasonText ? `<div class="am-wxt-ai-max-copy">${Utils.escapeHtml(reasonText)}</div>` : '<div></div>'}
+                                        <button
+                                            type="button"
+                                            class="am-wxt-ai-max-demand-summary"
+                                            data-scene-popup-summary="${Utils.escapeHtml(popupTrigger)}"
+                                            data-ai-max-demand-selector-trigger="1"
+                                            data-ai-max-info-field="${Utils.escapeHtml(normalizedInfoField)}"
+                                        >
+                                            <span>已选：</span>
+                                            <b>${Utils.escapeHtml(`${(Array.isArray(info.selectedDemandList) ? info.selectedDemandList.length : 0) || 0}个需求`)}</b>
+                                        </button>
+                                    </div>
+                                    <div class="am-wxt-ai-max-demand-list-wrap">
+                                        <div class="am-wxt-ai-max-demand-list" data-ai-max-demand-list="1">${demandCards}</div>
+                                        ${demandNextButton}
+                                    </div>
+                                    <div class="am-wxt-ai-max-analysis" data-ai-max-analysis-target="1">${analysisText ? `<b>AI解析：</b>${Utils.escapeHtml(analysisText)}` : ''}</div>
+                                    ${budgetAmount || clickEstimate ? `
+                                        <div class="am-wxt-ai-max-budget">
+                                            <b>AI小万建议</b>
+                                            <span>${clickEstimate ? `预计可获得点击量 ${Utils.escapeHtml(clickEstimate)} 次` : '已生成预算建议'}${budgetAmount ? `，建议日均预算 ${Utils.escapeHtml(budgetAmount)} 元` : ''}</span>
+                                        </div>
+                                    ` : ''}
+                                    <div class="am-wxt-ai-max-detail-grid" data-ai-max-demand-detail-grid="1">
+                                        ${searchWordHtml ? `<div class="am-wxt-ai-max-word-cloud">
+                                            <b>热门搜索词</b>
+                                            <div data-ai-max-word-target="1">${searchWordHtml}</div>
+                                        </div>` : ''}
+                                        ${personaHtml ? `<div class="am-wxt-ai-max-persona-list">
+                                            <b>搜索人群画像与特征</b>
+                                            <div data-ai-max-persona-target="1">${personaHtml}</div>
+                                        </div>` : ''}
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    `;
+                };
+
+                const buildKeywordAiMaxPendingPanelRow = ({
+                    infoRaw = '',
+                    infoField = '',
+                    message = '添加商品后可生成 AI 点睛投放内容和预算建议',
+                    status = 'pending'
+                } = {}) => {
+                    const normalizedInfoField = normalizeSceneSettingValue(infoField);
+                    if (!normalizedInfoField) return '';
+                    const panelStatus = normalizeSceneSettingValue(status || 'pending');
+                    return `
+                        <div class="am-wxt-scene-setting-row am-wxt-ai-max-setting-row">
+                            <div class="am-wxt-scene-setting-label">AI点睛设置</div>
+                            <div class="am-wxt-setting-control">
+                                <section class="am-wxt-ai-max-panel am-wxt-ai-max-panel-pending" data-ai-max-panel="${Utils.escapeHtml(panelStatus)}">
+                                    <input
+                                        class="am-wxt-hidden-control"
+                                        data-scene-field="${Utils.escapeHtml(normalizedInfoField)}"
+                                        data-scene-popup-field="keywordAiMaxSetting"
+                                        value="${Utils.escapeHtml(infoRaw || '')}"
+                                    />
+                                    <div class="am-wxt-ai-max-status">
+                                        <span>${Utils.escapeHtml(message || '添加商品后可生成 AI 点睛投放内容和预算建议')}</span>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    `;
+                };
+
+                const buildKeywordCustomKeywordSettingRow = ({
+                    fieldKey = '',
+                    enabled = true,
+                    manualKeywordCount = 0,
+                    recommendCount = ''
+                } = {}) => {
+                    const normalizedFieldKey = normalizeSceneSettingValue(fieldKey);
+                    if (!normalizedFieldKey) return '';
+                    const fieldValue = enabled ? '查看和添加关键词' : '关闭';
+                    const safeManualCount = Math.max(0, toNumber(manualKeywordCount, 0));
+                    const safeRecommendCount = normalizeSceneSettingValue(recommendCount || '');
+                    const summary = `已设置：开启流量智选，关键词组合 1 个、自选词 ${safeManualCount} 个${safeRecommendCount ? `、推荐词目标 ${safeRecommendCount} 个` : ''}`;
+                    return `
+                        <div class="am-wxt-scene-setting-row">
+                            <div class="am-wxt-scene-setting-label">关键词设置</div>
+                            <div class="am-wxt-setting-control am-wxt-keyword-setting-control">
+                                <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(normalizedFieldKey)}" value="${Utils.escapeHtml(fieldValue)}" />
+                                <label class="am-wxt-smart-crowd-check">
+                                    <input
+                                        type="checkbox"
+                                        data-scene-crowd-priority-toggle="1"
+                                        data-scene-crowd-priority-field="${Utils.escapeHtml(normalizedFieldKey)}"
+                                        data-scene-crowd-priority-on="查看和添加关键词"
+                                        data-scene-crowd-priority-off="关闭"
+                                        ${enabled ? 'checked' : ''}
+                                    />
+                                    <span
+                                        data-keyword-setting-open-manual="1"
+                                        data-keyword-setting-open-manual-field="${Utils.escapeHtml(normalizedFieldKey)}"
+                                    >查看和添加关键词</span>
+                                </label>
+                                <div class="am-wxt-smart-crowd-desc">${Utils.escapeHtml(summary)}</div>
                             </div>
                         </div>
                     `;
@@ -41341,7 +43086,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         </div>
                     </div>
                 `;
-                const buildManualKeywordDesignerRow = (label = '手动关键词') => {
+                const buildManualKeywordDesignerRow = (label = '手动关键词', options = {}) => {
                     const fallbackBid = toNumber(wizardState.els.bidInput?.value, 1);
                     const keywordDefaults = {
                         bidPrice: Number.isFinite(fallbackBid) ? fallbackBid : 1,
@@ -41358,7 +43103,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const flowEnabled = editingStrategy
                         ? editingStrategy.useWordPackage !== false
                         : wizardState?.draft?.useWordPackage !== false;
-                    const manualKeywordPanelCollapsed = wizardState.manualKeywordPanelCollapsed !== false;
+                    const manualKeywordPanelCollapsed = Object.prototype.hasOwnProperty.call(options || {}, 'collapsed')
+                        ? !!options.collapsed
+                        : wizardState.manualKeywordPanelCollapsed !== false;
                     const flowStatusText = flowEnabled ? '生效中' : '已关闭';
                     const flowSwitchText = flowEnabled ? '开' : '关';
                     const flowSwitchClassName = flowEnabled ? 'is-on' : 'is-off';
@@ -41572,15 +43319,18 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 })();
                 const bidConstraintFieldKey = bidConstraintFieldLabel ? normalizeSceneFieldKey(bidConstraintFieldLabel) : '';
                 const bidConstraintFieldToken = bidConstraintFieldLabel ? normalizeSceneRenderFieldToken(bidConstraintFieldLabel) : '';
+                const resolveFullSiteBidConstraintFallbackValue = () => normalizeSceneSettingValue(
+                    runtimeCache?.value?.storeData?.constraintValue
+                    || runtimeCache?.value?.solutionTemplate?.campaign?.constraintValue
+                    || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.目标投产比
+                    || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.净目标投产比
+                    || ''
+                );
                 if (sceneName === '货品全站推广' && Object.prototype.hasOwnProperty.call(bucket, 'field')) {
                     delete bucket.field;
                 }
                 if (sceneName === '货品全站推广' && bidConstraintFieldKey && normalizeSceneSettingValue(bucket[bidConstraintFieldKey]) === '') {
-                    const fallbackBidConstraintValue = normalizeSceneSettingValue(
-                        SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.目标投产比
-                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.净目标投产比
-                        || ''
-                    );
+                    const fallbackBidConstraintValue = resolveFullSiteBidConstraintFallbackValue();
                     if (fallbackBidConstraintValue) {
                         bucket[bidConstraintFieldKey] = fallbackBidConstraintValue;
                     }
@@ -41588,11 +43338,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (sceneName === '货品全站推广' && bidConstraintFieldKey) {
                     const currentBidConstraintValue = normalizeSceneSettingValue(bucket[bidConstraintFieldKey]);
                     if (/(增加总成交金额|增加净成交金额|获取成交量|稳定投产比|增加点击量|增加收藏加购量)/.test(currentBidConstraintValue)) {
-                        const fallbackBidConstraintValue = normalizeSceneSettingValue(
-                            SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.目标投产比
-                            || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.净目标投产比
-                            || '5'
-                        );
+                        const fallbackBidConstraintValue = resolveFullSiteBidConstraintFallbackValue() || '5';
                         bucket[bidConstraintFieldKey] = fallbackBidConstraintValue;
                     }
                 }
@@ -41600,26 +43346,153 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 staticRows.push(buildProxySelectRow('场景选择', 'am-wxt-keyword-scene-select', wizardState.els.sceneSelect, { segmented: true }));
                 staticRows.push(buildGoalSelectorRow('营销目标', goalOptions, activeMarketingGoal, { segmented: true }));
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
+                let keywordManualPanelInsertedAfterSetting = false;
                 if (isKeywordScene) {
-                    const keywordBidMode = normalizeBidMode(
+                    let keywordBidMode = normalizeBidMode(
                         wizardState?.els?.bidModeSelect?.value || wizardState?.draft?.bidMode || 'smart',
                         'smart'
                     );
                     const activeKeywordGoal = detectKeywordGoalFromText(activeMarketingGoal || '');
                     const isFixedKeywordBidContract = activeKeywordGoal === '搜索卡位' || activeKeywordGoal === '流量金卡';
+                    const keywordAiMaxFieldLabel = 'AI点睛';
+                    const keywordAiMaxFieldKey = normalizeSceneFieldKey(keywordAiMaxFieldLabel);
+                    const keywordAiMaxSwitchField = 'campaign.aiMaxSwitch';
+                    const keywordAiMaxSwitchFieldKey = normalizeSceneFieldKey(keywordAiMaxSwitchField);
+                    const keywordAiMaxInfoField = 'campaign.aiMaxInfo';
+                    const keywordAiMaxInfoFieldKey = normalizeSceneFieldKey(keywordAiMaxInfoField);
+                    const keywordAiMaxPrimaryItem = activeKeywordGoal === '自定义推广'
+                        ? resolveKeywordAiMaxPrimaryItem()
+                        : null;
+                    const keywordAiMaxHasItem = !!(
+                        keywordAiMaxPrimaryItem
+                        && (
+                            toIdValue(keywordAiMaxPrimaryItem?.materialId || keywordAiMaxPrimaryItem?.itemId || keywordAiMaxPrimaryItem?.id || '')
+                            || normalizeKeywordAiMaxItemTitle(keywordAiMaxPrimaryItem)
+                        )
+                    );
+                    const pickKeywordAiMaxRawValue = (...values) => {
+                        for (const value of values) {
+                            if (value === undefined || value === null) continue;
+                            const text = String(value).trim();
+                            if (text !== '') return text;
+                        }
+                        return '';
+                    };
+                    const keywordAiMaxRaw = activeKeywordGoal === '自定义推广'
+                        ? pickKeywordAiMaxRawValue(
+                            bucket[keywordAiMaxFieldKey],
+                            bucket[keywordAiMaxFieldLabel],
+                            bucket[keywordAiMaxSwitchField],
+                            bucket[keywordAiMaxSwitchFieldKey],
+                            runtimeCache?.value?.storeData?.aiMaxSwitch,
+                            runtimeCache?.value?.solutionTemplate?.campaign?.aiMaxSwitch,
+                            '1'
+                        )
+                        : '';
+                    const keywordAiMaxEnabled = activeKeywordGoal === '自定义推广'
+                        && !/^(0|false|off|关闭|否)$/i.test(keywordAiMaxRaw || '1');
+                    if (activeKeywordGoal === '自定义推广' && keywordAiMaxEnabled && keywordBidMode === 'manual') {
+                        keywordBidMode = 'smart';
+                        if (wizardState.els.bidModeSelect) wizardState.els.bidModeSelect.value = 'smart';
+                        if (wizardState.draft) wizardState.draft.bidMode = 'smart';
+                    }
+                    if (activeKeywordGoal === '自定义推广' && keywordAiMaxFieldKey) {
+                        const keywordAiMaxValue = keywordAiMaxEnabled ? '开启' : '关闭';
+                        const keywordAiMaxSwitchValue = keywordAiMaxEnabled ? '1' : '0';
+                        const keywordAiMaxInfoSource = bucket[keywordAiMaxInfoField]
+                            || bucket[keywordAiMaxInfoFieldKey]
+                            || runtimeCache?.value?.storeData?.aiMaxInfo
+                            || runtimeCache?.value?.solutionTemplate?.campaign?.aiMaxInfo
+                            || '';
+                        const keywordAiMaxInfoTouched = !!(
+                            touchedBucket[keywordAiMaxInfoField]
+                            || touchedBucket[keywordAiMaxInfoFieldKey]
+                        );
+                        const keywordAiMaxGenerationKey = keywordAiMaxPrimaryItem
+                            ? getKeywordAiMaxGenerationKey(keywordAiMaxPrimaryItem)
+                            : '';
+                        const keywordAiMaxGeneration = keywordAiMaxGenerationKey
+                            ? getKeywordAiMaxGenerationMap()[keywordAiMaxGenerationKey]
+                            : null;
+                        let keywordAiMaxInfoSourceForRender = keywordAiMaxInfoSource;
+                        if (keywordAiMaxEnabled && keywordAiMaxHasItem) {
+                            if (!keywordAiMaxInfoTouched && keywordAiMaxGeneration?.status === 'ready' && isPlainObject(keywordAiMaxGeneration.info)) {
+                                keywordAiMaxInfoSourceForRender = keywordAiMaxGeneration.info;
+                            } else {
+                                const parsedKeywordAiMaxInfo = normalizeKeywordAiMaxInfo(keywordAiMaxInfoSource, keywordAiMaxEnabled, keywordAiMaxPrimaryItem || {});
+                                if (!parsedKeywordAiMaxInfo.nativeGenerated && !parsedKeywordAiMaxInfo.nativeSource) {
+                                    ensureKeywordAiMaxGeneration(keywordAiMaxPrimaryItem);
+                                }
+                            }
+                        }
+                        const keywordAiMaxInfo = normalizeKeywordAiMaxInfo(keywordAiMaxInfoSourceForRender, keywordAiMaxEnabled, keywordAiMaxPrimaryItem || {});
+                        const keywordAiMaxInfoRaw = serializeKeywordAiMaxInfo(keywordAiMaxInfo, keywordAiMaxEnabled);
+                        bucket[keywordAiMaxFieldKey] = keywordAiMaxValue;
+                        bucket[keywordAiMaxFieldLabel] = keywordAiMaxValue;
+                        bucket[keywordAiMaxSwitchField] = keywordAiMaxSwitchValue;
+                        bucket[keywordAiMaxSwitchFieldKey] = keywordAiMaxSwitchValue;
+                        bucket[keywordAiMaxInfoField] = keywordAiMaxInfoRaw;
+                        bucket[keywordAiMaxInfoFieldKey] = keywordAiMaxInfoRaw;
+                        staticRows.push(buildKeywordAiMaxSwitchRow({
+                            fieldKey: keywordAiMaxFieldKey,
+                            selectedValue: keywordAiMaxValue,
+                            switchValue: keywordAiMaxSwitchValue,
+                            infoRaw: keywordAiMaxInfoRaw
+                        }));
+                        if (keywordAiMaxEnabled) {
+                            if (!keywordAiMaxHasItem) {
+                                staticRows.push(buildKeywordAiMaxPendingPanelRow({
+                                    infoRaw: keywordAiMaxInfoRaw,
+                                    infoField: keywordAiMaxInfoField
+                                }));
+                            } else if (keywordAiMaxGeneration?.status === 'error' && !keywordAiMaxInfo.nativeGenerated && !keywordAiMaxInfo.nativeSource) {
+                                staticRows.push(buildKeywordAiMaxPendingPanelRow({
+                                    infoRaw: keywordAiMaxInfoRaw,
+                                    infoField: keywordAiMaxInfoField,
+                                    status: 'error',
+                                    message: `AI点睛生成失败：${keywordAiMaxGeneration.message || '原生接口暂不可用'}`
+                                }));
+                            } else if (!keywordAiMaxInfo.nativeGenerated && !keywordAiMaxInfo.nativeSource) {
+                                staticRows.push(buildKeywordAiMaxPendingPanelRow({
+                                    infoRaw: keywordAiMaxInfoRaw,
+                                    infoField: keywordAiMaxInfoField,
+                                    message: 'AI点睛正在按原生接口生成投放内容，请稍候...'
+                                }));
+                            } else {
+                                staticRows.push(buildKeywordAiMaxInsightPanelRow({
+                                    infoRaw: keywordAiMaxInfoRaw,
+                                    info: keywordAiMaxInfo,
+                                    infoField: keywordAiMaxInfoField
+                                }));
+                            }
+                        }
+                    }
                     let keywordBidTargetLinkedInsertIndex = -1;
                     if (!isFixedKeywordBidContract) {
-                        staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, { segmented: true }));
+                        staticRows.push(buildProxySelectRow('出价方式', 'am-wxt-keyword-bid-mode', wizardState.els.bidModeSelect, {
+                            segmented: true,
+                            allowedValues: keywordAiMaxEnabled ? ['smart'] : [],
+                            enforceFilteredSelection: true,
+                            inlineControlHtml: keywordAiMaxEnabled
+                                ? '<span class="tips">开启‘AI点睛’后仅支持智能出价。如需使用手动出价，可关闭该功能。</span>'
+                                : ''
+                        }));
                     }
                     if (keywordBidMode !== 'manual' && !isFixedKeywordBidContract) {
                         const keywordCustomBidTargetAllowedValues = ['conv', 'similar_item', 'market_penetration', 'fav_cart', 'click', 'roi'];
+                        const keywordAiMaxBidTargetAllowedValues = ['conv', 'fav_cart', 'click', 'roi'];
                         const keywordTrendBidTargetAllowedValues = ['conv', 'click', 'fav_cart', 'roi'];
                         staticRows.push(buildProxySelectRow('出价目标', 'am-wxt-keyword-bid-target', wizardState.els.bidTargetSelect, {
                             segmented: true,
                             allowedValues: activeKeywordGoal === '自定义推广'
-                                ? keywordCustomBidTargetAllowedValues
+                                ? (keywordAiMaxEnabled ? keywordAiMaxBidTargetAllowedValues : keywordCustomBidTargetAllowedValues)
                                 : (activeKeywordGoal === '趋势明星' ? keywordTrendBidTargetAllowedValues : []),
                             enforceFilteredSelection: activeKeywordGoal === '自定义推广' || activeKeywordGoal === '趋势明星',
+                            resolveOptionText: ({ value, text }) => (
+                                activeKeywordGoal === '自定义推广' && value === 'market_penetration'
+                                    ? '提升词市场渗透'
+                                    : text
+                            ),
                             resolveBadgeText: ({ value, text }) => (value === 'conv' || /获取成交量/.test(text)) ? '升级净成交' : ''
                         }));
                         if (normalizeSceneSettingValue(activeKeywordGoal) === '自定义推广') {
@@ -41881,46 +43754,75 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 }
                             });
                         } else {
-                            const keywordSmartCrowdSettingLabel = normalizeSceneRenderFieldLabel('人群设置') || '人群设置';
-                            const keywordSmartCrowdSettingFieldKey = normalizeSceneFieldKey(keywordSmartCrowdSettingLabel);
-                            const keywordSmartCrowdSettingAliasKeys = ['设置人群', '设置拉新人群', '种子人群']
-                                .map(item => normalizeSceneFieldKey(item))
-                                .filter(Boolean);
-                            const keywordSmartCrowdSettingValue = isPriorityCrowdEnabled ? '设置优先投放客户' : '关闭';
-                            if (keywordSmartCrowdSettingFieldKey) {
-                                bucket[keywordSmartCrowdSettingFieldKey] = keywordSmartCrowdSettingValue;
-                                keywordSmartCrowdSettingAliasKeys.forEach(aliasKey => {
-                                    if (!aliasKey || touchedBucket[aliasKey]) return;
-                                    if (normalizeSceneSettingValue(bucket[aliasKey])) return;
-                                    bucket[aliasKey] = keywordSmartCrowdSettingValue;
-                                });
-                                staticRows.push(buildKeywordSmartCrowdPriorityRow({
-                                    label: keywordSmartCrowdSettingLabel,
-                                    fieldKey: keywordSmartCrowdSettingFieldKey,
-                                    enabled: isPriorityCrowdEnabled,
-                                    onValue: '设置优先投放客户',
-                                    offValue: '关闭',
-                                    helpText: '智能出价方式下，可通过人群设置，提高特定客户的投放权重。特别的，价值设置用于调整算法的出价系数，并不等于最终的出价。',
-                                    description: '支持对特定客户设置更高权重，进行优先获取。',
-                                    detailUrl: 'https://alidocs.dingtalk.com/i/nodes/Y1OQX0akWmzdBowLFk0vRgKlVGlDd3mE',
-                                    detailLabel: '了解详情'
+                            if (!keywordAiMaxEnabled) {
+                                const keywordSettingFieldLabel = '关键词设置';
+                                const keywordSettingFieldKey = normalizeSceneFieldKey(keywordSettingFieldLabel);
+                                const manualKeywordCount = String(wizardState?.els?.manualInput?.value || '')
+                                    .split(/\n+/)
+                                    .map(item => normalizeSceneSettingValue(item))
+                                    .filter(Boolean)
+                                    .length;
+                                const keywordSettingRaw = normalizeSceneSettingValue(
+                                    bucket[keywordSettingFieldKey]
+                                    || bucket[keywordSettingFieldLabel]
+                                    || '查看和添加关键词'
+                                );
+                                const keywordSettingEnabled = !/^(0|false|off|关闭|否)$/i.test(keywordSettingRaw || '查看和添加关键词');
+                                if (keywordSettingFieldKey) {
+                                    bucket[keywordSettingFieldKey] = keywordSettingEnabled ? '查看和添加关键词' : '关闭';
+                                    bucket[keywordSettingFieldLabel] = bucket[keywordSettingFieldKey];
+                                    staticRows.push(buildKeywordCustomKeywordSettingRow({
+                                        fieldKey: keywordSettingFieldKey,
+                                        enabled: keywordSettingEnabled,
+                                        manualKeywordCount,
+                                        recommendCount: wizardState?.els?.recommendCountInput?.value || ''
+                                    }));
+                                    staticRows.push(buildManualKeywordDesignerRow('手动关键词', {
+                                        collapsed: !keywordSettingEnabled
+                                    }));
+                                    keywordManualPanelInsertedAfterSetting = true;
+                                }
+                                const keywordSmartCrowdSettingLabel = normalizeSceneRenderFieldLabel('人群设置') || '人群设置';
+                                const keywordSmartCrowdSettingFieldKey = normalizeSceneFieldKey(keywordSmartCrowdSettingLabel);
+                                const keywordSmartCrowdSettingAliasKeys = ['设置人群', '设置拉新人群', '种子人群']
+                                    .map(item => normalizeSceneFieldKey(item))
+                                    .filter(Boolean);
+                                const keywordSmartCrowdSettingValue = isPriorityCrowdEnabled ? '设置优先投放客户' : '关闭';
+                                if (keywordSmartCrowdSettingFieldKey) {
+                                    bucket[keywordSmartCrowdSettingFieldKey] = keywordSmartCrowdSettingValue;
+                                    keywordSmartCrowdSettingAliasKeys.forEach(aliasKey => {
+                                        if (!aliasKey || touchedBucket[aliasKey]) return;
+                                        if (normalizeSceneSettingValue(bucket[aliasKey])) return;
+                                        bucket[aliasKey] = keywordSmartCrowdSettingValue;
+                                    });
+                                    staticRows.push(buildKeywordSmartCrowdPriorityRow({
+                                        label: keywordSmartCrowdSettingLabel,
+                                        fieldKey: keywordSmartCrowdSettingFieldKey,
+                                        enabled: isPriorityCrowdEnabled,
+                                        onValue: '设置优先投放客户',
+                                        offValue: '关闭',
+                                        helpText: '智能出价方式下，可通过人群设置，提高特定客户的投放权重。特别的，价值设置用于调整算法的出价系数，并不等于最终的出价。',
+                                        description: '支持对特定客户设置更高权重，进行优先获取。',
+                                        detailUrl: 'https://alidocs.dingtalk.com/i/nodes/Y1OQX0akWmzdBowLFk0vRgKlVGlDd3mE',
+                                        detailLabel: '了解详情'
+                                    }));
+                                }
+                                const keywordCrowdTargetFieldKey = normalizeSceneFieldKey('人群优化目标');
+                                const keywordCrowdClientFieldKey = normalizeSceneFieldKey('客户口径设置');
+                                const keywordCrowdValueFieldKey = normalizeSceneFieldKey('人群价值设置');
+                                const keywordCrowdTargetStatus = isCrowdTargetEnabled ? '人群优化目标' : '关闭';
+                                if (keywordCrowdTargetFieldKey) bucket[keywordCrowdTargetFieldKey] = keywordCrowdTargetStatus;
+                                if (keywordCrowdClientFieldKey) bucket[keywordCrowdClientFieldKey] = keywordCrowdTargetStatus;
+                                if (keywordCrowdValueFieldKey) bucket[keywordCrowdValueFieldKey] = keywordCrowdTargetStatus;
+                                staticRows.push(buildKeywordSmartCrowdTargetPanelRow({
+                                    targetFieldKey: keywordCrowdTargetFieldKey,
+                                    clientFieldKey: keywordCrowdClientFieldKey,
+                                    valueFieldKey: keywordCrowdValueFieldKey,
+                                    campaignFieldKey: crowdCampaignField,
+                                    campaignRaw: crowdCampaignRaw,
+                                    enabled: isCrowdTargetEnabled
                                 }));
                             }
-                            const keywordCrowdTargetFieldKey = normalizeSceneFieldKey('人群优化目标');
-                            const keywordCrowdClientFieldKey = normalizeSceneFieldKey('客户口径设置');
-                            const keywordCrowdValueFieldKey = normalizeSceneFieldKey('人群价值设置');
-                            const keywordCrowdTargetStatus = isCrowdTargetEnabled ? '人群优化目标' : '关闭';
-                            if (keywordCrowdTargetFieldKey) bucket[keywordCrowdTargetFieldKey] = keywordCrowdTargetStatus;
-                            if (keywordCrowdClientFieldKey) bucket[keywordCrowdClientFieldKey] = keywordCrowdTargetStatus;
-                            if (keywordCrowdValueFieldKey) bucket[keywordCrowdValueFieldKey] = keywordCrowdTargetStatus;
-                            staticRows.push(buildKeywordSmartCrowdTargetPanelRow({
-                                targetFieldKey: keywordCrowdTargetFieldKey,
-                                clientFieldKey: keywordCrowdClientFieldKey,
-                                valueFieldKey: keywordCrowdValueFieldKey,
-                                campaignFieldKey: crowdCampaignField,
-                                campaignRaw: crowdCampaignRaw,
-                                enabled: isCrowdTargetEnabled
-                            }));
                             // 临时隐藏：关键词-自定义推广-智能出价下先不展示 crowd target 开关，后续再彻底移除。
                             const keywordBidTargetLinkedRows = [];
                             const keywordRoiLevelFieldLabel = '设置7日投产比';
@@ -43110,19 +45012,76 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         )
                     }));
 
-                    const benefitKey = normalizeSceneFieldKey('专属权益');
-                    const benefitValue = normalizeSceneSettingValue(bucket[benefitKey] || '智能补贴券');
-                    bucket[benefitKey] = benefitValue;
+                    const staleBenefitKey = normalizeSceneFieldKey('专属权益');
+                    if (staleBenefitKey) delete bucket[staleBenefitKey];
+                    delete bucket.专属权益;
+
+                    const siteBudgetGuardKey = normalizeSceneFieldKey('优质计划防停投');
+                    const siteBudgetGuardValue = /^(0|false|off|关闭|否)$/i.test(normalizeSceneSettingValue(
+                        bucket[siteBudgetGuardKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.优质计划防停投
+                        || '开启'
+                    ))
+                        ? '关闭'
+                        : '开启';
+                    const siteBudgetGuardConfigField = '__am.siteBudgetGuardConfig';
+                    const siteBudgetGuardConfigRawValue = normalizeSceneSettingValue(
+                        bucket[siteBudgetGuardConfigField]
+                        || bucket[normalizeSceneFieldKey(siteBudgetGuardConfigField)]
+                        || '{}'
+                    ) || '{}';
+                    const siteBudgetGuardConfigRaw = JSON.stringify(normalizeBudgetGuardConfig(siteBudgetGuardConfigRawValue));
+                    bucket[siteBudgetGuardKey] = siteBudgetGuardValue;
+                    bucket[siteBudgetGuardConfigField] = siteBudgetGuardConfigRaw;
                     staticRows.push(`
                         <div class="am-wxt-scene-setting-row">
-                            <div class="am-wxt-scene-setting-label">专属权益</div>
+                            <div class="am-wxt-scene-setting-label">优质计划防停投</div>
+                            <div class="am-wxt-setting-control am-wxt-setting-control-pair">
+                                <div class="am-wxt-scene-budget-guard-main">
+                                    ${buildSceneSwitchControl(siteBudgetGuardKey, siteBudgetGuardValue, '开启', '关闭')}
+                                    <span class="am-wxt-scene-budget-guard-text">提升预算续航，防止成交损失</span>
+                                </div>
+                                ${buildScenePopupControl({
+                        trigger: 'budgetGuard',
+                        title: '优质计划防停投',
+                        buttonLabel: '修改',
+                        summary: describeBudgetGuardSummary(siteBudgetGuardConfigRaw),
+                        hiddenFields: [
+                            { fieldKey: siteBudgetGuardConfigField, value: siteBudgetGuardConfigRaw }
+                        ]
+                    })}
+                                <input
+                                    class="am-wxt-hidden-control"
+                                    data-scene-field="${Utils.escapeHtml(siteBudgetGuardKey)}"
+                                    value="${Utils.escapeHtml(siteBudgetGuardValue)}"
+                                />
+                            </div>
+                        </div>
+                    `);
+
+                    const smartCreativeKey = normalizeSceneFieldKey('智能创意');
+                    const smartCreativeValue = /^(0|false|off|关闭|否)$/i.test(normalizeSceneSettingValue(
+                        bucket[smartCreativeKey]
+                        || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.智能创意
+                        || '开启'
+                    ))
+                        ? '关闭'
+                        : '开启';
+                    bucket[smartCreativeKey] = smartCreativeValue;
+                    staticRows.push(`
+                        <div class="am-wxt-scene-setting-row">
+                            <div class="am-wxt-scene-setting-label">智能创意</div>
                             <div class="am-wxt-setting-control">
                                 <div class="am-wxt-site-optimize-main">
-                                    <span class="am-wxt-site-optimize-title">智能补贴券</span>
-                                    ${buildSceneSwitchControl(benefitKey, benefitValue, '智能补贴券', '不启用')}
-                                    <span class="am-wxt-site-optimize-link">投放即有机会获得消费者补贴券</span>
+                                    <span class="am-wxt-site-optimize-title">智能创意</span>
+                                    ${buildSceneSwitchControl(smartCreativeKey, smartCreativeValue, '开启', '关闭')}
+                                    <span class="am-wxt-site-optimize-link">自动优选商品素材</span>
                                 </div>
-                                <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(benefitKey)}" value="${Utils.escapeHtml(benefitValue)}" />
+                                <input
+                                    class="am-wxt-hidden-control"
+                                    data-scene-field="${Utils.escapeHtml(smartCreativeKey)}"
+                                    value="${Utils.escapeHtml(smartCreativeValue)}"
+                                />
                             </div>
                         </div>
                     `);
@@ -43133,22 +45092,121 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const launchBudgetKey = normalizeSceneFieldKey('一键起量预算');
                     const launchTimeKey = normalizeSceneFieldKey('投放时间');
                     const launchAreaKey = normalizeSceneFieldKey('投放地域');
-                    const optimizeTargetOptions = uniqueBy(
-                        ['优化加购', '优化直接成交', '增加收藏加购量', '增加总成交金额', '增加净成交金额']
-                            .concat(resolveSceneFieldOptions(profile, '优化目标'))
-                            .map(item => normalizeSceneSettingValue(item))
-                            .filter(Boolean),
-                        item => normalizeSceneOptionText(item)
-                    ).slice(0, 6);
+                    const quickLiftLaunchPeriodField = '__am.quickLiftLaunchPeriodList';
+                    const quickLiftLaunchAreaField = '__am.quickLiftLaunchAreaList';
+                    const optimizeTargetOptions = ['优化加购', '优化直接成交'];
+                    const normalizeSiteMultiTargetLabel = (value = '') => {
+                        const normalizedValue = normalizeSceneSettingValue(value);
+                        if (/^(1230|优化直接成交|增加净成交金额|净成交金额|直接成交)$/.test(normalizedValue)) return '优化直接成交';
+                        if (/^(1034|优化加购|收藏加购|加购)$/.test(normalizedValue)) return '优化加购';
+                        return '优化加购';
+                    };
+                    const buildSiteQuickLiftHourRanges = (hours = []) => {
+                        const sortedHours = Array.from(new Set(
+                            (Array.isArray(hours) ? hours : [])
+                                .map(hour => toNumber(hour, NaN))
+                                .filter(hour => Number.isFinite(hour) && hour >= 0 && hour <= 23)
+                        )).sort((left, right) => left - right);
+                        const ranges = [];
+                        sortedHours.forEach(hour => {
+                            const last = ranges[ranges.length - 1];
+                            if (last && hour === last.end) {
+                                last.end = hour + 1;
+                            } else {
+                                ranges.push({ start: hour, end: hour + 1 });
+                            }
+                        });
+                        return ranges;
+                    };
+                    const buildSiteQuickLiftPeriodRawFromValue = (value = '') => {
+                        const text = normalizeSceneSettingValue(value || '');
+                        if (!text || /(长期|全天|24小时|不限)/.test(text)) {
+                            return JSON.stringify(buildDefaultLaunchPeriodList());
+                        }
+                        const rangeMatches = Array.from(text.matchAll(/(\d{1,2})\s*(?:点|时)?\s*(?:~|-|至|到)\s*(\d{1,2})\s*(?:点|时)?/g));
+                        const hourList = (() => {
+                            if (rangeMatches.length) {
+                                const hourSet = new Set();
+                                rangeMatches.forEach(match => {
+                                    const start = Math.max(0, Math.min(23, toNumber(match[1], 0)));
+                                    const endRaw = toNumber(match[2], 24);
+                                    const end = Math.max(start + 1, Math.min(24, endRaw));
+                                    for (let hour = start; hour < end; hour += 1) hourSet.add(hour);
+                                });
+                                return Array.from(hourSet).sort((left, right) => left - right);
+                            }
+                            return Array.from(new Set(
+                                (text.match(/\d{1,2}/g) || [])
+                                    .map(item => toNumber(item, NaN))
+                                    .filter(num => Number.isFinite(num) && num >= 0 && num <= 23)
+                            )).sort((left, right) => left - right);
+                        })();
+                        if (!hourList.length || hourList.length >= 24) {
+                            return JSON.stringify(buildDefaultLaunchPeriodList());
+                        }
+                        const formatHour = hour => `${String(Math.max(0, Math.min(24, hour))).padStart(2, '0')}:00`;
+                        const timeSpanList = buildSiteQuickLiftHourRanges(hourList)
+                            .map(range => ({
+                                discount: 100,
+                                time: `${formatHour(range.start)}-${formatHour(Math.max(range.start + 1, range.end))}`
+                            }));
+                        return JSON.stringify(['1', '2', '3', '4', '5', '6', '7'].map(dayOfWeek => ({
+                            dayOfWeek,
+                            timeSpanList
+                        })));
+                    };
+                    const buildSiteQuickLiftAreaRawFromValue = (value = '') => {
+                        const text = normalizeSceneSettingValue(value || '');
+                        if (!text || /(全部|全国|不限|all)/i.test(text)) return '["all"]';
+                        const list = uniqueBy(
+                            text
+                                .split(/[,，\s、]+/)
+                                .map(item => normalizeSceneSettingValue(item))
+                                .filter(Boolean),
+                            item => item
+                        );
+                        return JSON.stringify(list.length ? list : ['all']);
+                    };
+                    const describeSiteQuickLiftPeriodSummary = (rawValue = '') => {
+                        if (!rawValue || isLaunchPeriodAllDay(rawValue)) return '0点~24点';
+                        const selectedHourSet = new Set();
+                        parseScenePopupJsonArray(rawValue, []).forEach(item => {
+                            const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                            spanList.forEach(span => {
+                                const timeText = String(span?.time || '').trim();
+                                if (timeText === '00:00-24:00') {
+                                    Array.from({ length: 24 }, (_, idx) => idx).forEach(hour => selectedHourSet.add(hour));
+                                    return;
+                                }
+                                const range = parseTimeRangeToMinutes(timeText);
+                                if (!range) return;
+                                const startHour = Math.max(0, Math.min(23, Math.floor(range.start / 60)));
+                                const endHour = Math.max(startHour + 1, Math.min(24, Math.ceil(range.end / 60)));
+                                for (let hour = startHour; hour < endHour; hour += 1) {
+                                    selectedHourSet.add(hour);
+                                }
+                            });
+                        });
+                        const ranges = buildSiteQuickLiftHourRanges(Array.from(selectedHourSet));
+                        if (!ranges.length) return '未设置';
+                        if (ranges.length === 1 && ranges[0].start === 0 && ranges[0].end === 24) return '0点~24点';
+                        return ranges.map(range => `${range.start}点~${Math.max(range.start + 1, range.end)}点`).join('、');
+                    };
+                    const describeSiteQuickLiftAreaSummary = (rawValue = '') => {
+                        const list = parseScenePopupJsonArray(rawValue, ['all'])
+                            .map(item => String(item || '').trim())
+                            .filter(Boolean);
+                        if (!list.length || list.some(item => /^all$/i.test(item))) return '在全部地域投放';
+                        return `已选择 ${list.length} 个起量地域`;
+                    };
                     const optimizeModeValue = normalizeSceneSettingValue(
                         bucket[optimizeModeKey]
                         || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.投放调优
                         || '多目标优化'
                     );
-                    const optimizeTargetValue = normalizeSceneSettingValue(
+                    const optimizeTargetValue = normalizeSiteMultiTargetLabel(
                         bucket[optimizeTargetKey]
                         || SCENE_SPEC_FIELD_FALLBACK?.['货品全站推广']?.优化目标
-                        || optimizeTargetOptions[0]
                         || '优化加购'
                     );
                     const optimizeBudgetValue = normalizeSceneSettingValue(
@@ -43179,6 +45237,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     bucket[launchBudgetKey] = launchBudgetValue;
                     bucket[launchTimeKey] = launchTimeValue;
                     bucket[launchAreaKey] = launchAreaValue;
+                    const quickLiftLaunchPeriodRaw = normalizeSceneSettingValue(
+                        bucket[quickLiftLaunchPeriodField]
+                        || bucket[normalizeSceneFieldKey(quickLiftLaunchPeriodField)]
+                        || buildSiteQuickLiftPeriodRawFromValue(launchTimeValue)
+                    ) || JSON.stringify(buildDefaultLaunchPeriodList());
+                    const quickLiftLaunchAreaRaw = normalizeSceneSettingValue(
+                        bucket[quickLiftLaunchAreaField]
+                        || bucket[normalizeSceneFieldKey(quickLiftLaunchAreaField)]
+                        || buildSiteQuickLiftAreaRawFromValue(launchAreaValue)
+                    ) || '["all"]';
+                    bucket[quickLiftLaunchPeriodField] = quickLiftLaunchPeriodRaw;
+                    bucket[quickLiftLaunchAreaField] = quickLiftLaunchAreaRaw;
+                    const quickLiftLaunchSummary = `${describeSiteQuickLiftPeriodSummary(quickLiftLaunchPeriodRaw)}｜${describeSiteQuickLiftAreaSummary(quickLiftLaunchAreaRaw)}`;
                     const optimizeTargetOptionHtml = optimizeTargetOptions.map(opt => `
                         <button
                             type="button"
@@ -43198,7 +45269,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     </div>
                                     <div class="am-wxt-site-optimize-inline-row">
                                         <span class="am-wxt-site-optimize-inline-label">目标：</span>
-                                        <div class="am-wxt-site-toggle am-wxt-site-toggle-wide" data-scene-toggle-group="optimize-target">
+                                        <div class="am-wxt-site-toggle am-wxt-site-toggle-wide" data-scene-toggle-group="site-multi-target-target">
                                             ${optimizeTargetOptionHtml}
                                         </div>
                                         <div class="am-wxt-site-optimize-inline-input">
@@ -43214,8 +45285,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <div class="am-wxt-site-optimize-item">
                                     <div class="am-wxt-site-optimize-main">
                                         <span class="am-wxt-site-optimize-title">一键起量</span>
-                                        ${buildSceneSwitchControl(launchTimeKey, launchTimeValue, '长期投放', '固定时段')}
-                                        <span class="am-wxt-site-optimize-link">起量时间地域设置</span>
+                                        ${buildSceneSwitchControl(
+                        launchTimeKey,
+                        /固定时段|关闭|不启用|关/.test(normalizeSceneSettingValue(launchTimeValue)) ? '固定时段' : '长期投放',
+                        '长期投放',
+                        '固定时段'
+                    )}
+                                        ${buildScenePopupControl({
+                        trigger: 'quickLiftLaunchSetting',
+                        title: '起量时间地域设置',
+                        buttonLabel: '起量时间地域设置',
+                        summary: quickLiftLaunchSummary,
+                        hiddenFields: [
+                            { fieldKey: quickLiftLaunchPeriodField, value: quickLiftLaunchPeriodRaw },
+                            { fieldKey: quickLiftLaunchAreaField, value: quickLiftLaunchAreaRaw }
+                        ]
+                    })}
                                     </div>
                                     <div class="am-wxt-site-optimize-inline-row">
                                         <div class="am-wxt-site-optimize-inline-input">
@@ -43226,8 +45311,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     </div>
                                     <div class="am-wxt-site-optimize-hint">建议预算不低于133元</div>
                                     <div class="am-wxt-site-optimize-config">
-                                        <input data-scene-field="${Utils.escapeHtml(launchTimeKey)}" value="${Utils.escapeHtml(launchTimeValue)}" placeholder="投放时间（如：长期投放）" />
-                                        <input data-scene-field="${Utils.escapeHtml(launchAreaKey)}" value="${Utils.escapeHtml(launchAreaValue)}" placeholder="投放地域（如：全部地域）" />
+                                        <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(launchTimeKey)}" value="${Utils.escapeHtml(launchTimeValue)}" />
+                                        <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(launchAreaKey)}" value="${Utils.escapeHtml(launchAreaValue)}" />
                                     </div>
                                 </div>
                             </div>
@@ -43237,7 +45322,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (shouldRenderStandaloneBudgetRow) {
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
-                if (isKeywordScene && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''))) {
+                if (
+                    isKeywordScene
+                    && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''))
+                    && !keywordManualPanelInsertedAfterSetting
+                ) {
                     staticRows.push(buildManualKeywordDesignerRow('手动关键词'));
                 }
                 const staticGridHtml = staticRows.join('');
@@ -43506,6 +45595,172 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     });
                 });
 
+                const syncAiMaxDetailButtonLabel = (button = null) => {
+                    if (!(button instanceof HTMLButtonElement)) return;
+                    const panel = button.closest('.am-wxt-ai-max-panel');
+                    if (!(panel instanceof HTMLElement)) return;
+                    const detailSections = Array.from(panel.querySelectorAll('[data-ai-max-detail-section="deep"]'))
+                        .filter(section => section instanceof HTMLElement);
+                    if (!detailSections.length) return;
+                    const expanded = detailSections.some(section => !section.classList.contains('hidden'));
+                    button.classList.toggle('is-expanded', expanded);
+                    button.textContent = expanded ? '收起详情' : '展开详情';
+                };
+                const runAiMaxTypewriter = (panel = null) => {
+                    if (!(panel instanceof HTMLElement)) return;
+                    const targets = Array.from(panel.querySelectorAll('[data-ai-max-typewriter-text]'))
+                        .filter(target => target instanceof HTMLElement);
+                    targets.forEach((target, targetIndex) => {
+                        if (target.matches('[data-ai-max-step-detail="1"].hidden')) return;
+                        const fullText = normalizeSceneSettingValue(target.getAttribute('data-ai-max-typewriter-text') || target.textContent || '');
+                        if (!fullText) return;
+                        if (target.dataset.aiMaxTyped === '1' && target.textContent === fullText) return;
+                        if (target.dataset.aiMaxTypeTimer) {
+                            clearInterval(Number(target.dataset.aiMaxTypeTimer));
+                            delete target.dataset.aiMaxTypeTimer;
+                        }
+                        target.dataset.aiMaxTyped = '1';
+                        target.textContent = '';
+                        let cursor = 0;
+                        const startDelay = Math.min(targetIndex * 90, 420);
+                        window.setTimeout(() => {
+                            const timer = window.setInterval(() => {
+                                cursor += 1;
+                                target.textContent = fullText.slice(0, cursor);
+                                if (cursor >= fullText.length) {
+                                    clearInterval(timer);
+                                    delete target.dataset.aiMaxTypeTimer;
+                                }
+                            }, 14);
+                            target.dataset.aiMaxTypeTimer = String(timer);
+                        }, startDelay);
+                    });
+                };
+
+                if (!(wizardState.aiMaxDetailDelegatedBound)) {
+                    wizardState.aiMaxDetailDelegatedBound = true;
+                    document.addEventListener('click', (event) => {
+                        const target = event.target instanceof Element
+                            ? event.target.closest('button[data-ai-max-detail-toggle="1"]')
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) return;
+                        const panel = target.closest('.am-wxt-ai-max-panel');
+                        if (!(panel instanceof HTMLElement)) return;
+                        const detailSections = Array.from(panel.querySelectorAll('[data-ai-max-detail-section="deep"]'))
+                            .filter(section => section instanceof HTMLElement);
+                        if (!detailSections.length) return;
+                        const expanded = detailSections.some(section => !section.classList.contains('hidden'));
+                        detailSections.forEach(section => {
+                            section.classList.toggle('hidden', expanded);
+                        });
+                        syncAiMaxDetailButtonLabel(target);
+                        if (!expanded) runAiMaxTypewriter(panel);
+                    });
+                    document.addEventListener('click', (event) => {
+                        const target = event.target instanceof Element
+                            ? event.target.closest('button[data-ai-max-step-toggle="1"]')
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) return;
+                        const step = target.closest('[data-ai-max-deep-step]');
+                        if (!(step instanceof HTMLElement)) return;
+                        const desc = step.querySelector('[data-ai-max-step-detail="1"]');
+                        if (!(desc instanceof HTMLElement)) return;
+                        const expanded = !desc.classList.contains('hidden');
+                        desc.classList.toggle('hidden', expanded);
+                        target.textContent = expanded ? '展开详情' : '收起详情';
+                        target.classList.toggle('is-expanded', !expanded);
+                        if (!expanded) runAiMaxTypewriter(step);
+                    });
+                    document.addEventListener('click', (event) => {
+                        const target = event.target instanceof Element
+                            ? event.target.closest('button[data-ai-max-demand-next="1"]')
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) return;
+                        const panel = target.closest('.am-wxt-ai-max-panel');
+                        const list = panel?.querySelector('[data-ai-max-demand-list="1"]');
+                        if (!(list instanceof HTMLElement)) return;
+                        const card = list.querySelector('[data-ai-max-demand-preview]');
+                        const step = card instanceof HTMLElement
+                            ? Math.max(card.getBoundingClientRect().width + 12, list.clientWidth / 3)
+                            : Math.max(240, list.clientWidth / 3);
+                        if (list.scrollLeft + list.clientWidth >= list.scrollWidth - 4) {
+                            list.scrollTo({ left: 0, behavior: 'smooth' });
+                        } else {
+                            list.scrollBy({ left: step, behavior: 'smooth' });
+                        }
+                    });
+                }
+
+                const aiMaxDetailToggleButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-detail-toggle="1"]');
+                aiMaxDetailToggleButtons.forEach(button => {
+                    syncAiMaxDetailButtonLabel(button);
+                });
+                const aiMaxDemandSelectorTriggers = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-demand-selector-trigger="1"]');
+                aiMaxDemandSelectorTriggers.forEach(button => {
+                    if (!(button instanceof HTMLElement)) return;
+                    button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openKeywordAiMaxDemandPopover(button);
+                    });
+                    button.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        openKeywordAiMaxDemandPopover(button);
+                    });
+                });
+
+                const renderAiMaxSearchWords = (words = []) => (Array.isArray(words) ? words : []).slice(0, 6).map((word, index) => {
+                    const safeWord = Utils.escapeHtml(normalizeSceneSettingValue(word || ''));
+                    if (!safeWord) return '';
+                    return `<span class="am-wxt-ai-max-word word-${(index % 3) + 1}">${safeWord}</span>`;
+                }).join('');
+                const renderAiMaxPersonas = (personas = []) => (Array.isArray(personas) ? personas : []).slice(0, 3).map((item) => {
+                    const title = Utils.escapeHtml(normalizeSceneSettingValue(item?.title || item?.name || '搜索人群'));
+                    const desc = Utils.escapeHtml(normalizeSceneSettingValue(item?.desc || item?.description || ''));
+                    return `
+                        <div class="am-wxt-ai-max-persona">
+                            <span class="am-wxt-ai-max-persona-icon">P</span>
+                            <span>
+                                <b>${title}</b>
+                                <em>${desc}</em>
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+                const parseAiMaxDemandPayload = (rawValue = '', fallback = []) => {
+                    try {
+                        const parsed = JSON.parse(String(rawValue || '[]'));
+                        return Array.isArray(parsed) ? parsed : fallback;
+                    } catch {
+                        return fallback;
+                    }
+                };
+                const aiMaxDemandCards = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-demand-preview]');
+                aiMaxDemandCards.forEach(card => {
+                    if (!(card instanceof HTMLButtonElement)) return;
+                    card.addEventListener('click', () => {
+                        const panel = card.closest('.am-wxt-ai-max-panel');
+                        if (!(panel instanceof HTMLElement)) return;
+                        panel.querySelectorAll('[data-ai-max-demand-preview]').forEach(peer => {
+                            peer.classList.toggle('active', peer === card);
+                        });
+                        const analysis = normalizeSceneSettingValue(card.getAttribute('data-ai-max-demand-analysis') || '');
+                        const analysisTarget = panel.querySelector('[data-ai-max-analysis-target="1"]');
+                        if (analysisTarget instanceof HTMLElement) {
+                            analysisTarget.innerHTML = analysis ? `<b>AI解析：</b>${Utils.escapeHtml(analysis)}` : '';
+                        }
+                        const wordTarget = panel.querySelector('[data-ai-max-word-target="1"]');
+                        if (wordTarget instanceof HTMLElement) {
+                            wordTarget.innerHTML = renderAiMaxSearchWords(parseAiMaxDemandPayload(card.getAttribute('data-ai-max-demand-search-words') || '[]'));
+                        }
+                        const personaTarget = panel.querySelector('[data-ai-max-persona-target="1"]');
+                        if (personaTarget instanceof HTMLElement) {
+                            personaTarget.innerHTML = renderAiMaxPersonas(parseAiMaxDemandPayload(card.getAttribute('data-ai-max-demand-personas') || '[]'));
+                        }
+                    });
+                });
+
                 const sceneOptionButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-scene-option]');
                 sceneOptionButtons.forEach(button => {
                     button.addEventListener('click', (event) => {
@@ -43588,6 +45843,25 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         hiddenControl.value = toggle.checked ? onValue : offValue;
                         hiddenControl.dispatchEvent(new Event('input', { bubbles: true }));
                         hiddenControl.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (onValue === '查看和添加关键词') {
+                            const manualPanel = wizardState.els.sceneDynamic?.querySelector?.('[data-manual-keyword-panel]');
+                            const manualToggle = manualPanel?.querySelector?.('button[data-manual-keyword-collapse-toggle]');
+                            if (manualPanel instanceof HTMLElement) {
+                                const nextCollapsed = !toggle.checked;
+                                manualPanel.classList.toggle('is-collapsed', nextCollapsed);
+                                manualPanel.setAttribute('data-manual-keyword-collapsed', nextCollapsed ? '1' : '0');
+                                if (manualToggle instanceof HTMLButtonElement) {
+                                    manualToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+                                    manualToggle.textContent = nextCollapsed ? '展开' : '收起';
+                                }
+                                wizardState.manualKeywordPanelCollapsed = nextCollapsed;
+                                ensureWizardDraft().manualKeywordPanelCollapsed = nextCollapsed;
+                                commitDraftState();
+                                if (toggle.checked && typeof manualPanel.scrollIntoView === 'function') {
+                                    manualPanel.scrollIntoView({ block: 'nearest' });
+                                }
+                            }
+                        }
                     });
                 });
 
@@ -43676,9 +45950,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 });
 
                 const updateScenePopupSummary = (row, trigger, text) => {
-                    const summaryEl = row?.querySelector?.(`[data-scene-popup-summary="${trigger}"]`);
-                    if (summaryEl instanceof HTMLElement) {
-                        summaryEl.textContent = String(text || '').trim() || '未配置';
+                    const summaryEl = row?.isConnected
+                        ? row?.querySelector?.(`[data-scene-popup-summary="${trigger}"]`)
+                        : null;
+                    const fallbackSummaryEl = summaryEl
+                        || wizardState.els.sceneDynamic?.querySelector?.(`[data-scene-popup-summary="${trigger}"]`);
+                    if (fallbackSummaryEl instanceof HTMLElement) {
+                        fallbackSummaryEl.textContent = String(text || '').trim() || '未配置';
                     }
                 };
                 const dispatchSceneControlUpdate = (control, nextValue = '') => {
@@ -43686,6 +45964,192 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     control.value = String(nextValue || '');
                     control.dispatchEvent(new Event('input', { bubbles: true }));
                     control.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+                const updateKeywordAiMaxDemandSummaryLabel = (triggerButton = null, count = 0) => {
+                    if (!(triggerButton instanceof HTMLElement)) return;
+                    const countText = `${Math.max(0, Number(count) || 0)}个需求`;
+                    const countEl = triggerButton.querySelector('b');
+                    if (countEl instanceof HTMLElement) {
+                        countEl.textContent = countText;
+                    } else {
+                        triggerButton.textContent = `已选：${countText}`;
+                    }
+                };
+                const closeKeywordAiMaxDemandPopover = () => {
+                    const existing = document.getElementById('am-wxt-ai-max-demand-popover');
+                    if (existing) existing.remove();
+                    document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                    document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    wizardState.aiMaxDemandPopoverOutsideClick = null;
+                    wizardState.aiMaxDemandPopoverEscClose = null;
+                };
+                const openKeywordAiMaxDemandPopover = (triggerButton = null) => {
+                    if (!(triggerButton instanceof HTMLElement)) return;
+                    const fieldKey = String(triggerButton.getAttribute('data-ai-max-info-field') || '').trim();
+                    if (!fieldKey || !wizardState.els.sceneDynamic) return;
+                    const infoControl = wizardState.els.sceneDynamic.querySelector(`input[data-scene-field="${fieldKey}"]`);
+                    if (!(infoControl instanceof HTMLInputElement || infoControl instanceof HTMLTextAreaElement)) return;
+                    let info = {};
+                    try {
+                        info = JSON.parse(infoControl.value || '{}') || {};
+                    } catch {
+                        info = {};
+                    }
+                    const allDemandList = Array.isArray(info.demandList) && info.demandList.length
+                        ? info.demandList
+                        : (Array.isArray(info.selectedDemandList) ? info.selectedDemandList : []);
+                    const uniqueDemandList = uniqueBy(
+                        allDemandList.map(item => normalizeSceneSettingValue(item || '')).filter(Boolean),
+                        item => item
+                    ).slice(0, 20);
+                    const selectedSet = new Set(
+                        (Array.isArray(info.selectedDemandList) ? info.selectedDemandList : uniqueDemandList)
+                            .map(item => normalizeSceneSettingValue(item || ''))
+                            .filter(Boolean)
+                    );
+                    closeKeywordAiMaxDemandPopover();
+                    const popover = document.createElement('div');
+                    popover.id = 'am-wxt-ai-max-demand-popover';
+                    popover.className = 'am-wxt-ai-max-demand-popover';
+                    const renderCheck = (title = '', checked = true, isAll = false) => `
+                        <label class="am-wxt-ai-max-demand-popover-item${isAll ? ' all' : ''}">
+                            <input
+                                type="checkbox"
+                                ${checked ? 'checked' : ''}
+                                ${isAll ? 'data-ai-max-demand-popover-all="1"' : `data-ai-max-demand-popover-item="${Utils.escapeHtml(title)}"`}
+                            />
+                            <span class="am-wxt-ai-max-demand-popover-check">✓</span>
+                            <span class="am-wxt-ai-max-demand-popover-text">${Utils.escapeHtml(title)}</span>
+                        </label>
+                    `;
+                    const checkedCount = uniqueDemandList.filter(item => selectedSet.has(item)).length;
+                    popover.innerHTML = `
+                        <div class="am-wxt-ai-max-demand-popover-body">
+                            <div class="am-wxt-ai-max-demand-popover-head">
+                                ${renderCheck('全选', uniqueDemandList.length > 0 && checkedCount === uniqueDemandList.length, true)}
+                                <span class="am-wxt-ai-max-demand-popover-count">已选：<b>${checkedCount}</b></span>
+                            </div>
+                            <div class="am-wxt-ai-max-demand-popover-list">
+                                ${uniqueDemandList.map(title => renderCheck(title, selectedSet.has(title))).join('')}
+                            </div>
+                        </div>
+                        <div class="am-wxt-ai-max-demand-popover-foot">
+                            <button type="button" class="am-wxt-btn primary" data-ai-max-demand-popover-confirm="1">确定</button>
+                            <button type="button" class="am-wxt-btn" data-ai-max-demand-popover-cancel="1">取消</button>
+                        </div>
+                    `;
+                    document.body.appendChild(popover);
+                    const positionPopover = () => {
+                        const rect = triggerButton.getBoundingClientRect();
+                        const popRect = popover.getBoundingClientRect();
+                        const gap = 8;
+                        const left = Math.min(
+                            Math.max(8, rect.right - popRect.width),
+                            Math.max(8, window.innerWidth - popRect.width - 8)
+                        );
+                        const top = Math.min(
+                            rect.bottom + gap,
+                            Math.max(8, window.innerHeight - popRect.height - 8)
+                        );
+                        popover.style.left = `${left + window.scrollX}px`;
+                        popover.style.top = `${top + window.scrollY}px`;
+                    };
+                    positionPopover();
+                    const countEl = popover.querySelector('.am-wxt-ai-max-demand-popover-count b');
+                    const syncPopoverState = () => {
+                        const checks = Array.from(popover.querySelectorAll('[data-ai-max-demand-popover-item]'))
+                            .filter(item => item instanceof HTMLInputElement);
+                        const allCheck = popover.querySelector('[data-ai-max-demand-popover-all="1"]');
+                        const selectedCount = checks.filter(item => item.checked).length;
+                        if (countEl instanceof HTMLElement) countEl.textContent = String(selectedCount);
+                        if (allCheck instanceof HTMLInputElement) {
+                            allCheck.checked = checks.length > 0 && selectedCount === checks.length;
+                            allCheck.indeterminate = selectedCount > 0 && selectedCount < checks.length;
+                        }
+                    };
+                    const allCheck = popover.querySelector('[data-ai-max-demand-popover-all="1"]');
+                    if (allCheck instanceof HTMLInputElement) {
+                        allCheck.addEventListener('change', () => {
+                            popover.querySelectorAll('[data-ai-max-demand-popover-item]').forEach(item => {
+                                if (item instanceof HTMLInputElement) item.checked = allCheck.checked;
+                            });
+                            syncPopoverState();
+                        });
+                    }
+                    popover.querySelectorAll('[data-ai-max-demand-popover-item]').forEach(item => {
+                        if (item instanceof HTMLInputElement) {
+                            item.addEventListener('change', syncPopoverState);
+                        }
+                    });
+                    const cancelButton = popover.querySelector('[data-ai-max-demand-popover-cancel="1"]');
+                    if (cancelButton instanceof HTMLButtonElement) {
+                        cancelButton.addEventListener('click', closeKeywordAiMaxDemandPopover);
+                    }
+                    const confirmButton = popover.querySelector('[data-ai-max-demand-popover-confirm="1"]');
+                    if (confirmButton instanceof HTMLButtonElement) {
+                        confirmButton.addEventListener('click', () => {
+                            const selectedDemandList = Array.from(popover.querySelectorAll('[data-ai-max-demand-popover-item]'))
+                                .filter(item => item instanceof HTMLInputElement && item.checked)
+                                .map(item => normalizeSceneSettingValue(item.getAttribute('data-ai-max-demand-popover-item') || ''))
+                                .filter(Boolean);
+                            const nextInfo = {
+                                ...info,
+                                selectedDemandList
+                            };
+                            const nextInfoRaw = JSON.stringify(nextInfo);
+                            const activeSceneName = String(wizardState.els.sceneSelect?.value || wizardState.draft?.sceneName || '关键词推广').trim();
+                            const activeBucket = ensureSceneSettingBucket(activeSceneName);
+                            const activeTouchedBucket = ensureSceneTouchedBucket(activeSceneName);
+                            const normalizedFieldKey = normalizeSceneFieldKey(fieldKey);
+                            activeBucket[fieldKey] = nextInfoRaw;
+                            if (normalizedFieldKey) activeBucket[normalizedFieldKey] = nextInfoRaw;
+                            activeTouchedBucket[fieldKey] = true;
+                            if (normalizedFieldKey) activeTouchedBucket[normalizedFieldKey] = true;
+                            try {
+                                const generationMap = typeof getKeywordAiMaxGenerationMap === 'function'
+                                    ? getKeywordAiMaxGenerationMap()
+                                    : null;
+                                if (generationMap && typeof generationMap === 'object') {
+                                    Object.keys(generationMap).forEach(key => {
+                                        const entry = generationMap[key];
+                                        if (!isPlainObject(entry?.info)) return;
+                                        const sameItem = normalizeSceneSettingValue(entry.info.itemId || '') === normalizeSceneSettingValue(nextInfo.itemId || '');
+                                        const sameTitle = normalizeSceneSettingValue(entry.info.itemTitle || '') === normalizeSceneSettingValue(nextInfo.itemTitle || '');
+                                        if (!sameItem && !sameTitle) return;
+                                        entry.info = {
+                                            ...entry.info,
+                                            selectedDemandList
+                                        };
+                                    });
+                                }
+                            } catch { }
+                            Array.from(wizardState.els.sceneDynamic.querySelectorAll(`[data-scene-field="${fieldKey}"]`))
+                                .forEach(control => {
+                                    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+                                        control.value = nextInfoRaw;
+                                    }
+                                });
+                            dispatchSceneControlUpdate(infoControl, nextInfoRaw);
+                            updateKeywordAiMaxDemandSummaryLabel(triggerButton, selectedDemandList.length);
+                            closeKeywordAiMaxDemandPopover();
+                            renderSceneDynamicConfig();
+                        });
+                    }
+                    wizardState.aiMaxDemandPopoverOutsideClick = (event) => {
+                        const target = event.target;
+                        if (target instanceof Node && (popover.contains(target) || triggerButton.contains(target))) return;
+                        closeKeywordAiMaxDemandPopover();
+                    };
+                    wizardState.aiMaxDemandPopoverEscClose = (event) => {
+                        if (event?.key !== 'Escape') return;
+                        event.preventDefault();
+                        closeKeywordAiMaxDemandPopover();
+                    };
+                    setTimeout(() => {
+                        document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                        document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    }, 0);
+                    syncPopoverState();
                 };
                 const openScenePopupDialog = ({
                     title = '',
@@ -44239,15 +46703,50 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     });
                     return output;
                 };
-                const isLaunchPeriodAllDay = (rawValue = '') => {
-                    const list = parseScenePopupJsonArray(rawValue, []);
-                    if (!list.length) return false;
-                    return list.every(item => {
-                        const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
-                        return spanList.length === 1 && String(spanList[0]?.time || '').trim() === '00:00-24:00';
-                    });
-                };
-                const openKeywordAdvancedSettingPopup = async (initialTab = 'adzone') => {
+                const openKeywordAdvancedSettingPopup = async (initialTab = 'adzone', popupOptions = {}) => {
+                    const advancedPopupOptions = isPlainObject(popupOptions) ? popupOptions : {};
+                    const advancedVariant = normalizeSceneSettingValue(advancedPopupOptions.variant || '');
+                    const isQuickLiftVariant = advancedVariant === 'quickLift';
+                    const includeAdzonePanel = advancedPopupOptions.includeAdzone !== false;
+                    const includeAreaRecommendTemplate = !isQuickLiftVariant && advancedPopupOptions.includeAreaRecommendTemplate !== false;
+                    const advancedTitle = normalizeSceneSettingValue(advancedPopupOptions.title || '高级设置') || '高级设置';
+                    const advancedLaunchPeriodTabLabel = normalizeSceneSettingValue(advancedPopupOptions.launchPeriodTabLabel || '分时折扣') || '分时折扣';
+                    const advancedLaunchPeriodTip = normalizeSceneSettingValue(
+                        advancedPopupOptions.launchPeriodTip
+                        || '出价方式于非活动性时段，允许对不同时段设置不同的折扣，分时折扣预计可提升流量稳定性。'
+                    );
+                    const advancedLaunchPeriodField = normalizeSceneSettingValue(advancedPopupOptions.launchPeriodField || 'campaign.launchPeriodList');
+                    const advancedLaunchAreaField = normalizeSceneSettingValue(advancedPopupOptions.launchAreaField || 'campaign.launchAreaStrList');
+                    const advancedAdzoneField = normalizeSceneSettingValue(advancedPopupOptions.adzoneField || 'campaign.adzoneList');
+                    const areaCustomTemplateLabel = normalizeSceneSettingValue(
+                        advancedPopupOptions.areaCustomTemplateLabel || (isQuickLiftVariant ? '自定义起量地域模板' : '自定义投放地域模板')
+                    );
+                    const areaCustomTemplateOptionLabel = normalizeSceneSettingValue(
+                        advancedPopupOptions.areaCustomTemplateOptionLabel || (isQuickLiftVariant ? 'RX10SMax成交' : '[迁移]RX600S标准地域')
+                    );
+                    const normalizeTriggerList = (list, fallback = []) => uniqueBy(
+                        (Array.isArray(list) ? list : fallback)
+                            .map(item => normalizeSceneSettingValue(item))
+                            .filter(Boolean),
+                        item => item
+                    );
+                    const advancedAdzoneTriggers = normalizeTriggerList(advancedPopupOptions.adzoneTriggers, [
+                        'adzone',
+                        'adzonePremium',
+                        'launchSetting'
+                    ]);
+                    const advancedLaunchPeriodTriggers = normalizeTriggerList(advancedPopupOptions.launchPeriodTriggers, [
+                        'launchPeriod',
+                        'launchSetting',
+                        'adzone',
+                        'adzonePremium'
+                    ]);
+                    const advancedLaunchAreaTriggers = normalizeTriggerList(advancedPopupOptions.launchAreaTriggers, [
+                        'launchArea',
+                        'launchSetting',
+                        'adzone',
+                        'adzonePremium'
+                    ]);
                     const resolvePopupControlByTriggers = (fieldKey = '', triggerList = []) => {
                         const targetField = String(fieldKey || '').trim();
                         if (!targetField) return null;
@@ -44260,41 +46759,31 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         }
                         return null;
                     };
-                    const adzoneControl = resolvePopupControlByTriggers('campaign.adzoneList', [
-                        'adzone',
-                        'adzonePremium',
-                        'launchSetting'
-                    ]);
-                    const launchPeriodControl = resolvePopupControlByTriggers('campaign.launchPeriodList', [
-                        'launchPeriod',
-                        'launchSetting',
-                        'adzone',
-                        'adzonePremium'
-                    ]);
-                    const launchAreaControl = resolvePopupControlByTriggers('campaign.launchAreaStrList', [
-                        'launchArea',
-                        'launchSetting',
-                        'adzone',
-                        'adzonePremium'
-                    ]);
-                    if (!(adzoneControl instanceof HTMLInputElement)) return null;
+                    const adzoneControl = includeAdzonePanel
+                        ? resolvePopupControlByTriggers(advancedAdzoneField, advancedAdzoneTriggers)
+                        : null;
+                    const launchPeriodControl = resolvePopupControlByTriggers(advancedLaunchPeriodField, advancedLaunchPeriodTriggers);
+                    const launchAreaControl = resolvePopupControlByTriggers(advancedLaunchAreaField, advancedLaunchAreaTriggers);
+                    if (includeAdzonePanel && !(adzoneControl instanceof HTMLInputElement)) return null;
                     if (!(launchPeriodControl instanceof HTMLInputElement)) return null;
                     if (!(launchAreaControl instanceof HTMLInputElement)) return null;
 
-                    const adzoneFieldKey = normalizeSceneFieldKey('campaign.adzoneList');
-                    const launchAreaFieldKey = normalizeSceneFieldKey('campaign.launchAreaStrList');
-                    const launchPeriodFieldKey = normalizeSceneFieldKey('campaign.launchPeriodList');
+                    const adzoneFieldKey = normalizeSceneFieldKey(advancedAdzoneField);
+                    const launchAreaFieldKey = normalizeSceneFieldKey(advancedLaunchAreaField);
+                    const launchPeriodFieldKey = normalizeSceneFieldKey(advancedLaunchPeriodField);
                     const adzoneTouched = !!(adzoneFieldKey && touchedBucket[adzoneFieldKey]);
                     const launchAreaTouched = !!(launchAreaFieldKey && touchedBucket[launchAreaFieldKey]);
                     const launchPeriodTouched = !!(launchPeriodFieldKey && touchedBucket[launchPeriodFieldKey]);
 
-                    let adzoneRaw = normalizeSceneSettingValue(adzoneControl.value || '') || '[]';
+                    let adzoneRaw = includeAdzonePanel && adzoneControl instanceof HTMLInputElement
+                        ? (normalizeSceneSettingValue(adzoneControl.value || '') || '[]')
+                        : '[]';
                     let launchPeriodRaw = normalizeSceneSettingValue(launchPeriodControl.value || '') || JSON.stringify(buildDefaultLaunchPeriodList());
                     let launchAreaRaw = normalizeSceneSettingValue(launchAreaControl.value || '') || '["all"]';
                     let initialAdzoneList = normalizeAdzoneListForAdvanced(adzoneRaw);
                     let initialAreaList = parseLaunchAreaList(launchAreaRaw);
                     let initialPeriodGridState = buildLaunchPeriodGridState(launchPeriodRaw);
-                    const needNativeAdzoneDefaults = !adzoneTouched || isAdzoneListPlaceholderForSync(initialAdzoneList);
+                    const needNativeAdzoneDefaults = includeAdzonePanel && (!adzoneTouched || isAdzoneListPlaceholderForSync(initialAdzoneList));
                     const needNativeAreaDefaults = !launchAreaTouched || !initialAreaList.length;
                     const needNativePeriodDefaults = !launchPeriodTouched || !parseScenePopupJsonArray(launchPeriodRaw, []).length;
                     if (needNativeAdzoneDefaults || needNativeAreaDefaults || needNativePeriodDefaults) {
@@ -44330,127 +46819,225 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             __defaultSynthetic: true
                         }
                     ];
-                    const initialTabValue = ['adzone', 'launchArea', 'launchPeriod'].includes(String(initialTab || '').trim())
+                    const allowedAdvancedTabs = includeAdzonePanel
+                        ? ['adzone', 'launchArea', 'launchPeriod']
+                        : ['launchArea', 'launchPeriod'];
+                    const initialTabValue = allowedAdvancedTabs.includes(String(initialTab || '').trim())
                         ? String(initialTab || '').trim()
-                        : 'adzone';
+                        : (includeAdzonePanel ? 'adzone' : 'launchArea');
+                    const areaConfigRowHtml = `
+                        <div class="am-wxt-scene-advanced-area-config-row">
+                            <label class="am-wxt-scene-advanced-area-radio">
+                                <input type="radio" name="am-wxt-area-template" value="current" data-scene-popup-area-template="current" />
+                                <span>当前设置</span>
+                            </label>
+                            ${includeAreaRecommendTemplate ? `
+                            <label class="am-wxt-scene-advanced-area-radio">
+                                <input type="radio" name="am-wxt-area-template" value="recommended" data-scene-popup-area-template="recommended" />
+                                <span>推荐投放地域模板</span>
+                            </label>
+                            <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-recommend-template="1">
+                                <option value="dishwasher_low_price">大家电/低价引流地域</option>
+                            </select>
+                            ` : ''}
+                            <label class="am-wxt-scene-advanced-area-radio">
+                                <input type="radio" name="am-wxt-area-template" value="custom" data-scene-popup-area-template="custom" />
+                                <span>${Utils.escapeHtml(areaCustomTemplateLabel || '自定义投放地域模板')}</span>
+                            </label>
+                            <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-custom-template="1">
+                                <option value="migration_rx600_standard">${Utils.escapeHtml(areaCustomTemplateOptionLabel || '[迁移]RX600S标准地域')}</option>
+                            </select>
+                            <button type="button" class="am-wxt-btn" data-scene-popup-area-save-template="1">保存模板</button>
+                        </div>
+                    `;
+                    const areaToolsHtml = `
+                        <div class="am-wxt-scene-advanced-area-tools">
+                            <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
+                            <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
+                            <span class="am-wxt-scene-advanced-area-search-icon"></span>
+                            <input
+                                type="text"
+                                class="am-wxt-scene-advanced-area-search"
+                                data-scene-popup-area-search="1"
+                                placeholder="省份/城市"
+                            />
+                        </div>
+                    `;
+                    const quickLiftBodyHtml = `
+                        <div class="am-wxt-scene-quick-lift-layout">
+                            <section class="am-wxt-scene-quick-lift-section" data-scene-popup-quick-section="time">
+                                <div class="am-wxt-scene-quick-lift-label">起量时间</div>
+                                <div class="am-wxt-scene-quick-lift-control">
+                                    <div class="am-wxt-scene-quick-lift-summary-row">
+                                        <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-time-summary="1">0点~24点</span>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="time">收起设置 <span>⌃</span></button>
+                                    </div>
+                                    <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="time">
+                                        <div class="am-wxt-scene-quick-time-card">
+                                            <div class="am-wxt-scene-quick-time-row" data-scene-popup-quick-time-range="1"></div>
+                                            <div class="am-wxt-scene-quick-time-actions">
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-quick-time-clear="1">清空</button>
+                                                <span class="am-wxt-scene-quick-time-error" data-scene-popup-quick-time-error="1" hidden>至少选择4个起量小时，支持多个时间段</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                            <section class="am-wxt-scene-quick-lift-section" data-scene-popup-quick-section="area">
+                                <div class="am-wxt-scene-quick-lift-label">起量地域</div>
+                                <div class="am-wxt-scene-quick-lift-control">
+                                    <div class="am-wxt-scene-quick-lift-summary-row">
+                                        <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-area-summary="1">在全部地域投放</span>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="area">收起设置 <span>⌃</span></button>
+                                    </div>
+                                    <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="area">
+                                        ${areaConfigRowHtml}
+                                        ${areaToolsHtml}
+                                        <div class="am-wxt-scene-advanced-area-selector" data-scene-popup-area-selector="1"></div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    `;
+                    const advancedBodyHtml = `
+                        <div class="am-wxt-scene-advanced-layout">
+                            <div class="am-wxt-scene-advanced-tabs">
+                                ${includeAdzonePanel ? '<button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="adzone">投放资源位</button>' : ''}
+                                <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchArea">投放地域</button>
+                                <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchPeriod">${Utils.escapeHtml(advancedLaunchPeriodTabLabel)}</button>
+                            </div>
+                            <div class="am-wxt-scene-advanced-main">
+                                <div class="am-wxt-scene-advanced-content">
+                                    ${includeAdzonePanel ? `
+                                    <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="adzone">
+                                        <div class="am-wxt-scene-advanced-tip">平台为您优选广告位，更全面获取优质流量，建议全部开启</div>
+                                        <div class="am-wxt-scene-advanced-toolbar">
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="on">全部开启</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="off">全部关闭</button>
+                                        </div>
+                                        <div class="am-wxt-scene-advanced-adzone-table" data-scene-popup-adzone-table="1">
+                                            <div class="am-wxt-scene-advanced-adzone-head">
+                                                <span>资源位</span>
+                                                <span>操作</span>
+                                            </div>
+                                            <div class="am-wxt-scene-advanced-adzone-list" data-scene-popup-adzone-list="1"></div>
+                                        </div>
+                                    </section>
+                                    ` : ''}
+                                    <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchArea">
+                                        <div class="am-wxt-scene-advanced-tip">您可以根据该计划内的您想主推的商品品类在各地区的搜索、成交、转化表现，选择您希望投放的区域</div>
+                                        ${areaConfigRowHtml}
+                                        ${areaToolsHtml}
+                                        <div class="am-wxt-scene-advanced-area-selector" data-scene-popup-area-selector="1"></div>
+                                    </section>
+                                    <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchPeriod">
+                                        <div class="am-wxt-scene-advanced-tip">${Utils.escapeHtml(advancedLaunchPeriodTip)}</div>
+                                        <div class="am-wxt-scene-time-recommend-cards" data-scene-popup-time-recommend-cards="1">
+                                            <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="gmv_peak">
+                                                <div class="am-wxt-scene-time-recommend-title">11:00-14:00 午间小单快节奏</div>
+                                                <div class="am-wxt-scene-time-recommend-desc">适合午间高意向成交，建议覆盖午间+晚高峰。</div>
+                                                <span class="am-wxt-scene-time-recommend-tag">预计增量 +6%~10%</span>
+                                            </button>
+                                            <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="night_click">
+                                                <div class="am-wxt-scene-time-recommend-title">17:00-21:00 晚间意向购买</div>
+                                                <div class="am-wxt-scene-time-recommend-desc">覆盖下班后高转化窗口，适合促进成交。</div>
+                                                <span class="am-wxt-scene-time-recommend-tag">预计增量 +8%~12%</span>
+                                            </button>
+                                            <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="morning_click">
+                                                <div class="am-wxt-scene-time-recommend-title">06:00-09:00 早高峰浏览点击</div>
+                                                <div class="am-wxt-scene-time-recommend-desc">早间通勤时段补量，适合提升曝光与点击。</div>
+                                                <span class="am-wxt-scene-time-recommend-tag">预计增量 +5%~9%</span>
+                                            </button>
+                                        </div>
+                                        <div class="am-wxt-scene-advanced-toolbar">
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="current">当前设置</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="full">全日制投放</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="dishwasher">大家电专属时段</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="custom">自定义投放时间模板</button>
+                                        </div>
+                                        <div class="am-wxt-scene-advanced-toolbar">
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-action="clear">清空</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-action="reset">重置</button>
+                                            <span class="am-wxt-scene-advanced-tip-inline">支持单击与拖拽选择投放时间</span>
+                                        </div>
+                                        <div class="am-wxt-scene-popup-time-grid" data-scene-popup-time-grid="1"></div>
+                                        <div class="am-wxt-scene-time-legend" data-scene-popup-time-legend="1">
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-1"></i>30-100%</span>
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-2"></i>100-200%</span>
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-3"></i>200-250%</span>
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-4"></i>可以系统智能推算分时折扣</span>
+                                        </div>
+                                    </section>
+                                </div>
+                                <aside class="am-wxt-scene-advanced-preview">
+                                    <div class="am-wxt-scene-advanced-preview-phone">
+                                        <div class="am-wxt-scene-advanced-preview-screen">
+                                            <div class="am-wxt-scene-advanced-preview-card"></div>
+                                            <div class="am-wxt-scene-advanced-preview-card"></div>
+                                            <div class="am-wxt-scene-advanced-preview-card"></div>
+                                        </div>
+                                    </div>
+                                    <div class="am-wxt-scene-advanced-preview-desc">模拟展示效果（与原站交互一致）</div>
+                                </aside>
+                            </div>
+                        </div>
+                    `;
+                    const normalizeQuickLiftHourValue = (value = 0) => Math.max(0, Math.min(24, Math.round(toNumber(value, 0))));
+                    const formatQuickLiftHourSummary = hour => `${normalizeQuickLiftHourValue(hour)}点`;
+                    const normalizeQuickLiftSelectedHours = (hours = []) => uniqueBy(
+                        (Array.isArray(hours) ? hours : [])
+                            .map(hour => Math.max(0, Math.min(23, Math.round(toNumber(hour, NaN)))))
+                            .filter(hour => Number.isFinite(hour)),
+                        hour => String(hour)
+                    ).sort((left, right) => left - right);
+                    const getQuickLiftSelectedHoursFromState = (state = {}) => {
+                        if (Array.isArray(state?.selectedHours)) return normalizeQuickLiftSelectedHours(state.selectedHours);
+                        if (state?.empty) return [];
+                        const start = Math.max(0, Math.min(23, normalizeQuickLiftHourValue(state?.start)));
+                        const end = Math.max(start + 1, Math.min(24, normalizeQuickLiftHourValue(state?.end || 24)));
+                        return Array.from({ length: Math.max(0, end - start) }, (_, idx) => start + idx);
+                    };
+                    const buildQuickLiftRangesFromSelectedHours = (hours = []) => {
+                        const normalized = normalizeQuickLiftSelectedHours(hours);
+                        const ranges = [];
+                        normalized.forEach(hour => {
+                            const last = ranges[ranges.length - 1];
+                            if (last && hour === last.end) {
+                                last.end = hour + 1;
+                            } else {
+                                ranges.push({ start: hour, end: hour + 1 });
+                            }
+                        });
+                        return ranges;
+                    };
+                    const formatQuickLiftTimeSelectionSummaryFromState = (state = {}) => {
+                        const selectedHours = getQuickLiftSelectedHoursFromState(state);
+                        if (!selectedHours.length) return '未设置';
+                        if (selectedHours.length === 24) return '0点~24点';
+                        return buildQuickLiftRangesFromSelectedHours(selectedHours)
+                            .map(range => `${formatQuickLiftHourSummary(range.start)}~${formatQuickLiftHourSummary(range.end)}`)
+                            .join('、');
+                    };
+                    const buildQuickLiftLaunchPeriodListFromSelectionState = (state = {}) => {
+                        const ranges = buildQuickLiftRangesFromSelectedHours(getQuickLiftSelectedHoursFromState(state));
+                        if (!ranges.length) return [];
+                        const timeSpanList = ranges.map(range => ({
+                            discount: 100,
+                            time: `${formatMinutesToClock(range.start * 60)}-${formatMinutesToClock(range.end * 60)}`
+                        }));
+                        return ADVANCED_DAY_COLUMNS.map(day => ({
+                            dayOfWeek: day.key,
+                            timeSpanList: timeSpanList.map(item => ({ ...item }))
+                        }));
+                    };
 
                     const result = await openScenePopupDialog({
-                        title: '高级设置',
-                        dialogClassName: 'am-wxt-scene-popup-dialog-advanced',
+                        title: advancedTitle,
+                        dialogClassName: `am-wxt-scene-popup-dialog-advanced ${isQuickLiftVariant ? 'am-wxt-scene-popup-dialog-quick-lift' : ''}`,
                         closeLabel: '×',
                         cancelLabel: '取消',
                         saveLabel: '确定',
-                        bodyHtml: `
-                            <div class="am-wxt-scene-advanced-layout">
-                                <div class="am-wxt-scene-advanced-tabs">
-                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="adzone">投放资源位</button>
-                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchArea">投放地域</button>
-                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchPeriod">分时折扣</button>
-                                </div>
-                                <div class="am-wxt-scene-advanced-main">
-                                    <div class="am-wxt-scene-advanced-content">
-                                        <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="adzone">
-                                            <div class="am-wxt-scene-advanced-tip">平台为您优选广告位，更全面获取优质流量，建议全部开启</div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="on">全部开启</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="off">全部关闭</button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-adzone-table" data-scene-popup-adzone-table="1">
-                                                <div class="am-wxt-scene-advanced-adzone-head">
-                                                    <span>资源位</span>
-                                                    <span>操作</span>
-                                                </div>
-                                                <div class="am-wxt-scene-advanced-adzone-list" data-scene-popup-adzone-list="1"></div>
-                                            </div>
-                                        </section>
-                                        <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchArea">
-                                            <div class="am-wxt-scene-advanced-tip">您可以根据该计划内的您想主推的商品品类在各地区的搜索、成交、转化表现，选择您希望投放的区域</div>
-                                            <div class="am-wxt-scene-advanced-area-config-row">
-                                                <label class="am-wxt-scene-advanced-area-radio">
-                                                    <input type="radio" name="am-wxt-area-template" value="current" data-scene-popup-area-template="current" />
-                                                    <span>当前设置</span>
-                                                </label>
-                                                <label class="am-wxt-scene-advanced-area-radio">
-                                                    <input type="radio" name="am-wxt-area-template" value="recommended" data-scene-popup-area-template="recommended" />
-                                                    <span>推荐投放地域模板</span>
-                                                </label>
-                                                <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-recommend-template="1">
-                                                    <option value="dishwasher_low_price">大家电/低价引流地域</option>
-                                                </select>
-                                                <label class="am-wxt-scene-advanced-area-radio">
-                                                    <input type="radio" name="am-wxt-area-template" value="custom" data-scene-popup-area-template="custom" />
-                                                    <span>自定义投放地域模板</span>
-                                                </label>
-                                                <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-custom-template="1">
-                                                    <option value="migration_rx600_standard">[迁移]RX600S标准地域</option>
-                                                </select>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-save-template="1">保存模板</button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-area-tools">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
-                                                <span class="am-wxt-scene-advanced-area-search-icon"></span>
-                                                <input
-                                                    type="text"
-                                                    class="am-wxt-scene-advanced-area-search"
-                                                    data-scene-popup-area-search="1"
-                                                    placeholder="省份/城市"
-                                                />
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-area-selector" data-scene-popup-area-selector="1"></div>
-                                        </section>
-                                        <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchPeriod">
-                                            <div class="am-wxt-scene-advanced-tip">出价方式于非活动性时段，允许对不同时段设置不同的折扣，分时折扣预计可提升流量稳定性。</div>
-                                            <div class="am-wxt-scene-time-recommend-cards" data-scene-popup-time-recommend-cards="1">
-                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="gmv_peak">
-                                                    <div class="am-wxt-scene-time-recommend-title">11:00-14:00 午间小单快节奏</div>
-                                                    <div class="am-wxt-scene-time-recommend-desc">适合午间高意向成交，建议覆盖午间+晚高峰。</div>
-                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +6%~10%</span>
-                                                </button>
-                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="night_click">
-                                                    <div class="am-wxt-scene-time-recommend-title">17:00-21:00 晚间意向购买</div>
-                                                    <div class="am-wxt-scene-time-recommend-desc">覆盖下班后高转化窗口，适合促进成交。</div>
-                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +8%~12%</span>
-                                                </button>
-                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="morning_click">
-                                                    <div class="am-wxt-scene-time-recommend-title">06:00-09:00 早高峰浏览点击</div>
-                                                    <div class="am-wxt-scene-time-recommend-desc">早间通勤时段补量，适合提升曝光与点击。</div>
-                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +5%~9%</span>
-                                                </button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="current">当前设置</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="full">全日制投放</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="dishwasher">大家电专属时段</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="custom">自定义投放时间模板</button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-action="clear">清空</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-action="reset">重置</button>
-                                                <span class="am-wxt-scene-advanced-tip-inline">支持单击与拖拽选择投放时间</span>
-                                            </div>
-                                            <div class="am-wxt-scene-popup-time-grid" data-scene-popup-time-grid="1"></div>
-                                            <div class="am-wxt-scene-time-legend" data-scene-popup-time-legend="1">
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-1"></i>30-100%</span>
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-2"></i>100-200%</span>
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-3"></i>200-250%</span>
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-4"></i>可以系统智能推算分时折扣</span>
-                                            </div>
-                                        </section>
-                                    </div>
-                                    <aside class="am-wxt-scene-advanced-preview">
-                                        <div class="am-wxt-scene-advanced-preview-phone">
-                                            <div class="am-wxt-scene-advanced-preview-screen">
-                                                <div class="am-wxt-scene-advanced-preview-card"></div>
-                                                <div class="am-wxt-scene-advanced-preview-card"></div>
-                                                <div class="am-wxt-scene-advanced-preview-card"></div>
-                                            </div>
-                                        </div>
-                                        <div class="am-wxt-scene-advanced-preview-desc">模拟展示效果（与原站交互一致）</div>
-                                    </aside>
-                                </div>
-                            </div>
-                        `,
+                        bodyHtml: isQuickLiftVariant ? quickLiftBodyHtml : advancedBodyHtml,
                         onMounted: (mask) => {
                             let currentTab = initialTabValue;
                             let areaList = Array.isArray(initialAreaList) ? initialAreaList.slice() : ['all'];
@@ -44481,6 +47068,94 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const areaModeButtons = Array.from(mask.querySelectorAll('[data-scene-popup-area-mode]'));
                             const timeTemplateButtons = Array.from(mask.querySelectorAll('[data-scene-popup-time-template]'));
                             const timeRecommendCards = Array.from(mask.querySelectorAll('[data-scene-popup-time-recommend-card]'));
+                            const quickLiftTimeRangeEl = mask.querySelector('[data-scene-popup-quick-time-range="1"]');
+                            const quickLiftTimeSummaryEl = mask.querySelector('[data-scene-popup-quick-time-summary="1"]');
+                            const quickLiftAreaSummaryEl = mask.querySelector('[data-scene-popup-quick-area-summary="1"]');
+                            const quickLiftTimeErrorEl = mask.querySelector('[data-scene-popup-quick-time-error="1"]');
+                            const quickLiftToggleButtons = Array.from(mask.querySelectorAll('[data-scene-popup-quick-toggle]'));
+                            const quickLiftPanelEls = Array.from(mask.querySelectorAll('[data-scene-popup-quick-panel]'));
+                            const normalizeQuickLiftHour = (value = 0) => Math.max(0, Math.min(24, Math.round(toNumber(value, 0))));
+                            const formatQuickLiftHour = hour => `${normalizeQuickLiftHour(hour)}点`;
+                            const resolveQuickLiftTimeSelectionFromRaw = (rawValue = '') => {
+                                const list = parseScenePopupJsonArray(rawValue, []);
+                                if (!list.length || isLaunchPeriodAllDay(rawValue)) {
+                                    return {
+                                        selectedHours: Array.from({ length: 24 }, (_, idx) => idx),
+                                        empty: false
+                                    };
+                                }
+                                const selectedHourSet = new Set();
+                                list.forEach(item => {
+                                    const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                                    spanList.forEach(span => {
+                                        const range = parseTimeRangeToMinutes(String(span?.time || '').trim());
+                                        if (!range) return;
+                                        const startHour = normalizeQuickLiftHour(Math.floor(range.start / 60));
+                                        const endHour = normalizeQuickLiftHour(Math.ceil(range.end / 60));
+                                        for (let hour = startHour; hour < endHour; hour += 1) {
+                                            if (hour >= 0 && hour <= 23) selectedHourSet.add(hour);
+                                        }
+                                    });
+                                });
+                                const selectedHours = normalizeQuickLiftSelectedHours(Array.from(selectedHourSet));
+                                return {
+                                    selectedHours: selectedHours.length
+                                        ? selectedHours
+                                        : Array.from({ length: 24 }, (_, idx) => idx),
+                                    empty: false
+                                };
+                            };
+                            const formatQuickLiftTimeSelectionSummary = (state = {}) => {
+                                const selectedHours = getQuickLiftSelectedHoursFromState(state);
+                                if (!selectedHours.length) return '未设置';
+                                if (selectedHours.length === 24) return '0点~24点';
+                                return buildQuickLiftRangesFromSelectedHours(selectedHours)
+                                    .map(range => `${formatQuickLiftHour(range.start)}~${formatQuickLiftHour(range.end)}`)
+                                    .join('、');
+                            };
+                            const formatQuickLiftAreaSummary = () => {
+                                const normalized = normalizeAreaListForStorage(areaList);
+                                if (!normalized.length || normalized.some(item => /^all$/i.test(String(item || '').trim()))) return '在全部地域投放';
+                                return `已选择 ${normalized.length} 个起量地域`;
+                            };
+                            let quickLiftTimeSelectionState = resolveQuickLiftTimeSelectionFromRaw(launchPeriodRaw);
+                            const isQuickLiftTimeSelectionValid = () => (
+                                getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState).length >= 4
+                            );
+                            const renderQuickLiftSummaries = () => {
+                                if (quickLiftTimeSummaryEl instanceof HTMLElement) {
+                                    quickLiftTimeSummaryEl.textContent = formatQuickLiftTimeSelectionSummary(quickLiftTimeSelectionState);
+                                }
+                                if (quickLiftAreaSummaryEl instanceof HTMLElement) {
+                                    quickLiftAreaSummaryEl.textContent = formatQuickLiftAreaSummary();
+                                }
+                                if (quickLiftTimeErrorEl instanceof HTMLElement) {
+                                    quickLiftTimeErrorEl.hidden = isQuickLiftTimeSelectionValid();
+                                }
+                            };
+                            const renderQuickLiftTimeRange = () => {
+                                if (!(quickLiftTimeRangeEl instanceof HTMLElement)) return;
+                                const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                const ranges = buildQuickLiftRangesFromSelectedHours(Array.from(selectedHourSet));
+                                const hourButtons = Array.from({ length: 25 }, (_, hour) => {
+                                    const isBoundary = hour === 0 || hour === 6 || hour === 12 || hour === 18 || hour === 24;
+                                    const inRange = hour < 24 ? selectedHourSet.has(hour) : selectedHourSet.has(23);
+                                    const isEndpoint = ranges.some(range => hour === range.start || hour === range.end);
+                                    return `
+                                        <button
+                                            type="button"
+                                            class="am-wxt-scene-quick-time-hour ${inRange ? 'active' : ''} ${isEndpoint ? 'endpoint' : ''} ${isBoundary ? 'boundary' : ''}"
+                                            data-scene-popup-quick-time-hour="${hour}"
+                                            aria-pressed="${inRange ? 'true' : 'false'}"
+                                        >${hour}</button>
+                                    `;
+                                }).join('');
+                                quickLiftTimeRangeEl.innerHTML = `
+                                    <div class="am-wxt-scene-quick-time-label">时间段</div>
+                                    <div class="am-wxt-scene-quick-time-hours">${hourButtons}</div>
+                                `;
+                                renderQuickLiftSummaries();
+                            };
 
                             const renderTabs = () => {
                                 tabButtons.forEach(btn => {
@@ -45094,7 +47769,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     areaTemplate = 'current';
                                     return;
                                 }
-                                if (isAreaListSame(areaList, resolveAreaTemplateList('recommended'))) {
+                                if (includeAreaRecommendTemplate && isAreaListSame(areaList, resolveAreaTemplateList('recommended'))) {
                                     areaTemplate = 'recommended';
                                     return;
                                 }
@@ -45102,7 +47777,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             };
                             const applyAreaTemplate = (templateKey = '') => {
                                 const key = String(templateKey || '').trim();
-                                const normalizedKey = ['current', 'recommended', 'custom'].includes(key) ? key : 'current';
+                                const allowedTemplateKeys = includeAreaRecommendTemplate ? ['current', 'recommended', 'custom'] : ['current', 'custom'];
+                                const normalizedKey = allowedTemplateKeys.includes(key) ? key : 'current';
                                 areaTemplate = normalizedKey;
                                 areaList = resolveAreaTemplateList(normalizedKey);
                                 areaExpandedProvinceSet.clear();
@@ -45398,6 +48074,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 areaSelector.innerHTML = `${loadingHtml}${sectionHtml}`;
                                 renderAreaTemplateButtons();
                                 renderAreaModeButtons();
+                                renderQuickLiftSummaries();
                             };
                             areaRegionGroups = buildAreaRegionGroupsFallback();
                             refreshAreaMetadata();
@@ -45674,6 +48351,163 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     renderAreaSelector();
                                 });
                             }
+                            quickLiftToggleButtons.forEach(btn => {
+                                if (!(btn instanceof HTMLButtonElement)) return;
+                                btn.onclick = () => {
+                                    const key = String(btn.getAttribute('data-scene-popup-quick-toggle') || '').trim();
+                                    if (!key) return;
+                                    const panel = quickLiftPanelEls.find(item => (
+                                        item instanceof HTMLElement
+                                        && String(item.getAttribute('data-scene-popup-quick-panel') || '').trim() === key
+                                    ));
+                                    if (!(panel instanceof HTMLElement)) return;
+                                    const nextHidden = !panel.hidden;
+                                    panel.hidden = nextHidden;
+                                    btn.innerHTML = nextHidden ? '展开设置 <span>⌄</span>' : '收起设置 <span>⌃</span>';
+                                };
+                            });
+                            if (quickLiftTimeRangeEl instanceof HTMLElement) {
+                                let quickLiftDragState = {
+                                    active: false,
+                                    pointerId: null,
+                                    nextSelected: true,
+                                    lastHour: null
+                                };
+                                let quickLiftSuppressNextClick = false;
+                                const resolveQuickLiftHourFromPointerEvent = (event) => {
+                                    let trigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-quick-time-hour]')
+                                        : null;
+                                    if (!(trigger instanceof HTMLElement) && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+                                        const hovered = document.elementFromPoint(event.clientX, event.clientY);
+                                        trigger = hovered instanceof HTMLElement
+                                            ? hovered.closest('[data-scene-popup-quick-time-hour]')
+                                            : null;
+                                    }
+                                    if (!(trigger instanceof HTMLElement) || !quickLiftTimeRangeEl.contains(trigger)) return null;
+                                    const rawHour = normalizeQuickLiftHour(trigger.getAttribute('data-scene-popup-quick-time-hour'));
+                                    return rawHour >= 24 ? 23 : rawHour;
+                                };
+                                const applyQuickLiftHourRangeSelection = (startHour, endHour, nextSelected) => {
+                                    const start = Math.max(0, Math.min(23, Math.round(toNumber(startHour, NaN))));
+                                    const end = Math.max(0, Math.min(23, Math.round(toNumber(endHour, NaN))));
+                                    if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+                                    const from = Math.min(start, end);
+                                    const to = Math.max(start, end);
+                                    const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                    let changed = false;
+                                    for (let hour = from; hour <= to; hour += 1) {
+                                        if (nextSelected) {
+                                            if (!selectedHourSet.has(hour)) {
+                                                selectedHourSet.add(hour);
+                                                changed = true;
+                                            }
+                                        } else if (selectedHourSet.has(hour)) {
+                                            selectedHourSet.delete(hour);
+                                            changed = true;
+                                        }
+                                    }
+                                    if (!changed) return false;
+                                    const selectedHours = normalizeQuickLiftSelectedHours(Array.from(selectedHourSet));
+                                    quickLiftTimeSelectionState = {
+                                        selectedHours,
+                                        empty: !selectedHours.length
+                                    };
+                                    renderQuickLiftTimeRange();
+                                    return true;
+                                };
+                                const stopQuickLiftDrag = (event = null) => {
+                                    if (
+                                        event
+                                        && quickLiftDragState.pointerId !== null
+                                        && event.pointerId !== quickLiftDragState.pointerId
+                                    ) {
+                                        return;
+                                    }
+                                    quickLiftDragState = {
+                                        active: false,
+                                        pointerId: null,
+                                        nextSelected: true,
+                                        lastHour: null
+                                    };
+                                    try {
+                                        if (event && typeof quickLiftTimeRangeEl.releasePointerCapture === 'function') {
+                                            quickLiftTimeRangeEl.releasePointerCapture(event.pointerId);
+                                        }
+                                    } catch { }
+                                    window.removeEventListener('pointerup', stopQuickLiftDrag, true);
+                                    window.removeEventListener('pointercancel', stopQuickLiftDrag, true);
+                                    setTimeout(() => {
+                                        quickLiftSuppressNextClick = false;
+                                    }, 0);
+                                };
+                                quickLiftTimeRangeEl.addEventListener('pointerdown', (event) => {
+                                    if (event.button !== 0) return;
+                                    const hour = resolveQuickLiftHourFromPointerEvent(event);
+                                    if (!Number.isFinite(hour)) return;
+                                    event.preventDefault();
+                                    const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                    const nextSelected = !selectedHourSet.has(hour);
+                                    quickLiftDragState = {
+                                        active: true,
+                                        pointerId: event.pointerId,
+                                        nextSelected,
+                                        lastHour: hour
+                                    };
+                                    quickLiftSuppressNextClick = true;
+                                    applyQuickLiftHourRangeSelection(hour, hour, nextSelected);
+                                    try {
+                                        if (typeof quickLiftTimeRangeEl.setPointerCapture === 'function') {
+                                            quickLiftTimeRangeEl.setPointerCapture(event.pointerId);
+                                        }
+                                    } catch { }
+                                    window.addEventListener('pointerup', stopQuickLiftDrag, true);
+                                    window.addEventListener('pointercancel', stopQuickLiftDrag, true);
+                                });
+                                quickLiftTimeRangeEl.addEventListener('pointermove', (event) => {
+                                    if (!quickLiftDragState.active) return;
+                                    if (
+                                        quickLiftDragState.pointerId !== null
+                                        && event.pointerId !== quickLiftDragState.pointerId
+                                    ) {
+                                        return;
+                                    }
+                                    if (Number.isFinite(event.buttons) && (event.buttons & 1) !== 1) {
+                                        stopQuickLiftDrag(event);
+                                        return;
+                                    }
+                                    const hour = resolveQuickLiftHourFromPointerEvent(event);
+                                    if (!Number.isFinite(hour) || hour === quickLiftDragState.lastHour) return;
+                                    event.preventDefault();
+                                    applyQuickLiftHourRangeSelection(
+                                        quickLiftDragState.lastHour,
+                                        hour,
+                                        quickLiftDragState.nextSelected
+                                    );
+                                    quickLiftDragState.lastHour = hour;
+                                });
+                                quickLiftTimeRangeEl.addEventListener('click', (event) => {
+                                    if (quickLiftSuppressNextClick) {
+                                        quickLiftSuppressNextClick = false;
+                                        return;
+                                    }
+                                    const trigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-quick-time-hour]')
+                                        : null;
+                                    if (!(trigger instanceof HTMLElement)) return;
+                                    const rawHour = normalizeQuickLiftHour(trigger.getAttribute('data-scene-popup-quick-time-hour'));
+                                    const hour = rawHour >= 24 ? 23 : rawHour;
+                                    const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                    applyQuickLiftHourRangeSelection(hour, hour, !selectedHourSet.has(hour));
+                                });
+                            }
+                            const quickLiftClearButton = mask.querySelector('[data-scene-popup-quick-time-clear="1"]');
+                            if (quickLiftClearButton instanceof HTMLButtonElement) {
+                                quickLiftClearButton.onclick = () => {
+                                    quickLiftTimeSelectionState = { selectedHours: [], empty: true };
+                                    renderQuickLiftTimeRange();
+                                };
+                            }
                             timeTemplateButtons.forEach(btn => {
                                 if (!(btn instanceof HTMLButtonElement)) return;
                                 btn.onclick = () => {
@@ -45783,22 +48617,39 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             renderAreaModeButtons();
                             renderAreaSelector();
                             renderTimeGrid();
+                            renderQuickLiftTimeRange();
 
                             mask.dataset.scenePopupSyntheticAdzone = syntheticOnly ? '1' : '0';
                             mask._scenePopupState = {
                                 getAdzoneList: () => deepClone(adzoneList),
                                 getLaunchAreaList: () => (Array.isArray(areaList) ? areaList.slice() : ['all']),
-                                getLaunchPeriodGridState: () => deepClone(launchPeriodGridState)
+                                getLaunchPeriodGridState: () => deepClone(launchPeriodGridState),
+                                getQuickLiftTimeSelectionState: () => ({
+                                    selectedHours: getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState),
+                                    empty: !getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState).length
+                                })
                             };
                         },
                         onSave: (mask) => {
                             const syntheticOnly = String(mask.dataset.scenePopupSyntheticAdzone || '') === '1';
                             const state = mask._scenePopupState || {};
-                            const adzoneListRaw = typeof state.getAdzoneList === 'function' ? state.getAdzoneList() : [];
+                            const adzoneListRaw = includeAdzonePanel && typeof state.getAdzoneList === 'function' ? state.getAdzoneList() : [];
                             const launchAreaListRaw = typeof state.getLaunchAreaList === 'function' ? state.getLaunchAreaList() : ['all'];
                             const launchPeriodGridState = typeof state.getLaunchPeriodGridState === 'function'
                                 ? state.getLaunchPeriodGridState()
                                 : createEmptyLaunchPeriodGridState();
+                            const quickLiftTimeSelectionState = typeof state.getQuickLiftTimeSelectionState === 'function'
+                                ? state.getQuickLiftTimeSelectionState()
+                                : { selectedHours: Array.from({ length: 24 }, (_, idx) => idx), empty: false };
+                            const quickLiftSelectedHours = getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState);
+                            if (
+                                isQuickLiftVariant
+                                && quickLiftSelectedHours.length < 4
+                            ) {
+                                const errorEl = mask.querySelector('[data-scene-popup-quick-time-error="1"]');
+                                if (errorEl instanceof HTMLElement) errorEl.hidden = false;
+                                return { ok: false };
+                            }
 
                             const normalizedAdzoneList = Array.isArray(adzoneListRaw)
                                 ? adzoneListRaw
@@ -45809,8 +48660,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         return next;
                                     })
                                 : [];
-                            const useDefaultAdzone = syntheticOnly && normalizedAdzoneList.every(item => isAdzoneStatusEnabled(item));
-                            const finalAdzoneList = useDefaultAdzone ? [] : normalizedAdzoneList;
+                            const useDefaultAdzone = includeAdzonePanel
+                                && syntheticOnly
+                                && normalizedAdzoneList.every(item => isAdzoneStatusEnabled(item));
+                            const finalAdzoneList = includeAdzonePanel
+                                ? (useDefaultAdzone ? [] : normalizedAdzoneList)
+                                : [];
                             const finalLaunchAreaList = uniqueBy(
                                 (Array.isArray(launchAreaListRaw) ? launchAreaListRaw : ['all'])
                                     .map(item => String(item || '').trim())
@@ -45820,7 +48675,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             const nextAreaList = !finalLaunchAreaList.length || finalLaunchAreaList.some(item => /^all$/i.test(item))
                                 ? ['all']
                                 : finalLaunchAreaList;
-                            const nextLaunchPeriodList = buildLaunchPeriodListFromGridState(launchPeriodGridState);
+                            const nextLaunchPeriodList = isQuickLiftVariant
+                                ? buildQuickLiftLaunchPeriodListFromSelectionState(quickLiftTimeSelectionState)
+                                : buildLaunchPeriodListFromGridState(launchPeriodGridState);
                             const nextAdzoneRaw = JSON.stringify(finalAdzoneList);
                             const nextLaunchAreaRaw = JSON.stringify(nextAreaList);
                             const nextLaunchPeriodRaw = JSON.stringify(nextLaunchPeriodList);
@@ -45831,8 +48688,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 launchAreaRaw: nextLaunchAreaRaw,
                                 launchPeriodRaw: nextLaunchPeriodRaw,
                                 adzoneSummary: describeAdzoneSummary(nextAdzoneRaw),
-                                launchAreaSummary: describeLaunchAreaSummary(nextLaunchAreaRaw),
-                                launchPeriodSummary: describeLaunchPeriodSummary(nextLaunchPeriodRaw)
+                                launchAreaSummary: isQuickLiftVariant
+                                    ? (nextAreaList.length === 1 && /^all$/i.test(nextAreaList[0]) ? '在全部地域投放' : `已选择 ${nextAreaList.length} 个起量地域`)
+                                    : describeLaunchAreaSummary(nextLaunchAreaRaw),
+                                launchPeriodSummary: isQuickLiftVariant
+                                    ? formatQuickLiftTimeSelectionSummaryFromState(quickLiftTimeSelectionState)
+                                    : describeLaunchPeriodSummary(nextLaunchPeriodRaw)
                             };
                         }
                     });
@@ -47884,6 +50745,283 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     };
                 };
 
+                const quickLiftLaunchPeriodRawToValue = (rawValue = '') => {
+                    const rawText = normalizeSceneSettingValue(rawValue || '');
+                    if (!rawText) return '0点~24点';
+                    if (isLaunchPeriodAllDay(rawText)) return '0点~24点';
+                    const periodList = parseScenePopupJsonArray(rawText, []);
+                    const selectedHourSet = new Set();
+                    periodList.forEach(item => {
+                        const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                        spanList.forEach(span => {
+                            const timeText = String(span?.time || '').trim();
+                            if (!timeText) return;
+                            if (timeText === '00:00-24:00') {
+                                Array.from({ length: 24 }, (_, idx) => idx).forEach(hour => selectedHourSet.add(hour));
+                                return;
+                            }
+                            const range = parseTimeRangeToMinutes(timeText);
+                            if (!range) return;
+                            const startHour = Math.max(0, Math.min(23, Math.floor(range.start / 60)));
+                            const endHour = Math.max(startHour + 1, Math.min(24, Math.ceil(range.end / 60)));
+                            for (let hour = startHour; hour < endHour; hour += 1) {
+                                selectedHourSet.add(hour);
+                            }
+                        });
+                    });
+                    const selectedHours = Array.from(selectedHourSet)
+                        .filter(hour => Number.isFinite(hour) && hour >= 0 && hour <= 23)
+                        .sort((left, right) => left - right);
+                    if (!selectedHours.length) return '固定时段';
+                    if (selectedHours.length === 24) return '0点~24点';
+                    const ranges = [];
+                    selectedHours.forEach(hour => {
+                        const last = ranges[ranges.length - 1];
+                        if (last && hour === last.end) {
+                            last.end = hour + 1;
+                        } else {
+                            ranges.push({ start: hour, end: hour + 1 });
+                        }
+                    });
+                    return ranges.map(range => `${range.start}点~${range.end}点`).join('、');
+                };
+
+                const quickLiftLaunchAreaRawToValue = (rawValue = '') => {
+                    const areaList = parseScenePopupJsonArray(rawValue || '["all"]', ['all'])
+                        .map(item => normalizeSceneSettingValue(item))
+                        .filter(Boolean);
+                    if (!areaList.length || areaList.some(item => /^all$/i.test(item))) return '全部地域';
+                    return areaList.join(',');
+                };
+
+                const quickLiftLaunchPeriodRawToSummary = (rawValue = '') => {
+                    const value = quickLiftLaunchPeriodRawToValue(rawValue);
+                    if (/固定时段/.test(value)) return '未设置';
+                    return value;
+                };
+
+                const quickLiftLaunchAreaRawToSummary = (rawValue = '') => {
+                    const value = quickLiftLaunchAreaRawToValue(rawValue);
+                    return value === '全部地域' ? '在全部地域投放' : `已选择 ${value.split(/[,，\s、]+/).filter(Boolean).length} 个起量地域`;
+                };
+
+                const openQuickLiftLaunchSettingPopup = async () => {
+                    const popupPayload = await openKeywordAdvancedSettingPopup('launchArea', {
+                        variant: 'quickLift',
+                        includeAdzone: false,
+                        title: '起量时间地域设置',
+                        launchPeriodTabLabel: '时间段',
+                        launchPeriodTip: '请选择一键起量的投放时间段，系统将在所选时段内集中加速获取流量。',
+                        launchPeriodField: '__am.quickLiftLaunchPeriodList',
+                        launchAreaField: '__am.quickLiftLaunchAreaList',
+                        areaCustomTemplateLabel: '自定义起量地域模板',
+                        areaCustomTemplateOptionLabel: 'RX10SMax成交',
+                        launchPeriodTriggers: ['quickLiftLaunchSetting'],
+                        launchAreaTriggers: ['quickLiftLaunchSetting']
+                    });
+                    if (!popupPayload || popupPayload.ok !== true) return null;
+                    const { result, launchPeriodControl, launchAreaControl } = popupPayload;
+                    return {
+                        ok: true,
+                        result,
+                        launchPeriodControl,
+                        launchAreaControl
+                    };
+                };
+
+                const openKeywordAiMaxSettingPopup = async () => {
+                    const aiMaxInfoControl = resolveScenePopupControl('campaign.aiMaxInfo', 'keywordAiMaxSetting');
+                    if (!(aiMaxInfoControl instanceof HTMLInputElement)) return null;
+                    const currentInfo = normalizeKeywordAiMaxInfo(aiMaxInfoControl.value || '', true);
+                    const templateHtml = KEYWORD_AI_MAX_TEMPLATE_LIST.map((item, idx) => `
+                        <div class="am-wxt-ai-max-template-card">
+                            <b>${Utils.escapeHtml(item.title)}</b>
+                            <p>${Utils.escapeHtml(item.text)}</p>
+                            <button type="button" class="am-wxt-btn" data-ai-max-template-apply="${idx}">应用</button>
+                        </div>
+                    `).join('');
+                    const demandHtml = (Array.isArray(currentInfo.demandList) && currentInfo.demandList.length
+                        ? currentInfo.demandList
+                        : []
+                    ).map((item, idx) => {
+                        const checked = (currentInfo.selectedDemandList || []).includes(item);
+                        return `
+                            <label class="am-wxt-ai-max-demand-check">
+                                <input type="checkbox" data-ai-max-demand-check="${idx}" value="${Utils.escapeHtml(item)}" ${checked ? 'checked' : ''} />
+                                <span>${Utils.escapeHtml(item)}</span>
+                            </label>
+                        `;
+                    }).join('');
+                    const renderWordEditorHtml = (type, title, limit, words) => `
+                        <section class="am-wxt-ai-max-shield-box" data-ai-max-shield-box="${Utils.escapeHtml(type)}">
+                            <div class="am-wxt-ai-max-shield-head">
+                                <b>${Utils.escapeHtml(title)}</b>
+                                <span>当前已添加数量：<em data-ai-max-shield-count="${Utils.escapeHtml(type)}">0</em>/${limit}</span>
+                            </div>
+                            <div class="am-wxt-ai-max-shield-add">
+                                <input data-ai-max-shield-input="${Utils.escapeHtml(type)}" placeholder="请输入过滤词名称后点击添加" />
+                                <button type="button" class="am-wxt-btn" data-ai-max-shield-add="${Utils.escapeHtml(type)}">添加屏蔽词</button>
+                            </div>
+                            <div class="am-wxt-ai-max-shield-list" data-ai-max-shield-list="${Utils.escapeHtml(type)}" data-ai-max-shield-limit="${limit}" data-ai-max-shield-initial="${Utils.escapeHtml(JSON.stringify(words || []))}"></div>
+                        </section>
+                    `;
+                    const result = await openScenePopupDialog({
+                        title: 'AI点睛设置',
+                        dialogClassName: 'am-wxt-scene-popup-dialog-ai-max',
+                        bodyHtml: `
+                            <div class="am-wxt-ai-max-popup" data-ai-max-popup="1">
+                                <section class="am-wxt-ai-max-popup-section">
+                                    <div class="am-wxt-ai-max-popup-title">表达更多流量诉求</div>
+                                    <div class="am-wxt-ai-max-popup-help">推荐您描述搜索什么类型词的什么样的用户，在什么情况下更容易购买您的商品。</div>
+                                    <textarea data-ai-max-traffic-appeal="1" placeholder="请输入流量诉求">${Utils.escapeHtml(currentInfo.trafficAppeal || KEYWORD_AI_MAX_DEFAULT_PROMPT)}</textarea>
+                                </section>
+                                <section class="am-wxt-ai-max-popup-section">
+                                    <div class="am-wxt-ai-max-popup-title">模板推荐（6）</div>
+                                    <div class="am-wxt-ai-max-template-list">${templateHtml}</div>
+                                </section>
+                                <section class="am-wxt-ai-max-popup-section">
+                                    <div class="am-wxt-ai-max-popup-title">屏蔽词设置</div>
+                                    <div class="am-wxt-ai-max-popup-help">AI点睛计划下，屏蔽词对计划下所有流量生效；中心词屏蔽为包含该词则屏蔽，精确词屏蔽为完全一致才过滤。</div>
+                                    <div class="am-wxt-ai-max-shield-grid">
+                                        ${renderWordEditorHtml('center', '中心词屏蔽', 10, currentInfo.centerShieldWordList)}
+                                        ${renderWordEditorHtml('exact', '精确词屏蔽', 100, currentInfo.exactShieldWordList)}
+                                    </div>
+                                </section>
+                                <section class="am-wxt-ai-max-popup-section">
+                                    <div class="am-wxt-ai-max-popup-title">已选需求</div>
+                                    <label class="am-wxt-ai-max-demand-check all">
+                                        <input type="checkbox" data-ai-max-demand-all="1" />
+                                        <span>全选</span>
+                                    </label>
+                                    <div class="am-wxt-ai-max-demand-check-list">${demandHtml}</div>
+                                </section>
+                            </div>
+                        `,
+                        onMounted: (mask) => {
+                            const appealInput = mask.querySelector('[data-ai-max-traffic-appeal]');
+                            mask.querySelectorAll('[data-ai-max-template-apply]').forEach(button => {
+                                button.addEventListener('click', () => {
+                                    const idx = toNumber(button.getAttribute('data-ai-max-template-apply'), -1);
+                                    const template = KEYWORD_AI_MAX_TEMPLATE_LIST[idx];
+                                    if (template && appealInput instanceof HTMLTextAreaElement) {
+                                        appealInput.value = template.text;
+                                        appealInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                    }
+                                });
+                            });
+                            const syncDemandAll = () => {
+                                const demandChecks = Array.from(mask.querySelectorAll('[data-ai-max-demand-check]'))
+                                    .filter(input => input instanceof HTMLInputElement);
+                                const allInput = mask.querySelector('[data-ai-max-demand-all]');
+                                if (allInput instanceof HTMLInputElement) {
+                                    allInput.checked = demandChecks.length > 0 && demandChecks.every(input => input.checked);
+                                    allInput.indeterminate = demandChecks.some(input => input.checked) && !allInput.checked;
+                                }
+                            };
+                            const allInput = mask.querySelector('[data-ai-max-demand-all]');
+                            if (allInput instanceof HTMLInputElement) {
+                                allInput.addEventListener('change', () => {
+                                    mask.querySelectorAll('[data-ai-max-demand-check]').forEach(input => {
+                                        if (input instanceof HTMLInputElement) input.checked = allInput.checked;
+                                    });
+                                    syncDemandAll();
+                                });
+                            }
+                            mask.querySelectorAll('[data-ai-max-demand-check]').forEach(input => {
+                                if (input instanceof HTMLInputElement) input.addEventListener('change', syncDemandAll);
+                            });
+                            syncDemandAll();
+                            const renderShieldList = (type = '') => {
+                                const listEl = mask.querySelector(`[data-ai-max-shield-list="${type}"]`);
+                                const countEl = mask.querySelector(`[data-ai-max-shield-count="${type}"]`);
+                                if (!(listEl instanceof HTMLElement)) return;
+                                const limit = Math.max(1, toNumber(listEl.getAttribute('data-ai-max-shield-limit'), 10));
+                                let words = [];
+                                try {
+                                    words = JSON.parse(listEl.getAttribute('data-ai-max-shield-initial') || '[]');
+                                } catch { }
+                                words = normalizeKeywordAiMaxWordList(words, limit);
+                                listEl.dataset.aiMaxShieldValue = JSON.stringify(words);
+                                if (countEl instanceof HTMLElement) countEl.textContent = String(words.length);
+                                if (!words.length) {
+                                    listEl.innerHTML = '<span class="am-wxt-ai-max-empty">暂无相关屏蔽词数据</span>';
+                                    return;
+                                }
+                                listEl.innerHTML = words.map(word => `
+                                    <span class="am-wxt-ai-max-shield-tag">
+                                        ${Utils.escapeHtml(word)}
+                                        <button type="button" data-ai-max-shield-remove="${Utils.escapeHtml(type)}" data-ai-max-shield-word="${Utils.escapeHtml(word)}">x</button>
+                                    </span>
+                                `).join('');
+                            };
+                            ['center', 'exact'].forEach(renderShieldList);
+                            mask.addEventListener('click', (event) => {
+                                const addButton = event.target?.closest?.('[data-ai-max-shield-add]');
+                                if (addButton instanceof HTMLElement) {
+                                    const type = String(addButton.getAttribute('data-ai-max-shield-add') || '').trim();
+                                    const input = mask.querySelector(`[data-ai-max-shield-input="${type}"]`);
+                                    const listEl = mask.querySelector(`[data-ai-max-shield-list="${type}"]`);
+                                    if (!(input instanceof HTMLInputElement) || !(listEl instanceof HTMLElement)) return;
+                                    const limit = Math.max(1, toNumber(listEl.getAttribute('data-ai-max-shield-limit'), 10));
+                                    const nextWord = normalizeSceneSettingValue(input.value || '');
+                                    if (!nextWord) return;
+                                    const current = normalizeKeywordAiMaxWordList(JSON.parse(listEl.dataset.aiMaxShieldValue || '[]'), limit);
+                                    const nextWords = normalizeKeywordAiMaxWordList(current.concat(nextWord), limit);
+                                    listEl.setAttribute('data-ai-max-shield-initial', JSON.stringify(nextWords));
+                                    input.value = '';
+                                    renderShieldList(type);
+                                    return;
+                                }
+                                const removeButton = event.target?.closest?.('[data-ai-max-shield-remove]');
+                                if (removeButton instanceof HTMLElement) {
+                                    const type = String(removeButton.getAttribute('data-ai-max-shield-remove') || '').trim();
+                                    const word = normalizeSceneSettingValue(removeButton.getAttribute('data-ai-max-shield-word') || '');
+                                    const listEl = mask.querySelector(`[data-ai-max-shield-list="${type}"]`);
+                                    if (!(listEl instanceof HTMLElement)) return;
+                                    const current = normalizeKeywordAiMaxWordList(JSON.parse(listEl.dataset.aiMaxShieldValue || '[]'), 100);
+                                    const nextWords = current.filter(item => item !== word);
+                                    listEl.setAttribute('data-ai-max-shield-initial', JSON.stringify(nextWords));
+                                    renderShieldList(type);
+                                }
+                            });
+                        },
+                        onSave: (mask) => {
+                            const trafficAppeal = normalizeSceneSettingValue(mask.querySelector('[data-ai-max-traffic-appeal]')?.value || '');
+                            const selectedDemandList = Array.from(mask.querySelectorAll('[data-ai-max-demand-check]'))
+                                .filter(input => input instanceof HTMLInputElement && input.checked)
+                                .map(input => normalizeSceneSettingValue(input.value || ''))
+                                .filter(Boolean);
+                            const readShieldWords = (type = '', limit = 100) => {
+                                const listEl = mask.querySelector(`[data-ai-max-shield-list="${type}"]`);
+                                if (!(listEl instanceof HTMLElement)) return [];
+                                try {
+                                    return normalizeKeywordAiMaxWordList(JSON.parse(listEl.dataset.aiMaxShieldValue || '[]'), limit);
+                                } catch {
+                                    return [];
+                                }
+                            };
+                            const nextInfo = normalizeKeywordAiMaxInfo({
+                                ...currentInfo,
+                                trafficAppeal: trafficAppeal || KEYWORD_AI_MAX_DEFAULT_PROMPT,
+                                selectedDemandList: selectedDemandList.length ? selectedDemandList : currentInfo.selectedDemandList,
+                                centerShieldWordList: readShieldWords('center', 10),
+                                exactShieldWordList: readShieldWords('exact', 100)
+                            }, true);
+                            return {
+                                ok: true,
+                                aiMaxInfoRaw: serializeKeywordAiMaxInfo(nextInfo, true),
+                                summary: describeKeywordAiMaxInfo(nextInfo)
+                            };
+                        }
+                    });
+                    if (!result || result.ok !== true) return null;
+                    return {
+                        ok: true,
+                        result,
+                        aiMaxInfoControl
+                    };
+                };
+
                 const openCrowdFilterSettingPopup = async () => {
                     const filterControl = resolveScenePopupControl('campaign.crowdFilterConfig', 'crowdFilter');
                     if (!(filterControl instanceof HTMLInputElement)) return null;
@@ -48273,7 +51411,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     return { ok: true, result, filterControl };
                 };
                 const openBudgetGuardSettingPopup = async () => {
-                    const configControl = resolveScenePopupControl('campaign.budgetGuardConfig', 'budgetGuard');
+                    const configControl = resolveScenePopupControl('campaign.budgetGuardConfig', 'budgetGuard')
+                        || resolveScenePopupControl('__am.siteBudgetGuardConfig', 'budgetGuard');
                     if (!(configControl instanceof HTMLInputElement)) return null;
                     const result = await openScenePopupDialog({
                         title: '优质计划防停投',
@@ -48551,7 +51690,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const findPopupControl = (fieldKey) => row.querySelector(`input[data-scene-field="${fieldKey}"][data-scene-popup-field="${trigger}"]`);
                         const findMainControl = () => row.querySelector('input.am-wxt-hidden-control[data-scene-field]:not([data-scene-popup-field])');
 
-                        if (trigger === 'adzone' || trigger === 'launchPeriod' || trigger === 'launchArea') {
+                        if (trigger === 'keywordAiMaxSetting') {
+                            const popupPayload = await openKeywordAiMaxSettingPopup();
+                            if (!popupPayload || popupPayload.ok !== true) return;
+                            const { result, aiMaxInfoControl } = popupPayload;
+                            dispatchSceneControlUpdate(aiMaxInfoControl, result.aiMaxInfoRaw || serializeKeywordAiMaxInfo({}, true));
+                            updateScenePopupSummary(row, trigger, result.summary || '已选：0个需求｜屏蔽词 0');
+                            commitSceneDynamicUiState({ renderSceneDynamic: true });
+                        } else if (trigger === 'adzone' || trigger === 'launchPeriod' || trigger === 'launchArea') {
                             const popupPayload = await openKeywordAdvancedSettingPopup(trigger);
                             if (!popupPayload || popupPayload.ok !== true) return;
                             const { result, adzoneControl, launchPeriodControl, launchAreaControl } = popupPayload;
@@ -48689,6 +51835,50 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 );
                                 dispatchSceneControlUpdate(mainControl, areaDefault && periodAllDay ? '默认投放' : '自定义设置');
                             }
+                        } else if (trigger === 'quickLiftLaunchSetting') {
+                            const popupPayload = await openQuickLiftLaunchSettingPopup();
+                            if (!popupPayload || popupPayload.ok !== true) return;
+                            const { result, launchPeriodControl, launchAreaControl } = popupPayload;
+                            dispatchSceneControlUpdate(
+                                launchPeriodControl,
+                                result.launchPeriodRaw || JSON.stringify(buildDefaultLaunchPeriodList())
+                            );
+                            dispatchSceneControlUpdate(
+                                launchAreaControl,
+                                result.launchAreaRaw || '["all"]'
+                            );
+                            const launchAreaSummary = quickLiftLaunchAreaRawToSummary(result.launchAreaRaw || '["all"]')
+                                || result.launchAreaSummary
+                                || '在全部地域投放';
+                            const launchPeriodSummary = quickLiftLaunchPeriodRawToSummary(result.launchPeriodRaw || JSON.stringify(buildDefaultLaunchPeriodList()))
+                                || result.launchPeriodSummary
+                                || '未设置';
+
+                            const quickLiftTimeFieldKey = normalizeSceneFieldKey('投放时间');
+                            const quickLiftAreaFieldKey = normalizeSceneFieldKey('投放地域');
+                            const quickLiftTimeControl = row.querySelector(
+                                `input.am-wxt-hidden-control[data-scene-field="${quickLiftTimeFieldKey}"]:not([data-scene-popup-field])`
+                            ) || row.querySelector(
+                                `input[data-scene-field="${quickLiftTimeFieldKey}"]:not([data-scene-popup-field])`
+                            );
+                            const quickLiftAreaControl = row.querySelector(
+                                `input.am-wxt-hidden-control[data-scene-field="${quickLiftAreaFieldKey}"]:not([data-scene-popup-field])`
+                            ) || row.querySelector(
+                                `input[data-scene-field="${quickLiftAreaFieldKey}"]:not([data-scene-popup-field])`
+                            );
+                            const nextQuickLiftTimeValue = quickLiftLaunchPeriodRawToValue(
+                                result.launchPeriodRaw || JSON.stringify(buildDefaultLaunchPeriodList())
+                            );
+                            const nextQuickLiftAreaValue = quickLiftLaunchAreaRawToValue(result.launchAreaRaw || '["all"]');
+                            dispatchSceneControlUpdate(quickLiftTimeControl, nextQuickLiftTimeValue);
+                            dispatchSceneControlUpdate(quickLiftAreaControl, nextQuickLiftAreaValue);
+                            const quickLiftEnabled = !/固定时段|关闭|不启用|关/.test(normalizeSceneSettingValue(nextQuickLiftTimeValue));
+                            row.querySelectorAll(`[data-scene-switch-target="${quickLiftTimeFieldKey}"]`).forEach(switchButton => {
+                                if (switchButton instanceof HTMLButtonElement) {
+                                    syncSceneSwitchVisual(switchButton, quickLiftEnabled);
+                                }
+                            });
+                            updateScenePopupSummary(row, trigger, `${launchPeriodSummary}｜${launchAreaSummary}`);
                         } else if (trigger === 'itemSelect') {
                             const popupPayload = await openCrowdItemSettingPopup();
                             if (!popupPayload || popupPayload.ok !== true) return;
@@ -49893,13 +53083,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 normalizeSceneFieldKey('关键词设置'),
                                 normalizeSceneFieldKey('匹配方式'),
                                 normalizeSceneFieldKey('流量智选'),
+                                normalizeSceneFieldKey('AI点睛'),
                                 normalizeSceneFieldKey('开启冷启加速'),
                                 normalizeSceneFieldKey('冷启加速'),
                                 normalizeSceneFieldKey('卡位方式'),
                                 normalizeSceneFieldKey('campaign.promotionScene'),
                                 normalizeSceneFieldKey('campaign.itemSelectedMode'),
                                 normalizeSceneFieldKey('campaign.bidTargetV2'),
-                                normalizeSceneFieldKey('campaign.optimizeTarget')
+                                normalizeSceneFieldKey('campaign.optimizeTarget'),
+                                normalizeSceneFieldKey('campaign.aiMaxSwitch'),
+                                normalizeSceneFieldKey('campaign.aiMaxInfo')
                             ].forEach(key => {
                                 if (!key) return;
                                 localTouchedBucket[key] = false;
@@ -50005,10 +53198,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const isKeywordCustomRoiField = activeScene === '关键词推广'
                             && activeKeywordGoal === '自定义推广'
                             && isSceneLabelMatch(fieldKey, '设置7日投产比');
+                        const isKeywordAiMaxField = activeScene === '关键词推广'
+                            && activeKeywordGoal === '自定义推广'
+                            && isSceneLabelMatch(fieldKey, 'AI点睛');
                         const shouldRerenderSceneConfig = isGoalSelectorField(fieldKey)
                             || (activeScene === '货品全站推广' && isSceneLabelMatch(fieldKey, '出价方式'))
                             || isCrowdCustomBidField
-                            || isKeywordCustomRoiField;
+                            || isKeywordCustomRoiField
+                            || isKeywordAiMaxField;
                         commitSceneDynamicUiState({
                             renderSceneDynamic: shouldRerenderSceneConfig
                         });
@@ -50063,8 +53260,50 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (wizardState.manualKeywordDelegatedBound) return;
                 if (!(wizardState.els?.sceneDynamic instanceof HTMLElement)) return;
                 wizardState.manualKeywordDelegatedBound = true;
+                const syncManualKeywordPanelCollapsed = (panel, nextCollapsed) => {
+                    if (!(panel instanceof Element)) return;
+                    const toggle = panel.querySelector('button[data-manual-keyword-collapse-toggle]');
+                    panel.classList.toggle('is-collapsed', nextCollapsed);
+                    panel.setAttribute('data-manual-keyword-collapsed', nextCollapsed ? '1' : '0');
+                    if (toggle instanceof HTMLButtonElement) {
+                        toggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+                        toggle.textContent = nextCollapsed ? '展开' : '收起';
+                    }
+                    wizardState.manualKeywordPanelCollapsed = nextCollapsed;
+                    ensureWizardDraft().manualKeywordPanelCollapsed = nextCollapsed;
+                    commitDraftState();
+                };
 
                 wizardState.els.sceneDynamic.addEventListener('click', (event) => {
+                    const openTrigger = event.target instanceof Element
+                        ? event.target.closest('[data-keyword-setting-open-manual="1"]')
+                        : null;
+                    if (openTrigger instanceof Element) {
+                        event.preventDefault();
+                        const fieldKey = String(openTrigger.getAttribute('data-keyword-setting-open-manual-field') || '').trim();
+                        const row = openTrigger.closest('.am-wxt-scene-setting-row');
+                        const toggle = row?.querySelector('input[data-scene-crowd-priority-toggle]');
+                        const safeFieldKey = fieldKey.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                        const hiddenControl = safeFieldKey
+                            ? wizardState.els.sceneDynamic.querySelector(`input[data-scene-field="${safeFieldKey}"]`)
+                            : row?.querySelector('input.am-wxt-hidden-control[data-scene-field]');
+                        if (toggle instanceof HTMLInputElement && !toggle.checked) {
+                            toggle.checked = true;
+                        }
+                        if (hiddenControl instanceof HTMLInputElement) {
+                            hiddenControl.value = '查看和添加关键词';
+                            hiddenControl.dispatchEvent(new Event('input', { bubbles: true }));
+                            hiddenControl.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        const manualPanel = wizardState.els.sceneDynamic.querySelector('[data-manual-keyword-panel]');
+                        if (manualPanel instanceof Element) {
+                            syncManualKeywordPanelCollapsed(manualPanel, false);
+                            if (typeof manualPanel.scrollIntoView === 'function') {
+                                manualPanel.scrollIntoView({ block: 'nearest' });
+                            }
+                        }
+                        return;
+                    }
                     const target = event.target instanceof Element ? event.target.closest('button') : null;
                     if (!(target instanceof Element)) return;
                     const panel = target.closest('[data-manual-keyword-panel]');
@@ -50082,13 +53321,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                     if (target.matches('button[data-manual-keyword-collapse-toggle]')) {
                         const nextCollapsed = !panel.classList.contains('is-collapsed');
-                        panel.classList.toggle('is-collapsed', nextCollapsed);
-                        panel.setAttribute('data-manual-keyword-collapsed', nextCollapsed ? '1' : '0');
-                        target.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
-                        target.textContent = nextCollapsed ? '展开' : '收起';
-                        wizardState.manualKeywordPanelCollapsed = nextCollapsed;
-                        ensureWizardDraft().manualKeywordPanelCollapsed = nextCollapsed;
-                        commitDraftState();
+                        syncManualKeywordPanelCollapsed(panel, nextCollapsed);
                         return;
                     }
 
@@ -50704,7 +53937,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 })
             );
-
             const openBatchStrategyNumberEditPopup = async (strategies = []) => {
                 const selectedStrategies = Array.isArray(strategies)
                     ? strategies.filter(item => isPlainObject(item))
@@ -51335,6 +54567,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const commitItemSelectionUiState = (options = {}) => {
                 syncDraftFromUI();
                 renderItemSelectionLists(options);
+                if (options.renderSceneDynamic === true) {
+                    renderSceneDynamicConfig();
+                }
                 if (options.refreshPreview === true) {
                     refreshWizardPreview();
                 }
@@ -51829,7 +55064,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         wizardState.addedItems = uniqueBy(wizardState.addedItems, x => String(x.materialId)).slice(0, WIZARD_MAX_ITEMS);
                         commitItemSelectionUiState({
                             renderAdded: true,
-                            renderCandidate: true
+                            renderCandidate: true,
+                            renderSceneDynamic: true
                         });
                     };
                     candidateListEl.appendChild(row);
@@ -51899,20 +55135,27 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const clone = wizardState.addedItems.slice();
                         [clone[idx - 1], clone[idx]] = [clone[idx], clone[idx - 1]];
                         wizardState.addedItems = clone;
-                        commitItemSelectionUiState({ renderAdded: true });
+                        commitItemSelectionUiState({
+                            renderAdded: true,
+                            renderSceneDynamic: true
+                        });
                     };
                     downBtn.onclick = () => {
                         if (idx >= wizardState.addedItems.length - 1) return;
                         const clone = wizardState.addedItems.slice();
                         [clone[idx + 1], clone[idx]] = [clone[idx], clone[idx + 1]];
                         wizardState.addedItems = clone;
-                        commitItemSelectionUiState({ renderAdded: true });
+                        commitItemSelectionUiState({
+                            renderAdded: true,
+                            renderSceneDynamic: true
+                        });
                     };
                     removeBtn.onclick = () => {
                         wizardState.addedItems = wizardState.addedItems.filter((_, i) => i !== idx);
                         commitItemSelectionUiState({
                             renderAdded: true,
-                            renderCandidate: true
+                            renderCandidate: true,
+                            renderSceneDynamic: true
                         });
                     };
                     wizardState.els.addedList.appendChild(row);
@@ -51984,7 +55227,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     appendWizardLog(`加载候选商品失败：${err?.message || err}`, 'error');
                 }
             };
-
             const buildRequestFromWizard = () => {
                 syncDraftFromUI();
                 const selectedSceneName = SCENE_OPTIONS.includes(wizardState.draft.sceneName) ? wizardState.draft.sceneName : '关键词推广';
@@ -52706,25 +55948,30 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     touchedBucket[strategyFieldKey] = true;
                 }
 
-                const editingStrategy = getStrategyById(wizardState.editingStrategyId)
+                const activeStrategies = (Array.isArray(wizardState.strategyList) ? wizardState.strategyList : [])
+                    .filter(strategy => isPlainObject(strategy) && strategy.enabled !== false);
+                const fallbackStrategy = getStrategyById(wizardState.editingStrategyId)
                     || wizardState.strategyList?.[0]
                     || null;
-                if (isPlainObject(editingStrategy)) {
-                    editingStrategy.marketingGoal = normalizedGoal;
-                    editingStrategy.sceneName = currentSceneName;
-                    editingStrategy.sceneSettingValues = isPlainObject(editingStrategy.sceneSettingValues)
-                        ? editingStrategy.sceneSettingValues
+                const targetStrategies = activeStrategies.length
+                    ? activeStrategies
+                    : (isPlainObject(fallbackStrategy) ? [fallbackStrategy] : []);
+                targetStrategies.forEach((strategy) => {
+                    strategy.marketingGoal = normalizedGoal;
+                    strategy.sceneName = currentSceneName;
+                    strategy.sceneSettingValues = isPlainObject(strategy.sceneSettingValues)
+                        ? strategy.sceneSettingValues
                         : {};
-                    editingStrategy.sceneSettings = isPlainObject(editingStrategy.sceneSettings)
-                        ? editingStrategy.sceneSettings
+                    strategy.sceneSettings = isPlainObject(strategy.sceneSettings)
+                        ? strategy.sceneSettings
                         : {};
-                    [editingStrategy.sceneSettingValues, editingStrategy.sceneSettings].forEach(targetBucket => {
+                    [strategy.sceneSettingValues, strategy.sceneSettings].forEach(targetBucket => {
                         targetBucket[goalFieldKey] = normalizedGoal;
                         if (currentSceneName === '关键词推广') {
                             targetBucket[strategyFieldKey] = normalizedGoal;
                         }
                     });
-                }
+                });
 
                 renderSceneDynamicConfig();
                 commitStrategyUiState({
@@ -52752,6 +55999,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 const currentSceneName = getMatrixSceneName(wizardState?.draft?.sceneName || '');
                 renderWorkbenchMatrixGoalSelector(currentSceneName);
+                const activeMarketingGoal = getMatrixActiveMarketingGoal(currentSceneName);
                 const matrixConfig = normalizeMatrixConfig(wizardState?.draft?.matrixConfig, currentSceneName);
                 const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
                     ? wizardState.strategyList.filter(item => item?.enabled !== false).length
@@ -52967,9 +56215,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (wizardState.els.matrixIntro instanceof HTMLElement) {
                     wizardState.els.matrixIntro.textContent = !canEditMatrixDimensions
                         ? '先在上方切换场景，矩阵维度会按该场景同步展示。'
-                        : currentSceneName === '关键词推广'
+                        : currentSceneName === '关键词推广' && activeMarketingGoal === '自定义推广'
                             ? '推荐先配预算、出价方式、智能出价目标包、计划名前缀、商品，再补充匹配方式等场景维度。'
-                            : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。';
+                            : (currentSceneName === '关键词推广'
+                                ? '推荐先配预算、出价方式、计划名前缀、商品，再补充当前营销目标维度。'
+                                : '推荐先配预算、出价方式、计划名前缀、商品，再补充当前场景维度。');
                 }
                 if (wizardState.els.matrixApplyRecommendedBtn instanceof HTMLButtonElement) {
                     wizardState.els.matrixApplyRecommendedBtn.disabled = !canEditMatrixDimensions;
@@ -53851,7 +57101,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.addedItems = wizardState.addedItems.concat(pick);
                 commitItemSelectionUiState({
                     renderAdded: true,
-                    renderCandidate: true
+                    renderCandidate: true,
+                    renderSceneDynamic: true
                 });
                 appendWizardLog(`已批量添加 ${pick.length} 个商品`, 'success');
             };
@@ -53859,7 +57110,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 wizardState.addedItems = [];
                 commitItemSelectionUiState({
                     renderAdded: true,
-                    renderCandidate: true
+                    renderCandidate: true,
+                    renderSceneDynamic: true
                 });
             };
             (Array.isArray(wizardState.els.workbenchTabs) ? wizardState.els.workbenchTabs : []).forEach((btn) => {
@@ -54000,7 +57252,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         const existingStrategyList = Array.isArray(wizardState?.strategyList)
                             ? wizardState.strategyList
                             : [];
-                        wizardState.strategyList = [...existingStrategyList, ...materializedStrategies];
+                        const disabledTemplateCount = existingStrategyList.filter(item => item?.enabled !== false).length;
+                        const nextExistingStrategyList = existingStrategyList.map((strategy) => {
+                            if (!isPlainObject(strategy)) return strategy;
+                            if (strategy.enabled === false) return strategy;
+                            return {
+                                ...strategy,
+                                enabled: false
+                            };
+                        });
+                        wizardState.strategyList = [...nextExistingStrategyList, ...materializedStrategies];
                         wizardState.editingStrategyId = materializedStrategies[0]?.id || wizardState.strategyList[0]?.id || '';
                         if (wizardState.els.matrixEnabledInput instanceof HTMLInputElement) {
                             wizardState.els.matrixEnabledInput.checked = false;
@@ -54008,7 +57269,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         setDetailVisible(false);
                         setWorkbenchPage('home');
                         commitStrategyUiState();
-                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个）`, 'success');
+                        appendWizardLog(`已生成计划 ${materializedStrategies.length} 个，已追加到首页计划列表（共 ${wizardState.strategyList.length} 个），源模板已暂停 ${disabledTemplateCount} 个`, 'success');
                     } catch (err) {
                         showMatrixGenerateFeedback(`生成计划失败：${err?.message || err}`);
                     }

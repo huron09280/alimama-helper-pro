@@ -25,8 +25,50 @@
                 if (wizardState.manualKeywordDelegatedBound) return;
                 if (!(wizardState.els?.sceneDynamic instanceof HTMLElement)) return;
                 wizardState.manualKeywordDelegatedBound = true;
+                const syncManualKeywordPanelCollapsed = (panel, nextCollapsed) => {
+                    if (!(panel instanceof Element)) return;
+                    const toggle = panel.querySelector('button[data-manual-keyword-collapse-toggle]');
+                    panel.classList.toggle('is-collapsed', nextCollapsed);
+                    panel.setAttribute('data-manual-keyword-collapsed', nextCollapsed ? '1' : '0');
+                    if (toggle instanceof HTMLButtonElement) {
+                        toggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+                        toggle.textContent = nextCollapsed ? '展开' : '收起';
+                    }
+                    wizardState.manualKeywordPanelCollapsed = nextCollapsed;
+                    ensureWizardDraft().manualKeywordPanelCollapsed = nextCollapsed;
+                    commitDraftState();
+                };
 
                 wizardState.els.sceneDynamic.addEventListener('click', (event) => {
+                    const openTrigger = event.target instanceof Element
+                        ? event.target.closest('[data-keyword-setting-open-manual="1"]')
+                        : null;
+                    if (openTrigger instanceof Element) {
+                        event.preventDefault();
+                        const fieldKey = String(openTrigger.getAttribute('data-keyword-setting-open-manual-field') || '').trim();
+                        const row = openTrigger.closest('.am-wxt-scene-setting-row');
+                        const toggle = row?.querySelector('input[data-scene-crowd-priority-toggle]');
+                        const safeFieldKey = fieldKey.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                        const hiddenControl = safeFieldKey
+                            ? wizardState.els.sceneDynamic.querySelector(`input[data-scene-field="${safeFieldKey}"]`)
+                            : row?.querySelector('input.am-wxt-hidden-control[data-scene-field]');
+                        if (toggle instanceof HTMLInputElement && !toggle.checked) {
+                            toggle.checked = true;
+                        }
+                        if (hiddenControl instanceof HTMLInputElement) {
+                            hiddenControl.value = '查看和添加关键词';
+                            hiddenControl.dispatchEvent(new Event('input', { bubbles: true }));
+                            hiddenControl.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        const manualPanel = wizardState.els.sceneDynamic.querySelector('[data-manual-keyword-panel]');
+                        if (manualPanel instanceof Element) {
+                            syncManualKeywordPanelCollapsed(manualPanel, false);
+                            if (typeof manualPanel.scrollIntoView === 'function') {
+                                manualPanel.scrollIntoView({ block: 'nearest' });
+                            }
+                        }
+                        return;
+                    }
                     const target = event.target instanceof Element ? event.target.closest('button') : null;
                     if (!(target instanceof Element)) return;
                     const panel = target.closest('[data-manual-keyword-panel]');
@@ -44,13 +86,7 @@
 
                     if (target.matches('button[data-manual-keyword-collapse-toggle]')) {
                         const nextCollapsed = !panel.classList.contains('is-collapsed');
-                        panel.classList.toggle('is-collapsed', nextCollapsed);
-                        panel.setAttribute('data-manual-keyword-collapsed', nextCollapsed ? '1' : '0');
-                        target.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
-                        target.textContent = nextCollapsed ? '展开' : '收起';
-                        wizardState.manualKeywordPanelCollapsed = nextCollapsed;
-                        ensureWizardDraft().manualKeywordPanelCollapsed = nextCollapsed;
-                        commitDraftState();
+                        syncManualKeywordPanelCollapsed(panel, nextCollapsed);
                         return;
                     }
 
@@ -666,4 +702,3 @@
                     }
                 })
             );
-

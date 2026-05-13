@@ -74,7 +74,9 @@
             wordPackageSuggestDefault: '/wordpackage/suggest/default/list.json',
             bidwordAdd: '/bidword/add.json',
             labelFindList: '/label/findList.json',
-            crowdFindRecommend: '/crowd/findRecommendCrowd.json'
+            crowdFindRecommend: '/crowd/findRecommendCrowd.json',
+            budgetSuggestion: '/algo/getBudgetSuggestion.json',
+            effectPrediction: '/algo/getEffectPrediction.json'
         };
         const runtimeCache = {
             value: null,
@@ -132,6 +134,7 @@
             manualKeywordDelegatedBound: false,
             manualKeywordPanelCollapsed: true,
             keywordMetricMap: {},
+            keywordAiMaxGenerationMap: {},
             crowdCustomDefaultItemPending: null,
             els: {}
         };
@@ -674,4 +677,3 @@
                 dayAverageBudget
             };
         };
-

@@ -443,6 +443,11 @@
                         applyMatrixDimensionBindingToPlan(plan, item, options);
                     });
             });
+            matrixValues
+                .filter(item => isMatrixSceneFieldBindingKey(item.bindingKey))
+                .forEach((item) => {
+                    applyMatrixDimensionBindingToPlan(plan, item, options);
+                });
             return plan;
         };
 

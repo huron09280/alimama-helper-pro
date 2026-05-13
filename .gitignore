@@ -23,3 +23,9 @@ dist/extension.pem
 .claude/
 .omx/
 .gstack/
+tmp/
+*.network-request
+test-start-before-body.html
+/AI点睛/
+/投放资源位/
+/高级设置/

@@ -1,4 +1,47 @@
-                const openKeywordAdvancedSettingPopup = async (initialTab = 'adzone') => {
+                const openKeywordAdvancedSettingPopup = async (initialTab = 'adzone', popupOptions = {}) => {
+                    const advancedPopupOptions = isPlainObject(popupOptions) ? popupOptions : {};
+                    const advancedVariant = normalizeSceneSettingValue(advancedPopupOptions.variant || '');
+                    const isQuickLiftVariant = advancedVariant === 'quickLift';
+                    const includeAdzonePanel = advancedPopupOptions.includeAdzone !== false;
+                    const includeAreaRecommendTemplate = !isQuickLiftVariant && advancedPopupOptions.includeAreaRecommendTemplate !== false;
+                    const advancedTitle = normalizeSceneSettingValue(advancedPopupOptions.title || '高级设置') || '高级设置';
+                    const advancedLaunchPeriodTabLabel = normalizeSceneSettingValue(advancedPopupOptions.launchPeriodTabLabel || '分时折扣') || '分时折扣';
+                    const advancedLaunchPeriodTip = normalizeSceneSettingValue(
+                        advancedPopupOptions.launchPeriodTip
+                        || '出价方式于非活动性时段，允许对不同时段设置不同的折扣，分时折扣预计可提升流量稳定性。'
+                    );
+                    const advancedLaunchPeriodField = normalizeSceneSettingValue(advancedPopupOptions.launchPeriodField || 'campaign.launchPeriodList');
+                    const advancedLaunchAreaField = normalizeSceneSettingValue(advancedPopupOptions.launchAreaField || 'campaign.launchAreaStrList');
+                    const advancedAdzoneField = normalizeSceneSettingValue(advancedPopupOptions.adzoneField || 'campaign.adzoneList');
+                    const areaCustomTemplateLabel = normalizeSceneSettingValue(
+                        advancedPopupOptions.areaCustomTemplateLabel || (isQuickLiftVariant ? '自定义起量地域模板' : '自定义投放地域模板')
+                    );
+                    const areaCustomTemplateOptionLabel = normalizeSceneSettingValue(
+                        advancedPopupOptions.areaCustomTemplateOptionLabel || (isQuickLiftVariant ? 'RX10SMax成交' : '[迁移]RX600S标准地域')
+                    );
+                    const normalizeTriggerList = (list, fallback = []) => uniqueBy(
+                        (Array.isArray(list) ? list : fallback)
+                            .map(item => normalizeSceneSettingValue(item))
+                            .filter(Boolean),
+                        item => item
+                    );
+                    const advancedAdzoneTriggers = normalizeTriggerList(advancedPopupOptions.adzoneTriggers, [
+                        'adzone',
+                        'adzonePremium',
+                        'launchSetting'
+                    ]);
+                    const advancedLaunchPeriodTriggers = normalizeTriggerList(advancedPopupOptions.launchPeriodTriggers, [
+                        'launchPeriod',
+                        'launchSetting',
+                        'adzone',
+                        'adzonePremium'
+                    ]);
+                    const advancedLaunchAreaTriggers = normalizeTriggerList(advancedPopupOptions.launchAreaTriggers, [
+                        'launchArea',
+                        'launchSetting',
+                        'adzone',
+                        'adzonePremium'
+                    ]);
                     const resolvePopupControlByTriggers = (fieldKey = '', triggerList = []) => {
                         const targetField = String(fieldKey || '').trim();
                         if (!targetField) return null;
@@ -11,41 +54,31 @@
                         }
                         return null;
                     };
-                    const adzoneControl = resolvePopupControlByTriggers('campaign.adzoneList', [
-                        'adzone',
-                        'adzonePremium',
-                        'launchSetting'
-                    ]);
-                    const launchPeriodControl = resolvePopupControlByTriggers('campaign.launchPeriodList', [
-                        'launchPeriod',
-                        'launchSetting',
-                        'adzone',
-                        'adzonePremium'
-                    ]);
-                    const launchAreaControl = resolvePopupControlByTriggers('campaign.launchAreaStrList', [
-                        'launchArea',
-                        'launchSetting',
-                        'adzone',
-                        'adzonePremium'
-                    ]);
-                    if (!(adzoneControl instanceof HTMLInputElement)) return null;
+                    const adzoneControl = includeAdzonePanel
+                        ? resolvePopupControlByTriggers(advancedAdzoneField, advancedAdzoneTriggers)
+                        : null;
+                    const launchPeriodControl = resolvePopupControlByTriggers(advancedLaunchPeriodField, advancedLaunchPeriodTriggers);
+                    const launchAreaControl = resolvePopupControlByTriggers(advancedLaunchAreaField, advancedLaunchAreaTriggers);
+                    if (includeAdzonePanel && !(adzoneControl instanceof HTMLInputElement)) return null;
                     if (!(launchPeriodControl instanceof HTMLInputElement)) return null;
                     if (!(launchAreaControl instanceof HTMLInputElement)) return null;
 
-                    const adzoneFieldKey = normalizeSceneFieldKey('campaign.adzoneList');
-                    const launchAreaFieldKey = normalizeSceneFieldKey('campaign.launchAreaStrList');
-                    const launchPeriodFieldKey = normalizeSceneFieldKey('campaign.launchPeriodList');
+                    const adzoneFieldKey = normalizeSceneFieldKey(advancedAdzoneField);
+                    const launchAreaFieldKey = normalizeSceneFieldKey(advancedLaunchAreaField);
+                    const launchPeriodFieldKey = normalizeSceneFieldKey(advancedLaunchPeriodField);
                     const adzoneTouched = !!(adzoneFieldKey && touchedBucket[adzoneFieldKey]);
                     const launchAreaTouched = !!(launchAreaFieldKey && touchedBucket[launchAreaFieldKey]);
                     const launchPeriodTouched = !!(launchPeriodFieldKey && touchedBucket[launchPeriodFieldKey]);
 
-                    let adzoneRaw = normalizeSceneSettingValue(adzoneControl.value || '') || '[]';
+                    let adzoneRaw = includeAdzonePanel && adzoneControl instanceof HTMLInputElement
+                        ? (normalizeSceneSettingValue(adzoneControl.value || '') || '[]')
+                        : '[]';
                     let launchPeriodRaw = normalizeSceneSettingValue(launchPeriodControl.value || '') || JSON.stringify(buildDefaultLaunchPeriodList());
                     let launchAreaRaw = normalizeSceneSettingValue(launchAreaControl.value || '') || '["all"]';
                     let initialAdzoneList = normalizeAdzoneListForAdvanced(adzoneRaw);
                     let initialAreaList = parseLaunchAreaList(launchAreaRaw);
                     let initialPeriodGridState = buildLaunchPeriodGridState(launchPeriodRaw);
-                    const needNativeAdzoneDefaults = !adzoneTouched || isAdzoneListPlaceholderForSync(initialAdzoneList);
+                    const needNativeAdzoneDefaults = includeAdzonePanel && (!adzoneTouched || isAdzoneListPlaceholderForSync(initialAdzoneList));
                     const needNativeAreaDefaults = !launchAreaTouched || !initialAreaList.length;
                     const needNativePeriodDefaults = !launchPeriodTouched || !parseScenePopupJsonArray(launchPeriodRaw, []).length;
                     if (needNativeAdzoneDefaults || needNativeAreaDefaults || needNativePeriodDefaults) {
@@ -81,127 +114,225 @@
                             __defaultSynthetic: true
                         }
                     ];
-                    const initialTabValue = ['adzone', 'launchArea', 'launchPeriod'].includes(String(initialTab || '').trim())
+                    const allowedAdvancedTabs = includeAdzonePanel
+                        ? ['adzone', 'launchArea', 'launchPeriod']
+                        : ['launchArea', 'launchPeriod'];
+                    const initialTabValue = allowedAdvancedTabs.includes(String(initialTab || '').trim())
                         ? String(initialTab || '').trim()
-                        : 'adzone';
+                        : (includeAdzonePanel ? 'adzone' : 'launchArea');
+                    const areaConfigRowHtml = `
+                        <div class="am-wxt-scene-advanced-area-config-row">
+                            <label class="am-wxt-scene-advanced-area-radio">
+                                <input type="radio" name="am-wxt-area-template" value="current" data-scene-popup-area-template="current" />
+                                <span>当前设置</span>
+                            </label>
+                            ${includeAreaRecommendTemplate ? `
+                            <label class="am-wxt-scene-advanced-area-radio">
+                                <input type="radio" name="am-wxt-area-template" value="recommended" data-scene-popup-area-template="recommended" />
+                                <span>推荐投放地域模板</span>
+                            </label>
+                            <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-recommend-template="1">
+                                <option value="dishwasher_low_price">大家电/低价引流地域</option>
+                            </select>
+                            ` : ''}
+                            <label class="am-wxt-scene-advanced-area-radio">
+                                <input type="radio" name="am-wxt-area-template" value="custom" data-scene-popup-area-template="custom" />
+                                <span>${Utils.escapeHtml(areaCustomTemplateLabel || '自定义投放地域模板')}</span>
+                            </label>
+                            <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-custom-template="1">
+                                <option value="migration_rx600_standard">${Utils.escapeHtml(areaCustomTemplateOptionLabel || '[迁移]RX600S标准地域')}</option>
+                            </select>
+                            <button type="button" class="am-wxt-btn" data-scene-popup-area-save-template="1">保存模板</button>
+                        </div>
+                    `;
+                    const areaToolsHtml = `
+                        <div class="am-wxt-scene-advanced-area-tools">
+                            <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
+                            <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
+                            <span class="am-wxt-scene-advanced-area-search-icon"></span>
+                            <input
+                                type="text"
+                                class="am-wxt-scene-advanced-area-search"
+                                data-scene-popup-area-search="1"
+                                placeholder="省份/城市"
+                            />
+                        </div>
+                    `;
+                    const quickLiftBodyHtml = `
+                        <div class="am-wxt-scene-quick-lift-layout">
+                            <section class="am-wxt-scene-quick-lift-section" data-scene-popup-quick-section="time">
+                                <div class="am-wxt-scene-quick-lift-label">起量时间</div>
+                                <div class="am-wxt-scene-quick-lift-control">
+                                    <div class="am-wxt-scene-quick-lift-summary-row">
+                                        <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-time-summary="1">0点~24点</span>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="time">收起设置 <span>⌃</span></button>
+                                    </div>
+                                    <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="time">
+                                        <div class="am-wxt-scene-quick-time-card">
+                                            <div class="am-wxt-scene-quick-time-row" data-scene-popup-quick-time-range="1"></div>
+                                            <div class="am-wxt-scene-quick-time-actions">
+                                                <button type="button" class="am-wxt-btn" data-scene-popup-quick-time-clear="1">清空</button>
+                                                <span class="am-wxt-scene-quick-time-error" data-scene-popup-quick-time-error="1" hidden>至少选择4个起量小时，支持多个时间段</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                            <section class="am-wxt-scene-quick-lift-section" data-scene-popup-quick-section="area">
+                                <div class="am-wxt-scene-quick-lift-label">起量地域</div>
+                                <div class="am-wxt-scene-quick-lift-control">
+                                    <div class="am-wxt-scene-quick-lift-summary-row">
+                                        <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-area-summary="1">在全部地域投放</span>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="area">收起设置 <span>⌃</span></button>
+                                    </div>
+                                    <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="area">
+                                        ${areaConfigRowHtml}
+                                        ${areaToolsHtml}
+                                        <div class="am-wxt-scene-advanced-area-selector" data-scene-popup-area-selector="1"></div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    `;
+                    const advancedBodyHtml = `
+                        <div class="am-wxt-scene-advanced-layout">
+                            <div class="am-wxt-scene-advanced-tabs">
+                                ${includeAdzonePanel ? '<button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="adzone">投放资源位</button>' : ''}
+                                <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchArea">投放地域</button>
+                                <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchPeriod">${Utils.escapeHtml(advancedLaunchPeriodTabLabel)}</button>
+                            </div>
+                            <div class="am-wxt-scene-advanced-main">
+                                <div class="am-wxt-scene-advanced-content">
+                                    ${includeAdzonePanel ? `
+                                    <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="adzone">
+                                        <div class="am-wxt-scene-advanced-tip">平台为您优选广告位，更全面获取优质流量，建议全部开启</div>
+                                        <div class="am-wxt-scene-advanced-toolbar">
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="on">全部开启</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="off">全部关闭</button>
+                                        </div>
+                                        <div class="am-wxt-scene-advanced-adzone-table" data-scene-popup-adzone-table="1">
+                                            <div class="am-wxt-scene-advanced-adzone-head">
+                                                <span>资源位</span>
+                                                <span>操作</span>
+                                            </div>
+                                            <div class="am-wxt-scene-advanced-adzone-list" data-scene-popup-adzone-list="1"></div>
+                                        </div>
+                                    </section>
+                                    ` : ''}
+                                    <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchArea">
+                                        <div class="am-wxt-scene-advanced-tip">您可以根据该计划内的您想主推的商品品类在各地区的搜索、成交、转化表现，选择您希望投放的区域</div>
+                                        ${areaConfigRowHtml}
+                                        ${areaToolsHtml}
+                                        <div class="am-wxt-scene-advanced-area-selector" data-scene-popup-area-selector="1"></div>
+                                    </section>
+                                    <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchPeriod">
+                                        <div class="am-wxt-scene-advanced-tip">${Utils.escapeHtml(advancedLaunchPeriodTip)}</div>
+                                        <div class="am-wxt-scene-time-recommend-cards" data-scene-popup-time-recommend-cards="1">
+                                            <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="gmv_peak">
+                                                <div class="am-wxt-scene-time-recommend-title">11:00-14:00 午间小单快节奏</div>
+                                                <div class="am-wxt-scene-time-recommend-desc">适合午间高意向成交，建议覆盖午间+晚高峰。</div>
+                                                <span class="am-wxt-scene-time-recommend-tag">预计增量 +6%~10%</span>
+                                            </button>
+                                            <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="night_click">
+                                                <div class="am-wxt-scene-time-recommend-title">17:00-21:00 晚间意向购买</div>
+                                                <div class="am-wxt-scene-time-recommend-desc">覆盖下班后高转化窗口，适合促进成交。</div>
+                                                <span class="am-wxt-scene-time-recommend-tag">预计增量 +8%~12%</span>
+                                            </button>
+                                            <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="morning_click">
+                                                <div class="am-wxt-scene-time-recommend-title">06:00-09:00 早高峰浏览点击</div>
+                                                <div class="am-wxt-scene-time-recommend-desc">早间通勤时段补量，适合提升曝光与点击。</div>
+                                                <span class="am-wxt-scene-time-recommend-tag">预计增量 +5%~9%</span>
+                                            </button>
+                                        </div>
+                                        <div class="am-wxt-scene-advanced-toolbar">
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="current">当前设置</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="full">全日制投放</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="dishwasher">大家电专属时段</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-template="custom">自定义投放时间模板</button>
+                                        </div>
+                                        <div class="am-wxt-scene-advanced-toolbar">
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-action="clear">清空</button>
+                                            <button type="button" class="am-wxt-btn" data-scene-popup-time-action="reset">重置</button>
+                                            <span class="am-wxt-scene-advanced-tip-inline">支持单击与拖拽选择投放时间</span>
+                                        </div>
+                                        <div class="am-wxt-scene-popup-time-grid" data-scene-popup-time-grid="1"></div>
+                                        <div class="am-wxt-scene-time-legend" data-scene-popup-time-legend="1">
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-1"></i>30-100%</span>
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-2"></i>100-200%</span>
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-3"></i>200-250%</span>
+                                            <span class="am-wxt-scene-time-legend-item"><i class="level-4"></i>可以系统智能推算分时折扣</span>
+                                        </div>
+                                    </section>
+                                </div>
+                                <aside class="am-wxt-scene-advanced-preview">
+                                    <div class="am-wxt-scene-advanced-preview-phone">
+                                        <div class="am-wxt-scene-advanced-preview-screen">
+                                            <div class="am-wxt-scene-advanced-preview-card"></div>
+                                            <div class="am-wxt-scene-advanced-preview-card"></div>
+                                            <div class="am-wxt-scene-advanced-preview-card"></div>
+                                        </div>
+                                    </div>
+                                    <div class="am-wxt-scene-advanced-preview-desc">模拟展示效果（与原站交互一致）</div>
+                                </aside>
+                            </div>
+                        </div>
+                    `;
+                    const normalizeQuickLiftHourValue = (value = 0) => Math.max(0, Math.min(24, Math.round(toNumber(value, 0))));
+                    const formatQuickLiftHourSummary = hour => `${normalizeQuickLiftHourValue(hour)}点`;
+                    const normalizeQuickLiftSelectedHours = (hours = []) => uniqueBy(
+                        (Array.isArray(hours) ? hours : [])
+                            .map(hour => Math.max(0, Math.min(23, Math.round(toNumber(hour, NaN)))))
+                            .filter(hour => Number.isFinite(hour)),
+                        hour => String(hour)
+                    ).sort((left, right) => left - right);
+                    const getQuickLiftSelectedHoursFromState = (state = {}) => {
+                        if (Array.isArray(state?.selectedHours)) return normalizeQuickLiftSelectedHours(state.selectedHours);
+                        if (state?.empty) return [];
+                        const start = Math.max(0, Math.min(23, normalizeQuickLiftHourValue(state?.start)));
+                        const end = Math.max(start + 1, Math.min(24, normalizeQuickLiftHourValue(state?.end || 24)));
+                        return Array.from({ length: Math.max(0, end - start) }, (_, idx) => start + idx);
+                    };
+                    const buildQuickLiftRangesFromSelectedHours = (hours = []) => {
+                        const normalized = normalizeQuickLiftSelectedHours(hours);
+                        const ranges = [];
+                        normalized.forEach(hour => {
+                            const last = ranges[ranges.length - 1];
+                            if (last && hour === last.end) {
+                                last.end = hour + 1;
+                            } else {
+                                ranges.push({ start: hour, end: hour + 1 });
+                            }
+                        });
+                        return ranges;
+                    };
+                    const formatQuickLiftTimeSelectionSummaryFromState = (state = {}) => {
+                        const selectedHours = getQuickLiftSelectedHoursFromState(state);
+                        if (!selectedHours.length) return '未设置';
+                        if (selectedHours.length === 24) return '0点~24点';
+                        return buildQuickLiftRangesFromSelectedHours(selectedHours)
+                            .map(range => `${formatQuickLiftHourSummary(range.start)}~${formatQuickLiftHourSummary(range.end)}`)
+                            .join('、');
+                    };
+                    const buildQuickLiftLaunchPeriodListFromSelectionState = (state = {}) => {
+                        const ranges = buildQuickLiftRangesFromSelectedHours(getQuickLiftSelectedHoursFromState(state));
+                        if (!ranges.length) return [];
+                        const timeSpanList = ranges.map(range => ({
+                            discount: 100,
+                            time: `${formatMinutesToClock(range.start * 60)}-${formatMinutesToClock(range.end * 60)}`
+                        }));
+                        return ADVANCED_DAY_COLUMNS.map(day => ({
+                            dayOfWeek: day.key,
+                            timeSpanList: timeSpanList.map(item => ({ ...item }))
+                        }));
+                    };
 
                     const result = await openScenePopupDialog({
-                        title: '高级设置',
-                        dialogClassName: 'am-wxt-scene-popup-dialog-advanced',
+                        title: advancedTitle,
+                        dialogClassName: `am-wxt-scene-popup-dialog-advanced ${isQuickLiftVariant ? 'am-wxt-scene-popup-dialog-quick-lift' : ''}`,
                         closeLabel: '×',
                         cancelLabel: '取消',
                         saveLabel: '确定',
-                        bodyHtml: `
-                            <div class="am-wxt-scene-advanced-layout">
-                                <div class="am-wxt-scene-advanced-tabs">
-                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="adzone">投放资源位</button>
-                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchArea">投放地域</button>
-                                    <button type="button" class="am-wxt-scene-advanced-tab" data-scene-popup-advanced-tab="launchPeriod">分时折扣</button>
-                                </div>
-                                <div class="am-wxt-scene-advanced-main">
-                                    <div class="am-wxt-scene-advanced-content">
-                                        <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="adzone">
-                                            <div class="am-wxt-scene-advanced-tip">平台为您优选广告位，更全面获取优质流量，建议全部开启</div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="on">全部开启</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-adzone-batch="off">全部关闭</button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-adzone-table" data-scene-popup-adzone-table="1">
-                                                <div class="am-wxt-scene-advanced-adzone-head">
-                                                    <span>资源位</span>
-                                                    <span>操作</span>
-                                                </div>
-                                                <div class="am-wxt-scene-advanced-adzone-list" data-scene-popup-adzone-list="1"></div>
-                                            </div>
-                                        </section>
-                                        <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchArea">
-                                            <div class="am-wxt-scene-advanced-tip">您可以根据该计划内的您想主推的商品品类在各地区的搜索、成交、转化表现，选择您希望投放的区域</div>
-                                            <div class="am-wxt-scene-advanced-area-config-row">
-                                                <label class="am-wxt-scene-advanced-area-radio">
-                                                    <input type="radio" name="am-wxt-area-template" value="current" data-scene-popup-area-template="current" />
-                                                    <span>当前设置</span>
-                                                </label>
-                                                <label class="am-wxt-scene-advanced-area-radio">
-                                                    <input type="radio" name="am-wxt-area-template" value="recommended" data-scene-popup-area-template="recommended" />
-                                                    <span>推荐投放地域模板</span>
-                                                </label>
-                                                <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-recommend-template="1">
-                                                    <option value="dishwasher_low_price">大家电/低价引流地域</option>
-                                                </select>
-                                                <label class="am-wxt-scene-advanced-area-radio">
-                                                    <input type="radio" name="am-wxt-area-template" value="custom" data-scene-popup-area-template="custom" />
-                                                    <span>自定义投放地域模板</span>
-                                                </label>
-                                                <select class="am-wxt-scene-advanced-area-select" data-scene-popup-area-custom-template="1">
-                                                    <option value="migration_rx600_standard">[迁移]RX600S标准地域</option>
-                                                </select>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-save-template="1">保存模板</button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-area-tools">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
-                                                <span class="am-wxt-scene-advanced-area-search-icon"></span>
-                                                <input
-                                                    type="text"
-                                                    class="am-wxt-scene-advanced-area-search"
-                                                    data-scene-popup-area-search="1"
-                                                    placeholder="省份/城市"
-                                                />
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-area-selector" data-scene-popup-area-selector="1"></div>
-                                        </section>
-                                        <section class="am-wxt-scene-advanced-panel" data-scene-popup-advanced-panel="launchPeriod">
-                                            <div class="am-wxt-scene-advanced-tip">出价方式于非活动性时段，允许对不同时段设置不同的折扣，分时折扣预计可提升流量稳定性。</div>
-                                            <div class="am-wxt-scene-time-recommend-cards" data-scene-popup-time-recommend-cards="1">
-                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="gmv_peak">
-                                                    <div class="am-wxt-scene-time-recommend-title">11:00-14:00 午间小单快节奏</div>
-                                                    <div class="am-wxt-scene-time-recommend-desc">适合午间高意向成交，建议覆盖午间+晚高峰。</div>
-                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +6%~10%</span>
-                                                </button>
-                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="night_click">
-                                                    <div class="am-wxt-scene-time-recommend-title">17:00-21:00 晚间意向购买</div>
-                                                    <div class="am-wxt-scene-time-recommend-desc">覆盖下班后高转化窗口，适合促进成交。</div>
-                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +8%~12%</span>
-                                                </button>
-                                                <button type="button" class="am-wxt-scene-time-recommend-card" data-scene-popup-time-recommend-card="morning_click">
-                                                    <div class="am-wxt-scene-time-recommend-title">06:00-09:00 早高峰浏览点击</div>
-                                                    <div class="am-wxt-scene-time-recommend-desc">早间通勤时段补量，适合提升曝光与点击。</div>
-                                                    <span class="am-wxt-scene-time-recommend-tag">预计增量 +5%~9%</span>
-                                                </button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="current">当前设置</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="full">全日制投放</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="dishwasher">大家电专属时段</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-template="custom">自定义投放时间模板</button>
-                                            </div>
-                                            <div class="am-wxt-scene-advanced-toolbar">
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-action="clear">清空</button>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-time-action="reset">重置</button>
-                                                <span class="am-wxt-scene-advanced-tip-inline">支持单击与拖拽选择投放时间</span>
-                                            </div>
-                                            <div class="am-wxt-scene-popup-time-grid" data-scene-popup-time-grid="1"></div>
-                                            <div class="am-wxt-scene-time-legend" data-scene-popup-time-legend="1">
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-1"></i>30-100%</span>
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-2"></i>100-200%</span>
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-3"></i>200-250%</span>
-                                                <span class="am-wxt-scene-time-legend-item"><i class="level-4"></i>可以系统智能推算分时折扣</span>
-                                            </div>
-                                        </section>
-                                    </div>
-                                    <aside class="am-wxt-scene-advanced-preview">
-                                        <div class="am-wxt-scene-advanced-preview-phone">
-                                            <div class="am-wxt-scene-advanced-preview-screen">
-                                                <div class="am-wxt-scene-advanced-preview-card"></div>
-                                                <div class="am-wxt-scene-advanced-preview-card"></div>
-                                                <div class="am-wxt-scene-advanced-preview-card"></div>
-                                            </div>
-                                        </div>
-                                        <div class="am-wxt-scene-advanced-preview-desc">模拟展示效果（与原站交互一致）</div>
-                                    </aside>
-                                </div>
-                            </div>
-                        `,
+                        bodyHtml: isQuickLiftVariant ? quickLiftBodyHtml : advancedBodyHtml,
                         onMounted: (mask) => {
                             let currentTab = initialTabValue;
                             let areaList = Array.isArray(initialAreaList) ? initialAreaList.slice() : ['all'];
@@ -232,6 +363,94 @@
                             const areaModeButtons = Array.from(mask.querySelectorAll('[data-scene-popup-area-mode]'));
                             const timeTemplateButtons = Array.from(mask.querySelectorAll('[data-scene-popup-time-template]'));
                             const timeRecommendCards = Array.from(mask.querySelectorAll('[data-scene-popup-time-recommend-card]'));
+                            const quickLiftTimeRangeEl = mask.querySelector('[data-scene-popup-quick-time-range="1"]');
+                            const quickLiftTimeSummaryEl = mask.querySelector('[data-scene-popup-quick-time-summary="1"]');
+                            const quickLiftAreaSummaryEl = mask.querySelector('[data-scene-popup-quick-area-summary="1"]');
+                            const quickLiftTimeErrorEl = mask.querySelector('[data-scene-popup-quick-time-error="1"]');
+                            const quickLiftToggleButtons = Array.from(mask.querySelectorAll('[data-scene-popup-quick-toggle]'));
+                            const quickLiftPanelEls = Array.from(mask.querySelectorAll('[data-scene-popup-quick-panel]'));
+                            const normalizeQuickLiftHour = (value = 0) => Math.max(0, Math.min(24, Math.round(toNumber(value, 0))));
+                            const formatQuickLiftHour = hour => `${normalizeQuickLiftHour(hour)}点`;
+                            const resolveQuickLiftTimeSelectionFromRaw = (rawValue = '') => {
+                                const list = parseScenePopupJsonArray(rawValue, []);
+                                if (!list.length || isLaunchPeriodAllDay(rawValue)) {
+                                    return {
+                                        selectedHours: Array.from({ length: 24 }, (_, idx) => idx),
+                                        empty: false
+                                    };
+                                }
+                                const selectedHourSet = new Set();
+                                list.forEach(item => {
+                                    const spanList = Array.isArray(item?.timeSpanList) ? item.timeSpanList : [];
+                                    spanList.forEach(span => {
+                                        const range = parseTimeRangeToMinutes(String(span?.time || '').trim());
+                                        if (!range) return;
+                                        const startHour = normalizeQuickLiftHour(Math.floor(range.start / 60));
+                                        const endHour = normalizeQuickLiftHour(Math.ceil(range.end / 60));
+                                        for (let hour = startHour; hour < endHour; hour += 1) {
+                                            if (hour >= 0 && hour <= 23) selectedHourSet.add(hour);
+                                        }
+                                    });
+                                });
+                                const selectedHours = normalizeQuickLiftSelectedHours(Array.from(selectedHourSet));
+                                return {
+                                    selectedHours: selectedHours.length
+                                        ? selectedHours
+                                        : Array.from({ length: 24 }, (_, idx) => idx),
+                                    empty: false
+                                };
+                            };
+                            const formatQuickLiftTimeSelectionSummary = (state = {}) => {
+                                const selectedHours = getQuickLiftSelectedHoursFromState(state);
+                                if (!selectedHours.length) return '未设置';
+                                if (selectedHours.length === 24) return '0点~24点';
+                                return buildQuickLiftRangesFromSelectedHours(selectedHours)
+                                    .map(range => `${formatQuickLiftHour(range.start)}~${formatQuickLiftHour(range.end)}`)
+                                    .join('、');
+                            };
+                            const formatQuickLiftAreaSummary = () => {
+                                const normalized = normalizeAreaListForStorage(areaList);
+                                if (!normalized.length || normalized.some(item => /^all$/i.test(String(item || '').trim()))) return '在全部地域投放';
+                                return `已选择 ${normalized.length} 个起量地域`;
+                            };
+                            let quickLiftTimeSelectionState = resolveQuickLiftTimeSelectionFromRaw(launchPeriodRaw);
+                            const isQuickLiftTimeSelectionValid = () => (
+                                getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState).length >= 4
+                            );
+                            const renderQuickLiftSummaries = () => {
+                                if (quickLiftTimeSummaryEl instanceof HTMLElement) {
+                                    quickLiftTimeSummaryEl.textContent = formatQuickLiftTimeSelectionSummary(quickLiftTimeSelectionState);
+                                }
+                                if (quickLiftAreaSummaryEl instanceof HTMLElement) {
+                                    quickLiftAreaSummaryEl.textContent = formatQuickLiftAreaSummary();
+                                }
+                                if (quickLiftTimeErrorEl instanceof HTMLElement) {
+                                    quickLiftTimeErrorEl.hidden = isQuickLiftTimeSelectionValid();
+                                }
+                            };
+                            const renderQuickLiftTimeRange = () => {
+                                if (!(quickLiftTimeRangeEl instanceof HTMLElement)) return;
+                                const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                const ranges = buildQuickLiftRangesFromSelectedHours(Array.from(selectedHourSet));
+                                const hourButtons = Array.from({ length: 25 }, (_, hour) => {
+                                    const isBoundary = hour === 0 || hour === 6 || hour === 12 || hour === 18 || hour === 24;
+                                    const inRange = hour < 24 ? selectedHourSet.has(hour) : selectedHourSet.has(23);
+                                    const isEndpoint = ranges.some(range => hour === range.start || hour === range.end);
+                                    return `
+                                        <button
+                                            type="button"
+                                            class="am-wxt-scene-quick-time-hour ${inRange ? 'active' : ''} ${isEndpoint ? 'endpoint' : ''} ${isBoundary ? 'boundary' : ''}"
+                                            data-scene-popup-quick-time-hour="${hour}"
+                                            aria-pressed="${inRange ? 'true' : 'false'}"
+                                        >${hour}</button>
+                                    `;
+                                }).join('');
+                                quickLiftTimeRangeEl.innerHTML = `
+                                    <div class="am-wxt-scene-quick-time-label">时间段</div>
+                                    <div class="am-wxt-scene-quick-time-hours">${hourButtons}</div>
+                                `;
+                                renderQuickLiftSummaries();
+                            };
 
                             const renderTabs = () => {
                                 tabButtons.forEach(btn => {
@@ -845,7 +1064,7 @@
                                     areaTemplate = 'current';
                                     return;
                                 }
-                                if (isAreaListSame(areaList, resolveAreaTemplateList('recommended'))) {
+                                if (includeAreaRecommendTemplate && isAreaListSame(areaList, resolveAreaTemplateList('recommended'))) {
                                     areaTemplate = 'recommended';
                                     return;
                                 }
@@ -853,7 +1072,8 @@
                             };
                             const applyAreaTemplate = (templateKey = '') => {
                                 const key = String(templateKey || '').trim();
-                                const normalizedKey = ['current', 'recommended', 'custom'].includes(key) ? key : 'current';
+                                const allowedTemplateKeys = includeAreaRecommendTemplate ? ['current', 'recommended', 'custom'] : ['current', 'custom'];
+                                const normalizedKey = allowedTemplateKeys.includes(key) ? key : 'current';
                                 areaTemplate = normalizedKey;
                                 areaList = resolveAreaTemplateList(normalizedKey);
                                 areaExpandedProvinceSet.clear();
@@ -1149,6 +1369,7 @@
                                 areaSelector.innerHTML = `${loadingHtml}${sectionHtml}`;
                                 renderAreaTemplateButtons();
                                 renderAreaModeButtons();
+                                renderQuickLiftSummaries();
                             };
                             areaRegionGroups = buildAreaRegionGroupsFallback();
                             refreshAreaMetadata();
@@ -1425,6 +1646,163 @@
                                     renderAreaSelector();
                                 });
                             }
+                            quickLiftToggleButtons.forEach(btn => {
+                                if (!(btn instanceof HTMLButtonElement)) return;
+                                btn.onclick = () => {
+                                    const key = String(btn.getAttribute('data-scene-popup-quick-toggle') || '').trim();
+                                    if (!key) return;
+                                    const panel = quickLiftPanelEls.find(item => (
+                                        item instanceof HTMLElement
+                                        && String(item.getAttribute('data-scene-popup-quick-panel') || '').trim() === key
+                                    ));
+                                    if (!(panel instanceof HTMLElement)) return;
+                                    const nextHidden = !panel.hidden;
+                                    panel.hidden = nextHidden;
+                                    btn.innerHTML = nextHidden ? '展开设置 <span>⌄</span>' : '收起设置 <span>⌃</span>';
+                                };
+                            });
+                            if (quickLiftTimeRangeEl instanceof HTMLElement) {
+                                let quickLiftDragState = {
+                                    active: false,
+                                    pointerId: null,
+                                    nextSelected: true,
+                                    lastHour: null
+                                };
+                                let quickLiftSuppressNextClick = false;
+                                const resolveQuickLiftHourFromPointerEvent = (event) => {
+                                    let trigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-quick-time-hour]')
+                                        : null;
+                                    if (!(trigger instanceof HTMLElement) && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+                                        const hovered = document.elementFromPoint(event.clientX, event.clientY);
+                                        trigger = hovered instanceof HTMLElement
+                                            ? hovered.closest('[data-scene-popup-quick-time-hour]')
+                                            : null;
+                                    }
+                                    if (!(trigger instanceof HTMLElement) || !quickLiftTimeRangeEl.contains(trigger)) return null;
+                                    const rawHour = normalizeQuickLiftHour(trigger.getAttribute('data-scene-popup-quick-time-hour'));
+                                    return rawHour >= 24 ? 23 : rawHour;
+                                };
+                                const applyQuickLiftHourRangeSelection = (startHour, endHour, nextSelected) => {
+                                    const start = Math.max(0, Math.min(23, Math.round(toNumber(startHour, NaN))));
+                                    const end = Math.max(0, Math.min(23, Math.round(toNumber(endHour, NaN))));
+                                    if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+                                    const from = Math.min(start, end);
+                                    const to = Math.max(start, end);
+                                    const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                    let changed = false;
+                                    for (let hour = from; hour <= to; hour += 1) {
+                                        if (nextSelected) {
+                                            if (!selectedHourSet.has(hour)) {
+                                                selectedHourSet.add(hour);
+                                                changed = true;
+                                            }
+                                        } else if (selectedHourSet.has(hour)) {
+                                            selectedHourSet.delete(hour);
+                                            changed = true;
+                                        }
+                                    }
+                                    if (!changed) return false;
+                                    const selectedHours = normalizeQuickLiftSelectedHours(Array.from(selectedHourSet));
+                                    quickLiftTimeSelectionState = {
+                                        selectedHours,
+                                        empty: !selectedHours.length
+                                    };
+                                    renderQuickLiftTimeRange();
+                                    return true;
+                                };
+                                const stopQuickLiftDrag = (event = null) => {
+                                    if (
+                                        event
+                                        && quickLiftDragState.pointerId !== null
+                                        && event.pointerId !== quickLiftDragState.pointerId
+                                    ) {
+                                        return;
+                                    }
+                                    quickLiftDragState = {
+                                        active: false,
+                                        pointerId: null,
+                                        nextSelected: true,
+                                        lastHour: null
+                                    };
+                                    try {
+                                        if (event && typeof quickLiftTimeRangeEl.releasePointerCapture === 'function') {
+                                            quickLiftTimeRangeEl.releasePointerCapture(event.pointerId);
+                                        }
+                                    } catch { }
+                                    window.removeEventListener('pointerup', stopQuickLiftDrag, true);
+                                    window.removeEventListener('pointercancel', stopQuickLiftDrag, true);
+                                    setTimeout(() => {
+                                        quickLiftSuppressNextClick = false;
+                                    }, 0);
+                                };
+                                quickLiftTimeRangeEl.addEventListener('pointerdown', (event) => {
+                                    if (event.button !== 0) return;
+                                    const hour = resolveQuickLiftHourFromPointerEvent(event);
+                                    if (!Number.isFinite(hour)) return;
+                                    event.preventDefault();
+                                    const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                    const nextSelected = !selectedHourSet.has(hour);
+                                    quickLiftDragState = {
+                                        active: true,
+                                        pointerId: event.pointerId,
+                                        nextSelected,
+                                        lastHour: hour
+                                    };
+                                    quickLiftSuppressNextClick = true;
+                                    applyQuickLiftHourRangeSelection(hour, hour, nextSelected);
+                                    try {
+                                        if (typeof quickLiftTimeRangeEl.setPointerCapture === 'function') {
+                                            quickLiftTimeRangeEl.setPointerCapture(event.pointerId);
+                                        }
+                                    } catch { }
+                                    window.addEventListener('pointerup', stopQuickLiftDrag, true);
+                                    window.addEventListener('pointercancel', stopQuickLiftDrag, true);
+                                });
+                                quickLiftTimeRangeEl.addEventListener('pointermove', (event) => {
+                                    if (!quickLiftDragState.active) return;
+                                    if (
+                                        quickLiftDragState.pointerId !== null
+                                        && event.pointerId !== quickLiftDragState.pointerId
+                                    ) {
+                                        return;
+                                    }
+                                    if (Number.isFinite(event.buttons) && (event.buttons & 1) !== 1) {
+                                        stopQuickLiftDrag(event);
+                                        return;
+                                    }
+                                    const hour = resolveQuickLiftHourFromPointerEvent(event);
+                                    if (!Number.isFinite(hour) || hour === quickLiftDragState.lastHour) return;
+                                    event.preventDefault();
+                                    applyQuickLiftHourRangeSelection(
+                                        quickLiftDragState.lastHour,
+                                        hour,
+                                        quickLiftDragState.nextSelected
+                                    );
+                                    quickLiftDragState.lastHour = hour;
+                                });
+                                quickLiftTimeRangeEl.addEventListener('click', (event) => {
+                                    if (quickLiftSuppressNextClick) {
+                                        quickLiftSuppressNextClick = false;
+                                        return;
+                                    }
+                                    const trigger = event.target instanceof HTMLElement
+                                        ? event.target.closest('[data-scene-popup-quick-time-hour]')
+                                        : null;
+                                    if (!(trigger instanceof HTMLElement)) return;
+                                    const rawHour = normalizeQuickLiftHour(trigger.getAttribute('data-scene-popup-quick-time-hour'));
+                                    const hour = rawHour >= 24 ? 23 : rawHour;
+                                    const selectedHourSet = new Set(getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState));
+                                    applyQuickLiftHourRangeSelection(hour, hour, !selectedHourSet.has(hour));
+                                });
+                            }
+                            const quickLiftClearButton = mask.querySelector('[data-scene-popup-quick-time-clear="1"]');
+                            if (quickLiftClearButton instanceof HTMLButtonElement) {
+                                quickLiftClearButton.onclick = () => {
+                                    quickLiftTimeSelectionState = { selectedHours: [], empty: true };
+                                    renderQuickLiftTimeRange();
+                                };
+                            }
                             timeTemplateButtons.forEach(btn => {
                                 if (!(btn instanceof HTMLButtonElement)) return;
                                 btn.onclick = () => {
@@ -1534,22 +1912,39 @@
                             renderAreaModeButtons();
                             renderAreaSelector();
                             renderTimeGrid();
+                            renderQuickLiftTimeRange();
 
                             mask.dataset.scenePopupSyntheticAdzone = syntheticOnly ? '1' : '0';
                             mask._scenePopupState = {
                                 getAdzoneList: () => deepClone(adzoneList),
                                 getLaunchAreaList: () => (Array.isArray(areaList) ? areaList.slice() : ['all']),
-                                getLaunchPeriodGridState: () => deepClone(launchPeriodGridState)
+                                getLaunchPeriodGridState: () => deepClone(launchPeriodGridState),
+                                getQuickLiftTimeSelectionState: () => ({
+                                    selectedHours: getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState),
+                                    empty: !getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState).length
+                                })
                             };
                         },
                         onSave: (mask) => {
                             const syntheticOnly = String(mask.dataset.scenePopupSyntheticAdzone || '') === '1';
                             const state = mask._scenePopupState || {};
-                            const adzoneListRaw = typeof state.getAdzoneList === 'function' ? state.getAdzoneList() : [];
+                            const adzoneListRaw = includeAdzonePanel && typeof state.getAdzoneList === 'function' ? state.getAdzoneList() : [];
                             const launchAreaListRaw = typeof state.getLaunchAreaList === 'function' ? state.getLaunchAreaList() : ['all'];
                             const launchPeriodGridState = typeof state.getLaunchPeriodGridState === 'function'
                                 ? state.getLaunchPeriodGridState()
                                 : createEmptyLaunchPeriodGridState();
+                            const quickLiftTimeSelectionState = typeof state.getQuickLiftTimeSelectionState === 'function'
+                                ? state.getQuickLiftTimeSelectionState()
+                                : { selectedHours: Array.from({ length: 24 }, (_, idx) => idx), empty: false };
+                            const quickLiftSelectedHours = getQuickLiftSelectedHoursFromState(quickLiftTimeSelectionState);
+                            if (
+                                isQuickLiftVariant
+                                && quickLiftSelectedHours.length < 4
+                            ) {
+                                const errorEl = mask.querySelector('[data-scene-popup-quick-time-error="1"]');
+                                if (errorEl instanceof HTMLElement) errorEl.hidden = false;
+                                return { ok: false };
+                            }
 
                             const normalizedAdzoneList = Array.isArray(adzoneListRaw)
                                 ? adzoneListRaw
@@ -1560,8 +1955,12 @@
                                         return next;
                                     })
                                 : [];
-                            const useDefaultAdzone = syntheticOnly && normalizedAdzoneList.every(item => isAdzoneStatusEnabled(item));
-                            const finalAdzoneList = useDefaultAdzone ? [] : normalizedAdzoneList;
+                            const useDefaultAdzone = includeAdzonePanel
+                                && syntheticOnly
+                                && normalizedAdzoneList.every(item => isAdzoneStatusEnabled(item));
+                            const finalAdzoneList = includeAdzonePanel
+                                ? (useDefaultAdzone ? [] : normalizedAdzoneList)
+                                : [];
                             const finalLaunchAreaList = uniqueBy(
                                 (Array.isArray(launchAreaListRaw) ? launchAreaListRaw : ['all'])
                                     .map(item => String(item || '').trim())
@@ -1571,7 +1970,9 @@
                             const nextAreaList = !finalLaunchAreaList.length || finalLaunchAreaList.some(item => /^all$/i.test(item))
                                 ? ['all']
                                 : finalLaunchAreaList;
-                            const nextLaunchPeriodList = buildLaunchPeriodListFromGridState(launchPeriodGridState);
+                            const nextLaunchPeriodList = isQuickLiftVariant
+                                ? buildQuickLiftLaunchPeriodListFromSelectionState(quickLiftTimeSelectionState)
+                                : buildLaunchPeriodListFromGridState(launchPeriodGridState);
                             const nextAdzoneRaw = JSON.stringify(finalAdzoneList);
                             const nextLaunchAreaRaw = JSON.stringify(nextAreaList);
                             const nextLaunchPeriodRaw = JSON.stringify(nextLaunchPeriodList);
@@ -1582,8 +1983,12 @@
                                 launchAreaRaw: nextLaunchAreaRaw,
                                 launchPeriodRaw: nextLaunchPeriodRaw,
                                 adzoneSummary: describeAdzoneSummary(nextAdzoneRaw),
-                                launchAreaSummary: describeLaunchAreaSummary(nextLaunchAreaRaw),
-                                launchPeriodSummary: describeLaunchPeriodSummary(nextLaunchPeriodRaw)
+                                launchAreaSummary: isQuickLiftVariant
+                                    ? (nextAreaList.length === 1 && /^all$/i.test(nextAreaList[0]) ? '在全部地域投放' : `已选择 ${nextAreaList.length} 个起量地域`)
+                                    : describeLaunchAreaSummary(nextLaunchAreaRaw),
+                                launchPeriodSummary: isQuickLiftVariant
+                                    ? formatQuickLiftTimeSelectionSummaryFromState(quickLiftTimeSelectionState)
+                                    : describeLaunchPeriodSummary(nextLaunchPeriodRaw)
                             };
                         }
                     });
