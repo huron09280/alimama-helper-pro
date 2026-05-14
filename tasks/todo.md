@@ -1,3 +1,39 @@
+# TODO - 2026-05-14 更新版本到 7.03
+
+## 需求规格
+- 目标：
+  - 将发布版本从 `7.02` 更新到 `7.03`；
+  - 同步 userscript 头、脚本更新日志、README 最近更新和 CLAUDE 当前版本；
+  - 重新生成根 userscript、packages 与 extension 产物；
+  - 通过版本一致性与基础验证。
+- 成功标准：
+  - `@version`、README 最近版本、CLAUDE 当前版本均为 `7.03`；
+  - `dist/extension/manifest.json` 与 extension page bundle 版本为 `7.03`；
+  - `node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`、`bash scripts/review-team.sh` 通过。
+
+## 执行计划（可核对）
+- [x] 确认当前版本来源与同步文件。
+- [x] 更新源码版本号、脚本更新日志、README 与 CLAUDE。
+- [x] 重新构建生成产物。
+- [x] 运行版本一致性和自动化校验。
+- [x] 回填验证记录与结果复盘。
+
+## 高层操作摘要
+- 默认采用下一版本 `7.03`，不创建 tag、不发布 release，除非后续另有指令。
+- 本轮不纳入开始前已有的 `tasks/lessons.md`、`tasks/linear-sync-inventory.md`、`tasks/linear-sync-results.json` 改动。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，生成版本 `7.03` 的根 userscript、packages 与 extension 产物。
+- `node scripts/build.mjs --check`：通过，源码与生成产物同步。
+- `node --check "阿里妈妈多合一助手.js"`：通过，生成主脚本语法有效。
+- `bash scripts/review-team.sh`：通过，442 个测试中 440 pass、2 skip，版本一致性校验对齐 README 与 CLAUDE 的 `7.03`。
+
+## 结果复盘
+- 已完成 `7.02` 到 `7.03` 的版本更新，覆盖 userscript metadata、脚本更新日志、README、CLAUDE、根脚本、packages 与 extension 产物。
+- 本轮仅更新版本与发布说明，不创建 tag、不执行 release。
+
+---
+
 # TODO - 2026-05-14 全面检查 bug
 
 ## 需求规格
