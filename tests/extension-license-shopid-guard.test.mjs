@@ -30,6 +30,8 @@ test('授权模块补齐 shopId 多来源识别与缓存兜底', () => {
   assert.match(pageBundle, /const fallbackShopName = nameMatch \? '' : resolveLooseShopNameCandidate\(shopId\);/, 'resolveShopIdentity 未接入带 shopId 的店铺名松耦合兜底');
   assert.match(pageBundle, /const cacheShopId = normalizeShopId\(cache\?\.shopId\);/, '缺少 cache shopId 兜底读取');
   assert.match(pageBundle, /const stateShopId = normalizeShopId\(state\.shopId \|\| ''\);/, '缺少 state shopId 兜底读取');
+  assert.doesNotMatch(pageBundle, /if \(fromCache\) candidates\.push\(fromCache\);/, '缓存 shopId 不应参与当前页面身份排序');
+  assert.match(pageBundle, /const currentLeaseMatchesResolvedShop = !!\([\s\S]*stateShopId[\s\S]*resolvedShopId[\s\S]*stateShopId === resolvedShopId[\s\S]*isCurrentLeaseValid\(\)[\s\S]*\);/, '有效租约未绑定当前解析 shopId');
   assert.match(pageBundle, /if \(!shopInfo\.shopId && stateShopId\) \{[\s\S]*license_state_fallback/, '缺少 state shopId 兜底分支');
   assert.match(pageBundle, /else if \(!shopInfo\.shopId && cacheShopId\) \{[\s\S]*license_cache_fallback/, '缺少 cache shopId 兜底分支');
   assert.match(pageBundle, /const scheduleShopNameBackfill = \(context = \{\}\) => \{/, '缺少店铺名异步回填任务');

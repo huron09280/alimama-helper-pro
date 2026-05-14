@@ -236,7 +236,14 @@
         (document.documentElement || document.head || document.body || document).appendChild(script);
         script.remove();
     };
-    if (typeof globalThis !== 'undefined') {
+    const isExtensionPageRuntime = () => {
+        try {
+            return window.__AM_PLATFORM_RUNTIME__?.mode === 'extension';
+        } catch {
+            return false;
+        }
+    };
+    if (typeof globalThis !== 'undefined' && !isExtensionPageRuntime()) {
         globalThis.__AM_TOKENS__ = State.tokens;
         globalThis.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
         globalThis.__AM_WXT_PLAN_API__ = KeywordPlanApi;

@@ -1275,7 +1275,7 @@
                         end: (hour + 1) * 60
                     };
                 });
-                const parseTimeRangeToMinutes = (timeText = '') => {
+                function parseTimeRangeToMinutes(timeText = '') {
                     const match = String(timeText || '').trim().match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
                     if (!match) return null;
                     const start = toNumber(match[1], 0) * 60 + toNumber(match[2], 0);
@@ -1283,15 +1283,15 @@
                     if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
                     if (end <= start) end += 24 * 60;
                     return { start, end };
-                };
-                const formatMinutesToClock = (minutes = 0) => {
+                }
+                function formatMinutesToClock(minutes = 0) {
                     const safeMinutes = toNumber(minutes, 0);
                     const base = ((safeMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
                     if (safeMinutes >= 24 * 60 && base === 0) return '24:00';
                     const hour = Math.floor(base / 60);
                     const minute = base % 60;
                     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-                };
+                }
                 const createEmptyLaunchPeriodGridState = () => {
                     const state = {};
                     ADVANCED_DAY_COLUMNS.forEach(day => {

@@ -2109,6 +2109,7 @@
                 staticRows.push(buildProxySelectRow('场景选择', 'am-wxt-keyword-scene-select', wizardState.els.sceneSelect, { segmented: true }));
                 staticRows.push(buildGoalSelectorRow('营销目标', goalOptions, activeMarketingGoal, { segmented: true }));
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
+                const shouldRenderManualKeywordPanel = isKeywordScene && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''));
                 let keywordManualPanelInsertedAfterSetting = false;
                 if (isKeywordScene) {
                     let keywordBidMode = normalizeBidMode(
@@ -2518,32 +2519,34 @@
                             });
                         } else {
                             if (!keywordAiMaxEnabled) {
-                                const keywordSettingFieldLabel = '关键词设置';
-                                const keywordSettingFieldKey = normalizeSceneFieldKey(keywordSettingFieldLabel);
-                                const manualKeywordCount = String(wizardState?.els?.manualInput?.value || '')
-                                    .split(/\n+/)
-                                    .map(item => normalizeSceneSettingValue(item))
-                                    .filter(Boolean)
-                                    .length;
-                                const keywordSettingRaw = normalizeSceneSettingValue(
-                                    bucket[keywordSettingFieldKey]
-                                    || bucket[keywordSettingFieldLabel]
-                                    || '查看和添加关键词'
-                                );
-                                const keywordSettingEnabled = !/^(0|false|off|关闭|否)$/i.test(keywordSettingRaw || '查看和添加关键词');
-                                if (keywordSettingFieldKey) {
-                                    bucket[keywordSettingFieldKey] = keywordSettingEnabled ? '查看和添加关键词' : '关闭';
-                                    bucket[keywordSettingFieldLabel] = bucket[keywordSettingFieldKey];
-                                    staticRows.push(buildKeywordCustomKeywordSettingRow({
-                                        fieldKey: keywordSettingFieldKey,
-                                        enabled: keywordSettingEnabled,
-                                        manualKeywordCount,
-                                        recommendCount: wizardState?.els?.recommendCountInput?.value || ''
-                                    }));
-                                    staticRows.push(buildManualKeywordDesignerRow('手动关键词', {
-                                        collapsed: !keywordSettingEnabled
-                                    }));
-                                    keywordManualPanelInsertedAfterSetting = true;
+                                if (shouldRenderManualKeywordPanel) {
+                                    const keywordSettingFieldLabel = '关键词设置';
+                                    const keywordSettingFieldKey = normalizeSceneFieldKey(keywordSettingFieldLabel);
+                                    const manualKeywordCount = String(wizardState?.els?.manualInput?.value || '')
+                                        .split(/\n+/)
+                                        .map(item => normalizeSceneSettingValue(item))
+                                        .filter(Boolean)
+                                        .length;
+                                    const keywordSettingRaw = normalizeSceneSettingValue(
+                                        bucket[keywordSettingFieldKey]
+                                        || bucket[keywordSettingFieldLabel]
+                                        || '查看和添加关键词'
+                                    );
+                                    const keywordSettingEnabled = !/^(0|false|off|关闭|否)$/i.test(keywordSettingRaw || '查看和添加关键词');
+                                    if (keywordSettingFieldKey) {
+                                        bucket[keywordSettingFieldKey] = keywordSettingEnabled ? '查看和添加关键词' : '关闭';
+                                        bucket[keywordSettingFieldLabel] = bucket[keywordSettingFieldKey];
+                                        staticRows.push(buildKeywordCustomKeywordSettingRow({
+                                            fieldKey: keywordSettingFieldKey,
+                                            enabled: keywordSettingEnabled,
+                                            manualKeywordCount,
+                                            recommendCount: wizardState?.els?.recommendCountInput?.value || ''
+                                        }));
+                                        staticRows.push(buildManualKeywordDesignerRow('手动关键词', {
+                                            collapsed: !keywordSettingEnabled
+                                        }));
+                                        keywordManualPanelInsertedAfterSetting = true;
+                                    }
                                 }
                                 const keywordSmartCrowdSettingLabel = normalizeSceneRenderFieldLabel('人群设置') || '人群设置';
                                 const keywordSmartCrowdSettingFieldKey = normalizeSceneFieldKey(keywordSmartCrowdSettingLabel);
@@ -4086,8 +4089,7 @@
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
                 if (
-                    isKeywordScene
-                    && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''))
+                    shouldRenderManualKeywordPanel
                     && !keywordManualPanelInsertedAfterSetting
                 ) {
                     staticRows.push(buildManualKeywordDesignerRow('手动关键词'));

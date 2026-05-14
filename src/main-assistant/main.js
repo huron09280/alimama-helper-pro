@@ -78,11 +78,23 @@
     }
 
     let hasBootstrapped = false;
+    const reportBootstrapError = (err) => {
+        try {
+            Logger.log(`⚠️ 主助手启动失败：${err?.message || '未知错误'}`, true);
+        } catch { }
+        try {
+            console.error('[AM Helper] main bootstrap failed', err);
+        } catch { }
+    };
     const bootstrapMain = () => {
         if (hasBootstrapped) return;
         if (!document.body) return;
         hasBootstrapped = true;
-        main();
+        try {
+            main();
+        } catch (err) {
+            reportBootstrapError(err);
+        }
     };
 
     bootstrapMain();

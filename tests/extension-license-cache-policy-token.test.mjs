@@ -10,6 +10,16 @@ test('授权守卫引入 policy token 验签能力', () => {
     assert.match(source, /const verifyPolicyToken = async \(shopId = '', normalizedResult = \{\}\) => \{/, '缺少 policy token 验签逻辑');
     assert.match(source, /policy_token_signature_invalid/, '缺少 policy token 验签失败错误码');
     assert.match(source, /policy_token_build_mismatch/, '缺少 policy token 构建信息绑定校验');
+    assert.match(
+        source,
+        /const normalized = verifyLeasePayloadShape\(json, payload\);[\s\S]*await verifySignature\(payload, normalized\);[\s\S]*await verifyPolicyToken\(payload\.shopId, normalized\);[\s\S]*return normalized;/,
+        '远端授权响应未强制执行 policy token 验签'
+    );
+    assert.doesNotMatch(
+        source,
+        /if \(normalized\.policyToken\) \{\s*await verifyPolicyToken\(payload\.shopId, normalized\);/s,
+        '远端授权响应仍允许缺失 policy token 时跳过验签'
+    );
 });
 
 test('本地缓存命中时必须先通过 policy token 验签', () => {
@@ -23,9 +33,13 @@ test('extension 模式改为按需校验，不在空闲时后台轮询', () => {
     assert.match(source, /if \(resolveRuntimeMode\(\) === 'extension'\) return;/, 'extension 仍在后台调度续租/过期检查');
     assert.match(source, /const installOnDemandVerifyHooks = \(\) => \{/, '缺少按需校验安装逻辑');
     assert.match(source, /triggerOnDemandVerify\('on_demand_pointerdown'\);/, '点击插件 UI 未触发按需校验');
+    assert.match(source, /const blockUnauthorizedInteraction = \(event, source = 'on_demand_interaction'\) => \{[\s\S]*event\?\.preventDefault\?\.\(\);[\s\S]*event\?\.stopImmediatePropagation\?\.\(\);[\s\S]*triggerOnDemandVerify\(source\);[\s\S]*\};/, '未授权点击未同步阻断业务事件');
+    assert.match(source, /if \(!isCurrentLeaseValid\(\)\) \{[\s\S]*blockUnauthorizedInteraction\(event, 'on_demand_pointerdown'\);[\s\S]*return;[\s\S]*\}/, 'pointerdown 未在授权成功前阻断插件入口');
+    assert.match(source, /if \(!isCurrentLeaseValid\(\)\) \{[\s\S]*blockUnauthorizedInteraction\(event, 'on_demand_keydown'\);[\s\S]*return;[\s\S]*\}/, 'keydown 未在授权成功前阻断插件入口');
     assert.match(source, /if \(resolveRuntimeMode\(\) === 'extension'\) \{\s*installOnDemandVerifyHooks\(\);/s, 'extension 启动未切换到按需校验模式');
     assert.doesNotMatch(source, /if \(onDemandVerifyInFlight \|\| isCurrentLeaseValid\(\)\) return;/, '按需校验仍在租约有效时直接跳过，活跃时间无法刷新');
     assert.match(source, /const ON_DEMAND_VERIFY_REFRESH_WINDOW_MS = 60 \* 1000;/, '缺少按需校验刷新窗口配置');
     assert.match(source, /if \(onDemandVerifyInFlight\) return;/, '按需校验并发保护缺失');
     assert.match(source, /force:\s*leaseValid,/, '租约有效时未强制远端校验，活跃时间不会刷新');
+    assert.match(source, /const shouldPreserveCurrentLease = !!\([\s\S]*force[\s\S]*currentLeaseMatchesResolvedShop[\s\S]*isTransientVerifyErrorCode\(code\)[\s\S]*\);/, '有效租约刷新遇到瞬时错误时未保留当前授权');
 });

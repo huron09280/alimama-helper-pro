@@ -1423,7 +1423,16 @@
             const magicBtn = document.getElementById('am-trigger-magic-report');
             if (magicBtn) {
                 magicBtn.onclick = () => {
-                    MagicReport.toggle(true);
+                    try {
+                        const result = MagicReport.toggle(true);
+                        if (result && typeof result.catch === 'function') {
+                            result.catch((err) => {
+                                Logger.log(`⚠️ 万能查数打开失败：${err?.message || '未知错误'}`, true);
+                            });
+                        }
+                    } catch (err) {
+                        Logger.log(`⚠️ 万能查数打开失败：${err?.message || '未知错误'}`, true);
+                    }
                 };
             }
 
@@ -1444,14 +1453,22 @@
                     State.save();
                     this.updateState();
 
+                    const toggleOptimizerPanel = () => {
+                        try {
+                            if (typeof window.__ALIMAMA_OPTIMIZER_TOGGLE__ !== 'function') return false;
+                            return window.__ALIMAMA_OPTIMIZER_TOGGLE__() !== false;
+                        } catch (err) {
+                            Logger.log(`⚠️ 算法护航打开失败：${err?.message || '未知错误'}`, true);
+                            return false;
+                        }
+                    };
+
                     if (typeof window.__ALIMAMA_OPTIMIZER_TOGGLE__ === 'function') {
-                        window.__ALIMAMA_OPTIMIZER_TOGGLE__();
+                        toggleOptimizerPanel();
                     } else {
                         Logger.log('⚠️ 算法护航模块初始化中...', true);
                         setTimeout(() => {
-                            if (typeof window.__ALIMAMA_OPTIMIZER_TOGGLE__ === 'function') {
-                                window.__ALIMAMA_OPTIMIZER_TOGGLE__();
-                            } else {
+                            if (!toggleOptimizerPanel()) {
                                 alert('算法护航模块无法加载，请刷新页面重试');
                             }
                         }, 1000);

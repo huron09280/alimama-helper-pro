@@ -4033,7 +4033,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const magicBtn = document.getElementById('am-trigger-magic-report');
             if (magicBtn) {
                 magicBtn.onclick = () => {
-                    MagicReport.toggle(true);
+                    try {
+                        const result = MagicReport.toggle(true);
+                        if (result && typeof result.catch === 'function') {
+                            result.catch((err) => {
+                                Logger.log(`⚠️ 万能查数打开失败：${err?.message || '未知错误'}`, true);
+                            });
+                        }
+                    } catch (err) {
+                        Logger.log(`⚠️ 万能查数打开失败：${err?.message || '未知错误'}`, true);
+                    }
                 };
             }
 
@@ -4054,14 +4063,22 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     State.save();
                     this.updateState();
 
+                    const toggleOptimizerPanel = () => {
+                        try {
+                            if (typeof window.__ALIMAMA_OPTIMIZER_TOGGLE__ !== 'function') return false;
+                            return window.__ALIMAMA_OPTIMIZER_TOGGLE__() !== false;
+                        } catch (err) {
+                            Logger.log(`⚠️ 算法护航打开失败：${err?.message || '未知错误'}`, true);
+                            return false;
+                        }
+                    };
+
                     if (typeof window.__ALIMAMA_OPTIMIZER_TOGGLE__ === 'function') {
-                        window.__ALIMAMA_OPTIMIZER_TOGGLE__();
+                        toggleOptimizerPanel();
                     } else {
                         Logger.log('⚠️ 算法护航模块初始化中...', true);
                         setTimeout(() => {
-                            if (typeof window.__ALIMAMA_OPTIMIZER_TOGGLE__ === 'function') {
-                                window.__ALIMAMA_OPTIMIZER_TOGGLE__();
-                            } else {
+                            if (!toggleOptimizerPanel()) {
                                 alert('算法护航模块无法加载，请刷新页面重试');
                             }
                         }, 1000);
@@ -13858,11 +13875,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     }
 
     let hasBootstrapped = false;
+    const reportBootstrapError = (err) => {
+        try {
+            Logger.log(`⚠️ 主助手启动失败：${err?.message || '未知错误'}`, true);
+        } catch { }
+        try {
+            console.error('[AM Helper] main bootstrap failed', err);
+        } catch { }
+    };
     const bootstrapMain = () => {
         if (hasBootstrapped) return;
         if (!document.body) return;
         hasBootstrapped = true;
-        main();
+        try {
+            main();
+        } catch (err) {
+            reportBootstrapError(err);
+        }
     };
 
     bootstrapMain();
@@ -23345,23 +23374,24 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
             const resolveNonEmptyArrayField = (field = '', fallback = []) => {
                 const candidates = [
-                    input?.[field],
-                    goalRuntime?.[field],
-                    request?.sceneForcedCampaignOverride?.[field],
-                    request?.goalForcedCampaignOverride?.[field],
-                    request?.common?.campaignOverride?.[field],
-                    request?.[field],
-                    request?.common?.[field],
-                    templateCampaign?.[field],
-                    runtimeStoreData?.[field],
-                    runtimeDefaults?.[field],
-                    fallback
+                    { value: input?.[field], explicit: hasOwn(input, field) },
+                    { value: goalRuntime?.[field], explicit: false },
+                    { value: request?.sceneForcedCampaignOverride?.[field], explicit: hasOwn(request?.sceneForcedCampaignOverride, field) },
+                    { value: request?.goalForcedCampaignOverride?.[field], explicit: hasOwn(request?.goalForcedCampaignOverride, field) },
+                    { value: request?.common?.campaignOverride?.[field], explicit: hasOwn(request?.common?.campaignOverride, field) },
+                    { value: request?.[field], explicit: hasOwn(request, field) },
+                    { value: request?.common?.[field], explicit: hasOwn(request?.common, field) },
+                    { value: templateCampaign?.[field], explicit: false },
+                    { value: runtimeStoreData?.[field], explicit: false },
+                    { value: runtimeDefaults?.[field], explicit: false },
+                    { value: fallback, explicit: false }
                 ];
                 for (let i = 0; i < candidates.length; i++) {
-                    const value = candidates[i];
+                    const value = candidates[i]?.value;
+                    const explicit = !!candidates[i]?.explicit;
                     if (Array.isArray(value)) {
-                        if (!value.length) continue;
-                        return deepClone(value);
+                        if (value.length || explicit) return deepClone(value);
+                        continue;
                     }
                     if (typeof value === 'string') {
                         const text = String(value || '').trim();
@@ -23369,7 +23399,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
                             try {
                                 const parsed = JSON.parse(text);
-                                if (Array.isArray(parsed) && parsed.length) return deepClone(parsed);
+                                if (Array.isArray(parsed) && (parsed.length || explicit)) return deepClone(parsed);
                             } catch { }
                         }
                     }
@@ -23801,6 +23831,23 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     out.orderAutoRenewalInfo.orderAutoRenewalSwitch = '1';
                 }
                 out.orderChargeType = String(out.orderChargeType || 'balance_charge').trim() || 'balance_charge';
+            }
+            if (!isSearchDetentContract) {
+                delete out.searchDetentType;
+            }
+            if (!isTrendContract) {
+                delete out.trendType;
+                delete out.trendThemeList;
+            }
+            if (!isGoldenTrafficCardContract) {
+                delete out.packageId;
+                delete out.packageTemplateId;
+                delete out.planId;
+                delete out.planTemplateId;
+                delete out.orderInfo;
+                delete out.orderAutoRenewalInfo;
+                delete out.orderChargeType;
+                delete out.launchTime;
             }
             return out;
         };
@@ -24903,10 +24950,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         const normalizeSceneSettingEntries = (sceneSettings = {}) => {
             if (!isPlainObject(sceneSettings)) return [];
-            return Object.keys(sceneSettings).map(key => ({
-                key: String(key || '').trim(),
-                value: normalizeSceneSettingValue(sceneSettings[key])
-            })).filter(item => item.key && item.value);
+            return Object.keys(sceneSettings).map(key => {
+                const rawValue = sceneSettings[key];
+                const value = Array.isArray(rawValue) || isPlainObject(rawValue)
+                    ? deepClone(rawValue)
+                    : normalizeSceneSettingValue(rawValue);
+                return {
+                    key: String(key || '').trim(),
+                    value
+                };
+            }).filter(item => item.key && item.value !== undefined && item.value !== null && item.value !== '');
         };
 
         const findSceneSettingEntry = (entries = [], patterns = []) => {
@@ -25093,6 +25146,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             };
 
             const parseDirectSettingValue = (key = '', rawValue = '') => {
+                if (Array.isArray(rawValue) || isPlainObject(rawValue)) return deepClone(rawValue);
                 const value = normalizeSceneSettingValue(rawValue);
                 if (!value) return '';
                 if ((value.startsWith('{') && value.endsWith('}')) || (value.startsWith('[') && value.endsWith(']'))) {
@@ -43346,6 +43400,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 staticRows.push(buildProxySelectRow('场景选择', 'am-wxt-keyword-scene-select', wizardState.els.sceneSelect, { segmented: true }));
                 staticRows.push(buildGoalSelectorRow('营销目标', goalOptions, activeMarketingGoal, { segmented: true }));
                 staticRows.push(buildProxyInputRow('计划名称', 'am-wxt-keyword-prefix', wizardState.els.prefixInput?.value || '', '例如：场景_时间'));
+                const shouldRenderManualKeywordPanel = isKeywordScene && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''));
                 let keywordManualPanelInsertedAfterSetting = false;
                 if (isKeywordScene) {
                     let keywordBidMode = normalizeBidMode(
@@ -43755,32 +43810,34 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                             });
                         } else {
                             if (!keywordAiMaxEnabled) {
-                                const keywordSettingFieldLabel = '关键词设置';
-                                const keywordSettingFieldKey = normalizeSceneFieldKey(keywordSettingFieldLabel);
-                                const manualKeywordCount = String(wizardState?.els?.manualInput?.value || '')
-                                    .split(/\n+/)
-                                    .map(item => normalizeSceneSettingValue(item))
-                                    .filter(Boolean)
-                                    .length;
-                                const keywordSettingRaw = normalizeSceneSettingValue(
-                                    bucket[keywordSettingFieldKey]
-                                    || bucket[keywordSettingFieldLabel]
-                                    || '查看和添加关键词'
-                                );
-                                const keywordSettingEnabled = !/^(0|false|off|关闭|否)$/i.test(keywordSettingRaw || '查看和添加关键词');
-                                if (keywordSettingFieldKey) {
-                                    bucket[keywordSettingFieldKey] = keywordSettingEnabled ? '查看和添加关键词' : '关闭';
-                                    bucket[keywordSettingFieldLabel] = bucket[keywordSettingFieldKey];
-                                    staticRows.push(buildKeywordCustomKeywordSettingRow({
-                                        fieldKey: keywordSettingFieldKey,
-                                        enabled: keywordSettingEnabled,
-                                        manualKeywordCount,
-                                        recommendCount: wizardState?.els?.recommendCountInput?.value || ''
-                                    }));
-                                    staticRows.push(buildManualKeywordDesignerRow('手动关键词', {
-                                        collapsed: !keywordSettingEnabled
-                                    }));
-                                    keywordManualPanelInsertedAfterSetting = true;
+                                if (shouldRenderManualKeywordPanel) {
+                                    const keywordSettingFieldLabel = '关键词设置';
+                                    const keywordSettingFieldKey = normalizeSceneFieldKey(keywordSettingFieldLabel);
+                                    const manualKeywordCount = String(wizardState?.els?.manualInput?.value || '')
+                                        .split(/\n+/)
+                                        .map(item => normalizeSceneSettingValue(item))
+                                        .filter(Boolean)
+                                        .length;
+                                    const keywordSettingRaw = normalizeSceneSettingValue(
+                                        bucket[keywordSettingFieldKey]
+                                        || bucket[keywordSettingFieldLabel]
+                                        || '查看和添加关键词'
+                                    );
+                                    const keywordSettingEnabled = !/^(0|false|off|关闭|否)$/i.test(keywordSettingRaw || '查看和添加关键词');
+                                    if (keywordSettingFieldKey) {
+                                        bucket[keywordSettingFieldKey] = keywordSettingEnabled ? '查看和添加关键词' : '关闭';
+                                        bucket[keywordSettingFieldLabel] = bucket[keywordSettingFieldKey];
+                                        staticRows.push(buildKeywordCustomKeywordSettingRow({
+                                            fieldKey: keywordSettingFieldKey,
+                                            enabled: keywordSettingEnabled,
+                                            manualKeywordCount,
+                                            recommendCount: wizardState?.els?.recommendCountInput?.value || ''
+                                        }));
+                                        staticRows.push(buildManualKeywordDesignerRow('手动关键词', {
+                                            collapsed: !keywordSettingEnabled
+                                        }));
+                                        keywordManualPanelInsertedAfterSetting = true;
+                                    }
                                 }
                                 const keywordSmartCrowdSettingLabel = normalizeSceneRenderFieldLabel('人群设置') || '人群设置';
                                 const keywordSmartCrowdSettingFieldKey = normalizeSceneFieldKey(keywordSmartCrowdSettingLabel);
@@ -45323,8 +45380,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     staticRows.push(buildProxyInputRow('预算值', 'am-wxt-keyword-budget', wizardState.els.budgetInput?.value || '', '请输入预算'));
                 }
                 if (
-                    isKeywordScene
-                    && !['趋势明星', '流量金卡'].includes(detectKeywordGoalFromText(activeMarketingGoal || ''))
+                    shouldRenderManualKeywordPanel
                     && !keywordManualPanelInsertedAfterSetting
                 ) {
                     staticRows.push(buildManualKeywordDesignerRow('手动关键词'));
@@ -46613,7 +46669,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         end: (hour + 1) * 60
                     };
                 });
-                const parseTimeRangeToMinutes = (timeText = '') => {
+                function parseTimeRangeToMinutes(timeText = '') {
                     const match = String(timeText || '').trim().match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
                     if (!match) return null;
                     const start = toNumber(match[1], 0) * 60 + toNumber(match[2], 0);
@@ -46621,15 +46677,15 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
                     if (end <= start) end += 24 * 60;
                     return { start, end };
-                };
-                const formatMinutesToClock = (minutes = 0) => {
+                }
+                function formatMinutesToClock(minutes = 0) {
                     const safeMinutes = toNumber(minutes, 0);
                     const base = ((safeMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
                     if (safeMinutes >= 24 * 60 && base === 0) return '24:00';
                     const hour = Math.floor(base / 60);
                     const minute = base % 60;
                     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-                };
+                }
                 const createEmptyLaunchPeriodGridState = () => {
                     const state = {};
                     ADVANCED_DAY_COLUMNS.forEach(day => {
@@ -63921,7 +63977,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 userConfig.concurrency = Math.min(10, Math.max(1, concurrency));
                 GM_setValue('config', userConfig);
 
-                Core.run();
+                Core.run().catch((err) => {
+                    Logger.error('算法护航执行失败', err);
+                    UI.updateStatus(`执行异常：${err?.message || '未知错误'}`, 'red');
+                });
             };
 
             // ==================== 拖拽调整尺寸 ====================
@@ -65383,7 +65442,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         (document.documentElement || document.head || document.body || document).appendChild(script);
         script.remove();
     };
-    if (typeof globalThis !== 'undefined') {
+    const isExtensionPageRuntime = () => {
+        try {
+            return window.__AM_PLATFORM_RUNTIME__?.mode === 'extension';
+        } catch {
+            return false;
+        }
+    };
+    if (typeof globalThis !== 'undefined' && !isExtensionPageRuntime()) {
         globalThis.__AM_TOKENS__ = State.tokens;
         globalThis.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
         globalThis.__AM_WXT_PLAN_API__ = KeywordPlanApi;
@@ -65404,60 +65470,125 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     }
 
     // [INTEGRATED] Expose toggle function
-    window.__ALIMAMA_OPTIMIZER_TOGGLE__ = () => {
-        const panel = document.getElementById(CONFIG.UI_ID);
-        if (!panel) {
-            UI.create();
-            setTimeout(() => {
-                const p = document.getElementById(CONFIG.UI_ID);
-                if (p) {
-                    p.style.opacity = '1';
-                    p.style.transform = 'scale(1)';
-                    p.style.pointerEvents = 'auto';
-                }
-            }, 100);
+    let lastOptimizerLicenseError = null;
+    const resolveOptimizerLicenseGuard = () => {
+        try {
+            if (typeof globalThis !== 'undefined' && globalThis.LicenseGuard) return globalThis.LicenseGuard;
+            return window.LicenseGuard || null;
+        } catch { }
+        return null;
+    };
+    const buildOptimizerLicenseDeniedResult = (source = 'optimizer_public_api') => {
+        const guard = resolveOptimizerLicenseGuard();
+        if (guard && typeof guard.buildDeniedResult === 'function') {
+            return guard.buildDeniedResult(lastOptimizerLicenseError, source);
+        }
+        return {
+            success: false,
+            code: String(lastOptimizerLicenseError?.code || 'license_required'),
+            msg: String(lastOptimizerLicenseError?.message || '授权未通过'),
+            source
+        };
+    };
+    const requireOptimizerLicense = (source = 'optimizer_public_api') => {
+        const guard = resolveOptimizerLicenseGuard();
+        if (!guard || typeof guard.requireAuthorizedSync !== 'function') return true;
+        try {
+            guard.requireAuthorizedSync(source);
+            lastOptimizerLicenseError = null;
+            return true;
+        } catch (err) {
+            lastOptimizerLicenseError = err;
+            try {
+                guard.triggerOnDemandVerify?.(source);
+            } catch { }
+            Logger.warn(`授权未通过，已阻止算法护航入口：${err?.message || 'unknown'}`);
+            return false;
+        }
+    };
+
+    const revealOptimizerPanel = (panel) => {
+        if (!panel) return;
+        if (panel.style.opacity === '0' || panel.style.opacity === '') {
+            panel.style.opacity = '1';
+            panel.style.transform = 'scale(1)';
+            panel.style.pointerEvents = 'auto';
         } else {
-            if (panel.style.opacity === '0' || panel.style.opacity === '') {
-                panel.style.opacity = '1';
-                panel.style.transform = 'scale(1)';
-                panel.style.pointerEvents = 'auto';
-            } else {
-                panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-                setTimeout(() => panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)', 500);
+            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
+            setTimeout(() => {
+                try {
+                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+                } catch { }
+            }, 500);
+        }
+    };
+
+    window.__ALIMAMA_OPTIMIZER_TOGGLE__ = () => {
+        try {
+            if (!requireOptimizerLicense('optimizer_toggle')) return false;
+            const panel = document.getElementById(CONFIG.UI_ID);
+            if (!panel) {
+                UI.create();
+                setTimeout(() => {
+                    try {
+                        revealOptimizerPanel(document.getElementById(CONFIG.UI_ID));
+                    } catch (err) {
+                        Logger.error('算法护航面板展示失败', err);
+                    }
+                }, 100);
+                return true;
             }
+            if (panel.style.opacity === '0' || panel.style.opacity === '') {
+                revealOptimizerPanel(panel);
+                return true;
+            }
+            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
+            setTimeout(() => {
+                try {
+                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+                } catch { }
+            }, 500);
+            return true;
+        } catch (err) {
+            Logger.error('算法护航面板切换失败', err);
+            return false;
         }
     };
 
     // [INTEGRATED] Expose run campaign function for MagicReport
     window.__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__ = async (campaignId, customPrompt) => {
-        // 覆盖配置
-        userConfig.customPrompt = customPrompt || userConfig.customPrompt;
-
-        // 确保 Token 就绪
-        TokenManager.refresh();
-        if (!State.tokens.loginPointId || !State.tokens.dynamicToken) {
-            return { success: false, msg: 'Token 未就绪，请先在页面点击任意处' };
-        }
-
-        // 调用处理逻辑
-        // 我们利用 ProcessCampaign，但把 UI 部分剥离或复用？
-        // processCampaign 依赖 UI.createCampaignCard。
-        // 为了 Magic Report，我们希望它仅仅返回结果，或者我们可以让 Logic 自己处理 UI。
-        // 这里简单地调用 processCampaign，它会把日志输出到 Escort 面板。
-        // 如果我们想要 Magic Report 独立显示，我们需要修改 Core.processCampaign
-        // 但为了最小化修改，我们暂时让它在后台跑，并返回结果。
-
-        // 确保 ESCORT UI 存在（因为 ProcessCampaign 依赖 UI 创建卡片）
-        if (!document.getElementById(CONFIG.UI_ID)) UI.create();
-
-        // 强制展开 Escort 面板 (可选)
-        // window.__ALIMAMA_OPTIMIZER_TOGGLE__();
-
         try {
+            if (!requireOptimizerLicense('optimizer_run_campaign')) {
+                return buildOptimizerLicenseDeniedResult('optimizer_run_campaign');
+            }
+            // 覆盖配置
+            userConfig.customPrompt = customPrompt || userConfig.customPrompt;
+
+            // 确保 Token 就绪
+            TokenManager.refresh();
+            if (!State.tokens.loginPointId || !State.tokens.dynamicToken) {
+                return { success: false, msg: 'Token 未就绪，请先在页面点击任意处' };
+            }
+
+            // 调用处理逻辑
+            // 我们利用 ProcessCampaign，但把 UI 部分剥离或复用？
+            // processCampaign 依赖 UI.createCampaignCard。
+            // 为了 Magic Report，我们希望它仅仅返回结果，或者我们可以让 Logic 自己处理 UI。
+            // 这里简单地调用 processCampaign，它会把日志输出到 Escort 面板。
+            // 如果我们想要 Magic Report 独立显示，我们需要修改 Core.processCampaign
+            // 但为了最小化修改，我们暂时让它在后台跑，并返回结果。
+
+            // 确保 ESCORT UI 存在（因为 ProcessCampaign 依赖 UI 创建卡片）
+            if (!document.getElementById(CONFIG.UI_ID)) UI.create();
+
+            // 强制展开 Escort 面板 (可选)
+            // window.__ALIMAMA_OPTIMIZER_TOGGLE__();
+
             const res = await Core.processCampaign(campaignId, '万能查数任务', 1, 1);
             return res;
         } catch (e) {
-            return { success: false, msg: e.message };
+            Logger.error('MagicReport 调用算法护航失败', e);
+            return { success: false, msg: e?.message || '算法护航执行失败' };
         }
     };
 })();

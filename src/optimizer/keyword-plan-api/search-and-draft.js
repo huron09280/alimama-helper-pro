@@ -1686,23 +1686,24 @@
             };
             const resolveNonEmptyArrayField = (field = '', fallback = []) => {
                 const candidates = [
-                    input?.[field],
-                    goalRuntime?.[field],
-                    request?.sceneForcedCampaignOverride?.[field],
-                    request?.goalForcedCampaignOverride?.[field],
-                    request?.common?.campaignOverride?.[field],
-                    request?.[field],
-                    request?.common?.[field],
-                    templateCampaign?.[field],
-                    runtimeStoreData?.[field],
-                    runtimeDefaults?.[field],
-                    fallback
+                    { value: input?.[field], explicit: hasOwn(input, field) },
+                    { value: goalRuntime?.[field], explicit: false },
+                    { value: request?.sceneForcedCampaignOverride?.[field], explicit: hasOwn(request?.sceneForcedCampaignOverride, field) },
+                    { value: request?.goalForcedCampaignOverride?.[field], explicit: hasOwn(request?.goalForcedCampaignOverride, field) },
+                    { value: request?.common?.campaignOverride?.[field], explicit: hasOwn(request?.common?.campaignOverride, field) },
+                    { value: request?.[field], explicit: hasOwn(request, field) },
+                    { value: request?.common?.[field], explicit: hasOwn(request?.common, field) },
+                    { value: templateCampaign?.[field], explicit: false },
+                    { value: runtimeStoreData?.[field], explicit: false },
+                    { value: runtimeDefaults?.[field], explicit: false },
+                    { value: fallback, explicit: false }
                 ];
                 for (let i = 0; i < candidates.length; i++) {
-                    const value = candidates[i];
+                    const value = candidates[i]?.value;
+                    const explicit = !!candidates[i]?.explicit;
                     if (Array.isArray(value)) {
-                        if (!value.length) continue;
-                        return deepClone(value);
+                        if (value.length || explicit) return deepClone(value);
+                        continue;
                     }
                     if (typeof value === 'string') {
                         const text = String(value || '').trim();
@@ -1710,7 +1711,7 @@
                         if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
                             try {
                                 const parsed = JSON.parse(text);
-                                if (Array.isArray(parsed) && parsed.length) return deepClone(parsed);
+                                if (Array.isArray(parsed) && (parsed.length || explicit)) return deepClone(parsed);
                             } catch { }
                         }
                     }
@@ -2142,6 +2143,23 @@
                     out.orderAutoRenewalInfo.orderAutoRenewalSwitch = '1';
                 }
                 out.orderChargeType = String(out.orderChargeType || 'balance_charge').trim() || 'balance_charge';
+            }
+            if (!isSearchDetentContract) {
+                delete out.searchDetentType;
+            }
+            if (!isTrendContract) {
+                delete out.trendType;
+                delete out.trendThemeList;
+            }
+            if (!isGoldenTrafficCardContract) {
+                delete out.packageId;
+                delete out.packageTemplateId;
+                delete out.planId;
+                delete out.planTemplateId;
+                delete out.orderInfo;
+                delete out.orderAutoRenewalInfo;
+                delete out.orderChargeType;
+                delete out.launchTime;
             }
             return out;
         };
@@ -3244,10 +3262,16 @@
 
         const normalizeSceneSettingEntries = (sceneSettings = {}) => {
             if (!isPlainObject(sceneSettings)) return [];
-            return Object.keys(sceneSettings).map(key => ({
-                key: String(key || '').trim(),
-                value: normalizeSceneSettingValue(sceneSettings[key])
-            })).filter(item => item.key && item.value);
+            return Object.keys(sceneSettings).map(key => {
+                const rawValue = sceneSettings[key];
+                const value = Array.isArray(rawValue) || isPlainObject(rawValue)
+                    ? deepClone(rawValue)
+                    : normalizeSceneSettingValue(rawValue);
+                return {
+                    key: String(key || '').trim(),
+                    value
+                };
+            }).filter(item => item.key && item.value !== undefined && item.value !== null && item.value !== '');
         };
 
         const findSceneSettingEntry = (entries = [], patterns = []) => {
@@ -3434,6 +3458,7 @@
             };
 
             const parseDirectSettingValue = (key = '', rawValue = '') => {
+                if (Array.isArray(rawValue) || isPlainObject(rawValue)) return deepClone(rawValue);
                 const value = normalizeSceneSettingValue(rawValue);
                 if (!value) return '';
                 if ((value.startsWith('{') && value.endsWith('}')) || (value.startsWith('[') && value.endsWith(']'))) {

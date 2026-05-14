@@ -1,3 +1,130 @@
+# TODO - 2026-05-14 全面检查 bug
+
+## 需求规格
+- 目标：
+  - 对当前仓库做一次全面缺陷检查，覆盖构建产物同步、语法、自动化回归、核心业务链路和近期高风险改动；
+  - 重点关注入口无反馈、Promise reject、字段同步丢失、请求载荷构造、弹窗/矩阵/关键词/AI 点睛/授权链路等历史高风险问题；
+  - 对能够明确复现且有低侵入修复路径的缺陷直接修复，并补充或更新回归测试；
+  - 不做无关重构，不覆盖现有未提交任务文档和用户改动。
+- 成功标准：
+  - `node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`、`node --test tests/*.test.mjs`、`bash scripts/review-team.sh` 结论明确；
+  - 至少完成一轮关键源码静态审查，覆盖 userscript 入口、optimizer API、keyword plan API、main-assistant、extension 入口和 license-server 契约；
+  - 若发现缺陷：有根因、最小修复、回归测试和复跑验证；
+  - 若未发现可修复缺陷：说明已覆盖范围、剩余风险和无法验证项。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md`，提取本轮高风险检查点。
+- [x] 写入本轮需求规格、验收标准和检查计划。
+- [x] 并行做代码静态审查：入口/Promise、请求载荷、UI 状态同步、extension 注入、license-server 契约。
+- [x] 运行构建同步、语法检查、全量自动化测试和团队 review 脚本。
+- [x] 汇总缺陷候选，区分确定 bug、测试缺口和需真实页面验证的风险。
+- [x] 对确定 bug 执行最小侵入修复，并补充回归测试。
+- [x] 复跑受影响测试和全量 review，确认无回归。
+- [x] 在本章节回填改动摘要、验证记录、结果复盘。
+
+## 高层操作摘要
+- 已确认工作树存在用户/历史改动：`tasks/todo.md`、`tasks/lessons.md`、`tasks/linear-sync-inventory.md`、`tasks/linear-sync-results.json`；本轮只在任务文档中追加当前检查记录，不回退既有内容。
+- 本轮先做无提交动作的检查与修复；如发现业务代码缺陷，再按最小代码侵入原则处理。
+
+## 检查笔记
+- 详见 `tasks/bug-audit-2026-05-14-notes.md`。
+
+## 缺陷修复摘要
+- 修复 `AI 点睛` 需求弹层中时间解析函数的 TDZ 风险，避免入口测试和运行时在初始化顺序变化时触发 `ReferenceError`。
+- 修复 `趋势明星/流量金卡` 下仍渲染手动关键词面板的问题，避免非自定义目标展示不匹配控件。
+- 修复 extension content 注入失败静默问题：无挂载点、`chrome.runtime.getURL` 失败、脚本加载失败和 append 失败都会渲染页面可见错误。
+- 收紧 extension page bridge：默认不再把完整计划 API 暴露到页面全局，仅保留 debug 开关。
+- 修复授权守卫：
+  - 缓存 shopId 不再参与当前页面身份排序；
+  - 有效租约必须绑定当前解析 shopId；
+  - 有效租约强制刷新遇到瞬时错误时保留当前授权；
+  - extension 模式未授权交互会同步阻断并触发按需校验；
+  - 远端授权响应必须携带并通过 `policyToken` 验签；
+  - 算法护航公开入口自身也执行授权同步门禁，防止页面全局函数绕过点击拦截。
+- 修复关键词最终组包：
+  - `crowdList/adzoneList/trendThemeList/launch*` 支持显式空数组和 JSON 空数组，不再误回落旧模板；
+  - 非目标场景会裁剪互斥原生字段，避免 `trendThemeList`、搜索卡位字段、流量金卡套餐/订单字段跨目标泄漏；
+  - `campaign.*` / `adgroup.*` 直连字段保留数组和对象原值，不再变成字符串。
+- 修复入口异常反馈：
+  - 主助手 bootstrap 捕获初始化异常，避免阻断后续模块；
+  - 万能查数、算法护航按钮和 `Core.run()` Promise reject 均有错误反馈；
+  - `__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__` 覆盖 token/UI/process 全链路异常并返回结构化失败。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/keyword-wizard-entry-regression.test.mjs`：通过，2/2。
+- `node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-search-p0-contract.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-wizard-entry-regression.test.mjs`：通过，34/34。
+- `node --test tests/extension-static-build.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/keyword-search-p0-contract.test.mjs`：通过，28/28。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test --test-reporter=dot tests/*.test.mjs`：通过，退出码 0。
+- `bash scripts/review-team.sh`：通过，442 个测试中 440 pass、2 skip，所有自动化 review checks passed。
+- Chrome DevTools MCP 真实 `one.alimama.com` 页面：重载后确认 `__ALIMAMA_OPTIMIZER_TOGGLE__` 和 `__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__` 存在；未授权状态下调用 `__ALIMAMA_OPTIMIZER_TOGGLE__()` 返回 `false`，未创建 `#alimama-escort-helper-ui`；调用 `__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__()` 返回 `{ success:false, code:"lease_expired" }`，并展示授权锁定遮罩。
+- Chrome DevTools MCP 控制台：仅见原站资源代理 `ERR_TUNNEL_CONNECTION_FAILED`、原站组件依赖 warning，以及预期的 `[EscortAPI] 授权未通过` warning；未见本轮插件堆栈错误。
+
+## 结果复盘
+- 本轮共修复 7 类确定缺陷：初始化顺序、目标控件隐藏、extension 注入反馈、授权边界、关键词组包字段污染、结构化字段保真、入口异常反馈。
+- 真实页面烟测发现了静态审查遗漏：只在事件层阻断未授权交互不足以防止页面脚本直接调用全局公开 API；最终把授权门禁下沉到公开 API 本身。
+- 本轮未点击原生 `创建完成`、插件 `批量创建`、`立即投放` 或任何真实提交入口。
+
+---
+
+# TODO - 2026-05-14 整理历史任务并同步 Linear
+
+## 需求规格
+- 目标：
+  - 从 `tasks/todo.md` 整理全部历史任务，包含已完成、未完成和阻塞项；
+  - 按主题、日期和完成状态归类，减少 Linear 中重复 issue；
+  - 同步到 Linear 项目 `阿里妈妈智能工具`；
+  - 同步完成后回填 issue 对照、失败原因和后续动作。
+- 成功标准：
+  - `tasks/todo.md` 中每个 `# TODO` 章节都被纳入整理清单；
+  - 已完成任务同步为已完成/Done 类状态，未完成任务保持待办/Backlog 类状态；
+  - 已有 Linear issue 优先复用更新，不重复创建同名任务；
+  - Linear 连接失败时，保留可直接重试的整理清单和阻塞说明。
+
+## 执行计划（可核对）
+- [x] 记录本轮整理范围和同步规则。
+- [x] 解析 `tasks/todo.md` 全量 `# TODO` 章节，统计完成状态。
+- [x] 按主题归类任务：关键词推广、货品全站、矩阵页、AI 点睛、趋势主题、抓包/提交流量、小万护航、授权/管理台、构建/发布等。
+- [x] 查询 Linear 中 `阿里妈妈智能工具` 项目、团队、标签和已有 issue。
+- [x] 生成本地同步清单。
+- [x] Linear 连接恢复后批量创建或更新 Linear issue。
+- [x] 回填 Linear 同步结果、失败项和复盘。
+
+## 整理规则
+- 状态判定：
+  - 章节内所有执行计划复选框均为 `[x]`，同步为完成态；
+  - 章节内存在 `[ ]`，同步为待办态；
+  - 章节显式记录工具/登录态/安全阻塞，保留阻塞说明。
+- 去重规则：
+  - 以任务标题作为主键；
+  - 同标题已存在 Linear issue 时更新描述和状态；
+  - 标题不同但明显属于同一修复闭环时保留独立 issue，并在描述中标注上下游关系。
+- 描述规则：
+  - 保留 `需求规格`、`执行计划`、`改动摘要`、`验证记录`、`结果复盘` 的高层摘要；
+  - 不把整段超长日志原样复制进 Linear，仅保留关键命令和结论。
+
+## 同步结果
+- 本地整理已完成，清单见 `tasks/linear-sync-inventory.md`。
+- 整理范围：`tasks/todo.md` 中 42 个历史开发 TODO；本轮新增的 Linear 同步操作章节不创建产品 issue。
+- 原始复选框状态：39 个已完成、3 个部分完成。
+- 整理后同步状态：41 个已完成/已闭环，1 个待继续。
+- 唯一待继续任务：`2026-05-05 阿里妈妈营销场景全量抓包`。
+- Linear 查询/同步阻塞：Linear 插件 MCP 握手失败，错误为连接 `https://chatgpt.com/backend-api/wham/apps` 时 HTTP request failed；`_research`、`_search`、`_list_projects`、`_list_issues` 均同类失败。
+- 用户重新安装授权 Linear 后复测：`_research`、`_search`、`_list_projects`、`_list_issues` 仍在 MCP 初始化阶段失败，尚未进入 Linear workspace 查询。
+- 连通性排查：本机 `curl -I https://chatgpt.com/backend-api/wham/apps` 可达并返回 HTTP 405/Allow POST，说明基础网络可达；当前阻塞更像是本 Codex 会话内 Linear app 授权状态未被 MCP runtime 刷新。
+- 本地环境检查：未发现 `LINEAR_API_KEY` 或同类 Linear API 环境变量，不能安全绕过插件直连 Linear API。
+- 修复方式：内置 `mcp__codex_apps__linear` wrapper 仍失败，但同一 Codex 登录 token 直连 `https://chatgpt.com/backend-api/wham/apps` 的 MCP JSON-RPC 可成功 `initialize`、`tools/list` 和 `tools/call`；本轮用该直连路径完成同步。
+- Linear 目标：项目 `阿里妈妈智能工具`，团队 `Linkswo`。
+- 已创建标签：`imported-from-tasks`、`关键词推广`、`货品全站推广`、`矩阵与趋势主题`、`抓包与开发文档`、`小万护航`、`验证与入口稳定性`、`已闭环`。
+- 同步结果：创建 `LIN-11` 至 `LIN-52` 共 42 条 issue，其中 41 条为 `Done`，1 条为 `Todo`。
+- 唯一待办：`LIN-41 2026-05-05 阿里妈妈营销场景全量抓包`，URL 为 `https://linear.app/linkswo/issue/LIN-41/2026-05-05-阿里妈妈营销场景全量抓包`。
+- 结果报告：`tasks/linear-sync-results.json`。
+- 反查验证：Linear 项目当前 `imported-from-tasks` issue 共 42 条，状态分布为 `Done=41`、`Todo=1`。
+
+---
+
 # TODO - 2026-05-13 手动关键词跟随关键词设置展开
 
 ## 需求规格

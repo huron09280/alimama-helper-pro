@@ -2149,7 +2149,10 @@
                 userConfig.concurrency = Math.min(10, Math.max(1, concurrency));
                 GM_setValue('config', userConfig);
 
-                Core.run();
+                Core.run().catch((err) => {
+                    Logger.error('算法护航执行失败', err);
+                    UI.updateStatus(`执行异常：${err?.message || '未知错误'}`, 'red');
+                });
             };
 
             // ==================== 拖拽调整尺寸 ====================

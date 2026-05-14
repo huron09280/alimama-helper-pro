@@ -877,8 +877,8 @@
             shopId,
             shopName,
             source: sourceName,
-            confidence: 1,
-            idTier: 'primary'
+            confidence: 0.5,
+            idTier: 'secondary'
         };
     };
 
@@ -961,8 +961,7 @@
         const fromDomText = parseShopFromDomText('dom_text');
         if (fromDomText) candidates.push(fromDomText);
 
-        const fromCache = parseShopFromCache(readCache(), 'license_cache');
-        if (fromCache) candidates.push(fromCache);
+        const fromCache = parseShopFromCache(readCache(), 'license_cache_fallback');
 
         if (!candidates.length) {
             return {
@@ -1488,9 +1487,7 @@
 
         const normalized = verifyLeasePayloadShape(json, payload);
         await verifySignature(payload, normalized);
-        if (normalized.policyToken) {
-            await verifyPolicyToken(payload.shopId, normalized);
-        }
+        await verifyPolicyToken(payload.shopId, normalized);
         return normalized;
     };
 
@@ -1720,6 +1717,14 @@
             throw createError('shop_not_found', '未识别到店铺标识（shopId）');
         }
 
+        const resolvedShopId = normalizeShopId(shopInfo.shopId || '');
+        const currentLeaseMatchesResolvedShop = !!(
+            stateShopId
+            && resolvedShopId
+            && stateShopId === resolvedShopId
+            && isCurrentLeaseValid()
+        );
+
         updateState({
             shopId: String(shopInfo.shopId || ''),
             shopName: String(shopInfo.shopName || ''),
@@ -1731,7 +1736,7 @@
             source
         });
 
-        if (!force && isCurrentLeaseValid()) {
+        if (!force && currentLeaseMatchesResolvedShop) {
             return { ...state };
         }
 
@@ -1806,6 +1811,20 @@
                     source
                 });
             }
+            const shouldPreserveCurrentLease = !!(
+                force
+                && currentLeaseMatchesResolvedShop
+                && isTransientVerifyErrorCode(code)
+            );
+            if (shouldPreserveCurrentLease) {
+                updateState({
+                    authorized: true,
+                    reason: 'authorized_refresh_failed',
+                    message: `授权租约仍有效，本次刷新失败：${msg}`,
+                    source
+                });
+                throw createError(code, msg, err?.detail || null);
+            }
             lock(code, msg, source);
             if (detailShopId && !detailShopName) {
                 scheduleShopNameBackfill({
@@ -1829,6 +1848,35 @@
         const className = typeof target.className === 'string' ? target.className : '';
         if (/\bam-[a-z0-9_-]+/i.test(className)) return true;
         return !!target.closest(ON_DEMAND_VERIFY_INTERACTION_SELECTOR);
+    };
+
+    const TRANSIENT_VERIFY_ERROR_CODES = new Set([
+        'request_failed',
+        'request_http_error',
+        'response_parse_error',
+        'invalid_response'
+    ]);
+
+    const isTransientVerifyErrorCode = (code = '') => (
+        TRANSIENT_VERIFY_ERROR_CODES.has(String(code || '').trim())
+    );
+
+    const renderPendingAuthorizationOverlay = (source = 'on_demand_interaction') => {
+        updateState({
+            authorized: false,
+            reason: 'license_checking',
+            message: '授权校验中，请稍后重试',
+            source
+        });
+        renderOverlay();
+    };
+
+    const blockUnauthorizedInteraction = (event, source = 'on_demand_interaction') => {
+        try { event?.preventDefault?.(); } catch { }
+        try { event?.stopImmediatePropagation?.(); } catch { }
+        try { event?.stopPropagation?.(); } catch { }
+        renderPendingAuthorizationOverlay(source);
+        triggerOnDemandVerify(source);
     };
 
     const triggerOnDemandVerify = (source = 'on_demand_interaction') => {
@@ -1866,6 +1914,10 @@
 
         document.addEventListener('pointerdown', (event) => {
             if (!isPluginInteractionTarget(event?.target)) return;
+            if (!isCurrentLeaseValid()) {
+                blockUnauthorizedInteraction(event, 'on_demand_pointerdown');
+                return;
+            }
             triggerOnDemandVerify('on_demand_pointerdown');
         }, true);
 
@@ -1873,6 +1925,10 @@
             const key = String(event?.key || '');
             if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') return;
             if (!isPluginInteractionTarget(event?.target)) return;
+            if (!isCurrentLeaseValid()) {
+                blockUnauthorizedInteraction(event, 'on_demand_keydown');
+                return;
+            }
             triggerOnDemandVerify('on_demand_keydown');
         }, true);
 
