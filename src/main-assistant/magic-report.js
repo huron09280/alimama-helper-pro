@@ -1726,6 +1726,21 @@
             return this.getCrowdCampaignItemOptions(id);
         },
 
+        refreshCrowdCampaignItemOptionsInBackground(campaignId, options = {}) {
+            const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
+            if (!id) return;
+            Promise.resolve()
+                .then(() => this.refreshCrowdCampaignItemOptions(id, options))
+                .then(() => {
+                    if (this.lastCampaignId === id || this.crowdMatrixLoadedCampaignId === id) {
+                        this.refreshCrowdMatrixCampaignMeta(id);
+                    }
+                })
+                .catch((err) => {
+                    Logger.warn(`🔮 商品列表后台识别失败：${err?.message || '未知错误'}`);
+                });
+        },
+
         getCrowdCampaignItemCandidates(campaignId, preferredItemId = '') {
             const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
             if (!id) return [];
@@ -2752,6 +2767,93 @@
             return this.crowdInsightRunContext;
         },
 
+        async ensureCrowdInsightExtraScopeResults(baseResult, { campaignId, metricType }) {
+            const id = String(campaignId || '').trim();
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!baseResult || typeof baseResult !== 'object' || baseResult.unsupportedReason) return baseResult;
+            if (!/^\d{6,}$/.test(id) || !metric) return baseResult;
+            if (!baseResult.scopeResolutionPromise) {
+                baseResult.scopeResolutionPromise = (async () => {
+                    const scopeResultMap = baseResult.scopeResultMap && typeof baseResult.scopeResultMap === 'object'
+                        ? baseResult.scopeResultMap
+                        : {};
+                    const itemId = String(baseResult.itemId || '').trim();
+                    this.CROWD_EXTRA_DIMENSION_GROUPS.forEach((groupName) => {
+                        const normalizedGroup = this.normalizeCrowdGroupName(groupName);
+                        if (!normalizedGroup || scopeResultMap[normalizedGroup]) return;
+                        const scopePrompt = this.buildCrowdDimensionPrompt({ campaignId: id, metricType: metric, groupName, itemId });
+                        if (!scopePrompt || scopePrompt === baseResult.prompt) return;
+                        scopeResultMap[normalizedGroup] = {
+                            prompt: scopePrompt,
+                            groupMap: {},
+                            panelQueryConf: null,
+                            requestPath: '',
+                            resolved: false
+                        };
+                    });
+                    const extraScopeKeys = Object.keys(scopeResultMap).filter(key => key !== 'base');
+                    await Promise.all(extraScopeKeys.map(async (scopeKey) => {
+                        const scopeMeta = scopeResultMap[scopeKey];
+                        if (scopeMeta?.resolved === true) return;
+                        const scopePrompt = String(scopeMeta?.prompt || '').trim();
+                        if (!scopePrompt) return;
+                        try {
+                            const scopeResult = await (async () => {
+                                const response = await this.requestCrowdApi('/ai/report/dataQuery.json', {
+                                    bizCode: 'universalBP',
+                                    contentParams: { bizCode: 'universalBP' },
+                                    prompt: {
+                                        promptType: 'text',
+                                        wordList: [{
+                                            word: scopePrompt,
+                                            wordType: 'text',
+                                            subjectId: null,
+                                            subjectType: null,
+                                            isTemplate: false,
+                                            placeholder: ''
+                                        }]
+                                    }
+                                });
+                                const componentList = Array.isArray(response?.payload?.data?.componentList)
+                                    ? response.payload.data.componentList
+                                    : [];
+                                const groupList = this.extractGroupList(componentList, scopeKey);
+                                let panelQueryConf = null;
+                                try {
+                                    panelQueryConf = this.extractPanelQueryConfFromDataQuery(componentList);
+                                } catch { }
+                                return {
+                                    groupMap: this.buildGroupMapFromGroupList(groupList, scopeKey),
+                                    panelQueryConf,
+                                    requestPath: response.requestPath
+                                };
+                            })();
+                            scopeResultMap[scopeKey] = {
+                                ...scopeMeta,
+                                groupMap: scopeResult.groupMap,
+                                panelQueryConf: scopeResult.panelQueryConf,
+                                requestPath: scopeResult.requestPath,
+                                resolved: true
+                            };
+                        } catch (err) {
+                            scopeResultMap[scopeKey] = {
+                                ...scopeMeta,
+                                resolved: true
+                            };
+                            Logger.warn(`🔮 ${scopeKey}维度查数失败：${err?.message || '未知错误'}`);
+                        }
+                    }));
+                    const mergedGroupMap = this.mergeCrowdGroupMaps(
+                        ...Object.values(scopeResultMap).map(item => item?.groupMap)
+                    );
+                    baseResult.scopeResultMap = scopeResultMap;
+                    baseResult.groupMap = mergedGroupMap;
+                    return baseResult;
+                })();
+            }
+            return baseResult.scopeResolutionPromise;
+        },
+
         async queryCrowdInsight({ campaignId, metricType, periodDays }) {
             const id = String(campaignId || '').trim();
             const metric = this.normalizeCrowdMetricType(metricType);
@@ -2950,82 +3052,7 @@
             }
 
             const baseResult = await context.basePromiseMap.get(metric);
-            if (!baseResult.unsupportedReason) {
-                const scopeResultMap = baseResult.scopeResultMap && typeof baseResult.scopeResultMap === 'object'
-                    ? baseResult.scopeResultMap
-                    : {};
-                const itemId = String(baseResult.itemId || '').trim();
-                this.CROWD_EXTRA_DIMENSION_GROUPS.forEach((groupName) => {
-                    const normalizedGroup = this.normalizeCrowdGroupName(groupName);
-                    if (!normalizedGroup || scopeResultMap[normalizedGroup]) return;
-                    const scopePrompt = this.buildCrowdDimensionPrompt({ campaignId: id, metricType: metric, groupName, itemId });
-                    if (!scopePrompt || scopePrompt === baseResult.prompt) return;
-                    scopeResultMap[normalizedGroup] = {
-                        prompt: scopePrompt,
-                        groupMap: {},
-                        panelQueryConf: null,
-                        requestPath: '',
-                        resolved: false
-                    };
-                });
-                const extraScopeKeys = Object.keys(scopeResultMap).filter(key => key !== 'base');
-                await Promise.all(extraScopeKeys.map(async (scopeKey) => {
-                    const scopeMeta = scopeResultMap[scopeKey];
-                    if (scopeMeta?.resolved === true) return;
-                    const scopePrompt = String(scopeMeta?.prompt || '').trim();
-                    if (!scopePrompt) return;
-                    try {
-                        const scopeResult = await (async () => {
-                            const response = await this.requestCrowdApi('/ai/report/dataQuery.json', {
-                                bizCode: 'universalBP',
-                                contentParams: { bizCode: 'universalBP' },
-                                prompt: {
-                                    promptType: 'text',
-                                    wordList: [{
-                                        word: scopePrompt,
-                                        wordType: 'text',
-                                        subjectId: null,
-                                        subjectType: null,
-                                        isTemplate: false,
-                                        placeholder: ''
-                                    }]
-                                }
-                            });
-                            const componentList = Array.isArray(response?.payload?.data?.componentList)
-                                ? response.payload.data.componentList
-                                : [];
-                            const groupList = this.extractGroupList(componentList, scopeKey);
-                            let panelQueryConf = null;
-                            try {
-                                panelQueryConf = this.extractPanelQueryConfFromDataQuery(componentList);
-                            } catch { }
-                            return {
-                                groupMap: this.buildGroupMapFromGroupList(groupList, scopeKey),
-                                panelQueryConf,
-                                requestPath: response.requestPath
-                            };
-                        })();
-                        scopeResultMap[scopeKey] = {
-                            ...scopeMeta,
-                            groupMap: scopeResult.groupMap,
-                            panelQueryConf: scopeResult.panelQueryConf,
-                            requestPath: scopeResult.requestPath,
-                            resolved: true
-                        };
-                    } catch (err) {
-                        scopeResultMap[scopeKey] = {
-                            ...scopeMeta,
-                            resolved: true
-                        };
-                        Logger.warn(`🔮 ${scopeKey}维度查数失败：${err?.message || '未知错误'}`);
-                    }
-                }));
-                const mergedGroupMap = this.mergeCrowdGroupMaps(
-                    ...Object.values(scopeResultMap).map(item => item?.groupMap)
-                );
-                baseResult.scopeResultMap = scopeResultMap;
-                baseResult.groupMap = mergedGroupMap;
-            }
+            await this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric });
             if (days === 7) {
                 return {
                     periodDays: days,
@@ -3984,6 +4011,18 @@
                 : this.CROWD_METRICS.slice();
         },
 
+        getCrowdMetricsForInitialLoad() {
+            const visibleMetrics = this.CROWD_METRICS.filter(metric => this.getCrowdMetricVisible(metric));
+            return visibleMetrics.length ? visibleMetrics : this.CROWD_METRICS.slice();
+        },
+
+        hasCrowdMatrixMetricResults(metricType) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!metric || !(this.crowdMatrixResultMap instanceof Map)) return false;
+            const metricPrefix = `${metric}|`;
+            return Array.from(this.crowdMatrixResultMap.keys()).some(key => String(key || '').startsWith(metricPrefix));
+        },
+
         normalizeCrowdPeriod(periodDays) {
             const days = Number(periodDays);
             return this.CROWD_PERIODS.includes(days) ? days : 0;
@@ -4219,8 +4258,23 @@
             this.crowdMetricVisibility = nextMap;
             this.syncCrowdAuxiliaryVisibilityByMetricCount(nextMap);
             if (this.crowdMatrixDataset) {
+                const shouldLoadMetric = nextVisible
+                    && this.crowdMatrixLoadedCampaignId
+                    && !this.hasCrowdMatrixMetricResults(metric);
+                if (shouldLoadMetric) {
+                    this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: true });
+                    this.reloadCrowdMatrixMetric({
+                        campaignId: this.crowdMatrixLoadedCampaignId,
+                        metricType: metric
+                    });
+                    return;
+                }
                 this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: true });
                 return;
+            }
+            if (nextVisible && this.crowdMatrixLoading) {
+                const campaignId = this.crowdMatrixLoadedCampaignId || this.getCurrentCampaignId() || this.lastCampaignId;
+                this.scheduleCrowdMatrixMetricReload(campaignId, metric);
             }
             this.applyCrowdMetricVisibility();
         },
@@ -4642,20 +4696,33 @@
             const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
             const metric = this.normalizeCrowdMetricType(metricType);
             if (!id || !metric) return;
-            this.crowdMatrixPendingMetricReload = {
+            if (!(this.crowdMatrixPendingMetricReload instanceof Map)) {
+                this.crowdMatrixPendingMetricReload = new Map();
+            }
+            this.crowdMatrixPendingMetricReload.set(`${id}|${metric}`, {
                 campaignId: id,
                 metricType: metric
-            };
+            });
         },
 
         flushPendingCrowdMatrixMetricReload() {
             if (this.crowdMatrixLoading) return;
             const pending = this.crowdMatrixPendingMetricReload;
-            if (!pending || typeof pending !== 'object') return;
-            this.crowdMatrixPendingMetricReload = null;
+            let nextPending = null;
+            if (pending instanceof Map) {
+                const pendingList = Array.from(pending.values());
+                nextPending = pendingList.shift() || null;
+                this.crowdMatrixPendingMetricReload = pendingList.length
+                    ? new Map(pendingList.map(item => [`${item.campaignId}|${item.metricType}`, item]))
+                    : null;
+            } else if (pending && typeof pending === 'object') {
+                nextPending = pending;
+                this.crowdMatrixPendingMetricReload = null;
+            }
+            if (!nextPending) return;
             this.reloadCrowdMatrixMetric({
-                campaignId: pending.campaignId,
-                metricType: pending.metricType
+                campaignId: nextPending.campaignId,
+                metricType: nextPending.metricType
             });
         },
 
@@ -4682,11 +4749,15 @@
             if (this.matrixGridEl instanceof HTMLElement) this.matrixGridEl.innerHTML = '';
 
             try {
-                await this.refreshCrowdCampaignItemOptions(id, { forceRefresh: forceRefreshItems });
+                const initialMetrics = this.getCrowdMetricsForInitialLoad();
+                if (initialMetrics.includes('itemdeal')) {
+                    await this.refreshCrowdCampaignItemOptions(id, { forceRefresh: forceRefreshItems });
+                } else {
+                    this.refreshCrowdCampaignItemOptionsInBackground(id, { forceRefresh: forceRefreshItems });
+                }
                 this.refreshCrowdMatrixCampaignMeta(id);
                 const taskFns = [];
-                const prioritizedMetrics = this.getCrowdMetricsByVisibilityPriority();
-                prioritizedMetrics.forEach((metricType) => {
+                initialMetrics.forEach((metricType) => {
                     this.CROWD_PERIODS.forEach((periodDays) => {
                         const task = async () => this.queryCrowdInsight({ campaignId: id, metricType, periodDays });
                         const metricMeta = this.getCrowdMetricMeta(metricType);
