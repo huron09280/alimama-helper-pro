@@ -1248,9 +1248,13 @@
 
                 const buildInlineSceneInputControl = (label, fieldKey, value, placeholder = '', options = {}) => {
                     const unit = normalizeSceneSettingValue(options?.unit || '');
+                    const hideLabel = options?.hideLabel === true;
+                    const labelHtml = hideLabel
+                        ? ''
+                        : `<span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>`;
                     return `
                         <div class="am-wxt-scene-inline-input ${unit ? 'with-unit' : ''}">
-                            <span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>
+                            ${labelHtml}
                             <span class="am-wxt-inline-input-wrap">
                                 <input
                                     data-scene-field="${Utils.escapeHtml(fieldKey)}"
@@ -2229,6 +2233,14 @@
                                     infoField: keywordAiMaxInfoField
                                 }));
                             }
+                            staticRows.push(`
+                                <div class="am-wxt-scene-setting-row am-wxt-scene-setting-row-readonly">
+                                    <div class="am-wxt-scene-setting-label">创意设置</div>
+                                    <div class="am-wxt-setting-control">
+                                        <span class="tips">当前解决方案下暂不支持设置创意，默认开启智能创意。</span>
+                                    </div>
+                                </div>
+                            `);
                         }
                     }
                     let keywordBidTargetLinkedInsertIndex = -1;
@@ -2798,9 +2810,12 @@
                                 const keywordAvgDealCostSwitchValue = keywordAvgDealCostEnabled ? '开启' : '关闭';
                                 bucket[keywordAvgDealCostSwitchFieldKey] = keywordAvgDealCostSwitchValue;
                                 bucket[keywordAvgDealCostSwitchFieldLabel] = keywordAvgDealCostSwitchValue;
+                                const keywordAvgDealCostVisibleLabel = keywordAiMaxEnabled
+                                    ? '设置平均直接净成交成本（非必要）'
+                                    : '设置平均成交成本';
                                 keywordBidTargetLinkedRows.push(`
                                     <div class="am-wxt-scene-setting-row">
-                                        <div class="am-wxt-scene-setting-label">设置平均成交成本</div>
+                                        <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(keywordAvgDealCostVisibleLabel)}</div>
                                         <div class="am-wxt-setting-control am-wxt-setting-control-pair">
                                             <div class="am-wxt-option-line segmented">${keywordSubOptimizeTargetOptionHtml}</div>
                                             ${buildSceneSwitchControl(
@@ -2815,7 +2830,7 @@
                                     keywordAvgDealCostFieldKey,
                                     keywordAvgDealCostValue,
                                     '请输入',
-                                    { unit: '元' }
+                                    { unit: '元', hideLabel: keywordAiMaxEnabled }
                                 )}
                                             <input
                                                 class="am-wxt-hidden-control"

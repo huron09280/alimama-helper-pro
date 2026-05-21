@@ -1,6 +1,10 @@
 (() => {
     const SCRIPT_ID = 'am-helper-pro-extension-page-bundle';
     const ERROR_ID = 'am-helper-pro-extension-injection-error';
+    const LICENSE_VERIFY_BRIDGE_CHANNEL = 'am-helper-pro:license-verify';
+    const LICENSE_VERIFY_REQUEST_TYPE = 'verify-request';
+    const LICENSE_VERIFY_RESPONSE_TYPE = 'verify-response';
+    const LICENSE_VERIFY_MESSAGE_TYPE = 'AM_LICENSE_VERIFY_REQUEST';
     if (document.getElementById(SCRIPT_ID)) return;
 
     const renderInjectionError = (message = '') => {
@@ -30,6 +34,60 @@
         renderInjectionError();
         return;
     }
+
+    const postBridgeMessage = (payload = {}) => {
+        const targetOrigin = String(window.location?.origin || '').trim() || '*';
+        window.postMessage(payload, targetOrigin);
+    };
+
+    const forwardLicenseVerifyRequest = (requestId = '', payload = null) => {
+        chrome.runtime.sendMessage({
+            type: LICENSE_VERIFY_MESSAGE_TYPE,
+            payload
+        }, (response) => {
+            const runtimeError = chrome.runtime.lastError;
+            if (runtimeError) {
+                postBridgeMessage({
+                    channel: LICENSE_VERIFY_BRIDGE_CHANNEL,
+                    type: LICENSE_VERIFY_RESPONSE_TYPE,
+                    requestId,
+                    ok: false,
+                    status: 0,
+                    message: String(runtimeError.message || 'runtime_unavailable')
+                });
+                return;
+            }
+
+            postBridgeMessage({
+                channel: LICENSE_VERIFY_BRIDGE_CHANNEL,
+                type: LICENSE_VERIFY_RESPONSE_TYPE,
+                requestId,
+                ...(response && typeof response === 'object'
+                    ? response
+                    : {
+                        ok: false,
+                        status: 0,
+                        message: 'empty_background_response'
+                    })
+            });
+        });
+    };
+
+    window.addEventListener('message', (event) => {
+        if (event.source !== window) return;
+        const data = event.data;
+        if (!data || typeof data !== 'object') return;
+        if (data.channel !== LICENSE_VERIFY_BRIDGE_CHANNEL) return;
+        if (data.type !== LICENSE_VERIFY_REQUEST_TYPE) return;
+
+        const requestId = String(data.requestId || '').trim();
+        const payload = data.payload && typeof data.payload === 'object'
+            ? data.payload
+            : null;
+        if (!requestId || !payload) return;
+
+        forwardLicenseVerifyRequest(requestId, payload);
+    });
 
     const script = document.createElement('script');
     script.id = SCRIPT_ID;

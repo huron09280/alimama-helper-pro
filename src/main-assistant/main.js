@@ -1,7 +1,17 @@
     // ==========================================
     // 7. 启动程序
     // ==========================================
+    const installAssistDisplayDiagnostics = () => {
+        try {
+            Object.defineProperty(window, '__AM_ASSIST_DISPLAY_DIAGNOSTICS__', {
+                value: () => Core.getAssistDisplayDiagnostics(),
+                configurable: true
+            });
+        } catch { }
+    };
+
     function main() {
+        installAssistDisplayDiagnostics();
         UI.init();
         BudgetFrontendLimitBypass.init();
         Interceptor.init();
@@ -72,7 +82,13 @@
             scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
         });
 
-        observer.observe(document.body, { childList: true, subtree: true });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'aria-hidden'],
+            characterData: true
+        });
 
         scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
     }

@@ -69,6 +69,7 @@
 
         renderTag(cell, type, text, extraStyle) {
             const fullStyle = CONSTANTS.TAG_BASE_STYLE + extraStyle;
+            cell.dataset.amHelperTaggedCell = '1';
             const existing = cell.querySelector(`.am-helper-tag.${type}`);
             if (existing) {
                 if (existing.textContent === text) return false;
@@ -115,9 +116,19 @@
 
         isElementVisible(el) {
             if (!el) return false;
-            const style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden') return false;
-            return el.getClientRects().length > 0;
+            if (!el.isConnected) return false;
+            let node = el;
+            while (node && node.nodeType === 1) {
+                const style = window.getComputedStyle(node);
+                if (!style) return false;
+                if (style.display === 'none' || style.visibility === 'hidden') return false;
+                if (parseFloat(style.opacity || '1') <= 0.01) return false;
+                if (node.getAttribute?.('aria-hidden') === 'true') return false;
+                node = node.parentElement;
+            }
+            const rects = el.getClientRects();
+            if (!rects || rects.length === 0) return false;
+            return Array.from(rects).some(rect => rect.width > 0 && rect.height > 0);
         },
 
         resolveStickyHeaderWrapper(stickyBodyWrapper) {
@@ -182,6 +193,21 @@
             return maxCells;
         },
 
+        getTableVisibleRowCount(table, maxScanRows = 30) {
+            if (!table) return 0;
+
+            const rows = table.rows;
+            let visibleRows = 0;
+            let scanned = 0;
+            for (let i = 0; i < rows.length && scanned < maxScanRows; i++) {
+                const row = rows[i];
+                if (!row || row.parentElement?.tagName === 'THEAD') continue;
+                scanned++;
+                if (this.isElementVisible(row)) visibleRows++;
+            }
+            return visibleRows;
+        },
+
         getTableCapabilityScore(colMap, headerCount, maxCells) {
             if (!colMap || headerCount <= 0 || maxCells <= 0) return 0;
 
@@ -209,9 +235,9 @@
             return score;
         },
 
-        resolveTableContext() {
+        resolveTableContexts() {
             const tableList = document.querySelectorAll('div[mx-stickytable-wrapper="body"] table, table');
-            if (!tableList || tableList.length === 0) return null;
+            if (!tableList || tableList.length === 0) return [];
 
             const contexts = [];
             const seen = new Set();
@@ -228,10 +254,12 @@
                 const visible = this.isElementVisible(stickyBodyWrapper || table);
                 const rowCount = table.tBodies?.[0]?.rows?.length || table.rows.length || 0;
                 const maxCells = this.getTableMaxCells(table);
+                const visibleRowCount = visible ? this.getTableVisibleRowCount(table) : 0;
                 const baseScore = this.getTableScore(colMap);
                 const capabilityScore = this.getTableCapabilityScore(colMap, headers.length, maxCells);
 
                 if (rowCount <= 0 || maxCells <= 0) return;
+                if (!visible || visibleRowCount <= 0) return;
                 if (capabilityScore <= 0 && baseScore <= 0) return;
 
                 contexts.push({
@@ -242,11 +270,12 @@
                     capabilityScore,
                     visible,
                     rowCount,
+                    visibleRowCount,
                     maxCells
                 });
             });
 
-            if (contexts.length === 0) return null;
+            if (contexts.length === 0) return [];
 
             contexts.sort((a, b) => {
                 const visibleDelta = Number(b.visible) - Number(a.visible);
@@ -257,10 +286,64 @@
                 if (scoreDelta !== 0) return scoreDelta;
                 const cellDelta = b.maxCells - a.maxCells;
                 if (cellDelta !== 0) return cellDelta;
+                const visibleRowsDelta = b.visibleRowCount - a.visibleRowCount;
+                if (visibleRowsDelta !== 0) return visibleRowsDelta;
                 return b.rowCount - a.rowCount;
             });
 
-            return contexts[0];
+            return contexts;
+        },
+
+        resolveTableContext() {
+            const contexts = this.resolveTableContexts();
+            return contexts[0] || null;
+        },
+
+        getAssistDisplayDiagnostics() {
+            const tags = Array.from(document.querySelectorAll('.am-helper-tag'));
+            const visibleTags = tags.filter(tag => this.isElementVisible(tag));
+            const taggedCells = Array.from(document.querySelectorAll('[data-am-helper-tagged-cell="1"]'));
+            const tableContexts = this.resolveTableContexts();
+            const tableContext = tableContexts[0] || null;
+            const headers = tableContext?.headers
+                ? Array.from(tableContext.headers).map(header => (header.textContent || '').replace(/\s+/g, '').trim()).filter(Boolean)
+                : [];
+
+            return {
+                version: CURRENT_VERSION,
+                url: window.location.href,
+                config: {
+                    showCost: !!State.config.showCost,
+                    showCartCost: !!State.config.showCartCost,
+                    showPercent: !!State.config.showPercent,
+                    showCostRatio: !!State.config.showCostRatio,
+                    showBudget: !!State.config.showBudget
+                },
+                tagCount: tags.length,
+                visibleTagCount: visibleTags.length,
+                taggedCellCount: taggedCells.length,
+                tableCount: tableContexts.length,
+                tableFound: !!tableContext,
+                tableVisible: !!tableContext?.visible,
+                tableRowCount: tableContext?.rowCount || 0,
+                tableVisibleRowCount: tableContext?.visibleRowCount || 0,
+                tableMaxCells: tableContext?.maxCells || 0,
+                columnMap: tableContext?.colMap || null,
+                headers: headers.slice(0, 80),
+                tables: tableContexts.slice(0, 8).map(context => ({
+                    rowCount: context.rowCount,
+                    visibleRowCount: context.visibleRowCount,
+                    maxCells: context.maxCells,
+                    score: context.score,
+                    capabilityScore: context.capabilityScore,
+                    columnMap: context.colMap
+                })),
+                sampleTags: tags.slice(0, 20).map(tag => ({
+                    text: tag.textContent || '',
+                    visible: this.isElementVisible(tag),
+                    cellText: (tag.closest('td,th')?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+                }))
+            };
         },
 
         resolveChargeHeader(table) {
@@ -272,31 +355,35 @@
             return scope.querySelector('[mx-stickytable-sort="charge"]') || document.querySelector('[mx-stickytable-sort="charge"]');
         },
 
-        run() {
-            const tableContext = this.resolveTableContext();
-            if (!tableContext) return;
-            const { table, headers, colMap } = tableContext;
-
-            // 自动点击花费列降序排序（需要开启配置，且未排序时）
-            if (State.config.autoSortCharge && !this._sortedByCharge) {
+        applyAutoSort(tableContexts = []) {
+            if (!State.config.autoSortCharge || this._sortedByCharge) return false;
+            for (let i = 0; i < tableContexts.length; i++) {
+                const table = tableContexts[i]?.table;
+                if (!table) continue;
                 const chargeHeader = this.resolveChargeHeader(table);
-                if (chargeHeader) {
-                    // 检查当前是否已经是降序
-                    const currentOrder = chargeHeader.getAttribute('mx-stickytable-sort-order');
-                    if (currentOrder !== 'desc') {
-                        // 点击降序按钮
-                        const descBtn = chargeHeader.querySelector('[mx-stickytable-sort-trigger="desc"]');
-                        if (descBtn) {
-                            descBtn.click();
-                            Logger.log('📊 已自动按花费降序排序');
-                            this._sortedByCharge = true;
-                            return; // 等待排序完成后再渲染数据
-                        }
-                    } else {
-                        this._sortedByCharge = true; // 已经是降序，标记
-                    }
+                if (!chargeHeader) continue;
+                // 检查当前是否已经是降序
+                const currentOrder = chargeHeader.getAttribute('mx-stickytable-sort-order');
+                if (currentOrder === 'desc') {
+                    this._sortedByCharge = true; // 已经是降序，标记
+                    return false;
+                }
+
+                // 点击降序按钮
+                const descBtn = chargeHeader.querySelector('[mx-stickytable-sort-trigger="desc"]');
+                if (descBtn) {
+                    descBtn.click();
+                    Logger.log('📊 已自动按花费降序排序');
+                    this._sortedByCharge = true;
+                    return true; // 等待排序完成后再渲染数据
                 }
             }
+            return false;
+        },
+
+        runTableContext(tableContext, totals = {}) {
+            if (!tableContext) return 0;
+            const { table, headers, colMap } = tableContext;
             const { showCost, showCartCost, showPercent, showCostRatio, showBudget } = State.config;
 
             // 检查是否需要执行
@@ -308,14 +395,9 @@
 
             if (!needCost && !needCart && !needPercent && !needRatio && !needBudget) return;
 
-            // 获取顶部汇总指标 (只需一次，且去重日志)
-            const totalCost = needRatio ? this.getTotalCost() : 0;
-            const totalImpression = needRatio && colMap.impression > -1 ? this.getTotalImpression() : 0;
-            const totalClick = needRatio && colMap.click > -1 ? this.getTotalClick() : 0;
-            if (needRatio && totalCost > 0 && this._lastTotalCost !== totalCost) {
-                this._lastTotalCost = totalCost;
-                Logger.log(`💰 总花费更新: ${totalCost}`);
-            }
+            const totalCost = needRatio ? (Number(totals.totalCost) || 0) : 0;
+            const totalImpression = needRatio && colMap.impression > -1 ? (Number(totals.totalImpression) || 0) : 0;
+            const totalClick = needRatio && colMap.click > -1 ? (Number(totals.totalClick) || 0) : 0;
 
             const rows = table.rows; // 使用原生 .rows 属性比 querySelectorAll 更快
             let updatedCount = 0;
@@ -493,6 +575,37 @@
                 }
             }
 
+            return updatedCount;
+        },
+
+        run() {
+            const tableContexts = this.resolveTableContexts();
+            if (tableContexts.length === 0) return;
+
+            // 自动点击花费列降序排序（需要开启配置，且未排序时）
+            if (this.applyAutoSort(tableContexts)) return;
+
+            const needRatio = State.config.showCostRatio && tableContexts.some(({ colMap }) => (
+                colMap.cost > -1 || colMap.impression > -1 || colMap.click > -1
+            ));
+            const needTotalImpression = needRatio && tableContexts.some(({ colMap }) => colMap.impression > -1);
+            const needTotalClick = needRatio && tableContexts.some(({ colMap }) => colMap.click > -1);
+
+            // 获取顶部汇总指标 (只需一次，且去重日志)
+            const totalCost = needRatio ? this.getTotalCost() : 0;
+            const totalImpression = needTotalImpression ? this.getTotalImpression() : 0;
+            const totalClick = needTotalClick ? this.getTotalClick() : 0;
+            if (needRatio && totalCost > 0 && this._lastTotalCost !== totalCost) {
+                this._lastTotalCost = totalCost;
+                Logger.log(`💰 总花费更新: ${totalCost}`);
+            }
+
+            const totals = { totalCost, totalImpression, totalClick };
+            let updatedCount = 0;
+            tableContexts.forEach(tableContext => {
+                updatedCount += this.runTableContext(tableContext, totals);
+            });
+
             if (updatedCount > 0) Logger.log(`✅ 更新 ${updatedCount} 项数据`);
         }
     };
@@ -531,4 +644,3 @@
         }
         return false;
     };
-

@@ -2740,3 +2740,341 @@
 
 - `出价目标`、`平均直接净成交成本`、`预算类型` 的逐项差异
 - `高级设置 -> 投放资源位/地域/时段` 的非默认样本
+
+## 21. 2026-05-18 一级营销场景覆盖总览
+
+### 21.1 抓取方式
+
+- 页面：真实 `https://one.alimama.com/index.html#!/main/index`
+- 店铺：`<SHOP_NAME>`
+- 店铺 ID：`<SHOP_ID>`
+- 工具：Chrome DevTools MCP + 页面内 `CAPTURE_ONLY` 拦截器 + DevTools Offline
+- 阻断证明：
+  - 页面内重写 `fetch/XMLHttpRequest`，命中 `/solution/addList.json` 时记录 payload 并阻断真实发送；
+  - DevTools Network 同步切到 `Offline` 作为第二层保护；
+  - 每次捕获后检查无 `创建成功/提交成功/计划创建成功/投放成功` 文案；
+  - 无计划 ID 返回，无成功响应。
+- 商品前置：
+  - 用户将本轮货品全站指定商品 ID 改为 `<SITE_ITEM_ID>`；
+  - 添加路径必须先进入 `添加商品 -> 全部商品`，再按商品 ID 搜索；
+  - `<SITE_ITEM_ID>` 已成功添加并进入 `onebpSite` 最终 payload。
+
+### 21.2 一级场景覆盖矩阵
+
+| 一级场景 | bizCode | 默认/入口子场景 | 本轮样本 | CAPTURE_ONLY 结果 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| 货品全站推广 | `onebpSite` | `promotion_scene_site` | `TOP01` | 捕获 1 条 addList，blocked | 商品 `<SITE_ITEM_ID>` 已进入 `material.materialId` |
+| 关键词推广 | `onebpSearch` | `promotion_scene_search_detent` | `TOP02` | 捕获 1 条 addList，blocked | 默认搜索卡位，10 个关键词，无 `adgroupList` |
+| 人群推广 | `onebpDisplay` | `promotion_scene_display_laxin` | `TOP03` | 捕获 1 条 addList，blocked | 默认高效拉新，含 1 个商品和 3 个人群 |
+| 店铺直达 | `onebpStarShop` | 店铺智营默认 | `TOP04` | 捕获 1 条 addList，blocked | 默认 3 个词包，页面仍提示需添加创意 |
+| 内容营销 | `onebpLive` | `scene_live_room` | `TOP05` | 捕获 1 条 addList，blocked | 默认超级直播/直播间成长 |
+| 线索推广 | `onebpAdStrategyLiuZi` | 收集销售线索 | `TOP06` | 未发 addList | 前端停在 `添加商品` 前置，未形成最终请求 |
+
+### 21.3 `TOP01` 货品全站推广 baseline
+
+- URL：`/solution/addList.json?...&bizCode=onebpSite`
+- body length：`8336`
+- 阻断：`transport=xhr`，`CAPTURE_ONLY_BLOCKED`
+- 页面结果：`系统异常`，无成功文案。
+
+```json
+{
+  "bizCode": "onebpSite",
+  "solutionCount": 1,
+  "campaign": {
+    "promotionScene": "promotion_scene_site",
+    "itemSelectedMode": "user_define",
+    "campaignName": "货品全站推广_20260518_233834_<SITE_ITEM_ID_PREFIX>",
+    "bidType": "roi_control",
+    "optimizeTarget": "ad_strategy_retained_buy",
+    "constraintType": "roi",
+    "constraintValue": 16.44,
+    "dmcType": "unlimit",
+    "multiTarget": {
+      "multiTargetSwitch": "0"
+    },
+    "smartCreative": 1,
+    "creativeSetMode": "minimalist",
+    "quickLiftBudgetCommand": {
+      "quickLiftSwitch": "true",
+      "quickLiftTimeSlot": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23",
+      "quickLiftLaunchArea": [
+        "all"
+      ],
+      "quickLiftBudget": 50
+    }
+  },
+  "material": {
+    "materialId": "<SITE_ITEM_ID>",
+    "materialName": "<SITE_ITEM_NAME>",
+    "promotionType": "item",
+    "subPromotionType": "item",
+    "categoryLevel1": "50022703",
+    "bidCount": 37
+  },
+  "strategyRecoverysLength": 19,
+  "lrsIdListLength": 5
+}
+```
+
+### 21.4 `TOP02` 关键词推广 baseline
+
+- URL：`/solution/addList.json?...&bizCode=onebpSearch`
+- body length：`20455`
+- 阻断：`transport=xhr`，`CAPTURE_ONLY_BLOCKED`
+- 页面结果：无成功文案；页面仍显示 `添加商品` 前置提示。
+
+```json
+{
+  "bizCode": "onebpSearch",
+  "solutionCount": 1,
+  "campaign": {
+    "promotionScene": "promotion_scene_search_detent",
+    "itemSelectedMode": "search_detent",
+    "campaignName": "关键词推广_卡位_20260519_003155",
+    "wordListLength": 10,
+    "adzoneListLength": 1,
+    "dmcType": "day_average",
+    "bidType": "max_amount"
+  },
+  "adgroupCount": 0
+}
+```
+
+### 21.5 `TOP03` 人群推广 baseline
+
+- URL：`/solution/addList.json?...&bizCode=onebpDisplay`
+- body length：`26953`
+- 阻断：`transport=xhr`，`CAPTURE_ONLY_BLOCKED`
+- 页面结果：无成功文案。
+
+```json
+{
+  "bizCode": "onebpDisplay",
+  "solutionCount": 1,
+  "campaign": {
+    "promotionScene": "promotion_scene_display_laxin",
+    "promotionStrategy": "jingdian_laxin",
+    "user_level": "m3",
+    "itemSelectedMode": "user_define",
+    "itemIdList": [
+      "<DISPLAY_ITEM_ID>"
+    ],
+    "campaignName": "人群推广_20260519_000942",
+    "commonFilters": {
+      "shop": "365",
+      "multiTouch": "-1"
+    },
+    "needTargetCrowd": "1",
+    "aiXiaowanCrowdListSwitch": "1",
+    "crowdListLength": 3,
+    "blackCrowdListLength": 0,
+    "dmcType": "normal"
+  },
+  "material": {
+    "materialId": "<DISPLAY_ITEM_ID>",
+    "materialName": "<DISPLAY_ITEM_NAME>",
+    "categoryLevel1": "50022703"
+  }
+}
+```
+
+### 21.6 `TOP04` 店铺直达 baseline
+
+- URL：`/solution/addList.json?...&bizCode=onebpStarShop`
+- body length：`8560`
+- 阻断：`transport=xhr`，`CAPTURE_ONLY_BLOCKED`
+- 页面结果：无成功文案；页面提示 `请添加创意`。
+
+```json
+{
+  "bizCode": "onebpStarShop",
+  "solutionCount": 1,
+  "campaign": {
+    "campaignName": "店铺直达_20260519_001505",
+    "promotionModel": "daily",
+    "creativeSkin": "0",
+    "dmcType": "normal",
+    "launchAreaStrList": [
+      "all"
+    ],
+    "launchPeriodListLength": 7
+  },
+  "adgroupCount": 1,
+  "adgroupKeys": [
+    "material",
+    "creativeInfo",
+    "wordPackageList"
+  ]
+}
+```
+
+### 21.7 `TOP05` 内容营销 baseline
+
+- URL：`/solution/addList.json?...&bizCode=onebpLive`
+- body length：`23311`
+- 阻断：`transport=xhr`，`CAPTURE_ONLY_BLOCKED`
+- 页面结果：无成功文案。
+
+```json
+{
+  "bizCode": "onebpLive",
+  "solutionCount": 1,
+  "campaign": {
+    "promotionScene": "scene_live_room",
+    "promotionModel": "daily",
+    "optimizeTarget": "ad_strategy_buy_net",
+    "spotContinue": "1",
+    "supportAiDigitalLaunch": 1,
+    "campaignName": "超级直播_直播间成长_20260519_002157",
+    "launchAreaStrList": [
+      "all"
+    ],
+    "adzoneListLength": 0,
+    "crowdListLength": 10
+  },
+  "adgroupCount": 1,
+  "firstAdgroup": {
+    "material": {
+      "materialId": "<LIVE_ROOM_ID>",
+      "promotionType": "content",
+      "subPromotionType": "live_room"
+    },
+    "keys": [
+      "material",
+      "smartCreativePackageList"
+    ]
+  }
+}
+```
+
+### 21.8 `TOP06` 线索推广 baseline 阻塞
+
+- URL：`https://one.alimama.com/index.html#!/main/index?bizCode=onebpAdStrategyLiuZi`
+- 默认入口：`收集销售线索`
+- 页面状态：
+  - `添加商品 0 / 10`
+  - `核心词设置 -> 添加关键词`
+  - `种子人群` 默认已选 2 个
+  - 套餐包默认 `自定义方案包`
+- CAPTURE_ONLY 尝试结果：
+  - 点击 `创建完成` 后 `captureCount=0`；
+  - 未触发 `/solution/addList.json`；
+  - 页面停在 `添加商品` 前置校验；
+  - 无成功文案。
+
+后续要拿到线索推广 payload，必须先补齐该账号当前可投商品与关键词，再重复 CAPTURE_ONLY 流程。
+
+## 22. 2026-05-19 一级场景内部控件覆盖清单
+
+> 用户修正：一级入口 baseline 不够，必须覆盖“每个内部按钮/开关/下拉”。本节是基于真实 `one.alimama.com` 页面实时 DOM 抽取的控件矩阵，第 21 章仅作为入口 payload baseline，不能视为最终覆盖完成。
+
+### 22.1 抽取方法
+
+- 工具：Chrome DevTools MCP，真实店铺 `<SHOP_NAME>`（`<SHOP_ID>`）。
+- 路由：逐个直达 `bizCode` URL 后滚动全页抽取，避免营销场景卡片点击误判。
+- 货品前置：`onebpSite` 先按 `添加商品 -> 全部商品 -> 商品ID -> <SITE_ITEM_ID> -> 添加 -> 确定` 恢复主页面 `添加商品 1 / 5`。
+- 分类：
+  - `capture-diff`：改动后需点原生 `创建完成`，使用页面内 CAPTURE_ONLY + DevTools Offline 比对 payload。
+  - `safe-observe`：只展开下拉、弹窗、详情或介绍，记录可见状态差异。
+  - `blocked`：删除/清空/移除、创意新建、真实投放或需要不可安全补齐素材的入口。
+
+### 22.2 控件矩阵
+
+| 场景 | 必覆盖按钮/开关/下拉 | 当前覆盖策略 |
+| --- | --- | --- |
+| 货品全站推广 | `添加商品 1 / 5`、`清空`、`卡片视图`、`表格视图`、`全部移除`、单品 `移除`、推荐选品下拉、出价方式 `控投产比投放/最大化拿量/加速跑量`、出价目标 `增加总成交金额/增加净成交金额`、ROI 推荐/自定义输入、`一键采纳`、`防拿量困难` 编辑/一键开启/开关、预算类型 `不限预算/每日预算`、`多目标优化`、`一键起量`、起量预算、`起量时间地域设置`、计划名称、计划组、智能创意介绍、创建完成 | 删除/清空/移除为 `blocked`；视图/弹窗/介绍为 `safe-observe`；出价、预算、开关、ROI 和输入为 `capture-diff`。 |
+| 关键词推广 | 营销目标 `搜索卡位/趋势明星/流量金卡/自定义推广`、`添加关键词`、`清空`、关键词复选框、匹配方式 `广泛/中心词/精准`、`流量智选`、`添加商品 0 / 30`、商品复选框、`一键上车`、`冷启加速`、卡位方式 `抢首条/抢前三/抢首页/位置不限`、筛选下拉 `成交人数/近365天`、预算类型 `日均预算/每日预算`、预算输入、高级设置、计划名称、计划组、创建完成 | `清空` 为 `blocked`；添加弹窗/筛选/高级设置为 `safe-observe`；营销目标、匹配方式、卡位方式、预算和开关为 `capture-diff`。 |
+| 人群推广 | 营销目标分支、方案选择 `竞店拉新/借势转化/兴趣拉新/收藏加购/首购拉新/收加转化/跨类目拉新`、`添加商品 1 / 20`、`清空`、`+设置礼金(0)`、选择方式 `自定义人群/AI推人`、AI 推人开关、目标人群 `添加指定竞争人群/清空`、过滤人群、竞争分析下拉、预算类型 `每日预算/周期预算`、预算输入、`优质计划防停投`、`智能创意`、高级设置、计划名称、计划组、创建完成 | 礼金/清空/人群删除为 `blocked`；人群弹窗、过滤、高级设置为 `safe-observe`；方案、预算、AI 推人、防停投、智能创意为 `capture-diff`。 |
+| 店铺直达 | 创意皮肤 `基础进店卡片/高级溢价卡片/敬请期待`、创意素材 `新建模板创意/从创意库添加`、`创意优选`、词包 `添加词包/新自助加词/批量修改词包溢价比例/清空/移除`、词包溢价输入、词包升级简介、每日预算输入、高级设置、计划名称、计划组、创建完成 | 当前创意素材 `0 / 20`，`新建模板创意/从创意库添加` 需要素材流程，记 `blocked`；创意皮肤、词包溢价、预算、创意优选可做 `capture-diff`；简介/高级设置为 `safe-observe`。 |
+| 内容营销 | 内容目标 `直播推广/短视频推广/短直联投`、直播方案 `直播间成长/商品打爆/拉新增粉/全站推广`、优化目标下拉、直播间 `去修改/查看详情/使用AI数字人一键开播`、AI 数字人投放开关、`下播续投`、种子人群 `添加/清空/移除/卡片视图/列表视图/行业/时间窗口`、`智能人群`、`优先拿量`、投放日期、投放时间、投放速度、封面智能创意、高级设置、预算、计划名称、计划组、创建完成 | AI 数字人开播、清空/移除为 `blocked`；详情、视图、日期/时间、高级设置为 `safe-observe`；内容目标、方案、优化目标、开关、预算为 `capture-diff`。 |
+| 线索推广 | 解决方案 `行业解决方案/自定义方案`、投放策略 `自定义获取客资方案/自定义获取旺咨方案`、`恢复默认推荐`、`添加商品 0 / 10`、`添加关键词`、`万相台算法词包`、种子人群 `添加/清空/移除`、`智能人群`、过滤人群、套餐包、投放日期、支付方式、`智能创意`、高级设置、计划名称、计划组、创建完成 | 默认状态被商品/关键词前置阻断，最终 addList 暂为 `blocked`；解决方案/投放策略/开关可先做状态差异，补齐可投商品和关键词后再做 `capture-diff`。 |
+
+### 22.3 已执行操作样本
+
+#### `CTRL-LIVE-DEFAULT` 内容营销默认直播间成长
+
+- 保护：页面内 CAPTURE_ONLY + DevTools Offline。
+- 操作：点击原生 `创建完成`。
+- 结果：捕获 1 条 XHR，页面无创建成功文案、无计划 ID。
+
+```json
+{
+  "bizCode": "onebpLive",
+  "bodyLength": 27012,
+  "campaign": {
+    "promotionScene": "scene_live_room",
+    "optimizeTarget": "ad_strategy_buy_net",
+    "spotContinue": "1",
+    "supportAiDigitalLaunch": 1
+  }
+}
+```
+
+#### `CTRL-LIVE-SPOT-CONTINUE` 内容营销下播续投开关
+
+- 操作：点击 `下播续投` 开关后准备再次 CAPTURE_ONLY。
+- 结果：原生 `创建完成` 置灰，`captureCount=0`，未发 `/solution/addList.json`。
+- 归类：状态差异已覆盖；该分支当前无 payload diff，原因是开关变更后页面禁止提交，不能强制触发。
+
+#### `CTRL-SEARCH-HOMEPAGE-PRECISE` 关键词推广抢首页 + 精准匹配
+
+- 保护：页面内 CAPTURE_ONLY + CDP `Network.setBlockedURLs` 阻断 `/solution/addList.json`。
+- 操作：点击 `抢首页`、`精准`，再点击原生 `创建完成`。
+- 结果：捕获 1 条 XHR，页面无创建成功文案、无计划 ID。
+
+```json
+{
+  "bizCode": "onebpSearch",
+  "bodyLength": 14689,
+  "campaign": {
+    "promotionScene": "promotion_scene_search_detent",
+    "itemSelectedMode": "search_detent",
+    "bidType": "max_amount",
+    "dmcType": "day_average",
+    "adzoneListLength": 1,
+    "wordListLength": 10,
+    "firstWord": {
+      "word": "gx1000s max",
+      "matchScope": "1",
+      "impression": "1-10"
+    }
+  }
+}
+```
+
+#### `CTRL-SITE-MAX-AMOUNT` 货品全站最大化拿量
+
+- 前置：重新添加商品 `<SITE_ITEM_ID>`，主页面显示 `添加商品 1 / 5`。
+- 操作：点击出价方式 `最大化拿量`。
+- 结果：原生 `创建完成` 置灰，`captureCount=0`，未发 `/solution/addList.json`。
+- 归类：状态差异已覆盖；该分支当前无 payload diff，原因是切换后页面禁止提交。
+
+#### `CTRL-SITE-ROI-CUSTOM` 货品全站 ROI 自定义
+
+- 操作：尝试回到 `控投产比投放`，点击 `自定义` 并填写 ROI 输入。
+- 结果：页面未接受 `自定义` 选中态，`创建完成` 仍置灰，未发 `/solution/addList.json`。
+- 归类：阻塞；后续需要更精确定位原生 radio 节点或人工确认触发条件。
+
+#### `CTRL-DISPLAY-AI-PUSH` 人群推广 AI 推人/兴趣拉新
+
+- 操作：尝试点击 `AI推人` 与 `兴趣拉新`。
+- 结果：当前 DOM 文本嵌套导致精确点击未命中独立控件，且 `创建完成` 置灰，未发 `/solution/addList.json`。
+- 归类：阻塞；后续需基于真实快照 UID 或坐标级节点重新执行。
+
+#### `CTRL-STARSHOP-PREMIUM-SKIN` 店铺直达高级溢价卡片
+
+- 操作：点击创意皮肤 `高级溢价卡片`。
+- 结果：页面保持 `请添加创意`，原生 `创建完成` 置灰，`captureCount=0`，未发 `/solution/addList.json`。
+- 归类：状态差异已覆盖；该分支依赖创意素材，未补素材前无法形成最终 payload。
+
+### 22.4 完整请求体归档
+
+- 已将当前可成功发起提交的完整 `parsedBody` 单独归档到 `tasks/alimama-scene-capture-payloads-2026-05-19.json`，供后续插件开发直接对照真实 JSON 结构。
+- 当前归档已覆盖本章已记录的 13 个 sampleId，包含 7 条成功样本和 6 条阻塞样本：
+  - 成功样本：`TOP01`、`TOP02`、`TOP03`、`TOP04`、`TOP05`、`CTRL-LIVE-DEFAULT`、`CTRL-SEARCH-HOMEPAGE-PRECISE`
+  - 阻塞样本：`TOP06`、`CTRL-LIVE-SPOT-CONTINUE`、`CTRL-SITE-MAX-AMOUNT`、`CTRL-SITE-ROI-CUSTOM`、`CTRL-DISPLAY-AI-PUSH`、`CTRL-STARSHOP-PREMIUM-SKIN`
+- 注意：
+  - 成功样本中的 raw JSON 主要是 2026-05-19 基于 9333 直连 CDP 的“当前页面态重抓”，用于补齐完整结构归档，不保证与历史摘要中的实时数值完全一致。
+  - 阻塞样本没有实际 `addList` 请求，归档中保存的是独立 blocked 记录和阻塞原因。
+  - 后续开发优先参考字段路径和结构，不要硬编码预算建议、推荐人群、商品上下文等实时数值。

@@ -128,22 +128,22 @@
 
     const scheduleExpiryCheck = () => {
         clearLeaseTimers();
-        // Extension mode uses interaction-triggered verification only; no background checks.
-        if (resolveRuntimeMode() === 'extension') return;
+        const isExtensionRuntime = resolveRuntimeMode() === 'extension';
         const expireAt = Number(state.expiresAt || 0);
         if (!state.authorized || !Number.isFinite(expireAt) || expireAt <= 0) return;
         const remainingMs = Math.max(0, expireAt - toNow());
         const renewLeadMs = resolveLeaseRenewLeadMs();
         const renewDelayMs = Math.max(0, remainingMs - renewLeadMs);
 
-        if (renewDelayMs > 0) {
+        if (remainingMs > 0) {
             renewTimer = setTimeout(() => {
                 assertAuthorized({
                     source: 'lease_renew',
                     force: true,
                     shopIdRetryAttempts: 2,
                     shopIdRetryBaseDelayMs: 160,
-                    shopIdRetryMaxDelayMs: 520
+                    shopIdRetryMaxDelayMs: 520,
+                    silentTransientFailure: isExtensionRuntime
                 }).catch(() => {
                     if (!state.authorized) return;
                     const retryRemaining = Number(state.expiresAt || 0) - toNow();
@@ -159,12 +159,16 @@
                             force: true,
                             shopIdRetryAttempts: 1,
                             shopIdRetryBaseDelayMs: 140,
-                            shopIdRetryMaxDelayMs: 360
+                            shopIdRetryMaxDelayMs: 360,
+                            silentTransientFailure: isExtensionRuntime
                         }).catch(() => { });
                     }, retryDelay);
                 });
             }, renewDelayMs);
         }
+
+        // Extension mode renews silently before expiry but does not lock from an idle timer.
+        if (isExtensionRuntime) return;
 
         const delay = remainingMs;
         expiryTimer = setTimeout(() => {
@@ -1394,6 +1398,11 @@
         return `${base}/v1/license/verify`;
     };
 
+    const EXTENSION_VERIFY_BRIDGE_CHANNEL = 'am-helper-pro:license-verify';
+    const EXTENSION_VERIFY_BRIDGE_REQUEST_TYPE = 'verify-request';
+    const EXTENSION_VERIFY_BRIDGE_RESPONSE_TYPE = 'verify-response';
+    const EXTENSION_VERIFY_BRIDGE_TIMEOUT_MS = 12 * 1000;
+
     const ensureAuthConfig = () => {
         const verifyUrl = runtimeAuthUrl();
         if (!verifyUrl) {
@@ -1456,7 +1465,93 @@
         }
     };
 
-    const requestVerify = async (payload) => {
+    const requestVerifyViaExtensionBridge = async (payload) => {
+        const requestId = `am_license_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            let timer = 0;
+
+            const cleanup = () => {
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = 0;
+                }
+                window.removeEventListener('message', handleMessage);
+            };
+
+            const finishResolve = (value) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(value);
+            };
+
+            const finishReject = (error) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(error);
+            };
+
+            const handleMessage = (event) => {
+                if (event.source !== window) return;
+                const data = event.data;
+                if (!data || typeof data !== 'object') return;
+                if (data.channel !== EXTENSION_VERIFY_BRIDGE_CHANNEL) return;
+                if (data.type !== EXTENSION_VERIFY_BRIDGE_RESPONSE_TYPE) return;
+                if (String(data.requestId || '') !== requestId) return;
+
+                if (data.ok !== true) {
+                    const status = Number(data.status || 0);
+                    const text = typeof data.text === 'string' ? data.text : '';
+                    const message = String(data.message || '').trim();
+                    if (status > 0) {
+                        finishReject(createError(
+                            'request_http_error',
+                            `授权请求失败: HTTP ${status}${text ? ` ${text.slice(0, 120)}` : ''}`,
+                            data.json || null
+                        ));
+                        return;
+                    }
+                    finishReject(createError(
+                        'request_failed',
+                        `授权请求失败: ${message || 'extension_bridge_failed'}`
+                    ));
+                    return;
+                }
+
+                const bridgeJson = data.json && typeof data.json === 'object'
+                    ? data.json
+                    : safeParseJson(data.text || '');
+                if (!bridgeJson) {
+                    finishReject(createError('response_parse_error', '授权响应解析失败'));
+                    return;
+                }
+                finishResolve(bridgeJson);
+            };
+
+            timer = window.setTimeout(() => {
+                finishReject(createError('request_failed', '授权请求失败: extension_bridge_timeout'));
+            }, EXTENSION_VERIFY_BRIDGE_TIMEOUT_MS);
+
+            window.addEventListener('message', handleMessage);
+            try {
+                window.postMessage({
+                    channel: EXTENSION_VERIFY_BRIDGE_CHANNEL,
+                    type: EXTENSION_VERIFY_BRIDGE_REQUEST_TYPE,
+                    requestId,
+                    payload
+                }, window.location?.origin || '*');
+            } catch (error) {
+                finishReject(createError(
+                    'request_failed',
+                    `授权请求失败: ${error?.message || 'extension_bridge_post_failed'}`
+                ));
+            }
+        });
+    };
+
+    const requestVerifyByFetch = async (payload) => {
         const url = ensureAuthConfig();
         let response;
         try {
@@ -1489,6 +1584,17 @@
         await verifySignature(payload, normalized);
         await verifyPolicyToken(payload.shopId, normalized);
         return normalized;
+    };
+
+    const requestVerify = async (payload) => {
+        if (resolveRuntimeMode() === 'extension') {
+            const bridgeResult = await requestVerifyViaExtensionBridge(payload);
+            const normalized = verifyLeasePayloadShape(bridgeResult, payload);
+            await verifySignature(payload, normalized);
+            await verifyPolicyToken(payload.shopId, normalized);
+            return normalized;
+        }
+        return requestVerifyByFetch(payload);
     };
 
     const renderOverlayStyle = () => {
@@ -1630,6 +1736,54 @@
         if (!state.authorized) return false;
         const expireAt = Number(state.expiresAt || 0);
         return Number.isFinite(expireAt) && expireAt > toNow();
+    };
+
+    const resolveValidCachedLeaseSnapshot = (cache = null) => {
+        if (!cache || typeof cache !== 'object') return null;
+        const shopId = normalizeShopId(cache.shopId);
+        const shopName = normalizeShopName(cache.shopName || cache?.policy?.shopName || '');
+        const leaseToken = String(cache.leaseToken || '').trim();
+        const expiresAt = normalizeTimestamp(cache.expiresAt);
+        const policyToken = String(cache.policyToken || cache?.policy?.token || '').trim();
+        if (!shopId || !leaseToken || !expiresAt || expiresAt <= toNow() || !policyToken) return null;
+
+        const parsedPolicyToken = parsePolicyToken(policyToken);
+        const tokenPayload = parsedPolicyToken?.payload || {};
+        const tokenShopId = normalizeShopId(tokenPayload.sid || '');
+        const tokenLeaseToken = String(tokenPayload.ltk || '').trim();
+        const tokenExpiresAt = normalizeTimestamp(tokenPayload.exp);
+        const tokenBuildId = String(tokenPayload.bid || '').trim();
+        const tokenBuildChannel = String(tokenPayload.bch || '').trim();
+        if (tokenShopId !== shopId) return null;
+        if (tokenLeaseToken !== leaseToken) return null;
+        if (!tokenExpiresAt || tokenExpiresAt !== expiresAt || tokenExpiresAt <= toNow()) return null;
+        if (tokenBuildId !== String(BUILD_ID || '') || tokenBuildChannel !== String(BUILD_CHANNEL || '')) return null;
+
+        return {
+            shopId,
+            shopName,
+            leaseToken,
+            expiresAt,
+            policyToken,
+            policy: {
+                ...(cache.policy && typeof cache.policy === 'object' ? cache.policy : {}),
+                token: policyToken
+            }
+        };
+    };
+
+    const hydrateCurrentLeaseFromCache = (source = 'license_cache_hydrate') => {
+        const cached = resolveValidCachedLeaseSnapshot(readCache());
+        if (!cached) return false;
+        unlock({
+            source,
+            shopId: cached.shopId,
+            shopName: cached.shopName,
+            expiresAt: cached.expiresAt,
+            leaseToken: cached.leaseToken,
+            policy: cached.policy
+        });
+        return true;
     };
 
     const buildVerifyPayload = async (shopInfo = {}) => {
@@ -1825,6 +1979,15 @@
                 });
                 throw createError(code, msg, err?.detail || null);
             }
+            if (options?.silentTransientFailure && isTransientVerifyErrorCode(code)) {
+                updateState({
+                    authorized: false,
+                    reason: 'license_refresh_deferred',
+                    message: `授权校验暂未完成：${msg}`,
+                    source
+                });
+                throw createError(code, msg, err?.detail || null);
+            }
             lock(code, msg, source);
             if (detailShopId && !detailShopName) {
                 scheduleShopNameBackfill({
@@ -1861,21 +2024,36 @@
         TRANSIENT_VERIFY_ERROR_CODES.has(String(code || '').trim())
     );
 
-    const renderPendingAuthorizationOverlay = (source = 'on_demand_interaction') => {
+    const PENDING_AUTHORIZATION_REASONS = new Set([
+        'license_unverified',
+        'license_checking',
+        'license_refresh_deferred'
+    ]);
+
+    const isPendingAuthorizationReason = (reason = '') => (
+        PENDING_AUTHORIZATION_REASONS.has(String(reason || '').trim())
+    );
+
+    const isRecoverableExtensionAuthorizationReason = (reason = '') => {
+        const normalizedReason = String(reason || '').trim();
+        return isPendingAuthorizationReason(normalizedReason) || isTransientVerifyErrorCode(normalizedReason);
+    };
+
+    const updatePendingAuthorizationState = (source = 'on_demand_interaction') => {
         updateState({
             authorized: false,
             reason: 'license_checking',
             message: '授权校验中，请稍后重试',
             source
         });
-        renderOverlay();
+        removeOverlay();
     };
 
     const blockUnauthorizedInteraction = (event, source = 'on_demand_interaction') => {
         try { event?.preventDefault?.(); } catch { }
         try { event?.stopImmediatePropagation?.(); } catch { }
         try { event?.stopPropagation?.(); } catch { }
-        renderPendingAuthorizationOverlay(source);
+        updatePendingAuthorizationState(source);
         triggerOnDemandVerify(source);
     };
 
@@ -1897,7 +2075,8 @@
             force: leaseValid,
             shopIdRetryAttempts: 2,
             shopIdRetryBaseDelayMs: 180,
-            shopIdRetryMaxDelayMs: 620
+            shopIdRetryMaxDelayMs: 620,
+            silentTransientFailure: true
         })
             .then(() => {
                 onDemandVerifyLastSuccessAt = toNow();
@@ -1939,6 +2118,19 @@
 
     const requireAuthorizedSync = (source = 'sync_gate') => {
         if (isCurrentLeaseValid()) return true;
+        const isExtensionRuntime = resolveRuntimeMode() === 'extension';
+        if (isExtensionRuntime) {
+            const cacheRecoverSource = `${source}+cache_recover`;
+            if (hydrateCurrentLeaseFromCache(cacheRecoverSource)) {
+                triggerOnDemandVerify(cacheRecoverSource);
+                return true;
+            }
+            if (isRecoverableExtensionAuthorizationReason(state.reason)) {
+                updatePendingAuthorizationState(source);
+                triggerOnDemandVerify(source);
+                throw createError('license_checking', '授权校验中，请稍后重试');
+            }
+        }
         lock('lease_expired', '授权已失效，功能已锁定', source);
         throw createError('lease_expired', '授权已失效');
     };
@@ -1983,7 +2175,23 @@
     });
 
     if (resolveRuntimeMode() === 'extension') {
+        const hydratedFromCache = hydrateCurrentLeaseFromCache('extension_cache_bootstrap');
         installOnDemandVerifyHooks();
+        if (hydratedFromCache) {
+            setTimeout(() => {
+                triggerOnDemandVerify('extension_cache_bootstrap');
+            }, 0);
+        } else {
+            setTimeout(() => {
+                LicenseGuard.assertAuthorized({
+                    source: 'bootstrap_preflight',
+                    shopIdRetryAttempts: 2,
+                    shopIdRetryBaseDelayMs: 180,
+                    shopIdRetryMaxDelayMs: 620,
+                    silentTransientFailure: true
+                }).catch(() => { });
+            }, 0);
+        }
     } else {
         // userscript 模式保持启动预热校验。
         LicenseGuard.assertAuthorized({ source: 'bootstrap_preflight' }).catch(() => { });

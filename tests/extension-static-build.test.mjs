@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderBuildOutputs } from '../scripts/build.mjs';
+import { normalizeExtensionManifestVersion, renderBuildOutputs } from '../scripts/build.mjs';
 
 const outputs = renderBuildOutputs();
 const manifest = JSON.parse(outputs.extensionFiles['manifest.json']);
 const contentSource = outputs.extensionFiles['content.js'];
+const backgroundSource = outputs.extensionFiles['background.js'];
 const pageBundle = outputs.extensionFiles['page.bundle.js'];
 
 test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
@@ -20,9 +21,20 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
     32: 'icon-32.png',
     48: 'icon-48.png'
   }, '工具栏图标配置缺失或不正确');
+  assert.deepEqual(manifest.background, {
+    service_worker: 'background.js'
+  }, '缺少 background service worker 配置');
+  assert.ok(Array.isArray(manifest.host_permissions), '缺少 host_permissions 配置');
+  assert.ok(manifest.host_permissions.includes('https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/*'), '缺少授权服务 host permission');
   assert.deepEqual(manifest.content_scripts[0].js, ['content.js']);
   assert.ok(manifest.content_scripts[0].matches.includes('*://*.alimama.com/*'), '缺少阿里妈妈子域匹配');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('page.bundle.js'), '缺少 page bundle 暴露');
+});
+
+test('extension manifest 使用 Chrome 规范版本并保留展示版本', () => {
+  assert.equal(normalizeExtensionManifestVersion('7.03'), '7.3');
+  assert.equal(manifest.version, '7.3', 'manifest.version 不能包含带前导零的分段');
+  assert.equal(manifest.version_name, outputs.version, 'manifest.version_name 应保留 userscript 展示版本');
 });
 
 test('extension content script 负责注入 page bundle', () => {
@@ -31,6 +43,22 @@ test('extension content script 负责注入 page bundle', () => {
   assert.match(contentSource, /const renderInjectionError = \(message = ''\) => \{/, '缺少 extension 注入失败可见反馈');
   assert.match(contentSource, /script\.onerror = \(\) => \{[\s\S]*renderInjectionError\(\);[\s\S]*\};/, 'page bundle 注入失败未展示页面错误');
   assert.match(contentSource, /mountNode\.appendChild\(script\);[\s\S]*catch \{[\s\S]*renderInjectionError\(\);/, 'appendChild 失败未兜底展示页面错误');
+  assert.match(contentSource, /const LICENSE_VERIFY_BRIDGE_CHANNEL = 'am-helper-pro:license-verify';/, '缺少授权桥 channel 常量');
+  assert.match(contentSource, /if \(data\.channel !== LICENSE_VERIFY_BRIDGE_CHANNEL\) return;/, 'content script 未限制授权桥 channel');
+  assert.match(contentSource, /if \(data\.type !== LICENSE_VERIFY_REQUEST_TYPE\) return;/, 'content script 未限制授权桥消息类型');
+  assert.match(contentSource, /chrome\.runtime\.sendMessage\(\{\s*type: LICENSE_VERIFY_MESSAGE_TYPE,\s*payload\s*\},\s*\(response\) => \{/, 'content script 未把授权请求转发给 background');
+  assert.match(contentSource, /type: LICENSE_VERIFY_RESPONSE_TYPE,/, 'content script 未回传授权桥响应');
+});
+
+test('extension build output 包含授权 background 桥', () => {
+  assert.equal(typeof backgroundSource, 'string', 'build output 缺少 background.js');
+  assert.match(backgroundSource, /const VERIFY_ENDPOINT = 'https:\/\/am-licee-server-mpbzozflkj\.cn-hangzhou\.fcapp\.run\/v1\/license\/verify';/, 'background 未固定授权 verify endpoint');
+  assert.match(backgroundSource, /const VERIFY_REQUEST_TYPE = 'AM_LICENSE_VERIFY_REQUEST';/, 'background 缺少授权消息类型');
+  assert.match(backgroundSource, /if \(message\?\.type !== VERIFY_REQUEST_TYPE\) return false;/, 'background 未限制消息类型');
+  assert.match(backgroundSource, /if \(!isAllowedSenderUrl\(sender\?\.url \|\| ''\)\) \{/, 'background 未校验 sender.url');
+  assert.match(backgroundSource, /return hostname === 'alimama\.com' \|\| hostname\.endsWith\('\.alimama\.com'\);/, 'background 未限制阿里妈妈来源');
+  assert.match(backgroundSource, /response = await fetch\(VERIFY_ENDPOINT, \{/, 'background 未请求固定授权地址');
+  assert.doesNotMatch(backgroundSource, /payload\.(?:url|endpoint)/, 'background 不应接受页面传入任意 URL');
 });
 
 test('extension page bundle 包含 GM 兼容层与核心桥接', () => {
@@ -51,4 +79,10 @@ test('extension page bundle 不默认暴露完整计划 API 到页面全局', ()
     /if \(typeof globalThis !== 'undefined'\) \{\s*globalThis\.__AM_TOKENS__ = State\.tokens;[\s\S]*globalThis\.__AM_WXT_PLAN_API__ = KeywordPlanApi;/,
     'extension page bundle 仍会无条件向 window/globalThis 暴露完整计划 API'
   );
+});
+
+test('extension page bundle 默认保留组建计划打开窄桥', () => {
+  assert.match(pageBundle, /const KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY = '__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__';/, '缺少组建计划打开窄桥常量');
+  assert.match(pageBundle, /installKeywordPlanOpenBridgeHost\(\);\s*if \(shouldExposePageApiDebug\(\)\) \{/s, '组建计划打开窄桥应默认安装，完整 API 仍受 debug 开关保护');
+  assert.match(pageBundle, /if \(window\[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY\] === '1'\) \{[\s\S]*?return createKeywordPlanOpenBridgeApi\(\);[\s\S]*?\}/s, '主助手未回退到组建计划打开窄桥');
 });

@@ -259,6 +259,40 @@
         }
     };
 
+    const fallbackStorage = new Map();
+
+    const warnStorageAccessFailure = (action, err) => {
+        try {
+            console.warn(`[AM Helper] config storage ${action} failed`, err);
+        } catch { }
+    };
+
+    const safeStorageGetItem = (key) => {
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+                const value = localStorage.getItem(key);
+                if (value !== null) return value;
+            }
+        } catch (err) {
+            warnStorageAccessFailure('read', err);
+        }
+        return fallbackStorage.has(key) ? fallbackStorage.get(key) : null;
+    };
+
+    const safeStorageSetItem = (key, value) => {
+        const text = String(value ?? '');
+        fallbackStorage.set(key, text);
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
+                localStorage.setItem(key, text);
+                return true;
+            }
+        } catch (err) {
+            warnStorageAccessFailure('write', err);
+        }
+        return false;
+    };
+
     const normalizeConfig = (rawConfig) => {
         const parsedRevision = Number(rawConfig?.configRevision);
         const hasValidRevision = Number.isFinite(parsedRevision);
@@ -276,20 +310,20 @@
     };
 
     const loadConfig = () => {
-        const current = safeParseJSON(localStorage.getItem(CONSTANTS.STORAGE_KEY));
+        const current = safeParseJSON(safeStorageGetItem(CONSTANTS.STORAGE_KEY));
         if (current && typeof current === 'object') {
             const { config, migrated } = normalizeConfig(current);
             if (migrated) {
-                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
+                safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
             }
             return config;
         }
 
         for (const legacyKey of CONSTANTS.LEGACY_STORAGE_KEYS) {
-            const legacy = safeParseJSON(localStorage.getItem(legacyKey));
+            const legacy = safeParseJSON(safeStorageGetItem(legacyKey));
             if (legacy && typeof legacy === 'object') {
                 const { config } = normalizeConfig(legacy);
-                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
+                safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
                 return config;
             }
         }
@@ -1714,6 +1748,51 @@
         }
     };
 
+    const KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY = '__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_RES__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_TIMEOUT_MS = 8000;
+
+    const createKeywordPlanOpenBridgeApi = () => ({
+        openWizard() {
+            return new Promise((resolve, reject) => {
+                const callId = `keyword_open_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+                let done = false;
+                const cleanup = () => {
+                    window.removeEventListener(KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT, handleResponse, false);
+                };
+                const finish = (fn, value) => {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timeoutId);
+                    cleanup();
+                    fn(value);
+                };
+                const handleResponse = (event) => {
+                    const detail = event?.detail || {};
+                    if (!detail || detail.callId !== callId) return;
+                    if (detail.ok) {
+                        finish(resolve, detail.result);
+                    } else {
+                        finish(reject, new Error(detail.error || 'keyword_open_bridge_failed'));
+                    }
+                };
+                const timeoutId = setTimeout(() => {
+                    finish(reject, new Error('keyword_open_bridge_timeout'));
+                }, KEYWORD_PLAN_OPEN_BRIDGE_TIMEOUT_MS);
+
+                window.addEventListener(KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT, handleResponse, false);
+                try {
+                    window.dispatchEvent(new CustomEvent(KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT, {
+                        detail: { callId }
+                    }));
+                } catch (err) {
+                    finish(reject, err);
+                }
+            });
+        }
+    });
+
     const resolveKeywordPlanApiAccessor = () => {
         try {
             if (KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
@@ -1732,6 +1811,11 @@
                 return fromGlobal;
             }
         } catch { }
+        try {
+            if (window[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY] === '1') {
+                return createKeywordPlanOpenBridgeApi();
+            }
+        } catch { }
         return null;
     };
 
@@ -1739,7 +1823,7 @@
         config: loadConfig(),
         riskAlertLastUrl: '',
         save() {
-            localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(this.config));
+            safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(this.config));
         }
     };
 

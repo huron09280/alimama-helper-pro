@@ -4869,12 +4869,14 @@
             const metricMeta = this.getCrowdMetricMeta(metric);
             this.setCrowdMatrixStatus(`正在刷新${metricMeta.seriesLabel}...`, 'loading', { showRetry: false, progress: 0 });
             try {
+                this.replaceCrowdMatrixMetricResults(metric, []);
                 const taskFns = this.CROWD_PERIODS.map((periodDays) => {
                     const task = async () => this.queryCrowdInsight({ campaignId: id, metricType: metric, periodDays });
                     task.__amCrowdTaskLabel = `${metricMeta.seriesLabel} · 过去${periodDays}天`;
                     return task;
                 });
                 const totalTaskCount = taskFns.length;
+                const revealedPeriodSet = new Set();
                 this.crowdMatrixTaskProgressHandler = (progressInfo) => {
                     if (runId !== this.crowdMatrixRunId) return;
                     const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
@@ -4883,6 +4885,20 @@
                     const stepText = status === 'fulfilled' ? '完成' : '失败';
                     const detailText = taskLabel ? `${stepText} ${taskLabel}` : `${stepText}一项请求`;
                     const ratio = totalTaskCount > 0 ? (done / totalTaskCount) * 100 : 0;
+                    if (status === 'fulfilled' && progressInfo?.value) {
+                        const mergedProgressResults = this.upsertCrowdMatrixResults([progressInfo.value]);
+                        if (mergedProgressResults.length) {
+                            const progressDataset = this.buildMatrixDataset(mergedProgressResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+                            this.crowdMatrixDataset = progressDataset;
+                            this.crowdMatrixLoadedCampaignId = id;
+                            const progressPeriod = this.normalizeCrowdPeriod(progressInfo.value?.periodDays);
+                            const shouldProgressiveReveal = !!progressPeriod && !revealedPeriodSet.has(progressPeriod);
+                            this.renderCrowdMatrixCharts(progressDataset, { progressivePeriod: shouldProgressiveReveal ? progressPeriod : 0 });
+                            if (shouldProgressiveReveal) {
+                                revealedPeriodSet.add(progressPeriod);
+                            }
+                        }
+                    }
                     this.setCrowdMatrixStatus(`刷新中 ${done}/${totalTaskCount} · ${detailText}`, 'loading', { showRetry: false, progress: ratio });
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);

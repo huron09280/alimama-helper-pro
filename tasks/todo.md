@@ -1,3 +1,236 @@
+# TODO - 2026-05-19 关键词自定义推广 3/4/5 UI 对齐
+
+## 需求规格
+- 目标：
+  - 对齐 `关键词推广 -> 自定义推广` 中三处低风险 UI 差异：成本项文案、AI 点睛开启态创意说明、预算类型顺序；
+  - 不修改 `AI点睛` 开关逻辑、手动关键词/人群显隐、最终提交字段和成本校验语义；
+  - 同步测试、构建产物和真实页面验证记录。
+- 成功标准：
+  - `AI点睛=开启 + 出价目标=获取成交量` 时，可见成本项标题为 `设置平均直接净成交成本（非必要）`，且不额外显示 `目标成本` 小标签；
+  - `AI点睛=开启` 时展示只读 `创意设置` 说明：`当前解决方案下暂不支持设置创意，默认开启智能创意。`，但不生成可提交 `创意设置` 字段；
+  - 关键词预算类型展示顺序为 `日均预算` 在前、`每日预算` 在后，底层 value 和默认值不变。
+
+## 执行计划（可核对）
+- [x] 回顾相关历史教训、现有自定义推广实现和测试断言。
+- [x] 在任务文档记录需求、边界、成功标准和验证计划。
+- [x] 修改场景配置渲染：成本项可见文案、只读创意说明、预算类型顺序。
+- [x] 更新自定义推广 UI 同构测试和预算顺序断言。
+- [x] 重新构建生成 userscript 与 extension 产物。
+- [x] 运行相关测试、构建校验和语法检查。
+- [x] 在真实 `one.alimama.com` 页面验证插件向导自定义推广可见 UI。
+- [x] 回填验证记录和结果复盘。
+
+## 高层操作摘要
+- 本轮只做 UI 同构修正，不改变请求组包、字段白名单、`AI点睛` 状态机或成本数值校验。
+- 已调整关键词预算类型 select 顺序为 `日均预算`、`每日预算`，保留底层 value `day_average` / `day_budget` 和默认值语义。
+- 已给 `buildInlineSceneInputControl()` 增加 `hideLabel` 选项，仅用于 AI 点睛开启态成本输入隐藏可见小标签，不影响输入字段、单位、placeholder 和校验。
+- 已在 `AI点睛=开启 + 出价目标=获取成交量` 的成本行使用可见标题 `设置平均直接净成交成本（非必要）`；内部字段仍沿用 `设置平均成交成本` / `平均成交成本`。
+- 已在 AI 点睛开启态追加只读 `创意设置` 说明行，不渲染分段按钮，也不写 `data-scene-field="创意设置"`。
+- 已更新 `tests/keyword-custom-native-parity-ui.test.mjs`，覆盖成本标题、只读创意说明、禁止可提交创意字段和预算顺序。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-preview-submit-parity.test.mjs`：通过，31/31。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- 真实 `one.alimama.com` 页面验证：标准 `chrome-devtools` MCP 9222 端口当前返回 HTTP Not Found，本轮改用项目测试专用 profile 的 9333 DevTools Protocol 直连；已 reload 扩展 `fejbonphnhfgfomjjchjijfeippmhnfd` 并硬刷新页面，`window.__AM_GET_SCRIPT_VERSION__()` 返回 `7.03`。
+- 真实页面插件向导验证：打开 `关键词推广 -> 自定义推广`，确认存在 `设置平均直接净成交成本（非必要）`，成本输入未额外显示 `目标成本` 小标签，存在只读文案 `当前解决方案下暂不支持设置创意，默认开启智能创意。`，预算类型顺序为 `日均预算`、`每日预算`，页面中没有 `data-scene-field="创意设置"`。
+- 真实页面安全检查：验证期间未点击插件提交入口；页面 performance entries 中未出现 `/solution/addList.json` 请求。
+
+## 结果复盘
+- 第 3 点属于纯 UI 文案对齐：只改可见标题和隐藏局部小标签，保留原字段键，避免影响 `singleCostV2`、`subOptimizeTarget` 等提交映射。
+- 第 4 点按只读说明实现，满足原生可见信息对齐，同时避免恢复可操作 `创意设置` 配置导致提交语义漂移。
+- 第 5 点只改预算类型展示顺序，默认值与组包逻辑不变。
+- 本轮没有收到新的用户修正，不更新 `tasks/lessons.md`。
+
+---
+
+# TODO - 2026-05-18 修复扩展授权续租误锁
+
+## 需求规格
+- 目标：
+  - 修复扩展页授权内存态卡在 `lease_renew/request_failed` 后，算法护航入口误报“授权已失效”的问题；
+  - 扩展续租遇到 `Failed to fetch` 等瞬时失败时不锁页、不清有效缓存；
+  - 算法护航同步门禁遇到可恢复态时优先从有效缓存恢复，或进入授权校验中状态并触发按需复验；
+  - 不改授权服务、授权名单、TTL、签名、`policyToken` 验签和 shopId 校验。
+- 成功标准：
+  - `lease_renew` / `lease_renew_retry` 在 extension 模式下使用静默瞬时失败策略；
+  - `requireAuthorizedSync()` 可从有效本地租约缓存恢复授权并放行；
+  - `request_failed`、`request_http_error`、`response_parse_error`、`invalid_response` 不再走 `lease_expired` 锁定分支；
+  - 构建产物同步，自动化验证和真实 `one.alimama.com` 页面验证通过。
+
+## 执行计划（可核对）
+- [x] 回顾历史教训、当前授权状态机和真实页面复现状态。
+- [x] 在任务文档记录需求、边界、成功标准和验证计划。
+- [x] 修改 `src/entries/extension-license-guard.js` 的续租与同步门禁恢复逻辑。
+- [x] 更新 `tests/extension-license-cache-policy-token.test.mjs` 覆盖本次状态机契约。
+- [x] 重新构建生成 userscript 与 extension 产物。
+- [x] 运行语法、相关测试、构建校验和 review 门禁。
+- [x] 使用 `chrome-devtools` MCP 在真实页面复验并记录结果。
+
+## 高层操作摘要
+- 真实页面已观察到 `LicenseGuard.getState()` 停在 `authorized=false`、`reason=request_failed`、`source=lease_renew`，但本地缓存仍有有效租约；触发 `am-helper:license-check` 后可恢复为 `authorized=true` 并移除遮罩。
+- 本轮修复聚焦客户端授权状态机：续租瞬时失败保持可恢复，入口同步门禁先恢复缓存或触发复验，不把可恢复态降级为“授权已失效”。
+- 已修改 `src/entries/extension-license-guard.js`：extension 续租与续租重试传入 `silentTransientFailure`；`requireAuthorizedSync()` 在 extension 模式先尝试有效缓存恢复，再把等待态/瞬时失败态转为 `license_checking` 并触发按需校验；进入等待态时会移除历史误锁遮罩。
+- 已更新 `tests/extension-license-cache-policy-token.test.mjs`，覆盖静默续租、同步门禁缓存恢复、瞬时失败可恢复态和历史遮罩清理。
+
+## 验证记录
+- `node --check src/entries/extension-license-guard.js src/optimizer/public-api.js`：通过。
+- `node --test tests/extension-license-cache-policy-token.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/extension-license-shopid-guard.test.mjs`：通过，11/11。
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `bash scripts/review-team.sh`：通过，457 个测试中 455 pass、2 skip、0 fail；所有 automated review checks passed。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html` 页面：reload 后 `LicenseGuard.getState()` 为 `authorized=true`，`shopId=<SHOP_ID>`，`shopName=<SHOP_NAME>`，`runtimeMode=extension`，`#am-license-lock-overlay` 不存在，本地缓存包含有效 `leaseToken` 与 `policyToken`。
+- Chrome DevTools MCP 构造复现场景：保存有效 `__AM_LICENSE_CACHE_V1__`，调用 `LicenseGuard.lock('request_failed', '授权请求失败: Failed to fetch', 'lease_renew')` 后恢复缓存，再调用 `window.__ALIMAMA_OPTIMIZER_TOGGLE__()`；返回 `true`，状态恢复为 `authorized=true`、`source=optimizer_toggle+cache_recover`，误锁遮罩被移除，未再报“授权已失效”。
+- Chrome DevTools MCP 控制台：复验后仅观察到站点外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 和站点组件依赖警告，未出现本次授权链路的 `[EscortAPI] 授权未通过...授权已失效` 新记录。
+
+## 结果复盘
+- 根因是扩展续租瞬时失败会把内存态写成 `request_failed`，而算法护航同步门禁只把少数等待态视为可恢复，导致有有效本地租约时仍被降级为 `lease_expired`。
+- 修复后 extension 续租失败保持静默可恢复；同步门禁先从有效缓存恢复并放行，若没有可用缓存但属于瞬时失败，则进入 `license_checking` 并触发按需校验，不再误写“授权已失效”。
+- 明确未授权、吊销、店铺授权过期等非瞬时失败仍走锁定分支；本轮未修改授权服务、授权名单、TTL、签名、`policyToken` 验签或 shopId 校验。
+- 已在 `tasks/lessons.md` 追加 L62，沉淀“扩展续租瞬时失败不能降级为授权过期”的状态机规则。
+
+---
+
+# TODO - 2026-05-18 生成项目级 AGENTS.md
+
+## 需求规格
+- 目标：
+  - 生成一份面向 Codex/Claude 等代码代理可执行的项目级 `AGENTS.md`；
+  - 合并项目现有仓库规范、任务管理规则、验证要求与真实浏览器验收约束；
+  - 明确 `src/` 为源码事实来源，根目录 userscript 与 `dist/` 为构建产物；
+  - 不触碰业务源码、不运行会改写构建产物的命令。
+- 成功标准：
+  - `AGENTS.md` 能覆盖工作流程、项目结构、构建测试、代码风格、关键路径测试、浏览器验证、提交/发布和上下文压缩规则；
+  - 文档内容与 `README.md`、`package.json`、`scripts/build.mjs` 的项目现状一致；
+  - 本轮仅修改文档和任务记录，避免影响已有未归属改动。
+
+## 执行计划（可核对）
+- [x] 检查当前 `AGENTS.md`、`README.md`、`package.json`、源码目录和现有任务/教训记录。
+- [x] 确认计划范围：只更新项目级 `AGENTS.md` 与 `tasks/todo.md`，不改业务源码和构建产物。
+- [x] 重写 `AGENTS.md`，补齐 agent 工作规范与项目技术约束。
+- [x] 校验 `AGENTS.md` 内容可读、无明显过时命令、无误导性路径。
+- [x] 回填验证记录和结果复盘。
+
+## 高层操作摘要
+- 当前仓库已有 `AGENTS.md`，但偏仓库结构指南，缺少规划优先、教训沉淀、真实验证和 Claude 复审等执行要求。
+- 本轮采用根目录单文件 `AGENTS.md`，不生成分层子目录 `AGENTS.md`，避免超出用户“这个项目的 agent.md”范围。
+- 当前工作区已有多项未提交改动；本轮会保持最小侵入，只更新文档。
+- 已将 `AGENTS.md` 重写为项目级 agent 工作规范，覆盖核心原则、任务规划、子代理/上下文、项目结构、构建测试、开发流程、代码风格、关键路径测试、真实浏览器验证、构建发布、安全边界和复审清单。
+
+## 验证记录
+- 人工对照 `README.md`、`package.json`、`scripts/build.mjs` 和 `docs/源码结构速查.md`：`AGENTS.md` 中命令、端口、源码事实来源和构建产物说明一致。
+- `git diff --check -- AGENTS.md tasks/todo.md`：通过，无 whitespace error。
+- `rg -n "8173|KNOWLEDGE|CLAUDE|TODO|待回填" AGENTS.md`：仅命中“开放 TODO”上下文压缩说明，未发现旧端口或过时文档引用。
+- `node -e "... required sections ..."`：通过，确认 `AGENTS.md` 必要章节齐全。
+
+## 结果复盘
+- 本轮是文档生成任务，未修改业务源码，未运行会改写 userscript 或 `dist/` 的构建命令。
+- 现有 `AGENTS.md` 的仓库指南已扩展为可执行 agent 规范，并保留项目最关键的源码事实来源、测试和真实页面验收要求。
+- 没有收到用户修正，本轮不新增 `tasks/lessons.md`。
+
+---
+
+# TODO - 2026-05-18 修复扩展授权请求 Failed to fetch
+
+## 需求规格
+- 目标：
+  - 修复 Chrome 扩展运行态下店铺已授权但仍弹出“授权请求失败: Failed to fetch”的误锁问题；
+  - 将 extension 授权网络请求迁移到 MV3 background service worker，规避页面主世界跨域/CSP 限制；
+  - 保留页面侧现有 shopId 识别、签名校验、policy token 验签与缓存续租逻辑，不降低授权安全性；
+  - 同步更新构建产物与静态回归测试，并用 `chrome-devtools` MCP 在真实阿里妈妈页面完成浏览器验收。
+- 成功标准：
+  - `src/entries/extension-background.js` 新增固定授权 verify 桥，仅接受阿里妈妈页面来源请求；
+  - `src/entries/extension-content.js` 只桥接授权校验消息，能把 page world 请求转发到 background 再回传结果；
+  - `src/entries/extension-license-guard.js` 在 extension runtime 优先走桥接请求，失败时沿用瞬时失败静默策略；
+  - extension manifest 生成 `background.service_worker` 与授权服务 `host_permissions`，并输出 `dist/extension/background.js`；
+  - 自动化校验和 `chrome-devtools` MCP 真实页面复验通过，`#am-license-lock-overlay` 不再因 `Failed to fetch` 误弹。
+
+## 执行计划（可核对）
+- [x] 回顾当前工作树与既有授权实现，确认只做增量修改，不回退已有改动。
+- [x] 在任务文档记录需求、检查项与验证计划。
+- [x] 新增 background 授权桥，并更新 content script/page guard 接线。
+- [x] 更新构建脚本与 manifest，产出 background.js 与 host permissions。
+- [x] 补充/更新静态回归测试，覆盖 manifest、background、content bridge 与 guard 走桥逻辑。
+- [x] 重新构建并运行语法、构建、测试校验。
+- [x] 使用 `chrome-devtools` MCP 在真实页面复验，并回填结果复盘。
+
+## 高层操作摘要
+- 本轮按扩展运行态根因修复，不改 license server，也不放松客户端签名与 token 校验。
+- 当前工作区已有多项未提交改动；本轮仅触碰授权桥、构建、对应测试与任务文档。
+- 新增 `src/entries/extension-background.js` 作为唯一授权 verify 网络出口；page world 只发桥接消息，background 固定请求授权服务并校验 `sender.url` 只能来自 `alimama.com` / `*.alimama.com`。
+- `src/entries/extension-content.js` 增加窄桥，只转发 `am-helper-pro:license-verify` / `verify-request` 到 `chrome.runtime.sendMessage`，再把 background 响应按 `verify-response` 回传页面。
+- `src/entries/extension-license-guard.js` 在 extension runtime 改为优先走 background 桥，同时保留 `verifyLeasePayloadShape`、`verifySignature`、`verifyPolicyToken` 顺序；桥超时和 background 失败继续归类为 `request_failed`，复用既有瞬时失败静默策略。
+- `scripts/build.mjs` 与 extension manifest 已同步产出 `dist/extension/background.js`、`background.service_worker` 和授权服务 `host_permissions`；静态测试补齐 manifest、background、content bridge 和 guard 桥接断言。
+
+## 验证记录
+- `node --check src/entries/extension-background.js src/entries/extension-content.js src/entries/extension-license-guard.js scripts/build.mjs`：通过。
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物，并生成 `dist/extension/background.js`。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/extension-static-build.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs`：通过，14/14。
+- `node --test tests/*.test.mjs`：通过，457 个测试中 455 pass、2 skip、0 fail。
+- `bash scripts/review-team.sh`：通过，所有 automated review checks passed。
+- Chrome DevTools MCP：在 `chrome://extensions/` 页面确认扩展 `阿里妈妈多合一助手 (Pro版)` `v7.03` 已 reload，扩展 ID 为 `fejbonphnhfgfomjjchjijfeippmhnfd`。
+- Chrome DevTools MCP 真实 `one.alimama.com#!/manage/search` 页面：reload 后首屏 `#am-license-lock-overlay` 不存在；此时授权态停留在 `license_unverified` / `runtimeMode=extension`，证明首装或刷新场景已不再因为网络瞬时问题直接全屏误锁。
+- Chrome DevTools MCP 真实 `one.alimama.com#!/manage/search` 页面：派发 `window.dispatchEvent(new CustomEvent('am-helper:license-check'))` 后约 `502ms` 内 `LicenseGuard.getState()` 变为 `authorized: true`，`shopId: "<SHOP_ID>"`，`shopName: "<SHOP_NAME>"`，且遮罩仍不存在。
+- Chrome DevTools MCP 二次派发 `am-helper:license-check`：授权态保持 `authorized: true`，`#am-license-lock-overlay` 仍不存在，未复现“授权请求失败: Failed to fetch”弹层。
+- Chrome DevTools MCP 控制台：未再观察到本次授权链路触发的 `Failed to fetch` 锁定提示；页面中仍有站点自身 `net::ERR_TUNNEL_CONNECTION_FAILED` 等既有噪声，与本次授权修复无关。
+
+## 结果复盘
+- 根因是 extension 模式下授权请求从 page world 直接 `fetch` 远端服务，受页面 CSP/跨域环境影响会把已授权店铺误判成请求失败；正确分层是让 MV3 background 作为跨域请求出口，页面只保留 shopId 解析和签名/token 验签。
+- 当前行为分成两段：刷新首屏时不再因为一次瞬时网络失败直接锁死页面；一旦用户触发插件授权校验事件，请求会经由 content -> background -> license server -> page 的窄桥完成，随后内存授权态进入 `authorized`。
+- 本轮没有放松客户端安全约束；background 固定 verify endpoint，不接受页面传入任意 URL，guard 仍要求签名验签和 `policyToken` 验签全部通过。
+- 真实页面已证明用户截图中的误锁弹层不再出现，并且同店铺 `<SHOP_ID>` 在触发校验后能稳定恢复为已授权状态。
+- 未收到新的用户修正，本轮不更新 `tasks/lessons.md`。
+
+---
+
+# TODO - 2026-05-15 Chrome 扩展版本号规范化提示
+
+## 需求规格
+- 目标：
+  - 解释 Chrome 扩展页提示 `The extension version is parsed as '7.3'.` 的原因；
+  - 修复生成的 extension manifest，避免 `7.03` 这类带前导零的版本组件触发 Chrome 规范化提示；
+  - 保留项目现有 `v7.03` 展示口径，不打乱 userscript、README 与发布记录。
+- 成功标准：
+  - `dist/extension/manifest.json` 的 `version` 输出为 Chrome 规范版本；
+  - manifest 通过 `version_name` 保留原展示版本；
+  - 构建测试覆盖版本规范化逻辑；
+  - 相关构建、语法和测试校验通过。
+
+## 执行计划（可核对）
+- [x] 回顾历史教训与当前工作树，确认不回退已有改动。
+- [x] 定位 manifest 版本来源与 Chrome 提示原因。
+- [x] 修改构建脚本，在 extension manifest 中区分规范更新版本与展示版本。
+- [x] 补充回归测试，防止后续再次输出带前导零的 manifest `version`。
+- [x] 重新构建生成产物并运行验证。
+- [x] 回填验证记录和结果复盘。
+
+## 高层操作摘要
+- Chrome 官方 manifest 版本规则要求每段是 0 到 65535 的整数，非零整数不能以 `0` 开头；因此 `7.03` 会被 Chrome 按数字解析为 `7.3` 并在扩展页提示。
+- 当前仓库的 extension manifest 由 `scripts/build.mjs` 从 userscript 头部 `@version 7.03` 直接生成，本轮需要在构建层处理，而不是手改 `dist/extension/manifest.json`。
+- 已在构建脚本新增 `normalizeExtensionManifestVersion()`，让 extension manifest 的 `version` 输出为 `7.3`，同时通过 `version_name` 保留 `7.03` 展示口径。
+- 已同步 `dist/extension/manifest.json`，并补充 `tests/extension-static-build.test.mjs` 防止后续再次直接输出带前导零的 manifest 版本。
+
+## 验证记录
+- `node --check scripts/build.mjs`：通过。
+- `node --test tests/extension-static-build.test.mjs`：通过，6/6。
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs`：通过，8/8。
+- `node -e "const m=require('./dist/extension/manifest.json'); if(m.version!=='7.3'||m.version_name!=='7.03') process.exit(1); console.log(JSON.stringify({version:m.version,version_name:m.version_name}))"`：通过，输出 `{"version":"7.3","version_name":"7.03"}`。
+- `bash scripts/review-team.sh`：通过，454 个测试中 452 pass、2 skip，所有 automated review checks passed。
+
+## 结果复盘
+- 这不是插件代码运行错误，而是 Chrome 对 manifest `version` 的规范化提示；`7.03` 中的 `03` 会被按整数解析为 `3`。
+- 不直接把项目版本全局改成 `7.3`，避免 userscript、README 和发版记录的 `v7.03` 口径被无关扰动。
+- 正确分层是：manifest `version` 用于 Chrome 更新比较，必须合规且无前导零；manifest `version_name` 用于显示，可保留 `7.03`。
+
+---
+
 # TODO - 2026-05-15 人群对比看板加载提速
 
 ## 需求规格
@@ -26,6 +259,7 @@
 - 当前工作树已有多项未归属本轮的改动，本轮只在必要文件上增量修改，不回退既有变更。
 - 实现集中在 `src/main-assistant/magic-report.js`；初步慢点为：看板请求前同步等待商品列表识别、默认隐藏指标仍参与首轮全量加载、同一指标的省份/城市基础查数在并发周期任务中缺少共享 promise 保护。
 - 优化选择：初次加载仅请求当前可见人群（默认加购人群），隐藏人群在图例点亮时按指标补拉；非商品成交场景下商品下拉列表改为后台识别；省份/城市基础查数集中到共享 promise，避免同指标并发周期任务重复查数；排队刷新改为多指标队列，避免加载中连续点亮多个隐藏人群只补最后一个。
+- 按最新口径确认加载体验：保持“完成一个周期就渲染一次”，并将隐藏人群点亮、商品 ID 切换等局部刷新链路也改为按周期增量渲染。
 
 ## 验证记录
 - `node --check src/main-assistant/magic-report.js`：通过。
@@ -40,13 +274,290 @@
 - Chrome DevTools MCP 控制台：仅观察到页面外部资源代理 `net::ERR_TUNNEL_CONNECTION_FAILED` 等既有噪声，未发现本次人群看板逻辑导致的可见异常。
 - Chrome DevTools MCP 真实关键词推广页复测计时：计划 `69514602419 / E7pro_自定义` 首屏第 1 次从点击到完成 `20.8s`，状态从 `正在加载计划...` 到 `加载中 1/4` 再到 `人群对比看板已加载完成（4列周期 × 8行维度）`；隔离到本次操作的报告请求为 `12` 个（`dataQuery=3`、`panelDataQuery=9`）。
 - Chrome DevTools MCP 真实关键词推广页复测计时：同计划首屏第 2 次从点击到完成 `14.5s`，仍为 `加载中 1/4` 的 4 周期任务；按需点亮隐藏的“点击人群”单独刷新 `11.3s` 完成，隔离报告请求同为 `12` 个。
+- `node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-trigger-driver.test.mjs tests/magic-report-panel-resilience.test.mjs`：通过，65/65；新增断言覆盖局部刷新“完成一个周期就渲染一次”。
 
 ## 结果复盘
 - 慢点根因是首屏做了过多“用户当前没看的数据”：隐藏人群仍参与初次全量请求，且非商品成交场景也同步等待商品列表识别。
 - 修复后默认首屏从“4 类人群 × 4 周期”收敛为“当前可见人群 × 4 周期”，隐藏人群保留交互入口，在用户点亮时按需补拉，不改变数据口径。
+- 首屏加载与局部刷新都保持边加载边显示：每完成一个周期结果就合入当前结果集并重绘对应周期列，最终完成后再做一次完整收口渲染。
 - 真实页面计时显示当前默认首屏在本次网络条件下约 `14.5s-20.8s` 完成；旧逻辑会把 4 类人群全部纳入首屏，至少是 `16` 个周期任务，且隐藏人群请求会挤占首屏，所以当前实现已把首屏工作量稳定降到旧逻辑的 1/4。
 - 省份/城市基础查数增加共享 promise 后，同一人群指标的并发周期任务不会重复发起相同基础维度解析；加载中连续点亮多个隐藏人群也会按队列依次补跑，避免只刷新最后一次操作。
 - 本轮没有点击原生 `创建完成`、插件 `批量创建`、`立即投放` 或任何真实提交入口；未收到用户修正，因此没有新增 `tasks/lessons.md` 教训项。
+
+---
+
+# TODO - 2026-05-15 取消辅助标签样式去宽度改动
+
+## 需求规格
+- 目标：
+  - 按用户最新修正，取消“`TAG_BASE_STYLE` 去掉强制 `width:100%`”这项样式改动。
+  - 保留本轮辅助显示的多可见表格遍历、诊断函数、可见性判断等非样式修复。
+  - 同步源码、测试契约、生成 userscript 与 extension 产物，避免源码和发布包不一致。
+- 成功标准：
+  - `src/main-assistant/bootstrap.js` 中 `TAG_BASE_STYLE` 恢复 `width:100%;margin-top:2px;`。
+  - `tests/logger-api.test.mjs` 不再禁止该样式，而是断言它被保留。
+  - `tasks/lessons.md` 不再保留与最新口径冲突的禁止项，并记录本次修正。
+  - 构建和相关测试通过。
+
+## 执行计划（可核对）
+- [x] 确认最新口径：取消去掉 `width:100%` 的样式改动。
+- [x] 记录需求、验收标准和用户修正。
+- [x] 恢复 `TAG_BASE_STYLE`，调整测试契约与任务/教训文档。
+- [x] 重新构建生成产物。
+- [x] 运行测试与构建校验。
+
+## 高层操作摘要
+- 用户纠正上一轮表述，明确 `TAG_BASE_STYLE` 去掉强制 `width:100%` 的改动需要取消。
+- 本轮只回滚辅助标签基础样式这一项，不回退辅助显示多表格遍历、诊断函数、可见性判断等根因修复。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/logger-api.test.mjs tests/report-metric-ratio-columns.test.mjs`：通过，15/15。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `bash scripts/review-team.sh`：通过，452 个测试中 450 pass、2 skip，所有 automated review checks passed。
+
+## 结果复盘
+- 最新样式契约已恢复为保留 `width:100%;margin-top:2px;`，并由 `tests/logger-api.test.mjs` 断言保护。
+- 辅助显示“日志更新但页面不可见”的主要修复仍保留在可见表格识别、多表格遍历、诊断函数和 DOM 观察增强上。
+
+---
+
+# TODO - 2026-05-15 辅助显示部分浏览器不生效
+
+## 需求规格
+- 目标：
+  - 排查真实浏览器里“辅助显示”开关/标记没有生效的问题；
+  - 区分脚本未注入、主面板未渲染、辅助开关未持久化、DOM 观察器未启动、页面结构或浏览器环境差异导致的失效；
+  - 找到根因后做最小侵入修复，并同步生成 userscript 与 extension 产物；
+  - 通过自动化测试和 Chrome DevTools MCP 真实页面验证。
+- 成功标准：
+  - 在当前浏览器真实页面可确认主助手与辅助显示运行态；
+  - 辅助显示入口点击后状态可见、配置可保存，并触发对应页面标记/增强逻辑；
+  - 对会导致部分浏览器失效的兼容性问题补充回归测试；
+  - `node scripts/build.mjs --check`、`node --check "阿里妈妈多合一助手.js"`、相关 `node:test` 通过。
+
+## 执行计划（可核对）
+- [x] 回顾历史教训与当前工作树，确认不回退已有改动。
+- [x] 用 Chrome DevTools MCP 检查当前浏览器页面、控制台错误、脚本注入状态和辅助显示 DOM。
+- [x] 阅读辅助显示实现，定位跨浏览器差异点与失败条件。
+- [x] 选择最小侵入且可维护的修复方案，并确认是否有更优雅实现。
+- [x] 修改源码、补充/更新回归测试并重新构建产物。
+- [x] 运行自动化验证和真实页面复验。
+- [x] 回填验证记录、结果复盘，必要时沉淀 `tasks/lessons.md`。
+
+## 高层操作摘要
+- 用户反馈“现在有个浏览器里，辅助显示没有生效，有些浏览器可以有些不可以”，初步按运行态差异排查，不先假设为单一 UI 问题。
+- 本轮只追加当前任务记录；开始前已有的授权、组建计划、Linear 同步、pet 任务等改动不回退。
+- Chrome DevTools MCP 检查当前 `one.alimama.com` 首页和关键词推广页，确认当前浏览器中主助手已注入，辅助显示标签能渲染；因此本轮按“部分浏览器环境差异”修复薄弱点，而不是重写辅助显示算法。
+- 根因候选收敛为两类：主助手配置直接读写 `localStorage`，在隐私模式/存储受限/异常配置浏览器中可能阻断启动；SPA 表格复用节点时只监听 `childList`，对 class/style/文本变化不敏感，可能错过重扫。
+- 修复方式：新增安全配置存储封装，`localStorage` 读写失败时回退内存 Map，不让主助手启动中断；扩展主 `MutationObserver` 监听 `class/style/aria-hidden` 和文本变化，覆盖表格显示切换与内容复用更新。
+- 补充回归测试，防止后续重新出现裸 `localStorage` 读写或只监听 `childList` 的退化；已重新构建根 userscript、packages 和 extension 产物。
+
+## 验证记录
+- Chrome DevTools MCP 当前浏览器 `one.alimama.com/index.html` 首页：脚本注入正常，`#am-helper-panel` 存在，辅助显示当前已有 80 个 `.am-helper-tag`。
+- Chrome DevTools MCP 当前浏览器关键词推广页：脚本注入正常，修复前运行态已有 230 个 `.am-helper-tag`，说明当前浏览器可用，问题更可能来自部分浏览器环境差异。
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/logger-api.test.mjs tests/magic-report-panel-resilience.test.mjs tests/report-metric-ratio-columns.test.mjs`：通过，17/17。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test --test-reporter=dot tests/*.test.mjs`：通过，退出码 0。
+- Chrome DevTools MCP 真实关键词推广页硬刷新后：`#am-helper-panel` 存在，`#am-assist-switches` 可展开，8 个辅助开关可见并读取为 active；列表渲染 175 个 `.am-helper-tag`，包含 `ratio-tag/cart-tag/cost-tag/budget-tag`。
+- Chrome DevTools MCP 真实关键词推广页面板日志：启动后记录 `阿里助手 Pro v7.03 已启动`、`总花费更新: 487.4`、多次 `更新 xx 项数据`，证明重扫链路正常触发。
+- `bash scripts/review-team.sh`：通过，448 个测试中 446 pass、2 skip，所有 automated review checks passed。
+
+## 结果复盘
+- 当前可复验浏览器本身不是“完全没有辅助显示”，真实页面已经能渲染辅助标签；本轮修的是会导致“有些浏览器可以、有些不可以”的两个高风险兼容点。
+- 存储受限或 `localStorage` 异常时，旧逻辑可能在 `loadConfig()` 或 `State.save()` 直接抛错，导致主助手/辅助显示初始化中断；现在配置读写失败只降级到内存态，不阻断运行。
+- 阿里妈妈 SPA 表格可能复用节点并只改属性或文本；旧观察器只看增删节点，可能漏掉重扫；现在属性和文本变化也会调度 `Core.run()`。
+- 本轮未点击原生 `创建完成`、插件 `批量创建`、`立即投放` 或任何真实提交入口。
+
+# TODO - 2026-05-15 创建个人化 Codex Pet
+
+## 需求规格
+- 目标：
+  - 创建一个基于用户工作风格的 Codex 兼容 pet；
+  - 体现“严谨工程、真实验证、最小侵入、可被 Claude 复审”的个人特征；
+  - 生成完整 9 状态 spritesheet、`pet.json`、联系表和动画预览；
+  - 不修改业务源码，不影响现有 userscript 构建产物。
+- 成功标准：
+  - 产物保存到 `${CODEX_HOME:-$HOME/.codex}/pets/<pet-id>/pet.json` 与 `spritesheet.webp`；
+  - `final/validation.json` 通过 Codex pet atlas 校验；
+  - `qa/contact-sheet.png` 与 `qa/previews/*.gif` 存在，可用于视觉复核；
+  - 任务文档记录高层操作摘要、验证记录和结果复盘。
+
+## 执行计划（可核对）
+- [x] 回顾历史教训，确认本轮只做资产生成，不触碰业务链路。
+- [x] 准备 hatch-pet 运行目录、宠物名称、描述、风格和 prompts。
+- [ ] 生成主形象与 9 个状态行图。
+- [ ] 运行帧提取、atlas 合成、校验、联系表和动画预览。
+- [ ] 打包到 Codex pets 目录并回填验证记录。
+
+## 高层操作摘要
+- 宠物方向：一个小型工程守护助手，偏贴纸/3D toy 风格，随身带轻量检查板但不包含任何可读文字或品牌标识。
+- 设计语义：idle 表示稳定待命，running-right/left 表示方向移动，running 表示专注处理任务，review 表示严谨复核，waiting 表示等待用户确认，failed 表示可恢复失败态。
+- 本轮按 `hatch-pet` 技能执行，使用内置 imagegen 生成位图资产，再用技能自带脚本做 deterministic atlas 与验证。
+- 已创建运行目录 `tasks/pet-runs/review-scout-20260515`，pet id 为 `review-scout`。
+- 已生成并登记主形象 `decoded/base.png` 与 `references/canonical-base.png`。
+
+## 验证记录
+- 待回填。
+
+## 结果复盘
+- 待回填。
+
+---
+
+# TODO - 2026-05-14 新店铺首装误弹授权超时
+
+## 需求规格
+- 目标：
+  - 修复新店铺首次安装、无本地授权缓存时也弹出授权超时/锁定页面的问题；
+  - 区分首装冷启动校验中、店铺识别暂未完成、授权服务瞬时失败、远端明确未授权/过期；
+  - 首装校验中不展示全屏锁定遮罩，避免把等待态误导成授权超时；
+  - 保持真实未授权、真实过期、远端明确拒绝时的阻断能力。
+- 成功标准：
+  - extension 无有效缓存冷启动时，不因用户第一次点击插件入口立即渲染授权锁定遮罩；
+  - 点击会触发后台授权校验，业务事件仍被同步阻断，避免校验完成前执行敏感动作；
+  - 只有远端明确拒绝、真实过期或非瞬时失败才展示锁定遮罩；
+  - 补充回归测试并通过构建、全量自动化和真实页面基础复验。
+
+## 执行计划（可核对）
+- [x] 记录用户修正和首装冷启动验收标准。
+- [x] 审查无缓存冷启动、按需校验、同步门禁和遮罩渲染路径。
+- [x] 修改首装等待态，不再把 `license_checking` 渲染为全屏锁定页。
+- [x] 补充授权守卫回归测试并同步生成产物。
+- [x] 运行自动化验证和 Chrome DevTools 真实页面复验。
+- [x] 回填验证记录、结果复盘，并沉淀到 `tasks/lessons.md`。
+
+## 高层操作摘要
+- 用户进一步反馈“新店铺刚安装时也弹授权超时页面”，说明上一轮只处理了已有有效缓存的租约刷新路径，没有覆盖无缓存首装冷启动。
+- 初步定位：extension 模式无缓存时会启动 `bootstrap_preflight` 静默校验，同时按需点击守卫在租约尚未建立时调用 `renderPendingAuthorizationOverlay()`，把“授权校验中”直接渲染为全屏锁定遮罩。
+- 修复方向：保留点击同步阻断和按需远端校验，但首装/等待态只更新状态，不渲染锁定遮罩；锁定遮罩仅用于真实未授权、真实过期或远端明确失败。
+- 已修改：`license_checking` 等等待态只写入只读授权状态；点击仍阻断当前业务事件并触发按需校验；同步公开入口在等待态返回 `license_checking`，不再先覆盖成 `lease_expired`。
+- 已补充：按需校验遇到 `request_failed/request_http_error/response_parse_error/invalid_response` 等瞬时失败也走静默延期，不再在新店铺冷启动时弹出授权超时锁定页。
+- 本轮不回退开始前已有的组建计划修复、授权缓存修复、Linear 同步文件和既有任务文档改动。
+
+## 验证记录
+- `node --check src/entries/extension-license-guard.js`：通过。
+- `node --test tests/extension-license-cache-policy-token.test.mjs`：通过，3/3。
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/extension-static-build.test.mjs`：通过，15/15。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test --test-reporter=dot tests/*.test.mjs`：通过，退出码 0。
+- `bash scripts/review-team.sh`：通过，446 个测试中 444 pass、2 skip，所有 automated review checks passed。
+- Chrome DevTools 真实 `one.alimama.com/index.html` 页面：备份并移除 `__AM_LICENSE_CACHE_V1__`，通过 `Page.addScriptToEvaluateOnNewDocument` 仅模拟 `/v1/license/verify` 授权接口超时。
+- Chrome DevTools 冷启动超时模拟：启动后 `LicenseGuard.getState()` 为 `authorized=false / reason=license_refresh_deferred / source=bootstrap_preflight`，`#am-license-lock-overlay` 不存在。
+- Chrome DevTools 点击助手入口模拟：`pointerdown` 被同步阻断，状态变为 `source=on_demand_pointerdown`，仍无 `#am-license-lock-overlay`，证明首装/超时等待态不再弹全屏锁定页。
+- Chrome DevTools 清理复原：移除超时注入脚本、恢复原授权缓存并刷新页面后，状态回到 `authorized=true / source=extension_cache_bootstrap`，无锁定遮罩。
+
+## 结果复盘
+- 根因是把“无缓存首装等待远端校验”和“真实授权失败/过期”共用了锁定遮罩；在授权服务慢、超时或新店铺首次写入缓存前，用户会看到误导性的授权超时页面。
+- 修复后，等待态只更新 `LicenseGuard` 状态并阻断当前业务事件，不渲染全屏遮罩；按需校验的瞬时失败也静默延期，避免新店铺首装被误判为过期。
+- 真实未授权、真实过期和远端明确拒绝仍会进入 `lock()` 并展示锁定遮罩，不放开敏感功能。
+- 本轮未点击原生 `创建完成`、插件 `批量创建`、`立即投放` 或任何真实提交入口。
+
+---
+
+# TODO - 2026-05-14 授权未过期却反复提示
+
+## 需求规格
+- 目标：
+  - 修复授权未过期时仍反复弹出授权/过期提示的问题；
+  - 定位提示触发源，区分真实未授权、租约过期、店铺识别失败、远端瞬时失败和本地缓存误判；
+  - 避免有效授权状态下阻断插件入口或反复展示锁定遮罩；
+  - 保持未授权/真实过期时的阻断能力不退化。
+- 成功标准：
+  - 有效授权租约未过期时，不应弹出 `授权已失效/租约已过期/授权校验失败` 类提示；
+  - 有效租约刷新失败时只保留当前授权并记录日志，不展示锁定遮罩；
+  - 真实页面可读取到当前授权状态，并验证插件入口不会被有效授权误阻断；
+  - 覆盖授权守卫回归测试，构建和 `review-team` 通过。
+
+## 执行计划（可核对）
+- [x] 记录问题、验收标准和风险边界。
+- [x] 读取 `extension-license-guard` 状态机、缓存命中和交互阻断逻辑。
+- [x] 用 Chrome DevTools 真实页面检查当前 `LicenseGuard` 状态、缓存、shopId、提示来源和控制台错误。
+- [x] 修复误提示根因并补充回归测试。
+- [x] 同步生成产物，运行自动化验证和真实页面复验。
+- [x] 回填验证记录、结果复盘，并把本次用户修正沉淀到 `tasks/lessons.md`。
+
+## 高层操作摘要
+- 用户反馈“没有授权过期，为什么老是会弹出提示”，说明当前提示可能把远端校验失败或店铺识别瞬态误展示成授权过期。
+- Chrome DevTools 真实页确认：后台店铺 `<SHOP_ID> / <SHOP_NAME>` 可远端校验通过，但页面启动时内存 `LicenseGuard` 为 `authorized=false / license_unverified`；旧本地租约已过期，手动校验后远端返回新 5 分钟租约。
+- 根因确认：extension 模式不从有效缓存恢复内存授权态，且不做租约到期前静默续租；本地 5 分钟短租约过期后，下一次插件交互会先被本地状态阻断并展示提示，再去远端续租。
+- 修复方式：启动时从结构校验通过的有效 policy token 缓存恢复内存授权态；extension 模式到期前静默续租，但不再通过空闲过期计时器锁定页面；无有效缓存时启动静默预检，瞬时失败不弹锁定遮罩。
+- 本轮不回退开始前已有的组建计划修复、Linear 同步文件和既有 `tasks/lessons.md` 改动。
+
+## 验证记录
+- `node --check src/entries/extension-license-guard.js`：通过。
+- `node --test tests/extension-license-cache-policy-token.test.mjs`：通过，3/3。
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/extension-static-build.test.mjs`：通过，15/15。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test --test-reporter=dot tests/*.test.mjs`：通过，退出码 0。
+- `bash scripts/review-team.sh`：通过，446 个测试中 444 pass、2 skip，所有 automated review checks passed。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html` 页面：修复前确认后台授权可通过，手动 `LicenseGuard.assertAuthorized()` 返回店铺 `<SHOP_ID> / <SHOP_NAME>` 的新 5 分钟租约，证明不是后台授权过期。
+- Chrome DevTools MCP 真实页面重载后：`LicenseGuard.getState()` 为 `authorized=true`，`source=extension_cache_bootstrap`，无授权锁定遮罩，助手面板存在。
+- Chrome DevTools MCP 点击主助手入口：点击前后均保持 `authorized=true`，未出现授权遮罩或误提示，面板正常打开。
+
+## 结果复盘
+- 根因不是后台授权过期，而是 extension 本地短租约约 5 分钟到期后，旧逻辑没有先静默续租或从有效缓存恢复内存态，导致下一次点击先被本地未授权状态阻断。
+- 修复后 extension 启动会校验 policy token 并从有效缓存恢复授权态；租约到期前触发静默续租；extension 模式不再因为空闲租约到期主动展示锁定遮罩。
+- 无有效缓存时仍会做启动静默预检，瞬时失败只记录待刷新状态，不直接弹锁定遮罩；真实未授权、真实过期或远端明确拒绝仍保持阻断能力。
+- 本轮未点击原生 `创建完成`、插件 `批量创建`、`立即投放` 或任何真实提交入口。
+
+---
+
+# TODO - 2026-05-14 组建计划模块不可用弹窗
+
+## 需求规格
+- 目标：
+  - 修复点击插件 `组建计划` 时出现 `组建计划模块不可用，请刷新页面重试` 的问题；
+  - 定位入口 API 获取失败的根因，优先修复模块注册/桥接/构建顺序问题，不做简单吞错；
+  - 保持页面安全边界，不能把 extension 页面不应暴露的完整 API 重新泄漏到页面全局；
+  - 同步根 userscript 与 extension 产物，并提供可复验的自动化证据。
+- 成功标准：
+  - 主助手入口能解析到可用的 `KeywordPlanApi.openWizard`，并在 API 尚未准备好时给出可恢复路径；
+  - `组建计划模块不可用` 不再因正常加载顺序或桥接隔离误判触发；
+  - 有回归测试覆盖入口 API 解析和桥接注册契约；
+  - `node scripts/build.mjs --check`、相关 `node --test`、`node --check "阿里妈妈多合一助手.js"` 通过。
+
+## 执行计划（可核对）
+- [x] 回顾历史教训，确认入口点击必须捕获 Promise reject 并验证可见反馈。
+- [x] 建立根因笔记，梳理 `组建计划` 按钮、`KeywordPlanApi` 导出、bridge 注册和 extension 注入链路。
+- [x] 选择最小侵入修复方案，并确认是否存在更优雅实现。
+- [x] 修改源码并补充回归测试。
+- [x] 运行构建、语法检查、相关测试和可行的浏览器验证。
+- [x] 回填验证记录、结果复盘和剩余风险。
+
+## 高层操作摘要
+- 用户截图显示线上域 `one.alimama.com` alert：`组建计划模块不可用，请刷新页面重试`。
+- 初步定位到触发点在主助手 UI 的 `am-trigger-keyword-plan-api` 点击处理：首次解析 API 失败后延迟重试，重试仍失败即弹窗。
+- 根因确认：extension 默认运行态为避免泄漏完整计划 API，跳过 `globalThis.__AM_WXT_KEYWORD_API__` 注册；主助手入口处于另一个 IIFE，不能直接访问 `KeywordPlanApi`，因此误判模块不可用。
+- 优雅性校验：不恢复完整 API 暴露，改为默认安装只允许 `openWizard` 的窄桥，保持建计划/查询/修复等高权限方法继续受内部或 debug 边界保护。
+- 本轮不回退开始前已有 `tasks/lessons.md`、`tasks/linear-sync-inventory.md`、`tasks/linear-sync-results.json` 改动。
+
+## 验证记录
+- `node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs`：通过，9/9。
+- `node --check src/optimizer/bridge.js`：通过。
+- `node --check src/main-assistant/bootstrap.js`：不适用，源码片段单独检查缺少后续 IIFE 结尾，改用整包语法检查。
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/keyword-plan-api-slim.test.mjs`：通过，19/19。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test --test-reporter=dot tests/*.test.mjs`：通过，退出码 0。
+- `bash scripts/review-team.sh`：通过，446 个测试中 444 pass、2 skip，所有 automated review checks passed。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html` 页面：临时移除 `__AM_WXT_DEBUG_PAGE_API__` 并重载后，确认 extension 运行态为 `mode=extension`、版本 `7.03`、`window.__AM_WXT_KEYWORD_API__` 为 `false`、`window.__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__` 为 `1`。
+- Chrome DevTools MCP：点击主面板 `组建计划` 后未触发 alert，未出现 `组建计划模块不可用` 或 `组建计划模块打开失败`，并成功创建且打开 `#am-wxt-keyword-overlay`。
+- Chrome DevTools MCP：测试后已恢复原 `__AM_WXT_DEBUG_PAGE_API__=1`，并关闭测试打开的关键词计划弹窗；控制台仍有原站资源代理 `ERR_TUNNEL_CONNECTION_FAILED` 等既有噪声。
+
+## 结果复盘
+- 根因是 v7.03 安全收紧后 extension 默认不再暴露完整 `KeywordPlanApi`，而主助手入口处于另一个 IIFE，无法直接访问 `openWizard`。
+- 修复采用默认可用的 `openWizard` 窄桥：主助手只请求打开向导，optimizer 侧只执行 `KeywordPlanApi.openWizard()`。
+- 完整 page API 仍保留 debug 开关保护，`createPlansBatch`、`searchItems`、`runCreateRepairByItem` 等高权限方法没有重新默认暴露。
+- 本轮未点击原生 `创建完成`、插件 `批量创建`、`立即投放` 或任何真实提交入口。
 
 ---
 
@@ -1272,13 +1783,13 @@
 - 目标：
   - 按真实页面一级营销场景卡片重新摸排 `addList.json`，场景口径为 `货品全站推广`、`关键词推广`、`人群推广`、`店铺直达`、`内容营销`、`线索推广`；
   - 每个一级场景建立独立浏览器子代理，进入后枚举并点击内部所有可见按钮、卡片、开关、下拉和高级设置；
-  - `货品全站推广` 必须先添加商品 ID `1024883718763`，再记录由该商品触发显示的新增参数；
+  - `货品全站推广` 必须先添加商品 ID `<SITE_ITEM_ID>`（用户 2026-05-18 修正），再记录由该商品触发显示的新增参数；
   - 对比 `addList.md`，标注哪些一级场景已有记录、哪些完全缺失、哪些只有子场景记录但缺一级入口记录；
   - 全程只捕获前端最终组包，不真实提交线上计划。
 - 成功标准：
   - `addList.md` 追加新的一级营销场景覆盖矩阵和逐按钮样本记录；
   - 每条最终样本都有 `CAPTURE_ONLY` 证明：Hook 捕获 payload、网络 blocked/offline/status=0、无成功响应、无计划 ID、无创建成功提示；
-  - `1024883718763` 在相关 payload 的商品字段中可检索；
+  - `<SITE_ITEM_ID>` 在相关 payload 的商品字段中可检索；
   - 未覆盖项均有明确阻塞原因和截图/页面证据；
   - 本轮执行结果和复盘写回本章节。
 - 约束：
@@ -1288,24 +1799,44 @@
 ## 执行计划（可核对）
 - [x] 初始化 `browser-use` IAB，会话命名为阿里妈妈营销场景抓包。
 - [x] 切换到 `chrome-devtools`，建立统一 `CAPTURE_ONLY` 协议、样本命名、diff 规范和 `addList.md` 归档格式。
+- [x] 2026-05-18 恢复执行：预检 Chrome DevTools 专用 profile、扩展注入、Hook 与页面内拦截能力。
+- [x] 2026-05-18 恢复执行：先只读盘点 `addList.md` 既有覆盖，确定本轮最小增量样本范围。
+- [x] 2026-05-18 恢复执行：用真实页面按 CAPTURE_ONLY 捕获至少覆盖 6 个一级场景入口的最终组包或记录不可覆盖阻塞。
+- [x] 2026-05-19 用户修正：baseline 不足，必须覆盖每个一级场景内部按钮、开关、下拉和高级设置。
+- [x] 2026-05-19 为 6 个一级场景生成实时控件清单，区分可安全点击、需要 CAPTURE_ONLY、不可点击/阻塞项。
+- [x] 2026-05-19 用户修正：将已成功样本的完整提交参数单独归档，供后续插件开发对照。
+- [x] 2026-05-19 用户修正：每一次实际触发到的 `addList` JSON 都要逐条归档，不能只保留代表样本或摘要。
+- [ ] 2026-05-19 按控件清单逐项操作并抓取 payload diff 或页面状态差异。
+- [ ] 2026-05-19 将内部控件覆盖矩阵和阻塞项回填 `addList.md` 与本任务记录。
 - [ ] 建立 `货品全站推广` 浏览器子代理，添加 `1024883718763` 后覆盖全域投放、ROI确定交付及内部全部按钮。
 - [ ] 建立 `关键词推广` 浏览器子代理，覆盖卡位、趋势、金卡、跟投及内部全部按钮。
 - [ ] 建立 `人群推广` 浏览器子代理，覆盖拉新、竞争、信息流及内部全部按钮。
 - [ ] 建立 `店铺直达` 浏览器子代理，覆盖店铺智营、海量样式及内部全部按钮。
 - [ ] 建立 `内容营销` 浏览器子代理，覆盖直播、短视频、短直联投及内部全部按钮。
 - [ ] 建立 `线索推广` 浏览器子代理，覆盖线索拉新、转化、管理及内部全部按钮。
-- [ ] 汇总 6 个一级场景的覆盖矩阵、payload diff、阻塞项和旧记录对比。
-- [ ] 更新 `addList.md`，并验证 `1024883718763` 与新增样本可检索。
+- [x] 汇总 6 个一级场景的覆盖矩阵、payload diff、阻塞项和旧记录对比。
+- [x] 更新 `addList.md`，并验证 `<SITE_ITEM_ID>` 与新增样本可检索。
 - [x] 回填本章节的改动摘要、验证记录和结果复盘。
 
 ## 改动摘要
 - 已按用户纠正后的一级营销场景口径写入本轮任务：`货品全站推广`、`关键词推广`、`人群推广`、`店铺直达`、`内容营销`、`线索推广`。
-- 已通过 `browser-use` IAB 打开真实 `one.alimama.com` 计划创建页，页面显示店铺 `美的洗碗机旗舰店`、店铺 ID `2957960066`，6 个一级营销场景均可见。
+- 已通过 `browser-use` IAB 打开真实 `one.alimama.com` 计划创建页，页面显示店铺 `<SHOP_NAME>`、店铺 ID `<SHOP_ID>`，6 个一级营销场景均可见。
 - 已确认当前 IAB 页面未加载本仓库助手脚本或扩展能力，DOM 中没有 `am-helper`、`am-report-capture-panel`、`__AM_HOOK_MANAGER__`、`API向导` 等抓包入口。
 - 已确认 `browser-use` 公开 API 只有导航、DOM、点击、截图、日志等能力，没有 `evaluate`、请求阻断、Network Offline 或 Hook 读取能力。
 - 已测试备用 `javascript:` 注入方案，`browser-use` 因安全策略明确拒绝，并要求不能通过间接执行、原始 CDP 或其它浏览器面绕过。
 - 因无法满足 `CAPTURE_ONLY` 的前置证明，未建立 6 个场景浏览器子代理，未点击 `创建完成`，未添加商品，未更新 `addList.md` 样本。
 - 2026-05-05 用户明确指示“用回 chrome-devtools”，后续执行恢复为 Chrome DevTools MCP，并以 DevTools Offline + 页面内 `addList.json` 阻断钩子作为提交保护。
+- 2026-05-18 用户要求继续本待办；本轮主线程负责 Chrome DevTools 真实页面安全验证与最终整合，只读子任务负责盘点历史覆盖和安全抓包步骤。
+- 2026-05-18 已完成一级入口 baseline：`货品全站推广`、`关键词推广`、`人群推广`、`店铺直达`、`内容营销` 捕获到最终组包，`线索推广` 被前端商品/关键词前置校验阻断，未发 addList。
+- 本轮按用户修正使用商品 `<SITE_ITEM_ID>`；添加路径为 `添加商品 -> 全部商品 -> 商品ID 搜索 -> 添加 -> 确定`。
+- 2026-05-19 用户修正：一级入口 baseline 还不够，真正有用的是“每个内部按钮/开关/下拉全部覆盖”；后续完成口径改为内部控件级覆盖，不得把第 21 章 baseline 当作最终完成。
+- 2026-05-19 已改为直达 `bizCode` 路由逐场景抽取控件清单，避免卡片点击误判场景；6 个一级场景均已生成实时控件清单。
+- 2026-05-19 继续执行逐项覆盖：新增 `内容营销` 默认组包与 `下播续投` 状态差异、`关键词推广` 抢首页+精准匹配组包、`货品全站` 最大化拿量/ROI 自定义阻塞、`人群推广` AI 推人/兴趣拉新阻塞、`店铺直达` 高级溢价卡片阻塞记录。
+- 2026-05-19 环境偏差：标准 `chrome-devtools` MCP 固定连 `9222`，但该端口被普通 Chrome 占用且 `/json/version` 为 404；恢复脚本失败，备用使用专用 profile 的 `9333` DevTools Protocol 继续采集，标准 MCP 复验仍需后续恢复。
+- 2026-05-19 用户补充要求：除摘要外，需要把已成功样本的完整请求参数单独归档，后续开发插件时可直接对照真实 JSON 结构。
+- 2026-05-19 已生成本地未提交抓包归档：当前包含 6 条成功样本的完整 `parsedBody` 和 1 条 `TOP06_LEADS_BLOCKED` 阻塞样本；其中 `SITE_ONECLICK_RECAPTURE_RAW` 为当前推荐选品重抓样本，不等同于 2026-05-18 的 `<SITE_ITEM_ID>` baseline。
+- 2026-05-19 用户继续收紧口径：不是“有一份完整 JSON 就行”，而是每一次实际触发到的 `addList` JSON 都要单独记录；后续需要按 `sampleId -> 完整 parsedBody` 做一一对应归档，不能用代表性重抓样本替代全部历史样本。
+- 2026-05-19 已按当前 `addList.md` 中出现过的 13 个 sampleId 补齐统一归档：7 条成功样本保存独立 raw JSON，6 条未发请求样本保存独立 blocked 记录；`tasks/alimama-scene-capture-payloads-2026-05-19.json` 现返回 `docSampleCoverageComplete=true`。
 
 ## 验证记录
 - `browser-use` IAB 初始化：通过，创建 tab 成功，会话命名为 `阿里妈妈营销场景抓包`。
@@ -1315,12 +1846,34 @@
 - `browser-use` API 能力检查：未通过抓包前置，`evaluate`、`route`、`network`、`emulate`、`offline`、`requestBlocking` 均不可用。
 - 备用注入检查：未通过，`browser-use` 拒绝访问 `javascript:` URL，并要求不得用 workaround、raw CDP、alternate browser surfaces 绕过。
 - 用户授权切换工具：通过，后续允许使用 `chrome-devtools`。
+- Chrome DevTools MCP 预检：9222 调试端口健康，`json/version` 返回 `webSocketDebuggerUrl`；真实页面标题为 `计划创建_万相台无界版`。
+- Chrome DevTools MCP 注入检查：`window.__AM_GET_SCRIPT_VERSION__()` 返回 `7.03`，`window.__AM_HOOK_MANAGER__`、`#am-helper-icon`、`#am-helper-panel`、`#am-report-capture-panel` 均存在。
+- CAPTURE_ONLY 自检：测试 `fetch` 命中 `/solution/addList.json` 返回 `409 CAPTURE_ONLY_BLOCKED`；测试 XHR 命中同路径触发 `status=0/error`；两条记录均写入 Hook 历史。
+- `货品全站推广`：在 `添加商品 -> 全部商品` 中搜索 `<SITE_ITEM_ID>`，添加成功；CAPTURE_ONLY 捕获 `onebpSite` addList，body length `8336`，`materialId=<SITE_ITEM_ID>`，无成功文案。
+- `关键词推广`：CAPTURE_ONLY 捕获 `onebpSearch / promotion_scene_search_detent` addList，body length `20455`，`wordListLength=10`，无成功文案。
+- `人群推广`：CAPTURE_ONLY 捕获 `onebpDisplay / promotion_scene_display_laxin` addList，body length `26953`，`crowdListLength=3`，无成功文案。
+- `店铺直达`：CAPTURE_ONLY 捕获 `onebpStarShop` addList，body length `8560`，页面提示 `请添加创意`，无成功文案。
+- `内容营销`：CAPTURE_ONLY 捕获 `onebpLive / scene_live_room` addList，body length `23311`，直播间主体 `<LIVE_ROOM_ID>`，无成功文案。
+- `线索推广`：`onebpAdStrategyLiuZi` 默认状态点击 `创建完成` 后 `captureCount=0`，前端停在 `添加商品` 校验，未触发 addList，无成功文案。
+- `rg -n "<SITE_ITEM_ID>|一级营销场景覆盖总览|TOP06" addList.md tasks/alimama-scene-capture-2026-05-18-notes.md tasks/todo.md tasks/lessons.md`：通过，新增记录可检索。
+- 内部控件清单抽取：通过，逐个直达 `onebpSite`、`onebpSearch`、`onebpDisplay`、`onebpStarShop`、`onebpLive`、`onebpAdStrategyLiuZi` 后滚动全页 DOM，按按钮、开关、下拉、单选/卡片、输入框、链接/弹窗入口分组；货品全站先重新添加 `<SITE_ITEM_ID>`，主页面显示 `添加商品 1 / 5` 后再抽取。
+- 逐项操作样本：`内容营销` 默认组包捕获 `onebpLive` payload，body length `27012`；`关键词推广` 抢首页+精准匹配捕获 `onebpSearch` payload，body length `14689`；页面均无创建成功文案和计划 ID。
+- 状态差异/阻塞样本：`内容营销` 下播续投、`货品全站` 最大化拿量、`货品全站` ROI 自定义、`人群推广` AI 推人/兴趣拉新、`店铺直达` 高级溢价卡片均未发 addList，原因已写入任务笔记和 `addList.md`。
+- 完整请求体归档：通过 9333 直连 CDP 重抓并生成 `tasks/alimama-scene-capture-payloads-2026-05-19.json`；归档成功样本为 `SITE_ONECLICK_RECAPTURE_RAW`、`SEARCH_DETENT_DEFAULT_RAW`、`SEARCH_HOME_PAGE_RECAPTURE_RAW`、`DISPLAY_LAXIN_DEFAULT_RAW`、`STARSHOP_DEFAULT_RAW`、`LIVE_DEFAULT_RECAPTURE_RAW`，阻塞样本为 `TOP06_LEADS_BLOCKED`。
+- 归档校验：`node` 读取归档摘要返回 `sampleCount=6`、`blockedCount=1`；`SEARCH_HOME_PAGE_RECAPTURE_RAW.summary.searchDetentType=home_page`，`SITE_ONECLICK_RECAPTURE_RAW.summary.bizCode=onebpSite`。
+- 归档补齐：新增 `LIVE_TOP05_BASELINE_RECAPTURE_RAW`，并为 `TOP06`、`CTRL-LIVE-SPOT-CONTINUE`、`CTRL-SITE-MAX-AMOUNT`、`CTRL-SITE-ROI-CUSTOM`、`CTRL-DISPLAY-AI-PUSH`、`CTRL-STARSHOP-PREMIUM-SKIN` 补齐独立 blocked 记录。
+- 归档复核：`node` 读取归档摘要返回 `sampleCount=7`、`blockedCount=6`、`recordedDocSampleCount=13`、`docSampleCoverageComplete=true`。
 
 ## 结果复盘
 - 本轮实际阻塞点不是登录态或页面入口，而是安全抓包能力缺失：严格只用 `browser-use` 时无法同时做到 Hook 读取、请求阻断和离线证明。
 - 按当前约束继续点击 `创建完成` 会违反“拦截提交，不能真实提交”的核心安全要求，因此主动停止。
 - 后续恢复执行需要满足其一：让 IAB 加载本仓库助手/扩展并暴露可点击的安全抓包入口，或用户明确允许使用具备 Network Offline 与请求阻断能力的浏览器调试通道。
 - 已满足恢复条件：用户明确允许切回 `chrome-devtools`。下一步需要先安装并验证 `CAPTURE_ONLY`，再进入 6 个一级场景的抓包。
+- 2026-05-18 恢复执行已完成一级入口 baseline 覆盖，并将结果追加到 `addList.md` 第 21 章；这不是内部全部按钮/开关/下拉的穷尽覆盖，深分支仍按原复选框保留为未完成。
+- 本轮未点击插件 `批量创建`、`立即投放`，所有原生 `创建完成` 点击均在页面内 CAPTURE_ONLY 与 DevTools Offline 保护下执行；未观察到成功创建文案或计划 ID。
+- 2026-05-19 根据用户修正，后续必须继续做内部控件级覆盖；验收以“控件清单逐项有 payload diff、状态差异或阻塞说明”为准。
+- 2026-05-19 新增的完整请求体归档已经满足“后续插件开发可直接对照真实 JSON 结构”的需求，但这些 raw body 仍是实时页面快照；开发实现应提炼稳定字段结构，不应依赖预算建议、推荐人群或商品上下文的瞬时数值。
+- 2026-05-19 截止当前，`addList.md` 中已经出现过的 13 个 sampleId 都已在统一归档里有独立 raw 或独立 blocked 记录；后续如果继续执行新的控件分支，必须同步追加新的 sampleId 记录，不能再回到 alias 代替的做法。
 
 ---
 
@@ -3303,3 +3856,44 @@
   - 需求卡片必须可点击切换 active 状态。
   - 切换需求时，下面的 `AI解析`、`热门搜索词`、`搜索人群画像与特征` 应优先使用原生 `nativeCrowdList` 中对应需求的数据。
   - 如果原生接口未返回逐需求数据，只允许保持聚合数据展示，不允许本地伪造内容。
+
+## TODO - 2026-05-15 修复辅助显示日志更新但页面不可见
+
+### 需求规格
+- 目标：
+  - 当日志出现 `✅ 更新 N 项数据` 时，用户应能在当前可见阿里妈妈表格中看到对应 `.am-helper-tag` 标签。
+  - 不改变现有指标计算口径，只修复可见表格选择、DOM 注入可见性和诊断能力。
+  - 保持 Tampermonkey 与 extension 双产物同步。
+- 判断标准：
+  - 若标签被插入到不可见/克隆表格，必须优先选择当前可见且可显示标签的 body 表格。
+  - 若标签存在但不可见，应通过诊断函数区分写入表格错误、可见性错误和样式布局差异；基础标签宽度按后续修正保留 `width:100%`。
+  - 需要补回归测试覆盖“日志更新但不可见”的可能根因。
+
+### 执行计划（可核对）
+- [x] 回看辅助显示表格选择、标签渲染和全局样式。
+- [x] 补充诊断或修复逻辑，避免更新不可见表格副本。
+- [x] 补充回归测试锁定修复。
+- [x] 构建、语法检查和相关测试验证。
+
+### 改动摘要
+- 收紧 `Core.isElementVisible()`：向上检查祖先 `display/visibility/opacity/aria-hidden`，并要求目标元素有实际可见矩形。
+- 表格选择新增 `visibleRowCount`，并从单个 `resolveTableContext()` 扩展为 `resolveTableContexts()`，遍历所有当前可见且包含可见行的指标表格，避免只更新上方汇总表而漏掉当前计划列表。
+- 辅助标签基础样式调整已按后续用户修正取消，`TAG_BASE_STYLE` 恢复保留 `width:100%;margin-top:2px;`；本节保留的有效修复集中在可见表格选择、多表格遍历和诊断能力。
+- 渲染标签时给单元格打 `data-am-helper-tagged-cell`，并暴露 `window.__AM_ASSIST_DISPLAY_DIAGNOSTICS__()`，便于问题浏览器直接诊断标签总数、可见数、表格数量、列映射和样例。
+- 自动排序被收口到 `applyAutoSort(tableContexts)`，多表格页面只触发一次排序，避免误点多个表头。
+- 更新 `tests/logger-api.test.mjs` 和 `tests/report-metric-ratio-columns.test.mjs`，锁定可见表格选择、多表格遍历、标签样式、诊断函数和占比总量传递契约。
+
+### 验证记录
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 和 extension bundle。
+- `node --test tests/logger-api.test.mjs tests/report-metric-ratio-columns.test.mjs`：通过，15/15。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- `node --test --test-reporter=dot tests/*.test.mjs`：通过，退出码 0。
+- Chrome DevTools MCP 真实 `one.alimama.com` 关键词推广页：`window.__AM_ASSIST_DISPLAY_DIAGNOSTICS__()` 可用，返回 `tagCount=175`、`visibleTagCount=175`、`tableCount=2`、`tableFound=true`、`tableVisible=true`、`tableVisibleRowCount=16`；第二个候选表格 `rowCount=24`、`visibleRowCount=24`，证明同页多表格已被诊断识别。
+- Chrome DevTools MCP 样式抽样：该记录来自取消样式调整前，后续用户已要求恢复 `TAG_BASE_STYLE` 的 `width:100%;margin-top:2px;`，当前样式契约以最新任务和测试为准。
+- `bash scripts/review-team.sh`：通过，452 个测试中 450 pass、2 skip，所有 automated review checks passed。
+
+### 结果复盘
+- 这类现象不能只看 `更新 N 项数据` 日志；该日志证明 DOM 写入发生，但不证明写入到当前可见表格，也不证明标签未被样式裁剪。
+- 真实页面验证显示同页可同时存在 2 个指标表格；旧单表格逻辑容易把标签写到上方数据汇总表，用户看下方计划列表时就会认为“没有显示”。
+- 本轮没有改指标计算公式和列识别口径，只修复“写到哪里”和“是否看得见”，并给问题浏览器留下可复制的诊断入口。

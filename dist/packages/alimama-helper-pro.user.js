@@ -464,6 +464,40 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         }
     };
 
+    const fallbackStorage = new Map();
+
+    const warnStorageAccessFailure = (action, err) => {
+        try {
+            console.warn(`[AM Helper] config storage ${action} failed`, err);
+        } catch { }
+    };
+
+    const safeStorageGetItem = (key) => {
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+                const value = localStorage.getItem(key);
+                if (value !== null) return value;
+            }
+        } catch (err) {
+            warnStorageAccessFailure('read', err);
+        }
+        return fallbackStorage.has(key) ? fallbackStorage.get(key) : null;
+    };
+
+    const safeStorageSetItem = (key, value) => {
+        const text = String(value ?? '');
+        fallbackStorage.set(key, text);
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
+                localStorage.setItem(key, text);
+                return true;
+            }
+        } catch (err) {
+            warnStorageAccessFailure('write', err);
+        }
+        return false;
+    };
+
     const normalizeConfig = (rawConfig) => {
         const parsedRevision = Number(rawConfig?.configRevision);
         const hasValidRevision = Number.isFinite(parsedRevision);
@@ -481,20 +515,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     };
 
     const loadConfig = () => {
-        const current = safeParseJSON(localStorage.getItem(CONSTANTS.STORAGE_KEY));
+        const current = safeParseJSON(safeStorageGetItem(CONSTANTS.STORAGE_KEY));
         if (current && typeof current === 'object') {
             const { config, migrated } = normalizeConfig(current);
             if (migrated) {
-                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
+                safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
             }
             return config;
         }
 
         for (const legacyKey of CONSTANTS.LEGACY_STORAGE_KEYS) {
-            const legacy = safeParseJSON(localStorage.getItem(legacyKey));
+            const legacy = safeParseJSON(safeStorageGetItem(legacyKey));
             if (legacy && typeof legacy === 'object') {
                 const { config } = normalizeConfig(legacy);
-                localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
+                safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(config));
                 return config;
             }
         }
@@ -1919,6 +1953,51 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         }
     };
 
+    const KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY = '__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_RES__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_TIMEOUT_MS = 8000;
+
+    const createKeywordPlanOpenBridgeApi = () => ({
+        openWizard() {
+            return new Promise((resolve, reject) => {
+                const callId = `keyword_open_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+                let done = false;
+                const cleanup = () => {
+                    window.removeEventListener(KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT, handleResponse, false);
+                };
+                const finish = (fn, value) => {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timeoutId);
+                    cleanup();
+                    fn(value);
+                };
+                const handleResponse = (event) => {
+                    const detail = event?.detail || {};
+                    if (!detail || detail.callId !== callId) return;
+                    if (detail.ok) {
+                        finish(resolve, detail.result);
+                    } else {
+                        finish(reject, new Error(detail.error || 'keyword_open_bridge_failed'));
+                    }
+                };
+                const timeoutId = setTimeout(() => {
+                    finish(reject, new Error('keyword_open_bridge_timeout'));
+                }, KEYWORD_PLAN_OPEN_BRIDGE_TIMEOUT_MS);
+
+                window.addEventListener(KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT, handleResponse, false);
+                try {
+                    window.dispatchEvent(new CustomEvent(KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT, {
+                        detail: { callId }
+                    }));
+                } catch (err) {
+                    finish(reject, err);
+                }
+            });
+        }
+    });
+
     const resolveKeywordPlanApiAccessor = () => {
         try {
             if (KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
@@ -1937,6 +2016,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 return fromGlobal;
             }
         } catch { }
+        try {
+            if (window[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY] === '1') {
+                return createKeywordPlanOpenBridgeApi();
+            }
+        } catch { }
         return null;
     };
 
@@ -1944,7 +2028,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         config: loadConfig(),
         riskAlertLastUrl: '',
         save() {
-            localStorage.setItem(CONSTANTS.STORAGE_KEY, JSON.stringify(this.config));
+            safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(this.config));
         }
     };
 
@@ -2152,6 +2236,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         renderTag(cell, type, text, extraStyle) {
             const fullStyle = CONSTANTS.TAG_BASE_STYLE + extraStyle;
+            cell.dataset.amHelperTaggedCell = '1';
             const existing = cell.querySelector(`.am-helper-tag.${type}`);
             if (existing) {
                 if (existing.textContent === text) return false;
@@ -2198,9 +2283,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
         isElementVisible(el) {
             if (!el) return false;
-            const style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden') return false;
-            return el.getClientRects().length > 0;
+            if (!el.isConnected) return false;
+            let node = el;
+            while (node && node.nodeType === 1) {
+                const style = window.getComputedStyle(node);
+                if (!style) return false;
+                if (style.display === 'none' || style.visibility === 'hidden') return false;
+                if (parseFloat(style.opacity || '1') <= 0.01) return false;
+                if (node.getAttribute?.('aria-hidden') === 'true') return false;
+                node = node.parentElement;
+            }
+            const rects = el.getClientRects();
+            if (!rects || rects.length === 0) return false;
+            return Array.from(rects).some(rect => rect.width > 0 && rect.height > 0);
         },
 
         resolveStickyHeaderWrapper(stickyBodyWrapper) {
@@ -2265,6 +2360,21 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return maxCells;
         },
 
+        getTableVisibleRowCount(table, maxScanRows = 30) {
+            if (!table) return 0;
+
+            const rows = table.rows;
+            let visibleRows = 0;
+            let scanned = 0;
+            for (let i = 0; i < rows.length && scanned < maxScanRows; i++) {
+                const row = rows[i];
+                if (!row || row.parentElement?.tagName === 'THEAD') continue;
+                scanned++;
+                if (this.isElementVisible(row)) visibleRows++;
+            }
+            return visibleRows;
+        },
+
         getTableCapabilityScore(colMap, headerCount, maxCells) {
             if (!colMap || headerCount <= 0 || maxCells <= 0) return 0;
 
@@ -2292,9 +2402,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return score;
         },
 
-        resolveTableContext() {
+        resolveTableContexts() {
             const tableList = document.querySelectorAll('div[mx-stickytable-wrapper="body"] table, table');
-            if (!tableList || tableList.length === 0) return null;
+            if (!tableList || tableList.length === 0) return [];
 
             const contexts = [];
             const seen = new Set();
@@ -2311,10 +2421,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const visible = this.isElementVisible(stickyBodyWrapper || table);
                 const rowCount = table.tBodies?.[0]?.rows?.length || table.rows.length || 0;
                 const maxCells = this.getTableMaxCells(table);
+                const visibleRowCount = visible ? this.getTableVisibleRowCount(table) : 0;
                 const baseScore = this.getTableScore(colMap);
                 const capabilityScore = this.getTableCapabilityScore(colMap, headers.length, maxCells);
 
                 if (rowCount <= 0 || maxCells <= 0) return;
+                if (!visible || visibleRowCount <= 0) return;
                 if (capabilityScore <= 0 && baseScore <= 0) return;
 
                 contexts.push({
@@ -2325,11 +2437,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     capabilityScore,
                     visible,
                     rowCount,
+                    visibleRowCount,
                     maxCells
                 });
             });
 
-            if (contexts.length === 0) return null;
+            if (contexts.length === 0) return [];
 
             contexts.sort((a, b) => {
                 const visibleDelta = Number(b.visible) - Number(a.visible);
@@ -2340,10 +2453,64 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 if (scoreDelta !== 0) return scoreDelta;
                 const cellDelta = b.maxCells - a.maxCells;
                 if (cellDelta !== 0) return cellDelta;
+                const visibleRowsDelta = b.visibleRowCount - a.visibleRowCount;
+                if (visibleRowsDelta !== 0) return visibleRowsDelta;
                 return b.rowCount - a.rowCount;
             });
 
-            return contexts[0];
+            return contexts;
+        },
+
+        resolveTableContext() {
+            const contexts = this.resolveTableContexts();
+            return contexts[0] || null;
+        },
+
+        getAssistDisplayDiagnostics() {
+            const tags = Array.from(document.querySelectorAll('.am-helper-tag'));
+            const visibleTags = tags.filter(tag => this.isElementVisible(tag));
+            const taggedCells = Array.from(document.querySelectorAll('[data-am-helper-tagged-cell="1"]'));
+            const tableContexts = this.resolveTableContexts();
+            const tableContext = tableContexts[0] || null;
+            const headers = tableContext?.headers
+                ? Array.from(tableContext.headers).map(header => (header.textContent || '').replace(/\s+/g, '').trim()).filter(Boolean)
+                : [];
+
+            return {
+                version: CURRENT_VERSION,
+                url: window.location.href,
+                config: {
+                    showCost: !!State.config.showCost,
+                    showCartCost: !!State.config.showCartCost,
+                    showPercent: !!State.config.showPercent,
+                    showCostRatio: !!State.config.showCostRatio,
+                    showBudget: !!State.config.showBudget
+                },
+                tagCount: tags.length,
+                visibleTagCount: visibleTags.length,
+                taggedCellCount: taggedCells.length,
+                tableCount: tableContexts.length,
+                tableFound: !!tableContext,
+                tableVisible: !!tableContext?.visible,
+                tableRowCount: tableContext?.rowCount || 0,
+                tableVisibleRowCount: tableContext?.visibleRowCount || 0,
+                tableMaxCells: tableContext?.maxCells || 0,
+                columnMap: tableContext?.colMap || null,
+                headers: headers.slice(0, 80),
+                tables: tableContexts.slice(0, 8).map(context => ({
+                    rowCount: context.rowCount,
+                    visibleRowCount: context.visibleRowCount,
+                    maxCells: context.maxCells,
+                    score: context.score,
+                    capabilityScore: context.capabilityScore,
+                    columnMap: context.colMap
+                })),
+                sampleTags: tags.slice(0, 20).map(tag => ({
+                    text: tag.textContent || '',
+                    visible: this.isElementVisible(tag),
+                    cellText: (tag.closest('td,th')?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+                }))
+            };
         },
 
         resolveChargeHeader(table) {
@@ -2355,31 +2522,35 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return scope.querySelector('[mx-stickytable-sort="charge"]') || document.querySelector('[mx-stickytable-sort="charge"]');
         },
 
-        run() {
-            const tableContext = this.resolveTableContext();
-            if (!tableContext) return;
-            const { table, headers, colMap } = tableContext;
-
-            // 自动点击花费列降序排序（需要开启配置，且未排序时）
-            if (State.config.autoSortCharge && !this._sortedByCharge) {
+        applyAutoSort(tableContexts = []) {
+            if (!State.config.autoSortCharge || this._sortedByCharge) return false;
+            for (let i = 0; i < tableContexts.length; i++) {
+                const table = tableContexts[i]?.table;
+                if (!table) continue;
                 const chargeHeader = this.resolveChargeHeader(table);
-                if (chargeHeader) {
-                    // 检查当前是否已经是降序
-                    const currentOrder = chargeHeader.getAttribute('mx-stickytable-sort-order');
-                    if (currentOrder !== 'desc') {
-                        // 点击降序按钮
-                        const descBtn = chargeHeader.querySelector('[mx-stickytable-sort-trigger="desc"]');
-                        if (descBtn) {
-                            descBtn.click();
-                            Logger.log('📊 已自动按花费降序排序');
-                            this._sortedByCharge = true;
-                            return; // 等待排序完成后再渲染数据
-                        }
-                    } else {
-                        this._sortedByCharge = true; // 已经是降序，标记
-                    }
+                if (!chargeHeader) continue;
+                // 检查当前是否已经是降序
+                const currentOrder = chargeHeader.getAttribute('mx-stickytable-sort-order');
+                if (currentOrder === 'desc') {
+                    this._sortedByCharge = true; // 已经是降序，标记
+                    return false;
+                }
+
+                // 点击降序按钮
+                const descBtn = chargeHeader.querySelector('[mx-stickytable-sort-trigger="desc"]');
+                if (descBtn) {
+                    descBtn.click();
+                    Logger.log('📊 已自动按花费降序排序');
+                    this._sortedByCharge = true;
+                    return true; // 等待排序完成后再渲染数据
                 }
             }
+            return false;
+        },
+
+        runTableContext(tableContext, totals = {}) {
+            if (!tableContext) return 0;
+            const { table, headers, colMap } = tableContext;
             const { showCost, showCartCost, showPercent, showCostRatio, showBudget } = State.config;
 
             // 检查是否需要执行
@@ -2391,14 +2562,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
             if (!needCost && !needCart && !needPercent && !needRatio && !needBudget) return;
 
-            // 获取顶部汇总指标 (只需一次，且去重日志)
-            const totalCost = needRatio ? this.getTotalCost() : 0;
-            const totalImpression = needRatio && colMap.impression > -1 ? this.getTotalImpression() : 0;
-            const totalClick = needRatio && colMap.click > -1 ? this.getTotalClick() : 0;
-            if (needRatio && totalCost > 0 && this._lastTotalCost !== totalCost) {
-                this._lastTotalCost = totalCost;
-                Logger.log(`💰 总花费更新: ${totalCost}`);
-            }
+            const totalCost = needRatio ? (Number(totals.totalCost) || 0) : 0;
+            const totalImpression = needRatio && colMap.impression > -1 ? (Number(totals.totalImpression) || 0) : 0;
+            const totalClick = needRatio && colMap.click > -1 ? (Number(totals.totalClick) || 0) : 0;
 
             const rows = table.rows; // 使用原生 .rows 属性比 querySelectorAll 更快
             let updatedCount = 0;
@@ -2576,6 +2742,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
             }
 
+            return updatedCount;
+        },
+
+        run() {
+            const tableContexts = this.resolveTableContexts();
+            if (tableContexts.length === 0) return;
+
+            // 自动点击花费列降序排序（需要开启配置，且未排序时）
+            if (this.applyAutoSort(tableContexts)) return;
+
+            const needRatio = State.config.showCostRatio && tableContexts.some(({ colMap }) => (
+                colMap.cost > -1 || colMap.impression > -1 || colMap.click > -1
+            ));
+            const needTotalImpression = needRatio && tableContexts.some(({ colMap }) => colMap.impression > -1);
+            const needTotalClick = needRatio && tableContexts.some(({ colMap }) => colMap.click > -1);
+
+            // 获取顶部汇总指标 (只需一次，且去重日志)
+            const totalCost = needRatio ? this.getTotalCost() : 0;
+            const totalImpression = needTotalImpression ? this.getTotalImpression() : 0;
+            const totalClick = needTotalClick ? this.getTotalClick() : 0;
+            if (needRatio && totalCost > 0 && this._lastTotalCost !== totalCost) {
+                this._lastTotalCost = totalCost;
+                Logger.log(`💰 总花费更新: ${totalCost}`);
+            }
+
+            const totals = { totalCost, totalImpression, totalClick };
+            let updatedCount = 0;
+            tableContexts.forEach(tableContext => {
+                updatedCount += this.runTableContext(tableContext, totals);
+            });
+
             if (updatedCount > 0) Logger.log(`✅ 更新 ${updatedCount} 项数据`);
         }
     };
@@ -2614,7 +2811,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         }
         return false;
     };
-
     // ==========================================
     // 4. UI 界面 (View) - 参考算法护航脚本样式
     // ==========================================
@@ -9619,12 +9815,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const metricMeta = this.getCrowdMetricMeta(metric);
             this.setCrowdMatrixStatus(`正在刷新${metricMeta.seriesLabel}...`, 'loading', { showRetry: false, progress: 0 });
             try {
+                this.replaceCrowdMatrixMetricResults(metric, []);
                 const taskFns = this.CROWD_PERIODS.map((periodDays) => {
                     const task = async () => this.queryCrowdInsight({ campaignId: id, metricType: metric, periodDays });
                     task.__amCrowdTaskLabel = `${metricMeta.seriesLabel} · 过去${periodDays}天`;
                     return task;
                 });
                 const totalTaskCount = taskFns.length;
+                const revealedPeriodSet = new Set();
                 this.crowdMatrixTaskProgressHandler = (progressInfo) => {
                     if (runId !== this.crowdMatrixRunId) return;
                     const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
@@ -9633,6 +9831,20 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     const stepText = status === 'fulfilled' ? '完成' : '失败';
                     const detailText = taskLabel ? `${stepText} ${taskLabel}` : `${stepText}一项请求`;
                     const ratio = totalTaskCount > 0 ? (done / totalTaskCount) * 100 : 0;
+                    if (status === 'fulfilled' && progressInfo?.value) {
+                        const mergedProgressResults = this.upsertCrowdMatrixResults([progressInfo.value]);
+                        if (mergedProgressResults.length) {
+                            const progressDataset = this.buildMatrixDataset(mergedProgressResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+                            this.crowdMatrixDataset = progressDataset;
+                            this.crowdMatrixLoadedCampaignId = id;
+                            const progressPeriod = this.normalizeCrowdPeriod(progressInfo.value?.periodDays);
+                            const shouldProgressiveReveal = !!progressPeriod && !revealedPeriodSet.has(progressPeriod);
+                            this.renderCrowdMatrixCharts(progressDataset, { progressivePeriod: shouldProgressiveReveal ? progressPeriod : 0 });
+                            if (shouldProgressiveReveal) {
+                                revealedPeriodSet.add(progressPeriod);
+                            }
+                        }
+                    }
                     this.setCrowdMatrixStatus(`刷新中 ${done}/${totalTaskCount} · ${detailText}`, 'loading', { showRetry: false, progress: ratio });
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
@@ -13876,7 +14088,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     // ==========================================
     // 7. 启动程序
     // ==========================================
+    const installAssistDisplayDiagnostics = () => {
+        try {
+            Object.defineProperty(window, '__AM_ASSIST_DISPLAY_DIAGNOSTICS__', {
+                value: () => Core.getAssistDisplayDiagnostics(),
+                configurable: true
+            });
+        } catch { }
+    };
+
     function main() {
+        installAssistDisplayDiagnostics();
         UI.init();
         BudgetFrontendLimitBypass.init();
         Interceptor.init();
@@ -13947,7 +14169,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
         });
 
-        observer.observe(document.body, { childList: true, subtree: true });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'aria-hidden'],
+            characterData: true
+        });
 
         scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
     }
@@ -38577,8 +38805,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         <div class="am-wxt-setting-control">
                                             <div class="am-wxt-option-line" data-bind-select="am-wxt-keyword-budget-type"></div>
                                             <select id="am-wxt-keyword-budget-type" class="am-wxt-hidden-control">
-                                                <option value="day_budget">每日预算</option>
                                                 <option value="day_average">日均预算</option>
+                                                <option value="day_budget">每日预算</option>
                                             </select>
                                         </div>
                                     </div>
@@ -42617,9 +42845,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
 
                 const buildInlineSceneInputControl = (label, fieldKey, value, placeholder = '', options = {}) => {
                     const unit = normalizeSceneSettingValue(options?.unit || '');
+                    const hideLabel = options?.hideLabel === true;
+                    const labelHtml = hideLabel
+                        ? ''
+                        : `<span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>`;
                     return `
                         <div class="am-wxt-scene-inline-input ${unit ? 'with-unit' : ''}">
-                            <span class="am-wxt-inline-label">${Utils.escapeHtml(label)}</span>
+                            ${labelHtml}
                             <span class="am-wxt-inline-input-wrap">
                                 <input
                                     data-scene-field="${Utils.escapeHtml(fieldKey)}"
@@ -43598,6 +43830,14 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     infoField: keywordAiMaxInfoField
                                 }));
                             }
+                            staticRows.push(`
+                                <div class="am-wxt-scene-setting-row am-wxt-scene-setting-row-readonly">
+                                    <div class="am-wxt-scene-setting-label">创意设置</div>
+                                    <div class="am-wxt-setting-control">
+                                        <span class="tips">当前解决方案下暂不支持设置创意，默认开启智能创意。</span>
+                                    </div>
+                                </div>
+                            `);
                         }
                     }
                     let keywordBidTargetLinkedInsertIndex = -1;
@@ -44167,9 +44407,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 const keywordAvgDealCostSwitchValue = keywordAvgDealCostEnabled ? '开启' : '关闭';
                                 bucket[keywordAvgDealCostSwitchFieldKey] = keywordAvgDealCostSwitchValue;
                                 bucket[keywordAvgDealCostSwitchFieldLabel] = keywordAvgDealCostSwitchValue;
+                                const keywordAvgDealCostVisibleLabel = keywordAiMaxEnabled
+                                    ? '设置平均直接净成交成本（非必要）'
+                                    : '设置平均成交成本';
                                 keywordBidTargetLinkedRows.push(`
                                     <div class="am-wxt-scene-setting-row">
-                                        <div class="am-wxt-scene-setting-label">设置平均成交成本</div>
+                                        <div class="am-wxt-scene-setting-label">${Utils.escapeHtml(keywordAvgDealCostVisibleLabel)}</div>
                                         <div class="am-wxt-setting-control am-wxt-setting-control-pair">
                                             <div class="am-wxt-option-line segmented">${keywordSubOptimizeTargetOptionHtml}</div>
                                             ${buildSceneSwitchControl(
@@ -44184,7 +44427,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     keywordAvgDealCostFieldKey,
                                     keywordAvgDealCostValue,
                                     '请输入',
-                                    { unit: '元' }
+                                    { unit: '元', hideLabel: keywordAiMaxEnabled }
                                 )}
                                             <input
                                                 class="am-wxt-hidden-control"
@@ -65282,6 +65525,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     const API_BRIDGE_REQ_EVENT = '__AM_WXT_PLAN_API_BRIDGE_REQ__';
     const API_BRIDGE_RES_EVENT = '__AM_WXT_PLAN_API_BRIDGE_RES__';
     const API_BRIDGE_MSG_CHANNEL = '__AM_WXT_PLAN_API_BRIDGE_MSG__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY = '__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_RES__';
     const API_BRIDGE_METHODS = [
         'openWizard',
         'getRuntimeDefaults',
@@ -65303,6 +65549,44 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         'getSessionDraft',
         'clearSessionDraft'
     ];
+    const installKeywordPlanOpenBridgeHost = () => {
+        const dispatchOpenBridgeResponse = (payload) => {
+            try {
+                window.dispatchEvent(new CustomEvent(KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT, { detail: payload }));
+            } catch { }
+        };
+        const handleOpenBridgeRequest = async (event) => {
+            const callId = String(event?.detail?.callId || '').trim();
+            if (!callId) return;
+            const payload = {
+                callId,
+                ok: false,
+                result: null,
+                error: ''
+            };
+            try {
+                const result = KeywordPlanApi.openWizard();
+                payload.result = result && typeof result.then === 'function' ? await result : result;
+                payload.ok = true;
+            } catch (err) {
+                payload.error = err?.message || String(err || 'keyword_open_bridge_failed');
+            }
+            dispatchOpenBridgeResponse(payload);
+        };
+        window.addEventListener(KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT, handleOpenBridgeRequest, false);
+        try {
+            Object.defineProperty(window, KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY, {
+                value: '1',
+                configurable: false,
+                enumerable: false,
+                writable: false
+            });
+        } catch {
+            try {
+                window[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY] = '1';
+            } catch { }
+        }
+    };
     const installPageApiBridgeHost = () => {
         if (window.__AM_WXT_PLAN_API_BRIDGE_HOST__) return;
         window.__AM_WXT_PLAN_API_BRIDGE_HOST__ = true;
@@ -65534,6 +65818,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         globalThis.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
         globalThis.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }
+    installKeywordPlanOpenBridgeHost();
     if (shouldExposePageApiDebug()) {
         window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
         window.__AM_WXT_PLAN_API__ = KeywordPlanApi;

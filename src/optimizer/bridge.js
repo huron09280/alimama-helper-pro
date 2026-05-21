@@ -1,3 +1,6 @@
+    const KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY = '__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__';
+    const KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_RES__';
     const API_BRIDGE_METHODS = [
         'openWizard',
         'getRuntimeDefaults',
@@ -19,6 +22,44 @@
         'getSessionDraft',
         'clearSessionDraft'
     ];
+    const installKeywordPlanOpenBridgeHost = () => {
+        const dispatchOpenBridgeResponse = (payload) => {
+            try {
+                window.dispatchEvent(new CustomEvent(KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT, { detail: payload }));
+            } catch { }
+        };
+        const handleOpenBridgeRequest = async (event) => {
+            const callId = String(event?.detail?.callId || '').trim();
+            if (!callId) return;
+            const payload = {
+                callId,
+                ok: false,
+                result: null,
+                error: ''
+            };
+            try {
+                const result = KeywordPlanApi.openWizard();
+                payload.result = result && typeof result.then === 'function' ? await result : result;
+                payload.ok = true;
+            } catch (err) {
+                payload.error = err?.message || String(err || 'keyword_open_bridge_failed');
+            }
+            dispatchOpenBridgeResponse(payload);
+        };
+        window.addEventListener(KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT, handleOpenBridgeRequest, false);
+        try {
+            Object.defineProperty(window, KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY, {
+                value: '1',
+                configurable: false,
+                enumerable: false,
+                writable: false
+            });
+        } catch {
+            try {
+                window[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY] = '1';
+            } catch { }
+        }
+    };
     const installPageApiBridgeHost = () => {
         if (window.__AM_WXT_PLAN_API_BRIDGE_HOST__) return;
         window.__AM_WXT_PLAN_API_BRIDGE_HOST__ = true;
@@ -250,6 +291,7 @@
         globalThis.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
         globalThis.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }
+    installKeywordPlanOpenBridgeHost();
     if (shouldExposePageApiDebug()) {
         window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
         window.__AM_WXT_PLAN_API__ = KeywordPlanApi;

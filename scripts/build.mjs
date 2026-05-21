@@ -163,6 +163,27 @@ export const extractVersion = (source = '') => {
     return match[1];
 };
 
+export const normalizeExtensionManifestVersion = (version) => {
+    const parts = String(version || '').split('.');
+    if (!parts.length || parts.length > 4 || parts.some((part) => !/^[0-9]+$/.test(part))) {
+        throw new Error(`extension manifest version 格式不符合 Chrome 规则: ${version}`);
+    }
+
+    const normalizedParts = parts.map((part) => {
+        const numericValue = Number.parseInt(part, 10);
+        if (!Number.isInteger(numericValue) || numericValue < 0 || numericValue > 65535) {
+            throw new Error(`extension manifest version 分段超出 Chrome 允许范围: ${version}`);
+        }
+        return String(numericValue);
+    });
+
+    if (normalizedParts.every((part) => part === '0')) {
+        throw new Error(`extension manifest version 不能全为 0: ${version}`);
+    }
+
+    return normalizedParts.join('.');
+};
+
 export const renderMetaSource = (userscriptSource) => {
     const headerStart = userscriptSource.indexOf('// ==UserScript==');
     const headerEnd = userscriptSource.indexOf('// ==/UserScript==');
@@ -182,10 +203,12 @@ export const renderMetaSource = (userscriptSource) => {
 };
 
 export const renderExtensionManifest = (version) => {
+    const manifestVersion = normalizeExtensionManifestVersion(version);
     const manifest = {
         manifest_version: 3,
         name: '阿里妈妈多合一助手 (Pro版)',
-        version,
+        version: manifestVersion,
+        ...(manifestVersion !== version ? { version_name: version } : {}),
         description: '阿里妈妈投放平台增强工具，支持主面板、万能查数、算法护航与计划辅助能力。',
         icons: {
             16: 'icon-16.png',
@@ -201,6 +224,12 @@ export const renderExtensionManifest = (version) => {
                 48: 'icon-48.png'
             }
         },
+        background: {
+            service_worker: 'background.js'
+        },
+        host_permissions: [
+            'https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/*'
+        ],
         content_scripts: [
             {
                 matches: [
@@ -227,6 +256,7 @@ export const renderExtensionManifest = (version) => {
 };
 
 export const renderExtensionContent = () => readText('src/entries/extension-content.js');
+export const renderExtensionBackground = () => readText('src/entries/extension-background.js');
 
 export const renderExtensionPageBundle = (version) => EXTENSION_PAGE_SEGMENTS
     .map((relativePath) => replaceTemplateTokens(readText(relativePath), { AM_EXTENSION_VERSION: JSON.stringify(version) }))
@@ -243,6 +273,7 @@ export const renderBuildOutputs = () => {
         extensionFiles: {
             'manifest.json': renderExtensionManifest(version),
             'content.js': renderExtensionContent(),
+            'background.js': renderExtensionBackground(),
             'page.bundle.js': renderExtensionPageBundle(version)
         }
     };
@@ -264,6 +295,9 @@ export const checkBuildOutputs = () => {
     }
     if (!extensionBundle.includes('GM_getValue')) {
         throw new Error('extension page bundle 缺少 GM 兼容层');
+    }
+    if (!outputs.extensionFiles['background.js']?.includes('AM_LICENSE_VERIFY_REQUEST')) {
+        throw new Error('extension background 缺少授权 verify 桥');
     }
 
     EXTENSION_ICON_FILES.forEach((filename) => {
@@ -300,7 +334,7 @@ const printSummary = (outputs, mode = 'build') => {
     console.log(`[build] version=${outputs.version}`);
     console.log(`[build] root=${ROOT_SCRIPT_FILE}`);
     console.log('[build] packages=dist/packages/alimama-helper-pro.user.js, dist/packages/alimama-helper-pro.meta.js');
-    console.log('[build] extension=dist/extension/manifest.json, dist/extension/content.js, dist/extension/page.bundle.js, dist/extension/icon-16.png, dist/extension/icon-32.png, dist/extension/icon-48.png, dist/extension/icon-128.png');
+    console.log('[build] extension=dist/extension/manifest.json, dist/extension/content.js, dist/extension/background.js, dist/extension/page.bundle.js, dist/extension/icon-16.png, dist/extension/icon-32.png, dist/extension/icon-48.png, dist/extension/icon-128.png');
 };
 
 const runWatch = () => {

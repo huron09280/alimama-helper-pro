@@ -147,8 +147,8 @@
                                         <div class="am-wxt-setting-control">
                                             <div class="am-wxt-option-line" data-bind-select="am-wxt-keyword-budget-type"></div>
                                             <select id="am-wxt-keyword-budget-type" class="am-wxt-hidden-control">
-                                                <option value="day_budget">每日预算</option>
                                                 <option value="day_average">日均预算</option>
+                                                <option value="day_budget">每日预算</option>
                                             </select>
                                         </div>
                                     </div>
