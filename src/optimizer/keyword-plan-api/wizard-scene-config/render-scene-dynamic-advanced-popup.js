@@ -1272,7 +1272,7 @@
                                                                         data-scene-popup-area-city-toggle="${Utils.escapeHtml(cityCode)}"
                                                                         data-scene-popup-area-city-parent="${Utils.escapeHtml(provinceCode)}"
                                                                     >
-                                                                        <span class="am-wxt-scene-area-check-icon">${checked ? '✓' : ''}</span>
+                                                                        <span class="am-wxt-scene-area-check-icon">${checked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : ''}</span>
                                                                         <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(String(city?.name || '').trim())}</span>
                                                                     </button>
                                                                 `;
@@ -1290,7 +1290,7 @@
                                                             data-scene-popup-area-item-toggle="${Utils.escapeHtml(provinceCode)}"
                                                             data-scene-popup-area-province-toggle="${Utils.escapeHtml(provinceCode)}"
                                                         >
-                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : (partialChecked ? renderAmIcon('minus', { size: 12, strokeWidth: 2.4 }) : '')}</span>
                                                             <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(labelText)}</span>
                                                         </button>
                                                     </div>
@@ -1305,7 +1305,7 @@
                                                             data-scene-popup-area-province-toggle="${Utils.escapeHtml(provinceCode)}"
                                                             title="${Utils.escapeHtml(`全选${labelText}`)}"
                                                         >
-                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : (partialChecked ? renderAmIcon('minus', { size: 12, strokeWidth: 2.4 }) : '')}</span>
                                                         </button>
                                                         <button
                                                             type="button"
@@ -1315,7 +1315,7 @@
                                                             aria-expanded="${expanded ? 'true' : 'false'}"
                                                         >
                                                             <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(labelText)}</span>
-                                                            <span class="am-wxt-scene-area-caret">${expanded ? '▴' : '▾'}</span>
+                                                            <span class="am-wxt-scene-area-caret">${renderAmIcon(expanded ? 'chevron-up' : 'chevron-down', { size: 12, strokeWidth: 2 })}</span>
                                                         </button>
                                                     </div>
                                                     ${cityHtml}
@@ -1359,7 +1359,7 @@
                                                 class="am-wxt-scene-area-section-toggle ${allChecked ? 'checked' : ''} ${partialChecked ? 'partial' : ''}"
                                                 data-scene-popup-area-group-toggle="${Utils.escapeHtml(section.section)}"
                                             >
-                                                <span class="am-wxt-scene-area-check-icon">${allChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                <span class="am-wxt-scene-area-check-icon">${allChecked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : (partialChecked ? renderAmIcon('minus', { size: 12, strokeWidth: 2.4 }) : '')}</span>
                                                 <span>${Utils.escapeHtml(String(section?.label || AREA_SECTION_LABEL_MAP[section.section] || '全选').trim())}</span>
                                             </button>
                                             <div class="am-wxt-scene-area-section-body">${contentHtml}</div>

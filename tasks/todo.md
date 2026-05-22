@@ -1,3 +1,67 @@
+# TODO - 2026-05-22 插件图标体系重设计
+
+## 需求规格
+- 目标：
+  - 参考站酷文章 `ICON设计干货来啦~` 的功能性图标方法，重设计插件运行态使用的图标；
+  - 图标统一采用 24×24 画板、20×20 主绘制区、整数坐标、统一线宽/端点/圆角和简练高辨识结构；
+  - 覆盖扩展图标、主面板/工具按钮、计划 ID 快捷入口、万能查数弹窗控制与快捷话术图标、算法护航标题/控制按钮、关键词向导下拉箭头；
+  - 不手工修改根 userscript 与 `dist/` 构建产物，最终通过构建同步。
+- 边界：
+  - 文档截图、mockup HTML、日志文案中的状态 emoji 暂不作为本轮图标资产重绘范围；
+  - 当前工作区已有未归属修改 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`，本轮只在同文件内做图标相关增量，不能覆盖既有改动。
+- 成功标准：
+  - 运行态图标统一为同一套线性 SVG 语言或同源应用图标；
+  - Chrome extension `icon-16/32/48/128.png` 与 `icon.svg` 同步更新；
+  - 自动化测试、构建同步检查和语法检查通过；
+  - 若能连接真实页面，完成 `one.alimama.com` 上的主面板/万能查数/算法护航/快捷入口视觉验证并记录。
+
+## 执行计划（可核对）
+- [x] 回顾项目教训、参考文章要点和当前图标分布。
+- [x] 写入需求规格、范围边界、成功标准和验证计划。
+- [x] 设计统一图标规范与共享 SVG 渲染入口，替换运行态内联大路径/emoji 图标。
+- [x] 更新扩展应用图标 SVG，并生成 16/32/48/128 PNG。
+- [x] 更新或补充回归测试，覆盖关键图标资产不退回旧 1024 填充路径/emoji 图标。
+- [x] 重新构建同步 userscript 与 extension 产物。
+- [x] 运行相关测试、构建校验和语法检查。
+- [x] 尽量使用真实浏览器验证运行态可见图标，并回填验证记录。
+- [x] 做交叉自检并补充结果复盘。
+
+## 高层操作摘要
+- 参考文章抽取的本轮设计约束：功能性图标强调功能表达、工整有序、结构简练；基于 24×24 画板，以 20×20 为主体绘制区；坐标尽量整数对齐；同套线性图标统一线宽、端点、拐角和视觉重心。
+- 初步盘点确认运行态图标主要分布在 `src/entries/extension-icons/`、`src/main-assistant/ui.js`、`src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/magic-report.js`、`src/optimizer/ui.js` 和 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`。
+- 本轮优先建立共享 SVG 图标渲染入口，减少多处复制 1024 iconfont 路径导致的风格漂移。
+- 已在 `src/shared/script-preamble.js` 增加共享 24×24 线性图标定义与 `renderAmIcon()`，统一主面板、万能查数、计划快捷入口、算法护航和关键词向导局部图标调用。
+- 已重绘扩展应用图标：`icon.svg` 改为 128 画板的圆角蓝底白色闪电符号，并用 `sharp` 生成 `icon-16/32/48/128.png`。
+- 已把主面板、下载捕获、万能查数快捷话术、刷新/关闭/默认星标、算法护航标题/控制/结果态、计划 ID 快捷入口、矩阵下拉箭头、AI 点睛勾选/地域勾选等运行态图标替换为同套线性 SVG 或同源 CSS 图形；日志文案中的状态符号保留为文本日志，不纳入图标资产。
+- 根据用户补充要求，已将图标体系沉淀为 `docs/图标设计规范.md`，覆盖画板、线宽、尺寸、颜色、实现入口、禁止项、新增流程和验收清单。
+- 已在 `tasks/lessons.md` 追加 L66，要求后续设计体系类改动必须同步沉淀规范文档。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，已同步根 userscript、packages 与 extension 产物。
+- `node --test tests/icon-system-regression.test.mjs tests/logger-api.test.mjs tests/magic-report-crowd-matrix.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/extension-static-build.test.mjs`：通过，117/117。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node scripts/build.mjs --check`：通过。
+- `git diff --check`：通过。
+- `node --check src/shared/script-preamble.js src/main-assistant/ui.js src/main-assistant/interceptor.js src/main-assistant/magic-report.js src/main-assistant/campaign-id-quick-entry.js src/optimizer/ui.js`：通过。
+- `node` + `sharp` 图标尺寸校验：`src/entries/extension-icons` 与 `dist/extension` 中 `icon-16/32/48/128.png` 均为对应尺寸。
+- `rg -n "viewBox=\"0 0 1024 1024\"" src/main-assistant src/optimizer src/shared`：无命中，运行态关键源码不再使用旧 1024 iconfont 大路径。
+- `npm run review`：通过，462 个测试中 460 pass、2 skip、0 fail；所有 automated review checks passed。
+- `git diff --check docs/图标设计规范.md tasks/lessons.md tasks/todo.md`：通过。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/main/index?bizCode=onebpSearch&promotionScene=promotion_scene_search_detent` 页面：reload 后 `window.__AM_GET_SCRIPT_VERSION__()` 返回 `7.03`，`window.__AM_RENDER_ICON__` 存在，`#am-helper-icon` 使用 `viewBox="0 0 24 24"` 的 `am-ui-icon-logo`。
+- 真实页面主面板验证：打开主面板，四个工具按钮分别使用 `am-ui-icon-shield-check`、`am-ui-icon-plan`、`am-ui-icon-chart`、`am-ui-icon-eye`，日志标题图标为 `0 0 24 24`。
+- 真实页面万能查数验证：打开万能查数弹窗，7 个快捷话术按钮均有 `0 0 24 24` 图标，刷新、关闭、默认星标也是 `0 0 24 24`；截图留存 `tasks/icon-redesign-verification.png`。
+- 真实页面算法护航验证：仅打开面板未点击“立即扫描并优化”，标题、居中、最大化、关闭按钮均为 `0 0 24 24` 图标。
+- 真实页面安全检查：本轮浏览器验证未点击创建、提交、投放或“立即扫描并优化”入口；当前页面未识别到计划列表快捷入口，因此 `quickEntryCount=0`，快捷入口由 DOM/自动化测试覆盖。
+
+## 结果复盘
+- 本轮根因是运行态图标来自多套来源：扩展 PNG、1024 iconfont 内联 SVG、emoji/字符图标、CSS data URI 混用，导致尺寸、线宽和视觉重心不一致。
+- 解决方案是建立共享 `renderAmIcon()` 与 24×24 图标集，把可交互图标统一为线性 SVG；扩展应用图标单独作为品牌图标源稿生成 PNG，避免 UI 图标和应用图标互相牵制。
+- 为保持最小侵入，日志文本里的状态符号没有批量重写为 SVG；它们属于日志内容而非可交互图标资产。若后续要完全去 emoji 化，应单独做日志文案规范化，避免影响用户排错习惯。
+- 原有未归属改动 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js` 的 `grid-template-columns` 未被覆盖；本轮仅在同文件追加图标相关增量。
+- 用户补充要求将本次设计沉淀成规范，已更新 `docs/图标设计规范.md` 和 `tasks/lessons.md`；后续新增/修改图标应按该规范执行。
+
+---
+
 # TODO - 2026-05-19 关键词自定义推广 3/4/5 UI 对齐
 
 ## 需求规格

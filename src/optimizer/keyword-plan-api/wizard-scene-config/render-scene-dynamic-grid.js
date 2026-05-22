@@ -680,7 +680,7 @@
                                 ${checked ? 'checked' : ''}
                                 ${isAll ? 'data-ai-max-demand-popover-all="1"' : `data-ai-max-demand-popover-item="${Utils.escapeHtml(title)}"`}
                             />
-                            <span class="am-wxt-ai-max-demand-popover-check">✓</span>
+                            <span class="am-wxt-ai-max-demand-popover-check">${renderAmIcon('check', { size: 12, strokeWidth: 2.4 })}</span>
                             <span class="am-wxt-ai-max-demand-popover-text">${Utils.escapeHtml(title)}</span>
                         </label>
                     `;

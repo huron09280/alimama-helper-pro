@@ -159,6 +159,9 @@
                     display: flex; align-items: center; gap: 8px;
                     text-shadow: 0 1px 0 rgba(255,255,255,0.4);
                 }
+                .am-title .am-brand-icon {
+                    flex: 0 0 16px;
+                }
                 .am-version {
                     font-size: 10px; color: var(--am26-text-soft); font-weight: normal;
                     background: rgba(255,255,255,0.3); padding: 1px 4px; border-radius: 6px;
@@ -525,6 +528,16 @@
                     display: flex; justify-content: space-between; align-items: center;
                     font-size: 12px; color: var(--am26-text-soft); margin-bottom: 8px; padding: 0 4px;
                 }
+                .am-log-title {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .am-log-title svg {
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
+                }
                 .am-action-btn {
                     cursor: pointer; color: var(--am26-text-soft); margin-left: 10px;
                     padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
@@ -584,6 +597,19 @@
                 #am-report-capture-panel .am-download-source {
                     color: var(--am26-text-soft);
                     font-size: 10px;
+                }
+                #am-report-capture-panel .am-download-title,
+                #am-report-capture-panel .am-download-link {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                }
+                #am-report-capture-panel .am-download-title svg,
+                #am-report-capture-panel .am-download-link svg {
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
                 }
                 #am-report-capture-panel .am-download-url {
                     background: rgba(255, 255, 255, 0.60);
@@ -1276,37 +1302,37 @@
             const root = document.createElement('div');
             root.innerHTML = `
                 <div id="am-helper-icon" title="点击展开助手面板">
-                    <svg viewBox="0 0 1024 1024" width="22" height="22" fill="currentColor"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
+                    ${renderAmIcon('logo', { size: 22, strokeWidth: 2.2 })}
                 </div>
                 <div id="am-helper-panel">
             <div class="am-resizer-left"></div>
             <div class="am-header">
                 <span class="am-title">
-                    <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor" style="margin-right:4px;"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
+                    ${renderAmIcon('logo', { size: 16, className: 'am-brand-icon', strokeWidth: 2.2 })}
                     阿里助手 Pro
                     <span class="am-version">v${CURRENT_VERSION}</span>
                 </span>
                 <div class="am-close-btn" title="最小化">
-                    <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                    ${renderAmIcon('close', { size: 18 })}
                 </div>
             </div>
             <div class="am-body">
                 <!-- Section 1: Tools -->
                 <div class="am-tools-row">
                     <div class="am-tool-btn" id="am-trigger-optimizer">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M907.8 770.1c-60-96.1-137.9-178.6-227.1-241.6 8.3-43.1 7.1-88.9-5-131-29.2-101.5-121.1-177.3-227.5-188.9-10.4-1.2-18.7 8.3-15.3 18.2 24.5 70.3 5.4 152.1-51.5 209-56.9 56.9-138.7 76-209 51.5-9.9-3.4-19.4 4.8-18.2 15.3 11.6 106.4 87.4 198.3 188.9 227.5 42.1 12.1 87.9 13.3 131 5 63.1 89.2 145.5 167.1 241.6 227.1 21.6 13.5 49.3-3.9 46.2-28.7l-12.7-106.3c10.3 3.6 21 6.1 31.9 7.4 35.7 4.2 71.3-7.5 99.2-35.4 27.9-27.9 39.6-63.5 35.4-99.2-1.3-10.9-3.8-21.6-7.4-31.9l106.3 12.7c24.9 3.1 42.3-24.6 28.7-46.2zM512 512c-23.7 0-46.3-5-67.4-14.1-18.4-7.9-19-33.3-1-42.3 22.1-11 47.9-16.1 74.5-13.2 59.8 6.5 106.9 53.6 113.4 113.4 2.9 26.6-2.2 52.4-13.2 74.5-9 18-34.4 17.4-42.3-1-9.1-21.1-14.1-43.7-14.1-67.4z"></path></svg>
+                        ${renderAmIcon('shield-check', { size: 16 })}
                         算法护航
                     </div>
                     <div class="am-tool-btn" id="am-trigger-keyword-plan-api">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 176a48 48 0 0 1 48-48h672a48 48 0 0 1 48 48v80H128v-80zm0 192h768v480a48 48 0 0 1-48 48H176a48 48 0 0 1-48-48V368zm160 96v64h448v-64H288zm0 160v64h288v-64H288z"></path></svg>
+                        ${renderAmIcon('plan', { size: 16 })}
                         组建计划
                     </div>
                     <div class="am-tool-btn" id="am-trigger-magic-report">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 128h768v768H128z m60.8 60.8V835.2h646.4V188.8H188.8z M256 384h128v320H256V384z m192-128h128v448H448V256z m192 192h128v256H640V448z"></path></svg>
+                        ${renderAmIcon('chart', { size: 16 })}
                         万能查数
                     </div>
                     <div class="am-tool-btn" id="am-toggle-assist-display">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M512 208c219.8 0 401.4 124.4 472 302.2a23.7 23.7 0 0 1 0 17.6C913.4 705.6 731.8 830 512 830S110.6 705.6 40 527.8a23.7 23.7 0 0 1 0-17.6C110.6 332.4 292.2 208 512 208zm0 104c-110.6 0-200 89.4-200 200s89.4 200 200 200 200-89.4 200-200-89.4-200-200-200zm0 88a112 112 0 1 1 0 224 112 112 0 0 1 0-224z"></path></svg>
+                        ${renderAmIcon('eye', { size: 16 })}
                         辅助显示
                     </div>
                 </div>
@@ -1327,7 +1353,7 @@
                 </div>
                 <div class="am-log-section">
                     <div class="am-log-header">
-                        <span>📋 运行日志</span>
+                        <span class="am-log-title">${renderAmIcon('list', { size: 14 })}<span>运行日志</span></span>
                         <div>
                             <span class="am-action-btn" id="am-log-clear">清空</span>
                             <span class="am-action-btn" id="am-log-toggle">展开</span>

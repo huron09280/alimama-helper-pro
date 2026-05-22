@@ -65,13 +65,13 @@
         CROWD_REQUEST_RETRY_BASE_MS: 700,
         CROWD_REQUEST_RETRY_MAX_MS: 3200,
         QUICK_PROMPTS: [
-            { label: '📛 计划名：{campaignName}', value: '计划名：{campaignName}', type: 'action', autoSubmit: false, requireCampaignName: true },
-            { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🛒 加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🏙️ 省份占比', value: '计划ID：{campaignId}，在各个省份的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🌆 城市占比', value: '计划ID：{campaignId}，在各个城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '✨商品ID成交', value: '商品ID：{商品ID}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true }
+            { icon: 'tag', label: '计划名：{campaignName}', value: '计划名：{campaignName}', type: 'action', autoSubmit: false, requireCampaignName: true },
+            { icon: 'cursor', label: '点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'cart', label: '加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'coin', label: '成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'pin', label: '省份占比', value: '计划ID：{campaignId}，在各个省份的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'city', label: '城市占比', value: '计划ID：{campaignId}，在各个城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'package', label: '商品ID成交', value: '商品ID：{商品ID}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true }
         ],
 
         // NOTE: iframe 加载后通过 JS 清理页面，只保留万能查数核心内容区
@@ -136,7 +136,7 @@
                 const icon = node.querySelector('.am-magic-view-default-icon');
                 if (!(icon instanceof HTMLElement)) return;
                 const label = view === 'matrix' ? '人群对比看板' : '万能查数';
-                icon.textContent = isDefault ? '★' : '☆';
+                icon.innerHTML = renderAmIcon(isDefault ? 'star-filled' : 'star', { size: 10, strokeWidth: 1.8 });
                 icon.title = isDefault ? `默认打开：${label}` : `设为默认打开：${label}`;
                 icon.setAttribute('aria-label', icon.title);
             });
@@ -731,6 +731,12 @@
             return resolved;
         },
 
+        renderQuickPromptContent(promptItem) {
+            const iconName = promptItem?.icon || 'search';
+            const label = this.resolvePromptLabel(promptItem);
+            return `${renderAmIcon(iconName, { size: 13, className: 'am-quick-prompt-icon' })}<span class="am-quick-prompt-label">${escapeAmIconHtml(label)}</span>`;
+        },
+
         refreshQuickPromptLabels() {
             if (!this.popup) return;
             const quickPrompts = this.popup.querySelector('#am-magic-quick-prompts');
@@ -741,7 +747,7 @@
                 const idx = Number(btn.dataset.index);
                 const item = this.QUICK_PROMPTS[idx];
                 if (!item) return;
-                btn.textContent = this.resolvePromptLabel(item);
+                btn.innerHTML = this.renderQuickPromptContent(item);
             });
         },
 
@@ -5102,6 +5108,16 @@
                     max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                     display: flex; align-items: center; gap: 4px;
                 }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt .am-quick-prompt-icon {
+                    width: 13px;
+                    height: 13px;
+                    flex: 0 0 13px;
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt .am-quick-prompt-label {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
                 #am-magic-report-popup .am-magic-header .am-quick-prompt:hover {
                     background: rgba(42, 91, 255, 0.12); border-color: rgba(42, 91, 255, 0.34); color: var(--am26-primary);
                     transform: translateY(-1px);
@@ -5171,6 +5187,10 @@
                     background: rgba(31, 41, 55, 0.08);
                     opacity: 0;
                     transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab .am-magic-view-default-icon svg {
+                    width: 10px;
+                    height: 10px;
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab:focus-visible {
                     outline: 2px solid rgba(37, 99, 235, 0.45);
@@ -5324,7 +5344,11 @@
                 #am-magic-report-popup .am-crowd-matrix-item-trigger-arrow {
                     flex: 0 0 auto;
                     color: #6e7f9f;
-                    font-size: 10px;
+                    width: 14px;
+                    height: 14px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     transition: transform 0.16s ease;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-trigger-arrow {
@@ -5958,7 +5982,7 @@
             const quickPromptHtml = this.QUICK_PROMPTS
                 .map((item, idx) => {
                     const typeClass = item.type === 'action' ? 'type-action' : 'type-query';
-                    return `<button type="button" class="am-quick-prompt ${typeClass}" data-index="${idx}" title="${item.value}">${this.resolvePromptLabel(item)}</button>`;
+                    return `<button type="button" class="am-quick-prompt ${typeClass}" data-index="${idx}" title="${escapeAmIconHtml(item.value)}">${this.renderQuickPromptContent(item)}</button>`;
                 })
                 .join('');
 
@@ -5975,10 +5999,10 @@
                         </div>
                         <div class="am-btn-group">
                             <span id="am-magic-refresh" title="刷新">
-                                <svg viewBox="0 0 1024 1024" style="width:0.65em;height:0.65em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M959.667298 800.651143l-33.843806-157.556409c-0.064468-0.224104 0-0.388856-0.029676-0.587378l-2.611477-10.637268c-1.434675-5.9055-5.15644-10.539031-9.918907-13.248745-4.767584-2.804882-10.638291-3.686972-16.416901-1.956561l-10.538007 3.067872c-0.164752 0.029676-0.328481 0.163729-0.557702 0.25992L729.110271 669.726278c-11.618619 3.362584-18.664082 15.634072-15.829524 27.412326l2.64627 8.879228c2.838651 11.743462 17.358343 15.370059 28.976962 12.006452l100.167351-32.18912c-2.316765 4.496407-4.728698 8.943696-7.227612 13.325493-50.845015 89.318258-137.646963 153.181775-238.125399 175.209464-94.868671 20.790512-225.597061 3.428076-307.410392-48.981574-81.779561-52.344159-137.517003-136.410809-158.308539-231.274364-3.551896-16.152888-19.510356-26.4013-35.668361-22.844288-16.152888 3.527336-26.400277 19.515473-22.809495 35.669384 24.178679 110.532419 89.252767 207.876468 184.510294 268.90031 95.257527 60.993143 242.041592 81.256652 352.540242 57.046251 116.955712-25.683962 218.022549-100.089579 277.32212-204.126051 0.652869-1.154289 1.288343-2.320858 1.932002-3.479241l18.071587 85.813434c2.870374 11.782348 14.618952 18.568914 26.237571 15.140839l8.384971-0.876973C956.17373 821.927725 962.502879 812.369022 959.667298 800.651143zM96.961844 395.962194l2.610454 10.654664c1.439792 5.90857 5.15644 10.525728 9.924024 13.252839 4.76349 2.787486 10.637268 3.669576 16.412808 1.957585l10.507308-3.086291c0.199545-0.029676 0.358157-0.177032 0.557702-0.2415l156.64055-49.751101c11.618619-3.393283 18.697851-15.634072 15.859199-27.41335l-2.871397-7.978718c-2.870374-11.747555-17.134239-16.300244-28.717042-12.906961l-100.582813 32.301683c5.130857-11.68411 10.870582-23.094998 17.173125-34.111912 50.90539-89.366354 136.895857-150.277632 237.309824-172.304298 94.863555-20.790512 225.595015-3.41068 307.374576 48.997947 81.814354 52.361555 138.299833 133.48927 159.121044 228.386594 3.558036 16.153912 19.48068 26.350135 35.668361 22.810518 11.294231-2.482541 19.709901-11.048637 22.485107-21.50478 1.206478-4.473895 1.404999-9.30083 0.323365-14.164604-24.213471-110.51093-90.030479-204.973348-185.288007-265.961374-95.291297-61.011562-242.045685-81.261769-352.543312-57.029878-116.891244 25.618471-217.210044 97.05036-276.470729 201.085808-4.179183 7.325849-8.151657 14.809287-11.908214 22.416546l-17.690918-84.010369c-2.905166-11.765975-13.900591-21.262256-25.51921-17.868973l-8.385994 0.916882c-11.618619 3.429099-18.697851 15.69547-15.859199 27.412326l33.805944 157.552316C96.996636 395.58664 96.896352 395.767765 96.961844 395.962194z"></path></svg>
+                                ${renderAmIcon('refresh', { size: 14 })}
                             </span>
                             <span id="am-magic-close" title="关闭">
-                                <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                                ${renderAmIcon('close', { size: 18 })}
                             </span>
                         </div>
                     </div>
@@ -5986,11 +6010,11 @@
                         <div class="am-magic-view-tabs" id="am-magic-view-tabs">
                             <button type="button" class="am-magic-view-tab" data-view="query">
                                 <span class="am-magic-view-tab-label">万能查数</span>
-                                <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">☆</span>
+                                <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
                             <button type="button" class="am-magic-view-tab active" data-view="matrix">
                                 <span class="am-magic-view-tab-label">人群对比看板</span>
-                                <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">☆</span>
+                                <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
                         </div>
                         <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">
@@ -6003,7 +6027,7 @@
                                 <div class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
                                     <button type="button" class="am-crowd-matrix-item-trigger" data-crowd-item-trigger aria-expanded="false" aria-haspopup="listbox">
                                         <span class="am-crowd-matrix-item-trigger-text" data-crowd-item-trigger-text>--</span>
-                                        <span class="am-crowd-matrix-item-trigger-arrow" aria-hidden="true">▾</span>
+                                        <span class="am-crowd-matrix-item-trigger-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 14, strokeWidth: 2 })}</span>
                                     </button>
                                     <div class="am-crowd-matrix-item-dropdown" data-crowd-item-dropdown role="listbox"></div>
                                 </div>

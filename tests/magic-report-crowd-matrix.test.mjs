@@ -117,9 +117,9 @@ test('四类指标 prompt 采用无时间词模板（周期通过 panelDataQuery
   assert.doesNotMatch(methodBlock, /过去\$\{/, 'buildMetricPrompt 不应直接拼接周期词');
 });
 
-test('万能查数快捷话术包含“✨商品ID成交占比分析”，并支持商品ID占位替换', () => {
+test('万能查数快捷话术包含商品ID成交占比分析，并支持商品ID占位替换', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /label:\s*'✨商品ID成交'\s*,\s*value:\s*'商品ID：\{商品ID\}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少商品ID成交占比模板');
+  assert.match(block, /icon:\s*'package'\s*,\s*label:\s*'商品ID成交'\s*,\s*value:\s*'商品ID：\{商品ID\}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少商品ID成交占比模板或线性图标');
   assert.match(block, /if \(resolved\.includes\('\{商品ID\}'\) \|\| resolved\.includes\('\{itemId\}'\)\) \{/, 'resolvePromptText 未处理商品ID占位');
   assert.match(block, /itemId = await this\.resolveCrowdItemIdByCampaign\(campaignId\);/, '商品ID占位未按计划自动补齐商品ID');
   assert.match(block, /resolved = resolved[\s\S]*replace\(\/\\\{商品ID\\\}\/g, itemId\)/, '商品ID占位未正确替换');
@@ -127,8 +127,8 @@ test('万能查数快捷话术包含“✨商品ID成交占比分析”，并支
 
 test('万能查数快捷话术补充计划ID省份/城市花费占比模板', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /label:\s*'🏙️ 省份占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个省份的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID省份花费占比模板');
-  assert.match(block, /label:\s*'🌆 城市占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID城市花费占比模板');
+  assert.match(block, /icon:\s*'pin'\s*,\s*label:\s*'省份占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个省份的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID省份花费占比模板或线性图标');
+  assert.match(block, /icon:\s*'city'\s*,\s*label:\s*'城市占比'\s*,\s*value:\s*'计划ID：\{campaignId\}，在各个城市的花费，再使用占比工具进行占比分析'/, '快捷话术缺少计划ID城市花费占比模板或线性图标');
 });
 
 test('快捷查询在 iframe 提交失败后会回退原生查数入口', () => {

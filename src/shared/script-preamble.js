@@ -186,3 +186,126 @@ const resolveScriptVersion = () => {
 if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ !== 'function') {
     globalThis.__AM_GET_SCRIPT_VERSION__ = resolveScriptVersion;
 }
+
+const escapeAmIconHtml = (value) => {
+    const str = value === null || value === undefined ? '' : String(value);
+    return str.replace(/[&<>"']/g, ch => {
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return map[ch] || ch;
+    });
+};
+
+const AM_ICON_DEFS = {
+    logo: {
+        body: '<path d="M13 3L5 13h6l-1 8 9-12h-6l1-6z"></path>'
+    },
+    close: {
+        body: '<path d="M6 6l12 12M18 6L6 18"></path>'
+    },
+    'shield-check': {
+        body: '<path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3z"></path><path d="M9 12l2 2 4-5"></path>'
+    },
+    plan: {
+        body: '<rect x="5" y="4" width="14" height="16" rx="2"></rect><path d="M9 8h6M9 12h4M9 16h3M15 14v4M13 16h4"></path>'
+    },
+    chart: {
+        body: '<path d="M4 19h16"></path><rect x="6" y="11" width="3" height="6" rx="1"></rect><rect x="11" y="7" width="3" height="10" rx="1"></rect><rect x="16" y="4" width="3" height="13" rx="1"></rect>'
+    },
+    eye: {
+        body: '<path d="M3 12s3.3-6 9-6 9 6 9 6-3.3 6-9 6-9-6-9-6z"></path><circle cx="12" cy="12" r="2.5"></circle>'
+    },
+    list: {
+        body: '<path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6h1M4 12h1M4 18h1"></path>'
+    },
+    search: {
+        body: '<circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path>'
+    },
+    'layers-play': {
+        body: '<rect x="5" y="7" width="12" height="12" rx="2"></rect><path d="M8 5h9a2 2 0 0 1 2 2v9"></path><path d="M10 11l5 3-5 3z"></path>'
+    },
+    refresh: {
+        body: '<path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M18 9a7 7 0 0 0-11.5-2.5L4 9"></path><path d="M6 15a7 7 0 0 0 11.5 2.5L20 15"></path>'
+    },
+    center: {
+        body: '<rect x="8" y="8" width="8" height="8" rx="2"></rect><path d="M12 4v4M12 16v4M4 12h4M16 12h4"></path>'
+    },
+    expand: {
+        body: '<path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4"></path><path d="M9 9L4 4M15 9l5-5M15 15l5 5M9 15l-5 5"></path>'
+    },
+    tag: {
+        body: '<path d="M4 5v6.5L12.5 20 20 12.5 11.5 4H5a1 1 0 0 0-1 1z"></path><circle cx="8.5" cy="8.5" r="1"></circle>'
+    },
+    cursor: {
+        body: '<path d="M6 3l11 11-5 1.5L9.5 21 6 3z"></path><path d="M15 4l2-2M18 8h3M13 2V0"></path>'
+    },
+    cart: {
+        body: '<path d="M3 4h2l2.2 10H18l2-7H7"></path><circle cx="9" cy="19" r="1.5"></circle><circle cx="17" cy="19" r="1.5"></circle>'
+    },
+    coin: {
+        body: '<circle cx="12" cy="12" r="7"></circle><path d="M12 8v8M9.5 10h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"></path>'
+    },
+    pin: {
+        body: '<path d="M12 21s6-5.2 6-11a6 6 0 0 0-12 0c0 5.8 6 11 6 11z"></path><circle cx="12" cy="10" r="2"></circle>'
+    },
+    city: {
+        body: '<path d="M4 20V9l5-3v14M9 20V4l6 3v13M15 20v-8l5 2v6"></path><path d="M6 12h1M6 16h1M11 9h1M11 13h1M17 16h1"></path>'
+    },
+    package: {
+        body: '<path d="M4 8l8-4 8 4-8 4-8-4z"></path><path d="M4 8v8l8 4 8-4V8"></path><path d="M12 12v8"></path>'
+    },
+    star: {
+        body: '<path d="M12 4l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8L12 4z"></path>'
+    },
+    'star-filled': {
+        fill: 'currentColor',
+        stroke: 'none',
+        strokeWidth: 0,
+        body: '<path d="M12 3.8l2.7 5.5 6 .9-4.4 4.2 1.1 6-5.4-2.8-5.4 2.8 1.1-6-4.4-4.2 6-.9L12 3.8z"></path>'
+    },
+    'check-circle': {
+        body: '<circle cx="12" cy="12" r="8"></circle><path d="M8.5 12.5l2.3 2.3 4.7-5.1"></path>'
+    },
+    check: {
+        body: '<path d="M5 12.5l4.2 4.2L19 7"></path>'
+    },
+    minus: {
+        body: '<path d="M5 12h14"></path>'
+    },
+    'x-circle': {
+        body: '<circle cx="12" cy="12" r="8"></circle><path d="M9 9l6 6M15 9l-6 6"></path>'
+    },
+    'alert-triangle': {
+        body: '<path d="M12 4l9 16H3L12 4z"></path><path d="M12 9v5M12 17h.01"></path>'
+    },
+    help: {
+        body: '<circle cx="12" cy="12" r="8"></circle><path d="M9.8 9.5a2.3 2.3 0 1 1 3.4 2c-.8.5-1.2 1-1.2 2V14"></path><path d="M12 17h.01"></path>'
+    },
+    'chevron-down': {
+        body: '<path d="M7 10l5 5 5-5"></path>'
+    },
+    'chevron-up': {
+        body: '<path d="M7 14l5-5 5 5"></path>'
+    }
+};
+
+const renderAmIcon = (name, options = {}) => {
+    const icon = AM_ICON_DEFS[name] || AM_ICON_DEFS.logo;
+    const size = Number.isFinite(Number(options.size)) ? Number(options.size) : 16;
+    const strokeWidth = options.strokeWidth ?? icon.strokeWidth ?? 2;
+    const className = [
+        'am-ui-icon',
+        `am-ui-icon-${String(name || 'logo').replace(/[^a-z0-9_-]+/gi, '-')}`,
+        options.className || ''
+    ].filter(Boolean).join(' ');
+    const ariaAttrs = options.label
+        ? `role="img" aria-label="${escapeAmIconHtml(options.label)}"`
+        : 'aria-hidden="true" focusable="false"';
+    const title = options.title ? `<title>${escapeAmIconHtml(options.title)}</title>` : '';
+    const style = options.style ? ` style="${escapeAmIconHtml(options.style)}"` : '';
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icon.viewBox || '0 0 24 24'}" width="${size}" height="${size}" class="${escapeAmIconHtml(className)}" fill="${icon.fill || 'none'}" stroke="${icon.stroke || 'currentColor'}" stroke-width="${escapeAmIconHtml(strokeWidth)}" stroke-linecap="round" stroke-linejoin="round" ${ariaAttrs}${style}>${title}${icon.body}</svg>`;
+};
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.__AM_RENDER_ICON__ = renderAmIcon;
+    globalThis.__AM_ESCAPE_ICON_HTML__ = escapeAmIconHtml;
+}

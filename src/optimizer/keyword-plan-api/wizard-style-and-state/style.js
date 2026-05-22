@@ -1609,13 +1609,13 @@
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow {
                     flex: 0 0 auto;
-                    width: 12px;
-                    height: 8px;
+                    width: 16px;
+                    height: 16px;
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
                     color: transparent;
-                    background: center / 12px 8px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2394A3B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                    background: center / 16px 16px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M7 10l5 5 5-5' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
                     transition: opacity 0.2s ease;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel {
@@ -1653,7 +1653,7 @@
                     box-shadow: 0 0 0 3px rgba(79,104,255,0.06);
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-arrow {
-                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%233354D1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M7 10l5 5 5-5' stroke='%233354D1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-panel {
                     left: 0;
@@ -2198,8 +2198,10 @@
                     border-radius: 50%;
                     background: #e8f7ef;
                     color: #16a34a;
-                    font-size: 11px;
-                    font-weight: 700;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-status-icon svg {
+                    width: 13px;
+                    height: 13px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn {
                     border: 0;
@@ -2385,10 +2387,12 @@
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 12px;
-                    font-weight: 700;
                     line-height: 1;
                     box-sizing: border-box;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-check svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-ai-max-demand-popover input:not(:checked) + .am-wxt-ai-max-demand-popover-check {
                     background: #fff;
@@ -5373,9 +5377,12 @@
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 10px;
                     line-height: 1;
                     flex-shrink: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-check-icon svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.checked .am-wxt-scene-area-check-icon,
                 #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.partial .am-wxt-scene-area-check-icon,
@@ -5508,7 +5515,11 @@
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-area-caret {
                     color: #94a3b8;
-                    font-size: 11px;
+                    width: 12px;
+                    height: 12px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     line-height: 1;
                     transform: translateY(1px);
                 }
@@ -6434,7 +6445,7 @@
                         grid-template-columns: 1fr;
                     }
                     #am-wxt-keyword-modal .am-wxt-strategy-main {
-                        flex-direction: column;
+                        grid-template-columns: 1fr;
                         align-items: flex-start;
                     }
                     #am-wxt-keyword-modal .am-wxt-strategy-right {

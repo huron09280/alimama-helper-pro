@@ -295,6 +295,129 @@ const resolveScriptVersion = () => {
 if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ !== 'function') {
     globalThis.__AM_GET_SCRIPT_VERSION__ = resolveScriptVersion;
 }
+
+const escapeAmIconHtml = (value) => {
+    const str = value === null || value === undefined ? '' : String(value);
+    return str.replace(/[&<>"']/g, ch => {
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return map[ch] || ch;
+    });
+};
+
+const AM_ICON_DEFS = {
+    logo: {
+        body: '<path d="M13 3L5 13h6l-1 8 9-12h-6l1-6z"></path>'
+    },
+    close: {
+        body: '<path d="M6 6l12 12M18 6L6 18"></path>'
+    },
+    'shield-check': {
+        body: '<path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3z"></path><path d="M9 12l2 2 4-5"></path>'
+    },
+    plan: {
+        body: '<rect x="5" y="4" width="14" height="16" rx="2"></rect><path d="M9 8h6M9 12h4M9 16h3M15 14v4M13 16h4"></path>'
+    },
+    chart: {
+        body: '<path d="M4 19h16"></path><rect x="6" y="11" width="3" height="6" rx="1"></rect><rect x="11" y="7" width="3" height="10" rx="1"></rect><rect x="16" y="4" width="3" height="13" rx="1"></rect>'
+    },
+    eye: {
+        body: '<path d="M3 12s3.3-6 9-6 9 6 9 6-3.3 6-9 6-9-6-9-6z"></path><circle cx="12" cy="12" r="2.5"></circle>'
+    },
+    list: {
+        body: '<path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6h1M4 12h1M4 18h1"></path>'
+    },
+    search: {
+        body: '<circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path>'
+    },
+    'layers-play': {
+        body: '<rect x="5" y="7" width="12" height="12" rx="2"></rect><path d="M8 5h9a2 2 0 0 1 2 2v9"></path><path d="M10 11l5 3-5 3z"></path>'
+    },
+    refresh: {
+        body: '<path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M18 9a7 7 0 0 0-11.5-2.5L4 9"></path><path d="M6 15a7 7 0 0 0 11.5 2.5L20 15"></path>'
+    },
+    center: {
+        body: '<rect x="8" y="8" width="8" height="8" rx="2"></rect><path d="M12 4v4M12 16v4M4 12h4M16 12h4"></path>'
+    },
+    expand: {
+        body: '<path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4"></path><path d="M9 9L4 4M15 9l5-5M15 15l5 5M9 15l-5 5"></path>'
+    },
+    tag: {
+        body: '<path d="M4 5v6.5L12.5 20 20 12.5 11.5 4H5a1 1 0 0 0-1 1z"></path><circle cx="8.5" cy="8.5" r="1"></circle>'
+    },
+    cursor: {
+        body: '<path d="M6 3l11 11-5 1.5L9.5 21 6 3z"></path><path d="M15 4l2-2M18 8h3M13 2V0"></path>'
+    },
+    cart: {
+        body: '<path d="M3 4h2l2.2 10H18l2-7H7"></path><circle cx="9" cy="19" r="1.5"></circle><circle cx="17" cy="19" r="1.5"></circle>'
+    },
+    coin: {
+        body: '<circle cx="12" cy="12" r="7"></circle><path d="M12 8v8M9.5 10h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"></path>'
+    },
+    pin: {
+        body: '<path d="M12 21s6-5.2 6-11a6 6 0 0 0-12 0c0 5.8 6 11 6 11z"></path><circle cx="12" cy="10" r="2"></circle>'
+    },
+    city: {
+        body: '<path d="M4 20V9l5-3v14M9 20V4l6 3v13M15 20v-8l5 2v6"></path><path d="M6 12h1M6 16h1M11 9h1M11 13h1M17 16h1"></path>'
+    },
+    package: {
+        body: '<path d="M4 8l8-4 8 4-8 4-8-4z"></path><path d="M4 8v8l8 4 8-4V8"></path><path d="M12 12v8"></path>'
+    },
+    star: {
+        body: '<path d="M12 4l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8L12 4z"></path>'
+    },
+    'star-filled': {
+        fill: 'currentColor',
+        stroke: 'none',
+        strokeWidth: 0,
+        body: '<path d="M12 3.8l2.7 5.5 6 .9-4.4 4.2 1.1 6-5.4-2.8-5.4 2.8 1.1-6-4.4-4.2 6-.9L12 3.8z"></path>'
+    },
+    'check-circle': {
+        body: '<circle cx="12" cy="12" r="8"></circle><path d="M8.5 12.5l2.3 2.3 4.7-5.1"></path>'
+    },
+    check: {
+        body: '<path d="M5 12.5l4.2 4.2L19 7"></path>'
+    },
+    minus: {
+        body: '<path d="M5 12h14"></path>'
+    },
+    'x-circle': {
+        body: '<circle cx="12" cy="12" r="8"></circle><path d="M9 9l6 6M15 9l-6 6"></path>'
+    },
+    'alert-triangle': {
+        body: '<path d="M12 4l9 16H3L12 4z"></path><path d="M12 9v5M12 17h.01"></path>'
+    },
+    help: {
+        body: '<circle cx="12" cy="12" r="8"></circle><path d="M9.8 9.5a2.3 2.3 0 1 1 3.4 2c-.8.5-1.2 1-1.2 2V14"></path><path d="M12 17h.01"></path>'
+    },
+    'chevron-down': {
+        body: '<path d="M7 10l5 5 5-5"></path>'
+    },
+    'chevron-up': {
+        body: '<path d="M7 14l5-5 5 5"></path>'
+    }
+};
+
+const renderAmIcon = (name, options = {}) => {
+    const icon = AM_ICON_DEFS[name] || AM_ICON_DEFS.logo;
+    const size = Number.isFinite(Number(options.size)) ? Number(options.size) : 16;
+    const strokeWidth = options.strokeWidth ?? icon.strokeWidth ?? 2;
+    const className = [
+        'am-ui-icon',
+        `am-ui-icon-${String(name || 'logo').replace(/[^a-z0-9_-]+/gi, '-')}`,
+        options.className || ''
+    ].filter(Boolean).join(' ');
+    const ariaAttrs = options.label
+        ? `role="img" aria-label="${escapeAmIconHtml(options.label)}"`
+        : 'aria-hidden="true" focusable="false"';
+    const title = options.title ? `<title>${escapeAmIconHtml(options.title)}</title>` : '';
+    const style = options.style ? ` style="${escapeAmIconHtml(options.style)}"` : '';
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icon.viewBox || '0 0 24 24'}" width="${size}" height="${size}" class="${escapeAmIconHtml(className)}" fill="${icon.fill || 'none'}" stroke="${icon.stroke || 'currentColor'}" stroke-width="${escapeAmIconHtml(strokeWidth)}" stroke-linecap="round" stroke-linejoin="round" ${ariaAttrs}${style}>${title}${icon.body}</svg>`;
+};
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.__AM_RENDER_ICON__ = renderAmIcon;
+    globalThis.__AM_ESCAPE_ICON_HTML__ = escapeAmIconHtml;
+}
 (() => {
     'use strict';
 
@@ -5263,6 +5386,9 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: flex; align-items: center; gap: 8px;
                     text-shadow: 0 1px 0 rgba(255,255,255,0.4);
                 }
+                .am-title .am-brand-icon {
+                    flex: 0 0 16px;
+                }
                 .am-version {
                     font-size: 10px; color: var(--am26-text-soft); font-weight: normal;
                     background: rgba(255,255,255,0.3); padding: 1px 4px; border-radius: 6px;
@@ -5629,6 +5755,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: flex; justify-content: space-between; align-items: center;
                     font-size: 12px; color: var(--am26-text-soft); margin-bottom: 8px; padding: 0 4px;
                 }
+                .am-log-title {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .am-log-title svg {
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
+                }
                 .am-action-btn {
                     cursor: pointer; color: var(--am26-text-soft); margin-left: 10px;
                     padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
@@ -5688,6 +5824,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-report-capture-panel .am-download-source {
                     color: var(--am26-text-soft);
                     font-size: 10px;
+                }
+                #am-report-capture-panel .am-download-title,
+                #am-report-capture-panel .am-download-link {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                }
+                #am-report-capture-panel .am-download-title svg,
+                #am-report-capture-panel .am-download-link svg {
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
                 }
                 #am-report-capture-panel .am-download-url {
                     background: rgba(255, 255, 255, 0.60);
@@ -6380,37 +6529,37 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const root = document.createElement('div');
             root.innerHTML = `
                 <div id="am-helper-icon" title="点击展开助手面板">
-                    <svg viewBox="0 0 1024 1024" width="22" height="22" fill="currentColor"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
+                    ${renderAmIcon('logo', { size: 22, strokeWidth: 2.2 })}
                 </div>
                 <div id="am-helper-panel">
             <div class="am-resizer-left"></div>
             <div class="am-header">
                 <span class="am-title">
-                    <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor" style="margin-right:4px;"><path d="M852.1 432.8L542.4 69.2c-26.6-30.8-74.6-11.8-74.6 28.6v238H218c-36.2 0-60.6 37.8-44.4 69.4l270.2 522.4c18.6 36 71.8 23.4 71.8-17V681h249.6c36.2 0 60.8-38 44.6-69.6z"></path></svg>
+                    ${renderAmIcon('logo', { size: 16, className: 'am-brand-icon', strokeWidth: 2.2 })}
                     阿里助手 Pro
                     <span class="am-version">v${CURRENT_VERSION}</span>
                 </span>
                 <div class="am-close-btn" title="最小化">
-                    <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                    ${renderAmIcon('close', { size: 18 })}
                 </div>
             </div>
             <div class="am-body">
                 <!-- Section 1: Tools -->
                 <div class="am-tools-row">
                     <div class="am-tool-btn" id="am-trigger-optimizer">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M907.8 770.1c-60-96.1-137.9-178.6-227.1-241.6 8.3-43.1 7.1-88.9-5-131-29.2-101.5-121.1-177.3-227.5-188.9-10.4-1.2-18.7 8.3-15.3 18.2 24.5 70.3 5.4 152.1-51.5 209-56.9 56.9-138.7 76-209 51.5-9.9-3.4-19.4 4.8-18.2 15.3 11.6 106.4 87.4 198.3 188.9 227.5 42.1 12.1 87.9 13.3 131 5 63.1 89.2 145.5 167.1 241.6 227.1 21.6 13.5 49.3-3.9 46.2-28.7l-12.7-106.3c10.3 3.6 21 6.1 31.9 7.4 35.7 4.2 71.3-7.5 99.2-35.4 27.9-27.9 39.6-63.5 35.4-99.2-1.3-10.9-3.8-21.6-7.4-31.9l106.3 12.7c24.9 3.1 42.3-24.6 28.7-46.2zM512 512c-23.7 0-46.3-5-67.4-14.1-18.4-7.9-19-33.3-1-42.3 22.1-11 47.9-16.1 74.5-13.2 59.8 6.5 106.9 53.6 113.4 113.4 2.9 26.6-2.2 52.4-13.2 74.5-9 18-34.4 17.4-42.3-1-9.1-21.1-14.1-43.7-14.1-67.4z"></path></svg>
+                        ${renderAmIcon('shield-check', { size: 16 })}
                         算法护航
                     </div>
                     <div class="am-tool-btn" id="am-trigger-keyword-plan-api">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 176a48 48 0 0 1 48-48h672a48 48 0 0 1 48 48v80H128v-80zm0 192h768v480a48 48 0 0 1-48 48H176a48 48 0 0 1-48-48V368zm160 96v64h448v-64H288zm0 160v64h288v-64H288z"></path></svg>
+                        ${renderAmIcon('plan', { size: 16 })}
                         组建计划
                     </div>
                     <div class="am-tool-btn" id="am-trigger-magic-report">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M128 128h768v768H128z m60.8 60.8V835.2h646.4V188.8H188.8z M256 384h128v320H256V384z m192-128h128v448H448V256z m192 192h128v256H640V448z"></path></svg>
+                        ${renderAmIcon('chart', { size: 16 })}
                         万能查数
                     </div>
                     <div class="am-tool-btn" id="am-toggle-assist-display">
-                        <svg viewBox="0 0 1024 1024" width="16" height="16" fill="currentColor"><path d="M512 208c219.8 0 401.4 124.4 472 302.2a23.7 23.7 0 0 1 0 17.6C913.4 705.6 731.8 830 512 830S110.6 705.6 40 527.8a23.7 23.7 0 0 1 0-17.6C110.6 332.4 292.2 208 512 208zm0 104c-110.6 0-200 89.4-200 200s89.4 200 200 200 200-89.4 200-200-89.4-200-200-200zm0 88a112 112 0 1 1 0 224 112 112 0 0 1 0-224z"></path></svg>
+                        ${renderAmIcon('eye', { size: 16 })}
                         辅助显示
                     </div>
                 </div>
@@ -6431,7 +6580,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 </div>
                 <div class="am-log-section">
                     <div class="am-log-header">
-                        <span>📋 运行日志</span>
+                        <span class="am-log-title">${renderAmIcon('list', { size: 14 })}<span>运行日志</span></span>
                         <div>
                             <span class="am-action-btn" id="am-log-clear">清空</span>
                             <span class="am-action-btn" id="am-log-toggle">展开</span>
@@ -7089,7 +7238,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const header = document.createElement('div');
             header.className = 'am-download-header';
             const headerTitle = document.createElement('span');
-            headerTitle.textContent = '✅ 捕获报表';
+            headerTitle.className = 'am-download-title';
+            headerTitle.innerHTML = `${renderAmIcon('check-circle', { size: 14 })}<span>捕获报表</span>`;
             const headerSource = document.createElement('span');
             headerSource.className = 'am-download-source';
             headerSource.textContent = source;
@@ -7108,7 +7258,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             dlLink.target = '_blank';
             dlLink.rel = 'noopener noreferrer';
             dlLink.className = 'am-download-link';
-            dlLink.textContent = '⚡ 直连下载';
+            dlLink.innerHTML = `${renderAmIcon('logo', { size: 14, strokeWidth: 2.2 })}<span>直连下载</span>`;
 
             const copyBtn = document.createElement('button');
             copyBtn.className = 'am-download-btn am-download-copy';
@@ -7234,7 +7384,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             this.hooksRegistered = true;
         }
     };
-
     // ==========================================
     // 6. 万能查数 (Magic Report) - iframe 嵌入方案
     // ==========================================
@@ -7302,13 +7451,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         CROWD_REQUEST_RETRY_BASE_MS: 700,
         CROWD_REQUEST_RETRY_MAX_MS: 3200,
         QUICK_PROMPTS: [
-            { label: '📛 计划名：{campaignName}', value: '计划名：{campaignName}', type: 'action', autoSubmit: false, requireCampaignName: true },
-            { label: '🖱️ 点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🛒 加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '💰 成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🏙️ 省份占比', value: '计划ID：{campaignId}，在各个省份的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '🌆 城市占比', value: '计划ID：{campaignId}，在各个城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
-            { label: '✨商品ID成交', value: '商品ID：{商品ID}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true }
+            { icon: 'tag', label: '计划名：{campaignName}', value: '计划名：{campaignName}', type: 'action', autoSubmit: false, requireCampaignName: true },
+            { icon: 'cursor', label: '点击分析', value: '计划ID：{campaignId} 点击人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'cart', label: '加购分析', value: '计划ID：{campaignId} 加购人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'coin', label: '成交分析', value: '计划ID：{campaignId} 成交人群分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'pin', label: '省份占比', value: '计划ID：{campaignId}，在各个省份的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'city', label: '城市占比', value: '计划ID：{campaignId}，在各个城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true },
+            { icon: 'package', label: '商品ID成交', value: '商品ID：{商品ID}，成交人群在各个省份或城市的花费，再使用占比工具进行占比分析', type: 'query', autoSubmit: true, requireCampaignId: true }
         ],
 
         // NOTE: iframe 加载后通过 JS 清理页面，只保留万能查数核心内容区
@@ -7373,7 +7522,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const icon = node.querySelector('.am-magic-view-default-icon');
                 if (!(icon instanceof HTMLElement)) return;
                 const label = view === 'matrix' ? '人群对比看板' : '万能查数';
-                icon.textContent = isDefault ? '★' : '☆';
+                icon.innerHTML = renderAmIcon(isDefault ? 'star-filled' : 'star', { size: 10, strokeWidth: 1.8 });
                 icon.title = isDefault ? `默认打开：${label}` : `设为默认打开：${label}`;
                 icon.setAttribute('aria-label', icon.title);
             });
@@ -7968,6 +8117,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             return resolved;
         },
 
+        renderQuickPromptContent(promptItem) {
+            const iconName = promptItem?.icon || 'search';
+            const label = this.resolvePromptLabel(promptItem);
+            return `${renderAmIcon(iconName, { size: 13, className: 'am-quick-prompt-icon' })}<span class="am-quick-prompt-label">${escapeAmIconHtml(label)}</span>`;
+        },
+
         refreshQuickPromptLabels() {
             if (!this.popup) return;
             const quickPrompts = this.popup.querySelector('#am-magic-quick-prompts');
@@ -7978,7 +8133,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 const idx = Number(btn.dataset.index);
                 const item = this.QUICK_PROMPTS[idx];
                 if (!item) return;
-                btn.textContent = this.resolvePromptLabel(item);
+                btn.innerHTML = this.renderQuickPromptContent(item);
             });
         },
 
@@ -12339,6 +12494,16 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                     display: flex; align-items: center; gap: 4px;
                 }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt .am-quick-prompt-icon {
+                    width: 13px;
+                    height: 13px;
+                    flex: 0 0 13px;
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt .am-quick-prompt-label {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
                 #am-magic-report-popup .am-magic-header .am-quick-prompt:hover {
                     background: rgba(42, 91, 255, 0.12); border-color: rgba(42, 91, 255, 0.34); color: var(--am26-primary);
                     transform: translateY(-1px);
@@ -12408,6 +12573,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     background: rgba(31, 41, 55, 0.08);
                     opacity: 0;
                     transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab .am-magic-view-default-icon svg {
+                    width: 10px;
+                    height: 10px;
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab:focus-visible {
                     outline: 2px solid rgba(37, 99, 235, 0.45);
@@ -12561,7 +12730,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 #am-magic-report-popup .am-crowd-matrix-item-trigger-arrow {
                     flex: 0 0 auto;
                     color: #6e7f9f;
-                    font-size: 10px;
+                    width: 14px;
+                    height: 14px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     transition: transform 0.16s ease;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-trigger-arrow {
@@ -13195,7 +13368,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const quickPromptHtml = this.QUICK_PROMPTS
                 .map((item, idx) => {
                     const typeClass = item.type === 'action' ? 'type-action' : 'type-query';
-                    return `<button type="button" class="am-quick-prompt ${typeClass}" data-index="${idx}" title="${item.value}">${this.resolvePromptLabel(item)}</button>`;
+                    return `<button type="button" class="am-quick-prompt ${typeClass}" data-index="${idx}" title="${escapeAmIconHtml(item.value)}">${this.renderQuickPromptContent(item)}</button>`;
                 })
                 .join('');
 
@@ -13212,10 +13385,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         </div>
                         <div class="am-btn-group">
                             <span id="am-magic-refresh" title="刷新">
-                                <svg viewBox="0 0 1024 1024" style="width:0.65em;height:0.65em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M959.667298 800.651143l-33.843806-157.556409c-0.064468-0.224104 0-0.388856-0.029676-0.587378l-2.611477-10.637268c-1.434675-5.9055-5.15644-10.539031-9.918907-13.248745-4.767584-2.804882-10.638291-3.686972-16.416901-1.956561l-10.538007 3.067872c-0.164752 0.029676-0.328481 0.163729-0.557702 0.25992L729.110271 669.726278c-11.618619 3.362584-18.664082 15.634072-15.829524 27.412326l2.64627 8.879228c2.838651 11.743462 17.358343 15.370059 28.976962 12.006452l100.167351-32.18912c-2.316765 4.496407-4.728698 8.943696-7.227612 13.325493-50.845015 89.318258-137.646963 153.181775-238.125399 175.209464-94.868671 20.790512-225.597061 3.428076-307.410392-48.981574-81.779561-52.344159-137.517003-136.410809-158.308539-231.274364-3.551896-16.152888-19.510356-26.4013-35.668361-22.844288-16.152888 3.527336-26.400277 19.515473-22.809495 35.669384 24.178679 110.532419 89.252767 207.876468 184.510294 268.90031 95.257527 60.993143 242.041592 81.256652 352.540242 57.046251 116.955712-25.683962 218.022549-100.089579 277.32212-204.126051 0.652869-1.154289 1.288343-2.320858 1.932002-3.479241l18.071587 85.813434c2.870374 11.782348 14.618952 18.568914 26.237571 15.140839l8.384971-0.876973C956.17373 821.927725 962.502879 812.369022 959.667298 800.651143zM96.961844 395.962194l2.610454 10.654664c1.439792 5.90857 5.15644 10.525728 9.924024 13.252839 4.76349 2.787486 10.637268 3.669576 16.412808 1.957585l10.507308-3.086291c0.199545-0.029676 0.358157-0.177032 0.557702-0.2415l156.64055-49.751101c11.618619-3.393283 18.697851-15.634072 15.859199-27.41335l-2.871397-7.978718c-2.870374-11.747555-17.134239-16.300244-28.717042-12.906961l-100.582813 32.301683c5.130857-11.68411 10.870582-23.094998 17.173125-34.111912 50.90539-89.366354 136.895857-150.277632 237.309824-172.304298 94.863555-20.790512 225.595015-3.41068 307.374576 48.997947 81.814354 52.361555 138.299833 133.48927 159.121044 228.386594 3.558036 16.153912 19.48068 26.350135 35.668361 22.810518 11.294231-2.482541 19.709901-11.048637 22.485107-21.50478 1.206478-4.473895 1.404999-9.30083 0.323365-14.164604-24.213471-110.51093-90.030479-204.973348-185.288007-265.961374-95.291297-61.011562-242.045685-81.261769-352.543312-57.029878-116.891244 25.618471-217.210044 97.05036-276.470729 201.085808-4.179183 7.325849-8.151657 14.809287-11.908214 22.416546l-17.690918-84.010369c-2.905166-11.765975-13.900591-21.262256-25.51921-17.868973l-8.385994 0.916882c-11.618619 3.429099-18.697851 15.69547-15.859199 27.412326l33.805944 157.552316C96.996636 395.58664 96.896352 395.767765 96.961844 395.962194z"></path></svg>
+                                ${renderAmIcon('refresh', { size: 14 })}
                             </span>
                             <span id="am-magic-close" title="关闭">
-                                <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                                ${renderAmIcon('close', { size: 18 })}
                             </span>
                         </div>
                     </div>
@@ -13223,11 +13396,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         <div class="am-magic-view-tabs" id="am-magic-view-tabs">
                             <button type="button" class="am-magic-view-tab" data-view="query">
                                 <span class="am-magic-view-tab-label">万能查数</span>
-                                <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">☆</span>
+                                <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
                             <button type="button" class="am-magic-view-tab active" data-view="matrix">
                                 <span class="am-magic-view-tab-label">人群对比看板</span>
-                                <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">☆</span>
+                                <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
                         </div>
                         <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">
@@ -13240,7 +13413,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 <div class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
                                     <button type="button" class="am-crowd-matrix-item-trigger" data-crowd-item-trigger aria-expanded="false" aria-haspopup="listbox">
                                         <span class="am-crowd-matrix-item-trigger-text" data-crowd-item-trigger-text>--</span>
-                                        <span class="am-crowd-matrix-item-trigger-arrow" aria-hidden="true">▾</span>
+                                        <span class="am-crowd-matrix-item-trigger-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 14, strokeWidth: 2 })}</span>
                                     </button>
                                     <div class="am-crowd-matrix-item-dropdown" data-crowd-item-dropdown role="listbox"></div>
                                 </div>
@@ -13609,16 +13782,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
         RETRY_DELAY_MS: 450,
         MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS: 3,
         SITE_CUSTOM_CONFLICT_RE: /(onebpsite-existed|horizontal-onebpsite-existed|diffbizcode-existed|存在在投计划|在投计划|持续推广计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i,
-        ICON_SVG: `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
-                <path fill="currentColor" d="M770.99008 637.242027c14.86848 14.199467 31.3344 29.463893 47.26784 45.335893 57.869653 57.603413 115.602773 115.397973 173.267627 173.19936 41.53344 41.601707 43.39712 100.27008 4.601173 139.4688-39.130453 39.601493-98.399573 37.730987-140.663467-4.46464-69.864107-69.864107-139.933013-139.598507-209.46944-209.865387-8.669867-8.731307-14.199467-9.332053-25.197227-3.331413-248.66816 136.997547-548.870827 1.467733-611.068587-275.531093-50.333013-224.13312 99.997013-449.733973 329.40032-494.26432 236.264107-45.800107 464.800427 123.467093 490.134187 362.530133 9.530027 90.002773-8.198827 173.93664-52.736 252.463787-1.467733 2.60096-2.935467 5.133653-4.1984 7.80288C771.857067 631.637333 771.857067 632.838827 770.99008 637.242027zM415.39584 703.904427c161.000107-1.201493 289.532587-129.80224 288.802133-289.068373-0.730453-159.136427-131.66592-287.798613-291.403093-286.53568C254.859947 129.6384 127.720107 260.23936 128.587093 420.174507 129.39264 575.03744 260.85376 705.10592 415.39584 703.904427zM193.1264 415.17056c0.197973-132.068693 113.937067-226.269867 222.405973-221.463893 0.26624 5.065387 0.79872 10.267307 0.79872 15.40096 0.136533 15.264427 0.068267 30.53568 0.068267 45.602133-103.99744 8.997547-156.071253 79.598933-161.000107 160.467627C235.055787 415.17056 214.657707 415.17056 193.1264 415.17056z"></path>
-            </svg>
-        `,
-        CONCURRENT_START_ICON_SVG: `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
-                <path fill="currentColor" d="M165.888 130.112A63.488 63.488 0 0 1 229.312 64H592.32a63.488 63.488 0 0 1 63.424 63.744l-.192 66.24h138.56a63.488 63.488 0 0 1 63.424 63.744v575.68a63.488 63.488 0 0 1-63.424 63.744H431.68a63.488 63.488 0 0 1-63.424-63.744v-66.24H229.312a63.488 63.488 0 0 1-63.424-63.744V130.112zm126.976 153.6l.064 356.16h75.328V257.728a63.488 63.488 0 0 1 63.424-63.744h96.896l.128-66.24-235.84.064zm151.744 486.4l286.08-.064-.128-448-286.08.064.128 448zm28.032-309.952c5.568-22.912 35.968-28.16 48.96-8.384l61.12 93.184h42.048c31.744 0 46.528 39.04 22.976 60.608l-98.624 90.24 23.68 135.552c5.44 31.04-27.328 54.592-55.36 39.808l-120.448-63.488-120.448 63.488c-28.096 14.784-60.8-8.768-55.424-39.808l23.744-135.552-98.624-90.24c-23.552-21.568-8.832-60.608 22.912-60.608h42.112l61.12-93.184c12.992-19.776 43.392-14.528 48.96 8.384l31.552 130.112h89.92l31.552-130.112z"></path>
-            </svg>
-        `,
+        ICON_SVG: renderAmIcon('search', { size: 14 }),
+        CONCURRENT_START_ICON_SVG: renderAmIcon('layers-play', { size: 14 }),
 
         init() {
             if (window.top !== window.self) return;
@@ -15216,7 +15381,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             });
         }
     };
-
     const PotentialPlanDailyExporter = {
         initialized: false,
         running: false,
@@ -32849,13 +33013,13 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow {
                     flex: 0 0 auto;
-                    width: 12px;
-                    height: 8px;
+                    width: 16px;
+                    height: 16px;
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
                     color: transparent;
-                    background: center / 12px 8px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2394A3B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                    background: center / 16px 16px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M7 10l5 5 5-5' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
                     transition: opacity 0.2s ease;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel {
@@ -32893,7 +33057,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     box-shadow: 0 0 0 3px rgba(79,104,255,0.06);
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-arrow {
-                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%233354D1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M7 10l5 5 5-5' stroke='%233354D1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-panel {
                     left: 0;
@@ -33438,8 +33602,10 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     border-radius: 50%;
                     background: #e8f7ef;
                     color: #16a34a;
-                    font-size: 11px;
-                    font-weight: 700;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-status-icon svg {
+                    width: 13px;
+                    height: 13px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn {
                     border: 0;
@@ -33625,10 +33791,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 12px;
-                    font-weight: 700;
                     line-height: 1;
                     box-sizing: border-box;
+                }
+                #am-wxt-ai-max-demand-popover .am-wxt-ai-max-demand-popover-check svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-ai-max-demand-popover input:not(:checked) + .am-wxt-ai-max-demand-popover-check {
                     background: #fff;
@@ -36613,9 +36781,12 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 10px;
                     line-height: 1;
                     flex-shrink: 0;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-area-check-icon svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.checked .am-wxt-scene-area-check-icon,
                 #am-wxt-scene-popup-mask .am-wxt-scene-area-section-toggle.partial .am-wxt-scene-area-check-icon,
@@ -36748,7 +36919,11 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-area-caret {
                     color: #94a3b8;
-                    font-size: 11px;
+                    width: 12px;
+                    height: 12px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     line-height: 1;
                     transform: translateY(1px);
                 }
@@ -37674,7 +37849,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         grid-template-columns: 1fr;
                     }
                     #am-wxt-keyword-modal .am-wxt-strategy-main {
-                        flex-direction: column;
+                        grid-template-columns: 1fr;
                         align-items: flex-start;
                     }
                     #am-wxt-keyword-modal .am-wxt-strategy-right {
@@ -39924,7 +40099,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 title="选择出价目标"
                             >
                                 <span class="am-wxt-matrix-dimension-picker-label" data-matrix-bid-package-target-label="1">${Utils.escapeHtml(targetOption.label || defaultOption.label)}</span>
-                                <span class="am-wxt-matrix-dimension-picker-arrow">▾</span>
+                                <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true"></span>
                             </button>
                             <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
                                 ${optionList.map(item => `
@@ -40212,7 +40387,6 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     : '先填写有效的区间和个数（个数需为正整数）');
             return canSubmitBatch;
         };
-
         const normalizeMatrixDimensionValuesByPreset = (values = [], preset = null) => {
             const normalizedValues = normalizeMatrixDimensionValues(values);
             if (String(preset?.key || '').trim() === 'bid_target_cost_package') {
@@ -44726,7 +44900,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     </div>
                                     <div class="am-wxt-ai-max-status">
                                         <span class="am-wxt-ai-max-status-title">
-                                            <span class="am-wxt-ai-max-status-icon">✓</span>
+                                            <span class="am-wxt-ai-max-status-icon">${renderAmIcon('check-circle', { size: 13, strokeWidth: 2 })}</span>
                                             <span>已完成深度搜索</span>
                                         </span>
                                         <button
@@ -45875,7 +46049,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             <button class="am-wxt-btn primary" type="button" data-manual-keyword-add="1">+更多关键词</button>
                                             <button class="am-wxt-btn" type="button" data-manual-keyword-batch-bid="1">批量修改出价</button>
                                             <div class="am-wxt-manual-keyword-match-menu" data-manual-keyword-match-menu="1">
-                                                <button class="am-wxt-btn" type="button" data-manual-keyword-menu-toggle="1">修改匹配方案 ▾</button>
+                                                <button class="am-wxt-btn" type="button" data-manual-keyword-menu-toggle="1">修改匹配方案 ${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2, style: 'vertical-align:-2px;margin-left:2px;' })}</button>
                                                 <div class="am-wxt-manual-keyword-match-pop">
                                                     <button class="am-wxt-btn" type="button" data-manual-keyword-batch-match="4">批量设为广泛</button>
                                                     <button class="am-wxt-btn" type="button" data-manual-keyword-batch-match="1">批量设为精准</button>
@@ -48686,7 +48860,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                 ${checked ? 'checked' : ''}
                                 ${isAll ? 'data-ai-max-demand-popover-all="1"' : `data-ai-max-demand-popover-item="${Utils.escapeHtml(title)}"`}
                             />
-                            <span class="am-wxt-ai-max-demand-popover-check">✓</span>
+                            <span class="am-wxt-ai-max-demand-popover-check">${renderAmIcon('check', { size: 12, strokeWidth: 2.4 })}</span>
                             <span class="am-wxt-ai-max-demand-popover-text">${Utils.escapeHtml(title)}</span>
                         </label>
                     `;
@@ -50645,7 +50819,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                                         data-scene-popup-area-city-toggle="${Utils.escapeHtml(cityCode)}"
                                                                         data-scene-popup-area-city-parent="${Utils.escapeHtml(provinceCode)}"
                                                                     >
-                                                                        <span class="am-wxt-scene-area-check-icon">${checked ? '✓' : ''}</span>
+                                                                        <span class="am-wxt-scene-area-check-icon">${checked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : ''}</span>
                                                                         <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(String(city?.name || '').trim())}</span>
                                                                     </button>
                                                                 `;
@@ -50663,7 +50837,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                             data-scene-popup-area-item-toggle="${Utils.escapeHtml(provinceCode)}"
                                                             data-scene-popup-area-province-toggle="${Utils.escapeHtml(provinceCode)}"
                                                         >
-                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : (partialChecked ? renderAmIcon('minus', { size: 12, strokeWidth: 2.4 }) : '')}</span>
                                                             <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(labelText)}</span>
                                                         </button>
                                                     </div>
@@ -50678,7 +50852,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                             data-scene-popup-area-province-toggle="${Utils.escapeHtml(provinceCode)}"
                                                             title="${Utils.escapeHtml(`全选${labelText}`)}"
                                                         >
-                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                            <span class="am-wxt-scene-area-check-icon">${fullChecked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : (partialChecked ? renderAmIcon('minus', { size: 12, strokeWidth: 2.4 }) : '')}</span>
                                                         </button>
                                                         <button
                                                             type="button"
@@ -50688,7 +50862,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                             aria-expanded="${expanded ? 'true' : 'false'}"
                                                         >
                                                             <span class="am-wxt-scene-area-item-label">${Utils.escapeHtml(labelText)}</span>
-                                                            <span class="am-wxt-scene-area-caret">${expanded ? '▴' : '▾'}</span>
+                                                            <span class="am-wxt-scene-area-caret">${renderAmIcon(expanded ? 'chevron-up' : 'chevron-down', { size: 12, strokeWidth: 2 })}</span>
                                                         </button>
                                                     </div>
                                                     ${cityHtml}
@@ -50732,7 +50906,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                                 class="am-wxt-scene-area-section-toggle ${allChecked ? 'checked' : ''} ${partialChecked ? 'partial' : ''}"
                                                 data-scene-popup-area-group-toggle="${Utils.escapeHtml(section.section)}"
                                             >
-                                                <span class="am-wxt-scene-area-check-icon">${allChecked ? '✓' : (partialChecked ? '−' : '')}</span>
+                                                <span class="am-wxt-scene-area-check-icon">${allChecked ? renderAmIcon('check', { size: 12, strokeWidth: 2.4 }) : (partialChecked ? renderAmIcon('minus', { size: 12, strokeWidth: 2.4 }) : '')}</span>
                                                 <span>${Utils.escapeHtml(String(section?.label || AREA_SECTION_LABEL_MAP[section.section] || '全选').trim())}</span>
                                             </button>
                                             <div class="am-wxt-scene-area-section-body">${contentHtml}</div>
@@ -58767,7 +58941,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                     ${valueOptions.length ? '' : 'disabled'}
                                 >
                                     <span class="am-wxt-matrix-dimension-picker-label" data-matrix-dimension-picker-label="1">${Utils.escapeHtml(pickerSummaryText)}</span>
-                                    <span class="am-wxt-matrix-dimension-picker-arrow">▾</span>
+                                    <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true"></span>
                                 </button>
                                 <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
                                     ${valueOptions.length
@@ -58811,7 +58985,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                             title="${Utils.escapeHtml(rowHintText)}"
                                         >
                                             <span class="am-wxt-matrix-dimension-picker-label" data-matrix-dimension-key-picker-label="1">${Utils.escapeHtml(keyPickerSummaryText)}</span>
-                                            <span class="am-wxt-matrix-dimension-picker-arrow">▾</span>
+                                            <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true"></span>
                                         </button>
                                         <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
                                             ${keyPickerOptionHtml}
@@ -64828,7 +65002,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
             const resolveExecutionIcon = (rawKey, normalizedKey) => {
                 const executionValue = resolveExecutionStateValue(rawKey, normalizedKey);
                 if (typeof executionValue !== 'boolean') return '';
-                return executionValue ? '✅' : '❌';
+                return '';
             };
             const resolvePlanEnabled = (rawKey, normalizedKey, cfg) => {
                 if (cfg && typeof cfg.enabled === 'boolean') return cfg.enabled;
@@ -65920,12 +66094,19 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                         color:#2a5bff;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand::before {
-                        content:'▸';
+                        content:'';
                         display:block;
-                        transform:translateY(-1px);
+                        width:6px;
+                        height:6px;
+                        margin:5px auto;
+                        border-right:1.7px solid currentColor;
+                        border-bottom:1.7px solid currentColor;
+                        transform:rotate(-45deg);
+                        transform-origin:center;
+                        transition:transform .18s ease;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand.is-expanded::before {
-                        content:'▾';
+                        transform:rotate(45deg);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand[aria-expanded="true"] {
                         color:#2a5bff;
@@ -66272,8 +66453,8 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                                         <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));${row.success ? 'color:var(--am26-text,#1b2438);' : 'color:var(--am26-danger,#ea4f4f);'}">${safeName}</td>
                                         <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));text-align:center;">
                                             ${row.success
-                        ? '<span style="color:var(--am26-success,#0ea86f);font-weight:600;">✓ 成功</span>'
-                        : '<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;">✗ 失败</span>'}
+                        ? `<span style="color:var(--am26-success,#0ea86f);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:4px;">${renderAmIcon('check-circle', { size: 14 })}<span>成功</span></span>`
+                        : `<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:4px;">${renderAmIcon('x-circle', { size: 14 })}<span>失败</span></span>`}
                                         </td>
                                     </tr>
                 `;
@@ -66293,7 +66474,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     backdrop-filter:blur(16px);
                 ">
                     <div style="text-align:center;margin-bottom:20px;">
-                        <div style="font-size:48px;margin-bottom:12px;">${isAllSuccess ? '🎉' : '⚠️'}</div>
+                        <div style="width:56px;height:56px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;color:${isAllSuccess ? 'var(--am26-success,#0ea86f)' : 'var(--am26-warning,#e8a325)'};">${renderAmIcon(isAllSuccess ? 'check-circle' : 'alert-triangle', { size: 52, strokeWidth: 1.6 })}</div>
                         <div style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
                         <div style="font-size:14px;color:var(--am26-text-soft,#505a74);margin-top:8px;">
                             共 ${totalCount} 个计划，
@@ -66385,17 +66566,17 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
                     }
                 </style>
                 <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="color:var(--am26-primary,#2a5bff);">🛡️ 小万护航 v${CONFIG.VERSION}</span>
+                    <span style="color:var(--am26-primary,#2a5bff);display:inline-flex;align-items:center;gap:6px;">${renderAmIcon('shield-check', { size: 16 })} 小万护航 v${CONFIG.VERSION}</span>
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
                         <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
-                            <svg viewBox="0 0 1024 1024" style="width:0.8em;height:0.8em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M838 314H197c-19.9 0-36-16.1-36-36s16.1-36 36-36h641c19.9 0 36 16.1 36 36s-16.1 36-36 36zM745 468H290c-19.9 0-36-16.1-36-36s16.1-36 36-36h455c19.9 0 36 16.1 36 36s-16.1 36-36 36zM838 621H197c-19.9 0-36-16.1-36-36s16.1-36 36-36h641c19.9 0 36 16.1 36 36s-16.1 36-36 36zM745 775H290c-19.9 0-36-16.1-36-36s16.1-36 36-36h455c19.9 0 36 16.1 36 36s-16.1 36-36 36z"></path></svg>
+                            ${renderAmIcon('center', { size: 14 })}
                         </span>
                         <span id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" title="最大化">
-                            <svg viewBox="0 0 1024 1024" style="width:0.8em;height:1.0em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M444.3 539.9L202 782.2 199.8 563c0-16.5-13.5-30-30-30s-30 13.5-30 30l2.2 285.1c0 8.8 3.8 16.7 9.8 22.2 5.5 6 13.4 9.8 22.2 9.8h295.6c16.5 0 30-13.5 30-30s-13.5-30-30-30H248.9l237.8-237.8c11.7-11.7 11.7-30.8 0-42.4-11.6-11.6-30.7-11.6-42.4 0zM578.1 488l242.3-242.3 2.2 219.2c0 16.5 13.5 30 30 30s30-13.5 30-30l-2.2-285.1c0-8.8-3.8-16.7-9.8-22.2-5.5-6-13.4-9.8-22.2-9.8H552.8c-16.5 0-30 13.5-30 30s13.5 30 30 30h220.7L535.7 445.6c-11.7 11.7-11.7 30.8 0 42.4 11.7 11.7 30.8 11.7 42.4 0z"></path></svg>
+                            ${renderAmIcon('expand', { size: 14 })}
                         </span>
                         <span id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" title="关闭">
-                            <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                            ${renderAmIcon('close', { size: 18 })}
                         </span>
                     </div>
                 </div>

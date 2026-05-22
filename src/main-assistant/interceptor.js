@@ -122,7 +122,8 @@
             const header = document.createElement('div');
             header.className = 'am-download-header';
             const headerTitle = document.createElement('span');
-            headerTitle.textContent = '✅ 捕获报表';
+            headerTitle.className = 'am-download-title';
+            headerTitle.innerHTML = `${renderAmIcon('check-circle', { size: 14 })}<span>捕获报表</span>`;
             const headerSource = document.createElement('span');
             headerSource.className = 'am-download-source';
             headerSource.textContent = source;
@@ -141,7 +142,7 @@
             dlLink.target = '_blank';
             dlLink.rel = 'noopener noreferrer';
             dlLink.className = 'am-download-link';
-            dlLink.textContent = '⚡ 直连下载';
+            dlLink.innerHTML = `${renderAmIcon('logo', { size: 14, strokeWidth: 2.2 })}<span>直连下载</span>`;
 
             const copyBtn = document.createElement('button');
             copyBtn.className = 'am-download-btn am-download-copy';
@@ -267,4 +268,3 @@
             this.hooksRegistered = true;
         }
     };
-

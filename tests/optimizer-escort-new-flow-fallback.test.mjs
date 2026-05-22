@@ -112,7 +112,7 @@ test('escortSettingTable 渲染包含操作项与范围信息', () => {
     );
 });
 
-test('openV3 提交后会把执行状态回传到方案渲染并显示 ✅/❌', () => {
+test('openV3 提交后会把执行状态回传到方案渲染状态列', () => {
     assert.match(
         coreSource,
         /buildExecutionStateMap[\s\S]*UI\.renderEscortSettingTableToCard\(card,\s*resolvedOpenV3Setting\.displaySetting,\s*\{[\s\S]*executionState[\s\S]*sourceLabel[\s\S]*fromManual[\s\S]*\}\)/,
@@ -120,8 +120,8 @@ test('openV3 提交后会把执行状态回传到方案渲染并显示 ✅/❌',
     );
     assert.match(
         uiSource,
-        /resolveExecutionStateValue[\s\S]*executionState[\s\S]*resolveExecutionIcon[\s\S]*'✅'[\s\S]*'❌'[\s\S]*actionText:\s*`\$\{resolveExecutionIcon\(rawKey,\s*key\)\}/,
-        '方案名称未根据 executionState 显示 ✅/❌'
+        /resolveExecutionStateValue[\s\S]*executionState[\s\S]*resolveStatusText[\s\S]*executionValue \? '已执行' : '执行失败'[\s\S]*\{ title: '状态', width: '68px', render: row => row\.status \}/,
+        '方案渲染未根据 executionState 显示状态列'
     );
 });
 
@@ -223,8 +223,8 @@ test('手动设置默认折叠并支持点击展开内部设置', () => {
     );
     assert.match(
         uiSource,
-        /\.am26-manual-expand::before\s*\{[\s\S]*content:'▸';[\s\S]*\}[\s\S]*\.am26-manual-expand\.is-expanded::before\s*\{[\s\S]*content:'▾';/,
-        '展开入口未采用简约图标态（收起/展开）'
+        /\.am26-manual-expand::before\s*\{[\s\S]*border-right:1\.7px solid currentColor;[\s\S]*transform:rotate\(-45deg\);[\s\S]*\}[\s\S]*\.am26-manual-expand\.is-expanded::before\s*\{[\s\S]*transform:rotate\(45deg\);/,
+        '展开入口未采用统一线性图标态（收起/展开）'
     );
     assert.doesNotMatch(
         uiSource,

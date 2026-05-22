@@ -388,7 +388,7 @@
             const resolveExecutionIcon = (rawKey, normalizedKey) => {
                 const executionValue = resolveExecutionStateValue(rawKey, normalizedKey);
                 if (typeof executionValue !== 'boolean') return '';
-                return executionValue ? '✅' : '❌';
+                return '';
             };
             const resolvePlanEnabled = (rawKey, normalizedKey, cfg) => {
                 if (cfg && typeof cfg.enabled === 'boolean') return cfg.enabled;
@@ -1480,12 +1480,19 @@
                         color:#2a5bff;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand::before {
-                        content:'▸';
+                        content:'';
                         display:block;
-                        transform:translateY(-1px);
+                        width:6px;
+                        height:6px;
+                        margin:5px auto;
+                        border-right:1.7px solid currentColor;
+                        border-bottom:1.7px solid currentColor;
+                        transform:rotate(-45deg);
+                        transform-origin:center;
+                        transition:transform .18s ease;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand.is-expanded::before {
-                        content:'▾';
+                        transform:rotate(45deg);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand[aria-expanded="true"] {
                         color:#2a5bff;
@@ -1832,8 +1839,8 @@
                                         <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));${row.success ? 'color:var(--am26-text,#1b2438);' : 'color:var(--am26-danger,#ea4f4f);'}">${safeName}</td>
                                         <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));text-align:center;">
                                             ${row.success
-                        ? '<span style="color:var(--am26-success,#0ea86f);font-weight:600;">✓ 成功</span>'
-                        : '<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;">✗ 失败</span>'}
+                        ? `<span style="color:var(--am26-success,#0ea86f);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:4px;">${renderAmIcon('check-circle', { size: 14 })}<span>成功</span></span>`
+                        : `<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:4px;">${renderAmIcon('x-circle', { size: 14 })}<span>失败</span></span>`}
                                         </td>
                                     </tr>
                 `;
@@ -1853,7 +1860,7 @@
                     backdrop-filter:blur(16px);
                 ">
                     <div style="text-align:center;margin-bottom:20px;">
-                        <div style="font-size:48px;margin-bottom:12px;">${isAllSuccess ? '🎉' : '⚠️'}</div>
+                        <div style="width:56px;height:56px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;color:${isAllSuccess ? 'var(--am26-success,#0ea86f)' : 'var(--am26-warning,#e8a325)'};">${renderAmIcon(isAllSuccess ? 'check-circle' : 'alert-triangle', { size: 52, strokeWidth: 1.6 })}</div>
                         <div style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
                         <div style="font-size:14px;color:var(--am26-text-soft,#505a74);margin-top:8px;">
                             共 ${totalCount} 个计划，
@@ -1945,17 +1952,17 @@
                     }
                 </style>
                 <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="color:var(--am26-primary,#2a5bff);">🛡️ 小万护航 v${CONFIG.VERSION}</span>
+                    <span style="color:var(--am26-primary,#2a5bff);display:inline-flex;align-items:center;gap:6px;">${renderAmIcon('shield-check', { size: 16 })} 小万护航 v${CONFIG.VERSION}</span>
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
                         <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
-                            <svg viewBox="0 0 1024 1024" style="width:0.8em;height:0.8em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M838 314H197c-19.9 0-36-16.1-36-36s16.1-36 36-36h641c19.9 0 36 16.1 36 36s-16.1 36-36 36zM745 468H290c-19.9 0-36-16.1-36-36s16.1-36 36-36h455c19.9 0 36 16.1 36 36s-16.1 36-36 36zM838 621H197c-19.9 0-36-16.1-36-36s16.1-36 36-36h641c19.9 0 36 16.1 36 36s-16.1 36-36 36zM745 775H290c-19.9 0-36-16.1-36-36s16.1-36 36-36h455c19.9 0 36 16.1 36 36s-16.1 36-36 36z"></path></svg>
+                            ${renderAmIcon('center', { size: 14 })}
                         </span>
                         <span id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" title="最大化">
-                            <svg viewBox="0 0 1024 1024" style="width:0.8em;height:1.0em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M444.3 539.9L202 782.2 199.8 563c0-16.5-13.5-30-30-30s-30 13.5-30 30l2.2 285.1c0 8.8 3.8 16.7 9.8 22.2 5.5 6 13.4 9.8 22.2 9.8h295.6c16.5 0 30-13.5 30-30s-13.5-30-30-30H248.9l237.8-237.8c11.7-11.7 11.7-30.8 0-42.4-11.6-11.6-30.7-11.6-42.4 0zM578.1 488l242.3-242.3 2.2 219.2c0 16.5 13.5 30 30 30s30-13.5 30-30l-2.2-285.1c0-8.8-3.8-16.7-9.8-22.2-5.5-6-13.4-9.8-22.2-9.8H552.8c-16.5 0-30 13.5-30 30s13.5 30 30 30h220.7L535.7 445.6c-11.7 11.7-11.7 30.8 0 42.4 11.7 11.7 30.8 11.7 42.4 0z"></path></svg>
+                            ${renderAmIcon('expand', { size: 14 })}
                         </span>
                         <span id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" title="关闭">
-                            <svg viewBox="0 0 1024 1024" style="width:1.2em;height:1.2em;vertical-align:middle;fill:currentColor;overflow:hidden;"><path d="M551.424 512l195.072-195.072c9.728-9.728 9.728-25.6 0-36.864l-1.536-1.536c-9.728-9.728-25.6-9.728-35.328 0L514.56 475.136 319.488 280.064c-9.728-9.728-25.6-9.728-35.328 0l-1.536 1.536c-9.728 9.728-9.728 25.6 0 36.864L477.696 512 282.624 707.072c-9.728 9.728-9.728 25.6 0 36.864l1.536 1.536c9.728 9.728 25.6 9.728 35.328 0L514.56 548.864l195.072 195.072c9.728 9.728 25.6 9.728 35.328 0l1.536-1.536c9.728-9.728 9.728-25.6 0-36.864L551.424 512z"></path></svg>
+                            ${renderAmIcon('close', { size: 18 })}
                         </span>
                     </div>
                 </div>

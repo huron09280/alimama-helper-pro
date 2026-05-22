@@ -838,7 +838,7 @@
                                     </div>
                                     <div class="am-wxt-ai-max-status">
                                         <span class="am-wxt-ai-max-status-title">
-                                            <span class="am-wxt-ai-max-status-icon">✓</span>
+                                            <span class="am-wxt-ai-max-status-icon">${renderAmIcon('check-circle', { size: 13, strokeWidth: 2 })}</span>
                                             <span>已完成深度搜索</span>
                                         </span>
                                         <button
@@ -1987,7 +1987,7 @@
                                             <button class="am-wxt-btn primary" type="button" data-manual-keyword-add="1">+更多关键词</button>
                                             <button class="am-wxt-btn" type="button" data-manual-keyword-batch-bid="1">批量修改出价</button>
                                             <div class="am-wxt-manual-keyword-match-menu" data-manual-keyword-match-menu="1">
-                                                <button class="am-wxt-btn" type="button" data-manual-keyword-menu-toggle="1">修改匹配方案 ▾</button>
+                                                <button class="am-wxt-btn" type="button" data-manual-keyword-menu-toggle="1">修改匹配方案 ${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2, style: 'vertical-align:-2px;margin-left:2px;' })}</button>
                                                 <div class="am-wxt-manual-keyword-match-pop">
                                                     <button class="am-wxt-btn" type="button" data-manual-keyword-batch-match="4">批量设为广泛</button>
                                                     <button class="am-wxt-btn" type="button" data-manual-keyword-batch-match="1">批量设为精准</button>
