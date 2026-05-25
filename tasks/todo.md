@@ -1,3 +1,370 @@
+# TODO - 2026-05-25 加载性能优化与对比
+
+## 需求规格
+- 目标：定位当前脚本/插件加载阶段的主要性能瓶颈，做最小侵入优化，并输出修改前后的量化性能对比。
+- 约束：
+  - 保持现有交互、DOM id、事件语义、提交链路和真实页面安全边界不变；
+  - 优先优化加载阶段的同步耗时、重复初始化、构建体积或首屏阻塞点；
+  - 不回退、覆盖当前工作区已有未提交改动；
+  - 只从 `src/` 修改源码，构建产物通过 `npm run build` 同步；
+  - 真实页面验证只做只读检查，不点击真实创建/投放/提交入口。
+- 成功标准：
+  - 有明确瓶颈定位记录和依据；
+  - 至少一项加载性能指标在优化后改善，且无交互回归；
+  - 相关测试、构建校验和语法检查通过；
+  - 输出修改前后性能对比表，并说明测量口径。
+
+## 执行计划（可核对）
+- [x] 回顾历史教训、dirty 状态和当前加载路径，确认计划范围。
+- [x] 建立基线：构建产物体积、模块/段落体积、初始化耗时或可复现 micro-benchmark。
+- [x] 定位主要瓶颈：结合源码、构建脚本、测试和必要的运行时测量，找出优先级最高的加载阻塞点。
+- [x] 实施最小侵入优化，保持交互和业务链路不变。
+- [x] 同步构建产物，运行相关测试、`npm run build:check`、`npm run check:syntax`，按风险运行 `npm run review`。
+- [x] 复测优化后指标并输出前后对比，必要时做真实页面只读验证。
+- [x] 回填验证记录、结果复盘和风险/回滚方式。
+
+## 高层操作摘要
+- 已读取 `tasks/lessons.md`：本轮会遵守真实页面刷新后再验收、点击类修复需保留当前页反馈、提交类入口只读验证等规则。
+- 已确认工作区存在前序未提交改动，本轮会在现有状态上增量处理，不回退无关文件。
+- 计划范围校验：本轮目标是加载性能，不改变关键词批量建计划首页、矩阵、商品选择和提交交互语义。
+- 已建立本地基线，详见 `tasks/load-performance-20260525-notes.md`：userscript 3,777,502 bytes，extension page bundle 3,869,584 bytes，extension 当前在 `document_start` 立即注入完整 page bundle。
+- 已定位两个低风险瓶颈：extension 早期注入 3.87 MB bundle；主助手启动样式里 36,579 bytes 的 `#am-trigger-optimizer` 原生变量快照实际冗余。
+- 经复核，extension page bundle 内含授权守卫，本轮不改变注入时序，避免安全检查延后；实际落地先删除主助手冗余 CSS 快照。
+- 已从 `src/main-assistant/ui.js` 删除 `#am-trigger-optimizer` 冗余原生变量 CSS 快照，保留工具按钮 DOM、`.am-tool-btn` 样式和点击事件。
+- 已运行构建同步产物、最小回归集、构建校验、语法检查、diff 检查和完整 review。
+- 已用同口径 micro-benchmark 复测并形成对比；已在真实 `one.alimama.com` 页面只读验证主助手、算法护航入口和组建计划入口。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `node --test tests/build-segments.test.mjs tests/build-output-sync.test.mjs tests/extension-static-build.test.mjs tests/package-scripts.test.mjs tests/keyword-plan-api-slim.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/logger-api.test.mjs`：通过，33/33。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过，476 pass / 0 fail / 2 skipped。
+- 性能复测详见 `tasks/load-performance-20260525-notes.md`：userscript raw 减少 36,579 bytes（-0.97%），gzip 减少 5,705 bytes（-0.98%）；extension page bundle raw 减少 36,579 bytes（-0.95%），gzip 减少 4,841 bytes（-0.81%）；主助手启动 CSS raw 减少 36,579 bytes（-55.67%）。
+- Chrome DevTools MCP 真实页面只读验证：刷新 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` 后脚本版本 `7.03`；主助手面板可展开，`算法护航 / 组建计划 / 万能查数 / 辅助显示` 按钮可见；启动样式不再包含被删除的原生变量快照；点击 `算法护航` 可打开护航面板并显示 `立即扫描并优化`；点击 `组建计划` 可打开关键词向导并显示 `提交创建`；未点击任何真实执行、创建、投放或确认提交入口。
+- 本轮复核 `npm run build`：通过，已重新同步根 userscript、`dist/packages` 与 `dist/extension`。
+- 本轮复核 `npm run test`：通过，478 tests / 476 pass / 0 fail / 2 skipped。
+- 本轮复核 `npm run build:check`：通过。
+- 本轮复核 `npm run check:syntax`：通过。
+- 本轮复核 `git diff --check`：通过。
+- 本轮复核 `npm run review`：通过，478 tests / 476 pass / 0 fail / 2 skipped，所有 review-team 自动检查通过。
+- 本轮复核性能指标：当前 `userscript` 3,740,923 bytes，`extension page.bundle.js` 3,833,005 bytes，`PRE_KEYWORD_SEGMENTS` 724,611 bytes，主助手启动 CSS 29,133 bytes；另用追加唯一注释的 `vm.Script` 口径复核 parse/compile median，`userscript` 36.842 ms，`extension page.bundle.js` 41.465 ms。
+- 5 个子代理复核结论：删除 `#am-trigger-optimizer` CSS 快照未改变 DOM id、`.am-tool-btn` 通用样式和点击事件；最大结构性瓶颈仍是 `document_start` 立即注入约 3.83 MB 单体 `page.bundle.js`，其中 `keyword-plan-api` 约占 2.8 MB，后续更大收益应专项拆包。
+- 本轮 Chrome DevTools MCP 真实页面只读复核：刷新后 `document.readyState=complete`、脚本版本 `7.03`；`#am-helper-pro-v26-style` 为 29,133 bytes，且不含 `Native Style for Optimizer Trigger`、`--mux-ai-brand-gradient-line` 或 `#am-trigger-optimizer { ... }` 快照；四个主助手工具按钮均可见；点击 `算法护航` 可打开护航面板；点击 `组建计划` 可打开关键词向导并显示 `提交创建`；`performance` resource 中未发现 `create/submit/launch` 类请求。控制台仍有平台侧既有 `Uncaught (in promise)` 噪声，但不阻断本轮入口验证。
+
+## 结果复盘
+- 根因：主助手启动样式中残留一段为单个 `#am-trigger-optimizer` 按钮准备的原生变量快照，包含大量未被当前 `.am-tool-btn` 视觉和事件使用的 CSS 变量；每次加载都会进入 userscript/page bundle，并在 `UI.injectStyles()` 中注入到页面。
+- 修复：删除该冗余 CSS 块，保留主面板 DOM、按钮 class、图标、点击事件和算法护航/组建计划打开链路。
+- 风险：本轮没有拆分 keyword-plan-api、万能查数或授权守卫，整体 3.8 MB 单体 bundle 仍是后续主要优化空间；extension page bundle 延后注入曾评估但因授权守卫时序要求未采用。
+- 复核补充：首次本地指标脚本误把不完整的 `PRE_KEYWORD_SEGMENTS` 当成完整 JS 编译，出现 `Unexpected end of input`；已改为“分片只统计体积、完整 bundle 才编译”，产物语法与测试均通过。
+- 回滚方式：恢复 `src/main-assistant/ui.js` 中 `/* Native Style for Optimizer Trigger */ #am-trigger-optimizer { ... }` 样式块，并运行 `npm run build` 同步产物。
+
+---
+
+# TODO - 2026-05-25 关键词批量建计划类型标签配色
+
+## 需求规格
+- 目标：按用户反馈优化首页计划表格“类型”列，让不同设置有不同颜色，同一语义类型可用深浅区分。
+- 约束：
+  - 只调整类型标签渲染 class、样式和测试契约；
+  - 不改变计划数据、请求 payload、提交确认、矩阵、商品和日志逻辑；
+  - 保持后台工具风格，避免大面积高饱和色块影响扫描；
+  - 真实页面验证只读，不点击真实创建/投放入口。
+- 成功标准：
+  - 类型列三类标签分别带有语义 class：推广类型、营销目标、出价模式；
+  - 不同营销目标有不同色系，智能/手动出价有区分；
+  - 同一行内标签颜色有层级但不抢主按钮；
+  - 构建、相关测试和真实页面只读验证通过。
+
+## 执行计划（可核对）
+- [x] 定位类型标签渲染位置、现有样式和回归断言。
+- [x] 增加标签 tone helper、色彩样式和测试断言。
+- [x] 运行构建、相关测试、构建校验、语法、review 和 diff 检查。
+- [x] 用 Chrome DevTools MCP 刷新真实页面，只读验证标签颜色与布局。
+
+## 高层操作摘要
+- 已确认类型列当前由 `strategySceneName / goalLabel / bidModeLabel` 三个标签组成，全部共用 `.am-wxt-strategy-tag` 蓝色样式。
+- 已新增 `getStrategyTagClassName`，按推广类型、营销目标和出价模式生成语义 class；样式层通过 CSS 变量设置不同色系与深浅。
+- 已补充首页回归测试，断言类型标签 tone helper 和关键色彩变量存在。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-plan-api-slim.test.mjs`：首次因新增 CSS 正则过于依赖变量顺序失败；已调整为匹配实际 CSS 变量顺序后通过，17/17。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过，476 pass / 0 fail / 2 skipped。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后脚本版本为 `7.03`，向导可打开。
+- 真实页面类型标签验证：弹窗宽度 `1320px`，计划行 `7` 行；首行标签为 `关键词推广` 蓝色、`趋势明星` 青色、`智能出价` 紫色，class 分别为 `am-wxt-strategy-tag-scene am-wxt-strategy-tag-tone-keyword`、`am-wxt-strategy-tag-goal am-wxt-strategy-tag-tone-trend`、`am-wxt-strategy-tag-bid am-wxt-strategy-tag-tone-smart`；当前 7 行合计出现 6 组颜色，覆盖不同目标设置。
+- 安全边界：仅打开向导读取样式和布局；未点击 `提交创建`、`确认提交创建` 或任何真实创建/投放入口。
+
+## 结果复盘
+- 根因：类型列三枚标签原先共用一套蓝色样式，无法快速区分推广类型、营销目标和出价模式，也无法在多个营销目标之间形成扫描差异。
+- 修复：新增稳定的 `getStrategyTagClassName` helper，按业务语义输出 scene/goal/bid 和 tone class；样式层用 CSS 变量承载色彩，做到同语义稳定、不同设置可区分。
+- 风险：本轮仅覆盖现有常见目标色系；后续如果新增营销目标，可继续扩展 helper 的 tone 分支，不影响数据与提交链路。
+- 回滚方式：恢复 `strategy-state-and-draft.js` 中类型标签 class 生成和 `style.js` 中新增 tone 样式，重跑 `npm run build`。
+
+---
+
+# TODO - 2026-05-25 关键词批量建计划首页宽度修正
+
+## 需求规格
+- 目标：按用户反馈放宽关键词批量建计划首页弹窗宽度，缓解计划行文字拥挤和叠加观感。
+- 约束：
+  - 只调整首页主弹窗桌面宽度和对应测试契约；
+  - 不改变提交确认、请求组包、计划构造、商品选择、矩阵页和日志逻辑；
+  - 保留窄屏回退，真实页面验证不点击确认提交。
+- 成功标准：
+  - 宽屏下主向导弹窗宽度上限更大；
+  - 计划表格列获得更宽展示空间；
+  - 二次确认和主按钮仍保持上一轮逻辑；
+  - 构建、相关测试和真实页面只读验证通过。
+
+## 执行计划（可核对）
+- [x] 定位当前弹窗宽度、计划行列宽和真实页面实际尺寸。
+- [x] 调整主弹窗宽度与测试断言，并同步教训。
+- [x] 运行构建、相关测试、构建校验、语法和 diff 检查。
+- [x] 用 Chrome DevTools MCP 刷新真实页面，只读验证宽度和文字不叠加。
+
+## 高层操作摘要
+- 已在真实页面读取当前尺寸：视口 `1800px`，主向导弹窗 `1160px`，首行计划表格列无 DOM 几何重叠但信息密度偏紧。
+- 已将主向导桌面宽度上限调整为 `min(1320px, calc(100vw - 48px))`，并补充首页回归测试断言。
+- 已将“后台表格弹窗优先给足桌面宽度”的规则沉淀到 `tasks/lessons.md`。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-plan-api-slim.test.mjs`：通过，16/16。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过，475 pass / 0 fail / 2 skipped。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后 `document.readyState` 为 `complete`，脚本版本为 `7.03`，`window.__AM_WXT_KEYWORD_API__.openWizard()` 可打开向导。
+- 真实页面宽度验证：视口 `1800px` 下主向导弹窗从先前读取的 `1160px` 变为 `1320px`；首行计划列宽为名称 `330px`、类型标签 `211px`、出价目标 `264px`、预算 `145px`、操作 `224px`；列间 `overlaps=[]`。
+- 真实页面安全边界：仅打开向导并读取布局；未点击 `提交创建`、`确认提交创建` 或任何真实创建/投放入口。
+
+## 结果复盘
+- 根因：上一轮虽然补了计划名两行和 title，但主弹窗桌面宽度仍保持 `1160px`，表格信息密度较高，用户视觉上仍会感到文字拥挤或叠加。
+- 修复：在首页工作台样式层将主向导宽度上限提高到 `1320px`，同时用 `calc(100vw - 48px)` 约束视口边距，避免影响窄屏回退。
+- 风险：本轮只改宽度，不改表格列模板和业务逻辑；若后续计划标签继续增加，可能还需要拆分列或减少同一行标签数量。
+- 回滚方式：恢复 `style.js` 中 `#am-wxt-keyword-modal` 的宽度覆盖，并重跑 `npm run build`。
+
+---
+
+# TODO - 2026-05-25 关键词批量建计划首页 UI 小步优化
+
+## 需求规格
+- 目标：基于当前已回退后的首页继续做小步 UI 优化，让提交风险更清晰、计划表格更可读、底部执行区更像工作台。
+- 约束：
+  - 不重走二次贴图大改版；
+  - 不改变请求 payload、提交接口、矩阵生成、商品选择、日志页和批量编辑业务逻辑；
+  - 保留 `#am-wxt-keyword-run-quick`、`#am-wxt-keyword-submit-summary`、`#am-wxt-keyword-run-mode-toggle` 等关键 DOM id；
+  - 不使用 `window.confirm`，二次确认复用现有弹窗体系；
+  - 真实页面验证只做只读验收，不点击确认提交、不触发真实创建/投放请求。
+- 成功标准：
+  - 首页主按钮从 `立即投放` 改为 `提交创建`；
+  - 点击主按钮先出现二次确认弹窗，显示计划数、预算合计、商品数、提交方式和风险提示；
+  - 确认后才调用现有创建链路；
+  - 计划名称可完整识别，删除按钮为危险态，复制/删除/编辑权重区分；
+  - 目标成本输入空值态更清晰，单位不拥挤；
+  - 底部摘要固定表达“将提交 N 个计划 / 预算合计 X / 提交方式 Y”。
+
+## 执行计划（可核对）
+- [x] 回顾项目教训、当前任务记录和 dirty 状态，确认在现有改动基础上增量实现。
+- [x] 修改首页提交按钮、二次确认弹窗、底部摘要和计划行可读性。
+- [x] 更新首页 UI 回归测试并同步构建产物。
+- [x] 运行构建、相关测试、语法、review、diff 检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面刷新运行态并只读验证。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`，本轮重点遵守：真实页面验证前刷新运行态、点击类修复要有当前页可见反馈、提交类验证不触碰真实提交入口。
+- 已确认当前工作区已有上一轮首页/商品/矩阵等未提交改动，本轮只做增量优化，不回退无关文件。
+- 已完成首页主按钮文案、二次确认弹窗、底部摘要、计划名称完整识别、删除危险态和目标成本空值态的源码改动。
+- 已更新首页 UI 回归测试，覆盖提交确认弹窗、确认后调用现有创建链路、计划行可读性和危险态。
+- 已运行 `npm run build` 同步根 userscript、`dist/packages` 与 `dist/extension` 产物。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/site-scene-submit-mode.test.mjs tests/keyword-item-picker-popup.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-strategy-target-cost-layout.test.mjs tests/keyword-target-cost-input-visual.test.mjs`：通过，36/36。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `npm run review`：首次因 `tests/keyword-plan-api-slim.test.mjs` 仍定位旧 `handleRun` 内联拦截而失败；已改为定位新的 `resolveWizardRunPayload` 前置校验 helper。
+- `node --test tests/keyword-plan-api-slim.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs`：通过，16/16。
+- `npm run review`：通过，475 pass / 0 fail / 2 skipped。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后 `document.readyState` 为 `complete`，脚本版本为 `7.03`，`window.__AM_WXT_KEYWORD_API__.openWizard()` 可打开向导。
+- 真实页面首页验证：弹窗打开；主按钮为 `提交创建`；按钮 title 为 `提交方式：单条`；底部摘要为 `将提交 7 个计划 预算合计 700元 提交方式：单条`；计划列表 7 行；首个计划名有完整 `title`；存在危险态删除按钮；空目标成本占位为 `待填写`。
+- 二次确认只读验证：点击 `#am-wxt-keyword-run-quick` 后出现确认弹窗，包含计划数 `7`、预算合计 `700元`、商品数 `1`、提交方式 `单条`、风险提示和按钮 `确认提交创建 / 取消`。
+- 安全边界：未点击确认按钮；点击主按钮到确认弹窗期间未观察到创建/提交/投放类网络请求。
+
+## 结果复盘
+- 根因：原首页主按钮仍用 `立即投放` 表达，提交风险和创建前确认不足；计划行操作权重接近，长计划名和空目标成本状态不够清晰；底部摘要偏日志化而非工作台决策信息。
+- 修复：保留原提交入口 DOM id 和创建链路，新增弹窗式二次确认；确认前只做请求预检和预览渲染，确认后才复用现有 `handleRun`；计划行补完整名称可访问性、删除危险态、操作权重和空成本视觉；底部摘要固定展示计划数、预算和提交方式。
+- 风险：真实页面验收按安全边界未点击 `确认提交创建`，因此未覆盖真实创建接口成功结果；确认后的调用路径已由单元测试证明进入现有 `handleRun`。
+- 回滚方式：恢复 `request-builder-preview.js` 的 quick run 绑定、`wizard-mount-intro.js` 的按钮/摘要文案、`strategy-state-and-draft.js` 的计划行类名与 placeholder、`style.js` 新增样式，并重跑 `npm run build` 同步产物。
+
+---
+
+# TODO - 2026-05-25 回退关键词批量建计划向导首页二次贴图改版
+
+## 需求规格
+- 目标：按用户“回退”要求，撤销上一轮“首页二次贴图改版”，恢复到前一版首页 UI 改版状态。
+- 约束：
+  - 只回退最近一轮二次贴图改版；
+  - 保留上一版首页 UI 改版、商品主图、首页 Tab 精简、矩阵间距等既有改动；
+  - 不回退或覆盖工作区中其它用户/代理改动；
+  - 真实页面验证仍只做只读检查，不点击 `立即投放`、`提交 N 个计划`、`批量创建`、原生 `创建完成` 或任何真实提交入口。
+- 成功标准：
+  - Header 状态恢复为 `向导就绪`；
+  - 顶部 Tab 恢复为 `首页 / 矩阵页 / 日志页`；
+  - 商品区恢复为 `已添加商品`，计划区恢复为 `计划配置`；
+  - 移除首页只读批量设置输入外观；
+  - 表格预算列恢复为 `预算`，计划行恢复场景/目标/出价标签与 `预算 x 元`；
+  - 底部主按钮恢复为 `立即投放`，摘要恢复 `N 个计划可提交 · 预算合计 y元`；
+  - 快捷日志恢复原 `[时间] 消息` 文本输出。
+
+## 执行计划（可核对）
+- [x] 隔离二次贴图改版改动点，确认不回退上一版 UI 和无关文件。
+- [x] 反向修改首页 DOM、计划行渲染、样式和相关测试。
+- [x] 运行构建、构建校验、语法、相关测试、`npm run review`。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面刷新运行态并只读验证回退结果。
+
+## 高层操作摘要
+- 已按“回退最近一轮二次贴图改版”处理，保留上一版首页 UI 改版与其它已存在改动。
+- 已将 Header 状态、Tab 文案、商品区标题、计划区标题、计划列表预算列、主按钮文案和日志输出恢复到上一版语义。
+- 已移除二次贴图新增的只读批量设置输入、缺目标成本统计、动态 `提交 N 个计划` 文案、结构化日志拆列和对应测试断言。
+- 已同步构建产物，确保根 userscript、`dist/packages` 与 `dist/extension` 与源码一致。
+
+## 验证记录
+- `npm run build`：通过。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/site-scene-submit-mode.test.mjs tests/keyword-item-picker-popup.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-strategy-target-cost-layout.test.mjs`：通过，33/33。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `npm run review`：通过，473 pass / 0 fail / 2 skipped。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后脚本版本为 `7.03`，通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 打开向导。
+- 真实页面回退验证：弹窗显示 `向导就绪`；Tab 为 `首页 / 矩阵页 / 日志页`；商品区为 `已添加商品`；计划区为 `计划配置`；表头含 `预算`；计划行展示 `关键词推广 / 趋势明星 / 智能出价` 标签和 `预算 100 元`；底部为 `3 个计划可提交 · 预算合计 300元`；主按钮为 `立即投放`；日志恢复 `[11:25:10] ...` 文本格式。
+- 安全边界：未点击 `立即投放`、`提交 N 个计划`、`批量创建`、原生 `创建完成` 或任何真实提交入口。
+
+## 结果复盘
+- 根因：用户明确要求回退二次贴图改版，当前应保留更稳妥的上一版首页 UI，而不是继续贴近设计稿细节。
+- 修复：用最小反向补丁撤销二次贴图的新增视觉与状态逻辑，保留上一版已经完成且验证过的首页重排、底部执行区和日志标题。
+- 风险：真实页面只读验证未覆盖真实创建链路；这是符合回退安全边界的刻意限制。
+- 回滚方式：如需再次应用二次贴图，可参考下方已归档的“关键词批量建计划向导首页二次贴图改版”记录重新引入对应改动。
+
+---
+
+# TODO - 2026-05-25 关键词批量建计划向导首页二次贴图改版
+
+## 需求规格
+- 目标：在上一版首页 UI 改版基础上继续贴近设计图，补齐顶部状态、摘要卡片、商品信息区、批量设置区、计划表格、结构化日志和底部提交区。
+- 约束：
+  - 本轮只做视觉 + 轻交互，不新增提交接口、不修改组包参数、不改矩阵生成、商品接口和既有业务动作；
+  - 顶部不新增“商品”Tab，保留矩阵顶部入口，Tab 文案为 `计划 / 矩阵 / 日志`；
+  - 首页批量设置输入只作为轻交互/视觉入口，不做直接批量写入，真正批量修改仍走现有批量编辑弹窗；
+  - 真实页面验证只做布局和控件状态检查，不点击 `提交 N 个计划`、`立即投放`、`批量创建`、原生 `创建完成` 或任何真实提交入口。
+- 成功标准：
+  - Header 状态显示绿色 `已连接运行时`；
+  - 摘要卡片有图标、弱标签和突出数字；
+  - 商品区标题为 `商品信息`，已添加商品保持紧凑单行；
+  - 计划区显示 `批量设置`、目标成本/预算轻量输入外观和现有批量编辑入口；
+  - 表格列收敛为勾选、计划名称、类型、出价目标、预算（元）、操作；
+  - 日志按时间、level、消息结构化展示；
+  - 底部主按钮文案为 `提交 N 个计划`，摘要显示 `N 个计划可提交 · M 个缺少目标成本`。
+
+## 执行计划（可核对）
+- [x] 回顾当前首页 DOM、日志输出、计划行渲染和测试断言，确认最小改动点。
+- [x] 调整首页 DOM 与辅助状态：Tab 文案、运行态、摘要卡片、商品区标题、批量设置行、底部文案和缺目标成本统计。
+- [x] 调整计划行和日志渲染：列语义收敛、结构化日志行、保留既有事件绑定。
+- [x] 调整首页 CSS：贴近设计图卡片、表格、输入、日志、底部 CTA 和窄屏回退。
+- [x] 更新回归测试并同步构建产物。
+- [x] 运行构建、语法、相关测试、`npm run review` 和真实页面只读验证。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`，本轮继续遵守视觉稿确认只落地确认范围、真实页面验证前刷新运行态、只读验证不点击真实提交入口。
+- 已确认当前工作区存在上一轮未提交改动，本轮将在现有改动基础上继续，不回退已有用户/代理修改。
+- 已定位最小改动点：`appendWizardLog` 负责结构化日志行，`syncHomeSummary` 负责底部摘要和主按钮文案，计划行渲染可复用现有目标成本解析 helper。
+- 已完成首页二次贴图结构：Tab 改为 `计划/矩阵/日志`，状态改为 `已连接运行时`，摘要卡片补图标，商品区补 `商品信息` 标题，计划区补只读批量设置外观。
+- 已完成计划表格和日志重排：类型列只保留营销目标标签，出价目标列聚合目标与目标成本，日志行拆成时间、level、消息。
+- 已更新首页结构、计划行、日志结构、提交按钮文案、批量设置外观和编辑页 Tab 文案相关回归测试。
+- 已运行构建同步根 userscript、`dist/packages` 与 `dist/extension` 产物。
+- 已在真实 `one.alimama.com` 页面刷新运行态后打开向导，只验证布局、菜单、搜索、全选和商品弹窗，未点击任何真实提交入口。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/site-scene-submit-mode.test.mjs tests/keyword-item-picker-popup.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-strategy-target-cost-layout.test.mjs`：通过，33/33。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过，473 pass / 0 fail / 2 skipped。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后 `window.__AM_GET_SCRIPT_VERSION__()` 为 `7.03`，`window.__AM_WXT_KEYWORD_API__.openWizard()` 可打开向导。
+- 真实页面首页布局验证：Header 显示 `已连接运行时`；Tab 为 `计划 / 矩阵 / 日志`；三张摘要卡为 `已添加商品 1/30`、`已选计划 6`、`预算合计 600元` 且均有图标；商品区可见 `商品信息`；批量设置区可见只读目标成本 `0.60` 与预算 `100`；表格列包含 `计划名称 / 类型 / 出价目标 / 预算（元） / 操作`；主按钮为 `提交 6 个计划`；底部摘要为 `6 个计划可提交 · 6 个缺少目标成本`。
+- 真实页面日志验证：`#am-wxt-keyword-quick-log` 继续复用原节点，日志行包含 `.am-wxt-log-time`、`.am-wxt-log-level`、`.am-wxt-log-message` 三段结构，当前 4 行。
+- 真实页面轻交互验证：提交方式菜单可展开为 `并发数 2 / 单条`；搜索框可输入并清空；全选可取消并恢复；“添加商品”弹窗可打开，候选商品列表和已添加禁用态正常，关闭正常。
+- 安全边界：未点击 `提交 6 个计划`、`立即投放`、`批量创建`、原生 `创建完成` 或任何真实提交入口。
+- 目视截图：`/tmp/keyword-wizard-home-20260525.png`。
+
+## 结果复盘
+- 根因：上一版已完成整体重排，但与设计图相比仍缺少顶部绿色运行态、三卡摘要视觉、商品/批量设置分区标题、表格列语义、结构化日志和底部提交文案的细节对齐。
+- 修复：在不改提交协议和业务行为的前提下，补齐首页视觉层级与轻交互外观；批量设置输入保持只读展示，真实修改仍走现有批量编辑弹窗；主按钮仅改文案并保留原 ID 与点击处理。
+- 风险：真实页面验证为只读验收，未覆盖真实创建链路；页面控制台存在平台侧既有 promise/resource 噪声，但未阻断本次向导打开、布局和轻交互检查。
+- 回滚方式：恢复 `wizard-mount-intro.js` 首页结构与日志输出、`strategy-state-and-draft.js` 计划行结构、`style.js` 首页样式覆盖，并重跑 `npm run build` 同步产物。
+
+---
+
+# TODO - 2026-05-25 关键词批量建计划向导首页 UI 改版
+
+## 需求规格
+- 目标：按预览图方向重构关键词批量建计划向导首页视觉层级，提升商品区、计划区、执行区和日志区的可扫描性。
+- 约束：
+  - 本轮只做首页视觉重排，不新增首页直接批量写入目标成本/预算功能；
+  - 保留现有提交、复制、批量编辑、清空、搜索、全选、商品弹窗、编辑页、矩阵页和接口组包逻辑；
+  - 真实页面验证只检查布局与控件状态，不点击 `立即投放`、`批量创建`、原生 `创建完成` 或任何真实提交入口。
+- 成功标准：
+  - Header 显示运行态状态，Tab 为轻量导航；
+  - 首页显示 `已添加商品 / 已选计划 / 预算合计` 摘要；
+  - 商品区紧凑展示已添加商品，计划区为表格化列表；
+  - 底部执行条展示可提交摘要，并保留 `生成其他策略` 与 `立即投放 + 提交方式`；
+  - 日志区有“执行日志”标题并弱化为次级信息；
+  - 构建、相关测试和真实页面只读验证通过。
+
+## 执行计划（可核对）
+- [x] 回顾首页 DOM、策略列表渲染、商品列表渲染与现有样式覆盖关系。
+- [x] 调整首页 DOM：Header 状态、轻量 Tab、摘要条、计划工具条、底部执行条、日志标题。
+- [x] 调整首页 CSS：企业后台风格、表格化计划行、稳定控件尺寸、窄屏回退。
+- [x] 更新首页结构和样式相关回归测试，并同步构建产物。
+- [x] 运行构建、语法、相关测试和真实页面只读验证。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`，本轮特别遵守真实页面验证前刷新运行态、布局验证看可见内容、不点击真实提交入口。
+- 已在首页 Header 增加“向导就绪”状态标识，新增商品/计划/预算摘要条。
+- 已将计划区改成表格化行结构，并把主执行按钮移动到底部执行条。
+- 已为日志区增加“执行日志”标题，保留原 `appendWizardLog` 容器和输出链路。
+- 已增加首页结构与网格样式回归断言。
+- 已同步构建产物；`npm run review` 期间发现并修复并发日志关闭按钮共享 SVG 图标门禁问题，修复范围限定在图标渲染入口。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/site-scene-submit-mode.test.mjs tests/keyword-item-picker-popup.test.mjs`：通过，26/26。
+- `node --test tests/icon-system-regression.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/site-scene-submit-mode.test.mjs tests/keyword-item-picker-popup.test.mjs`：通过，32/32。
+- `git diff --check`：通过。
+- `npm run review`：通过，472 pass / 0 fail / 2 skipped。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后脚本版本为 `7.03`，通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 打开向导。
+- 真实页面首页布局验证：弹窗打开；摘要为 `已添加商品 1 / 30`、`已选计划 6`、`预算合计 600元`；已添加商品区高度 `72px`；计划列表 6 行且首行 grid 为表格化列；底部摘要为 `6 个计划可提交 · 预算合计 600元`；日志标题为“执行日志”。
+- 真实页面交互只读验证：搜索、全选、提交方式下拉、添加商品弹窗均可打开且无明显布局错位；商品弹窗候选 40 条；关闭弹窗正常。
+- 安全边界：未点击 `立即投放`、`批量创建` 或原生 `创建完成`；网络请求抽查未发现创建/提交/投放类请求。
+
+## 结果复盘
+- 根因：旧首页以纵向卡片堆叠为主，商品、计划、执行和日志缺少清晰层级，计划行信息密度与后台使用场景不匹配。
+- 修复：在保持业务逻辑不变的前提下重排首页 DOM，新增摘要状态、表格化计划列表、底部固定执行区和弱化日志区；CSS 改为克制的企业后台风格并补窄屏回退。
+- 额外修复：review 门禁暴露并发日志关闭按钮仍用窗口图标入口，已改为共享 `renderAmIcon('close')`，同步构建产物。
+- 风险：本轮不改变提交参数、矩阵生成、编辑页字段映射或商品接口；真实页面只做只读验证，未覆盖真实创建链路。
+- 回滚方式：恢复 `wizard-mount-intro.js` 首页结构、`strategy-state-and-draft.js` 计划行结构、`item-selection.js` 商品区高度与 `style.js` 首页样式覆盖，并重跑构建同步产物。
+
+---
+
 # TODO - 2026-05-25 商品主图与首页 Tab 精简
 
 ## 需求规格

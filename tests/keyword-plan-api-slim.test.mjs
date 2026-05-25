@@ -90,10 +90,10 @@ test('向导已移除 scan/repair UI 控件与 component/findList 依赖', () =>
 });
 
 test('向导运行在无计划时直接拦截，不再依赖页面商品回退', () => {
-  const runStart = source.indexOf('const handleRun = async () => {');
-  assert.ok(runStart > -1, '无法定位 handleRun');
+  const runStart = source.indexOf('const resolveWizardRunPayload = (options = {}) => {');
+  assert.ok(runStart > -1, '无法定位运行前置校验 helper');
   const runEnd = source.indexOf('wizardState.els.runBtn.onclick = handleRun;', runStart);
-  assert.ok(runEnd > runStart, 'handleRun 结构不完整');
+  assert.ok(runEnd > runStart, '运行前置校验与 handleRun 结构不完整');
   const runBlock = source.slice(runStart, runEnd);
 
   assert.match(runBlock, /if \(!req\.plans\.length\)\s*{\s*appendWizardLog\('请先添加商品并勾选策略后再创建', 'error'\);/s, '无计划时应直接拦截并提示');
