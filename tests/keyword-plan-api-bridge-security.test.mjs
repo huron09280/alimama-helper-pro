@@ -31,15 +31,26 @@ test('关键词计划入口仍会优先通过 sandbox 内部桥接解析 API', (
     assert.match(source, /if \(fromGlobal && typeof fromGlobal\.openWizard === 'function'\) \{[\s\S]*?return fromGlobal;[\s\S]*?\}/s, '入口未优先接受 sandbox 内部桥接');
 });
 
-test('extension 默认只开放组建计划打开窄桥，不恢复完整计划 API', () => {
+test('extension 默认只开放组建计划打开窄桥，不把完整 API 暴露到页面全局', () => {
     const start = source.indexOf('const installKeywordPlanOpenBridgeHost = () => {');
     const end = source.indexOf('const installPageApiBridgeHost = () => {', start);
     assert.ok(start > -1 && end > start, '无法定位 openWizard 窄桥 host');
     const narrowBridgeBlock = source.slice(start, end);
-    assert.match(narrowBridgeBlock, /KeywordPlanApi\.openWizard\(\)/, '窄桥只能调用 openWizard 打开向导');
+    assert.match(narrowBridgeBlock, /resolveKeywordPlanOpenForBridge\(\)/, '窄桥应通过 openWizard-only 解析器打开向导');
+    assert.match(narrowBridgeBlock, /ensureKeywordPlanApiForBridge\(\)/, '窄桥应确认关键词 API 已随 page runtime 初始化');
+    assert.doesNotMatch(narrowBridgeBlock, /loadKeywordPlanApiForExtension/, '窄桥不应在点击路径懒加载关键词 API 大包');
     assert.doesNotMatch(narrowBridgeBlock, /createPlansBatch|searchItems|runCreateRepairByItem|appendKeywords|suggestKeywords/, '窄桥不得包含建计划或查询类高权限方法');
     assert.match(source, /installKeywordPlanOpenBridgeHost\(\);\s*if \(shouldExposePageApiDebug\(\)\) \{/s, '窄桥应默认安装，完整 page API 仍必须在 debug 开关内');
     assert.match(source, /if \(window\[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY\] === '1'\) \{[\s\S]*?return createKeywordPlanOpenBridgeApi\(\);[\s\S]*?\}/s, '主助手未回退到 openWizard 窄桥');
+});
+
+test('完整 page API bridge host 也校验方法白名单', () => {
+    assert.match(source, /const API_BRIDGE_METHOD_SET = new Set\(API_BRIDGE_METHODS\);/, 'bridge host 缺少方法白名单 Set');
+    assert.match(
+        source,
+        /if \(!API_BRIDGE_METHOD_SET\.has\(method\)\) \{[\s\S]*?throw new Error\(`method_not_allowed:\$\{method\}`\);[\s\S]*?\}/s,
+        'bridge host 调用 API 前必须拒绝白名单外 method'
+    );
 });
 
 test('向导 API 覆盖检查将 page API 视为可选调试面', () => {

@@ -1,3 +1,36 @@
+        const scheduleWizardOpenTask = (openToken = 0, task = null) => {
+            const runTask = () => {
+                if (openToken !== wizardState.openToken) return;
+                if (wizardState.visible !== true) return;
+                if (typeof task === 'function') {
+                    task();
+                }
+            };
+            const scheduleAfterPaint = () => {
+                if (typeof setTimeout === 'function') {
+                    setTimeout(runTask, 0);
+                    return;
+                }
+                runTask();
+            };
+            if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(scheduleAfterPaint);
+                return;
+            }
+            scheduleAfterPaint();
+        };
+
+        const scheduleWizardOpenPreviewRefresh = (openToken = 0) => {
+            wizardState.openPreviewRefreshToken = toNumber(wizardState.openPreviewRefreshToken, 0) + 1;
+            const previewRefreshToken = wizardState.openPreviewRefreshToken;
+            scheduleWizardOpenTask(openToken, () => {
+                if (previewRefreshToken !== wizardState.openPreviewRefreshToken) return;
+                if (typeof KeywordPlanPreviewExecutor.refreshWizardPreview === 'function') {
+                    KeywordPlanPreviewExecutor.refreshWizardPreview();
+                }
+            });
+        };
+
         const openWizard = () => {
             mountWizard();
             wizardState.openToken = (toNumber(wizardState.openToken, 0) + 1);
@@ -15,7 +48,11 @@
                     : [];
             }
 
-            KeywordPlanPreviewExecutor.renderWizardFromState({ clearLogs: true });
+            KeywordPlanPreviewExecutor.renderWizardFromState({
+                clearLogs: true,
+                refreshPreview: false,
+                renderDetailSceneDynamic: false
+            });
             setRepairControlState(!!wizardState.repairRunning);
             if (wizardState.repairLastSummary) {
                 setRepairStatusText(formatRepairStatusText({
@@ -36,71 +73,79 @@
 
             wizardState.els.overlay.classList.add('open');
             wizardState.visible = true;
-            if (!WIZARD_FORCE_API_ONLY_SCENE_CONFIG && typeof wizardState.refreshSceneProfileFromSpec === 'function') {
-                wizardState.refreshSceneProfileFromSpec(wizardState.draft.sceneName, {
-                    scanMode: 'visible',
-                    unlockPolicy: 'safe_only',
-                    goalScan: false,
-                    silent: true
-                });
-            }
+            scheduleWizardOpenPreviewRefresh(openToken);
 
-            if (!wizardState.candidates.length) {
-                wizardState.loadCandidates('', wizardState.candidateSource || 'all');
-            }
+            scheduleWizardOpenTask(openToken, () => {
+                if (!WIZARD_FORCE_API_ONLY_SCENE_CONFIG && typeof wizardState.refreshSceneProfileFromSpec === 'function') {
+                    wizardState.refreshSceneProfileFromSpec(wizardState.draft.sceneName, {
+                        scanMode: 'visible',
+                        unlockPolicy: 'safe_only',
+                        goalScan: false,
+                        silent: true
+                    });
+                }
 
-            (async () => {
-                let runtimeForInit = null;
-                try {
-                    runtimeForInit = await getRuntimeDefaults(false);
-                    if (isStaleOpen()) return;
-                    if (typeof wizardState.applyRuntimeToDraft === 'function') {
-                        wizardState.applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
-                    } else {
-                        applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                if (!wizardState.candidates.length) {
+                    wizardState.loadCandidates('', wizardState.candidateSource || 'all');
+                }
+
+                (async () => {
+                    let runtimeForInit = null;
+                    try {
+                        runtimeForInit = await getRuntimeDefaults(false);
+                        if (isStaleOpen()) return;
+                        if (typeof wizardState.applyRuntimeToDraft === 'function') {
+                            wizardState.applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                        } else {
+                            applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                        }
+                        await ensureSceneDefaultItemForScene({
+                            sceneName: wizardState?.draft?.sceneName || '',
+                            runtime: runtimeForInit,
+                            force: false,
+                            silent: false,
+                            rerender: false,
+                            isStale: () => isStaleOpen()
+                        });
+                        await syncNativeCrowdDefaultsForScene({
+                            sceneName: wizardState?.draft?.sceneName || '',
+                            runtime: runtimeForInit,
+                            silent: false,
+                            rerender: false,
+                            isStale: () => isStaleOpen()
+                        });
+                        if (isStaleOpen()) return;
+                        KeywordPlanPreviewExecutor.renderWizardFromState({
+                            refreshPreview: false,
+                            renderDetailSceneDynamic: false
+                        });
+                        scheduleWizardOpenPreviewRefresh(openToken);
+                    } catch (err) {
+                        log.warn('初始化运行时默认值失败:', err?.message || err);
                     }
-                    await ensureSceneDefaultItemForScene({
-                        sceneName: wizardState?.draft?.sceneName || '',
-                        runtime: runtimeForInit,
-                        force: false,
-                        silent: false,
-                        rerender: false,
-                        isStale: () => isStaleOpen()
-                    });
-                    await syncNativeCrowdDefaultsForScene({
-                        sceneName: wizardState?.draft?.sceneName || '',
-                        runtime: runtimeForInit,
-                        silent: false,
-                        rerender: false,
-                        isStale: () => isStaleOpen()
-                    });
-                    if (isStaleOpen()) return;
-                    KeywordPlanPreviewExecutor.renderWizardFromState();
-                } catch (err) {
-                    log.warn('初始化运行时默认值失败:', err?.message || err);
-                }
 
-                if (wizardState.addedItems.length) return;
-                try {
-                    const runtime = runtimeForInit || await getRuntimeDefaults(false);
-                    if (isStaleOpen()) return;
-                    const preferred = await resolvePreferredItems({}, runtime);
-                    if (isStaleOpen()) return;
-                    wizardState.addedItems = preferred.slice(0, WIZARD_MAX_ITEMS);
-                    wizardState.draft.addedItems = wizardState.addedItems;
-                    wizardState.draft.matrixConfig = syncMatrixMaterialDimensionValues(
-                        wizardState.draft.matrixConfig,
-                        wizardState.addedItems,
-                        wizardState.draft.sceneName
-                    );
-                    KeywordPlanWizardStore.persistDraft();
-                    wizardState.renderAddedList();
-                    wizardState.renderCandidateList({ preserveScroll: true });
-                    KeywordPlanPreviewExecutor.refreshWizardPreview();
-                } catch (err) {
-                    log.warn('初始化已添加商品失败:', err?.message || err);
-                }
-            })();
+                    if (wizardState.addedItems.length) return;
+                    try {
+                        const runtime = runtimeForInit || await getRuntimeDefaults(false);
+                        if (isStaleOpen()) return;
+                        const preferred = await resolvePreferredItems({}, runtime);
+                        if (isStaleOpen()) return;
+                        wizardState.addedItems = preferred.slice(0, WIZARD_MAX_ITEMS);
+                        wizardState.draft.addedItems = wizardState.addedItems;
+                        wizardState.draft.matrixConfig = syncMatrixMaterialDimensionValues(
+                            wizardState.draft.matrixConfig,
+                            wizardState.addedItems,
+                            wizardState.draft.sceneName
+                        );
+                        KeywordPlanWizardStore.persistDraft();
+                        wizardState.renderAddedList();
+                        wizardState.renderCandidateList({ preserveScroll: true });
+                        scheduleWizardOpenPreviewRefresh(openToken);
+                    } catch (err) {
+                        log.warn('初始化已添加商品失败:', err?.message || err);
+                    }
+                })();
+            });
         };
 
         const getSessionDraft = () => readSessionDraft();

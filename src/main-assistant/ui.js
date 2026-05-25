@@ -317,18 +317,22 @@
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    margin-left: 2px;
+                    width: 20px;
+                    height: 20px;
+                    margin-left: 3px;
                     -webkit-appearance: none;
                     appearance: none;
                     border: 0;
+                    border-radius: 5px;
                     background: transparent;
-                    color: #a3adb8;
+                    color: #8f9aa7;
                     line-height: 1;
                     cursor: pointer;
                     user-select: none;
                     vertical-align: middle;
-                    padding: 0;
-                    transition: color 0.18s ease, opacity 0.18s ease;
+                    padding: 2px;
+                    box-sizing: border-box;
+                    transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
                 }
                 .am-campaign-hover-host .am-campaign-search-btn {
                     opacity: 0;
@@ -343,22 +347,31 @@
                     pointer-events: auto;
                 }
                 .am-campaign-search-btn:hover {
-                    color: #6b7480;
+                    color: #1677ff;
+                    background: rgba(22, 119, 255, 0.08);
+                }
+                .am-campaign-search-btn:focus-visible {
+                    outline: none;
+                    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.24);
+                    background: rgba(22, 119, 255, 0.08);
                 }
                 .am-campaign-concurrent-start-btn:hover {
                     color: #157a43;
+                    background: rgba(21, 122, 67, 0.1);
                 }
                 .am-campaign-search-btn.is-running {
                     color: #1677ff;
+                    background: rgba(22, 119, 255, 0.08);
                     opacity: 0.72;
                     visibility: visible;
                     pointer-events: none;
                 }
                 .am-campaign-search-btn svg {
-                    width: 11px;
-                    height: 11px;
+                    width: 14px;
+                    height: 14px;
                     display: block;
-                    fill: currentColor;
+                    fill: none;
+                    stroke: currentColor;
                     pointer-events: none;
                 }
                 .am-potential-plan-export-btn {

@@ -335,8 +335,8 @@ test('AI点睛添加商品后重渲染并隐藏关键词/人群独立设置', ()
   );
   assert.match(
     source,
-    /commitItemSelectionUiState = \(options = \{\}\) => \{[\s\S]*if \(options\.renderSceneDynamic === true\) \{[\s\S]*renderSceneDynamicConfig\(\);/,
-    '添加商品状态提交未支持重渲染场景设置'
+    /commitItemSelectionUiState = \(options = \{\}\) => \{[\s\S]*if \(options\.renderSceneDynamic === true\) \{[\s\S]*wizardState\.detailVisible === true \|\| wizardState\.workbenchPage === 'editor'[\s\S]*renderSceneDynamicConfig\(\);[\s\S]*wizardState\.sceneDynamicDirty = true;/,
+    '添加商品状态提交应在编辑页可见时重渲染场景设置，隐藏时只标记 dirty'
   );
   assert.match(
     source,

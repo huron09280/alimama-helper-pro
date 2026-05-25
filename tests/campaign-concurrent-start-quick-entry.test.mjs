@@ -13,9 +13,18 @@ function getCampaignQuickEntryBlock() {
 
 test('计划ID快捷入口包含并发开启按钮与样式标识', () => {
     const block = getCampaignQuickEntryBlock();
-    assert.match(block, /CONCURRENT_START_ICON_SVG/, '缺少并发开启按钮图标');
+    assert.match(block, /ICON_SVG:\s*renderAmIcon\('campaign-query',\s*\{\s*size:\s*14,\s*strokeWidth:\s*2\.1\s*\}\)/, '快捷查数按钮未使用专用查询图标');
+    assert.match(block, /CONCURRENT_START_ICON_SVG:\s*renderAmIcon\('campaign-concurrent-start',\s*\{\s*size:\s*14,\s*strokeWidth:\s*2\.1\s*\}\)/, '并发开启按钮未使用专用启动图标');
     assert.match(block, /data-am-campaign-concurrent-start/, '缺少并发开启 data 标识');
     assert.match(source, /\.am-campaign-concurrent-start-btn/, '缺少并发开启按钮样式类');
+});
+
+test('计划ID快捷入口图标按钮保留热区和线性 SVG 样式', () => {
+    assert.match(source, /'campaign-query':\s*\{[\s\S]*?<circle cx="10" cy="10" r="5"><\/circle>[\s\S]*?<path d="M14 14l5 5"><\/path>[\s\S]*?'campaign-concurrent-start':/, '缺少简约查询图标定义');
+    assert.match(source, /'campaign-concurrent-start':\s*\{[\s\S]*?<path d="M8 6l10 6-10 6V6z"><\/path>/, '缺少简约启动图标定义');
+    assert.match(source, /\.am-campaign-search-btn \{[\s\S]*?width:\s*20px;[\s\S]*?height:\s*20px;[\s\S]*?padding:\s*2px;/, '计划ID图标按钮缺少 20px 热区');
+    assert.match(source, /\.am-campaign-search-btn svg \{[\s\S]*?width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;/, '计划ID图标 SVG 应保持线性无填充');
+    assert.match(source, /\.am-campaign-search-btn:focus-visible \{[\s\S]*?box-shadow:\s*0 0 0 2px rgba\(22,\s*119,\s*255,\s*0\.24\);/, '计划ID图标按钮缺少键盘焦点状态');
 });
 
 test('并发开启流程包含全量暂停与原在投并发重试', () => {

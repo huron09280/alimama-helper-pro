@@ -6,6 +6,11 @@ const gridSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizar
 const assistantBootstrapSource = readFileSync(new URL('../src/main-assistant/bootstrap.js', import.meta.url), 'utf8');
 const assistantUiSource = readFileSync(new URL('../src/main-assistant/ui.js', import.meta.url), 'utf8');
 const optimizerBridgeSource = readFileSync(new URL('../src/optimizer/bridge.js', import.meta.url), 'utf8');
+const wizardOpenSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-open-and-create.js', import.meta.url), 'utf8');
+const searchAndDraftSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/search-and-draft.js', import.meta.url), 'utf8');
+const strategyStateSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/strategy-state-and-draft.js', import.meta.url), 'utf8');
+const batchEditPopupSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/batch-edit-popup.js', import.meta.url), 'utf8');
+const itemSelectionSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/item-selection.js', import.meta.url), 'utf8');
 
 test('场景动态渲染的时间解析 helper 可被前置货品全站配置安全调用', () => {
   assert.match(
@@ -59,8 +64,13 @@ test('组建计划入口在完整 API 不可见时回退到 openWizard 窄桥', 
 test('optimizer 默认安装 openWizard 窄桥但不恢复完整 page API', () => {
   assert.match(
     optimizerBridgeSource,
-    /const installKeywordPlanOpenBridgeHost = \(\) => \{[\s\S]*?KeywordPlanApi\.openWizard\(\)[\s\S]*?window\.addEventListener\(KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT/,
+    /const installKeywordPlanOpenBridgeHost = \(\) => \{[\s\S]*?ensureKeywordPlanApiForBridge\(\)[\s\S]*?resolveKeywordPlanOpenForBridge\(\)[\s\S]*?window\.addEventListener\(KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT/,
     'optimizer 未安装默认 openWizard 窄桥 host'
+  );
+  assert.doesNotMatch(
+    optimizerBridgeSource,
+    /loadKeywordPlanApiForExtension|KEYWORD_PLAN_LAZY|keywordPlanApiBundle/,
+    '组建计划点击路径不应懒加载 keyword-plan-api 大包'
   );
   assert.match(
     optimizerBridgeSource,
@@ -71,5 +81,59 @@ test('optimizer 默认安装 openWizard 窄桥但不恢复完整 page API', () =
     optimizerBridgeSource,
     /window\.__AM_WXT_KEYWORD_API__\s*=\s*\{\s*openWizard/s,
     '不要用 page 全局对象暴露 openWizard 窄桥，避免和完整 API 暴露边界混淆'
+  );
+});
+
+test('组建计划打开路径不在点击同步任务里构建预览', () => {
+  assert.match(
+    wizardOpenSource,
+    /const scheduleWizardOpenTask = \(openToken = 0, task = null\) => \{[\s\S]*?if \(openToken !== wizardState\.openToken\) return;[\s\S]*?if \(wizardState\.visible !== true\) return;[\s\S]*?setTimeout\(runTask, 0\)[\s\S]*?window\.requestAnimationFrame\(scheduleAfterPaint\)/,
+    'openWizard 应把预览刷新延后到 overlay 打开后的下一帧，避免点击同步任务里做重预览'
+  );
+  assert.match(
+    wizardOpenSource,
+    /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?clearLogs: true,[\s\S]*?refreshPreview: false,[\s\S]*?\}\);[\s\S]*?wizardState\.els\.overlay\.classList\.add\('open'\);[\s\S]*?scheduleWizardOpenPreviewRefresh\(openToken\);[\s\S]*?scheduleWizardOpenTask\(openToken, \(\) => \{[\s\S]*?refreshSceneProfileFromSpec/,
+    '首次打开向导应先跳过预览构建，overlay 打开后再异步刷新预览'
+  );
+  assert.match(
+    wizardOpenSource,
+    /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?refreshPreview: false,[\s\S]*?\}\);[\s\S]*?scheduleWizardOpenPreviewRefresh\(openToken\);/,
+    '后台 runtime 初始化后的二次渲染也不应同步构建预览'
+  );
+});
+
+test('组建计划默认打开不渲染隐藏编辑页动态配置', () => {
+  assert.match(
+    batchEditPopupSource,
+    /const applyStrategyToDetailForm = \(strategy, options = \{\}\) => \{[\s\S]*?if \(options\.renderSceneDynamic !== false\) \{[\s\S]*?renderSceneDynamicConfig\(\);[\s\S]*?\}/,
+    'applyStrategyToDetailForm 应支持跳过隐藏 editor 的动态配置渲染'
+  );
+  assert.match(
+    strategyStateSource,
+    /const shouldRenderDetailSceneDynamic = options\.renderDetailSceneDynamic !== false[\s\S]*?\|\| wizardState\.detailVisible === true[\s\S]*?\|\| wizardState\.workbenchPage === 'editor';[\s\S]*?applyStrategyToDetailForm\(editingStrategy \|\| wizardState\.strategyList\[0\] \|\| null, \{[\s\S]*?renderSceneDynamic: shouldRenderDetailSceneDynamic[\s\S]*?\}\);/,
+    'fillUIFromDraft 应只在默认隐藏 editor 时跳过动态配置，用户已进入 editor 时仍要补渲染'
+  );
+  assert.match(
+    searchAndDraftSource,
+    /wizardState\.fillUIFromDraft\(\{[\s\S]*?renderDetailSceneDynamic: options\.renderDetailSceneDynamic !== false[\s\S]*?\}\);/,
+    'renderWizardFromState 应把 renderDetailSceneDynamic 选项传入 fillUIFromDraft'
+  );
+  assert.match(
+    wizardOpenSource,
+    /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?clearLogs: true,[\s\S]*?refreshPreview: false,[\s\S]*?renderDetailSceneDynamic: false[\s\S]*?\}\);/,
+    'openWizard 首次渲染应跳过隐藏 editor 动态配置'
+  );
+});
+
+test('组建计划默认打开不重建隐藏候选商品列表', () => {
+  assert.match(
+    itemSelectionSource,
+    /const shouldRenderCandidateDomNow = \(options = \{\}\) => \([\s\S]*?options\.force === true[\s\S]*?\|\| wizardState\.itemSplitExpanded === true[\s\S]*?\|\| !!document\.getElementById\('am-wxt-keyword-item-picker-mask'\)[\s\S]*?\);/,
+    '候选商品列表应只在强制、商品面板展开或商品弹窗可见时重建 DOM'
+  );
+  assert.match(
+    itemSelectionSource,
+    /const renderCandidateList = \(options = \{\}\) => \{[\s\S]*?if \(!shouldRenderCandidateDomNow\(options\)\) \{[\s\S]*?wizardState\.candidateListDirty = true;[\s\S]*?return;[\s\S]*?\}[\s\S]*?wizardState\.candidateListDirty = false;/,
+    '隐藏态 renderCandidateList 应只标记 dirty，不生成候选商品卡片'
   );
 });

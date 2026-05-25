@@ -14,8 +14,8 @@
         RETRY_DELAY_MS: 450,
         MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS: 3,
         SITE_CUSTOM_CONFLICT_RE: /(onebpsite-existed|horizontal-onebpsite-existed|diffbizcode-existed|存在在投计划|在投计划|持续推广计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i,
-        ICON_SVG: renderAmIcon('search', { size: 14 }),
-        CONCURRENT_START_ICON_SVG: renderAmIcon('layers-play', { size: 14 }),
+        ICON_SVG: renderAmIcon('campaign-query', { size: 14, strokeWidth: 2.1 }),
+        CONCURRENT_START_ICON_SVG: renderAmIcon('campaign-concurrent-start', { size: 14, strokeWidth: 2.1 }),
 
         init() {
             if (window.top !== window.self) return;

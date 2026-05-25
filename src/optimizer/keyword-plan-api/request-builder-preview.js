@@ -1065,21 +1065,26 @@
                         : baseNote);
                 }
                 if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
-                    wizardState.els.matrixDimensionList.classList.toggle('is-empty', !canEditMatrixDimensions);
-                    if (!canEditMatrixDimensions) {
-                        wizardState.els.matrixDimensionList.innerHTML = `
-                            <div class="am-wxt-matrix-empty-state">
-                                <div class="am-wxt-matrix-empty-title">先选场景</div>
-                                <div class="am-wxt-matrix-empty-desc">请先在上方切换场景，再添加维度。</div>
-                                <div class="am-wxt-matrix-empty-hint">矩阵维度会同步当前场景，只显示该场景可用的预算、出价、前缀、商品等维度。</div>
-                            </div>
-                        `;
+                    if (!shouldRenderMatrixDimensionListNow()) {
+                        markMatrixDimensionListDirty(currentSceneName);
                     } else {
-                        const nextPresetKey = getNextAvailableMatrixPresetKey(currentSceneName, dimensionList);
-                        wizardState.els.matrixDimensionList.innerHTML = [
-                            ...dimensionList.map((item, index) => buildMatrixDimensionRow(item, index)),
-                            buildMatrixDimensionAddCard(nextPresetKey)
-                        ].join('');
+                        wizardState.els.matrixDimensionList.classList.toggle('is-empty', !canEditMatrixDimensions);
+                        if (!canEditMatrixDimensions) {
+                            wizardState.els.matrixDimensionList.innerHTML = `
+                                <div class="am-wxt-matrix-empty-state">
+                                    <div class="am-wxt-matrix-empty-title">先选场景</div>
+                                    <div class="am-wxt-matrix-empty-desc">请先在上方切换场景，再添加维度。</div>
+                                    <div class="am-wxt-matrix-empty-hint">矩阵维度会同步当前场景，只显示该场景可用的预算、出价、前缀、商品等维度。</div>
+                                </div>
+                            `;
+                        } else {
+                            const nextPresetKey = getNextAvailableMatrixPresetKey(currentSceneName, dimensionList);
+                            wizardState.els.matrixDimensionList.innerHTML = [
+                                ...dimensionList.map((item, index) => buildMatrixDimensionRow(item, index)),
+                                buildMatrixDimensionAddCard(nextPresetKey)
+                            ].join('');
+                        }
+                        markMatrixDimensionListRendered(currentSceneName);
                     }
                 }
             };
@@ -3200,7 +3205,7 @@
                 commitDraftState: (draft = null) => commitDraftState(draft),
                 normalizeDraftForUi: (draft = {}) => normalizeDraftForUi(draft),
                 applyDraftStateToWizard: (draft = {}) => applyDraftStateToWizard(draft),
-                applyDraftValuesToControls: (draft = {}) => applyDraftValuesToControls(draft),
+                applyDraftValuesToControls: (draft = {}, options = {}) => applyDraftValuesToControls(draft, options),
                 renderWizardFromState: (options = {}) => renderWizardFromState(options)
             });
             Object.assign(KeywordPlanSceneSpec, {

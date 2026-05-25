@@ -529,6 +529,29 @@
                     `;
                 }
             };
+            const isMatrixWorkbenchVisible = () => (
+                wizardState.visible === true
+                && wizardState.workbenchPage === 'matrix'
+                && wizardState.els.matrixPanel instanceof HTMLElement
+                && wizardState.els.matrixPanel.style.display !== 'none'
+                && !wizardState.els.matrixPanel.classList.contains('collapsed')
+            );
+            const shouldRenderMatrixDimensionListNow = () => isMatrixWorkbenchVisible();
+            const markMatrixDimensionListDirty = (sceneName = '') => {
+                wizardState.matrixDimensionListDirty = true;
+                wizardState.matrixDimensionListSceneName = getMatrixSceneName(sceneName || wizardState.draft?.sceneName || '');
+            };
+            const markMatrixDimensionListRendered = (sceneName = '') => {
+                wizardState.matrixDimensionListDirty = false;
+                wizardState.matrixDimensionListRendered = true;
+                wizardState.matrixDimensionListSceneName = getMatrixSceneName(sceneName || wizardState.draft?.sceneName || '');
+            };
+            const shouldSyncMatrixDimensionRowsFromUI = (sceneName = '') => (
+                isMatrixWorkbenchVisible()
+                && wizardState.matrixDimensionListRendered === true
+                && wizardState.matrixDimensionListDirty !== true
+                && wizardState.matrixDimensionListSceneName === getMatrixSceneName(sceneName || wizardState.draft?.sceneName || '')
+            );
             const setWorkbenchPage = (page = 'home') => {
                 const nextPage = WORKBENCH_PAGE_SET.has(String(page || '').trim()) ? String(page || '').trim() : 'home';
                 wizardState.workbenchPage = nextPage;
@@ -575,7 +598,10 @@
                 if (wizardState.els.matrixNamePatternInput instanceof HTMLInputElement) {
                     nextMatrixConfig.namingPattern = String(wizardState.els.matrixNamePatternInput.value || nextMatrixConfig.namingPattern || MATRIX_DEFAULT_NAMING_PATTERN).trim() || MATRIX_DEFAULT_NAMING_PATTERN;
                 }
-                if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
+                if (
+                    wizardState.els.matrixDimensionList instanceof HTMLElement
+                    && shouldSyncMatrixDimensionRowsFromUI(currentSceneName)
+                ) {
                     nextMatrixConfig.dimensions = Array.from(
                         wizardState.els.matrixDimensionList.querySelectorAll('[data-matrix-dimension-row="1"]')
                     ).map((row) => {

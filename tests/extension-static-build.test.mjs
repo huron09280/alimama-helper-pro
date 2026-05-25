@@ -30,6 +30,7 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
   assert.ok(manifest.content_scripts[0].matches.includes('*://*.alimama.com/*'), '缺少阿里妈妈子域匹配');
   assert.ok(manifest.content_scripts[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com 匹配');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('page.bundle.js'), '缺少 page bundle 暴露');
+  assert.ok(!manifest.web_accessible_resources[0].resources.includes('keyword-plan-api.bundle.js'), '不应暴露点击时加载的 keyword-plan-api lazy bundle');
   assert.ok(manifest.web_accessible_resources[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com web_accessible 匹配');
 });
 
@@ -41,6 +42,7 @@ test('extension manifest 使用 Chrome 规范版本并保留展示版本', () =>
 
 test('extension content script 负责注入 page bundle', () => {
   assert.match(contentSource, /chrome\.runtime\.getURL\('page\.bundle\.js'\)/, '未通过 runtime URL 注入 page bundle');
+  assert.doesNotMatch(contentSource, /keyword-plan-api\.bundle\.js/, 'content script 不应把 keyword-plan-api 大包延后到点击路径');
   assert.match(contentSource, /SCRIPT_ID = 'am-helper-pro-extension-page-bundle'/, '缺少固定注入节点 ID');
   assert.match(contentSource, /const renderInjectionError = \(message = ''\) => \{/, '缺少 extension 注入失败可见反馈');
   assert.match(contentSource, /script\.onerror = \(\) => \{[\s\S]*renderInjectionError\(\);[\s\S]*\};/, 'page bundle 注入失败未展示页面错误');
@@ -70,11 +72,14 @@ test('extension build output 包含授权 background 桥', () => {
 test('extension page bundle 包含 GM 兼容层与核心桥接', () => {
   assert.match(pageBundle, /window\.GM_getValue = GM_getValue_impl/, '缺少 GM_getValue 兼容层');
   assert.match(pageBundle, /window\.__AM_PLATFORM_RUNTIME__ = \{/, '缺少 extension 运行时标记');
+  assert.doesNotMatch(pageBundle, /keywordPlanApiBundle/, 'extension 运行态不应记录点击时加载的 keyword-plan-api lazy bundle');
   assert.match(pageBundle, /window\.__ALIMAMA_OPTIMIZER_TOGGLE__ = \(\) => \{/, '缺少核心桥接入口');
 });
 
-test('extension page bundle 不默认暴露完整计划 API 到页面全局', () => {
+test('extension page bundle 包含完整计划 API 且不默认暴露到页面全局', () => {
   assert.match(pageBundle, /const isExtensionPageRuntime = \(\) => \{[\s\S]*__AM_PLATFORM_RUNTIME__\?\.mode === 'extension'/, '缺少 extension 运行态判定');
+  assert.match(pageBundle, /const KeywordPlanApi = \(\(\) => \{/, 'extension page bundle 应包含完整 KeywordPlanApi 主体，避免点击时首次解析大包');
+  assert.match(pageBundle, /\bKeywordPlanRuntime\b/, 'extension page bundle 应在启动期初始化关键词运行时');
   assert.match(
     pageBundle,
     /if \(typeof globalThis !== 'undefined' && !isExtensionPageRuntime\(\)\) \{[\s\S]*globalThis\.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;[\s\S]*globalThis\.__AM_WXT_PLAN_API__ = KeywordPlanApi;/,
@@ -89,6 +94,8 @@ test('extension page bundle 不默认暴露完整计划 API 到页面全局', ()
 
 test('extension page bundle 默认保留组建计划打开窄桥', () => {
   assert.match(pageBundle, /const KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY = '__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__';/, '缺少组建计划打开窄桥常量');
+  assert.doesNotMatch(pageBundle, /loadKeywordPlanApiForExtension\(\)/, '组建计划点击路径不应再懒加载 keyword-plan-api 大包');
+  assert.doesNotMatch(pageBundle, /am-helper-pro-extension-keyword-plan-bundle/, '不应保留点击时注入 keyword-plan-api 大包的 script 标识');
   assert.match(pageBundle, /installKeywordPlanOpenBridgeHost\(\);\s*if \(shouldExposePageApiDebug\(\)\) \{/s, '组建计划打开窄桥应默认安装，完整 API 仍受 debug 开关保护');
   assert.match(pageBundle, /if \(window\[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY\] === '1'\) \{[\s\S]*?return createKeywordPlanOpenBridgeApi\(\);[\s\S]*?\}/s, '主助手未回退到组建计划打开窄桥');
 });

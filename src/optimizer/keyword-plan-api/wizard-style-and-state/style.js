@@ -7395,8 +7395,8 @@
                 #am-wxt-keyword-modal .am-wxt-strategy-list-head,
                 #am-wxt-keyword-modal .am-wxt-strategy-main {
                     display: grid;
-                    grid-template-columns: 28px minmax(210px, 1.25fr) minmax(170px, 0.8fr) minmax(220px, 1fr) minmax(120px, 0.55fr) minmax(200px, auto);
-                    gap: 12px;
+                    grid-template-columns: 28px minmax(180px, 1.05fr) minmax(190px, 0.95fr) minmax(220px, 1fr) minmax(120px, 0.55fr) minmax(180px, auto);
+                    gap: 10px;
                     align-items: center;
                 }
 
@@ -7432,6 +7432,8 @@
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-name {
+                    display: flex;
+                    align-items: center;
                     min-width: 0;
                     color: #0f172a;
                     font-size: 12px;
@@ -7441,7 +7443,7 @@
                     white-space: nowrap;
                 }
 
-                #am-wxt-keyword-modal .am-wxt-strategy-name span {
+                #am-wxt-keyword-modal .am-wxt-strategy-name .am-wxt-strategy-inline-view {
                     display: -webkit-box;
                     -webkit-line-clamp: 2;
                     -webkit-box-orient: vertical;
@@ -7449,6 +7451,87 @@
                     overflow-wrap: anywhere;
                     white-space: normal;
                     line-height: 1.35;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    width: 100%;
+                    min-width: 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-view {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-input {
+                    display: none;
+                    width: 100%;
+                    min-width: 0;
+                    height: 28px;
+                    box-sizing: border-box;
+                    padding: 0 8px;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background: #fff;
+                    color: #0f172a;
+                    font-size: 12px;
+                    font-weight: 600;
+                    line-height: 26px;
+                    outline: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-input:focus {
+                    border-color: #2563eb;
+                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-budget-input {
+                    max-width: 82px;
+                    text-align: right;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit.is-editing .am-wxt-strategy-inline-view {
+                    display: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit.is-editing .am-wxt-strategy-inline-input {
+                    display: block;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex: 0 0 24px;
+                    width: 24px;
+                    height: 24px;
+                    padding: 0;
+                    border: 0;
+                    border-radius: 6px;
+                    background: transparent;
+                    color: #94a3b8;
+                    cursor: pointer;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: color 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:hover,
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:focus-visible {
+                    background: #f1f5f9;
+                    color: #64748b;
+                    outline: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-item:hover .am-wxt-strategy-inline-edit-btn,
+                #am-wxt-keyword-modal .am-wxt-strategy-item:focus-within .am-wxt-strategy-inline-edit-btn,
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit.is-editing .am-wxt-strategy-inline-edit-btn {
+                    opacity: 1;
+                    visibility: visible;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-tags {
@@ -7556,6 +7639,17 @@
                 #am-wxt-keyword-modal .am-wxt-strategy-actions {
                     justify-content: flex-end;
                     flex-wrap: nowrap;
+                    opacity: 0;
+                    visibility: hidden;
+                    pointer-events: none;
+                    transition: opacity 0.16s ease, visibility 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-item:hover .am-wxt-strategy-actions,
+                #am-wxt-keyword-modal .am-wxt-strategy-item:focus-within .am-wxt-strategy-actions {
+                    opacity: 1;
+                    visibility: visible;
+                    pointer-events: auto;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-target {

@@ -189,7 +189,12 @@
                 syncDraftFromUI();
                 renderItemSelectionLists(options);
                 if (options.renderSceneDynamic === true) {
-                    renderSceneDynamicConfig();
+                    if (wizardState.detailVisible === true || wizardState.workbenchPage === 'editor') {
+                        wizardState.sceneDynamicDirty = false;
+                        renderSceneDynamicConfig();
+                    } else {
+                        wizardState.sceneDynamicDirty = true;
+                    }
                 }
                 if (options.refreshPreview === true) {
                     refreshWizardPreview();
@@ -279,6 +284,23 @@
                     addKind('tone-neutral');
                 }
                 return classes.join(' ');
+            };
+
+            const normalizeInlineStrategyBudgetValue = (rawValue = '') => {
+                const text = String(rawValue || '').trim();
+                if (!text) return '';
+                const amount = parseNumberFromSceneValue(text);
+                if (!Number.isFinite(amount) || amount <= 0 || amount > 999999) return '';
+                return toShortSceneValue(String(amount)) || String(amount);
+            };
+
+            const syncInlineStrategyDetailField = (strategy = null, field = '', value = '') => {
+                if (!strategy || wizardState.editingStrategyId !== strategy.id || wizardState.detailVisible !== true) return;
+                if (field === 'planName' && wizardState.els.prefixInput instanceof HTMLInputElement) {
+                    wizardState.els.prefixInput.value = value;
+                } else if (field === 'dayAverageBudget' && wizardState.els.budgetInput instanceof HTMLInputElement) {
+                    wizardState.els.budgetInput.value = value;
+                }
             };
 
             const renderStrategyList = () => {
@@ -379,7 +401,20 @@
                                 <input type="checkbox" ${strategy.enabled ? 'checked' : ''} />
                             </label>
                             <div class="am-wxt-strategy-name">
-                                <span title="${Utils.escapeHtml(strategyLabel)}">${Utils.escapeHtml(strategyLabel)}</span>
+                                <span class="am-wxt-strategy-inline-edit" data-inline-edit-field="planName">
+                                    <span class="am-wxt-strategy-inline-view" data-action="inline-value" title="${Utils.escapeHtml(strategyLabel)}">${Utils.escapeHtml(strategyLabel)}</span>
+                                    <input
+                                        type="text"
+                                        class="am-wxt-strategy-inline-input"
+                                        data-action="inline-edit-input"
+                                        data-field="planName"
+                                        value="${Utils.escapeHtml(strategyLabel)}"
+                                        aria-label="计划名称"
+                                    />
+                                    <button type="button" class="am-wxt-strategy-inline-edit-btn" data-action="inline-edit" data-field="planName" title="编辑计划名称" aria-label="编辑计划名称">
+                                        ${renderAmIcon('edit', { size: 16, strokeWidth: 1.8 })}
+                                    </button>
+                                </span>
                             </div>
                             <div class="am-wxt-strategy-tags">
                                 <span class="${getStrategyTagClassName('scene', strategySceneName)}">${Utils.escapeHtml(strategySceneName)}</span>
@@ -408,7 +443,23 @@
                                 ` : `<span class="am-wxt-strategy-summary muted">${Utils.escapeHtml(bidModeLabel)}</span>`}
                             </div>
                             <div class="am-wxt-strategy-budget">
-                                <span>预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
+                                <span class="am-wxt-strategy-inline-edit" data-inline-edit-field="dayAverageBudget">
+                                    <span class="am-wxt-strategy-inline-view" data-action="inline-value">预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        max="999999"
+                                        step="0.01"
+                                        class="am-wxt-strategy-inline-input am-wxt-strategy-budget-input"
+                                        data-action="inline-edit-input"
+                                        data-field="dayAverageBudget"
+                                        value="${Utils.escapeHtml(budgetLabel)}"
+                                        aria-label="预算"
+                                    />
+                                    <button type="button" class="am-wxt-strategy-inline-edit-btn" data-action="inline-edit" data-field="dayAverageBudget" title="编辑预算" aria-label="编辑预算">
+                                        ${renderAmIcon('edit', { size: 16, strokeWidth: 1.8 })}
+                                    </button>
+                                </span>
                             </div>
                             <div class="am-wxt-strategy-actions">
                                 <button class="am-wxt-btn am-wxt-copy-btn am-wxt-strategy-action-secondary" data-action="copy">
@@ -419,7 +470,7 @@
                                     </span>
                                 </button>
                                 <button class="am-wxt-btn danger am-wxt-strategy-delete-btn" data-action="delete">删除</button>
-                                <button class="am-wxt-btn am-wxt-strategy-action-main" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑计划'}</button>
+                                <button class="am-wxt-btn am-wxt-strategy-action-main" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑'}</button>
                             </div>
                         </div>
                     `;
@@ -430,7 +481,85 @@
                     const deleteBtn = row.querySelector('button[data-action="delete"]');
                     const editBtn = row.querySelector('button[data-action="edit"]');
                     const targetCostInput = row.querySelector('input[data-action="target-cost-input"]');
+                    const inlineEditButtons = Array.from(row.querySelectorAll('button[data-action="inline-edit"]'));
+                    const inlineEditInputs = Array.from(row.querySelectorAll('input[data-action="inline-edit-input"]'));
+                    let activeInlineEditField = '';
+                    let activeInlineEditOriginalValue = '';
                     let commitStrategyTargetCostInput = () => { };
+                    const getInlineEditInput = (field = '') => (
+                        row.querySelector(`input[data-action="inline-edit-input"][data-field="${field}"]`)
+                    );
+                    const getInlineEditWrap = (field = '') => (
+                        row.querySelector(`[data-inline-edit-field="${field}"]`)
+                    );
+                    const setInlineEditState = (field = '', editing = false) => {
+                        const wrap = getInlineEditWrap(field);
+                        if (wrap instanceof HTMLElement) {
+                            wrap.classList.toggle('is-editing', !!editing);
+                        }
+                    };
+                    const closeInlineEdit = () => {
+                        if (!activeInlineEditField) return;
+                        setInlineEditState(activeInlineEditField, false);
+                        activeInlineEditField = '';
+                        activeInlineEditOriginalValue = '';
+                    };
+                    const startInlineEdit = (field = '') => {
+                        const input = getInlineEditInput(field);
+                        if (!(input instanceof HTMLInputElement)) return;
+                        if (activeInlineEditField && activeInlineEditField !== field) {
+                            commitInlineEdit();
+                        }
+                        activeInlineEditField = field;
+                        activeInlineEditOriginalValue = String(input.value || '');
+                        setInlineEditState(field, true);
+                        input.value = field === 'planName'
+                            ? getStrategyMainLabel(strategy)
+                            : (String(strategy.dayAverageBudget || '').trim() || '100');
+                        input.focus({ preventScroll: true });
+                        input.select();
+                    };
+                    const restoreInlineEditValue = () => {
+                        if (!activeInlineEditField) return;
+                        const input = getInlineEditInput(activeInlineEditField);
+                        if (input instanceof HTMLInputElement) {
+                            input.value = activeInlineEditOriginalValue;
+                        }
+                        closeInlineEdit();
+                    };
+                    const commitInlineEdit = () => {
+                        const field = activeInlineEditField;
+                        if (!field) return;
+                        const input = getInlineEditInput(field);
+                        if (!(input instanceof HTMLInputElement)) {
+                            closeInlineEdit();
+                            return;
+                        }
+                        const rawValue = String(input.value || '').trim();
+                        if (field === 'planName') {
+                            if (!rawValue) {
+                                appendWizardLog('计划名称不能为空，已恢复原值', 'error');
+                                restoreInlineEditValue();
+                                renderStrategyList();
+                                return;
+                            }
+                            const nextPlanName = ensureUniqueStrategyPlanName(rawValue, strategy.id);
+                            strategy.planName = nextPlanName;
+                            syncInlineStrategyDetailField(strategy, field, nextPlanName);
+                        } else if (field === 'dayAverageBudget') {
+                            const nextBudgetValue = normalizeInlineStrategyBudgetValue(rawValue);
+                            if (!nextBudgetValue) {
+                                appendWizardLog('预算需填写大于 0 且不超过 999999 的数值，已恢复原值', 'error');
+                                restoreInlineEditValue();
+                                renderStrategyList();
+                                return;
+                            }
+                            strategy.dayAverageBudget = nextBudgetValue;
+                            syncInlineStrategyDetailField(strategy, field, nextBudgetValue);
+                        }
+                        closeInlineEdit();
+                        commitStrategyUiState();
+                    };
                     checkbox.onchange = () => {
                         strategy.enabled = !!checkbox.checked;
                         commitStrategyUiState({ refreshPreview: false });
@@ -466,6 +595,36 @@
                         });
                         syncStrategyTargetCostEmptyState();
                     }
+                    inlineEditButtons.forEach((button) => {
+                        if (!(button instanceof HTMLButtonElement)) return;
+                        button.addEventListener('click', (event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            startInlineEdit(button.dataset.field || '');
+                        });
+                    });
+                    inlineEditInputs.forEach((input) => {
+                        if (!(input instanceof HTMLInputElement)) return;
+                        input.addEventListener('keydown', (event) => {
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                commitInlineEdit();
+                            } else if (event.key === 'Escape') {
+                                event.preventDefault();
+                                restoreInlineEditValue();
+                                renderStrategyList();
+                            }
+                        });
+                        input.addEventListener('blur', () => {
+                            commitInlineEdit();
+                        });
+                        input.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                        });
+                    });
+                    row.addEventListener('mouseleave', () => {
+                        commitInlineEdit();
+                    });
                     if (copyCountBadge instanceof HTMLElement) {
                         const refreshCopyCount = () => {
                             if (copyCountNum instanceof HTMLElement) {
@@ -496,6 +655,7 @@
                         }, { passive: false });
                     }
                     copyBtn.onclick = () => {
+                        commitInlineEdit();
                         commitStrategyTargetCostInput();
                         const editing = getStrategyById(wizardState.editingStrategyId);
                         if (editing && wizardState.detailVisible) pullDetailFormToStrategy(editing);
@@ -526,6 +686,7 @@
                         );
                     };
                     deleteBtn.onclick = () => {
+                        commitInlineEdit();
                         commitStrategyTargetCostInput();
                         if ((wizardState.strategyList || []).length <= 1) {
                             appendWizardLog('至少保留 1 个计划', 'error');
@@ -537,6 +698,7 @@
                         appendWizardLog(`已删除计划：${removed?.name || ''}`, 'success');
                     };
                     editBtn.onclick = () => {
+                        commitInlineEdit();
                         commitStrategyTargetCostInput();
                         openStrategyDetail(strategy.id);
                     };
@@ -656,7 +818,7 @@
                 wizardState.editingStrategyId = String(draft.editingStrategyId || wizardState.strategyList[0]?.id || '').trim();
             };
 
-            const applyDraftValuesToControls = (draft = {}) => {
+            const applyDraftValuesToControls = (draft = {}, options = {}) => {
                 if (wizardState.els.sceneSelect) wizardState.els.sceneSelect.value = draft.sceneName;
                 if (wizardState.els.prefixInput) wizardState.els.prefixInput.value = draft.planNamePrefix || '';
                 if (wizardState.els.budgetInput) wizardState.els.budgetInput.value = draft.dayAverageBudget || '';
@@ -667,7 +829,12 @@
                 if (wizardState.els.manualInput) wizardState.els.manualInput.value = draft.manualKeywords || '';
                 setDetailVisible(!!draft.detailVisible);
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
-                applyStrategyToDetailForm(editingStrategy || wizardState.strategyList[0] || null);
+                const shouldRenderDetailSceneDynamic = options.renderDetailSceneDynamic !== false
+                    || wizardState.detailVisible === true
+                    || wizardState.workbenchPage === 'editor';
+                applyStrategyToDetailForm(editingStrategy || wizardState.strategyList[0] || null, {
+                    renderSceneDynamic: shouldRenderDetailSceneDynamic
+                });
                 updateBidModeControls(editingStrategy?.bidMode || draft.bidMode || 'smart');
                 setDebugVisible(!!draft.debugVisible);
                 renderRunModeMenu();
@@ -676,8 +843,8 @@
                 setCandidateListExpanded(wizardState.candidateListExpanded);
             };
 
-            const fillUIFromDraft = () => {
+            const fillUIFromDraft = (options = {}) => {
                 const draft = KeywordPlanRuntime.normalizeDraftForUi(ensureWizardDraft());
                 KeywordPlanRuntime.applyDraftStateToWizard(draft);
-                KeywordPlanRuntime.applyDraftValuesToControls(draft);
+                KeywordPlanRuntime.applyDraftValuesToControls(draft, options);
             };

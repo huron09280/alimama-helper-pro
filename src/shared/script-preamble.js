@@ -226,6 +226,15 @@ const AM_ICON_DEFS = {
     search: {
         body: '<circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path>'
     },
+    edit: {
+        body: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"></path><path d="M14 8l2 2"></path>'
+    },
+    'campaign-query': {
+        body: '<circle cx="10" cy="10" r="5"></circle><path d="M14 14l5 5"></path>'
+    },
+    'campaign-concurrent-start': {
+        body: '<path d="M8 6l10 6-10 6V6z"></path>'
+    },
     'layers-play': {
         body: '<rect x="5" y="7" width="12" height="12" rx="2"></rect><path d="M8 5h9a2 2 0 0 1 2 2v9"></path><path d="M10 11l5 3-5 3z"></path>'
     },

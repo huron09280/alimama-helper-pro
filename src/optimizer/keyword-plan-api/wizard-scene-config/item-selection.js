@@ -68,7 +68,18 @@
                 `;
             };
 
+            const shouldRenderCandidateDomNow = (options = {}) => (
+                options.force === true
+                || wizardState.itemSplitExpanded === true
+                || !!document.getElementById('am-wxt-keyword-item-picker-mask')
+            );
+
             const renderCandidateList = (options = {}) => {
+                if (!shouldRenderCandidateDomNow(options)) {
+                    wizardState.candidateListDirty = true;
+                    return;
+                }
+                wizardState.candidateListDirty = false;
                 const preserveScroll = options && options.preserveScroll === true;
                 const addedSet = new Set(wizardState.addedItems.map(item => String(item.materialId)));
                 const candidateListEl = wizardState.els.candidateList;

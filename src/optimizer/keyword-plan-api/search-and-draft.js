@@ -2459,7 +2459,9 @@
             const shouldRefreshPreview = options.refreshPreview !== false;
             const shouldClearLogs = options.clearLogs === true;
             if (typeof wizardState.fillUIFromDraft === 'function') {
-                wizardState.fillUIFromDraft();
+                wizardState.fillUIFromDraft({
+                    renderDetailSceneDynamic: options.renderDetailSceneDynamic !== false
+                });
             }
             if (typeof wizardState.refreshSceneSelect === 'function') {
                 wizardState.refreshSceneSelect();

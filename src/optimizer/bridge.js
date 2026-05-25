@@ -22,6 +22,43 @@
         'getSessionDraft',
         'clearSessionDraft'
     ];
+    const API_BRIDGE_METHOD_SET = new Set(API_BRIDGE_METHODS);
+    const isExtensionPageRuntime = () => {
+        try {
+            return window.__AM_PLATFORM_RUNTIME__?.mode === 'extension';
+        } catch {
+            return false;
+        }
+    };
+    const resolveKeywordPlanApiForBridge = () => {
+        try {
+            if (typeof KeywordPlanApi !== 'undefined' && KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
+                return KeywordPlanApi;
+            }
+        } catch { }
+        try {
+            const fromWindow = window.__AM_WXT_KEYWORD_API__;
+            if (fromWindow && typeof fromWindow.openWizard === 'function') return fromWindow;
+        } catch { }
+        try {
+            const fromGlobal = globalThis.__AM_WXT_KEYWORD_API__;
+            if (fromGlobal && typeof fromGlobal.openWizard === 'function') return fromGlobal;
+        } catch { }
+        return null;
+    };
+    const resolveKeywordPlanOpenForBridge = () => {
+        const api = resolveKeywordPlanApiForBridge();
+        if (api && typeof api.openWizard === 'function') {
+            return () => api.openWizard();
+        }
+        return null;
+    };
+    const ensureKeywordPlanApiForBridge = async (options = {}) => {
+        const needFullApi = options.needFullApi === true;
+        const currentApi = resolveKeywordPlanApiForBridge();
+        if (currentApi || (!needFullApi && resolveKeywordPlanOpenForBridge())) return currentApi;
+        throw new Error(needFullApi ? 'keyword_plan_api_not_ready' : 'keyword_plan_open_not_ready');
+    };
     const installKeywordPlanOpenBridgeHost = () => {
         const dispatchOpenBridgeResponse = (payload) => {
             try {
@@ -38,7 +75,12 @@
                 error: ''
             };
             try {
-                const result = KeywordPlanApi.openWizard();
+                await ensureKeywordPlanApiForBridge();
+                const openWizard = resolveKeywordPlanOpenForBridge();
+                if (typeof openWizard !== 'function') {
+                    throw new Error('keyword_plan_open_not_ready');
+                }
+                const result = openWizard();
                 payload.result = result && typeof result.then === 'function' ? await result : result;
                 payload.ok = true;
             } catch (err) {
@@ -121,7 +163,11 @@
                 error: ''
             };
             try {
-                const fn = KeywordPlanApi?.[method];
+                if (!API_BRIDGE_METHOD_SET.has(method)) {
+                    throw new Error(`method_not_allowed:${method}`);
+                }
+                const api = await ensureKeywordPlanApiForBridge({ needFullApi: true });
+                const fn = api?.[method];
                 if (typeof fn !== 'function') {
                     throw new Error(`method_not_found:${method}`);
                 }
@@ -162,6 +208,7 @@
         const script = document.createElement('script');
         script.id = 'am-wxt-plan-api-bridge-client';
         script.type = 'text/javascript';
+        const bridgeBuildVersion = resolveKeywordPlanApiForBridge()?.buildVersion || window.__AM_WXT_PLAN_BUILD__ || '';
         script.textContent = `
             ;(function() {
                 try {
@@ -169,7 +216,7 @@
                     var RES = ${JSON.stringify(API_BRIDGE_RES_EVENT)};
                     var CHANNEL = ${JSON.stringify(API_BRIDGE_MSG_CHANNEL)};
                     var METHODS = ${JSON.stringify(API_BRIDGE_METHODS)};
-                    var BUILD = ${JSON.stringify(KeywordPlanApi.buildVersion || '')};
+                    var BUILD = ${JSON.stringify(bridgeBuildVersion)};
                     var DEBUG_STORAGE_KEY = ${JSON.stringify(PAGE_API_DEBUG_STORAGE_KEY)};
                     var shouldExposePageApi = function() {
                         try {
@@ -277,13 +324,6 @@
         (document.documentElement || document.head || document.body || document).appendChild(script);
         script.remove();
     };
-    const isExtensionPageRuntime = () => {
-        try {
-            return window.__AM_PLATFORM_RUNTIME__?.mode === 'extension';
-        } catch {
-            return false;
-        }
-    };
     if (typeof globalThis !== 'undefined' && !isExtensionPageRuntime()) {
         globalThis.__AM_TOKENS__ = State.tokens;
         globalThis.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
@@ -293,15 +333,18 @@
     }
     installKeywordPlanOpenBridgeHost();
     if (shouldExposePageApiDebug()) {
-        window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
-        window.__AM_WXT_PLAN_API__ = KeywordPlanApi;
+        const directKeywordPlanApi = resolveKeywordPlanApiForBridge();
+        if (!isExtensionPageRuntime() && directKeywordPlanApi) {
+            window.__AM_WXT_KEYWORD_API__ = directKeywordPlanApi;
+            window.__AM_WXT_PLAN_API__ = directKeywordPlanApi;
+        }
         installPageApiBridgeHost();
         injectPageApiBridgeClient();
     }
-    window.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
+    window.__AM_WXT_PLAN_BUILD__ = resolveKeywordPlanApiForBridge()?.buildVersion || '';
     window.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     if (pageGlobal && pageGlobal !== window) {
-        pageGlobal.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
+        pageGlobal.__AM_WXT_PLAN_BUILD__ = resolveKeywordPlanApiForBridge()?.buildVersion || '';
         pageGlobal.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }
 

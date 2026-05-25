@@ -84,7 +84,9 @@ export const USERSCRIPT_SEGMENTS = [
 export const EXTENSION_PAGE_RUNTIME_SEGMENTS = [
     'src/shared/script-preamble.js',
     'src/entries/extension-license-guard.js',
-    ...CORE_RUNTIME_SEGMENTS.filter((relativePath) => relativePath !== 'src/shared/script-preamble.js')
+    ...PRE_KEYWORD_SEGMENTS.filter((relativePath) => relativePath !== 'src/shared/script-preamble.js'),
+    ...KEYWORD_PLAN_API_SEGMENTS,
+    ...POST_KEYWORD_SEGMENTS
 ];
 
 export const EXTENSION_PAGE_SEGMENTS = [
@@ -283,13 +285,61 @@ export const renderBuildOutputs = () => {
 
 const readExisting = (absolutePath) => (existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null);
 
+export const listGeneratedTextOutputs = (outputs) => {
+    if (!outputs || typeof outputs !== 'object') {
+        throw new Error('listGeneratedTextOutputs requires renderBuildOutputs() result');
+    }
+    return [
+        {
+            relativePath: ROOT_SCRIPT_FILE,
+            content: outputs.userscriptSource
+        },
+        {
+            relativePath: 'dist/packages/alimama-helper-pro.user.js',
+            content: outputs.userscriptSource
+        },
+        {
+            relativePath: 'dist/packages/alimama-helper-pro.meta.js',
+            content: outputs.metaSource
+        },
+        ...Object.entries(outputs.extensionFiles).map(([filename, content]) => ({
+            relativePath: `dist/extension/${filename}`,
+            content
+        }))
+    ];
+};
+
+const assertGeneratedTextOutputsSynced = (outputs) => {
+    listGeneratedTextOutputs(outputs).forEach(({ relativePath, content }) => {
+        const absolutePath = path.join(ROOT_DIR, relativePath);
+        const current = readExisting(absolutePath);
+        if (current !== content) {
+            throw new Error(`构建文本产物未与 src 同步，请先运行 node scripts/build.mjs: ${relativePath}`);
+        }
+    });
+};
+
+const assertExtensionIconsSynced = () => {
+    EXTENSION_ICON_FILES.forEach((filename) => {
+        const sourcePath = path.join(EXTENSION_ICON_DIR, filename);
+        const outputPath = path.join(EXTENSION_DIR, filename);
+        if (!existsSync(sourcePath)) {
+            throw new Error(`extension icon 文件缺失: src/entries/extension-icons/${filename}`);
+        }
+        if (!existsSync(outputPath)) {
+            throw new Error(`extension icon 产物缺失，请先运行 node scripts/build.mjs: dist/extension/${filename}`);
+        }
+        const source = readFileSync(sourcePath);
+        const output = readFileSync(outputPath);
+        if (!source.equals(output)) {
+            throw new Error(`extension icon 产物未与 src 同步，请先运行 node scripts/build.mjs: dist/extension/${filename}`);
+        }
+    });
+};
+
 export const checkBuildOutputs = () => {
     const outputs = renderBuildOutputs();
-    const rootScriptPath = path.join(ROOT_DIR, ROOT_SCRIPT_FILE);
-    const currentRoot = readExisting(rootScriptPath);
-    if (currentRoot !== outputs.userscriptSource) {
-        throw new Error(`根文件未与 src 同步，请先运行 node scripts/build.mjs: ${ROOT_SCRIPT_FILE}`);
-    }
+    assertGeneratedTextOutputsSynced(outputs);
 
     const extensionBundle = outputs.extensionFiles['page.bundle.js'];
     if (!extensionBundle.includes('__ALIMAMA_OPTIMIZER_TOGGLE__')) {
@@ -298,15 +348,14 @@ export const checkBuildOutputs = () => {
     if (!extensionBundle.includes('GM_getValue')) {
         throw new Error('extension page bundle 缺少 GM 兼容层');
     }
+    if (!extensionBundle.includes('const KeywordPlanApi = (() => {')) {
+        throw new Error('extension page bundle 缺少完整 keyword-plan-api 主体，点击路径不应承担首次解析大包');
+    }
     if (!outputs.extensionFiles['background.js']?.includes('AM_LICENSE_VERIFY_REQUEST')) {
         throw new Error('extension background 缺少授权 verify 桥');
     }
 
-    EXTENSION_ICON_FILES.forEach((filename) => {
-        if (!existsSync(path.join(EXTENSION_ICON_DIR, filename))) {
-            throw new Error(`extension icon 文件缺失: src/entries/extension-icons/${filename}`);
-        }
-    });
+    assertExtensionIconsSynced();
 
     return outputs;
 };

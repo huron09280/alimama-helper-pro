@@ -628,10 +628,33 @@ test('切到矩阵页时会移除 collapsed 隐藏状态', () => {
   );
 });
 
+test('矩阵隐藏态不重建维度 DOM，也不从隐藏 DOM 回写 draft', () => {
+  assert.match(
+    source,
+    /const isMatrixWorkbenchVisible = \(\) => \([\s\S]*?wizardState\.visible === true[\s\S]*?wizardState\.workbenchPage === 'matrix'[\s\S]*?wizardState\.els\.matrixPanel instanceof HTMLElement[\s\S]*?!wizardState\.els\.matrixPanel\.classList\.contains\('collapsed'\)[\s\S]*?\);/,
+    '缺少矩阵页可见性 helper，隐藏态仍可能重建或读取矩阵 DOM'
+  );
+  assert.match(
+    source,
+    /const shouldSyncMatrixDimensionRowsFromUI = \(sceneName = ''\) => \([\s\S]*?isMatrixWorkbenchVisible\(\)[\s\S]*?wizardState\.matrixDimensionListRendered === true[\s\S]*?wizardState\.matrixDimensionListDirty !== true[\s\S]*?wizardState\.matrixDimensionListSceneName === getMatrixSceneName/,
+    '缺少矩阵维度行 DOM 可信判断，隐藏或陈旧 DOM 仍可能覆盖 draft.matrixConfig'
+  );
+  assert.match(
+    source,
+    /if \(\s*wizardState\.els\.matrixDimensionList instanceof HTMLElement\s*&& shouldSyncMatrixDimensionRowsFromUI\(currentSceneName\)\s*\) \{[\s\S]*?querySelectorAll\('\[data-matrix-dimension-row="1"\]'\)[\s\S]*?draft\.matrixConfig = nextMatrixConfig;/,
+    'syncMatrixConfigFromUI 必须只在矩阵页可见且维度 DOM 可信时读取行'
+  );
+  assert.match(
+    source,
+    /if \(wizardState\.els\.matrixDimensionList instanceof HTMLElement\) \{[\s\S]*?if \(!shouldRenderMatrixDimensionListNow\(\)\) \{[\s\S]*?markMatrixDimensionListDirty\(currentSceneName\);[\s\S]*?\} else \{[\s\S]*?matrixDimensionList\.innerHTML[\s\S]*?markMatrixDimensionListRendered\(currentSceneName\);/,
+    'renderWorkbenchMatrixSummary 隐藏态应只标记 dirty，矩阵页可见时才重建维度卡片'
+  );
+});
+
 test('矩阵页编辑行会同步回 draft.matrixConfig', () => {
   assert.match(
     source,
-    /querySelectorAll\('\[data-matrix-dimension-row="1"\]'\)[\s\S]*?querySelector\('\[data-matrix-dimension-key="1"\]'\)[\s\S]*?const values = readMatrixDimensionValuesFromRow\(row,\s*currentSceneName\);[\s\S]*?draft\.matrixConfig = nextMatrixConfig;/,
+    /shouldSyncMatrixDimensionRowsFromUI\(currentSceneName\)[\s\S]*?querySelectorAll\('\[data-matrix-dimension-row="1"\]'\)[\s\S]*?querySelector\('\[data-matrix-dimension-key="1"\]'\)[\s\S]*?const values = readMatrixDimensionValuesFromRow\(row,\s*currentSceneName\);[\s\S]*?draft\.matrixConfig = nextMatrixConfig;/,
     '矩阵编辑行未同步回 draft.matrixConfig'
   );
   assert.match(

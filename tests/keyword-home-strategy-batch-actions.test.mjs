@@ -38,7 +38,7 @@ test('首页计划列表改为表格化列结构', () => {
   );
   assert.match(
     source,
-    /#am-wxt-keyword-modal \.am-wxt-strategy-list-head,[\s\S]*?#am-wxt-keyword-modal \.am-wxt-strategy-main \{[\s\S]*?display: grid;[\s\S]*?grid-template-columns: 28px minmax\(210px, 1\.25fr\)/,
+    /#am-wxt-keyword-modal \.am-wxt-strategy-list-head,[\s\S]*?#am-wxt-keyword-modal \.am-wxt-strategy-main \{[\s\S]*?display: grid;[\s\S]*?grid-template-columns: 28px minmax\(180px, 1\.05fr\) minmax\(190px, 0\.95fr\)/,
     '计划行缺少稳定网格列样式'
   );
   assert.match(
@@ -91,16 +91,69 @@ test('首页计划行强化可读性和风险态', () => {
     /class="am-wxt-btn am-wxt-copy-btn am-wxt-strategy-action-secondary"[\s\S]*?class="am-wxt-btn danger am-wxt-strategy-delete-btn"[\s\S]*?class="am-wxt-btn am-wxt-strategy-action-main"/,
     '复制、删除、编辑按钮未拉开视觉权重或删除缺少危险态'
   );
+  assert.match(
+    source,
+    /\$\{wizardState\.detailVisible && wizardState\.editingStrategyId === strategy\.id \? '编辑中' : '编辑'\}/,
+    '首页计划行编辑按钮文案应为“编辑”'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-strategy-actions \{[\s\S]*?opacity:\s*0;[\s\S]*?visibility:\s*hidden;[\s\S]*?pointer-events:\s*none;[\s\S]*?#am-wxt-keyword-modal \.am-wxt-strategy-item:hover \.am-wxt-strategy-actions,[\s\S]*?#am-wxt-keyword-modal \.am-wxt-strategy-item:focus-within \.am-wxt-strategy-actions \{[\s\S]*?opacity:\s*1;[\s\S]*?visibility:\s*visible;[\s\S]*?pointer-events:\s*auto;/,
+    '首页计划行操作按钮应仅在行 hover/focus-within 时显示'
+  );
   assert.match(source, /placeholder="\$\{strategyBidTargetCode === 'roi' \? '例如 2\.24' : '待填写'\}"/, '目标成本空值态提示不清晰');
   assert.match(
     source,
-    /#am-wxt-keyword-modal \.am-wxt-strategy-name span \{[\s\S]*?-webkit-line-clamp:\s*2;[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?white-space:\s*normal;/,
+    /#am-wxt-keyword-modal \.am-wxt-strategy-name \.am-wxt-strategy-inline-view \{[\s\S]*?-webkit-line-clamp:\s*2;[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?white-space:\s*normal;/,
     '计划名称未支持更完整的两行识别'
   );
   assert.match(
     source,
     /#am-wxt-keyword-modal \.am-wxt-strategy-delete-btn \{[\s\S]*?color:\s*#b91c1c;[\s\S]*?border-color:\s*#fecaca;/,
     '删除按钮缺少危险态样式'
+  );
+});
+
+test('首页计划名称与预算支持悬停铅笔行内编辑并自动保存', () => {
+  assert.match(
+    source,
+    /data-inline-edit-field="planName"[\s\S]*?data-action="inline-edit-input"[\s\S]*?data-field="planName"[\s\S]*?data-action="inline-edit"[\s\S]*?编辑计划名称/,
+    '计划名称列缺少行内编辑结构'
+  );
+  assert.match(
+    source,
+    /data-inline-edit-field="dayAverageBudget"[\s\S]*?预算 \$\{Utils\.escapeHtml\(budgetLabel\)\} 元[\s\S]*?type="number"[\s\S]*?data-field="dayAverageBudget"[\s\S]*?编辑预算/,
+    '预算列缺少行内编辑结构'
+  );
+  assert.match(
+    source,
+    /const normalizeInlineStrategyBudgetValue = \(rawValue = ''\) => \{[\s\S]*?parseNumberFromSceneValue\(text\)[\s\S]*?amount <= 0 \|\| amount > 999999[\s\S]*?toShortSceneValue/,
+    '行内预算编辑缺少数值校验'
+  );
+  assert.match(
+    source,
+    /const commitInlineEdit = \(\) => \{[\s\S]*?ensureUniqueStrategyPlanName\(rawValue, strategy\.id\)[\s\S]*?strategy\.dayAverageBudget = nextBudgetValue[\s\S]*?commitStrategyUiState\(\);/,
+    '行内编辑未写回计划名称/预算并复用现有提交状态刷新'
+  );
+  assert.match(
+    source,
+    /const syncInlineStrategyDetailField = \(strategy = null, field = '', value = ''\) => \{[\s\S]*?wizardState\.editingStrategyId !== strategy\.id[\s\S]*?prefixInput\.value = value[\s\S]*?budgetInput\.value = value/,
+    '行内编辑未同步当前详情页表单，可能被 syncDraftFromUI 覆盖'
+  );
+  assert.match(
+    source,
+    /row\.addEventListener\('mouseleave', \(\) => \{[\s\S]*?commitInlineEdit\(\);[\s\S]*?\}\);/,
+    '计划行鼠标离开时未自动保存行内编辑'
+  );
+  assert.match(
+    source,
+    /renderAmIcon\('edit', \{ size: 16, strokeWidth: 1\.8 \}\)/,
+    '行内编辑按钮未使用共享铅笔图标'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-strategy-item:hover \.am-wxt-strategy-inline-edit-btn,[\s\S]*?#am-wxt-keyword-modal \.am-wxt-strategy-item:focus-within \.am-wxt-strategy-inline-edit-btn,[\s\S]*?opacity:\s*1;[\s\S]*?visibility:\s*visible;/,
+    '行内编辑按钮缺少 hover/focus 显示样式'
   );
 });
 

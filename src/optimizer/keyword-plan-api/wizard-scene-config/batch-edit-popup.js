@@ -81,7 +81,7 @@
                 });
             };
 
-            const applyStrategyToDetailForm = (strategy) => {
+            const applyStrategyToDetailForm = (strategy, options = {}) => {
                 if (!strategy) return;
                 if (wizardState.els.detailTitle) {
                     wizardState.els.detailTitle.textContent = getStrategyMainLabel(strategy);
@@ -161,7 +161,12 @@
                     wizardState.els.singleCostInput.value = strategy.singleCostV2 || '';
                 }
                 updateBidModeControls(bidMode);
-                renderSceneDynamicConfig();
+                if (options.renderSceneDynamic !== false) {
+                    wizardState.sceneDynamicDirty = false;
+                    renderSceneDynamicConfig();
+                } else {
+                    wizardState.sceneDynamicDirty = true;
+                }
             };
 
             const pullDetailFormToStrategy = (strategy) => {

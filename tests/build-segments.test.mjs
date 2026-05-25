@@ -41,6 +41,10 @@ test('extension page segments keep compat entry before extension runtime segment
         'src/entries/extension-license-guard.js',
         'extension license guard must execute right after preamble'
     );
+    const firstKeywordIndex = rest.indexOf(KEYWORD_PLAN_API_SEGMENTS[0]);
+    const postStartIndex = rest.indexOf(POST_KEYWORD_SEGMENTS[0]);
+    assert.ok(firstKeywordIndex > 1, 'extension page runtime 应包含 keyword-plan-api，避免点击时首次解析大包');
+    assert.ok(postStartIndex > firstKeywordIndex, 'extension post keyword segments 应在 keyword-plan-api 之后执行');
 });
 
 test('keyword-plan-api 目录下新增切片文件必须加入 segment 清单', () => {

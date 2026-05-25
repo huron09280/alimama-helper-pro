@@ -335,6 +335,15 @@ const AM_ICON_DEFS = {
     search: {
         body: '<circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path>'
     },
+    edit: {
+        body: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"></path><path d="M14 8l2 2"></path>'
+    },
+    'campaign-query': {
+        body: '<circle cx="10" cy="10" r="5"></circle><path d="M14 14l5 5"></path>'
+    },
+    'campaign-concurrent-start': {
+        body: '<path d="M8 6l10 6-10 6V6z"></path>'
+    },
     'layers-play': {
         body: '<rect x="5" y="7" width="12" height="12" rx="2"></rect><path d="M8 5h9a2 2 0 0 1 2 2v9"></path><path d="M10 11l5 3-5 3z"></path>'
     },
@@ -5573,18 +5582,22 @@ if (typeof globalThis !== 'undefined') {
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    margin-left: 2px;
+                    width: 20px;
+                    height: 20px;
+                    margin-left: 3px;
                     -webkit-appearance: none;
                     appearance: none;
                     border: 0;
+                    border-radius: 5px;
                     background: transparent;
-                    color: #a3adb8;
+                    color: #8f9aa7;
                     line-height: 1;
                     cursor: pointer;
                     user-select: none;
                     vertical-align: middle;
-                    padding: 0;
-                    transition: color 0.18s ease, opacity 0.18s ease;
+                    padding: 2px;
+                    box-sizing: border-box;
+                    transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
                 }
                 .am-campaign-hover-host .am-campaign-search-btn {
                     opacity: 0;
@@ -5599,22 +5612,31 @@ if (typeof globalThis !== 'undefined') {
                     pointer-events: auto;
                 }
                 .am-campaign-search-btn:hover {
-                    color: #6b7480;
+                    color: #1677ff;
+                    background: rgba(22, 119, 255, 0.08);
+                }
+                .am-campaign-search-btn:focus-visible {
+                    outline: none;
+                    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.24);
+                    background: rgba(22, 119, 255, 0.08);
                 }
                 .am-campaign-concurrent-start-btn:hover {
                     color: #157a43;
+                    background: rgba(21, 122, 67, 0.1);
                 }
                 .am-campaign-search-btn.is-running {
                     color: #1677ff;
+                    background: rgba(22, 119, 255, 0.08);
                     opacity: 0.72;
                     visibility: visible;
                     pointer-events: none;
                 }
                 .am-campaign-search-btn svg {
-                    width: 11px;
-                    height: 11px;
+                    width: 14px;
+                    height: 14px;
                     display: block;
-                    fill: currentColor;
+                    fill: none;
+                    stroke: currentColor;
                     pointer-events: none;
                 }
                 .am-potential-plan-export-btn {
@@ -13605,8 +13627,8 @@ if (typeof globalThis !== 'undefined') {
         RETRY_DELAY_MS: 450,
         MAX_SITE_CUSTOM_BREAKTHROUGH_ROUNDS: 3,
         SITE_CUSTOM_CONFLICT_RE: /(onebpsite-existed|horizontal-onebpsite-existed|diffbizcode-existed|存在在投计划|在投计划|持续推广计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i,
-        ICON_SVG: renderAmIcon('search', { size: 14 }),
-        CONCURRENT_START_ICON_SVG: renderAmIcon('layers-play', { size: 14 }),
+        ICON_SVG: renderAmIcon('campaign-query', { size: 14, strokeWidth: 2.1 }),
+        CONCURRENT_START_ICON_SVG: renderAmIcon('campaign-concurrent-start', { size: 14, strokeWidth: 2.1 }),
 
         init() {
             if (window.top !== window.self) return;
@@ -26749,7 +26771,9 @@ if (typeof globalThis !== 'undefined') {
             const shouldRefreshPreview = options.refreshPreview !== false;
             const shouldClearLogs = options.clearLogs === true;
             if (typeof wizardState.fillUIFromDraft === 'function') {
-                wizardState.fillUIFromDraft();
+                wizardState.fillUIFromDraft({
+                    renderDetailSceneDynamic: options.renderDetailSceneDynamic !== false
+                });
             }
             if (typeof wizardState.refreshSceneSelect === 'function') {
                 wizardState.refreshSceneSelect();
@@ -38640,8 +38664,8 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-modal .am-wxt-strategy-list-head,
                 #am-wxt-keyword-modal .am-wxt-strategy-main {
                     display: grid;
-                    grid-template-columns: 28px minmax(210px, 1.25fr) minmax(170px, 0.8fr) minmax(220px, 1fr) minmax(120px, 0.55fr) minmax(200px, auto);
-                    gap: 12px;
+                    grid-template-columns: 28px minmax(180px, 1.05fr) minmax(190px, 0.95fr) minmax(220px, 1fr) minmax(120px, 0.55fr) minmax(180px, auto);
+                    gap: 10px;
                     align-items: center;
                 }
 
@@ -38677,6 +38701,8 @@ if (typeof globalThis !== 'undefined') {
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-name {
+                    display: flex;
+                    align-items: center;
                     min-width: 0;
                     color: #0f172a;
                     font-size: 12px;
@@ -38686,7 +38712,7 @@ if (typeof globalThis !== 'undefined') {
                     white-space: nowrap;
                 }
 
-                #am-wxt-keyword-modal .am-wxt-strategy-name span {
+                #am-wxt-keyword-modal .am-wxt-strategy-name .am-wxt-strategy-inline-view {
                     display: -webkit-box;
                     -webkit-line-clamp: 2;
                     -webkit-box-orient: vertical;
@@ -38694,6 +38720,87 @@ if (typeof globalThis !== 'undefined') {
                     overflow-wrap: anywhere;
                     white-space: normal;
                     line-height: 1.35;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    width: 100%;
+                    min-width: 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-view {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-input {
+                    display: none;
+                    width: 100%;
+                    min-width: 0;
+                    height: 28px;
+                    box-sizing: border-box;
+                    padding: 0 8px;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background: #fff;
+                    color: #0f172a;
+                    font-size: 12px;
+                    font-weight: 600;
+                    line-height: 26px;
+                    outline: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-input:focus {
+                    border-color: #2563eb;
+                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-budget-input {
+                    max-width: 82px;
+                    text-align: right;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit.is-editing .am-wxt-strategy-inline-view {
+                    display: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit.is-editing .am-wxt-strategy-inline-input {
+                    display: block;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex: 0 0 24px;
+                    width: 24px;
+                    height: 24px;
+                    padding: 0;
+                    border: 0;
+                    border-radius: 6px;
+                    background: transparent;
+                    color: #94a3b8;
+                    cursor: pointer;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: color 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:hover,
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:focus-visible {
+                    background: #f1f5f9;
+                    color: #64748b;
+                    outline: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-item:hover .am-wxt-strategy-inline-edit-btn,
+                #am-wxt-keyword-modal .am-wxt-strategy-item:focus-within .am-wxt-strategy-inline-edit-btn,
+                #am-wxt-keyword-modal .am-wxt-strategy-inline-edit.is-editing .am-wxt-strategy-inline-edit-btn {
+                    opacity: 1;
+                    visibility: visible;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-tags {
@@ -38801,6 +38908,17 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-modal .am-wxt-strategy-actions {
                     justify-content: flex-end;
                     flex-wrap: nowrap;
+                    opacity: 0;
+                    visibility: hidden;
+                    pointer-events: none;
+                    transition: opacity 0.16s ease, visibility 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-item:hover .am-wxt-strategy-actions,
+                #am-wxt-keyword-modal .am-wxt-strategy-item:focus-within .am-wxt-strategy-actions {
+                    opacity: 1;
+                    visibility: visible;
+                    pointer-events: auto;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-target {
@@ -42746,6 +42864,29 @@ if (typeof globalThis !== 'undefined') {
                     `;
                 }
             };
+            const isMatrixWorkbenchVisible = () => (
+                wizardState.visible === true
+                && wizardState.workbenchPage === 'matrix'
+                && wizardState.els.matrixPanel instanceof HTMLElement
+                && wizardState.els.matrixPanel.style.display !== 'none'
+                && !wizardState.els.matrixPanel.classList.contains('collapsed')
+            );
+            const shouldRenderMatrixDimensionListNow = () => isMatrixWorkbenchVisible();
+            const markMatrixDimensionListDirty = (sceneName = '') => {
+                wizardState.matrixDimensionListDirty = true;
+                wizardState.matrixDimensionListSceneName = getMatrixSceneName(sceneName || wizardState.draft?.sceneName || '');
+            };
+            const markMatrixDimensionListRendered = (sceneName = '') => {
+                wizardState.matrixDimensionListDirty = false;
+                wizardState.matrixDimensionListRendered = true;
+                wizardState.matrixDimensionListSceneName = getMatrixSceneName(sceneName || wizardState.draft?.sceneName || '');
+            };
+            const shouldSyncMatrixDimensionRowsFromUI = (sceneName = '') => (
+                isMatrixWorkbenchVisible()
+                && wizardState.matrixDimensionListRendered === true
+                && wizardState.matrixDimensionListDirty !== true
+                && wizardState.matrixDimensionListSceneName === getMatrixSceneName(sceneName || wizardState.draft?.sceneName || '')
+            );
             const setWorkbenchPage = (page = 'home') => {
                 const nextPage = WORKBENCH_PAGE_SET.has(String(page || '').trim()) ? String(page || '').trim() : 'home';
                 wizardState.workbenchPage = nextPage;
@@ -42792,7 +42933,10 @@ if (typeof globalThis !== 'undefined') {
                 if (wizardState.els.matrixNamePatternInput instanceof HTMLInputElement) {
                     nextMatrixConfig.namingPattern = String(wizardState.els.matrixNamePatternInput.value || nextMatrixConfig.namingPattern || MATRIX_DEFAULT_NAMING_PATTERN).trim() || MATRIX_DEFAULT_NAMING_PATTERN;
                 }
-                if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
+                if (
+                    wizardState.els.matrixDimensionList instanceof HTMLElement
+                    && shouldSyncMatrixDimensionRowsFromUI(currentSceneName)
+                ) {
                     nextMatrixConfig.dimensions = Array.from(
                         wizardState.els.matrixDimensionList.querySelectorAll('[data-matrix-dimension-row="1"]')
                     ).map((row) => {
@@ -58048,7 +58192,7 @@ if (typeof globalThis !== 'undefined') {
                 });
             };
 
-            const applyStrategyToDetailForm = (strategy) => {
+            const applyStrategyToDetailForm = (strategy, options = {}) => {
                 if (!strategy) return;
                 if (wizardState.els.detailTitle) {
                     wizardState.els.detailTitle.textContent = getStrategyMainLabel(strategy);
@@ -58128,7 +58272,12 @@ if (typeof globalThis !== 'undefined') {
                     wizardState.els.singleCostInput.value = strategy.singleCostV2 || '';
                 }
                 updateBidModeControls(bidMode);
-                renderSceneDynamicConfig();
+                if (options.renderSceneDynamic !== false) {
+                    wizardState.sceneDynamicDirty = false;
+                    renderSceneDynamicConfig();
+                } else {
+                    wizardState.sceneDynamicDirty = true;
+                }
             };
 
             const pullDetailFormToStrategy = (strategy) => {
@@ -58584,7 +58733,12 @@ if (typeof globalThis !== 'undefined') {
                 syncDraftFromUI();
                 renderItemSelectionLists(options);
                 if (options.renderSceneDynamic === true) {
-                    renderSceneDynamicConfig();
+                    if (wizardState.detailVisible === true || wizardState.workbenchPage === 'editor') {
+                        wizardState.sceneDynamicDirty = false;
+                        renderSceneDynamicConfig();
+                    } else {
+                        wizardState.sceneDynamicDirty = true;
+                    }
                 }
                 if (options.refreshPreview === true) {
                     refreshWizardPreview();
@@ -58674,6 +58828,23 @@ if (typeof globalThis !== 'undefined') {
                     addKind('tone-neutral');
                 }
                 return classes.join(' ');
+            };
+
+            const normalizeInlineStrategyBudgetValue = (rawValue = '') => {
+                const text = String(rawValue || '').trim();
+                if (!text) return '';
+                const amount = parseNumberFromSceneValue(text);
+                if (!Number.isFinite(amount) || amount <= 0 || amount > 999999) return '';
+                return toShortSceneValue(String(amount)) || String(amount);
+            };
+
+            const syncInlineStrategyDetailField = (strategy = null, field = '', value = '') => {
+                if (!strategy || wizardState.editingStrategyId !== strategy.id || wizardState.detailVisible !== true) return;
+                if (field === 'planName' && wizardState.els.prefixInput instanceof HTMLInputElement) {
+                    wizardState.els.prefixInput.value = value;
+                } else if (field === 'dayAverageBudget' && wizardState.els.budgetInput instanceof HTMLInputElement) {
+                    wizardState.els.budgetInput.value = value;
+                }
             };
 
             const renderStrategyList = () => {
@@ -58774,7 +58945,20 @@ if (typeof globalThis !== 'undefined') {
                                 <input type="checkbox" ${strategy.enabled ? 'checked' : ''} />
                             </label>
                             <div class="am-wxt-strategy-name">
-                                <span title="${Utils.escapeHtml(strategyLabel)}">${Utils.escapeHtml(strategyLabel)}</span>
+                                <span class="am-wxt-strategy-inline-edit" data-inline-edit-field="planName">
+                                    <span class="am-wxt-strategy-inline-view" data-action="inline-value" title="${Utils.escapeHtml(strategyLabel)}">${Utils.escapeHtml(strategyLabel)}</span>
+                                    <input
+                                        type="text"
+                                        class="am-wxt-strategy-inline-input"
+                                        data-action="inline-edit-input"
+                                        data-field="planName"
+                                        value="${Utils.escapeHtml(strategyLabel)}"
+                                        aria-label="计划名称"
+                                    />
+                                    <button type="button" class="am-wxt-strategy-inline-edit-btn" data-action="inline-edit" data-field="planName" title="编辑计划名称" aria-label="编辑计划名称">
+                                        ${renderAmIcon('edit', { size: 16, strokeWidth: 1.8 })}
+                                    </button>
+                                </span>
                             </div>
                             <div class="am-wxt-strategy-tags">
                                 <span class="${getStrategyTagClassName('scene', strategySceneName)}">${Utils.escapeHtml(strategySceneName)}</span>
@@ -58803,7 +58987,23 @@ if (typeof globalThis !== 'undefined') {
                                 ` : `<span class="am-wxt-strategy-summary muted">${Utils.escapeHtml(bidModeLabel)}</span>`}
                             </div>
                             <div class="am-wxt-strategy-budget">
-                                <span>预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
+                                <span class="am-wxt-strategy-inline-edit" data-inline-edit-field="dayAverageBudget">
+                                    <span class="am-wxt-strategy-inline-view" data-action="inline-value">预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        max="999999"
+                                        step="0.01"
+                                        class="am-wxt-strategy-inline-input am-wxt-strategy-budget-input"
+                                        data-action="inline-edit-input"
+                                        data-field="dayAverageBudget"
+                                        value="${Utils.escapeHtml(budgetLabel)}"
+                                        aria-label="预算"
+                                    />
+                                    <button type="button" class="am-wxt-strategy-inline-edit-btn" data-action="inline-edit" data-field="dayAverageBudget" title="编辑预算" aria-label="编辑预算">
+                                        ${renderAmIcon('edit', { size: 16, strokeWidth: 1.8 })}
+                                    </button>
+                                </span>
                             </div>
                             <div class="am-wxt-strategy-actions">
                                 <button class="am-wxt-btn am-wxt-copy-btn am-wxt-strategy-action-secondary" data-action="copy">
@@ -58814,7 +59014,7 @@ if (typeof globalThis !== 'undefined') {
                                     </span>
                                 </button>
                                 <button class="am-wxt-btn danger am-wxt-strategy-delete-btn" data-action="delete">删除</button>
-                                <button class="am-wxt-btn am-wxt-strategy-action-main" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑计划'}</button>
+                                <button class="am-wxt-btn am-wxt-strategy-action-main" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑'}</button>
                             </div>
                         </div>
                     `;
@@ -58825,7 +59025,85 @@ if (typeof globalThis !== 'undefined') {
                     const deleteBtn = row.querySelector('button[data-action="delete"]');
                     const editBtn = row.querySelector('button[data-action="edit"]');
                     const targetCostInput = row.querySelector('input[data-action="target-cost-input"]');
+                    const inlineEditButtons = Array.from(row.querySelectorAll('button[data-action="inline-edit"]'));
+                    const inlineEditInputs = Array.from(row.querySelectorAll('input[data-action="inline-edit-input"]'));
+                    let activeInlineEditField = '';
+                    let activeInlineEditOriginalValue = '';
                     let commitStrategyTargetCostInput = () => { };
+                    const getInlineEditInput = (field = '') => (
+                        row.querySelector(`input[data-action="inline-edit-input"][data-field="${field}"]`)
+                    );
+                    const getInlineEditWrap = (field = '') => (
+                        row.querySelector(`[data-inline-edit-field="${field}"]`)
+                    );
+                    const setInlineEditState = (field = '', editing = false) => {
+                        const wrap = getInlineEditWrap(field);
+                        if (wrap instanceof HTMLElement) {
+                            wrap.classList.toggle('is-editing', !!editing);
+                        }
+                    };
+                    const closeInlineEdit = () => {
+                        if (!activeInlineEditField) return;
+                        setInlineEditState(activeInlineEditField, false);
+                        activeInlineEditField = '';
+                        activeInlineEditOriginalValue = '';
+                    };
+                    const startInlineEdit = (field = '') => {
+                        const input = getInlineEditInput(field);
+                        if (!(input instanceof HTMLInputElement)) return;
+                        if (activeInlineEditField && activeInlineEditField !== field) {
+                            commitInlineEdit();
+                        }
+                        activeInlineEditField = field;
+                        activeInlineEditOriginalValue = String(input.value || '');
+                        setInlineEditState(field, true);
+                        input.value = field === 'planName'
+                            ? getStrategyMainLabel(strategy)
+                            : (String(strategy.dayAverageBudget || '').trim() || '100');
+                        input.focus({ preventScroll: true });
+                        input.select();
+                    };
+                    const restoreInlineEditValue = () => {
+                        if (!activeInlineEditField) return;
+                        const input = getInlineEditInput(activeInlineEditField);
+                        if (input instanceof HTMLInputElement) {
+                            input.value = activeInlineEditOriginalValue;
+                        }
+                        closeInlineEdit();
+                    };
+                    const commitInlineEdit = () => {
+                        const field = activeInlineEditField;
+                        if (!field) return;
+                        const input = getInlineEditInput(field);
+                        if (!(input instanceof HTMLInputElement)) {
+                            closeInlineEdit();
+                            return;
+                        }
+                        const rawValue = String(input.value || '').trim();
+                        if (field === 'planName') {
+                            if (!rawValue) {
+                                appendWizardLog('计划名称不能为空，已恢复原值', 'error');
+                                restoreInlineEditValue();
+                                renderStrategyList();
+                                return;
+                            }
+                            const nextPlanName = ensureUniqueStrategyPlanName(rawValue, strategy.id);
+                            strategy.planName = nextPlanName;
+                            syncInlineStrategyDetailField(strategy, field, nextPlanName);
+                        } else if (field === 'dayAverageBudget') {
+                            const nextBudgetValue = normalizeInlineStrategyBudgetValue(rawValue);
+                            if (!nextBudgetValue) {
+                                appendWizardLog('预算需填写大于 0 且不超过 999999 的数值，已恢复原值', 'error');
+                                restoreInlineEditValue();
+                                renderStrategyList();
+                                return;
+                            }
+                            strategy.dayAverageBudget = nextBudgetValue;
+                            syncInlineStrategyDetailField(strategy, field, nextBudgetValue);
+                        }
+                        closeInlineEdit();
+                        commitStrategyUiState();
+                    };
                     checkbox.onchange = () => {
                         strategy.enabled = !!checkbox.checked;
                         commitStrategyUiState({ refreshPreview: false });
@@ -58861,6 +59139,36 @@ if (typeof globalThis !== 'undefined') {
                         });
                         syncStrategyTargetCostEmptyState();
                     }
+                    inlineEditButtons.forEach((button) => {
+                        if (!(button instanceof HTMLButtonElement)) return;
+                        button.addEventListener('click', (event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            startInlineEdit(button.dataset.field || '');
+                        });
+                    });
+                    inlineEditInputs.forEach((input) => {
+                        if (!(input instanceof HTMLInputElement)) return;
+                        input.addEventListener('keydown', (event) => {
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                commitInlineEdit();
+                            } else if (event.key === 'Escape') {
+                                event.preventDefault();
+                                restoreInlineEditValue();
+                                renderStrategyList();
+                            }
+                        });
+                        input.addEventListener('blur', () => {
+                            commitInlineEdit();
+                        });
+                        input.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                        });
+                    });
+                    row.addEventListener('mouseleave', () => {
+                        commitInlineEdit();
+                    });
                     if (copyCountBadge instanceof HTMLElement) {
                         const refreshCopyCount = () => {
                             if (copyCountNum instanceof HTMLElement) {
@@ -58891,6 +59199,7 @@ if (typeof globalThis !== 'undefined') {
                         }, { passive: false });
                     }
                     copyBtn.onclick = () => {
+                        commitInlineEdit();
                         commitStrategyTargetCostInput();
                         const editing = getStrategyById(wizardState.editingStrategyId);
                         if (editing && wizardState.detailVisible) pullDetailFormToStrategy(editing);
@@ -58921,6 +59230,7 @@ if (typeof globalThis !== 'undefined') {
                         );
                     };
                     deleteBtn.onclick = () => {
+                        commitInlineEdit();
                         commitStrategyTargetCostInput();
                         if ((wizardState.strategyList || []).length <= 1) {
                             appendWizardLog('至少保留 1 个计划', 'error');
@@ -58932,6 +59242,7 @@ if (typeof globalThis !== 'undefined') {
                         appendWizardLog(`已删除计划：${removed?.name || ''}`, 'success');
                     };
                     editBtn.onclick = () => {
+                        commitInlineEdit();
                         commitStrategyTargetCostInput();
                         openStrategyDetail(strategy.id);
                     };
@@ -59051,7 +59362,7 @@ if (typeof globalThis !== 'undefined') {
                 wizardState.editingStrategyId = String(draft.editingStrategyId || wizardState.strategyList[0]?.id || '').trim();
             };
 
-            const applyDraftValuesToControls = (draft = {}) => {
+            const applyDraftValuesToControls = (draft = {}, options = {}) => {
                 if (wizardState.els.sceneSelect) wizardState.els.sceneSelect.value = draft.sceneName;
                 if (wizardState.els.prefixInput) wizardState.els.prefixInput.value = draft.planNamePrefix || '';
                 if (wizardState.els.budgetInput) wizardState.els.budgetInput.value = draft.dayAverageBudget || '';
@@ -59062,7 +59373,12 @@ if (typeof globalThis !== 'undefined') {
                 if (wizardState.els.manualInput) wizardState.els.manualInput.value = draft.manualKeywords || '';
                 setDetailVisible(!!draft.detailVisible);
                 const editingStrategy = getStrategyById(wizardState.editingStrategyId);
-                applyStrategyToDetailForm(editingStrategy || wizardState.strategyList[0] || null);
+                const shouldRenderDetailSceneDynamic = options.renderDetailSceneDynamic !== false
+                    || wizardState.detailVisible === true
+                    || wizardState.workbenchPage === 'editor';
+                applyStrategyToDetailForm(editingStrategy || wizardState.strategyList[0] || null, {
+                    renderSceneDynamic: shouldRenderDetailSceneDynamic
+                });
                 updateBidModeControls(editingStrategy?.bidMode || draft.bidMode || 'smart');
                 setDebugVisible(!!draft.debugVisible);
                 renderRunModeMenu();
@@ -59071,10 +59387,10 @@ if (typeof globalThis !== 'undefined') {
                 setCandidateListExpanded(wizardState.candidateListExpanded);
             };
 
-            const fillUIFromDraft = () => {
+            const fillUIFromDraft = (options = {}) => {
                 const draft = KeywordPlanRuntime.normalizeDraftForUi(ensureWizardDraft());
                 KeywordPlanRuntime.applyDraftStateToWizard(draft);
-                KeywordPlanRuntime.applyDraftValuesToControls(draft);
+                KeywordPlanRuntime.applyDraftValuesToControls(draft, options);
             };
             const setCandidateSource = (source = 'all') => {
                 wizardState.candidateSource = source === 'recommend' ? 'recommend' : 'all';
@@ -59146,7 +59462,18 @@ if (typeof globalThis !== 'undefined') {
                 `;
             };
 
+            const shouldRenderCandidateDomNow = (options = {}) => (
+                options.force === true
+                || wizardState.itemSplitExpanded === true
+                || !!document.getElementById('am-wxt-keyword-item-picker-mask')
+            );
+
             const renderCandidateList = (options = {}) => {
+                if (!shouldRenderCandidateDomNow(options)) {
+                    wizardState.candidateListDirty = true;
+                    return;
+                }
+                wizardState.candidateListDirty = false;
                 const preserveScroll = options && options.preserveScroll === true;
                 const addedSet = new Set(wizardState.addedItems.map(item => String(item.materialId)));
                 const candidateListEl = wizardState.els.candidateList;
@@ -60417,21 +60744,26 @@ if (typeof globalThis !== 'undefined') {
                         : baseNote);
                 }
                 if (wizardState.els.matrixDimensionList instanceof HTMLElement) {
-                    wizardState.els.matrixDimensionList.classList.toggle('is-empty', !canEditMatrixDimensions);
-                    if (!canEditMatrixDimensions) {
-                        wizardState.els.matrixDimensionList.innerHTML = `
-                            <div class="am-wxt-matrix-empty-state">
-                                <div class="am-wxt-matrix-empty-title">先选场景</div>
-                                <div class="am-wxt-matrix-empty-desc">请先在上方切换场景，再添加维度。</div>
-                                <div class="am-wxt-matrix-empty-hint">矩阵维度会同步当前场景，只显示该场景可用的预算、出价、前缀、商品等维度。</div>
-                            </div>
-                        `;
+                    if (!shouldRenderMatrixDimensionListNow()) {
+                        markMatrixDimensionListDirty(currentSceneName);
                     } else {
-                        const nextPresetKey = getNextAvailableMatrixPresetKey(currentSceneName, dimensionList);
-                        wizardState.els.matrixDimensionList.innerHTML = [
-                            ...dimensionList.map((item, index) => buildMatrixDimensionRow(item, index)),
-                            buildMatrixDimensionAddCard(nextPresetKey)
-                        ].join('');
+                        wizardState.els.matrixDimensionList.classList.toggle('is-empty', !canEditMatrixDimensions);
+                        if (!canEditMatrixDimensions) {
+                            wizardState.els.matrixDimensionList.innerHTML = `
+                                <div class="am-wxt-matrix-empty-state">
+                                    <div class="am-wxt-matrix-empty-title">先选场景</div>
+                                    <div class="am-wxt-matrix-empty-desc">请先在上方切换场景，再添加维度。</div>
+                                    <div class="am-wxt-matrix-empty-hint">矩阵维度会同步当前场景，只显示该场景可用的预算、出价、前缀、商品等维度。</div>
+                                </div>
+                            `;
+                        } else {
+                            const nextPresetKey = getNextAvailableMatrixPresetKey(currentSceneName, dimensionList);
+                            wizardState.els.matrixDimensionList.innerHTML = [
+                                ...dimensionList.map((item, index) => buildMatrixDimensionRow(item, index)),
+                                buildMatrixDimensionAddCard(nextPresetKey)
+                            ].join('');
+                        }
+                        markMatrixDimensionListRendered(currentSceneName);
                     }
                 }
             };
@@ -62552,7 +62884,7 @@ if (typeof globalThis !== 'undefined') {
                 commitDraftState: (draft = null) => commitDraftState(draft),
                 normalizeDraftForUi: (draft = {}) => normalizeDraftForUi(draft),
                 applyDraftStateToWizard: (draft = {}) => applyDraftStateToWizard(draft),
-                applyDraftValuesToControls: (draft = {}) => applyDraftValuesToControls(draft),
+                applyDraftValuesToControls: (draft = {}, options = {}) => applyDraftValuesToControls(draft, options),
                 renderWizardFromState: (options = {}) => renderWizardFromState(options)
             });
             Object.assign(KeywordPlanSceneSpec, {
@@ -62621,6 +62953,39 @@ if (typeof globalThis !== 'undefined') {
             setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
             wizardState.mounted = true;
         };
+        const scheduleWizardOpenTask = (openToken = 0, task = null) => {
+            const runTask = () => {
+                if (openToken !== wizardState.openToken) return;
+                if (wizardState.visible !== true) return;
+                if (typeof task === 'function') {
+                    task();
+                }
+            };
+            const scheduleAfterPaint = () => {
+                if (typeof setTimeout === 'function') {
+                    setTimeout(runTask, 0);
+                    return;
+                }
+                runTask();
+            };
+            if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(scheduleAfterPaint);
+                return;
+            }
+            scheduleAfterPaint();
+        };
+
+        const scheduleWizardOpenPreviewRefresh = (openToken = 0) => {
+            wizardState.openPreviewRefreshToken = toNumber(wizardState.openPreviewRefreshToken, 0) + 1;
+            const previewRefreshToken = wizardState.openPreviewRefreshToken;
+            scheduleWizardOpenTask(openToken, () => {
+                if (previewRefreshToken !== wizardState.openPreviewRefreshToken) return;
+                if (typeof KeywordPlanPreviewExecutor.refreshWizardPreview === 'function') {
+                    KeywordPlanPreviewExecutor.refreshWizardPreview();
+                }
+            });
+        };
+
         const openWizard = () => {
             mountWizard();
             wizardState.openToken = (toNumber(wizardState.openToken, 0) + 1);
@@ -62638,7 +63003,11 @@ if (typeof globalThis !== 'undefined') {
                     : [];
             }
 
-            KeywordPlanPreviewExecutor.renderWizardFromState({ clearLogs: true });
+            KeywordPlanPreviewExecutor.renderWizardFromState({
+                clearLogs: true,
+                refreshPreview: false,
+                renderDetailSceneDynamic: false
+            });
             setRepairControlState(!!wizardState.repairRunning);
             if (wizardState.repairLastSummary) {
                 setRepairStatusText(formatRepairStatusText({
@@ -62659,71 +63028,79 @@ if (typeof globalThis !== 'undefined') {
 
             wizardState.els.overlay.classList.add('open');
             wizardState.visible = true;
-            if (!WIZARD_FORCE_API_ONLY_SCENE_CONFIG && typeof wizardState.refreshSceneProfileFromSpec === 'function') {
-                wizardState.refreshSceneProfileFromSpec(wizardState.draft.sceneName, {
-                    scanMode: 'visible',
-                    unlockPolicy: 'safe_only',
-                    goalScan: false,
-                    silent: true
-                });
-            }
+            scheduleWizardOpenPreviewRefresh(openToken);
 
-            if (!wizardState.candidates.length) {
-                wizardState.loadCandidates('', wizardState.candidateSource || 'all');
-            }
+            scheduleWizardOpenTask(openToken, () => {
+                if (!WIZARD_FORCE_API_ONLY_SCENE_CONFIG && typeof wizardState.refreshSceneProfileFromSpec === 'function') {
+                    wizardState.refreshSceneProfileFromSpec(wizardState.draft.sceneName, {
+                        scanMode: 'visible',
+                        unlockPolicy: 'safe_only',
+                        goalScan: false,
+                        silent: true
+                    });
+                }
 
-            (async () => {
-                let runtimeForInit = null;
-                try {
-                    runtimeForInit = await getRuntimeDefaults(false);
-                    if (isStaleOpen()) return;
-                    if (typeof wizardState.applyRuntimeToDraft === 'function') {
-                        wizardState.applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
-                    } else {
-                        applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                if (!wizardState.candidates.length) {
+                    wizardState.loadCandidates('', wizardState.candidateSource || 'all');
+                }
+
+                (async () => {
+                    let runtimeForInit = null;
+                    try {
+                        runtimeForInit = await getRuntimeDefaults(false);
+                        if (isStaleOpen()) return;
+                        if (typeof wizardState.applyRuntimeToDraft === 'function') {
+                            wizardState.applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                        } else {
+                            applyRuntimeToDraft(runtimeForInit, wizardState.draft.sceneName);
+                        }
+                        await ensureSceneDefaultItemForScene({
+                            sceneName: wizardState?.draft?.sceneName || '',
+                            runtime: runtimeForInit,
+                            force: false,
+                            silent: false,
+                            rerender: false,
+                            isStale: () => isStaleOpen()
+                        });
+                        await syncNativeCrowdDefaultsForScene({
+                            sceneName: wizardState?.draft?.sceneName || '',
+                            runtime: runtimeForInit,
+                            silent: false,
+                            rerender: false,
+                            isStale: () => isStaleOpen()
+                        });
+                        if (isStaleOpen()) return;
+                        KeywordPlanPreviewExecutor.renderWizardFromState({
+                            refreshPreview: false,
+                            renderDetailSceneDynamic: false
+                        });
+                        scheduleWizardOpenPreviewRefresh(openToken);
+                    } catch (err) {
+                        log.warn('初始化运行时默认值失败:', err?.message || err);
                     }
-                    await ensureSceneDefaultItemForScene({
-                        sceneName: wizardState?.draft?.sceneName || '',
-                        runtime: runtimeForInit,
-                        force: false,
-                        silent: false,
-                        rerender: false,
-                        isStale: () => isStaleOpen()
-                    });
-                    await syncNativeCrowdDefaultsForScene({
-                        sceneName: wizardState?.draft?.sceneName || '',
-                        runtime: runtimeForInit,
-                        silent: false,
-                        rerender: false,
-                        isStale: () => isStaleOpen()
-                    });
-                    if (isStaleOpen()) return;
-                    KeywordPlanPreviewExecutor.renderWizardFromState();
-                } catch (err) {
-                    log.warn('初始化运行时默认值失败:', err?.message || err);
-                }
 
-                if (wizardState.addedItems.length) return;
-                try {
-                    const runtime = runtimeForInit || await getRuntimeDefaults(false);
-                    if (isStaleOpen()) return;
-                    const preferred = await resolvePreferredItems({}, runtime);
-                    if (isStaleOpen()) return;
-                    wizardState.addedItems = preferred.slice(0, WIZARD_MAX_ITEMS);
-                    wizardState.draft.addedItems = wizardState.addedItems;
-                    wizardState.draft.matrixConfig = syncMatrixMaterialDimensionValues(
-                        wizardState.draft.matrixConfig,
-                        wizardState.addedItems,
-                        wizardState.draft.sceneName
-                    );
-                    KeywordPlanWizardStore.persistDraft();
-                    wizardState.renderAddedList();
-                    wizardState.renderCandidateList({ preserveScroll: true });
-                    KeywordPlanPreviewExecutor.refreshWizardPreview();
-                } catch (err) {
-                    log.warn('初始化已添加商品失败:', err?.message || err);
-                }
-            })();
+                    if (wizardState.addedItems.length) return;
+                    try {
+                        const runtime = runtimeForInit || await getRuntimeDefaults(false);
+                        if (isStaleOpen()) return;
+                        const preferred = await resolvePreferredItems({}, runtime);
+                        if (isStaleOpen()) return;
+                        wizardState.addedItems = preferred.slice(0, WIZARD_MAX_ITEMS);
+                        wizardState.draft.addedItems = wizardState.addedItems;
+                        wizardState.draft.matrixConfig = syncMatrixMaterialDimensionValues(
+                            wizardState.draft.matrixConfig,
+                            wizardState.addedItems,
+                            wizardState.draft.sceneName
+                        );
+                        KeywordPlanWizardStore.persistDraft();
+                        wizardState.renderAddedList();
+                        wizardState.renderCandidateList({ preserveScroll: true });
+                        scheduleWizardOpenPreviewRefresh(openToken);
+                    } catch (err) {
+                        log.warn('初始化已添加商品失败:', err?.message || err);
+                    }
+                })();
+            });
         };
 
         const getSessionDraft = () => readSessionDraft();
@@ -69371,6 +69748,43 @@ if (typeof globalThis !== 'undefined') {
         'getSessionDraft',
         'clearSessionDraft'
     ];
+    const API_BRIDGE_METHOD_SET = new Set(API_BRIDGE_METHODS);
+    const isExtensionPageRuntime = () => {
+        try {
+            return window.__AM_PLATFORM_RUNTIME__?.mode === 'extension';
+        } catch {
+            return false;
+        }
+    };
+    const resolveKeywordPlanApiForBridge = () => {
+        try {
+            if (typeof KeywordPlanApi !== 'undefined' && KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
+                return KeywordPlanApi;
+            }
+        } catch { }
+        try {
+            const fromWindow = window.__AM_WXT_KEYWORD_API__;
+            if (fromWindow && typeof fromWindow.openWizard === 'function') return fromWindow;
+        } catch { }
+        try {
+            const fromGlobal = globalThis.__AM_WXT_KEYWORD_API__;
+            if (fromGlobal && typeof fromGlobal.openWizard === 'function') return fromGlobal;
+        } catch { }
+        return null;
+    };
+    const resolveKeywordPlanOpenForBridge = () => {
+        const api = resolveKeywordPlanApiForBridge();
+        if (api && typeof api.openWizard === 'function') {
+            return () => api.openWizard();
+        }
+        return null;
+    };
+    const ensureKeywordPlanApiForBridge = async (options = {}) => {
+        const needFullApi = options.needFullApi === true;
+        const currentApi = resolveKeywordPlanApiForBridge();
+        if (currentApi || (!needFullApi && resolveKeywordPlanOpenForBridge())) return currentApi;
+        throw new Error(needFullApi ? 'keyword_plan_api_not_ready' : 'keyword_plan_open_not_ready');
+    };
     const installKeywordPlanOpenBridgeHost = () => {
         const dispatchOpenBridgeResponse = (payload) => {
             try {
@@ -69387,7 +69801,12 @@ if (typeof globalThis !== 'undefined') {
                 error: ''
             };
             try {
-                const result = KeywordPlanApi.openWizard();
+                await ensureKeywordPlanApiForBridge();
+                const openWizard = resolveKeywordPlanOpenForBridge();
+                if (typeof openWizard !== 'function') {
+                    throw new Error('keyword_plan_open_not_ready');
+                }
+                const result = openWizard();
                 payload.result = result && typeof result.then === 'function' ? await result : result;
                 payload.ok = true;
             } catch (err) {
@@ -69470,7 +69889,11 @@ if (typeof globalThis !== 'undefined') {
                 error: ''
             };
             try {
-                const fn = KeywordPlanApi?.[method];
+                if (!API_BRIDGE_METHOD_SET.has(method)) {
+                    throw new Error(`method_not_allowed:${method}`);
+                }
+                const api = await ensureKeywordPlanApiForBridge({ needFullApi: true });
+                const fn = api?.[method];
                 if (typeof fn !== 'function') {
                     throw new Error(`method_not_found:${method}`);
                 }
@@ -69511,6 +69934,7 @@ if (typeof globalThis !== 'undefined') {
         const script = document.createElement('script');
         script.id = 'am-wxt-plan-api-bridge-client';
         script.type = 'text/javascript';
+        const bridgeBuildVersion = resolveKeywordPlanApiForBridge()?.buildVersion || window.__AM_WXT_PLAN_BUILD__ || '';
         script.textContent = `
             ;(function() {
                 try {
@@ -69518,7 +69942,7 @@ if (typeof globalThis !== 'undefined') {
                     var RES = ${JSON.stringify(API_BRIDGE_RES_EVENT)};
                     var CHANNEL = ${JSON.stringify(API_BRIDGE_MSG_CHANNEL)};
                     var METHODS = ${JSON.stringify(API_BRIDGE_METHODS)};
-                    var BUILD = ${JSON.stringify(KeywordPlanApi.buildVersion || '')};
+                    var BUILD = ${JSON.stringify(bridgeBuildVersion)};
                     var DEBUG_STORAGE_KEY = ${JSON.stringify(PAGE_API_DEBUG_STORAGE_KEY)};
                     var shouldExposePageApi = function() {
                         try {
@@ -69626,13 +70050,6 @@ if (typeof globalThis !== 'undefined') {
         (document.documentElement || document.head || document.body || document).appendChild(script);
         script.remove();
     };
-    const isExtensionPageRuntime = () => {
-        try {
-            return window.__AM_PLATFORM_RUNTIME__?.mode === 'extension';
-        } catch {
-            return false;
-        }
-    };
     if (typeof globalThis !== 'undefined' && !isExtensionPageRuntime()) {
         globalThis.__AM_TOKENS__ = State.tokens;
         globalThis.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
@@ -69642,15 +70059,18 @@ if (typeof globalThis !== 'undefined') {
     }
     installKeywordPlanOpenBridgeHost();
     if (shouldExposePageApiDebug()) {
-        window.__AM_WXT_KEYWORD_API__ = KeywordPlanApi;
-        window.__AM_WXT_PLAN_API__ = KeywordPlanApi;
+        const directKeywordPlanApi = resolveKeywordPlanApiForBridge();
+        if (!isExtensionPageRuntime() && directKeywordPlanApi) {
+            window.__AM_WXT_KEYWORD_API__ = directKeywordPlanApi;
+            window.__AM_WXT_PLAN_API__ = directKeywordPlanApi;
+        }
         installPageApiBridgeHost();
         injectPageApiBridgeClient();
     }
-    window.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
+    window.__AM_WXT_PLAN_BUILD__ = resolveKeywordPlanApiForBridge()?.buildVersion || '';
     window.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     if (pageGlobal && pageGlobal !== window) {
-        pageGlobal.__AM_WXT_PLAN_BUILD__ = KeywordPlanApi.buildVersion || '';
+        pageGlobal.__AM_WXT_PLAN_BUILD__ = resolveKeywordPlanApiForBridge()?.buildVersion || '';
         pageGlobal.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }
 

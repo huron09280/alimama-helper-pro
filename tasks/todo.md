@@ -1,3 +1,487 @@
+# TODO - 2026-05-25 计划列表名称与预算悬停编辑
+
+## 需求规格
+- 目标：在关键词推广批量建计划 API 向导首页的计划列表中，鼠标悬停到对应计划行时，计划名称与预算右侧显示铅笔编辑图标；点击图标后直接进入该字段的行内编辑；鼠标离开行后自动保存当前编辑值。
+- 可编辑字段：
+  - 计划名称：对应单条策略的 `planName` / 显示名称；
+  - 预算：对应单条策略的预算值，当前列表展示为 `预算 100 元`。
+- 交互约束：
+  - 默认静态展示保持当前列表密度，不直接暴露输入框；
+  - 编辑图标仅在行 hover/focus-within 时出现，风格参考原生浅灰线性铅笔图标；
+  - 点击图标后聚焦输入框；按 Enter 或输入框 blur 保存，按 Escape 取消并恢复旧值；
+  - 鼠标离开行时若正在编辑，自动保存，不要求用户额外点击确认；
+  - 不改变批量编辑、复制、删除、编辑计划、提交创建和请求组包语义；
+  - 不点击真实提交创建、生成策略或投放入口。
+- 成功标准：
+  - 首页策略列表计划名称和预算均支持 hover 显示编辑图标、点击编辑、离开行自动保存；
+  - 保存后底部“预算合计”和提交预览能随预算变化同步；
+  - 预算输入有最小校验，非法/空值不写入破坏性数据；
+  - 相关回归测试覆盖 DOM 结构、事件绑定和状态同步；
+  - 构建产物由 `npm run build` 同步，相关测试、语法检查、build check 通过；
+  - Chrome DevTools MCP 在真实 `one.alimama.com` 页面只读验证交互，不触碰提交创建。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md` 与当前工作区改动，确认不覆盖已有未提交变更。
+- [x] 定位计划列表渲染、字段保存、预算汇总与测试落点，确认最小改动方案。
+- [x] 实现计划名称/预算的 hover 编辑图标、行内编辑、离行自动保存和取消逻辑。
+- [x] 更新样式，保证图标与原生铅笔视觉接近且不挤压表格布局。
+- [x] 更新回归测试覆盖编辑 DOM、事件绑定、预算同步与提交语义不变。
+- [x] 运行构建同步产物，并执行相关测试、语法检查、build check。
+- [x] 用 Chrome DevTools MCP 在真实页面验证 hover、点击编辑、离行保存和预算汇总更新，不触碰真实提交。
+- [x] 回填验证记录、风险和结果复盘。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`：本轮属于 UI 运行态交互，必须真实页面验证可见反馈；同时小尺寸图标应简洁，避免叠加复杂语义。
+- 已检查 `git status`，当前工作区已有多处未提交改动，后续只叠加本次必要变更，不回退、不格式化无关文件。
+- 已定位实现面：`renderStrategyList()` 负责首页计划行 DOM，`strategy.planName` / `strategy.dayAverageBudget` 是单条计划字段；`syncHomeSummary()` 直接按启用计划预算计算摘要，提交预览和创建请求也读取策略字段，适合在列表层保存后复用现有 `commitStrategyUiState()` 刷新。
+- 已在 `renderStrategyList()` 中给计划名称和预算列增加行内编辑容器、共享 `edit` 铅笔图标、输入框和保存/取消事件；保存写回 `strategy.planName` / `strategy.dayAverageBudget` 并复用 `commitStrategyUiState()`。
+- 已补上当前详情页同一策略的同步保护：行内保存前同步 `prefixInput` / `budgetInput`，避免 `syncDraftFromUI()` 用旧详情表单覆盖行内值。
+- 已更新计划行样式：默认隐藏铅笔，行 hover/focus-within 时显示；编辑态展示输入框，预算输入控宽，名称保留两行截断。
+- 已新增回归断言覆盖行内编辑 DOM、预算校验、mouseleave 自动保存、详情表单同步保护和共享铅笔图标。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/icon-system-regression.test.mjs`：通过，20/20。
+- `node --check "阿里妈妈多合一助手.js" && node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check`：通过。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/matrix-plan-config.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/keyword-plan-api-bridge-security.test.mjs`：通过，64/64。
+- Chrome DevTools MCP 真实页面验证：
+  - 页面：`https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`。
+  - 向导首页已加载新运行态：`[data-inline-edit-field]` 4 个，`.am-ui-icon-edit` 4 个。
+  - hover 首行计划名后，计划名称和预算两枚铅笔按钮均变为 `opacity=1`、`visibility=visible`。
+  - 点击计划名称铅笔，输入临时后缀并触发离行保存，行文本更新；随后恢复原计划名。
+  - 点击预算铅笔，将首行预算从 200 临时改为 101，底部摘要从 `预算合计 400元` 更新为 `301元`；随后恢复首行预算为 200，摘要回到 `预算合计 400元`。
+  - 截图：`tasks/strategy-inline-edit-hover.png`。
+  - 网络审计：未触碰提交创建按钮，`keyword-plan-api/create/submit/launch/publish/batchCreate/campaignCreate` 资源命中 0。
+- `npm run test`：通过，486 tests / 484 pass / 0 fail / 2 skipped。
+- `npm run review`：通过，review-team 全部 PASS。
+
+## 结果复盘
+- 根因/诉求：计划列表原本只在“编辑计划”详情里改名称和预算，首页行内只能查看；用户需要像原生表格一样在 hover 后直接点铅笔编辑，提高批量调整效率。
+- 实现：不新增全局状态，不改提交链路；在计划行局部维护正在编辑字段，保存时只写策略对象并复用现有状态提交函数，让预算合计、预览和草稿持久化走原链路。
+- 风险控制：预算只允许 `0 < value <= 999999` 的纯数字字符串；详情页打开时先同步同一策略的表单字段，避免旧表单覆盖；真实页面只做本地草稿编辑并已恢复原值，未触碰真实创建/投放。
+
+---
+
+# TODO - 2026-05-25 计划列表操作列悬停显示与列距微调
+
+## 需求规格
+- 目标：计划行右侧“复制 / 删除 / 编辑”操作区和名称/预算铅笔保持同样交互，只在鼠标移动到对应行或键盘聚焦该行时显示；未 hover 的行不显示操作区。
+- 文案：右侧按钮“编辑计划”改为“编辑”。
+- 布局：类型列整体向左移动一些，减少计划名称与类型标签之间的叠字/拥挤。
+- 约束：不改变复制、删除、编辑的业务语义，不触碰提交创建。
+
+## 执行计划（可核对）
+- [x] 调整计划行操作区渲染文案，将“编辑计划”改为“编辑”。
+- [x] 调整 CSS：操作列默认隐藏，行 hover/focus-within 时显示，并保留可点击热区。
+- [x] 微调计划列表 grid 列宽，让类型列更靠左且不挤压操作列。
+- [x] 更新回归测试覆盖文案、hover 显示和列宽。
+- [x] 构建同步产物，运行相关测试与必要门禁。
+- [x] Chrome DevTools 真实页面验证 hover 显示、非 hover 隐藏、文案与列距。
+
+## 高层操作摘要
+- 已将首页计划行操作按钮文案从“编辑计划”改为“编辑”，保留当前编辑态“编辑中”。
+- 已让 `.am-wxt-strategy-actions` 默认 `opacity:0/visibility:hidden/pointer-events:none`，仅在对应行 `hover` 或 `focus-within` 时显示并恢复可点击。
+- 已把计划行 grid 从名称列 `minmax(210px, 1.25fr)`、类型列 `minmax(170px, 0.8fr)` 调整为名称列 `minmax(180px, 1.05fr)`、类型列 `minmax(190px, 0.95fr)`，让类型列起点左移并增加标签可用宽度。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/icon-system-regression.test.mjs`：通过，20/20。
+- `node --check "阿里妈妈多合一助手.js" && node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check`：通过。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `npm run test`：通过，486 tests / 484 pass / 0 fail / 2 skipped。
+- `npm run review`：通过，review-team 全部 PASS。
+- Chrome DevTools MCP：
+  - 初次复测发现真实页仍是旧运行态，操作按钮为“编辑计划”且操作区常显；已在 `chrome://extensions/` 重载当前 worktree extension `cfegfgaodnfeigffdknhgciapojejflk`，并强刷 `one.alimama.com` 页面后复测。
+  - 新运行态下，按钮文案为“编辑”；鼠标移出计划行时两条计划的操作区均为 `opacity=0`、`visibility=hidden`、`pointer-events=none`。
+  - 鼠标悬停首行后，仅首行显示计划名称铅笔、预算铅笔和“复制 / 删除 / 编辑”操作区；第二行仍隐藏。
+  - 计划列表实际 grid 列宽为 `28px 289.266px 261.719px 275.492px 151.516px 212px`，类型列可用宽度大于名称列调整前状态，截图未见类型标签叠字。
+  - 截图：`tasks/strategy-actions-hover.png`。
+  - 未点击真实提交创建；网络列表未出现 `keyword-plan-api/create`、`submit`、`launch`、`publish`、`batchCreate`、`campaignCreate` 请求。
+
+## 结果复盘
+- 根因/诉求：计划行操作按钮常显会让右侧区域拥挤，且“编辑计划”文案比按钮空间更长；类型标签列也容易和名称列读起来拥挤。
+- 实现：沿用上一轮行 hover 模式，操作区默认隐藏，`hover/focus-within` 才显示；按钮文案收敛为“编辑”；名称列略收窄、类型列加宽并前移，减少标签叠字风险。
+- 风险：真实页面只验证了悬停/非悬停、文案和布局状态，没有点击复制、删除、编辑或提交创建，避免改动真实草稿和投放数据；这些业务语义由现有回归测试覆盖。
+
+---
+
+# TODO - 2026-05-25 重绘计划ID快捷查数与并发开启图标
+
+## 需求规格
+- 目标：按参考文章的功能性 ICON 方法，重新设计计划 ID 行内快捷查数按钮和并发开启按钮的图标。
+- 目标选择器：
+  - `#mx_2543 > div.asiYysjJgT > button:nth-child(3)`
+  - `#mx_2543 > div.asiYysjJgT > button.am-campaign-search-btn.am-campaign-concurrent-start-btn`
+- 设计约束：
+  - 保持两个按钮原有点击语义、`data-*` 标识、标题和 aria 文案不变；
+  - 使用共享 `renderAmIcon()` 体系，不回退到 iconfont、emoji、裸字符或手绘 CSS 图标；
+  - 采用 24x24 画板、约 20x20 安全区、整数坐标、统一线宽和统一圆形线端；
+  - 图形要比当前更容易区分：快捷查数表达“查询/数据”，并发开启表达“多计划/启动”；
+  - 补足行内图标按钮热区与 hover/focus/运行态，不明显挤压原生表格布局；
+  - 生成产物只能通过 `npm run build` 同步。
+- 成功标准：
+  - 两个按钮分别使用新图标名与新路径；
+  - 图标 SVG 保持线性、无填充、整数坐标、24x24 默认画板；
+  - 回归测试覆盖两个按钮图标和按钮热区样式；
+  - 构建、相关测试、语法/同步检查通过；
+  - 真实 `one.alimama.com` 页面只读验证两个按钮可见状态与图标渲染，不点击并发开启真实执行。
+
+## 执行计划（可核对）
+- [x] 校验计划范围：只改 `src/shared/script-preamble.js`、`src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/ui.js`、相关测试和构建产物。
+- [x] 增加两个专用共享图标定义，按 24x24/安全区/统一线宽重绘。
+- [x] 将计划 ID 快捷查数与并发开启按钮切到新图标，并调整行内按钮热区、SVG fill/stroke、hover/focus 状态。
+- [x] 更新回归测试，锁定新图标、禁用填充式行内 SVG、保留并发按钮标识。
+- [x] 运行构建同步产物，并执行相关测试、语法检查、build check。
+- [x] 用 Chrome DevTools MCP 在真实页面只读验收两个图标渲染和按钮状态，不触发真实并发开启。
+- [x] 回填验证记录、风险和结果复盘。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`，本轮涉及 UI 运行态，必须真实页面验证可见状态，不以静态代码推断替代。
+- 已读取参考文章并提炼落地规则：功能性图标强调功能表达、工整规范；小尺寸图标要简练、可辨识、视觉重心稳定；24x24 画板内约 20x20 作图、安全区留白、整数坐标、统一线宽和端点。
+- 已定位实现面：按钮创建在 `src/main-assistant/campaign-id-quick-entry.js`，按钮样式在 `src/main-assistant/ui.js`，共享图标定义在 `src/shared/script-preamble.js`。
+- 已新增 `campaign-query` 与 `campaign-concurrent-start` 两个专用共享图标；快捷查数按钮表达“数据查询”，并发开启按钮表达“多行计划 + 启动”。
+- 已把两个按钮从通用 `search` / `layers-play` 切到专用图标，并把行内按钮从 11px 实际图形改为 20px 热区 + 14px 线性图标，修正 SVG `fill: currentColor` 导致的填充风险。
+- 已更新 `tests/campaign-concurrent-start-quick-entry.test.mjs` 与 `tests/icon-system-regression.test.mjs`，锁定专用图标名、SVG 路径、线性样式和按钮热区。
+- 根据用户截图反馈，已进一步删除“文档线/列表线”等多语义细节，把两枚行内图标收敛为简约放大镜与简约启动三角，使其更接近旁边原生铅笔图标的低复杂度轮廓。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/campaign-concurrent-start-quick-entry.test.mjs tests/icon-system-regression.test.mjs`：通过，11/11。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过，review-team 全部 PASS；全量回归 485 tests / 483 pass / 0 fail / 2 skipped。
+- Chrome DevTools MCP：
+  - 参考页面：`https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`。
+  - 首次检查发现页面仍是旧运行态，按钮仍为 `am-ui-icon-search` / `am-ui-icon-layers-play`、11px 图形；该轮未记为通过。
+  - 已在 `chrome://extensions/?id=cfegfgaodnfeigffdknhgciapojejflk` 点击 Reload，确认扩展从 `dist/extension` 加载，并强刷真实页面。
+  - 复测结果：`quickButtonCount=80`，`concurrentButtonCount=40`；首个快捷查数按钮为 `am-ui-icon-campaign-query`，路径为 `<circle cx="10" cy="10" r="5">` + `<path d="M14 14l5 5">`；首个并发开启按钮为 `am-ui-icon-campaign-concurrent-start`，路径为 `<path d="M8 6l10 6-10 6V6z">`。
+  - 按钮样式：20px x 20px 热区、2px padding、5px radius；SVG 为 14px x 14px、`fill: none`、`stroke: currentColor`、`stroke-width=2.1`、`viewBox=0 0 24 24`。
+  - 仅临时强制显示首行按钮做截图核验，截图保存到 `tasks/campaign-icons-verify.png`；随后已移除临时样式。
+  - 未点击快捷查数或并发开启按钮；网络列表未出现 `campaign/updatePart`、创建、提交或投放类请求。
+
+## 结果复盘
+- 根因：第一版把“数据查询/并发开启”表达拆成文档线、列表线和播放形，放到 20px 行内图标中后显得复杂，和页面原生铅笔图标的简洁程度不一致。
+- 修复：保留共享 SVG 体系和 20px 热区，但把图形收敛为放大镜与启动三角两个单一核心轮廓；按钮语义继续由 title/aria-label 和不同 data 标识承担。
+- 质量：测试锁定专用图标名、简约路径、线性 SVG、热区和焦点态；真实页面加载最新 extension 后已验证渲染生效。
+- 风险：真实页面仅做只读检查，没有点击两个按钮执行实际查数或并发开启，避免触发真实操作。
+
+---
+
+# TODO - 2026-05-25 组建计划矩阵隐藏态按需渲染
+
+## 需求规格
+- 目标：继续优化“组建计划”打开后的隐藏矩阵页渲染，减少默认首页打开时 `renderWorkbenchMatrixSummary()` 对矩阵维度卡片 DOM 的重建压力。
+- 约束：
+  - 不改变矩阵页入口、维度编辑、预设补齐、生成计划、预览摘要和提交请求语义；
+  - 不让隐藏或陈旧的矩阵 DOM 反向覆盖 `draft.matrixConfig`；
+  - 不点击真实生成计划、提交创建、投放入口；
+  - 不扩大到矩阵结构重写或重新拆包；
+  - 所有产物必须由 `npm run build` 同步。
+- 成功标准：
+  - 默认打开首页时矩阵维度列表 DOM 不重建，只保留摘要/统计轻量更新；
+  - 切到矩阵页时基于当前 draft 补渲染完整维度卡片；
+  - 矩阵页可见时编辑行仍能同步回 `draft.matrixConfig`；
+  - 相关测试、全量测试/review 和真实页面只读验证通过；
+  - 输出本轮前后性能对比与残余风险。
+
+## 执行计划（可核对）
+- [x] 启动 5 个子代理并行复核 matrix 同步、渲染边界、测试落点、浏览器验收和回归风险。
+- [x] 主线程阅读 `renderWorkbenchMatrixSummary()`、`syncMatrixConfigFromUI()`、`setWorkbenchPage()` 与矩阵事件处理调用链。
+- [x] 实施最小按需渲染：隐藏态只标 dirty，不重建维度卡片；矩阵页可见时补渲染。
+- [x] 防止隐藏/陈旧矩阵 DOM 回写 draft，确保可见编辑链路仍同步。
+- [x] 更新回归测试覆盖隐藏态跳过、切矩阵页补渲染、可见态同步。
+- [x] 同步构建产物并运行相关测试、全量测试、review、diff 检查。
+- [x] 用真实页面只读验证打开、切换矩阵页、编辑页，不触碰生成/提交/投放。
+- [x] 回填性能对比、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已回顾上一轮结论：矩阵 DOM 是剩余隐藏渲染压力，但存在 `syncMatrixConfigFromUI()` 从 DOM 回写 draft 的高风险耦合，本轮必须同时处理 source-of-truth 边界。
+- 已启动 5 个只读子代理：分别复核矩阵 source-of-truth、事件链路、测试落点、真实页面验收和性能/回滚风险。
+- 已实现矩阵维度行 guard：`renderWorkbenchMatrixSummary()` 在非矩阵页只标记 `matrixDimensionListDirty`，不重建 `matrixDimensionList.innerHTML`；矩阵页可见时才渲染并标记当前 scene。
+- 已收紧 `syncMatrixConfigFromUI()`：只有矩阵页可见、维度 DOM 已按当前 scene 渲染且未 dirty 时，才从 DOM 读取 `[data-matrix-dimension-row]` 回写 `draft.matrixConfig.dimensions`。
+- 已同步构建产物并完成矩阵定向测试、打开路径相关回归、全量测试和 review-team 门禁。
+- 已在真实 `one.alimama.com` 页面完成只读验收：默认首页打开未重建矩阵维度 DOM，切换矩阵页后按需补渲染，编辑页动态配置仍可见。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，25/25。
+- `node --test tests/matrix-plan-config.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-custom-native-parity-ui.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/keyword-plan-api-bridge-security.test.mjs`：通过，69/69。
+- `node --check dist/extension/page.bundle.js && node --check "阿里妈妈多合一助手.js"`：通过。
+- `npm run build:check`：通过。
+- `git diff --check`：通过。
+- `npm run check:syntax`：通过。
+- `npm run test`：通过，484 tests / 482 pass / 0 fail / 2 skipped。
+- `npm run review`：通过，review-team 全部 PASS。
+- Chrome DevTools MCP：
+  - 已在 `chrome://extensions/?id=cfegfgaodnfeigffdknhgciapojejflk` 点击 Reload，并强刷真实 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`。
+  - 运行态为 `mode=extension`，版本 `7.03`，`#am-trigger-keyword-plan-api` 文案为“组建计划”，`keyword-plan-api.bundle.js` 资源数为 0。
+  - 首轮点击“组建计划”：`clickReturnMs=2.1ms`，`overlayOpenMs=254.6ms`；首页可见、提交创建按钮可见、策略行 7 条；隐藏矩阵维度列表 `innerHTML` 写入次数为 0。
+  - 切到“矩阵页”：矩阵面板可见，维度列表 `innerHTML` 按需写入 1 次，矩阵区域非空；未点击 `#am-wxt-matrix-generate-plans`。
+  - 回首页并点击第一条“编辑计划”：详情页可见，动态配置控件数 33；未点击提交/创建/投放。
+  - 资源与请求审计：本轮交互 `resourceDelta=0`，监控到的 create/submit/launch/publish/batchCreate/campaignCreate fetch/xhr 数为 0。
+  - 热打开 5 次：全部正常打开，`clickReturnMs` median 0.6ms，`overlayOpenMs` median 169.0ms；每次首页打开时矩阵维度 DOM 写入次数均为 0。
+- 控制台仍有页面既有 `Uncaught (in promise)` 与 deprecated feature 噪声；本轮未发现由组建计划交互触发的真实创建/提交/投放请求。
+
+## 结果复盘
+- 根因：上一轮已延后预览、runtime、editor 和 candidate 重任务，但 `renderPreview()` 仍会触发 `renderWorkbenchMatrixSummary()`；该函数在首页隐藏态也会重建矩阵维度卡片 DOM。矩阵维度同时存在 DOM 回写 draft 的双向耦合，不能只跳过渲染，否则陈旧或空 DOM 可能覆盖 `draft.matrixConfig.dimensions`。
+- 修复：保持矩阵摘要、统计、输入、预设与按钮状态轻量更新，只把 `matrixDimensionList.innerHTML` 延迟到矩阵页可见时执行；隐藏态标记 dirty。`syncMatrixConfigFromUI()` 增加 source-of-truth guard，仅在矩阵页可见、列表已按当前 scene 渲染且未 dirty 时读取维度行。
+- 性能对比：原始缺陷复测点击路径约 1,467ms；上一轮隐藏 editor/candidate 后首轮 overlay 可见 369.6ms、热打开 median 288.1ms；本轮首轮 overlay 可见 254.6ms，较上一轮再降 115.0ms（约 -31.1%），较原始约 -82.6%。热打开 median 169.0ms，较上一轮 288.1ms 再降 119.1ms（约 -41.3%）。
+- 交互保持：组建计划首页、矩阵页补渲染、编辑计划动态配置均在真实页面验证可用；生成计划、提交创建、投放入口均未触碰。
+- 风险：本轮真实页面是当前草稿状态，矩阵为关闭态，未人工制造 5 维重矩阵草稿以避免污染用户会话；结构性收益已通过隐藏态 DOM 写入次数 0、切矩阵页补渲染 1 次证明。后续若继续压榨重矩阵场景，可在离线 fixture 或受控测试草稿中补充 heavy matrix browser benchmark。
+
+---
+
+# TODO - 2026-05-25 组建计划隐藏区域按需渲染
+
+## 需求规格
+- 目标：继续降低点击“组建计划”后的同步 DOM 渲染压力，把默认首页不可见区域的重渲染延后到用户进入对应区域时执行。
+- 约束：
+  - 不改变向导首页、编辑页、矩阵页、日志页的入口和交互语义；
+  - 不改变请求构建、提交创建、矩阵生成的业务输出；
+  - 不点击真实创建、投放、提交入口；
+  - 不扩大到重新拆包或大规模重构；
+  - 所有产物必须由 `npm run build` 同步。
+- 成功标准：
+  - 默认打开路径减少隐藏 editor/matrix/candidate 的同步渲染；
+  - 进入对应页面后 UI 仍完整补渲染；
+  - 相关回归测试、全量测试/review 和真实页面只读验证通过；
+  - 输出本轮前后性能对比和残余风险。
+
+## 执行计划（可核对）
+- [x] 启动 5 个子代理并行复核 editor、matrix、candidate、测试和浏览器验收风险。
+- [x] 主线程阅读 `fillUIFromDraft`、`applyStrategyToDetailForm`、`renderWorkbenchMatrixSummary`、`renderCandidateList` 的状态依赖。
+- [x] 选择最小侵入按需渲染点并实现，优先避免默认打开时渲染隐藏 editor/candidate。
+- [x] 更新回归测试，锁定默认打开路径不渲染隐藏重区域，进入页面后仍补渲染。
+- [x] 同步构建产物并运行相关测试、全量测试、review、diff 检查。
+- [x] 用真实页面只读验证打开、切换矩阵/编辑入口，不触碰提交创建。
+- [x] 回填性能对比、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已完成上一轮打开路径 after-paint 调度；本轮继续处理剩余可见性无关的隐藏区域 DOM 重绘。
+- 已启动 5 个只读子代理，分别复核 editor 动态表单、matrix DOM、candidate 列表、测试落点和真实页面验收方案。
+- 已采纳 editor/candidate 两个低风险点：默认打开和后台 runtime 初始化时跳过隐藏 editor 动态配置；候选商品列表在商品面板/弹窗不可见时只标记 dirty，不重建卡片 DOM。
+- 已根据子代理复核补上编辑页可见 guard：若 draft 恢复到 editor 或用户已进入 editor，即使打开路径传了 `renderDetailSceneDynamic: false`，仍强制补渲染动态配置，避免重开编辑页空白。
+- 已补充首页添加/清空商品 guard：编辑页不可见时只标记 `sceneDynamicDirty`，进入编辑计划后仍通过 `showStrategyDetail()` 完整补渲染动态配置。
+- 已暂缓 matrix DOM 按需渲染：`renderWorkbenchMatrixSummary` 与 `syncMatrixConfigFromUI()` 存在双向状态依赖，盲目跳过隐藏矩阵 DOM 可能让旧 DOM 覆盖 draft，本轮不把高风险矩阵 guard 混入。
+
+## 验证记录
+- `node --test tests/keyword-wizard-entry-regression.test.mjs`：通过，7/7。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-wizard-entry-regression.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-custom-native-parity-ui.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/keyword-plan-api-bridge-security.test.mjs`：通过，44/44。
+- `node --check dist/extension/page.bundle.js && node --check "阿里妈妈多合一助手.js"`：通过。
+- `npm run build:check`：通过。
+- `git diff --check`：通过。
+- `npm run check:syntax`：通过。
+- `npm run test`：通过，483 tests / 481 pass / 0 fail / 2 skipped。
+- `npm run review`：通过，review-team 全部 PASS。
+- Chrome DevTools MCP：本轮 `mcp__chrome_devtools__list_pages` 正常返回页面列表；已在 `chrome://extensions/?id=cfegfgaodnfeigffdknhgciapojejflk` 点击 Reload，并对真实 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` 执行强制刷新。
+- 真实页面运行态：`mode=extension`，版本 `7.03`，`#am-trigger-keyword-plan-api` 文案为“组建计划”，`keyword-plan-api.bundle.js` 资源数为 0。
+- 真实页面只读验证：
+  - 点击“组建计划”能打开 overlay；首轮记录 `clickReturnMs=6.0ms`、`overlayOpenMs=369.6ms`，可见提交创建按钮；未点击提交/创建/投放。
+  - 点击“添加商品”弹窗后候选商品列表补渲染，候选行 40，首行商品可见。
+  - 切到“矩阵页”后 `#am-wxt-keyword-matrix-config` 可见，矩阵摘要、预设列表、维度列表均非空；未点击“生成计划”。
+  - 切回首页并点击第一条“编辑计划”后详情弹层可见，动态配置控件数 33，字段回填正常。
+  - 页面内资源审计：本轮交互后 `keyword-plan-api/create/submit/launch/publish/batchCreate/campaignCreate` 命中 0，`keyword-plan-api.bundle.js` 命中 0。
+- 后续热打开 5 次采样：`btn.click()` 同步返回 median 0.8ms，overlay 可见 median 288.1ms；未出现点击卡死。
+- 控制台存在页面既有 `Uncaught (in promise)` 与 `ERR_TUNNEL_CONNECTION_FAILED` 噪声；本轮资源审计未出现真实创建/提交/投放请求。
+
+## 结果复盘
+- 根因：上一轮已把预览构建和 runtime 初始化移出点击同步任务，但 `renderWizardFromState -> fillUIFromDraft -> applyStrategyToDetailForm -> renderSceneDynamicConfig` 仍会在默认首页打开时重建隐藏 editor 动态配置；候选商品列表也会在默认隐藏态用 40 条候选商品重建卡片 DOM。
+- 修复：给 `applyStrategyToDetailForm`、`fillUIFromDraft`、`renderWizardFromState` 增加可见性参数链，默认打开和后台初始化跳过隐藏 editor 动态配置；若 draft/用户状态已经进入 editor，则强制补渲染，避免空白。候选列表在强制渲染、商品面板展开或商品弹窗可见时才重建 DOM，否则只标记 dirty。
+- 性能对比：原始缺陷复测点击返回约 1,467ms；上一轮打开路径轻量化首轮 overlay 可见 578.2ms；本轮真实页面首轮 overlay 可见 369.6ms，较原始约 -74.8%，较上一轮再减少 208.6ms（约 -36.1%）。热打开 overlay 可见 median 288.1ms，同步 click 返回 median 0.8ms。
+- 交互保持：组建计划入口、候选商品弹窗、矩阵页、编辑计划详情页均在真实页面验证可用；请求构建/提交创建链路未改，且未触碰真实提交按钮。
+- 风险：矩阵 DOM 仍会随预览摘要重建；子代理确认矩阵页有 DOM 回写 draft 的双向依赖，本轮暂不做 matrix lazy guard，避免隐藏旧 DOM 覆盖 `draft.matrixConfig`。后续若继续优化矩阵，需要同时改 `syncMatrixConfigFromUI()` 的 source-of-truth 判断。
+
+---
+
+# TODO - 2026-05-25 组建计划打开路径轻量化
+
+## 需求规格
+- 目标：在不改变现有交互的前提下，继续优化“组建计划”点击后的打开路径，降低同步渲染和重复计算造成的卡顿风险。
+- 约束：
+  - 不再采用点击时加载完整关键词大包的方案；
+  - 不改变向导 DOM id、按钮、矩阵配置、预览、提交创建链路语义；
+  - 不点击真实创建、投放、提交入口；
+  - 只做最小侵入优化，保持 userscript 与 extension 行为一致；
+  - 所有构建产物必须由 `npm run build` 生成。
+- 成功标准：
+  - 定位打开路径中的主要同步瓶颈或重复工作；
+  - 点击“组建计划”能稳定打开向导，首帧/返回耗时不劣化；
+  - 相关测试、构建校验、全量测试/review 通过；
+  - 输出本轮修改前后的打开路径或构建性能对比。
+
+## 执行计划（可核对）
+- [x] 启动 5 个子代理并行复核打开路径、重复渲染、测试、构建风险和验收方案。
+- [x] 主线程阅读 `openWizard`、`renderWizardFromState`、`refreshWizardPreview` 关键路径，确认最小可改点。
+- [x] 实施打开路径轻量化改动，避免重复同步预览/渲染。
+- [x] 同步构建产物并更新/新增针对性回归测试。
+- [x] 运行构建、相关测试、全量测试、review 和 diff 检查。
+- [x] 通过真实页面只读方式验证“组建计划”点击打开，不触碰真实提交。
+- [x] 回填性能对比、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认本轮不再尝试把完整 `keyword-plan-api` 放到点击时加载，避免复发“点击组建计划卡死浏览器”。
+- 已启动 5 个只读子代理：分别复核 `openWizard` 调用链、`renderWizardFromState/refreshWizardPreview` 同步工作、回归测试、构建产物遗留和真实页面验收方案。
+- 已定位点击打开路径的同步瓶颈：`openWizard()` 首次调用 `renderWizardFromState({ clearLogs: true })` 时会立即进入 `refreshWizardPreview()`，而该函数会 `buildRequest()`、同步读取 UI/draft、生成 plans/matrix preview 并写入预览 DOM；这些工作发生在 overlay 加 `open` class 之前。
+- 已修改 `src/optimizer/keyword-plan-api/wizard-open-and-create.js`：首次打开先 `renderWizardFromState({ clearLogs: true, refreshPreview: false })` 渲染表单、列表和按钮，再把 overlay 打开，随后用 `requestAnimationFrame` + `setTimeout` 延后刷新预览；用 `openToken` 避免旧 open 的延迟任务回写。
+- 已根据子代理复核继续收敛：场景 spec 刷新、候选商品加载和 runtime 默认值初始化也统一放到 overlay 打开后的下一帧后执行；runtime 初始化后的二次 `renderWizardFromState()` 同样跳过同步预览，改为调度预览刷新。
+- 已更新 `tests/keyword-wizard-entry-regression.test.mjs`，锁定“点击同步任务不构建预览”和“不得点击时懒加载完整 keyword 大包”的回归约束；定向测试已通过。
+
+## 验证记录
+- `node --test tests/keyword-wizard-entry-regression.test.mjs`：通过，5/5。
+- `node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-wizard-entry-regression.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/build-output-sync.test.mjs`：通过，25/25。
+- `node --check dist/extension/page.bundle.js && node --check "阿里妈妈多合一助手.js"`：通过。
+- lazy split 残留搜索：`keyword-plan-api.bundle`、`keywordPlanApiBundle`、`KEYWORD_PLAN_LAZY`、`loadKeywordPlanApiForExtension`、`am-helper-pro-extension-keyword-plan-bundle` 在 `src/scripts/tests/dist` 和根 userscript 中无命中。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run test`：通过，481 tests / 479 pass / 0 fail / 2 skipped。
+- `npm run review`：通过，review-team 全部 PASS。
+- Chrome DevTools MCP：`mcp__chrome_devtools__list_pages` 仍返回 `Network.enable timed out`。
+- 直接 CDP 真实页面验证：页面为 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`，运行态 `mode=extension`、版本 `7.03`；点击“组建计划”5 轮均能打开 overlay 并看到 `提交创建`，未点击真实提交/创建/投放入口。
+- 直接 CDP 只读性能：首轮 `btn.click()` 同步返回 1.2ms，首轮 overlay 可见 578.2ms；热打开 `btn.click()` 同步返回 median 0.8ms；5 轮相关资源（`keyword-plan-api/create/submit/launch/publish/batchCreate/campaignCreate`）为 0，`keyword-plan-api.bundle.js` 为 0。
+- Chrome extension 管理页 direct CDP reload 尝试：`chrome://extensions/?id=cfegfgaodnfeigffdknhgciapojejflk` 的 `Runtime.evaluate` 超时，未将该步骤记为通过；后续通过真实页面重新导航与运行态检查完成只读验收。
+- 当前构建体积/compile 复测：`dist/extension/content.js` 4,161 raw / 1,427 gzip / compile median 0.058ms；`dist/extension/page.bundle.js` 3,837,089 raw / 595,820 gzip / compile median 47.431ms；根 userscript 3,745,007 raw / 576,732 gzip / compile median 46.037ms。
+
+## 结果复盘
+- 根因：修复点击懒加载大包后，`openWizard()` 仍把预览构建、场景 spec 扫描、候选列表加载和 runtime 默认值初始化压在打开链路早期，其中预览构建会同步 `buildRequest()`、物化 plans/matrix 并写预览 DOM；场景 spec 扫描还可能在首个 `await` 前做大量 DOM 查询。
+- 修复：打开时先渲染基础表单和列表，立即让 overlay 进入打开状态；预览刷新、场景 spec、候选加载和 runtime 默认值初始化全部经 `requestAnimationFrame` + `setTimeout` 延后到下一帧后执行；runtime 初始化后的二次渲染不再同步构建预览。
+- 性能对比：上一轮修复后的真实页面单次点击记录为 1,467ms 返回；本轮真实页面首轮同步点击返回 1.2ms、overlay 可见 578.2ms，按首轮 overlay 口径约减少 888.8ms（约 -60.6%）。热打开同步点击返回 median 0.8ms。
+- 交互保持：按钮、overlay、`提交创建` 可见性、extension open bridge 和完整 page API debug 边界保持不变；真实页面 5 轮只读点击未出现提交/创建/投放请求。
+- 风险：候选商品、场景配置和预览摘要现在会晚一帧到数百毫秒更新；首页打开体验更快，但若用户极快切到矩阵/编辑页，仍依赖后续异步渲染完成。已有 `openToken` 和 `visible` 检查阻止旧打开任务回写。
+- 后续更大收益应继续专项拆分隐藏 editor/matrix 渲染和矩阵预览物化，不再把完整关键词大包放回点击路径。
+
+---
+
+# TODO - 2026-05-25 修复组建计划点击卡死
+
+## 需求规格
+- 目标：修复用户反馈的点击“组建计划”导致浏览器卡死问题，优先恢复点击稳定性。
+- 约束：
+  - 不改变 userscript 分发形态；
+  - 不改变组建计划按钮、向导打开、debug page API 和提交链路语义；
+  - 不点击真实创建、投放、提交入口；
+  - 不回退本轮已修好的构建同步校验和 bridge host 方法白名单。
+- 成功标准：
+  - extension 点击“组建计划”不再承担首次解析/执行 2.8MB 关键词大包；
+  - 构建产物同步，相关静态测试和全量 review 通过；
+  - `tasks/lessons.md` 沉淀本次教训；
+  - 若 Chrome DevTools MCP 仍不可用，必须如实记录验证阻塞。
+
+## 执行计划（可核对）
+- [x] 记录缺陷教训，明确点击路径不能承担大包首次解析。
+- [x] 回滚 extension 点击时懒加载关键词大包，恢复 `KeywordPlanApi` 随 page runtime 初始化。
+- [x] 保留并复核构建同步校验、bridge method 白名单等非问题修复。
+- [x] 更新测试断言，防止再次把大包首解析挪到点击路径。
+- [x] 运行构建、相关测试、全量测试/review、性能复测。
+- [x] 尝试真实页面只读验证；Chrome DevTools MCP 仍阻塞，但直接 CDP 验证通过。
+
+## 高层操作摘要
+- 已确认根因优先级：性能拆包把 2.8MB 关键词运行时首次解析/执行转移到“组建计划”点击链路，是点击卡死的高风险来源；本轮先恢复稳定交互。
+- 已更新 `tasks/lessons.md` 的 L43，要求后续性能拆包不能把大包首次解析转移到高频点击路径。
+- 已恢复 extension `page.bundle.js` 包含完整 `keyword-plan-api` 主体，取消 `keyword-plan-api.bundle.js` 产物、manifest 暴露、content dataset 和 page runtime resources。
+- 已保留上轮正确的质量改进：`npm run build:check` 逐个比对文本产物和 extension 图标；完整 page API bridge host 校验 `API_BRIDGE_METHODS` 白名单。
+- 已更新测试：extension page runtime 必须包含 keyword 切片；manifest/content/page bundle 不得引用 `keyword-plan-api.bundle.js`；点击路径不得出现 `loadKeywordPlanApiForExtension` / `KEYWORD_PLAN_LAZY` / lazy script 标识。
+
+## 验证记录
+- `npm run build`：通过，extension summary 只包含 `page.bundle.js`，不再生成 `keyword-plan-api.bundle.js`。
+- `node --test tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/build-output-sync.test.mjs`：通过，24/24。
+- `node --check dist/extension/page.bundle.js && node --check "阿里妈妈多合一助手.js"`：通过。
+- 静态产物探针：manifest `web_accessible_resources=["page.bundle.js"]`；`content.js` 不含 `keyword-plan-api.bundle.js`；`page.bundle.js` 含 `KeywordPlanApi`，不含 lazy loader。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run test`：通过，480 tests / 478 pass / 0 fail / 2 skipped。
+- `npm run review`：通过，review-team 全部 PASS。
+- 性能复测：extension 当前首包关键路径 `content.js + page.bundle.js` 为 3,839,328 raw / 596,971 gzip / 69,937 行；本轮有意放弃点击时拆包收益，换取点击稳定性。
+- Chrome DevTools MCP：`mcp__chrome_devtools__list_pages` 仍返回 `Network.enable timed out`，但 9222 HTTP endpoint 健康。
+- 直接 CDP 只读验证：已在 `chrome://extensions/?id=cfegfgaodnfeigffdknhgciapojejflk` 点击目标扩展 reload；新打开真实 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` 后，运行态 `mode=extension`、`version=7.03`、`resources=null`、`lazyScript=false`、`keyword-plan-api.bundle` 资源数为 0。
+- 直接 CDP 点击验证：点击 `#am-trigger-keyword-plan-api` 后 1,467ms 返回，`#am-wxt-keyword-overlay.open=true`，可见 `提交创建`，`lazyScript=false`，未出现 `keyword-plan-api.bundle.js`，未出现 `create/submit/launch` 类资源；未点击任何真实提交/投放入口。
+
+## 结果复盘
+- 根因：上轮 extension-only lazy split 虽降低首包体积，但把 `keyword-plan-api` 的首次解析、执行和向导打开集中到用户点击“组建计划”的同一条路径，真实页面中会造成浏览器长时间无响应。
+- 修复：撤销点击时懒加载大包，恢复关键词运行时随 extension page runtime 初始化；点击时只执行已有的 open bridge / `openWizard`。
+- 保留：构建产物同步校验和 page API host 方法白名单是独立正确修复，继续保留。
+- 风险：extension 首包体积回到约 3.84MB，后续若继续优化，需要走 idle 预热、真正模块级懒加载或拆分向导内部重计算，不能直接把完整大包放到点击路径。
+- 回滚方式：如需回到 lazy split，可恢复 `EXTENSION_KEYWORD_PLAN_API_SEGMENTS`、manifest lazy resource、content dataset 与 lazy bridge 文件；但必须先通过真实页面点击验收。
+
+---
+
+# TODO - 2026-05-25 Extension 关键词建计划按需拆包
+
+## 需求规格
+- 目标：执行“先拆大包”性能优化，把 MV3 extension `document_start` 首包中的 `keyword-plan-api` 主体移到按需加载资源，降低页面早期 JS 解析与内存压力。
+- 约束：
+  - 不改变 userscript 单文件分发形态；
+  - 不延后授权守卫、GM 兼容、主助手、算法护航入口执行时序；
+  - 保持 `#am-trigger-keyword-plan-api`、open bridge、完整 debug API 的交互语义；
+  - 不手改发布产物，必须从 `src/` / `scripts/` 修改后通过 `npm run build` 生成；
+  - 真实页面验证只读，不点击真实创建、投放、确认提交入口。
+- 成功标准：
+  - `dist/extension/page.bundle.js` 不再包含完整 `keyword-plan-api` 主体；
+  - 新增按需资源能在首次点击“组建计划”时加载并打开向导；
+  - 重复点击不重复注入，加载失败有当前页可见反馈；
+  - extension 首包 raw/gzip/parse 指标明显下降；
+  - 构建、测试、review 和真实页面只读验收通过。
+
+## 执行计划（可核对）
+- [x] 复核现有 IIFE/切片依赖，确定 extension-only 懒加载边界。
+- [x] 修改构建脚本，输出 `keyword-plan-api.bundle.js` 并把它加入 extension 可访问资源。
+- [x] 修改 extension 主包 bridge，首次 open/debug API 调用时加载 keyword bundle，保留 userscript 直连行为。
+- [x] 增加/更新静态回归测试，覆盖拆包、manifest、懒加载桥和失败反馈。
+- [x] 构建同步产物，运行最小相关测试、全量测试、review、diff 检查。
+- [x] 复测拆包前后体积/parse 指标；Chrome DevTools MCP 真实页面验收因工具通道超时已记录阻塞。
+- [x] 回填验证记录、性能对比、风险和回滚方式。
+
+## 高层操作摘要
+- 已确认关键实现约束：当前构建靠字符串拼接共享 IIFE 作用域，不能简单把 `KEYWORD_PLAN_API_SEGMENTS` 从 `page.bundle.js` 移出；extension 需要一个能自洽执行并暴露 API/bridge 的按需关键词运行时。
+- 已启动 5 个只读子代理分别复核构建拆包、runtime bridge、测试覆盖、性能口径和浏览器验收方案。
+- 已调整 `scripts/build.mjs`：extension `page.bundle.js` 排除完整 `keyword-plan-api` 切片，新增 `dist/extension/keyword-plan-api.bundle.js`，manifest `web_accessible_resources` 覆盖新资源；userscript 仍保持单文件包含完整 `KeywordPlanApi`。
+- 已调整 extension 注入链路：`content.js` 把 lazy bundle URL 通过 dataset 传给 `extension-page-compat.js`，页面运行态记录到 `window.__AM_PLATFORM_RUNTIME__.resources.keywordPlanApiBundle`。
+- 已调整 bridge：默认只保留 `openWizard` 窄桥；首次打开组建计划或 debug page API 时再注入 `#am-helper-pro-extension-keyword-plan-bundle`；pending Promise 和固定 script id 避免重复注入。
+- 子代理发现并已修复 P1：lazy bundle 在严格模式下直接写不可写的 `__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__` 会抛异常；现改为幂等 helper 写入，并保留 lazy ready event。
+- 子代理发现并已修复 P2/P3：运行时半初始化失败后可移除旧 script 再重试；完整 page API bridge host 侧也校验 `API_BRIDGE_METHODS` 白名单。
+- 子代理发现并已修复构建同步缺口：`npm run build:check` 现在逐个比对根 userscript、`dist/packages/*`、`dist/extension/*.js/json` 文本产物，并校验 extension 图标产物同步。
+- 已补强测试：extension page runtime 与 `KEYWORD_PLAN_API_SEGMENTS` 必须零交集；lazy bundle 顺序用完整 `deepEqual` 锁定；产物级 denylist 覆盖 `KeywordPlanRuntime`、`KeywordPlanWizardStore`、`KeywordPlanPreviewExecutor`；lazy ready 幂等写入、加载状态重试、host method 白名单和所有文本产物同步均有断言。
+
+## 验证记录
+- `npm run build`：通过，已生成根 userscript、`dist/packages`、`dist/extension/page.bundle.js` 和新增 `dist/extension/keyword-plan-api.bundle.js`。
+- `node --check dist/extension/page.bundle.js && node --check dist/extension/keyword-plan-api.bundle.js && node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/build-output-sync.test.mjs`：通过，25/25。
+- `npm run build:check`：通过，已校验所有文本产物与 extension 图标同步。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run test`：通过，481 tests / 479 pass / 0 fail / 2 skipped。
+- `npm run review`：通过，review-team 全部 PASS。
+- 性能复测口径：gzip 使用 Node `zlib.gzipSync` 默认参数；行数用 `text.split('\n').length`；compile 指标为同一 Node 进程内 13 轮追加唯一注释后 `new vm.Script(...)` median，仅作本地 parse/compile 代理指标。
+- 性能对比：
+  - 修改前 extension `document_start` critical path（`content.js + page.bundle.js`）：3,837,166 raw / 596,609 gzip / 69,894 行 / compile median 57.396 ms。
+  - 修改后 extension `document_start` critical path：1,042,028 raw / 196,073 gzip / 21,295 行 / compile median 26.320 ms。
+  - 差异：raw -2,795,138 bytes（-72.84%），gzip -400,536 bytes（-67.14%），行数 -48,599（-69.53%），compile median -31.076 ms（-54.14%）。
+  - 修改后按需资源 `dist/extension/keyword-plan-api.bundle.js`：2,834,987 raw / 410,228 gzip / 49,506 行 / compile median 60.840 ms；不计入首屏 `document_start`，首次打开组建计划时加载。
+  - 修改后 userscript 单文件：3,747,664 raw / 577,174 gzip / 67,638 行 / compile median 189.509 ms；分发形态保持单文件。
+- Chrome DevTools MCP 真实页面验收：`curl http://127.0.0.1:9222/json/version` 返回健康 `webSocketDebuggerUrl`，`/json/list` 可看到真实 `one.alimama.com/index.html#!/manage/search?...` 页面；但 `mcp__chrome_devtools__list_pages` 120s 超时，`mcp__chrome_devtools__new_page about:blank` 返回 `Network.enable timed out`。
+- 已按技能尝试 `bash scripts/recover-chrome-devtools-mcp.sh "https://one.alimama.com/"`，脚本在“固化 Codex MCP 配置”阶段失败：引用的 Codex vendor 可执行文件路径不存在（`ENOENT .../codex-darwin-arm64/.../codex`）。直接 CDP 诊断也在 Runtime 启用阶段卡住，已终止挂起进程。因此真实 extension runtime MCP 验收未完成，不能登记为通过。
+
+## 结果复盘
+- 根因：extension 在 `document_start` 立即注入完整 `page.bundle.js`，其中 `keyword-plan-api` 主体约 2.83 MB，包含大量只在“组建计划”向导首次打开时才需要的配置、渲染和提交链路，导致页面早期 JS 解析和内存压力偏高。
+- 修复：保持 userscript 单文件不变；仅在 MV3 extension 中把关键词建计划主体拆成 `keyword-plan-api.bundle.js`，首包保留授权守卫、GM 兼容、主助手、算法护航和 `openWizard` 窄桥。
+- 后续状态：该方案触发“点击组建计划卡死浏览器”缺陷，已在上方 `修复组建计划点击卡死` 任务中撤销点击时懒加载大包，恢复关键词运行时随 page bundle 初始化。
+- 交互保持：`#am-trigger-keyword-plan-api` 仍通过 open bridge 打开向导；完整 page API 仍只在 `localStorage.__AM_WXT_DEBUG_PAGE_API__ === '1'` 时暴露；debug 开关是调试面，不作为安全边界。
+- 主要收益：extension 首屏关键路径 raw 下降 72.84%，gzip 下降 67.14%，本地 compile median 下降 54.14%；总体 extension JS 总量基本不变，收益来自把大模块移出 `document_start`。
+- 风险：真实 Chrome DevTools MCP 运行态验收因当前工具通道阻塞未完成；已用构建产物、静态测试、全量测试和 review 证明拆包形态与桥接不变量，但仍建议在 MCP 恢复后按子代理给出的 extension-only 步骤做一次真实点击验证。
+- 回滚方式：把 `EXTENSION_PAGE_RUNTIME_SEGMENTS` 恢复为完整 `CORE_RUNTIME_SEGMENTS` 形态，移除 `keyword-plan-api.bundle.js` 生成与 lazy bridge 改动，运行 `npm run build` 同步产物。
+
+---
+
 # TODO - 2026-05-25 加载性能优化与对比
 
 ## 需求规格

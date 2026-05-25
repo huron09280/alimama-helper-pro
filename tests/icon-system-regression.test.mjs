@@ -7,7 +7,7 @@ const read = (relativePath) => readFileSync(new URL(`../${relativePath}`, import
 test('共享图标体系使用 24x24 线性 SVG 渲染入口', () => {
   const preamble = read('src/shared/script-preamble.js');
   assert.match(preamble, /const AM_ICON_DEFS = \{[\s\S]*'shield-check'[\s\S]*'chevron-down'/, '缺少共享图标定义');
-  for (const iconName of ['plus', 'multiply', 'user', 'sparkles', 'external-link']) {
+  for (const iconName of ['plus', 'multiply', 'edit', 'user', 'sparkles', 'external-link', 'campaign-query', 'campaign-concurrent-start']) {
     assert.match(preamble, new RegExp(`${iconName}:|'${iconName}':`), `共享图标定义缺少 ${iconName}`);
   }
   assert.match(preamble, /const renderAmIcon = \(name, options = \{\}\) => \{[\s\S]*viewBox="\$\{icon\.viewBox \|\| '0 0 24 24'\}"/, '图标渲染器未默认使用 24x24 画板');
