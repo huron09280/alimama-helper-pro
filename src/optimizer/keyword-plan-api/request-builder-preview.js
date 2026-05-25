@@ -2736,11 +2736,11 @@
             wizardState.els.previewBtn.onclick = handlePreview;
             wizardState.els.previewQuickBtn.onclick = handleGenerateOtherStrategies;
 
-            const handleRun = async () => {
+            const resolveWizardRunPayload = (options = {}) => {
                 const req = KeywordPlanRequestBuilder.buildRequestFromWizard();
                 if (!req.plans.length) {
                     appendWizardLog('请先添加商品并勾选策略后再创建', 'error');
-                    return;
+                    return null;
                 }
                 const planNameCheck = validatePlanNameUniqueness(req);
                 if (!planNameCheck.ok) {
@@ -2756,8 +2756,8 @@
                             'error'
                         );
                     }
-                    appendWizardLog('请修改计划名后再提交，当前已拦截提交', 'error');
-                    if (wizardState.els.preview) {
+                        appendWizardLog('请修改计划名后再提交，当前已拦截提交', 'error');
+                    if (options.writeBlockedPreview !== false && wizardState.els.preview) {
                         wizardState.els.preview.textContent = JSON.stringify({
                             sceneName: req.sceneName,
                             blocked: true,
@@ -2767,14 +2767,72 @@
                             existingPlanNameCount: planNameCheck.existingPlanNameCount
                         }, null, 2);
                     }
-                    return;
+                    return null;
                 }
                 const sceneRequests = buildSceneRequestsFromWizard(req)
                     .filter(sceneReq => Array.isArray(sceneReq?.plans) && sceneReq.plans.length);
                 if (!sceneRequests.length) {
                     appendWizardLog('未识别到可提交的场景计划，请检查策略场景设置', 'error');
-                    return;
+                    return null;
                 }
+                return {
+                    req,
+                    sceneRequests
+                };
+            };
+
+            const openKeywordSubmitConfirmPopup = async ({ req = {}, sceneRequests = [] } = {}) => {
+                const planCount = Array.isArray(req?.plans) ? req.plans.length : 0;
+                const itemCount = Array.isArray(wizardState?.addedItems) ? wizardState.addedItems.length : 0;
+                const budgetText = formatWizardBudgetAmount(calculateWizardBudgetTotal());
+                const mode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'serial');
+                const modeText = submitModeLabel(mode);
+                const sceneSummaryText = (Array.isArray(sceneRequests) ? sceneRequests : [])
+                    .map(item => `${item.sceneName}×${Array.isArray(item?.plans) ? item.plans.length : 0}`)
+                    .filter(Boolean)
+                    .join('、') || '未识别场景';
+                return openBatchStrategyPopupDialog({
+                    title: '确认提交创建',
+                    dialogClassName: 'am-wxt-scene-popup-dialog-submit-confirm',
+                    cancelLabel: '取消',
+                    saveLabel: '确认提交创建',
+                    bodyHtml: `
+                        <div class="am-wxt-submit-confirm" data-submit-confirm-dialog="1">
+                            <div class="am-wxt-submit-confirm-grid">
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>计划数</span>
+                                    <strong data-submit-confirm-plan-count="1">${planCount}</strong>
+                                </div>
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>预算合计</span>
+                                    <strong data-submit-confirm-budget="1">${Utils.escapeHtml(budgetText)}</strong>
+                                </div>
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>商品数</span>
+                                    <strong data-submit-confirm-item-count="1">${itemCount}</strong>
+                                </div>
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>提交方式</span>
+                                    <strong data-submit-confirm-mode="1">${Utils.escapeHtml(modeText)}</strong>
+                                </div>
+                            </div>
+                            <div class="am-wxt-submit-confirm-scenes" data-submit-confirm-scenes="1">${Utils.escapeHtml(sceneSummaryText)}</div>
+                            <div class="am-wxt-submit-confirm-risk">确认后会调用创建接口，请再次核对计划名、预算、商品和提交方式。本弹窗关闭或取消不会提交。</div>
+                        </div>
+                    `,
+                    onSave() {
+                        return {
+                            ok: true,
+                            confirmed: true
+                        };
+                    }
+                });
+            };
+
+            const handleRun = async () => {
+                const runPayload = resolveWizardRunPayload({ writeBlockedPreview: true });
+                if (!runPayload) return;
+                const { req, sceneRequests } = runPayload;
                 const runCount = req.plans.length || 0;
                 KeywordPlanPreviewExecutor.renderPreview(req);
                 const sceneSummaryText = sceneRequests.map(item => `${item.sceneName}×${item.plans.length}`).join('、');
@@ -3016,8 +3074,19 @@
                     }
                 }
             };
+            const handleRunQuickWithConfirm = async () => {
+                const runPayload = resolveWizardRunPayload({ writeBlockedPreview: true });
+                if (!runPayload) return;
+                KeywordPlanPreviewExecutor.renderPreview(runPayload.req);
+                const confirmResult = await openKeywordSubmitConfirmPopup(runPayload);
+                if (!confirmResult?.confirmed) {
+                    appendWizardLog('已取消提交创建');
+                    return;
+                }
+                await handleRun();
+            };
             wizardState.els.runBtn.onclick = handleRun;
-            wizardState.els.runQuickBtn.onclick = handleRun;
+            wizardState.els.runQuickBtn.onclick = handleRunQuickWithConfirm;
             if (wizardState.els.addStrategyBtn) {
                 wizardState.els.addStrategyBtn.onclick = () => {
                     addNewStrategy();

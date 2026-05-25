@@ -8,7 +8,10 @@
                 <div id="am-wxt-keyword-detail-backdrop"></div>
                 <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true">
                     <div class="am-wxt-header">
-                        <span>关键词推广批量建计划 API 向导</span>
+                        <div class="am-wxt-header-main">
+                            <span>关键词推广批量建计划 API 向导</span>
+                            <span class="am-wxt-runtime-pill">向导就绪</span>
+                        </div>
                         <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
                     <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
@@ -17,6 +20,20 @@
                         <button type="button" class="am-wxt-btn" data-workbench-page="previewlog">日志页</button>
                     </div>
                     <div class="am-wxt-body">
+                        <div class="am-wxt-home-summary" id="am-wxt-keyword-home-summary" data-workbench-page-panel="home">
+                            <div class="am-wxt-home-stat">
+                                <span class="am-wxt-home-stat-label">已添加商品</span>
+                                <strong><span id="am-wxt-keyword-summary-added">0</span> / ${WIZARD_MAX_ITEMS}</strong>
+                            </div>
+                            <div class="am-wxt-home-stat">
+                                <span class="am-wxt-home-stat-label">已选计划</span>
+                                <strong id="am-wxt-keyword-summary-strategy">0</strong>
+                            </div>
+                            <div class="am-wxt-home-stat">
+                                <span class="am-wxt-home-stat-label">预算合计</span>
+                                <strong id="am-wxt-keyword-summary-budget">0元</strong>
+                            </div>
+                        </div>
                         <div class="am-wxt-split" id="am-wxt-keyword-item-split" data-workbench-page-panel="home">
                             <div class="am-wxt-panel am-wxt-panel-candidate">
                                 <div class="am-wxt-toolbar">
@@ -29,11 +46,13 @@
                                 <div class="am-wxt-list" id="am-wxt-keyword-candidate-list"></div>
                             </div>
                             <div class="am-wxt-panel">
-                                <div class="am-wxt-toolbar">
+                                <div class="am-wxt-toolbar am-wxt-product-toolbar">
                                     <span>已添加商品 <b id="am-wxt-keyword-added-count">0</b> / ${WIZARD_MAX_ITEMS}</span>
-                                    <button class="am-wxt-btn" id="am-wxt-keyword-toggle-candidate">添加商品</button>
-                                    <button class="am-wxt-btn am-wxt-toggle-candidate-list-btn hidden" id="am-wxt-keyword-toggle-candidate-list">展开更多</button>
-                                    <button class="am-wxt-btn" id="am-wxt-keyword-clear-added">清空</button>
+                                    <div class="am-wxt-toolbar-actions">
+                                        <button class="am-wxt-btn" id="am-wxt-keyword-toggle-candidate">添加商品</button>
+                                        <button class="am-wxt-btn am-wxt-toggle-candidate-list-btn hidden" id="am-wxt-keyword-toggle-candidate-list">展开更多</button>
+                                        <button class="am-wxt-btn" id="am-wxt-keyword-clear-added">清空</button>
+                                    </div>
                                 </div>
                                 <div class="am-wxt-list" id="am-wxt-keyword-added-list"></div>
                             </div>
@@ -42,6 +61,7 @@
                         <div class="am-wxt-strategy-board" data-workbench-page-panel="home">
                             <div class="am-wxt-strategy-head">
                                 <div class="am-wxt-strategy-head-main">
+                                    <span class="am-wxt-strategy-section-title">计划配置</span>
                                     <button class="am-wxt-btn" id="am-wxt-keyword-add-strategy">新建计划</button>
                                     <span>已选 <b id="am-wxt-keyword-strategy-count">0</b> 个</span>
                                 </div>
@@ -62,34 +82,40 @@
                                 </div>
                             </div>
                             <div class="am-wxt-strategy-list" id="am-wxt-keyword-strategy-list"></div>
-                            <div class="am-wxt-actions">
-                                <div class="am-wxt-run-mode-wrap" id="am-wxt-keyword-run-mode-wrap">
-                                    <button class="am-wxt-btn primary" id="am-wxt-keyword-run-quick">立即投放</button>
-                                    <button
-                                        type="button"
-                                        class="am-wxt-btn am-wxt-run-mode-toggle"
-                                        id="am-wxt-keyword-run-mode-toggle"
-                                        aria-label="提交方式"
-                                        aria-haspopup="menu"
-                                        aria-expanded="false"
-                                        data-open="0"
-                                    ></button>
-                                    <div class="am-wxt-run-mode-menu hidden" id="am-wxt-keyword-run-mode-menu" role="menu">
-                                        <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
-                                            <span class="am-wxt-run-mode-label">并发数</span>
-                                            <span class="am-wxt-run-mode-count" data-action="run-mode-count-badge" title="点击增加，右键减少，滚轮可调节">
-                                                <span class="am-wxt-run-mode-count-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
-                                                <span class="am-wxt-run-mode-count-num" data-submit-mode-count="parallel">${Math.max(1, toNumber(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 1))}</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="am-wxt-run-mode-item" data-submit-mode="serial" role="menuitem">
-                                            <span class="am-wxt-run-mode-label">单条</span>
-                                        </button>
+                            <div class="am-wxt-strategy-footer">
+                                <div class="am-wxt-submit-summary" id="am-wxt-keyword-submit-summary">将提交 0 个计划 / 预算合计 0元 / 提交方式：单条</div>
+                                <div class="am-wxt-actions am-wxt-primary-actions">
+                                    <button class="am-wxt-btn" id="am-wxt-keyword-preview-quick">生成其他策略</button>
+                                    <div class="am-wxt-run-mode-wrap" id="am-wxt-keyword-run-mode-wrap">
+                                        <button class="am-wxt-btn primary" id="am-wxt-keyword-run-quick">提交创建</button>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-btn am-wxt-run-mode-toggle"
+                                            id="am-wxt-keyword-run-mode-toggle"
+                                            aria-label="提交方式"
+                                            aria-haspopup="menu"
+                                            aria-expanded="false"
+                                            data-open="0"
+                                        ></button>
+                                        <div class="am-wxt-run-mode-menu hidden" id="am-wxt-keyword-run-mode-menu" role="menu">
+                                            <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
+                                                <span class="am-wxt-run-mode-label">并发数</span>
+                                                <span class="am-wxt-run-mode-count" data-action="run-mode-count-badge" title="点击增加，右键减少，滚轮可调节">
+                                                    <span class="am-wxt-run-mode-count-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
+                                                    <span class="am-wxt-run-mode-count-num" data-submit-mode-count="parallel">${Math.max(1, toNumber(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 1))}</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="am-wxt-run-mode-item" data-submit-mode="serial" role="menuitem">
+                                                <span class="am-wxt-run-mode-label">单条</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <button class="am-wxt-btn" id="am-wxt-keyword-preview-quick">生成其他策略</button>
                             </div>
-                            <div id="am-wxt-keyword-quick-log"></div>
+                            <div class="am-wxt-quick-log-panel">
+                                <div class="am-wxt-quick-log-title">执行日志</div>
+                                <div id="am-wxt-keyword-quick-log"></div>
+                            </div>
                         </div>
 
                         <div class="am-wxt-config collapsed" id="am-wxt-keyword-detail-config" data-workbench-page-panel="editor">
@@ -350,6 +376,10 @@
                 addAllBtn: overlay.querySelector('#am-wxt-keyword-add-all'),
                 itemSplit: overlay.querySelector('#am-wxt-keyword-item-split'),
                 strategyBoard: overlay.querySelector('.am-wxt-strategy-board'),
+                homeSummary: overlay.querySelector('#am-wxt-keyword-home-summary'),
+                summaryAddedCount: overlay.querySelector('#am-wxt-keyword-summary-added'),
+                summaryStrategyCount: overlay.querySelector('#am-wxt-keyword-summary-strategy'),
+                summaryBudgetTotal: overlay.querySelector('#am-wxt-keyword-summary-budget'),
                 candidateList: overlay.querySelector('#am-wxt-keyword-candidate-list'),
                 addedList: overlay.querySelector('#am-wxt-keyword-added-list'),
                 addedCount: overlay.querySelector('#am-wxt-keyword-added-count'),
@@ -368,6 +398,7 @@
                 runModeMenu: overlay.querySelector('#am-wxt-keyword-run-mode-menu'),
                 runQuickBtn: overlay.querySelector('#am-wxt-keyword-run-quick'),
                 previewQuickBtn: overlay.querySelector('#am-wxt-keyword-preview-quick'),
+                submitSummary: overlay.querySelector('#am-wxt-keyword-submit-summary'),
                 quickLog: overlay.querySelector('#am-wxt-keyword-quick-log'),
                 detailConfig: overlay.querySelector('#am-wxt-keyword-detail-config'),
                 detailTitle: overlay.querySelector('#am-wxt-keyword-detail-title'),
@@ -456,6 +487,48 @@
                 appendLine(wizardState.els.log, 160);
                 appendLine(wizardState.els.workbenchPreviewLog, 160);
             };
+            const parseWizardBudgetAmount = (value = '') => {
+                const normalized = String(value ?? '').replace(/[^\d.-]/g, '').trim();
+                const amount = Number(normalized);
+                return Number.isFinite(amount) && amount > 0 ? amount : 0;
+            };
+            const formatWizardBudgetAmount = (amount = 0) => {
+                const normalized = Number.isFinite(Number(amount)) ? Math.max(0, Number(amount)) : 0;
+                return `${normalized.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}元`;
+            };
+            const calculateWizardBudgetTotal = () => {
+                const fallbackBudget = wizardState?.draft?.dayAverageBudget || '100';
+                return (Array.isArray(wizardState?.strategyList) ? wizardState.strategyList : [])
+                    .filter(strategy => strategy?.enabled !== false)
+                    .reduce((sum, strategy) => {
+                        const amount = parseWizardBudgetAmount(strategy?.dayAverageBudget || fallbackBudget || '100');
+                        return sum + amount;
+                    }, 0);
+            };
+            const syncHomeSummary = () => {
+                const addedCount = Array.isArray(wizardState?.addedItems) ? wizardState.addedItems.length : 0;
+                const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
+                    ? wizardState.strategyList.filter(item => item?.enabled !== false).length
+                    : 0;
+                const budgetText = formatWizardBudgetAmount(calculateWizardBudgetTotal());
+                const submitModeText = submitModeLabel(normalizeSubmitMode(wizardState?.draft?.submitMode || 'serial'));
+                if (wizardState.els.summaryAddedCount instanceof HTMLElement) {
+                    wizardState.els.summaryAddedCount.textContent = String(addedCount);
+                }
+                if (wizardState.els.summaryStrategyCount instanceof HTMLElement) {
+                    wizardState.els.summaryStrategyCount.textContent = String(enabledStrategyCount);
+                }
+                if (wizardState.els.summaryBudgetTotal instanceof HTMLElement) {
+                    wizardState.els.summaryBudgetTotal.textContent = budgetText;
+                }
+                if (wizardState.els.submitSummary instanceof HTMLElement) {
+                    wizardState.els.submitSummary.innerHTML = `
+                        <span>将提交 <strong>${enabledStrategyCount}</strong> 个计划</span>
+                        <span>预算合计 ${budgetText}</span>
+                        <span>提交方式：${Utils.escapeHtml(submitModeText)}</span>
+                    `;
+                }
+            };
             const setWorkbenchPage = (page = 'home') => {
                 const nextPage = WORKBENCH_PAGE_SET.has(String(page || '').trim()) ? String(page || '').trim() : 'home';
                 wizardState.workbenchPage = nextPage;
@@ -468,6 +541,7 @@
                     const active = btn.dataset.workbenchPage === nextPage;
                     btn.classList.toggle('primary', active);
                 });
+                toggleDisplay(wizardState.els.homeSummary, nextPage === 'home');
                 toggleDisplay(wizardState.els.itemSplit, nextPage === 'home');
                 toggleDisplay(wizardState.els.strategyBoard, nextPage === 'home');
                 toggleDisplay(wizardState.els.detailConfig, nextPage === 'editor');
@@ -577,6 +651,7 @@
                     wizardState.els.runModeToggleBtn.removeAttribute('title');
                     wizardState.els.runModeToggleBtn.setAttribute('aria-label', `提交方式：${submitModeLabel(mode)}`);
                 }
+                syncHomeSummary();
                 if (!(wizardState.els.runModeMenu instanceof HTMLElement)) return;
                 const parallelCountNode = wizardState.els.runModeMenu.querySelector('[data-submit-mode-count="parallel"]');
                 if (parallelCountNode) {

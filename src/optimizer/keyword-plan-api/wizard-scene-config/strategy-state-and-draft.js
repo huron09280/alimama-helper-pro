@@ -252,11 +252,41 @@
                 });
             };
 
+            const getStrategyTagClassName = (kind = '', label = '') => {
+                const text = String(label || '').trim();
+                const classes = ['am-wxt-strategy-tag'];
+                const addKind = (value = '') => {
+                    if (value) classes.push(`am-wxt-strategy-tag-${value}`);
+                };
+                addKind(kind);
+                if (kind === 'scene') {
+                    if (/关键词/.test(text)) addKind('tone-keyword');
+                    else if (/人群/.test(text)) addKind('tone-crowd');
+                    else if (/货品|全站/.test(text)) addKind('tone-site');
+                    else if (/线索/.test(text)) addKind('tone-lead');
+                    else addKind('tone-neutral');
+                } else if (kind === 'goal') {
+                    if (/趋势|明星/.test(text)) addKind('tone-trend');
+                    else if (/搜索|卡位/.test(text)) addKind('tone-search');
+                    else if (/流量|金卡/.test(text)) addKind('tone-traffic');
+                    else if (/自定义/.test(text)) addKind('tone-custom');
+                    else if (/拉新|人群/.test(text)) addKind('tone-crowd');
+                    else addKind('tone-goal');
+                } else if (kind === 'bid') {
+                    if (/手动/.test(text)) addKind('tone-manual');
+                    else addKind('tone-smart');
+                } else {
+                    addKind('tone-neutral');
+                }
+                return classes.join(' ');
+            };
+
             const renderStrategyList = () => {
                 if (!wizardState.els.strategyList || !wizardState.els.strategyCount) return;
                 wizardState.els.strategyList.innerHTML = '';
                 const enabledCount = wizardState.strategyList.filter(item => item.enabled).length;
                 wizardState.els.strategyCount.textContent = String(enabledCount);
+                syncHomeSummary();
                 syncStrategyHeadActionState();
                 const filteredStrategyList = getFilteredStrategyList();
                 const strategySearchKeyword = getStrategySearchKeyword();
@@ -297,6 +327,17 @@
                     }
                     return removed;
                 };
+                const listHead = document.createElement('div');
+                listHead.className = 'am-wxt-strategy-list-head';
+                listHead.innerHTML = `
+                    <span></span>
+                    <span>计划名称</span>
+                    <span>类型</span>
+                    <span>出价目标</span>
+                    <span>预算</span>
+                    <span>操作</span>
+                `;
+                wizardState.els.strategyList.appendChild(listHead);
                 filteredStrategyList.forEach((strategy) => {
                     const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                         ? String(strategy.sceneName).trim()
@@ -323,23 +364,34 @@
                     const strategyTargetCostValue = shouldShowStrategyTargetCostInput
                         ? resolveStrategyTargetCostValue(strategy, strategyBidTargetCode)
                         : '';
+                    const strategyTargetCostEmptyClass = shouldShowStrategyTargetCostInput && !String(strategyTargetCostValue || '').trim()
+                        ? ' is-empty'
+                        : '';
                     const showStrategyTargetCostUnit = shouldShowStrategyTargetCostInput && strategyBidTargetCode !== 'roi';
                     const copyBatchCount = Math.min(99, Math.max(1, toNumber(strategy.copyBatchCount, 1)));
                     strategy.copyBatchCount = copyBatchCount;
+                    const strategyLabel = getStrategyMainLabel(strategy);
                     const row = document.createElement('div');
                     row.className = 'am-wxt-strategy-item';
                     row.innerHTML = `
                         <div class="am-wxt-strategy-main">
-                            <div class="am-wxt-strategy-left">
+                            <label class="am-wxt-strategy-check">
                                 <input type="checkbox" ${strategy.enabled ? 'checked' : ''} />
-                                <span>${Utils.escapeHtml(getStrategyMainLabel(strategy))}</span>
+                            </label>
+                            <div class="am-wxt-strategy-name">
+                                <span title="${Utils.escapeHtml(strategyLabel)}">${Utils.escapeHtml(strategyLabel)}</span>
                             </div>
-                            <div class="am-wxt-strategy-right">
-                                <span class="am-wxt-strategy-summary">${Utils.escapeHtml(goalLabel)} / ${Utils.escapeHtml(bidModeLabel)} / ${Utils.escapeHtml(bidTargetLabel)}</span>
+                            <div class="am-wxt-strategy-tags">
+                                <span class="${getStrategyTagClassName('scene', strategySceneName)}">${Utils.escapeHtml(strategySceneName)}</span>
+                                <span class="${getStrategyTagClassName('goal', goalLabel)}">${Utils.escapeHtml(goalLabel)}</span>
+                                <span class="${getStrategyTagClassName('bid', bidModeLabel)}">${Utils.escapeHtml(bidModeLabel)}</span>
+                            </div>
+                            <div class="am-wxt-strategy-target">
+                                <span class="am-wxt-strategy-summary">${Utils.escapeHtml(bidTargetLabel)}</span>
                                 ${shouldShowStrategyTargetCostInput ? `
                                     <label class="am-wxt-strategy-target-cost">
                                         <span>目标成本</span>
-                                        <span class="am-wxt-strategy-target-cost-field ${showStrategyTargetCostUnit ? 'with-unit' : ''}">
+                                        <span class="am-wxt-strategy-target-cost-field ${showStrategyTargetCostUnit ? 'with-unit' : ''}${strategyTargetCostEmptyClass}">
                                             <input
                                                 type="number"
                                                 min="0.01"
@@ -348,22 +400,26 @@
                                                 value="${Utils.escapeHtml(strategyTargetCostValue)}"
                                                 data-action="target-cost-input"
                                                 data-target-code="${Utils.escapeHtml(strategyBidTargetCode)}"
-                                                placeholder="${strategyBidTargetCode === 'roi' ? '例如 2.24' : '请输入'}"
+                                                placeholder="${strategyBidTargetCode === 'roi' ? '例如 2.24' : '待填写'}"
                                             />
                                             ${showStrategyTargetCostUnit ? '<span class="am-wxt-strategy-target-cost-unit">元</span>' : ''}
                                         </span>
                                     </label>
-                                ` : ''}
-                                <span class="am-wxt-strategy-summary">/ 预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
-                                <button class="am-wxt-btn am-wxt-copy-btn" data-action="copy">
+                                ` : `<span class="am-wxt-strategy-summary muted">${Utils.escapeHtml(bidModeLabel)}</span>`}
+                            </div>
+                            <div class="am-wxt-strategy-budget">
+                                <span>预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
+                            </div>
+                            <div class="am-wxt-strategy-actions">
+                                <button class="am-wxt-btn am-wxt-copy-btn am-wxt-strategy-action-secondary" data-action="copy">
                                     <span>复制</span>
                                     <span class="am-wxt-copy-multi" data-action="copy-count-badge" title="点击增加，右键减少，滚轮可调节">
                                         <span class="am-wxt-copy-multi-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
                                         <span class="am-wxt-copy-multi-num">${copyBatchCount}</span>
                                     </span>
                                 </button>
-                                <button class="am-wxt-btn" data-action="delete">删除</button>
-                                <button class="am-wxt-btn" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑计划'}</button>
+                                <button class="am-wxt-btn danger am-wxt-strategy-delete-btn" data-action="delete">删除</button>
+                                <button class="am-wxt-btn am-wxt-strategy-action-main" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑计划'}</button>
                             </div>
                         </div>
                     `;
@@ -380,15 +436,23 @@
                         commitStrategyUiState({ refreshPreview: false });
                     };
                     if (targetCostInput instanceof HTMLInputElement) {
+                        const targetCostField = targetCostInput.closest('.am-wxt-strategy-target-cost-field');
+                        const syncStrategyTargetCostEmptyState = () => {
+                            if (targetCostField instanceof HTMLElement) {
+                                targetCostField.classList.toggle('is-empty', !String(targetCostInput.value || '').trim());
+                            }
+                        };
                         const syncStrategyTargetCostInputOnly = () => {
                             syncStrategyTargetCostFields(strategy, strategyBidTargetCode, targetCostInput.value);
                             syncStrategyTargetCostInputWidth(targetCostInput);
+                            syncStrategyTargetCostEmptyState();
                         };
                         commitStrategyTargetCostInput = () => {
                             const parsed = parseNumberFromSceneValue(targetCostInput.value);
                             const nextValue = syncStrategyTargetCostFields(strategy, strategyBidTargetCode, parsed);
                             targetCostInput.value = nextValue;
                             syncStrategyTargetCostInputWidth(targetCostInput);
+                            syncStrategyTargetCostEmptyState();
                             if (wizardState.detailVisible && wizardState.editingStrategyId === strategy.id) {
                                 applyStrategyToDetailForm(strategy);
                             }
@@ -400,6 +464,7 @@
                         targetCostInput.addEventListener('click', (event) => {
                             event.stopPropagation();
                         });
+                        syncStrategyTargetCostEmptyState();
                     }
                     if (copyCountBadge instanceof HTMLElement) {
                         const refreshCopyCount = () => {

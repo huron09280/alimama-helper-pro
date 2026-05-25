@@ -135,7 +135,7 @@
                     clearCompactViewport();
                     return;
                 }
-                const compactHeight = 168;
+                const compactHeight = 72;
                 addedListEl.style.height = `${compactHeight}px`;
                 addedListEl.style.maxHeight = `${compactHeight}px`;
                 addedListEl.style.scrollbarGutter = 'stable';
@@ -148,6 +148,7 @@
 
             const renderAddedList = () => {
                 wizardState.els.addedCount.textContent = String(wizardState.addedItems.length);
+                syncHomeSummary();
                 wizardState.els.addedList.innerHTML = '';
                 if (!wizardState.addedItems.length) {
                     wizardState.els.addedList.innerHTML = '<div class="am-wxt-item"><div class="name">请点击上方“添加商品”按钮</div></div>';
