@@ -150,7 +150,9 @@
 
             const closeBtn = document.createElement('button');
             closeBtn.className = 'am-download-btn am-download-close';
-            closeBtn.textContent = 'X';
+            closeBtn.innerHTML = renderAmWindowIcon('close');
+            closeBtn.setAttribute('aria-label', '关闭');
+            closeBtn.title = '关闭';
 
             actions.appendChild(dlLink);
             actions.appendChild(copyBtn);

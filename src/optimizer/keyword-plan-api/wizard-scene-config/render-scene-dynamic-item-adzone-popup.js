@@ -268,7 +268,7 @@
                     const result = await openScenePopupDialog({
                         title: '选择趋势主题',
                         dialogClassName: 'am-wxt-scene-popup-dialog-filter am-wxt-scene-popup-dialog-trend-theme',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         saveFirst: true,
@@ -306,7 +306,7 @@
                                                     <span>
                                                         <label class="am-wxt-scene-trend-check">
                                                             <input type="checkbox" data-scene-popup-trend-select-all="trend" />
-                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                             <i>主题</i>
                                                         </label>
                                                     </span>
@@ -327,7 +327,7 @@
                                                     <span>
                                                         <label class="am-wxt-scene-trend-check">
                                                             <input type="checkbox" data-scene-popup-trend-select-all="effect" />
-                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                             <i>主题</i>
                                                         </label>
                                                     </span>
@@ -348,7 +348,7 @@
                                                     <span>
                                                         <label class="am-wxt-scene-trend-check">
                                                             <input type="checkbox" data-scene-popup-trend-select-all="traffic" />
-                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                             <i>主题</i>
                                                         </label>
                                                     </span>
@@ -640,7 +640,7 @@
                                                             ${selected ? 'checked' : ''}
                                                             ${disabled ? 'disabled' : ''}
                                                         />
-                                                        <span class="am-wxt-scene-trend-check-icon"></span>
+                                                    <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                     </label>
                                                     <div class="name">${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</div>
                                                 </div>
@@ -676,7 +676,7 @@
                                     return `
                                         <button type="button" class="am-wxt-scene-trend-selected-chip" data-scene-popup-trend-remove="${Utils.escapeHtml(key)}">
                                             <span>${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</span>
-                                            <i>×</i>
+                                            <i aria-hidden="true">${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}</i>
                                         </button>
                                     `;
                                 }).join('');
@@ -1353,7 +1353,7 @@
                     const result = await openScenePopupDialog({
                         title: '添加商品',
                         dialogClassName: 'am-wxt-scene-popup-dialog-filter',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         bodyHtml: `
@@ -1793,7 +1793,7 @@
                     const result = await openScenePopupDialog({
                         title: '资源位溢价',
                         dialogClassName: 'am-wxt-scene-popup-dialog-advanced',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         bodyHtml: `

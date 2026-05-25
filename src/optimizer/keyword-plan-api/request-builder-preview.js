@@ -929,7 +929,7 @@
                                         data-matrix-dimension-remove="1"
                                         aria-label="删除维度"
                                         title="删除维度"
-                                    >&times;</button>
+                                    >${renderAmIcon('close', { size: 16, strokeWidth: 2.2 })}</button>
                                 </div>
                             </div>
                             <input
@@ -961,7 +961,7 @@
                             title="${Utils.escapeHtml(desc)}"
                             ${isDisabled ? 'disabled' : ''}
                         >
-                            <span class="am-wxt-matrix-dimension-add-icon">+</span>
+                            <span class="am-wxt-matrix-dimension-add-icon">${renderAmIcon('plus', { size: 18, strokeWidth: 2.2 })}</span>
                             <span class="am-wxt-matrix-dimension-add-title">${Utils.escapeHtml(title)}</span>
                             <span class="am-wxt-matrix-dimension-add-desc">${Utils.escapeHtml(desc)}</span>
                         </button>

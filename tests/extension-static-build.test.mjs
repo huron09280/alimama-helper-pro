@@ -28,7 +28,9 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
   assert.ok(manifest.host_permissions.includes('https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/*'), '缺少授权服务 host permission');
   assert.deepEqual(manifest.content_scripts[0].js, ['content.js']);
   assert.ok(manifest.content_scripts[0].matches.includes('*://*.alimama.com/*'), '缺少阿里妈妈子域匹配');
+  assert.ok(manifest.content_scripts[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com 匹配');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('page.bundle.js'), '缺少 page bundle 暴露');
+  assert.ok(manifest.web_accessible_resources[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com web_accessible 匹配');
 });
 
 test('extension manifest 使用 Chrome 规范版本并保留展示版本', () => {
@@ -56,7 +58,11 @@ test('extension build output 包含授权 background 桥', () => {
   assert.match(backgroundSource, /const VERIFY_REQUEST_TYPE = 'AM_LICENSE_VERIFY_REQUEST';/, 'background 缺少授权消息类型');
   assert.match(backgroundSource, /if \(message\?\.type !== VERIFY_REQUEST_TYPE\) return false;/, 'background 未限制消息类型');
   assert.match(backgroundSource, /if \(!isAllowedSenderUrl\(sender\?\.url \|\| ''\)\) \{/, 'background 未校验 sender.url');
-  assert.match(backgroundSource, /return hostname === 'alimama\.com' \|\| hostname\.endsWith\('\.alimama\.com'\);/, 'background 未限制阿里妈妈来源');
+  assert.match(
+    backgroundSource,
+    /return hostname === 'alimama\.com'[\s\S]*hostname === 'myseller\.taobao\.com'[\s\S]*hostname\.endsWith\('\.myseller\.taobao\.com'\)[\s\S]*hostname\.endsWith\('\.alimama\.com'\);/,
+    'background 未限制阿里妈妈来源'
+  );
   assert.match(backgroundSource, /response = await fetch\(VERIFY_ENDPOINT, \{/, 'background 未请求固定授权地址');
   assert.doesNotMatch(backgroundSource, /payload\.(?:url|endpoint)/, 'background 不应接受页面传入任意 URL');
 });

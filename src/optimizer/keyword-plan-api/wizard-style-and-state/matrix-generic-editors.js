@@ -73,7 +73,7 @@
                         data-matrix-dimension-value-item-remove="1"
                         aria-label="删除维度值"
                         title="删除这个维度值"
-                    >&times;</button>
+                    >${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}</button>
                 </div>
             `;
         };
@@ -333,7 +333,7 @@
                                     aria-expanded="false"
                                     aria-label="新增维度值"
                                     title="新增一个维度值"
-                                >+</button>
+                                >${renderAmIcon('plus', { size: 14, strokeWidth: 2.3 })}</button>
                                 <div
                                     class="am-wxt-matrix-dimension-picker-panel am-wxt-matrix-value-batch-menu"
                                     data-matrix-dimension-picker-panel="1"
@@ -435,4 +435,3 @@
                     : '先填写有效的区间和个数（个数需为正整数）');
             return canSubmitBatch;
         };
-

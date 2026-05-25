@@ -448,7 +448,7 @@
                         <div class="am-wxt-scene-setting-row am-wxt-ai-max-switch-row">
                             <div class="am-wxt-scene-setting-label am-wxt-ai-max-switch-label">
                                 <span>${Utils.escapeHtml(label)}</span>
-                                <span class="am-wxt-ai-max-help-icon" title="${Utils.escapeHtml(helpText)}">?</span>
+                                <span class="am-wxt-ai-max-help-icon" title="${Utils.escapeHtml(helpText)}">${renderAmIcon('help', { size: 12, strokeWidth: 2.2 })}</span>
                             </div>
                             <div class="am-wxt-setting-control am-wxt-ai-max-switch-control">
                                 <div class="am-wxt-option-line segmented">${optionHtml}</div>
@@ -458,7 +458,7 @@
                                     href="https://alidocs.dingtalk.com/i/nodes/N7dx2rn0JbxOaqnACQ5kRDGvWMGjLRb3"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                >介绍文档</a>
+                                ><span>介绍文档</span>${renderAmIcon('external-link', { size: 12, strokeWidth: 2.1 })}</a>
                                 <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(fieldKey)}" value="${Utils.escapeHtml(safeValue)}" />
                                 <input class="am-wxt-hidden-control" data-scene-field="campaign.aiMaxSwitch" value="${Utils.escapeHtml(switchValue)}" />
                                 <input class="am-wxt-hidden-control" data-scene-field="campaign.aiMaxInfo" value="${Utils.escapeHtml(infoRaw)}" />
@@ -731,7 +731,7 @@
                     `).join('');
                     const renderPersonaHtml = (list = []) => (Array.isArray(list) ? list : []).slice(0, 3).map(item => `
                         <div class="am-wxt-ai-max-persona">
-                            <span class="am-wxt-ai-max-persona-icon">P</span>
+                            <span class="am-wxt-ai-max-persona-icon">${renderAmIcon('user', { size: 16, strokeWidth: 2 })}</span>
                             <span>
                                 <b>${Utils.escapeHtml(normalizeSceneSettingValue(item?.title || item?.name || '搜索人群'))}</b>
                                 <em>${Utils.escapeHtml(normalizeSceneSettingValue(item?.desc || item?.description || ''))}</em>
@@ -748,7 +748,7 @@
                             data-ai-max-demand-search-words="${Utils.escapeHtml(JSON.stringify(resolveKeywordAiMaxDemandDetail(info, title).searchWordList || []))}"
                             data-ai-max-demand-personas="${Utils.escapeHtml(JSON.stringify(resolveKeywordAiMaxDemandDetail(info, title).personaList || []))}"
                         >
-                            <span class="am-wxt-ai-max-demand-icon">*</span>
+                            <span class="am-wxt-ai-max-demand-icon">${renderAmIcon('sparkles', { size: 16, strokeWidth: 2 })}</span>
                             <span class="am-wxt-ai-max-demand-main">
                                 <b>${Utils.escapeHtml(title)}</b>
                                 <em>"${Utils.escapeHtml(info.itemTitle || '已选商品标题')}"</em>
@@ -818,7 +818,7 @@
                                     data-ai-max-typewriter-text="${Utils.escapeHtml(step.desc)}"
                                 >${Utils.escapeHtml(step.desc)}</div>
                             </div>
-                            <button type="button" class="am-wxt-ai-max-step-btn" data-ai-max-step-toggle="1">展开详情</button>
+                            <button type="button" class="am-wxt-ai-max-step-btn" data-ai-max-step-toggle="1">展开详情${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}</button>
                         </div>
                     `).join('');
                     return `
@@ -845,7 +845,7 @@
                                             type="button"
                                             class="am-wxt-ai-max-detail-btn"
                                             data-ai-max-detail-toggle="1"
-                                        >展开详情</button>
+                                        >展开详情${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}</button>
                                     </div>
                                     <div class="am-wxt-ai-max-deep-detail hidden" data-ai-max-detail-section="deep">
                                         <div class="am-wxt-ai-max-deep-box">
@@ -863,6 +863,7 @@
                                         >
                                             <span>已选：</span>
                                             <b>${Utils.escapeHtml(`${(Array.isArray(info.selectedDemandList) ? info.selectedDemandList.length : 0) || 0}个需求`)}</b>
+                                            ${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}
                                         </button>
                                     </div>
                                     <div class="am-wxt-ai-max-demand-list-wrap">
@@ -986,7 +987,7 @@
                                 <span class="am-wxt-scene-label-main">
                                     <span>${Utils.escapeHtml(normalizedLabel)}</span>
                                     ${normalizedHelpText
-                                        ? `<span class="am-wxt-scene-label-help" title="${Utils.escapeHtml(normalizedHelpText)}" aria-label="${Utils.escapeHtml(normalizedHelpText)}">?</span>`
+                                        ? `<span class="am-wxt-scene-label-help" title="${Utils.escapeHtml(normalizedHelpText)}" aria-label="${Utils.escapeHtml(normalizedHelpText)}">${renderAmIcon('help', { size: 12, strokeWidth: 2.2 })}</span>`
                                         : ''}
                                 </span>
                             </div>

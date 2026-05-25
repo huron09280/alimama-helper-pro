@@ -168,7 +168,7 @@
                 }
                 .am-icon-btn {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
-                    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+                    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
                 }
                 .am-icon-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--am26-primary); }
@@ -176,7 +176,7 @@
 
                 .am-close-btn {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
-                    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+                    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
                 }
                 .am-close-btn:hover { background: rgba(234, 79, 79, 0.1); color: var(--am26-danger); }
@@ -461,10 +461,19 @@
                     border: 0;
                     background: transparent;
                     color: #6b7280;
-                    font-size: 18px;
                     line-height: 1;
                     cursor: pointer;
-                    padding: 0 2px;
+                    width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 8px;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-close:hover {
+                    background: rgba(234, 79, 79, 0.1);
+                    color: var(--am26-danger, #ea4f4f);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status {
                     padding: 10px 14px;
@@ -648,12 +657,30 @@
                     border-color: var(--am26-border);
                     color: var(--am26-text-soft);
                 }
+                #am-report-capture-panel .am-download-close {
+                    width: 32px;
+                    min-width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                #am-report-capture-panel .am-download-close svg {
+                    width: 16px;
+                    height: 16px;
+                }
+                #am-report-capture-panel .am-download-close:hover {
+                    background: rgba(234, 79, 79, 0.1);
+                    color: var(--am26-danger, #ea4f4f);
+                    border-color: rgba(234, 79, 79, 0.22);
+                }
                 #am-report-capture-panel .am-download-btn:hover,
                 #am-report-capture-panel .am-download-link:hover {
                     transform: translateY(-1px);
                 }
                 #am-report-capture-panel .am-download-copy { flex: 1; }
-                #am-report-capture-panel .am-download-close { flex: 0.5; }
                 #am-report-capture-panel .am-download-hint {
                     margin-top: 8px;
                     font-size: 10px;
@@ -1313,7 +1340,7 @@
                     <span class="am-version">v${CURRENT_VERSION}</span>
                 </span>
                 <div class="am-close-btn" title="最小化">
-                    ${renderAmIcon('close', { size: 18 })}
+                    ${renderAmWindowIcon('close')}
                 </div>
             </div>
             <div class="am-body">

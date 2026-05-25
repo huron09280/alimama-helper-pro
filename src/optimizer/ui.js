@@ -1956,13 +1956,13 @@
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
                         <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
-                            ${renderAmIcon('center', { size: 14 })}
+                            ${renderAmWindowIcon('center')}
                         </span>
                         <span id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" title="最大化">
-                            ${renderAmIcon('expand', { size: 14 })}
+                            ${renderAmWindowIcon('expand')}
                         </span>
                         <span id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" title="关闭">
-                            ${renderAmIcon('close', { size: 18 })}
+                            ${renderAmWindowIcon('close')}
                         </span>
                     </div>
                 </div>

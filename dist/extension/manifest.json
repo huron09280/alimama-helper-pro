@@ -29,7 +29,8 @@
             "matches": [
                 "*://alimama.com/*",
                 "*://*.alimama.com/*",
-                "https://one.alimama.com/*"
+                "https://one.alimama.com/*",
+                "https://myseller.taobao.com/*"
             ],
             "js": [
                 "content.js"
@@ -45,7 +46,8 @@
             "matches": [
                 "*://alimama.com/*",
                 "*://*.alimama.com/*",
-                "https://one.alimama.com/*"
+                "https://one.alimama.com/*",
+                "https://myseller.taobao.com/*"
             ]
         }
     ]

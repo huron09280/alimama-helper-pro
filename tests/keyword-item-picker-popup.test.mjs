@@ -44,6 +44,38 @@ test('商品弹窗仅保留候选商品左列', () => {
   assert.match(source, /#am-wxt-keyword-item-picker-mask \.am-wxt-panel-candidate \{[\s\S]*?min-height: 310px;/, '商品弹窗缺少候选面板样式映射');
 });
 
+test('候选商品与已添加商品渲染主图缩略图', () => {
+  assert.match(
+    source,
+    /const resolveKeywordItemPicUrl = \(item = \{\}\) => \{[\s\S]*?item\?\.picUrl[\s\S]*?item\?\.materialImageUrl[\s\S]*?raw\.picUrl[\s\S]*?raw\.mainPic[\s\S]*?\)\.trim\(\);[\s\S]*?\};/,
+    '商品主图 URL 解析未覆盖归一化字段与 raw 兼容字段'
+  );
+  assert.match(
+    source,
+    /const renderKeywordItemThumb = \(item = \{\}\) => \{[\s\S]*?class="am-wxt-item-thumb empty"[\s\S]*?class="am-wxt-item-thumb has-image"[\s\S]*?<img src="\$\{Utils\.escapeHtml\(picUrl\)\}" alt="" loading="lazy" referrerpolicy="no-referrer" \/>[\s\S]*?\};/,
+    '商品缩略图渲染缺少图片或缺图占位'
+  );
+  assert.ok(
+    (source.match(/\$\{renderKeywordItemThumb\(item\)\}/g) || []).length >= 2,
+    '候选商品与已添加商品未共用主图渲染'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-item-main,[\s\S]*?#am-wxt-keyword-item-picker-mask \.am-wxt-item-main \{[\s\S]*?display:\s*flex;[\s\S]*?min-width:\s*0;[\s\S]*?flex:\s*1 1 auto;/,
+    '首页与商品弹窗的商品主图标题容器缺少稳定布局'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-item-thumb,[\s\S]*?#am-wxt-keyword-item-picker-mask \.am-wxt-item-thumb \{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?flex:\s*0 0 44px;/,
+    '首页与商品弹窗的商品主图缩略图缺少固定尺寸'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-item \.name,[\s\S]*?#am-wxt-keyword-item-picker-mask \.am-wxt-item \.name \{[\s\S]*?min-width:\s*0;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?-webkit-line-clamp:\s*2;/,
+    '首页与商品弹窗的商品标题未限制为稳定两行展示'
+  );
+});
+
 test('商品区与列表高度改为自适应', () => {
   assert.match(source, /#am-wxt-keyword-item-split \{[\s\S]*?height: auto;[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden;/, '商品 split 未改为内层滚动承载');
   assert.match(source, /#am-wxt-keyword-item-split > \.am-wxt-panel \{[\s\S]*?min-height: 0;/, '商品 split 子面板未允许内部滚动收缩');

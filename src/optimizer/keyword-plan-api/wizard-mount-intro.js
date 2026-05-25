@@ -9,11 +9,10 @@
                 <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true">
                     <div class="am-wxt-header">
                         <span>关键词推广批量建计划 API 向导</span>
-                        <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭">✕</button>
+                        <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
                     <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
                         <button type="button" class="am-wxt-btn primary" data-workbench-page="home">首页</button>
-                        <button type="button" class="am-wxt-btn" data-workbench-page="editor">编辑页</button>
                         <button type="button" class="am-wxt-btn" data-workbench-page="matrix">矩阵页</button>
                         <button type="button" class="am-wxt-btn" data-workbench-page="previewlog">日志页</button>
                     </div>
@@ -70,7 +69,6 @@
                                         type="button"
                                         class="am-wxt-btn am-wxt-run-mode-toggle"
                                         id="am-wxt-keyword-run-mode-toggle"
-                                        title="提交方式"
                                         aria-label="提交方式"
                                         aria-haspopup="menu"
                                         aria-expanded="false"
@@ -80,7 +78,7 @@
                                         <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
                                             <span class="am-wxt-run-mode-label">并发数</span>
                                             <span class="am-wxt-run-mode-count" data-action="run-mode-count-badge" title="点击增加，右键减少，滚轮可调节">
-                                                <span class="am-wxt-run-mode-count-icon">×</span>
+                                                <span class="am-wxt-run-mode-count-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
                                                 <span class="am-wxt-run-mode-count-num" data-submit-mode-count="parallel">${Math.max(1, toNumber(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 1))}</span>
                                             </span>
                                         </button>
@@ -98,7 +96,7 @@
                             <div class="am-wxt-detail-title">
                                 <span id="am-wxt-keyword-detail-title">同步计划</span>
                                 <div class="am-wxt-detail-title-right">
-                                    <button class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭">✕</button>
+                                    <button class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                                 </div>
                             </div>
                             <div id="am-wxt-keyword-static-settings" class="am-wxt-static-settings">
@@ -548,6 +546,9 @@
             const setRunModeMenuOpen = (open = false) => {
                 const nextOpen = open === true;
                 if (wizardState.els.runModeMenu instanceof HTMLElement) {
+                    if (nextOpen && wizardState.els.runModeMenu.parentElement !== document.body) {
+                        document.body.appendChild(wizardState.els.runModeMenu);
+                    }
                     wizardState.els.runModeMenu.classList.toggle('hidden', !nextOpen);
                     if (nextOpen) {
                         requestAnimationFrame(() => {
@@ -573,7 +574,8 @@
                     wizardState.els.runQuickBtn.title = `提交方式：${submitModeLabel(mode)}`;
                 }
                 if (wizardState.els.runModeToggleBtn instanceof HTMLButtonElement) {
-                    wizardState.els.runModeToggleBtn.title = `提交方式：${submitModeLabel(mode)}`;
+                    wizardState.els.runModeToggleBtn.removeAttribute('title');
+                    wizardState.els.runModeToggleBtn.setAttribute('aria-label', `提交方式：${submitModeLabel(mode)}`);
                 }
                 if (!(wizardState.els.runModeMenu instanceof HTMLElement)) return;
                 const parallelCountNode = wizardState.els.runModeMenu.querySelector('[data-submit-mode-count="parallel"]');
@@ -774,7 +776,9 @@
                     <div class="am-wxt-keyword-item-picker-dialog" role="dialog" aria-modal="true" aria-label="添加商品">
                         <div class="am-wxt-keyword-item-picker-head">
                             <span>添加商品</span>
-                            <button type="button" class="am-wxt-btn" data-am-wxt-item-picker-close="1">关闭</button>
+                            <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-am-wxt-item-picker-close="1" aria-label="关闭">
+                                ${renderAmWindowIcon('close')}
+                            </button>
                         </div>
                         <div class="am-wxt-keyword-item-picker-body">
                             <div class="am-wxt-keyword-item-picker-host" data-am-wxt-item-picker-host="1"></div>

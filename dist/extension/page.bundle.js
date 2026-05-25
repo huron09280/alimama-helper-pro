@@ -311,6 +311,12 @@ const AM_ICON_DEFS = {
     close: {
         body: '<path d="M6 6l12 12M18 6L6 18"></path>'
     },
+    multiply: {
+        body: '<path d="M8 8l8 8M16 8l-8 8"></path>'
+    },
+    plus: {
+        body: '<path d="M12 5v14M5 12h14"></path>'
+    },
     'shield-check': {
         body: '<path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3z"></path><path d="M9 12l2 2 4-5"></path>'
     },
@@ -389,6 +395,15 @@ const AM_ICON_DEFS = {
     help: {
         body: '<circle cx="12" cy="12" r="8"></circle><path d="M9.8 9.5a2.3 2.3 0 1 1 3.4 2c-.8.5-1.2 1-1.2 2V14"></path><path d="M12 17h.01"></path>'
     },
+    user: {
+        body: '<circle cx="12" cy="8" r="3"></circle><path d="M5 20c1.4-4 4-6 7-6s5.6 2 7 6"></path>'
+    },
+    sparkles: {
+        body: '<path d="M13 3l1.5 4.5L19 9l-4.5 1.5L13 15l-1.5-4.5L7 9l4.5-1.5L13 3z"></path><path d="M6 14l.9 2.1L9 17l-2.1.9L6 20l-.9-2.1L3 17l2.1-.9L6 14z"></path>'
+    },
+    'external-link': {
+        body: '<path d="M14 5h5v5"></path><path d="M10 14L19 5"></path><path d="M19 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4"></path>'
+    },
     'chevron-down': {
         body: '<path d="M7 10l5 5 5-5"></path>'
     },
@@ -414,8 +429,22 @@ const renderAmIcon = (name, options = {}) => {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icon.viewBox || '0 0 24 24'}" width="${size}" height="${size}" class="${escapeAmIconHtml(className)}" fill="${icon.fill || 'none'}" stroke="${icon.stroke || 'currentColor'}" stroke-width="${escapeAmIconHtml(strokeWidth)}" stroke-linecap="round" stroke-linejoin="round" ${ariaAttrs}${style}>${title}${icon.body}</svg>`;
 };
 
+const renderAmWindowIcon = (name, options = {}) => {
+    const baseStyle = 'display:block;width:16px;height:16px;';
+    const className = ['am-window-control-icon', options.className || ''].filter(Boolean).join(' ');
+    const style = `${baseStyle}${options.style || ''}`;
+    return renderAmIcon(name, {
+        ...options,
+        size: 16,
+        strokeWidth: 2.2,
+        className,
+        style
+    });
+};
+
 if (typeof globalThis !== 'undefined') {
     globalThis.__AM_RENDER_ICON__ = renderAmIcon;
+    globalThis.__AM_RENDER_WINDOW_ICON__ = renderAmWindowIcon;
     globalThis.__AM_ESCAPE_ICON_HTML__ = escapeAmIconHtml;
 }
 (() => {
@@ -5395,7 +5424,7 @@ if (typeof globalThis !== 'undefined') {
                 }
                 .am-icon-btn {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
-                    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+                    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
                 }
                 .am-icon-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--am26-primary); }
@@ -5403,7 +5432,7 @@ if (typeof globalThis !== 'undefined') {
 
                 .am-close-btn {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
-                    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+                    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
                 }
                 .am-close-btn:hover { background: rgba(234, 79, 79, 0.1); color: var(--am26-danger); }
@@ -5688,10 +5717,19 @@ if (typeof globalThis !== 'undefined') {
                     border: 0;
                     background: transparent;
                     color: #6b7280;
-                    font-size: 18px;
                     line-height: 1;
                     cursor: pointer;
-                    padding: 0 2px;
+                    width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 8px;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-close:hover {
+                    background: rgba(234, 79, 79, 0.1);
+                    color: var(--am26-danger, #ea4f4f);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status {
                     padding: 10px 14px;
@@ -5875,12 +5913,30 @@ if (typeof globalThis !== 'undefined') {
                     border-color: var(--am26-border);
                     color: var(--am26-text-soft);
                 }
+                #am-report-capture-panel .am-download-close {
+                    width: 32px;
+                    min-width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                #am-report-capture-panel .am-download-close svg {
+                    width: 16px;
+                    height: 16px;
+                }
+                #am-report-capture-panel .am-download-close:hover {
+                    background: rgba(234, 79, 79, 0.1);
+                    color: var(--am26-danger, #ea4f4f);
+                    border-color: rgba(234, 79, 79, 0.22);
+                }
                 #am-report-capture-panel .am-download-btn:hover,
                 #am-report-capture-panel .am-download-link:hover {
                     transform: translateY(-1px);
                 }
                 #am-report-capture-panel .am-download-copy { flex: 1; }
-                #am-report-capture-panel .am-download-close { flex: 0.5; }
                 #am-report-capture-panel .am-download-hint {
                     margin-top: 8px;
                     font-size: 10px;
@@ -6540,7 +6596,7 @@ if (typeof globalThis !== 'undefined') {
                     <span class="am-version">v${CURRENT_VERSION}</span>
                 </span>
                 <div class="am-close-btn" title="最小化">
-                    ${renderAmIcon('close', { size: 18 })}
+                    ${renderAmWindowIcon('close')}
                 </div>
             </div>
             <div class="am-body">
@@ -6926,6 +6982,9 @@ if (typeof globalThis !== 'undefined') {
                 if (window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_INSTALLED__) return;
                 window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_INSTALLED__ = true;
                 window.__AM_BUDGET_FRONTEND_UNLOCK__ = !!window.__AM_BUDGET_FRONTEND_UNLOCK__;
+                const SMART_ASSISTANT_BUDGET_WARNING_RE = /(预算|dailyBudgetAmount|日预算|daily\\s*budget|不能|不能?低于|不少于|低于|至少).{0,20}(100|一百)/i;
+                const SMART_ASSISTANT_BUDGET_FIELD_NAME = 'dailyBudgetAmount';
+                const SMART_ASSISTANT_BUDGET_MIN_VALUE = 100;
 
                 const BUDGET_SELECTOR = [
                     '[mx-view*="dayBudget"]',
@@ -6942,9 +7001,11 @@ if (typeof globalThis !== 'undefined') {
 
                 const patchedViews = new Set();
                 const snapshots = new WeakMap();
+                const smartAssistantPatchedTargets = new WeakMap();
                 let magixCache = null;
                 let magixPending = null;
                 let scanTimer = null;
+                let smartAssistantScanTimer = null;
 
                 const canPatch = (view) => {
                     if (!view || typeof view !== 'object') return false;
@@ -7013,6 +7074,343 @@ if (typeof globalThis !== 'undefined') {
                     patchedViews.clear();
                 };
 
+                const parseBudgetValue = (rawValue) => {
+                    if (typeof rawValue === 'number') return Number.isFinite(rawValue) ? rawValue : NaN;
+                    const normalized = String(rawValue || '').replace(/,/g, '').replace(/[^\d.-]+/g, '').trim();
+                    if (!normalized) return NaN;
+                    const parsed = Number.parseFloat(normalized);
+                    return Number.isFinite(parsed) ? parsed : NaN;
+                };
+
+                const shouldBypassSmartAssistantBudgetValidationValue = (value) => {
+                    const budgetValue = parseBudgetValue(value);
+                    return Number.isFinite(budgetValue) && budgetValue < SMART_ASSISTANT_BUDGET_MIN_VALUE;
+                };
+
+                const createSmartAssistantBudgetValidationValues = (value, nextReason = null) => ({
+                    budgetField: SMART_ASSISTANT_BUDGET_FIELD_NAME,
+                    budgetValue: parseBudgetValue(value),
+                    reason: nextReason
+                });
+
+                const collectBudgetValidationContext = (args = []) => {
+                    const context = {
+                        field: '',
+                        value: '',
+                        reason: null
+                    };
+                    const visit = (candidate) => {
+                        if (candidate == null) return;
+                        if (typeof candidate === 'string' || typeof candidate === 'number') {
+                            const value = String(candidate || '').trim();
+                            if (!context.field && /^dailybudgetamount$/i.test(value.replace(/\\s+/g, ''))) {
+                                context.field = SMART_ASSISTANT_BUDGET_FIELD_NAME;
+                                return;
+                            }
+                            if (!context.value && Number.isFinite(parseBudgetValue(candidate))) {
+                                context.value = candidate;
+                            }
+                            if (!context.reason && value.length) {
+                                context.reason = candidate;
+                            }
+                            return;
+                        }
+
+                        if (!candidate || typeof candidate !== 'object') return;
+                        const fieldName = candidate.name || candidate.field || candidate.fieldName || candidate.key;
+                        if (typeof fieldName === 'string' && !context.field
+                            && fieldName.replace(/\\s+/g, '').toLowerCase() === SMART_ASSISTANT_BUDGET_FIELD_NAME.toLowerCase()) {
+                            context.field = SMART_ASSISTANT_BUDGET_FIELD_NAME;
+                        }
+
+                        if (Object.prototype.hasOwnProperty.call(candidate, SMART_ASSISTANT_BUDGET_FIELD_NAME)
+                            && Number.isFinite(parseBudgetValue(candidate[SMART_ASSISTANT_BUDGET_FIELD_NAME])) && !context.value) {
+                            context.value = candidate[SMART_ASSISTANT_BUDGET_FIELD_NAME];
+                        }
+
+                        if (Object.prototype.hasOwnProperty.call(candidate, 'value')
+                            && Number.isFinite(parseBudgetValue(candidate.value)) && !context.value) {
+                            context.value = candidate.value;
+                        }
+
+                        if (Object.prototype.hasOwnProperty.call(candidate, 'message')
+                            && typeof candidate.message === 'string') {
+                            context.reason = candidate.message;
+                        }
+                        if (Object.prototype.hasOwnProperty.call(candidate, 'msg')
+                            && typeof candidate.msg === 'string' && !context.reason) {
+                            context.reason = candidate.msg;
+                        }
+                        if (Object.prototype.hasOwnProperty.call(candidate, 'reason')
+                            && (typeof candidate.reason === 'string' || typeof candidate.reason === 'number') && !context.reason) {
+                            context.reason = candidate.reason;
+                        }
+                    };
+
+                    (Array.isArray(args) ? args : []).forEach((arg) => visit(arg));
+                    return context;
+                };
+
+                const isSmartAssistantBudgetWarning = (context, reason = null) => {
+                    if (!context || context.field !== SMART_ASSISTANT_BUDGET_FIELD_NAME) return false;
+                    if (!shouldBypassSmartAssistantBudgetValidationValue(context.value)) return false;
+                    const reasonText = String(reason || context.reason || '').toLowerCase();
+                    if (!reasonText) return true;
+                    return SMART_ASSISTANT_BUDGET_WARNING_RE.test(reasonText);
+                };
+
+                const clearSmartAssistantBudgetErrorState = () => {
+                    const selectors = [
+                        '[name="' + SMART_ASSISTANT_BUDGET_FIELD_NAME + '"]',
+                        '[id="' + SMART_ASSISTANT_BUDGET_FIELD_NAME + '"]',
+                        '[data-name="' + SMART_ASSISTANT_BUDGET_FIELD_NAME + '"]',
+                        '[data-am-smart-assistant-budget]'
+                    ];
+                    const nodes = new Set();
+                    selectors.forEach((selector) => {
+                        try {
+                            document.querySelectorAll(selector).forEach((node) => nodes.add(node));
+                        } catch { }
+                    });
+                    nodes.forEach((node) => {
+                        if (!(node instanceof Element)) return;
+                        node.classList.remove('has-error');
+                        node.classList.remove('is-error');
+                        const wrapper = node.closest('.has-error, .mx-error, .error, .am-error');
+                        if (wrapper instanceof Element) {
+                            wrapper.classList.remove('has-error');
+                            wrapper.classList.remove('is-error');
+                            wrapper.classList.remove('mx-error');
+                            wrapper.classList.remove('error');
+                            wrapper.classList.remove('am-error');
+                        }
+                    });
+                };
+
+                const shouldPatchSmartAssistantValidationTarget = (target) => {
+                    if (!target || typeof target !== 'object') return false;
+                    const hasValidator = [target.setError, target.getErrors, target.getState, target.validate].some((fn) => typeof fn === 'function');
+                    if (!hasValidator) return false;
+
+                    const inspect = (value) => (
+                        value
+                            && typeof value === 'object'
+                            && Object.prototype.hasOwnProperty.call(value, SMART_ASSISTANT_BUDGET_FIELD_NAME)
+                    );
+                    return inspect(target)
+                        || inspect(target.formState)
+                        || inspect(target.state)
+                        || inspect(target.props)
+                        || inspect(target.data)
+                        || inspect(target.valueMap)
+                        || inspect(target.values);
+                };
+
+                const filterBudgetErrors = (errors) => {
+                    const clearSingle = (item) => {
+                        if (!item || typeof item !== 'object') return null;
+                        if (!Object.prototype.hasOwnProperty.call(item, SMART_ASSISTANT_BUDGET_FIELD_NAME)) return item;
+                        const maybeValue = parseBudgetValue(item[SMART_ASSISTANT_BUDGET_FIELD_NAME]);
+                        if (!Number.isFinite(maybeValue) || maybeValue >= SMART_ASSISTANT_BUDGET_MIN_VALUE) return item;
+                        return null;
+                    };
+                    if (Array.isArray(errors)) {
+                        return errors
+                            .map(clearSingle)
+                            .filter((item) => item && item !== null);
+                    }
+                    if (errors && typeof errors === 'object') {
+                        const value = clearSingle(errors);
+                        return value || {};
+                    }
+                    return errors;
+                };
+
+                const patchSmartAssistantValidationTarget = (target) => {
+                    if (!shouldPatchSmartAssistantValidationTarget(target)) return;
+                    if (smartAssistantPatchedTargets.has(target)) return;
+
+                    const hasSetError = typeof target.setError === 'function';
+                    const hasGetErrors = typeof target.getErrors === 'function';
+                    const hasGetState = typeof target.getState === 'function';
+                    const hasValidate = typeof target.validate === 'function';
+
+                    smartAssistantPatchedTargets.set(target, {
+                        hasSetError,
+                        setError: target.setError,
+                        hasGetErrors,
+                        getErrors: target.getErrors,
+                        hasGetState,
+                        getState: target.getState,
+                        hasValidate,
+                        validate: target.validate
+                    });
+
+                    if (hasSetError) {
+                        target.setError = function (...args) {
+                            const context = collectBudgetValidationContext(args);
+                            context.field = context.field || SMART_ASSISTANT_BUDGET_FIELD_NAME;
+                            const reason = String(context.reason || args?.[0] || '').toLowerCase();
+                            if (isSmartAssistantBudgetWarning(context, reason)) {
+                                clearSmartAssistantBudgetErrorState();
+                                const values = createSmartAssistantBudgetValidationValues(context.value, reason);
+                                if (window.__AM_BUDGET_FRONTEND_UNLOCK_DEBUG__) {
+                                    window.__AM_BUDGET_FRONTEND_UNLOCK_DEBUG__(values);
+                                }
+                                return;
+                            }
+                            return target.setError.apply(this, args);
+                        };
+                    }
+
+                    if (hasGetErrors) {
+                        target.getErrors = function (...args) {
+                            const context = collectBudgetValidationContext(args);
+                            const reason = String(context.reason || '').toLowerCase();
+                            if (isSmartAssistantBudgetWarning(context, reason)) {
+                                return filterBudgetErrors(target.getErrors.call(this, ...args));
+                            }
+                            return filterBudgetErrors(target.getErrors.call(this, ...args));
+                        };
+                    }
+
+                    if (hasGetState) {
+                        target.getState = function (...args) {
+                            const state = target.getState.apply(this, args);
+                            if (!state || typeof state !== 'object') return state;
+                            if (Object.prototype.hasOwnProperty.call(state, SMART_ASSISTANT_BUDGET_FIELD_NAME)) {
+                                const budgetValue = parseBudgetValue(state[SMART_ASSISTANT_BUDGET_FIELD_NAME]);
+                                if (Number.isFinite(budgetValue) && budgetValue < SMART_ASSISTANT_BUDGET_MIN_VALUE) {
+                                    delete state[SMART_ASSISTANT_BUDGET_FIELD_NAME].error;
+                                    delete state[SMART_ASSISTANT_BUDGET_FIELD_NAME].message;
+                                    delete state[SMART_ASSISTANT_BUDGET_FIELD_NAME].code;
+                                }
+                            }
+                            if (Array.isArray(state.errors)) {
+                                state.errors = filterBudgetErrors(state.errors);
+                            } else if (state.errors && typeof state.errors === 'object') {
+                                const nextErrors = { ...state.errors };
+                                if (Object.prototype.hasOwnProperty.call(nextErrors, SMART_ASSISTANT_BUDGET_FIELD_NAME)
+                                    && shouldBypassSmartAssistantBudgetValidationValue(nextErrors[SMART_ASSISTANT_BUDGET_FIELD_NAME])) {
+                                    delete nextErrors[SMART_ASSISTANT_BUDGET_FIELD_NAME];
+                                }
+                                state.errors = nextErrors;
+                            }
+                            clearSmartAssistantBudgetErrorState();
+                            return state;
+                        };
+                    }
+
+                    if (hasValidate) {
+                        target.validate = function (...args) {
+                            const context = collectBudgetValidationContext(args);
+                            context.field = context.field || SMART_ASSISTANT_BUDGET_FIELD_NAME;
+                            const reasonText = String(context.reason || '').toLowerCase();
+                            if (isSmartAssistantBudgetWarning(context, reasonText)) {
+                                clearSmartAssistantBudgetErrorState();
+                                return Promise.resolve(true);
+                            }
+
+                            try {
+                                const result = target.validate.apply(this, args);
+                                if (result && typeof result.then === 'function') {
+                                    return result.then(
+                                        (value) => value,
+                                        (err) => {
+                                            const errContext = collectBudgetValidationContext([err]);
+                                            errContext.field = errContext.field || context.field;
+                                            errContext.value = errContext.value || context.value;
+                                            if (isSmartAssistantBudgetWarning(errContext, String(err))) {
+                                                clearSmartAssistantBudgetErrorState();
+                                                return true;
+                                            }
+                                            throw err;
+                                        }
+                                    );
+                                }
+                                return result;
+                            } catch (err) {
+                                const errContext = collectBudgetValidationContext([err]);
+                                errContext.field = errContext.field || context.field;
+                                errContext.value = errContext.value || context.value;
+                                if (isSmartAssistantBudgetWarning(errContext, String(err))) {
+                                    clearSmartAssistantBudgetErrorState();
+                                    return true;
+                                }
+                                throw err;
+                            }
+                        };
+                    }
+                };
+
+                const restoreSmartAssistantPatches = () => {
+                    smartAssistantPatchedTargets.forEach((snapshot, target) => {
+                        if (snapshot.hasSetError) target.setError = snapshot.setError;
+                        if (snapshot.hasGetErrors) target.getErrors = snapshot.getErrors;
+                        if (snapshot.hasGetState) target.getState = snapshot.getState;
+                        if (snapshot.hasValidate) target.validate = snapshot.validate;
+                    });
+                    smartAssistantPatchedTargets.clear();
+                };
+
+                const collectSmartAssistantReactTargets = () => {
+                    const targets = new Set();
+                    const nodes = Array.from(document.querySelectorAll('input, textarea, select, [id], [name]'));
+                    nodes.forEach((node) => {
+                        const fiberKeys = Object.keys(node).filter((key) => /^__reactFiber\\$/.test(key));
+                        fiberKeys.forEach((key) => {
+                            let cursor = node[key];
+                            let depth = 0;
+                            while (cursor && depth < 14) {
+                                const stateNode = cursor.stateNode;
+                                if (stateNode) targets.add(stateNode);
+                                cursor = cursor.return || cursor._debugOwner;
+                                depth += 1;
+                            }
+                        });
+                    });
+                    nodes.forEach((node) => {
+                        const datasetValue = String(node.getAttribute?.('data-name') || '').toLowerCase();
+                        if (datasetValue === SMART_ASSISTANT_BUDGET_FIELD_NAME || node.getAttribute?.('name') === SMART_ASSISTANT_BUDGET_FIELD_NAME) {
+                            const value = node.value;
+                            if (!shouldBypassSmartAssistantBudgetValidationValue(value)) return;
+                            const parent = node.closest ? node.closest('.am-budgets, .budget, .form-item, .field') : null;
+                            if (parent && parent.__reactInternalInstance$) {
+                                const raw = Object.values(parent).find((item) => item && typeof item === 'object' && item.stateNode);
+                                if (raw && raw.stateNode) targets.add(raw.stateNode);
+                            }
+                        }
+                    });
+                    return Array.from(targets);
+                };
+
+                const patchSmartAssistantBudgetValidation = () => {
+                    collectSmartAssistantReactTargets().forEach(patchSmartAssistantValidationTarget);
+                };
+
+                const isSmartAssistantBudgetPage = () => {
+                    try {
+                        const href = String(window.location.href || '').toLowerCase();
+                        return href.includes('myseller.taobao.com')
+                            && href.includes('crm-workbench')
+                            && href.includes('smartassistant');
+                    } catch {
+                        return false;
+                    }
+                };
+
+                const scheduleSmartAssistantPatch = () => {
+                    if (smartAssistantScanTimer) return;
+                    smartAssistantScanTimer = setTimeout(() => {
+                        smartAssistantScanTimer = null;
+                        if (window.__AM_BUDGET_FRONTEND_UNLOCK__ && isSmartAssistantBudgetPage()) {
+                            patchSmartAssistantBudgetValidation();
+                        } else if (!window.__AM_BUDGET_FRONTEND_UNLOCK__) {
+                            restoreSmartAssistantPatches();
+                        }
+                    }, 120);
+                };
+
                 const collectCandidateIds = (node) => {
                     const ids = new Set();
                     let cursor = node;
@@ -7050,11 +7448,13 @@ if (typeof globalThis !== 'undefined') {
                 const apply = async () => {
                     if (!window.__AM_BUDGET_FRONTEND_UNLOCK__) {
                         restoreAll();
+                        restoreSmartAssistantPatches();
                         return;
                     }
                     const magixRef = await getMagix();
                     if (!window.__AM_BUDGET_FRONTEND_UNLOCK__) {
                         restoreAll();
+                        restoreSmartAssistantPatches();
                         return;
                     }
                     if (!magixRef || !magixRef.Vframe || typeof magixRef.Vframe.all !== 'function') return;
@@ -7074,6 +7474,12 @@ if (typeof globalThis !== 'undefined') {
                         const view = vf && (vf.$v || vf.view);
                         patchView(view);
                     });
+
+                    if (isSmartAssistantBudgetPage()) {
+                        scheduleSmartAssistantPatch();
+                    } else {
+                        restoreSmartAssistantPatches();
+                    }
                 };
 
                 const scheduleApply = () => {
@@ -7094,11 +7500,21 @@ if (typeof globalThis !== 'undefined') {
                 };
 
                 window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__ = scheduleApply;
+                window.__AM_BUDGET_SMART_ASSISTANT_DEBUG__ = {
+                    isSmartAssistantBudgetPage,
+                    shouldBypassSmartAssistantBudgetValidationValue,
+                    createSmartAssistantBudgetValidationValues,
+                    collectSmartAssistantReactTargets,
+                    clearSmartAssistantBudgetErrorState
+                };
                 window.addEventListener('hashchange', scheduleApply, true);
                 startObserver();
                 setInterval(() => {
                     if (window.__AM_BUDGET_FRONTEND_UNLOCK__) scheduleApply();
                 }, 600);
+                if (window.__AM_BUDGET_FRONTEND_UNLOCK__) {
+                    scheduleSmartAssistantPatch();
+                }
                 scheduleApply();
             })();`);
         },
@@ -7113,7 +7529,6 @@ if (typeof globalThis !== 'undefined') {
             } catch { }
         }
     };
-
     // ==========================================
     // 6. 网络拦截与报表抓取 (Interceptor)
     // ==========================================
@@ -7266,7 +7681,9 @@ if (typeof globalThis !== 'undefined') {
 
             const closeBtn = document.createElement('button');
             closeBtn.className = 'am-download-btn am-download-close';
-            closeBtn.textContent = 'X';
+            closeBtn.innerHTML = renderAmWindowIcon('close');
+            closeBtn.setAttribute('aria-label', '关闭');
+            closeBtn.title = '关闭';
 
             actions.appendChild(dlLink);
             actions.appendChild(copyBtn);
@@ -13385,10 +13802,10 @@ if (typeof globalThis !== 'undefined') {
                         </div>
                         <div class="am-btn-group">
                             <span id="am-magic-refresh" title="刷新">
-                                ${renderAmIcon('refresh', { size: 14 })}
+                                ${renderAmWindowIcon('refresh')}
                             </span>
                             <span id="am-magic-close" title="关闭">
-                                ${renderAmIcon('close', { size: 18 })}
+                                ${renderAmWindowIcon('close')}
                             </span>
                         </div>
                     </div>
@@ -13902,7 +14319,7 @@ if (typeof globalThis !== 'undefined') {
                     <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-label="并发开启执行日志">
                         <div class="am-concurrent-log-header">
                             <span id="am-concurrent-log-title">并发开启执行日志</span>
-                            <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">×</button>
+                            <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">${renderAmWindowIcon('close')}</button>
                         </div>
                         <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status">执行中...</div>
                         <div class="am-concurrent-log-body" id="am-concurrent-log-body"></div>
@@ -16552,10 +16969,28 @@ if (typeof globalThis !== 'undefined') {
         } catch { }
     };
 
+    const isSmartAssistantBudgetOnlyPage = () => {
+        try {
+            const href = String(window.location.href || '');
+            const pathname = String(new URL(href).pathname || '').toLowerCase();
+            const hash = String(new URL(href).hash || '').toLowerCase();
+            return (
+                pathname.includes('/home.htm')
+                && (/crm-workbench\/smartassistant/i.test(pathname) || /crm-workbench\/smartassistant/i.test(hash))
+            );
+        } catch { }
+        return false;
+    };
+
     function main() {
         installAssistDisplayDiagnostics();
         UI.init();
         BudgetFrontendLimitBypass.init();
+        if (isSmartAssistantBudgetOnlyPage()) {
+            Logger.log('🔧 SmartAssistant 预算页：仅启动预算破限补丁');
+            notifyRiskChallengeIfNeeded(window.location.href);
+            return;
+        }
         Interceptor.init();
         CampaignIdQuickEntry.init();
         PotentialPlanDailyExporter.init();
@@ -31436,6 +31871,8 @@ if (typeof globalThis !== 'undefined') {
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
+                    position: relative;
+                    z-index: 1000008;
                     font-family: PingFangSC-Regular,PingFang SC,"Microsoft Yahei","SimHei",sans-serif;
                     color: #1f2937;
                 }
@@ -31451,11 +31888,22 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-wxt-keyword-modal .am-wxt-close {
                     border: 0;
-                    background: transparent;
+                    background: transparent !important;
+                    border-color: transparent !important;
+                    box-shadow: none !important;
                     color: #4b5563;
                     cursor: pointer;
-                    font-size: 16px;
-                    padding: 4px 6px;
+                    width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 8px;
+                }
+                #am-wxt-keyword-modal .am-wxt-close:hover {
+                    background: rgba(234, 79, 79, 0.1);
+                    color: var(--am26-danger, #ea4f4f);
                 }
                 #am-wxt-keyword-modal .am-wxt-body {
                     padding: 12px 14px 14px;
@@ -31613,10 +32061,55 @@ if (typeof globalThis !== 'undefined') {
                     gap: 8px;
                     align-items: center;
                 }
-                #am-wxt-keyword-modal .am-wxt-item .name {
+                #am-wxt-keyword-modal .am-wxt-item-main,
+                #am-wxt-keyword-item-picker-mask .am-wxt-item-main {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                    flex: 1 1 auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-item-info,
+                #am-wxt-keyword-item-picker-mask .am-wxt-item-info {
+                    min-width: 0;
+                    flex: 1 1 auto;
+                }
+                #am-wxt-keyword-modal .am-wxt-item-thumb,
+                #am-wxt-keyword-item-picker-mask .am-wxt-item-thumb {
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 8px;
+                    flex: 0 0 44px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                    border: 1px solid rgba(148,163,184,0.28);
+                    background: rgba(241,245,249,0.86);
+                    color: #64748b;
+                    font-size: 13px;
+                    font-weight: 600;
+                    line-height: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-item-thumb img,
+                #am-wxt-keyword-item-picker-mask .am-wxt-item-thumb img {
+                    width: 100%;
+                    height: 100%;
+                    display: block;
+                    object-fit: cover;
+                }
+                #am-wxt-keyword-modal .am-wxt-item .name,
+                #am-wxt-keyword-item-picker-mask .am-wxt-item .name {
                     font-size: 12px;
                     line-height: 1.35;
                     color: #111827;
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow-wrap: anywhere;
                 }
                 #am-wxt-keyword-modal .am-wxt-item .meta {
                     font-size: 11px;
@@ -31789,7 +32282,7 @@ if (typeof globalThis !== 'undefined') {
                     position: absolute;
                     right: 8px;
                     top: 50%;
-                    transform: translateY(-50%);
+                    transform: translateY(-50%) !important;
                     font-size: 11px;
                     color: #475569;
                     pointer-events: none;
@@ -31817,7 +32310,9 @@ if (typeof globalThis !== 'undefined') {
                     user-select: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-copy-multi-icon {
-                    font-weight: 700;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     opacity: 0.9;
                 }
                 #am-wxt-keyword-modal .am-wxt-copy-multi-num {
@@ -31847,6 +32342,9 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop.open {
                     display: block;
+                }
+                #am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop.open + #am-wxt-keyword-modal {
+                    overflow: visible;
                 }
                 #am-wxt-keyword-modal .am-wxt-config {
                     margin-top: 12px;
@@ -32068,6 +32566,9 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 999px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-scene-card {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 14px;
                     padding: 12px 14px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-scene-card .am-wxt-scene-setting-row {
@@ -32196,8 +32697,11 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 999px;
                     background: rgba(79,104,255,0.08);
                     color: #3354d1;
-                    font-size: 24px;
                     line-height: 1;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-icon svg {
+                    width: 18px;
+                    height: 18px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-title {
                     color: #0f172a;
@@ -32283,7 +32787,6 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 999px;
                     background: transparent;
                     color: #94a3b8;
-                    font-size: 16px;
                     line-height: 1;
                     box-shadow: none;
                     visibility: hidden;
@@ -32291,6 +32794,10 @@ if (typeof globalThis !== 'undefined') {
                     pointer-events: none;
                     transform: scale(0.86);
                     transition: color 0.2s ease, background 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-remove-icon svg {
+                    width: 16px;
+                    height: 16px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-row:hover .am-wxt-matrix-dimension-remove-icon,
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-row:focus-within .am-wxt-matrix-dimension-remove-icon {
@@ -32403,7 +32910,6 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 0 10px 10px 0;
                     background: transparent;
                     color: #94a3b8;
-                    font-size: 14px;
                     line-height: 1;
                     box-shadow: none;
                     visibility: hidden;
@@ -32411,6 +32917,10 @@ if (typeof globalThis !== 'undefined') {
                     pointer-events: none;
                     transform: translateX(4px) scale(0.82);
                     transition: width 0.2s ease, min-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease, transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-value-item-remove svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-value-item:hover .am-wxt-matrix-value-item-remove {
                     width: 26px;
@@ -32441,8 +32951,6 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 999px;
                     background: transparent;
                     color: rgba(148,163,184,0.9);
-                    font-size: 16px;
-                    font-weight: 400;
                     line-height: 1;
                     box-shadow: none;
                     visibility: hidden;
@@ -32450,6 +32958,10 @@ if (typeof globalThis !== 'undefined') {
                     pointer-events: none;
                     transform: scale(0.86);
                     transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-value-add svg {
+                    width: 14px;
+                    height: 14px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-row:hover .am-wxt-matrix-value-add,
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-row:focus-within .am-wxt-matrix-value-add,
@@ -32723,7 +33235,6 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 0 10px 10px 0;
                     background: transparent;
                     color: #94a3b8;
-                    font-size: 14px;
                     line-height: 1;
                     box-shadow: none;
                     visibility: hidden;
@@ -32731,6 +33242,10 @@ if (typeof globalThis !== 'undefined') {
                     pointer-events: none;
                     transform: translateX(4px) scale(0.82);
                     transition: width 0.2s ease, min-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease, transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-remove svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item:hover .am-wxt-matrix-bid-package-cost-remove {
                     width: 26px;
@@ -32758,8 +33273,6 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 999px;
                     background: transparent;
                     color: rgba(148,163,184,0.9);
-                    font-size: 16px;
-                    font-weight: 400;
                     line-height: 1;
                     box-shadow: none;
                     visibility: hidden;
@@ -32767,6 +33280,10 @@ if (typeof globalThis !== 'undefined') {
                     pointer-events: none;
                     transform: scale(0.86);
                     transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-add svg {
+                    width: 14px;
+                    height: 14px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row:hover .am-wxt-matrix-bid-package-cost-add,
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row:focus-within .am-wxt-matrix-bid-package-cost-add,
@@ -32924,7 +33441,6 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 999px;
                     background: rgba(241,245,249,0.72);
                     color: #94a3b8;
-                    font-size: 16px;
                     line-height: 1;
                     box-shadow: none;
                     visibility: hidden;
@@ -32932,6 +33448,10 @@ if (typeof globalThis !== 'undefined') {
                     pointer-events: none;
                     transform: translateX(6px) scale(0.78);
                     transition: width 0.2s ease, min-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease, transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-remove svg {
+                    width: 14px;
+                    height: 14px;
                 }
                 #am-wxt-keyword-modal .am-wxt-matrix-bid-package-row:hover .am-wxt-matrix-bid-package-remove {
                     width: 32px;
@@ -33277,7 +33797,7 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 999px;
                     padding: 0 4px;
                     background: #4f68ff;
-                    color: #fff;
+                    color: #fff !important;
                     cursor: pointer;
                     font-size: 10px;
                     line-height: 1;
@@ -33506,9 +34026,12 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 50%;
                     background: #eef2ff;
                     color: #64748b;
-                    font-size: 10px;
                     line-height: 1;
                     cursor: help;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-help-icon svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-switch-control {
                     flex-direction: row;
@@ -33532,15 +34055,18 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-doc-link {
                     flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 3px;
                     color: #4f68ff;
                     font-size: 12px;
                     line-height: 1.4;
                     text-decoration: none;
                     white-space: nowrap;
                 }
-                #am-wxt-keyword-modal .am-wxt-ai-max-doc-link::after {
-                    content: " ↗";
-                    font-size: 11px;
+                #am-wxt-keyword-modal .am-wxt-ai-max-doc-link svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-panel {
                     width: 100%;
@@ -33614,19 +34140,18 @@ if (typeof globalThis !== 'undefined') {
                     font-size: 13px;
                     cursor: pointer;
                     padding: 0;
-                }
-                #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn::after {
-                    content: "⌄";
-                    display: inline-block;
-                    margin-left: 3px;
-                    font-size: 12px;
-                }
-                #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn.is-expanded::after {
-                    content: "^";
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    gap: 3px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn:not(:empty) {
                     min-width: 70px;
                     text-align: right;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-detail-btn svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-deep-detail {
                     margin: 14px 8px 18px;
@@ -33682,15 +34207,13 @@ if (typeof globalThis !== 'undefined') {
                     line-height: 1.45;
                     cursor: pointer;
                     white-space: nowrap;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 3px;
                 }
-                #am-wxt-keyword-modal .am-wxt-ai-max-step-btn::after {
-                    content: "⌄";
-                    display: inline-block;
-                    margin-left: 4px;
-                    font-size: 12px;
-                }
-                #am-wxt-keyword-modal .am-wxt-ai-max-step-btn.is-expanded::after {
-                    content: "^";
+                #am-wxt-keyword-modal .am-wxt-ai-max-step-btn svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-copy {
                     display: flex;
@@ -33732,9 +34255,9 @@ if (typeof globalThis !== 'undefined') {
                     font-weight: 600;
                     color: #4f68ff;
                 }
-                #am-wxt-keyword-modal .am-wxt-ai-max-demand-summary::after {
-                    content: "⌄";
-                    font-size: 12px;
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-summary svg {
+                    width: 12px;
+                    height: 12px;
                     color: #4f68ff;
                 }
                 #am-wxt-ai-max-demand-popover {
@@ -33908,9 +34431,15 @@ if (typeof globalThis !== 'undefined') {
                     background: rgba(51,65,85,0.78);
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-demand-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     color: #4f46e5;
-                    font-weight: 700;
                     line-height: 1.2;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-demand-icon svg {
+                    width: 16px;
+                    height: 16px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-demand-main {
                     display: grid;
@@ -34026,8 +34555,10 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 8px;
                     background: #f1f5f9;
                     color: #4f46e5;
-                    font-size: 13px;
-                    font-weight: 700;
+                }
+                #am-wxt-keyword-modal .am-wxt-ai-max-persona-icon svg {
+                    width: 16px;
+                    height: 16px;
                 }
                 #am-wxt-keyword-modal .am-wxt-ai-max-persona b,
                 #am-wxt-keyword-modal .am-wxt-ai-max-persona em {
@@ -34189,10 +34720,13 @@ if (typeof globalThis !== 'undefined') {
                     border: 1px solid #cbd5e1;
                     border-radius: 999px;
                     color: #94a3b8;
-                    font-size: 10px;
                     line-height: 1;
                     cursor: help;
                     user-select: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-scene-label-help svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-keyword-modal .am-wxt-smart-crowd-control {
                     gap: 6px;
@@ -34536,6 +35070,20 @@ if (typeof globalThis !== 'undefined') {
                     background: #eef2ff;
                     color: #2e3ab8;
                     cursor: pointer;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn.am-wxt-icon-only-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 30px;
+                    height: 30px;
+                    min-width: 30px;
+                    padding: 0;
+                    line-height: 1;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn.am-wxt-icon-only-btn svg {
+                    width: 14px;
+                    height: 14px;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn.primary {
                     background: linear-gradient(135deg, #4554e5, #4f68ff);
@@ -35138,8 +35686,15 @@ if (typeof globalThis !== 'undefined') {
                     cursor: pointer;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-chip i {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     font-style: normal;
                     color: #64748b;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-chip i svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-trend-selected-empty {
                     color: #94a3b8;
@@ -35261,21 +35816,23 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 5px;
                     background: #fff;
                     position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #fff;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input:checked + .am-wxt-scene-trend-check-icon {
                     border-color: #4f68ff;
                     background: #4f68ff;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input:checked + .am-wxt-scene-trend-check-icon::after {
-                    content: '';
-                    position: absolute;
-                    left: 4px;
-                    top: 1px;
-                    width: 5px;
-                    height: 9px;
-                    border: solid #fff;
-                    border-width: 0 2px 2px 0;
-                    transform: rotate(45deg);
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check-icon svg {
+                    width: 12px;
+                    height: 12px;
+                    opacity: 0;
+                    transition: opacity 0.16s ease;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input:checked + .am-wxt-scene-trend-check-icon svg {
+                    opacity: 1;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-trend-check input:disabled + .am-wxt-scene-trend-check-icon {
                     border-color: rgba(203,213,225,0.9);
@@ -36248,6 +36805,21 @@ if (typeof globalThis !== 'undefined') {
                     line-height: 1;
                     color: #64748b;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-icon-only-btn,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-head [data-scene-popup-close].am-wxt-icon-only-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-width: 32px;
+                    width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    line-height: 1;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-icon-only-btn svg {
+                    width: 16px;
+                    height: 16px;
+                }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-body {
                     padding: 18px;
                     gap: 0;
@@ -36314,6 +36886,13 @@ if (typeof globalThis !== 'undefined') {
                     font-size: 13px;
                     line-height: 18px;
                     cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 3px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-toggle svg {
+                    width: 12px;
+                    height: 12px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-quick-lift-panel {
                     margin-top: 12px;
@@ -36728,9 +37307,15 @@ if (typeof globalThis !== 'undefined') {
                     flex-wrap: wrap;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-search-icon {
-                    font-size: 13px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     color: #94a3b8;
                     margin-left: 4px;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-search-icon svg {
+                    width: 14px;
+                    height: 14px;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-advanced-area-search {
                     width: 220px;
@@ -37660,6 +38245,7 @@ if (typeof globalThis !== 'undefined') {
                     justify-content: center;
                     cursor: pointer;
                     z-index: 2;
+                    transition: color 0.16s ease, transform 0.16s ease;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-toggle::before {
                     content: '◀';
@@ -37670,7 +38256,40 @@ if (typeof globalThis !== 'undefined') {
                     content: '▼';
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-toggle:hover {
-                    color: rgba(255,255,255,0.92);
+                    background: transparent !important;
+                    border-color: transparent !important;
+                    box-shadow: none !important;
+                    color: #fff !important;
+                    transform: translateY(calc(-50% - 1px)) !important;
+                }
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle,
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle:hover,
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle:active,
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle:focus {
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    background-image: none !important;
+                    border: 0 !important;
+                    box-shadow: none !important;
+                    outline: 0;
+                    color: #fff !important;
+                }
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle {
+                    transform: translateY(-50%) !important;
+                }
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle:hover,
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle:active {
+                    transform: translateY(calc(-50% - 1px)) !important;
+                }
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle::before {
+                    background: transparent !important;
+                    border: 0 !important;
+                    box-shadow: none !important;
+                    text-shadow: none;
+                }
+                #am-wxt-keyword-modal #am-wxt-keyword-run-mode-toggle.am-wxt-run-mode-toggle::after {
+                    content: none !important;
+                    display: none !important;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-toggle:focus-visible {
                     outline: 2px solid rgba(255,255,255,0.72);
@@ -37682,7 +38301,7 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-menu {
                     position: fixed;
-                    z-index: 20;
+                    z-index: 2147483647;
                     top: 0;
                     left: 0;
                     right: auto;
@@ -37732,7 +38351,9 @@ if (typeof globalThis !== 'undefined') {
                     user-select: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-count-icon {
-                    font-weight: 700;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     opacity: 0.9;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-count-num {
@@ -37745,6 +38366,77 @@ if (typeof globalThis !== 'undefined') {
                     color: #1d4ed8;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-item.active {
+                    background: rgba(37,99,235,0.14);
+                    color: #1d4ed8;
+                    font-weight: 600;
+                }
+                #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu {
+                    position: fixed;
+                    z-index: 2147483647;
+                    top: 0;
+                    left: 0;
+                    right: auto;
+                    min-width: 84px;
+                    width: max-content;
+                    padding: 4px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(148,163,184,0.35);
+                    background: #fff;
+                    box-shadow: 0 10px 24px rgba(15,23,42,0.18);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+                #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu.hidden {
+                    display: none;
+                }
+                #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-item {
+                    border: 0;
+                    background: transparent;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    text-align: left;
+                    white-space: nowrap;
+                    padding: 6px 10px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    color: #334155;
+                    cursor: pointer;
+                }
+                #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-label {
+                    flex: 1;
+                }
+                #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-count {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 2px;
+                    padding: 2px 6px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(99,102,241,0.32);
+                    background: rgba(255,255,255,0.88);
+                    color: #3344c8;
+                    font-size: 11px;
+                    line-height: 1;
+                    user-select: none;
+                }
+                #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-count-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0.9;
+                }
+                #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-count-num {
+                    min-width: 12px;
+                    text-align: center;
+                    font-weight: 600;
+                }
+                #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-item:hover {
+                    background: rgba(37,99,235,0.1);
+                    color: #1d4ed8;
+                }
+                #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-item.active {
                     background: rgba(37,99,235,0.14);
                     color: #1d4ed8;
                     font-weight: 600;
@@ -37994,6 +38686,253 @@ if (typeof globalThis !== 'undefined') {
                     #am-wxt-keyword-modal .am-wxt-manual-keyword-item > :last-child {
                         grid-column: 1 / -1;
                     }
+                }
+
+                #am-wxt-keyword-overlay {
+                    --am-wxt-glass-border: rgba(255, 255, 255, 0.66);
+                    --am-wxt-glass-bg: rgba(248, 250, 255, 0.72);
+                    --am-wxt-soft-stroke: rgba(79, 102, 224, 0.24);
+                    --am-wxt-surface: rgba(255, 255, 255, 0.85);
+                    background: linear-gradient(120deg, rgba(15, 23, 42, 0.26), rgba(30, 64, 175, 0.18));
+                    backdrop-filter: blur(12px);
+                    -webkit-backdrop-filter: blur(12px);
+                }
+
+                #am-wxt-keyword-overlay:not(.item-picker-open) {
+                    background: linear-gradient(120deg, rgba(15, 23, 42, 0.3), rgba(30, 64, 175, 0.2));
+                    backdrop-filter: blur(10px);
+                }
+
+                #am-wxt-keyword-modal {
+                    color: #1f2937;
+                    background: linear-gradient(140deg, rgba(255, 255, 255, 0.92), rgba(240, 246, 255, 0.72));
+                    border: 1px solid var(--am-wxt-glass-border);
+                    box-shadow: 0 22px 56px rgba(15, 23, 42, 0.28);
+                    border-radius: 18px;
+                    backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
+                    overflow: hidden;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-header {
+                    height: 52px;
+                    padding: 0 18px;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(245, 250, 255, 0.9));
+                    border-bottom: 1px solid var(--am-wxt-soft-stroke);
+                    color: #1d4ed8;
+                    box-shadow: 0 10px 16px rgba(15, 23, 42, 0.04);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-close {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    color: #4b5563;
+                    background: transparent;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-close:hover {
+                    background: rgba(234, 79, 79, 0.1);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-body {
+                    background: transparent;
+                    padding: 12px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs {
+                    display: inline-flex;
+                    gap: 6px;
+                    padding: 10px 10px 0;
+                    flex-wrap: wrap;
+                    border-bottom: 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn {
+                    border: 1px solid rgba(79, 104, 255, 0.2);
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.82);
+                    color: #334155;
+                    padding: 7px 14px;
+                    min-height: 30px;
+                    font-weight: 600;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn.primary {
+                    background: linear-gradient(135deg, #4f68ff, #3754d2);
+                    border-color: rgba(79, 104, 255, 0.55);
+                    color: #ffffff;
+                    box-shadow: 0 8px 18px rgba(79, 104, 255, 0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-split {
+                    gap: 12px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-panel,
+                #am-wxt-keyword-modal .am-wxt-config,
+                #am-wxt-keyword-modal .am-wxt-matrix-card,
+                #am-wxt-keyword-modal .am-wxt-strategy-board,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-row,
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-panel {
+                    border: 1px solid rgba(255, 255, 255, 0.65);
+                    border-radius: 16px;
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.86));
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar {
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 255, 0.8));
+                    border-top-left-radius: 16px;
+                    border-top-right-radius: 16px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-list {
+                    background: rgba(255, 255, 255, 0.25);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]),
+                #am-wxt-keyword-modal .am-wxt-config input:not([type="checkbox"]):not([type="radio"]),
+                #am-wxt-keyword-modal .am-wxt-config select,
+                #am-wxt-keyword-modal .am-wxt-config textarea,
+                #am-wxt-keyword-modal .am-wxt-setting-control select {
+                    border: 1px solid rgba(148, 163, 184, 0.58);
+                    border-radius: 10px;
+                    background: rgba(255, 255, 255, 0.96);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:focus,
+                #am-wxt-keyword-modal .am-wxt-config input:focus,
+                #am-wxt-keyword-modal .am-wxt-config select:focus,
+                #am-wxt-keyword-modal .am-wxt-config textarea:focus,
+                #am-wxt-keyword-modal .am-wxt-setting-control select:focus {
+                    border-color: rgba(79, 104, 255, 0.6);
+                    box-shadow: 0 0 0 3px rgba(79, 104, 255, 0.14);
+                    outline: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-btn {
+                    border-radius: 999px;
+                    border-color: rgba(79, 104, 255, 0.34);
+                    background: rgba(255, 255, 255, 0.88);
+                    color: #334155;
+                    padding: 7px 12px;
+                    min-height: 30px;
+                    line-height: 1;
+                    transition: all 0.2s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-btn:hover {
+                    border-color: rgba(79, 104, 255, 0.56);
+                    transform: translateY(-1px);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-btn:focus-visible {
+                    outline: 2px solid rgba(79, 104, 255, 0.45);
+                    outline-offset: 1px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-btn.primary {
+                    color: #ffffff;
+                    background: linear-gradient(135deg, #4554e5, #4f68ff);
+                    border-color: rgba(79, 104, 255, 0.65);
+                    box-shadow: 0 8px 18px rgba(79, 104, 255, 0.24);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-title,
+                #am-wxt-keyword-modal .am-wxt-crowd-title {
+                    color: #334155;
+                    font-size: 12px;
+                    letter-spacing: 0.01em;
+                }
+
+                #am-wxt-keyword-detail-config {
+                    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.95));
+                    border: 1px solid rgba(255, 255, 255, 0.72);
+                    border-radius: 18px;
+                    backdrop-filter: blur(12px);
+                    -webkit-backdrop-filter: blur(12px);
+                }
+
+                #am-wxt-keyword-detail-config .am-wxt-detail-title,
+                #am-wxt-keyword-detail-config .am-wxt-detail-footer {
+                    background: rgba(255, 255, 255, 0.95);
+                    border-color: rgba(148, 163, 184, 0.2);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log,
+                #am-wxt-keyword-quick-log,
+                #am-wxt-keyword-log,
+                #am-wxt-keyword-preview {
+                    border-radius: 12px;
+                    border-color: rgba(148, 163, 184, 0.35);
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(244, 248, 255, 0.82));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-wrap {
+                    margin-top: 4px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-menu,
+                #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu {
+                    border: 1px solid rgba(255, 255, 255, 0.8);
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 249, 255, 0.9));
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    box-shadow: 0 12px 24px rgba(42, 91, 255, 0.12);
+                }
+
+                #am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop {
+                    background: rgba(15, 23, 42, 0.2);
+                    backdrop-filter: blur(8px);
+                }
+
+                #am-wxt-keyword-detail-config .am-wxt-inline-check,
+                #am-wxt-keyword-modal .am-wxt-inline-check {
+                    border-radius: 999px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-inline-check input[type="checkbox"] {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 4px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-crowd-list .am-wxt-crowd-item {
+                    border-bottom-color: rgba(100, 116, 139, 0.22);
+                    padding: 6px 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-item {
+                    border: 1px solid rgba(255, 255, 255, 0.72);
+                    border-radius: 12px;
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.9));
+                    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-item {
+                    border-radius: 10px;
+                    border-color: rgba(148, 163, 184, 0.26);
+                    background: rgba(255, 255, 255, 0.9);
+                    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.04);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-summary,
+                #am-wxt-keyword-modal .am-wxt-matrix-stat {
+                    border-radius: 999px;
+                    border-color: rgba(148, 163, 184, 0.3);
+                    background: rgba(241, 245, 249, 0.9);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card,
+                #am-wxt-keyword-modal .am-wxt-matrix-empty-state {
+                    border-radius: 14px;
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.9));
                 }
             `;
             document.head.appendChild(style);
@@ -39307,7 +40246,7 @@ if (typeof globalThis !== 'undefined') {
                         data-matrix-dimension-value-item-remove="1"
                         aria-label="删除维度值"
                         title="删除这个维度值"
-                    >&times;</button>
+                    >${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}</button>
                 </div>
             `;
         };
@@ -39567,7 +40506,7 @@ if (typeof globalThis !== 'undefined') {
                                     aria-expanded="false"
                                     aria-label="新增维度值"
                                     title="新增一个维度值"
-                                >+</button>
+                                >${renderAmIcon('plus', { size: 14, strokeWidth: 2.3 })}</button>
                                 <div
                                     class="am-wxt-matrix-dimension-picker-panel am-wxt-matrix-value-batch-menu"
                                     data-matrix-dimension-picker-panel="1"
@@ -39669,7 +40608,6 @@ if (typeof globalThis !== 'undefined') {
                     : '先填写有效的区间和个数（个数需为正整数）');
             return canSubmitBatch;
         };
-
         const MATRIX_BID_TARGET_OPTIONS = [
             { value: 'conv', label: '获取成交量' },
             { value: 'ad_strategy_buy', label: '增加总成交金额' },
@@ -39843,7 +40781,7 @@ if (typeof globalThis !== 'undefined') {
                         data-matrix-bid-package-cost-remove="1"
                         aria-label="删除目标成本"
                         title="删除这个目标成本"
-                    >&times;</button>
+                    >${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}</button>
                 </div>
             `;
         };
@@ -40125,7 +41063,7 @@ if (typeof globalThis !== 'undefined') {
                             data-matrix-bid-package-remove="1"
                             aria-label="删除目标包"
                             title="删除这一组"
-                        >&times;</button>
+                        >${renderAmIcon('close', { size: 14, strokeWidth: 2.3 })}</button>
                     </div>
                     <div class="am-wxt-matrix-bid-package-row-body">
                         <div class="am-wxt-matrix-bid-package-cost-list" data-matrix-bid-package-cost-list="1">
@@ -40145,7 +41083,7 @@ if (typeof globalThis !== 'undefined') {
                                     aria-expanded="false"
                                     aria-label="${Utils.escapeHtml(targetOption.value === 'roi' ? '新增目标值' : '新增目标成本')}"
                                     title="${Utils.escapeHtml(`为${targetOption.label || defaultOption.label}再加一个${costLabel}`)}"
-                                >+</button>
+                                >${renderAmIcon('plus', { size: 14, strokeWidth: 2.3 })}</button>
                                 <div
                                     class="am-wxt-matrix-dimension-picker-panel am-wxt-matrix-bid-package-cost-batch-menu"
                                     data-matrix-dimension-picker-panel="1"
@@ -40301,7 +41239,7 @@ if (typeof globalThis !== 'undefined') {
                     costMeta.textContent = costLabel;
                 }
                 if (costAddBtn instanceof HTMLButtonElement) {
-                    costAddBtn.textContent = '+';
+                    costAddBtn.innerHTML = renderAmIcon('plus', { size: 14, strokeWidth: 2.3 });
                     costAddBtn.setAttribute('aria-label', targetOptionValue === 'roi' ? '新增目标值' : '新增目标成本');
                     costAddBtn.title = `为${targetOptionLabel}再加一个${costLabel}`;
                 }
@@ -41132,11 +42070,10 @@ if (typeof globalThis !== 'undefined') {
                 <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true">
                     <div class="am-wxt-header">
                         <span>关键词推广批量建计划 API 向导</span>
-                        <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭">✕</button>
+                        <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
                     <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
                         <button type="button" class="am-wxt-btn primary" data-workbench-page="home">首页</button>
-                        <button type="button" class="am-wxt-btn" data-workbench-page="editor">编辑页</button>
                         <button type="button" class="am-wxt-btn" data-workbench-page="matrix">矩阵页</button>
                         <button type="button" class="am-wxt-btn" data-workbench-page="previewlog">日志页</button>
                     </div>
@@ -41193,7 +42130,6 @@ if (typeof globalThis !== 'undefined') {
                                         type="button"
                                         class="am-wxt-btn am-wxt-run-mode-toggle"
                                         id="am-wxt-keyword-run-mode-toggle"
-                                        title="提交方式"
                                         aria-label="提交方式"
                                         aria-haspopup="menu"
                                         aria-expanded="false"
@@ -41203,7 +42139,7 @@ if (typeof globalThis !== 'undefined') {
                                         <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
                                             <span class="am-wxt-run-mode-label">并发数</span>
                                             <span class="am-wxt-run-mode-count" data-action="run-mode-count-badge" title="点击增加，右键减少，滚轮可调节">
-                                                <span class="am-wxt-run-mode-count-icon">×</span>
+                                                <span class="am-wxt-run-mode-count-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
                                                 <span class="am-wxt-run-mode-count-num" data-submit-mode-count="parallel">${Math.max(1, toNumber(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 1))}</span>
                                             </span>
                                         </button>
@@ -41221,7 +42157,7 @@ if (typeof globalThis !== 'undefined') {
                             <div class="am-wxt-detail-title">
                                 <span id="am-wxt-keyword-detail-title">同步计划</span>
                                 <div class="am-wxt-detail-title-right">
-                                    <button class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭">✕</button>
+                                    <button class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                                 </div>
                             </div>
                             <div id="am-wxt-keyword-static-settings" class="am-wxt-static-settings">
@@ -41671,6 +42607,9 @@ if (typeof globalThis !== 'undefined') {
             const setRunModeMenuOpen = (open = false) => {
                 const nextOpen = open === true;
                 if (wizardState.els.runModeMenu instanceof HTMLElement) {
+                    if (nextOpen && wizardState.els.runModeMenu.parentElement !== document.body) {
+                        document.body.appendChild(wizardState.els.runModeMenu);
+                    }
                     wizardState.els.runModeMenu.classList.toggle('hidden', !nextOpen);
                     if (nextOpen) {
                         requestAnimationFrame(() => {
@@ -41696,7 +42635,8 @@ if (typeof globalThis !== 'undefined') {
                     wizardState.els.runQuickBtn.title = `提交方式：${submitModeLabel(mode)}`;
                 }
                 if (wizardState.els.runModeToggleBtn instanceof HTMLButtonElement) {
-                    wizardState.els.runModeToggleBtn.title = `提交方式：${submitModeLabel(mode)}`;
+                    wizardState.els.runModeToggleBtn.removeAttribute('title');
+                    wizardState.els.runModeToggleBtn.setAttribute('aria-label', `提交方式：${submitModeLabel(mode)}`);
                 }
                 if (!(wizardState.els.runModeMenu instanceof HTMLElement)) return;
                 const parallelCountNode = wizardState.els.runModeMenu.querySelector('[data-submit-mode-count="parallel"]');
@@ -41897,7 +42837,9 @@ if (typeof globalThis !== 'undefined') {
                     <div class="am-wxt-keyword-item-picker-dialog" role="dialog" aria-modal="true" aria-label="添加商品">
                         <div class="am-wxt-keyword-item-picker-head">
                             <span>添加商品</span>
-                            <button type="button" class="am-wxt-btn" data-am-wxt-item-picker-close="1">关闭</button>
+                            <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-am-wxt-item-picker-close="1" aria-label="关闭">
+                                ${renderAmWindowIcon('close')}
+                            </button>
                         </div>
                         <div class="am-wxt-keyword-item-picker-body">
                             <div class="am-wxt-keyword-item-picker-host" data-am-wxt-item-picker-host="1"></div>
@@ -44510,7 +45452,7 @@ if (typeof globalThis !== 'undefined') {
                         <div class="am-wxt-scene-setting-row am-wxt-ai-max-switch-row">
                             <div class="am-wxt-scene-setting-label am-wxt-ai-max-switch-label">
                                 <span>${Utils.escapeHtml(label)}</span>
-                                <span class="am-wxt-ai-max-help-icon" title="${Utils.escapeHtml(helpText)}">?</span>
+                                <span class="am-wxt-ai-max-help-icon" title="${Utils.escapeHtml(helpText)}">${renderAmIcon('help', { size: 12, strokeWidth: 2.2 })}</span>
                             </div>
                             <div class="am-wxt-setting-control am-wxt-ai-max-switch-control">
                                 <div class="am-wxt-option-line segmented">${optionHtml}</div>
@@ -44520,7 +45462,7 @@ if (typeof globalThis !== 'undefined') {
                                     href="https://alidocs.dingtalk.com/i/nodes/N7dx2rn0JbxOaqnACQ5kRDGvWMGjLRb3"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                >介绍文档</a>
+                                ><span>介绍文档</span>${renderAmIcon('external-link', { size: 12, strokeWidth: 2.1 })}</a>
                                 <input class="am-wxt-hidden-control" data-scene-field="${Utils.escapeHtml(fieldKey)}" value="${Utils.escapeHtml(safeValue)}" />
                                 <input class="am-wxt-hidden-control" data-scene-field="campaign.aiMaxSwitch" value="${Utils.escapeHtml(switchValue)}" />
                                 <input class="am-wxt-hidden-control" data-scene-field="campaign.aiMaxInfo" value="${Utils.escapeHtml(infoRaw)}" />
@@ -44793,7 +45735,7 @@ if (typeof globalThis !== 'undefined') {
                     `).join('');
                     const renderPersonaHtml = (list = []) => (Array.isArray(list) ? list : []).slice(0, 3).map(item => `
                         <div class="am-wxt-ai-max-persona">
-                            <span class="am-wxt-ai-max-persona-icon">P</span>
+                            <span class="am-wxt-ai-max-persona-icon">${renderAmIcon('user', { size: 16, strokeWidth: 2 })}</span>
                             <span>
                                 <b>${Utils.escapeHtml(normalizeSceneSettingValue(item?.title || item?.name || '搜索人群'))}</b>
                                 <em>${Utils.escapeHtml(normalizeSceneSettingValue(item?.desc || item?.description || ''))}</em>
@@ -44810,7 +45752,7 @@ if (typeof globalThis !== 'undefined') {
                             data-ai-max-demand-search-words="${Utils.escapeHtml(JSON.stringify(resolveKeywordAiMaxDemandDetail(info, title).searchWordList || []))}"
                             data-ai-max-demand-personas="${Utils.escapeHtml(JSON.stringify(resolveKeywordAiMaxDemandDetail(info, title).personaList || []))}"
                         >
-                            <span class="am-wxt-ai-max-demand-icon">*</span>
+                            <span class="am-wxt-ai-max-demand-icon">${renderAmIcon('sparkles', { size: 16, strokeWidth: 2 })}</span>
                             <span class="am-wxt-ai-max-demand-main">
                                 <b>${Utils.escapeHtml(title)}</b>
                                 <em>"${Utils.escapeHtml(info.itemTitle || '已选商品标题')}"</em>
@@ -44880,7 +45822,7 @@ if (typeof globalThis !== 'undefined') {
                                     data-ai-max-typewriter-text="${Utils.escapeHtml(step.desc)}"
                                 >${Utils.escapeHtml(step.desc)}</div>
                             </div>
-                            <button type="button" class="am-wxt-ai-max-step-btn" data-ai-max-step-toggle="1">展开详情</button>
+                            <button type="button" class="am-wxt-ai-max-step-btn" data-ai-max-step-toggle="1">展开详情${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}</button>
                         </div>
                     `).join('');
                     return `
@@ -44907,7 +45849,7 @@ if (typeof globalThis !== 'undefined') {
                                             type="button"
                                             class="am-wxt-ai-max-detail-btn"
                                             data-ai-max-detail-toggle="1"
-                                        >展开详情</button>
+                                        >展开详情${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}</button>
                                     </div>
                                     <div class="am-wxt-ai-max-deep-detail hidden" data-ai-max-detail-section="deep">
                                         <div class="am-wxt-ai-max-deep-box">
@@ -44925,6 +45867,7 @@ if (typeof globalThis !== 'undefined') {
                                         >
                                             <span>已选：</span>
                                             <b>${Utils.escapeHtml(`${(Array.isArray(info.selectedDemandList) ? info.selectedDemandList.length : 0) || 0}个需求`)}</b>
+                                            ${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}
                                         </button>
                                     </div>
                                     <div class="am-wxt-ai-max-demand-list-wrap">
@@ -45048,7 +45991,7 @@ if (typeof globalThis !== 'undefined') {
                                 <span class="am-wxt-scene-label-main">
                                     <span>${Utils.escapeHtml(normalizedLabel)}</span>
                                     ${normalizedHelpText
-                                        ? `<span class="am-wxt-scene-label-help" title="${Utils.escapeHtml(normalizedHelpText)}" aria-label="${Utils.escapeHtml(normalizedHelpText)}">?</span>`
+                                        ? `<span class="am-wxt-scene-label-help" title="${Utils.escapeHtml(normalizedHelpText)}" aria-label="${Utils.escapeHtml(normalizedHelpText)}">${renderAmIcon('help', { size: 12, strokeWidth: 2.2 })}</span>`
                                         : ''}
                                 </span>
                             </div>
@@ -48437,6 +49380,10 @@ if (typeof globalThis !== 'undefined') {
                     });
                 });
 
+                const setAiMaxToggleButtonContent = (button = null, expanded = false) => {
+                    if (!(button instanceof HTMLButtonElement)) return;
+                    button.innerHTML = `${expanded ? '收起详情' : '展开详情'}${renderAmIcon(expanded ? 'chevron-up' : 'chevron-down', { size: 12, strokeWidth: 2.4 })}`;
+                };
                 const syncAiMaxDetailButtonLabel = (button = null) => {
                     if (!(button instanceof HTMLButtonElement)) return;
                     const panel = button.closest('.am-wxt-ai-max-panel');
@@ -48446,7 +49393,7 @@ if (typeof globalThis !== 'undefined') {
                     if (!detailSections.length) return;
                     const expanded = detailSections.some(section => !section.classList.contains('hidden'));
                     button.classList.toggle('is-expanded', expanded);
-                    button.textContent = expanded ? '收起详情' : '展开详情';
+                    setAiMaxToggleButtonContent(button, expanded);
                 };
                 const runAiMaxTypewriter = (panel = null) => {
                     if (!(panel instanceof HTMLElement)) return;
@@ -48509,7 +49456,7 @@ if (typeof globalThis !== 'undefined') {
                         if (!(desc instanceof HTMLElement)) return;
                         const expanded = !desc.classList.contains('hidden');
                         desc.classList.toggle('hidden', expanded);
-                        target.textContent = expanded ? '展开详情' : '收起详情';
+                        setAiMaxToggleButtonContent(target, !expanded);
                         target.classList.toggle('is-expanded', !expanded);
                         if (!expanded) runAiMaxTypewriter(step);
                     });
@@ -48562,7 +49509,7 @@ if (typeof globalThis !== 'undefined') {
                     const desc = Utils.escapeHtml(normalizeSceneSettingValue(item?.desc || item?.description || ''));
                     return `
                         <div class="am-wxt-ai-max-persona">
-                            <span class="am-wxt-ai-max-persona-icon">P</span>
+                            <span class="am-wxt-ai-max-persona-icon">${renderAmIcon('user', { size: 16, strokeWidth: 2 })}</span>
                             <span>
                                 <b>${title}</b>
                                 <em>${desc}</em>
@@ -49000,6 +49947,7 @@ if (typeof globalThis !== 'undefined') {
                     onSave = null,
                     dialogClassName = '',
                     closeLabel = '关闭',
+                    closeIcon = false,
                     cancelLabel = '取消',
                     saveLabel = '保存',
                     hideCloseButton = false,
@@ -49013,9 +49961,11 @@ if (typeof globalThis !== 'undefined') {
                         mask.id = 'am-wxt-scene-popup-mask';
                         mask.className = 'am-wxt-scene-popup-mask';
                         const dialogClass = `am-wxt-scene-popup-dialog${String(dialogClassName || '').trim() ? ` ${String(dialogClassName || '').trim()}` : ''}`;
+                        const normalizedCloseLabel = String(closeLabel || '关闭').trim();
+                        const isIconClose = closeIcon === true;
                         const closeBtnHtml = hideCloseButton
                             ? ''
-                            : `<button type="button" class="am-wxt-btn" data-scene-popup-close="1">${Utils.escapeHtml(closeLabel || '关闭')}</button>`;
+                            : `<button type="button" class="am-wxt-btn${isIconClose ? ' am-wxt-icon-only-btn' : ''}" data-scene-popup-close="1" aria-label="关闭">${isIconClose ? renderAmWindowIcon('close') : Utils.escapeHtml(normalizedCloseLabel || '关闭')}</button>`;
                         const cancelBtnHtml = `<button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">${Utils.escapeHtml(cancelLabel || '取消')}</button>`;
                         const saveBtnHtml = `<button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">${Utils.escapeHtml(saveLabel || '保存')}</button>`;
                         const footButtonsHtml = saveFirst ? `${saveBtnHtml}${cancelBtnHtml}` : `${cancelBtnHtml}${saveBtnHtml}`;
@@ -49696,7 +50646,7 @@ if (typeof globalThis !== 'undefined') {
                         <div class="am-wxt-scene-advanced-area-tools">
                             <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
                             <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
-                            <span class="am-wxt-scene-advanced-area-search-icon"></span>
+                            <span class="am-wxt-scene-advanced-area-search-icon">${renderAmIcon('search', { size: 14, strokeWidth: 2.1 })}</span>
                             <input
                                 type="text"
                                 class="am-wxt-scene-advanced-area-search"
@@ -49712,7 +50662,7 @@ if (typeof globalThis !== 'undefined') {
                                 <div class="am-wxt-scene-quick-lift-control">
                                     <div class="am-wxt-scene-quick-lift-summary-row">
                                         <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-time-summary="1">0点~24点</span>
-                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="time">收起设置 <span>⌃</span></button>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="time">收起设置${renderAmIcon('chevron-up', { size: 12, strokeWidth: 2.4 })}</button>
                                     </div>
                                     <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="time">
                                         <div class="am-wxt-scene-quick-time-card">
@@ -49730,7 +50680,7 @@ if (typeof globalThis !== 'undefined') {
                                 <div class="am-wxt-scene-quick-lift-control">
                                     <div class="am-wxt-scene-quick-lift-summary-row">
                                         <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-area-summary="1">在全部地域投放</span>
-                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="area">收起设置 <span>⌃</span></button>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="area">收起设置${renderAmIcon('chevron-up', { size: 12, strokeWidth: 2.4 })}</button>
                                     </div>
                                     <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="area">
                                         ${areaConfigRowHtml}
@@ -49876,7 +50826,7 @@ if (typeof globalThis !== 'undefined') {
                     const result = await openScenePopupDialog({
                         title: advancedTitle,
                         dialogClassName: `am-wxt-scene-popup-dialog-advanced ${isQuickLiftVariant ? 'am-wxt-scene-popup-dialog-quick-lift' : ''}`,
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         bodyHtml: isQuickLiftVariant ? quickLiftBodyHtml : advancedBodyHtml,
@@ -51205,7 +52155,9 @@ if (typeof globalThis !== 'undefined') {
                                     if (!(panel instanceof HTMLElement)) return;
                                     const nextHidden = !panel.hidden;
                                     panel.hidden = nextHidden;
-                                    btn.innerHTML = nextHidden ? '展开设置 <span>⌄</span>' : '收起设置 <span>⌃</span>';
+                                    btn.innerHTML = nextHidden
+                                        ? `展开设置${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}`
+                                        : `收起设置${renderAmIcon('chevron-up', { size: 12, strokeWidth: 2.4 })}`;
                                 };
                             });
                             if (quickLiftTimeRangeEl instanceof HTMLElement) {
@@ -51818,7 +52770,7 @@ if (typeof globalThis !== 'undefined') {
                     const result = await openScenePopupDialog({
                         title: '选择趋势主题',
                         dialogClassName: 'am-wxt-scene-popup-dialog-filter am-wxt-scene-popup-dialog-trend-theme',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         saveFirst: true,
@@ -51856,7 +52808,7 @@ if (typeof globalThis !== 'undefined') {
                                                     <span>
                                                         <label class="am-wxt-scene-trend-check">
                                                             <input type="checkbox" data-scene-popup-trend-select-all="trend" />
-                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                             <i>主题</i>
                                                         </label>
                                                     </span>
@@ -51877,7 +52829,7 @@ if (typeof globalThis !== 'undefined') {
                                                     <span>
                                                         <label class="am-wxt-scene-trend-check">
                                                             <input type="checkbox" data-scene-popup-trend-select-all="effect" />
-                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                             <i>主题</i>
                                                         </label>
                                                     </span>
@@ -51898,7 +52850,7 @@ if (typeof globalThis !== 'undefined') {
                                                     <span>
                                                         <label class="am-wxt-scene-trend-check">
                                                             <input type="checkbox" data-scene-popup-trend-select-all="traffic" />
-                                                            <span class="am-wxt-scene-trend-check-icon"></span>
+                                                            <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                             <i>主题</i>
                                                         </label>
                                                     </span>
@@ -52190,7 +53142,7 @@ if (typeof globalThis !== 'undefined') {
                                                             ${selected ? 'checked' : ''}
                                                             ${disabled ? 'disabled' : ''}
                                                         />
-                                                        <span class="am-wxt-scene-trend-check-icon"></span>
+                                                    <span class="am-wxt-scene-trend-check-icon">${renderAmIcon('check', { size: 12, strokeWidth: 2.5 })}</span>
                                                     </label>
                                                     <div class="name">${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</div>
                                                 </div>
@@ -52226,7 +53178,7 @@ if (typeof globalThis !== 'undefined') {
                                     return `
                                         <button type="button" class="am-wxt-scene-trend-selected-chip" data-scene-popup-trend-remove="${Utils.escapeHtml(key)}">
                                             <span>${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</span>
-                                            <i>×</i>
+                                            <i aria-hidden="true">${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}</i>
                                         </button>
                                     `;
                                 }).join('');
@@ -52903,7 +53855,7 @@ if (typeof globalThis !== 'undefined') {
                     const result = await openScenePopupDialog({
                         title: '添加商品',
                         dialogClassName: 'am-wxt-scene-popup-dialog-filter',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         bodyHtml: `
@@ -53343,7 +54295,7 @@ if (typeof globalThis !== 'undefined') {
                     const result = await openScenePopupDialog({
                         title: '资源位溢价',
                         dialogClassName: 'am-wxt-scene-popup-dialog-advanced',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         bodyHtml: `
@@ -53710,6 +54662,7 @@ if (typeof globalThis !== 'undefined') {
                     const result = await openScenePopupDialog({
                         title: 'AI点睛设置',
                         dialogClassName: 'am-wxt-scene-popup-dialog-ai-max',
+                        closeIcon: true,
                         bodyHtml: `
                             <div class="am-wxt-ai-max-popup" data-ai-max-popup="1">
                                 <section class="am-wxt-ai-max-popup-section">
@@ -53890,7 +54843,7 @@ if (typeof globalThis !== 'undefined') {
                     const result = await openScenePopupDialog({
                         title: '设置过滤人群',
                         dialogClassName: 'am-wxt-scene-popup-dialog-filter',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         saveFirst: true,
@@ -54259,7 +55212,7 @@ if (typeof globalThis !== 'undefined') {
                     const result = await openScenePopupDialog({
                         title: '优质计划防停投',
                         dialogClassName: 'am-wxt-scene-popup-dialog-budget-guard',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         saveFirst: true,
@@ -54762,7 +55715,7 @@ if (typeof globalThis !== 'undefined') {
                             const result = await openScenePopupDialog({
                                 title: crowdPopupTitle,
                                 dialogClassName: 'am-wxt-scene-popup-dialog-crowd',
-                                closeLabel: '×',
+                                closeIcon: true,
                                 cancelLabel: '取消',
                                 saveLabel: '确定',
                                 bodyHtml: `
@@ -54819,7 +55772,7 @@ if (typeof globalThis !== 'undefined') {
                                                         rel="noreferrer noopener"
                                                     >人群解读</a>
                                                 </div>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-crowd-add-close="1">×</button>
+                                                <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-scene-popup-crowd-add-close="1" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                                             </div>
                                             <div class="am-wxt-scene-crowd-add-body">
                                                 <div class="am-wxt-scene-crowd-native-layout" data-scene-popup-crowd-native-layout="1">
@@ -56730,7 +57683,9 @@ if (typeof globalThis !== 'undefined') {
                         <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true">
                             <div class="am-wxt-scene-popup-head">
                                 <span>${Utils.escapeHtml(title || '批量修改')}</span>
-                                <button type="button" class="am-wxt-btn" data-scene-popup-close="1">关闭</button>
+                                <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-scene-popup-close="1" aria-label="关闭">
+                                    ${renderAmWindowIcon('close')}
+                                </button>
                             </div>
                             <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
                             <div class="am-wxt-scene-popup-foot">
@@ -57026,18 +57981,6 @@ if (typeof globalThis !== 'undefined') {
             const openStrategyDetail = (strategyId) => {
                 const strategy = getStrategyById(strategyId);
                 if (!strategy) return;
-                if (
-                    wizardState.editingStrategyId === strategy.id
-                    && wizardState.detailVisible
-                    && wizardState.workbenchPage === 'editor'
-                ) {
-                    setDetailVisible(false);
-                    if (typeof wizardState.setWorkbenchPage === 'function') {
-                        wizardState.setWorkbenchPage('home');
-                    }
-                    commitStrategyUiState({ refreshPreview: false });
-                    return;
-                }
                 showStrategyDetail(strategy);
             };
             const addNewStrategy = () => {
@@ -57579,7 +58522,7 @@ if (typeof globalThis !== 'undefined') {
                                 <button class="am-wxt-btn am-wxt-copy-btn" data-action="copy">
                                     <span>复制</span>
                                     <span class="am-wxt-copy-multi" data-action="copy-count-badge" title="点击增加，右键减少，滚轮可调节">
-                                        <span class="am-wxt-copy-multi-icon">×</span>
+                                        <span class="am-wxt-copy-multi-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
                                         <span class="am-wxt-copy-multi-num">${copyBatchCount}</span>
                                     </span>
                                 </button>
@@ -57872,6 +58815,41 @@ if (typeof globalThis !== 'undefined') {
                 });
             };
 
+            const resolveKeywordItemPicUrl = (item = {}) => {
+                const raw = isPlainObject(item?.raw) ? item.raw : {};
+                return String(
+                    item?.picUrl
+                    || item?.imgUrl
+                    || item?.imageUrl
+                    || item?.pictUrl
+                    || item?.itemPicUrl
+                    || item?.materialPicUrl
+                    || item?.materialImageUrl
+                    || item?.mainPic
+                    || raw.picUrl
+                    || raw.imgUrl
+                    || raw.imageUrl
+                    || raw.pictUrl
+                    || raw.itemPicUrl
+                    || raw.materialPicUrl
+                    || raw.materialImageUrl
+                    || raw.mainPic
+                    || ''
+                ).trim();
+            };
+
+            const renderKeywordItemThumb = (item = {}) => {
+                const picUrl = resolveKeywordItemPicUrl(item);
+                if (!picUrl) {
+                    return '<span class="am-wxt-item-thumb empty" aria-hidden="true">宝</span>';
+                }
+                return `
+                    <span class="am-wxt-item-thumb has-image">
+                        <img src="${Utils.escapeHtml(picUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                    </span>
+                `;
+            };
+
             const renderCandidateList = (options = {}) => {
                 const preserveScroll = options && options.preserveScroll === true;
                 const addedSet = new Set(wizardState.addedItems.map(item => String(item.materialId)));
@@ -57886,9 +58864,12 @@ if (typeof globalThis !== 'undefined') {
                     const row = document.createElement('div');
                     row.className = 'am-wxt-item';
                     row.innerHTML = `
-                        <div>
-                            <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
-                            <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                        <div class="am-wxt-item-main">
+                            ${renderKeywordItemThumb(item)}
+                            <div class="am-wxt-item-info">
+                                <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
+                                <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                            </div>
                         </div>
                         <div class="actions">
                             <button class="am-wxt-btn">${addedSet.has(String(item.materialId)) ? '已添加' : '添加'}</button>
@@ -57959,9 +58940,12 @@ if (typeof globalThis !== 'undefined') {
                     const row = document.createElement('div');
                     row.className = 'am-wxt-item';
                     row.innerHTML = `
-                        <div>
-                            <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
-                            <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                        <div class="am-wxt-item-main">
+                            ${renderKeywordItemThumb(item)}
+                            <div class="am-wxt-item-info">
+                                <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
+                                <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                            </div>
                         </div>
                         <div class="actions">
                             <button class="am-wxt-btn">上移</button>
@@ -59000,7 +59984,7 @@ if (typeof globalThis !== 'undefined') {
                                         data-matrix-dimension-remove="1"
                                         aria-label="删除维度"
                                         title="删除维度"
-                                    >&times;</button>
+                                    >${renderAmIcon('close', { size: 16, strokeWidth: 2.2 })}</button>
                                 </div>
                             </div>
                             <input
@@ -59032,7 +60016,7 @@ if (typeof globalThis !== 'undefined') {
                             title="${Utils.escapeHtml(desc)}"
                             ${isDisabled ? 'disabled' : ''}
                         >
-                            <span class="am-wxt-matrix-dimension-add-icon">+</span>
+                            <span class="am-wxt-matrix-dimension-add-icon">${renderAmIcon('plus', { size: 18, strokeWidth: 2.2 })}</span>
                             <span class="am-wxt-matrix-dimension-add-title">${Utils.escapeHtml(title)}</span>
                             <span class="am-wxt-matrix-dimension-add-desc">${Utils.escapeHtml(desc)}</span>
                         </button>
@@ -66570,13 +67554,13 @@ if (typeof globalThis !== 'undefined') {
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
                         <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
-                            ${renderAmIcon('center', { size: 14 })}
+                            ${renderAmWindowIcon('center')}
                         </span>
                         <span id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" title="最大化">
-                            ${renderAmIcon('expand', { size: 14 })}
+                            ${renderAmWindowIcon('expand')}
                         </span>
                         <span id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" title="关闭">
-                            ${renderAmIcon('close', { size: 18 })}
+                            ${renderAmWindowIcon('close')}
                         </span>
                     </div>
                 </div>

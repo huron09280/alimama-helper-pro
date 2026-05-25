@@ -33,6 +33,41 @@
                 });
             };
 
+            const resolveKeywordItemPicUrl = (item = {}) => {
+                const raw = isPlainObject(item?.raw) ? item.raw : {};
+                return String(
+                    item?.picUrl
+                    || item?.imgUrl
+                    || item?.imageUrl
+                    || item?.pictUrl
+                    || item?.itemPicUrl
+                    || item?.materialPicUrl
+                    || item?.materialImageUrl
+                    || item?.mainPic
+                    || raw.picUrl
+                    || raw.imgUrl
+                    || raw.imageUrl
+                    || raw.pictUrl
+                    || raw.itemPicUrl
+                    || raw.materialPicUrl
+                    || raw.materialImageUrl
+                    || raw.mainPic
+                    || ''
+                ).trim();
+            };
+
+            const renderKeywordItemThumb = (item = {}) => {
+                const picUrl = resolveKeywordItemPicUrl(item);
+                if (!picUrl) {
+                    return '<span class="am-wxt-item-thumb empty" aria-hidden="true">宝</span>';
+                }
+                return `
+                    <span class="am-wxt-item-thumb has-image">
+                        <img src="${Utils.escapeHtml(picUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                    </span>
+                `;
+            };
+
             const renderCandidateList = (options = {}) => {
                 const preserveScroll = options && options.preserveScroll === true;
                 const addedSet = new Set(wizardState.addedItems.map(item => String(item.materialId)));
@@ -47,9 +82,12 @@
                     const row = document.createElement('div');
                     row.className = 'am-wxt-item';
                     row.innerHTML = `
-                        <div>
-                            <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
-                            <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                        <div class="am-wxt-item-main">
+                            ${renderKeywordItemThumb(item)}
+                            <div class="am-wxt-item-info">
+                                <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
+                                <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                            </div>
                         </div>
                         <div class="actions">
                             <button class="am-wxt-btn">${addedSet.has(String(item.materialId)) ? '已添加' : '添加'}</button>
@@ -120,9 +158,12 @@
                     const row = document.createElement('div');
                     row.className = 'am-wxt-item';
                     row.innerHTML = `
-                        <div>
-                            <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
-                            <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                        <div class="am-wxt-item-main">
+                            ${renderKeywordItemThumb(item)}
+                            <div class="am-wxt-item-info">
+                                <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
+                                <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
+                            </div>
                         </div>
                         <div class="actions">
                             <button class="am-wxt-btn">上移</button>

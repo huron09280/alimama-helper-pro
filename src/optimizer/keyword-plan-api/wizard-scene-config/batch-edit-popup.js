@@ -245,18 +245,6 @@
             const openStrategyDetail = (strategyId) => {
                 const strategy = getStrategyById(strategyId);
                 if (!strategy) return;
-                if (
-                    wizardState.editingStrategyId === strategy.id
-                    && wizardState.detailVisible
-                    && wizardState.workbenchPage === 'editor'
-                ) {
-                    setDetailVisible(false);
-                    if (typeof wizardState.setWorkbenchPage === 'function') {
-                        wizardState.setWorkbenchPage('home');
-                    }
-                    commitStrategyUiState({ refreshPreview: false });
-                    return;
-                }
                 showStrategyDetail(strategy);
             };
             const addNewStrategy = () => {

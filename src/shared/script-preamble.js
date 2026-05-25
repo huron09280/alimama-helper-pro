@@ -202,6 +202,12 @@ const AM_ICON_DEFS = {
     close: {
         body: '<path d="M6 6l12 12M18 6L6 18"></path>'
     },
+    multiply: {
+        body: '<path d="M8 8l8 8M16 8l-8 8"></path>'
+    },
+    plus: {
+        body: '<path d="M12 5v14M5 12h14"></path>'
+    },
     'shield-check': {
         body: '<path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3z"></path><path d="M9 12l2 2 4-5"></path>'
     },
@@ -280,6 +286,15 @@ const AM_ICON_DEFS = {
     help: {
         body: '<circle cx="12" cy="12" r="8"></circle><path d="M9.8 9.5a2.3 2.3 0 1 1 3.4 2c-.8.5-1.2 1-1.2 2V14"></path><path d="M12 17h.01"></path>'
     },
+    user: {
+        body: '<circle cx="12" cy="8" r="3"></circle><path d="M5 20c1.4-4 4-6 7-6s5.6 2 7 6"></path>'
+    },
+    sparkles: {
+        body: '<path d="M13 3l1.5 4.5L19 9l-4.5 1.5L13 15l-1.5-4.5L7 9l4.5-1.5L13 3z"></path><path d="M6 14l.9 2.1L9 17l-2.1.9L6 20l-.9-2.1L3 17l2.1-.9L6 14z"></path>'
+    },
+    'external-link': {
+        body: '<path d="M14 5h5v5"></path><path d="M10 14L19 5"></path><path d="M19 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4"></path>'
+    },
     'chevron-down': {
         body: '<path d="M7 10l5 5 5-5"></path>'
     },
@@ -305,7 +320,21 @@ const renderAmIcon = (name, options = {}) => {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icon.viewBox || '0 0 24 24'}" width="${size}" height="${size}" class="${escapeAmIconHtml(className)}" fill="${icon.fill || 'none'}" stroke="${icon.stroke || 'currentColor'}" stroke-width="${escapeAmIconHtml(strokeWidth)}" stroke-linecap="round" stroke-linejoin="round" ${ariaAttrs}${style}>${title}${icon.body}</svg>`;
 };
 
+const renderAmWindowIcon = (name, options = {}) => {
+    const baseStyle = 'display:block;width:16px;height:16px;';
+    const className = ['am-window-control-icon', options.className || ''].filter(Boolean).join(' ');
+    const style = `${baseStyle}${options.style || ''}`;
+    return renderAmIcon(name, {
+        ...options,
+        size: 16,
+        strokeWidth: 2.2,
+        className,
+        style
+    });
+};
+
 if (typeof globalThis !== 'undefined') {
     globalThis.__AM_RENDER_ICON__ = renderAmIcon;
+    globalThis.__AM_RENDER_WINDOW_ICON__ = renderAmWindowIcon;
     globalThis.__AM_ESCAPE_ICON_HTML__ = escapeAmIconHtml;
 }

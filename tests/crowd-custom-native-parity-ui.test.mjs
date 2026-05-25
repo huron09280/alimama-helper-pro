@@ -360,8 +360,8 @@ test('场景弹窗支持 ESC 关闭并在销毁时解绑事件', () => {
   );
   assert.match(
     renderBlock,
-    /dialogClassName:\s*'am-wxt-scene-popup-dialog-crowd'[\s\S]*?closeLabel:\s*'×'/,
-    '人群弹窗头部关闭按钮未对齐为“×”'
+    /dialogClassName:\s*'am-wxt-scene-popup-dialog-crowd'[\s\S]*?closeIcon:\s*true/,
+    '人群弹窗头部关闭按钮未使用共享图标关闭态'
   );
   assert.match(
     renderBlock,

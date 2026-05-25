@@ -358,7 +358,7 @@
                                 <button class="am-wxt-btn am-wxt-copy-btn" data-action="copy">
                                     <span>复制</span>
                                     <span class="am-wxt-copy-multi" data-action="copy-count-badge" title="点击增加，右键减少，滚轮可调节">
-                                        <span class="am-wxt-copy-multi-icon">×</span>
+                                        <span class="am-wxt-copy-multi-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
                                         <span class="am-wxt-copy-multi-num">${copyBatchCount}</span>
                                     </span>
                                 </button>

@@ -235,7 +235,8 @@ export const renderExtensionManifest = (version) => {
                 matches: [
                     '*://alimama.com/*',
                     '*://*.alimama.com/*',
-                    'https://one.alimama.com/*'
+                    'https://one.alimama.com/*',
+                    'https://myseller.taobao.com/*'
                 ],
                 js: ['content.js'],
                 run_at: 'document_start'
@@ -247,7 +248,8 @@ export const renderExtensionManifest = (version) => {
                 matches: [
                     '*://alimama.com/*',
                     '*://*.alimama.com/*',
-                    'https://one.alimama.com/*'
+                    'https://one.alimama.com/*',
+                    'https://myseller.taobao.com/*'
                 ]
             }
         ]

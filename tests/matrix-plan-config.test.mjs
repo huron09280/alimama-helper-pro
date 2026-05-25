@@ -503,6 +503,7 @@ test('矩阵页使用双栏工作台布局并扩展维度编辑区', () => {
   assert.match(source, /id="am-wxt-matrix-stat-dimensions"/, '矩阵页缺少维度数量统计卡片');
   assert.match(source, /#am-wxt-keyword-modal \.am-wxt-matrix-main \{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?gap:\s*10px;/, '矩阵主区未改成场景横条加维度卡片的纵向结构');
   assert.match(source, /#am-wxt-keyword-modal \.am-wxt-matrix-scene-card \{[\s\S]*?padding:\s*12px 14px;/, '矩阵场景横条未启用独立卡片样式');
+  assert.match(source, /#am-wxt-keyword-modal \.am-wxt-matrix-scene-card \{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?gap:\s*14px;/, '矩阵场景选择与营销目标缺少稳定行距');
   assert.match(source, /class="am-wxt-crowd-list am-wxt-matrix-dimension-list"/, '矩阵页缺少独立维度列表容器');
   assert.match(
     source,
@@ -519,7 +520,7 @@ test('矩阵维度卡片将维度类型下拉收进首行，避免重复展示',
   );
   assert.match(
     source,
-    /class="am-wxt-matrix-dimension-top-actions">[\s\S]*?class="am-wxt-matrix-dimension-remove-icon"[\s\S]*?data-matrix-dimension-remove="1"[\s\S]*?&times;/,
+    /class="am-wxt-matrix-dimension-top-actions">[\s\S]*?class="am-wxt-matrix-dimension-remove-icon"[\s\S]*?data-matrix-dimension-remove="1"[\s\S]*?renderAmIcon\('close'/,
     '右上角删除图标未保留在卡片首行'
   );
   assert.match(source, /data-matrix-dimension-key-picker-toggle="1"/, '维度类型单选未改成自定义下拉触发器');
@@ -538,7 +539,7 @@ test('矩阵维度卡片将维度类型下拉收进首行，避免重复展示',
   );
   assert.match(
     source,
-    /#am-wxt-keyword-modal \.am-wxt-matrix-dimension-remove-icon \{[\s\S]*?width:\s*34px;[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*16px;/,
+    /#am-wxt-keyword-modal \.am-wxt-matrix-dimension-remove-icon \{[\s\S]*?width:\s*34px;[\s\S]*?height:\s*34px;[\s\S]*?display:\s*inline-flex;/,
     '右上角删除图标样式未生效'
   );
   assert.match(

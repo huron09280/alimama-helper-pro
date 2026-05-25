@@ -1,3 +1,375 @@
+# TODO - 2026-05-25 商品主图与首页 Tab 精简
+
+## 需求规格
+- 目标：在关键词批量建计划向导的候选商品与已添加商品列表中展示商品主图，并删除顶部导航中“编辑页”tab。
+- 约束：
+  - 保留计划行“编辑计划”和“新建计划”进入编辑层的能力；
+  - 不修改选品、排序、添加/移除、建计划、投放、复制、批量编辑、矩阵和接口组包逻辑；
+  - 商品主图仅用于展示，缺图时使用稳定占位。
+- 成功标准：
+  - 顶部导航只显示“首页 / 矩阵页 / 日志页”；
+  - 首页已添加商品和添加商品弹窗候选商品显示主图或占位；
+  - “编辑计划”仍可打开单计划编辑层；
+  - 相关测试、构建校验和真实页面验证通过。
+
+## 执行计划（可核对）
+- [x] 回顾当前商品渲染、顶部 tab 与编辑链路，确认最小改动范围。
+- [x] 在商品渲染模块增加主图 URL 解析与缩略图渲染 helper，并接入候选/已添加列表。
+- [x] 补充主图展示样式，确保标题与按钮不重叠。
+- [x] 删除顶部“编辑页”tab，保留内部 editor 路由和计划行编辑入口。
+- [x] 更新商品主图与顶部 tab 精简相关回归测试。
+- [x] 运行语法、构建、测试与真实页面验证。
+
+## 高层操作摘要
+- 已确认商品归一化链路已有 `picUrl` 及多种 raw 图片字段兼容，本次只补展示层。
+- 已确认顶部“编辑页”tab 是 `data-workbench-page="editor"` 按钮；计划行“编辑计划”走 `showStrategyDetail`，需要保留。
+- 已在商品列表渲染中增加主图解析/缩略图 helper，候选商品与已添加商品共用同一展示结构。
+- 已补充 44px 固定主图样式、标题两行截断与按钮防挤压布局。
+- 已删除顶部“编辑页”tab，并保留隐藏 editor 面板与内部路由，供“编辑计划/新建计划”继续打开。
+- 已更新商品主图与顶部 tab 精简回归断言。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/wizard-scene-config/item-selection.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+- `node --check tests/keyword-item-picker-popup.test.mjs && node --check tests/keyword-edit-strategy-settings.test.mjs`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-mount-intro.js`：该文件为构建拼接片段，单独检查报 `Unexpected end of input`；已用整包语法检查覆盖实际产物。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `node --test tests/keyword-item-picker-popup.test.mjs tests/keyword-edit-strategy-settings.test.mjs`：通过，12/12。
+- `npm run build:check`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后 `window.__AM_GET_SCRIPT_VERSION__()` 为 `7.03`，打开向导未触发创建/投放/提交入口。
+- 真实页面首页验证：顶部 tab 为 `首页 / 矩阵页 / 日志页`，`data-workbench-page="editor"` 不存在；已添加商品 1 个，主图 `44×44`，图片存在。
+- 真实页面添加商品弹窗验证：点击“添加商品”只打开选品弹窗，候选商品 40 条，缩略图 40 个，图片 40 个，首个缩略图 `44×44`。
+- 真实页面编辑入口验证：关闭选品弹窗后点击第一条“编辑计划”，详情编辑层打开，标题为当前计划名，可见输入框存在；未点击“立即投放”或“批量创建”。
+- 控制台抽查：页面仍有平台/既有助手侧 `restoreSmartAssistantPatches` 与 `ERR_TUNNEL_CONNECTION_FAILED` 错误，未阻断本次商品主图、tab 精简和编辑入口验证。
+
+## 结果复盘
+- 根因：商品数据已归一化出图片字段，但候选/已添加商品渲染只展示标题与宝贝 ID；顶部“编辑页”tab 作为入口存在，但计划编辑实际已由“新建计划/编辑计划”统一打开。
+- 修复：新增商品主图解析与缩略图 helper，候选商品和已添加商品共用展示结构；补充首页与商品弹窗两处样式作用域；删除顶部“编辑页”tab，保留内部 editor 路由。
+- 风险：主图依赖接口返回图片字段；缺图时显示“宝”占位，不额外请求详情接口。
+- 回滚方式：恢复 `wizard-mount-intro.js` 的 editor tab 按钮，移除 `item-selection.js` 中缩略图 helper/DOM 包裹，并移除对应样式与测试断言。
+
+---
+
+# TODO - 2026-05-25 矩阵页场景选择与营销目标增加行距
+
+## 需求规格
+- 目标：按截图反馈，将矩阵页顶部“场景选择”和“营销目标”两行上下间距调高，减少两组分段按钮贴得过近的问题。
+- 约束：
+  - 只调整矩阵页场景卡片的布局间距；
+  - 不修改场景、营销目标选项、默认值、联动逻辑或请求组包；
+  - 不影响编辑页其它动态表单行。
+- 成功标准：
+  - 矩阵页“场景选择”与“营销目标”之间存在更明显的垂直留白；
+  - 两行标签与分段按钮仍保持对齐，移动端不出现文字/控件重叠；
+  - 构建和相关矩阵 UI 回归测试通过，必要时完成真实页面目视验证。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md` 和现有矩阵页结构，确认本次只做 UI 间距微调。
+- [x] 在 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js` 中限定修改 `.am-wxt-matrix-scene-card` 内部行距。
+- [x] 补充/更新矩阵页样式回归断言，锁定该间距不会被后续覆盖。
+- [x] 运行相关语法、构建和测试验证，并同步生成产物。
+- [x] 进行浏览器目视验证，记录“场景选择/营销目标”间距结果。
+
+## 高层操作摘要
+- 已定位该 UI 位于矩阵页 `.am-wxt-matrix-scene-card`，当前两行 `.am-wxt-scene-setting-row` 在卡片内 `padding: 0`，导致上下过近。
+- 本次计划采用卡片内部纵向 `row-gap`/相邻行间距处理，避免改通用动态表单行。
+- 已将 `.am-wxt-matrix-scene-card` 改为纵向 flex，并设置 `gap: 14px`，只影响矩阵页顶部场景卡片。
+- 已在 `tests/matrix-plan-config.test.mjs` 增加样式断言，防止后续把该行距覆盖回 0。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+- `node --check tests/matrix-plan-config.test.mjs`：通过。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，24/24。
+- `node scripts/build.mjs`：通过，已同步根 userscript、`dist/packages` 与 `dist/extension`。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js"`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc`：刷新页面后通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 打开向导并切到矩阵页，未点击创建/投放/提交入口。
+- 真实页面计算样式：`.am-wxt-matrix-scene-card` 为 `display:flex`、`flex-direction:column`、`gap:14px`，两行实际 `verticalGapPx=14`，`hasOverlap=false`。
+- 目视截图：`tasks/matrix-scene-goal-spacing-2026-05-25.png`，确认“场景选择”和“营销目标”上下间隔更明显。
+
+## 结果复盘
+- 根因：矩阵页场景卡片内两行行容器 `padding: 0` 且卡片没有内部行距，分段按钮高度相邻后显得过贴。
+- 修复：在矩阵页专属 `.am-wxt-matrix-scene-card` 上增加纵向 flex 和 `14px` 间距，不触碰通用动态表单行、场景/目标业务逻辑或组包。
+- 风险：本次只改视觉间距；如浏览器仍加载旧运行态，需要刷新页面或重载脚本/扩展后才能看到新样式。
+
+---
+
+# TODO - 2026-05-24 修复立即投放提交方式菜单错位
+
+## 需求规格
+- 目标：修复关键词推广批量建计划弹窗中，“立即投放”旁边提交方式图标点击后下拉菜单错位的问题。
+- 约束：
+  - 不修改提交业务逻辑、接口参数、默认提交方式或真实投放链路；
+  - 不改变“并发数 / 单条”的现有选项语义；
+  - 仅做最小 UI 定位与必要的结构/样式修复。
+- 成功标准：
+  - 点击“立即投放”旁边图标后，提交方式菜单贴近该按钮组展开，不再跑到弹窗底部或其它区域；
+  - 菜单层级不被日志区或弹窗内容遮挡；
+  - 现有提交方式切换逻辑保持不变。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md` 与现有任务记录，确认本次只修 UI 错位。
+- [x] 定位“立即投放 + 提交方式”渲染结构与样式定位规则。
+- [x] 以最小改动修复下拉菜单锚点、层级或布局上下文。
+- [x] 回填高层操作摘要、验证记录与结果复盘。
+- [ ] 在获得允许后执行真实页面/关键测试验证并记录结果。
+
+## 高层操作摘要
+- 本次计划只处理提交方式图标点击后的菜单定位，不触发创建、提交或投放。
+- 已确认错位根因是提交方式菜单使用 `position: fixed`，但菜单 DOM 位于弹窗内部，视口坐标与弹窗定位上下文混用后产生偏移。
+- 已将菜单改为按钮组内 `absolute` 定位，并让打开时的内联定位固定为 `left: 0; top: calc(100% + 6px)`，避免继续依赖视口坐标。
+- 用户复验反馈仍有错位，且图标不需要背景；二次修复改为打开时将菜单挂载到 `document.body`，恢复 `fixed` 视口坐标定位，并强制箭头按钮透明无阴影。
+- 用户继续反馈鼠标 hover 时仍有错位；本轮移除箭头按钮的原生 `title`，避免浏览器 tooltip 自带错位，并补充 ID 级 hover/active/focus/伪元素背景覆盖。
+- 用户补充期望：默认图标为白色，鼠标移上去只允许 1px 位移；已补充 transform 强覆盖，避免通用按钮 hover 覆盖垂直居中。
+
+## 验证记录
+- 源码修复已完成；真实页面验证需要在不点击实际提交的前提下，只点击提交方式图标并观察菜单位置。
+- `node scripts/build.mjs`：2026-05-24 已执行通过，已同步根 userscript、`dist/packages` 与 `dist/extension` 产物。
+- 未执行真实页面点击验证；如继续验证，应只点击提交方式图标，不点击“立即投放”按钮本体。
+- 2026-05-25 用户复验反馈：菜单仍有错位，且提交方式图标不需要背景；已完成二次源码修复。
+- `node scripts/build.mjs`：2026-05-25 已执行通过，已同步根 userscript、`dist/packages` 与 `dist/extension` 产物。
+- 2026-05-25 用户复验反馈：鼠标 hover 时仍有错位；已完成 hover 态源码修复。
+- `node scripts/build.mjs`：2026-05-25 hover 修复后已执行通过，已同步根 userscript、`dist/packages` 与 `dist/extension` 产物。
+- 2026-05-25 用户补充：默认图标白色，hover 只移动 1px；已完成 CSS 源码修复。
+- `node scripts/build.mjs`：2026-05-25 hover 位移修复后已执行通过，已同步根 userscript、`dist/packages` 与 `dist/extension` 产物。
+
+## 结果复盘
+- 根因：提交方式菜单作为弹窗内部 DOM 使用 `position: fixed`，同时 JS 写入视口坐标；在弹窗定位上下文内坐标解释偏移，导致菜单出现在弹窗底部。
+- 修复：让菜单回到 `.am-wxt-run-mode-wrap` 内部绝对定位，打开时固定贴在按钮组下方展开，避免视口坐标与弹窗上下文混用。
+- 二次修复：按钮组内绝对定位仍受弹窗内部布局影响，改为 body 级浮层，菜单定位与弹窗内容流解耦；图标按钮补充 `background/border/box-shadow` 强覆盖。
+- 三次修复：hover 错位主要来自原生 `title` tooltip 与通用按钮伪元素/状态样式泄漏；移除小箭头 `title`，用 `aria-label` 保留可访问性，并禁用该按钮 hover/active/focus 的背景、边框、阴影和 `::after`。
+- 四次修复：通用 `.am-wxt-btn:hover` 可能覆盖小箭头的 `transform`，导致从 `translateY(-50%)` 跳到通用位移；本次用 ID 级规则固定默认 `translateY(-50%)`，hover/active 仅为 `translateY(calc(-50% - 1px))`，并保持图标白色。
+- 风险：本次不改提交逻辑；如当前浏览器仍加载旧 userscript，需要刷新页面或重载扩展/脚本后才能看到新样式。
+
+---
+
+# TODO - 2026-05-24 统一悬浮球与 Chrome 插件图标
+
+## 需求规格
+- 目标：将 Chrome 插件（谷歌插件）应用图标改为与当前悬浮球主品牌图标一致的形状与视觉风格。
+- 约束：
+  - 不改浮窗/面板交互、业务逻辑与用户配置；
+  - 不改 `extension manifest` 名称、版本、权限；
+  - 仅修改 `src/entries/extension-icons/icon.svg` 与生成的 PNG 源文件。
+- 成功标准：
+  - `src/entries/extension-icons/icon.svg` 使用悬浮球同款圆形底板与蓝色线性 logo；
+  - 插件 SVG 中 logo 路径由 `src/shared/script-preamble.js` 的 `M13 3L5 13h6l-1 8 9-12h-6l1-6z` 等比换算而来，不再使用相似但不同源的旧闪电路径；
+  - `icon-16.png`、`icon-32.png`、`icon-48.png`、`icon-128.png` 由 `icon.svg` 重新生成，替换并同步至 `dist/extension/`。
+
+## 执行计划（可核对）
+- [x] 在 `src/entries/extension-icons/icon.svg` 按 `src/shared/script-preamble.js` 的 `logo` 图形重绘应用图标。
+- [x] 二次校准：将 SVG 从“相似填充闪电”改为悬浮球同款圆形底板 + 蓝色线性 logo，并严格按共享 logo 路径等比换算。
+- [x] 用 `sharp` 重新生成 `icon-16/32/48/128.png`，确保尺寸与边界一致。
+- [x] 运行 `node scripts/build.mjs` 让 `dist/extension` 同步更新。
+- [x] 运行 `node scripts/build.mjs --check` 与关键语法校验。
+
+## 高层操作摘要
+- 本次只改应用图标源稿链路，不进入运行时逻辑；
+- 通过统一图形源，保证 Chrome extension 图标视觉与悬浮球品牌标识一致；
+- 二次校准后不再保留旧版圆角方形底板，Chrome 插件图标直接采用悬浮球视觉语言。
+
+## 验证记录
+- `node scripts/build.mjs`：2026-05-24 已执行，`dist/extension` 图标文件已同步。
+- `node scripts/build.mjs --check`：2026-05-24 通过。
+- `node --check \"阿里妈妈多合一助手.js\"`：通过。
+- `node --check tests/icon-system-regression.test.mjs`：通过。
+- `node --test tests/icon-system-regression.test.mjs`：2026-05-24 通过。
+- 2026-05-24 二次校准后已重新执行 `node scripts/build.mjs`，完成根 userscript、packages 与 extension 产物同步。
+- `sharp metadata`：`icon-16.png`、`icon-32.png`、`icon-48.png`、`icon-128.png` 分别为 16/32/48/128 正方形 PNG，均保留 alpha 通道。
+- `node scripts/build.mjs --check`：2026-05-24 二次校准后通过。
+- `node --check "阿里妈妈多合一助手.js"`：2026-05-24 二次校准后通过。
+- `node --check tests/icon-system-regression.test.mjs`：2026-05-24 二次校准后通过。
+- `node --test tests/icon-system-regression.test.mjs`：2026-05-24 二次校准后通过，6/6。
+- `node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs`：2026-05-24 二次校准后通过，9/9。
+- `git diff --check`：2026-05-24 二次校准后通过。
+- 本地查看 `src/entries/extension-icons/icon-128.png`：图标为悬浮球同款白色圆形底板、浅蓝描边和蓝色线性 logo，未保留旧版底部基线或方形底板。
+
+## 结果复盘
+- 已完成应用图标从旧版底部基线样式改为与悬浮球 `logo` 一致的路径；二次校准后进一步改为悬浮球同款圆形底板与蓝色线性标识。
+- 通过重建 PNG 与 `build --check`，Chrome 插件应用图标在 `dist/extension` 与 `src/entries/extension-icons` 两处同步。
+- 风险：本次为静态视觉一致性变更，不影响运行时行为；Chrome 扩展页需要重载 unpacked extension 后才会显示新图标缓存。
+
+---
+
+# TODO - 2026-05-24 组建计划风格对齐人群看板
+
+## 需求规格
+- 目标：将 `组建计划` 弹窗（关键词批量建计划）主界面视觉风格统一到 `人群看板` 弹窗的玻璃拟态方向。
+- 约束：
+  - 不修改向导业务逻辑、接口签名和请求链路；
+  - 不改 DOM 结构与交互入口（按钮动作、tab 切换、关闭逻辑）；
+  - 不触发真实投放/创建流程。
+- 成功标准：
+  - 组建计划弹窗整体（遮罩、卡片、边框、阴影、圆角）与人群看板风格一致；
+  - `头部 Tab`、`面板块`、`按钮`、`输入框`、`日志区`外观采用同系玻璃拟态视觉；
+  - 交互类行为与现有功能不变。
+
+## 执行计划（可核对）
+- [x] 定位 `组建计划` 弹窗与 `人群看板` 样式差异。
+- [x] 仅改 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js` 中样式层：
+  - `#am-wxt-keyword-overlay`
+  - `#am-wxt-keyword-modal`
+  - `.am-wxt-header`
+  - `.am-wxt-workbench-tabs`
+  - `.am-wxt-panel/.am-wxt-config/.am-wxt-matrix-card`
+  - `.am-wxt-btn/.am-wxt-input/.am-wxt-workbench-preview-log/.am-wxt-crowd-box/.am-wxt-log`
+- [x] 在 `tasks/todo.md` 记录验证与复盘。
+- [x] 进行至少一次本地代码级自检并记录结果。
+
+## 高层操作摘要
+- 计划仅覆盖样式层调整，避免动任何业务代码；
+- 采用“覆盖式改写”保留现有类名，维持弹窗功能不变；
+- 以 `人群看板` 的透明白卡、毛玻璃、软阴影、胶囊控件为主视觉参照。
+
+## 验证记录
+- 2026-05-24 已完成 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js` 的样式对齐补丁（覆盖 `#am-wxt-keyword-overlay`、`#am-wxt-keyword-modal`、头部 tab、面板、按钮、输入、日志区、run mode 等）。
+- 2026-05-24 本地语法检查通过：
+  - `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`
+  - `node --check src/main-assistant/magic-report.js`
+- 真实页面对比验收（one.alimama.com）仍待执行，当前结果待补。
+
+## 结果复盘
+- 当前完成样式层对齐补齐，未执行构建与浏览器回归；
+- 当前补齐与本地语法自检已通过；
+- 下一步请补充构建同步与真实页面对比验收，并依据结果继续微调（如仍有偏差再局部补丁）。
+
+---
+
+# TODO - 2026-05-24 统一窗口右上角关闭图标
+
+## 需求规格
+- 目标：统一插件内各窗口右上角关闭入口为同一套 SVG 关闭图标（`renderAmIcon('close')`），避免文字/符号混用。
+- 约束：
+  - 不改窗口关闭逻辑和已有交互行为；
+  - 不改动除本任务范围外的图标资产、提交流程或业务校验。
+- 成功标准：
+  - `interceptor` 报表捕获弹窗关闭按钮改为统一关闭 SVG；
+  - `手动关键词批量修改弹窗` 右上角关闭按钮改为统一关闭 SVG；
+  - `添加商品弹窗` 关闭按钮改为统一关闭 SVG；
+  - 其余窗口右上角关闭入口沿用现有行为，仅变更渲染图标。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md` 与本地图标规范，确认兼容约束。
+- [x] 在源码中定位所有窗口右上角关闭按钮渲染点。
+- [x] 将 `text/字符` 关闭入口替换为 `renderAmIcon('close')` 渲染，补充可访问性属性。
+- [x] 统一补齐 item-picker 头部按钮 icon 尺寸样式（如无默认样式则补齐）。
+- [ ] 运行构建同步与关键验证（语法、回归、真实窗口目视）并回填结果。
+
+## 高层操作摘要
+- 本次仅修改 3 个窗口关闭入口，实现统一 icon 风格和最小布局侵入；
+- 关闭逻辑和事件绑定保持不变，仅替换 DOM 内容为 `renderAmIcon('close')`；
+- 未改动提交链路、状态同步、拦截逻辑或弹窗生命周期管理。
+
+## 验证记录
+- 任务刚录入，源码改动待完成后补充验证结果。
+
+---
+
+# TODO - 2026-05-24 智能助手 SmartAssistant 预算破限支持
+
+## 需求规格
+- 目标：在 `myseller.taobao.com/home.htm` 的 `CRM-Workbench/SmartAssistant` 页面增加预算前端校验破限能力，默认不影响其他阿里妈妈页面行为。
+- 约束：
+  - SmartAssistant 页面只处理 `dailyBudgetAmount` 预算字段；
+  - 当 `dailyBudgetAmount < 100` 时仅绕过该字段阈值相关的阻断/警告，保留其它校验逻辑；
+  - 不放宽除该字段外的校验链路和提交参数；
+  - 该页不得启动 `Interceptor / CampaignIdQuickEntry / PotentialPlanDailyExporter`，仅保留 UI 与预算破限补丁。
+- 成功标准：
+  - userscript 和 extension 内容注入匹配覆盖 `myseller.taobao.com/home.htm/CRM-Workbench/SmartAssistant*`；
+  - `background` 允许 `myseller.taobao.com` 的授权消息来源；
+  - 预算补丁在 SmartAssistant 提交链路中能去掉 `<100` 的前端阻断；
+  - 非 SmartAssistant 页面仍保持现有 budget patch + 全量主助手初始化链路；
+  - 构建产物、语法、测试、manifest 及关键页面验收通过。
+
+## 执行计划（可核对）
+- [x] 先在 `tasks/todo.md` 记录本任务需求、计划与验收边界（当前）；
+- [x] 更新 `src/entries/userscript-meta.js`，补充 `myseller.taobao.com` 匹配；
+- [x] 更新 `src/entries/extension-background.js`，放行 `myseller.taobao.com` sender；
+- [x] 在 `src/main-assistant/main.js` 新增 SmartAssistant 页面检测：
+  - SmartAssistant 页面只 init `UI` 与 `BudgetFrontendLimitBypass`；
+  - 其余模块不 init，不跑 `Core.run / run` 周期。
+- [x] 在 `src/main-assistant/budget-frontend-limit-bypass.js` 增加 SmartAssistant 专用绕过逻辑（仅 `dailyBudgetAmount`）；
+- [x] 更新 `scripts/build.mjs` 的 extension manifest `matches`（`content_scripts` 与 `web_accessible_resources`）；
+- [x] 新增/更新测试：
+  - 新增 `tests/budget-frontend-limit-bypass.test.mjs`，覆盖 SmartAssistant 常量与补丁链路关键断言；
+  - 更新 `tests/extension-static-build.test.mjs`，覆盖 myseller 注入与 manifest 白名单；
+- [x] 运行 `node scripts/build.mjs` 并将 dist 产物回写；
+- [x] 运行 `node scripts/build.mjs --check`、`node --check`、关键测试与 `node run review`；
+- [x] 使用 `chrome-devtools` 在真实 `myseller.taobao.com/.../SmartAssistant` 页面做保存链路验收并回填结果。
+
+## 高层操作摘要
+- 按任务边界把 SmartAssistant 识别与主入口收敛到“只做预算破限”模式，避免该页复用核心算法护航/快速入口能力；
+- 预算补丁分离为：原有 Magix 通用预算字段处理保留 + SmartAssistant 专用 `dailyBudgetAmount` 前端验证链路短路；
+- 全量构建与测试由 build 脚本驱动，避免手改 dist。
+
+## 验证记录
+- `node scripts/build.mjs`：2026-05-24 已执行，完成根用户脚本与 extension 产物回写（`dist/packages` 与 `dist/extension` 均刷新）。
+- `node scripts/build.mjs --check`、`node --check`、`node --test tests/budget-frontend-limit-bypass.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs`：2026-05-24 全部通过。
+- `npm run review`：2026-05-24 全量门禁通过（467/467），无语法/回归失败。
+- `chrome-devtools`：2026-05-24 在已打开的真实页中，`one.alimama.com` 页面可识别到 `window.__AM_GET_SCRIPT_VERSION__()` 与脚本版本；但当前 `myseller.taobao.com/home.htm/CRM-Workbench/smartassistant` 会话未命中 userscript 注入（`hasScriptVersion=null`、未见浮窗/补丁全局），未触发保存链路验收；仅确认 URL 与目标页可达，未发生高风险写操作。
+
+## 结果复盘
+- SmartAssistant 预算破限链路已通过静态源 + 自动化回归验证：专用常量聚焦 `dailyBudgetAmount`，且仅在该字段上下文短路 `setError/getErrors/getState/validate` 与 DOM 错误清理；通用预算补丁与主入口初始化分流边界保持。
+- 关键回退点为 `__AM_BUDGET_FRONTEND_UNLOCK__` 与 `restoreSmartAssistantPatches()/restoreAll()`：关闭总开关或重建页面时会清理补丁快照，回退到原生校验行为。
+
+# TODO - 2026-05-24 运行态图标全量审计与残留修复
+
+## 需求规格
+- 目标：
+  - 按站酷文章 `ICON设计干货来啦~` 的功能性图标方法，对插件运行态所有图标做二次全量审计和补齐；
+  - 在既有 24×24 共享线性图标体系基础上，继续清理残留的私有字体字符、文本符号按钮、CSS 手绘图标和未接入共享入口的图标；
+  - 保持应用图标、主面板、万能查数、算法护航、计划快捷入口、关键词向导/弹窗内控件的图标语言一致；
+  - 通过构建同步根 userscript、packages 与 extension 产物，不手工改 `dist/` 或根 userscript。
+- 边界：
+  - 日志正文中的状态字符属于文本内容，不作为本轮交互图标资产处理；
+  - 文档截图、mockup HTML、历史任务记录不作为运行态图标资产处理；
+  - 仅做图标体系补齐，不顺手调整业务流程、布局密度或提交逻辑。
+- 成功标准：
+  - 运行态可交互图标不再依赖私有字体字符或裸文本符号表达；
+  - 新增/调整的图标仍使用 24×24 画板、20×20 主绘制区、整数坐标、统一线宽/端点/圆角；
+  - 自动化测试、构建同步检查、语法检查通过；
+  - 能够用本地/真实浏览器验证关键图标渲染为非空且 `viewBox` 统一。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md`、既有图标设计规范和参考文章要点。
+- [x] 写入本轮需求规格、边界、成功标准和验证计划。
+- [x] 审计运行态源码中残留的私有字体字符、文本符号按钮、CSS 手绘图标和共享图标调用遗漏。
+- [x] 补齐共享图标定义，替换残留图标实现，并保持最小代码侵入。
+- [x] 更新或补充回归测试，防止重新引入私有字体、裸文本符号和非 24×24 图标。
+- [x] 运行构建、相关测试、构建校验、语法检查和必要的视觉验证。
+- [x] 回填验证记录和结果复盘。
+
+## 高层操作摘要
+- 参考文章抽取的设计约束继续沿用：功能表达清晰、结构简练、重心稳定、基于 24×24 画板和 20×20 主绘制区，坐标尽量像素对齐，同套图标统一线宽、端点和圆角。
+- 既有实现已经建立 `renderAmIcon()` 与 extension 应用图标源稿，本轮重点检查是否仍有漏网的运行态图标没有统一。
+- 审计发现漏网点集中在关键词向导与并发日志：私有字体搜索字符 ``、文本 `+`/`×`/`✕`、AI 点睛帮助/人群/需求的 `?`/`P`/`*`、CSS 伪元素箭头和 CSS 边框勾选。
+- 已新增 `plus`、`multiply`、`user`、`sparkles`、`external-link` 共享图标，并把并发徽标、矩阵增删、AI 点睛、地域搜索、弹窗关闭、趋势主题勾选等运行态图标改为 `renderAmIcon()`。
+- 已更新 `tests/icon-system-regression.test.mjs`，并同步调整矩阵、人群弹窗和智能出价目标包相关断言。
+
+## 验证记录
+- `node --check src/shared/script-preamble.js src/main-assistant/ui.js src/main-assistant/campaign-id-quick-entry.js src/optimizer/keyword-plan-api/wizard-mount-intro.js src/optimizer/keyword-plan-api/request-builder-preview.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-core.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-advanced-popup.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-item-adzone-popup.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-crowd-popup.js src/optimizer/keyword-plan-api/wizard-scene-config/strategy-state-and-draft.js src/optimizer/keyword-plan-api/wizard-style-and-state/matrix-generic-editors.js src/optimizer/keyword-plan-api/wizard-style-and-state/matrix-bid-package.js`：通过。
+- `node scripts/build.mjs`：通过，已同步根 userscript、`dist/packages` 与 extension page bundle。
+- `node --test tests/icon-system-regression.test.mjs tests/matrix-plan-config.test.mjs tests/matrix-bid-target-cost-package.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs`：通过，54/54。
+- `node scripts/build.mjs --check`：通过。
+- `node --check "阿里妈妈多合一助手.js" && git diff --check`：通过。
+- 残留扫描脚本：通过，关键词向导与并发日志关键源码未再命中 ``、`&times;`、裸 `+`/`×`/`✕`、span 字符图标、CSS 文本伪箭头或 CSS 边框手绘勾。
+- `npm run review`：通过，464 个测试中 462 pass、2 skip、0 fail；所有 automated review checks passed。
+- Chrome DevTools MCP 真实 `one.alimama.com/index.html#!/main/index?bizCode=onebpSearch&promotionScene=promotion_scene_search_detent` 页面：reload 后 `window.__AM_GET_SCRIPT_VERSION__()` 返回 `7.03`，`window.__AM_RENDER_ICON__` 存在，`#am-helper-icon svg` 为 `viewBox="0 0 24 24"`，授权锁定遮罩不存在。
+- 真实页面主面板验证：打开主面板后，品牌、关闭、算法护航、组建计划、万能查数、辅助显示、运行日志图标均为 `0 0 24 24` 的 `am-ui-icon`。
+- 真实页面批量建计划弹窗验证：打开 `组建计划` 后，关闭、复制倍数、并发倍数、矩阵新增等检查目标均为共享 SVG，目标元素 `textContent` 为空且 `svgCount=1`；矩阵新增按钮为 `am-ui-icon-plus`。
+- 真实页面安全检查：本轮只打开插件面板和向导弹窗，未点击创建、提交、投放或算法护航执行入口；截图留存 `tasks/icon-redesign-2026-05-24-verification.png`。
+
+## 结果复盘
+- 根因：既有图标体系已经覆盖主入口和扩展应用图标，但“全量”验收遗漏了关键词向导内的局部控件与 CSS 伪元素；这些位置仍会把私有字体和裸字符当作图标使用。
+- 解决：把剩余运行态图标收敛到共享 SVG，关闭按钮通过 `closeIcon` 语义渲染，计数徽标使用 `multiply`，新增/删除使用 `plus`/`close`，AI 点睛使用 `help`/`user`/`sparkles`/`external-link`，地域搜索和展开收起使用共享搜索与 chevron 图标。
+- 风险：原生页面自身仍大量使用私有字体字符，本轮只处理插件注入的运行态 UI；日志正文里的状态 emoji 属于文本日志，未作为交互图标改写。
+- 后续：已在 `tasks/lessons.md` 追加 L67，后续图标任务必须扫描局部控件、CSS `content` 和手绘勾选，不能只看主入口图标。
+
+---
+
 # TODO - 2026-05-22 插件图标体系重设计
 
 ## 需求规格
@@ -3961,3 +4333,78 @@
 - 这类现象不能只看 `更新 N 项数据` 日志；该日志证明 DOM 写入发生，但不证明写入到当前可见表格，也不证明标签未被样式裁剪。
 - 真实页面验证显示同页可同时存在 2 个指标表格；旧单表格逻辑容易把标签写到上方数据汇总表，用户看下方计划列表时就会认为“没有显示”。
 - 本轮没有改指标计算公式和列识别口径，只修复“写到哪里”和“是否看得见”，并给问题浏览器留下可复制的诊断入口。
+# TODO - 2026-05-24 编辑计划无法编辑
+
+## 用户复测补充 - 浏览器仍不可编辑
+- 触发：用户反馈“请在浏览器里测试，现在还是不行，直到修复位置”。
+- 追加要求：必须在真实浏览器中实际尝试修改编辑页字段，而不是只确认“进入编辑页”。
+- 追加计划：
+  - [ ] 在 Chrome DevTools MCP 中打开当前向导首页，真实点击“编辑计划”。
+  - [ ] 对计划名称/预算值等字段执行真实输入，确认是无法聚焦、无法输入、输入后回滚，还是保存/列表不同步。
+  - [ ] 定位具体失效源码位置，修复后重新构建并复测。
+
+## 需求规格
+- 目标：修复批量建计划 API 向导首页“编辑计划”无法进入可编辑态的问题。
+- 约束：只修编辑入口链路和必要同步，不扩大重构；不点击真实创建、投放、提交入口。
+- 成功标准：点击任一计划的“编辑计划”后稳定进入编辑页，详情区可见且输入/弹窗控件可操作；源码与生成产物同步。
+
+## 执行计划（可核对）
+- [x] 记录本次缺陷与用户修正教训。
+- [x] 确认 `src` 与生成产物中 `openStrategyDetail` 是否仍存在同计划点击即关闭的短路。
+- [x] 采用最小修复：编辑计划入口只负责打开/刷新编辑态，不承担关闭语义。
+- [x] 运行构建同步 userscript 与 extension 产物。
+- [x] 做必要静态/浏览器验证，并记录实际结果。
+
+## 高层操作摘要
+- 已在 `tasks/lessons.md` 记录本次修正：编辑入口修复必须同步生成产物和真实运行态。
+- 已移除 `openStrategyDetail` 中“同一计划已在编辑页时点击即关闭”的短路逻辑，保留统一 `showStrategyDetail(strategy)` 打开链路。
+- 已补充回归断言，禁止“编辑计划”入口再次承担关闭语义。
+- 已运行构建同步根 userscript、packages 与 extension bundle。
+
+## 验证记录
+- `node scripts/build.mjs`：通过，已同步 `阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js` 等产物。
+- `rg "wizardState\\.workbenchPage === 'editor'|const openStrategyDetail = \\(strategyId\\)|setWorkbenchPage\\('home'\\)" src/optimizer/keyword-plan-api/wizard-scene-config/batch-edit-popup.js 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js`：确认 `openStrategyDetail` 旧短路已从源码和产物消失，剩余 `setWorkbenchPage('home')` 属于其他关闭/返回链路。
+- `node --test tests/keyword-edit-strategy-settings.test.mjs`：3/3 通过。
+- Chrome DevTools MCP：在真实 `one.alimama.com` 页面加载 worktree extension `~/.codex/worktrees/313b/alimama-helper-pro/dist/extension`，打开向导后切到首页，点击第一个“编辑计划”，进入编辑页；计划名称与预算值显示为可编辑 textbox，未停留首页，未触发创建/投放/提交。
+
+## 结果复盘
+- 根因：源码中“编辑计划”入口曾复用 toggle 关闭语义；更关键的是此前只改了 `src`，真实浏览器加载的 userscript/extension bundle 仍保留旧短路。
+- 修复策略：让“编辑计划”只负责打开/刷新编辑态，关闭继续由显式关闭按钮承担；构建同步所有运行产物，并用回归测试锁定该入口契约。
+- 风险：当前真实验证覆盖了首页列表第一个计划的编辑入口；未点击 `立即投放`、`批量创建` 或任何真实提交入口。
+
+### 补充验证记录 - 2026-05-24 23:13 编辑计划真实填充修复
+- 根因补充：`#am-wxt-keyword-detail-config` 是 `fixed` 子级，但父级 `#am-wxt-keyword-modal` 在详情态只有约 118px 高且 `overflow: hidden`，导致详情区域虽然可见、可被无障碍树枚举，但命中测试落到 `#am-wxt-keyword-detail-backdrop`，真实输入框无法交互。
+- 修复摘要：保留弹层高于遮罩的层级，并新增 `#am-wxt-keyword-detail-backdrop.open + #am-wxt-keyword-modal { overflow: visible; }`，只在详情弹层打开时放开 overflow，保留点击遮罩关闭能力。
+- 验证命令：`node scripts/build.mjs` 通过，已同步 userscript、packages 和 extension 产物。
+- 验证命令：`node --test tests/keyword-edit-strategy-settings.test.mjs` 通过，5/5。
+- 浏览器验证：在 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` reload 当前扩展 `cfegfgaodnfeigffdknhgciapojejflk` 和页面，打开“组建计划” -> “首页” -> 第一条“编辑计划”。
+- 浏览器验证：`elementFromPoint` 在“计划名前缀”输入框中心命中 `INPUT#am-wxt-keyword-prefix`，`#am-wxt-keyword-modal` computed `overflow=visible`。
+- 浏览器验证：通过 Chrome DevTools 对“计划名前缀”填入 `关键词推广_20260523_043636_01_验证` 成功，随后恢复为 `关键词推广_20260523_043636_01` 成功；未点击“立即投放”“批量创建”等真实提交入口。
+- 控制台记录：页面仍存在平台侧/助手侧既有 `Uncaught (in promise)` 与少量网络错误，抽查最新栈为 `restoreSmartAssistantPatches`，未阻断本次编辑计划字段交互。
+- 结果复盘：本轮缺陷不是单一“详情是否打开”，而是“输入框是否真实可命中”。后续 UI 验收必须包含实际 fill/click 行为和 `elementFromPoint` 命中检查。
+
+## TODO - 2026-05-24 编辑计划重复表单修正
+
+### 需求规格
+- 用户反馈编辑详情上方旧基础表单重复显示，“上面那些不要”。
+- 目标：隐藏上方旧基础表单，只保留下方“场景配置”作为编辑入口。
+- 成功标准：编辑计划详情仍能打开；下方“计划名称”等场景配置输入框可真实填充并恢复；不触发真实提交。
+
+### 执行计划（可核对）
+- [x] 将 `.am-wxt-static-settings` 恢复为隐藏，避免重复显示。
+- [x] 调整回归测试，固定旧基础表单隐藏、详情弹层命中可编辑。
+- [x] 构建同步生成产物并运行专项测试。
+- [x] 在真实 `one.alimama.com` 页面 reload 扩展后，验证下方“计划名称”可编辑并恢复。
+
+### 高层操作摘要
+- 待执行。
+
+### 验证记录 - 2026-05-24 23:16 编辑计划重复表单修正
+- 源码修复：`.am-wxt-static-settings` 恢复为 `display: none`，上方旧基础表单不再显示。
+- 回归测试：`node --test tests/keyword-edit-strategy-settings.test.mjs` 通过，5/5，覆盖旧基础表单隐藏与详情弹层命中层级。
+- 构建同步：`node scripts/build.mjs` 通过，已更新 userscript、packages 和 extension 产物。
+- 浏览器验证：reload 当前扩展 `cfegfgaodnfeigffdknhgciapojejflk` 和 `one.alimama.com` 页面后，打开“组建计划” -> “首页” -> 第一条“编辑计划”，详情中只显示“场景配置：关键词推广”，不再显示上方旧基础表单。
+- 浏览器验证：下方“计划名称”输入框填入 `关键词推广_20260524_231614_01_验证` 成功，随后恢复为 `关键词推广_20260524_231614_01` 成功；未点击“立即投放”“批量创建”等真实提交入口。
+
+### 结果复盘
+- 上一轮把旧基础表单显示出来解决了一个隐藏输入框不可交互的表象，但引入重复 UI。正确方案是隐藏旧表单，同时修复详情弹层 overflow/z-index，让新的场景配置表单成为唯一可编辑入口。

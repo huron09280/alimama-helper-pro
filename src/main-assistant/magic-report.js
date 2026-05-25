@@ -5999,10 +5999,10 @@
                         </div>
                         <div class="am-btn-group">
                             <span id="am-magic-refresh" title="刷新">
-                                ${renderAmIcon('refresh', { size: 14 })}
+                                ${renderAmWindowIcon('refresh')}
                             </span>
                             <span id="am-magic-close" title="关闭">
-                                ${renderAmIcon('close', { size: 18 })}
+                                ${renderAmWindowIcon('close')}
                             </span>
                         </div>
                     </div>

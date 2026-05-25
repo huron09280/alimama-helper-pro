@@ -98,7 +98,7 @@ test('智能出价目标包改为结构化行编辑，不再依赖纯文本 text
   assert.doesNotMatch(source, /<span class="am-wxt-matrix-chip">结构化编辑<\/span>/, '智能出价目标包仍保留冗余结构化编辑标签');
   assert.match(
     source,
-    /data-matrix-bid-package-cost-add="1"[\s\S]*?data-matrix-bid-package-picker-toggle="1"[\s\S]*?>\+<\/button>/,
+    /data-matrix-bid-package-cost-add="1"[\s\S]*?data-matrix-bid-package-picker-toggle="1"[\s\S]*?renderAmIcon\('plus'/,
     '智能出价目标包行内新增按钮未接入下拉菜单或仍保留冗余文字'
   );
   assert.doesNotMatch(source, /class="am-wxt-matrix-bid-package-footer"/, '智能出价目标包底部 footer 未移除');

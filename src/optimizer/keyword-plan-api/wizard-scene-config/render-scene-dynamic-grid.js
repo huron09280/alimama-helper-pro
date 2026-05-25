@@ -257,6 +257,10 @@
                     });
                 });
 
+                const setAiMaxToggleButtonContent = (button = null, expanded = false) => {
+                    if (!(button instanceof HTMLButtonElement)) return;
+                    button.innerHTML = `${expanded ? '收起详情' : '展开详情'}${renderAmIcon(expanded ? 'chevron-up' : 'chevron-down', { size: 12, strokeWidth: 2.4 })}`;
+                };
                 const syncAiMaxDetailButtonLabel = (button = null) => {
                     if (!(button instanceof HTMLButtonElement)) return;
                     const panel = button.closest('.am-wxt-ai-max-panel');
@@ -266,7 +270,7 @@
                     if (!detailSections.length) return;
                     const expanded = detailSections.some(section => !section.classList.contains('hidden'));
                     button.classList.toggle('is-expanded', expanded);
-                    button.textContent = expanded ? '收起详情' : '展开详情';
+                    setAiMaxToggleButtonContent(button, expanded);
                 };
                 const runAiMaxTypewriter = (panel = null) => {
                     if (!(panel instanceof HTMLElement)) return;
@@ -329,7 +333,7 @@
                         if (!(desc instanceof HTMLElement)) return;
                         const expanded = !desc.classList.contains('hidden');
                         desc.classList.toggle('hidden', expanded);
-                        target.textContent = expanded ? '展开详情' : '收起详情';
+                        setAiMaxToggleButtonContent(target, !expanded);
                         target.classList.toggle('is-expanded', !expanded);
                         if (!expanded) runAiMaxTypewriter(step);
                     });
@@ -382,7 +386,7 @@
                     const desc = Utils.escapeHtml(normalizeSceneSettingValue(item?.desc || item?.description || ''));
                     return `
                         <div class="am-wxt-ai-max-persona">
-                            <span class="am-wxt-ai-max-persona-icon">P</span>
+                            <span class="am-wxt-ai-max-persona-icon">${renderAmIcon('user', { size: 16, strokeWidth: 2 })}</span>
                             <span>
                                 <b>${title}</b>
                                 <em>${desc}</em>
@@ -820,6 +824,7 @@
                     onSave = null,
                     dialogClassName = '',
                     closeLabel = '关闭',
+                    closeIcon = false,
                     cancelLabel = '取消',
                     saveLabel = '保存',
                     hideCloseButton = false,
@@ -833,9 +838,11 @@
                         mask.id = 'am-wxt-scene-popup-mask';
                         mask.className = 'am-wxt-scene-popup-mask';
                         const dialogClass = `am-wxt-scene-popup-dialog${String(dialogClassName || '').trim() ? ` ${String(dialogClassName || '').trim()}` : ''}`;
+                        const normalizedCloseLabel = String(closeLabel || '关闭').trim();
+                        const isIconClose = closeIcon === true;
                         const closeBtnHtml = hideCloseButton
                             ? ''
-                            : `<button type="button" class="am-wxt-btn" data-scene-popup-close="1">${Utils.escapeHtml(closeLabel || '关闭')}</button>`;
+                            : `<button type="button" class="am-wxt-btn${isIconClose ? ' am-wxt-icon-only-btn' : ''}" data-scene-popup-close="1" aria-label="关闭">${isIconClose ? renderAmWindowIcon('close') : Utils.escapeHtml(normalizedCloseLabel || '关闭')}</button>`;
                         const cancelBtnHtml = `<button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">${Utils.escapeHtml(cancelLabel || '取消')}</button>`;
                         const saveBtnHtml = `<button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">${Utils.escapeHtml(saveLabel || '保存')}</button>`;
                         const footButtonsHtml = saveFirst ? `${saveBtnHtml}${cancelBtnHtml}` : `${cancelBtnHtml}${saveBtnHtml}`;

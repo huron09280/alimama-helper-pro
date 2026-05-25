@@ -149,7 +149,7 @@
                         <div class="am-wxt-scene-advanced-area-tools">
                             <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="alpha">按首字母选择</button>
                             <button type="button" class="am-wxt-btn" data-scene-popup-area-mode="geo">按地理区选择</button>
-                            <span class="am-wxt-scene-advanced-area-search-icon"></span>
+                            <span class="am-wxt-scene-advanced-area-search-icon">${renderAmIcon('search', { size: 14, strokeWidth: 2.1 })}</span>
                             <input
                                 type="text"
                                 class="am-wxt-scene-advanced-area-search"
@@ -165,7 +165,7 @@
                                 <div class="am-wxt-scene-quick-lift-control">
                                     <div class="am-wxt-scene-quick-lift-summary-row">
                                         <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-time-summary="1">0点~24点</span>
-                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="time">收起设置 <span>⌃</span></button>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="time">收起设置${renderAmIcon('chevron-up', { size: 12, strokeWidth: 2.4 })}</button>
                                     </div>
                                     <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="time">
                                         <div class="am-wxt-scene-quick-time-card">
@@ -183,7 +183,7 @@
                                 <div class="am-wxt-scene-quick-lift-control">
                                     <div class="am-wxt-scene-quick-lift-summary-row">
                                         <span class="am-wxt-scene-quick-lift-summary" data-scene-popup-quick-area-summary="1">在全部地域投放</span>
-                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="area">收起设置 <span>⌃</span></button>
+                                        <button type="button" class="am-wxt-scene-quick-lift-toggle" data-scene-popup-quick-toggle="area">收起设置${renderAmIcon('chevron-up', { size: 12, strokeWidth: 2.4 })}</button>
                                     </div>
                                     <div class="am-wxt-scene-quick-lift-panel" data-scene-popup-quick-panel="area">
                                         ${areaConfigRowHtml}
@@ -329,7 +329,7 @@
                     const result = await openScenePopupDialog({
                         title: advancedTitle,
                         dialogClassName: `am-wxt-scene-popup-dialog-advanced ${isQuickLiftVariant ? 'am-wxt-scene-popup-dialog-quick-lift' : ''}`,
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         bodyHtml: isQuickLiftVariant ? quickLiftBodyHtml : advancedBodyHtml,
@@ -1658,7 +1658,9 @@
                                     if (!(panel instanceof HTMLElement)) return;
                                     const nextHidden = !panel.hidden;
                                     panel.hidden = nextHidden;
-                                    btn.innerHTML = nextHidden ? '展开设置 <span>⌄</span>' : '收起设置 <span>⌃</span>';
+                                    btn.innerHTML = nextHidden
+                                        ? `展开设置${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}`
+                                        : `收起设置${renderAmIcon('chevron-up', { size: 12, strokeWidth: 2.4 })}`;
                                 };
                             });
                             if (quickLiftTimeRangeEl instanceof HTMLElement) {

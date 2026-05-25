@@ -653,7 +653,9 @@
                         <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true">
                             <div class="am-wxt-scene-popup-head">
                                 <span>${Utils.escapeHtml(title || '批量修改')}</span>
-                                <button type="button" class="am-wxt-btn" data-scene-popup-close="1">关闭</button>
+                                <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-scene-popup-close="1" aria-label="关闭">
+                                    ${renderAmWindowIcon('close')}
+                                </button>
                             </div>
                             <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
                             <div class="am-wxt-scene-popup-foot">

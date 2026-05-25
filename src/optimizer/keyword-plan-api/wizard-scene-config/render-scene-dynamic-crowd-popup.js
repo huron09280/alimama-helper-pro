@@ -133,6 +133,7 @@
                     const result = await openScenePopupDialog({
                         title: 'AI点睛设置',
                         dialogClassName: 'am-wxt-scene-popup-dialog-ai-max',
+                        closeIcon: true,
                         bodyHtml: `
                             <div class="am-wxt-ai-max-popup" data-ai-max-popup="1">
                                 <section class="am-wxt-ai-max-popup-section">
@@ -313,7 +314,7 @@
                     const result = await openScenePopupDialog({
                         title: '设置过滤人群',
                         dialogClassName: 'am-wxt-scene-popup-dialog-filter',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         saveFirst: true,
@@ -682,7 +683,7 @@
                     const result = await openScenePopupDialog({
                         title: '优质计划防停投',
                         dialogClassName: 'am-wxt-scene-popup-dialog-budget-guard',
-                        closeLabel: '×',
+                        closeIcon: true,
                         cancelLabel: '取消',
                         saveLabel: '确定',
                         saveFirst: true,
@@ -1185,7 +1186,7 @@
                             const result = await openScenePopupDialog({
                                 title: crowdPopupTitle,
                                 dialogClassName: 'am-wxt-scene-popup-dialog-crowd',
-                                closeLabel: '×',
+                                closeIcon: true,
                                 cancelLabel: '取消',
                                 saveLabel: '确定',
                                 bodyHtml: `
@@ -1242,7 +1243,7 @@
                                                         rel="noreferrer noopener"
                                                     >人群解读</a>
                                                 </div>
-                                                <button type="button" class="am-wxt-btn" data-scene-popup-crowd-add-close="1">×</button>
+                                                <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-scene-popup-crowd-add-close="1" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                                             </div>
                                             <div class="am-wxt-scene-crowd-add-body">
                                                 <div class="am-wxt-scene-crowd-native-layout" data-scene-popup-crowd-native-layout="1">

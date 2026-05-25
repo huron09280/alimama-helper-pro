@@ -171,7 +171,7 @@
                         data-matrix-bid-package-cost-remove="1"
                         aria-label="删除目标成本"
                         title="删除这个目标成本"
-                    >&times;</button>
+                    >${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}</button>
                 </div>
             `;
         };
@@ -453,7 +453,7 @@
                             data-matrix-bid-package-remove="1"
                             aria-label="删除目标包"
                             title="删除这一组"
-                        >&times;</button>
+                        >${renderAmIcon('close', { size: 14, strokeWidth: 2.3 })}</button>
                     </div>
                     <div class="am-wxt-matrix-bid-package-row-body">
                         <div class="am-wxt-matrix-bid-package-cost-list" data-matrix-bid-package-cost-list="1">
@@ -473,7 +473,7 @@
                                     aria-expanded="false"
                                     aria-label="${Utils.escapeHtml(targetOption.value === 'roi' ? '新增目标值' : '新增目标成本')}"
                                     title="${Utils.escapeHtml(`为${targetOption.label || defaultOption.label}再加一个${costLabel}`)}"
-                                >+</button>
+                                >${renderAmIcon('plus', { size: 14, strokeWidth: 2.3 })}</button>
                                 <div
                                     class="am-wxt-matrix-dimension-picker-panel am-wxt-matrix-bid-package-cost-batch-menu"
                                     data-matrix-dimension-picker-panel="1"
@@ -629,7 +629,7 @@
                     costMeta.textContent = costLabel;
                 }
                 if (costAddBtn instanceof HTMLButtonElement) {
-                    costAddBtn.textContent = '+';
+                    costAddBtn.innerHTML = renderAmIcon('plus', { size: 14, strokeWidth: 2.3 });
                     costAddBtn.setAttribute('aria-label', targetOptionValue === 'roi' ? '新增目标值' : '新增目标成本');
                     costAddBtn.title = `为${targetOptionLabel}再加一个${costLabel}`;
                 }
