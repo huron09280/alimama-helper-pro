@@ -134,7 +134,7 @@
                     <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-label="并发开启执行日志">
                         <div class="am-concurrent-log-header">
                             <span id="am-concurrent-log-title">并发开启执行日志</span>
-                            <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">${renderAmWindowIcon('close')}</button>
+                            <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">${renderAmIcon('close', { size: 16, strokeWidth: 2.2 })}</button>
                         </div>
                         <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status">执行中...</div>
                         <div class="am-concurrent-log-body" id="am-concurrent-log-body"></div>

@@ -3687,600 +3687,6 @@ if (typeof globalThis !== 'undefined') {
                     }
                 }
 
-                /* Native Style for Optimizer Trigger */
-                #am-trigger-optimizer {
-                    --line-height: 1.5;
-                    --font-size: 12px;
-                    --font-family: PingFangSC-Regular,PingFang SC,"Microsoft Yahei","SimHei",sans-serif;
-                    --font-number: Tahoma;
-                    --font-color: #333;
-                    --font-color-hover: #333;
-                    --font-color-active: var(--color-brand);
-                    --font-color-secondary: #666;
-                    --font-color-tip: #999;
-                    --anchor-font-color: #333;
-                    --app-nav-bg: #303a58;
-                    --app-bg: #f9f9f9;
-                    --app-min-width: 1418px;
-                    --color-brand: #4554e5;
-                    --color-brand-gradient: #4554e5;
-                    --color-brand-hover: #3325d4;
-                    --color-brand-hover-gradient: #3325d4;
-                    --color-brand-vs: #f5714d;
-                    --color-brand-light: rgba(69,84,229,.2);
-                    --color-brand-opacity: rgba(69,84,229,.1);
-                    --color-brand-text: #fff;
-                    --color-brand-text-hover: #fff;
-                    --color-brand-opacity5: rgba(69,84,229,.05);
-                    --color-brand-opacity10: rgba(69,84,229,.1);
-                    --color-brand-opacity20: rgba(69,84,229,.2);
-                    --color-brand-opacity50: rgba(69,84,229,.5);
-                    --color-bg: #f8f9fa;
-                    --color-bg-hover: var(--color-brand-opacity);
-                    --color-bg-active: var(--color-brand-opacity);
-                    --input-v-gap: 8px;
-                    --input-h-gap: 8px;
-                    --input-min-width: 64px;
-                    --input-height: 32px;
-                    --input-font-size: var(--font-size);
-                    --input-icon-size: 16px;
-                    --input-icon-gap: 4px;
-                    --border-radius: 8px;
-                    --input-small-v-gap: 8px;
-                    --input-small-h-gap: 8px;
-                    --input-small-min-width: 48px;
-                    --input-small-height: 24px;
-                    --input-small-font-size: var(--font-size);
-                    --input-small-icon-size: 12px;
-                    --input-small-icon-gap: 4px;
-                    --border-small-radius: 6px;
-                    --input-large-v-gap: 8px;
-                    --input-large-h-gap: 8px;
-                    --input-large-min-width: 80px;
-                    --input-large-height: 40px;
-                    --input-large-font-size: calc(var(--font-size) + 2px);
-                    --input-large-icon-size: 20px;
-                    --input-large-icon-gap: 4px;
-                    --border-large-radius: 10px;
-                    --input-gap-border: #e4e7f0;
-                    --bg-highlight: #f0f2f5;
-                    --border-highlight: #f0f2f5;
-                    --border-highlight-shadow: none;
-                    --bg-highlight-hover: #e4e7f0;
-                    --border-highlight-hover: #e4e7f0;
-                    --border-highlight-shadow-hover: none;
-                    --bg-highlight-active: #fff;
-                    --border-highlight-active-opacity: 0.5;
-                    --border-highlight-active: rgba(69,84,229,var(--border-highlight-active-opacity));
-                    --border-highlight-shadow-active-h: 0px;
-                    --border-highlight-shadow-active-v: 2px;
-                    --border-highlight-shadow-active-blur: 4px;
-                    --border-highlight-shadow-active-opacity: 0.2;
-                    --border-highlight-shadow-active: var(--border-highlight-shadow-active-h) var(--border-highlight-shadow-active-v) var(--border-highlight-shadow-active-blur) 0 rgba(69,84,229,var(--border-highlight-shadow-active-opacity));
-                    --output-bg: #fff;
-                    --output-color: var(--font-color,#333);
-                    --output-color-hover: var(--font-color-hover,#333);
-                    --output-color-active: var(--font-color-active,var(--color-brand));
-                    --output-small-v-gap: 8px;
-                    --output-small-h-gap: 16px;
-                    --output-small-border-radius: 8px;
-                    --output-v-gap: 16px;
-                    --output-h-gap: 24px;
-                    --output-border-radius: 24px;
-                    --output-large-v-gap: 24px;
-                    --output-large-h-gap: 24px;
-                    --output-large-border-radius: 16px;
-                    --output-small-offset: 8px;
-                    --output-small-item-max-height: 244px;
-                    --output-small-item-height: var(--input-small-height);
-                    --output-small-item-fontsize: 12px;
-                    --output-offset: 8px;
-                    --output-item-max-height: 312px;
-                    --output-item-height: var(--input-height);
-                    --output-item-fontsize: 12px;
-                    --output-large-offset: 8px;
-                    --output-large-item-max-height: 380px;
-                    --output-large-item-height: var(--input-large-height);
-                    --output-large-item-fontsize: 14px;
-                    --btn-brand: var(--color-brand);
-                    --btn-brand-gradient: var(--color-brand-gradient);
-                    --btn-brand-shadow: none;
-                    --btn-brand-text: var(--color-brand-text);
-                    --btn-brand-hover: var(--color-brand-hover);
-                    --btn-brand-gradient-hover: var(--color-brand-hover-gradient);
-                    --btn-brand-shadow-hover-h: 0px;
-                    --btn-brand-shadow-hover-v: 2px;
-                    --btn-brand-shadow-hover-blur: 10px;
-                    --btn-brand-shadow-hover-opacity: 0.4;
-                    --btn-brand-shadow-hover: var(--btn-brand-shadow-hover-h,0px) var(--btn-brand-shadow-hover-v,2px) var(--btn-brand-shadow-hover-blur,10px) 0 rgba(69,84,229,var(--btn-brand-shadow-hover-opacity,0.4));
-                    --btn-brand-text-hover: var(--color-brand-text-hover);
-                    --btn-border: #e4e7f0;
-                    --btn-bg: #fff;
-                    --btn-text: #333;
-                    --btn-border-hover: rgba(69,84,229,.5);
-                    --btn-bg-hover: #fff;
-                    --btn-text-hover: var(--color-brand);
-                    --btn-h-gap: 12px;
-                    --btn-min-width: var(--input-min-width);
-                    --btn-font-size: var(--input-font-size);
-                    --btn-border-radius: 500px;
-                    --btn-small-h-gap: 12px;
-                    --btn-small-min-width: var(--input-small-min-width);
-                    --btn-small-font-size: var(--input-small-font-size);
-                    --btn-small-border-radius: 500px;
-                    --btn-large-h-gap: 12px;
-                    --btn-large-min-width: var(--input-large-min-width);
-                    --btn-large-font-size: var(--input-large-font-size);
-                    --btn-large-border-radius: 500px;
-                    --btn-font-weight: normal;
-                    --btn-small-font-weight: normal;
-                    --btn-large-font-weight: normal;
-                    --color-border: #e4e7f0;
-                    --color-warn: #ffa53d;
-                    --color-red: #ff4d4d;
-                    --color-green: #08bf81;
-                    --color-blue: #6a76ea;
-                    --duration: 0.2s;
-                    --mx-text-placeholder: #999;
-                    --mx-trigger-color: var(--font-color,#333);
-                    --mx-trigger-color-hover: var(--font-color,#333);
-                    --mx-trigger-color-active: var(--font-color,#333);
-                    --mx-trigger-tag-bg: #fff;
-                    --mx-trigger-tag-color: #333;
-                    --mx-trigger-tag-arrow-color: #999;
-                    --mx-trigger-tag-bg-hover: #fff;
-                    --mx-trigger-tag-color-hover: #333;
-                    --mx-trigger-tag-arrow-color-hover: #999;
-                    --mx-trigger-tag-bg-active: var(--color-brand-opacity);
-                    --mx-trigger-tag-color-active: #333;
-                    --mx-trigger-tag-arrow-color-active: #999;
-                    --mx-trigger-tag-height: calc(var(--input-height) - 8px);
-                    --mx-trigger-arrow-size: 16px;
-                    --mx-trigger-arrow-color: #999;
-                    --mx-trigger-arrow-color-hover: #666;
-                    --mx-trigger-arrow-color-active: #666;
-                    --mx-trigger-prefix-icon: #666;
-                    --mx-trigger-prefix-text: #666;
-                    --mx-comp-disabled-opacity: 0.4;
-                    --mx-comp-expand-amin-color: var(--color-brand);
-                    --mx-comp-expand-amin-timer: 300ms;
-                    --mx-comp-expand-amin-ease: ease-out;
-                    --mx-grid-bg: #fff;
-                    --mx-grid-body-v-top: var(--output-v-gap,16px);
-                    --mx-grid-body-v-bottom: var(--output-v-gap,16px);
-                    --mx-grid-border-radius: var(--output-border-radius,24px);
-                    --mx-grid-h-gap: var(--output-h-gap,24px);
-                    --mx-grid-title-bg: transparent;
-                    --mx-grid-title-v-gap: 16px;
-                    --mx-grid-title-font-size: 16px;
-                    --mx-grid-title-font-weight: bold;
-                    --mx-grid-title-color-border: var(--color-border);
-                    --mx-grid-title-link-font-size: 12px;
-                    --mx-grid-title-link-color: var(--color-brand);
-                    --mx-grid-title-link-color-hover: var(--color-brand-hover);
-                    --mx-grid-shadow: 0 4px 10px 0 hsla(16,7%,67%,.2);
-                    --mx-grid-gap: 16px;
-                    --mx-checkbox-size: 14px;
-                    --mx-checkbox-border-radius: 4px;
-                    --mx-checkbox-border: #dde1eb;
-                    --mx-checkbox-bg: #fff;
-                    --mx-checkbox-shadow: none;
-                    --mx-checkbox-border-hover: #dde1eb;
-                    --mx-checkbox-shadow-hover: 0 0 4px 0 rgba(0,0,0,.16);
-                    --mx-checkbox-bg-hover: #fff;
-                    --mx-table-font-size: var(--font-size);
-                    --mx-table-ceil-h-gap: 8px;
-                    --mx-table-ceil-v-gap: 12px;
-                    --mx-table-ceil-small-h-gap: 4px;
-                    --mx-table-ceil-small-v-gap: 4px;
-                    --mx-table-ceil-large-h-gap: 24px;
-                    --mx-table-ceil-large-v-gap: 24px;
-                    --mx-table-ceil-text-align: left;
-                    --mx-table-ceil-vertical-align: middle;
-                    --mx-table-ceil-font-color: #333;
-                    --mx-table-head-line-number: 2;
-                    --mx-table-head-border: 1px solid var(--color-border);
-                    --mx-table-head-height: 60px;
-                    --mx-table-head-small-height: 40px;
-                    --mx-table-head-large-height: 80px;
-                    --mx-table-head-group-height: 80px;
-                    --mx-table-head-bg: #fff;
-                    --mx-table-head-font-size: 12px;
-                    --mx-table-head-font-color: #333;
-                    --mx-table-head-font-weight: bold;
-                    --mx-table-hover-bg: #f8f9fa;
-                    --mx-table-hover-oper-bg: #e4e7f0;
-                    --mx-table-scrollbar-bg: #333;
-                    --mx-effects-card-color-bg: #fff;
-                    --mx-effects-card-title-font-size: 18px;
-                    --mx-effects-card-sub-title-font-size: 14px;
-                    --mx-effects-card-tip-font-size: 12px;
-                    --mx-effects-card-color-border: var(--color-border);
-                    --mx-effects-card-shadow: 0 1px 4px 0 hsla(0,0%,73%,.5);
-                    --mx-effects-tag-mode: opacity;
-                    --mx-effects-tag-height: 16px;
-                    --mx-effects-tag-border-radius: calc(var(--mx-effects-tag-height, 16px)/2);
-                    --mx-effects-tag-h-gap: 6px;
-                    --mx-effects-tag-font-size: 20px;
-                    --mx-effects-tag-font-scale: 0.5;
-                    --mx-effects-large-tag-height: 18px;
-                    --mx-effects-large-tag-border-radius: calc(var(--mx-effects-large-tag-height, 16px)/2);
-                    --mx-effects-large-tag-h-gap: 8px;
-                    --mx-effects-large-tag-font-size: 12px;
-                    --mx-effects-large-tag-font-scale: 1;
-                    --mx-effects-notice-border-radius: var(--border-radius);
-                    --mx-effects-notice-v-gap: 8px;
-                    --mx-effects-notice-h-gap: var(--output-h-gap,24px);
-                    --mx-effects-notice-fontsize: 12px;
-                    --mx-effects-notice-line-height: 20px;
-                    --mx-effects-notice-round-height: 40px;
-                    --mx-effects-progress-height: 6px;
-                    --mx-effects-progress-num-height: 24px;
-                    --mx-effects-progress-bg: #e4e7f0;
-                    --mx-dialog-text-align: left;
-                    --mx-dialog-color-bg: #e8ebf2;
-                    --mx-dialog-shadow: 0 2px 10px 0 rgba(0,0,0,.16);
-                    --mx-dialog-body-border-color: 0 none;
-                    --mx-tabs-line-item-gap: 16px;
-                    --mx-tabs-line-v-gap: var(--mx-grid-title-v-gap);
-                    --mx-tabs-line-h-gap: 12px;
-                    --mx-tabs-line-font-size: var(--mx-grid-title-font-size,16px);
-                    --mx-tabs-line-font-weight: 500;
-                    --mx-tabs-line-small-v-gap: calc(var(--mx-grid-title-v-gap)/2);
-                    --mx-tabs-line-small-h-gap: 12px;
-                    --mx-tabs-line-small-font-size: 12px;
-                    --mx-tabs-line-small-font-weight: 500;
-                    --mx-tabs-line-border-color: var(--color-border);
-                    --mx-tabs-line-color: #333;
-                    --mx-tabs-line-color-hover: var(--color-brand);
-                    --mx-tabs-line-color-active: var(--color-brand);
-                    --mx-tabs-line-bg-hover: var(--color-brand-opacity);
-                    --mx-tabs-box-bg: var(--bg-highlight);
-                    --mx-tabs-box-bg-hover: var(--bg-highlight-hover);
-                    --mx-tabs-box-bg-active: var(--color-brand-opacity);
-                    --mx-tabs-box-border: var(--border-highlight);
-                    --mx-tabs-box-border-hover: var(--border-highlight-hover);
-                    --mx-tabs-box-border-active: var(--border-highlight-active);
-                    --mx-tabs-box-color: #666;
-                    --mx-tabs-box-color-hover: #333;
-                    --mx-tabs-box-color-active: var(--color-brand);
-                    --mx-tabs-box-arrow: #999;
-                    --mx-tabs-box-arrow-hover: #666;
-                    --mx-tabs-box-arrow-active: var(--color-brand);
-                    --mx-tabs-box-discrete-gap: 8px;
-                    --mx-large-block-outer-gap: 16px;
-                    --mx-large-block-v-gap: 12px;
-                    --mx-large-block-h-gap: 12px;
-                    --mx-large-block-line-height: 18px;
-                    --mx-large-block-bg: transparent;
-                    --mx-large-block-bg-hover: transparent;
-                    --mx-large-block-bg-active: var(--color-brand-opacity5,var(--color-brand-opacity));
-                    --mx-large-block-border: var(--color-border);
-                    --mx-large-block-border-hover: var(--border-highlight-active);
-                    --mx-large-block-border-active: var(--border-highlight-active);
-                    --mx-tabs-menu-line-color: #c3c9d9;
-                    --mx-tabs-menu-width: 160px;
-                    --mx-tabs-menu-height: var(--input-height);
-                    --mx-tabs-menu-padding-gap: 12px;
-                    --mx-tabs-menu-margin-gap: 8px;
-                    --mx-tabs-menu-icon-size: 16px;
-                    --mx-tabs-menu-hover-color: var(--color-brand);
-                    --mx-tabs-menu-hover-bg: var(--color-brand-opacity);
-                    --mx-tabs-menu-hover-shadow: 0 none;
-                    --mx-tabs-menu-selected-color: #fff;
-                    --mx-tabs-menu-selected-bg: var(--color-brand);
-                    --mx-tabs-menu-selected-shadow: var(--border-highlight-shadow-active);
-                    --mx-popover-v-gap: var(--input-v-gap);
-                    --mx-popover-h-gap: var(--input-h-gap);
-                    --mx-popover-arrow-size: 8px;
-                    --mx-popover-arrow-gap: 24px;
-                    --mx-popover-bg: var(--output-bg,#fff);
-                    --mx-popover-color: var(--output-color,var(--font-color,#333));
-                    --mx-popover-color-border: var(--color-border);
-                    --mx-popover-shaodow: 0 4px 8px 0 rgba(0,0,0,.06);
-                    --mx-pagination-align: left;
-                    --mx-switch-width: 36px;
-                    --mx-switch-height: 20px;
-                    --mx-switch-icon-size: 14px;
-                    --mx-switch-border-radius: 10px;
-                    --mx-header-other-height: 48px;
-                    --mx-header-menu-height: 58px;
-                    --mx-carousel-zindex: 3;
-                    --mx-carousel-triggers-size: 24px;
-                    --mx-carousel-triggers-fontsize: 16px;
-                    --mx-carousel-trigger-color: #fff;
-                    --mx-carousel-trigger-bg: #dde1eb;
-                    --mx-carousel-trigger-gap: 8px;
-                    --mx-carousel-line-size: 16px;
-                    --mx-carousel-dot-size: 8px;
-                    --mx-main-nav-v-gap: 16px;
-                    --mx-main-nav-h-gap: 16px;
-                    --mx-main-nav-footer-height: 80px;
-                    --mx-main-nav-info-width: 240px;
-                    --mx-grey-box-border: #e4e7f0;
-                    --mx-grey-box-bg: #f8f9fa;
-                    --mx-grey-box-border-hover: var(--color-brand-opacity50,var(--color-brand));
-                    --mx-grey-box-bg-hover: #f0f2f5;
-                    --mx-market-color: #f257a8;
-                    --mx-market-color-gradient: #ff0036;
-                    --mx-market-color-border: #fcd5e5;
-                    --mx-market-color-bg: #fff5f8;
-                    --mx-market-color-hover: #df2e8b;
-                    --mx-market-color-hover-gradient: #e80c20;
-                    --mx-market-color-hover-border: #fcd5e5;
-                    --mx-market-color-hover-bg: #fee3eb;
-                    --mx-market-color-bg5: linear-gradient(135deg,#fff2f5,#fef6fa);
-                    --mx-market-color-bg10: linear-gradient(135deg,#ffe6eb,#fdeef6);
-                    --mx-mask-black: rgba(0,0,0,.6);
-                    --mx-mask-white: hsla(0,0%,100%,.6);
-                    --mx-mask-backdrop-filter: blur(2px);
-                    --mx-ai-color: #33f;
-                    --mx-ai-color-gradient: #93f;
-                    --mx-ai-color-anim: #3cf;
-                    --mx-ai-color-hover: #0c0cff;
-                    --mx-ai-color-hover-gradient: #850cff;
-                    --mx-ai-color-hover-anim: #0cc2ff;
-                    --mx-ai-color-line-width-number: 2;
-                    --mx-ai-color100: #33f;
-                    --mx-ai-color90: #4747ff;
-                    --mx-ai-color80: #5b5bff;
-                    --mx-ai-color70: #7070ff;
-                    --mx-ai-color60: #8484ff;
-                    --mx-ai-color50: #99f;
-                    --mx-ai-color40: #adadff;
-                    --mx-ai-color30: #c1c1ff;
-                    --mx-ai-color20: #d6d6ff;
-                    --mx-ai-color10: #eaeaff;
-                    --mx-ai-color5: #f4f4ff;
-                    --mx-ai-color-gradient100: #93f;
-                    --mx-ai-color-gradient90: #a347ff;
-                    --mx-ai-color-gradient80: #ad5bff;
-                    --mx-ai-color-gradient70: #b770ff;
-                    --mx-ai-color-gradient60: #c184ff;
-                    --mx-ai-color-gradient50: #c9f;
-                    --mx-ai-color-gradient40: #d6adff;
-                    --mx-ai-color-gradient30: #e0c1ff;
-                    --mx-ai-color-gradient20: #ead6ff;
-                    --mx-ai-color-gradient10: #f4eaff;
-                    --mx-ai-color-gradient5: #f9f4ff;
-                    --mx-ai-color-anim100: #3cf;
-                    --mx-ai-color-anim90: #47d1ff;
-                    --mx-ai-color-anim80: #5bd6ff;
-                    --mx-ai-color-anim70: #70dbff;
-                    --mx-ai-color-anim60: #84e0ff;
-                    --mx-ai-color-anim50: #99e5ff;
-                    --mx-ai-color-anim40: #adeaff;
-                    --mx-ai-color-anim30: #c1efff;
-                    --mx-ai-color-anim20: #d6f4ff;
-                    --mx-ai-color-anim10: #eaf9ff;
-                    --mx-ai-color-anim5: #f4fcff;
-                    --mx-ai-color-line: linear-gradient(135deg,#33f,#3cf,#93f);
-                    --mx-ai-color-line100: linear-gradient(135deg,#33f,#3cf,#93f);
-                    --mx-ai-color-line90: linear-gradient(135deg,#4747ff,#47d1ff,#a347ff);
-                    --mx-ai-color-line80: linear-gradient(135deg,#5b5bff,#5bd6ff,#ad5bff);
-                    --mx-ai-color-line70: linear-gradient(135deg,#7070ff,#70dbff,#b770ff);
-                    --mx-ai-color-line60: linear-gradient(135deg,#8484ff,#84e0ff,#c184ff);
-                    --mx-ai-color-line50: linear-gradient(135deg,#99f,#99e5ff,#c9f);
-                    --mx-ai-color-line40: linear-gradient(135deg,#adadff,#adeaff,#d6adff);
-                    --mx-ai-color-line30: linear-gradient(135deg,#c1c1ff,#c1efff,#e0c1ff);
-                    --mx-ai-color-line20: linear-gradient(135deg,#d6d6ff,#d6f4ff,#ead6ff);
-                    --mx-ai-color-line10: linear-gradient(135deg,#eaeaff,#eaf9ff,#f4eaff);
-                    --mx-ai-color-line5: linear-gradient(135deg,#f4f4ff,#f4fcff,#f9f4ff);
-                    --mx-ai-color-bg: linear-gradient(135deg,#33f,#3cf,#93f);
-                    --mx-ai-color-bg100: linear-gradient(135deg,#33f,#3cf,#93f);
-                    --mx-ai-color-bg90: linear-gradient(135deg,#4747ff,#47d1ff,#a347ff);
-                    --mx-ai-color-bg80: linear-gradient(135deg,#5b5bff,#5bd6ff,#ad5bff);
-                    --mx-ai-color-bg70: linear-gradient(135deg,#7070ff,#70dbff,#b770ff);
-                    --mx-ai-color-bg60: linear-gradient(135deg,#8484ff,#84e0ff,#c184ff);
-                    --mx-ai-color-bg50: linear-gradient(135deg,#99f,#99e5ff,#c9f);
-                    --mx-ai-color-bg40: linear-gradient(135deg,#adadff,#adeaff,#d6adff);
-                    --mx-ai-color-bg30: linear-gradient(135deg,#c1c1ff,#c1efff,#e0c1ff);
-                    --mx-ai-color-bg20: linear-gradient(135deg,#d6d6ff,#d6f4ff,#ead6ff);
-                    --mx-ai-color-bg10: linear-gradient(135deg,#eaeaff,#eaf9ff,#f4eaff);
-                    --mx-ai-color-bg5: linear-gradient(135deg,#f4f4ff,#f4fcff,#f9f4ff);
-                    --mx-ai-color-bg-primary: linear-gradient(135deg,#eaeaff,#eaf9ff,#f4eaff);
-                    --mx-ai-color-bg-secondary: linear-gradient(135deg,#f4f4ff,#f4fcff,#f9f4ff);
-                    --mx-ai-color-line-primary: linear-gradient(135deg,#33f,#3cf,#93f);
-                    --mx-ai-color-line-secondary: linear-gradient(135deg,#d6d6ff,#d6f4ff,#ead6ff);
-                    --mx-ai-color-line-width: 2px;
-                    --app-brand: var(--color-brand);
-                    --app-brand-gradient: var(--color-brand-gradient);
-                    --mx-grid-shadow-hover: var(--mx-grid-shadow);
-                    --mx-checkbox-color: var(--mx-checkbox-border);
-                    --mx-checkbox-hover-color: var(--mx-checkbox-border-hover);
-                    --mx-checkbox-hover-shadow: var(--mx-checkbox-shadow-hover);
-                    --mx-tag-mode: var(--mx-effects-tag-mode);
-                    --mx-tag-height: var(--mx-effects-tag-height);
-                    --mx-tag-border-radius: var(--mx-effects-tag-border-radius);
-                    --mx-tag-h-gap: var(--mx-effects-tag-h-gap);
-                    --mx-tag-font-size: var(--mx-effects-tag-font-size);
-                    --mx-tag-font-scale: var(--mx-effects-tag-font-scale);
-                    --mx-input-gap-border: var(--input-gap-border);
-                    --mx-effects-card-v-gap: var(--output-large-v-gap);
-                    --mx-effects-card-h-gap: var(--output-large-h-gap);
-                    --mx-effects-card-radius: var(--output-large-border-radius);
-                    --mx-tab-box-gap-border: var(--input-gap-border);
-                    --mx-tab-box-bg: var(--mx-tabs-box-bg);
-                    --mx-tab-box-bg-active: var(--mx-tabs-box-bg-active);
-                    --mx-tab-box-border: var(--mx-tabs-box-border);
-                    --mx-tab-box-border-active: var(--mx-tabs-box-border-active);
-                    --mx-tab-box-color: var(--mx-tabs-box-color);
-                    --mx-tab-box-color-hover: var(--mx-tabs-box-color-hover);
-                    --mx-tab-box-color-active: var(--mx-tabs-box-color-active);
-                    --mx-tab-v-gap: var(--mx-tabs-line-v-gap);
-                    --mx-tab-h-gap: var(--mx-tabs-line-h-gap);
-                    --mx-tab-first-h-gap: var(--mx-grid-h-gap,24px);
-                    --mx-tab-font-size: var(--mx-tabs-line-font-size);
-                    --mx-tab-font-weight: var(--mx-tabs-line-font-weight);
-                    --mx-tab-border-color: var(--mx-tabs-line-border-color);
-                    --mx-tab-color: var(--mx-tabs-line-color);
-                    --mx-tab-color-hover: var(--mx-tabs-line-color-hover);
-                    --mx-tab-color-active: var(--mx-tabs-line-color-active);
-                    --mx-tab-box-arrow-bg: var(--mx-tabs-box-arrow);
-                    --mx-tab-box-arrow-bg-hover: var(--mx-tabs-box-arrow-hover);
-                    --mx-tab-box-arrow-bg-active: var(--mx-tabs-box-arrow-active);
-                    --mx-trigger-v-gap: var(--input-v-gap);
-                    --mx-trigger-h-gap: var(--input-h-gap);
-                    --mx-trigger-min-width: var(--input-min-width);
-                    --mx-trigger-font-size: var(--input-font-size);
-                    --mx-trigger-small-v-gap: var(--input-small-v-gap);
-                    --mx-trigger-small-h-gap: var(--input-small-h-gap);
-                    --mx-trigger-small-min-width: var(--input-small-min-width);
-                    --mx-trigger-small-font-size: var(--input-small-font-size);
-                    --mx-trigger-large-v-gap: var(--input-large-v-gap);
-                    --mx-trigger-large-h-gap: var(--input-large-h-gap);
-                    --mx-trigger-large-min-width: var(--input-large-min-width);
-                    --mx-trigger-large-font-size: var(--input-large-font-size);
-                    --mx-trigger-output-gap: var(--output-offset);
-                    --mx-trigger-output-height: var(--output-item-height);
-                    --mx-comp-v-gap: var(--output-v-gap);
-                    --mx-comp-h-gap: var(--output-h-gap);
-                    --mx-comp-shadow: var(--mx-dialog-shadow);
-                    --mx-custom-layout-width: 80px;
-                    --mx-custom-layout-h-gap: 16px;
-                    --mx-custom-layout-v-gap: 16px;
-                    --mx-custom-layout-icon-width: 32px;
-                    --mx-custom-layout-icon-height: 32px;
-                    --am26-font: "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
-                    --am26-mono: "SF Mono", "JetBrains Mono", "Menlo", "Monaco", "Consolas", monospace;
-                    --am26-text: #1b2438;
-                    --am26-text-soft: #505a74;
-                    --am26-border: rgba(255, 255, 255, 0.4);
-                    --am26-border-strong: rgba(255, 255, 255, 0.6);
-                    --am26-surface: rgba(255, 255, 255, 0.25);
-                    --am26-surface-strong: rgba(255, 255, 255, 0.45);
-                    --am26-panel: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
-                    --am26-panel-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2));
-                    --am26-primary: rgba(69, 84, 229, 1);
-                    --am26-primary-strong: #1d3fcf;
-                    --am26-primary-soft: rgba(42, 91, 255, 0.15);
-                    --am26-success: #0ea86f;
-                    --am26-warning: #e8a325;
-                    --am26-danger: #ea4f4f;
-                    --am26-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-                    --am26-glow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
-                    --mux-comp-disabled-opacity: 0.4;
-                    --mux-comp-v-gap: 16px;
-                    --mux-comp-h-gap: 24px;
-                    --mux-comp-shadow: 0 2px 10px 0 rgba(0,0,0,0.16);
-                    --mux-comp-shadow-border: 0 none;
-                    --mux-comp-btn-gap: 8px;
-                    --mux-trigger-tag-gap: 2px;
-                    --mux-trigger-tag-height: calc(var(--input-height) - var(--mux-trigger-tag-gap)*4 - 2px);
-                    --mux-trigger-tag-bg: #fff;
-                    --mux-trigger-tag-bg-hover: #fff;
-                    --mux-trigger-tag-bg-active: var(--color-brand-opacity);
-                    --mux-trigger-tag-arrow-color: #999;
-                    --mux-trigger-tag-arrow-color-hover: #666;
-                    --mux-trigger-input-placeholder-color: #999;
-                    --mux-trigger-prefix-icon: #666;
-                    --mux-trigger-prefix-text: #666;
-                    --mux-trigger-arrow-size: 16px;
-                    --mux-trigger-arrow-color: #333;
-                    --mux-trigger-arrow-color-hover: #333;
-                    --mux-trigger-v-gap: 8px;
-                    --mux-trigger-h-gap: 8px;
-                    --mux-trigger-min-width: var(--btn-min-width);
-                    --mux-trigger-font-size: var(--btn-font-size);
-                    --mux-trigger-small-v-gap: 8px;
-                    --mux-trigger-small-h-gap: 8px;
-                    --mux-trigger-small-min-width: var(--btn-small-min-width);
-                    --mux-trigger-small-font-size: var(--btn-small-font-size);
-                    --mux-trigger-large-v-gap: 8px;
-                    --mux-trigger-large-h-gap: 12px;
-                    --mux-trigger-large-min-width: var(--btn-large-min-width);
-                    --mux-trigger-large-font-size: var(--btn-large-font-size);
-                    --mux-table-hover-color: #f5f6f8;
-                    --mux-table-hover-expanded-row-bg: #eaecf1;
-                    --mux-table-border-color: #dfdfdf;
-                    --mux-table-size--large: 100px;
-                    --mux-table-size--normal: 60px;
-                    --mux-table-size--small: 40px;
-                    --mux-table-expanded-row-height: 40px;
-                    --mux-table-header-height--small: 50px;
-                    --mux-table-header-background: #fff;
-                    --mux-radio-color: #dadadb;
-                    --mux-radio-shadow-color: rgba(0,0,0,0.16);
-                    --mux-radio-gap: 8px;
-                    --mux-checkbox-color: #9095a1;
-                    --mux-checkbox-size: calc(var(--font-size) + 2px);
-                    --mux-checkbox-border-radius: 4px;
-                    --mux-tag-font-scale: 0.84;
-                    --mux-nav-icon-gap: 12px;
-                    --mux-nav-h-gap: 24px;
-                    --mux-mask-bg: rgba(0,0,0,0.6);
-                    --mux-mask-light-bg: hsla(0,0%,100%,0.6);
-                    --mux-statistic-font-size-integer: 20px;
-                    --mux-statistic-font-size-decimal: 14px;
-                    --mux-field-color-error: var(--color-red);
-                    --mux-field-color-warning: var(--color-warn);
-                    --mux-field-color-success: var(--color-green);
-                    --mux-field-color-highlight: var(--color-brand);
-                    --mux-field-color-initial: transparent;
-                    --mux-common-bg: transparent;
-                    --mux-btn-h-gap: 12px;
-                    --mux-process-color-success: var(--color-green);
-                    --mux-process-color-suspend: var(--color-warn);
-                    --mux-process-color-error: var(--color-red);
-                    --color-brand-alpha-10: rgba(62,62,255,0.1);
-                    --color-brand-alpha-50: rgba(62,62,255,0.5);
-                    --color-brand-btn-shadow-hover: 0 2px 10px 0 rgba(62,62,255,0.4);
-                    --border-huge-radius: 16px;
-                    --border-highlight-active-error: rgba(237,0,0,0.5);
-                    --border-highlight-shadow-active-error: 0 2px 4px 0 rgba(237,0,0,0.2);
-                    --border-highlight-active-warning: rgba(255,136,0,0.5);
-                    --border-highlight-shadow-active-warning: 0 2px 4px 0 rgba(255,136,0,0.2);
-                    --border-highlight-active-success: rgba(0,175,116,0.5);
-                    --border-highlight-shadow-active-success: 0 2px 4px 0 rgba(0,175,116,0.2);
-                    --btn-error: #f44;
-                    --btn-error-gradient: #f44;
-                    --btn-error-text: #fff;
-                    --btn-error-hover: #cc0909;
-                    --btn-error-gradient-hover: #cc0909;
-                    --btn-error-shadow-hover: 0 2px 10px 0 rgba(255,68,68,0.4);
-                    --btn-error-text-hover: #fff;
-                    --btn-error-border: #cf1c1c;
-                    --btn-error-bg: #ffecec;
-                    --btn-error-border-hover: #fd9b9b;
-                    --btn-error-bg-hover: #fedadb;
-                    --color-orange: #f50;
-                    --color-gray: rgba(0,0,0,0.25);
-                    --color-red-weaken: #c9817b;
-                    --mux-ai-brand--color: #ae5cff;
-                    --mux-ai-brand-gradient-color: #5c5cff;
-                    --mux-ai-brand-gradient-tl-br: linear-gradient(135deg,#5c5cff,#ae5cff 95%);
-                    --mux-ai-brand-gradient-tl-br-dark: linear-gradient(135deg,#3e3eff,#93f 95%);
-                    --mux-ai-brand-gradient-tl-br-light: linear-gradient(135deg,#ebd7ff,#d7d7ff);
-                    --mux-ai-brand-gradient-tl-br-slight: linear-gradient(117deg,#ececff,#e9fbff 48%,#f4eaff);
-                    --mux-ai-brand-gradient-tl-br-lighter: linear-gradient(135deg,#f5f5ff,#f5fdff 50%,#faf5ff);
-                    --mux-ai-brand-gradient-l-r-dark: linear-gradient(90deg,#3e3eff 5%,#93f 95%);
-                    --mux-ai-brand-gradient-line: linear-gradient(135deg,#3e3eff,#1dd3ff,#8e28ff);
-                    --mux-marketing-brand-color: #ff0036;
-                    --mux-marketing-brand-gradient-color: #f257a8;
-                    --mux-marketing-brand-gradient-t-b: linear-gradient(180deg,#f257a8 0,#ff0036);
-                    --mux-marketing-brand-gradient-t-b-dark: linear-gradient(180deg,#df2e8b 0,#e80c20);
-                    --mux-marketing-brand-gradient-t-b-light: linear-gradient(180deg,#fff,#ffccd7);
-                    --mux-marketing-brand-gradient-t-b-lighter: linear-gradient(180deg,#fff,#ffe6eb);
-                    --mux-marketing-brand-gradient-l-r: linear-gradient(90deg,#f257a8 0,#ff0036);
-                    --mux-marketing-brand-gradient-l-r-dark: linear-gradient(90deg,#df2e8b 0,#e80c20);
-                    --mux-marketing-brand-gradient-tl-br-light: linear-gradient(135deg,#ffe6eb,#fdeef6);
-                    --mux-marketing-brand-gradient-tl-br-lighter: linear-gradient(135deg,#fff2f5,#fef6fa);
-                    --mx-color-width: 224px;
-                    --mx-color-slider-width: 18px;
-                    --mx-color-picker-width: calc(var(--mx-color-width) - var(--mx-color-slider-width) - 10px);
-                    -webkit-font-smoothing: antialiased;
-                    color: var(--font-color,#333);
-                    font-family: var(--font-family);
-                    font-size: var(--font-size);
-                    line-height: var(--line-height);
-                    box-sizing: inherit;
-                    -webkit-appearance: none;
-                    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-                    outline: none;
-                    bottom: 0;
-                    position: relative;
-                    width: 100%;
-                }
             `;
             const style = document.createElement('style');
             style.id = 'am-helper-pro-v26-style';
@@ -12030,7 +11436,7 @@ if (typeof globalThis !== 'undefined') {
                     <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-label="并发开启执行日志">
                         <div class="am-concurrent-log-header">
                             <span id="am-concurrent-log-title">并发开启执行日志</span>
-                            <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">${renderAmWindowIcon('close')}</button>
+                            <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">${renderAmIcon('close', { size: 16, strokeWidth: 2.2 })}</button>
                         </div>
                         <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status">执行中...</div>
                         <div class="am-concurrent-log-body" id="am-concurrent-log-body"></div>
@@ -36645,6 +36051,756 @@ if (typeof globalThis !== 'undefined') {
                     border-radius: 14px;
                     background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.9));
                 }
+
+                #am-wxt-keyword-overlay,
+                #am-wxt-keyword-overlay:not(.item-picker-open) {
+                    --am-wxt-primary: #2563eb;
+                    --am-wxt-primary-soft: #eff6ff;
+                    --am-wxt-border: #dbe3ef;
+                    --am-wxt-muted-border: #e5eaf2;
+                    --am-wxt-text: #111827;
+                    --am-wxt-muted: #64748b;
+                    background: rgba(15, 23, 42, 0.42);
+                    backdrop-filter: blur(6px);
+                    -webkit-backdrop-filter: blur(6px);
+                }
+
+                #am-wxt-keyword-modal {
+                    width: min(1320px, calc(100vw - 48px));
+                    color: var(--am-wxt-text);
+                    background: #f8fafc;
+                    border: 1px solid rgba(203, 213, 225, 0.95);
+                    border-radius: 10px;
+                    box-shadow: 0 22px 56px rgba(15, 23, 42, 0.26);
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-header {
+                    height: 48px;
+                    padding: 0 16px;
+                    background: #fff;
+                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    color: var(--am-wxt-text);
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-header-main {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                    font-weight: 700;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-runtime-pill {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 22px;
+                    padding: 0 9px;
+                    border: 1px solid #bfdbfe;
+                    border-radius: 999px;
+                    background: #eff6ff;
+                    color: #2563eb;
+                    font-size: 11px;
+                    font-weight: 600;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-body {
+                    padding: 12px;
+                    background: #f8fafc;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs {
+                    display: flex;
+                    gap: 18px;
+                    padding: 0 16px;
+                    min-height: 42px;
+                    align-items: flex-end;
+                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn {
+                    position: relative;
+                    min-height: 40px;
+                    padding: 0 0 10px;
+                    border: 0;
+                    border-radius: 0;
+                    background: transparent;
+                    box-shadow: none;
+                    color: #475569;
+                    font-weight: 600;
+                    transform: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn::after {
+                    content: "";
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    bottom: -1px;
+                    height: 2px;
+                    border-radius: 999px 999px 0 0;
+                    background: transparent;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn.primary {
+                    color: var(--am-wxt-primary);
+                    background: transparent;
+                    border: 0;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn.primary::after {
+                    background: var(--am-wxt-primary);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-btn {
+                    min-height: 32px;
+                    padding: 0 12px;
+                    border-radius: 8px;
+                    border: 1px solid #cbd5e1;
+                    background: #fff;
+                    color: #334155;
+                    box-shadow: none;
+                    line-height: 30px;
+                    transform: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-btn:hover {
+                    border-color: #93c5fd;
+                    background: #f8fbff;
+                    transform: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-btn.primary {
+                    background: var(--am-wxt-primary);
+                    border-color: var(--am-wxt-primary);
+                    color: #fff;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-summary {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 14px;
+                    margin-bottom: 12px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-stat {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 10px;
+                    min-height: 54px;
+                    padding: 10px 14px;
+                    border: 1px solid #eef2f7;
+                    border-radius: 8px;
+                    background: #fff;
+                    box-sizing: border-box;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-stat-label {
+                    color: #64748b;
+                    font-size: 12px;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-stat strong {
+                    color: #0f172a;
+                    font-size: 18px;
+                    font-weight: 750;
+                    line-height: 1.1;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-stat strong small {
+                    margin-left: 2px;
+                    color: #0f172a;
+                    font-size: 14px;
+                    font-weight: 700;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-panel,
+                #am-wxt-keyword-modal .am-wxt-config,
+                #am-wxt-keyword-modal .am-wxt-matrix-card,
+                #am-wxt-keyword-modal .am-wxt-strategy-board,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-row,
+                #am-wxt-keyword-modal .am-wxt-manual-keyword-panel {
+                    border: 1px solid var(--am-wxt-muted-border);
+                    border-radius: 8px;
+                    background: #fff;
+                    box-shadow: none;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar {
+                    min-height: 42px;
+                    padding: 8px 10px;
+                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    border-radius: 8px 8px 0 0;
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-product-toolbar {
+                    justify-content: space-between;
+                    gap: 12px;
+                    padding: 8px 12px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar-actions {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]),
+                #am-wxt-keyword-modal .am-wxt-config input:not([type="checkbox"]):not([type="radio"]),
+                #am-wxt-keyword-modal .am-wxt-config select,
+                #am-wxt-keyword-modal .am-wxt-config textarea,
+                #am-wxt-keyword-modal .am-wxt-setting-control select,
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input {
+                    min-height: 32px;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 8px;
+                    background: #fff;
+                    color: #111827;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-item {
+                    border-radius: 8px;
+                    border-color: var(--am-wxt-muted-border);
+                    background: #fff;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-added-list {
+                    min-height: 72px;
+                    height: 72px;
+                    max-height: 72px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-board {
+                    margin-top: 10px;
+                    padding: 0;
+                    overflow: hidden;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head {
+                    display: grid;
+                    grid-template-columns: minmax(180px, auto) minmax(260px, 1fr) auto;
+                    align-items: center;
+                    gap: 10px;
+                    margin: 0;
+                    padding: 12px;
+                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-section-title {
+                    color: #0f172a;
+                    font-size: 13px;
+                    font-weight: 700;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head-main,
+                #am-wxt-keyword-modal .am-wxt-strategy-head-tools,
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    min-width: 0;
+                    flex-wrap: wrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head-tools {
+                    justify-content: flex-end;
+                    flex: initial;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions {
+                    justify-content: flex-end;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input {
+                    width: min(280px, 100%);
+                    padding: 0 10px;
+                    color: #111827;
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input::placeholder {
+                    color: #94a3b8;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0;
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-list-head,
+                #am-wxt-keyword-modal .am-wxt-strategy-main {
+                    display: grid;
+                    grid-template-columns: 28px minmax(210px, 1.25fr) minmax(170px, 0.8fr) minmax(220px, 1fr) minmax(120px, 0.55fr) minmax(200px, auto);
+                    gap: 12px;
+                    align-items: center;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-list-head {
+                    min-height: 34px;
+                    padding: 0 12px;
+                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    color: #64748b;
+                    font-size: 11px;
+                    font-weight: 600;
+                    background: #f8fafc;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-item {
+                    border: 0;
+                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    border-radius: 0;
+                    padding: 0;
+                    background: #fff;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-main {
+                    min-height: 52px;
+                    padding: 8px 12px;
+                    box-sizing: border-box;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-check {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-name {
+                    min-width: 0;
+                    color: #0f172a;
+                    font-size: 12px;
+                    font-weight: 700;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-name span {
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                    overflow-wrap: anywhere;
+                    white-space: normal;
+                    line-height: 1.35;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tags {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    min-width: 0;
+                    flex-wrap: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag {
+                    display: inline-flex;
+                    align-items: center;
+                    max-width: 100%;
+                    min-height: 22px;
+                    padding: 0 7px;
+                    border: 1px solid var(--am-wxt-strategy-tag-border, #dbeafe);
+                    border-radius: 999px;
+                    background: var(--am-wxt-strategy-tag-bg, #eff6ff);
+                    color: var(--am-wxt-strategy-tag-text, #1d4ed8);
+                    font-size: 11px;
+                    font-weight: var(--am-wxt-strategy-tag-weight, 650);
+                    line-height: 20px;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-scene {
+                    --am-wxt-strategy-tag-weight: 700;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-goal {
+                    --am-wxt-strategy-tag-weight: 650;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-bid {
+                    --am-wxt-strategy-tag-weight: 600;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-keyword {
+                    --am-wxt-strategy-tag-bg: #dbeafe;
+                    --am-wxt-strategy-tag-border: #93c5fd;
+                    --am-wxt-strategy-tag-text: #1d4ed8;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-trend {
+                    --am-wxt-strategy-tag-bg: #ecfeff;
+                    --am-wxt-strategy-tag-border: #67e8f9;
+                    --am-wxt-strategy-tag-text: #0e7490;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-search {
+                    --am-wxt-strategy-tag-bg: #eef2ff;
+                    --am-wxt-strategy-tag-border: #c7d2fe;
+                    --am-wxt-strategy-tag-text: #4338ca;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-traffic,
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-site {
+                    --am-wxt-strategy-tag-bg: #fffbeb;
+                    --am-wxt-strategy-tag-border: #fde68a;
+                    --am-wxt-strategy-tag-text: #b45309;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-custom,
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-crowd {
+                    --am-wxt-strategy-tag-bg: #ecfdf5;
+                    --am-wxt-strategy-tag-border: #a7f3d0;
+                    --am-wxt-strategy-tag-text: #047857;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-lead {
+                    --am-wxt-strategy-tag-bg: #fdf2f8;
+                    --am-wxt-strategy-tag-border: #fbcfe8;
+                    --am-wxt-strategy-tag-text: #be185d;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-smart {
+                    --am-wxt-strategy-tag-bg: #f5f3ff;
+                    --am-wxt-strategy-tag-border: #ddd6fe;
+                    --am-wxt-strategy-tag-text: #6d28d9;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-manual {
+                    --am-wxt-strategy-tag-bg: #fff7ed;
+                    --am-wxt-strategy-tag-border: #fed7aa;
+                    --am-wxt-strategy-tag-text: #c2410c;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-goal,
+                #am-wxt-keyword-modal .am-wxt-strategy-tag-tone-neutral {
+                    --am-wxt-strategy-tag-bg: #f8fafc;
+                    --am-wxt-strategy-tag-border: #cbd5e1;
+                    --am-wxt-strategy-tag-text: #475569;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-target,
+                #am-wxt-keyword-modal .am-wxt-strategy-budget,
+                #am-wxt-keyword-modal .am-wxt-strategy-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-width: 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-actions {
+                    justify-content: flex-end;
+                    flex-wrap: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-target {
+                    flex-wrap: wrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-budget {
+                    justify-content: flex-start;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-summary {
+                    border: 0;
+                    border-radius: 0;
+                    background: transparent;
+                    color: #475569;
+                    font-size: 12px;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-summary.muted {
+                    color: #94a3b8;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost {
+                    min-height: 28px;
+                    padding: 0 4px 0 8px;
+                    border-radius: 8px;
+                    border: 1px solid #bfdbfe;
+                    background: #eff6ff;
+                    color: #1e40af;
+                    gap: 6px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost input {
+                    min-height: 24px;
+                    line-height: 22px;
+                    border-radius: 6px;
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost-field.with-unit input {
+                    min-width: 52px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-target-cost-field.is-empty input {
+                    border-color: #f59e0b;
+                    background: #fffbeb;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-actions .am-wxt-btn {
+                    min-width: 56px;
+                    padding: 0 9px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-action-secondary {
+                    color: #475569;
+                    background: #f8fafc;
+                    border-color: #cbd5e1;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-action-main {
+                    color: #1d4ed8;
+                    background: #eff6ff;
+                    border-color: #bfdbfe;
+                    font-weight: 600;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-delete-btn {
+                    color: #b91c1c;
+                    background: #fff;
+                    border-color: #fecaca;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-delete-btn:hover {
+                    color: #991b1b;
+                    background: #fef2f2;
+                    border-color: #fca5a5;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-copy-multi,
+                #am-wxt-keyword-modal .am-wxt-run-mode-count {
+                    border-radius: 999px;
+                    background: #f8fafc;
+                    border-color: #cbd5e1;
+                    color: #334155;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-footer {
+                    position: sticky;
+                    bottom: 0;
+                    z-index: 2;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                    padding: 12px;
+                    border-top: 1px solid var(--am-wxt-muted-border);
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-submit-summary {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    color: #475569;
+                    font-size: 13px;
+                    line-height: 1.4;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-submit-summary span {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 24px;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-submit-summary strong {
+                    color: #2563eb;
+                    font-size: 18px;
+                    font-weight: 750;
+                    margin: 0 3px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-primary-actions {
+                    margin-top: 0;
+                    justify-content: flex-end;
+                    flex-wrap: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-wrap {
+                    margin-top: 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-wrap .am-wxt-btn.primary {
+                    min-width: 120px;
+                    padding-right: 30px;
+                    font-weight: 700;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle:hover {
+                    transform: translateY(-50%) !important;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-quick-log-panel {
+                    padding: 10px;
+                    border-top: 1px solid var(--am-wxt-muted-border);
+                    background: #fff;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-quick-log-title {
+                    margin-bottom: 6px;
+                    color: #64748b;
+                    font-size: 12px;
+                    font-weight: 700;
+                }
+
+                #am-wxt-keyword-quick-log {
+                    margin-top: 0;
+                    min-height: 82px;
+                    max-height: 112px;
+                    padding: 8px 10px;
+                    border: 1px solid var(--am-wxt-muted-border);
+                    border-radius: 8px;
+                    background: #fff;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-quick-log .line {
+                    min-height: 24px;
+                    color: #475569;
+                    line-height: 1.45;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm {
+                    width: min(520px, calc(100vw - 32px));
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 8px;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-stat {
+                    min-width: 0;
+                    padding: 10px;
+                    border: 1px solid #e5eaf2;
+                    border-radius: 8px;
+                    background: #f8fafc;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-stat span {
+                    display: block;
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.35;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-stat strong {
+                    display: block;
+                    margin-top: 4px;
+                    color: #0f172a;
+                    font-size: 18px;
+                    line-height: 1.2;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-scenes {
+                    padding: 8px 10px;
+                    border-radius: 8px;
+                    background: #eff6ff;
+                    color: #1d4ed8;
+                    font-size: 12px;
+                    line-height: 1.45;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-risk {
+                    padding: 10px 12px;
+                    border: 1px solid #fed7aa;
+                    border-radius: 8px;
+                    background: #fff7ed;
+                    color: #9a3412;
+                    font-size: 12px;
+                    line-height: 1.55;
+                }
+
+                @media (max-width: 980px) {
+                    #am-wxt-keyword-modal .am-wxt-home-summary,
+                    #am-wxt-keyword-modal .am-wxt-strategy-head {
+                        grid-template-columns: 1fr;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-strategy-head-tools,
+                    #am-wxt-keyword-modal .am-wxt-strategy-head-actions,
+                    #am-wxt-keyword-modal .am-wxt-toolbar-actions {
+                        justify-content: flex-start;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-product-toolbar {
+                        align-items: flex-start;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-strategy-search-input {
+                        width: 100%;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-strategy-list-head {
+                        display: none;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-strategy-main {
+                        grid-template-columns: 28px minmax(0, 1fr);
+                        align-items: start;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-strategy-tags,
+                    #am-wxt-keyword-modal .am-wxt-strategy-target,
+                    #am-wxt-keyword-modal .am-wxt-strategy-budget,
+                    #am-wxt-keyword-modal .am-wxt-strategy-actions {
+                        grid-column: 2 / -1;
+                        justify-content: flex-start;
+                        flex-wrap: wrap;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-strategy-footer {
+                        position: static;
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-primary-actions {
+                        width: 100%;
+                        justify-content: flex-start;
+                        flex-wrap: wrap;
+                    }
+
+                    #am-wxt-scene-popup-mask .am-wxt-submit-confirm-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
             `;
             document.head.appendChild(style);
         };
@@ -39780,7 +39936,10 @@ if (typeof globalThis !== 'undefined') {
                 <div id="am-wxt-keyword-detail-backdrop"></div>
                 <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true">
                     <div class="am-wxt-header">
-                        <span>关键词推广批量建计划 API 向导</span>
+                        <div class="am-wxt-header-main">
+                            <span>关键词推广批量建计划 API 向导</span>
+                            <span class="am-wxt-runtime-pill">向导就绪</span>
+                        </div>
                         <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
                     <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
@@ -39789,6 +39948,20 @@ if (typeof globalThis !== 'undefined') {
                         <button type="button" class="am-wxt-btn" data-workbench-page="previewlog">日志页</button>
                     </div>
                     <div class="am-wxt-body">
+                        <div class="am-wxt-home-summary" id="am-wxt-keyword-home-summary" data-workbench-page-panel="home">
+                            <div class="am-wxt-home-stat">
+                                <span class="am-wxt-home-stat-label">已添加商品</span>
+                                <strong><span id="am-wxt-keyword-summary-added">0</span> / ${WIZARD_MAX_ITEMS}</strong>
+                            </div>
+                            <div class="am-wxt-home-stat">
+                                <span class="am-wxt-home-stat-label">已选计划</span>
+                                <strong id="am-wxt-keyword-summary-strategy">0</strong>
+                            </div>
+                            <div class="am-wxt-home-stat">
+                                <span class="am-wxt-home-stat-label">预算合计</span>
+                                <strong id="am-wxt-keyword-summary-budget">0元</strong>
+                            </div>
+                        </div>
                         <div class="am-wxt-split" id="am-wxt-keyword-item-split" data-workbench-page-panel="home">
                             <div class="am-wxt-panel am-wxt-panel-candidate">
                                 <div class="am-wxt-toolbar">
@@ -39801,11 +39974,13 @@ if (typeof globalThis !== 'undefined') {
                                 <div class="am-wxt-list" id="am-wxt-keyword-candidate-list"></div>
                             </div>
                             <div class="am-wxt-panel">
-                                <div class="am-wxt-toolbar">
+                                <div class="am-wxt-toolbar am-wxt-product-toolbar">
                                     <span>已添加商品 <b id="am-wxt-keyword-added-count">0</b> / ${WIZARD_MAX_ITEMS}</span>
-                                    <button class="am-wxt-btn" id="am-wxt-keyword-toggle-candidate">添加商品</button>
-                                    <button class="am-wxt-btn am-wxt-toggle-candidate-list-btn hidden" id="am-wxt-keyword-toggle-candidate-list">展开更多</button>
-                                    <button class="am-wxt-btn" id="am-wxt-keyword-clear-added">清空</button>
+                                    <div class="am-wxt-toolbar-actions">
+                                        <button class="am-wxt-btn" id="am-wxt-keyword-toggle-candidate">添加商品</button>
+                                        <button class="am-wxt-btn am-wxt-toggle-candidate-list-btn hidden" id="am-wxt-keyword-toggle-candidate-list">展开更多</button>
+                                        <button class="am-wxt-btn" id="am-wxt-keyword-clear-added">清空</button>
+                                    </div>
                                 </div>
                                 <div class="am-wxt-list" id="am-wxt-keyword-added-list"></div>
                             </div>
@@ -39814,6 +39989,7 @@ if (typeof globalThis !== 'undefined') {
                         <div class="am-wxt-strategy-board" data-workbench-page-panel="home">
                             <div class="am-wxt-strategy-head">
                                 <div class="am-wxt-strategy-head-main">
+                                    <span class="am-wxt-strategy-section-title">计划配置</span>
                                     <button class="am-wxt-btn" id="am-wxt-keyword-add-strategy">新建计划</button>
                                     <span>已选 <b id="am-wxt-keyword-strategy-count">0</b> 个</span>
                                 </div>
@@ -39834,34 +40010,40 @@ if (typeof globalThis !== 'undefined') {
                                 </div>
                             </div>
                             <div class="am-wxt-strategy-list" id="am-wxt-keyword-strategy-list"></div>
-                            <div class="am-wxt-actions">
-                                <div class="am-wxt-run-mode-wrap" id="am-wxt-keyword-run-mode-wrap">
-                                    <button class="am-wxt-btn primary" id="am-wxt-keyword-run-quick">立即投放</button>
-                                    <button
-                                        type="button"
-                                        class="am-wxt-btn am-wxt-run-mode-toggle"
-                                        id="am-wxt-keyword-run-mode-toggle"
-                                        aria-label="提交方式"
-                                        aria-haspopup="menu"
-                                        aria-expanded="false"
-                                        data-open="0"
-                                    ></button>
-                                    <div class="am-wxt-run-mode-menu hidden" id="am-wxt-keyword-run-mode-menu" role="menu">
-                                        <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
-                                            <span class="am-wxt-run-mode-label">并发数</span>
-                                            <span class="am-wxt-run-mode-count" data-action="run-mode-count-badge" title="点击增加，右键减少，滚轮可调节">
-                                                <span class="am-wxt-run-mode-count-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
-                                                <span class="am-wxt-run-mode-count-num" data-submit-mode-count="parallel">${Math.max(1, toNumber(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 1))}</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="am-wxt-run-mode-item" data-submit-mode="serial" role="menuitem">
-                                            <span class="am-wxt-run-mode-label">单条</span>
-                                        </button>
+                            <div class="am-wxt-strategy-footer">
+                                <div class="am-wxt-submit-summary" id="am-wxt-keyword-submit-summary">将提交 0 个计划 / 预算合计 0元 / 提交方式：单条</div>
+                                <div class="am-wxt-actions am-wxt-primary-actions">
+                                    <button class="am-wxt-btn" id="am-wxt-keyword-preview-quick">生成其他策略</button>
+                                    <div class="am-wxt-run-mode-wrap" id="am-wxt-keyword-run-mode-wrap">
+                                        <button class="am-wxt-btn primary" id="am-wxt-keyword-run-quick">提交创建</button>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-btn am-wxt-run-mode-toggle"
+                                            id="am-wxt-keyword-run-mode-toggle"
+                                            aria-label="提交方式"
+                                            aria-haspopup="menu"
+                                            aria-expanded="false"
+                                            data-open="0"
+                                        ></button>
+                                        <div class="am-wxt-run-mode-menu hidden" id="am-wxt-keyword-run-mode-menu" role="menu">
+                                            <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
+                                                <span class="am-wxt-run-mode-label">并发数</span>
+                                                <span class="am-wxt-run-mode-count" data-action="run-mode-count-badge" title="点击增加，右键减少，滚轮可调节">
+                                                    <span class="am-wxt-run-mode-count-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
+                                                    <span class="am-wxt-run-mode-count-num" data-submit-mode-count="parallel">${Math.max(1, toNumber(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 1))}</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="am-wxt-run-mode-item" data-submit-mode="serial" role="menuitem">
+                                                <span class="am-wxt-run-mode-label">单条</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <button class="am-wxt-btn" id="am-wxt-keyword-preview-quick">生成其他策略</button>
                             </div>
-                            <div id="am-wxt-keyword-quick-log"></div>
+                            <div class="am-wxt-quick-log-panel">
+                                <div class="am-wxt-quick-log-title">执行日志</div>
+                                <div id="am-wxt-keyword-quick-log"></div>
+                            </div>
                         </div>
 
                         <div class="am-wxt-config collapsed" id="am-wxt-keyword-detail-config" data-workbench-page-panel="editor">
@@ -40122,6 +40304,10 @@ if (typeof globalThis !== 'undefined') {
                 addAllBtn: overlay.querySelector('#am-wxt-keyword-add-all'),
                 itemSplit: overlay.querySelector('#am-wxt-keyword-item-split'),
                 strategyBoard: overlay.querySelector('.am-wxt-strategy-board'),
+                homeSummary: overlay.querySelector('#am-wxt-keyword-home-summary'),
+                summaryAddedCount: overlay.querySelector('#am-wxt-keyword-summary-added'),
+                summaryStrategyCount: overlay.querySelector('#am-wxt-keyword-summary-strategy'),
+                summaryBudgetTotal: overlay.querySelector('#am-wxt-keyword-summary-budget'),
                 candidateList: overlay.querySelector('#am-wxt-keyword-candidate-list'),
                 addedList: overlay.querySelector('#am-wxt-keyword-added-list'),
                 addedCount: overlay.querySelector('#am-wxt-keyword-added-count'),
@@ -40140,6 +40326,7 @@ if (typeof globalThis !== 'undefined') {
                 runModeMenu: overlay.querySelector('#am-wxt-keyword-run-mode-menu'),
                 runQuickBtn: overlay.querySelector('#am-wxt-keyword-run-quick'),
                 previewQuickBtn: overlay.querySelector('#am-wxt-keyword-preview-quick'),
+                submitSummary: overlay.querySelector('#am-wxt-keyword-submit-summary'),
                 quickLog: overlay.querySelector('#am-wxt-keyword-quick-log'),
                 detailConfig: overlay.querySelector('#am-wxt-keyword-detail-config'),
                 detailTitle: overlay.querySelector('#am-wxt-keyword-detail-title'),
@@ -40228,6 +40415,48 @@ if (typeof globalThis !== 'undefined') {
                 appendLine(wizardState.els.log, 160);
                 appendLine(wizardState.els.workbenchPreviewLog, 160);
             };
+            const parseWizardBudgetAmount = (value = '') => {
+                const normalized = String(value ?? '').replace(/[^\d.-]/g, '').trim();
+                const amount = Number(normalized);
+                return Number.isFinite(amount) && amount > 0 ? amount : 0;
+            };
+            const formatWizardBudgetAmount = (amount = 0) => {
+                const normalized = Number.isFinite(Number(amount)) ? Math.max(0, Number(amount)) : 0;
+                return `${normalized.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}元`;
+            };
+            const calculateWizardBudgetTotal = () => {
+                const fallbackBudget = wizardState?.draft?.dayAverageBudget || '100';
+                return (Array.isArray(wizardState?.strategyList) ? wizardState.strategyList : [])
+                    .filter(strategy => strategy?.enabled !== false)
+                    .reduce((sum, strategy) => {
+                        const amount = parseWizardBudgetAmount(strategy?.dayAverageBudget || fallbackBudget || '100');
+                        return sum + amount;
+                    }, 0);
+            };
+            const syncHomeSummary = () => {
+                const addedCount = Array.isArray(wizardState?.addedItems) ? wizardState.addedItems.length : 0;
+                const enabledStrategyCount = Array.isArray(wizardState?.strategyList)
+                    ? wizardState.strategyList.filter(item => item?.enabled !== false).length
+                    : 0;
+                const budgetText = formatWizardBudgetAmount(calculateWizardBudgetTotal());
+                const submitModeText = submitModeLabel(normalizeSubmitMode(wizardState?.draft?.submitMode || 'serial'));
+                if (wizardState.els.summaryAddedCount instanceof HTMLElement) {
+                    wizardState.els.summaryAddedCount.textContent = String(addedCount);
+                }
+                if (wizardState.els.summaryStrategyCount instanceof HTMLElement) {
+                    wizardState.els.summaryStrategyCount.textContent = String(enabledStrategyCount);
+                }
+                if (wizardState.els.summaryBudgetTotal instanceof HTMLElement) {
+                    wizardState.els.summaryBudgetTotal.textContent = budgetText;
+                }
+                if (wizardState.els.submitSummary instanceof HTMLElement) {
+                    wizardState.els.submitSummary.innerHTML = `
+                        <span>将提交 <strong>${enabledStrategyCount}</strong> 个计划</span>
+                        <span>预算合计 ${budgetText}</span>
+                        <span>提交方式：${Utils.escapeHtml(submitModeText)}</span>
+                    `;
+                }
+            };
             const setWorkbenchPage = (page = 'home') => {
                 const nextPage = WORKBENCH_PAGE_SET.has(String(page || '').trim()) ? String(page || '').trim() : 'home';
                 wizardState.workbenchPage = nextPage;
@@ -40240,6 +40469,7 @@ if (typeof globalThis !== 'undefined') {
                     const active = btn.dataset.workbenchPage === nextPage;
                     btn.classList.toggle('primary', active);
                 });
+                toggleDisplay(wizardState.els.homeSummary, nextPage === 'home');
                 toggleDisplay(wizardState.els.itemSplit, nextPage === 'home');
                 toggleDisplay(wizardState.els.strategyBoard, nextPage === 'home');
                 toggleDisplay(wizardState.els.detailConfig, nextPage === 'editor');
@@ -40349,6 +40579,7 @@ if (typeof globalThis !== 'undefined') {
                     wizardState.els.runModeToggleBtn.removeAttribute('title');
                     wizardState.els.runModeToggleBtn.setAttribute('aria-label', `提交方式：${submitModeLabel(mode)}`);
                 }
+                syncHomeSummary();
                 if (!(wizardState.els.runModeMenu instanceof HTMLElement)) return;
                 const parallelCountNode = wizardState.els.runModeMenu.querySelector('[data-submit-mode-count="parallel"]');
                 if (parallelCountNode) {
@@ -56127,11 +56358,41 @@ if (typeof globalThis !== 'undefined') {
                 });
             };
 
+            const getStrategyTagClassName = (kind = '', label = '') => {
+                const text = String(label || '').trim();
+                const classes = ['am-wxt-strategy-tag'];
+                const addKind = (value = '') => {
+                    if (value) classes.push(`am-wxt-strategy-tag-${value}`);
+                };
+                addKind(kind);
+                if (kind === 'scene') {
+                    if (/关键词/.test(text)) addKind('tone-keyword');
+                    else if (/人群/.test(text)) addKind('tone-crowd');
+                    else if (/货品|全站/.test(text)) addKind('tone-site');
+                    else if (/线索/.test(text)) addKind('tone-lead');
+                    else addKind('tone-neutral');
+                } else if (kind === 'goal') {
+                    if (/趋势|明星/.test(text)) addKind('tone-trend');
+                    else if (/搜索|卡位/.test(text)) addKind('tone-search');
+                    else if (/流量|金卡/.test(text)) addKind('tone-traffic');
+                    else if (/自定义/.test(text)) addKind('tone-custom');
+                    else if (/拉新|人群/.test(text)) addKind('tone-crowd');
+                    else addKind('tone-goal');
+                } else if (kind === 'bid') {
+                    if (/手动/.test(text)) addKind('tone-manual');
+                    else addKind('tone-smart');
+                } else {
+                    addKind('tone-neutral');
+                }
+                return classes.join(' ');
+            };
+
             const renderStrategyList = () => {
                 if (!wizardState.els.strategyList || !wizardState.els.strategyCount) return;
                 wizardState.els.strategyList.innerHTML = '';
                 const enabledCount = wizardState.strategyList.filter(item => item.enabled).length;
                 wizardState.els.strategyCount.textContent = String(enabledCount);
+                syncHomeSummary();
                 syncStrategyHeadActionState();
                 const filteredStrategyList = getFilteredStrategyList();
                 const strategySearchKeyword = getStrategySearchKeyword();
@@ -56172,6 +56433,17 @@ if (typeof globalThis !== 'undefined') {
                     }
                     return removed;
                 };
+                const listHead = document.createElement('div');
+                listHead.className = 'am-wxt-strategy-list-head';
+                listHead.innerHTML = `
+                    <span></span>
+                    <span>计划名称</span>
+                    <span>类型</span>
+                    <span>出价目标</span>
+                    <span>预算</span>
+                    <span>操作</span>
+                `;
+                wizardState.els.strategyList.appendChild(listHead);
                 filteredStrategyList.forEach((strategy) => {
                     const strategySceneName = SCENE_OPTIONS.includes(String(strategy?.sceneName || '').trim())
                         ? String(strategy.sceneName).trim()
@@ -56198,23 +56470,34 @@ if (typeof globalThis !== 'undefined') {
                     const strategyTargetCostValue = shouldShowStrategyTargetCostInput
                         ? resolveStrategyTargetCostValue(strategy, strategyBidTargetCode)
                         : '';
+                    const strategyTargetCostEmptyClass = shouldShowStrategyTargetCostInput && !String(strategyTargetCostValue || '').trim()
+                        ? ' is-empty'
+                        : '';
                     const showStrategyTargetCostUnit = shouldShowStrategyTargetCostInput && strategyBidTargetCode !== 'roi';
                     const copyBatchCount = Math.min(99, Math.max(1, toNumber(strategy.copyBatchCount, 1)));
                     strategy.copyBatchCount = copyBatchCount;
+                    const strategyLabel = getStrategyMainLabel(strategy);
                     const row = document.createElement('div');
                     row.className = 'am-wxt-strategy-item';
                     row.innerHTML = `
                         <div class="am-wxt-strategy-main">
-                            <div class="am-wxt-strategy-left">
+                            <label class="am-wxt-strategy-check">
                                 <input type="checkbox" ${strategy.enabled ? 'checked' : ''} />
-                                <span>${Utils.escapeHtml(getStrategyMainLabel(strategy))}</span>
+                            </label>
+                            <div class="am-wxt-strategy-name">
+                                <span title="${Utils.escapeHtml(strategyLabel)}">${Utils.escapeHtml(strategyLabel)}</span>
                             </div>
-                            <div class="am-wxt-strategy-right">
-                                <span class="am-wxt-strategy-summary">${Utils.escapeHtml(goalLabel)} / ${Utils.escapeHtml(bidModeLabel)} / ${Utils.escapeHtml(bidTargetLabel)}</span>
+                            <div class="am-wxt-strategy-tags">
+                                <span class="${getStrategyTagClassName('scene', strategySceneName)}">${Utils.escapeHtml(strategySceneName)}</span>
+                                <span class="${getStrategyTagClassName('goal', goalLabel)}">${Utils.escapeHtml(goalLabel)}</span>
+                                <span class="${getStrategyTagClassName('bid', bidModeLabel)}">${Utils.escapeHtml(bidModeLabel)}</span>
+                            </div>
+                            <div class="am-wxt-strategy-target">
+                                <span class="am-wxt-strategy-summary">${Utils.escapeHtml(bidTargetLabel)}</span>
                                 ${shouldShowStrategyTargetCostInput ? `
                                     <label class="am-wxt-strategy-target-cost">
                                         <span>目标成本</span>
-                                        <span class="am-wxt-strategy-target-cost-field ${showStrategyTargetCostUnit ? 'with-unit' : ''}">
+                                        <span class="am-wxt-strategy-target-cost-field ${showStrategyTargetCostUnit ? 'with-unit' : ''}${strategyTargetCostEmptyClass}">
                                             <input
                                                 type="number"
                                                 min="0.01"
@@ -56223,22 +56506,26 @@ if (typeof globalThis !== 'undefined') {
                                                 value="${Utils.escapeHtml(strategyTargetCostValue)}"
                                                 data-action="target-cost-input"
                                                 data-target-code="${Utils.escapeHtml(strategyBidTargetCode)}"
-                                                placeholder="${strategyBidTargetCode === 'roi' ? '例如 2.24' : '请输入'}"
+                                                placeholder="${strategyBidTargetCode === 'roi' ? '例如 2.24' : '待填写'}"
                                             />
                                             ${showStrategyTargetCostUnit ? '<span class="am-wxt-strategy-target-cost-unit">元</span>' : ''}
                                         </span>
                                     </label>
-                                ` : ''}
-                                <span class="am-wxt-strategy-summary">/ 预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
-                                <button class="am-wxt-btn am-wxt-copy-btn" data-action="copy">
+                                ` : `<span class="am-wxt-strategy-summary muted">${Utils.escapeHtml(bidModeLabel)}</span>`}
+                            </div>
+                            <div class="am-wxt-strategy-budget">
+                                <span>预算 ${Utils.escapeHtml(budgetLabel)} 元</span>
+                            </div>
+                            <div class="am-wxt-strategy-actions">
+                                <button class="am-wxt-btn am-wxt-copy-btn am-wxt-strategy-action-secondary" data-action="copy">
                                     <span>复制</span>
                                     <span class="am-wxt-copy-multi" data-action="copy-count-badge" title="点击增加，右键减少，滚轮可调节">
                                         <span class="am-wxt-copy-multi-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span>
                                         <span class="am-wxt-copy-multi-num">${copyBatchCount}</span>
                                     </span>
                                 </button>
-                                <button class="am-wxt-btn" data-action="delete">删除</button>
-                                <button class="am-wxt-btn" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑计划'}</button>
+                                <button class="am-wxt-btn danger am-wxt-strategy-delete-btn" data-action="delete">删除</button>
+                                <button class="am-wxt-btn am-wxt-strategy-action-main" data-action="edit">${wizardState.detailVisible && wizardState.editingStrategyId === strategy.id ? '编辑中' : '编辑计划'}</button>
                             </div>
                         </div>
                     `;
@@ -56255,15 +56542,23 @@ if (typeof globalThis !== 'undefined') {
                         commitStrategyUiState({ refreshPreview: false });
                     };
                     if (targetCostInput instanceof HTMLInputElement) {
+                        const targetCostField = targetCostInput.closest('.am-wxt-strategy-target-cost-field');
+                        const syncStrategyTargetCostEmptyState = () => {
+                            if (targetCostField instanceof HTMLElement) {
+                                targetCostField.classList.toggle('is-empty', !String(targetCostInput.value || '').trim());
+                            }
+                        };
                         const syncStrategyTargetCostInputOnly = () => {
                             syncStrategyTargetCostFields(strategy, strategyBidTargetCode, targetCostInput.value);
                             syncStrategyTargetCostInputWidth(targetCostInput);
+                            syncStrategyTargetCostEmptyState();
                         };
                         commitStrategyTargetCostInput = () => {
                             const parsed = parseNumberFromSceneValue(targetCostInput.value);
                             const nextValue = syncStrategyTargetCostFields(strategy, strategyBidTargetCode, parsed);
                             targetCostInput.value = nextValue;
                             syncStrategyTargetCostInputWidth(targetCostInput);
+                            syncStrategyTargetCostEmptyState();
                             if (wizardState.detailVisible && wizardState.editingStrategyId === strategy.id) {
                                 applyStrategyToDetailForm(strategy);
                             }
@@ -56275,6 +56570,7 @@ if (typeof globalThis !== 'undefined') {
                         targetCostInput.addEventListener('click', (event) => {
                             event.stopPropagation();
                         });
+                        syncStrategyTargetCostEmptyState();
                     }
                     if (copyCountBadge instanceof HTMLElement) {
                         const refreshCopyCount = () => {
@@ -56628,7 +56924,7 @@ if (typeof globalThis !== 'undefined') {
                     clearCompactViewport();
                     return;
                 }
-                const compactHeight = 168;
+                const compactHeight = 72;
                 addedListEl.style.height = `${compactHeight}px`;
                 addedListEl.style.maxHeight = `${compactHeight}px`;
                 addedListEl.style.scrollbarGutter = 'stable';
@@ -56641,6 +56937,7 @@ if (typeof globalThis !== 'undefined') {
 
             const renderAddedList = () => {
                 wizardState.els.addedCount.textContent = String(wizardState.addedItems.length);
+                syncHomeSummary();
                 wizardState.els.addedList.innerHTML = '';
                 if (!wizardState.addedItems.length) {
                     wizardState.els.addedList.innerHTML = '<div class="am-wxt-item"><div class="name">请点击上方“添加商品”按钮</div></div>';
@@ -59502,11 +59799,11 @@ if (typeof globalThis !== 'undefined') {
             wizardState.els.previewBtn.onclick = handlePreview;
             wizardState.els.previewQuickBtn.onclick = handleGenerateOtherStrategies;
 
-            const handleRun = async () => {
+            const resolveWizardRunPayload = (options = {}) => {
                 const req = KeywordPlanRequestBuilder.buildRequestFromWizard();
                 if (!req.plans.length) {
                     appendWizardLog('请先添加商品并勾选策略后再创建', 'error');
-                    return;
+                    return null;
                 }
                 const planNameCheck = validatePlanNameUniqueness(req);
                 if (!planNameCheck.ok) {
@@ -59522,8 +59819,8 @@ if (typeof globalThis !== 'undefined') {
                             'error'
                         );
                     }
-                    appendWizardLog('请修改计划名后再提交，当前已拦截提交', 'error');
-                    if (wizardState.els.preview) {
+                        appendWizardLog('请修改计划名后再提交，当前已拦截提交', 'error');
+                    if (options.writeBlockedPreview !== false && wizardState.els.preview) {
                         wizardState.els.preview.textContent = JSON.stringify({
                             sceneName: req.sceneName,
                             blocked: true,
@@ -59533,14 +59830,72 @@ if (typeof globalThis !== 'undefined') {
                             existingPlanNameCount: planNameCheck.existingPlanNameCount
                         }, null, 2);
                     }
-                    return;
+                    return null;
                 }
                 const sceneRequests = buildSceneRequestsFromWizard(req)
                     .filter(sceneReq => Array.isArray(sceneReq?.plans) && sceneReq.plans.length);
                 if (!sceneRequests.length) {
                     appendWizardLog('未识别到可提交的场景计划，请检查策略场景设置', 'error');
-                    return;
+                    return null;
                 }
+                return {
+                    req,
+                    sceneRequests
+                };
+            };
+
+            const openKeywordSubmitConfirmPopup = async ({ req = {}, sceneRequests = [] } = {}) => {
+                const planCount = Array.isArray(req?.plans) ? req.plans.length : 0;
+                const itemCount = Array.isArray(wizardState?.addedItems) ? wizardState.addedItems.length : 0;
+                const budgetText = formatWizardBudgetAmount(calculateWizardBudgetTotal());
+                const mode = normalizeSubmitMode(wizardState?.draft?.submitMode || 'serial');
+                const modeText = submitModeLabel(mode);
+                const sceneSummaryText = (Array.isArray(sceneRequests) ? sceneRequests : [])
+                    .map(item => `${item.sceneName}×${Array.isArray(item?.plans) ? item.plans.length : 0}`)
+                    .filter(Boolean)
+                    .join('、') || '未识别场景';
+                return openBatchStrategyPopupDialog({
+                    title: '确认提交创建',
+                    dialogClassName: 'am-wxt-scene-popup-dialog-submit-confirm',
+                    cancelLabel: '取消',
+                    saveLabel: '确认提交创建',
+                    bodyHtml: `
+                        <div class="am-wxt-submit-confirm" data-submit-confirm-dialog="1">
+                            <div class="am-wxt-submit-confirm-grid">
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>计划数</span>
+                                    <strong data-submit-confirm-plan-count="1">${planCount}</strong>
+                                </div>
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>预算合计</span>
+                                    <strong data-submit-confirm-budget="1">${Utils.escapeHtml(budgetText)}</strong>
+                                </div>
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>商品数</span>
+                                    <strong data-submit-confirm-item-count="1">${itemCount}</strong>
+                                </div>
+                                <div class="am-wxt-submit-confirm-stat">
+                                    <span>提交方式</span>
+                                    <strong data-submit-confirm-mode="1">${Utils.escapeHtml(modeText)}</strong>
+                                </div>
+                            </div>
+                            <div class="am-wxt-submit-confirm-scenes" data-submit-confirm-scenes="1">${Utils.escapeHtml(sceneSummaryText)}</div>
+                            <div class="am-wxt-submit-confirm-risk">确认后会调用创建接口，请再次核对计划名、预算、商品和提交方式。本弹窗关闭或取消不会提交。</div>
+                        </div>
+                    `,
+                    onSave() {
+                        return {
+                            ok: true,
+                            confirmed: true
+                        };
+                    }
+                });
+            };
+
+            const handleRun = async () => {
+                const runPayload = resolveWizardRunPayload({ writeBlockedPreview: true });
+                if (!runPayload) return;
+                const { req, sceneRequests } = runPayload;
                 const runCount = req.plans.length || 0;
                 KeywordPlanPreviewExecutor.renderPreview(req);
                 const sceneSummaryText = sceneRequests.map(item => `${item.sceneName}×${item.plans.length}`).join('、');
@@ -59782,8 +60137,19 @@ if (typeof globalThis !== 'undefined') {
                     }
                 }
             };
+            const handleRunQuickWithConfirm = async () => {
+                const runPayload = resolveWizardRunPayload({ writeBlockedPreview: true });
+                if (!runPayload) return;
+                KeywordPlanPreviewExecutor.renderPreview(runPayload.req);
+                const confirmResult = await openKeywordSubmitConfirmPopup(runPayload);
+                if (!confirmResult?.confirmed) {
+                    appendWizardLog('已取消提交创建');
+                    return;
+                }
+                await handleRun();
+            };
             wizardState.els.runBtn.onclick = handleRun;
-            wizardState.els.runQuickBtn.onclick = handleRun;
+            wizardState.els.runQuickBtn.onclick = handleRunQuickWithConfirm;
             if (wizardState.els.addStrategyBtn) {
                 wizardState.els.addStrategyBtn.onclick = () => {
                     addNewStrategy();
