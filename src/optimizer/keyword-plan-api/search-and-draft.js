@@ -2506,6 +2506,18 @@
             }
         };
 
+        Object.assign(KeywordPlanWizardStore, {
+            readSessionDraft,
+            saveSessionDraft,
+            clearSessionDraft,
+            wizardDefaultDraft: (...args) => wizardDefaultDraft(...args),
+            createWizardDraft,
+            resetWizardDraft,
+            hydrateWizardDraftForOpen: (storedDraft = {}) => hydrateWizardDraftForOpen(storedDraft),
+            ensureWizardDraft: () => ensureWizardDraft(),
+            persistDraft: (draft = null) => persistWizardDraft(draft)
+        });
+
         const resolvePreferredItems = async (request, runtime) => {
             const draft = KeywordPlanWizardStore.readSessionDraft();
             const draftItems = Array.isArray(draft?.addedItems)
@@ -4913,7 +4925,17 @@
                 }
                 if (sceneCapabilities.sceneName === '线索推广') {
                     delete merged.campaign.bidTypeV2;
-                    merged.campaign.dmcType = 'total';
+                    const isCopyCurrentPlan = request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true;
+                    const sourceLeadDmcType = String(merged.campaign.dmcType || '').trim().toLowerCase();
+                    const sourceLeadDailyBudget = toNumber(
+                        merged.campaign.dayBudget,
+                        toNumber(merged.campaign.dayAverageBudget, NaN)
+                    );
+                    const preserveLeadDailyBudget = isCopyCurrentPlan
+                        && sourceLeadDmcType === 'normal'
+                        && Number.isFinite(sourceLeadDailyBudget)
+                        && sourceLeadDailyBudget > 0;
+                    merged.campaign.dmcType = preserveLeadDailyBudget ? 'normal' : 'total';
                     if (!merged.campaign.promotionScene) {
                         merged.campaign.promotionScene = resolveSceneDefaultPromotionScene('线索推广', runtimeForScene?.storeData?.promotionScene || 'leads_collection');
                     }
@@ -4949,59 +4971,72 @@
                     if (!isPlainObject(merged.campaign.launchTime)) {
                         merged.campaign.launchTime = buildDefaultLaunchTime({ days: 7, forever: false });
                     }
-                    const normalizeLeadTemplateIdText = (value) => {
-                        const idText = String(toIdValue(value)).trim();
-                        return /^\d+$/.test(idText) ? idText : '';
-                    };
-                    const leadTemplateTriplet = resolveLeadTemplateTriplet({
-                        campaign: merged.campaign,
-                        runtimeStoreData: runtimeForScene?.storeData || {}
-                    });
-                    if (leadTemplateTriplet.missingFields.length) {
-                        throw new Error(`线索推广缺少关键模板参数: ${leadTemplateTriplet.missingFields.join(', ')}`);
+                    if (preserveLeadDailyBudget) {
+                        merged.campaign.dayBudget = sourceLeadDailyBudget;
+                        delete merged.campaign.dayAverageBudget;
+                        delete merged.campaign.totalBudget;
+                        delete merged.campaign.futureBudget;
+                        delete merged.campaign.orderAmount;
+                        delete merged.campaign.planId;
+                        delete merged.campaign.planTemplateId;
+                        delete merged.campaign.packageTemplateId;
+                        delete merged.campaign.orderChargeType;
+                        delete merged.campaign.orderInfo;
+                    } else {
+                        const normalizeLeadTemplateIdText = (value) => {
+                            const idText = String(toIdValue(value)).trim();
+                            return /^\d+$/.test(idText) ? idText : '';
+                        };
+                        const leadTemplateTriplet = resolveLeadTemplateTriplet({
+                            campaign: merged.campaign,
+                            runtimeStoreData: runtimeForScene?.storeData || {}
+                        });
+                        if (leadTemplateTriplet.missingFields.length) {
+                            throw new Error(`线索推广缺少关键模板参数: ${leadTemplateTriplet.missingFields.join(', ')}`);
+                        }
+                        const leadPlanId = leadTemplateTriplet.planId;
+                        const leadPlanTemplateId = leadTemplateTriplet.planTemplateId;
+                        const leadPackageTemplateId = leadTemplateTriplet.packageTemplateId;
+                        merged.campaign.planId = leadPlanId;
+                        merged.campaign.planTemplateId = leadPlanTemplateId;
+                        merged.campaign.packageTemplateId = leadPackageTemplateId;
+                        const orderAmountBase = Math.max(1500, toNumber(
+                            merged.campaign.orderAmount
+                            || merged.campaign.totalBudget
+                            || merged.campaign.dayBudget
+                            || merged.campaign.dayAverageBudget
+                            || 3000,
+                            3000
+                        ));
+                        merged.campaign.orderAmount = orderAmountBase;
+                        merged.campaign.totalBudget = Math.max(1500, toNumber(merged.campaign.totalBudget, orderAmountBase));
+                        delete merged.campaign.dayBudget;
+                        delete merged.campaign.dayAverageBudget;
+                        delete merged.campaign.futureBudget;
+                        if (!isPlainObject(merged.campaign.orderInfo)) {
+                            merged.campaign.orderInfo = {};
+                        }
+                        merged.campaign.orderInfo.orderAmount = Math.max(1500, toNumber(merged.campaign.orderInfo.orderAmount, orderAmountBase));
+                        merged.campaign.orderInfo.planId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planId) || leadPlanId;
+                        merged.campaign.orderInfo.planTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planTemplateId) || leadPlanTemplateId;
+                        merged.campaign.orderInfo.packageTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.packageTemplateId) || leadPackageTemplateId;
+                        merged.campaign.orderInfo.launchTimeType = merged.campaign.orderInfo.launchTimeType || 'adjustable';
+                        merged.campaign.orderInfo.isCustom = merged.campaign.orderInfo.isCustom !== undefined
+                            ? merged.campaign.orderInfo.isCustom
+                            : true;
+                        merged.campaign.orderInfo.name = merged.campaign.orderInfo.name || '自定义方案包';
+                        merged.campaign.orderInfo.planName = merged.campaign.orderInfo.planName || '自定义方案包';
+                        merged.campaign.orderInfo.minBudget = Math.max(1500, toNumber(merged.campaign.orderInfo.minBudget, 1500));
+                        merged.campaign.orderInfo.maxBudget = Math.max(merged.campaign.orderInfo.minBudget, toNumber(merged.campaign.orderInfo.maxBudget, 1000000));
+                        merged.campaign.orderInfo.predictCycle = Math.max(1, toNumber(merged.campaign.orderInfo.predictCycle, 7));
+                        merged.campaign.orderInfo.dmcPeriod = Math.max(1, toNumber(merged.campaign.orderInfo.dmcPeriod, 7));
+                        merged.campaign.orderInfo.supportRefund = merged.campaign.orderInfo.supportRefund !== undefined
+                            ? merged.campaign.orderInfo.supportRefund
+                            : true;
+                        merged.campaign.orderInfo.supportRenewal = merged.campaign.orderInfo.supportRenewal !== undefined
+                            ? merged.campaign.orderInfo.supportRenewal
+                            : true;
                     }
-                    const leadPlanId = leadTemplateTriplet.planId;
-                    const leadPlanTemplateId = leadTemplateTriplet.planTemplateId;
-                    const leadPackageTemplateId = leadTemplateTriplet.packageTemplateId;
-                    merged.campaign.planId = leadPlanId;
-                    merged.campaign.planTemplateId = leadPlanTemplateId;
-                    merged.campaign.packageTemplateId = leadPackageTemplateId;
-                    const orderAmountBase = Math.max(1500, toNumber(
-                        merged.campaign.orderAmount
-                        || merged.campaign.totalBudget
-                        || merged.campaign.dayBudget
-                        || merged.campaign.dayAverageBudget
-                        || 3000,
-                        3000
-                    ));
-                    merged.campaign.orderAmount = orderAmountBase;
-                    merged.campaign.totalBudget = Math.max(1500, toNumber(merged.campaign.totalBudget, orderAmountBase));
-                    delete merged.campaign.dayBudget;
-                    delete merged.campaign.dayAverageBudget;
-                    delete merged.campaign.futureBudget;
-                    if (!isPlainObject(merged.campaign.orderInfo)) {
-                        merged.campaign.orderInfo = {};
-                    }
-                    merged.campaign.orderInfo.orderAmount = Math.max(1500, toNumber(merged.campaign.orderInfo.orderAmount, orderAmountBase));
-                    merged.campaign.orderInfo.planId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planId) || leadPlanId;
-                    merged.campaign.orderInfo.planTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.planTemplateId) || leadPlanTemplateId;
-                    merged.campaign.orderInfo.packageTemplateId = normalizeLeadTemplateIdText(merged.campaign.orderInfo.packageTemplateId) || leadPackageTemplateId;
-                    merged.campaign.orderInfo.launchTimeType = merged.campaign.orderInfo.launchTimeType || 'adjustable';
-                    merged.campaign.orderInfo.isCustom = merged.campaign.orderInfo.isCustom !== undefined
-                        ? merged.campaign.orderInfo.isCustom
-                        : true;
-                    merged.campaign.orderInfo.name = merged.campaign.orderInfo.name || '自定义方案包';
-                    merged.campaign.orderInfo.planName = merged.campaign.orderInfo.planName || '自定义方案包';
-                    merged.campaign.orderInfo.minBudget = Math.max(1500, toNumber(merged.campaign.orderInfo.minBudget, 1500));
-                    merged.campaign.orderInfo.maxBudget = Math.max(merged.campaign.orderInfo.minBudget, toNumber(merged.campaign.orderInfo.maxBudget, 1000000));
-                    merged.campaign.orderInfo.predictCycle = Math.max(1, toNumber(merged.campaign.orderInfo.predictCycle, 7));
-                    merged.campaign.orderInfo.dmcPeriod = Math.max(1, toNumber(merged.campaign.orderInfo.dmcPeriod, 7));
-                    merged.campaign.orderInfo.supportRefund = merged.campaign.orderInfo.supportRefund !== undefined
-                        ? merged.campaign.orderInfo.supportRefund
-                        : true;
-                    merged.campaign.orderInfo.supportRenewal = merged.campaign.orderInfo.supportRenewal !== undefined
-                        ? merged.campaign.orderInfo.supportRenewal
-                        : true;
                 }
 
                 // 非关键词场景按当前模板剔除可选字段，避免把上一个场景字段串到当前场景。

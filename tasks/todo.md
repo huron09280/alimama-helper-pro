@@ -1,3 +1,185 @@
+# TODO - 2026-05-26 当前计划复制按钮
+
+## 反馈修正 - 单按钮跟随源计划状态复制
+- 需求：用户要求把 `复制暂停 / 复制并开启` 两个按钮改成一个 `复制` 按钮；源计划当前为开启，新计划就开启；源计划当前为暂停，新计划就暂停。
+- 约束：
+  - 保留组建计划复刻来的 `×数量` 徽标、点击加一、右键减一、滚轮调节和连续序号命名；
+  - 状态来源必须来自源计划详情或可靠状态字段，不靠按钮文案手动选择；
+  - 真实页面验证只做 dry-run/只读，不再误触真实创建；
+  - 不修改、暂停、删除源计划。
+- 执行计划：
+  - [x] 收敛操作区注入逻辑，每行只保留一个 `复制` 按钮。
+  - [x] 点击复制时读取源计划状态，按源计划 `onlineStatus/displayStatus` 映射新计划状态。
+  - [x] 更新测试契约，删除双按钮文案断言，增加跟随源状态和单按钮断言。
+  - [x] 构建同步产物，运行相关测试与真实页面 dry-run/只读验证。
+  - [x] 回填验证记录、结果复盘和教训。
+- 高层操作摘要：
+  - 已将本次用户修正设为当前主线：当前计划列表只暴露一个复制入口，按钮状态语义由源计划状态自动决定。
+  - 已把操作区复制按钮从两个按钮收敛为单个 `复制`，按钮 `data-am-campaign-copy="inherit"`；旧的 `start/pause` 操作按钮会在增强时清理。
+  - 保留组建计划同款 `×数量` 徽标，点击加一、右键减一、滚轮调节，且同步更新徽标 data 值与按钮计数。
+  - 点击复制先读取源计划详情，使用源计划 `onlineStatus/displayStatus/status` 解析目标状态；无法识别源状态时直接取消复制。
+  - `copyCurrentPlanByScene` 仍走白名单复制、多计划命名和 dry-run 保护；只有源计划为暂停时，新建后暂停兜底才会生效。
+- 验证记录：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，8/8。
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/lead-scene-template-id-guard.test.mjs tests/keyword-plan-api-slim.test.mjs tests/keyword-plan-api-bridge-security.test.mjs`：通过，42/42。
+  - `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：均通过。
+  - Chrome DevTools MCP 真实页面只读验证：刷新扩展与线索推广页面后，当前 6 个操作组均只显示 1 个 `复制` 按钮，旧 `复制暂停 / 复制并开启` 数量为 0；每个按钮 `data-am-campaign-copy="inherit"` 且位于 `更多` 后。
+  - Chrome DevTools MCP 复制数量验证：首个按钮徽标初始为 1；点击后为 2，右键回到 1，滚轮上调到 2，滚轮下调回 1；按钮计数、徽标 data 与显示文本同步。
+  - Chrome DevTools MCP dry-run 验证：源计划 `11659955636` 为 `onlineStatus=1/displayStatus=start`，dry-run 复制 2 个计划返回 `targetOnlineStatus=1/targetStatus=start`，样例计划 `onlineStatus=1`；已暂停源计划 `14481815933` 为 `onlineStatus=0/displayStatus=pause`，dry-run 返回 `targetOnlineStatus=0/targetStatus=pause`，样例计划 `onlineStatus=0`；验证期间 `/solution/addList.json` 与 `/campaign/updatePart.json` 请求数为 0。
+  - `npm run test`：通过，494 项中 492 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`）。
+  - `npm run review`：通过，所有自动 review 检查通过。
+- 结果复盘：
+  - 用户最新口径比双按钮更符合原生列表操作：复制动作只有一个，状态不再让用户手动二选一，而是复制源计划当前投放状态。
+  - 本次只改变操作入口和状态解析，不改变复制字段白名单、命名、数量、支付字段修复和源计划不修改边界。
+  - 风险：如果某业务线详情接口不返回可判定状态，会 fail-fast 提示无法识别源计划当前状态，避免默认为开启或暂停造成误投放。
+
+## 反馈修正 - 复刻组建计划里的复制方式
+- 需求：用户要求参考插件“组建计划”里的复制计划方式，将当前计划行复制按钮的复制方式与操作复刻过来。
+- 约束：
+  - 先查清组建计划内复制计划的真实交互、命名、数量和删除原计划语义，再改当前列表复制；
+  - 不再新增会误触真实创建的验证动作，浏览器验证优先用 dry-run 或只读检查；
+  - 保持按钮仍位于原生操作区后方，不回退到计划 ID/名称旁；
+  - 不破坏现有 `复制暂停 / 复制并开启` 的目标状态语义，除非组建计划参考交互能明确替代。
+- 执行计划：
+  - [x] 梳理“组建计划”内部复制按钮实现，包括数量调节、命名规则、复制后删除原计划、日志与状态刷新。
+  - [x] 梳理当前计划行复制流程与 API 转换差异，明确可复用/应对齐的行为。
+  - [x] 以最小改动抽取或复刻组建计划复制命名与操作语义到当前复制链路。
+  - [x] 补充回归测试覆盖复刻行为，特别是复制命名连续递增、数量/状态、日志和字段清理。
+  - [ ] 构建同步产物，运行相关测试与真实页面 dry-run/只读验证。
+- 高层操作摘要：
+  - 已开始检索 `strategy-state-and-draft.js` 和 `wizard-mount-intro.js` 中组建计划复制逻辑，重点关注 `copyBatchCount`、`buildCopiedStrategyPlanName`、`removeStrategyById` 与日志语义。
+  - 已确认组建计划复制行为：按钮内有 `×数量` 徽标；点击徽标加 1、右键减 1、滚轮调节；执行时复制 N 个草稿，命名按末尾序号连续递增；当 `N >= 2` 时删除原草稿并输出短日志。
+  - 当前真实计划复制已复刻数量徽标、调节操作、1-99 数量上限、连续序号命名与短日志；但不复刻“删除原计划”，真实投放对象仍保持只创建新计划、不修改源计划。
+  - API 层 `copyCurrentPlanByScene` 已支持 `copyCount/usedPlanNames`，一次构造多条 plans，并返回 `copySource.newPlanNames`；dry-run 复制会跳过创建后暂停，避免只读验证误报。
+
+## 反馈排查 - 复制计划显示“余额支付”
+- 需求：用户反馈“其它新建的没有‘余额支付’，为什么复制的会显示”，需要解释根因并修复复制链路中不该出现的支付字段。
+- 约束：
+  - 只做只读查询和代码修正，不再触发新的真实创建；
+  - 不修改、暂停、删除已有原计划或已创建计划；
+  - 真实页面验证以接口字段和可见状态为准。
+- 执行计划：
+  - [x] 比对复制计划与其它新建计划的只读 `campaign/get`/列表字段，定位“余额支付”对应的后端字段。
+  - [x] 回查复制请求构造逻辑，确认字段来源和触发条件。
+  - [x] 收敛修复：线索日预算复制路径不提交不相关支付字段。
+  - [x] 补充/更新回归测试，证明日预算复制不会带出支付字段，套餐/流量金卡路径不被误伤。
+  - [x] 运行相关测试、构建校验，并记录结果。
+- 高层操作摘要：
+  - 初步代码线索：线索推广组包在补默认值时会把 `orderChargeType` 兜底为 `balance_charge`，该值与“余额支付”文案匹配；需要用真实计划数据确认是否为本次异常字段。
+  - 真实只读对比：源计划 `11659955636` 与原生新建计划 `14549308822` 的 `orderChargeType=null`；插件复制出的 `14481815933`、`14481867638`、`14549332819` 均为 `orderChargeType=balance_charge`。
+  - 根因：复制旧线索日预算计划时已删除 `orderInfo/planId/planTemplateId/packageTemplateId`，但遗漏删除前置默认补齐的 `orderChargeType=balance_charge`，导致页面显示“余额支付”。
+  - 修复：`preserveLeadDailyBudget` 分支同步删除 `orderChargeType`，让日预算复制计划与源计划、原生新建计划保持一致；非日预算/套餐型线索计划仍走原模板支付字段逻辑。
+- 验证记录：
+  - Chrome DevTools MCP 真实页面只读对比：`campaign/get.json` 确认源计划与原生新建计划 `orderChargeType=null`，插件复制计划为 `balance_charge`，根因字段明确。
+  - Chrome DevTools MCP 真实页面 dry-run：重载扩展与页面后调用 `copyCurrentPlanByScene(..., { dryRunOnly: true })`，未触发 `/solution/addList.json` 与 `/campaign/updatePart.json`；样例 campaign `dmcType=normal`、`dayBudget=2000`、`orderChargeType` 不存在。
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/lead-scene-template-id-guard.test.mjs tests/keyword-plan-api-slim.test.mjs tests/keyword-plan-api-bridge-security.test.mjs`：通过，27/27。
+  - `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：均通过。
+  - `npm run test`：通过，493 项中 491 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`）。
+  - `npm run review`：通过，所有自动 review 检查通过。
+
+## 需求规格
+- 目标：在 `one.alimama.com` 计划管理列表的每条计划操作区增加 `复制暂停` 与 `复制并开启` 两个按钮。
+- 当前首批落地页面：用户给定的线索推广管理页 `onebpAdStrategyLiuZi`；实现层需按可复用方式接入现有计划 API，避免只写死当前页面。
+- 行为：
+  - `复制暂停`：复制当前计划配置创建一条新计划，新计划默认暂停；
+  - `复制并开启`：复制当前计划配置创建一条新计划，新计划按开启状态提交；
+  - 点击后直接创建，不打开组建计划向导，不依赖人工二次提交；
+  - 创建失败只提示错误，不暂停、删除或修改原计划。
+- 安全边界：
+  - 复制请求必须清理旧 `campaignId/adgroupId/id/copyCampaignId/copyAdgroupId/gmtCreate/gmtModified/createTime/modifyTime` 等瞬态字段；
+  - 禁止把旧计划原对象无过滤透传到创建接口；
+  - 按钮需有 running 状态，防重复点击；
+  - 真实页面验证只确认按钮和状态反馈，不点击真实创建按钮，除非用户后续明确授权。
+- 成功标准：
+  - 当前线索推广列表每行可见两个复制按钮，且能正确绑定 `campaignId/bizCode/itemId`；
+  - `KeywordPlanApi.copyCurrentPlanByScene(sceneName, source, options)` 可被桥接受控调用；
+  - 复制转换保留预算、商品、出价、地域、分时等关键配置，并按按钮选择映射新计划状态；
+  - 相关单测、构建同步、语法检查、build check 通过。
+
+## 执行计划（可核对）
+- [x] 回顾工作区状态与相关历史教训，确认不覆盖已有未提交改动。
+- [x] 实现已有计划到新建请求的安全转换函数与 `copyCurrentPlanByScene` API。
+- [x] 更新 API 导出与桥接白名单，只暴露受控复制入口。
+- [x] 在计划行操作区注入 `复制暂停` / `复制并开启` 按钮，绑定点击、running 状态和日志。
+- [x] 补充回归测试：按钮注入、data 透传、防重复、字段清理、状态映射、桥接白名单。
+- [x] 通过构建同步生成产物，并运行相关测试、`build:check`、语法检查。
+- [x] 使用 Chrome DevTools MCP 在真实当前页面只读验证按钮渲染与未触发真实创建。
+- [x] 回填验证记录、风险和结果复盘。
+
+## 反馈修正 - 操作按钮位置
+- 需求：用户截图明确要求复制计划按钮放在计划行原生操作区 `详情 / 报表 / 高级设置 / 置顶 / 更多` 的后面，而不是计划 ID 或计划名称旁边。
+- 执行计划：
+  - [x] 从计划 ID 快捷入口旁移除复制按钮注入，仅保留快捷查数与并发开启。
+  - [x] 新增原生操作区定位逻辑，按操作行的上一条计划数据行解析 `campaignId/bizCode/itemId`，并在“更多”后插入 `复制暂停`、`复制并开启`。
+  - [x] 更新样式与回归测试，锁定复制按钮位于操作区且不污染计划名称区域。
+  - [x] 构建同步产物，运行定向测试、`build:check`、语法检查，并用真实页面只读验证位置和 no-op 点击链路。
+- 操作摘要：
+  - 已新增 `enhanceOperationNodes()`，识别原生操作组并追加复制按钮到组末尾；旧的计划 ID 区复制按钮会被清理。
+  - 已让复制按钮在操作区按原生按钮横排浮动展示，并把计划 ID 区保持为仅快捷查数/并发开启的小图标。
+  - 已把本次用户修正沉淀到 `tasks/lessons.md` 的 L45。
+- 验证记录：
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs`：通过，11/11。
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/keyword-plan-api-slim.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/icon-system-regression.test.mjs`：通过，28/28。
+  - `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：均通过。
+  - `npm run review`：通过，review-team 全部 PASS，回归测试 490/492，2 个历史跳过项仍为缺少 `agent-cluster/index.mjs`。
+  - Chrome DevTools MCP 真实页面验证：当前线索推广页面 3 个原生操作组均带 `复制暂停 / 复制并开启`，每组顺序为 `详情 / 报表 / 高级设置 / 置顶 / 更多 / 复制暂停 / 复制并开启`；计划名称/ID 区 inline copy 数量为 0。
+  - Chrome DevTools MCP no-op 点击验证：点击操作区首个 `复制暂停` 后，同计划两枚复制按钮同时 disabled 后恢复；参数仍解析到 `campaignId=11659955636`、`itemId=757440599385`、`adgroupId=11693289232`、`copyMode=pause`、`targetOnlineStatus=0`；创建类请求计数为 0。
+
+## 真实复制创建验证 - 用户授权执行
+- 授权口径：用户要求“请测试，通过复制生成计划为止”，本轮允许执行真实复制创建验证。
+- 安全选择：只点击 `复制暂停`，生成的新计划应为暂停状态；不点击 `复制并开启`，不修改、暂停、删除原计划。创建接口忽略暂停状态时，仅对刚生成的新计划追加暂停。
+- 执行计划：
+  - [x] 刷新真实线索推广页面并确认本地最新运行态。
+  - [x] 对 `copyCurrentPlanByScene` 加一层记录包装，保留真实调用并记录返回结果与创建响应。
+  - [x] 修复复制请求缺少 `marketingGoal` 导致严格目标匹配拦截的问题。
+  - [x] 修复复制链路在真实运行态下依赖草稿 store 挂载顺序的问题。
+  - [x] 修复线索日预算老计划复制被套餐模板 ID 校验误拦截的问题。
+  - [x] 修复 `复制暂停` 创建接口忽略 `onlineStatus=0` 时未自动暂停新计划的问题。
+  - [x] 点击首条计划操作区 `复制暂停` 执行真实创建。
+  - [x] 记录新计划名、源计划、新 campaignId、目标状态和创建接口返回；必要时用只读查询确认新计划存在。
+- 当前进展：
+  - 首次真实点击源计划 `11659955636` 的 `复制暂停`，链路进入 `copyCurrentPlanByScene`，但未发起 `/solution/addList.json`。
+  - 拦截原因：复制请求缺少 `marketingGoal`，严格目标匹配返回 `营销目标严格匹配失败：请求=未提供，解析=收集销售线索`。
+  - 处理：补齐复制请求顶层、`common` 与单计划的 `marketingGoal`，优先匹配源计划目标，兜底使用当前场景默认目标。
+  - 二次真实点击仍未发起 `/solution/addList.json`，新的拦截原因为 `KeywordPlanWizardStore.readSessionDraft is not a function`。
+  - 处理：将基础草稿读写方法提前挂载到 `KeywordPlanWizardStore`，复制创建不再依赖预览模块后置挂载顺序。
+  - 重载扩展后发现第一次 store 修复把后置定义的 `wizardDefaultDraft` 直接提前引用，触发 `Cannot access 'wizardDefaultDraft' before initialization`，导致计划 API 未装载；已改为延迟 wrapper，并重新构建/重载后确认 page API 和 `copyCurrentPlanByScene` 可用。
+  - 三次真实点击进入线索组包后仍未发起 `/solution/addList.json`，拦截原因为 `线索推广缺少关键模板参数: planId, planTemplateId, packageTemplateId`。
+  - 处理：源计划实际为 `promotionModel=daily + dmcType=normal + dayBudget` 的老线索日预算计划；复制该形态时保留日预算并跳过套餐模板 ID 校验，非日预算/套餐路径继续 fail-fast。
+  - 后续真实创建成功后发现 `/solution/addList.json` 会忽略 `onlineStatus=0`，新计划初始为 `start`；已在 `copyCurrentPlanByScene` 创建成功后解析新 campaignId，并仅对新计划调用 `/campaign/updatePart.json` 设置 `displayStatus=pause`。
+  - 最终强刷扩展运行态后点击源计划 `11659955636` 的 `复制暂停`：创建新计划 `14481815933 / 洗碗机_线索_E7Pro_复制_20260526_162417`，随后自动暂停成功；只读 `campaign/get.json` 确认 `onlineStatus=0`、`displayStatus=pause`、`dayBudget=2000`。
+
+## 高层操作摘要
+- 已基于用户给定 URL 只读分析：页面列表数据来自 `campaign/horizontal/findPage.json`，当前 3 条在投线索计划均携带 campaign/adgroup/material、预算、出价、地域与分时等复制所需字段。
+- 已确认页面未发现原生“复制/克隆”入口，因此采用插件注入计划行按钮与现有建计划 API 创建链路。
+- 已在 `KeywordPlanApi` 增加 `copyCurrentPlanByScene`：只接收受控源计划对象，按白名单保留 campaign/adgroup/material/item 字段，递归清理旧 ID 与时间字段，生成 `${原计划名}_复制_${yyyyMMdd_HHmmss}` 新名称。
+- 已把 `copyCurrentPlanByScene` 加入 `exports.js` 与 `bridge.js` 白名单，主助手 API 解析同时兼容 `__AM_WXT_PLAN_API__`。
+- 已在线索推广复制路径增加日预算保持标记：仅复制当前计划时保留 `dmcType=normal + dayBudget`，不影响普通线索推广创建默认逻辑。
+- 已在原生操作区 `详情 / 报表 / 高级设置 / 置顶 / 更多` 后注入 `复制暂停`、`复制并开启` 两个按钮，并添加按计划维度互斥的 running 状态与源计划 ID / 新计划名 / 目标状态 / 创建结果日志。
+- 已为 `复制暂停` 增加创建后状态兜底：解析创建响应里的新 campaignId，调用 `/campaign/updatePart.json` 只暂停新计划；暂停失败时整体复制结果标记失败并提示“新计划创建成功但暂停失败”。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-plan-api-slim.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/icon-system-regression.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs`：通过，28/28。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `npm run test`：通过，490/492，2 个历史跳过项为缺少 `agent-cluster/index.mjs`。
+- `npm run review`：通过，review-team 全部 PASS，回归测试 490/492，2 个历史跳过项同上。
+- Chrome DevTools MCP 真实页面验证：打开用户给定线索推广 URL，Dev Loader 加载本地最新构建后，3 条计划共渲染 6 个复制按钮；`pause=3`、`start=3`；campaignId 为 `11567504148 / 11659955636 / 12018488321`；bizCode 均为 `onebpAdStrategyLiuZi`；按钮可见且 idle。
+- Chrome DevTools MCP 点击链路验证：临时把 `copyCurrentPlanByScene` 替换为 no-op 记录函数后点击首个 `复制暂停`，同一计划的 `复制暂停` 与 `复制并开启` 同时进入 disabled running 后恢复；调用参数为 `sceneName=线索推广`、`sourceCampaignId=11659955636`、`sourceBizCode=onebpAdStrategyLiuZi`、`sourceItemId=757440599385`、`sourceAdgroupId=11693289232`、`copyMode=pause`、`targetOnlineStatus=0`、`conflictPolicy=none`。
+- Chrome DevTools MCP 网络验证：未点击真实创建；no-op 验证中拦截创建类 fetch 后，`/solution/addList.json`、`campaign/add/create`、`adgroup/add` 等创建类请求计数为 0。
+- Chrome DevTools MCP 真实创建验证：强刷扩展与页面后点击源计划 `11659955636` 的 `复制暂停`，捕获 `/solution/addList.json` 返回 `ok=true`，新计划 `14481815933 / 洗碗机_线索_E7Pro_复制_20260526_162417`，`adgroupId=14549438636`，`materialId=757440599385`；随后自动调用 `/campaign/updatePart.json`，body 为 `campaignList:[{campaignId:14481815933, displayStatus:"pause"}]`，返回 `ok=true`。
+- Chrome DevTools MCP 只读确认：`campaign/get.json` 查询新计划 `14481815933` 返回 `onlineStatus=0`、`displayStatus=pause`、`dayBudget=2000`；源计划未修改。
+
+## 结果复盘
+- 已完成受控复制入口、页面按钮和真实创建验证。根因链路依次为：缺 `marketingGoal`、草稿 store 挂载顺序、老线索日预算计划被套餐模板 ID 校验误拦截、创建接口忽略暂停状态。
+- 最终方案不直接提交旧计划原对象；先白名单复制并清理瞬态字段，再走现有创建接口；`复制暂停` 在创建成功后只对新计划做一次状态兜底，不触碰原计划。
+- 当前真实页面按钮初始 DOM 无 `data-item-id`，因为列表链接/行 DOM 未暴露商品 ID；点击链路会通过 `campaign/get.json` 与 `adgroup/get.json` 只读详情兜底解析，已在 no-op 验证中解析到 `757440599385`。
+- 风险：复制字段按白名单保留，能覆盖当前线索推广预算、出价、地域、分时和商品；其它场景的深层定向字段如后续发现漏传，应追加白名单并补测试。
+
+---
+
 # TODO - 2026-05-25 计划列表名称与预算悬停编辑
 
 ## 需求规格

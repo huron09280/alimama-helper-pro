@@ -1,6 +1,8 @@
     const CampaignIdQuickEntry = {
         initialized: false,
         runningCampaignIds: new Set(),
+        runningCopyKeys: new Set(),
+        copyPlanNameCache: new Set(),
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -16,6 +18,7 @@
         SITE_CUSTOM_CONFLICT_RE: /(onebpsite-existed|horizontal-onebpsite-existed|diffbizcode-existed|存在在投计划|在投计划|持续推广计划|冲突|已存在.*计划|计划已存在|already.*exist|conflict)/i,
         ICON_SVG: renderAmIcon('campaign-query', { size: 14, strokeWidth: 2.1 }),
         CONCURRENT_START_ICON_SVG: renderAmIcon('campaign-concurrent-start', { size: 14, strokeWidth: 2.1 }),
+        COPY_ICON_SVG: renderAmIcon('campaign-copy', { size: 14, strokeWidth: 2.1 }),
 
         init() {
             if (window.top !== window.self) return;
@@ -42,6 +45,55 @@
 
                     MagicReport.openWithCampaignId(id, { preferNative: false, promptType: 'click' }).catch((err) => {
                         Logger.log(`⚠️ 快捷查数失败：${err?.message || '未知错误'} `, true);
+                    });
+                    return;
+                }
+
+                const copyCountBadge = target.closest('[data-am-campaign-copy-count-badge]');
+                if (copyCountBadge) {
+                    const copyButton = copyCountBadge.closest('.am-campaign-search-btn[data-am-campaign-copy]');
+                    if (copyButton instanceof HTMLButtonElement) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.adjustCopyBatchCount(copyButton, 1);
+                    }
+                    return;
+                }
+
+                const copyBtn = target.closest('.am-campaign-search-btn[data-am-campaign-copy]');
+                if (copyBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const id = this.normalizeCampaignId(copyBtn.getAttribute('data-campaign-id') || copyBtn.dataset.campaignId);
+                    if (!id) {
+                        Logger.log('⚠️ 计划ID无效，已忽略复制计划', true);
+                        return;
+                    }
+                    const copyMode = this.normalizeCopyMode(copyBtn.getAttribute('data-am-campaign-copy') || copyBtn.dataset.amCampaignCopy);
+                    const copyKey = id;
+                    const label = this.getCopyModeLabel(copyMode);
+                    const copyCount = this.readCopyBatchCount(copyBtn);
+                    if (this.runningCopyKeys.has(copyKey)) {
+                        Logger.log(`⏳ 复制计划进行中：${id} `);
+                        return;
+                    }
+                    this.runningCopyKeys.add(copyKey);
+                    this.setCopyButtonRunning(id, copyMode, true);
+                    this.runCopyCurrentPlanFlow(id, copyBtn, copyMode, { copyCount }).then((result) => {
+                        const copySource = result?.copySource || {};
+                        const newPlanNames = this.normalizePlanNameList(copySource.newPlanNames || copySource.newPlanName || []);
+                        const newPlanText = this.formatPlanNameListForLog(newPlanNames);
+                        const statusText = copySource.targetOnlineStatus === 1 ? '开启' : '暂停';
+                        const successCount = Number(result?.successCount || 0);
+                        const failCount = Number(result?.failCount || 0);
+                        this.rememberCopiedPlanNames(newPlanNames);
+                        Logger.log(`✅ ${label}完成：已复制计划 ${newPlanNames.length || copyCount} 个（保留源计划），源计划${id}，新计划${newPlanText}，目标状态=${statusText}，成功=${successCount}，失败=${failCount}`);
+                    }).catch((err) => {
+                        Logger.log(`⚠️ ${label}失败：源计划${id}，原因：${err?.message || '未知错误'} `, true);
+                    }).finally(() => {
+                        this.runningCopyKeys.delete(copyKey);
+                        this.setCopyButtonRunning(id, copyMode, false);
                     });
                     return;
                 }
@@ -94,6 +146,30 @@
                 });
             }, true);
 
+            document.addEventListener('contextmenu', (e) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+                const copyCountBadge = target.closest('[data-am-campaign-copy-count-badge]');
+                if (!copyCountBadge) return;
+                const copyButton = copyCountBadge.closest('.am-campaign-search-btn[data-am-campaign-copy]');
+                if (!(copyButton instanceof HTMLButtonElement)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this.adjustCopyBatchCount(copyButton, -1);
+            }, true);
+
+            document.addEventListener('wheel', (e) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+                const copyCountBadge = target.closest('[data-am-campaign-copy-count-badge]');
+                if (!copyCountBadge) return;
+                const copyButton = copyCountBadge.closest('.am-campaign-search-btn[data-am-campaign-copy]');
+                if (!(copyButton instanceof HTMLButtonElement)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this.adjustCopyBatchCount(copyButton, e.deltaY > 0 ? -1 : 1);
+            }, { capture: true, passive: false });
+
             this.initialized = true;
         },
 
@@ -111,6 +187,112 @@
 
         getOppositeBizCode(bizCode) {
             return PlanIdentityUtils.getOppositeBizCode(bizCode);
+        },
+
+        normalizeCopyMode(rawMode) {
+            const text = String(rawMode || '').trim().toLowerCase();
+            if (/^(start|enabled|online|1|开启|在投)$/.test(text)) return 'start';
+            if (/^(pause|paused|stop|stopped|offline|0|暂停)$/.test(text)) return 'pause';
+            return 'inherit';
+        },
+
+        getCopyModeLabel(copyMode) {
+            return '复制';
+        },
+
+        normalizeCopyBatchCount(value) {
+            return Math.min(99, Math.max(1, Number(value) || 1));
+        },
+
+        readCopyBatchCount(copyBtn) {
+            if (!(copyBtn instanceof Element)) return 1;
+            return this.normalizeCopyBatchCount(copyBtn.getAttribute('data-am-copy-batch-count') || copyBtn.dataset?.amCopyBatchCount || 1);
+        },
+
+        setCopyBatchCount(campaignId, copyMode, nextCount) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return;
+            const mode = this.normalizeCopyMode(copyMode);
+            const count = this.normalizeCopyBatchCount(nextCount);
+            const selector = `.am-campaign-search-btn[data-am-campaign-copy="${mode}"][data-campaign-id="${id}"]`;
+            document.querySelectorAll(selector).forEach((btn) => {
+                if (!(btn instanceof HTMLElement)) return;
+                btn.setAttribute('data-am-copy-batch-count', String(count));
+                btn.dataset.amCopyBatchCount = String(count);
+                const countBadge = btn.querySelector('[data-am-campaign-copy-count-badge]');
+                if (countBadge) countBadge.setAttribute('data-am-campaign-copy-count-badge', String(count));
+                const countNum = btn.querySelector('.am-wxt-copy-multi-num');
+                if (countNum) countNum.textContent = String(count);
+            });
+        },
+
+        adjustCopyBatchCount(copyBtn, delta = 1) {
+            if (!(copyBtn instanceof Element)) return 1;
+            const id = this.normalizeCampaignId(copyBtn.getAttribute('data-campaign-id') || copyBtn.dataset?.campaignId || '');
+            const mode = this.normalizeCopyMode(copyBtn.getAttribute('data-am-campaign-copy') || copyBtn.dataset?.amCampaignCopy || '');
+            const nextCount = this.normalizeCopyBatchCount(this.readCopyBatchCount(copyBtn) + Number(delta || 0));
+            this.setCopyBatchCount(id, mode, nextCount);
+            return nextCount;
+        },
+
+        normalizePlanNameList(value) {
+            const rawList = Array.isArray(value) ? value : [value];
+            return rawList
+                .map(item => String(item || '').trim())
+                .filter(Boolean);
+        },
+
+        formatPlanNameListForLog(planNames = []) {
+            const names = this.normalizePlanNameList(planNames);
+            if (!names.length) return '「-」';
+            if (names.length <= 2) return names.map(name => `「${name}」`).join('、');
+            return `${names.slice(0, 2).map(name => `「${name}」`).join('、')} 等 ${names.length} 个`;
+        },
+
+        rememberCopiedPlanNames(planNames = []) {
+            this.normalizePlanNameList(planNames).forEach((name) => {
+                this.copyPlanNameCache.add(name);
+            });
+        },
+
+        collectVisibleCampaignPlanNames(root = document) {
+            const out = new Set();
+            const pushName = (value = '') => {
+                const name = String(value || '').replace(/\s+/g, ' ').trim();
+                if (!name || /^\d+$/.test(name) || name.length > 120) return;
+                out.add(name);
+            };
+            if (root?.querySelectorAll) {
+                root.querySelectorAll('a[href*="campaignId="], a[href*="campaign_id="], [data-campaign-name], [campaignname], [class*="campaign-name"], [class*="campaignName"], [class*="plan-name"], [class*="planName"]').forEach((node) => {
+                    pushName(node.getAttribute?.('data-campaign-name') || node.getAttribute?.('campaignname') || node.getAttribute?.('title') || node.textContent || '');
+                });
+            }
+            this.copyPlanNameCache.forEach(name => pushName(name));
+            return Array.from(out);
+        },
+
+        getSceneNameByBizCode(bizCode) {
+            const biz = this.normalizeBizCode(bizCode);
+            const map = {
+                onebpSite: '货品全站推广',
+                onebpSearch: '关键词推广',
+                onebpDisplay: '人群推广',
+                onebpAdStrategyLiuZi: '线索推广'
+            };
+            return map[biz] || '';
+        },
+
+        isPlainRecord(value) {
+            return !!value && typeof value === 'object' && !Array.isArray(value);
+        },
+
+        cloneCopyData(value) {
+            if (!value || typeof value !== 'object') return value;
+            try {
+                return JSON.parse(JSON.stringify(value));
+            } catch {
+                return value;
+            }
         },
 
         sleep(ms) {
@@ -398,6 +580,142 @@
                 ]);
             if (itemId) this.rememberCampaignItemId(normalizedCampaignId, itemId);
             return { itemId, response: json };
+        },
+
+        extractCopyCampaignFromPayload(payload = {}, expectedCampaignId = '') {
+            const expectedId = this.normalizeCampaignId(expectedCampaignId);
+            const data = payload?.data || {};
+            const candidates = [
+                data?.campaign,
+                payload?.campaign,
+                Array.isArray(data?.campaignList) ? data.campaignList[0] : null,
+                Array.isArray(payload?.campaignList) ? payload.campaignList[0] : null,
+                data
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                const item = candidates[i];
+                if (!this.isPlainRecord(item)) continue;
+                const campaignId = this.normalizeCampaignId(item.campaignId || '');
+                if (expectedId && campaignId && campaignId !== expectedId) continue;
+                if (!campaignId && !item.campaignName && !item.bizCode) continue;
+                return this.cloneCopyData(item);
+            }
+            return {};
+        },
+
+        extractCopyAdgroupFromPayload(payload = {}, expectedCampaignId = '', expectedAdgroupId = '') {
+            const expectedCid = this.normalizeCampaignId(expectedCampaignId);
+            const expectedAid = this.normalizeAdgroupId(expectedAdgroupId);
+            const data = payload?.data || {};
+            const campaign = data?.campaign || payload?.campaign || {};
+            const candidates = [
+                Array.isArray(campaign?.adgroupList) ? campaign.adgroupList[0] : null,
+                campaign?.lastAdgroup,
+                data?.adgroup,
+                Array.isArray(data?.adgroupList) ? data.adgroupList[0] : null,
+                payload?.adgroup,
+                Array.isArray(payload?.adgroupList) ? payload.adgroupList[0] : null
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                const item = candidates[i];
+                if (!this.isPlainRecord(item)) continue;
+                const campaignId = this.normalizeCampaignId(item.campaignId || '');
+                const adgroupId = this.normalizeAdgroupId(item.adgroupId || item.groupId || item.id || '');
+                if (expectedCid && campaignId && campaignId !== expectedCid) continue;
+                if (expectedAid && adgroupId && adgroupId !== expectedAid) continue;
+                if (!adgroupId && !item.material && !item.adgroupName) continue;
+                return this.cloneCopyData(item);
+            }
+            return {};
+        },
+
+        extractCopyMaterial(campaign = {}, adgroup = {}) {
+            const candidates = [
+                adgroup?.material,
+                campaign?.material,
+                Array.isArray(campaign?.materialList) ? campaign.materialList[0] : null
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                if (this.isPlainRecord(candidates[i])) return this.cloneCopyData(candidates[i]);
+            }
+            return {};
+        },
+
+        buildCopyItemFromSource(campaign = {}, adgroup = {}, material = {}, fallbackItemId = '') {
+            const itemId = this.resolveItemIdFromCandidates([
+                fallbackItemId,
+                campaign?.itemId,
+                campaign?.materialId,
+                campaign?.itemIdList,
+                campaign?.materialIdList,
+                adgroup?.itemId,
+                adgroup?.materialId,
+                material?.itemId,
+                material?.materialId,
+                material?.linkUrl
+            ]);
+            if (!itemId) return null;
+            return {
+                itemId,
+                materialId: this.normalizeItemId(material?.materialId || '') || itemId,
+                materialName: String(material?.materialName || campaign?.materialName || `商品${itemId}`).trim(),
+                fromTab: material?.fromTab || 'copy',
+                linkUrl: material?.linkUrl || '',
+                shopId: material?.shopId || '',
+                shopName: material?.shopName || '',
+                bidCount: material?.bidCount || 0,
+                categoryLevel1: material?.categoryLevel1 || ''
+            };
+        },
+
+        async resolveCopySourcePlan(campaignId, triggerEl, bizCandidates, authContext) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const targetBizCode = this.normalizeBizCode(bizCandidates?.[0] || this.inferBizCodeFromElement(triggerEl) || this.DEFAULT_BIZ_CODE);
+            const hintedItemId = this.inferItemIdFromElement(triggerEl, {
+                allowLocationFallback: false,
+                allowBodyFallback: false
+            });
+            const detail = await this.queryCampaignDetail(id, targetBizCode, authContext);
+            let campaign = this.extractCopyCampaignFromPayload(detail?.response || {}, id);
+            const guessedName = MagicReport.guessCampaignNameById(id, triggerEl);
+            if (campaign && !campaign.campaignName && guessedName) {
+                campaign.campaignName = guessedName;
+            }
+            const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
+            let adgroup = this.extractCopyAdgroupFromPayload(detail?.response || {}, id);
+            let itemId = this.normalizeItemId(detail?.itemId || hintedItemId || '');
+            if ((!this.isPlainRecord(adgroup) || !Object.keys(adgroup).length || !itemId) && adgroupIds.length) {
+                const adgroupDetail = await this.queryAdgroupDetail(id, adgroupIds[0], targetBizCode, authContext);
+                const nextAdgroup = this.extractCopyAdgroupFromPayload(adgroupDetail?.response || {}, id, adgroupIds[0]);
+                if (this.isPlainRecord(nextAdgroup) && Object.keys(nextAdgroup).length) {
+                    adgroup = nextAdgroup;
+                }
+                itemId = itemId || this.normalizeItemId(adgroupDetail?.itemId || '');
+            }
+            if (!this.isPlainRecord(campaign) || !Object.keys(campaign).length) {
+                throw new Error('未能读取源计划详情');
+            }
+            const material = this.extractCopyMaterial(campaign, adgroup);
+            const item = this.buildCopyItemFromSource(campaign, adgroup, material, itemId);
+            if (!item) {
+                throw new Error('未能识别源计划商品');
+            }
+            this.rememberCampaignItemId(id, item.itemId || item.materialId);
+            return {
+                campaignId: id,
+                bizCode: targetBizCode,
+                campaign: {
+                    ...campaign,
+                    campaignId: campaign.campaignId || id,
+                    bizCode: campaign.bizCode || targetBizCode
+                },
+                adgroup,
+                material,
+                item,
+                itemId: item.itemId || item.materialId,
+                adgroupId: this.normalizeAdgroupId(adgroup?.adgroupId || adgroupIds[0] || '')
+            };
         },
 
         async resolveItemIdByCampaignId(campaignId, bizCandidates, authContext, fallbackItemId = '', traceMessages = null) {
@@ -1172,6 +1490,78 @@
             };
         },
 
+        setCopyButtonRunning(campaignId, copyMode, running) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return;
+            const selector = `.am-campaign-search-btn[data-am-campaign-copy][data-campaign-id="${id}"]`;
+            document.querySelectorAll(selector).forEach((btn) => {
+                if (!(btn instanceof HTMLButtonElement)) return;
+                const btnMode = this.normalizeCopyMode(btn.getAttribute('data-am-campaign-copy') || copyMode);
+                const label = this.getCopyModeLabel(btnMode);
+                if (running) {
+                    if (!btn.dataset.amTitleBak) btn.dataset.amTitleBak = btn.title || '';
+                    btn.classList.add('is-running');
+                    btn.disabled = true;
+                    btn.title = `${label}执行中：${id}`;
+                    return;
+                }
+                btn.classList.remove('is-running');
+                btn.disabled = false;
+                const titleBak = btn.dataset.amTitleBak;
+                btn.title = titleBak || `${label}：${id}`;
+                delete btn.dataset.amTitleBak;
+            });
+        },
+
+        resolveCopyTargetOnlineStatus(source = {}) {
+            const active = this.resolveCampaignActiveState(source?.campaign || source);
+            if (active === true) return 1;
+            if (active === false) return 0;
+            throw new Error('未能识别源计划当前状态，已取消复制');
+        },
+
+        async runCopyCurrentPlanFlow(campaignId, triggerEl, copyMode = 'inherit', options = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const mode = this.normalizeCopyMode(copyMode);
+            const label = this.getCopyModeLabel(mode);
+            const bizCandidates = this.getCandidateBizCodes(triggerEl);
+            const authContext = this.resolveAuthContext(bizCandidates[0] || this.DEFAULT_BIZ_CODE);
+            const source = await this.resolveCopySourcePlan(id, triggerEl, bizCandidates, authContext);
+            const sceneName = this.getSceneNameByBizCode(source.bizCode || bizCandidates[0] || '');
+            if (!sceneName) {
+                throw new Error(`暂不支持复制该业务线：${source.bizCode || bizCandidates[0] || '-'}`);
+            }
+            const api = resolveKeywordPlanApiAccessor();
+            if (!api || typeof api.copyCurrentPlanByScene !== 'function') {
+                throw new Error('计划复制 API 未就绪，请刷新页面后重试');
+            }
+            const targetOnlineStatus = mode === 'start'
+                ? 1
+                : (mode === 'pause' ? 0 : this.resolveCopyTargetOnlineStatus(source));
+            const copyCount = this.normalizeCopyBatchCount(options.copyCount || this.readCopyBatchCount(triggerEl));
+            const usedPlanNames = this.collectVisibleCampaignPlanNames(document);
+            source.usedPlanNames = usedPlanNames;
+            Logger.log(`📋 ${label}准备：源计划${id}，场景=${sceneName}，商品=${source.itemId || '-'}，复制数量=${copyCount}，跟随源状态=${targetOnlineStatus === 1 ? '开启' : '暂停'}`);
+            const result = await api.copyCurrentPlanByScene(sceneName, source, {
+                copyMode: mode,
+                copyCount,
+                usedPlanNames,
+                targetOnlineStatus,
+                conflictPolicy: 'none'
+            });
+            const copySource = result?.copySource || {};
+            const newPlanText = this.formatPlanNameListForLog(copySource.newPlanNames || copySource.newPlanName || []);
+            Logger.log(`📋 ${label}结果：源计划${id}，新计划${newPlanText}，跟随源状态=${targetOnlineStatus === 1 ? '开启' : '暂停'}，创建结果=${result?.ok ? '成功' : '失败'}`);
+            if (!result?.ok) {
+                const firstError = Array.isArray(result?.failures) && result.failures.length
+                    ? (result.failures[0]?.error || result.failures[0]?.message || '')
+                    : '';
+                throw new Error(firstError || '创建接口返回失败');
+            }
+            return result;
+        },
+
         setConcurrentButtonRunning(campaignId, running) {
             const id = this.normalizeCampaignId(campaignId);
             if (!id) return;
@@ -1392,7 +1782,8 @@
         createButton(campaignId, options = {}) {
             const id = this.normalizeCampaignId(campaignId);
             if (!id) return null;
-            const mode = options.mode === 'concurrent' ? 'concurrent' : 'quick';
+            const rawMode = String(options.mode || '').trim();
+            const mode = ['concurrent', 'copy'].includes(rawMode) ? rawMode : 'quick';
             const bizCode = this.normalizeBizCode(options.bizCode || '');
             const itemId = this.normalizeItemId(options.itemId || '');
 
@@ -1400,7 +1791,9 @@
             btn.type = 'button';
             btn.className = mode === 'concurrent'
                 ? 'am-campaign-search-btn am-campaign-concurrent-start-btn'
-                : 'am-campaign-search-btn';
+                : (mode === 'copy'
+                    ? 'am-campaign-search-btn am-campaign-copy-btn'
+                    : 'am-campaign-search-btn');
             btn.setAttribute('data-campaign-id', id);
             btn.dataset.campaignId = id;
             if (bizCode) {
@@ -1416,6 +1809,16 @@
                 btn.title = `并发开启关联计划：${id}`;
                 btn.setAttribute('aria-label', `并发开启关联计划：${id}`);
                 btn.innerHTML = this.CONCURRENT_START_ICON_SVG.trim();
+            } else if (mode === 'copy') {
+                const copyMode = 'inherit';
+                const label = this.getCopyModeLabel(copyMode);
+                const copyBatchCount = this.normalizeCopyBatchCount(options.copyCount || 1);
+                btn.setAttribute('data-am-campaign-copy', copyMode);
+                btn.setAttribute('data-am-copy-batch-count', String(copyBatchCount));
+                btn.dataset.amCopyBatchCount = String(copyBatchCount);
+                btn.title = `${label}：${id}`;
+                btn.setAttribute('aria-label', `${label}：${id}`);
+                btn.innerHTML = `${this.COPY_ICON_SVG.trim()}<span class="am-campaign-copy-label">${label}</span><span class="am-wxt-copy-multi" data-am-campaign-copy-count-badge="${copyBatchCount}" title="点击增加，右键减少，滚轮可调节"><span class="am-wxt-copy-multi-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span><span class="am-wxt-copy-multi-num">${copyBatchCount}</span></span>`;
             } else {
                 btn.setAttribute('data-am-campaign-quick', '1');
                 btn.title = `查数计划ID：${id}`;
@@ -1454,11 +1857,131 @@
             });
         },
 
+        isCampaignOperationGroup(el) {
+            if (!(el instanceof Element)) return false;
+            if (el.matches('[data-am-campaign-operation-copy-host="1"]')) return true;
+            const text = String(el.textContent || '').replace(/\s+/g, '');
+            return text.includes('详情')
+                && text.includes('报表')
+                && text.includes('高级设置')
+                && text.includes('更多')
+                && el.querySelectorAll('button, [role="button"]').length >= 4;
+        },
+
+        getCampaignOperationGroups() {
+            const groups = new Set();
+            document.querySelectorAll('.wO_WXptarh.clearfix, [data-am-campaign-operation-copy-host="1"]').forEach((el) => {
+                if (this.isCampaignOperationGroup(el)) groups.add(el);
+            });
+            if (!groups.size) {
+                document.querySelectorAll('td > div > div, [role="row"] div').forEach((el) => {
+                    if (this.isCampaignOperationGroup(el)) groups.add(el);
+                });
+            }
+            return Array.from(groups);
+        },
+
+        resolveCampaignContextFromElement(root) {
+            if (!(root instanceof Element)) return null;
+            const existingBtn = root.querySelector('.am-campaign-search-btn[data-campaign-id]');
+            const linkWithCampaign = Array.from(root.querySelectorAll('a[href*="campaignId="], a[href*="campaign_id="], [mx-href*="campaignId="], [mx-href*="campaign_id="]'))
+                .find((el) => {
+                    const raw = el.getAttribute('href') || el.getAttribute('mx-href') || '';
+                    return !!this.normalizeCampaignId(MagicReport.extractCampaignId(raw));
+                });
+            const rawLink = linkWithCampaign
+                ? (linkWithCampaign.getAttribute('href') || linkWithCampaign.getAttribute('mx-href') || '')
+                : '';
+            let campaignId = this.normalizeCampaignId(existingBtn?.getAttribute('data-campaign-id') || existingBtn?.dataset?.campaignId);
+            if (!campaignId && rawLink) {
+                campaignId = this.normalizeCampaignId(MagicReport.extractCampaignId(rawLink));
+            }
+            if (!campaignId) {
+                const textMatch = String(root.textContent || '').match(/计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/);
+                campaignId = this.normalizeCampaignId(textMatch?.[1]);
+            }
+            if (!campaignId) return null;
+
+            const bizCode = this.normalizeBizCode(
+                existingBtn?.getAttribute('data-biz-code')
+                || existingBtn?.dataset?.bizCode
+                || this.parseBizCodeFromRaw(rawLink)
+                || this.inferBizCodeFromElement(root)
+            );
+            const itemId = this.normalizeItemId(
+                existingBtn?.getAttribute('data-item-id')
+                || existingBtn?.dataset?.itemId
+                || this.inferItemIdFromElement(root, {
+                    allowLocationFallback: false,
+                    allowBodyFallback: false
+                })
+            );
+            return { campaignId, bizCode, itemId };
+        },
+
+        resolveOperationGroupCopyContext(group) {
+            if (!(group instanceof Element)) return null;
+            const directContext = this.resolveCampaignContextFromElement(group);
+            if (directContext) return directContext;
+            const operationRow = group.closest('tr, [role="row"]');
+            let pointer = operationRow?.previousElementSibling || null;
+            for (let i = 0; i < 4 && pointer; i++, pointer = pointer.previousElementSibling) {
+                const context = this.resolveCampaignContextFromElement(pointer);
+                if (context) return context;
+            }
+            return null;
+        },
+
+        cleanupInlineCopyButtons() {
+            document.querySelectorAll('.am-campaign-search-btn[data-am-campaign-copy]').forEach((btn) => {
+                if (!(btn instanceof HTMLElement)) return;
+                const host = btn.closest('[data-am-campaign-operation-copy-host="1"]');
+                if (host && this.isCampaignOperationGroup(host) && btn.getAttribute('data-am-campaign-copy') === 'inherit') return;
+                btn.remove();
+            });
+        },
+
+        enhanceOperationNodes() {
+            this.cleanupInlineCopyButtons();
+            this.getCampaignOperationGroups().forEach((group) => {
+                if (!(group instanceof HTMLElement)) return;
+                const context = this.resolveOperationGroupCopyContext(group);
+                if (!context?.campaignId) return;
+                group.setAttribute('data-am-campaign-operation-copy-host', '1');
+
+                const ensureCopyButton = () => {
+                    const existing = group.querySelector(`.am-campaign-search-btn[data-am-campaign-copy="inherit"][data-campaign-id="${context.campaignId}"]`);
+                    const btn = existing instanceof HTMLButtonElement
+                        ? existing
+                        : this.createButton(context.campaignId, {
+                            mode: 'copy',
+                            bizCode: context.bizCode,
+                            itemId: context.itemId
+                        });
+                    if (!(btn instanceof HTMLButtonElement)) return null;
+                    btn.classList.add('am-campaign-operation-copy-btn');
+                    if (context.bizCode) {
+                        btn.setAttribute('data-biz-code', context.bizCode);
+                        btn.dataset.bizCode = context.bizCode;
+                    }
+                    if (context.itemId) {
+                        btn.setAttribute('data-item-id', context.itemId);
+                        btn.dataset.itemId = context.itemId;
+                    }
+                    if (!existing) group.appendChild(btn);
+                    return btn;
+                };
+
+                ensureCopyButton();
+            });
+        },
+
         run() {
             if (window.top !== window.self) return;
             if (!document.body) return;
             this.enhanceTextNodes();
             this.enhanceLinkNodes();
+            this.enhanceOperationNodes();
             this.syncConcurrentButtonsVisibility();
         },
 
@@ -1572,7 +2095,7 @@
 
                 const siblingButtons = [];
                 let pointer = el.nextElementSibling;
-                for (let i = 0; i < 6 && pointer; i++) {
+                for (let i = 0; i < 10 && pointer; i++) {
                     if (pointer.matches?.('.am-campaign-search-btn')) {
                         siblingButtons.push(pointer);
                         pointer = pointer.nextElementSibling;
@@ -1597,6 +2120,7 @@
                 }
 
                 let anchor = quickBtn || el;
+                if (concurrentBtn) anchor = concurrentBtn;
                 if (!quickBtn) {
                     const createdQuick = this.createButton(id, { mode: 'quick', bizCode, itemId });
                     if (createdQuick) {
@@ -1608,6 +2132,7 @@
                     const createdConcurrent = this.createButton(id, { mode: 'concurrent', bizCode, itemId });
                     if (createdConcurrent) {
                         anchor.insertAdjacentElement('afterend', createdConcurrent);
+                        anchor = createdConcurrent;
                     }
                 }
             });

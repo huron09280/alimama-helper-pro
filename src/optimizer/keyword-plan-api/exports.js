@@ -12,6 +12,7 @@
             searchItems,
             createPlansBatch,
             createPlansByScene,
+            copyCurrentPlanByScene,
             createSitePlansBatch,
             createKeywordPlansBatch,
             createCrowdPlansBatch,

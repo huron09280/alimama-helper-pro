@@ -1806,9 +1806,21 @@
             }
         } catch { }
         try {
+            const fromWindowPlan = window.__AM_WXT_PLAN_API__;
+            if (fromWindowPlan && typeof fromWindowPlan.openWizard === 'function') {
+                return fromWindowPlan;
+            }
+        } catch { }
+        try {
             const fromGlobal = globalThis.__AM_WXT_KEYWORD_API__;
             if (fromGlobal && typeof fromGlobal.openWizard === 'function') {
                 return fromGlobal;
+            }
+        } catch { }
+        try {
+            const fromGlobalPlan = globalThis.__AM_WXT_PLAN_API__;
+            if (fromGlobalPlan && typeof fromGlobalPlan.openWizard === 'function') {
+                return fromGlobalPlan;
             }
         } catch { }
         try {

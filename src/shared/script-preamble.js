@@ -235,6 +235,9 @@ const AM_ICON_DEFS = {
     'campaign-concurrent-start': {
         body: '<path d="M8 6l10 6-10 6V6z"></path>'
     },
+    'campaign-copy': {
+        body: '<rect x="8" y="8" width="10" height="10" rx="2"></rect><path d="M6 16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path>'
+    },
     'layers-play': {
         body: '<rect x="5" y="7" width="12" height="12" rx="2"></rect><path d="M8 5h9a2 2 0 0 1 2 2v9"></path><path d="M10 11l5 3-5 3z"></path>'
     },

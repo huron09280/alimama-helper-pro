@@ -359,6 +359,62 @@
                     color: #157a43;
                     background: rgba(21, 122, 67, 0.1);
                 }
+                .am-campaign-copy-btn {
+                    width: auto;
+                    min-width: 88px;
+                    height: 22px;
+                    gap: 3px;
+                    padding: 2px 4px 2px 6px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    line-height: 1;
+                    white-space: nowrap;
+                }
+                .am-campaign-operation-copy-btn {
+                    float: left;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 8px 0 0;
+                    opacity: 1;
+                    visibility: visible;
+                    pointer-events: auto;
+                }
+                .am-campaign-copy-btn:hover {
+                    color: #7c3aed;
+                    background: rgba(124, 58, 237, 0.1);
+                }
+                .am-campaign-copy-label {
+                    pointer-events: none;
+                }
+                .am-campaign-copy-btn .am-wxt-copy-multi {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 2px;
+                    margin-left: 2px;
+                    padding: 2px 5px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(99, 102, 241, 0.32);
+                    background: rgba(255, 255, 255, 0.88);
+                    color: #3344c8;
+                    font-size: 11px;
+                    line-height: 1;
+                    user-select: none;
+                    pointer-events: auto;
+                }
+                .am-campaign-copy-btn .am-wxt-copy-multi-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0.9;
+                    pointer-events: none;
+                }
+                .am-campaign-copy-btn .am-wxt-copy-multi-num {
+                    min-width: 12px;
+                    text-align: center;
+                    font-weight: 600;
+                    pointer-events: none;
+                }
                 .am-campaign-search-btn.is-running {
                     color: #1677ff;
                     background: rgba(22, 119, 255, 0.08);
