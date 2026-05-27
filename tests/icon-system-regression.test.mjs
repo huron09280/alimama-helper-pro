@@ -39,7 +39,8 @@ test('扩展图标源稿是当前重绘后的应用图标', () => {
   const preamble = read('src/shared/script-preamble.js');
   assert.match(svg, /viewBox="0 0 128 128"/, '扩展 SVG 源稿应使用 128 画板');
   assert.match(preamble, /logo:\s*\{\s*body:\s*'<path d="M13 3L5 13h6l-1 8 9-12h-6l1-6z"><\/path>'/, '悬浮球 logo 源路径发生变化，请同步更新扩展图标断言');
-  assert.match(svg, /<circle cx="64" cy="64" r="52" fill="#FFFFFF" fill-opacity="0\.9"\/>/, '扩展 SVG 缺少悬浮球圆形底板');
+  assert.doesNotMatch(svg, /<circle\b/, '扩展 SVG 不应叠加圆形底板或外圈');
+  assert.doesNotMatch(svg, /fill-opacity=|stroke="#DDE4FF"/, '扩展 SVG 不应保留外圈底板样式');
   assert.match(svg, /<path d="M69\.3333 16L26\.6667 69\.3333h32l-5\.3334 42\.6667 48-64h-32l5\.3334-32z" fill="none" stroke="#4554E5" stroke-width="10\.6667" stroke-linecap="round" stroke-linejoin="round"\/>/, '扩展 SVG 未按悬浮球 logo 路径等比换算');
   assert.doesNotMatch(svg, /<path d="M73 25L36 71h27l-5 32 36-48H68l5-30z"/, '扩展 SVG 保持旧闪电符号');
   assert.doesNotMatch(svg, /<rect x="12" y="12" width="104" height="104" rx="24"/, '扩展 SVG 不应继续使用旧版圆角方形底板');

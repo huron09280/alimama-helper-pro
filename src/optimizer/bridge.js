@@ -333,13 +333,15 @@
         globalThis.__AM_WXT_PLAN_PATCH__ = 'adzone-default-sync-v5';
     }
     installKeywordPlanOpenBridgeHost();
+    if (isExtensionPageRuntime() || shouldExposePageApiDebug()) {
+        installPageApiBridgeHost();
+    }
     if (shouldExposePageApiDebug()) {
         const directKeywordPlanApi = resolveKeywordPlanApiForBridge();
         if (!isExtensionPageRuntime() && directKeywordPlanApi) {
             window.__AM_WXT_KEYWORD_API__ = directKeywordPlanApi;
             window.__AM_WXT_PLAN_API__ = directKeywordPlanApi;
         }
-        installPageApiBridgeHost();
         injectPageApiBridgeClient();
     }
     window.__AM_WXT_PLAN_BUILD__ = resolveKeywordPlanApiForBridge()?.buildVersion || '';

@@ -1,4 +1,447 @@
+# TODO - 2026-05-27 修复 Chrome 扩展错误页全部报错
+
+## 需求规格
+- 目标：打开 `chrome://extensions/?errors=cfegfgaodnfeigffdknhgciapojejflk`，逐项定位并修复该扩展错误页中提示的所有错误。
+- 约束：优先修 `src/`，通过构建同步根 userscript 与 `dist/extension/`；不得手工绕过生成产物；不改无关功能。
+- 成功标准：Chrome 扩展错误页不再显示未处理错误；相关语法、构建、测试和浏览器验证通过。
+
+## 执行计划（可核对）
+- [ ] 打开 Chrome 扩展错误页，记录所有错误文本、来源文件和触发栈。
+- [ ] 映射错误到源码根因，判断是局部修复还是结构性修复。
+- [ ] 修改 `src/` 或必要的构建脚本，保持最小侵入并同步生成产物。
+- [ ] 运行相关 `node --check`、专项测试、`npm run build:check`/`npm run review` 级验证。
+- [ ] 重新加载扩展并复查 `chrome://extensions` 错误页，确认错误清空或不再新增。
+- [ ] 回填验证记录与结果复盘。
+
+## 高层操作摘要
+- 已回顾 `AGENTS.md`、`tasks/lessons.md` 和外部 AGENT-v2 规则；本轮按 debug-first 和根因修复执行。
+
+## 验证记录
+- 待补充。
+
+## 结果复盘
+- 待补充。
+
+# TODO - 2026-05-27 版本号与更新日志同步到 7.04
+
+## 需求规格
+- 目标：将本轮复制计划、批量人群与 extension bridge 修复同步到版本号和最近更新日志。
+- 版本策略：当前版本 `7.03`，本轮为向后兼容的问题修复与体验增强，升级为 patch 版本 `7.04`。
+- 同步范围：userscript `@version`、脚本内更新日志、README 最近更新、CLAUDE 当前版本，以及构建生成产物。
+- 成功标准：构建产物版本一致，`npm run build:check`、`npm run check:syntax` 和版本门禁通过。
+
+## 执行计划（可核对）
+- [x] 更新源码版本号与最近更新日志。
+- [x] 更新 README/CLAUDE 版本说明。
+- [x] 运行构建同步根 userscript、packages 与 extension 产物。
+- [x] 运行版本一致性与语法验证。
+- [x] 回填验证记录与结果复盘。
+
+## 高层操作摘要
+- 已将 userscript 源版本从 `7.03` 升级到 `7.04`，并把脚本内更新日志新增 `v7.04 (2026-05-27)`。
+- 已同步 README 最近更新和 CLAUDE 当前版本，日志覆盖复制 API bridge、新复制确认窗、成功页内搜索、人群推广批量官方弹窗和回归测试扩充。
+- 已运行构建，根 userscript、`dist/packages/` 与 `dist/extension/` 产物均同步到 `7.04`。
+
+## 验证记录
+- `npm run build`：通过，构建版本 `7.04`。
+- `npm run build:check`：通过，构建产物同步。
+- `npm run check:syntax`：通过。
+- `node --test tests/extension-static-build.test.mjs`：通过，7/7。
+- `git diff --check`：通过。
+- `bash scripts/review-team.sh`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败；版本一致性检查通过，README/CLAUDE 均为 `7.04`。
+
+## 结果复盘
+- 结果：版本号、最近更新日志和构建产物已统一到 `7.04`。
+- 风险与回滚：本轮只同步版本/日志和对应测试预期；回滚需同时恢复 `src/entries/userscript-meta.js`、README、CLAUDE、脚本内日志和构建产物版本。
+
+# TODO - 2026-05-27 新设备安装后复制计划 API 未就绪
+
+## 需求规格
+- 目标：修复在另一台电脑新安装后点击复制计划时报 `[AM] ⚠️ 复制失败：源计划80227512963，原因：计划复制 API 未就绪，请刷新页面后重试` 的问题。
+- 初步判断：复制按钮层依赖页面侧 `copyCurrentPlanByScene` 桥接方法；新安装或注入时序不同步时，页面 API 可能尚未挂载到可用对象，导致按钮直接失败。
+- 约束：优先定位桥接/注入初始化根因；不绕过官方复制安全检查；不触发真实创建投放计划做无保护验证。
+- 成功标准：新安装/初始化时序下复制入口能等待或恢复计划复制 API；专项测试、构建检查通过；真实页面或受保护验证能证明不再直接报 API 未就绪。
+
+## 执行计划（可核对）
+- [x] 回查复制按钮解析计划 API 的入口、桥接白名单和页面侧 API 挂载时序。
+- [x] 设计最小修复：API 未就绪时主动等待/重取桥接，必要时触发页面 API 懒加载，而不是立即报错。
+- [x] 修改 `src/` 并补充复制专项回归测试覆盖 API 延迟就绪场景。
+- [x] 构建同步产物并运行相关 `node --check`、专项测试、build check/review 级验证。
+- [x] 回填验证记录、结果复盘；若形成可复用规则则更新 `tasks/lessons.md`。
+
+## 高层操作摘要
+- 已回顾 `AGENTS.md`、`tasks/lessons.md` 中复制计划相关教训；本轮属于复制关键路径修复，先定位根因再改动。
+- 已确认主助手与 `KeywordPlanApi` 分处两个 IIFE：userscript 依赖 sandbox `globalThis` 共享完整 API，extension 为避免 page 全局高权限 API 暴露，只默认安装 openWizard 窄桥；新设备没有 `__AM_WXT_DEBUG_PAGE_API__=1` 时，复制入口拿不到 `copyCurrentPlanByScene`。
+- 已在主助手中增加完整计划 API 的内部桥代理与 `waitForKeywordPlanApiAccessor()`，复制入口在准备与提交阶段都等待 `copyCurrentPlanByScene` 就绪。
+- 已调整 extension 运行态：默认安装内部 `installPageApiBridgeHost()`，但 `window.__AM_WXT_KEYWORD_API__` / `window.__AM_WXT_PLAN_API__` 全局客户端仍只在 debug 开关下暴露。
+- 已更新复制、extension 静态构建和 bridge 安全契约测试，明确覆盖“内部 bridge host 可用、page 全局完整 API 不默认暴露”的边界。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --check src/optimizer/bridge.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs`：通过，26/26。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `node --test tests/keyword-plan-api-bridge-security.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs`：通过，33/33。
+- `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：在真实 `one.alimama.com` 关键词推广页面临时移除 `__AM_WXT_DEBUG_PAGE_API__` 并刷新，验证 extension runtime 下 `debugFlag=null`、`window.__AM_WXT_PLAN_API__` 与 `window.__AM_WXT_KEYWORD_API__` 均未暴露完整复制 API，但 `window.__AM_WXT_PLAN_API_BRIDGE_HOST__ === true`。
+- Chrome DevTools MCP：同一无 debug 状态下，通过内部 bridge probe 调用 `copyCurrentPlanByScene`，返回业务校验错误 `复制计划缺少源计划数据`，证明命中真实复制方法而非 `method_not_found` / API 未就绪；随后恢复本机原 debug 开关值。
+- Chrome DevTools MCP：同一页面点击计划 `69514602419` 的 `复制1` 后，不再出现 `计划复制 API 未就绪`；当前页面因 Token 未就绪停在更早的鉴权提示 `Token 未就绪，请先在页面手动点击一次计划开关后重试`，未触发创建/复制提交。
+
+## 结果复盘
+- 根因：extension 新安装环境没有本机 debug 开关，主助手只能通过 openWizard 窄桥打开组建计划；复制按钮需要的 `copyCurrentPlanByScene` 不在窄桥里，导致准备复制时直接报 `计划复制 API 未就绪`。
+- 修复结果：extension 默认提供不挂全局对象的内部完整桥 host，主助手通过闭包内桥代理等待并调用 `copyCurrentPlanByScene`；page 全局完整 API 客户端仍保持 debug-only，避免恢复高权限全局暴露。
+- 风险与回滚：改动集中在 API 桥接解析和 extension bridge host 安装时序；回滚可撤销内部完整桥默认安装和 `waitForKeywordPlanApiAccessor()` 调用，但新安装环境会重新出现复制 API 未就绪。
+
+# TODO - 2026-05-27 复制成功确认改为页内搜索
+
+## 需求规格
+- 目标：复制成功弹窗点击确认后，不刷新页面，不整页跳转；直接在当前列表页“计划名称”搜索框搜索公共计划名。
+- 搜索词规则：以新计划名称为准，去掉最右侧 `_<数字>` 后再搜索，例如 `E7pro_自定义_1` 搜索 `E7pro_自定义`。
+- 约束：保留成功弹窗明细、成功结果判断和取消只关闭弹窗；不得再次触发真实复制或其它投放修改。
+- 成功标准：专项测试、构建检查通过；真实页面可证明确认后页面未 reload/assign，而是计划名称输入框变为公共计划名并触发搜索。
+
+## 执行计划（可核对）
+- [x] 更新复制成功搜索词归一化逻辑，优先去掉新计划名最右侧 `_<数字>`。
+- [x] 将成功确认行为从 URL reload/assign 改为当前页搜索框写值并触发回车搜索。
+- [x] 更新专项测试、构建产物和任务教训。
+- [x] 用 Chrome DevTools MCP 做真实页面或受保护弹窗验证。
+
+## 高层操作摘要
+- 已回顾当前复制成功刷新链路和相关教训；本轮只改成功确认后的“查看结果”行为，不改真实复制提交、暂停兜底和成功结果判定。
+- 已将成功弹窗确认文案从“确定并刷新”改为“确定并搜索”，确认后优先查找当前页 `计划名称 / 回车搜索` 输入框，写入公共计划名并触发回车搜索。
+- 已把搜索词生成逻辑改为先对新计划名称执行复制序号归一化，去掉最右侧 `_<数字>`，例如 `E7pro_自定义_123` 搜索 `E7pro_自定义`。
+- 已保留地址栏搜索条件同步，但使用 `history.replaceState` 更新 hash 查询参数，不调用 `window.location.reload()` 或 `window.location.assign()`。
+- 已在 `tasks/lessons.md` 追加 L66，沉淀“复制成功确认优先页内搜索”的规则。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，12/12。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重载本地 unpacked extension 与关键词推广页面后，在真实 `one.alimama.com` 列表页用受保护假复制 API 验证成功弹窗；未触发 `solution/copy`、`solution/addList`、`create` 等真实创建/复制请求。
+- Chrome DevTools MCP：复制 `E7pro_自定义_1` 后成功弹窗显示 `新计划明细：E7pro_自定义_123`，确认按钮为 `确定并搜索`，说明文案为“点击“确定并搜索”后将在计划名称框搜索公共名称。”
+- Chrome DevTools MCP：点击 `确定并搜索` 后，当前页搜索框值变为 `E7pro_自定义`，URL 变为 `searchKey=campaignNameLike&searchValue=E7pro_自定义`，且 `performance.timeOrigin` 与操作前一致，证明没有整页刷新。
+
+## 结果复盘
+- 根因：旧成功确认行为以刷新/跳转到搜索 URL 为主，且搜索词可能保留新计划最右复制序号，不符合用户要在当前页按公共名称筛选的交互。
+- 修复结果：成功确认现在复用当前页计划名称搜索框完成筛选，并按新计划名去掉最右 `_<数字>` 后搜索；找不到输入框时只同步地址栏搜索参数，不整页刷新。
+- 风险与回滚：依赖当前列表页可见搜索框的 `计划名称/回车搜索` 文案；若官方 DOM 后续改版，回退行为仍会同步 URL 参数但不会刷新。回滚可恢复 `navigateToCopySuccessSearch()` 的 reload/assign 逻辑，但会重新出现整页刷新体验。
+
+# TODO - 2026-05-27 E7pro_自定义真实复制提交失败
+
+## 需求规格
+- 目标：修复关键词推广计划 `E7pro_自定义` 点击 `复制` 后，确认生成进行真实提交时报错、无法复制成功的问题。
+- 约束：优先定位真实失败根因，不做绕过式修复；复制链路仍需保留提交前一览窗、可编辑字段、暂停兜底、成功确认与刷新搜索能力。
+- 安全边界：真实页面验证可在用户已授权目标计划复制的前提下执行；不得修改非目标计划，不额外触发开启/暂停/删除等无关投放动作。
+- 成功标准：专项测试和构建检查通过；真实 `one.alimama.com` 页面中 `E7pro_自定义` 的复制确认生成成功，服务端能查到新计划或成功弹窗能展示新计划结果。
+
+## 执行计划（可核对）
+- [x] 复现或定位 `E7pro_自定义` 真实提交失败的具体错误、接口与请求载荷。
+- [x] 对照复制链路源码和最近教训，确定是预览行覆盖、源计划字段裁剪、目标合同、预算/出价还是提交结果判定导致失败。
+- [x] 以最小范围修改 `src/` 复制链路，必要时补充专项回归测试。
+- [x] 构建同步产物并运行相关 `node --check`、专项测试、build check/review 级验证。
+- [x] 用 Chrome DevTools MCP 在真实页面验证 `E7pro_自定义` 复制成功，并记录网络/页面结果。
+
+## 高层操作摘要
+- 已回顾 `AGENTS.md`、`tasks/lessons.md` 和当前复制计划历史记录；本轮属于创建/复制关键路径，必须证明真实服务端结果成功后才能完成。
+- 真实复现：在关键词推广列表 `searchValue=E7pro_自定义` 点击计划 `69514602419` 的 `复制`，一览窗显示 `E7pro_自定义_1`、手动出价、每日预算 1000；点击 `确认生成` 后 `/solution/addList.json` 两次返回 HTTP 200 且 `info.ok=true`，但 `data.list[0].campaignId=null`，弹窗报 `服务端未返回 campaignId`。
+- 根因定位：`campaign/get.json` 源计划字段为 `bidTypeV2:"custom_bid"`、`bidType:"custom_bid"`，但提交载荷变成 `bidTypeV2:"smart_bid"`、`bidTargetV2:"conv"`。原因是 `normalizePlans()` 在复制计划没有显式 `plan.bidMode` 时先写入 common 默认 `smart`，后续 `resolvePlanBidMode()` 被这个默认值短路，无法再读取 `rawOverrides.campaign.bidTypeV2`。
+- 已修复：`normalizePlans()` 归一化单计划时优先从 `plan.rawOverrides.campaign.bidTypeV2/bidType` 与 `request.common.rawOverrides.campaign.bidTypeV2/bidType` 读取源计划出价方式，再回退 common 默认；同时补充回归断言防止复制链路再次把 `custom_bid` 漂移成 `smart_bid`。
+- 真实复验：重载本地 unpacked extension 后，在真实关键词推广列表再次复制 `E7pro_自定义`，一览窗仍显示 `手动出价`、`E7pro_自定义_1`、每日预算 1000；点击 `确认生成` 后服务端成功创建新计划 `E7pro_自定义_1`（campaignId `81032293252`），并通过暂停兜底将新计划状态回写为暂停。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，12/12。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重载本地 unpacked extension 与关键词推广页面后，点击 `E7pro_自定义`（campaignId `69514602419`）复制；一览窗显示 `E7pro_自定义_1`、`手动出价`、出价不可编辑、每日预算 `1000`。
+- Chrome DevTools MCP：确认生成后 `/solution/addList.json` HTTP 200 且 `info.ok=true`，请求载荷中 `campaign.bidTypeV2:"custom_bid"`，不再漂移为 `smart_bid/conv`；响应返回新计划 `E7pro_自定义_1`、campaignId `81032293252`、adgroupId `81032333166`。
+- Chrome DevTools MCP：随后 `/campaign/updatePart.json` HTTP 200 且 `info.ok=true`，请求 `displayStatus:"pause"`，响应 `onlineStatus:0`；成功弹窗显示 `本次复制成功：1 个`，刷新后列表可查到 `E7pro_自定义_1`（campaignId `81032293252`），行内显示 `手动出价`、每日预算 `1,000元`。
+
+## 结果复盘
+- 根因：复制链路在 `normalizePlans()` 阶段过早把缺失显式 `bidMode` 的复制计划归一到 common 默认智能出价，导致后续从源计划 rawOverrides 读取 `custom_bid` 的逻辑被短路，真实创建接口收到错误的智能出价合同。
+- 修复结果：复制计划现在优先继承源计划 rawOverrides 中的 `bidTypeV2/bidType`，`E7pro_自定义` 真实提交已成功创建新计划，并保留手动出价与暂停兜底行为。
+- 风险与回滚：改动集中在复制请求归一化阶段，主要影响“无显式 bidMode、但源计划 rawOverrides 有真实出价方式”的复制场景；回滚可撤销 `rawCampaignBidMode` 优先级补丁和对应测试断言。
+
+# TODO - 2026-05-27 批量人群设置直接弹官方抽屉
+
+## 需求规格
+- 目标：人群推广列表 `批量+ -> 批量人群设置` 点击后直接打开官方 `批量编辑人群` 抽屉/弹窗。
+- 缺陷：当前实现会先打开官方 `批量计划设置` 菜单/弹层，再从里面触发 `批量编辑人群`，用户看到两次弹窗。
+- 约束：继续复用官方人群设置能力，不跳转详情页；不通过中间官方批量计划设置弹层；真实页面验证只打开和取消/关闭，不提交修改。
+- 成功标准：选中人群推广计划后点击 `批量人群设置`，页面只出现一次 `批量编辑人群` 抽屉；不出现 `批量计划设置` 中间弹层；测试、构建和真实页面验收通过。
+
+## 执行计划（可核对）
+- [x] 抓取官方 `批量编辑人群` 抽屉的直接 `mxModal`/VFrame 调用参数，确认绕过中间菜单的最小入口。
+- [x] 修改 `openDisplayNativeBatchCrowdDrawer`，优先直接调用官方抽屉，失败时不再主动打开中间菜单造成双弹窗。
+- [x] 更新回归测试和教训，防止后续又走 `批量计划设置 -> 批量编辑人群` 两段式。
+- [x] 构建同步产物并运行专项测试、语法检查、review。
+- [x] 用 Chrome DevTools MCP 在真实人群推广页验证点击后只弹一次，且不触发真实提交。
+
+## 高层操作摘要
+- 已回顾相关教训：官方隐藏弹窗能力应复用官方宿主，但不能把用户可见的中间菜单当作必经交互；本轮要直接打开最终官方人群设置抽屉。
+- 真实页面抓取确认官方最终抽屉由计划列表 VFrame 直接 `mxModal('onebp/views/pages/manage/campaign/batch-show')` 打开，核心参数为 `campaignIdList` 与 `tab: 'crowd'`，不需要先展开 `批量计划设置` 菜单。
+- 已将 `openDisplayNativeBatchCrowdDrawer` 改为定位人群推广计划列表 VFrame，复用当前页面的 `biz/parentParams/adcConfig/batchOperList` 等官方上下文，直接打开 `批量编辑人群` 全屏抽屉。
+- 已更新专项回归测试，明确断言 `批量人群设置` 不再调用 `findNativeBatchPlanSettingHost`、`triggerNativeBatchPlanSettingMenu`、`findNativeBatchPlanMenuItem` 或 `dispatchNativeMouseClick`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，6/6。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重载本地 unpacked extension 后，复验人群推广列表 `#!/manage/display?...searchValue=E7Pro_AI点睛_测试`。选择测试计划 `81020127177` 后点击 `批量+ -> 批量人群设置`，页面直接打开官方 `批量编辑人群` 全屏抽屉，抽屉内可见 `添加人群 / 批量修改状态 / 批量修改出价`。
+- Chrome DevTools MCP：同次验收中没有可见的 `#am-campaign-batch-plus-menu` 或 `popmenu_*` 官方批量计划设置中间菜单残留；URL 保持列表页；Network 只有 `crowd/horizontal/findPage.json`、`report/query.json` 等读取请求，没有 `modify`、`updatePart`、`delete` 等提交类修改请求。已点击抽屉左上关闭按钮退出，未提交任何人群修改。
+
+## 结果复盘
+- 根因：旧实现把官方 `批量计划设置` 菜单当成打开 `批量编辑人群` 的必经入口，用户点击插件菜单后会先看到官方中间菜单，再看到最终抽屉。
+- 修复结果：`批量人群设置` 现在直接定位人群推广计划列表 VFrame，并调用官方 `onebp/views/pages/manage/campaign/batch-show`，通过 `campaignIdList + tab: 'crowd'` 打开最终抽屉。
+- 风险与回滚：依赖官方计划列表 VFrame 的 `viewOptions` 上下文；若官方后续改名或移除该 VFrame，会显示明确错误并不再主动打开中间菜单。回滚可恢复到上一版菜单中转实现，但会重新出现双弹窗体验问题。
+
+# TODO - 2026-05-27 复制计划提交前一览编辑窗
+
+## 需求规格
+- 目标：点击计划行 `复制` 后，不再直接提交复制请求；先弹出复制计划一览窗，按复制数量展示每个待生成计划。
+- 一览窗列：至少包含 `计划名称`、`出价方式`、`出价价格`、`预算`；计划名称、出价价格和预算可编辑，出价方式按源计划展示文案只读；确认后才开始提交。
+- 最新反馈：一览窗要更宽且不能出现横向滚动条；出价方式必须优先取当前计划行的中文展示，不能把手动出价误显示成智能出价；编辑控件改为底部横线样式，不使用完整边框。
+- 最新列宽反馈：一览窗每列宽度按内容紧凑适配，短文本列不要被固定百分比拉得过宽，计划名称列占剩余空间。
+- 最新批量编辑反馈：一览窗内需要批量编辑能力，出价价格支持按首价到尾价生成等差梯度（如 3 到 8 生成 3/4/5/6/7/8），预算支持统一批量设置到所有待复制计划。
+- 最新出价展示反馈：表头从 `出价方式` 改为 `计划出价方式`；智能出价行内需展示具体目标明细，如 `智能出价（促点击）`、`智能出价（促成交）`、`智能出价（促收藏加购）`，仍保持只读不可编辑。
+- 最新无出价反馈：若源计划没有可读到的出价价格，则一览窗里的出价价格不能编辑，批量出价也不能给这些计划新增覆盖。
+- 提交过程：确认后显示生成中/提交中状态，防止重复提交；最终成功时显示成功确认。
+- 成功后行为：用户点击成功确认后刷新页面，并定位/搜索到本次新生成的搜索计划名称。
+- 约束：保持现有复制 API、数量徽标、暂停兜底和成功弹窗能力；仅在确认后触发真实创建；不影响非复制行操作与批量菜单。
+- 成功标准：复制前可编辑一览窗、确认后提交、生成中态、成功确认、刷新后搜索新计划名全部可由测试或真实页面验收证明。
+
+## 执行计划（可核对）
+- [x] 回顾现有复制按钮、复制 API 入参、命名与成功刷新链路，确认最小改动点。
+- [x] 设计并实现复制一览窗：行数据生成、计划名称/出价/预算字段编辑、校验与取消。
+- [x] 将复制提交流程改为一览窗确认后执行，并在提交期间展示生成状态和防重复提交。
+- [x] 让编辑后的计划名称和可编辑字段透传到复制 API，同时保持官方人群复制和通用复制分支兼容。
+- [x] 更新回归测试，覆盖预览窗、字段透传、生成中态和成功后搜索刷新。
+- [x] 构建同步产物并运行相关验证；如能安全连接真实页面，使用 Chrome DevTools MCP 验证复制前弹窗与取消链路。
+- [x] 按最新反馈微调一览窗样式与出价方式提取，并在真实页面复验手动出价、无横向滚动条和取消不提交。
+- [x] 按最新列宽反馈把表格改成内容优先列宽，并复验短列不再过宽、无横向滚动条。
+- [x] 在一览窗加入批量出价梯度与批量预算设置，并验证应用后能回写所有行且确认前不提交。
+- [x] 补充智能出价目标明细展示和 `计划出价方式` 表头，并验证只读展示不影响复制提交入参。
+- [x] 源计划无出价价格时禁用行内出价与批量出价，确认提交时不生成出价覆盖。
+
+## 高层操作摘要
+- 已回顾 AGENTS、`tasks/lessons.md` 与当前 `tasks/todo.md`。本轮属于复制/创建类链路改造，必须先预览确认、再提交，并证明确认前不会触发创建请求。
+- 已将复制按钮链路拆成准备上下文、打开一览窗、确认后提交三段；一览窗包含计划名称、出价方式、出价价格、预算字段/预算值，其中出价方式只展示源计划中文文案不参与编辑覆盖，取消不会调用创建 API。
+- 已给 `copyCurrentPlanByScene` 增加 `copyPlanRows` 受控入参，支持多行显式计划名，并把每行预算/出价覆盖合并到创建请求；成功后搜索关键字改为优先使用新生成计划名称。
+- 已更新复制专项测试，覆盖一览窗 DOM、字段透传、生成中状态、显式计划名数组和预算/出价覆盖。
+- 根据用户反馈，已把一览窗视觉改回接近原成功弹窗的轻量原生格式：24px 圆角、轻阴影、图标标题区与胶囊按钮；表格只负责承载多行内容。
+- 根据最新反馈，已把行内编辑控件从完整边框改成仅底部横线，减少多列表格里的视觉噪声；只读出价方式保持纯文本展示。
+- 真实页面复验时发现固定操作列按钮的祖先节点可能不是当前数据行，旧阈值会跳过包含 `手动出价` 的当前行；已改为优先按按钮 `campaignId` 找回计划名称链接所在行，再从该行提取中文出价方式，并避开包含多计划的整表容器。
+- 根据最新列宽反馈，已把表格从固定百分比分配改成内容优先的紧凑列：序号、出价方式、出价价格、预算按内容宽度收缩，计划名称承接剩余宽度。
+- 根据最新批量编辑反馈，已在一览窗表格上方加入轻量批量工具区：出价按首尾价格等差填充每行，预算按统一预算类型和金额填充每行；批量操作只回写弹窗里的现有行输入，确认前不触发创建接口。
+- 根据最新智能出价反馈，已把一览窗表头改为 `计划出价方式`，并在智能出价展示值中拼接源计划目标明细：点击目标显示 `智能出价（促点击）`、成交目标显示 `智能出价（促成交）`、收藏加购目标显示 `智能出价（促收藏加购）`；该字段仍是只读展示，不写入 `copyPlanRows` 覆盖提交。
+- 根据最新无出价反馈，已给复制一览窗行数据增加 `bidPriceEditable` 标记：源计划没有可读出价时，行内 `出价价格` 输入禁用并显示 `无出价` 占位，批量出价首价/尾价/应用按钮也会禁用；确认读取行数据时只读出价不会写入 `bidPrice` 覆盖。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`：通过。
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，12/12。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run test`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- `npm run review`：通过；自动复审、构建检查和回归测试均通过。
+- Chrome DevTools MCP：重载本地 unpacked extension 后复验关键词推广 `#!/manage/search`，先安装 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json` 请求拦截保护，再点击可见计划 `复制1`。页面先弹出 `复制计划一览`，可见列 `# / 计划名称 / 出价方式 / 出价价格 / 预算`；计划名称、出价价格、预算类型、预算值为可编辑控件，出价方式显示源计划中文文案。
+- Chrome DevTools MCP：在一览窗中修改计划名称输入值后未触发任何真实创建请求；点击 `取消` 后弹窗关闭，URL 保持 `#!/manage/search?orderField=charge&orderBy=desc`，拦截记录为空。未点击 `确认生成`，避免真实创建投放计划。
+- Chrome DevTools MCP：再次复验一览窗，出价方式列显示 `智能出价`，不存在 `data-am-copy-field="bidMode"` 可编辑输入；可编辑字段仅 `planName / bidPrice / budgetField / budgetValue`。卡片样式为 `border-radius: 24px`、`box-shadow: 0 2px 10px rgba(0,0,0,0.16)`，与原成功弹窗格式保持一致。
+- 最新修正后 `node --check src/main-assistant/campaign-id-quick-entry.js`、`node --check src/main-assistant/ui.js`、`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，专项测试 12/12。
+- 最新修正后 `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：通过；生成产物已同步。
+- 最新修正后 `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重载 unpacked extension 与关键词推广 `#!/manage/search` 后，先安装真实创建请求拦截，再点击可见手动出价计划 `E7pro_自定义`（campaignId `69514602419`）的 `复制1`。一览窗 `出价方式` 显示 `手动出价`，不存在 `data-am-copy-field="bidMode"` 可编辑输入；可编辑字段仍为 `planName / bidPrice / budgetField / budgetValue`。
+- Chrome DevTools MCP：同一一览窗卡片宽度为 1080px，表格容器 `clientWidth=1030`、`scrollWidth=1030`、`overflow-x=hidden`，无横向滚动条；编辑控件 computed style 为上/左边框 `0px`、底部线 `1px`、圆角 `0px`、透明背景；点击取消后弹窗关闭，拦截记录为空。
+- 最新列宽修正后 `node --check src/main-assistant/ui.js`、`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`、`npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：通过；专项测试 12/12，生成产物已同步。
+- 最新列宽修正后 `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重载本地 unpacked extension 与关键词推广页面后，再次点击手动出价计划 `E7pro_自定义`（campaignId `69514602419`）的 `复制1`。一览窗 `table-layout=auto`，表头宽度为 `# 42px / 计划名称 626px / 出价方式 84px / 出价价格 92px / 预算 186px`，预算内部列为 `76px 82px`；表格容器 `clientWidth=1030`、`scrollWidth=1030`、`overflow-x=hidden`，无横向滚动条。出价方式仍显示 `手动出价` 且不可编辑，点击取消后拦截记录为空。
+- 最新批量编辑修正后 `node --check src/main-assistant/campaign-id-quick-entry.js`、`node --check src/main-assistant/ui.js`、`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过；专项测试 12/12。
+- 最新批量编辑修正后 `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：通过；生成产物已同步。
+- 最新批量编辑修正后 `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重载 unpacked extension 与关键词推广 `#!/manage/search` 后，在受保护请求拦截下把手动出价计划 `E7pro_自定义` 的复制数量设为 6 并点击 `复制`。一览窗显示 6 行，批量出价输入首价 `3`、尾价 `8` 后点击 `应用梯度`，6 行出价回写为 `3 / 4 / 5 / 6 / 7 / 8`，间隔显示 `间隔 1`；批量预算选择 `每日预算`、金额 `300` 后点击 `应用预算`，6 行预算字段均为 `dayBudget`，预算值均为 `300`。表格仍为 `table-layout=auto`，容器 `clientWidth=1030`、`scrollWidth=1030`、`overflow-x=hidden`；出价方式仍显示 `手动出价` 且不可编辑；点击取消后创建请求拦截记录为空。
+- 最新智能出价明细修正后 `node --check src/main-assistant/campaign-id-quick-entry.js`、`node --check src/main-assistant/ui.js`、`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过；专项测试 12/12。
+- 最新智能出价明细修正后 `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：通过；生成产物已同步。
+- 最新智能出价明细修正后 `npm run review`：通过；504 项测试中 502 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重载本地 unpacked extension 后复验关键词推广列表，在受保护请求拦截下点击智能出价计划复制。一览窗表头为 `计划出价方式`，行内显示 `智能出价（促点击）`，不存在 `data-am-copy-field="bidMode"` 可编辑输入；表头宽度为 `# 42px / 计划名称 564px / 计划出价方式 146px / 出价价格 92px / 预算 186px`，表格容器 `clientWidth=1030`、`scrollWidth=1030`、`overflow-x=hidden`。点击取消后弹窗关闭，创建/复制类请求拦截记录为空。
+- 最新无出价修正后 `node --check src/main-assistant/campaign-id-quick-entry.js`、`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过；专项测试 12/12。
+- 最新无出价修正后 `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：通过；生成产物已同步。
+
+## 结果复盘
+- 修复结果：复制计划从“点击即提交”改为“准备上下文 -> 一览窗编辑确认 -> 生成中提交 -> 成功确认刷新搜索新计划名”的链路；取消或关闭一览窗不会调用创建接口。
+- 数据边界：`copyPlanRows` 只作为确认后的受控覆盖入参使用，多行显式计划名、预算字段/预算值、源计划已有的出价价格会逐行合并到复制请求；计划出价方式只读展示并继续跟随源计划，不写入行级覆盖。批量出价和批量预算只是在确认前批量写入弹窗行内字段，不新增提交入口；源计划没有出价价格时不允许在确认窗新增出价覆盖。计划出价方式展示优先从当前 campaignId 对应的可见列表行提取中文文案，并从源计划目标合同补充智能出价明细，避免固定操作列扫到其它计划或被详情字段覆盖；一览窗短列按内容紧凑收缩，计划名称列承接剩余空间。官方人群复制分支保持原有官方接口策略。
+- 验收边界：真实页面验证覆盖了点击复制、编辑一览窗和取消不提交；最终确认生成属于真实投放创建动作，本轮未在生产页面点击。
+
+# TODO - 2026-05-27 批量修改屏蔽人群复用官方编辑弹窗
+
+## 需求规格
+- 目标：在 `https://one.alimama.com/index.html#!/manage/display-detail?mx_bizCode=onebpDisplay&bizCode=onebpDisplay&campaignId=81020127177&tab=crowd&startTime=2026-05-27&endTime=2026-05-27` 分析点击 `编辑过滤人群` 打开的官方弹窗；人群推广列表 `批量+ -> 批量修改屏蔽人群` 必须调用一样的窗口，并通过该窗口完成批量修改提交。
+- 约束：不能再用自定义确认框替代官方弹窗；不能跳转详情页；真实浏览器测试要验证弹窗可打开、数据可编辑/提交链路正常；真实提交前必须确认不会误改非选中计划，必要时只提交用户指定/当前选中的测试计划。
+- 成功标准：列表页选中计划后点击 `批量修改屏蔽人群`，原地出现与详情页 `编辑过滤人群` 一致的编辑弹窗；确认提交时调用官方过滤人群提交接口并按选中计划批量修改；专项测试、构建检查和真实页面验收通过。
+
+## 执行计划（可核对）
+- [x] 在真实详情页分析 `编辑过滤人群` 弹窗 DOM、打开方式、数据读取和提交行为。
+- [x] 调整 `批量+ -> 批量修改屏蔽人群`，复用同构官方弹窗而非自定义确认框。
+- [x] 实现弹窗提交时对选中人群推广计划批量调用官方提交接口。
+- [x] 更新回归测试、构建产物和任务教训。
+- [x] 用 Chrome DevTools MCP 在真实人群推广页面验证弹窗打开、取消/提交链路和接口行为。
+
+## 高层操作摘要
+- 已确认上一轮实现仍是读取官方接口后打开自定义确认框，不满足“调用一样的窗口”的最新目标，本轮必须改为同构官方 `编辑过滤人群` 弹窗。
+- 真实详情页分析确认官方入口在 `onebp/views/pages/manage/display/crowd-list` 中调用 `mxModal('onebp/views/pages/manage/campaign/info')`，只展示 `campaignCrowdFilterList`，提交回调再执行过滤人群批量修改/删除。
+- 已将列表页 `批量+ -> 批量修改屏蔽人群` 改为复用页面 Magix/VFrame 的 `mxModal` 打开同一个 `campaign/info` 弹窗，标题仍是 `编辑过滤人群`，初始数据来自第一个选中计划的 `/blackCrowd/findList.json`。
+- 已把官方弹窗的提交回调接到批量同步逻辑：对每个选中计划计算新旧过滤人群差异，新增/保留项走 `/blackCrowd/batchModify.json`，移除项走 `/blackCrowd/batchDelete.json`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，6/6。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run review`：通过；503 项测试中 501 通过、2 个历史跳过（`agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：在详情页 `#!/manage/display-detail?...campaignId=81020127177&tab=crowd` 分析官方 `编辑过滤人群` 弹窗，确认 view 为 `onebp/views/pages/manage/campaign/info`，组件过滤为 `campaignCrowdFilterList`，已选过滤人群为 `50岁以上 / 40-49岁 / 18-24岁`。
+- Chrome DevTools MCP：重载本地 unpacked extension 后复验人群推广列表 `#!/manage/display?...searchValue=E7Pro_AI点睛_测试`，`批量+` hover 菜单可见，菜单项包含 `批量修改屏蔽人群`。
+- Chrome DevTools MCP：只勾选测试计划 `81020127177`，点击 `批量+ -> 批量修改屏蔽人群`，列表页原地打开官方 `编辑过滤人群` 弹窗，显示 `设置过滤人群` 与 3 个已选过滤人群，URL 保持列表页。
+- Chrome DevTools MCP：保持内容不变点击 `确定`，Network 记录 `/blackCrowd/batchModify.json?bizCode=onebpDisplay` HTTP 200，请求体 `campaignId=81020127177` 且 `crowdList` 为 3 个过滤人群；随后页面刷新回列表，弹窗关闭。
+
+## 结果复盘
+- 修复结果：`批量修改屏蔽人群` 已从自定义确认框升级为官方同构编辑弹窗；用户在该窗口内编辑后，提交会批量同步到选中的人群推广计划。
+- 风险边界：真实页面只对单个测试计划做“不改变内容”的提交验证；多计划批量同步由专项测试和代码路径覆盖，实际修改多个计划前仍应谨慎选择计划。
+
+# TODO - 2026-05-27 人群推广批量+官方人群接口
+
+## 反馈修正 - 人群推广人群类动作不跳转
+- 需求：用户要求人群推广 `批量+` 中的 `批量修改屏蔽人群` 与 `批量人群设置` 不再跳转详情页，改为使用官方接口；`批量修改屏蔽人群` 对应点击计划后 `人群 -> 编辑过滤人群` 的弹窗接口，`批量人群设置` 对应 `批量计划设置` 官方按钮里的人群设置能力。
+- 约束：
+  - 仅本轮先收敛到 `onebpDisplay / 人群推广`，关键词推广和线索推广不伪造未确认接口；
+  - 必须先在真实页面抓取官方弹窗的数据读取和提交接口，不能凭字段名猜测；
+  - 真实页面验收只允许受保护抓包、打开弹窗和取消，不直接提交会修改投放配置的请求；
+  - 若官方能力需要用户选择/编辑人群，插件应复用或同构官方弹窗流程，不再 `window.open` 跳转详情页。
+- 执行计划：
+  - [x] 抓取人群推广官方 `编辑过滤人群` 与 `批量计划设置 -> 人群设置` 的弹窗接口、请求载荷和确认链路。
+  - [x] 设计 `批量+` 人群推广专用执行路径：读取选中计划、打开同构批量弹窗、按官方接口提交或受控确认。
+  - [x] 实现人群推广两项动作的官方接口接入，关键词/线索保持保守提示或原入口策略。
+  - [x] 更新回归测试，覆盖人群推广不跳转、官方接口路径、二次确认/取消安全边界。
+  - [x] 构建同步产物，运行专项测试、语法检查、build check 与 review。
+  - [x] 用 Chrome DevTools MCP 在真实人群推广页面验证菜单、弹窗、取消链路和无真实提交。
+- 高层操作摘要：
+  - 已回顾 `AGENTS.md` 与 `tasks/lessons.md`，本轮属于用户修正：官方隐藏弹窗能力不能用跳转详情页替代。
+  - 已在真实人群推广页抓取官方 `批量计划设置 -> 批量编辑人群` 打开链路：点击官方菜单项后原地打开 `批量编辑人群` 抽屉，读取 `/crowd/horizontal/findPage.json` 等人群列表接口，不发生页面跳转。
+  - 已在计划详情 `人群 -> 编辑过滤人群` 抓取官方过滤人群接口：读取 `/blackCrowd/findList.json`，提交 `/blackCrowd/batchModify.json`，受保护抓包确认载荷包含 `campaignId`、`tab=crowd`、`startTime/endTime` 与 `crowdList`。
+  - 已将人群推广 `批量人群设置` 改为打开官方 `批量编辑人群` 抽屉；`批量修改屏蔽人群` 改为读取第一个选中计划的过滤人群作为模板，二次确认后用官方 `/blackCrowd/batchModify.json` 同步到选中计划。
+  - 关键词推广和线索推广继续保留原有保守入口/详情兜底，不伪造未抓取的人群接口。
+- 验证记录：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，6/6。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+  - `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+  - `npm run review`：通过；503 项测试中 501 通过、2 个历史跳过，0 失败。
+  - Chrome DevTools MCP：重载本地 unpacked extension 后复验人群推广 `#!/manage/display`，`批量+` 宽度 69px，与官方 `批量计划设置` 间距 12px；鼠标移入菜单可见，菜单包含 `批量开启 / 批量暂停 / 批量删除 / 批量修改屏蔽人群 / 批量人群设置`。
+  - Chrome DevTools MCP：选中计划 `81020127177` 后点击 `批量人群设置`，当前页原地打开官方 `批量编辑人群` 抽屉，可见 `添加人群`、`批量修改状态`、`批量修改出价` 等官方能力；页面 URL 保持 `#!/manage/display`，未触发 `/blackCrowd/batchModify.json`。
+  - Chrome DevTools MCP：选中计划 `81020127177` 后点击 `批量修改屏蔽人群`，弹出二次确认；读取 `/blackCrowd/findList.json` 返回 3 个过滤人群模板，点击取消后弹窗关闭，URL 不变，Network 未触发 `/blackCrowd/batchModify.json`。
+- 结果复盘：
+  - 修复结果：人群推广两个人群类批量动作均不再跳详情页；`批量人群设置` 复用官方 `批量计划设置` 内的官方菜单与抽屉，`批量修改屏蔽人群` 复用官方过滤人群读取/提交接口并加二次确认。
+  - 交互要点：官方菜单项实际可点击节点优先是 `.mx-output-link` 等交互子节点；触发人群抽屉时需要真实 `PointerEvent`，官方 `批量计划设置` 主按钮保持 hover 后简单 click 更稳定。
+  - 安全边界：真实页面只执行打开弹窗、读取模板和取消验证，没有点击会修改投放配置的最终确认。
+
 # TODO - 2026-05-27 批量+ 计划列表增强
+
+## 反馈修正 - 批量+ 增加批量开启与批量暂停
+- 需求：用户要求在 `批量+` 菜单里增加两个操作：`批量开启`、`批量暂停`。
+- 约束：
+  - 继续复用现有 `批量+` hover 菜单与选中计划读取逻辑；
+  - 状态变更属于真实投放动作，必须有二次确认，不在浏览器验收中点击最终确认；
+  - 按业务线分组调用已验证的批量状态接口，避免跨关键词/人群/线索误改；
+  - 无选中计划时仍只提示选择计划，不发请求。
+- 执行计划：
+  - [x] 复查现有批量状态接口和确认弹窗，确定最小复用点。
+  - [x] 在 `批量+` 菜单新增 `批量开启 / 批量暂停` 两项，并接入受控批量状态变更。
+  - [x] 更新回归测试，覆盖菜单项、action 分发、二次确认和 `campaign/updatePart.json` 批量载荷。
+  - [x] 构建同步产物，运行相关测试与 review 级验证。
+  - [x] 用 Chrome DevTools MCP 在真实页面验证菜单展示与确认弹窗，不点击最终确认。
+- 高层操作摘要：
+  - 已回顾相关教训：状态变更类操作必须二次确认，真实页面验收只验证弹窗和取消，不直接执行最终提交。
+  - 已确认现有 `updateCampaignStatusBatchByBiz` 使用原生 `/campaign/updatePart.json`，payload 为按业务线分组的 `campaignList[{ campaignId, displayStatus }]`。
+  - 已在 `批量+` 菜单新增 `批量开启 / 批量暂停`，执行前用 `openBatchPlusConfirmDialog` 二次确认，取消不发请求。
+  - 已补充识别不到计划 ID 时的早退提示，避免异常选中状态下继续打开确认或刷新列表。
+- 验证记录：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，6/6。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+  - `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+  - `npm run review`：通过；503 项测试中 501 通过、2 个历史跳过（`agent-cluster/index.mjs`），0 失败。
+  - Chrome DevTools MCP：重载本地 unpacked extension 后复验关键词推广 `#!/manage/search`，`批量+` hover 菜单打开，`bizCode=onebpSearch`，菜单包含 `批量开启 / 批量暂停 / 批量删除 / 批量修改屏蔽人群 / 批量人群设置`，按钮宽度随 `批量+` 文案自适应为 69px。
+  - Chrome DevTools MCP：复验人群推广 `#!/manage/display`，菜单包含新增两项；选中 1 个人群计划后分别点击 `批量开启`、`批量暂停`，均弹出二次确认，确认按钮文案分别为 `确认开启`、`确认暂停`；仅点击取消，`/campaign/updatePart.json` 请求增量为 0。
+  - Chrome DevTools MCP：复验线索推广 `#!/manage/hky`，`批量+` hover 菜单打开，`bizCode=onebpAdStrategyLiuZi`，新增两项 title 分别指向线索推广开启/暂停计划；未点击最终确认。
+  - Chrome DevTools MCP：控制台仅观察到页面外部资源 `ERR_TUNNEL_CONNECTION_FAILED`，未见本次逻辑报错。
+- 结果复盘：
+  - 修复结果：`批量+` 新增 `批量开启` 和 `批量暂停`，复用原生批量状态更新接口；执行前强制二次确认，并继续按当前业务线分组处理选中计划。
+  - 安全边界：真实页面只验证菜单、确认弹窗和取消链路，没有执行实际开启/暂停；取消后未产生 `campaign/updatePart.json` 请求。
+
+## 最新反馈修正 - 鼠标移入必须看到菜单
+- 需求：用户反馈 `批量+` 鼠标移动上去没有看到弹出菜单；需要按 `批量计划设置` 的 hover 触发体验修正。
+- 约束：
+  - `批量+` 是补充能力入口，即使原生 `批量计划设置` 因未选中计划而禁用，也要能 hover 展开菜单；
+  - 无选中计划时由菜单项动作给出选择计划提示，不能在按钮层拦截菜单；
+  - 鼠标真实落点可能是克隆出的内部 `button/span`，事件定位必须用外层 `data-am-campaign-batch-plus`；
+  - 若页面或调试过程移除了旧菜单 DOM，内部状态不得误判为菜单仍打开。
+- 执行计划：
+  - [x] 定位真实 hover 不弹出的差异，确认外层直接事件与真实内部按钮事件的差异。
+  - [x] 解除 `批量+` 对原生 disabled 交互态的继承，仅保留 `data-am-native-disabled` 调试标记。
+  - [x] 加固菜单状态读取，只认可仍连接在 DOM 上的菜单节点，避免陈旧引用阻断 hover。
+  - [x] 更新回归测试并构建同步产物。
+  - [x] 用 Chrome DevTools MCP 在关键词/人群/线索真实页面复验 hover 菜单、间距和宽度。
+- 高层操作摘要：
+  - 已把按钮层从“跟随原生禁用不弹”改成“始终可 hover 弹菜单”；原生禁用状态只保存在 `data-am-native-disabled`。
+  - 已新增连接态菜单判断，修复旧菜单节点脱离 DOM 后 `showBatchPlusMenu` 直接 return 的风险。
+- 验证记录：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，5/5。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+  - `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+  - `npm run review`：通过；502 项测试中 500 通过、2 个历史跳过（`agent-cluster/index.mjs`），0 失败。
+  - Chrome DevTools MCP：重载本地 unpacked extension 后复验关键词推广 `#!/manage/search`，真实内部 `button` 触发 `mouseover`，`nativeDisabled=1`、`ariaDisabled=false`、`buttonDisabled=false`，菜单打开且包含 `批量删除 / 批量修改屏蔽人群 / 批量人群设置`；`批量+` 宽度 69px，原生按钮宽度 112px，与原生按钮间距 12px。
+  - Chrome DevTools MCP：复验人群推广 `#!/manage/display`，内部 `button` hover 可打开菜单；`wrapClass=am-campaign-batch-plus-wrap fl`、`float=left`、与原生按钮间距 12px，未选中计划时仍可展开。
+  - Chrome DevTools MCP：复验线索推广 `#!/manage/hky`，内部 `button` hover 可打开菜单；`bizCode=onebpAdStrategyLiuZi`、`ariaDisabled=false`、`buttonDisabled=false`、菜单三项完整，`批量+` 自适应宽度 69px。
+  - Chrome DevTools MCP：菜单移出/移入验证通过，移到菜单内部不关闭，离开菜单后延迟关闭；页面控制台仅观察到外部资源 `ERR_TUNNEL_CONNECTION_FAILED`，未见本次逻辑报错。
+- 结果复盘：
+  - 根因：只复刻了按钮外观和部分原生状态，但扩展菜单的目标是补充原生禁用态下不可批量的能力；继续继承 disabled 交互会让 hover 入口不可达。另外陈旧菜单引用会让 `showBatchPlusMenu` 误判菜单已打开。
+  - 修复结果：`批量+` 不再继承原生 disabled 交互，hover/click 均能打开菜单；菜单状态只信任仍连接在 DOM 上的节点，避免旧状态阻断后续 hover。
+
+## 反馈修正 - 批量+ 必须与批量计划设置同构
+- 需求：用户明确要求 `批量+` 的操作逻辑与 `批量计划设置` 一模一样，包括样式和弹出逻辑。
+- 约束：
+  - 不再使用自定义下拉按钮视觉和独立菜单样式来近似模拟；
+  - 先在真实页面抓取原生 `批量计划设置` 的 DOM、disabled 状态、点击弹层和菜单结构；
+  - `批量+` 保留本轮新增能力，但按钮、启用/禁用、弹出层定位与菜单交互要尽量复用原生结构；
+  - 浏览器验收仍不能点击真实删除确认或提交入口。
+- 执行计划：
+  - [x] 抓取关键词/人群/线索真实页原生批量按钮与弹层结构，确认可复刻的最小 DOM。
+  - [x] 将 `批量+` 改为克隆/同构原生 `批量计划设置` 控件，镜像禁用状态并使用同类 popmenu 弹层。
+  - [x] 更新回归测试，覆盖原生同构、disabled 同步和菜单项动作。
+  - [x] 构建同步产物，运行相关测试与 review 级验证。
+  - [x] Chrome DevTools MCP 真实验收三类页面的样式、弹层和安全动作。
+- 高层操作摘要：
+  - 真实页复查确认 `批量计划设置` 外层为 `.wO_WXbzf.mxgc-popmenu`，内部 Magix button 才是真实 enabled/disabled 状态源；因此 `批量+` 改为克隆该原生 DOM，移除 `mx-*` 和埋点事件属性，只替换文案。
+  - 已删除上一版自定义 plus 图标按钮视觉；按钮样式完全依赖原生克隆 class，外层只保留 8px 间距和 `data-am-campaign-batch-plus` 标识。
+  - 弹层改为同类 popmenu 菜单行为：跟随按钮宽度、点击按钮开关、点击外部关闭、禁用态不弹出；菜单项仍保留 `批量删除 / 批量修改屏蔽人群 / 批量人群设置`。
+  - 真实页复验发现人群页原生节点会把可见的 `优化效果` 兄弟节点一起克隆进 `批量+`，已改为仅保留原生按钮链路；也补齐 computed style 尺寸同步，避免克隆按钮高度偏差。
+- 验证记录：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，5/5；覆盖原生克隆、属性剥离、disabledTip、尺寸同步、非按钮兄弟节点剪除和菜单 class。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+  - `npm run review`：通过；502 项测试中 500 通过、2 个历史跳过（`agent-cluster/index.mjs`），0 失败；`git diff --check` 通过。
+  - Chrome DevTools MCP：重载 unpacked extension 后复验 `#!/manage/display`，`批量+` 位于原生 `批量计划设置` 右侧，`plusText=批量+`、`bizCode=onebpDisplay`、宽高 `112x32` 与原生一致，`mx-view/mx-change/data-spm-click` 已剥离，未再克隆可见 `优化效果` 节点。
+  - Chrome DevTools MCP：复验 `#!/manage/hky`，`plusText=批量+`、`bizCode=onebpAdStrategyLiuZi`、宽高 `112x32` 与原生一致；当前原生 `mx-view disabled=true`，`批量+ aria-disabled=true`，点击后不弹出菜单。
+  - Chrome DevTools MCP：复验 `#!/manage/search`，`plusText=批量+`、`bizCode=onebpSearch`、宽高 `112x32` 与原生一致；当前原生禁用态同步到 `批量+`，直接点击不会弹菜单或触发真实动作。
+- 结果复盘：
+  - 修正结果：`批量+` 不再是自定义按钮，而是克隆原生 `批量计划设置` 控件，仅替换文案并剥离原生 Magix/埋点属性；禁用态、提示、按钮 class、尺寸和弹层开关逻辑跟随原生。
+  - 安全边界：当前真实账号页面的原生批量按钮处于禁用态时，`批量+` 也保持禁用且不弹菜单；真实页面验收未点击删除确认或提交设置。菜单打开与删除二次确认由自动化回归覆盖。
 
 ## 需求规格
 - 目标：在关键词推广、人群推广、线索推广计划列表的原生批量操作区最右侧，复刻一个类似 `批量计划设置` 的按钮，按钮文案为 `批量+`。
@@ -8,23 +451,39 @@
 - 成功标准：三类推广列表均可见 `批量+`；菜单项按当前场景展示；无选中项时有明确提示；相关逻辑有回归测试；构建产物同步；浏览器验证记录完整。
 
 ## 执行计划（可核对）
-- [ ] 统计三类推广列表已有批量按钮、行级可批量动作和现有 API 能力，明确首批可落地菜单。
-- [ ] 定位 `批量计划设置` 和现有计划行操作注入实现，确定最小扩展点。
-- [ ] 实现 `批量+` 按钮、菜单、场景化菜单项和选中计划读取逻辑。
-- [ ] 为首批批量能力接入受控执行或安全占位提示，避免未验证接口造成真实误操作。
-- [ ] 补充或更新回归测试，覆盖按钮位置、菜单项、场景过滤和安全防护。
-- [ ] 构建同步产物，运行相关测试、语法检查和必要 review。
-- [ ] 用 Chrome DevTools MCP 在真实页面验证三类推广列表按钮渲染与菜单行为，回填记录。
+- [x] 统计三类推广列表已有批量按钮、行级可批量动作和现有 API 能力，明确首批可落地菜单。
+- [x] 定位 `批量计划设置` 和现有计划行操作注入实现，确定最小扩展点。
+- [x] 实现 `批量+` 按钮、菜单、场景化菜单项和选中计划读取逻辑。
+- [x] 为首批批量能力接入受控执行或安全占位提示，避免未验证接口造成真实误操作。
+- [x] 补充或更新回归测试，覆盖按钮位置、菜单项、场景过滤和安全防护。
+- [x] 构建同步产物，运行相关测试、语法检查和必要 review。
+- [x] 用 Chrome DevTools MCP 在真实页面验证三类推广列表按钮渲染与菜单行为，回填记录。
 
 ## 高层操作摘要
 - 已回顾 `AGENTS.md`、`tasks/lessons.md` 和当前未提交改动；本轮将在既有复制功能改动基础上叠加，不回退已有文件。
 - 当前任务涉及 UI 注入、批量操作和真实页面行为，必须先统计再实现，并把验证纳入完成标准。
+- 真实页面统计：关键词推广原生 `批量计划设置` 覆盖预算、资源位、地域、分时折扣、出价、计划组；人群推广额外覆盖批量编辑人群、精细化人群调控、资源位溢价、加入活动助手；线索推广可见原生批量设置/活动助手入口但未覆盖删除和屏蔽/过滤人群类批量动作。
+- 首批落地菜单收敛为 `批量删除`、`批量修改屏蔽人群`、`批量人群设置`：删除接原生 `campaign/delete.json` 并加二次确认；人群/屏蔽类动作只打开原生行入口或详情页 `crowd` tab，不伪造未验证的批量提交接口。
+- 已在 `CampaignIdQuickEntry` 内复用原生 `批量计划设置` 作为锚点插入 `批量+`，并补充透明 checkbox 的外层可见性兜底，避免真实表格选中项漏读。
+- 真实人群页复验时发现 SPA 切换后旧页面隐藏选中项可能残留，已新增当前路由业务线识别和选中项业务线过滤，避免在 `display/hky/search` 间误取旧场景计划。
 
 ## 验证记录
-- 待执行。
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs`：通过，19/19。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run test`：通过，502 项中 500 通过、2 个历史跳过。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run review`：通过，所有自动 review 检查通过。
+- Chrome DevTools MCP：重载本地 unpacked extension 后，关键词推广页 `#!/manage/search` 可见 `批量+` 位于 `批量计划设置` 右侧；菜单项为 `批量删除 / 批量修改屏蔽人群 / 批量人群设置`；选中计划后删除确认文案为 `1 个关键词推广计划`，点击取消后弹窗关闭，`campaign/delete.json` 请求数为 0。
+- Chrome DevTools MCP：人群推广页 `#!/manage/display` 可见 `批量+`，按钮 `data-biz-code=onebpDisplay`；选中计划后删除确认文案为 `1 个人群推广计划`，取消后未发出 `campaign/delete.json`。
+- Chrome DevTools MCP：线索推广页 `#!/manage/hky` 可见 `批量+`，按钮 `data-biz-code=onebpAdStrategyLiuZi`；选中计划后删除确认文案为 `1 个线索推广计划`，取消后未发出 `campaign/delete.json`。
+- Chrome DevTools MCP 受保护验证：在线索页拦截真实点击和 `window.open` 后点击 `批量修改屏蔽人群`、`批量人群设置`，两个菜单项均能定位到官方 `高级设置` 入口；未实际打开页面、未提交设置。
 
 ## 结果复盘
-- 待补充。
+- 本次先统计再落地：原生 `批量计划设置` 已覆盖预算、地域、时段、出价、计划组等通用设置；人群推广额外覆盖部分人群编辑能力；三类场景共同缺口是批量删除，线索/关键词的屏蔽人群和人群设置也没有稳定的批量提交入口。
+- 修复结果：三类推广列表均在原生批量区右侧显示 `批量+`；删除走原生删除接口但必须二次确认；取消不会触发请求；人群/屏蔽类动作只打开官方入口，不伪造未知批量写接口。
+- 风险与后续：若后续抓到官方屏蔽人群/人群设置的稳定批量提交接口，可把当前“打开官方入口”升级为真正批量写入；当前实现保守但不会误改真实投放配置。
 
 ---
 

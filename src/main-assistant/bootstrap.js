@@ -1752,6 +1752,15 @@
     const KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__';
     const KEYWORD_PLAN_OPEN_BRIDGE_RES_EVENT = '__AM_WXT_KEYWORD_OPEN_BRIDGE_RES__';
     const KEYWORD_PLAN_OPEN_BRIDGE_TIMEOUT_MS = 8000;
+    const PLAN_API_BRIDGE_READY_KEY = '__AM_WXT_PLAN_API_BRIDGE_HOST__';
+    const PLAN_API_BRIDGE_REQ_EVENT = '__AM_WXT_PLAN_API_BRIDGE_REQ__';
+    const PLAN_API_BRIDGE_RES_EVENT = '__AM_WXT_PLAN_API_BRIDGE_RES__';
+    const PLAN_API_BRIDGE_MSG_CHANNEL = '__AM_WXT_PLAN_API_BRIDGE_MSG__';
+    const PLAN_API_BRIDGE_TIMEOUT_MS = 180000;
+    const PLAN_API_BRIDGE_METHODS = [
+        'openWizard',
+        'copyCurrentPlanByScene'
+    ];
 
     const createKeywordPlanOpenBridgeApi = () => ({
         openWizard() {
@@ -1793,6 +1802,89 @@
         }
     });
 
+    const callKeywordPlanApiBridge = (method, args = []) => (
+        new Promise((resolve, reject) => {
+            const methodName = String(method || '').trim();
+            if (!methodName) {
+                reject(new Error('plan_api_bridge_method_empty'));
+                return;
+            }
+            const callId = `plan_api_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            let done = false;
+            const cleanup = () => {
+                window.removeEventListener(PLAN_API_BRIDGE_RES_EVENT, handleResponse, false);
+                document.removeEventListener(PLAN_API_BRIDGE_RES_EVENT, handleResponse, false);
+                window.removeEventListener('message', handleMessage, false);
+            };
+            const finish = (fn, value) => {
+                if (done) return;
+                done = true;
+                clearTimeout(timeoutId);
+                cleanup();
+                fn(value);
+            };
+            const handlePayload = (detail) => {
+                if (!detail || detail.callId !== callId) return;
+                if (detail.ok) {
+                    finish(resolve, detail.result);
+                    return;
+                }
+                finish(reject, new Error(detail.error || `plan_api_bridge_error:${methodName}`));
+            };
+            const handleResponse = (event) => handlePayload(event?.detail || {});
+            const handleMessage = (event) => {
+                if (!event || event.source !== window) return;
+                const data = event.data;
+                if (!data || typeof data !== 'object') return;
+                if (String(data.channel || '') !== PLAN_API_BRIDGE_MSG_CHANNEL) return;
+                if (String(data.direction || '') !== 'res') return;
+                handlePayload(data.payload || {});
+            };
+            const timeoutId = setTimeout(() => {
+                finish(reject, new Error(`plan_api_bridge_timeout:${methodName}`));
+            }, PLAN_API_BRIDGE_TIMEOUT_MS);
+            const requestDetail = {
+                callId,
+                method: methodName,
+                args: Array.isArray(args) ? args : []
+            };
+
+            window.addEventListener(PLAN_API_BRIDGE_RES_EVENT, handleResponse, false);
+            document.addEventListener(PLAN_API_BRIDGE_RES_EVENT, handleResponse, false);
+            window.addEventListener('message', handleMessage, false);
+            try {
+                window.dispatchEvent(new CustomEvent(PLAN_API_BRIDGE_REQ_EVENT, {
+                    detail: requestDetail
+                }));
+                document.dispatchEvent(new CustomEvent(PLAN_API_BRIDGE_REQ_EVENT, {
+                    detail: requestDetail
+                }));
+                window.postMessage({
+                    channel: PLAN_API_BRIDGE_MSG_CHANNEL,
+                    direction: 'req',
+                    payload: requestDetail
+                }, '*');
+            } catch (err) {
+                finish(reject, err);
+            }
+        })
+    );
+
+    const createKeywordPlanApiBridgeApi = () => {
+        const bridgeApi = {
+            buildVersion: (() => {
+                try {
+                    return window.__AM_WXT_PLAN_BUILD__ || '';
+                } catch { }
+                return '';
+            })()
+        };
+        PLAN_API_BRIDGE_METHODS.forEach((method) => {
+            bridgeApi[method] = (...args) => callKeywordPlanApiBridge(method, args);
+        });
+        return bridgeApi;
+    };
+
     const resolveKeywordPlanApiAccessor = () => {
         try {
             if (KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
@@ -1824,11 +1916,32 @@
             }
         } catch { }
         try {
+            if (window[PLAN_API_BRIDGE_READY_KEY] === true || window[PLAN_API_BRIDGE_READY_KEY] === '1') {
+                return createKeywordPlanApiBridgeApi();
+            }
+        } catch { }
+        try {
             if (window[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY] === '1') {
                 return createKeywordPlanOpenBridgeApi();
             }
         } catch { }
         return null;
+    };
+
+    const waitForKeywordPlanApiAccessor = async (options = {}) => {
+        const requiredMethod = String(options.requiredMethod || '').trim();
+        const timeoutMs = Math.max(0, Number(options.timeoutMs || 0) || 0);
+        const intervalMs = Math.max(50, Number(options.intervalMs || 120) || 120);
+        const deadline = Date.now() + timeoutMs;
+        const hasRequiredMethod = (api) => !!api && (!requiredMethod || typeof api[requiredMethod] === 'function');
+        let api = resolveKeywordPlanApiAccessor();
+        if (hasRequiredMethod(api)) return api;
+        while (Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, Math.max(50, deadline - Date.now()))));
+            api = resolveKeywordPlanApiAccessor();
+            if (hasRequiredMethod(api)) return api;
+        }
+        return api;
     };
 
     const State = {

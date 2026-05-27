@@ -22,7 +22,7 @@
                 if (event.defaultPrevented || event.ctrlKey) return;
                 const target = event.target;
                 if (!(target instanceof Element)) return;
-                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-campaign-copy-success-popup, #am-report-capture-panel');
+                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup, #am-report-capture-panel');
                 if (!(pluginRoot instanceof HTMLElement)) return;
                 if (!this.shouldBlockPluginWheel(pluginRoot, target, event.deltaY)) return;
                 event.preventDefault();
@@ -415,6 +415,66 @@
                     font-weight: 600;
                     pointer-events: none;
                 }
+                .am-campaign-batch-plus-wrap {
+                    display: inline-block;
+                    float: none;
+                    margin-left: 0;
+                    vertical-align: top;
+                }
+                .am-campaign-batch-plus-wrap.fl {
+                    display: block;
+                    float: left;
+                }
+                .am-campaign-batch-plus-native {
+                    display: inline-block;
+                    vertical-align: top;
+                }
+                .am-campaign-batch-plus-native.is-disabled {
+                    cursor: not-allowed;
+                }
+                #am-campaign-batch-plus-menu {
+                    position: absolute;
+                    z-index: 2147483646;
+                    width: max-content;
+                    min-width: 120px;
+                    padding: 4px 0;
+                    border: 1px solid rgba(0, 0, 0, 0.08);
+                    border-radius: 4px;
+                    background: #ffffff;
+                    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+                    box-sizing: border-box;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item {
+                    width: 100%;
+                    min-height: 32px;
+                    display: flex;
+                    align-items: center;
+                    border: 0;
+                    border-radius: 0;
+                    padding: 0 12px;
+                    background: transparent;
+                    color: #333333;
+                    font-size: 12px;
+                    line-height: 18px;
+                    text-align: left;
+                    white-space: nowrap;
+                    cursor: pointer;
+                    box-sizing: border-box;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:hover,
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:focus-visible {
+                    background: #f5f7fa;
+                    color: #111111;
+                    outline: none;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger {
+                    color: #d93026;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:hover,
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:focus-visible {
+                    background: #fff2f0;
+                    color: #d93026;
+                }
                 .am-campaign-search-btn.is-running {
                     color: #1677ff;
                     background: rgba(22, 119, 255, 0.08);
@@ -592,6 +652,363 @@
                     margin-bottom: 0;
                 }
 
+                #am-campaign-copy-overview-popup {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 2147483646;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 24px;
+                    background: rgba(15, 23, 42, 0.36);
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-card {
+                    width: min(1080px, calc(100vw - 48px));
+                    max-height: min(84vh, 680px);
+                    display: flex;
+                    flex-direction: column;
+                    border-radius: 24px;
+                    background: #ffffff;
+                    color: #333333;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    overflow: hidden;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-header {
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: space-between;
+                    gap: 12px;
+                    padding: 16px 24px 8px;
+                    background: #ffffff;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-heading {
+                    min-width: 0;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 8px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-icon {
+                    width: 16px;
+                    height: 16px;
+                    margin-top: 4px;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    background: #ffa33b;
+                    color: #ffffff;
+                    font-size: 12px;
+                    line-height: 1;
+                    font-weight: 700;
+                    font-family: Arial, Helvetica, sans-serif;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-title {
+                    margin: 0;
+                    font-size: 16px;
+                    line-height: 24px;
+                    font-weight: 700;
+                    color: #333333;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-subtitle {
+                    margin: 4px 0 0;
+                    font-size: 12px;
+                    line-height: 18px;
+                    color: #666666;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-close {
+                    width: 28px;
+                    height: 28px;
+                    border: 0;
+                    border-radius: 50%;
+                    background: transparent;
+                    color: #999999;
+                    font-size: 20px;
+                    line-height: 28px;
+                    cursor: pointer;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-close:hover,
+                #am-campaign-copy-overview-popup .am-copy-overview-close:focus-visible {
+                    background: rgba(69, 84, 229, 0.1);
+                    color: #4554e5;
+                    outline: none;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulkbar {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 8px 18px;
+                    margin: 12px 24px 0;
+                    padding: 0 0 10px;
+                    border-bottom: 1px solid #edf0f5;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    min-width: 0;
+                    color: #666666;
+                    font-size: 12px;
+                    line-height: 28px;
+                    white-space: nowrap;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-title {
+                    color: #333333;
+                    font-weight: 600;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-field {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    margin: 0;
+                    color: #666666;
+                    font-weight: 400;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-input,
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-select {
+                    width: 72px;
+                    height: 28px;
+                    border: 0;
+                    border-bottom: 1px solid #d9dee8;
+                    border-radius: 0;
+                    padding: 0 2px;
+                    box-sizing: border-box;
+                    background: transparent;
+                    color: #111827;
+                    font-size: 12px;
+                    line-height: 28px;
+                    outline: none;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-select {
+                    width: 82px;
+                    appearance: none;
+                    padding-right: 16px;
+                    background-image:
+                        linear-gradient(45deg, transparent 50%, #8a93a3 50%),
+                        linear-gradient(135deg, #8a93a3 50%, transparent 50%);
+                    background-position:
+                        calc(100% - 9px) 12px,
+                        calc(100% - 5px) 12px;
+                    background-size: 4px 4px, 4px 4px;
+                    background-repeat: no-repeat;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-input:focus,
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-select:focus {
+                    border-bottom-color: #4554e5;
+                    background-color: rgba(69, 84, 229, 0.04);
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-step {
+                    min-width: 52px;
+                    color: #8a93a3;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn {
+                    height: 28px;
+                    min-width: 72px;
+                    border: 1px solid rgba(69, 84, 229, 0.28);
+                    border-radius: 500px;
+                    padding: 0 12px;
+                    background: #ffffff;
+                    color: #4554e5;
+                    font-size: 12px;
+                    line-height: 26px;
+                    cursor: pointer;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:hover,
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:focus-visible {
+                    background: rgba(69, 84, 229, 0.08);
+                    outline: none;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:disabled {
+                    cursor: not-allowed;
+                    opacity: 0.5;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table-wrap {
+                    flex: 1;
+                    min-height: 180px;
+                    margin: 14px 24px 0;
+                    border: 1px solid #edf0f5;
+                    border-radius: 8px;
+                    overflow-x: hidden;
+                    overflow-y: auto;
+                    background: #ffffff;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table {
+                    width: 100%;
+                    min-width: 0;
+                    border-collapse: collapse;
+                    table-layout: auto;
+                    font-size: 12px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table th,
+                #am-campaign-copy-overview-popup .am-copy-overview-table td {
+                    border-bottom: 1px solid #edf0f5;
+                    padding: 9px 10px;
+                    box-sizing: border-box;
+                    text-align: left;
+                    vertical-align: middle;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 1;
+                    background: #fafbff;
+                    color: #666666;
+                    font-weight: 600;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table th:nth-child(1),
+                #am-campaign-copy-overview-popup .am-copy-overview-table td:nth-child(1) {
+                    width: 42px;
+                    text-align: center;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table th:nth-child(2),
+                #am-campaign-copy-overview-popup .am-copy-overview-table td:nth-child(2) {
+                    width: auto;
+                    min-width: 260px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table th:nth-child(3),
+                #am-campaign-copy-overview-popup .am-copy-overview-table td:nth-child(3) {
+                    width: 1%;
+                    min-width: 146px;
+                    white-space: nowrap;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table th:nth-child(4),
+                #am-campaign-copy-overview-popup .am-copy-overview-table td:nth-child(4) {
+                    width: 1%;
+                    min-width: 92px;
+                    white-space: nowrap;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-table th:nth-child(5),
+                #am-campaign-copy-overview-popup .am-copy-overview-table td:nth-child(5) {
+                    width: 1%;
+                    min-width: 172px;
+                    white-space: nowrap;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-index {
+                    color: #6b7280;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-input,
+                #am-campaign-copy-overview-popup .am-copy-overview-select {
+                    width: 100%;
+                    height: 30px;
+                    border: 0;
+                    border-bottom: 1px solid #d9dee8;
+                    border-radius: 0;
+                    padding: 0 2px;
+                    box-sizing: border-box;
+                    background: transparent;
+                    color: #111827;
+                    font-size: 12px;
+                    line-height: 30px;
+                    outline: none;
+                    transition: border-color 0.16s ease, background-color 0.16s ease;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-select {
+                    appearance: none;
+                    padding-right: 16px;
+                    background-image:
+                        linear-gradient(45deg, transparent 50%, #8a93a3 50%),
+                        linear-gradient(135deg, #8a93a3 50%, transparent 50%);
+                    background-position:
+                        calc(100% - 9px) 13px,
+                        calc(100% - 5px) 13px;
+                    background-size: 4px 4px, 4px 4px;
+                    background-repeat: no-repeat;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-input:focus,
+                #am-campaign-copy-overview-popup .am-copy-overview-select:focus {
+                    border-bottom-color: #4554e5;
+                    background-color: rgba(69, 84, 229, 0.04);
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-name {
+                    min-width: 0;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-static {
+                    display: block;
+                    width: 100%;
+                    min-height: 30px;
+                    box-sizing: border-box;
+                    padding: 6px 2px;
+                    background: transparent;
+                    color: #333333;
+                    font-size: 12px;
+                    line-height: 18px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-budget-cell {
+                    display: grid;
+                    grid-template-columns: 76px 82px;
+                    gap: 8px;
+                    align-items: center;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-status {
+                    min-height: 34px;
+                    padding: 10px 24px 6px;
+                    color: #666666;
+                    background: #ffffff;
+                    font-size: 12px;
+                    line-height: 18px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-status.is-running {
+                    color: #0f4fce;
+                    background: #eff6ff;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-status.is-success {
+                    color: #0f6b3f;
+                    background: #edf9f2;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-status.is-error {
+                    color: #a43131;
+                    background: #fff1f1;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-footer {
+                    display: flex;
+                    justify-content: flex-start;
+                    gap: 8px;
+                    padding: 0 24px 16px;
+                    background: #ffffff;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-submit,
+                #am-campaign-copy-overview-popup .am-copy-overview-cancel {
+                    min-width: 76px;
+                    height: 32px;
+                    border: 0;
+                    border-radius: 500px;
+                    padding: 0 14px;
+                    box-sizing: border-box;
+                    font-size: 12px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-submit {
+                    background: #4554e5;
+                    color: #ffffff;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-cancel {
+                    background: rgba(69, 84, 229, 0.1);
+                    color: #4554e5;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-submit:hover,
+                #am-campaign-copy-overview-popup .am-copy-overview-submit:focus-visible {
+                    background: #3546df;
+                    outline: none;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-cancel:hover,
+                #am-campaign-copy-overview-popup .am-copy-overview-cancel:focus-visible {
+                    background: rgba(69, 84, 229, 0.16);
+                    outline: none;
+                }
+                #am-campaign-copy-overview-popup button:disabled,
+                #am-campaign-copy-overview-popup input:disabled,
+                #am-campaign-copy-overview-popup select:disabled {
+                    opacity: 0.68;
+                    cursor: not-allowed;
+                }
+
                 #am-campaign-copy-success-popup {
                     position: fixed;
                     inset: 0;
@@ -689,6 +1106,115 @@
                 }
                 #am-campaign-copy-success-popup .am-copy-success-cancel:hover,
                 #am-campaign-copy-success-popup .am-copy-success-cancel:focus-visible {
+                    background: rgba(69, 84, 229, 0.16);
+                    outline: none;
+                }
+
+                #am-campaign-batch-confirm-popup {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 2147483646;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 24px;
+                    background: rgba(15, 23, 42, 0.36);
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-card {
+                    width: min(320px, calc(100vw - 28px));
+                    display: flex;
+                    flex-direction: column;
+                    border-radius: 24px;
+                    background: #ffffff;
+                    color: #333333;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    overflow: hidden;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 16px 24px 8px;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-icon {
+                    width: 16px;
+                    height: 16px;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    background: #ffa33b;
+                    color: #ffffff;
+                    font-size: 12px;
+                    line-height: 1;
+                    font-weight: 700;
+                    font-family: Arial, Helvetica, sans-serif;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-icon.is-danger {
+                    background: #b42318;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-title {
+                    margin: 0;
+                    font-size: 16px;
+                    line-height: 24px;
+                    font-weight: 700;
+                    color: #333333;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-body {
+                    margin: 0;
+                    padding: 24px;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    font-family: inherit;
+                    font-size: 12px;
+                    line-height: 18px;
+                    color: #333333;
+                    background: #ffffff;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-footer {
+                    display: flex;
+                    justify-content: flex-start;
+                    gap: 8px;
+                    padding: 0 24px 16px;
+                    background: #ffffff;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-submit,
+                #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
+                    min-width: 64px;
+                    height: 32px;
+                    border: 0;
+                    border-radius: 500px;
+                    padding: 0 12px;
+                    box-sizing: border-box;
+                    font-size: 12px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background-color 0.16s ease, color 0.16s ease;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-submit {
+                    background: #4554e5;
+                    color: #ffffff;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger {
+                    background: #b42318;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
+                    background: rgba(69, 84, 229, 0.1);
+                    color: #4554e5;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-submit:hover,
+                #am-campaign-batch-confirm-popup .am-batch-confirm-submit:focus-visible {
+                    background: #3546df;
+                    outline: none;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:hover,
+                #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:focus-visible {
+                    background: #9f1f14;
+                    outline: none;
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:hover,
+                #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:focus-visible {
                     background: rgba(69, 84, 229, 0.16);
                     outline: none;
                 }

@@ -2755,9 +2755,15 @@
                     const prefix = resolvePlanNamePrefix(request);
                     normalized.planName = `${prefix}_${String(idx + 1).padStart(2, '0')}`;
                 }
+                const rawCampaignBidMode = normalized?.rawOverrides?.campaign?.bidTypeV2
+                    || normalized?.rawOverrides?.campaign?.bidType
+                    || request?.common?.rawOverrides?.campaign?.bidTypeV2
+                    || request?.common?.rawOverrides?.campaign?.bidType
+                    || '';
                 normalized.bidMode = normalizeBidMode(
                     normalized.bidMode
                     || normalized.campaignOverride?.bidTypeV2
+                    || rawCampaignBidMode
                     || commonBidMode,
                     commonBidMode
                 );

@@ -61,11 +61,16 @@ test('组建计划入口在完整 API 不可见时回退到 openWizard 窄桥', 
   );
 });
 
-test('optimizer 默认安装 openWizard 窄桥但不恢复完整 page API', () => {
+test('optimizer 默认安装内部桥但不恢复完整 page API 全局暴露', () => {
   assert.match(
     optimizerBridgeSource,
     /const installKeywordPlanOpenBridgeHost = \(\) => \{[\s\S]*?ensureKeywordPlanApiForBridge\(\)[\s\S]*?resolveKeywordPlanOpenForBridge\(\)[\s\S]*?window\.addEventListener\(KEYWORD_PLAN_OPEN_BRIDGE_REQ_EVENT/,
     'optimizer 未安装默认 openWizard 窄桥 host'
+  );
+  assert.match(
+    optimizerBridgeSource,
+    /installKeywordPlanOpenBridgeHost\(\);\s*if \(isExtensionPageRuntime\(\) \|\| shouldExposePageApiDebug\(\)\) \{[\s\S]*?installPageApiBridgeHost\(\);[\s\S]*?\}\s*if \(shouldExposePageApiDebug\(\)\) \{/,
+    'extension 运行态应默认安装内部完整桥 host，避免新安装时复制 API 不可用'
   );
   assert.doesNotMatch(
     optimizerBridgeSource,
@@ -74,8 +79,8 @@ test('optimizer 默认安装 openWizard 窄桥但不恢复完整 page API', () =
   );
   assert.match(
     optimizerBridgeSource,
-    /installKeywordPlanOpenBridgeHost\(\);\s*if \(shouldExposePageApiDebug\(\)\) \{/,
-    'openWizard 窄桥应默认安装，完整 page API 仍必须受 debug 开关保护'
+    /if \(shouldExposePageApiDebug\(\)\) \{[\s\S]*?injectPageApiBridgeClient\(\);[\s\S]*?\}/,
+    '完整 page API 客户端暴露仍必须受 debug 开关保护'
   );
   assert.doesNotMatch(
     optimizerBridgeSource,

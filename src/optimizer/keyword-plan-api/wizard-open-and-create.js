@@ -362,6 +362,35 @@
                 1
             )));
         };
+        const normalizeCurrentPlanCopyRowList = (options = {}) => {
+            const sourceRows = Array.isArray(options.copyPlanRows)
+                ? options.copyPlanRows
+                : (Array.isArray(options.planRows) ? options.planRows : []);
+            return sourceRows
+                .filter(item => isPlainObject(item))
+                .map((item) => ({
+                    planName: String(item.planName || item.campaignName || item.name || '').trim(),
+                    bidMode: String(item.bidMode || item.bidTypeV2 || item.bidType || '').trim(),
+                    bidPrice: item.bidPrice ?? item.price ?? item.singleCostV2 ?? item.constraintValue ?? '',
+                    budgetField: String(item.budgetField || '').trim(),
+                    budgetValue: item.budgetValue ?? item.budget ?? item.dayBudget ?? item.dayAverageBudget ?? item.totalBudget ?? ''
+                }));
+        };
+        const normalizeCurrentPlanCopyPlanNameList = (options = {}) => {
+            const rowNames = normalizeCurrentPlanCopyRowList(options)
+                .map(item => String(item.planName || '').trim())
+                .filter(Boolean);
+            const optionNames = Array.isArray(options.newPlanNames)
+                ? options.newPlanNames
+                : (Array.isArray(options.planNames) ? options.planNames : []);
+            return uniqueBy(
+                [
+                    ...rowNames,
+                    ...optionNames.map(item => String(item || '').trim()).filter(Boolean)
+                ],
+                item => item
+            );
+        };
         const buildCurrentPlanCopyUsedNameSet = (source = {}, options = {}) => {
             const values = [
                 ...(Array.isArray(options.usedPlanNames) ? options.usedPlanNames : []),
@@ -405,12 +434,16 @@
         const buildCurrentPlanCopiedPlanNames = (sourcePlanName = '', sceneName = '', copyCount = 1, source = {}, options = {}) => {
             const explicitPlanName = String(options.newPlanName || options.planName || '').trim();
             const targetCopyCount = Math.max(1, Math.min(99, toNumber(copyCount, 1)));
+            const explicitPlanNames = normalizeCurrentPlanCopyPlanNameList(options);
+            if (explicitPlanNames.length >= targetCopyCount) return explicitPlanNames.slice(0, targetCopyCount);
             if (explicitPlanName && targetCopyCount <= 1) return [explicitPlanName];
             const usedPlanNameSet = buildCurrentPlanCopyUsedNameSet(source, options);
+            explicitPlanNames.forEach(name => usedPlanNameSet.add(name));
             const basePlanName = explicitPlanName || sourcePlanName;
-            return Array.from({ length: targetCopyCount }).map((_, idx) => (
+            const generatedNames = Array.from({ length: Math.max(0, targetCopyCount - explicitPlanNames.length) }).map((_, idx) => (
                 buildCurrentPlanCopiedPlanName(basePlanName, sceneName, idx + 1, usedPlanNameSet)
             ));
+            return explicitPlanNames.concat(generatedNames);
         };
         const resolveCurrentPlanCopyStatus = (source = {}, options = {}) => {
             const rawMode = String(options.copyMode || options.targetStatus || '').trim().toLowerCase();
@@ -438,6 +471,75 @@
                 }
             });
             return budget;
+        };
+        const normalizeCurrentPlanCopyBudgetField = (field = '') => {
+            const token = String(field || '').trim();
+            const compact = token.replace(/[\s_-]+/g, '').toLowerCase();
+            if (compact === 'daybudget' || compact === 'normal' || compact === '每日预算') return 'dayBudget';
+            if (compact === 'dayaveragebudget' || compact === 'dayaverage' || compact === '日均预算') return 'dayAverageBudget';
+            if (compact === 'totalbudget' || compact === 'total' || compact === '总预算') return 'totalBudget';
+            if (compact === 'futurebudget' || compact === 'dayfreeze' || compact === '冻结预算') return 'futureBudget';
+            if (compact === 'orderamount' || compact === '套餐预算') return 'orderAmount';
+            return '';
+        };
+        const getCurrentPlanCopyBudgetDmcType = (field = '') => {
+            if (field === 'dayBudget') return 'normal';
+            if (field === 'dayAverageBudget') return 'day_average';
+            if (field === 'totalBudget') return 'total';
+            if (field === 'futureBudget') return 'day_freeze';
+            return '';
+        };
+        const normalizeCurrentPlanCopyBidMode = (value = '') => {
+            const raw = String(value || '').trim();
+            const compact = raw.replace(/[\s_-]+/g, '').toLowerCase();
+            if (!compact) return '';
+            if (compact === 'smart' || compact === 'smartbid' || compact === '智能出价') return 'smart_bid';
+            if (compact === 'manual' || compact === 'maxamount' || compact === '手动出价' || compact === '最大化拿量') return 'max_amount';
+            if (compact === 'roi' || compact === 'roicontrol' || compact === '控投产比') return 'roi_control';
+            return raw;
+        };
+        const applyCurrentPlanCopyRowOverrides = (plan = {}, planCampaign = {}, planAdgroup = {}, row = {}) => {
+            if (!isPlainObject(row)) return;
+            const bidMode = normalizeCurrentPlanCopyBidMode(row.bidMode || '');
+            if (bidMode) {
+                if (bidMode === 'max_amount' || bidMode === 'roi_control') {
+                    planCampaign.bidType = bidMode;
+                    delete planCampaign.bidTypeV2;
+                } else {
+                    planCampaign.bidTypeV2 = bidMode;
+                    if (planCampaign.bidType === 'max_amount') delete planCampaign.bidType;
+                }
+                if (planAdgroup.campaignBidType !== undefined || planAdgroup.bidTypeV2 !== undefined || planAdgroup.bidType !== undefined) {
+                    planAdgroup.campaignBidType = bidMode;
+                }
+                plan.bidMode = bidMode;
+            }
+            const bidPrice = toNumber(row.bidPrice, NaN);
+            if (Number.isFinite(bidPrice) && bidPrice > 0) {
+                plan.keywordDefaults = {
+                    ...(isPlainObject(plan.keywordDefaults) ? plan.keywordDefaults : {}),
+                    bidPrice
+                };
+                const bidTypeText = String(planCampaign.bidType || planCampaign.bidTypeV2 || '').toLowerCase();
+                if (planCampaign.constraintType || planCampaign.constraintValue !== undefined || /roi/.test(bidTypeText)) {
+                    planCampaign.constraintValue = bidPrice;
+                    delete planCampaign.singleCostV2;
+                } else {
+                    planCampaign.singleCostV2 = bidPrice;
+                }
+                planAdgroup.bidPrice = bidPrice;
+            }
+            const budgetValue = toNumber(row.budgetValue, NaN);
+            if (Number.isFinite(budgetValue) && budgetValue > 0) {
+                const budgetField = normalizeCurrentPlanCopyBudgetField(row.budgetField || '') || 'dayAverageBudget';
+                COPY_BUDGET_FIELDS.forEach((field) => {
+                    delete planCampaign[field];
+                });
+                planCampaign[budgetField] = budgetValue;
+                const dmcType = getCurrentPlanCopyBudgetDmcType(budgetField);
+                if (dmcType) planCampaign.dmcType = dmcType;
+                plan.budget = { [budgetField]: budgetValue };
+            }
         };
         const resolveCurrentPlanCopyMarketingGoal = (targetScene = '', source = {}, campaign = {}, options = {}) => {
             const goalOptions = uniqueBy([
@@ -478,6 +580,7 @@
             if (!item) throw new Error('复制计划缺少商品参数');
             const sourcePlanName = campaign.campaignName || source?.campaignName || source?.name || '';
             const copyCount = normalizeCurrentPlanCopyCount(options);
+            const copyPlanRows = normalizeCurrentPlanCopyRowList(options);
             const newPlanNames = buildCurrentPlanCopiedPlanNames(sourcePlanName, targetScene, copyCount, source, options);
             const newPlanName = newPlanNames[0] || buildCurrentPlanCopyName(sourcePlanName || targetScene || '计划');
             const targetOnlineStatus = resolveCurrentPlanCopyStatus(source, options);
@@ -502,13 +605,14 @@
                         adgroup: commonAdgroup
                     }
                 },
-                plans: newPlanNames.map((planName) => {
+                plans: newPlanNames.map((planName, index) => {
                     const planCampaign = deepClone(campaign);
                     const planAdgroup = deepClone(adgroup);
+                    const row = copyPlanRows[index] || {};
                     planCampaign.campaignName = planName;
                     planCampaign.onlineStatus = targetOnlineStatus;
                     planAdgroup.onlineStatus = targetOnlineStatus;
-                    return {
+                    const plan = {
                         planName,
                         marketingGoal,
                         item,
@@ -521,6 +625,8 @@
                             adgroup: planAdgroup
                         }
                     };
+                    applyCurrentPlanCopyRowOverrides(plan, planCampaign, planAdgroup, row);
+                    return plan;
                 })
             };
             return {
@@ -534,7 +640,8 @@
                     targetOnlineStatus,
                     sceneName: targetScene,
                     bizCode: request.bizCode,
-                    itemId: String(item.itemId || item.materialId || '').trim()
+                    itemId: String(item.itemId || item.materialId || '').trim(),
+                    copyPlanRows
                 }
             };
         };

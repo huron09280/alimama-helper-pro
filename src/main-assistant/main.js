@@ -104,7 +104,7 @@
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ['class', 'style', 'aria-hidden'],
+            attributeFilter: ['class', 'style', 'aria-hidden', 'aria-disabled', 'aria-checked', 'disabled', 'mx-view'],
             characterData: true
         });
 

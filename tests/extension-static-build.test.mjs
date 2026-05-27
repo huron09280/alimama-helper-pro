@@ -35,8 +35,8 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
 });
 
 test('extension manifest 使用 Chrome 规范版本并保留展示版本', () => {
-  assert.equal(normalizeExtensionManifestVersion('7.03'), '7.3');
-  assert.equal(manifest.version, '7.3', 'manifest.version 不能包含带前导零的分段');
+  assert.equal(normalizeExtensionManifestVersion('7.04'), '7.4');
+  assert.equal(manifest.version, '7.4', 'manifest.version 不能包含带前导零的分段');
   assert.equal(manifest.version_name, outputs.version, 'manifest.version_name 应保留 userscript 展示版本');
 });
 
@@ -50,7 +50,8 @@ test('extension content script 负责注入 page bundle', () => {
   assert.match(contentSource, /const LICENSE_VERIFY_BRIDGE_CHANNEL = 'am-helper-pro:license-verify';/, '缺少授权桥 channel 常量');
   assert.match(contentSource, /if \(data\.channel !== LICENSE_VERIFY_BRIDGE_CHANNEL\) return;/, 'content script 未限制授权桥 channel');
   assert.match(contentSource, /if \(data\.type !== LICENSE_VERIFY_REQUEST_TYPE\) return;/, 'content script 未限制授权桥消息类型');
-  assert.match(contentSource, /chrome\.runtime\.sendMessage\(\{\s*type: LICENSE_VERIFY_MESSAGE_TYPE,\s*payload\s*\},\s*\(response\) => \{/, 'content script 未把授权请求转发给 background');
+  assert.match(contentSource, /try \{[\s\S]*chrome\.runtime\.sendMessage\(\{\s*type: LICENSE_VERIFY_MESSAGE_TYPE,\s*payload\s*\},\s*\(response\) => \{/, 'content script 未保护式转发授权请求给 background');
+  assert.match(contentSource, /catch \(err\) \{[\s\S]*markLicenseBridgeRuntimeUnavailable\(err\);[\s\S]*postLicenseBridgeRuntimeUnavailable\(requestId\);[\s\S]*\}/, 'content script 未捕获扩展上下文失效错误');
   assert.match(contentSource, /type: LICENSE_VERIFY_RESPONSE_TYPE,/, 'content script 未回传授权桥响应');
 });
 
@@ -96,6 +97,15 @@ test('extension page bundle 默认保留组建计划打开窄桥', () => {
   assert.match(pageBundle, /const KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY = '__AM_WXT_KEYWORD_OPEN_BRIDGE_READY__';/, '缺少组建计划打开窄桥常量');
   assert.doesNotMatch(pageBundle, /loadKeywordPlanApiForExtension\(\)/, '组建计划点击路径不应再懒加载 keyword-plan-api 大包');
   assert.doesNotMatch(pageBundle, /am-helper-pro-extension-keyword-plan-bundle/, '不应保留点击时注入 keyword-plan-api 大包的 script 标识');
-  assert.match(pageBundle, /installKeywordPlanOpenBridgeHost\(\);\s*if \(shouldExposePageApiDebug\(\)\) \{/s, '组建计划打开窄桥应默认安装，完整 API 仍受 debug 开关保护');
+  assert.match(pageBundle, /installKeywordPlanOpenBridgeHost\(\);\s*if \(isExtensionPageRuntime\(\) \|\| shouldExposePageApiDebug\(\)\) \{[\s\S]*?installPageApiBridgeHost\(\);[\s\S]*?\}\s*if \(shouldExposePageApiDebug\(\)\) \{/s, 'extension 应默认安装内部完整桥 host，完整 page API 客户端仍受 debug 开关保护');
   assert.match(pageBundle, /if \(window\[KEYWORD_PLAN_OPEN_BRIDGE_READY_KEY\] === '1'\) \{[\s\S]*?return createKeywordPlanOpenBridgeApi\(\);[\s\S]*?\}/s, '主助手未回退到组建计划打开窄桥');
+});
+
+test('extension page bundle 不把 API 控制流失败写入 Chrome 扩展错误页', () => {
+  assert.match(pageBundle, /Logger\.info\(`\[\$\{reqId\}\] 请求失败 \(\$\{elapsed\}ms\):`, \{/, '单次请求失败应保留日志但不使用 console.error');
+  assert.match(pageBundle, /Logger\.info\(`✗ 请求失败 \(第\$\{attempt\}\/\$\{totalAttempts\}次\): \$\{err\.message\}`\);/, '重试失败应保留日志但不使用 console.warn');
+  assert.match(pageBundle, /Logger\.info\(`❌ 请求最终失败: \$\{finalError\.message\}`, \{ url, attempts: totalAttempts \}\);/, '最终失败应保留日志但不使用 console.error');
+  assert.doesNotMatch(pageBundle, /Logger\.error\(`\[\$\{reqId\}\] 请求失败 \(\$\{elapsed\}ms\):`/, '单次请求失败不应进入 Chrome error collection');
+  assert.doesNotMatch(pageBundle, /Logger\.warn\(`✗ 请求失败 \(第\$\{attempt\}\/\$\{totalAttempts\}次\): \$\{err\.message\}`\);/, '重试失败不应进入 Chrome warning collection');
+  assert.doesNotMatch(pageBundle, /Logger\.error\(`❌ 请求最终失败: \$\{finalError\.message\}`/, '最终失败不应进入 Chrome error collection');
 });

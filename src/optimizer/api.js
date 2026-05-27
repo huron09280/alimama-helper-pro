@@ -123,7 +123,7 @@
 
                 if (err.name === 'AbortError') {
                     if (timedOut) {
-                        Logger.error(`[${reqId}] 请求超时 (${elapsed}ms, 配置${timeout}ms)`);
+                        Logger.info(`[${reqId}] 请求超时 (${elapsed}ms, 配置${timeout}ms)`);
                         throw new Error(`请求超时 (>${timeout}ms)`);
                     }
                     const abortErr = new Error('请求已取消');
@@ -131,7 +131,7 @@
                     throw abortErr;
                 }
 
-                Logger.error(`[${reqId}] 请求失败 (${elapsed}ms):`, {
+                Logger.info(`[${reqId}] 请求失败 (${elapsed}ms):`, {
                     error: err.message,
                     name: err.name,
                     stack: err.stack?.split('\n').slice(0, 3).join('\n')
@@ -159,7 +159,7 @@
                 } catch (err) {
                     lastError = err;
                     if (err.name === 'AbortError') throw err;
-                    Logger.warn(`✗ 请求失败 (第${attempt}/${totalAttempts}次): ${err.message}`);
+                    Logger.info(`✗ 请求失败 (第${attempt}/${totalAttempts}次): ${err.message}`);
 
                     if (attempt < totalAttempts) {
                         Logger.info(`⏳ ${retryDelay / 1000}秒后重试...`);
@@ -171,8 +171,7 @@
             const finalError = lastError instanceof Error
                 ? lastError
                 : new Error(`请求失败：未捕获到具体异常（maxRetries=${totalAttempts}）`);
-            Logger.error(`❌ 请求最终失败: ${finalError.message}`, { url, attempts: totalAttempts });
+            Logger.info(`❌ 请求最终失败: ${finalError.message}`, { url, attempts: totalAttempts });
             throw finalError;
         }
     };
-

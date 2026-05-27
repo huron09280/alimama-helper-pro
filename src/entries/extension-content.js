@@ -40,37 +40,66 @@
         window.postMessage(payload, targetOrigin);
     };
 
+    let licenseBridgeRuntimeUnavailableMessage = '';
+
+    const markLicenseBridgeRuntimeUnavailable = (err) => {
+        licenseBridgeRuntimeUnavailableMessage = String(err?.message || err || 'runtime_unavailable').trim() || 'runtime_unavailable';
+    };
+
+    const postLicenseBridgeRuntimeUnavailable = (requestId = '') => {
+        postBridgeMessage({
+            channel: LICENSE_VERIFY_BRIDGE_CHANNEL,
+            type: LICENSE_VERIFY_RESPONSE_TYPE,
+            requestId,
+            ok: false,
+            status: 0,
+            message: licenseBridgeRuntimeUnavailableMessage || 'runtime_unavailable'
+        });
+    };
+
     const forwardLicenseVerifyRequest = (requestId = '', payload = null) => {
-        chrome.runtime.sendMessage({
-            type: LICENSE_VERIFY_MESSAGE_TYPE,
-            payload
-        }, (response) => {
-            const runtimeError = chrome.runtime.lastError;
-            if (runtimeError) {
+        if (licenseBridgeRuntimeUnavailableMessage) {
+            postLicenseBridgeRuntimeUnavailable(requestId);
+            return;
+        }
+
+        try {
+            chrome.runtime.sendMessage({
+                type: LICENSE_VERIFY_MESSAGE_TYPE,
+                payload
+            }, (response) => {
+                let runtimeError = null;
+                try {
+                    runtimeError = chrome.runtime.lastError;
+                } catch (err) {
+                    markLicenseBridgeRuntimeUnavailable(err);
+                    postLicenseBridgeRuntimeUnavailable(requestId);
+                    return;
+                }
+
+                if (runtimeError) {
+                    markLicenseBridgeRuntimeUnavailable(runtimeError);
+                    postLicenseBridgeRuntimeUnavailable(requestId);
+                    return;
+                }
+
                 postBridgeMessage({
                     channel: LICENSE_VERIFY_BRIDGE_CHANNEL,
                     type: LICENSE_VERIFY_RESPONSE_TYPE,
                     requestId,
-                    ok: false,
-                    status: 0,
-                    message: String(runtimeError.message || 'runtime_unavailable')
+                    ...(response && typeof response === 'object'
+                        ? response
+                        : {
+                            ok: false,
+                            status: 0,
+                            message: 'empty_background_response'
+                        })
                 });
-                return;
-            }
-
-            postBridgeMessage({
-                channel: LICENSE_VERIFY_BRIDGE_CHANNEL,
-                type: LICENSE_VERIFY_RESPONSE_TYPE,
-                requestId,
-                ...(response && typeof response === 'object'
-                    ? response
-                    : {
-                        ok: false,
-                        status: 0,
-                        message: 'empty_background_response'
-                    })
             });
-        });
+        } catch (err) {
+            markLicenseBridgeRuntimeUnavailable(err);
+            postLicenseBridgeRuntimeUnavailable(requestId);
+        }
     };
 
     window.addEventListener('message', (event) => {
