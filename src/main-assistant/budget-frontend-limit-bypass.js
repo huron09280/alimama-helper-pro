@@ -64,7 +64,7 @@
 
                 const patchedViews = new Set();
                 const snapshots = new WeakMap();
-                const smartAssistantPatchedTargets = new WeakMap();
+                const smartAssistantPatchedTargets = new Map();
                 let magixCache = null;
                 let magixPending = null;
                 let scanTimer = null;

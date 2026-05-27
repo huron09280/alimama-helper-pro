@@ -217,6 +217,8 @@
             'orderChargeType',
             'smartCreative',
             'creativeSetMode',
+            'openAutoCreative',
+            'openStaticCreative',
             'needTargetCrowd',
             'crowdList',
             'adzoneList',
@@ -235,6 +237,11 @@
             'enableRuleAuto',
             'ruleCommand',
             'campaignColdStartVO',
+            'aiMaxSwitch',
+            'aiMaxInfo',
+            'campaignShieldWords',
+            'shieldWords',
+            'shieldCenterWords',
             'aiXiaowanCrowdListSwitch',
             'supportCouponId',
             'sourceChannel',
@@ -278,9 +285,29 @@
             const value = source?.[key];
             return isPlainObject(value) ? value : {};
         };
+        const pickCopyCampaignCrowdList = (source = {}) => {
+            const candidates = [
+                source?.campaign?.crowdList,
+                source?.crowdList,
+                source?.aiMaxCrowdList,
+                source?.keywordAiMaxCrowdList
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                if (Array.isArray(candidates[i]) && candidates[i].length) {
+                    return deepClone(candidates[i]);
+                }
+            }
+            return [];
+        };
         const normalizeCopySourceCampaign = (source = {}) => {
             const campaignSource = isPlainObject(source?.campaign) ? source.campaign : source;
             const campaign = purgeCreateTransientFields(sanitizeCampaign(copyPickWhitelistedFields(campaignSource, COPY_CAMPAIGN_FIELD_WHITELIST)));
+            if (!Array.isArray(campaign.crowdList) || !campaign.crowdList.length) {
+                const sourceCrowdList = pickCopyCampaignCrowdList(source);
+                if (sourceCrowdList.length) {
+                    campaign.crowdList = purgeCreateTransientFields(sourceCrowdList);
+                }
+            }
             COPY_DROP_STATUS_FIELDS.forEach(key => delete campaign[key]);
             return campaign;
         };
@@ -506,12 +533,79 @@
                     copyCount,
                     targetOnlineStatus,
                     sceneName: targetScene,
+                    bizCode: request.bizCode,
                     itemId: String(item.itemId || item.materialId || '').trim()
                 }
             };
         };
+        const extractCampaignListFromFindPageResponse = (payload = {}) => {
+            const data = isPlainObject(payload?.data) ? payload.data : {};
+            const candidates = [
+                data.list,
+                data.result,
+                data.records,
+                data.campaignList,
+                payload.list,
+                payload.result,
+                payload.records
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                if (Array.isArray(candidates[i])) return candidates[i];
+            }
+            if (Array.isArray(data?.page?.list)) return data.page.list;
+            return [];
+        };
+        const normalizeCopyLookupPlanName = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+        const queryCopiedCampaignIdsByPlanNames = async (sceneName = '', planNames = [], meta = {}, result = {}, options = {}) => {
+            const names = uniqueBy(
+                (Array.isArray(planNames) ? planNames : [planNames])
+                    .map(normalizeCopyLookupPlanName)
+                    .filter(Boolean),
+                item => item
+            );
+            if (!names.length) return [];
+            const bizCode = normalizeSceneBizCode(
+                result?.runtime?.bizCode
+                || result?.bizCode
+                || meta?.bizCode
+                || resolveSceneBizCodeHint(sceneName)
+                || SCENE_BIZCODE_HINT_FALLBACK[sceneName]
+                || DEFAULTS.bizCode
+            ) || DEFAULTS.bizCode;
+            const out = [];
+            for (let i = 0; i < names.length; i++) {
+                const name = names[i];
+                try {
+                    const response = await requestOne('/campaign/horizontal/findPage.json', bizCode, {
+                        mx_bizCode: bizCode,
+                        bizCode,
+                        offset: 0,
+                        pageSize: 20,
+                        orderField: '',
+                        orderBy: '',
+                        queryRuleAuto: '1',
+                        adgroupRequired: false,
+                        adzoneRequired: false,
+                        searchKey: 'campaignNameLike',
+                        searchValue: name
+                    }, options.requestOptions || {});
+                    const matched = extractCampaignListFromFindPageResponse(response).find((item) => {
+                        return normalizeCopyLookupPlanName(item?.campaignName || item?.name || '') === name;
+                    });
+                    const campaignId = toPositiveIdText(
+                        matched?.campaignId
+                        || matched?.id
+                        || matched?.campaign_id
+                        || ''
+                    );
+                    if (campaignId) out.push(campaignId);
+                } catch { }
+            }
+            return uniqueBy(out, id => id);
+        };
         const pauseCopiedCampaignsAfterCreate = async (sceneName = '', result = {}, meta = {}, options = {}) => {
-            if (toNumber(meta?.targetOnlineStatus, 1) !== 0) {
+            const shouldPause = toNumber(meta?.targetOnlineStatus, 1) === 0 || options.pauseIfStartedAfterCreate === true;
+            if (!shouldPause) {
                 return {
                     skipped: true,
                     reason: 'target_status_not_pause',
@@ -573,13 +667,142 @@
                 error: rows.filter(row => !row.ok).map(row => `${row.campaignId}: ${row.error || '暂停失败'}`).join('；')
             };
         };
+        const isDisplayOfficialCopyScene = (meta = {}) => {
+            const bizCode = normalizeSceneBizCode(meta?.bizCode || '');
+            return bizCode === 'onebpDisplay' || meta?.sceneName === '人群推广';
+        };
+        const formatOfficialCopyDate = (value = '') => {
+            const raw = String(value || '').trim();
+            const directMatch = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+            if (directMatch) {
+                return `${directMatch[1]}-${String(directMatch[2]).padStart(2, '0')}-${String(directMatch[3]).padStart(2, '0')}`;
+            }
+            const compactMatch = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+            if (compactMatch) {
+                return `${compactMatch[1]}-${compactMatch[2]}-${compactMatch[3]}`;
+            }
+            const date = new Date();
+            const pad = (num) => String(num).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        };
+        const buildDisplayOfficialCopyPayload = (meta = {}, planName = '', source = {}, options = {}) => {
+            const campaign = normalizeCopySourceCampaign(source);
+            const sourceCampaignId = toPositiveIdText(
+                meta?.sourceCampaignId
+                || source?.campaignId
+                || source?.campaign?.campaignId
+                || campaign?.campaignId
+                || ''
+            );
+            if (!sourceCampaignId) throw new Error('人群推广官方复制缺少源计划ID');
+            const startTime = formatOfficialCopyDate(
+                options.startTime
+                || options.copyStartTime
+                || campaign?.copyStartTime
+                || ''
+            );
+            const payload = {
+                bizCode: normalizeSceneBizCode(meta?.bizCode || source?.bizCode || campaign?.bizCode || 'onebpDisplay') || 'onebpDisplay',
+                copyCampaignId: Number(sourceCampaignId),
+                campaignName: String(planName || meta?.newPlanName || '').trim(),
+                campaignGroupName: String(options.campaignGroupName ?? ''),
+                campaignGroupId: String(options.campaignGroupId ?? ''),
+                startTime,
+                launchForever: options.launchForever !== false
+            };
+            if (!payload.campaignName) throw new Error('人群推广官方复制缺少新计划名称');
+            return payload;
+        };
+        const copyDisplayCurrentPlanByOfficialApi = async (meta = {}, source = {}, options = {}) => {
+            const bizCode = normalizeSceneBizCode(meta?.bizCode || source?.bizCode || 'onebpDisplay') || 'onebpDisplay';
+            const planNames = uniqueBy(
+                (Array.isArray(meta?.newPlanNames) ? meta.newPlanNames : [meta?.newPlanName])
+                    .map(name => String(name || '').trim())
+                    .filter(Boolean),
+                name => name
+            );
+            if (!planNames.length) throw new Error('人群推广官方复制缺少新计划名称');
+            const payloads = planNames.map(planName => buildDisplayOfficialCopyPayload(meta, planName, source, options));
+            if (options.dryRunOnly) {
+                return {
+                    ok: true,
+                    partial: false,
+                    dryRunOnly: true,
+                    successCount: 0,
+                    failCount: 0,
+                    successes: [],
+                    failures: [],
+                    rawResponses: [],
+                    officialCopyPayloads: payloads,
+                    bizCode
+                };
+            }
+            const rawResponses = [];
+            const successes = [];
+            const failures = [];
+            for (let i = 0; i < payloads.length; i++) {
+                const payload = payloads[i];
+                let checkResponse = null;
+                let checkError = '';
+                try {
+                    checkResponse = await requestOne('/campaign/copy/campaignCheck.json', bizCode, {
+                        bizCode,
+                        campaignId: payload.copyCampaignId
+                    }, options.requestOptions || {});
+                } catch (err) {
+                    checkError = err?.message || String(err);
+                }
+                try {
+                    const response = await requestOne('/solution/copy.json', bizCode, payload, options.requestOptions || {});
+                    rawResponses.push(response);
+                    const createdIds = uniqueBy(collectCreateCampaignIdsFromResponse(response, []), id => id);
+                    if (createdIds.length) {
+                        createdIds.forEach((campaignId) => {
+                            successes.push({
+                                planName: payload.campaignName,
+                                campaignId,
+                                checkResponse
+                            });
+                        });
+                    }
+                } catch (err) {
+                    failures.push({
+                        planName: payload.campaignName,
+                        error: err?.message || String(err),
+                        checkError
+                    });
+                }
+                if (i < payloads.length - 1) {
+                    await sleep(Math.max(300, toNumber(options.copyIntervalMs, SERIAL_PLAN_SUBMIT_INTERVAL_MS)));
+                }
+            }
+            const createdCampaignIds = uniqueBy(
+                successes.map(item => toPositiveIdText(item?.campaignId || '')).filter(Boolean),
+                id => id
+            );
+            return {
+                ok: failures.length === 0,
+                partial: failures.length > 0 && (rawResponses.length > 0 || createdCampaignIds.length > 0),
+                successCount: createdCampaignIds.length,
+                failCount: failures.length,
+                successes,
+                failures,
+                rawResponses,
+                createdCampaignIds,
+                officialCopyPayloads: payloads,
+                bizCode
+            };
+        };
         const copyCurrentPlanByScene = async (sceneName, source = {}, options = {}) => {
             if (!isPlainObject(source)) throw new Error('复制计划缺少源计划数据');
             const { request, meta } = buildCurrentPlanCopyRequestByScene(sceneName, source, options);
-            const result = await createPlansByScene(meta.sceneName, request, {
-                ...options,
-                conflictPolicy: options.conflictPolicy || 'none'
-            });
+            const result = isDisplayOfficialCopyScene(meta)
+                ? await copyDisplayCurrentPlanByOfficialApi(meta, source, options)
+                : await createPlansByScene(meta.sceneName, request, {
+                    ...options,
+                    batchRetry: Math.max(0, toNumber(options.batchRetry, 0)),
+                    conflictPolicy: options.conflictPolicy || 'none'
+                });
             if (result?.dryRunOnly) {
                 return {
                     ...result,
@@ -595,7 +818,53 @@
                     }
                 };
             }
-            const postCreateStatus = await pauseCopiedCampaignsAfterCreate(meta.sceneName, result, meta, options);
+            let createdCampaignIds = extractCreatedCampaignIdsFromCreateResult(result);
+            if (!createdCampaignIds.length) {
+                createdCampaignIds = await queryCopiedCampaignIdsByPlanNames(
+                    meta.sceneName,
+                    meta.newPlanNames,
+                    meta,
+                    result,
+                    options
+                );
+                if (createdCampaignIds.length) {
+                    result.createdCampaignIds = createdCampaignIds;
+                    result.ok = true;
+                    result.partial = false;
+                    result.successCount = Math.max(toNumber(result?.successCount, 0), createdCampaignIds.length);
+                    result.failCount = 0;
+                    result.failures = [];
+                    if (!Array.isArray(result.successes) || !result.successes.length) {
+                        result.successes = createdCampaignIds.map((campaignId, index) => ({
+                            planName: meta.newPlanNames[index] || meta.newPlanName || '',
+                            campaignId
+                        }));
+                    }
+                }
+            }
+            if (!createdCampaignIds.length) {
+                return {
+                    ...result,
+                    postCreateStatus: {
+                        skipped: true,
+                        reason: 'create_not_successful',
+                        campaignIds: []
+                    },
+                    copySource: {
+                        ...meta,
+                        targetStatus: meta.targetOnlineStatus === 1 ? 'start' : 'pause',
+                        createdCampaignIds: []
+                    }
+                };
+            }
+            const resultWithCreatedIds = {
+                ...result,
+                createdCampaignIds
+            };
+            const postCreateStatus = await pauseCopiedCampaignsAfterCreate(meta.sceneName, resultWithCreatedIds, meta, options);
+            const resolvedTargetStatus = postCreateStatus && postCreateStatus.skipped === false && postCreateStatus.ok !== false
+                ? 'pause'
+                : (meta.targetOnlineStatus === 1 ? 'start' : 'pause');
             if (postCreateStatus && postCreateStatus.ok === false) {
                 const failure = {
                     planName: meta.newPlanName,
@@ -603,7 +872,7 @@
                     error: `新计划创建成功但暂停失败：${postCreateStatus.error || postCreateStatus.reason || '未知错误'}`
                 };
                 return {
-                    ...result,
+                    ...resultWithCreatedIds,
                     ok: false,
                     partial: true,
                     failCount: toNumber(result?.failCount, 0) + 1,
@@ -611,18 +880,20 @@
                     postCreateStatus,
                     copySource: {
                         ...meta,
-                        targetStatus: meta.targetOnlineStatus === 1 ? 'start' : 'pause',
-                        createdCampaignIds: postCreateStatus.campaignIds || []
+                        targetStatus: resolvedTargetStatus,
+                        createdCampaignIds: postCreateStatus.campaignIds || createdCampaignIds
                     }
                 };
             }
             return {
-                ...result,
+                ...resultWithCreatedIds,
                 postCreateStatus,
                 copySource: {
                     ...meta,
-                    targetStatus: meta.targetOnlineStatus === 1 ? 'start' : 'pause',
-                    createdCampaignIds: Array.isArray(postCreateStatus?.campaignIds) ? postCreateStatus.campaignIds : []
+                    targetStatus: resolvedTargetStatus,
+                    createdCampaignIds: Array.isArray(postCreateStatus?.campaignIds) && postCreateStatus.campaignIds.length
+                        ? postCreateStatus.campaignIds
+                        : createdCampaignIds
                 }
             };
         };

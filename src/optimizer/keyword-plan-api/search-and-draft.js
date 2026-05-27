@@ -1461,6 +1461,8 @@
             'supportCouponId',
             'creativeSetMode',
             'smartCreative',
+            'openAutoCreative',
+            'openStaticCreative',
             'campaignColdStartVO',
             'needTargetCrowd',
             'aiXiaowanCrowdListSwitch',
@@ -1485,6 +1487,9 @@
             'launchTime',
             'aiMaxSwitch',
             'aiMaxInfo',
+            'campaignShieldWords',
+            'shieldWords',
+            'shieldCenterWords',
             // NOTE: 对齐原生「优质计划防停投」，避免被白名单裁剪
             'enableRuleAuto',
             'ruleCommand'
@@ -1589,6 +1594,13 @@
             if (fromPlanCampaign) return fromPlanCampaign;
             const fromPlanGoalCampaign = normalizeBidMode(plan?.goalForcedCampaignOverride?.bidTypeV2 || '', '');
             if (fromPlanGoalCampaign) return fromPlanGoalCampaign;
+            const fromPlanRawCampaign = normalizeBidMode(
+                plan?.rawOverrides?.campaign?.bidTypeV2
+                || plan?.rawOverrides?.campaign?.bidType
+                || '',
+                ''
+            );
+            if (fromPlanRawCampaign) return fromPlanRawCampaign;
             const fromCampaign = normalizeBidMode(campaign?.bidTypeV2 || '', '');
             if (fromCampaign) return fromCampaign;
             const fromCommon = normalizeBidMode(request?.common?.bidMode || '', '');
@@ -1597,6 +1609,15 @@
             if (fromRequest) return fromRequest;
             const fromCommonCampaign = normalizeBidMode(request?.common?.campaignOverride?.bidTypeV2 || '', '');
             if (fromCommonCampaign) return fromCommonCampaign;
+            const fromCommonRawCampaign = normalizeBidMode(
+                request?.common?.rawOverrides?.campaign?.bidTypeV2
+                || request?.common?.rawOverrides?.campaign?.bidType
+                || request?.rawOverrides?.campaign?.bidTypeV2
+                || request?.rawOverrides?.campaign?.bidType
+                || '',
+                ''
+            );
+            if (fromCommonRawCampaign) return fromCommonRawCampaign;
             const fromSceneForcedCampaign = normalizeBidMode(request?.sceneForcedCampaignOverride?.bidTypeV2 || '', '');
             if (fromSceneForcedCampaign) return fromSceneForcedCampaign;
             const fromGoalForcedCampaign = normalizeBidMode(request?.goalForcedCampaignOverride?.bidTypeV2 || '', '');
@@ -1649,6 +1670,7 @@
                 || request?.common?.marketingGoal
                 || ''
             );
+            const isCopyCurrentPlan = request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true;
             const bidMode = normalizeBidMode(
                 options?.bidMode
                 || request?.common?.bidMode
@@ -1954,6 +1976,10 @@
                     return token === '1' || token === 'true' || token === 'yes' || token === 'on';
                 };
                 if (keywordConvContract) {
+                    const copyConstraintType = String(input.constraintType || '').trim();
+                    const copySubOptimizeTarget = String(input.subOptimizeTarget || '').trim();
+                    const copyOptimizeTarget = String(input.optimizeTarget || '').trim();
+                    const copyHasNativeConvContract = isCopyCurrentPlan && (copyConstraintType || copySubOptimizeTarget);
                     const convConstraintValue = toNumber(
                         out.constraintValue
                         ?? out.singleCostV2
@@ -1962,16 +1988,40 @@
                         ?? templateCampaign?.constraintValue,
                         NaN
                     );
-                    out.constraintType = 'dir_conv';
-                    if (Number.isFinite(convConstraintValue) && convConstraintValue > 0) {
-                        out.constraintValue = convConstraintValue;
-                        out.setSingleCostV2 = true;
+                    if (copyHasNativeConvContract) {
+                        if (copyConstraintType) {
+                            out.constraintType = copyConstraintType;
+                        } else {
+                            delete out.constraintType;
+                        }
+                        if (copySubOptimizeTarget) {
+                            out.subOptimizeTarget = copySubOptimizeTarget;
+                        } else {
+                            delete out.subOptimizeTarget;
+                        }
+                        if (copyOptimizeTarget) {
+                            out.optimizeTarget = copyOptimizeTarget;
+                        } else {
+                            delete out.optimizeTarget;
+                        }
+                        if (Number.isFinite(convConstraintValue) && convConstraintValue > 0) {
+                            out.constraintValue = convConstraintValue;
+                        } else {
+                            delete out.constraintValue;
+                        }
+                        out.setSingleCostV2 = parseKeywordSingleCostEnabled(input.setSingleCostV2 ?? out.setSingleCostV2);
                     } else {
-                        out.setSingleCostV2 = false;
-                        delete out.constraintValue;
+                        out.constraintType = 'dir_conv';
+                        if (Number.isFinite(convConstraintValue) && convConstraintValue > 0) {
+                            out.constraintValue = convConstraintValue;
+                            out.setSingleCostV2 = true;
+                        } else {
+                            out.setSingleCostV2 = false;
+                            delete out.constraintValue;
+                        }
+                        delete out.optimizeTarget;
+                        delete out.subOptimizeTarget;
                     }
-                    delete out.optimizeTarget;
-                    delete out.subOptimizeTarget;
                     delete out.singleCostV2;
                     // 与原生提交流程对齐：conv 合同不走 mcb 字段，避免触发计划MCB模型校验。
                     delete out.mcbBidModel;
@@ -5148,6 +5198,9 @@
             createdList.forEach((node) => appendNode(node));
             const detailList = Array.isArray(res?.data?.errorDetails) ? res.data.errorDetails : [];
             detailList.forEach((detail) => {
+                const detailCode = String(detail?.code || '').trim();
+                const detailMsg = String(detail?.msg || detail?.message || detail?.errorMsg || '').trim();
+                if (detailCode || detailMsg) return;
                 if (isPlainObject(detail?.result)) {
                     appendNode(detail.result);
                 } else if (isPlainObject(detail)) {
@@ -5159,6 +5212,11 @@
 
         const extractCreatedCampaignIdsFromCreateResult = (result = {}) => {
             const out = [];
+            const directList = Array.isArray(result?.createdCampaignIds) ? result.createdCampaignIds : [];
+            directList.forEach((id) => {
+                const normalized = toCreateCampaignIdText(id);
+                if (normalized) out.push(normalized);
+            });
             const successList = Array.isArray(result?.successes) ? result.successes : [];
             successList.forEach((entry) => {
                 const id = pickCreateCampaignIdFromNode(entry);

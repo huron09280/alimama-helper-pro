@@ -22,7 +22,7 @@
                 if (event.defaultPrevented || event.ctrlKey) return;
                 const target = event.target;
                 if (!(target instanceof Element)) return;
-                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-report-capture-panel');
+                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-campaign-copy-success-popup, #am-report-capture-panel');
                 if (!(pluginRoot instanceof HTMLElement)) return;
                 if (!this.shouldBlockPluginWheel(pluginRoot, target, event.deltaY)) return;
                 event.preventDefault();
@@ -590,6 +590,107 @@
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line:last-child {
                     margin-bottom: 0;
+                }
+
+                #am-campaign-copy-success-popup {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 2147483646;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 24px;
+                    background: rgba(15, 23, 42, 0.36);
+                }
+                #am-campaign-copy-success-popup .am-copy-success-card {
+                    width: min(320px, calc(100vw - 28px));
+                    max-height: min(84vh, 680px);
+                    display: flex;
+                    flex-direction: column;
+                    border-radius: 24px;
+                    background: #ffffff;
+                    color: #333333;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    overflow: hidden;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 16px 24px 8px;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-icon {
+                    width: 16px;
+                    height: 16px;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    background: #ffa33b;
+                    color: #ffffff;
+                    font-size: 12px;
+                    line-height: 1;
+                    font-weight: 700;
+                    font-family: Arial, Helvetica, sans-serif;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-title {
+                    margin: 0;
+                    font-size: 16px;
+                    line-height: 24px;
+                    font-weight: 700;
+                    color: #333333;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-body {
+                    margin: 0;
+                    padding: 24px;
+                    overflow: auto;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    font-family: inherit;
+                    font-size: 12px;
+                    line-height: 18px;
+                    color: #333333;
+                    background: #ffffff;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-footer {
+                    display: flex;
+                    justify-content: flex-start;
+                    gap: 8px;
+                    padding: 0 24px 16px;
+                    background: #ffffff;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-confirm,
+                #am-campaign-copy-success-popup .am-copy-success-cancel {
+                    min-width: 64px;
+                    height: 32px;
+                    border: 0;
+                    border-radius: 500px;
+                    padding: 0 12px;
+                    box-sizing: border-box;
+                    font-size: 12px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-confirm {
+                    background: #4554e5;
+                    color: #ffffff;
+                    box-shadow: none;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-cancel {
+                    background: rgba(69, 84, 229, 0.1);
+                    color: #4554e5;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-confirm:hover,
+                #am-campaign-copy-success-popup .am-copy-success-confirm:focus-visible {
+                    background: #3546df;
+                    outline: none;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-cancel:hover,
+                #am-campaign-copy-success-popup .am-copy-success-cancel:focus-visible {
+                    background: rgba(69, 84, 229, 0.16);
+                    outline: none;
                 }
 
                 /* 算法护航弹窗居中 */

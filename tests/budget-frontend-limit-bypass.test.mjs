@@ -44,6 +44,7 @@ test('SmartAssistant 预算校验短路覆盖 setError/getErrors/getState/valida
 
 test('SmartAssistant 预算页面补丁支持恢复机制，避免误污染全局', () => {
     const block = getBudgetBlock();
+    assert.match(block, /smartAssistantPatchedTargets\s*=\s*new Map\(\)/, 'SmartAssistant patch 快照需要可遍历 Map 支持恢复');
     assert.match(block, /restoreSmartAssistantPatches = \(\) => \{[\s\S]*smartAssistantPatchedTargets\.forEach\(\(snapshot, target\)/, '缺少 SmartAssistant patch 快照恢复实现');
     assert.match(block, /collectSmartAssistantReactTargets = \(\) => \{/, '缺少 SmartAssistant React 目标收集实现');
     assert.match(block, /scheduleSmartAssistantPatch = \(\) => \{[\s\S]*if \(window.__AM_BUDGET_FRONTEND_UNLOCK__ && isSmartAssistantBudgetPage\(\)\)/, '缺少 SmartAssistant patch 启停时序调度');

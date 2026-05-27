@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
 
-test('创建响应支持从 planId/id/errorDetails 回填 campaignId', () => {
+test('创建响应支持从 planId/id 回填 campaignId，错误明细不误当成功 ID', () => {
   assert.match(
     source,
     /const CREATE_RESPONSE_CAMPAIGN_ID_KEYS = \['campaignId', 'planId', 'id', 'bpCampaignId', 'targetCampaignId'\];/,
@@ -14,6 +14,11 @@ test('创建响应支持从 planId/id/errorDetails 回填 campaignId', () => {
     source,
     /const createdCampaignId = pickCreateCampaignIdFromNode\(created\);[\s\S]*?const detailCampaignId = pickCreateCampaignIdFromNode\(isPlainObject\(detail\?\.result\) \? detail\.result : detail\);[\s\S]*?const rootCampaignId = entries\.length === 1 \? pickCreateCampaignIdFromNode\(res\?\.data \|\| \{\}\) : '';[\s\S]*?const campaignId = createdCampaignId[\s\S]*?\|\| \(!detailHasError \? \(detailCampaignId \|\| rootCampaignId\) : ''\);/,
     'parseAddListOutcome 未补齐 campaignId 回填链路'
+  );
+  assert.match(
+    source,
+    /const detailCode = String\(detail\?\.code \|\| ''\)\.trim\(\);[\s\S]*?const detailMsg = String\(detail\?\.msg \|\| detail\?\.message \|\| detail\?\.errorMsg \|\| ''\)\.trim\(\);[\s\S]*?if \(detailCode \|\| detailMsg\) return;/,
+    '创建结果 ID 提取不应从带错误码/错误文案的 errorDetails 回填 campaignId'
   );
 });
 

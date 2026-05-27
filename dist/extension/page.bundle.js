@@ -5302,7 +5302,7 @@ if (typeof globalThis !== 'undefined') {
                 if (event.defaultPrevented || event.ctrlKey) return;
                 const target = event.target;
                 if (!(target instanceof Element)) return;
-                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-report-capture-panel');
+                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-campaign-copy-success-popup, #am-report-capture-panel');
                 if (!(pluginRoot instanceof HTMLElement)) return;
                 if (!this.shouldBlockPluginWheel(pluginRoot, target, event.deltaY)) return;
                 event.preventDefault();
@@ -5870,6 +5870,107 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line:last-child {
                     margin-bottom: 0;
+                }
+
+                #am-campaign-copy-success-popup {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 2147483646;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 24px;
+                    background: rgba(15, 23, 42, 0.36);
+                }
+                #am-campaign-copy-success-popup .am-copy-success-card {
+                    width: min(320px, calc(100vw - 28px));
+                    max-height: min(84vh, 680px);
+                    display: flex;
+                    flex-direction: column;
+                    border-radius: 24px;
+                    background: #ffffff;
+                    color: #333333;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    overflow: hidden;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 16px 24px 8px;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-icon {
+                    width: 16px;
+                    height: 16px;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    background: #ffa33b;
+                    color: #ffffff;
+                    font-size: 12px;
+                    line-height: 1;
+                    font-weight: 700;
+                    font-family: Arial, Helvetica, sans-serif;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-title {
+                    margin: 0;
+                    font-size: 16px;
+                    line-height: 24px;
+                    font-weight: 700;
+                    color: #333333;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-body {
+                    margin: 0;
+                    padding: 24px;
+                    overflow: auto;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    font-family: inherit;
+                    font-size: 12px;
+                    line-height: 18px;
+                    color: #333333;
+                    background: #ffffff;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-footer {
+                    display: flex;
+                    justify-content: flex-start;
+                    gap: 8px;
+                    padding: 0 24px 16px;
+                    background: #ffffff;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-confirm,
+                #am-campaign-copy-success-popup .am-copy-success-cancel {
+                    min-width: 64px;
+                    height: 32px;
+                    border: 0;
+                    border-radius: 500px;
+                    padding: 0 12px;
+                    box-sizing: border-box;
+                    font-size: 12px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-confirm {
+                    background: #4554e5;
+                    color: #ffffff;
+                    box-shadow: none;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-cancel {
+                    background: rgba(69, 84, 229, 0.1);
+                    color: #4554e5;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-confirm:hover,
+                #am-campaign-copy-success-popup .am-copy-success-confirm:focus-visible {
+                    background: #3546df;
+                    outline: none;
+                }
+                #am-campaign-copy-success-popup .am-copy-success-cancel:hover,
+                #am-campaign-copy-success-popup .am-copy-success-cancel:focus-visible {
+                    background: rgba(69, 84, 229, 0.16);
+                    outline: none;
                 }
 
                 /* 算法护航弹窗居中 */
@@ -6500,7 +6601,7 @@ if (typeof globalThis !== 'undefined') {
 
                 const patchedViews = new Set();
                 const snapshots = new WeakMap();
-                const smartAssistantPatchedTargets = new WeakMap();
+                const smartAssistantPatchedTargets = new Map();
                 let magixCache = null;
                 let magixPending = null;
                 let scanTimer = null;
@@ -13692,7 +13793,7 @@ if (typeof globalThis !== 'undefined') {
         concurrentLogStatusEl: null,
         concurrentLogBodyEl: null,
         campaignItemIdCache: new Map(),
-        IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup',
+        IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-success-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
         DEFAULT_BIZ_CODE: 'onebpSearch',
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
@@ -13768,11 +13869,17 @@ if (typeof globalThis !== 'undefined') {
                         const copySource = result?.copySource || {};
                         const newPlanNames = this.normalizePlanNameList(copySource.newPlanNames || copySource.newPlanName || []);
                         const newPlanText = this.formatPlanNameListForLog(newPlanNames);
-                        const statusText = copySource.targetOnlineStatus === 1 ? '开启' : '暂停';
+                        const statusText = copySource.targetStatus === 'pause' ? '暂停' : (copySource.targetOnlineStatus === 1 ? '开启' : '暂停');
                         const successCount = Number(result?.successCount || 0);
                         const failCount = Number(result?.failCount || 0);
                         this.rememberCopiedPlanNames(newPlanNames);
                         Logger.log(`✅ ${label}完成：已复制计划 ${newPlanNames.length || copyCount} 个（保留源计划），源计划${id}，新计划${newPlanText}，目标状态=${statusText}，成功=${successCount}，失败=${failCount}`);
+                        this.showCopySuccessDialogAndRefresh(result, {
+                            sourceCampaignId: id,
+                            label,
+                            copyCount,
+                            statusText
+                        });
                     }).catch((err) => {
                         Logger.log(`⚠️ ${label}失败：源计划${id}，原因：${err?.message || '未知错误'} `, true);
                     }).finally(() => {
@@ -13939,6 +14046,184 @@ if (typeof globalThis !== 'undefined') {
             });
         },
 
+        normalizeCampaignIdList(value) {
+            const rawList = Array.isArray(value) ? value : [value];
+            return rawList
+                .map(item => this.normalizeCampaignId(item))
+                .filter(Boolean);
+        },
+
+        resolveCopiedCampaignIds(result = {}) {
+            const copySource = result?.copySource || {};
+            return this.normalizeCampaignIdList(
+                copySource.createdCampaignIds
+                || result?.postCreateStatus?.campaignIds
+                || result?.createdCampaignIds
+                || []
+            );
+        },
+
+        resolvePlanNameCommonPart(planNames = []) {
+            const names = this.normalizePlanNameList(planNames);
+            if (!names.length) return '';
+            let common = names[0];
+            for (let i = 1; i < names.length && common; i++) {
+                const name = names[i];
+                const maxLength = Math.min(common.length, name.length);
+                let offset = 0;
+                while (offset < maxLength && common[offset] === name[offset]) offset++;
+                common = common.slice(0, offset);
+            }
+            return String(common || '').replace(/[\s_-]+$/g, '').trim();
+        },
+
+        resolveCopySuccessSearchKeyword(result = {}, context = {}) {
+            const copySource = result?.copySource || {};
+            const sourceCampaignName = String(context.sourceCampaignName || copySource.sourceCampaignName || '').trim();
+            const newPlanNames = this.normalizePlanNameList(copySource.newPlanNames || copySource.newPlanName || []);
+            const commonName = this.resolvePlanNameCommonPart([sourceCampaignName, ...newPlanNames]);
+            return commonName || sourceCampaignName || newPlanNames[0] || '';
+        },
+
+        resolveManageHashPathByBizCode(bizCode = '') {
+            const normalizedBizCode = this.normalizeBizCode(bizCode) || this.DEFAULT_BIZ_CODE;
+            if (normalizedBizCode === 'onebpDisplay') return '#!/manage/display';
+            if (normalizedBizCode === 'onebpSite') return '#!/manage/onesite';
+            if (normalizedBizCode === 'onebpAdStrategyLiuZi') return '#!/manage/hky';
+            return '#!/manage/search';
+        },
+
+        parseCurrentHashParams() {
+            const hash = String(window.location.hash || '');
+            const queryIndex = hash.indexOf('?');
+            return new URLSearchParams(queryIndex >= 0 ? hash.slice(queryIndex + 1) : '');
+        },
+
+        buildCopySuccessSearchUrl(result = {}, context = {}) {
+            const searchValue = this.resolveCopySuccessSearchKeyword(result, context);
+            if (!searchValue) return '';
+            const copySource = result?.copySource || {};
+            const currentParams = this.parseCurrentHashParams();
+            const bizCode = this.normalizeBizCode(
+                context.bizCode
+                || copySource.bizCode
+                || currentParams.get('bizCode')
+                || this.DEFAULT_BIZ_CODE
+            ) || this.DEFAULT_BIZ_CODE;
+            const nextParams = new URLSearchParams();
+            nextParams.set('bizCode', bizCode);
+            nextParams.set('offset', '0');
+            nextParams.set('searchKey', 'campaignNameLike');
+            nextParams.set('searchValue', searchValue);
+            nextParams.set('orderField', currentParams.get('orderField') || 'charge');
+            nextParams.set('orderBy', currentParams.get('orderBy') || 'desc');
+            return `${window.location.origin}${window.location.pathname}${this.resolveManageHashPathByBizCode(bizCode)}?${nextParams.toString()}`;
+        },
+
+        navigateToCopySuccessSearch(result = {}, context = {}) {
+            const targetUrl = this.buildCopySuccessSearchUrl(result, context);
+            if (!targetUrl) {
+                window.location.reload();
+                return;
+            }
+            const currentUrl = `${window.location.origin}${window.location.pathname}${window.location.hash}`;
+            if (targetUrl === window.location.href || targetUrl === currentUrl) {
+                window.location.reload();
+                return;
+            }
+            window.location.assign(targetUrl);
+        },
+
+        buildCopySuccessDialogMessage(result = {}, context = {}) {
+            const copySource = result?.copySource || {};
+            const sourceCampaignId = this.normalizeCampaignId(context.sourceCampaignId || copySource.sourceCampaignId || '');
+            const sourceCampaignName = String(copySource.sourceCampaignName || '').trim();
+            const newPlanNames = this.normalizePlanNameList(copySource.newPlanNames || copySource.newPlanName || []);
+            const createdCampaignIds = this.resolveCopiedCampaignIds(result);
+            const reportedSuccessCount = Math.max(createdCampaignIds.length, Number(result?.successCount || 0));
+            const successCount = reportedSuccessCount || newPlanNames.length || Number(context.copyCount || 0);
+            const statusText = context.statusText || (copySource.targetOnlineStatus === 1 ? '开启' : '暂停');
+            const sourceText = sourceCampaignName
+                ? `${sourceCampaignName}${sourceCampaignId ? `（计划ID：${sourceCampaignId}）` : ''}`
+                : (sourceCampaignId ? `计划ID：${sourceCampaignId}` : '-');
+            const maxRows = Math.max(newPlanNames.length, createdCampaignIds.length, successCount);
+            const detailRows = [];
+            for (let i = 0; i < maxRows; i++) {
+                const name = newPlanNames[i] || '未返回计划名';
+                const id = createdCampaignIds[i] || '';
+                detailRows.push(`${i + 1}. ${name}${id ? `（计划ID：${id}）` : ''}`);
+            }
+            const detailText = detailRows.length ? detailRows.join('\n') : '-';
+            return [
+                '复制计划已成功',
+                `本次复制成功：${successCount} 个`,
+                `源计划：${sourceText}`,
+                `目标状态：${statusText}`,
+                '新计划明细：',
+                detailText,
+                '',
+                '点击“确定并刷新”后将搜索计划名称公共部分。'
+            ].join('\n');
+        },
+
+        showCopySuccessDialogAndRefresh(result = {}, context = {}) {
+            const message = this.buildCopySuccessDialogMessage(result, context);
+            const oldPopup = document.getElementById('am-campaign-copy-success-popup');
+            if (oldPopup) oldPopup.remove();
+
+            const popup = document.createElement('div');
+            popup.id = 'am-campaign-copy-success-popup';
+            popup.setAttribute('role', 'dialog');
+            popup.setAttribute('aria-modal', 'true');
+            popup.setAttribute('aria-label', '复制计划成功');
+
+            const card = document.createElement('section');
+            card.className = 'am-copy-success-card';
+            const header = document.createElement('div');
+            header.className = 'am-copy-success-header';
+            const icon = document.createElement('span');
+            icon.className = 'am-copy-success-icon';
+            icon.textContent = '!';
+            const title = document.createElement('h3');
+            title.className = 'am-copy-success-title';
+            title.textContent = '复制计划已成功';
+            const body = document.createElement('pre');
+            body.className = 'am-copy-success-body';
+            body.textContent = message.replace(/^复制计划已成功\n?/, '');
+            const footer = document.createElement('div');
+            footer.className = 'am-copy-success-footer';
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'button';
+            confirmBtn.className = 'am-copy-success-confirm';
+            confirmBtn.textContent = '确定并刷新';
+            confirmBtn.addEventListener('click', () => {
+                popup.remove();
+                try {
+                    this.navigateToCopySuccessSearch(result, context);
+                } catch (err) {
+                    Logger.log(`⚠️ 复制成功后跳转搜索结果失败：${err?.message || '未知错误'} `, true);
+                }
+            }, { once: true });
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'am-copy-success-cancel';
+            cancelBtn.textContent = '取消';
+            cancelBtn.addEventListener('click', () => {
+                popup.remove();
+            }, { once: true });
+
+            header.appendChild(icon);
+            header.appendChild(title);
+            footer.appendChild(confirmBtn);
+            footer.appendChild(cancelBtn);
+            card.appendChild(header);
+            card.appendChild(body);
+            card.appendChild(footer);
+            popup.appendChild(card);
+            document.body.appendChild(popup);
+            requestAnimationFrame(() => confirmBtn.focus());
+        },
+
         collectVisibleCampaignPlanNames(root = document) {
             const out = new Set();
             const pushName = (value = '') => {
@@ -13953,6 +14238,72 @@ if (typeof globalThis !== 'undefined') {
             }
             this.copyPlanNameCache.forEach(name => pushName(name));
             return Array.from(out);
+        },
+
+        normalizeCopyPlanSearchSeed(planName = '') {
+            let seed = String(planName || '').replace(/\s+/g, ' ').trim();
+            if (!seed) return '';
+            if (/(?:_\d{8}_\d{6}|_\d{8}|\d{14})$/.test(seed)) return seed;
+            seed = seed.replace(/_\d+$/, '');
+            return seed || String(planName || '').replace(/\s+/g, ' ').trim();
+        },
+
+        extractCampaignListFromPayload(payload = {}) {
+            const data = payload?.data || payload || {};
+            const candidates = [
+                data?.list,
+                data?.result,
+                data?.records,
+                data?.campaignList,
+                payload?.list,
+                payload?.result,
+                payload?.records
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                if (Array.isArray(candidates[i])) return candidates[i];
+            }
+            if (Array.isArray(data?.page?.list)) return data.page.list;
+            return [];
+        },
+
+        async collectRemoteCampaignPlanNames(bizCode, authContext, sourcePlanName = '') {
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/horizontal/findPage.json?${query.toString()}`;
+            const basePayload = {
+                mx_bizCode: targetBizCode,
+                bizCode: targetBizCode,
+                offset: 0,
+                pageSize: 200,
+                orderField: '',
+                orderBy: '',
+                queryRuleAuto: '1',
+                adgroupRequired: false,
+                adzoneRequired: false,
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const searchSeed = this.normalizeCopyPlanSearchSeed(sourcePlanName);
+            if (searchSeed) {
+                basePayload.searchKey = 'campaignNameLike';
+                basePayload.searchValue = searchSeed;
+            }
+            try {
+                const json = await OneApiTransport.postJson(url, basePayload, {
+                    actionName: '查询计划名称失败',
+                    businessErrorMessage: '查询计划名称失败',
+                    allowBusinessError: true
+                });
+                return this.extractCampaignListFromPayload(json)
+                    .map(item => String(item?.campaignName || item?.name || '').replace(/\s+/g, ' ').trim())
+                    .filter(Boolean);
+            } catch (err) {
+                Logger.log(`⚠️ 查询已有计划名失败，继续使用页面可见名称：${err?.message || '未知错误'} `, true);
+                return [];
+            }
         },
 
         getSceneNameByBizCode(bizCode) {
@@ -14266,6 +14617,75 @@ if (typeof globalThis !== 'undefined') {
             return { itemId, response: json };
         },
 
+        extractCopyCrowdListFromPayload(payload = {}, expectedCampaignId = '') {
+            const expectedId = this.normalizeCampaignId(expectedCampaignId);
+            const data = payload?.data || {};
+            const candidates = [
+                data?.list,
+                data?.result,
+                data?.records,
+                data?.crowdList,
+                payload?.list,
+                payload?.result,
+                payload?.records,
+                payload?.crowdList
+            ];
+            if (Array.isArray(data?.page?.list)) candidates.push(data.page.list);
+
+            const rows = [];
+            candidates.forEach((candidate) => {
+                if (Array.isArray(candidate)) {
+                    candidate.forEach(item => rows.push(item));
+                } else if (this.isPlainRecord(candidate)) {
+                    rows.push(candidate);
+                }
+            });
+
+            const crowdList = [];
+            rows.forEach((row) => {
+                if (!this.isPlainRecord(row)) return;
+                const rowCampaignId = this.normalizeCampaignId(row?.campaignId || row?.campaign?.campaignId || '');
+                if (expectedId && rowCampaignId && rowCampaignId !== expectedId) return;
+                if (Array.isArray(row.crowdList)) {
+                    row.crowdList.forEach(item => crowdList.push(item));
+                    return;
+                }
+                if (this.isPlainRecord(row.crowd)) {
+                    crowdList.push(row);
+                }
+            });
+            return crowdList
+                .filter(item => this.isPlainRecord(item))
+                .map(item => this.cloneCopyData(item));
+        },
+
+        async queryCampaignCrowdList(campaignId, bizCode, authContext) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return { crowdList: [] };
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/crowd/findList.json?${query.toString()}`;
+            const payload = {
+                bizCode: targetBizCode,
+                crowdBindQueryList: [{
+                    campaignId: Number(id)
+                }],
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询计划人群失败',
+                businessErrorMessage: '查询计划人群失败'
+            });
+            return {
+                crowdList: this.extractCopyCrowdListFromPayload(json, id),
+                response: json
+            };
+        },
+
         extractCopyCampaignFromPayload(payload = {}, expectedCampaignId = '') {
             const expectedId = this.normalizeCampaignId(expectedCampaignId);
             const data = payload?.data || {};
@@ -14311,6 +14731,24 @@ if (typeof globalThis !== 'undefined') {
                 return this.cloneCopyData(item);
             }
             return {};
+        },
+
+        isKeywordAiMaxCampaignEnabled(campaign = {}) {
+            if (!this.isPlainRecord(campaign)) return false;
+            const aiMaxInfo = this.isPlainRecord(campaign.aiMaxInfo) ? campaign.aiMaxInfo : {};
+            const switchValue = campaign.aiMaxSwitch ?? aiMaxInfo.aiMaxSwitch;
+            if (switchValue === true || switchValue === 1) return true;
+            return /^(1|true|on|开启|启用)$/i.test(String(switchValue ?? '').trim());
+        },
+
+        hasKeywordAiMaxDemandSignal(campaign = {}) {
+            if (!this.isPlainRecord(campaign)) return false;
+            const aiMaxInfo = this.isPlainRecord(campaign.aiMaxInfo) ? campaign.aiMaxInfo : {};
+            return [
+                aiMaxInfo.aiMaxGenReason,
+                aiMaxInfo.aiMaxReason,
+                aiMaxInfo.aiMaxDeliveryPlan
+            ].some(value => String(value || '').trim());
         },
 
         extractCopyMaterial(campaign = {}, adgroup = {}) {
@@ -14379,6 +14817,24 @@ if (typeof globalThis !== 'undefined') {
             }
             if (!this.isPlainRecord(campaign) || !Object.keys(campaign).length) {
                 throw new Error('未能读取源计划详情');
+            }
+            if (targetBizCode === 'onebpSearch') {
+                const aiMaxEnabled = this.isKeywordAiMaxCampaignEnabled(campaign);
+                try {
+                    const crowdDetail = await this.queryCampaignCrowdList(id, targetBizCode, authContext);
+                    const campaignCrowdList = Array.isArray(crowdDetail?.crowdList) ? crowdDetail.crowdList : [];
+                    if (campaignCrowdList.length) {
+                        campaign.crowdList = campaignCrowdList;
+                        Logger.log(`📋 已读取源计划${id}的 AI点睛需求人群 ${campaignCrowdList.length} 个`);
+                    } else if (aiMaxEnabled && this.hasKeywordAiMaxDemandSignal(campaign)) {
+                        throw new Error('源计划 AI点睛已生成方案，但未返回需求人群');
+                    }
+                } catch (err) {
+                    if (aiMaxEnabled) {
+                        throw new Error(`查询AI点睛需求人群失败，已取消复制：${err?.message || '未知错误'}`);
+                    }
+                    Logger.log(`⚠️ 查询计划人群失败，继续复制基础设置：${err?.message || '未知错误'} `, true);
+                }
             }
             const material = this.extractCopyMaterial(campaign, adgroup);
             const item = this.buildCopyItemFromSource(campaign, adgroup, material, itemId);
@@ -15224,7 +15680,15 @@ if (typeof globalThis !== 'undefined') {
                 ? 1
                 : (mode === 'pause' ? 0 : this.resolveCopyTargetOnlineStatus(source));
             const copyCount = this.normalizeCopyBatchCount(options.copyCount || this.readCopyBatchCount(triggerEl));
-            const usedPlanNames = this.collectVisibleCampaignPlanNames(document);
+            const remotePlanNames = await this.collectRemoteCampaignPlanNames(
+                source.bizCode || bizCandidates[0] || '',
+                authContext,
+                source?.campaign?.campaignName || source?.campaignName || ''
+            );
+            const usedPlanNames = Array.from(new Set([
+                ...this.collectVisibleCampaignPlanNames(document),
+                ...remotePlanNames
+            ]));
             source.usedPlanNames = usedPlanNames;
             Logger.log(`📋 ${label}准备：源计划${id}，场景=${sceneName}，商品=${source.itemId || '-'}，复制数量=${copyCount}，跟随源状态=${targetOnlineStatus === 1 ? '开启' : '暂停'}`);
             const result = await api.copyCurrentPlanByScene(sceneName, source, {
@@ -15232,6 +15696,7 @@ if (typeof globalThis !== 'undefined') {
                 copyCount,
                 usedPlanNames,
                 targetOnlineStatus,
+                pauseIfStartedAfterCreate: true,
                 conflictPolicy: 'none'
             });
             const copySource = result?.copySource || {};
@@ -15242,6 +15707,14 @@ if (typeof globalThis !== 'undefined') {
                     ? (result.failures[0]?.error || result.failures[0]?.message || '')
                     : '';
                 throw new Error(firstError || '创建接口返回失败');
+            }
+            const createdCampaignIds = this.resolveCopiedCampaignIds(result);
+            const successCount = Number(result?.successCount || 0);
+            if (!createdCampaignIds.length && successCount <= 0) {
+                const firstError = Array.isArray(result?.failures) && result.failures.length
+                    ? (result.failures[0]?.error || result.failures[0]?.message || '')
+                    : '';
+                throw new Error(firstError || '创建接口未返回成功的新计划');
             }
             return result;
         },
@@ -15545,16 +16018,31 @@ if (typeof globalThis !== 'undefined') {
             if (!(el instanceof Element)) return false;
             if (el.matches('[data-am-campaign-operation-copy-host="1"]')) return true;
             const text = String(el.textContent || '').replace(/\s+/g, '');
-            return text.includes('详情')
-                && text.includes('报表')
-                && text.includes('高级设置')
-                && text.includes('更多')
-                && el.querySelectorAll('button, [role="button"]').length >= 4;
+            const hasDetail = text.includes('详情');
+            const hasMore = text.includes('更多');
+            const hasCoreAction = text.includes('高级设置')
+                || text.includes('报表')
+                || text.includes('推广解读')
+                || text.includes('复制');
+            const hasSceneAction = text.includes('AI点睛')
+                || text.includes('人群设置')
+                || text.includes('置顶')
+                || text.includes('一键起量')
+                || text.includes('相似品跟投')
+                || text.includes('修改趋势')
+                || text.includes('创意起量')
+                || text.includes('加速测图')
+                || text.includes('冷启加速');
+            return hasDetail
+                && hasMore
+                && hasCoreAction
+                && (hasSceneAction || text.includes('报表') || text.includes('推广解读'))
+                && el.querySelectorAll('button, [role="button"], a').length >= 3;
         },
 
         getCampaignOperationGroups() {
             const groups = new Set();
-            document.querySelectorAll('.wO_WXptarh.clearfix, [data-am-campaign-operation-copy-host="1"]').forEach((el) => {
+            document.querySelectorAll('.wO_WXptarh.clearfix, .wO_WXbzarh.clearfix, [data-am-campaign-operation-copy-host="1"]').forEach((el) => {
                 if (this.isCampaignOperationGroup(el)) groups.add(el);
             });
             if (!groups.size) {
@@ -26369,6 +26857,8 @@ if (typeof globalThis !== 'undefined') {
             'supportCouponId',
             'creativeSetMode',
             'smartCreative',
+            'openAutoCreative',
+            'openStaticCreative',
             'campaignColdStartVO',
             'needTargetCrowd',
             'aiXiaowanCrowdListSwitch',
@@ -26393,6 +26883,9 @@ if (typeof globalThis !== 'undefined') {
             'launchTime',
             'aiMaxSwitch',
             'aiMaxInfo',
+            'campaignShieldWords',
+            'shieldWords',
+            'shieldCenterWords',
             // NOTE: 对齐原生「优质计划防停投」，避免被白名单裁剪
             'enableRuleAuto',
             'ruleCommand'
@@ -26497,6 +26990,13 @@ if (typeof globalThis !== 'undefined') {
             if (fromPlanCampaign) return fromPlanCampaign;
             const fromPlanGoalCampaign = normalizeBidMode(plan?.goalForcedCampaignOverride?.bidTypeV2 || '', '');
             if (fromPlanGoalCampaign) return fromPlanGoalCampaign;
+            const fromPlanRawCampaign = normalizeBidMode(
+                plan?.rawOverrides?.campaign?.bidTypeV2
+                || plan?.rawOverrides?.campaign?.bidType
+                || '',
+                ''
+            );
+            if (fromPlanRawCampaign) return fromPlanRawCampaign;
             const fromCampaign = normalizeBidMode(campaign?.bidTypeV2 || '', '');
             if (fromCampaign) return fromCampaign;
             const fromCommon = normalizeBidMode(request?.common?.bidMode || '', '');
@@ -26505,6 +27005,15 @@ if (typeof globalThis !== 'undefined') {
             if (fromRequest) return fromRequest;
             const fromCommonCampaign = normalizeBidMode(request?.common?.campaignOverride?.bidTypeV2 || '', '');
             if (fromCommonCampaign) return fromCommonCampaign;
+            const fromCommonRawCampaign = normalizeBidMode(
+                request?.common?.rawOverrides?.campaign?.bidTypeV2
+                || request?.common?.rawOverrides?.campaign?.bidType
+                || request?.rawOverrides?.campaign?.bidTypeV2
+                || request?.rawOverrides?.campaign?.bidType
+                || '',
+                ''
+            );
+            if (fromCommonRawCampaign) return fromCommonRawCampaign;
             const fromSceneForcedCampaign = normalizeBidMode(request?.sceneForcedCampaignOverride?.bidTypeV2 || '', '');
             if (fromSceneForcedCampaign) return fromSceneForcedCampaign;
             const fromGoalForcedCampaign = normalizeBidMode(request?.goalForcedCampaignOverride?.bidTypeV2 || '', '');
@@ -26557,6 +27066,7 @@ if (typeof globalThis !== 'undefined') {
                 || request?.common?.marketingGoal
                 || ''
             );
+            const isCopyCurrentPlan = request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true;
             const bidMode = normalizeBidMode(
                 options?.bidMode
                 || request?.common?.bidMode
@@ -26862,6 +27372,10 @@ if (typeof globalThis !== 'undefined') {
                     return token === '1' || token === 'true' || token === 'yes' || token === 'on';
                 };
                 if (keywordConvContract) {
+                    const copyConstraintType = String(input.constraintType || '').trim();
+                    const copySubOptimizeTarget = String(input.subOptimizeTarget || '').trim();
+                    const copyOptimizeTarget = String(input.optimizeTarget || '').trim();
+                    const copyHasNativeConvContract = isCopyCurrentPlan && (copyConstraintType || copySubOptimizeTarget);
                     const convConstraintValue = toNumber(
                         out.constraintValue
                         ?? out.singleCostV2
@@ -26870,16 +27384,40 @@ if (typeof globalThis !== 'undefined') {
                         ?? templateCampaign?.constraintValue,
                         NaN
                     );
-                    out.constraintType = 'dir_conv';
-                    if (Number.isFinite(convConstraintValue) && convConstraintValue > 0) {
-                        out.constraintValue = convConstraintValue;
-                        out.setSingleCostV2 = true;
+                    if (copyHasNativeConvContract) {
+                        if (copyConstraintType) {
+                            out.constraintType = copyConstraintType;
+                        } else {
+                            delete out.constraintType;
+                        }
+                        if (copySubOptimizeTarget) {
+                            out.subOptimizeTarget = copySubOptimizeTarget;
+                        } else {
+                            delete out.subOptimizeTarget;
+                        }
+                        if (copyOptimizeTarget) {
+                            out.optimizeTarget = copyOptimizeTarget;
+                        } else {
+                            delete out.optimizeTarget;
+                        }
+                        if (Number.isFinite(convConstraintValue) && convConstraintValue > 0) {
+                            out.constraintValue = convConstraintValue;
+                        } else {
+                            delete out.constraintValue;
+                        }
+                        out.setSingleCostV2 = parseKeywordSingleCostEnabled(input.setSingleCostV2 ?? out.setSingleCostV2);
                     } else {
-                        out.setSingleCostV2 = false;
-                        delete out.constraintValue;
+                        out.constraintType = 'dir_conv';
+                        if (Number.isFinite(convConstraintValue) && convConstraintValue > 0) {
+                            out.constraintValue = convConstraintValue;
+                            out.setSingleCostV2 = true;
+                        } else {
+                            out.setSingleCostV2 = false;
+                            delete out.constraintValue;
+                        }
+                        delete out.optimizeTarget;
+                        delete out.subOptimizeTarget;
                     }
-                    delete out.optimizeTarget;
-                    delete out.subOptimizeTarget;
                     delete out.singleCostV2;
                     // 与原生提交流程对齐：conv 合同不走 mcb 字段，避免触发计划MCB模型校验。
                     delete out.mcbBidModel;
@@ -30056,6 +30594,9 @@ if (typeof globalThis !== 'undefined') {
             createdList.forEach((node) => appendNode(node));
             const detailList = Array.isArray(res?.data?.errorDetails) ? res.data.errorDetails : [];
             detailList.forEach((detail) => {
+                const detailCode = String(detail?.code || '').trim();
+                const detailMsg = String(detail?.msg || detail?.message || detail?.errorMsg || '').trim();
+                if (detailCode || detailMsg) return;
                 if (isPlainObject(detail?.result)) {
                     appendNode(detail.result);
                 } else if (isPlainObject(detail)) {
@@ -30067,6 +30608,11 @@ if (typeof globalThis !== 'undefined') {
 
         const extractCreatedCampaignIdsFromCreateResult = (result = {}) => {
             const out = [];
+            const directList = Array.isArray(result?.createdCampaignIds) ? result.createdCampaignIds : [];
+            directList.forEach((id) => {
+                const normalized = toCreateCampaignIdText(id);
+                if (normalized) out.push(normalized);
+            });
             const successList = Array.isArray(result?.successes) ? result.successes : [];
             successList.forEach((entry) => {
                 const id = pickCreateCampaignIdFromNode(entry);
@@ -63803,6 +64349,8 @@ if (typeof globalThis !== 'undefined') {
             'orderChargeType',
             'smartCreative',
             'creativeSetMode',
+            'openAutoCreative',
+            'openStaticCreative',
             'needTargetCrowd',
             'crowdList',
             'adzoneList',
@@ -63821,6 +64369,11 @@ if (typeof globalThis !== 'undefined') {
             'enableRuleAuto',
             'ruleCommand',
             'campaignColdStartVO',
+            'aiMaxSwitch',
+            'aiMaxInfo',
+            'campaignShieldWords',
+            'shieldWords',
+            'shieldCenterWords',
             'aiXiaowanCrowdListSwitch',
             'supportCouponId',
             'sourceChannel',
@@ -63864,9 +64417,29 @@ if (typeof globalThis !== 'undefined') {
             const value = source?.[key];
             return isPlainObject(value) ? value : {};
         };
+        const pickCopyCampaignCrowdList = (source = {}) => {
+            const candidates = [
+                source?.campaign?.crowdList,
+                source?.crowdList,
+                source?.aiMaxCrowdList,
+                source?.keywordAiMaxCrowdList
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                if (Array.isArray(candidates[i]) && candidates[i].length) {
+                    return deepClone(candidates[i]);
+                }
+            }
+            return [];
+        };
         const normalizeCopySourceCampaign = (source = {}) => {
             const campaignSource = isPlainObject(source?.campaign) ? source.campaign : source;
             const campaign = purgeCreateTransientFields(sanitizeCampaign(copyPickWhitelistedFields(campaignSource, COPY_CAMPAIGN_FIELD_WHITELIST)));
+            if (!Array.isArray(campaign.crowdList) || !campaign.crowdList.length) {
+                const sourceCrowdList = pickCopyCampaignCrowdList(source);
+                if (sourceCrowdList.length) {
+                    campaign.crowdList = purgeCreateTransientFields(sourceCrowdList);
+                }
+            }
             COPY_DROP_STATUS_FIELDS.forEach(key => delete campaign[key]);
             return campaign;
         };
@@ -64092,12 +64665,79 @@ if (typeof globalThis !== 'undefined') {
                     copyCount,
                     targetOnlineStatus,
                     sceneName: targetScene,
+                    bizCode: request.bizCode,
                     itemId: String(item.itemId || item.materialId || '').trim()
                 }
             };
         };
+        const extractCampaignListFromFindPageResponse = (payload = {}) => {
+            const data = isPlainObject(payload?.data) ? payload.data : {};
+            const candidates = [
+                data.list,
+                data.result,
+                data.records,
+                data.campaignList,
+                payload.list,
+                payload.result,
+                payload.records
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                if (Array.isArray(candidates[i])) return candidates[i];
+            }
+            if (Array.isArray(data?.page?.list)) return data.page.list;
+            return [];
+        };
+        const normalizeCopyLookupPlanName = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+        const queryCopiedCampaignIdsByPlanNames = async (sceneName = '', planNames = [], meta = {}, result = {}, options = {}) => {
+            const names = uniqueBy(
+                (Array.isArray(planNames) ? planNames : [planNames])
+                    .map(normalizeCopyLookupPlanName)
+                    .filter(Boolean),
+                item => item
+            );
+            if (!names.length) return [];
+            const bizCode = normalizeSceneBizCode(
+                result?.runtime?.bizCode
+                || result?.bizCode
+                || meta?.bizCode
+                || resolveSceneBizCodeHint(sceneName)
+                || SCENE_BIZCODE_HINT_FALLBACK[sceneName]
+                || DEFAULTS.bizCode
+            ) || DEFAULTS.bizCode;
+            const out = [];
+            for (let i = 0; i < names.length; i++) {
+                const name = names[i];
+                try {
+                    const response = await requestOne('/campaign/horizontal/findPage.json', bizCode, {
+                        mx_bizCode: bizCode,
+                        bizCode,
+                        offset: 0,
+                        pageSize: 20,
+                        orderField: '',
+                        orderBy: '',
+                        queryRuleAuto: '1',
+                        adgroupRequired: false,
+                        adzoneRequired: false,
+                        searchKey: 'campaignNameLike',
+                        searchValue: name
+                    }, options.requestOptions || {});
+                    const matched = extractCampaignListFromFindPageResponse(response).find((item) => {
+                        return normalizeCopyLookupPlanName(item?.campaignName || item?.name || '') === name;
+                    });
+                    const campaignId = toPositiveIdText(
+                        matched?.campaignId
+                        || matched?.id
+                        || matched?.campaign_id
+                        || ''
+                    );
+                    if (campaignId) out.push(campaignId);
+                } catch { }
+            }
+            return uniqueBy(out, id => id);
+        };
         const pauseCopiedCampaignsAfterCreate = async (sceneName = '', result = {}, meta = {}, options = {}) => {
-            if (toNumber(meta?.targetOnlineStatus, 1) !== 0) {
+            const shouldPause = toNumber(meta?.targetOnlineStatus, 1) === 0 || options.pauseIfStartedAfterCreate === true;
+            if (!shouldPause) {
                 return {
                     skipped: true,
                     reason: 'target_status_not_pause',
@@ -64159,13 +64799,142 @@ if (typeof globalThis !== 'undefined') {
                 error: rows.filter(row => !row.ok).map(row => `${row.campaignId}: ${row.error || '暂停失败'}`).join('；')
             };
         };
+        const isDisplayOfficialCopyScene = (meta = {}) => {
+            const bizCode = normalizeSceneBizCode(meta?.bizCode || '');
+            return bizCode === 'onebpDisplay' || meta?.sceneName === '人群推广';
+        };
+        const formatOfficialCopyDate = (value = '') => {
+            const raw = String(value || '').trim();
+            const directMatch = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+            if (directMatch) {
+                return `${directMatch[1]}-${String(directMatch[2]).padStart(2, '0')}-${String(directMatch[3]).padStart(2, '0')}`;
+            }
+            const compactMatch = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+            if (compactMatch) {
+                return `${compactMatch[1]}-${compactMatch[2]}-${compactMatch[3]}`;
+            }
+            const date = new Date();
+            const pad = (num) => String(num).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        };
+        const buildDisplayOfficialCopyPayload = (meta = {}, planName = '', source = {}, options = {}) => {
+            const campaign = normalizeCopySourceCampaign(source);
+            const sourceCampaignId = toPositiveIdText(
+                meta?.sourceCampaignId
+                || source?.campaignId
+                || source?.campaign?.campaignId
+                || campaign?.campaignId
+                || ''
+            );
+            if (!sourceCampaignId) throw new Error('人群推广官方复制缺少源计划ID');
+            const startTime = formatOfficialCopyDate(
+                options.startTime
+                || options.copyStartTime
+                || campaign?.copyStartTime
+                || ''
+            );
+            const payload = {
+                bizCode: normalizeSceneBizCode(meta?.bizCode || source?.bizCode || campaign?.bizCode || 'onebpDisplay') || 'onebpDisplay',
+                copyCampaignId: Number(sourceCampaignId),
+                campaignName: String(planName || meta?.newPlanName || '').trim(),
+                campaignGroupName: String(options.campaignGroupName ?? ''),
+                campaignGroupId: String(options.campaignGroupId ?? ''),
+                startTime,
+                launchForever: options.launchForever !== false
+            };
+            if (!payload.campaignName) throw new Error('人群推广官方复制缺少新计划名称');
+            return payload;
+        };
+        const copyDisplayCurrentPlanByOfficialApi = async (meta = {}, source = {}, options = {}) => {
+            const bizCode = normalizeSceneBizCode(meta?.bizCode || source?.bizCode || 'onebpDisplay') || 'onebpDisplay';
+            const planNames = uniqueBy(
+                (Array.isArray(meta?.newPlanNames) ? meta.newPlanNames : [meta?.newPlanName])
+                    .map(name => String(name || '').trim())
+                    .filter(Boolean),
+                name => name
+            );
+            if (!planNames.length) throw new Error('人群推广官方复制缺少新计划名称');
+            const payloads = planNames.map(planName => buildDisplayOfficialCopyPayload(meta, planName, source, options));
+            if (options.dryRunOnly) {
+                return {
+                    ok: true,
+                    partial: false,
+                    dryRunOnly: true,
+                    successCount: 0,
+                    failCount: 0,
+                    successes: [],
+                    failures: [],
+                    rawResponses: [],
+                    officialCopyPayloads: payloads,
+                    bizCode
+                };
+            }
+            const rawResponses = [];
+            const successes = [];
+            const failures = [];
+            for (let i = 0; i < payloads.length; i++) {
+                const payload = payloads[i];
+                let checkResponse = null;
+                let checkError = '';
+                try {
+                    checkResponse = await requestOne('/campaign/copy/campaignCheck.json', bizCode, {
+                        bizCode,
+                        campaignId: payload.copyCampaignId
+                    }, options.requestOptions || {});
+                } catch (err) {
+                    checkError = err?.message || String(err);
+                }
+                try {
+                    const response = await requestOne('/solution/copy.json', bizCode, payload, options.requestOptions || {});
+                    rawResponses.push(response);
+                    const createdIds = uniqueBy(collectCreateCampaignIdsFromResponse(response, []), id => id);
+                    if (createdIds.length) {
+                        createdIds.forEach((campaignId) => {
+                            successes.push({
+                                planName: payload.campaignName,
+                                campaignId,
+                                checkResponse
+                            });
+                        });
+                    }
+                } catch (err) {
+                    failures.push({
+                        planName: payload.campaignName,
+                        error: err?.message || String(err),
+                        checkError
+                    });
+                }
+                if (i < payloads.length - 1) {
+                    await sleep(Math.max(300, toNumber(options.copyIntervalMs, SERIAL_PLAN_SUBMIT_INTERVAL_MS)));
+                }
+            }
+            const createdCampaignIds = uniqueBy(
+                successes.map(item => toPositiveIdText(item?.campaignId || '')).filter(Boolean),
+                id => id
+            );
+            return {
+                ok: failures.length === 0,
+                partial: failures.length > 0 && (rawResponses.length > 0 || createdCampaignIds.length > 0),
+                successCount: createdCampaignIds.length,
+                failCount: failures.length,
+                successes,
+                failures,
+                rawResponses,
+                createdCampaignIds,
+                officialCopyPayloads: payloads,
+                bizCode
+            };
+        };
         const copyCurrentPlanByScene = async (sceneName, source = {}, options = {}) => {
             if (!isPlainObject(source)) throw new Error('复制计划缺少源计划数据');
             const { request, meta } = buildCurrentPlanCopyRequestByScene(sceneName, source, options);
-            const result = await createPlansByScene(meta.sceneName, request, {
-                ...options,
-                conflictPolicy: options.conflictPolicy || 'none'
-            });
+            const result = isDisplayOfficialCopyScene(meta)
+                ? await copyDisplayCurrentPlanByOfficialApi(meta, source, options)
+                : await createPlansByScene(meta.sceneName, request, {
+                    ...options,
+                    batchRetry: Math.max(0, toNumber(options.batchRetry, 0)),
+                    conflictPolicy: options.conflictPolicy || 'none'
+                });
             if (result?.dryRunOnly) {
                 return {
                     ...result,
@@ -64181,7 +64950,53 @@ if (typeof globalThis !== 'undefined') {
                     }
                 };
             }
-            const postCreateStatus = await pauseCopiedCampaignsAfterCreate(meta.sceneName, result, meta, options);
+            let createdCampaignIds = extractCreatedCampaignIdsFromCreateResult(result);
+            if (!createdCampaignIds.length) {
+                createdCampaignIds = await queryCopiedCampaignIdsByPlanNames(
+                    meta.sceneName,
+                    meta.newPlanNames,
+                    meta,
+                    result,
+                    options
+                );
+                if (createdCampaignIds.length) {
+                    result.createdCampaignIds = createdCampaignIds;
+                    result.ok = true;
+                    result.partial = false;
+                    result.successCount = Math.max(toNumber(result?.successCount, 0), createdCampaignIds.length);
+                    result.failCount = 0;
+                    result.failures = [];
+                    if (!Array.isArray(result.successes) || !result.successes.length) {
+                        result.successes = createdCampaignIds.map((campaignId, index) => ({
+                            planName: meta.newPlanNames[index] || meta.newPlanName || '',
+                            campaignId
+                        }));
+                    }
+                }
+            }
+            if (!createdCampaignIds.length) {
+                return {
+                    ...result,
+                    postCreateStatus: {
+                        skipped: true,
+                        reason: 'create_not_successful',
+                        campaignIds: []
+                    },
+                    copySource: {
+                        ...meta,
+                        targetStatus: meta.targetOnlineStatus === 1 ? 'start' : 'pause',
+                        createdCampaignIds: []
+                    }
+                };
+            }
+            const resultWithCreatedIds = {
+                ...result,
+                createdCampaignIds
+            };
+            const postCreateStatus = await pauseCopiedCampaignsAfterCreate(meta.sceneName, resultWithCreatedIds, meta, options);
+            const resolvedTargetStatus = postCreateStatus && postCreateStatus.skipped === false && postCreateStatus.ok !== false
+                ? 'pause'
+                : (meta.targetOnlineStatus === 1 ? 'start' : 'pause');
             if (postCreateStatus && postCreateStatus.ok === false) {
                 const failure = {
                     planName: meta.newPlanName,
@@ -64189,7 +65004,7 @@ if (typeof globalThis !== 'undefined') {
                     error: `新计划创建成功但暂停失败：${postCreateStatus.error || postCreateStatus.reason || '未知错误'}`
                 };
                 return {
-                    ...result,
+                    ...resultWithCreatedIds,
                     ok: false,
                     partial: true,
                     failCount: toNumber(result?.failCount, 0) + 1,
@@ -64197,18 +65012,20 @@ if (typeof globalThis !== 'undefined') {
                     postCreateStatus,
                     copySource: {
                         ...meta,
-                        targetStatus: meta.targetOnlineStatus === 1 ? 'start' : 'pause',
-                        createdCampaignIds: postCreateStatus.campaignIds || []
+                        targetStatus: resolvedTargetStatus,
+                        createdCampaignIds: postCreateStatus.campaignIds || createdCampaignIds
                     }
                 };
             }
             return {
-                ...result,
+                ...resultWithCreatedIds,
                 postCreateStatus,
                 copySource: {
                     ...meta,
-                    targetStatus: meta.targetOnlineStatus === 1 ? 'start' : 'pause',
-                    createdCampaignIds: Array.isArray(postCreateStatus?.campaignIds) ? postCreateStatus.campaignIds : []
+                    targetStatus: resolvedTargetStatus,
+                    createdCampaignIds: Array.isArray(postCreateStatus?.campaignIds) && postCreateStatus.campaignIds.length
+                        ? postCreateStatus.campaignIds
+                        : createdCampaignIds
                 }
             };
         };

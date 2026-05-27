@@ -1,3 +1,138 @@
+# TODO - 2026-05-27 人群推广官方复制接入
+
+## 反馈修正 - 人群 AI 点睛计划复制不完整
+- 需求：用户反馈人群计划里复制 `E7Pro_AI点睛_测试` 也没有复制完整，存在刚刚关键词推广同类问题；人群推广有官方复制计划功能，希望把官方复制能力放进我们当前列表 `复制` 功能里。
+- 约束：
+  - 当前最高优先级切到人群推广复制；先只读/受保护确认官方复制链路，不直接假设关键词补字段方案适用于人群。
+  - 不点击会真实创建、投放、删除或扣费的官方确认入口，除非先证明请求被拦截或用户再次明确授权真实创建。
+  - 若最终需要真实复测，只创建测试复制计划并保证新计划暂停，不影响源计划。
+  - 继续保留现有单个 `复制` 按钮、数量徽标、成功弹窗和公共计划名搜索体验。
+- 执行计划：
+  - [x] 回顾当前人群复制实现、关键词 AI 点睛修复和相关教训，确认风险边界。
+  - [x] 在真实人群推广页面定位官方 `复制` 入口，抓取其只读接口、弹窗字段和最终提交接口。
+  - [x] 对比官方复制请求与当前 `copyCurrentPlanByScene('人群推广')` 请求，定位缺失字段或可复用官方复制 API。
+  - [x] 以最小侵入方式把人群推广复制接入官方复制链路或同构请求，保留创建后暂停兜底和成功弹窗。
+  - [x] 补充回归测试覆盖人群官方复制分支、AI 点睛/人群设置字段和公共计划名搜索。
+  - [x] 构建同步产物，并用 Chrome DevTools MCP 真实页面验证新计划暂停且设置完整。
+- 高层操作摘要：
+  - 已确认当前代码的人群复制仍走通用 `copyCurrentPlanByScene` -> `/solution/addList.json` 组包链路；用户这次要求优先参考官方人群推广复制功能，避免继续漏官方弹窗级配置。
+  - 真实人群推广页受保护点击官方 `复制` 后确认：原生会先打开大弹窗，不立即创建；弹窗说明系统会复制计划状态、主体、人群、预算、出价、高级设置、创意、灵犀调优等参数。
+  - 受保护拦截官方确认链路：先请求 `/campaign/copy/campaignCheck.json`，body 为 `bizCode=onebpDisplay + campaignId=81020127177`；继续复制最终请求 `/solution/copy.json`，body 为 `copyCampaignId、campaignName、campaignGroupName、campaignGroupId、startTime、launchForever`，由服务端完成完整复制。
+  - 对比结论：当前插件的人群复制自己组 `/solution/addList.json` payload，容易漏原生弹窗级“人群/创意/灵犀调优”等隐藏配置；人群推广应改用官方 `/solution/copy.json`，再复用现有创建后暂停兜底与成功弹窗。
+  - 已将 `copyCurrentPlanByScene` 的 `onebpDisplay / 人群推广` 分支切到官方复制接口：先 `campaignCheck`，再 `solution/copy`；关键词、线索等其它场景仍走原有白名单组包链路。
+  - 真实创建验证生成新计划 `81105428182 / E7Pro_AI点睛_测试_1`；创建后立即调用 `/campaign/updatePart.json` 暂停该新计划，源计划不修改。
+
+## 验证记录
+- Chrome DevTools MCP 受保护官方链路确认：官方弹窗最终提交 `/solution/copy.json`，请求体为 `copyCampaignId=81020127177`、`campaignName=E7Pro_AI点睛_测试副本`、`startTime=2026-05-27`、`launchForever=true` 等字段；未放行真实创建。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，11/11；新增断言覆盖人群推广官方复制接口、dry-run payload 和创建后暂停兜底。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- Chrome DevTools MCP dry-run：真实人群页重载扩展后，`copyCurrentPlanByScene('人群推广', ..., {dryRunOnly:true})` 返回官方 payload：`/solution/copy.json` 所需字段完整，`campaignName=E7Pro_AI点睛_测试_1`，`copyCampaignId=81020127177`，且不触发创建。
+- Chrome DevTools MCP 真实复制：点击插件 `复制` 按钮后请求链路为 `/campaign/copy/campaignCheck.json` -> `/solution/copy.json` -> `/campaign/updatePart.json`；`solution/copy` 创建新计划 `81105428182 / E7Pro_AI点睛_测试_1`，`updatePart` 对同一 ID 提交 `displayStatus:"pause"`。
+- Chrome DevTools MCP 只读确认：新计划 `81105428182` 返回 `onlineStatus=0`、`displayStatus=pause`；与源计划一致的关键字段包括 `dayBudget=60`、`bidTypeV2=smart_bid`、`bidTargetV2=display_cart`、`optimizeTarget=coll_cart`、`promotionScene=promotion_scene_item`、`promotionStrategy=zidingyi`、`needTargetCrowd=1`、`creativeSetMode=professional`、`itemSelectedMode=user_define`。
+- Chrome DevTools MCP 人群对比：源计划与新计划 `/crowd/findList.json` 均返回 16 个人群，名称一致；复制后页面成功弹窗按钮为 `确定并刷新`，点击后跳转到 `campaignNameLike=E7Pro_AI点睛_测试`，列表可见源计划 `E7Pro_AI点睛_测试` 与复制计划 `E7Pro_AI点睛_测试_1`，共 2 项。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-create-repair-cleanup-id-extract.test.mjs tests/budget-frontend-limit-bypass.test.mjs`：通过，21/21。
+- `npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run review`：通过，497 项回归中 495 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），所有自动 review 检查通过。
+
+## 结果复盘
+- 根因：人群推广有官方复制能力，后端会复制人群、创意、灵犀调优等当前插件通用 `/solution/addList.json` 组包无法完整表达的隐藏配置；继续用自组 payload 容易复现“复制不完整”。
+- 修复结果：人群推广当前计划复制改走官方 `solution/copy`，仍由插件统一处理数量命名、创建后暂停、成功弹窗和公共计划名搜索。
+- 风险与回滚：官方复制接口是业务线专属接口，本次只在 `onebpDisplay / 人群推广` 分支启用；若后端接口变更，可回退到旧通用组包分支，但会重新承担设置缺失风险。
+
+---
+
+# TODO - 2026-05-27 营销场景复制计划
+
+## 反馈修正 - 关键词 AI 点睛计划复制不完整
+- 需求：用户反馈关键词计划 `E7Pro_AI点睛_测试` 复制后不完整，`AI点睛` 设置未复制，智能出价未复制到 `获取净成交`；后续修正后又反馈 `AI点睛` 开关已开启，但“需求人群”没有复制，需要继续核对 AI 点睛弹窗级设置并确保完整复制；成功弹窗字号和尺寸需要参考当前网页原生 `确认删除` 弹窗；成功弹窗确认按钮文案为 `确定并刷新`，确认后跳转到计划名称公共部分搜索结果，显示源计划与复制出的计划。
+- 约束：
+  - 当前最高优先级切到关键词复制缺陷修复；不继续货品全栈，本轮仍保留已完成的人群/关键词复制验证记录；
+  - 先只读比对源计划、已复制计划和创建请求字段，再改转换逻辑；
+  - 修复必须保持 ID/时间/源对象污染字段清理，不为完整复制而无过滤透传；
+  - 真实复测仍只复制生成暂停计划，不影响源计划。
+- 执行计划：
+  - [x] 只读获取 `E7Pro_AI点睛_测试` 源计划、问题复制计划详情和相关列表字段，定位 AI 点睛/智能出价/其它设置差异。
+  - [x] 回查 `copyCurrentPlanByScene` 白名单、默认值覆盖和创建请求组包链路，确认字段缺失根因。
+  - [x] 以最小范围补齐 AI 点睛设置、智能出价目标、需求人群及同类关键设置的复制映射，并保留安全清理。
+  - [x] 补充定向测试覆盖 AI 点睛设置、`获取净成交` 出价目标、需求人群和不回退默认值。
+  - [x] 构建同步产物，运行相关回归、`build:check`、语法检查。
+  - [x] Chrome DevTools MCP 真实复制 `E7Pro_AI点睛_测试`，确认新计划暂停且关键设置与源计划一致。
+- 高层操作摘要：
+  - 已停止继续推进货品全栈；先确认刚才已创建的人群复制弹窗并刷新页面，避免留下半完成弹窗状态。
+  - 已启动只读字段链路调研，主线程同步抓真实接口详情和源码转换链路。
+  - 真实比对确认：源计划 `80404078368 / E7Pro_AI点睛_测试` 的 `campaign/get` 带 `aiMaxInfo.aiMaxSwitch=1`、`aiMaxGenReason`、`aiMaxDeliveryPlan` 和净成交出价合同；复制计划 `81104780304 / E7Pro_AI点睛_测试_1` 已带开关与智能出价，但 `aiMaxGenReason=null` 且没有需求人群。
+  - 打开原生 `AI点睛设置` 弹窗后确认“已选：5个需求”来自额外请求 `/crowd/findList.json`，不是 `campaign/get` 的 `aiMaxInfo` 自带完整列表；该接口按 `crowdBindQueryList:[{campaignId}]` 返回 5 条 AI点睛人群。
+  - 已补复制源读取：关键词复制前额外只读查询 `/crowd/findList.json`，把返回的需求人群写回 `campaign.crowdList`；AI点睛源计划若读不到需求人群则直接中止，避免继续创建半成品。
+  - 已补复制组包：从源计划挂载的 `campaign.crowdList` 回填到创建请求，继续保留白名单与瞬态 ID 清理，避免把源计划 ID、时间等污染字段透传。
+  - 已按真实页面原生 `确认删除` 弹窗测量值重调成功弹窗：原生卡片 `320x198`、圆角 `24px`、标题 `16px/24px`、正文 `12px/18px`、按钮 `64x32`；成功弹窗同步为卡片宽 `320px`、圆角 `24px`、标题 `16px`、正文 `12px`、按钮高度 `32px`，确认按钮文案为 `确定并刷新`。
+  - 已将成功确认行为从简单刷新改为按源计划名与新计划名公共前缀搜索：例如 `E7Pro_AI点睛_测试` 与 `E7Pro_AI点睛_测试_1` 会跳转到 `campaignNameLike=E7Pro_AI点睛_测试`，列表同时展示源计划和复制计划。
+
+## 需求规格
+- 目标：把当前线索推广计划列表已验证的 `复制` 能力，扩展到营销场景推广中的关键词推广、人群推广。
+- 范围顺序：先完成并验证关键词推广，再做人群推广；用户已将本轮目标收敛为这两个场景，货品全栈推广不纳入本轮完成标准。
+- 行为要求：
+  - 复用当前线索推广复制计划交互：行操作区单个 `复制` 按钮、数量徽标、连续序号命名、防重复点击和受控复制 API；
+  - 通过复制生成计划成功为止；
+  - 测试生成的新计划必须为暂停状态，不得影响源计划；
+  - 复制成功后弹窗说明本次复制成功数量、源计划和新计划明细，用户点击 `确定并刷新` 后按计划名称公共部分搜索列表，让源计划与复制出的计划同时可见；
+  - 不绕过现有白名单、桥接和创建后状态兜底。
+- 成功标准：
+  - 关键词推广、人群推广都能从现有有花费计划复制生成新计划；
+  - 真实创建验证的新计划均只读确认 `pause/onlineStatus=0`；
+  - 真实浏览器复制成功后出现明细弹窗，确认后页面刷新；
+  - 相关转换逻辑、按钮注入和桥接测试通过；
+  - 构建产物同步，`build:check`、语法检查和风险匹配测试通过。
+
+## 执行计划（可核对）
+- [x] 回顾现有线索推广复制实现、场景映射和营销场景入口，确认最小扩展点。
+- [x] 关键词推广：补齐场景识别、复制请求转换和暂停兜底，完成测试与真实创建验证。
+- [x] 人群推广：基于关键词推广复用方案补齐差异字段，完成测试与真实创建验证。
+- [x] 成功弹窗：复制成功后展示复制数量和新计划明细，确认后刷新网页，并在关键词/人群真实页面复测。
+- [x] 构建同步产物，运行完整相关回归、`build:check`、语法检查和 review 级验证。
+- [x] 回填验证记录、结果复盘；若用户修正或发现重复失误，同步更新 `tasks/lessons.md`。
+
+## 高层操作摘要
+- 已回顾项目规则与近期教训：创建/复制类功能必须确认服务端创建结果和目标暂停状态，不能只验证按钮点击或请求 payload。
+- 当前工作区干净；本轮将优先改 `src/` 与相关测试，生成产物只通过构建同步。
+- 已确认现有按钮层可识别 `onebpSearch`、`onebpDisplay`、`onebpSite` 并映射到 `关键词推广`、`人群推广`、`货品全站推广`；复制 API 已使用通用场景入口和创建后暂停兜底，下一步以真实页面执行为准。
+- 关键词推广真实页初次复制命中全站推广冲突，接口在 `errorDetails[].result` 返回的是冲突计划 ID；已修复创建结果 ID 提取，禁止把带 `code/msg` 的错误明细误当成新建计划，并将当前计划复制的自动重试默认收敛为 0。
+- 已扩展营销场景列表操作区识别：除线索推广的 `报表/置顶` 外，兼容关键词/人群/货品列表里的 `AI点睛`、`人群设置`、`一键起量`、`相似品跟投`、`修改趋势` 等操作组合。
+- 真实关键词推广复制源计划 `76860218266` 成功创建新计划 `80979085755 / 自定义_T7Pro_品牌词_03_0906_909`；随后只对新计划调用暂停兜底，`campaign/get.json` 只读确认 `onlineStatus=0`、`displayStatus=pause`。
+- 真实页验证时发现预算补丁恢复逻辑使用 `WeakMap.forEach` 的运行时错误；已改为可遍历 `Map` 并补回归测试，避免后续页面切换持续抛错。
+- 人群推广真实页先点击了无商品源计划 `77464409842`，链路在创建前停止，未发起创建请求；随后选择带商品的源计划 `78346932308 / TA人群投放`，成功创建新计划 `81019401313 / TA人群投放_1` 并自动暂停。
+- 用户最新目标取消货品全栈推广本轮要求，并补充复制成功后必须弹窗说明复制数量和新计划明细，确认后刷新网页；下一步只围绕关键词/人群补齐该交互并复测。
+
+## 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/site-scene-item-binding.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-plan-api-bridge-security.test.mjs`：通过，28/28。
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`、`node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`、`node --check src/main-assistant/campaign-id-quick-entry.js`、`node --check src/main-assistant/budget-frontend-limit-bypass.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-create-repair-cleanup-id-extract.test.mjs tests/budget-frontend-limit-bypass.test.mjs`：通过，18/18。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- Chrome DevTools MCP 真实关键词推广页：本地扩展重载后，当前可见营销场景操作区出现单个 `复制` 按钮；点击源计划 `76860218266` 后，`/solution/addList.json` 返回新计划 `80979085755`，`/campaign/updatePart.json` 对同一 ID 设置 `displayStatus:"pause"` 且返回 `onlineStatus=0`。
+- Chrome DevTools MCP 只读确认：`campaign/get.json` 查询新计划 `80979085755` 返回 `onlineStatus=0`、`displayStatus=pause`、`dayBudget=700`、`gmtCreate=2026-05-27 01:05:11`。
+- Chrome DevTools MCP 真实人群推广页：本地扩展重载后，`onebpDisplay` 列表操作区出现单个 `复制` 按钮；无商品源计划 `77464409842` 只触发 `/campaign/get.json` 后停止，未创建新计划。
+- Chrome DevTools MCP 真实人群推广页：点击带商品源计划 `78346932308` 后，`/solution/addList.json` 返回新计划 `81019401313 / TA人群投放_1`，`/campaign/updatePart.json` body 为 `campaignList:[{campaignId:81019401313, displayStatus:"pause"}]` 且返回 `onlineStatus=0`。
+- Chrome DevTools MCP 只读确认：`campaign/get.json` 查询新计划 `81019401313` 返回 `onlineStatus=0`、`displayStatus=pause`、`dayBudget=600`、`sceneId=372`、`gmtCreate=2026-05-27 01:13:22`。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-create-repair-cleanup-id-extract.test.mjs tests/budget-frontend-limit-bypass.test.mjs tests/keyword-search-p0-contract.test.mjs`：通过，29/29。
+- Chrome DevTools MCP dry-run `E7Pro_AI点睛_测试`：不触发 `/solution/addList.json` 创建；源计划额外读取 `/crowd/findList.json` 1 次，读取到 5 个需求人群；样例创建请求中 `campaign.crowdList.length=5`，且不含旧 `campaignId`，`aiMaxSwitch=1`、`bidTargetV2=conv`、`constraintType=liu_zi`、`subOptimizeTarget=retained_buy`。
+- Chrome DevTools MCP 真实关键词复制：源计划 `80404078368 / E7Pro_AI点睛_测试` 成功创建新计划 `81104956408 / E7Pro_AI点睛_测试_1`；创建后自动调用 `updatePart` 暂停，新计划只读查询返回 `onlineStatus=0`、`displayStatus=pause`。
+- Chrome DevTools MCP 只读确认新计划 `81104956408`：`/crowd/findList.json` 返回 5 个需求人群（厨房空间有限的小型洗碗机、消毒烘干一体的厨房省心方案、灶下嵌入式洗碗机的安装首选、水槽洗碗机的台式灵活之选、美的品牌的品质洗碗机首选）；智能出价仍为获取净成交合同字段。
+- Chrome DevTools MCP 原生弹窗测量：真实关键词列表只点击行操作 `删除` 到确认弹窗，不点击确认删除；测得原生弹窗卡片 `320x198`、圆角 `24px`、标题 `16px/24px`、正文 `12px/18px`、按钮 `64x32/12px`、阴影 `0 2px 10px rgba(0,0,0,0.16)`，随后点击 `取消` 关闭，未删除计划。
+- Chrome DevTools MCP 成功弹窗复测：重载本地 extension 与真实页面后，用同一套弹窗 DOM/class 临时预览，不触发复制接口；测得成功弹窗卡片宽 `320px`、圆角 `24px`、标题 `16px/24px`、正文 `12px/18px`、按钮 `64x32/12px`，截图保存到 `tasks/copy-success-dialog-native-size.png`，预览后已移除页面弹窗。
+- Chrome DevTools MCP 跳转目标复测：成功确认 URL 构造会把 `bizCode=onebpSearch`、`offset=0`、`searchKey=campaignNameLike`、`searchValue=E7Pro_AI点睛_测试`、`orderField=charge`、`orderBy=desc` 写入目标 hash；真实关键词列表访问该 URL 后可见源计划 `E7Pro_AI点睛_测试` 与复制计划 `E7Pro_AI点睛_测试_1` 等同前缀计划。
+- Chrome DevTools MCP 受保护交互复测：临时替换页面公开 `copyCurrentPlanByScene` 为假成功返回，不触发真实创建；点击实际列表 `复制` 按钮后出现插件成功弹窗，按钮文案为 `确定并刷新`；点击后跳转到 `#!/manage/search?bizCode=onebpSearch&offset=0&searchKey=campaignNameLike&searchValue=E7Pro_AI点睛_测试&orderField=charge&orderBy=desc`，可见计划名为 `E7Pro_AI点睛_测试` 和 `E7Pro_AI点睛_测试_1`，共 2 项数据；验证后已恢复页面 API。
+- `node --check src/main-assistant/ui.js`、`node --check src/main-assistant/campaign-id-quick-entry.js`、`node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`、`node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，10/10。
+- `npm run build`、`npm run build:check`、`npm run check:syntax`、`git diff --check`：通过。
+- `npm run review`：通过，496 项回归中 494 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），所有自动 review 检查通过。
+
+## 结果复盘
+- 根因一：关键词 AI 点睛复制此前只保留 `campaign/get` 的开关和方案字段，没有读取原生 `AI点睛设置` 弹窗依赖的 `/crowd/findList.json`，导致复制后看起来开启但缺“已选需求”。
+- 根因二：成功弹窗样式先按截图放大比例落地，后续又按通用桌面字号收窄，但没有直接读取当前页面原生 `确认删除` 弹窗的 computed style。
+- 修复结果：关键词复制现在会把源计划 5 个 AI 点睛需求人群随创建请求复制过去；真实新计划 `81104956408` 已确认暂停、需求人群完整、智能出价目标仍为获取净成交。成功弹窗已按当前网页原生删除确认弹窗尺寸重调；确认按钮为 `确定并刷新`，确认后进入公共计划名搜索结果。
+- 风险与回滚：AI 点睛源计划若读取不到需求人群会 fail-fast，不创建半成品；若后端未来调整需求人群接口，需要更新 `queryCampaignCrowdList` 的接口解析。
+
+---
+
 # TODO - 2026-05-26 当前计划复制按钮
 
 ## 反馈修正 - 单按钮跟随源计划状态复制
