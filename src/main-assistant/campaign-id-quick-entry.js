@@ -267,7 +267,9 @@
 
         getBatchPlusMenuItems(bizCode = '') {
             const sceneName = this.getSceneNameByBizCode(bizCode) || '当前场景';
-            const isDisplayScene = this.normalizeBizCode(bizCode) === 'onebpDisplay';
+            const normalizedBizCode = this.normalizeBizCode(bizCode);
+            const isDisplayScene = normalizedBizCode === 'onebpDisplay';
+            const isLeadScene = normalizedBizCode === 'onebpAdStrategyLiuZi';
             return [
                 {
                     action: 'start',
@@ -288,7 +290,7 @@
                 {
                     action: 'shieldCrowd',
                     label: '批量修改屏蔽人群',
-                    title: isDisplayScene ? '打开官方编辑过滤人群弹窗并批量同步屏蔽人群' : '打开选中计划的原生屏蔽/过滤人群设置入口'
+                    title: isDisplayScene || isLeadScene ? '打开官方编辑过滤人群弹窗并批量同步屏蔽人群' : '打开选中计划的原生屏蔽/过滤人群设置入口'
                 },
                 {
                     action: 'crowdSetting',
@@ -828,7 +830,7 @@
                 label?.labelId || label?.labelValue || label?.labelName,
                 crowd?.targetType || label?.targetType,
                 crowd?.crowdValue || optionValues || subValues
-            ].map(value => String(value || '').trim()).filter(Boolean);
+            ].map(value => this.normalizeBlackCrowdIdentityPart(value)).filter(Boolean);
             if (stableParts.length) return stableParts.join('::');
             const fallback = [
                 item?.mx_crowdId,
@@ -836,8 +838,80 @@
                 item?.crowdId,
                 crowd?.crowdId,
                 this.formatBlackCrowdName(item)
-            ].map(value => String(value || '').trim()).find(Boolean);
+            ].map(value => this.normalizeBlackCrowdIdentityPart(value)).find(Boolean);
             return fallback || '';
+        },
+
+        normalizeBlackCrowdIdentityPart(value = '') {
+            return String(value || '')
+                .replace(/\s+/g, '')
+                .replace(/：/g, ':')
+                .trim();
+        },
+
+        getBlackCrowdIdentitySet(crowdList = []) {
+            return new Set((Array.isArray(crowdList) ? crowdList : [])
+                .map(item => this.getBlackCrowdIdentity(item))
+                .filter(Boolean));
+        },
+
+        isBlackCrowdListSynced(expectedCrowdList = [], actualCrowdList = []) {
+            const expected = this.getBlackCrowdIdentitySet(expectedCrowdList);
+            const actual = this.getBlackCrowdIdentitySet(actualCrowdList);
+            if (expected.size !== actual.size) return false;
+            for (const key of expected) {
+                if (!actual.has(key)) return false;
+            }
+            return true;
+        },
+
+        formatBlackCrowdSyncDebug(crowdList = []) {
+            const names = (Array.isArray(crowdList) ? crowdList : [])
+                .map(item => this.formatBlackCrowdName(item))
+                .filter(Boolean);
+            return names.length ? names.join('、') : '无';
+        },
+
+        async verifyBlackCrowdListSynced(fetchCurrent, campaignId, expectedCrowdList = [], sceneName = '计划') {
+            const id = this.normalizeCampaignId(campaignId);
+            let lastCrowdList = [];
+            let lastError = null;
+            for (let i = 0; i < 3; i++) {
+                if (i > 0) await this.sleep(350 * i);
+                try {
+                    const current = await fetchCurrent();
+                    lastCrowdList = Array.isArray(current?.crowdList) ? current.crowdList : [];
+                    if (this.isBlackCrowdListSynced(expectedCrowdList, lastCrowdList)) {
+                        return current;
+                    }
+                } catch (err) {
+                    lastError = err;
+                }
+            }
+            if (lastError && !lastCrowdList.length) {
+                throw new Error(`${sceneName}过滤人群回查失败：计划 ${id}，${lastError.message || lastError}`);
+            }
+            throw new Error(`${sceneName}过滤人群未确认落库：计划 ${id}，期望 ${this.formatBlackCrowdSyncDebug(expectedCrowdList)}，实际 ${this.formatBlackCrowdSyncDebug(lastCrowdList)}`);
+        },
+
+        async verifyDisplayBlackCrowdListSynced(campaignId, expectedCrowdList = [], authContext = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            return this.verifyBlackCrowdListSynced(
+                () => this.findDisplayBlackCrowdList(id, authContext),
+                id,
+                expectedCrowdList,
+                '人群推广'
+            );
+        },
+
+        async verifyLeadBlackCrowdListSynced(campaignId, expectedCrowdList = [], authContext = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            return this.verifyBlackCrowdListSynced(
+                () => this.findLeadBlackCrowdList(id, authContext),
+                id,
+                expectedCrowdList,
+                '线索推广'
+            );
         },
 
         getBlackCrowdDeleteList(oldCrowdList = [], newCrowdList = []) {
@@ -932,10 +1006,178 @@
             if (deleteList.length) {
                 results.push(await this.deleteDisplayBlackCrowdList(id, deleteList, authContext));
             }
+            const verification = await this.verifyDisplayBlackCrowdListSynced(id, newCrowdList, authContext);
             return {
                 campaignId: id,
                 modifyCount: preparedNew.length,
                 deleteCount: deleteList.length,
+                verifiedCount: verification.crowdList.length,
+                results
+            };
+        },
+
+        async findLeadCampaign(campaignId, authContext = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: 'onebpAdStrategyLiuZi'
+            });
+            const url = `https://one.alimama.com/campaign/get.json?${query.toString()}`;
+            const payload = {
+                bizCode: 'onebpAdStrategyLiuZi',
+                campaignId: String(id),
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '读取线索推广计划失败',
+                businessErrorMessage: '读取线索推广计划失败'
+            });
+            const campaign = this.isPlainRecord(json?.data?.campaign)
+                ? json.data.campaign
+                : (this.isPlainRecord(json?.campaign) ? json.campaign : null);
+            if (!campaign) {
+                throw new Error('读取线索推广计划失败：响应缺少 campaign');
+            }
+            return {
+                campaignId: id,
+                campaign: this.cloneCopyData(campaign),
+                response: json
+            };
+        },
+
+        async findLeadBlackCrowdList(campaignId, authContext = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: 'onebpAdStrategyLiuZi'
+            });
+            const url = `https://one.alimama.com/blackCrowd/findList.json?${query.toString()}`;
+            const payload = {
+                bizCode: 'onebpAdStrategyLiuZi',
+                crowdBindQueryList: [{
+                    campaignId: String(id)
+                }],
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '读取线索推广过滤人群失败',
+                businessErrorMessage: '读取线索推广过滤人群失败'
+            });
+            return {
+                campaignId: id,
+                crowdList: this.extractBlackCrowdListFromResponse(json, id),
+                response: json
+            };
+        },
+
+        prepareLeadBlackCrowdListForCampaign(crowdList = [], campaignId = '') {
+            const id = this.normalizeCampaignId(campaignId);
+            return (Array.isArray(crowdList) ? crowdList : []).map((item) => {
+                const cloned = this.cloneCopyData(item);
+                if (!this.isPlainRecord(cloned)) return cloned;
+                cloned.campaignId = String(id);
+                cloned.bizCode = 'onebpAdStrategyLiuZi';
+                if (this.isPlainRecord(cloned.campaign)) {
+                    cloned.campaign.campaignId = Number(id);
+                    cloned.campaign.bizCode = 'onebpAdStrategyLiuZi';
+                    cloned.campaign.campaignBizCode = 'onebpAdStrategyLiuZi';
+                }
+                return cloned;
+            });
+        },
+
+        async modifyLeadBlackCrowdList(campaignId, crowdList = [], authContext = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const { startTime, endTime } = this.getDisplayCrowdDateRange();
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: 'onebpAdStrategyLiuZi'
+            });
+            const url = `https://one.alimama.com/blackCrowd/batchModify.json?${query.toString()}`;
+            const payload = {
+                mx_bizCode: 'onebpAdStrategyLiuZi',
+                bizCode: 'onebpAdStrategyLiuZi',
+                campaignId: String(id),
+                tab: 'crowd',
+                startTime,
+                endTime,
+                crowdList: this.prepareLeadBlackCrowdListForCampaign(crowdList, id),
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '批量修改线索推广屏蔽人群失败',
+                businessErrorMessage: '批量修改线索推广屏蔽人群失败'
+            });
+            return {
+                campaignId: id,
+                crowdCount: payload.crowdList.length,
+                response: json
+            };
+        },
+
+        async deleteLeadBlackCrowdList(campaignId, crowdList = [], authContext = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const prepared = this.prepareLeadBlackCrowdListForCampaign(crowdList, id);
+            if (!prepared.length) {
+                return {
+                    campaignId: id,
+                    crowdCount: 0,
+                    skipped: true
+                };
+            }
+            const { startTime, endTime } = this.getDisplayCrowdDateRange();
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: 'onebpAdStrategyLiuZi'
+            });
+            const url = `https://one.alimama.com/blackCrowd/batchDelete.json?${query.toString()}`;
+            const payload = {
+                mx_bizCode: 'onebpAdStrategyLiuZi',
+                bizCode: 'onebpAdStrategyLiuZi',
+                campaignId: String(id),
+                tab: 'crowd',
+                startTime,
+                endTime,
+                crowdList: prepared,
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '批量删除线索推广屏蔽人群失败',
+                businessErrorMessage: '批量删除线索推广屏蔽人群失败'
+            });
+            return {
+                campaignId: id,
+                crowdCount: payload.crowdList.length,
+                response: json
+            };
+        },
+
+        async syncLeadBlackCrowdListForCampaign(campaignId, newCrowdList = [], oldCrowdList = [], authContext = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const preparedNew = this.prepareLeadBlackCrowdListForCampaign(newCrowdList, id);
+            const deleteList = this.getBlackCrowdDeleteList(oldCrowdList, newCrowdList);
+            const results = [];
+            if (preparedNew.length) {
+                results.push(await this.modifyLeadBlackCrowdList(id, preparedNew, authContext));
+            }
+            if (deleteList.length) {
+                results.push(await this.deleteLeadBlackCrowdList(id, deleteList, authContext));
+            }
+            const verification = await this.verifyLeadBlackCrowdListSynced(id, newCrowdList, authContext);
+            return {
+                campaignId: id,
+                modifyCount: preparedNew.length,
+                deleteCount: deleteList.length,
+                verifiedCount: verification.crowdList.length,
                 results
             };
         },
@@ -1054,21 +1296,24 @@
                 const enterCallback = async (payload = {}) => {
                     const nextCrowdList = this.extractDialogBlackCrowdList(payload);
                     try {
-                        const settled = await Promise.allSettled(ids.map(async (id) => {
-                            const oldCrowdList = Array.isArray(oldCrowdMap[id])
-                                ? oldCrowdMap[id]
-                                : (await this.findDisplayBlackCrowdList(id, authContext)).crowdList;
-                            return this.syncDisplayBlackCrowdListForCampaign(id, nextCrowdList, oldCrowdList, authContext);
-                        }));
-                        const successCount = settled.filter(item => item.status === 'fulfilled').length;
-                        const errors = settled
-                            .filter(item => item.status === 'rejected')
-                            .map(item => item.reason?.message || '修改失败');
+                        const results = [];
+                        const errors = [];
+                        for (const id of ids) {
+                            try {
+                                const oldCrowdList = Array.isArray(oldCrowdMap[id])
+                                    ? oldCrowdMap[id]
+                                    : (await this.findDisplayBlackCrowdList(id, authContext)).crowdList;
+                                results.push(await this.syncDisplayBlackCrowdListForCampaign(id, nextCrowdList, oldCrowdList, authContext));
+                            } catch (err) {
+                                errors.push(`计划 ${id}：${err?.message || '修改失败'}`);
+                            }
+                        }
+                        const successCount = results.length;
                         if (errors.length) {
                             Logger.log(`⚠️ 批量修改屏蔽人群部分失败：成功 ${successCount} 个，失败 ${errors.length} 个，原因：${errors.join('；')}`, true);
                             return;
                         }
-                        Logger.log(`✅ 批量修改屏蔽人群完成：已同步 ${successCount} 个计划，过滤人群 ${nextCrowdList.length} 个`);
+                        Logger.log(`✅ 批量修改屏蔽人群完成：已同步并回查确认 ${successCount} 个计划，过滤人群 ${nextCrowdList.length} 个`);
                         window.setTimeout(() => window.location.reload(), 600);
                     } catch (err) {
                         Logger.log(`⚠️ 批量修改屏蔽人群失败：${err?.message || err}`, true);
@@ -1076,6 +1321,73 @@
                 };
                 vf.invoke('mxModal', ['onebp/views/pages/manage/campaign/info', {
                     campaign,
+                    adcConfigs,
+                    operation,
+                    enterCallback
+                }, {
+                    header: {
+                        title: '编辑过滤人群'
+                    },
+                    ladder: {
+                        width: 'xlarge'
+                    }
+                }]);
+                return true;
+            });
+        },
+
+        openLeadBlackCrowdEditorModal({ campaignId, campaignName = '', campaign = {}, crowdList = [], targetIds = [], oldCrowdMap = {}, authContext = {} } = {}) {
+            return this.getPageMagix().then((magixRef) => {
+                const vf = this.findMagixModalVframe(magixRef);
+                if (!vf) {
+                    throw new Error('未找到官方弹窗宿主，请刷新页面后重试');
+                }
+                const sourceId = this.normalizeCampaignId(campaignId);
+                const ids = (Array.isArray(targetIds) ? targetIds : [])
+                    .map(id => this.normalizeCampaignId(id))
+                    .filter(Boolean);
+                const sourceCrowdList = Array.isArray(crowdList) ? crowdList.map(item => this.cloneCopyData(item)) : [];
+                const sourceCampaign = this.isPlainRecord(campaign) ? this.cloneCopyData(campaign) : {};
+                sourceCampaign.bizCode = 'onebpAdStrategyLiuZi';
+                sourceCampaign.campaignBizCode = 'onebpAdStrategyLiuZi';
+                sourceCampaign.campaignId = String(sourceId);
+                sourceCampaign.campaignName = sourceCampaign.campaignName || campaignName || '';
+                sourceCampaign.blackCrowdList = sourceCrowdList;
+                const adcConfigs = [{
+                    code: 'b_onebp_main_step_one_campaign_budget',
+                    filterCodes: ['campaignCrowdFilterList']
+                }];
+                const operation = {
+                    code: 'changeCampaignCrowdFilterList'
+                };
+                const enterCallback = async (payload = {}) => {
+                    const nextCrowdList = this.extractDialogBlackCrowdList(payload);
+                    try {
+                        const results = [];
+                        const errors = [];
+                        for (const id of ids) {
+                            try {
+                                const oldCrowdList = Array.isArray(oldCrowdMap[id])
+                                    ? oldCrowdMap[id]
+                                    : (await this.findLeadBlackCrowdList(id, authContext)).crowdList;
+                                results.push(await this.syncLeadBlackCrowdListForCampaign(id, nextCrowdList, oldCrowdList, authContext));
+                            } catch (err) {
+                                errors.push(`计划 ${id}：${err?.message || '修改失败'}`);
+                            }
+                        }
+                        const successCount = results.length;
+                        if (errors.length) {
+                            Logger.log(`⚠️ 线索推广批量修改屏蔽人群部分失败：成功 ${successCount} 个，失败 ${errors.length} 个，原因：${errors.join('；')}`, true);
+                            return;
+                        }
+                        Logger.log(`✅ 线索推广批量修改屏蔽人群完成：已同步并回查确认 ${successCount} 个计划，过滤人群 ${nextCrowdList.length} 个`);
+                        window.setTimeout(() => window.location.reload(), 600);
+                    } catch (err) {
+                        Logger.log(`⚠️ 线索推广批量修改屏蔽人群失败：${err?.message || err}`, true);
+                    }
+                };
+                vf.invoke('mxModal', ['onebp/views/pages/manage/campaign/info', {
+                    campaign: sourceCampaign,
                     adcConfigs,
                     operation,
                     enterCallback
@@ -1372,6 +1684,46 @@
             Logger.log(`✅ 批量修改屏蔽人群：已打开官方编辑过滤人群弹窗，本次共选中 ${ids.length} 个人群推广计划`);
         },
 
+        async runLeadBatchShieldCrowd(contexts = []) {
+            const selected = Array.isArray(contexts) ? contexts : [];
+            if (!selected.length) {
+                Logger.log('⚠️ 请先勾选需要批量处理的计划', true);
+                return;
+            }
+            const ids = selected.map(item => this.normalizeCampaignId(item?.campaignId || '')).filter(Boolean);
+            if (!ids.length) {
+                Logger.log('⚠️ 未能识别需要批量修改屏蔽人群的线索推广计划ID', true);
+                return;
+            }
+            const sourceId = ids[0];
+            const authContext = this.resolveAuthContext('onebpAdStrategyLiuZi');
+            const [source, sourceCampaign] = await Promise.all([
+                this.findLeadBlackCrowdList(sourceId, authContext),
+                this.findLeadCampaign(sourceId, authContext)
+            ]);
+            const crowdList = Array.isArray(source?.crowdList) ? source.crowdList : [];
+            const sourceContext = selected.find(item => this.normalizeCampaignId(item?.campaignId || '') === sourceId) || selected[0] || {};
+            await this.openLeadBlackCrowdEditorModal({
+                campaignId: sourceId,
+                campaignName: sourceContext?.campaignName || sourceContext?.name || '',
+                campaign: sourceCampaign?.campaign || {},
+                crowdList,
+                targetIds: ids,
+                oldCrowdMap: {
+                    [sourceId]: crowdList
+                },
+                authContext
+            });
+            for (let i = 0; !this.isDisplayBlackCrowdEditorDialogOpen() && i < 16; i++) {
+                await this.sleep(120);
+            }
+            if (!this.isDisplayBlackCrowdEditorDialogOpen()) {
+                Logger.log('⚠️ 线索推广批量修改屏蔽人群：已调用官方编辑过滤人群弹窗，但未检测到弹窗打开，请刷新页面后重试', true);
+                return;
+            }
+            Logger.log(`✅ 线索推广批量修改屏蔽人群：已打开官方编辑过滤人群弹窗，本次共选中 ${ids.length} 个线索推广计划`);
+        },
+
         async runDisplayBatchCrowdAction(action = '', contexts = []) {
             if (action === 'crowdSetting') {
                 await this.openDisplayNativeBatchCrowdDrawer(contexts);
@@ -1479,6 +1831,10 @@
             if (action === 'shieldCrowd' || action === 'crowdSetting') {
                 if (normalizedBizCode === 'onebpDisplay') {
                     await this.runDisplayBatchCrowdAction(action, contexts, normalizedBizCode);
+                    return;
+                }
+                if (normalizedBizCode === 'onebpAdStrategyLiuZi' && action === 'shieldCrowd') {
+                    await this.runLeadBatchShieldCrowd(contexts);
                     return;
                 }
                 await this.runBatchOpenNativeAction(action, contexts, normalizedBizCode, triggerEl);

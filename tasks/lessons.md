@@ -1,5 +1,15 @@
 # Lessons - 2026-04-15
 
+## L69 修改类官方弹窗必须验到确认后的服务端状态
+- 触发：线索推广 `批量修改屏蔽人群` 上一轮只验证了能打开官方 `编辑过滤人群` 弹窗并取消，用户继续指出点击确定后再进计划详情看不到成功。
+- 原因：打开弹窗只能证明入口链路正确，不能证明 `enterCallback`、提交 payload、差异删除/新增和服务端落库都正确；修改类功能如果不做确认后的详情页或只读接口核对，容易漏掉真实业务失败。
+- 规则：涉及配置修改、创建、复制、投放状态等写操作时，在用户授权后必须完成“真实确认提交 -> 读取接口或官方详情页验证最终状态”的闭环；未验到服务端状态前，不得宣称功能已修好。
+
+## L68 Extension 已处理业务失败不要写入 Chrome 错误集合
+- 触发：`chrome://extensions` 错误页积累大量 `[EscortAPI] 请求失败`、`CODEX_BLOCKED_CREATE_REQUEST` 和受保护拦截日志，掩盖真正的 runtime 异常。
+- 原因：业务/API 失败已经通过 Promise reject、UI 提示或调用方错误处理显式暴露，但同时使用 `console.error` / `console.warn` 会被 Chrome 当成扩展 runtime error/warning 收集。
+- 规则：extension 运行态中，已处理且会返回/抛给调用方的控制流失败应使用普通日志级别记录；只有未恢复的启动失败、代码异常或安全边界违规才使用 `console.error` / `console.warn` 进入 Chrome 扩展错误页。
+
 ## L67 Extension 内部桥不可依赖本机 debug 全局开关
 - 触发：用户在另一台电脑新安装后点击复制计划，报 `计划复制 API 未就绪`。
 - 原因：主助手与 `KeywordPlanApi` 分处不同 IIFE；extension 为安全不默认暴露 `window.__AM_WXT_PLAN_API__`，旧复制入口却依赖完整 API 可见，本机有 debug 开关时问题被掩盖，新设备无开关时只剩 openWizard 窄桥。

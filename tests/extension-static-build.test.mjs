@@ -35,8 +35,8 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
 });
 
 test('extension manifest 使用 Chrome 规范版本并保留展示版本', () => {
-  assert.equal(normalizeExtensionManifestVersion('7.04'), '7.4');
-  assert.equal(manifest.version, '7.4', 'manifest.version 不能包含带前导零的分段');
+  assert.equal(normalizeExtensionManifestVersion('7.05'), '7.5');
+  assert.equal(manifest.version, '7.5', 'manifest.version 不能包含带前导零的分段');
   assert.equal(manifest.version_name, outputs.version, 'manifest.version_name 应保留 userscript 展示版本');
 });
 

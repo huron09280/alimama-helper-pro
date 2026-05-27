@@ -100,6 +100,14 @@ test('人群推广屏蔽人群与人群设置走官方接口且不跳转', () =>
     assert.match(quickEntry, /openDisplayBlackCrowdEditorModal\(\{[\s\S]*?vf\.invoke\('mxModal',\s*\['onebp\/views\/pages\/manage\/campaign\/info'/, '批量修改屏蔽人群应调用官方 campaign/info 弹窗');
     assert.match(quickEntry, /openDisplayBlackCrowdEditorModal\(\{[\s\S]*?title:\s*'编辑过滤人群'/, '批量修改屏蔽人群弹窗标题应与官方一致');
     assert.match(quickEntry, /const enterCallback = async \(payload = \{\}\) => \{[\s\S]*?extractDialogBlackCrowdList\(payload\)[\s\S]*?syncDisplayBlackCrowdListForCampaign/, '官方弹窗提交回调应批量同步选中计划');
+    assert.match(quickEntry, /openDisplayBlackCrowdEditorModal\(\{[\s\S]*?const results = \[\];[\s\S]*?for \(const id of ids\)[\s\S]*?syncDisplayBlackCrowdListForCampaign/, '人群推广批量提交应逐个计划同步并等待回查完成');
+    const displayBlackCrowdModalBlock = quickEntry.slice(
+        quickEntry.indexOf('openDisplayBlackCrowdEditorModal({'),
+        quickEntry.indexOf('openLeadBlackCrowdEditorModal({')
+    );
+    assert.doesNotMatch(displayBlackCrowdModalBlock, /Promise\.allSettled\(ids\.map/, '人群推广批量修改屏蔽人群不得并发提交后漏掉逐个回查');
+    assert.match(quickEntry, /syncDisplayBlackCrowdListForCampaign\(campaignId,\s*newCrowdList = \[\],[\s\S]*?verifyDisplayBlackCrowdListSynced\(id,\s*newCrowdList,\s*authContext\)/, '人群推广提交后必须回查过滤人群是否真实落库');
+    assert.match(quickEntry, /verifyBlackCrowdListSynced\(fetchCurrent,\s*campaignId,[\s\S]*?过滤人群未确认落库/, '过滤人群回查失败时不得误报成功');
     assert.match(quickEntry, /vf\.invoke\('mxModal'[\s\S]*?enterCallback/, '官方弹窗提交回调应传入 mxModal');
     assert.match(quickEntry, /getPageMagix\(\)[\s\S]*?window\.seajs\.use\(\['magix'\]/, '打开官方弹窗应复用页面 Magix/seajs 环境');
     assert.match(quickEntry, /findMagixModalVframe\(magixRef = null\)[\s\S]*?universalBP_common_layout_main_content_display_campaign_list[\s\S]*?view\.mxModal/, '应优先使用官方页面 VFrame 的 mxModal 宿主');
@@ -125,5 +133,30 @@ test('人群推广屏蔽人群与人群设置走官方接口且不跳转', () =>
         quickEntry.indexOf('getNativeBatchActionPatterns')
     );
     assert.doesNotMatch(displayCrowdActionBlock, /window\.open|buildCampaignDetailUrl/, '人群推广官方人群动作不得跳转详情页');
-    assert.match(quickEntry, /runBatchOpenNativeAction\(action = '',\s*contexts = \[\],\s*fallbackBizCode = ''\)[\s\S]*?buildCampaignDetailUrl/, '关键词/线索等未确认业务线仍保留原保守兜底');
+    assert.match(quickEntry, /runBatchOpenNativeAction\(action = '',\s*contexts = \[\],\s*fallbackBizCode = ''\)[\s\S]*?buildCampaignDetailUrl/, '关键词等未确认业务线仍保留原保守兜底');
+});
+
+test('线索推广屏蔽人群走官方编辑弹窗且不跳转', () => {
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?isLeadScene[\s\S]*?打开官方编辑过滤人群弹窗并批量同步屏蔽人群/, '线索推广菜单 title 应指向官方编辑弹窗');
+    assert.match(quickEntry, /findLeadCampaign\(campaignId,\s*authContext = \{\}\)[\s\S]*?campaign\/get\.json\?\$\{query\.toString\(\)\}[\s\S]*?bizCode:\s*'onebpAdStrategyLiuZi'/, '线索推广应读取官方 campaign/get 以复用详情页完整 campaign 参数');
+    assert.match(quickEntry, /findLeadBlackCrowdList\(campaignId,\s*authContext = \{\}\)[\s\S]*?blackCrowd\/findList\.json\?\$\{query\.toString\(\)\}[\s\S]*?bizCode:\s*'onebpAdStrategyLiuZi'[\s\S]*?crowdBindQueryList:\s*\[\{[\s\S]*?campaignId:\s*String\(id\)/, '线索推广批量修改屏蔽人群应读取官方过滤人群数据');
+    assert.match(quickEntry, /modifyLeadBlackCrowdList\(campaignId,\s*crowdList = \[\],\s*authContext = \{\}\)[\s\S]*?blackCrowd\/batchModify\.json\?\$\{query\.toString\(\)\}[\s\S]*?mx_bizCode:\s*'onebpAdStrategyLiuZi'[\s\S]*?crowdList:\s*this\.prepareLeadBlackCrowdListForCampaign\(crowdList,\s*id\)/, '线索推广提交应调用官方 batchModify 并保持线索 bizCode');
+    assert.match(quickEntry, /deleteLeadBlackCrowdList\(campaignId,\s*crowdList = \[\],\s*authContext = \{\}\)[\s\S]*?blackCrowd\/batchDelete\.json\?\$\{query\.toString\(\)\}/, '线索推广移除过滤人群应调用官方 batchDelete');
+    assert.match(quickEntry, /openLeadBlackCrowdEditorModal\(\{[\s\S]*?sourceCampaign\.campaignBizCode = 'onebpAdStrategyLiuZi'[\s\S]*?filterCodes:\s*\['campaignCrowdFilterList'\]/, '线索推广应补齐 campaignBizCode 并只展示过滤人群组件');
+    assert.match(quickEntry, /openLeadBlackCrowdEditorModal\(\{[\s\S]*?vf\.invoke\('mxModal',\s*\['onebp\/views\/pages\/manage\/campaign\/info'/, '线索推广应复用官方 campaign/info 弹窗');
+    assert.match(quickEntry, /openLeadBlackCrowdEditorModal\(\{[\s\S]*?title:\s*'编辑过滤人群'/, '线索推广弹窗标题应与官方详情页一致');
+    assert.match(quickEntry, /runLeadBatchShieldCrowd\(contexts = \[\]\)[\s\S]*?Promise\.all\(\[[\s\S]*?findLeadBlackCrowdList\(sourceId,\s*authContext\)[\s\S]*?findLeadCampaign\(sourceId,\s*authContext\)[\s\S]*?openLeadBlackCrowdEditorModal/, '线索推广执行路径应先读取官方数据再打开弹窗');
+    assert.match(quickEntry, /openLeadBlackCrowdEditorModal\(\{[\s\S]*?const results = \[\];[\s\S]*?for \(const id of ids\)[\s\S]*?syncLeadBlackCrowdListForCampaign/, '线索推广批量提交应逐个计划同步并等待回查完成');
+    const leadBlackCrowdModalBlock = quickEntry.slice(
+        quickEntry.indexOf('openLeadBlackCrowdEditorModal({'),
+        quickEntry.indexOf('async runDisplayBatchShieldCrowd')
+    );
+    assert.doesNotMatch(leadBlackCrowdModalBlock, /Promise\.allSettled\(ids\.map/, '线索推广批量修改屏蔽人群不得并发提交后漏掉逐个回查');
+    assert.match(quickEntry, /syncLeadBlackCrowdListForCampaign\(campaignId,\s*newCrowdList = \[\],[\s\S]*?verifyLeadBlackCrowdListSynced\(id,\s*newCrowdList,\s*authContext\)/, '线索推广提交后也必须回查过滤人群是否真实落库');
+    assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?normalizedBizCode === 'onebpAdStrategyLiuZi' && action === 'shieldCrowd'[\s\S]*?runLeadBatchShieldCrowd\(contexts\)/, '批量+ shieldCrowd 在线索推广应进入专用官方弹窗流程');
+    const leadShieldBlock = quickEntry.slice(
+        quickEntry.indexOf('async runLeadBatchShieldCrowd'),
+        quickEntry.indexOf('async runDisplayBatchCrowdAction')
+    );
+    assert.doesNotMatch(leadShieldBlock, /window\.open|buildCampaignDetailUrl|runBatchOpenNativeAction/, '线索推广批量修改屏蔽人群不得再跳转详情页或只点行入口');
 });

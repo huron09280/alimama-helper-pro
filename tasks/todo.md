@@ -1,3 +1,154 @@
+# TODO - 2026-05-27 版本号与更新日志同步到 7.05
+
+## 需求规格
+- 目标：在当前功能改动完成后发布新版本，将版本号和最近更新日志同步到 `7.05`，再中文提交并推送。
+- 版本策略：当前版本 `7.04`，本轮包含批量+ 官方能力、过滤人群落库回查、extension 错误页清理等修复与增强，升级为 patch 版本 `7.05`。
+- 同步范围：userscript `@version`、脚本内更新日志、README 最近更新、CLAUDE 当前版本、extension manifest 版本测试，以及构建生成产物。
+- 成功标准：版本一致性门禁通过，构建产物同步，工作区改动以中文 commit 推送到当前分支。
+
+## 执行计划（可核对）
+- [x] 更新源码版本号、脚本更新日志、README、CLAUDE 和版本测试。
+- [x] 运行构建同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- [x] 运行版本一致性、语法与必要测试验证。
+- [x] 中文提交并推送当前分支。
+- [x] 回填验证记录与结果复盘。
+
+## 高层操作摘要
+- 已确认版本源头是 `src/entries/userscript-meta.js`，当前为 `7.04`；extension manifest 会由构建脚本归一化为 Chrome 合法版本号。
+- 已确认本轮已有未提交功能改动，版本更新会叠加在现有工作区上，不回退已有文件。
+- 已将源码版本、脚本更新日志、README、CLAUDE 和 extension manifest 版本测试同步到 `7.05`。
+- 已运行 `npm run build`，构建脚本输出版本为 `7.05`，并同步根 userscript、packages 与 extension 产物。
+
+## 验证记录
+- `npm run build`：通过，构建版本 `7.05`。
+- `npm run build:check`：通过，构建产物同步。
+- `npm run check:syntax`：通过。
+- `node --test tests/extension-static-build.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs`：通过，15/15。
+- `git diff --check`：通过。
+- `npm run review`：通过；506 项测试中 504 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败；版本一致性检查通过，README/CLAUDE 均为 `7.05`。
+
+## 结果复盘
+- 结果：版本号、最近更新日志和构建产物已统一到 `7.05`。
+- 风险与回滚：本轮包含已有功能改动与版本同步；如需回滚，应按提交整体回退，并重新运行 `npm run build` 保证产物一致。
+
+---
+
+# TODO - 2026-05-27 人群推广批量修改屏蔽人群真实提交回查
+
+## 需求规格
+- 目标：排查并修复人群推广 `批量+ -> 批量修改屏蔽人群` 是否存在与线索推广相同的“点击确定后看似完成但详情页未落库”问题。
+- 约束：用户要求修复到通过；真实提交验证只选可控测试/复制计划，只改过滤人群，不触发投放、预算、删除或创建。
+- 成功标准：人群推广批量修改确认提交后，代码会自动回查服务端状态；真实浏览器中至少 2 个计划提交成功，并能通过只读接口证明过滤人群已同步；计划详情 `人群 -> 编辑过滤人群` 官方入口需验证并如实记录页面状态；专项测试、构建检查通过。
+
+## 执行计划（可核对）
+- [x] 对比人群推广与线索推广提交链路，确认同类风险点。
+- [x] 修改 `src/`：提交后必须回查 `blackCrowd/findList`，未落库时不得报成功。
+- [x] 补充专项测试覆盖提交后回查校验。
+- [x] 构建同步产物并运行相关验证。
+- [x] 重载扩展，在真实人群推广页面执行最小真实提交验证，并打开计划详情确认。
+- [x] 回填验证记录与结果复盘。
+
+## 高层操作摘要
+- 已确认当前人群推广链路会复用官方 `编辑过滤人群` 弹窗并调用 `/blackCrowd/batchModify.json?bizCode=onebpDisplay`，但提交完成后只按接口 promise 成功计数并刷新，缺少服务端最终状态回查。
+- 已增加通用过滤人群落库校验：人群推广与线索推广在 `batchModify/batchDelete` 完成后会重试读取 `blackCrowd/findList`，只有回查结果与弹窗选择一致才计为成功，否则抛出“过滤人群未确认落库”。
+- 真实提交预检发现并发批量提交时请求顺序不利于证明逐个计划均完成回查；已改为按计划串行执行“读取旧值 -> 提交 -> 回查确认”，所有计划回查通过后才刷新并报成功。
+- 已在真实人群推广列表选中两个测试计划 `81021969209`、`81020127177`，通过官方 `编辑过滤人群` 弹窗确认提交 3 个过滤人群；请求探针证明每个计划均按“提交 -> 提交后回查”顺序完成。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，7/7。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过；506 项测试中 504 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重新加载扩展后，`chrome.developerPrivate.getExtensionInfo('cfegfgaodnfeigffdknhgciapojejflk')` 显示版本 `7.04`、`manifestErrors=0`、`runtimeErrors=0`、`runtimeWarnings=0`。
+- Chrome DevTools MCP：刷新真实 `one.alimama.com` 人群推广列表页后，运行态显示 `__AM_GET_SCRIPT_VERSION__() === "7.04"`、`__AM_PLATFORM_RUNTIME__.mode === "extension"`。
+- Chrome DevTools MCP：在人群推广列表选中计划 `81021969209`（`E7Pro_AI点睛_测试_4`）与 `81020127177`（`E7Pro_AI点睛_测试`），点击 `批量+ -> 批量修改屏蔽人群`，官方弹窗显示 `编辑过滤人群 / 过滤人群 / 设置过滤人群`，已选 3 个过滤人群：`屏蔽基础属性：50岁以上`、`屏蔽基础属性：40-49岁`、`屏蔽基础属性：18-24岁`。
+- Chrome DevTools MCP：点击官方弹窗 `确定` 后，抓包顺序为计划 `81021969209` 先 `findList` 读取旧值、再 `batchModify` 提交、再 `findList` 提交后回查；计划 `81020127177` 随后同样按 `findList -> batchModify -> findList` 串行完成。两次 `batchModify` HTTP 200，响应 `ok=true`，请求均包含 3 个过滤人群。
+- Chrome DevTools MCP：用同页面授权态只读查询 `/blackCrowd/findList.json?bizCode=onebpDisplay`，计划 `81021969209` 与 `81020127177` 均返回成功，过滤人群均为 `屏蔽基础属性：50岁以上`、`屏蔽基础属性：40-49岁`、`屏蔽基础属性：18-24岁`。
+- Chrome DevTools MCP：进入计划 `81021969209` 详情页并点击 `人群 -> 编辑过滤人群`，官方 `编辑过滤人群` 外层弹窗可打开，但当前页面未渲染过滤人群内容区；未在该弹窗内提交。最终落库结论以后续同授权态只读 `findList` 回查为准。
+
+## 结果复盘
+- 结论：人群推广存在与线索推广同类的交付风险。旧链路虽然调用了官方提交接口，但只依赖提交 promise 成功，未证明服务端最终状态已更新；在用户指出“详情页看不到变化”的场景下容易误报完成。
+- 修复结果：人群推广和线索推广共用过滤人群身份归一化与落库校验，提交后必须回查 `blackCrowd/findList` 并与弹窗选择一致才算成功；批量处理改为按计划串行，避免并发请求造成状态证明不清晰。
+- 风险与回滚：如果官方调整 `blackCrowd/findList` 的 `crowdList` 结构，校验会失败关闭并提示“过滤人群未确认落库”，不会静默报成功；回滚可撤销本次回查与串行同步逻辑，但会恢复旧的假成功风险。
+
+# TODO - 2026-05-27 线索推广批量修改屏蔽人群真实提交不生效
+
+## 需求规格
+- 目标：修复线索推广列表 `批量+ -> 批量修改屏蔽人群` 在官方弹窗中点击确定后真实提交不生效的问题，直到打开计划详情确认过滤人群已同步。
+- 约束：用户已明确授权真实提交验证；仍需选择最小可控改动，避免触发无关投放、预算、删除或创建动作；优先复用官方弹窗和官方接口。
+- 成功标准：批量选择至少 2 个线索推广计划，编辑过滤人群并确认后，请求返回成功；逐个打开/查询计划详情能看到相同过滤人群结果；专项测试、构建检查和真实浏览器验证通过。
+
+## 执行计划（可核对）
+- [x] 执行真实点击确定链路，记录请求、响应、弹窗回调数据和详情页结果。
+- [x] 定位是否仍存在回调取值、提交 payload、删除/修改差异计算、异步刷新或接口语义问题。
+- [x] 复核 `src/` 中线索推广批量同步逻辑，保持官方弹窗链路和最小侵入；本轮未发现需新增源码改动。
+- [x] 复跑专项测试覆盖官方弹窗链路。
+- [x] 运行构建同步校验。
+- [x] 在真实浏览器执行授权范围内的提交验证，并打开计划详情确认已生效。
+- [x] 回填验证记录与结果复盘，并将本轮验收教训同步到 `tasks/lessons.md`。
+
+## 高层操作摘要
+- 已启动本轮真实提交修复；上一轮只验证打开/取消，未覆盖用户现在指出的“确认后提交不生效、计划详情内无变化”。
+- 已在真实线索推广列表选中两个复制计划 `14581908434`、`14549542833`，通过 `批量+ -> 批量修改屏蔽人群` 打开官方 `编辑过滤人群` 弹窗，选择 `50岁以上` 后点击外层确定完成真实提交。
+- 已确认当前 7.04 线索专用官方弹窗链路真实生效；本轮未新增源码改动，上一轮 `src/main-assistant/campaign-id-quick-entry.js` 的线索专用读取/弹窗/批量同步链路就是对应修复。
+
+## 验证记录
+- Chrome DevTools MCP：真实提交后网络记录出现两次 `/blackCrowd/batchModify.json?bizCode=onebpAdStrategyLiuZi`，分别提交到计划 `14581908434` 与 `14549542833`，HTTP 状态均为 200，payload 均包含 1 个过滤人群 `50岁以上`。
+- Chrome DevTools MCP：用当前页面授权态只读查询 `/blackCrowd/findList.json?bizCode=onebpAdStrategyLiuZi`，计划 `14581908434` 与 `14549542833` 均返回成功，过滤人群均为 `屏蔽基础属性:50岁以上`。
+- Chrome DevTools MCP：打开计划 `14581908434` 详情页，进入 `人群 -> 编辑过滤人群`，官方弹窗显示 `已选择 1 个人群` 和 `屏蔽基础属性:50岁以上`。
+- Chrome DevTools MCP：打开计划 `14549542833` 详情页，进入 `人群 -> 编辑过滤人群`，官方弹窗显示 `已选择 1 个人群` 和 `屏蔽基础属性:50岁以上`。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，7/7。
+- `npm run build:check`：通过，构建产物与源码同步。
+
+## 结果复盘
+- 结论：这次按用户授权完成了外层确定后的真实提交闭环，接口层和详情页官方窗口均证明已落库；未复现当前 7.04 仍不生效的问题。
+- 根因归档：上一轮只验到“能打开官方窗口并取消不提交”，没有覆盖“确认提交后再进入计划详情核对”的交付标准，导致用户看到的实际问题未被验收闭环捕获。
+- 风险与边界：保存请求的响应 body 因页面自动刷新已无法从 DevTools preserved network 读取，但后续只读查询和两个计划详情页官方弹窗均确认了最终服务端状态。
+
+# TODO - 2026-05-27 线索推广批量修改屏蔽人群修复
+
+## 需求规格
+- 目标：修复线索推广列表里的 `批量+ -> 批量修改屏蔽人群`，在真实浏览器中验证可用。
+- 约束：优先复用线索推广官方页面能力；不得跳转详情页伪装批量能力；不得提交真实修改，除非有明确阻断/拦截保护或只做打开/取消验证。
+- 成功标准：在线索推广列表选中计划后点击 `批量修改屏蔽人群`，能原地打开正确的官方屏蔽/人群过滤编辑界面；不误走人群推广接口；不触发真实提交；专项测试、构建检查和浏览器验证通过。
+
+## 执行计划（可核对）
+- [x] 在真实线索推广页复现当前 `批量修改屏蔽人群` 行为，记录页面、按钮、错误和网络请求。
+- [x] 定位线索推广官方单计划入口和可复用的弹窗/抽屉宿主参数。
+- [x] 以最小范围修改 `src/`，让线索推广走官方原地编辑链路。
+- [x] 补充或更新 `tests/campaign-batch-plus-quick-entry.test.mjs` 专项断言。
+- [x] 构建同步产物并运行相关语法、专项测试、build check/review。
+- [x] 重载扩展后在真实浏览器复验，记录是否打开官方界面、URL 是否停留列表页、是否有提交类请求。
+- [x] 回填验证记录与结果复盘；如形成通用规则则更新 `tasks/lessons.md`。
+
+## 高层操作摘要
+- 已回顾 `AGENTS.md` 与 `tasks/lessons.md`；本轮需遵守官方弹窗复用、真实浏览器验收和不触发真实提交的边界。
+- 真实线索列表复现：选中计划 `14581908434` 后点击 `批量+ -> 批量修改屏蔽人群`，页面仍停留列表且没有打开 `编辑过滤人群` 弹窗，也没有发起读取/提交请求；当前实现只是点击行内 `高级设置` 并误报成功。
+- 真实线索详情页确认：`人群 -> 编辑过滤人群` 打开官方 `campaign/info` 弹窗，组件为 `campaignCrowdFilterList`，读取接口为 `/blackCrowd/findList.json?bizCode=onebpAdStrategyLiuZi`，同时读取 `/campaign/get.json?bizCode=onebpAdStrategyLiuZi` 补齐完整 campaign 参数。
+- 已新增线索推广专用 `runLeadBatchShieldCrowd` 链路：先读取线索计划和过滤人群，再复用官方 `编辑过滤人群` 弹窗；提交回调按选中计划批量同步 `/blackCrowd/batchModify.json` 与 `/blackCrowd/batchDelete.json`，bizCode 保持 `onebpAdStrategyLiuZi`。
+- 已同步构建产物并在真实列表页复验：选中计划后点击 `批量修改屏蔽人群` 会原地打开官方 `编辑过滤人群` 弹窗，不再误点行内 `高级设置`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，7/7。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过；506 项测试中 504 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：重新加载扩展后，`chrome.developerPrivate.getExtensionInfo('cfegfgaodnfeigffdknhgciapojejflk')` 显示版本 `7.04`、`manifestErrors=0`、`runtimeErrors=0`、`runtimeWarnings=0`。
+- Chrome DevTools MCP：刷新真实 `one.alimama.com` 线索推广列表页后，运行态显示 `__AM_GET_SCRIPT_VERSION__() === "7.04"`、`__AM_PLATFORM_RUNTIME__.mode === "extension"`。
+- Chrome DevTools MCP：在线索推广列表页选中计划 `14581908434`，点击 `批量+ -> 批量修改屏蔽人群`，页面停留 `#!/manage/hky?orderField=charge&orderBy=desc`，原地打开官方弹窗 `编辑过滤人群 / 过滤人群 / 设置过滤人群`。
+- Chrome DevTools MCP：上述操作仅发起 `/blackCrowd/findList.json?bizCode=onebpAdStrategyLiuZi` 与 `/campaign/get.json?bizCode=onebpAdStrategyLiuZi` 两个读取请求；未点击确定，取消后弹窗关闭，拦截探针记录 `blocked=[]`，未触发 `/blackCrowd/batchModify.json`、`/blackCrowd/batchDelete.json` 或其它提交类请求。
+
+## 结果复盘
+- 根因：线索推广 `批量修改屏蔽人群` 复用了通用原生入口点击逻辑，只能尝试点击行内 `高级设置`，没有按线索详情页官方 `人群 -> 编辑过滤人群` 链路准备完整 campaign 与过滤人群参数，因此列表页会误报成功但不弹出目标窗口。
+- 修复结果：线索推广现在有专用官方弹窗链路，读取 `/campaign/get.json` 与 `/blackCrowd/findList.json` 后调用官方 `campaign/info` 弹窗，并在确认回调里才按选中计划批量同步过滤人群；列表页打开/取消验证通过且未触发真实提交。
+- 风险与回滚：实现依赖官方 `campaign/info` 视图、`campaignCrowdFilterList` 组件和 `changeCampaignCrowdFilterList` 操作码；若官方改版，回滚可撤销线索专用 `runLeadBatchShieldCrowd` 链路，但会恢复为无法打开过滤人群弹窗的旧行为。
+
 # TODO - 2026-05-27 修复 Chrome 扩展错误页全部报错
 
 ## 需求规格
@@ -6,21 +157,37 @@
 - 成功标准：Chrome 扩展错误页不再显示未处理错误；相关语法、构建、测试和浏览器验证通过。
 
 ## 执行计划（可核对）
-- [ ] 打开 Chrome 扩展错误页，记录所有错误文本、来源文件和触发栈。
-- [ ] 映射错误到源码根因，判断是局部修复还是结构性修复。
-- [ ] 修改 `src/` 或必要的构建脚本，保持最小侵入并同步生成产物。
-- [ ] 运行相关 `node --check`、专项测试、`npm run build:check`/`npm run review` 级验证。
-- [ ] 重新加载扩展并复查 `chrome://extensions` 错误页，确认错误清空或不再新增。
-- [ ] 回填验证记录与结果复盘。
+- [x] 打开 Chrome 扩展错误页，记录所有错误文本、来源文件和触发栈。
+- [x] 映射错误到源码根因，判断是局部修复还是结构性修复。
+- [x] 修改 `src/` 或必要的构建脚本，保持最小侵入并同步生成产物。
+- [x] 运行相关 `node --check`、专项测试、`npm run build:check`/`npm run review` 级验证。
+- [x] 重新加载扩展并复查 `chrome://extensions` 错误页，确认错误清空或不再新增。
+- [x] 回填验证记录与结果复盘。
 
 ## 高层操作摘要
 - 已回顾 `AGENTS.md`、`tasks/lessons.md` 和外部 AGENT-v2 规则；本轮按 debug-first 和根因修复执行。
+- 已通过 `chrome.developerPrivate.getExtensionInfo()` 读取扩展 `cfegfgaodnfeigffdknhgciapojejflk` 的完整错误集合：初始有 54 条 runtime 记录，主要分为 `Extension context invalidated`、7.03 旧 bundle 的 `wizardDefaultDraft` 初始化顺序错误、以及 EscortAPI 控制流失败日志三类。
+- 已修复 `src/entries/extension-content.js`：授权桥转发 `chrome.runtime.sendMessage` 时捕获扩展上下文失效，并把后续请求转换为明确的 `runtime_unavailable` 响应，避免旧 content script 在扩展重载后继续抛未捕获异常。
+- 已修复 `src/optimizer/api.js`：API 请求失败仍按原链路抛出给调用方，但日志改为 `Logger.info`，避免已处理的业务失败、网络失败或受保护拦截被 Chrome 归类为扩展 error/warning。
+- 已更新 `tests/extension-static-build.test.mjs`，覆盖 content script 保护式转发和 extension page bundle 不把 API 控制流失败写入 Chrome 扩展错误页。
+- 已运行构建同步根 userscript、`dist/packages/` 与 `dist/extension/`；Chrome 重新加载 unpacked extension 后版本为 `7.04`。
 
 ## 验证记录
-- 待补充。
+- `node --check src/entries/extension-content.js`：通过。
+- `node --check src/optimizer/api.js`：通过。
+- `node --test tests/extension-static-build.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，20/20。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/`。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run review`：通过；505 项测试中 503 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- Chrome DevTools MCP：在 `chrome://extensions/?errors=cfegfgaodnfeigffdknhgciapojejflk` 清空旧错误并重新加载扩展，`getExtensionInfo()` 显示版本 `7.04`、`manifestErrors=0`、`runtimeErrors=0`、`runtimeWarnings=0`。
+- Chrome DevTools MCP：刷新真实 `one.alimama.com` 关键词推广页面后，页面运行态显示 `__AM_GET_SCRIPT_VERSION__() === "7.04"`、`__AM_PLATFORM_RUNTIME__.mode === "extension"`、`__AM_WXT_PLAN_API_BRIDGE_HOST__ === true`；再次复查扩展错误页仍为 `manifestErrors=0`、`runtimeErrors=0`、`runtimeWarnings=0`。
 
 ## 结果复盘
-- 待补充。
+- 根因：Chrome 错误页混合了旧运行态历史错误和当前代码缺陷。`content.js` 在扩展重载后仍可能收到页面 license bridge 消息，直接调用失效的 `chrome.runtime.sendMessage` 会生成 `Extension context invalidated`；EscortAPI 将已处理的请求失败用 `console.error/warn` 记录，导致业务失败和测试拦截噪声进入扩展错误页。
+- 修复结果：content 授权桥现在对失效上下文显式降级响应；API 请求失败仍保留日志和抛错，但不再污染 Chrome 扩展错误集合。重新加载 7.04 并刷新真实页面后，错误页已清空且没有新增错误。
+- 风险与回滚：改动不改变 API 失败语义，只改变已处理失败的控制台级别；若需要回滚，可撤销 `src/entries/extension-content.js` 的 runtime unavailable 保护和 `src/optimizer/api.js` 的日志级别调整，但 Chrome 错误页会重新被已处理失败污染。
 
 # TODO - 2026-05-27 版本号与更新日志同步到 7.04
 
