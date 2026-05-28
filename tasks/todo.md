@@ -10,9 +10,9 @@
 - [x] 更新版本展示源、文档示例和 mockup 生成脚本/产物。
 - [x] 增加版本展示一致性回归测试。
 - [x] 运行构建、测试与版本门禁验证。
-- [ ] 中文提交并推送当前分支。
-- [ ] 创建并核验 GitHub `v7.05` Release 与下载资产。
-- [ ] 回填验证记录与结果复盘。
+- [x] 中文提交并推送当前分支。
+- [x] 创建并核验 GitHub `v7.05` Release 与下载资产。
+- [x] 回填验证记录与结果复盘。
 
 ## 高层操作摘要
 - 已确认本地 `src/entries/userscript-meta.js`、README 最近更新和 CLAUDE 当前版本为 `7.05`。
@@ -20,6 +20,8 @@
 - 已发现当前展示示例仍残留在 `scripts/generate-mockups.mjs`、`docs/images/mockups/*.html`、`docs/新人使用教程.md`、`docs/授权管理页.md`。
 - 已将 mockup 生成脚本改为读取 userscript meta 当前版本，重新生成 `docs/images/mockups/*.html` 与 README 引用的 PNG 截图。
 - 已新增回归测试，覆盖 README、CLAUDE、授权文档、教程和 mockup HTML 的当前展示版本同步。
+- 已提交 `548d80d docs: 同步 GitHub 展示版本到 7.05` 并推送到 `origin/main`。
+- 已创建并推送 tag `v7.05`，Release workflow 成功生成 GitHub Release 和 3 个下载资产。
 
 ## 验证记录
 - `node --test tests/build-output-sync.test.mjs`：通过，新增当前展示版本同步检查。
@@ -30,9 +32,16 @@
 - `git diff --check`：通过。
 - `npm run test`：通过，507 项测试中 505 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
 - `npm run review`：通过，版本一致性检查确认 README/CLAUDE 均为 `7.05`。
+- `gh run watch 26550389767 --interval 5 --exit-status`：通过，Release workflow 成功。
+- `gh release view v7.05 --json tagName,url,assets,createdAt,publishedAt`：通过，Release 为 `v7.05`，资产包含 `alimama-helper-pro.user.js`、`alimama-helper-pro.meta.js`、`alimama-helper-pro-extension.zip`。
+- `curl -sSLI https://github.com/huron09280/alimama-helper-pro/releases/latest`：通过，302 跳转到 `/releases/tag/v7.05`。
+- `curl -sSL https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.meta.js | sed -n '1,12p'`：通过，`@version 7.05`。
+- `curl -sSL https://github.com/huron09280/alimama-helper-pro/releases/latest/download/alimama-helper-pro.user.js | sed -n '1,12p'`：通过，`@version 7.05`。
 
 ## 结果复盘
-- 待补充。
+- 根因：上一轮版本源头与构建产物已到 `7.05`，但 GitHub 最新 Release 仍停在 `v7.01`；同时文档示例、mockup HTML 和 README 截图里仍有旧展示版本，现有 review 门禁只覆盖 README/CLAUDE/脚本头，未覆盖这些展示位。
+- 修复结果：当前展示版本统一到 `7.05`，mockup 生成脚本改为从 userscript meta 自动读取版本，新增测试防止文档/示例/HTML mockup 再次漏同步；GitHub `releases/latest` 与下载资产已发布为 `v7.05`。
+- 风险与回滚：本轮不改运行时代码；若截图样式需要回退，可恢复 `docs/images/*` 和 mockup 生成脚本，再保留版本同步测试。
 
 ---
 
