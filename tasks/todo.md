@@ -1,3 +1,41 @@
+# TODO - 2026-05-28 GitHub 展示版本与 Release 同步到 7.05
+
+## 需求规格
+- 目标：修复 GitHub 页面上仍可见的旧版本号，确保当前展示版本、文档示例、mockup HTML、发布下载入口与 `7.05` 口径一致。
+- 范围：仓库源码版本源头仍以 `src/entries/userscript-meta.js` 的 `@version 7.05` 为准；本轮只清理当前展示/示例里的旧版本，不改历史更新日志条目的真实历史版本。
+- 成功标准：全仓当前展示版本无 `7.01`/`6.08` 这类旧示例残留；自动化门禁能捕获 README、CLAUDE、教程、授权示例、mockup 生成脚本/产物的版本不同步；GitHub `releases/latest` 更新到 `v7.05`。
+
+## 执行计划（可核对）
+- [x] 扫描仓库与 GitHub 线上状态，确认旧版本号来源。
+- [x] 更新版本展示源、文档示例和 mockup 生成脚本/产物。
+- [x] 增加版本展示一致性回归测试。
+- [x] 运行构建、测试与版本门禁验证。
+- [ ] 中文提交并推送当前分支。
+- [ ] 创建并核验 GitHub `v7.05` Release 与下载资产。
+- [ ] 回填验证记录与结果复盘。
+
+## 高层操作摘要
+- 已确认本地 `src/entries/userscript-meta.js`、README 最近更新和 CLAUDE 当前版本为 `7.05`。
+- 已确认 GitHub `releases/latest` 仍指向 `v7.01`，发布资产未跟上当前版本；远端 tag 也仅到 `v7.01`。
+- 已发现当前展示示例仍残留在 `scripts/generate-mockups.mjs`、`docs/images/mockups/*.html`、`docs/新人使用教程.md`、`docs/授权管理页.md`。
+- 已将 mockup 生成脚本改为读取 userscript meta 当前版本，重新生成 `docs/images/mockups/*.html` 与 README 引用的 PNG 截图。
+- 已新增回归测试，覆盖 README、CLAUDE、授权文档、教程和 mockup HTML 的当前展示版本同步。
+
+## 验证记录
+- `node --test tests/build-output-sync.test.mjs`：通过，新增当前展示版本同步检查。
+- `node scripts/generate-mockups.mjs`：通过，重新生成 `docs/images/mockups/*.html`。
+- Chrome headless 截图：已重新生成 `docs/images/{floating-ball,main-panel,assist-switches,download-capture,campaign-quick-entry,tampermonkey-install}.png`，抽查主面板、辅助显示和 Tampermonkey 安装图均显示 `v7.05`。
+- `npm run build:check`：通过，构建版本 `7.05`。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run test`：通过，507 项测试中 505 通过、2 个历史跳过（缺少 `agent-cluster/index.mjs`），0 失败。
+- `npm run review`：通过，版本一致性检查确认 README/CLAUDE 均为 `7.05`。
+
+## 结果复盘
+- 待补充。
+
+---
+
 # TODO - 2026-05-27 版本号与更新日志同步到 7.05
 
 ## 需求规格

@@ -3,15 +3,55 @@ import path from 'path';
 
 const uiJsPath = path.resolve('./src/main-assistant/ui.js');
 const uiJsContent = fs.readFileSync(uiJsPath, 'utf8');
+const userscriptMetaPath = path.resolve('./src/entries/userscript-meta.js');
+const userscriptMetaContent = fs.readFileSync(userscriptMetaPath, 'utf8');
+const currentVersion = (() => {
+    const match = userscriptMetaContent.match(/^\/\/ @version\s+([0-9]+(?:\.[0-9]+)*)/m);
+    if (!match) {
+        throw new Error('无法从 userscript meta 解析当前版本号');
+    }
+    return match[1];
+})();
 
 const cssMatch = uiJsContent.match(/const css = `([\s\S]*?)`;/);
-const css = cssMatch ? cssMatch[1].replace(/\$\{CURRENT_VERSION\}/g, '6.08') : '';
+const css = cssMatch ? cssMatch[1].replace(/\$\{CURRENT_VERSION\}/g, currentVersion) : '';
 
 const domMatch = uiJsContent.match(/root\.innerHTML = `([\s\S]*?)`;/);
-let dom = domMatch ? domMatch[1].replace(/\$\{CURRENT_VERSION\}/g, '6.08') : '';
+let dom = domMatch ? domMatch[1].replace(/\$\{CURRENT_VERSION\}/g, currentVersion) : '';
 
 // Fix close button size for headless rendering
 dom = dom.replace(/<svg viewBox="0 0 1024 1024" style="width:1\.2em;height:1\.2em;/g, '<svg viewBox="0 0 1024 1024" style="width:16px;height:16px;');
+
+const escapeTemplateLiteral = (value) => String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/`/g, '\\`');
+
+const mockupIconRuntime = `
+        const escapeAmIconHtml = (value) => String(value ?? '').replace(/[&<>"']/g, ch => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[ch] || ch));
+        const AM_ICON_DEFS = {
+            logo: '<path d="M13 3L5 13h6l-1 8 9-12h-6l1-6z"></path>',
+            close: '<path d="M6 6l12 12M18 6L6 18"></path>',
+            'shield-check': '<path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3z"></path><path d="M9 12l2 2 4-5"></path>',
+            plan: '<rect x="5" y="4" width="14" height="16" rx="2"></rect><path d="M9 8h6M9 12h4M9 16h3M15 14v4M13 16h4"></path>',
+            chart: '<path d="M4 19h16"></path><rect x="6" y="11" width="3" height="6" rx="1"></rect><rect x="11" y="7" width="3" height="10" rx="1"></rect><rect x="16" y="4" width="3" height="13" rx="1"></rect>',
+            eye: '<path d="M3 12s3.3-6 9-6 9 6 9 6-3.3 6-9 6-9-6-9-6z"></path><circle cx="12" cy="12" r="2.5"></circle>',
+            list: '<path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6h1M4 12h1M4 18h1"></path>'
+        };
+        const renderAmIcon = (name, options = {}) => {
+            const size = Number.isFinite(Number(options.size)) ? Number(options.size) : 16;
+            const strokeWidth = options.strokeWidth ?? 2;
+            const className = ['am-ui-icon', 'am-ui-icon-' + String(name || 'logo').replace(/[^a-z0-9_-]+/gi, '-'), options.className || ''].filter(Boolean).join(' ');
+            const style = options.style ? ' style="' + escapeAmIconHtml(options.style) + '"' : '';
+            return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="' + size + '" height="' + size + '" class="' + escapeAmIconHtml(className) + '" fill="none" stroke="currentColor" stroke-width="' + escapeAmIconHtml(strokeWidth) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"' + style + '>' + (AM_ICON_DEFS[name] || AM_ICON_DEFS.logo) + '</svg>';
+        };
+        const renderAmWindowIcon = (name, options = {}) => renderAmIcon(name, { ...options, size: 16, strokeWidth: 2.2, className: ['am-window-control-icon', options.className || ''].filter(Boolean).join(' '), style: 'display:block;width:16px;height:16px;' + (options.style || '') });
+`;
 
 const htmlTemplate = (type) => `
 <!DOCTYPE html>
@@ -138,7 +178,8 @@ const htmlTemplate = (type) => `
     <div class="snapshot-container" id="container">
     </div>
     <script>
-        const dom = \`${dom.replace(/`/g, '\\`')}\`;
+${mockupIconRuntime}
+        const dom = \`${escapeTemplateLiteral(dom)}\`;
         const type = '${type}';
         const container = document.getElementById('container');
         
@@ -150,7 +191,7 @@ const htmlTemplate = (type) => `
             
             // Populate fake logs cleanly
             logContent.innerHTML = 
-                '<div class="am-log-line"><span class="am-log-time">10:45:12</span> <span style="color:#0ea86f">[系统] 阿里助手 Pro v7.01 启动成功</span></div>' +
+                '<div class="am-log-line"><span class="am-log-time">10:45:12</span> <span style="color:#0ea86f">[系统] 阿里助手 Pro v${currentVersion} 启动成功</span></div>' +
                 '<div class="am-log-line"><span class="am-log-time">10:45:15</span> <span style="color:#1d3fcf">[护航] 算法护航引擎已就绪</span></div>';
             
             if (type === 'floating-ball') {
@@ -261,7 +302,7 @@ const htmlTemplate = (type) => `
                             <div class="tm-left">
                                 <div class="tm-title">
                                     阿里妈妈多合一助手 (Pro版) 
-                                    <span class="tm-version">v7.01</span>
+                                    <span class="tm-version">v${currentVersion}</span>
                                 </div>
                                 <div class="tm-meta-row">
                                     <div class="tm-meta-key">Author</div>
