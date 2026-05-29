@@ -180,6 +180,20 @@ test('主面板 P2 样式收敛到统一浅玻璃 token', () => {
   assert.doesNotMatch(uiBlock, /border-color:\s*rgba\(47,\s*84,\s*235,\s*0\.4\)/, '辅助开关 hover 不应保留硬编码蓝色边框');
 });
 
+test('主样式层不覆盖万能查数头部统一表面 token', () => {
+  const uiBlock = getMainUIBlock();
+  assert.match(
+    uiBlock,
+    /#am-magic-report-popup \.am-magic-header \{[\s\S]*?background:\s*var\(--am26-surface-strong\) !important;/,
+    '主样式层不应把万能查数头部覆盖回旧半透明背景'
+  );
+  assert.doesNotMatch(
+    uiBlock,
+    /#am-magic-report-popup \.am-magic-header \{[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.3\) !important;/,
+    '万能查数头部不应保留旧 rgba 背景覆盖'
+  );
+});
+
 test('主助手配置读写使用安全存储封装，避免部分浏览器阻断辅助显示启动', () => {
   const bootstrapBlock = getMainBootstrapBlock();
   assert.match(bootstrapBlock, /const fallbackStorage = new Map\(\);/, '缺少配置存储内存兜底');

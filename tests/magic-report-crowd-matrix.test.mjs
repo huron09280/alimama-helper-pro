@@ -288,6 +288,60 @@ test('万能查数窗口动作与视图页签具备可访问语义', () => {
   assert.match(block, /this\.viewTabsEl\.addEventListener\('keydown'[\s\S]*\['ArrowLeft', 'ArrowRight', 'Home', 'End'\][\s\S]*nextTab\.focus\(\{ preventScroll: true \}\);[\s\S]*this\.switchMagicView\(nextTab\.dataset\.view \|\| 'matrix'\);/, '视图页签缺少键盘左右/Home/End 切换');
 });
 
+test('万能查数头部与人群看板顶部控制区收敛到统一浅玻璃 token', () => {
+  const block = getMagicReportBlock();
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-magic-header \{[\s\S]*?background:\s*var\(--am26-surface-strong\);[\s\S]*?backdrop-filter:\s*blur\(18px\) saturate\(1\.28\);[\s\S]*?box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.54\), 0 6px 18px rgba\(31,\s*53,\s*109,\s*0\.06\);/,
+    '万能查数头部未使用统一浅玻璃表面 token'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-magic-header \.am-btn-group \{[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.52\), 0 4px 12px rgba\(31,\s*53,\s*109,\s*0\.05\);/,
+    '窗口动作组未收敛为统一浅玻璃工具组'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-magic-header \.am-magic-view-tabs \{[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?backdrop-filter:\s*blur\(10px\) saturate\(1\.18\);/,
+    '万能查数页签容器未使用统一 token'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-crowd-matrix-campaign \{[\s\S]*?flex:\s*1 1 420px;[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?overflow:\s*visible;/,
+    '计划信息胶囊未使用统一 token 或未保留商品下拉弹出空间'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-crowd-matrix-campaign-part \{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/,
+    '计划信息长文本缺少省略保护'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-crowd-matrix-toolbar \{[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?backdrop-filter:\s*blur\(10px\) saturate\(1\.12\);/,
+    '看板工具栏未使用统一浅玻璃容器'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-crowd-matrix-legend-group \{[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?background:\s*var\(--am26-surface-strong\);[\s\S]*?border-radius:\s*999px;/,
+    '图例分组未使用统一胶囊控制组'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-crowd-matrix-retry \{[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?color:\s*var\(--am26-primary\);[\s\S]*?transition:\s*background 0\.2s ease, border-color 0\.2s ease, color 0\.2s ease, box-shadow 0\.2s ease, transform 0\.2s ease;/,
+    '重试按钮未使用统一按钮边框、语义色或明确 transition'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-crowd-matrix-retry:hover,[\s\S]*?#am-magic-report-popup \.am-crowd-matrix-retry:focus-visible \{[\s\S]*?color:\s*var\(--am26-primary-strong\);[\s\S]*?transform:\s*translateY\(-1px\);/,
+    '重试按钮 hover/focus 未使用克制反馈'
+  );
+  assert.doesNotMatch(
+    block,
+    /#am-magic-report-popup \.am-magic-header \.am-btn-group \{[\s\S]*?border-left:\s*1px solid rgba\(0,\s*0,\s*0,\s*0\.06\)/,
+    '窗口动作组不应保留旧左分割线样式'
+  );
+});
+
 test('万能查数快捷话术按钮具备焦点与临时激活语义', () => {
   const block = getMagicReportBlock();
   assert.match(block, /btn\.setAttribute\('aria-label', `快捷话术：\$\{label\}`\);/, '快捷话术缺少稳定 aria-label');

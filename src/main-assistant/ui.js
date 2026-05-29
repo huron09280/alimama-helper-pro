@@ -1606,7 +1606,7 @@
                     background: var(--am26-panel-strong) !important;
                 }
                 #am-magic-report-popup .am-magic-header {
-                    background: rgba(255, 255, 255, 0.3) !important;
+                    background: var(--am26-surface-strong) !important;
                 }
 
                 #alimama-escort-helper-ui [id$="-log-wrapper"] {

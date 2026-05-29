@@ -10,7 +10,7 @@
 ## 执行计划（可核对）
 - [x] 使用不少于 3 个子代理完成页面清单、设计约束、验证路径并行梳理。
 - [x] 页面 1：悬浮球 + 主面板 + 辅助显示展开区。
-- [ ] 页面 2：万能查数弹窗 + 人群对比看板入口。
+- [x] 页面 2：万能查数弹窗 + 人群对比看板入口。
 - [ ] 页面 3：算法护航主面板 + 执行结果浮层。
 - [ ] 页面 4：组建计划主向导首页/日志区。
 - [ ] 页面 5：组建计划矩阵配置页。
@@ -30,6 +30,7 @@
 - 已完成 3 个只读子代理：页面入口清单、设计/代码/验证约束、构建与 Chrome MCP 验证路径。
 - 当前从页面 1 开始，优先保证主入口更像统一工作台：标题、主操作、辅助开关、日志状态清晰且可扫描。
 - 页面 1 已完成：主工具区改为统一浅玻璃控制组，辅助显示展开区改为浅玻璃胶囊开关组，日志头改为同体系工具条；工具按钮文字增加 `am-tool-label`，避免窄面板溢出。
+- 页面 2 已完成：万能查数弹窗头部、窗口动作组、视图页签、计划信息胶囊、看板工具栏、图例组和重试按钮统一为浅玻璃 token；补充长计划/商品文本省略保护，并同步主样式层覆盖，避免运行态 header 被旧背景压回。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -46,11 +47,30 @@
   - 样式核对：主面板宽度 `304px`；`.am-tools-row`、`#am-assist-switches.open`、`.am-log-header` 均为 `var(--am26-surface)` 背景、统一边框和浅玻璃阴影；工具文字 `am-tool-label` 正常渲染。
   - 截图：`tasks/ui-page1-main-panel-before-2026-05-30.png`、`tasks/ui-page1-main-panel-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED`，未发现插件 UI 相关运行时异常。
+- 页面 2 自动化：
+  - `node --check src/main-assistant/magic-report.js`：通过。
+  - `node --check src/main-assistant/ui.js`：通过。
+  - `git diff --check`：通过。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs tests/icon-system-regression.test.mjs tests/logger-api.test.mjs`：通过，86/86。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+- 页面 2 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，硬刷新真实关键词推广详情页。
+  - 页面身份：`关键词推广详情页_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218`。
+  - 交互：打开主面板，点击“万能查数”，默认进入“人群对比看板”，`#am-magic-tab-matrix aria-selected="true"`，query panel 隐藏、matrix panel 展示。
+  - 样式核对：弹窗全屏 `1794x978`；header 计算背景为 `rgba(255,255,255,0.45)`，`backdrop-filter: blur(18px) saturate(1.28)`；页签、计划信息胶囊、看板工具栏、图例组均为 `--am26-*` token 对应的浅玻璃计算值；商品 ID 长文本 `text-overflow: ellipsis` 生效，外层 `overflow: visible` 保留商品下拉弹出空间。
+  - 运行状态：看板加载完成，状态条为 `is-success is-hidden`；performance resource 未发现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/updatePart.json`、预算、创建、提交、删除等写接口。
+  - 截图：`tasks/ui-page2-magic-report-before-2026-05-30.png`、`tasks/ui-page2-magic-report-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 `ScriptProcessorNode` 弃用警告，未发现插件 UI 相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
 - 页面 1 风险：本次只覆盖桌面真实页面视口；移动/窄屏只由 CSS `max-width` 和文字省略保护，后续如主面板需要移动端专门验收再补。
 - 页面 1 回滚：回退 `src/main-assistant/ui.js`、`tests/logger-api.test.mjs`、构建产物和两张任务截图即可。
+- 页面 2 结果：万能查数和人群对比看板顶部控制区已按统一浅玻璃工作台规范收敛，长计划/商品文本不挤压相邻控件，未改动查数接口、缓存、请求并发或任何写操作链路。
+- 页面 2 风险：Chrome 验收覆盖桌面全屏看板；窄屏由 `flex-wrap`、`min-width:0` 和文本省略保护，后续如需移动视口专项验收再补。
+- 页面 2 回滚：回退 `src/main-assistant/magic-report.js`、`src/main-assistant/ui.js`、`tests/magic-report-crowd-matrix.test.mjs`、`tests/logger-api.test.mjs`、构建产物和页面 2 截图即可。
 
 ---
 
