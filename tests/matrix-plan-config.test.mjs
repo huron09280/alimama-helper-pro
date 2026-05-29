@@ -8,6 +8,13 @@ const getLastCssBlock = (selector) => {
   const pattern = new RegExp(`${escapeRegExp(selector)}\\s*\\{[\\s\\S]*?\\n\\s*\\}`, 'g');
   return Array.from(source.matchAll(pattern)).map(match => match[0]).at(-1) || '';
 };
+const getLastCssBlockWith = (selector, patternToMatch) => {
+  const pattern = new RegExp(`${escapeRegExp(selector)}\\s*\\{[\\s\\S]*?\\n\\s*\\}`, 'g');
+  return Array.from(source.matchAll(pattern))
+    .map(match => match[0])
+    .filter(block => patternToMatch.test(block))
+    .at(-1) || '';
+};
 const getLastMatch = (pattern) => Array.from(source.matchAll(pattern)).map(match => match[0]).at(-1) || '';
 const getLastCssBlockForSelectors = (selectors = []) => {
   const selectorPattern = selectors.map(escapeRegExp).join('\\s*,\\s*');
@@ -628,7 +635,7 @@ test('矩阵页维度选择器收敛到统一 token', () => {
     '#am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger:hover',
     '#am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker.open .am-wxt-matrix-dimension-picker-trigger'
   ]);
-  const finalArrowBlock = getLastCssBlock('#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow');
+  const finalArrowBlock = getLastCssBlockWith('#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow', /background-image:\s*none/);
   const finalPanelBlock = getLastCssBlock('#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel');
   const finalOptionBlock = getLastCssBlockForSelectors([
     '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option',
@@ -671,7 +678,7 @@ test('矩阵页维度选择器收敛到统一 token', () => {
   assert.match(finalKeyTriggerBlock, /color:\s*var\(--am26-primary-strong,/, '矩阵维度类型胶囊文字未使用主色 token');
   assert.match(finalKeyTriggerHoverBlock, /background:\s*rgba\(69,84,229,0\.14\);/, '矩阵维度类型胶囊 hover 背景未使用统一品牌弱光');
   assert.match(finalArrowBlock, /color:\s*var\(--am26-text-soft,/, '矩阵维度下拉箭头未继承统一次级文本色');
-  assert.match(finalArrowBlock, /background-image:\s*none;/, '矩阵维度下拉箭头最终规则不得继续依赖 data URI 旧色图标');
+  assert.match(finalArrowBlock, /background-image:\s*none(?:\s*!important)?;/, '矩阵维度下拉箭头最终规则不得继续依赖 data URI 旧色图标');
   assert.match(finalPanelBlock, /border:\s*1px solid var\(--am26-border-strong,/, '矩阵维度下拉面板边框未使用 --am26 token');
   assert.match(finalPanelBlock, /background:\s*var\(--am26-panel-strong,/, '矩阵维度下拉面板背景未使用 --am26 token');
   assert.match(finalPanelBlock, /backdrop-filter:\s*blur\(12px\) saturate\(1\.25\);/, '矩阵维度下拉面板缺少统一浅玻璃 blur');

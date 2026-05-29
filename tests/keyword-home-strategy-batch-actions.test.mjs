@@ -3,17 +3,36 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
+const matrixStyleSource = fs.readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-style-and-state/style.js', import.meta.url), 'utf8');
+const matrixArrowSource = [
+  '../src/optimizer/keyword-plan-api/request-builder-preview.js',
+  '../src/optimizer/keyword-plan-api/wizard-style-and-state/matrix-bid-package.js'
+].map(file => fs.readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const escapeRegExp = (text) => String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const getLastCssBlock = (selector) => {
-  const matches = Array.from(source.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{[^}]*\\}`, 'g')));
+const getLastCssBlockFrom = (text, selector) => {
+  const matches = Array.from(text.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{[^}]*\\}`, 'g')));
   return matches.at(-1)?.[0] || '';
 };
-const getLastCssBlockWith = (selector, pattern) => {
-  const matches = Array.from(source.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{[^}]*\\}`, 'g')))
+const getLastCssBlockWithFrom = (text, selector, pattern) => {
+  const matches = Array.from(text.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{[^}]*\\}`, 'g')))
     .map(match => match[0])
     .filter(block => pattern.test(block));
   return matches.at(-1) || '';
 };
+const getLastCssBlockContainingFrom = (text, selector, pattern = /[\s\S]/) => {
+  const matches = Array.from(text.matchAll(/(^|\n)([^{}]+)\{[^}]*\}/g))
+    .map(match => match[0].trim())
+    .filter(block => {
+      const selectorList = block.slice(0, block.indexOf('{'));
+      return selectorList
+        .split(',')
+        .map(item => item.trim())
+        .includes(selector) && pattern.test(block);
+    });
+  return matches.at(-1) || '';
+};
+const getLastCssBlock = (selector) => getLastCssBlockFrom(source, selector);
+const getLastCssBlockWith = (selector, pattern) => getLastCssBlockWithFrom(source, selector, pattern);
 const getLastMatch = (pattern) => Array.from(source.matchAll(pattern)).map(match => match[0]).at(-1) || '';
 
 test('首页贴图改版包含运行态、轻量 Tab、摘要卡片、固定执行区和日志标题', () => {
@@ -66,6 +85,50 @@ test('组建计划工作台页签同步可访问状态并使用浅玻璃胶囊',
   assert.match(finalTabActiveBlock, /background:\s*var\(--am26-surface-strong,/, '工作台页签 active 态未使用 --am26-surface-strong');
   assert.match(finalTabActiveBlock, /color:\s*var\(--am26-primary-strong,/, '工作台页签 active 态未使用品牌强调文字色');
   assert.doesNotMatch(finalTabsBlock, /background:\s*transparent;/, '工作台页签容器不得回退到普通下划线 Tab');
+});
+
+test('组建计划矩阵配置页收敛到统一浅玻璃 token', () => {
+  const matrixWorkspaceBlock = getLastCssBlockWithFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-workspace', /gap:\s*12px;/);
+  const matrixCardBlock = getLastCssBlockFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-card');
+  const matrixStatBlock = getLastCssBlockFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-stat');
+  const matrixActionNoteBlock = getLastCssBlockFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-action-note');
+  const matrixSceneCardBlock = getLastCssBlockContainingFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-scene-card', /background:\s*var\(--am26-surface,/);
+  const matrixDimensionBoxBlock = getLastCssBlockContainingFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-box', /padding:\s*10px;/);
+  const matrixDimensionRowBlock = getLastCssBlockContainingFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-row', /background:\s*linear-gradient\(145deg,/);
+  const matrixAddCardBlock = getLastCssBlockContainingFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card', /background:\s*linear-gradient\(145deg,/);
+  const matrixPickerPanelBlock = getLastCssBlockFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel');
+
+  assert.match(matrixWorkspaceBlock, /gap:\s*12px;/, '矩阵工作区缺少紧凑栅格间距');
+  assert.match(matrixCardBlock, /border:\s*1px solid var\(--am26-border,/, '矩阵卡片边框未使用 --am26-border');
+  assert.match(matrixCardBlock, /background:\s*linear-gradient\(145deg,\s*var\(--am26-surface-strong,[\s\S]*?var\(--am26-surface,/, '矩阵卡片背景未使用 --am26 surface 渐变');
+  assert.match(matrixCardBlock, /backdrop-filter:\s*blur\(10px\) saturate\(1\.15\);/, '矩阵卡片缺少浅玻璃模糊');
+  assert.match(matrixStatBlock, /background:\s*var\(--am26-surface,/, '矩阵统计胶囊未使用 --am26-surface');
+  assert.match(matrixStatBlock, /box-shadow:\s*inset 0 1px 0 rgba\(255,255,255,0\.3\);/, '矩阵统计胶囊缺少内高光');
+  assert.match(matrixActionNoteBlock, /color:\s*var\(--am26-text-soft,/, '矩阵操作提示未使用 --am26-text-soft');
+  assert.match(matrixSceneCardBlock, /background:\s*var\(--am26-surface,/, '矩阵场景配置卡片未使用 --am26-surface');
+  assert.match(matrixDimensionBoxBlock, /padding:\s*10px;/, '矩阵维度容器缺少紧凑内边距');
+  assert.match(matrixDimensionRowBlock, /background:\s*linear-gradient\(145deg,\s*var\(--am26-surface-strong,[\s\S]*?var\(--am26-surface,/, '矩阵维度行未使用 --am26 surface 渐变');
+  assert.match(matrixAddCardBlock, /background:\s*linear-gradient\(145deg,\s*var\(--am26-surface-strong,[\s\S]*?var\(--am26-surface,/, '矩阵新增维度卡片未使用 --am26 surface 渐变');
+  assert.match(matrixPickerPanelBlock, /background:\s*var\(--am26-panel-strong,/, '矩阵下拉面板未使用 --am26-panel-strong');
+  assert.match(matrixPickerPanelBlock, /backdrop-filter:\s*blur\(12px\) saturate\(1\.25\);/, '矩阵下拉面板缺少浅玻璃模糊');
+  assert.doesNotMatch(matrixCardBlock, /background:\s*(?:#fff|linear-gradient\(180deg,\s*rgba\(255,255,255,0\.98\))/, '矩阵卡片不得回退到旧白底');
+  assert.doesNotMatch(matrixDimensionRowBlock, /background:\s*#fff;/, '矩阵维度行不得回退到硬编码白底');
+  assert.doesNotMatch(matrixPickerPanelBlock, /background:\s*#fff;/, '矩阵下拉面板不得回退到硬编码白底');
+});
+
+test('矩阵配置页选择器箭头使用共享 SVG 并支持旋转状态', () => {
+  const finalArrowBlock = getLastCssBlockWithFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow', /background-image:\s*none !important;/);
+  const finalArrowBeforeBlock = getLastCssBlockFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow::before');
+  const finalArrowSvgBlock = getLastCssBlockFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow svg');
+  const finalArrowOpenBlock = getLastCssBlockFrom(matrixStyleSource, '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker.open .am-wxt-matrix-dimension-picker-arrow');
+  const chevronUsages = matrixArrowSource.match(/class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true">\$\{renderAmIcon\('chevron-down', \{ size: 14, strokeWidth: 2\.4 \}\)\}<\/span>/g) || [];
+
+  assert.ok(chevronUsages.length >= 3, '矩阵维度和出价目标选择器箭头未全部使用共享 chevron-down SVG');
+  assert.match(finalArrowBlock, /background-image:\s*none !important;/, '矩阵选择器箭头未禁用旧 data-url 背景图');
+  assert.match(finalArrowBeforeBlock, /content:\s*none !important;/, '矩阵选择器箭头仍可能使用 CSS 边框手绘');
+  assert.match(finalArrowSvgBlock, /width:\s*14px;[\s\S]*?height:\s*14px;/, '矩阵选择器 SVG 尺寸不稳定');
+  assert.match(finalArrowOpenBlock, /transform:\s*rotate\(180deg\);/, '矩阵选择器打开态缺少 chevron 旋转反馈');
+  assert.doesNotMatch(finalArrowBlock, /url\("data:image\/svg\+xml/, '矩阵选择器箭头不得继续依赖 CSS data URL 图标');
 });
 
 test('组建计划主弹窗外壳对齐统一 UI 规范', () => {

@@ -427,7 +427,7 @@
                                 title="选择出价目标"
                             >
                                 <span class="am-wxt-matrix-dimension-picker-label" data-matrix-bid-package-target-label="1">${Utils.escapeHtml(targetOption.label || defaultOption.label)}</span>
-                                <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true"></span>
+                                <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 14, strokeWidth: 2.4 })}</span>
                             </button>
                             <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
                                 ${optionList.map(item => `

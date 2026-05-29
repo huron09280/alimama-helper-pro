@@ -8742,9 +8742,291 @@
                     padding: 10px 12px;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-matrix-workspace {
+                    gap: 12px;
+                    align-items: stretch;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-sidebar,
+                #am-wxt-keyword-modal .am-wxt-matrix-main {
+                    gap: 10px;
+                    min-width: 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-card {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: linear-gradient(145deg, var(--am26-surface-strong, rgba(255,255,255,0.45)), var(--am26-surface, rgba(255,255,255,0.25)));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.34), 0 8px 20px rgba(31,38,135,0.06);
+                    backdrop-filter: blur(10px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.15);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-card .am-wxt-crowd-title {
+                    color: var(--am26-text, #1b2438);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-intro,
+                #am-wxt-keyword-modal .am-wxt-matrix-subtitle,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-summary,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-summary,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-note,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-help,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-note,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-help,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-meta {
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-matrix-summary,
+                #am-wxt-keyword-modal .am-wxt-matrix-chip,
+                #am-wxt-keyword-modal .am-wxt-matrix-chip.muted {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-summary-grid {
+                    gap: 8px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-stat {
+                    min-width: 0;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-stat-label {
+                    min-width: 0;
+                    color: var(--am26-text-soft, #505a74);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-stat-value {
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    font-variant-numeric: tabular-nums;
+                    font-feature-settings: "tnum" 1;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-preset-grid,
+                #am-wxt-keyword-modal .am-wxt-matrix-action-grid {
+                    gap: 8px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-preset-grid .am-wxt-btn,
+                #am-wxt-keyword-modal .am-wxt-matrix-action-grid .am-wxt-btn {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-preset-grid .am-wxt-btn:hover:not(:disabled),
+                #am-wxt-keyword-modal .am-wxt-matrix-action-grid .am-wxt-btn:hover:not(:disabled),
+                #am-wxt-keyword-modal .am-wxt-matrix-preset-grid .am-wxt-btn:focus-visible,
+                #am-wxt-keyword-modal .am-wxt-matrix-action-grid .am-wxt-btn:focus-visible {
+                    border-color: rgba(69,84,229,0.42);
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.34);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note {
+                    min-height: 20px;
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-error,
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-success {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-error {
+                    border-color: rgba(234,79,79,0.28);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-action-note.is-success {
+                    border-color: rgba(14,168,111,0.28);
+                    color: var(--am26-success, #0ea86f);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-scene-card,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-box {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-box {
+                    padding: 10px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-crowd-list.am-wxt-matrix-dimension-list {
+                    max-height: min(478px, calc(90vh - 318px));
+                    overflow: auto;
+                    overscroll-behavior: contain;
+                    padding-right: 4px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-row,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card,
+                #am-wxt-keyword-modal .am-wxt-matrix-empty-state {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: linear-gradient(145deg, var(--am26-surface-strong, rgba(255,255,255,0.45)), var(--am26-surface, rgba(255,255,255,0.25)));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), 0 8px 18px rgba(31,38,135,0.05);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-row::before {
+                    background: linear-gradient(90deg, rgba(69,84,229,0.42), rgba(69,84,229,0.06));
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-card:hover:not(:disabled) {
+                    border-color: rgba(69,84,229,0.42);
+                    background: linear-gradient(145deg, var(--am26-surface-strong, rgba(255,255,255,0.45)), rgba(255,255,255,0.32));
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.10), inset 0 1px 0 rgba(255,255,255,0.34);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-icon {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-title,
+                #am-wxt-keyword-modal .am-wxt-matrix-empty-title {
+                    color: var(--am26-text, #1b2438);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-add-desc,
+                #am-wxt-keyword-modal .am-wxt-matrix-empty-desc,
+                #am-wxt-keyword-modal .am-wxt-matrix-empty-hint {
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-remove-icon,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-item-remove,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-add,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-remove,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-add,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-remove {
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-remove-icon:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-item-remove:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-add:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-remove:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-add:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-remove:hover {
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-value-item,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-form input,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form input,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-suggest,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-value-item.is-pending,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item.is-pending,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select:disabled {
+                    border-style: dashed;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger {
+                    min-height: 34px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger {
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow {
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 16px;
+                    height: 16px;
+                    color: var(--am26-text-soft, #505a74);
+                    background-image: none !important;
+                    transition: transform 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow::before {
+                    content: none !important;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow svg {
+                    width: 14px;
+                    height: 14px;
+                    display: block;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker.open .am-wxt-matrix-dimension-picker-arrow {
+                    transform: rotate(180deg);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-menu,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-batch-menu {
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option {
+                    color: var(--am26-text-soft, #505a74);
+                    background: transparent;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:has(input:checked),
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option.is-active,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option:hover {
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
+                }
+
                 @media (max-width: 980px) {
                     #am-wxt-keyword-modal .am-wxt-home-summary,
-                    #am-wxt-keyword-modal .am-wxt-strategy-head {
+                    #am-wxt-keyword-modal .am-wxt-strategy-head,
+                    #am-wxt-keyword-modal .am-wxt-matrix-workspace {
                         grid-template-columns: 1fr;
                     }
 
@@ -8763,6 +9045,13 @@
                         display: grid;
                         grid-template-columns: 1fr;
                         background: transparent;
+                    }
+
+                    #am-wxt-keyword-modal .am-wxt-crowd-list.am-wxt-matrix-dimension-list {
+                        column-count: 1;
+                        column-width: auto;
+                        max-height: none;
+                        overflow: visible;
                     }
 
                     #am-wxt-keyword-modal .am-wxt-strategy-search-input {
@@ -8808,7 +9097,8 @@
                     #am-wxt-keyword-modal .am-wxt-btn,
                     #am-wxt-keyword-modal .am-wxt-close,
                     #am-wxt-keyword-modal .am-wxt-strategy-actions,
-                    #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn {
+                    #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn,
+                    #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow {
                         transition: none !important;
                     }
                 }

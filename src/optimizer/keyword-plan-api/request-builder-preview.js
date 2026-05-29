@@ -870,7 +870,7 @@
                                     ${valueOptions.length ? '' : 'disabled'}
                                 >
                                     <span class="am-wxt-matrix-dimension-picker-label" data-matrix-dimension-picker-label="1">${Utils.escapeHtml(pickerSummaryText)}</span>
-                                    <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true"></span>
+                                    <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 14, strokeWidth: 2.4 })}</span>
                                 </button>
                                 <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
                                     ${valueOptions.length
@@ -914,7 +914,7 @@
                                             title="${Utils.escapeHtml(rowHintText)}"
                                         >
                                             <span class="am-wxt-matrix-dimension-picker-label" data-matrix-dimension-key-picker-label="1">${Utils.escapeHtml(keyPickerSummaryText)}</span>
-                                            <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true"></span>
+                                            <span class="am-wxt-matrix-dimension-picker-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 14, strokeWidth: 2.4 })}</span>
                                         </button>
                                         <div class="am-wxt-matrix-dimension-picker-panel" data-matrix-dimension-picker-panel="1">
                                             ${keyPickerOptionHtml}

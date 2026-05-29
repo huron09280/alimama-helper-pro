@@ -13,7 +13,7 @@
 - [x] 页面 2：万能查数弹窗 + 人群对比看板入口。
 - [x] 页面 3：算法护航主面板 + 执行结果浮层。
 - [x] 页面 4：组建计划主向导首页/日志区。
-- [ ] 页面 5：组建计划矩阵配置页。
+- [x] 页面 5：组建计划矩阵配置页。
 - [ ] 页面 6：建计划商品选择弹窗。
 - [ ] 页面 7：场景配置/策略详情/高级设置弹窗。
 - [ ] 页面 8：建计划提交确认弹窗。
@@ -33,6 +33,7 @@
 - 页面 2 已完成：万能查数弹窗头部、窗口动作组、视图页签、计划信息胶囊、看板工具栏、图例组和重试按钮统一为浅玻璃 token；补充长计划/商品文本省略保护，并同步主样式层覆盖，避免运行态 header 被旧背景压回。
 - 页面 3 已完成：算法护航主面板改为统一浅玻璃工作台骨架，标题区、窗口动作组、手动设置容器、底部参数行、状态条、日志容器和执行结果浮层统一 token；Token 指示灯改用 `--am26-success/danger`，保留运行按钮、窗口动作、手动设置和执行逻辑不变。
 - 页面 4 已完成：组建计划主向导首页/日志区统一为浅玻璃工作台，首页摘要、商品区、计划区、执行条、快速日志与日志页按 `--am26-*` token 收敛；首页/矩阵/日志切换补齐 ARIA tab 语义，执行模式折叠箭头改为共享 SVG 图标；提交、创建、矩阵和弹窗业务逻辑保持不变。
+- 页面 5 已完成：组建计划矩阵页的配置容器、工作台统计、预设按钮、场景/维度卡片、维度下拉和批量菜单统一为浅玻璃 token；矩阵选择器箭头改为共享 `chevron-down` SVG，保留矩阵生成算法、提交创建、安全阻断和弹窗业务逻辑不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -99,6 +100,26 @@
   - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
   - 截图：`tasks/ui-page4-keyword-wizard-home-after-2026-05-30.png`、`tasks/ui-page4-keyword-wizard-log-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 issue，未发现插件 UI 相关运行时异常。
+- 页面 5 自动化：
+  - `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+  - `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/matrix-bid-package.js`：通过。
+  - `node --check tests/keyword-home-strategy-batch-actions.test.mjs`：通过。
+  - `node --check tests/matrix-plan-config.test.mjs`：通过。
+  - `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/matrix-plan-config.test.mjs tests/matrix-trend-star-runtime-package.test.mjs tests/matrix-bid-target-cost-package.test.mjs tests/matrix-dimension-structured-values.test.mjs tests/icon-system-regression.test.mjs`：通过，74/74。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+  - 说明：`node --check src/optimizer/keyword-plan-api/request-builder-preview.js` 在 `HEAD` 上同样报 `Unexpected end of input`，该文件是构建片段而非独立 JS 模块，本次不作为回归。
+- 页面 5 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，硬刷新真实关键词推广详情页，再打开主助手并进入“组建计划 > 矩阵页”。
+  - 页面身份：`关键词推广详情页_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218`。
+  - 交互：矩阵页 tab `aria-selected="true"`，`#am-wxt-keyword-matrix-panel` 展示；点击“添加维度”后只生成本地矩阵维度行和下拉面板，未点击“生成计划”“提交创建”或确认类入口。
+  - 样式核对：`.am-wxt-matrix-workspace` 计算 `gap=12px`；`.am-wxt-matrix-card` 为 12px 圆角、`--am26-surface-strong -> --am26-surface` 浅玻璃渐变、`backdrop-filter: blur(10px) saturate(1.15)`；`.am-wxt-matrix-stat` 使用 `rgba(255,255,255,0.25)` token 背景、统一边框和内高光；维度列表 `max-height=478px` 且可滚动。
+  - 选择器核对：维度选择器箭头包含 1 个共享 `chevron-down` SVG，`background-image=none`；下拉打开态箭头旋转为 `matrix(-1, 0, 0, -1, 0, 0)`，下拉面板为 `--am26-panel-strong` 浅玻璃渐变、`backdrop-filter: blur(12px) saturate(1.25)`。
+  - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
+  - 截图：`tasks/ui-page5-keyword-wizard-matrix-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 issue，未发现插件 UI 相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -113,6 +134,9 @@
 - 页面 4 结果：组建计划主向导首页/日志区已按统一浅玻璃工作台规范收敛；首页摘要、商品区、计划区、执行条、快速日志和日志页摘要/日志均可见且状态清晰，tab 语义和 SVG 图标回归已补齐，未改动提交创建链路。
 - 页面 4 风险：真实验收刻意不触发创建/提交，因此提交后的执行日志增长由现有专项测试和静态样式覆盖；本轮覆盖桌面真实页视口，窄屏依赖现有响应式约束。
 - 页面 4 回滚：回退 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、`tests/icon-system-regression.test.mjs`、构建产物和页面 4 截图即可。
+- 页面 5 结果：矩阵配置页已按统一浅玻璃工作台规范收敛；基础参数、状态统计、快捷预设、场景卡片、维度卡片和下拉选择器层级清晰，SVG 箭头替代旧 CSS/data-url 箭头，未改动矩阵组合生成和提交创建链路。
+- 页面 5 风险：真实验收刻意不触发“生成计划”和提交创建，因此生成结果列表主要由专项测试覆盖；本轮覆盖桌面真实页视口，窄屏依赖现有响应式约束。
+- 页面 5 回滚：回退 `src/optimizer/keyword-plan-api/request-builder-preview.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/matrix-bid-package.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、`tests/matrix-plan-config.test.mjs`、构建产物和页面 5 截图即可。
 
 ---
 
