@@ -87,12 +87,13 @@
                 const previousScrollTop = preserveScroll ? candidateListEl.scrollTop : 0;
                 candidateListEl.innerHTML = '';
                 if (!wizardState.candidates.length) {
-                    candidateListEl.innerHTML = '<div class="am-wxt-item"><div class="name">暂无候选商品</div></div>';
+                    candidateListEl.innerHTML = '<div class="am-wxt-item is-empty"><div class="name">暂无候选商品</div><div class="meta">可搜索商品名称或宝贝 ID</div></div>';
                     return;
                 }
                 wizardState.candidates.forEach(item => {
                     const row = document.createElement('div');
-                    row.className = 'am-wxt-item';
+                    const isAdded = addedSet.has(String(item.materialId));
+                    row.className = `am-wxt-item${isAdded ? ' is-added' : ''}`;
                     row.innerHTML = `
                         <div class="am-wxt-item-main">
                             ${renderKeywordItemThumb(item)}
@@ -102,11 +103,11 @@
                             </div>
                         </div>
                         <div class="actions">
-                            <button class="am-wxt-btn">${addedSet.has(String(item.materialId)) ? '已添加' : '添加'}</button>
+                            <button class="am-wxt-btn am-wxt-item-add-btn">${isAdded ? '已添加' : '添加'}</button>
                         </div>
                     `;
                     const addBtn = row.querySelector('button');
-                    addBtn.disabled = addedSet.has(String(item.materialId));
+                    addBtn.disabled = isAdded;
                     addBtn.onclick = () => {
                         if (wizardState.addedItems.length >= WIZARD_MAX_ITEMS) {
                             appendWizardLog(`最多添加 ${WIZARD_MAX_ITEMS} 个商品`, 'error');
@@ -127,6 +128,11 @@
                     const maxScrollTop = Math.max(0, candidateListEl.scrollHeight - candidateListEl.clientHeight);
                     candidateListEl.scrollTop = Math.min(previousScrollTop, maxScrollTop);
                 }
+            };
+
+            const syncKeywordItemPickerCount = () => {
+                const countEl = document.getElementById('am-wxt-keyword-item-picker-count');
+                if (countEl) countEl.textContent = String(wizardState.addedItems.length);
             };
 
             const syncItemPickerAddedListViewport = () => {
@@ -160,16 +166,17 @@
 
             const renderAddedList = () => {
                 wizardState.els.addedCount.textContent = String(wizardState.addedItems.length);
+                syncKeywordItemPickerCount();
                 syncHomeSummary();
                 wizardState.els.addedList.innerHTML = '';
                 if (!wizardState.addedItems.length) {
-                    wizardState.els.addedList.innerHTML = '<div class="am-wxt-item"><div class="name">请点击上方“添加商品”按钮</div></div>';
+                    wizardState.els.addedList.innerHTML = '<div class="am-wxt-item is-empty"><div class="name">请点击上方“添加商品”按钮</div><div class="meta">最多可添加 30 个商品</div></div>';
                     syncItemPickerAddedListViewport();
                     return;
                 }
                 wizardState.addedItems.forEach((item, idx) => {
                     const row = document.createElement('div');
-                    row.className = 'am-wxt-item';
+                    row.className = 'am-wxt-item is-selected';
                     const itemName = item.materialName || '(无标题商品)';
                     row.innerHTML = `
                         <div class="am-wxt-item-main">

@@ -879,7 +879,11 @@
                 mask.innerHTML = `
                     <div class="am-wxt-keyword-item-picker-dialog" role="dialog" aria-modal="true" aria-label="添加商品">
                         <div class="am-wxt-keyword-item-picker-head">
-                            <span>添加商品</span>
+                            <div class="am-wxt-keyword-item-picker-title">
+                                <span class="am-wxt-keyword-item-picker-icon" aria-hidden="true">${renderAmIcon('package', { size: 16, strokeWidth: 2.1 })}</span>
+                                <span class="am-wxt-keyword-item-picker-title-text">添加商品</span>
+                                <span class="am-wxt-keyword-item-picker-status">已选 <b id="am-wxt-keyword-item-picker-count">${wizardState.addedItems.length}</b> / ${WIZARD_MAX_ITEMS}</span>
+                            </div>
                             <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-am-wxt-item-picker-close="1" aria-label="关闭">
                                 ${renderAmWindowIcon('close')}
                             </button>

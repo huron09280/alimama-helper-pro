@@ -14,7 +14,7 @@
 - [x] 页面 3：算法护航主面板 + 执行结果浮层。
 - [x] 页面 4：组建计划主向导首页/日志区。
 - [x] 页面 5：组建计划矩阵配置页。
-- [ ] 页面 6：建计划商品选择弹窗。
+- [x] 页面 6：建计划商品选择弹窗。
 - [ ] 页面 7：场景配置/策略详情/高级设置弹窗。
 - [ ] 页面 8：建计划提交确认弹窗。
 - [ ] 页面 9：计划行复制入口 + 一览/成功弹窗。
@@ -34,6 +34,7 @@
 - 页面 3 已完成：算法护航主面板改为统一浅玻璃工作台骨架，标题区、窗口动作组、手动设置容器、底部参数行、状态条、日志容器和执行结果浮层统一 token；Token 指示灯改用 `--am26-success/danger`，保留运行按钮、窗口动作、手动设置和执行逻辑不变。
 - 页面 4 已完成：组建计划主向导首页/日志区统一为浅玻璃工作台，首页摘要、商品区、计划区、执行条、快速日志与日志页按 `--am26-*` token 收敛；首页/矩阵/日志切换补齐 ARIA tab 语义，执行模式折叠箭头改为共享 SVG 图标；提交、创建、矩阵和弹窗业务逻辑保持不变。
 - 页面 5 已完成：组建计划矩阵页的配置容器、工作台统计、预设按钮、场景/维度卡片、维度下拉和批量菜单统一为浅玻璃 token；矩阵选择器箭头改为共享 `chevron-down` SVG，保留矩阵生成算法、提交创建、安全阻断和弹窗业务逻辑不变。
+- 页面 6 已完成：组建计划“添加商品”二级弹窗统一为浅玻璃工作台弹层，补齐标题图标、已选数量状态、搜索工具条、候选/已选商品卡片状态、空态和底部操作区；添加/取消本地状态已在真实页验证，保留候选加载、添加/移除商品、取消回滚、确认回写和创建提交逻辑不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -120,6 +121,23 @@
   - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
   - 截图：`tasks/ui-page5-keyword-wizard-matrix-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 issue，未发现插件 UI 相关运行时异常。
+- 页面 6 自动化：
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+  - `node --check tests/keyword-item-picker-popup.test.mjs`：通过。
+  - `node --test tests/keyword-item-picker-popup.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/icon-system-regression.test.mjs`：通过，43/43。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+- 页面 6 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，硬刷新真实关键词推广详情页，再打开主助手并进入“组建计划 > 首页 > 添加商品”。
+  - 页面身份：`关键词推广详情页_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218`。
+  - 样式核对：添加商品弹窗 `dialogRole="dialog"`，标题区含 1 个共享 `package` SVG 图标；遮罩为浅色渐变并带 `blur(10px) saturate(1.18)`；弹窗宽高约 `647x900`、圆角 `18px`、边框 `rgba(255,255,255,.6)`、`backdrop-filter: blur(20px)`；工具条、输入框、候选列表、已选列表和底部操作区均收敛为 `--am26-*` token。
+  - 状态核对：已选数量显示 `1`；候选商品 `40` 条；候选区存在 `.is-added`，已选区存在 `.is-selected`；空态/已添加态保留稳定行高和文本布局。
+  - 交互核对：点击首个候选商品“添加”后，数量从 `1` 变为 `2`，按钮切换为禁用的“已添加”；点击“取消”后弹窗关闭，首页已添加商品数回到 `1`。
+  - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
+  - 截图：`tasks/ui-page6-keyword-item-picker-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 `ScriptProcessorNode` 弃用警告，未发现插件 UI 相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -137,6 +155,9 @@
 - 页面 5 结果：矩阵配置页已按统一浅玻璃工作台规范收敛；基础参数、状态统计、快捷预设、场景卡片、维度卡片和下拉选择器层级清晰，SVG 箭头替代旧 CSS/data-url 箭头，未改动矩阵组合生成和提交创建链路。
 - 页面 5 风险：真实验收刻意不触发“生成计划”和提交创建，因此生成结果列表主要由专项测试覆盖；本轮覆盖桌面真实页视口，窄屏依赖现有响应式约束。
 - 页面 5 回滚：回退 `src/optimizer/keyword-plan-api/request-builder-preview.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/matrix-bid-package.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、`tests/matrix-plan-config.test.mjs`、构建产物和页面 5 截图即可。
+- 页面 6 结果：添加商品弹窗已按统一浅玻璃工作台规范收敛，标题、搜索、候选、已选、状态和底部动作在真实页中可见且交互稳定；添加/取消只影响本地弹窗状态，未触发创建或写接口。
+- 页面 6 风险：真实验收覆盖了默认候选列表、添加和取消回滚；未执行关键词搜索后的远端候选刷新，也未点击“确认”写回新商品后继续提交创建。
+- 页面 6 回滚：回退 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`、`src/optimizer/keyword-plan-api/wizard-scene-config/item-selection.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-item-picker-popup.test.mjs`、构建产物和页面 6 截图即可。
 
 ---
 
