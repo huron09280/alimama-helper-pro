@@ -24,7 +24,7 @@ test('TokenManager 会同时注册 fetch/XHR 捕获 token', () => {
 test('Token 指示灯在缺 token 时会主动触发 refresh，避免长期红色误报', () => {
     assert.match(
         uiSource,
-        /let lastTokenRefreshAt = 0;[\s\S]*if \(!tokenReady && now - lastTokenRefreshAt >= 2500\)[\s\S]*TokenManager\.refresh\(\);[\s\S]*tokenDot\.style\.color = \(State\.tokens\.dynamicToken && State\.tokens\.loginPointId\) \? '#52c41a' : '#ff4d4f';/,
+        /let lastTokenRefreshAt = 0;[\s\S]*if \(!tokenReady && now - lastTokenRefreshAt >= 2500\)[\s\S]*TokenManager\.refresh\(\);[\s\S]*tokenDot\.style\.color = \(State\.tokens\.dynamicToken && State\.tokens\.loginPointId\) \? 'var\(--am26-success,#0ea86f\)' : 'var\(--am26-danger,#ea4f4f\)';/,
         'Token 指示灯未在缺 token 时主动刷新'
     );
 });

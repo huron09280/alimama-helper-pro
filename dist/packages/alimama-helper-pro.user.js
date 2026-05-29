@@ -73295,14 +73295,15 @@ if (typeof globalThis !== 'undefined') {
 
             const rowsHtml = data.map((row, i) => {
                 const safeName = Utils.escapeHtml(row.name ?? '-');
+                const rowClass = row.success ? 'am26-result-row is-success' : 'am26-result-row is-fail';
                 return `
-                                    <tr style="${row.success ? '' : 'background:rgba(234,79,79,.08);'}">
-                                        <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));color:var(--am26-text-soft,#505a74);">${i + 1}</td>
-                                        <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));${row.success ? 'color:var(--am26-text,#1b2438);' : 'color:var(--am26-danger,#ea4f4f);'}">${safeName}</td>
-                                        <td style="padding:8px 12px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));text-align:center;">
+                                    <tr class="${rowClass}">
+                                        <td class="am26-result-index">${i + 1}</td>
+                                        <td class="am26-result-name" title="${safeName}">${safeName}</td>
+                                        <td class="am26-result-state">
                                             ${row.success
-                        ? `<span style="color:var(--am26-success,#0ea86f);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:4px;">${renderAmIcon('check-circle', { size: 14 })}<span>成功</span></span>`
-                        : `<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:4px;">${renderAmIcon('x-circle', { size: 14 })}<span>失败</span></span>`}
+                        ? `<span class="am26-result-status is-success">${renderAmIcon('check-circle', { size: 14 })}<span>成功</span></span>`
+                        : `<span class="am26-result-status is-fail">${renderAmIcon('x-circle', { size: 14 })}<span>失败</span></span>`}
                                         </td>
                                     </tr>
                 `;
@@ -73312,6 +73313,122 @@ if (typeof globalThis !== 'undefined') {
                 <style>
                     @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
                     @keyframes slideUp { from { transform:translateY(20px);opacity:0; } to { transform:translateY(0);opacity:1; } }
+                    #${CONFIG.UI_ID}-result-overlay {
+                        --am26-result-row-border:rgba(255,255,255,.35);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-dialog {
+                        width:min(620px,calc(100vw - 32px));
+                        max-height:calc(100vh - 40px);
+                        box-sizing:border-box;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-hero {
+                        text-align:center;
+                        margin-bottom:16px;
+                        padding:16px;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4));
+                        border-radius:16px;
+                        background:var(--am26-surface,rgba(255,255,255,.25));
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-icon {
+                        width:52px;
+                        height:52px;
+                        margin:0 auto 10px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-title {
+                        font-size:15px;
+                        font-weight:700;
+                        color:var(--am26-text,#1b2438);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-summary {
+                        margin-top:6px;
+                        font-size:12px;
+                        color:var(--am26-text-soft,#505a74);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-table-wrap {
+                        max-height:300px;
+                        overflow:auto;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4));
+                        border-radius:14px;
+                        background:rgba(255,255,255,.22);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-table {
+                        width:100%;
+                        border-collapse:collapse;
+                        table-layout:fixed;
+                        font-size:12px;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-table th {
+                        position:sticky;
+                        top:0;
+                        z-index:1;
+                        padding:10px 12px;
+                        text-align:left;
+                        font-weight:700;
+                        color:var(--am26-text,#1b2438);
+                        background:rgba(255,255,255,.42);
+                        border-bottom:1px solid var(--am26-result-row-border);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-table th:first-child,
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-index {
+                        width:44px;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-table th:last-child,
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-state {
+                        width:88px;
+                        text-align:center;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-index,
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-name,
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-state {
+                        padding:9px 12px;
+                        border-bottom:1px solid var(--am26-result-row-border);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-index {
+                        color:var(--am26-text-soft,#505a74);
+                        font-variant-numeric:tabular-nums;
+                        font-feature-settings:"tnum" 1;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-name {
+                        color:var(--am26-text,#1b2438);
+                        overflow:hidden;
+                        text-overflow:ellipsis;
+                        white-space:nowrap;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-row.is-fail {
+                        background:rgba(234,79,79,.08);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-row.is-fail .am26-result-name {
+                        color:var(--am26-danger,#ea4f4f);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-status {
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        gap:4px;
+                        font-weight:700;
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-status.is-success {
+                        color:var(--am26-success,#0ea86f);
+                    }
+                    #${CONFIG.UI_ID}-result-overlay .am26-result-status.is-fail {
+                        color:var(--am26-danger,#ea4f4f);
+                    }
+                    #${CONFIG.UI_ID}-result-close {
+                        min-width:104px;
+                        min-height:34px;
+                        padding:9px 24px;
+                        background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));
+                        color:#fff;
+                        border:none;
+                        border-radius:12px;
+                        cursor:pointer;
+                        font-size:13px;
+                        font-weight:700;
+                        transition:transform 0.2s,box-shadow 0.2s;
+                    }
                     #${CONFIG.UI_ID}-result-close:focus-visible {
                         outline:2px solid rgba(42,91,255,.45);
                         outline-offset:2px;
@@ -73327,27 +73444,27 @@ if (typeof globalThis !== 'undefined') {
                 <div class="am26-result-dialog" style="
                     background:var(--am26-panel-strong,rgba(255,255,255,.45));
                     border:1px solid var(--am26-border,rgba(255,255,255,.4));
-                    border-radius:18px;padding:24px 32px;min-width:400px;max-width:600px;
+                    border-radius:18px;padding:14px;
                     box-shadow:0 20px 60px rgba(17,24,39,0.28);animation:slideUp 0.4s ease;
                     color:var(--am26-text,#1b2438);font-family:var(--am26-font,-apple-system,system-ui,sans-serif);
-                    backdrop-filter:blur(16px);
+                    backdrop-filter:blur(18px) saturate(1.22);-webkit-backdrop-filter:blur(18px) saturate(1.22);
                 ">
-                    <div style="text-align:center;margin-bottom:20px;">
-                        <div style="width:56px;height:56px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;color:${isAllSuccess ? 'var(--am26-success,#0ea86f)' : 'var(--am26-warning,#e8a325)'};">${renderAmIcon(isAllSuccess ? 'check-circle' : 'alert-triangle', { size: 52, strokeWidth: 1.6 })}</div>
-                        <div id="${CONFIG.UI_ID}-result-title" style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
-                        <div style="font-size:14px;color:var(--am26-text-soft,#505a74);margin-top:8px;">
+                    <div class="am26-result-hero">
+                        <div class="am26-result-icon" style="color:${isAllSuccess ? 'var(--am26-success,#0ea86f)' : 'var(--am26-warning,#e8a325)'};">${renderAmIcon(isAllSuccess ? 'check-circle' : 'alert-triangle', { size: 48, strokeWidth: 1.6 })}</div>
+                        <div id="${CONFIG.UI_ID}-result-title" class="am26-result-title">执行完成</div>
+                        <div class="am26-result-summary">
                             共 ${totalCount} 个计划，
                             <span style="color:var(--am26-success,#0ea86f);font-weight:600;">${successCount} 成功</span>
                             ${failCount > 0 ? `，<span style="color:var(--am26-danger,#ea4f4f);font-weight:600;">${failCount} 失败</span>` : ''}
                         </div>
                     </div>
-                    <div style="max-height:300px;overflow-y:auto;border:1px solid var(--am26-border,rgba(255,255,255,.4));border-radius:12px;">
-                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <div class="am26-result-table-wrap">
+                        <table class="am26-result-table">
                             <thead>
-                                <tr style="background:rgba(255,255,255,.16);">
-                                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));width:40px;">#</th>
-                                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));">计划名称</th>
-                                    <th style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.35));width:80px;">状态</th>
+                                <tr>
+                                    <th>#</th>
+                                    <th>计划名称</th>
+                                    <th>状态</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -73355,12 +73472,8 @@ if (typeof globalThis !== 'undefined') {
                             </tbody>
                         </table>
                     </div>
-                    <div style="text-align:center;margin-top:20px;">
-                        <button id="${CONFIG.UI_ID}-result-close" style="
-                            padding:10px 32px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;
-                            border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;
-                            transition:transform 0.2s,box-shadow 0.2s;
-                        ">关闭</button>
+                    <div style="text-align:center;margin-top:14px;">
+                        <button id="${CONFIG.UI_ID}-result-close" type="button">关闭</button>
                     </div>
                 </div>
             `;
@@ -73420,10 +73533,11 @@ if (typeof globalThis !== 'undefined') {
             const idlePanelWidthPx = 667;
             panel.style.cssText = `
                 position:fixed;top:20px;right:20px;width:${idlePanelWidthPx}px;min-width:${idlePanelWidthPx}px;max-width:1200px;
-                padding:15px;background:var(--am26-panel-strong,rgba(255,255,255,.45));
+                box-sizing:border-box;padding:0;background:var(--am26-panel-strong,rgba(255,255,255,.45));
                 color:var(--am26-text,#1b2438);border-radius:18px;z-index:1000001;
                 font-size:13px;box-shadow:var(--am26-shadow,0 8px 32px rgba(31,38,135,.15));border:1px solid var(--am26-border,rgba(255,255,255,.4));
                 font-family:var(--am26-font,-apple-system,system-ui,sans-serif);
+                backdrop-filter:blur(20px) saturate(1.25);-webkit-backdrop-filter:blur(20px) saturate(1.25);
                 opacity:0;transform:scale(0.8);transform-origin:top right;pointer-events:none;
                 transition:opacity 0.3s ease, transform 0.3s ease, width 0.8s cubic-bezier(0.4,0,0.2,1);
                 overflow:hidden;
@@ -73432,6 +73546,69 @@ if (typeof globalThis !== 'undefined') {
 
             panel.innerHTML = `
                 <style>
+                    #${CONFIG.UI_ID} .am-escort-shell {
+                        display:grid;
+                        gap:10px;
+                        padding:12px;
+                        box-sizing:border-box;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-header,
+                    #${CONFIG.UI_ID} .am-escort-setting-panel,
+                    #${CONFIG.UI_ID} .am-escort-field,
+                    #${CONFIG.UI_ID} .am-escort-statusbar,
+                    #${CONFIG.UI_ID} .am-escort-log-shell {
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4));
+                        background:var(--am26-surface,rgba(255,255,255,.25));
+                        box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 10px 24px rgba(31,53,109,.06);
+                        backdrop-filter:blur(12px) saturate(1.12);
+                        -webkit-backdrop-filter:blur(12px) saturate(1.12);
+                    }
+                    #${CONFIG.UI_ID} .am-escort-header {
+                        min-width:0;
+                        display:flex;
+                        align-items:center;
+                        justify-content:space-between;
+                        gap:12px;
+                        padding:10px 12px;
+                        border-radius:14px;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-title {
+                        min-width:0;
+                        display:flex;
+                        align-items:center;
+                        gap:8px;
+                        color:var(--am26-primary,#2a5bff);
+                        font-weight:700;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-title-text {
+                        min-width:0;
+                        overflow:hidden;
+                        text-overflow:ellipsis;
+                        white-space:nowrap;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-window-actions {
+                        display:flex;
+                        align-items:center;
+                        gap:4px;
+                        flex-shrink:0;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-api-badge {
+                        height:22px;
+                        display:inline-flex;
+                        align-items:center;
+                        padding:0 9px;
+                        border-radius:999px;
+                        border:1px solid rgba(69,84,229,.18);
+                        background:rgba(69,84,229,.08);
+                        color:var(--am26-primary,#2a5bff);
+                        font-size:10px;
+                        font-weight:700;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-workbench {
+                        display:grid;
+                        gap:10px;
+                        min-width:0;
+                    }
                     #${CONFIG.UI_ID} .am-icon-btn {
                         width:28px;
                         height:28px;
@@ -73454,6 +73631,46 @@ if (typeof globalThis !== 'undefined') {
                         background:rgba(234,79,79,.12);
                         color:var(--am26-danger,#ea4f4f);
                     }
+                    #${CONFIG.UI_ID} .am-escort-log-shell {
+                        border-radius:14px;
+                        font-size:11px;
+                        font-family:Monaco,Consolas,monospace;
+                        height:0;
+                        max-height:500px;
+                        overflow:hidden;
+                        opacity:0;
+                        transform:scaleY(0.8);
+                        transform-origin:top;
+                        transition:height 0.6s ease-out, opacity 0.3s ease-out, transform 0.45s ease-out, margin-bottom 0.3s ease-out;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-log {
+                        color:var(--am26-text-soft,#505a74);
+                        line-height:1.55;
+                        padding:10px;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-setting-panel {
+                        border-radius:14px;
+                        padding:10px;
+                        min-width:0;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-setting-content {
+                        font-size:11px;
+                        line-height:1.45;
+                        color:var(--am26-text-soft,#505a74);
+                    }
+                    #${CONFIG.UI_ID} .am-escort-primary-action {
+                        width:100%;
+                        min-height:34px;
+                        padding:8px 12px;
+                        background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));
+                        color:#fff;
+                        border:none;
+                        border-radius:12px;
+                        cursor:pointer;
+                        font-weight:700;
+                        font-size:13px;
+                        letter-spacing:0;
+                    }
                     #${CONFIG.UI_ID} .am-icon-btn:focus-visible,
                     #${CONFIG.UI_ID}-run:focus-visible,
                     #${CONFIG.UI_ID}-prompt:focus-visible,
@@ -73467,6 +73684,74 @@ if (typeof globalThis !== 'undefined') {
                     #${CONFIG.UI_ID}-run:hover {
                         transform:translateY(-1px);
                         box-shadow:0 6px 16px rgba(42,91,255,.24);
+                    }
+                    #${CONFIG.UI_ID} .am-escort-control-grid {
+                        display:grid;
+                        grid-template-columns:minmax(0,1fr) minmax(172px,auto);
+                        gap:8px;
+                        min-width:0;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-field {
+                        min-width:0;
+                        display:flex;
+                        align-items:center;
+                        gap:7px;
+                        min-height:34px;
+                        box-sizing:border-box;
+                        border-radius:12px;
+                        padding:6px 8px;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-field-label,
+                    #${CONFIG.UI_ID} .am-escort-field-unit {
+                        color:var(--am26-text-soft,#505a74);
+                        font-size:11px;
+                        font-weight:700;
+                        white-space:nowrap;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-field input {
+                        min-width:0;
+                        height:24px;
+                        box-sizing:border-box;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.45));
+                        border-radius:8px;
+                        background:rgba(255,255,255,.72);
+                        color:var(--am26-text,#1b2438);
+                        font:inherit;
+                        font-size:11px;
+                    }
+                    #${CONFIG.UI_ID}-prompt {
+                        flex:1;
+                        padding:0 8px;
+                    }
+                    #${CONFIG.UI_ID}-concurrency {
+                        width:54px;
+                        padding:0 6px;
+                        text-align:center;
+                        font-variant-numeric:tabular-nums;
+                        font-feature-settings:"tnum" 1;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-statusbar {
+                        min-width:0;
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:center;
+                        gap:12px;
+                        min-height:28px;
+                        padding:5px 8px;
+                        border-radius:999px;
+                        color:var(--am26-text-soft,#505a74);
+                        font-size:10px;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-user {
+                        min-width:0;
+                        overflow:hidden;
+                        text-overflow:ellipsis;
+                        white-space:nowrap;
+                    }
+                    #${CONFIG.UI_ID} .am-escort-token {
+                        flex-shrink:0;
+                        cursor:help;
+                        font-weight:700;
                     }
                     #${CONFIG.UI_ID}-log.am26-log-waterfall { column-count:2; column-gap:10px; }
                     #${CONFIG.UI_ID}-log .am26-campaign-card { width:100%; }
@@ -73482,40 +73767,49 @@ if (typeof globalThis !== 'undefined') {
                         }
                     }
                 </style>
-                <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="color:var(--am26-primary,#2a5bff);display:inline-flex;align-items:center;gap:6px;">${renderAmIcon('shield-check', { size: 16 })} 小万护航 v${CONFIG.VERSION}</span>
-                    <div style="display:flex;align-items:center;gap:2px;">
-                        <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
-                        <button id="${CONFIG.UI_ID}-center" class="am-icon-btn" type="button" title="居中" aria-label="居中">
-                            ${renderAmWindowIcon('center')}
-                        </button>
-                        <button id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" type="button" title="最大化" aria-label="最大化">
-                            ${renderAmWindowIcon('expand')}
-                        </button>
-                        <button id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" type="button" title="关闭" aria-label="关闭算法护航">
-                            ${renderAmWindowIcon('close')}
-                        </button>
+                <div class="am-escort-shell">
+                    <div class="am-escort-header">
+                        <span class="am-escort-title">
+                            ${renderAmIcon('shield-check', { size: 16 })}
+                            <span class="am-escort-title-text">小万护航 v${CONFIG.VERSION}</span>
+                        </span>
+                        <div class="am-escort-window-actions">
+                            <span class="am-escort-api-badge">API版</span>
+                            <button id="${CONFIG.UI_ID}-center" class="am-icon-btn" type="button" title="居中" aria-label="居中">
+                                ${renderAmWindowIcon('center')}
+                            </button>
+                            <button id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" type="button" title="最大化" aria-label="最大化">
+                                ${renderAmWindowIcon('expand')}
+                            </button>
+                            <button id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" type="button" title="关闭" aria-label="关闭算法护航">
+                                ${renderAmWindowIcon('close')}
+                            </button>
+                        </div>
                     </div>
-                </div>
-                <div id="${CONFIG.UI_ID}-log-wrapper" style="background:rgba(255,255,255,.22);padding:0;border-radius:12px;font-size:11px;height:0;max-height:500px;overflow:hidden;margin-bottom:0;border:1px solid var(--am26-border,rgba(255,255,255,.35));font-family:Monaco,Consolas,monospace;opacity:0;transform:scaleY(0.8);transform-origin:top;transition:all 0.6s ease-out;">
-                    <div id="${CONFIG.UI_ID}-log" style="color:var(--am26-text-soft,#505a74);line-height:1.5;padding:10px;"></div>
-                </div>
-                <div id="${CONFIG.UI_ID}-latest-setting-panel" style="margin-bottom:8px;padding:8px;border:1px solid var(--am26-border,rgba(255,255,255,.35));border-radius:10px;background:rgba(255,255,255,.24);">
-                    <div id="${CONFIG.UI_ID}-latest-setting-content" style="font-size:10px;line-height:1.45;color:var(--am26-text-soft,#505a74);">正在读取...</div>
-                </div>
-                <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
-                <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
-                    <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">诊断话术:</label>
-                    <input id="${CONFIG.UI_ID}-prompt" type="text" style="flex:1;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" placeholder="例: 深度拿量" />
-                </div>
-                <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
-                    <label style="color:var(--am26-text-soft,#505a74);font-size:10px;white-space:nowrap;">同时执行:</label>
-                    <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" style="width:50px;padding:4px;border:1px solid var(--am26-border,rgba(255,255,255,.45));border-radius:10px;font-size:10px;text-align:center;background:rgba(255,255,255,.72);color:var(--am26-text,#1b2438);" />
-                    <span style="color:var(--am26-text-soft,#505a74);font-size:10px;">个计划 (1-10)</span>
-                </div>
-                <div style="margin-top:10px;font-size:10px;color:var(--am26-text-soft,#505a74);display:flex;justify-content:space-between;">
-                    <span id="${CONFIG.UI_ID}-user" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-                    <span id="${CONFIG.UI_ID}-token" style="cursor:help;" title="Token状态">● Token</span>
+                    <div class="am-escort-workbench">
+                        <div id="${CONFIG.UI_ID}-log-wrapper" class="am-escort-log-shell">
+                            <div id="${CONFIG.UI_ID}-log" class="am-escort-log"></div>
+                        </div>
+                        <div id="${CONFIG.UI_ID}-latest-setting-panel" class="am-escort-setting-panel">
+                            <div id="${CONFIG.UI_ID}-latest-setting-content" class="am-escort-setting-content">正在读取...</div>
+                        </div>
+                        <button id="${CONFIG.UI_ID}-run" class="am-escort-primary-action" type="button">立即扫描并优化</button>
+                        <div class="am-escort-control-grid">
+                            <label class="am-escort-field">
+                                <span class="am-escort-field-label">诊断话术</span>
+                                <input id="${CONFIG.UI_ID}-prompt" type="text" placeholder="例: 深度拿量" />
+                            </label>
+                            <label class="am-escort-field">
+                                <span class="am-escort-field-label">同时执行</span>
+                                <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" />
+                                <span class="am-escort-field-unit">个计划</span>
+                            </label>
+                        </div>
+                        <div class="am-escort-statusbar">
+                            <span id="${CONFIG.UI_ID}-user" class="am-escort-user"></span>
+                            <span id="${CONFIG.UI_ID}-token" class="am-escort-token" title="Token状态">● Token</span>
+                        </div>
+                    </div>
                 </div>
             `;
 
@@ -73526,14 +73820,6 @@ if (typeof globalThis !== 'undefined') {
             const concurrencyInput = document.getElementById(`${CONFIG.UI_ID}-concurrency`);
             if (concurrencyInput) concurrencyInput.value = userConfig.concurrency || 3;
             UI.renderLatestEscortSettingPreview();
-
-            // 事件绑定
-            ['center', 'maximize', 'close'].forEach(key => {
-                const el = document.getElementById(`${CONFIG.UI_ID}-${key}`);
-                if (!el) return;
-                el.addEventListener('mouseenter', () => { el.style.color = 'var(--am26-primary,#2a5bff)'; });
-                el.addEventListener('mouseleave', () => { el.style.color = 'var(--am26-text-soft,#505a74)'; });
-            });
 
             document.getElementById(`${CONFIG.UI_ID}-close`).onclick = () => {
                 panel.style.opacity = '0';
@@ -73769,7 +74055,7 @@ if (typeof globalThis !== 'undefined') {
                 }
                 const tokenDot = document.getElementById(`${CONFIG.UI_ID}-token`);
                 if (tokenDot) {
-                    tokenDot.style.color = (State.tokens.dynamicToken && State.tokens.loginPointId) ? '#52c41a' : '#ff4d4f';
+                    tokenDot.style.color = (State.tokens.dynamicToken && State.tokens.loginPointId) ? 'var(--am26-success,#0ea86f)' : 'var(--am26-danger,#ea4f4f)';
                 }
             }, 1000);
         }
