@@ -66,6 +66,8 @@ test('关键词向导残留图标字符改为共享 SVG', () => {
   }
   const style = read('src/optimizer/keyword-plan-api/wizard-style-and-state/style.js');
   assert.doesNotMatch(style, /content:\s*"\s*[⌄⌃^↗]\s*"/, '样式中不应再用文本箭头或外链符号做图标');
+  assert.doesNotMatch(style, /content:\s*['"]\s*[◀▼]\s*['"]/, '提交方式下拉不应使用 CSS 文本箭头做功能图标');
+  assert.match(read('src/optimizer/keyword-plan-api/wizard-mount-intro.js'), /renderAmIcon\('chevron-down', \{ size: 12, strokeWidth: 2\.4 \}\)/, '提交方式下拉按钮应使用共享 chevron 图标');
   assert.doesNotMatch(style, /am-wxt-scene-trend-check input:checked \+ \.am-wxt-scene-trend-check-icon::after/, '趋势主题勾选不应再用 CSS 边框手绘勾');
 });
 

@@ -14,10 +14,10 @@
                         </div>
                         <button type="button" class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
-                    <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
-                        <button type="button" class="am-wxt-btn primary" data-workbench-page="home">首页</button>
-                        <button type="button" class="am-wxt-btn" data-workbench-page="matrix">矩阵页</button>
-                        <button type="button" class="am-wxt-btn" data-workbench-page="previewlog">日志页</button>
+                    <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs" role="tablist" aria-label="组建计划工作台页签">
+                        <button type="button" class="am-wxt-btn primary" id="am-wxt-workbench-tab-home" data-workbench-page="home" role="tab" aria-selected="true" aria-controls="am-wxt-keyword-home-summary">首页</button>
+                        <button type="button" class="am-wxt-btn" id="am-wxt-workbench-tab-matrix" data-workbench-page="matrix" role="tab" aria-selected="false" aria-controls="am-wxt-keyword-matrix-config">矩阵页</button>
+                        <button type="button" class="am-wxt-btn" id="am-wxt-workbench-tab-previewlog" data-workbench-page="previewlog" role="tab" aria-selected="false" aria-controls="am-wxt-keyword-previewlog-panel">日志页</button>
                     </div>
                     <div class="am-wxt-body">
                         <div class="am-wxt-home-summary" id="am-wxt-keyword-home-summary" data-workbench-page-panel="home">
@@ -95,8 +95,9 @@
                                             aria-label="提交方式"
                                             aria-haspopup="menu"
                                             aria-expanded="false"
+                                            aria-controls="am-wxt-keyword-run-mode-menu"
                                             data-open="0"
-                                        ></button>
+                                        ><span class="am-wxt-run-mode-toggle-icon">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}</span></button>
                                         <div class="am-wxt-run-mode-menu hidden" id="am-wxt-keyword-run-mode-menu" role="menu">
                                             <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
                                                 <span class="am-wxt-run-mode-label">并发数</span>
@@ -563,6 +564,8 @@
                     if (!(btn instanceof HTMLButtonElement)) return;
                     const active = btn.dataset.workbenchPage === nextPage;
                     btn.classList.toggle('primary', active);
+                    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+                    btn.tabIndex = active ? 0 : -1;
                 });
                 toggleDisplay(wizardState.els.homeSummary, nextPage === 'home');
                 toggleDisplay(wizardState.els.itemSplit, nextPage === 'home');

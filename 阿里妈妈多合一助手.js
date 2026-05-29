@@ -41212,12 +41212,10 @@ if (typeof globalThis !== 'undefined') {
                     transition: color 0.16s ease, transform 0.16s ease;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-toggle::before {
-                    content: '◀';
-                    font-size: 11px;
-                    line-height: 1;
+                    content: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-toggle[data-open="1"]::before {
-                    content: '▼';
+                    content: none;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-toggle:hover {
                     background: transparent !important;
@@ -43030,6 +43028,313 @@ if (typeof globalThis !== 'undefined') {
                     line-height: 1.55;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs {
+                    display: inline-flex;
+                    align-self: flex-start;
+                    gap: 4px;
+                    min-height: 0;
+                    margin: 10px 12px 0;
+                    padding: 4px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.32);
+                    backdrop-filter: blur(10px) saturate(1.18);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.18);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn {
+                    min-height: 30px;
+                    padding: 0 13px;
+                    border: 0;
+                    border-radius: 999px;
+                    background: transparent;
+                    color: var(--am26-text-soft, #505a74);
+                    line-height: 30px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    box-shadow: none;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn::after {
+                    content: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn:hover,
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn:focus-visible {
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn.primary,
+                #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn[aria-selected="true"] {
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: 0 8px 18px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.42);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-body {
+                    padding: 10px 12px 12px;
+                    background: transparent;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-summary {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 10px;
+                    margin-bottom: 10px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-stat {
+                    min-width: 0;
+                    min-height: 48px;
+                    padding: 9px 12px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: linear-gradient(145deg, var(--am26-surface-strong, rgba(255,255,255,0.45)), var(--am26-surface, rgba(255,255,255,0.25)));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.36), 0 8px 20px rgba(31,38,135,0.06);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-stat-label,
+                #am-wxt-keyword-modal .am-wxt-product-toolbar > span,
+                #am-wxt-keyword-modal .am-wxt-strategy-head-main > span:not(.am-wxt-strategy-section-title) {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-home-stat strong {
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    font-variant-numeric: tabular-nums;
+                    font-feature-settings: "tnum" 1;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-panel {
+                    min-height: 250px;
+                    overflow: hidden;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-panel-candidate {
+                    min-height: 250px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar {
+                    gap: 6px;
+                    padding: 8px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]) {
+                    min-width: 150px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-product-toolbar {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    align-items: center;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar-actions {
+                    flex-wrap: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-board {
+                    margin-top: 10px;
+                    border-radius: 12px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head {
+                    grid-template-columns: minmax(190px, auto) minmax(220px, 1fr) auto;
+                    gap: 8px;
+                    padding: 10px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-section-title {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 24px;
+                    padding: 0 8px;
+                    border: 1px solid rgba(69,84,229,0.16);
+                    border-radius: 999px;
+                    background: rgba(69,84,229,0.08);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    line-height: 22px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input {
+                    width: min(240px, 100%);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-list {
+                    background: transparent;
+                    max-height: min(296px, 34vh);
+                    overflow: auto;
+                    overscroll-behavior: contain;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-list-head {
+                    position: sticky;
+                    top: 0;
+                    z-index: 1;
+                    backdrop-filter: blur(10px) saturate(1.12);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.12);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-item:hover {
+                    background: rgba(255,255,255,0.18);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-footer {
+                    min-height: 58px;
+                    padding: 10px;
+                    background: linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0.24));
+                }
+
+                #am-wxt-keyword-modal .am-wxt-submit-summary {
+                    min-width: 0;
+                    overflow: hidden;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-submit-summary span {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-primary-actions {
+                    flex: 0 0 auto;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle {
+                    right: 6px;
+                    border-radius: 999px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle::before {
+                    content: none !important;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: transform 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-run-mode-toggle[data-open="1"] .am-wxt-run-mode-toggle-icon {
+                    transform: rotate(180deg);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-quick-log-panel {
+                    padding: 9px 10px 10px;
+                    background: linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.16));
+                }
+
+                #am-wxt-keyword-modal .am-wxt-quick-log-title {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-quick-log-title::before {
+                    content: "";
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 999px;
+                    background: var(--am26-primary, #4554e5);
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.1);
+                }
+
+                #am-wxt-keyword-quick-log,
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log {
+                    font-variant-numeric: tabular-nums;
+                    font-feature-settings: "tnum" 1;
+                }
+
+                #am-wxt-keyword-quick-log .line,
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line {
+                    position: relative;
+                    padding-left: 12px;
+                    overflow-wrap: anywhere;
+                }
+
+                #am-wxt-keyword-quick-log .line::before,
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line::before {
+                    content: "";
+                    position: absolute;
+                    left: 0;
+                    top: 0.72em;
+                    width: 5px;
+                    height: 5px;
+                    border-radius: 999px;
+                    background: rgba(80,90,116,0.46);
+                }
+
+                #am-wxt-keyword-quick-log .line.error::before,
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.error::before {
+                    background: var(--am26-danger, #ea4f4f);
+                }
+
+                #am-wxt-keyword-quick-log .line.success::before,
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.success::before {
+                    background: var(--am26-success, #0ea86f);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel {
+                    padding: 10px;
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text, #1b2438);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-detail-title {
+                    margin-bottom: 10px;
+                    color: var(--am26-text, #1b2438);
+                    font-weight: 700;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-box {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 8px;
+                    margin-top: 0;
+                    padding: 0;
+                    border: 0;
+                    background: transparent;
+                    box-shadow: none;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    min-height: 40px;
+                    margin: 0;
+                    padding: 8px 10px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 10px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title:last-child {
+                    padding: 8px 10px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log {
+                    min-height: 180px;
+                    max-height: min(380px, 42vh);
+                    padding: 10px 12px;
+                }
+
                 @media (max-width: 980px) {
                     #am-wxt-keyword-modal .am-wxt-home-summary,
                     #am-wxt-keyword-modal .am-wxt-strategy-head {
@@ -43043,7 +43348,14 @@ if (typeof globalThis !== 'undefined') {
                     }
 
                     #am-wxt-keyword-modal .am-wxt-product-toolbar {
+                        grid-template-columns: 1fr;
                         align-items: flex-start;
+                    }
+
+                    #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-box {
+                        display: grid;
+                        grid-template-columns: 1fr;
+                        background: transparent;
                     }
 
                     #am-wxt-keyword-modal .am-wxt-strategy-search-input {
@@ -46234,10 +46546,10 @@ if (typeof globalThis !== 'undefined') {
                         </div>
                         <button type="button" class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
-                    <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
-                        <button type="button" class="am-wxt-btn primary" data-workbench-page="home">首页</button>
-                        <button type="button" class="am-wxt-btn" data-workbench-page="matrix">矩阵页</button>
-                        <button type="button" class="am-wxt-btn" data-workbench-page="previewlog">日志页</button>
+                    <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs" role="tablist" aria-label="组建计划工作台页签">
+                        <button type="button" class="am-wxt-btn primary" id="am-wxt-workbench-tab-home" data-workbench-page="home" role="tab" aria-selected="true" aria-controls="am-wxt-keyword-home-summary">首页</button>
+                        <button type="button" class="am-wxt-btn" id="am-wxt-workbench-tab-matrix" data-workbench-page="matrix" role="tab" aria-selected="false" aria-controls="am-wxt-keyword-matrix-config">矩阵页</button>
+                        <button type="button" class="am-wxt-btn" id="am-wxt-workbench-tab-previewlog" data-workbench-page="previewlog" role="tab" aria-selected="false" aria-controls="am-wxt-keyword-previewlog-panel">日志页</button>
                     </div>
                     <div class="am-wxt-body">
                         <div class="am-wxt-home-summary" id="am-wxt-keyword-home-summary" data-workbench-page-panel="home">
@@ -46315,8 +46627,9 @@ if (typeof globalThis !== 'undefined') {
                                             aria-label="提交方式"
                                             aria-haspopup="menu"
                                             aria-expanded="false"
+                                            aria-controls="am-wxt-keyword-run-mode-menu"
                                             data-open="0"
-                                        ></button>
+                                        ><span class="am-wxt-run-mode-toggle-icon">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.4 })}</span></button>
                                         <div class="am-wxt-run-mode-menu hidden" id="am-wxt-keyword-run-mode-menu" role="menu">
                                             <button type="button" class="am-wxt-run-mode-item" data-submit-mode="parallel" role="menuitem">
                                                 <span class="am-wxt-run-mode-label">并发数</span>
@@ -46783,6 +47096,8 @@ if (typeof globalThis !== 'undefined') {
                     if (!(btn instanceof HTMLButtonElement)) return;
                     const active = btn.dataset.workbenchPage === nextPage;
                     btn.classList.toggle('primary', active);
+                    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+                    btn.tabIndex = active ? 0 : -1;
                 });
                 toggleDisplay(wizardState.els.homeSummary, nextPage === 'home');
                 toggleDisplay(wizardState.els.itemSplit, nextPage === 'home');

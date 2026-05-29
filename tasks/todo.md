@@ -12,7 +12,7 @@
 - [x] 页面 1：悬浮球 + 主面板 + 辅助显示展开区。
 - [x] 页面 2：万能查数弹窗 + 人群对比看板入口。
 - [x] 页面 3：算法护航主面板 + 执行结果浮层。
-- [ ] 页面 4：组建计划主向导首页/日志区。
+- [x] 页面 4：组建计划主向导首页/日志区。
 - [ ] 页面 5：组建计划矩阵配置页。
 - [ ] 页面 6：建计划商品选择弹窗。
 - [ ] 页面 7：场景配置/策略详情/高级设置弹窗。
@@ -32,6 +32,7 @@
 - 页面 1 已完成：主工具区改为统一浅玻璃控制组，辅助显示展开区改为浅玻璃胶囊开关组，日志头改为同体系工具条；工具按钮文字增加 `am-tool-label`，避免窄面板溢出。
 - 页面 2 已完成：万能查数弹窗头部、窗口动作组、视图页签、计划信息胶囊、看板工具栏、图例组和重试按钮统一为浅玻璃 token；补充长计划/商品文本省略保护，并同步主样式层覆盖，避免运行态 header 被旧背景压回。
 - 页面 3 已完成：算法护航主面板改为统一浅玻璃工作台骨架，标题区、窗口动作组、手动设置容器、底部参数行、状态条、日志容器和执行结果浮层统一 token；Token 指示灯改用 `--am26-success/danger`，保留运行按钮、窗口动作、手动设置和执行逻辑不变。
+- 页面 4 已完成：组建计划主向导首页/日志区统一为浅玻璃工作台，首页摘要、商品区、计划区、执行条、快速日志与日志页按 `--am26-*` token 收敛；首页/矩阵/日志切换补齐 ARIA tab 语义，执行模式折叠箭头改为共享 SVG 图标；提交、创建、矩阵和弹窗业务逻辑保持不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -79,6 +80,25 @@
   - 样式核对：护航面板宽 `667px`，背景为 `var(--am26-panel-strong)` 对应浅玻璃渐变，`backdrop-filter: blur(20px) saturate(1.25)`；标题区、手动设置面板、底部输入行和状态条均为 `var(--am26-surface)` 对应计算值、统一半透明边框和浅玻璃阴影；手动设置展开状态 `bodyHidden=false`，运行按钮仍为 `mode=run`、文案 `立即扫描并优化`。
   - 安全核对：performance resource 未发现 `escort/openV3.json`、`escort/open.json`、`solution/addList.json`、`campaign/updatePart.json`、`solution/copy.json`、`campaign/copy*` 等写接口。
   - 截图：`tasks/ui-page3-optimizer-escort-before-2026-05-30.png`、`tasks/ui-page3-optimizer-escort-after-2026-05-30.png`。
+- 页面 4 自动化：
+  - `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+  - `node --check tests/keyword-home-strategy-batch-actions.test.mjs`：通过。
+  - `node --check tests/icon-system-regression.test.mjs`：通过。
+  - `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/icon-system-regression.test.mjs tests/keyword-plan-api-bridge-security.test.mjs`：通过，43/43。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+  - 说明：`node --check src/optimizer/keyword-plan-api/wizard-mount-intro.js` 在 `HEAD` 上同样报 `Unexpected end of input`，该文件是构建片段而非独立 JS 模块，本次不作为回归。
+- 页面 4 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，硬刷新真实关键词推广详情页。
+  - 页面身份：`关键词推广详情页_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218`。
+  - 交互：打开主助手，点击“组建计划”；`#am-wxt-keyword-overlay.open` 展示，`#am-wxt-keyword-modal` 为可见 dialog；首页 tab 默认选中，随后仅切换到“日志页”，未点击“提交创建”“批量创建”或确认类入口。
+  - 首页样式核对：主弹窗为浅玻璃渐变，计算背景 `linear-gradient(135deg, rgba(255,255,255,.6), rgba(255,255,255,.2))`，边框 `rgba(255,255,255,.6)`，`backdrop-filter: blur(20px) saturate(1.4)`；首页/矩阵页/日志页均为 `role=tab`，首页 `aria-selected=true`、`tabIndex=0`；摘要卡片为浅玻璃 token，显示“已添加商品 1 / 30”“已选计划 1”“预算合计 200元”；执行模式 chevron 为共享 SVG。
+  - 日志页样式核对：点击“日志页”后 `aria-selected=true`，`aria-controls=am-wxt-keyword-previewlog-panel`；日志面板计算背景 `rgba(255,255,255,.25)`、边框 `rgba(255,255,255,.4)`、`backdrop-filter: blur(10px) saturate(1.15)`，可见“场景摘要 / 组合摘要 / 批次摘要”和预览日志行。
+  - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
+  - 截图：`tasks/ui-page4-keyword-wizard-home-after-2026-05-30.png`、`tasks/ui-page4-keyword-wizard-log-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 issue，未发现插件 UI 相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -90,6 +110,9 @@
 - 页面 3 结果：算法护航主面板和结果浮层已按统一浅玻璃工作台规范收敛；窗口动作、手动设置展开、输入框和 Token 状态仍沿用原逻辑，未改动护航提交路径。
 - 页面 3 风险：本次 Chrome 验收刻意不触发真实护航执行，因此结果浮层主要由静态回归覆盖；执行后数据表视觉未通过真实写接口闭环。
 - 页面 3 回滚：回退 `src/optimizer/ui.js`、`tests/optimizer-token-capture-history.test.mjs`、构建产物和页面 3 截图即可。
+- 页面 4 结果：组建计划主向导首页/日志区已按统一浅玻璃工作台规范收敛；首页摘要、商品区、计划区、执行条、快速日志和日志页摘要/日志均可见且状态清晰，tab 语义和 SVG 图标回归已补齐，未改动提交创建链路。
+- 页面 4 风险：真实验收刻意不触发创建/提交，因此提交后的执行日志增长由现有专项测试和静态样式覆盖；本轮覆盖桌面真实页视口，窄屏依赖现有响应式约束。
+- 页面 4 回滚：回退 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、`tests/icon-system-regression.test.mjs`、构建产物和页面 4 截图即可。
 
 ---
 
