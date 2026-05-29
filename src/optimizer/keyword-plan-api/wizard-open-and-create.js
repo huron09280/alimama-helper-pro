@@ -506,6 +506,10 @@
             return uniqueBy(
                 wordList
                     .map((item) => {
+                        if (typeof item === 'string') {
+                            const text = item.trim();
+                            return text ? { word: text } : null;
+                        }
                         if (!item || typeof item !== 'object') return null;
                         const word = String(item.word || item.keyword || item.bidword || item.name || '').trim();
                         if (!word) return null;
@@ -632,6 +636,15 @@
             if (!item) throw new Error('复制计划缺少商品参数');
             const commonCampaign = deepClone(campaign);
             const commonAdgroup = deepClone(adgroup);
+            const sourceWordListSeed = [
+                adgroup.wordList,
+                source?.wordList,
+                source?.keywordList
+            ].find(list => Array.isArray(list) && list.length) || [];
+            const commonSourceWordList = normalizeCopyKeywordWordList(sourceWordListSeed);
+            if (commonSourceWordList.length) {
+                commonAdgroup.wordList = deepClone(commonSourceWordList);
+            }
             delete commonCampaign.campaignName;
             delete commonCampaign.onlineStatus;
             delete commonAdgroup.onlineStatus;
@@ -646,7 +659,7 @@
                 __copyCurrentPlan: true,
                 common: {
                     marketingGoal,
-                    keywordMode: Array.isArray(adgroup.wordList) && adgroup.wordList.length ? 'manual' : undefined,
+                    keywordMode: commonSourceWordList.length ? 'manual' : undefined,
                     useWordPackage: Array.isArray(adgroup.wordPackageList) && adgroup.wordPackageList.length,
                     rawOverrides: {
                         campaign: commonCampaign,
@@ -657,10 +670,15 @@
                     const planCampaign = deepClone(campaign);
                     const planAdgroup = deepClone(adgroup);
                     const row = copyPlanRows[index] || {};
-                    const sourceWordList = normalizeCopyKeywordWordList(planAdgroup.wordList || []);
+                    const sourceWordList = commonSourceWordList.length
+                        ? deepClone(commonSourceWordList)
+                        : normalizeCopyKeywordWordList(planAdgroup.wordList || []);
                     const sourceWordPackageList = Array.isArray(planAdgroup.wordPackageList)
                         ? deepClone(planAdgroup.wordPackageList).slice(0, 100)
                         : [];
+                    if (sourceWordList.length) {
+                        planAdgroup.wordList = deepClone(sourceWordList);
+                    }
                     planCampaign.campaignName = planName;
                     planCampaign.onlineStatus = targetOnlineStatus;
                     planAdgroup.onlineStatus = targetOnlineStatus;
@@ -693,7 +711,14 @@
                 meta: {
                     ...baseMeta,
                     itemId: String(item.itemId || item.materialId || '').trim(),
-                    bizCode: request.bizCode
+                    bizCode: request.bizCode,
+                    sourceWordList: commonSourceWordList,
+                    sourceKeywordContext: {
+                        promotionScene: campaign.promotionScene || DEFAULTS.promotionScene,
+                        itemSelectedMode: campaign.itemSelectedMode || DEFAULTS.itemSelectedMode,
+                        bidTypeV2: campaign.bidTypeV2 || 'custom_bid',
+                        bidTargetV2: campaign.bidTargetV2 || campaign.optimizeTarget || DEFAULTS.bidTargetV2
+                    }
                 }
             };
         };
@@ -825,6 +850,108 @@
                 rows,
                 error: rows.filter(row => !row.ok).map(row => `${row.campaignId}: ${row.error || '暂停失败'}`).join('；')
             };
+        };
+        const resolveCreatedAdgroupIdsFromCopyResult = (result = {}) => {
+            const out = [];
+            const successList = Array.isArray(result?.successes) ? result.successes : [];
+            successList.forEach((entry) => {
+                [
+                    entry?.adgroupId,
+                    ...(Array.isArray(entry?.adgroupIdList) ? entry.adgroupIdList : []),
+                    ...(Array.isArray(entry?.adgroupIds) ? entry.adgroupIds : [])
+                ].forEach((id) => {
+                    const normalized = toPositiveIdText(id);
+                    if (normalized && !out.includes(normalized)) out.push(normalized);
+                });
+            });
+            if (!out.length && typeof extractCreatedAdgroupIdsFromCreateResult === 'function') {
+                extractCreatedAdgroupIdsFromCreateResult(result).forEach((id) => {
+                    const normalized = toPositiveIdText(id);
+                    if (normalized && !out.includes(normalized)) out.push(normalized);
+                });
+            }
+            return out;
+        };
+        const appendCopiedKeywordsAfterCreate = async (sceneName = '', result = {}, meta = {}, options = {}) => {
+            const bizCode = normalizeSceneBizCode(
+                result?.runtime?.bizCode
+                || result?.bizCode
+                || meta?.bizCode
+                || resolveSceneBizCodeHint(sceneName)
+                || ''
+            );
+            if (bizCode !== 'onebpSearch' && sceneName !== '关键词推广') {
+                return {
+                    skipped: true,
+                    reason: 'not_keyword_scene',
+                    adgroupIds: []
+                };
+            }
+            const sourceWordList = normalizeCopyKeywordWordList(meta?.sourceWordList || []);
+            if (!sourceWordList.length) {
+                return {
+                    skipped: true,
+                    reason: 'source_word_empty',
+                    adgroupIds: []
+                };
+            }
+            const adgroupIds = resolveCreatedAdgroupIdsFromCopyResult(result);
+            if (!adgroupIds.length) {
+                return {
+                    ok: false,
+                    skipped: false,
+                    reason: 'created_adgroup_id_missing',
+                    adgroupIds: [],
+                    wordCount: sourceWordList.length,
+                    rows: [],
+                    error: '创建接口未返回新单元ID，无法复制关键词'
+                };
+            }
+            const entries = adgroupIds.map(adgroupId => ({
+                adgroupId,
+                keywords: sourceWordList,
+                keywordDefaults: {
+                    bidPrice: toNumber(sourceWordList[0]?.bidPrice || sourceWordList[0]?.price, 1),
+                    matchScope: sourceWordList[0]?.matchScope || DEFAULTS.matchScope,
+                    onlineStatus: sourceWordList[0]?.onlineStatus || DEFAULTS.keywordOnlineStatus
+                }
+            }));
+            const sourceKeywordContext = isPlainObject(meta?.sourceKeywordContext) ? meta.sourceKeywordContext : {};
+            try {
+                const response = await appendKeywords({
+                    bizCode: bizCode || DEFAULTS.bizCode,
+                    promotionScene: sourceKeywordContext.promotionScene || DEFAULTS.promotionScene,
+                    itemSelectedMode: sourceKeywordContext.itemSelectedMode || DEFAULTS.itemSelectedMode,
+                    bidTypeV2: sourceKeywordContext.bidTypeV2 || 'custom_bid',
+                    bidTargetV2: sourceKeywordContext.bidTargetV2 || DEFAULTS.bidTargetV2,
+                    entries
+                }, {
+                    requestOptions: options.requestOptions || {}
+                });
+                const rows = Array.isArray(response?.results) ? response.results : [];
+                const failedRows = rows.filter(row => !row?.ok);
+                return {
+                    ok: !!response?.ok && failedRows.length === 0,
+                    partial: !!response?.partial || failedRows.length > 0,
+                    skipped: false,
+                    reason: '',
+                    adgroupIds,
+                    wordCount: sourceWordList.length,
+                    rows,
+                    response,
+                    error: failedRows.map(row => `${row?.adgroupId || '-'}: ${row?.error || '关键词复制失败'}`).join('；')
+                };
+            } catch (err) {
+                return {
+                    ok: false,
+                    skipped: false,
+                    reason: 'append_keywords_failed',
+                    adgroupIds,
+                    wordCount: sourceWordList.length,
+                    rows: [],
+                    error: err?.message || String(err)
+                };
+            }
         };
         const isOfficialCopyScene = (meta = {}) => {
             const bizCode = normalizeSceneBizCode(meta?.bizCode || '');
@@ -1045,9 +1172,35 @@
                     }
                 };
             }
+            const postCreateKeywords = await appendCopiedKeywordsAfterCreate(meta.sceneName, resultWithCreatedIds, meta, options);
+            if (postCreateKeywords && postCreateKeywords.ok === false) {
+                const failure = {
+                    planName: meta.newPlanName,
+                    campaignIds: postCreateStatus?.campaignIds || createdCampaignIds,
+                    adgroupIds: postCreateKeywords.adgroupIds || [],
+                    error: `新计划创建成功但关键词复制失败：${postCreateKeywords.error || postCreateKeywords.reason || '未知错误'}`
+                };
+                return {
+                    ...resultWithCreatedIds,
+                    ok: false,
+                    partial: true,
+                    failCount: toNumber(result?.failCount, 0) + 1,
+                    failures: (Array.isArray(result?.failures) ? result.failures : []).concat(failure),
+                    postCreateStatus,
+                    postCreateKeywords,
+                    copySource: {
+                        ...meta,
+                        targetStatus: resolvedTargetStatus,
+                        createdCampaignIds: Array.isArray(postCreateStatus?.campaignIds) && postCreateStatus.campaignIds.length
+                            ? postCreateStatus.campaignIds
+                            : createdCampaignIds
+                    }
+                };
+            }
             return {
                 ...resultWithCreatedIds,
                 postCreateStatus,
+                postCreateKeywords,
                 copySource: {
                     ...meta,
                     targetStatus: resolvedTargetStatus,

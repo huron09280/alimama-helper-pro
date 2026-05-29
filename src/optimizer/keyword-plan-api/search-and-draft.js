@@ -302,6 +302,7 @@
             if (value === undefined || value === null || value === '') return fallback;
             if (value === 1 || value === '1' || value === 'exact' || value === '精准' || value === '精确') return 1;
             if (value === 4 || value === '4' || value === 'broad' || value === '广泛') return 4;
+            if (value === 16 || value === '16' || value === 'center' || value === '中心词') return 16;
             return fallback;
         };
 
@@ -5194,6 +5195,8 @@
 
         const CREATE_RESPONSE_CAMPAIGN_ID_KEYS = ['campaignId', 'planId', 'id', 'bpCampaignId', 'targetCampaignId'];
         const CREATE_RESPONSE_CAMPAIGN_ID_LIST_KEYS = ['campaignIdList', 'planIdList', 'campaignIds', 'planIds', 'idList'];
+        const CREATE_RESPONSE_ADGROUP_ID_KEYS = ['adgroupId', 'groupId', 'bpAdgroupId', 'targetAdgroupId'];
+        const CREATE_RESPONSE_ADGROUP_ID_LIST_KEYS = ['adgroupIdList', 'adgroupIds', 'groupIdList', 'groupIds'];
 
         const toCreateCampaignIdText = (value) => {
             if (value === undefined || value === null || value === '') return '';
@@ -5218,6 +5221,31 @@
             }
             return '';
         };
+        const toCreateAdgroupIdText = (value) => {
+            if (value === undefined || value === null || value === '') return '';
+            const text = String(value).trim();
+            return /^\d{4,}$/.test(text) ? text : '';
+        };
+        const collectCreateAdgroupIdsFromNode = (node = null, out = []) => {
+            const push = (value) => {
+                const id = toCreateAdgroupIdText(value);
+                if (!id || out.includes(id)) return;
+                out.push(id);
+            };
+            const appendNode = (item = null) => {
+                if (!item || typeof item !== 'object') return;
+                CREATE_RESPONSE_ADGROUP_ID_KEYS.forEach((key) => push(item[key]));
+                CREATE_RESPONSE_ADGROUP_ID_LIST_KEYS.forEach((key) => {
+                    const list = Array.isArray(item[key]) ? item[key] : [];
+                    list.forEach(push);
+                });
+            };
+            appendNode(node);
+            appendNode(node?.adgroup);
+            const adgroupList = Array.isArray(node?.adgroupList) ? node.adgroupList : [];
+            adgroupList.forEach(appendNode);
+            return out;
+        };
 
         const collectCreateCampaignIdsFromResponse = (res = {}, out = []) => {
             const push = (value) => {
@@ -5233,6 +5261,24 @@
                     list.forEach(push);
                 });
             };
+            appendNode(res?.data || {});
+            const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
+            createdList.forEach((node) => appendNode(node));
+            const detailList = Array.isArray(res?.data?.errorDetails) ? res.data.errorDetails : [];
+            detailList.forEach((detail) => {
+                const detailCode = String(detail?.code || '').trim();
+                const detailMsg = String(detail?.msg || detail?.message || detail?.errorMsg || '').trim();
+                if (detailCode || detailMsg) return;
+                if (isPlainObject(detail?.result)) {
+                    appendNode(detail.result);
+                } else if (isPlainObject(detail)) {
+                    appendNode(detail);
+                }
+            });
+            return out;
+        };
+        const collectCreateAdgroupIdsFromResponse = (res = {}, out = []) => {
+            const appendNode = (node = null) => collectCreateAdgroupIdsFromNode(node, out);
             appendNode(res?.data || {});
             const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
             createdList.forEach((node) => appendNode(node));
@@ -5268,6 +5314,21 @@
             }
             return uniqueBy(out, id => id);
         };
+        const extractCreatedAdgroupIdsFromCreateResult = (result = {}) => {
+            const out = [];
+            const directList = Array.isArray(result?.createdAdgroupIds) ? result.createdAdgroupIds : [];
+            directList.forEach((id) => {
+                const normalized = toCreateAdgroupIdText(id);
+                if (normalized) out.push(normalized);
+            });
+            const successList = Array.isArray(result?.successes) ? result.successes : [];
+            successList.forEach((entry) => collectCreateAdgroupIdsFromNode(entry, out));
+            if (!out.length) {
+                const rawResponses = Array.isArray(result?.rawResponses) ? result.rawResponses : [];
+                rawResponses.forEach((res) => collectCreateAdgroupIdsFromResponse(res, out));
+            }
+            return uniqueBy(out, id => id);
+        };
 
         const parseAddListOutcome = (res, entries = []) => {
             const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
@@ -5289,11 +5350,18 @@
                 const campaignId = createdCampaignId
                     || (!detailHasError ? (detailCampaignId || rootCampaignId) : '');
                 if (campaignId && (!detailHasError || !!createdCampaignId)) {
+                    const createdAdgroupIds = collectCreateAdgroupIdsFromNode(created, []);
+                    if (!createdAdgroupIds.length && !detailHasError) {
+                        collectCreateAdgroupIdsFromNode(isPlainObject(detail?.result) ? detail.result : detail, createdAdgroupIds);
+                        if (entries.length === 1) collectCreateAdgroupIdsFromNode(res?.data || {}, createdAdgroupIds);
+                    }
                     successes.push({
                         planName: entry.meta.planName,
                         item: entry.meta.item,
                         campaignId,
-                        adgroupIdList: created.adgroupIdList || [],
+                        adgroupId: createdAdgroupIds[0] || '',
+                        adgroupIdList: createdAdgroupIds,
+                        adgroupIds: createdAdgroupIds,
                         marketingGoal: entry?.meta?.marketingGoal || '',
                         submitEndpoint: entry?.meta?.submitEndpoint || '',
                         keywordCount: entry.meta.keywordCount,

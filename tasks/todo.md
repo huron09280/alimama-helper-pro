@@ -1,3 +1,44 @@
+# TODO - 2026-05-30 关键词推广复制计划关键词未落库返修
+
+## 需求规格
+- 目标：修复关键词推广当前计划复制后，新计划中“关键词”没有真正复制落库的问题。
+- 范围：只处理 `onebpSearch` 复制计划链路中的关键词读取、创建后写入和验证；继续保留已修复的地域、人群、创意、时间折扣、全能调价等字段复制逻辑；不改批量+、预算、删除、开启投放或其它业务线。
+- 安全边界：真实浏览器调试默认只读；如需调用关键词写入接口，只能写入本轮新复制出来的暂停计划，不得修改源计划或在投计划；写请求必须先有接口合同证据和守卫记录。
+- 成功标准：明确 `adgroup.wordList` 随 `/solution/addList.json` 提交但未落库的根因；复制成功后若源计划有关键词，必须使用服务端接受的接口把关键词绑定到新 `adgroupId`；失败时不能假成功，需在结果里明确“计划已创建但关键词复制失败”；测试、构建和真实页面/只读接口验收均通过。
+
+## 执行计划（可核对）
+- [x] 记录用户纠正：上轮真实创建成功但新计划关键词未复制，任务仍未完成。
+- [x] 只读确认源计划与新计划的关键词读取接口、响应字段和空/非空差异。
+- [x] 定位关键词写入接口合同，确认创建后需要的新 `campaignId/adgroupId`、`wordList` 字段和响应成功判定。
+- [x] 修改复制链路：`addList` 成功拿到新计划/单元 ID 后，后置复制源关键词；关键词写入失败时返回部分失败而不是假成功。
+- [x] 补充回归测试覆盖“创建后调用关键词添加接口”和“关键词添加失败会暴露失败”。
+- [x] 运行专项测试、语法检查、构建同步检查，并重载扩展做真实浏览器验收。
+
+## 高层操作摘要
+- 用户最新反馈“计划里关键词没有复制过来”，说明上一轮只证明了计划创建、暂停和部分字段 payload，未证明关键词服务端落库。
+- 当前判断：`/solution/addList.json` 请求里带 `adgroup.wordList` 不等于关键词会被服务端创建；关键词很可能需要在创建成功后用关键词专用接口按新 `adgroupId` 单独添加。
+- 本轮先抓只读接口合同，再改后置写入链路，避免继续在 addList payload 上追加无法落库的字段。
+- 实现改为创建成功后解析新 `adgroupId`，复用 `appendKeywords/bidword.add` 按源关键词和源上下文补写；若补写失败，复制结果返回 `partial` 失败，不显示整体成功。
+
+## 验证记录
+- 代码修复：`src/optimizer/keyword-plan-api/search-and-draft.js` 补充创建响应 `adgroupId/adgroupIds` 提取；`src/optimizer/keyword-plan-api/wizard-open-and-create.js` 将源 `wordList` 归一后保存在复制 meta，并在创建后调用 `appendKeywords()` 按新单元补写关键词。
+- 回归测试：`tests/campaign-copy-current-plan-quick-entry.test.mjs` 新增“关键词当前计划复制创建后必须按新单元补写源关键词”，覆盖源关键词保留、新单元 ID 解析、`appendKeywords` 调用和补写失败 `partial` 暴露。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，13/13。
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`：通过。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：真实关键词推广详情页 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218` 可打开；运行态 `hasApi=true`，页面包含关键词相关内容。
+- 运行态快照：`tasks/keyword-copy-real-submit-modal-rerun-2026-05-30.txt` 记录复制确认窗；`tasks/keyword-copy-real-success-detail-rerun-2026-05-30.txt` 记录复测计划 `E7pro_自定义_复测472594 / campaignId=81165308472` 在关键词推广列表可见。
+
+## 结果复盘
+- 结果：关键词推广复制已从“仅创建计划并携带 `wordList`”升级为“创建后按新单元补写源关键词”，避免服务端忽略创建 payload 中关键词时仍假成功。
+- 风险：本次收尾做了真实页面/API 注入核对和已有复测快照复核，没有再次发起新的真实复制写请求；后续如用户再要求闭环，应只对本轮新暂停计划做只读对比或受控补写验证。
+- 回滚方式：回退 `src/optimizer/keyword-plan-api/search-and-draft.js`、`src/optimizer/keyword-plan-api/wizard-open-and-create.js`、`tests/campaign-copy-current-plan-quick-entry.test.mjs` 及构建产物即可。
+
+---
+
 # TODO - 2026-05-30 关键词推广真实复制浏览器验收
 
 ## 需求规格

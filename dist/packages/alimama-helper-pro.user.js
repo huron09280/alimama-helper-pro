@@ -27642,6 +27642,7 @@ if (typeof globalThis !== 'undefined') {
             if (value === undefined || value === null || value === '') return fallback;
             if (value === 1 || value === '1' || value === 'exact' || value === '精准' || value === '精确') return 1;
             if (value === 4 || value === '4' || value === 'broad' || value === '广泛') return 4;
+            if (value === 16 || value === '16' || value === 'center' || value === '中心词') return 16;
             return fallback;
         };
 
@@ -32534,6 +32535,8 @@ if (typeof globalThis !== 'undefined') {
 
         const CREATE_RESPONSE_CAMPAIGN_ID_KEYS = ['campaignId', 'planId', 'id', 'bpCampaignId', 'targetCampaignId'];
         const CREATE_RESPONSE_CAMPAIGN_ID_LIST_KEYS = ['campaignIdList', 'planIdList', 'campaignIds', 'planIds', 'idList'];
+        const CREATE_RESPONSE_ADGROUP_ID_KEYS = ['adgroupId', 'groupId', 'bpAdgroupId', 'targetAdgroupId'];
+        const CREATE_RESPONSE_ADGROUP_ID_LIST_KEYS = ['adgroupIdList', 'adgroupIds', 'groupIdList', 'groupIds'];
 
         const toCreateCampaignIdText = (value) => {
             if (value === undefined || value === null || value === '') return '';
@@ -32558,6 +32561,31 @@ if (typeof globalThis !== 'undefined') {
             }
             return '';
         };
+        const toCreateAdgroupIdText = (value) => {
+            if (value === undefined || value === null || value === '') return '';
+            const text = String(value).trim();
+            return /^\d{4,}$/.test(text) ? text : '';
+        };
+        const collectCreateAdgroupIdsFromNode = (node = null, out = []) => {
+            const push = (value) => {
+                const id = toCreateAdgroupIdText(value);
+                if (!id || out.includes(id)) return;
+                out.push(id);
+            };
+            const appendNode = (item = null) => {
+                if (!item || typeof item !== 'object') return;
+                CREATE_RESPONSE_ADGROUP_ID_KEYS.forEach((key) => push(item[key]));
+                CREATE_RESPONSE_ADGROUP_ID_LIST_KEYS.forEach((key) => {
+                    const list = Array.isArray(item[key]) ? item[key] : [];
+                    list.forEach(push);
+                });
+            };
+            appendNode(node);
+            appendNode(node?.adgroup);
+            const adgroupList = Array.isArray(node?.adgroupList) ? node.adgroupList : [];
+            adgroupList.forEach(appendNode);
+            return out;
+        };
 
         const collectCreateCampaignIdsFromResponse = (res = {}, out = []) => {
             const push = (value) => {
@@ -32573,6 +32601,24 @@ if (typeof globalThis !== 'undefined') {
                     list.forEach(push);
                 });
             };
+            appendNode(res?.data || {});
+            const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
+            createdList.forEach((node) => appendNode(node));
+            const detailList = Array.isArray(res?.data?.errorDetails) ? res.data.errorDetails : [];
+            detailList.forEach((detail) => {
+                const detailCode = String(detail?.code || '').trim();
+                const detailMsg = String(detail?.msg || detail?.message || detail?.errorMsg || '').trim();
+                if (detailCode || detailMsg) return;
+                if (isPlainObject(detail?.result)) {
+                    appendNode(detail.result);
+                } else if (isPlainObject(detail)) {
+                    appendNode(detail);
+                }
+            });
+            return out;
+        };
+        const collectCreateAdgroupIdsFromResponse = (res = {}, out = []) => {
+            const appendNode = (node = null) => collectCreateAdgroupIdsFromNode(node, out);
             appendNode(res?.data || {});
             const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
             createdList.forEach((node) => appendNode(node));
@@ -32608,6 +32654,21 @@ if (typeof globalThis !== 'undefined') {
             }
             return uniqueBy(out, id => id);
         };
+        const extractCreatedAdgroupIdsFromCreateResult = (result = {}) => {
+            const out = [];
+            const directList = Array.isArray(result?.createdAdgroupIds) ? result.createdAdgroupIds : [];
+            directList.forEach((id) => {
+                const normalized = toCreateAdgroupIdText(id);
+                if (normalized) out.push(normalized);
+            });
+            const successList = Array.isArray(result?.successes) ? result.successes : [];
+            successList.forEach((entry) => collectCreateAdgroupIdsFromNode(entry, out));
+            if (!out.length) {
+                const rawResponses = Array.isArray(result?.rawResponses) ? result.rawResponses : [];
+                rawResponses.forEach((res) => collectCreateAdgroupIdsFromResponse(res, out));
+            }
+            return uniqueBy(out, id => id);
+        };
 
         const parseAddListOutcome = (res, entries = []) => {
             const createdList = Array.isArray(res?.data?.list) ? res.data.list : [];
@@ -32629,11 +32690,18 @@ if (typeof globalThis !== 'undefined') {
                 const campaignId = createdCampaignId
                     || (!detailHasError ? (detailCampaignId || rootCampaignId) : '');
                 if (campaignId && (!detailHasError || !!createdCampaignId)) {
+                    const createdAdgroupIds = collectCreateAdgroupIdsFromNode(created, []);
+                    if (!createdAdgroupIds.length && !detailHasError) {
+                        collectCreateAdgroupIdsFromNode(isPlainObject(detail?.result) ? detail.result : detail, createdAdgroupIds);
+                        if (entries.length === 1) collectCreateAdgroupIdsFromNode(res?.data || {}, createdAdgroupIds);
+                    }
                     successes.push({
                         planName: entry.meta.planName,
                         item: entry.meta.item,
                         campaignId,
-                        adgroupIdList: created.adgroupIdList || [],
+                        adgroupId: createdAdgroupIds[0] || '',
+                        adgroupIdList: createdAdgroupIds,
+                        adgroupIds: createdAdgroupIds,
                         marketingGoal: entry?.meta?.marketingGoal || '',
                         submitEndpoint: entry?.meta?.submitEndpoint || '',
                         keywordCount: entry.meta.keywordCount,
@@ -67358,6 +67426,10 @@ if (typeof globalThis !== 'undefined') {
             return uniqueBy(
                 wordList
                     .map((item) => {
+                        if (typeof item === 'string') {
+                            const text = item.trim();
+                            return text ? { word: text } : null;
+                        }
                         if (!item || typeof item !== 'object') return null;
                         const word = String(item.word || item.keyword || item.bidword || item.name || '').trim();
                         if (!word) return null;
@@ -67484,6 +67556,15 @@ if (typeof globalThis !== 'undefined') {
             if (!item) throw new Error('复制计划缺少商品参数');
             const commonCampaign = deepClone(campaign);
             const commonAdgroup = deepClone(adgroup);
+            const sourceWordListSeed = [
+                adgroup.wordList,
+                source?.wordList,
+                source?.keywordList
+            ].find(list => Array.isArray(list) && list.length) || [];
+            const commonSourceWordList = normalizeCopyKeywordWordList(sourceWordListSeed);
+            if (commonSourceWordList.length) {
+                commonAdgroup.wordList = deepClone(commonSourceWordList);
+            }
             delete commonCampaign.campaignName;
             delete commonCampaign.onlineStatus;
             delete commonAdgroup.onlineStatus;
@@ -67498,7 +67579,7 @@ if (typeof globalThis !== 'undefined') {
                 __copyCurrentPlan: true,
                 common: {
                     marketingGoal,
-                    keywordMode: Array.isArray(adgroup.wordList) && adgroup.wordList.length ? 'manual' : undefined,
+                    keywordMode: commonSourceWordList.length ? 'manual' : undefined,
                     useWordPackage: Array.isArray(adgroup.wordPackageList) && adgroup.wordPackageList.length,
                     rawOverrides: {
                         campaign: commonCampaign,
@@ -67509,10 +67590,15 @@ if (typeof globalThis !== 'undefined') {
                     const planCampaign = deepClone(campaign);
                     const planAdgroup = deepClone(adgroup);
                     const row = copyPlanRows[index] || {};
-                    const sourceWordList = normalizeCopyKeywordWordList(planAdgroup.wordList || []);
+                    const sourceWordList = commonSourceWordList.length
+                        ? deepClone(commonSourceWordList)
+                        : normalizeCopyKeywordWordList(planAdgroup.wordList || []);
                     const sourceWordPackageList = Array.isArray(planAdgroup.wordPackageList)
                         ? deepClone(planAdgroup.wordPackageList).slice(0, 100)
                         : [];
+                    if (sourceWordList.length) {
+                        planAdgroup.wordList = deepClone(sourceWordList);
+                    }
                     planCampaign.campaignName = planName;
                     planCampaign.onlineStatus = targetOnlineStatus;
                     planAdgroup.onlineStatus = targetOnlineStatus;
@@ -67545,7 +67631,14 @@ if (typeof globalThis !== 'undefined') {
                 meta: {
                     ...baseMeta,
                     itemId: String(item.itemId || item.materialId || '').trim(),
-                    bizCode: request.bizCode
+                    bizCode: request.bizCode,
+                    sourceWordList: commonSourceWordList,
+                    sourceKeywordContext: {
+                        promotionScene: campaign.promotionScene || DEFAULTS.promotionScene,
+                        itemSelectedMode: campaign.itemSelectedMode || DEFAULTS.itemSelectedMode,
+                        bidTypeV2: campaign.bidTypeV2 || 'custom_bid',
+                        bidTargetV2: campaign.bidTargetV2 || campaign.optimizeTarget || DEFAULTS.bidTargetV2
+                    }
                 }
             };
         };
@@ -67677,6 +67770,108 @@ if (typeof globalThis !== 'undefined') {
                 rows,
                 error: rows.filter(row => !row.ok).map(row => `${row.campaignId}: ${row.error || '暂停失败'}`).join('；')
             };
+        };
+        const resolveCreatedAdgroupIdsFromCopyResult = (result = {}) => {
+            const out = [];
+            const successList = Array.isArray(result?.successes) ? result.successes : [];
+            successList.forEach((entry) => {
+                [
+                    entry?.adgroupId,
+                    ...(Array.isArray(entry?.adgroupIdList) ? entry.adgroupIdList : []),
+                    ...(Array.isArray(entry?.adgroupIds) ? entry.adgroupIds : [])
+                ].forEach((id) => {
+                    const normalized = toPositiveIdText(id);
+                    if (normalized && !out.includes(normalized)) out.push(normalized);
+                });
+            });
+            if (!out.length && typeof extractCreatedAdgroupIdsFromCreateResult === 'function') {
+                extractCreatedAdgroupIdsFromCreateResult(result).forEach((id) => {
+                    const normalized = toPositiveIdText(id);
+                    if (normalized && !out.includes(normalized)) out.push(normalized);
+                });
+            }
+            return out;
+        };
+        const appendCopiedKeywordsAfterCreate = async (sceneName = '', result = {}, meta = {}, options = {}) => {
+            const bizCode = normalizeSceneBizCode(
+                result?.runtime?.bizCode
+                || result?.bizCode
+                || meta?.bizCode
+                || resolveSceneBizCodeHint(sceneName)
+                || ''
+            );
+            if (bizCode !== 'onebpSearch' && sceneName !== '关键词推广') {
+                return {
+                    skipped: true,
+                    reason: 'not_keyword_scene',
+                    adgroupIds: []
+                };
+            }
+            const sourceWordList = normalizeCopyKeywordWordList(meta?.sourceWordList || []);
+            if (!sourceWordList.length) {
+                return {
+                    skipped: true,
+                    reason: 'source_word_empty',
+                    adgroupIds: []
+                };
+            }
+            const adgroupIds = resolveCreatedAdgroupIdsFromCopyResult(result);
+            if (!adgroupIds.length) {
+                return {
+                    ok: false,
+                    skipped: false,
+                    reason: 'created_adgroup_id_missing',
+                    adgroupIds: [],
+                    wordCount: sourceWordList.length,
+                    rows: [],
+                    error: '创建接口未返回新单元ID，无法复制关键词'
+                };
+            }
+            const entries = adgroupIds.map(adgroupId => ({
+                adgroupId,
+                keywords: sourceWordList,
+                keywordDefaults: {
+                    bidPrice: toNumber(sourceWordList[0]?.bidPrice || sourceWordList[0]?.price, 1),
+                    matchScope: sourceWordList[0]?.matchScope || DEFAULTS.matchScope,
+                    onlineStatus: sourceWordList[0]?.onlineStatus || DEFAULTS.keywordOnlineStatus
+                }
+            }));
+            const sourceKeywordContext = isPlainObject(meta?.sourceKeywordContext) ? meta.sourceKeywordContext : {};
+            try {
+                const response = await appendKeywords({
+                    bizCode: bizCode || DEFAULTS.bizCode,
+                    promotionScene: sourceKeywordContext.promotionScene || DEFAULTS.promotionScene,
+                    itemSelectedMode: sourceKeywordContext.itemSelectedMode || DEFAULTS.itemSelectedMode,
+                    bidTypeV2: sourceKeywordContext.bidTypeV2 || 'custom_bid',
+                    bidTargetV2: sourceKeywordContext.bidTargetV2 || DEFAULTS.bidTargetV2,
+                    entries
+                }, {
+                    requestOptions: options.requestOptions || {}
+                });
+                const rows = Array.isArray(response?.results) ? response.results : [];
+                const failedRows = rows.filter(row => !row?.ok);
+                return {
+                    ok: !!response?.ok && failedRows.length === 0,
+                    partial: !!response?.partial || failedRows.length > 0,
+                    skipped: false,
+                    reason: '',
+                    adgroupIds,
+                    wordCount: sourceWordList.length,
+                    rows,
+                    response,
+                    error: failedRows.map(row => `${row?.adgroupId || '-'}: ${row?.error || '关键词复制失败'}`).join('；')
+                };
+            } catch (err) {
+                return {
+                    ok: false,
+                    skipped: false,
+                    reason: 'append_keywords_failed',
+                    adgroupIds,
+                    wordCount: sourceWordList.length,
+                    rows: [],
+                    error: err?.message || String(err)
+                };
+            }
         };
         const isOfficialCopyScene = (meta = {}) => {
             const bizCode = normalizeSceneBizCode(meta?.bizCode || '');
@@ -67897,9 +68092,35 @@ if (typeof globalThis !== 'undefined') {
                     }
                 };
             }
+            const postCreateKeywords = await appendCopiedKeywordsAfterCreate(meta.sceneName, resultWithCreatedIds, meta, options);
+            if (postCreateKeywords && postCreateKeywords.ok === false) {
+                const failure = {
+                    planName: meta.newPlanName,
+                    campaignIds: postCreateStatus?.campaignIds || createdCampaignIds,
+                    adgroupIds: postCreateKeywords.adgroupIds || [],
+                    error: `新计划创建成功但关键词复制失败：${postCreateKeywords.error || postCreateKeywords.reason || '未知错误'}`
+                };
+                return {
+                    ...resultWithCreatedIds,
+                    ok: false,
+                    partial: true,
+                    failCount: toNumber(result?.failCount, 0) + 1,
+                    failures: (Array.isArray(result?.failures) ? result.failures : []).concat(failure),
+                    postCreateStatus,
+                    postCreateKeywords,
+                    copySource: {
+                        ...meta,
+                        targetStatus: resolvedTargetStatus,
+                        createdCampaignIds: Array.isArray(postCreateStatus?.campaignIds) && postCreateStatus.campaignIds.length
+                            ? postCreateStatus.campaignIds
+                            : createdCampaignIds
+                    }
+                };
+            }
             return {
                 ...resultWithCreatedIds,
                 postCreateStatus,
+                postCreateKeywords,
                 copySource: {
                     ...meta,
                     targetStatus: resolvedTargetStatus,
