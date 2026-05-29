@@ -11,6 +11,13 @@ function getCampaignQuickEntryBlock() {
     return source.slice(start, end);
 }
 
+function getConcurrentLogStyleBlock() {
+    const start = source.indexOf('#am-campaign-concurrent-log-popup {');
+    const end = source.indexOf('#am-campaign-copy-overview-popup {', start);
+    assert.ok(start > -1 && end > start, '无法定位并发日志样式块');
+    return source.slice(start, end);
+}
+
 test('计划ID快捷入口包含并发开启按钮与样式标识', () => {
     const block = getCampaignQuickEntryBlock();
     assert.match(block, /ICON_SVG:\s*renderAmIcon\('campaign-query',\s*\{\s*size:\s*14,\s*strokeWidth:\s*2\.1\s*\}\)/, '快捷查数按钮未使用专用查询图标');
@@ -83,4 +90,31 @@ test('并发开启流程包含弹窗日志并在成功后提示', () => {
     assert.match(block, /setConcurrentLogStatus\(`执行成功：第\$\{result\?\.attempt \|\| 1\}次即完成`, 'success'\)/, '缺少成功状态提示');
     assert.match(block, /#am-campaign-concurrent-log-popup/, '并发日志弹窗未加入忽略区域，可能污染计划按钮');
     assert.match(block, /data-item-id/, '并发按钮缺少商品ID透传字段');
+});
+
+test('并发日志弹窗对齐统一弹窗语义和焦点规范', () => {
+    const block = getCampaignQuickEntryBlock();
+    assert.match(block, /class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-labelledby="am-concurrent-log-title"/, '并发日志弹窗应通过标题建立可访问名称');
+    assert.match(block, /class="am-concurrent-log-icon" aria-hidden="true">\$\{renderAmIcon\('campaign-concurrent-start'/, '并发日志标题应使用共享启动图标');
+    assert.match(block, /<h3 class="am-concurrent-log-title" id="am-concurrent-log-title">并发开启执行日志<\/h3>/, '并发日志标题应使用 heading 结构');
+    assert.match(block, /id="am-concurrent-log-status" role="status" aria-live="polite"/, '并发日志状态条应具备 live status 语义');
+    assert.match(block, /id="am-concurrent-log-body" role="log" aria-live="polite" aria-relevant="additions text" aria-label="并发开启日志明细" tabindex="0"/, '并发日志明细应具备 log 语义和键盘滚动焦点');
+    assert.match(block, /popup\.setAttribute\('aria-hidden', 'false'\)/, '打开并发日志时应同步 aria-hidden');
+    assert.match(block, /closeConcurrentLogPopup\(\{ restoreFocus = true \} = \{\}\)[\s\S]*?popup\.setAttribute\('aria-hidden', 'true'\)[\s\S]*?document\.removeEventListener\('keydown', this\.concurrentLogKeydownHandler, true\)[\s\S]*?focusBackEl\.focus\(\{ preventScroll: true \}\)/, '并发日志关闭应移除 Esc 监听并恢复触发按钮焦点');
+    assert.match(block, /this\.concurrentLogKeydownHandler = \(event\) => \{[\s\S]*?event\.key !== 'Escape'[\s\S]*?this\.closeConcurrentLogPopup\(\)/, '并发日志应支持 Esc 关闭');
+    assert.match(block, /requestAnimationFrame\(\(\) => closeBtn\.focus\(\{ preventScroll: true \}\)\)/, '打开并发日志后应聚焦关闭按钮');
+    assert.match(block, /const normalizedLevel = \['running', 'success', 'warning', 'error'\]\.includes\(level\) \? level : 'running'/, '并发日志状态应支持 warning 语义');
+});
+
+test('并发日志弹窗样式使用统一 token 和可见焦点', () => {
+    const styleBlock = getConcurrentLogStyleBlock();
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \{[\s\S]*?background:\s*rgba\(27,\s*36,\s*56,\s*0\.28\);[\s\S]*?backdrop-filter:\s*blur\(10px\);/, '并发日志遮罩应使用统一浅玻璃遮罩');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-card\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?border:\s*1px solid var\(--am26-border-strong\);[\s\S]*?background:\s*var\(--am26-panel-strong\);[\s\S]*?box-shadow:\s*var\(--am26-shadow\);[\s\S]*?backdrop-filter:\s*blur\(20px\) saturate\(1\.4\);/, '并发日志卡片应收敛到统一 token 玻璃面板');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-title\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/, '并发日志标题应防止挤压关闭按钮');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-close:focus-visible\s*\{[\s\S]*?box-shadow:\s*0 0 0 3px rgba\(37,\s*99,\s*235,\s*0\.28\);/, '并发日志关闭按钮缺少可见键盘焦点');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-body:focus-visible\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 2px rgba\(37,\s*99,\s*235,\s*0\.22\);/, '并发日志明细区缺少可见键盘焦点');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-status\.is-warning\s*\{[\s\S]*?background:\s*rgba\(232,\s*163,\s*37,\s*0\.14\);/, '并发日志状态缺少 warning 语义样式');
+    assert.match(styleBlock, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-campaign-concurrent-log-popup \.am-concurrent-log-close/, '并发日志动效应适配减少动画');
+    assert.doesNotMatch(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-card\s*\{[\s\S]*?background:\s*#ffffff;/, '并发日志卡片不应回退到旧纯白硬编码背景');
+    assert.doesNotMatch(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-body\s*\{[\s\S]*?background:\s*#0f172a;/, '并发日志明细区不应回退到旧深色终端背景');
 });

@@ -747,7 +747,12 @@
                 const idx = Number(btn.dataset.index);
                 const item = this.QUICK_PROMPTS[idx];
                 if (!item) return;
+                const label = this.resolvePromptLabel(item);
                 btn.innerHTML = this.renderQuickPromptContent(item);
+                btn.setAttribute('aria-label', `快捷话术：${label}`);
+                if (!btn.hasAttribute('aria-pressed')) {
+                    btn.setAttribute('aria-pressed', 'false');
+                }
             });
         },
 
@@ -766,6 +771,16 @@
             if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
                 this.matrixCampaignItemTriggerEl.setAttribute('aria-expanded', next ? 'true' : 'false');
             }
+            if (this.matrixCampaignItemDropdownEl instanceof HTMLElement) {
+                this.matrixCampaignItemDropdownEl.setAttribute('aria-hidden', next ? 'false' : 'true');
+            }
+            if (next) {
+                const options = this.getCrowdCampaignItemOptionNodes();
+                const selectedOption = options.find(node => node.getAttribute('aria-selected') === 'true') || options[0];
+                this.setCrowdCampaignItemActiveOption(selectedOption, { scroll: false });
+            } else {
+                this.clearCrowdCampaignItemActiveOption();
+            }
         },
 
         toggleCrowdCampaignItemDropdown(forceOpen) {
@@ -778,6 +793,123 @@
                 ? forceOpen
                 : !this.matrixCampaignItemSelectEl.classList.contains('is-open');
             this.setCrowdCampaignItemDropdownOpen(nextOpen);
+        },
+
+        getCrowdCampaignItemOptionNodes() {
+            if (!(this.matrixCampaignItemDropdownEl instanceof HTMLElement)) return [];
+            return Array.from(this.matrixCampaignItemDropdownEl.querySelectorAll('[data-crowd-item-id]'))
+                .filter(node => node instanceof HTMLElement);
+        },
+
+        clearCrowdCampaignItemActiveOption() {
+            this.getCrowdCampaignItemOptionNodes().forEach(node => node.classList.remove('is-keyboard-active'));
+            if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
+                this.matrixCampaignItemTriggerEl.removeAttribute('aria-activedescendant');
+            }
+        },
+
+        setCrowdCampaignItemActiveOption(optionEl, options = {}) {
+            if (!(optionEl instanceof HTMLElement)) return;
+            this.getCrowdCampaignItemOptionNodes().forEach(node => {
+                node.classList.toggle('is-keyboard-active', node === optionEl);
+            });
+            if (this.matrixCampaignItemTriggerEl instanceof HTMLElement && optionEl.id) {
+                this.matrixCampaignItemTriggerEl.setAttribute('aria-activedescendant', optionEl.id);
+            }
+            if (options?.scroll !== false && typeof optionEl.scrollIntoView === 'function') {
+                optionEl.scrollIntoView({ block: 'nearest' });
+            }
+        },
+
+        moveCrowdCampaignItemActiveOption(step = 0) {
+            const options = this.getCrowdCampaignItemOptionNodes();
+            if (!options.length) return;
+            const activeId = this.matrixCampaignItemTriggerEl instanceof HTMLElement
+                ? this.matrixCampaignItemTriggerEl.getAttribute('aria-activedescendant')
+                : '';
+            let currentIndex = activeId ? options.findIndex(node => node.id === activeId) : -1;
+            if (currentIndex < 0) {
+                currentIndex = options.findIndex(node => node.getAttribute('aria-selected') === 'true');
+            }
+            if (currentIndex < 0) currentIndex = 0;
+            const nextIndex = Math.max(0, Math.min(options.length - 1, currentIndex + Number(step || 0)));
+            this.setCrowdCampaignItemActiveOption(options[nextIndex]);
+        },
+
+        setCrowdCampaignItemActiveOptionByIndex(index = 0) {
+            const options = this.getCrowdCampaignItemOptionNodes();
+            if (!options.length) return;
+            const safeIndex = Math.max(0, Math.min(options.length - 1, Number(index) || 0));
+            this.setCrowdCampaignItemActiveOption(options[safeIndex]);
+        },
+
+        selectCrowdCampaignItemActiveOption() {
+            const options = this.getCrowdCampaignItemOptionNodes();
+            if (!options.length) return;
+            const activeId = this.matrixCampaignItemTriggerEl instanceof HTMLElement
+                ? this.matrixCampaignItemTriggerEl.getAttribute('aria-activedescendant')
+                : '';
+            const activeOption = options.find(node => node.id === activeId)
+                || options.find(node => node.getAttribute('aria-selected') === 'true')
+                || options[0];
+            const optionItemId = PlanIdentityUtils.normalizeItemId(activeOption?.dataset?.crowdItemId || '');
+            if (!optionItemId) return;
+            this.handleCrowdCampaignItemSelect(optionItemId);
+        },
+
+        handleCrowdCampaignItemDropdownKeydown(event) {
+            if (!(event instanceof KeyboardEvent)) return;
+            if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
+            if (this.matrixCampaignItemSelectEl.classList.contains('is-disabled')) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (!target.closest('#am-crowd-matrix-item-select')) return;
+            const key = event.key;
+            const isOpen = this.matrixCampaignItemSelectEl.classList.contains('is-open');
+            if (key === 'Tab') {
+                this.setCrowdCampaignItemDropdownOpen(false);
+                return;
+            }
+            if (key === 'Escape') {
+                if (isOpen) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.setCrowdCampaignItemDropdownOpen(false);
+                    if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
+                        this.matrixCampaignItemTriggerEl.focus({ preventScroll: true });
+                    }
+                }
+                return;
+            }
+            if (key === 'Enter' || key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!isOpen) {
+                    this.setCrowdCampaignItemDropdownOpen(true);
+                    return;
+                }
+                this.selectCrowdCampaignItemActiveOption();
+                return;
+            }
+            if (key === 'ArrowDown' || key === 'ArrowUp') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!isOpen) {
+                    this.setCrowdCampaignItemDropdownOpen(true);
+                    return;
+                }
+                this.moveCrowdCampaignItemActiveOption(key === 'ArrowDown' ? 1 : -1);
+                return;
+            }
+            if (key === 'Home' || key === 'End') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!isOpen) {
+                    this.setCrowdCampaignItemDropdownOpen(true);
+                }
+                const options = this.getCrowdCampaignItemOptionNodes();
+                this.setCrowdCampaignItemActiveOptionByIndex(key === 'Home' ? 0 : options.length - 1);
+            }
         },
 
         renderCrowdCampaignItemSelect(campaignId = '') {
@@ -801,6 +933,7 @@
             if (!id) {
                 this.matrixCampaignItemTriggerTextEl.textContent = '--';
                 this.matrixCampaignItemTriggerEl.title = '--';
+                this.matrixCampaignItemTriggerEl.setAttribute('aria-label', '选择商品ID：未识别计划');
                 applyDisabledState(true);
                 return;
             }
@@ -810,6 +943,7 @@
             if (!normalizedOptions.length) {
                 this.matrixCampaignItemTriggerTextEl.textContent = '--';
                 this.matrixCampaignItemTriggerEl.title = '--';
+                this.matrixCampaignItemTriggerEl.setAttribute('aria-label', '选择商品ID：暂无可选商品');
                 applyDisabledState(true);
                 return;
             }
@@ -823,10 +957,13 @@
                 const optionBtn = document.createElement('button');
                 optionBtn.type = 'button';
                 optionBtn.className = 'am-crowd-matrix-item-option';
+                optionBtn.id = `am-crowd-matrix-item-option-${item.itemId}`;
                 optionBtn.dataset.crowdItemId = item.itemId;
                 optionBtn.textContent = item.label;
                 optionBtn.title = item.label;
+                optionBtn.tabIndex = -1;
                 optionBtn.setAttribute('role', 'option');
+                optionBtn.setAttribute('aria-label', item.label);
                 this.matrixCampaignItemDropdownEl.appendChild(optionBtn);
             });
 
@@ -848,6 +985,7 @@
             const pickedOption = optionViews.find(item => item.itemId === pickedItemId) || optionViews[0];
             this.matrixCampaignItemTriggerTextEl.textContent = pickedOption?.label || '--';
             this.matrixCampaignItemTriggerEl.title = pickedOption?.label || '--';
+            this.matrixCampaignItemTriggerEl.setAttribute('aria-label', `选择商品ID：${pickedOption?.label || '--'}`);
             applyDisabledState(false);
         },
 
@@ -4090,9 +4228,11 @@
                     const metric = this.normalizeCrowdMetricType(node.dataset.crowdMetric || '');
                     if (!metric) return;
                     const visible = this.getCrowdMetricVisible(metric);
+                    const label = this.getCrowdMetricMeta(metric).seriesLabel;
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
-                    node.title = `${this.getCrowdMetricMeta(metric).seriesLabel}${visible ? '（点击隐藏）' : '（点击显示）'}`;
+                    node.setAttribute('aria-label', `切换人群：${label}`);
+                    node.title = `${label}${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
                 this.matrixLegendEl.querySelectorAll('[data-crowd-period]').forEach((node) => {
                     if (!(node instanceof HTMLElement)) return;
@@ -4101,6 +4241,7 @@
                     const visible = this.getCrowdPeriodVisible(period);
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.setAttribute('aria-label', `切换周期：过去${period}天`);
                     node.title = `过去${period}天${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
                 this.matrixLegendEl.querySelectorAll('[data-crowd-ratio-toggle]').forEach((node) => {
@@ -4108,6 +4249,7 @@
                     const visible = this.getCrowdRatioVisible();
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.setAttribute('aria-label', '切换显示占比');
                     node.title = `显示占比${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
                 this.matrixLegendEl.querySelectorAll('[data-crowd-insight-toggle]').forEach((node) => {
@@ -4115,6 +4257,7 @@
                     const visible = this.getCrowdInsightsVisible();
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.setAttribute('aria-label', '切换显示提示');
                     node.title = `显示提示${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
             }
@@ -4181,6 +4324,7 @@
                 btn.dataset.crowdMetric = metric;
                 btn.style.setProperty('--am-crowd-legend-color', meta.color);
                 const dot = document.createElement('i');
+                dot.setAttribute('aria-hidden', 'true');
                 const text = document.createElement('span');
                 text.textContent = meta.seriesLabel;
                 btn.appendChild(dot);
@@ -4204,6 +4348,7 @@
                 btn.dataset.crowdPeriod = String(period);
                 btn.style.setProperty('--am-crowd-legend-color', '#7f8ca9');
                 const dot = document.createElement('i');
+                dot.setAttribute('aria-hidden', 'true');
                 const text = document.createElement('span');
                 text.textContent = `过去${period}天`;
                 btn.appendChild(dot);
@@ -4226,6 +4371,7 @@
             ratioBtn.dataset.crowdRatioToggle = '1';
             ratioBtn.style.setProperty('--am-crowd-legend-color', '#2f54eb');
             const ratioDot = document.createElement('i');
+            ratioDot.setAttribute('aria-hidden', 'true');
             const ratioText = document.createElement('span');
             ratioText.textContent = '显示占比';
             ratioBtn.appendChild(ratioDot);
@@ -4238,6 +4384,7 @@
             insightBtn.dataset.crowdInsightToggle = '1';
             insightBtn.style.setProperty('--am-crowd-legend-color', '#7f8ca9');
             const insightDot = document.createElement('i');
+            insightDot.setAttribute('aria-hidden', 'true');
             const insightText = document.createElement('span');
             insightText.textContent = '显示提示';
             insightBtn.appendChild(insightDot);
@@ -4633,15 +4780,22 @@
             if (this.viewTabsEl instanceof HTMLElement) {
                 this.viewTabsEl.querySelectorAll('[data-view]').forEach((node) => {
                     if (!(node instanceof HTMLElement)) return;
-                    node.classList.toggle('active', node.dataset.view === next);
+                    const selected = node.dataset.view === next;
+                    node.classList.toggle('active', selected);
+                    node.setAttribute('aria-selected', selected ? 'true' : 'false');
+                    node.tabIndex = selected ? 0 : -1;
                 });
             }
             this.refreshMagicViewTabDefaultState();
             if (this.queryPanelEl instanceof HTMLElement) {
-                this.queryPanelEl.style.display = next === 'query' ? 'block' : 'none';
+                const active = next === 'query';
+                this.queryPanelEl.style.display = active ? 'block' : 'none';
+                this.queryPanelEl.setAttribute('aria-hidden', active ? 'false' : 'true');
             }
             if (this.matrixPanelEl instanceof HTMLElement) {
-                this.matrixPanelEl.style.display = next === 'matrix' ? 'flex' : 'none';
+                const active = next === 'matrix';
+                this.matrixPanelEl.style.display = active ? 'flex' : 'none';
+                this.matrixPanelEl.setAttribute('aria-hidden', active ? 'false' : 'true');
             }
             if (this.quickPromptsEl instanceof HTMLElement) {
                 this.quickPromptsEl.style.display = next === 'query' ? 'flex' : 'none';
@@ -5085,17 +5239,28 @@
                 #am-magic-report-popup .am-magic-header .am-btn-group {
                     display: flex; align-items: center; gap: 4px; border-left: 1px solid rgba(0,0,0,0.06); padding-left: 12px;
                 }
-                #am-magic-report-popup .am-magic-header .am-btn-group span {
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn {
+                    appearance: none;
                     width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-                    border-radius: 8px; color: #666; font-size: 18px; transition: all 0.2s;
+                    padding: 0; border: 0; background: transparent;
+                    border-radius: 8px; color: #666; font: inherit; font-size: 18px;
+                    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
                 }
                 #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-refresh {
                     font-size: 20px; font-weight: bold;
                 }
-                #am-magic-report-popup .am-magic-header .am-btn-group span:hover {
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn:hover,
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn:focus-visible {
                     background: rgba(0,0,0,0.05); color: var(--am26-primary);
                 }
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                }
                 #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-close:hover {
+                    background: rgba(234, 79, 79, 0.1); color: var(--am26-danger);
+                }
+                #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-close:focus-visible {
                     background: rgba(234, 79, 79, 0.1); color: var(--am26-danger);
                 }
                 #am-magic-report-popup .am-magic-header .am-quick-prompts {
@@ -5121,6 +5286,12 @@
                 #am-magic-report-popup .am-magic-header .am-quick-prompt:hover {
                     background: rgba(42, 91, 255, 0.12); border-color: rgba(42, 91, 255, 0.34); color: var(--am26-primary);
                     transform: translateY(-1px);
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    border-color: rgba(42, 91, 255, 0.36);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
                 #am-magic-report-popup .am-magic-header .am-quick-prompt.type-action {
                     background: rgba(255, 159, 24, 0.1); border-color: rgba(255, 159, 24, 0.3); color: #d48806;
@@ -5201,6 +5372,12 @@
                     background: rgba(255, 255, 255, 0.42);
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab.active {
+                    background: rgba(255, 255, 255, 0.88);
+                    color: #111827;
+                    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+                    font-weight: 700;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab[aria-selected="true"] {
                     background: rgba(255, 255, 255, 0.88);
                     color: #111827;
                     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -5333,6 +5510,12 @@
                     gap: 4px;
                     cursor: pointer;
                 }
+                #am-magic-report-popup .am-crowd-matrix-item-trigger:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    border-radius: 8px;
+                    background: rgba(42, 91, 255, 0.08);
+                }
                 #am-magic-report-popup .am-crowd-matrix-item-trigger-text {
                     min-width: 0;
                     flex: 1 1 auto;
@@ -5399,6 +5582,14 @@
                     border-color: rgba(42, 91, 255, 0.2);
                     background: rgba(255, 255, 255, 0.95);
                     box-shadow: 0 2px 6px rgba(42, 91, 255, 0.08);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-option:focus-visible,
+                #am-magic-report-popup .am-crowd-matrix-item-option.is-keyboard-active {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 1px;
+                    border-color: rgba(42, 91, 255, 0.28);
+                    background: rgba(255, 255, 255, 0.98);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-option.is-active {
                     color: #1e4de8;
@@ -5497,6 +5688,12 @@
                     transform: translateY(-2px);
                     box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
                     border-color: color-mix(in srgb, var(--am-crowd-legend-color) 40%, transparent);
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-toggle:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    border-color: color-mix(in srgb, var(--am-crowd-legend-color) 46%, transparent);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
                 #am-magic-report-popup .am-crowd-matrix-legend-toggle.is-off {
                     opacity: 0.5;
@@ -5975,6 +6172,21 @@
                     }
                 }
                 @keyframes am-spin { to { transform: rotate(360deg); } }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-magic-report-popup .am-magic-window-btn,
+                    #am-magic-report-popup .am-quick-prompt,
+                    #am-magic-report-popup .am-magic-view-tab,
+                    #am-magic-report-popup .am-magic-view-default-icon,
+                    #am-magic-report-popup .am-crowd-matrix-legend-toggle,
+                    #am-magic-report-popup .am-crowd-matrix-item-trigger-arrow,
+                    #am-magic-report-popup .am-crowd-matrix-cell-chart {
+                        transition: none !important;
+                        animation: none !important;
+                    }
+                    #am-magic-report-popup .am-quick-prompt:hover {
+                        transform: none !important;
+                    }
+                }
             `;
             style.id = 'am-magic-report-popup-style';
             document.head.appendChild(style);
@@ -5997,22 +6209,22 @@
                                 <span class="asiYysqLCj asiYysqLCl font-special asiYysqLCm">万能查数输入您想要了解的数据，小万帮您收集</span>
                             </div>
                         </div>
-                        <div class="am-btn-group">
-                            <span id="am-magic-refresh" title="刷新">
+                        <div class="am-btn-group" aria-label="万能查数窗口操作">
+                            <button type="button" class="am-magic-window-btn" id="am-magic-refresh" title="刷新当前视图" aria-label="刷新当前视图">
                                 ${renderAmWindowIcon('refresh')}
-                            </span>
-                            <span id="am-magic-close" title="关闭">
+                            </button>
+                            <button type="button" class="am-magic-window-btn" id="am-magic-close" title="关闭万能查数" aria-label="关闭万能查数弹窗">
                                 ${renderAmWindowIcon('close')}
-                            </span>
+                            </button>
                         </div>
                     </div>
                     <div class="am-magic-view-meta">
-                        <div class="am-magic-view-tabs" id="am-magic-view-tabs">
-                            <button type="button" class="am-magic-view-tab" data-view="query">
+                        <div class="am-magic-view-tabs" id="am-magic-view-tabs" role="tablist" aria-label="万能查数视图">
+                            <button type="button" class="am-magic-view-tab" id="am-magic-tab-query" data-view="query" role="tab" aria-selected="false" aria-controls="am-magic-panel-query" tabindex="-1">
                                 <span class="am-magic-view-tab-label">万能查数</span>
                                 <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
-                            <button type="button" class="am-magic-view-tab active" data-view="matrix">
+                            <button type="button" class="am-magic-view-tab active" id="am-magic-tab-matrix" data-view="matrix" role="tab" aria-selected="true" aria-controls="am-magic-panel-matrix" tabindex="0">
                                 <span class="am-magic-view-tab-label">人群对比看板</span>
                                 <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
@@ -6025,11 +6237,11 @@
                             <label class="am-crowd-matrix-item-select-wrap">
                                 <span class="am-crowd-matrix-item-label">商品ID：</span>
                                 <div class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
-                                    <button type="button" class="am-crowd-matrix-item-trigger" data-crowd-item-trigger aria-expanded="false" aria-haspopup="listbox">
+                                    <button type="button" class="am-crowd-matrix-item-trigger" data-crowd-item-trigger aria-label="选择商品ID" aria-expanded="false" aria-haspopup="listbox" aria-controls="am-crowd-matrix-item-listbox">
                                         <span class="am-crowd-matrix-item-trigger-text" data-crowd-item-trigger-text>--</span>
                                         <span class="am-crowd-matrix-item-trigger-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 14, strokeWidth: 2 })}</span>
                                     </button>
-                                    <div class="am-crowd-matrix-item-dropdown" data-crowd-item-dropdown role="listbox"></div>
+                                    <div class="am-crowd-matrix-item-dropdown" id="am-crowd-matrix-item-listbox" data-crowd-item-dropdown role="listbox" aria-label="商品ID候选列表" aria-hidden="true"></div>
                                 </div>
                             </label>
                         </div>
@@ -6038,7 +6250,7 @@
                         ${quickPromptHtml}
                     </div>
                 </div>
-                <div class="am-magic-content am-magic-content-query" data-view-panel="query">
+                <div class="am-magic-content am-magic-content-query" id="am-magic-panel-query" data-view-panel="query" role="tabpanel" aria-labelledby="am-magic-tab-query" aria-hidden="true" tabindex="0">
                     <div class="am-iframe-loading" id="am-magic-loading">
                         <div class="am-spinner"></div>
                         <span>正在加载万能查数...</span>
@@ -6049,7 +6261,7 @@
                         allow="clipboard-write"
                     ></iframe>
                 </div>
-                <div class="am-magic-content am-magic-content-matrix" data-view-panel="matrix">
+                <div class="am-magic-content am-magic-content-matrix" id="am-magic-panel-matrix" data-view-panel="matrix" role="tabpanel" aria-labelledby="am-magic-tab-matrix" aria-hidden="false" tabindex="0">
                     <div class="am-crowd-matrix-state is-info" id="am-crowd-matrix-state"><span class="am-crowd-matrix-state-text">点击“人群对比看板”开始加载</span></div>
                     <div class="am-crowd-matrix-toolbar">
                         <div class="am-crowd-matrix-legend-global" id="am-crowd-matrix-global-legend"></div>
@@ -6153,11 +6365,14 @@
                 Logger.warn('⚠️ 万能查数刷新失败，请检查登录状态或网络后重试');
             };
 
-            // 关闭按钮
-            div.querySelector('#am-magic-close').onclick = () => this.toggle(false);
+            const closeBtn = div.querySelector('#am-magic-close');
+            if (closeBtn instanceof HTMLButtonElement) {
+                closeBtn.addEventListener('click', () => this.toggle(false));
+            }
 
-            // 刷新按钮
-            div.querySelector('#am-magic-refresh').onclick = () => {
+            const refreshBtn = div.querySelector('#am-magic-refresh');
+            if (refreshBtn instanceof HTMLButtonElement) {
+                refreshBtn.addEventListener('click', () => {
                 if (this.activeView === 'matrix') {
                     this.ensureCrowdMatrixLoaded(true);
                     return;
@@ -6166,7 +6381,8 @@
                 if (loading) loading.style.display = 'flex';
                 this.iframe.style.opacity = '0';
                 this.iframe.src = this.buildIframeUrl(true);
-            };
+                });
+            }
 
             if (this.viewTabsEl instanceof HTMLElement) {
                 this.viewTabsEl.addEventListener('click', (e) => {
@@ -6187,6 +6403,27 @@
                     const nextView = String(btn.dataset.view || '').trim();
                     if (!nextView) return;
                     this.switchMagicView(nextView);
+                });
+                this.viewTabsEl.addEventListener('keydown', (e) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const currentTab = target.closest('[role="tab"][data-view]');
+                    if (!(currentTab instanceof HTMLElement)) return;
+                    const tabs = Array.from(this.viewTabsEl.querySelectorAll('[role="tab"][data-view]'))
+                        .filter(node => node instanceof HTMLElement);
+                    const currentIndex = tabs.indexOf(currentTab);
+                    if (currentIndex < 0 || !tabs.length) return;
+                    e.preventDefault();
+                    let nextIndex = currentIndex;
+                    if (e.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                    if (e.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+                    if (e.key === 'Home') nextIndex = 0;
+                    if (e.key === 'End') nextIndex = tabs.length - 1;
+                    const nextTab = tabs[nextIndex];
+                    if (!(nextTab instanceof HTMLElement)) return;
+                    nextTab.focus({ preventScroll: true });
+                    this.switchMagicView(nextTab.dataset.view || 'matrix');
                 });
             }
             if (this.matrixRetryBtn instanceof HTMLElement) {
@@ -6251,6 +6488,9 @@
                     if (!optionItemId) return;
                     this.handleCrowdCampaignItemSelect(optionItemId);
                 });
+                this.matrixCampaignEl.addEventListener('keydown', (e) => {
+                    this.handleCrowdCampaignItemDropdownKeydown(e);
+                });
             }
 
             document.addEventListener('click', (e) => {
@@ -6282,7 +6522,14 @@
 
                     quickPrompts.querySelectorAll('.am-quick-prompt').forEach(node => node.classList.remove('active'));
                     btn.classList.add('active');
-                    setTimeout(() => btn.classList.remove('active'), 1200);
+                    quickPrompts.querySelectorAll('.am-quick-prompt').forEach((node) => {
+                        if (node instanceof HTMLElement) node.setAttribute('aria-pressed', 'false');
+                    });
+                    if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'true');
+                    setTimeout(() => {
+                        btn.classList.remove('active');
+                        if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'false');
+                    }, 1200);
 
                     const promptText = await this.resolvePromptText(promptItem);
                     if (!promptText) return;

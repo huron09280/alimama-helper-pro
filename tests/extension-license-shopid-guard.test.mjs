@@ -14,7 +14,7 @@ test('授权模块补齐 shopId 多来源识别与缓存兜底', () => {
   assert.match(pageBundle, /const SECONDARY_SHOP_ID_KEY_SET = new Set\(\['sellerid', 'memberid', 'merchantid', 'principalid', 'ownerid'\]\);/, '缺少降级ID键集合');
   assert.match(pageBundle, /const resolveSecondaryShopIdVerifiedSet = \(candidates = \[\], options = \{\}\) => \{/, '缺少降级ID二次校验函数');
   assert.match(pageBundle, /\+secondary_verified/, '降级ID命中缺少二次校验来源标识');
-  assert.match(pageBundle, /const shopName = normalizeShopName\(state\.shopName\) \|\| '-';/, '遮罩展示未使用解码后的 shopName');
+  assert.match(pageBundle, /\['shopName', normalizeShopName\(state\.shopName\) \|\| '-'\]/, '遮罩展示未使用解码后的 shopName');
   assert.match(pageBundle, /push\('window\.__INITIAL_STATE__', window\.__INITIAL_STATE__\);/, '未补齐 __INITIAL_STATE__ 识别来源');
   assert.match(pageBundle, /const parseShopFromDomText = \(sourceName = 'dom_text'\) => \{/, '未补齐 DOM 文本店铺ID识别');
   assert.match(

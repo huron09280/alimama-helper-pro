@@ -75,9 +75,10 @@
                             background:rgba(42,91,255,.12);color:var(--am26-primary,#2a5bff);border:1px solid rgba(42,91,255,.28);
                         ">处理中</span>
                         <span class="arrow" style="
-                            display:inline-block;transition:transform 0.2s;
-                            font-size:10px;color:var(--am26-text-soft,#505a74);
-                        ">▼</span>
+                            display:inline-flex;align-items:center;justify-content:center;
+                            width:14px;height:14px;transition:transform 0.2s;
+                            color:var(--am26-text-soft,#505a74);
+                        " aria-hidden="true">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.2 })}</span>
                     </div>
                 </div>
                 <div class="card-body" style="padding:8px 12px;font-size:11px;max-height:150px;overflow-y:auto;background:rgba(255,255,255,.12);">
@@ -1459,9 +1460,9 @@
 
             content.innerHTML = `
                 <style>
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:var(--am26-text,#1b2438); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:flex-start; align-items:center; gap:6px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--am26-text,#1b2438); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand {
                         width:18px;
                         height:18px;
@@ -1469,15 +1470,23 @@
                         border-radius:4px;
                         padding:0;
                         background:transparent;
-                        color:#6a789a;
+                        color:var(--am26-text-soft,#505a74);
                         font-size:12px;
                         line-height:18px;
                         text-align:center;
                         cursor:pointer;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand:hover {
-                        background:#edf2ff;
-                        color:#2a5bff;
+                        background:var(--am26-surface-strong,rgba(255,255,255,.45));
+                        color:var(--am26-primary,#2a5bff);
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-segment button:focus-visible {
+                        outline:2px solid rgba(37,99,235,.45);
+                        outline-offset:2px;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand::before {
                         content:'';
@@ -1495,14 +1504,14 @@
                         transform:rotate(45deg);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand[aria-expanded="true"] {
-                        color:#2a5bff;
-                        background:#edf2ff;
+                        color:var(--am26-primary,#2a5bff);
+                        background:var(--am26-surface-strong,rgba(255,255,255,.45));
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-body[hidden] { display:none !important; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"] {
                         -webkit-appearance:auto !important;
                         appearance:auto !important;
-                        accent-color:#2a5bff;
+                        accent-color:var(--am26-primary,#2a5bff);
                         display:inline-block !important;
                         width:14px !important;
                         height:14px !important;
@@ -1514,9 +1523,9 @@
                         visibility:visible !important;
                         vertical-align:middle;
                         box-sizing:border-box;
-                        border:1px solid #b8c7ec;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4));
                         border-radius:4px;
-                        background:#fff;
+                        background:rgba(255,255,255,.72);
                         box-shadow:none;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"]:disabled {
@@ -1527,60 +1536,79 @@
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card {
                         display:inline-block; width:100%; box-sizing:border-box; margin:0 0 10px;
                         break-inside:avoid; -webkit-column-break-inside:avoid;
-                        padding:10px 12px; border:1px solid #d7e2fb; border-radius:12px;
-                        background:linear-gradient(180deg,#f9fbff,#f4f7ff);
+                        padding:10px 12px; border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:12px;
+                        background:linear-gradient(145deg,rgba(246,250,255,.72),rgba(235,243,255,.48));
                         box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-toggle { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1f2638; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline { display:flex; align-items:center; gap:6px; color:#5b6785; font-size:11px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-toggle { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--am26-text,#1b2438); }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline { display:flex; align-items:center; gap:6px; color:var(--am26-text-soft,#505a74); font-size:11px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline input[type="number"],
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline input[type="text"] {
                         width:68px; box-sizing:border-box; padding:5px 8px; height:18px;
-                        border:1px solid #d7dfef; border-radius:8px; background:#fff; color:#1f2638;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:8px; background:rgba(255,255,255,.72); color:var(--am26-text,#1b2438);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field { display:grid; gap:4px; font-size:10px; color:#5f6c8e; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field { display:grid; gap:4px; font-size:10px; color:var(--am26-text-soft,#505a74); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field.full { grid-column:1 / -1; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field input {
                         width:100%; box-sizing:border-box; padding:5px 8px; height:28px;
-                        border:1px solid #d7dfef; border-radius:8px; background:#fff; color:#1f2638;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:8px; background:rgba(255,255,255,.72); color:var(--am26-text,#1b2438);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-switch-item {
                         display:flex; align-items:center; gap:6px; padding:7px 8px;
-                        background:#fff; border:1px solid #dbe3f1; border-radius:9px; color:#5b6785; font-size:11px;
+                        background:var(--am26-surface,rgba(255,255,255,.25)); border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:9px; color:var(--am26-text-soft,#505a74); font-size:11px;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown { position:relative; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger {
-                        width:100%; height:26px; padding:0 10px; border:1px solid #d7dfef; border-radius:8px;
-                        background:#fff; color:#1f2638; display:flex; align-items:center; gap:6px; cursor:pointer;
+                        width:100%; height:26px; padding:0 10px; border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:8px;
+                        background:rgba(255,255,255,.72); color:var(--am26-text,#1b2438); display:flex; align-items:center; gap:6px; cursor:pointer;
                     }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-prefix { color:#5f6c8e; font-size:11px; white-space:nowrap; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-prefix { color:var(--am26-text-soft,#505a74); font-size:11px; white-space:nowrap; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-value { flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-arrow { font-size:10px; color:#5f6c8e; transition:transform .2s ease; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-arrow {
+                        display:inline-flex; align-items:center; justify-content:center;
+                        width:14px; height:14px; color:var(--am26-text-soft,#505a74);
+                        transition:transform .2s ease;
+                    }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger[aria-expanded="true"] .am26-dropdown-arrow { transform:rotate(180deg); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-menu {
                         display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:20;
-                        border:1px solid #d7dfef; border-radius:10px; background:#fff;
-                        box-shadow:0 8px 24px rgba(30,64,175,.16); padding:6px;
+                        border:1px solid var(--am26-border-strong,rgba(255,255,255,.6)); border-radius:10px; background:var(--am26-panel-strong,rgba(255,255,255,.45));
+                        box-shadow:var(--am26-shadow,0 8px 32px rgba(31,38,135,.15)); padding:6px;
+                        backdrop-filter:blur(12px);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-group-title {
-                        font-size:10px; color:#7b86a6; font-weight:600; padding:4px 8px; margin-top:2px;
+                        font-size:10px; color:var(--am26-text-soft,#505a74); font-weight:600; padding:4px 8px; margin-top:2px;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item {
                         width:100%; border:none; background:transparent; border-radius:8px; cursor:pointer;
-                        padding:6px 8px; text-align:left; font-size:11px; color:#1f2638;
+                        padding:6px 8px; text-align:left; font-size:11px; color:var(--am26-text,#1b2438);
                     }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:hover { background:#f3f6ff; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item.is-selected { background:#ebf2ff; color:#2a5bff; font-weight:600; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:hover { background:var(--am26-surface-strong,rgba(255,255,255,.45)); }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item.is-selected { background:rgba(69,84,229,.12); color:var(--am26-primary,#2a5bff); font-weight:600; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-segment {
-                        height:30px; display:flex; border:1px solid #d7dfef; border-radius:9px; overflow:hidden; background:#fff;
+                        height:30px; display:flex; border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:9px; overflow:hidden; background:rgba(255,255,255,.72);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-segment button {
-                        flex:1; border:none; background:transparent; font-size:11px; color:#5f6c8e; cursor:pointer;
+                        flex:1; border:none; background:transparent; font-size:11px; color:var(--am26-text-soft,#505a74); cursor:pointer;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-segment button.is-active {
-                        background:linear-gradient(180deg,#2a5bff,#1f49d4); color:#fff; font-weight:600;
+                        background:linear-gradient(180deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf)); color:#fff; font-weight:600;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input:disabled,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger:disabled,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:disabled,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-segment button:disabled {
+                        cursor:not-allowed;
+                        opacity:.55;
+                    }
+                    @media (prefers-reduced-motion: reduce) {
+                        #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root,
+                        #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root * {
+                            transition:none !important;
+                            animation:none !important;
+                        }
                     }
                     @media (max-width:760px) {
                         #${CONFIG.UI_ID}-latest-setting-content .am26-manual-waterfall { column-count:1; }
@@ -1703,7 +1731,7 @@
                                         <button id="${CONFIG.UI_ID}-manual-keyword-preference-trigger" type="button" class="am26-dropdown-trigger" aria-expanded="false">
                                             <span class="am26-dropdown-prefix">我希望增加：</span>
                                             <span id="${CONFIG.UI_ID}-manual-keyword-preference-value" class="am26-dropdown-value">类目流量飙升词</span>
-                                            <span class="am26-dropdown-arrow">▼</span>
+                                            <span class="am26-dropdown-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.2 })}</span>
                                         </button>
                                         <div id="${CONFIG.UI_ID}-manual-keyword-preference-menu" class="am26-dropdown-menu" data-open="false">
                                             <div class="am26-dropdown-group-title">相似商家买词</div>
@@ -1751,7 +1779,7 @@
                             </div>
                         </div>
                     </div>
-                    <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:#7f8bab;line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
+                    <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:var(--am26-text-soft,#505a74);line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
                     </div>
                 </div>
             `;
@@ -1818,6 +1846,10 @@
             // 创建模态遮罩层
             const overlay = document.createElement('div');
             overlay.id = `${CONFIG.UI_ID}-result-overlay`;
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-labelledby', `${CONFIG.UI_ID}-result-title`);
+            overlay.tabIndex = -1;
             overlay.style.cssText = `
                 position:fixed;top:0;left:0;right:0;bottom:0;
                 background:rgba(15,23,42,0.42);backdrop-filter:blur(6px);
@@ -1830,6 +1862,7 @@
             const failCount = failList.length;
             const totalCount = successCount + failCount;
             const isAllSuccess = failCount === 0;
+            const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
             const rowsHtml = data.map((row, i) => {
                 const safeName = Utils.escapeHtml(row.name ?? '-');
@@ -1850,8 +1883,19 @@
                 <style>
                     @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
                     @keyframes slideUp { from { transform:translateY(20px);opacity:0; } to { transform:translateY(0);opacity:1; } }
+                    #${CONFIG.UI_ID}-result-close:focus-visible {
+                        outline:2px solid rgba(42,91,255,.45);
+                        outline-offset:2px;
+                    }
+                    @media (prefers-reduced-motion: reduce) {
+                        #${CONFIG.UI_ID}-result-overlay,
+                        #${CONFIG.UI_ID}-result-overlay .am26-result-dialog {
+                            animation:none !important;
+                            transition:none !important;
+                        }
+                    }
                 </style>
-                <div style="
+                <div class="am26-result-dialog" style="
                     background:var(--am26-panel-strong,rgba(255,255,255,.45));
                     border:1px solid var(--am26-border,rgba(255,255,255,.4));
                     border-radius:18px;padding:24px 32px;min-width:400px;max-width:600px;
@@ -1861,7 +1905,7 @@
                 ">
                     <div style="text-align:center;margin-bottom:20px;">
                         <div style="width:56px;height:56px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;color:${isAllSuccess ? 'var(--am26-success,#0ea86f)' : 'var(--am26-warning,#e8a325)'};">${renderAmIcon(isAllSuccess ? 'check-circle' : 'alert-triangle', { size: 52, strokeWidth: 1.6 })}</div>
-                        <div style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
+                        <div id="${CONFIG.UI_ID}-result-title" style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
                         <div style="font-size:14px;color:var(--am26-text-soft,#505a74);margin-top:8px;">
                             共 ${totalCount} 个计划，
                             <span style="color:var(--am26-success,#0ea86f);font-weight:600;">${successCount} 成功</span>
@@ -1896,28 +1940,43 @@
 
             // 绑定关闭事件
             const closeBtn = document.getElementById(`${CONFIG.UI_ID}-result-close`);
+            const restoreFocus = () => {
+                if (previousActiveElement && previousActiveElement.isConnected) {
+                    previousActiveElement.focus({ preventScroll: true });
+                }
+            };
+            const closeResultOverlay = () => {
+                document.removeEventListener('keydown', handleResultKeydown, true);
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.24s ease';
+                setTimeout(() => {
+                    overlay.remove();
+                    restoreFocus();
+                }, 240);
+            };
+            const handleResultKeydown = (event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                closeResultOverlay();
+            };
+            document.addEventListener('keydown', handleResultKeydown, true);
             if (closeBtn) {
                 closeBtn.addEventListener('mouseenter', () => {
-                    closeBtn.style.transform = 'scale(1.05)';
+                    closeBtn.style.transform = 'translateY(-1px)';
                     closeBtn.style.boxShadow = '0 4px 12px rgba(42,91,255,0.35)';
                 });
                 closeBtn.addEventListener('mouseleave', () => {
-                    closeBtn.style.transform = 'scale(1)';
+                    closeBtn.style.transform = 'translateY(0)';
                     closeBtn.style.boxShadow = 'none';
                 });
+                closeBtn.focus({ preventScroll: true });
             }
-            if (closeBtn) closeBtn.onclick = () => {
-                overlay.style.opacity = '0';
-                overlay.style.transition = 'opacity 0.3s ease';
-                setTimeout(() => overlay.remove(), 300);
-            };
+            if (closeBtn) closeBtn.addEventListener('click', closeResultOverlay);
 
             // 点击遮罩层也可关闭
             overlay.onclick = (e) => {
                 if (e.target === overlay) {
-                    overlay.style.opacity = '0';
-                    overlay.style.transition = 'opacity 0.3s ease';
-                    setTimeout(() => overlay.remove(), 300);
+                    closeResultOverlay();
                 }
             };
         },
@@ -1944,33 +2003,76 @@
 
             panel.innerHTML = `
                 <style>
+                    #${CONFIG.UI_ID} .am-icon-btn {
+                        width:28px;
+                        height:28px;
+                        border:0;
+                        border-radius:8px;
+                        padding:0;
+                        background:transparent;
+                        color:var(--am26-text-soft,#505a74);
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        cursor:pointer;
+                        font:inherit;
+                    }
+                    #${CONFIG.UI_ID} .am-icon-btn:hover {
+                        background:var(--am26-surface-strong,rgba(255,255,255,.45));
+                        color:var(--am26-primary,#2a5bff);
+                    }
+                    #${CONFIG.UI_ID} .am-icon-btn.danger:hover {
+                        background:rgba(234,79,79,.12);
+                        color:var(--am26-danger,#ea4f4f);
+                    }
+                    #${CONFIG.UI_ID} .am-icon-btn:focus-visible,
+                    #${CONFIG.UI_ID}-run:focus-visible,
+                    #${CONFIG.UI_ID}-prompt:focus-visible,
+                    #${CONFIG.UI_ID}-concurrency:focus-visible {
+                        outline:2px solid rgba(37,99,235,.45);
+                        outline-offset:2px;
+                    }
+                    #${CONFIG.UI_ID}-run {
+                        transition:transform .2s ease, box-shadow .2s ease;
+                    }
+                    #${CONFIG.UI_ID}-run:hover {
+                        transform:translateY(-1px);
+                        box-shadow:0 6px 16px rgba(42,91,255,.24);
+                    }
                     #${CONFIG.UI_ID}-log.am26-log-waterfall { column-count:2; column-gap:10px; }
                     #${CONFIG.UI_ID}-log .am26-campaign-card { width:100%; }
                     #${CONFIG.UI_ID}-log .am26-log-status-line { width:100%; }
                     @media (max-width:1100px) {
                         #${CONFIG.UI_ID}-log.am26-log-waterfall { column-count:1; }
                     }
+                    @media (prefers-reduced-motion: reduce) {
+                        #${CONFIG.UI_ID},
+                        #${CONFIG.UI_ID} * {
+                            transition:none !important;
+                            animation:none !important;
+                        }
+                    }
                 </style>
                 <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
                     <span style="color:var(--am26-primary,#2a5bff);display:inline-flex;align-items:center;gap:6px;">${renderAmIcon('shield-check', { size: 16 })} 小万护航 v${CONFIG.VERSION}</span>
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
-                        <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
+                        <button id="${CONFIG.UI_ID}-center" class="am-icon-btn" type="button" title="居中" aria-label="居中">
                             ${renderAmWindowIcon('center')}
-                        </span>
-                        <span id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" title="最大化">
+                        </button>
+                        <button id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" type="button" title="最大化" aria-label="最大化">
                             ${renderAmWindowIcon('expand')}
-                        </span>
-                        <span id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" title="关闭">
+                        </button>
+                        <button id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" type="button" title="关闭" aria-label="关闭算法护航">
                             ${renderAmWindowIcon('close')}
-                        </span>
+                        </button>
                     </div>
                 </div>
                 <div id="${CONFIG.UI_ID}-log-wrapper" style="background:rgba(255,255,255,.22);padding:0;border-radius:12px;font-size:11px;height:0;max-height:500px;overflow:hidden;margin-bottom:0;border:1px solid var(--am26-border,rgba(255,255,255,.35));font-family:Monaco,Consolas,monospace;opacity:0;transform:scaleY(0.8);transform-origin:top;transition:all 0.6s ease-out;">
                     <div id="${CONFIG.UI_ID}-log" style="color:var(--am26-text-soft,#505a74);line-height:1.5;padding:10px;"></div>
                 </div>
                 <div id="${CONFIG.UI_ID}-latest-setting-panel" style="margin-bottom:8px;padding:8px;border:1px solid var(--am26-border,rgba(255,255,255,.35));border-radius:10px;background:rgba(255,255,255,.24);">
-                    <div id="${CONFIG.UI_ID}-latest-setting-content" style="font-size:10px;line-height:1.45;color:#4d5875;">正在读取...</div>
+                    <div id="${CONFIG.UI_ID}-latest-setting-content" style="font-size:10px;line-height:1.45;color:var(--am26-text-soft,#505a74);">正在读取...</div>
                 </div>
                 <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
@@ -2045,7 +2147,7 @@
                 if (mode === 'back') {
                     runBtn.dataset.mode = 'back';
                     runBtn.textContent = '返回';
-                    runBtn.style.background = 'linear-gradient(135deg,#6b7280,#4b5563)';
+                    runBtn.style.background = 'linear-gradient(135deg,var(--am26-text-soft,#505a74),var(--am26-text,#1b2438))';
                     return;
                 }
                 runBtn.dataset.mode = 'run';

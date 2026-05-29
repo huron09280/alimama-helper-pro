@@ -6,13 +6,13 @@
             overlay.id = 'am-wxt-keyword-overlay';
             overlay.innerHTML = `
                 <div id="am-wxt-keyword-detail-backdrop"></div>
-                <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true">
+                <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true" aria-labelledby="am-wxt-keyword-title">
                     <div class="am-wxt-header">
                         <div class="am-wxt-header-main">
-                            <span>关键词推广批量建计划 API 向导</span>
+                            <h3 class="am-wxt-title" id="am-wxt-keyword-title">关键词推广批量建计划 API 向导</h3>
                             <span class="am-wxt-runtime-pill">向导就绪</span>
                         </div>
-                        <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
+                        <button type="button" class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
                     <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
                         <button type="button" class="am-wxt-btn primary" data-workbench-page="home">首页</button>
@@ -122,7 +122,7 @@
                             <div class="am-wxt-detail-title">
                                 <span id="am-wxt-keyword-detail-title">同步计划</span>
                                 <div class="am-wxt-detail-title-right">
-                                    <button class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
+                                    <button type="button" class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                                 </div>
                             </div>
                             <div id="am-wxt-keyword-static-settings" class="am-wxt-static-settings">

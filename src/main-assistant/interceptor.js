@@ -22,7 +22,7 @@
             const div = document.createElement('div');
             div.id = 'am-report-capture-panel';
             // Inline fallback: even if style injection fails, ensure popup is visible and clickable.
-            div.style.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;z-index:2147483647;display:none;';
+            div.style.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;width:min(340px, calc(100vw - 24px));z-index:2147483647;display:none;';
             document.body.appendChild(div);
             this.panel = div;
         },
@@ -142,13 +142,16 @@
             dlLink.target = '_blank';
             dlLink.rel = 'noopener noreferrer';
             dlLink.className = 'am-download-link';
+            dlLink.setAttribute('aria-label', '直连下载捕获到的报表');
             dlLink.innerHTML = `${renderAmIcon('logo', { size: 14, strokeWidth: 2.2 })}<span>直连下载</span>`;
 
             const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
             copyBtn.className = 'am-download-btn am-download-copy';
             copyBtn.textContent = '复制';
 
             const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
             closeBtn.className = 'am-download-btn am-download-close';
             closeBtn.innerHTML = renderAmWindowIcon('close');
             closeBtn.setAttribute('aria-label', '关闭');

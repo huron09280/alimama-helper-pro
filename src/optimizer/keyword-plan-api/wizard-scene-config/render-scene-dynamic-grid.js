@@ -838,6 +838,7 @@
                         mask.id = 'am-wxt-scene-popup-mask';
                         mask.className = 'am-wxt-scene-popup-mask';
                         const dialogClass = `am-wxt-scene-popup-dialog${String(dialogClassName || '').trim() ? ` ${String(dialogClassName || '').trim()}` : ''}`;
+                        const titleId = 'am-wxt-scene-popup-title';
                         const normalizedCloseLabel = String(closeLabel || '关闭').trim();
                         const isIconClose = closeIcon === true;
                         const closeBtnHtml = hideCloseButton
@@ -846,10 +847,11 @@
                         const cancelBtnHtml = `<button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">${Utils.escapeHtml(cancelLabel || '取消')}</button>`;
                         const saveBtnHtml = `<button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">${Utils.escapeHtml(saveLabel || '保存')}</button>`;
                         const footButtonsHtml = saveFirst ? `${saveBtnHtml}${cancelBtnHtml}` : `${cancelBtnHtml}${saveBtnHtml}`;
+                        const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                         mask.innerHTML = `
-                            <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true">
+                            <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
                                 <div class="am-wxt-scene-popup-head">
-                                    <span>${Utils.escapeHtml(title || '配置设置')}</span>
+                                    <span id="${titleId}">${Utils.escapeHtml(title || '配置设置')}</span>
                                     ${closeBtnHtml}
                                 </div>
                                 <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
@@ -858,25 +860,85 @@
                                 </div>
                             </div>
                         `;
-                        const handleEscClose = (event) => {
-                            if (event?.key !== 'Escape') return;
-                            event.preventDefault();
-                            close(null);
+                        const focusPopupElement = (target) => {
+                            if (!(target instanceof HTMLElement)) return;
+                            try {
+                                target.focus({ preventScroll: true });
+                            } catch {
+                                target.focus();
+                            }
+                        };
+                        const getPopupFocusableElements = () => Array.from(mask.querySelectorAll([
+                            'button:not([disabled])',
+                            '[href]',
+                            'input:not([disabled])',
+                            'select:not([disabled])',
+                            'textarea:not([disabled])',
+                            '[tabindex]:not([tabindex="-1"])'
+                        ].join(',')))
+                            .filter(el => el instanceof HTMLElement
+                                && el.getAttribute('aria-hidden') !== 'true'
+                                && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+                        const resolveDefaultFocusTarget = () => {
+                            if (defaultFocus === 'save') return saveBtn;
+                            if (defaultFocus === 'cancel') return cancelBtn;
+                            if (defaultFocus === 'close') return closeBtn;
+                            return getPopupFocusableElements()[0] || null;
+                        };
+                        const focusDefaultTarget = () => {
+                            const focusTarget = resolveDefaultFocusTarget();
+                            if (!(focusTarget instanceof HTMLElement)) return;
+                            requestAnimationFrame(() => focusPopupElement(focusTarget));
+                        };
+                        const trapPopupFocus = (event) => {
+                            const focusableEls = getPopupFocusableElements();
+                            if (!focusableEls.length) {
+                                event.preventDefault();
+                                return;
+                            }
+                            const firstEl = focusableEls[0];
+                            const lastEl = focusableEls[focusableEls.length - 1];
+                            const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                            if (!activeEl || !mask.contains(activeEl)) {
+                                event.preventDefault();
+                                focusPopupElement(firstEl);
+                                return;
+                            }
+                            if (event.shiftKey && activeEl === firstEl) {
+                                event.preventDefault();
+                                focusPopupElement(lastEl);
+                            } else if (!event.shiftKey && activeEl === lastEl) {
+                                event.preventDefault();
+                                focusPopupElement(firstEl);
+                            }
+                        };
+                        const handlePopupKeydown = (event) => {
+                            if (event?.key === 'Escape') {
+                                event.preventDefault();
+                                close(null);
+                                return;
+                            }
+                            if (event?.key === 'Tab') {
+                                trapPopupFocus(event);
+                            }
                         };
                         const close = (payload = null) => {
-                            document.removeEventListener('keydown', handleEscClose, true);
+                            document.removeEventListener('keydown', handlePopupKeydown, true);
                             if (typeof mask._amWxtCleanup === 'function') {
                                 try {
                                     mask._amWxtCleanup();
                                 } catch { }
                             }
                             mask.remove();
+                            if (previousActiveElement?.isConnected) {
+                                requestAnimationFrame(() => focusPopupElement(previousActiveElement));
+                            }
                             resolve(payload);
                         };
                         mask.addEventListener('click', (event) => {
                             if (event.target === mask) close(null);
                         });
-                        document.addEventListener('keydown', handleEscClose, true);
+                        document.addEventListener('keydown', handlePopupKeydown, true);
                         const closeBtn = mask.querySelector('[data-scene-popup-close]');
                         const cancelBtn = mask.querySelector('[data-scene-popup-cancel]');
                         const saveBtn = mask.querySelector('[data-scene-popup-save]');
@@ -894,23 +956,7 @@
                             };
                         }
                         document.body.appendChild(mask);
-                        if (defaultFocus) {
-                            const focusTarget = (() => {
-                                if (defaultFocus === 'save') return saveBtn;
-                                if (defaultFocus === 'cancel') return cancelBtn;
-                                if (defaultFocus === 'close') return closeBtn;
-                                return null;
-                            })();
-                            if (focusTarget instanceof HTMLElement) {
-                                requestAnimationFrame(() => {
-                                    try {
-                                        focusTarget.focus({ preventScroll: true });
-                                    } catch {
-                                        focusTarget.focus();
-                                    }
-                                });
-                            }
-                        }
+                        focusDefaultTarget();
                         if (typeof onMounted === 'function') {
                             try {
                                 onMounted(mask);

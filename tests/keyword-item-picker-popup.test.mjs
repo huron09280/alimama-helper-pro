@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
+const escapeRegExp = (text) => String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const getLastCssBlock = (selector) => {
+  const matches = Array.from(source.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{[^}]*\\}`, 'g')));
+  return matches.at(-1)?.[0] || '';
+};
 
 function getToggleCandidateHandlerBlock() {
   const start = source.indexOf('wizardState.els.toggleCandidateBtn.onclick = () => {');
@@ -42,6 +47,71 @@ test('商品弹窗仅保留候选商品左列', () => {
   assert.match(source, /#am-wxt-keyword-item-picker-mask \.am-wxt-keyword-item-picker-host > #am-wxt-keyword-item-split \{[\s\S]*?height: 100%;/, '商品弹窗 split 未撑满宿主高度');
   assert.match(source, /#am-wxt-keyword-item-picker-mask \.am-wxt-panel \{[\s\S]*?height: 100%;[\s\S]*?min-height: 310px;/, '商品弹窗候选列高度未跟随容器');
   assert.match(source, /#am-wxt-keyword-item-picker-mask \.am-wxt-panel-candidate \{[\s\S]*?min-height: 310px;/, '商品弹窗缺少候选面板样式映射');
+});
+
+test('商品弹窗遮罩和面板改为白色轻玻璃背景', () => {
+  const maskBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask');
+  const dialogBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-dialog');
+  const headBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-head');
+  const panelBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-panel');
+  const toolbarBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-toolbar');
+  const footBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-foot');
+
+  assert.match(maskBlock, /background:\s*rgba\(255,\s*255,\s*255,\s*0\.72\);/, '商品弹窗遮罩未改为白色轻玻璃背景');
+  assert.match(maskBlock, /backdrop-filter:\s*blur\(8px\) saturate\(1\.15\);/, '商品弹窗遮罩缺少轻量玻璃模糊');
+  assert.match(dialogBlock, /background:\s*var\(--am26-panel-strong,/, '商品弹窗主体未使用 --am26-panel-strong');
+  assert.match(dialogBlock, /border:\s*1px solid var\(--am26-border-strong,/, '商品弹窗主体边框未使用 --am26-border-strong');
+  assert.match(dialogBlock, /box-shadow:\s*var\(--am26-shadow,/, '商品弹窗主体阴影未使用 --am26-shadow');
+  assert.match(dialogBlock, /backdrop-filter:\s*blur\(18px\) saturate\(1\.35\);/, '商品弹窗主体缺少浅玻璃面板模糊');
+  assert.match(dialogBlock, /color:\s*var\(--am26-text,/, '商品弹窗主体文字色未使用 --am26-text');
+  assert.match(headBlock, /background:\s*var\(--am26-surface-strong,/, '商品弹窗头部未使用 --am26-surface-strong');
+  assert.match(headBlock, /border-bottom:\s*1px solid var\(--am26-border,/, '商品弹窗头部分割线未使用 --am26-border');
+  assert.match(panelBlock, /border:\s*1px solid var\(--am26-border,/, '商品弹窗候选面板边框未使用 --am26-border');
+  assert.match(panelBlock, /background:\s*var\(--am26-surface,/, '商品弹窗候选面板背景未使用 --am26-surface');
+  assert.match(panelBlock, /box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.26\);/, '商品弹窗候选面板缺少轻量内高光');
+  assert.match(toolbarBlock, /background:\s*var\(--am26-surface,/, '商品弹窗工具条背景未使用 --am26-surface');
+  assert.match(footBlock, /background:\s*var\(--am26-surface,/, '商品弹窗底部操作区背景未使用 --am26-surface');
+
+  assert.doesNotMatch(maskBlock, /background:\s*rgba\(15,\s*23,\s*42,\s*0\.48\);/, '商品弹窗遮罩不得回退到旧深色压暗背景');
+  assert.doesNotMatch(dialogBlock, /(?:background:\s*#f7f8fc|box-shadow:\s*0 16px 42px rgba\(17,\s*24,\s*39,\s*0\.28\)|color:\s*#1f2937);/, '商品弹窗主体不得回退到旧灰底深色样式');
+  assert.doesNotMatch(headBlock, /(?:background:\s*linear-gradient\(135deg,\s*#eef2ff,\s*#f8f9ff\)|color:\s*#1f2937);/, '商品弹窗头部不得回退到旧浅蓝硬编码背景');
+  assert.doesNotMatch(panelBlock, /(?:border:\s*1px solid rgba\(148,\s*163,\s*184,\s*0\.35\)|background:\s*#fff);/, '商品弹窗候选面板不得回退到硬编码白底灰边');
+  assert.doesNotMatch(footBlock, /background:\s*#f7f8fc;/, '商品弹窗底部不得回退到硬编码灰底');
+});
+
+test('商品弹窗候选行和按钮收敛到浅玻璃 token', () => {
+  const buttonBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-btn');
+  const buttonHoverBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-btn:hover');
+  const buttonFocusBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-btn:focus-visible');
+  const primaryButtonBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-btn.primary');
+  const disabledButtonBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-btn:disabled');
+  const itemBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-item');
+  const nameBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-item .name');
+  const metaBlock = getLastCssBlock('#am-wxt-keyword-item-picker-mask .am-wxt-item .meta');
+
+  assert.match(buttonBlock, /border:\s*1px solid var\(--am26-border,/, '商品弹窗按钮边框未使用 --am26-border');
+  assert.match(buttonBlock, /background:\s*var\(--am26-surface-strong,/, '商品弹窗按钮背景未使用 --am26-surface-strong');
+  assert.match(buttonBlock, /color:\s*var\(--am26-text-soft,/, '商品弹窗按钮文字未使用 --am26-text-soft');
+  assert.match(buttonBlock, /box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.28\);/, '商品弹窗按钮缺少轻量内高光');
+  assert.match(buttonHoverBlock, /border-color:\s*rgba\(69,\s*84,\s*229,\s*0\.42\);/, '商品弹窗按钮 hover 缺少品牌弱光边框');
+  assert.match(buttonHoverBlock, /background:\s*rgba\(255,\s*255,\s*255,\s*0\.62\);/, '商品弹窗按钮 hover 缺少白色轻玻璃反馈');
+  assert.match(buttonFocusBlock, /outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.45\);/, '商品弹窗按钮缺少可见 focus-visible 轮廓');
+  assert.match(primaryButtonBlock, /background:\s*linear-gradient\(135deg,\s*var\(--am26-primary,/, '商品弹窗主按钮未使用 --am26-primary 渐变');
+  assert.match(primaryButtonBlock, /var\(--am26-primary-strong,/, '商品弹窗主按钮未使用 --am26-primary-strong');
+  assert.match(primaryButtonBlock, /border-color:\s*var\(--am26-primary,/, '商品弹窗主按钮边框未使用 --am26-primary');
+  assert.match(disabledButtonBlock, /background:\s*var\(--am26-surface,/, '商品弹窗禁用按钮背景未使用 --am26-surface');
+  assert.match(disabledButtonBlock, /color:\s*rgba\(80,\s*90,\s*116,\s*0\.62\);/, '商品弹窗禁用按钮文字未使用弱化文本色');
+  assert.match(itemBlock, /border:\s*1px solid var\(--am26-border,/, '商品候选行边框未使用 --am26-border');
+  assert.match(itemBlock, /background:\s*var\(--am26-surface-strong,/, '商品候选行背景未使用 --am26-surface-strong');
+  assert.match(itemBlock, /box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.28\);/, '商品候选行缺少轻量内高光');
+  assert.match(nameBlock, /color:\s*var\(--am26-text,/, '商品候选名称未使用 --am26-text');
+  assert.match(metaBlock, /color:\s*var\(--am26-text-soft,/, '商品候选 ID 文本未使用 --am26-text-soft');
+
+  assert.doesNotMatch(buttonBlock, /(?:background:\s*#eef2ff|color:\s*#2e3ab8|border:\s*1px solid rgba\(69,\s*84,\s*229,\s*0\.3\))/, '商品弹窗按钮不得回退到旧浅蓝硬编码样式');
+  assert.doesNotMatch(primaryButtonBlock, /(?:#4554e5,\s*#4f68ff|color:\s*#fff|border-color:\s*#4554e5)/, '商品弹窗主按钮不得回退到旧硬编码蓝色渐变');
+  assert.doesNotMatch(itemBlock, /border:\s*1px solid rgba\(148,\s*163,\s*184,\s*0\.34\)/, '商品候选行不得回退到旧灰边');
+  assert.doesNotMatch(nameBlock, /color:\s*#111827;/, '商品候选名称不得回退到旧深灰硬编码');
+  assert.doesNotMatch(metaBlock, /color:\s*#64748b;/, '商品候选 ID 不得回退到旧灰蓝硬编码');
 });
 
 test('候选商品与已添加商品渲染主图缩略图', () => {

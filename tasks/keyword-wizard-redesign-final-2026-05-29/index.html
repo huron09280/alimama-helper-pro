@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>关键词推广批量建计划 API 向导 - 重绘设计稿</title>
+    <style>
+        :root {
+            --am-font: "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+            --am-text: #1b2438;
+            --am-text-soft: #58647c;
+            --am-muted: #8590a8;
+            --am-line: rgba(121, 140, 184, 0.18);
+            --am-line-strong: rgba(88, 108, 160, 0.24);
+            --am-bg: #f5f7fd;
+            --am-panel: rgba(255, 255, 255, 0.84);
+            --am-panel-strong: rgba(255, 255, 255, 0.94);
+            --am-primary: #4554e5;
+            --am-primary-strong: #2438d3;
+            --am-primary-soft: rgba(69, 84, 229, 0.09);
+            --am-blue-soft: #edf4ff;
+            --am-cyan: #0f9ea8;
+            --am-green: #0f9f70;
+            --am-orange: #d97706;
+            --am-danger: #d94646;
+            --am-warning-bg: #fff7e6;
+            --am-radius-lg: 18px;
+            --am-radius: 12px;
+            --am-radius-sm: 8px;
+            --am-shadow: 0 22px 70px rgba(31, 53, 109, 0.18);
+            --am-shadow-soft: 0 10px 28px rgba(31, 53, 109, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: var(--am-font);
+            color: var(--am-text);
+            background:
+                radial-gradient(circle at 20% -10%, rgba(102, 139, 255, 0.14), transparent 30%),
+                linear-gradient(180deg, #f8faff 0%, #f1f4fb 100%);
+            overflow: hidden;
+            letter-spacing: 0;
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
+        .page {
+            width: 1365px;
+            height: 768px;
+            position: relative;
+            overflow: hidden;
+            background: #f6f8fc;
+        }
+
+        .topbar {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            padding: 0 28px;
+            border-bottom: 1px solid rgba(133, 144, 168, 0.16);
+            background: rgba(255, 255, 255, 0.86);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 188px;
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .brand-mark {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            background:
+                linear-gradient(135deg, #3658ff, #7b6cff);
+            position: relative;
+        }
+
+        .brand-mark::before,
+        .brand-mark::after {
+            content: "";
+            position: absolute;
+            border-radius: 999px;
+            background: #fff;
+        }
+
+        .brand-mark::before {
+            width: 11px;
+            height: 4px;
+            left: 7px;
+            top: 7px;
+            transform: rotate(-34deg);
+        }
+
+        .brand-mark::after {
+            width: 4px;
+            height: 12px;
+            left: 13px;
+            top: 9px;
+            transform: rotate(32deg);
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            color: #4d5870;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .nav span:nth-child(2) {
+            color: var(--am-primary);
+            position: relative;
+        }
+
+        .nav span:nth-child(2)::after {
+            content: "";
+            position: absolute;
+            left: 3px;
+            right: 3px;
+            bottom: -21px;
+            height: 3px;
+            border-radius: 999px;
+            background: var(--am-primary);
+        }
+
+        .top-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            color: #667089;
+            font-size: 12px;
+        }
+
+        .shell {
+            display: grid;
+            grid-template-columns: 92px 1fr 72px;
+            height: calc(100% - 64px);
+        }
+
+        .sidenav {
+            padding: 22px 12px;
+            background: rgba(255, 255, 255, 0.74);
+            border-right: 1px solid rgba(133, 144, 168, 0.14);
+        }
+
+        .side-section {
+            font-size: 12px;
+            color: #758098;
+            margin: 0 0 14px;
+            font-weight: 700;
+        }
+
+        .side-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 34px;
+            margin: 6px 0;
+            border-radius: 9px;
+            color: #6b7590;
+            font-size: 12px;
+        }
+
+        .side-item.active {
+            color: #fff;
+            background: linear-gradient(135deg, #5060ee, #6874ff);
+            box-shadow: 0 8px 18px rgba(69, 84, 229, 0.26);
+        }
+
+        .content-bg {
+            position: relative;
+            padding: 22px 24px;
+            overflow: hidden;
+        }
+
+        .blur-card {
+            position: absolute;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(133, 144, 168, 0.16);
+        }
+
+        .blur-card.one {
+            left: 24px;
+            top: 24px;
+            right: 24px;
+            height: 118px;
+        }
+
+        .blur-card.two {
+            left: 24px;
+            top: 162px;
+            right: 24px;
+            bottom: 24px;
+        }
+
+        .fake-title {
+            position: absolute;
+            left: 48px;
+            top: 50px;
+            font-size: 22px;
+            font-weight: 800;
+            color: rgba(27, 36, 56, 0.68);
+        }
+
+        .metric-row {
+            position: absolute;
+            left: 48px;
+            right: 48px;
+            top: 92px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .metric {
+            height: 56px;
+            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(255,255,255,0.76), rgba(239,244,255,0.72));
+            border: 1px solid rgba(133, 144, 168, 0.12);
+        }
+
+        .right-rail {
+            position: relative;
+            border-left: 1px solid rgba(133, 144, 168, 0.12);
+            background: rgba(255, 255, 255, 0.62);
+        }
+
+        .float-dot {
+            width: 42px;
+            height: 42px;
+            border-radius: 999px;
+            margin: 308px auto 0;
+            background: linear-gradient(135deg, #4763ff, #7a66ff);
+            box-shadow: 0 12px 24px rgba(69, 84, 229, 0.28);
+        }
+
+        .modal {
+            position: absolute;
+            left: 106px;
+            top: 92px;
+            width: 1154px;
+            height: 598px;
+            border-radius: var(--am-radius-lg);
+            background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(244,248,255,0.92));
+            border: 1px solid rgba(255,255,255,0.82);
+            box-shadow: var(--am-shadow);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            height: 72px;
+            display: flex;
+            align-items: center;
+            padding: 0 22px;
+            border-bottom: 1px solid var(--am-line);
+            background: rgba(255, 255, 255, 0.68);
+        }
+
+        .title-block {
+            min-width: 0;
+        }
+
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.2;
+            font-weight: 800;
+        }
+
+        .mode-pill {
+            display: inline-flex;
+            align-items: center;
+            height: 22px;
+            padding: 0 9px;
+            border-radius: 999px;
+            background: var(--am-primary-soft);
+            color: var(--am-primary-strong);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .modal-subtitle {
+            margin-top: 8px;
+            color: var(--am-text-soft);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .header-summary {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .summary-chip {
+            min-width: 112px;
+            height: 40px;
+            padding: 0 13px;
+            border-radius: 12px;
+            border: 1px solid var(--am-line);
+            background: rgba(255, 255, 255, 0.72);
+        }
+
+        .summary-label {
+            display: block;
+            margin-top: 6px;
+            color: var(--am-muted);
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .summary-value {
+            display: block;
+            color: var(--am-text);
+            font-size: 14px;
+            line-height: 16px;
+            font-weight: 800;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .close-btn {
+            width: 32px;
+            height: 32px;
+            border: 0;
+            border-radius: 10px;
+            color: #667089;
+            background: rgba(255, 255, 255, 0.62);
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .steps {
+            height: 54px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            padding: 11px 22px;
+            border-bottom: 1px solid var(--am-line);
+            background: rgba(247, 250, 255, 0.72);
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            color: var(--am-text-soft);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .step-index {
+            width: 26px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: rgba(69, 84, 229, 0.1);
+            color: var(--am-primary-strong);
+            font-size: 12px;
+            font-weight: 800;
+            flex: 0 0 auto;
+        }
+
+        .step.active {
+            color: var(--am-primary-strong);
+        }
+
+        .step.active .step-index {
+            color: #fff;
+            background: var(--am-primary);
+            box-shadow: 0 8px 16px rgba(69, 84, 229, 0.22);
+        }
+
+        .step-desc {
+            color: var(--am-muted);
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .modal-body {
+            height: calc(100% - 72px - 54px - 76px);
+            display: grid;
+            grid-template-columns: 286px 1fr 220px;
+            gap: 14px;
+            padding: 14px 22px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.24), rgba(239,245,255,0.52));
+        }
+
+        .panel {
+            min-width: 0;
+            min-height: 0;
+            border-radius: 14px;
+            border: 1px solid var(--am-line);
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: var(--am-shadow-soft);
+            overflow: hidden;
+        }
+
+        .panel-head {
+            height: 48px;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 0 14px;
+            border-bottom: 1px solid var(--am-line);
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .panel-meta {
+            margin-left: auto;
+            color: var(--am-muted);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .icon-btn {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--am-line);
+            border-radius: 8px;
+            color: var(--am-text-soft);
+            background: rgba(255,255,255,0.8);
+        }
+
+        .product-list {
+            padding: 12px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .product-card {
+            display: grid;
+            grid-template-columns: 44px 1fr;
+            gap: 10px;
+            min-width: 0;
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(69, 84, 229, 0.14);
+            background: linear-gradient(145deg, #ffffff, #f6f9ff);
+        }
+
+        .product-card.active {
+            box-shadow: inset 3px 0 0 var(--am-primary);
+            background: #fff;
+        }
+
+        .thumb {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background:
+                linear-gradient(135deg, rgba(214,71,54,0.92), rgba(247,171,74,0.9));
+            position: relative;
+            overflow: hidden;
+        }
+
+        .thumb::after {
+            content: "";
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            top: 12px;
+            height: 18px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.8);
+            box-shadow: 0 12px 0 rgba(255,255,255,0.36);
+        }
+
+        .product-name {
+            min-width: 0;
+            color: #2a354d;
+            font-size: 12px;
+            line-height: 16px;
+            font-weight: 700;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+
+        .product-id {
+            margin-top: 4px;
+            color: var(--am-muted);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .product-footer {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .mini-tag {
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            padding: 0 7px;
+            border-radius: 999px;
+            background: rgba(69, 84, 229, 0.08);
+            color: var(--am-primary-strong);
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .ghost-row {
+            height: 34px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            border-radius: 10px;
+            color: var(--am-muted);
+            background: rgba(247, 250, 255, 0.78);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .table-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-toolbar {
+            height: 48px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 14px;
+            border-bottom: 1px solid var(--am-line);
+        }
+
+        .tabs {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px;
+            border-radius: 999px;
+            background: rgba(69, 84, 229, 0.08);
+        }
+
+        .tab {
+            height: 26px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 999px;
+            color: var(--am-text-soft);
+            background: transparent;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .tab.active {
+            color: var(--am-primary-strong);
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 4px 10px rgba(31, 53, 109, 0.08);
+        }
+
+        .search {
+            margin-left: auto;
+            width: 158px;
+            height: 30px;
+            border: 1px solid var(--am-line);
+            border-radius: 9px;
+            padding: 0 11px;
+            color: var(--am-muted);
+            background: rgba(255, 255, 255, 0.8);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .text-btn {
+            height: 30px;
+            padding: 0 11px;
+            border-radius: 9px;
+            border: 1px solid var(--am-line);
+            background: rgba(255, 255, 255, 0.82);
+            color: var(--am-primary-strong);
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        thead {
+            background: rgba(247, 250, 255, 0.88);
+            color: #667089;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        th,
+        td {
+            height: 54px;
+            padding: 0 10px;
+            border-bottom: 1px solid rgba(133, 144, 168, 0.12);
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        th {
+            height: 34px;
+        }
+
+        .check {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            color: #fff;
+            background: var(--am-primary);
+            font-size: 11px;
+            font-weight: 900;
+        }
+
+        .plan-name {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #24304a;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .plan-sub {
+            display: block;
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--am-muted);
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .strategy {
+            display: inline-flex;
+            align-items: center;
+            height: 24px;
+            max-width: 100%;
+            padding: 0 8px;
+            border-radius: 999px;
+            color: #3151d2;
+            background: #eef3ff;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .cost-input {
+            width: 82px;
+            height: 30px;
+            border: 1px solid rgba(69, 84, 229, 0.3);
+            border-radius: 10px;
+            padding: 0 9px;
+            color: var(--am-primary-strong);
+            background: #fff;
+            font-size: 13px;
+            font-weight: 900;
+            text-align: right;
+            box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.08);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .budget {
+            color: #24304a;
+            font-size: 12px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--am-green);
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .status::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: currentColor;
+        }
+
+        .review-panel {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+        }
+
+        .review-body {
+            padding: 12px;
+        }
+
+        .risk-box {
+            padding: 12px;
+            border-radius: 13px;
+            border: 1px solid rgba(217, 119, 6, 0.2);
+            background: var(--am-warning-bg);
+        }
+
+        .risk-title {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: #9a5a03;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .risk-title::before {
+            content: "!";
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            color: #fff;
+            background: var(--am-orange);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .risk-list {
+            margin: 9px 0 0;
+            padding: 0;
+            list-style: none;
+            color: #7a4d09;
+            font-size: 11px;
+            line-height: 20px;
+            font-weight: 700;
+        }
+
+        .review-kpis {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .review-kpi {
+            min-height: 64px;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid var(--am-line);
+            background: rgba(255, 255, 255, 0.78);
+        }
+
+        .review-kpi span {
+            display: block;
+            color: var(--am-muted);
+            font-size: 10px;
+            font-weight: 800;
+        }
+
+        .review-kpi strong {
+            display: block;
+            margin-top: 8px;
+            color: var(--am-text);
+            font-size: 18px;
+            font-weight: 900;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .log-fold {
+            align-self: end;
+            margin: 0 12px 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px dashed rgba(88, 108, 160, 0.22);
+            background: rgba(247, 250, 255, 0.76);
+            color: var(--am-text-soft);
+            font-size: 11px;
+            line-height: 18px;
+            font-weight: 700;
+        }
+
+        .log-fold strong {
+            display: block;
+            color: var(--am-text);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .submit-bar {
+            height: 76px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 0 22px;
+            border-top: 1px solid var(--am-line-strong);
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 -10px 24px rgba(31, 53, 109, 0.08);
+        }
+
+        .submit-summary {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        .submit-item {
+            color: var(--am-text-soft);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .submit-item strong {
+            display: block;
+            margin-top: 4px;
+            color: var(--am-text);
+            font-size: 16px;
+            font-weight: 900;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .submit-note {
+            min-width: 0;
+            margin-left: 4px;
+            padding-left: 16px;
+            border-left: 1px solid var(--am-line);
+            color: var(--am-muted);
+            font-size: 11px;
+            line-height: 17px;
+            font-weight: 700;
+        }
+
+        .submit-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .secondary-btn,
+        .primary-btn {
+            height: 40px;
+            padding: 0 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .secondary-btn {
+            color: var(--am-primary-strong);
+            border: 1px solid rgba(69, 84, 229, 0.18);
+            background: rgba(69, 84, 229, 0.07);
+        }
+
+        .primary-btn {
+            min-width: 126px;
+            color: #fff;
+            border: 0;
+            background: linear-gradient(135deg, #4154ee, #263bd8);
+            box-shadow: 0 12px 26px rgba(69, 84, 229, 0.3);
+        }
+
+        .annotation {
+            position: absolute;
+            left: 106px;
+            top: 704px;
+            color: rgba(88, 100, 124, 0.82);
+            font-size: 12px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <header class="topbar">
+            <div class="brand"><span class="brand-mark"></span>阿里妈妈·万相台</div>
+            <nav class="nav" aria-label="页面导航">
+                <span>首页</span>
+                <span>推广</span>
+                <span>报表</span>
+                <span>洞察</span>
+                <span>创意</span>
+                <span>工具</span>
+                <span>账户</span>
+            </nav>
+            <div class="top-actions">
+                <span>AI小万</span>
+                <span>快捷入口</span>
+                <span>消息中心</span>
+                <span>美的洗碗机旗舰店</span>
+            </div>
+        </header>
+        <section class="shell">
+            <aside class="sidenav">
+                <p class="side-section">营销场景</p>
+                <div class="side-item">全站</div>
+                <div class="side-item">关键词</div>
+                <div class="side-item active">人群</div>
+                <div class="side-item">店铺</div>
+                <p class="side-section" style="margin-top: 24px;">我的设置</p>
+                <div class="side-item">关注</div>
+                <div class="side-item">规则</div>
+                <div class="side-item">记录</div>
+            </aside>
+            <section class="content-bg">
+                <div class="blur-card one"></div>
+                <div class="blur-card two"></div>
+                <div class="fake-title">人群推广</div>
+                <div class="metric-row">
+                    <div class="metric"></div>
+                    <div class="metric"></div>
+                    <div class="metric"></div>
+                    <div class="metric"></div>
+                    <div class="metric"></div>
+                </div>
+            </section>
+            <aside class="right-rail">
+                <div class="float-dot"></div>
+            </aside>
+        </section>
+
+        <section class="modal" aria-label="关键词推广批量建计划 API 向导设计稿">
+            <header class="modal-header">
+                <div class="title-block">
+                    <h1 class="modal-title">
+                        关键词推广批量建计划 API 向导
+                        <span class="mode-pill">向导就绪</span>
+                    </h1>
+                    <div class="modal-subtitle">按商品选择、计划配置、提交确认三步完成创建；提交前集中核对预算与目标成本。</div>
+                </div>
+                <div class="header-summary">
+                    <div class="summary-chip">
+                        <span class="summary-label">已添加商品</span>
+                        <span class="summary-value">8 / 30</span>
+                    </div>
+                    <div class="summary-chip">
+                        <span class="summary-label">已选计划</span>
+                        <span class="summary-value">4</span>
+                    </div>
+                    <div class="summary-chip">
+                        <span class="summary-label">预算合计</span>
+                        <span class="summary-value">400元</span>
+                    </div>
+                    <button class="close-btn" aria-label="关闭">×</button>
+                </div>
+            </header>
+
+            <div class="steps">
+                <div class="step">
+                    <span class="step-index">1</span>
+                    商品选择
+            <span class="step-desc">8 个商品</span>
+                </div>
+                <div class="step active">
+                    <span class="step-index">2</span>
+                    计划配置
+                    <span class="step-desc">核对 4 个计划</span>
+                </div>
+                <div class="step">
+                    <span class="step-index">3</span>
+                    提交确认
+                    <span class="step-desc">单条提交</span>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <section class="panel">
+                    <div class="panel-head">
+                        <span class="panel-title">商品选择</span>
+                        <span class="panel-meta">8 / 30</span>
+                        <span class="icon-btn">＋</span>
+                    </div>
+                    <div class="product-list">
+                        <article class="product-card active">
+                            <div class="thumb"></div>
+                            <div>
+                                <div class="product-name">[新品首发] 美的洗碗机嵌入式全自动家用20套大容量 X6SMax/Ultra</div>
+                                <div class="product-id">宝贝ID：895245741261</div>
+                                <div class="product-footer">
+                                    <span class="mini-tag">主推</span>
+                                    <span class="mini-tag">已绑定</span>
+                                </div>
+                            </div>
+                        </article>
+                        <article class="product-card">
+                            <div class="thumb"></div>
+                            <div>
+                                <div class="product-name">美的洗碗机 V9pro 灶下15套家用大容量热风烘干消毒一体机</div>
+                                <div class="product-id">宝贝ID：973306665230</div>
+                            </div>
+                        </article>
+                        <div class="ghost-row">其余 6 个商品已收起，点击展开查看</div>
+                    </div>
+                </section>
+
+                <section class="panel table-panel">
+                    <div class="table-toolbar">
+                        <div class="tabs" aria-label="计划配置分组">
+                            <button class="tab active">计划配置</button>
+                            <button class="tab">批量编辑</button>
+                        </div>
+                        <input class="search" value="搜索计划名称" aria-label="搜索计划名称">
+                        <button class="text-btn">目标成本批量填充</button>
+                        <button class="text-btn">清空</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 34px;"></th>
+                                <th style="width: 184px;">计划名称</th>
+                                <th style="width: 88px;">推广类型</th>
+                                <th style="width: 92px;">出价目标</th>
+                                <th style="width: 100px;">目标成本</th>
+                                <th style="width: 66px;">预算</th>
+                                <th style="width: 70px;">状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="check">✓</span></td>
+                                <td>
+                                    <span class="plan-name">关键词推广_20260529_004010_01</span>
+                                    <span class="plan-sub">搜索卡位 · 智能出价</span>
+                                </td>
+                                <td><span class="strategy">搜索卡位</span></td>
+                                <td><span class="budget">获取成交量</span></td>
+                                <td><input class="cost-input" value="待填写"></td>
+                                <td><span class="budget">100元</span></td>
+                                <td><span class="status">可提交</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="check">✓</span></td>
+                                <td>
+                                    <span class="plan-name">关键词推广_20260529_004010_02</span>
+                                    <span class="plan-sub">趋势明星 · 智能出价</span>
+                                </td>
+                                <td><span class="strategy">趋势明星</span></td>
+                                <td><span class="budget">获取成交量</span></td>
+                                <td><input class="cost-input" value="待填写"></td>
+                                <td><span class="budget">100元</span></td>
+                                <td><span class="status">可提交</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="check">✓</span></td>
+                                <td>
+                                    <span class="plan-name">关键词推广_20260529_004010_03</span>
+                                    <span class="plan-sub">流量金卡 · 智能出价</span>
+                                </td>
+                                <td><span class="strategy">流量金卡</span></td>
+                                <td><span class="budget">获取成交量</span></td>
+                                <td><input class="cost-input" value="待填写"></td>
+                                <td><span class="budget">100元</span></td>
+                                <td><span class="status">可提交</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="check">✓</span></td>
+                                <td>
+                                    <span class="plan-name">关键词推广_20260529_004010_04</span>
+                                    <span class="plan-sub">自定义推广 · 智能出价</span>
+                                </td>
+                                <td><span class="strategy">自定义推广</span></td>
+                                <td><span class="budget">获取成交量</span></td>
+                                <td><input class="cost-input" value="待填写"></td>
+                                <td><span class="budget">100元</span></td>
+                                <td><span class="status">可提交</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <aside class="panel review-panel">
+                    <div class="panel-head">
+                        <span class="panel-title">提交确认</span>
+                        <span class="panel-meta">需核对</span>
+                    </div>
+                    <div class="review-body">
+                        <div class="risk-box">
+                            <div class="risk-title">创建前确认</div>
+                            <ul class="risk-list">
+                                <li>将创建 4 个关键词推广计划</li>
+                                <li>预算合计 400 元，提交方式为单条</li>
+                                <li>目标成本未填写时将阻断提交</li>
+                            </ul>
+                        </div>
+                        <div class="review-kpis">
+                            <div class="review-kpi">
+                                <span>计划数</span>
+                                <strong>4</strong>
+                            </div>
+                            <div class="review-kpi">
+                                <span>预算</span>
+                                <strong>400</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="log-fold">
+                        <strong>执行日志已折叠</strong>
+                        仅在提交、失败或重试时展开，减少对配置区的干扰。
+                    </div>
+                </aside>
+            </div>
+
+            <footer class="submit-bar">
+                <div class="submit-summary">
+                    <div class="submit-item">将提交<strong>4 个计划</strong></div>
+                    <div class="submit-item">预算合计<strong>400 元</strong></div>
+                    <div class="submit-item">提交方式<strong>单条提交</strong></div>
+                    <div class="submit-note">提交前请先完成目标成本填写；创建类操作只在最终按钮触发。</div>
+                </div>
+                <div class="submit-actions">
+                    <button class="secondary-btn">保存草稿</button>
+                    <button class="secondary-btn">生成其他策略</button>
+                    <button class="primary-btn">提交创建</button>
+                </div>
+            </footer>
+        </section>
+        <div class="annotation">重绘方向：强流程、低装饰、目标成本高亮、底部固定提交确认、日志默认折叠。</div>
+    </main>
+</body>
+</html>

@@ -66,12 +66,22 @@
                             targetCostValue: mask.querySelector('[data-batch-strategy-number-field="targetCostValue"]')?.value || ''
                         });
                         if (!Object.keys(normalizedValues).length) {
-                            appendWizardLog('请至少填写 1 个需要批量修改的数值字段', 'error');
-                            return { ok: false };
+                            const message = '请至少填写 1 个需要批量修改的数值字段';
+                            appendWizardLog(message, 'error');
+                            return {
+                                ok: false,
+                                error: message,
+                                focusSelector: '[data-batch-strategy-number-field="dayAverageBudget"]'
+                            };
                         }
                         if (normalizedValues.targetCostValue && targetCostPlanCount <= 0) {
-                            appendWizardLog('已选计划中没有可批量修改目标成本/ROI的计划', 'error');
-                            return { ok: false };
+                            const message = '已选计划中没有可批量修改目标成本/ROI的计划';
+                            appendWizardLog(message, 'error');
+                            return {
+                                ok: false,
+                                error: message,
+                                focusSelector: '[data-batch-strategy-number-field="targetCostValue"]'
+                            };
                         }
                         return {
                             ok: true,

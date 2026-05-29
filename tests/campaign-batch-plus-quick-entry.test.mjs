@@ -53,6 +53,28 @@ test('批量+ 菜单覆盖批量计划设置缺失的首批能力', () => {
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item\.is-danger/, '批量删除菜单项应有危险态样式');
 });
 
+test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
+    const confirmDialogBlock = quickEntry.slice(
+        quickEntry.indexOf('openBatchPlusConfirmDialog({'),
+        quickEntry.indexOf('async runBatchUpdateCampaignStatus')
+    );
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'start'[\s\S]*?icon:\s*'layers-play'/, '批量开启菜单项应使用共享图标');
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'delete'[\s\S]*?icon:\s*'x-circle'/, '批量删除菜单项应使用危险动作共享图标');
+    assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?am-campaign-batch-plus-item-icon[\s\S]*?renderAmIcon\(item\.icon \|\| 'logo'/, '批量+菜单项应渲染共享 SVG 图标');
+    assert.match(quickEntry, /renderBatchPlusChevronIcon\(\)[\s\S]*?data-am-batch-plus-fallback-chevron="1"[\s\S]*?renderAmIcon\('chevron-down'/, '批量+ fallback 箭头应使用共享 chevron 图标');
+    assert.doesNotMatch(quickEntry, /\uE646/, '批量+源码不得再自造私有字体箭头字符');
+    assert.match(confirmDialogBlock, /popup\.setAttribute\('aria-labelledby',\s*titleId\)/, '批量确认弹窗应通过标题建立可访问名称');
+    assert.match(confirmDialogBlock, /icon\.innerHTML = renderAmIcon\(danger \? 'x-circle' : 'alert-triangle'/, '批量确认弹窗应使用共享 SVG 告警/危险图标');
+    assert.doesNotMatch(confirmDialogBlock, /icon\.textContent = '!'/, '批量确认弹窗不得使用文本感叹号作为功能图标');
+    assert.match(confirmDialogBlock, /previousActiveElement[\s\S]*?focus\(\{ preventScroll: true \}\)/, '批量确认弹窗关闭后应恢复焦点');
+    assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu\s*\{[\s\S]*?border:\s*1px solid var\(--am26-border[\s\S]*?background:\s*var\(--am26-panel-strong[\s\S]*?box-shadow:\s*var\(--am26-shadow/, '批量+菜单应使用统一 token');
+    assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item:focus-visible[\s\S]*?outline:\s*2px solid/, '批量+菜单项应有可见 focus 态');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-card\s*\{[\s\S]*?width:\s*min\(360px,\s*calc\(100vw - 28px\)\);[\s\S]*?border:\s*1px solid var\(--am26-border[\s\S]*?border-radius:\s*18px[\s\S]*?background:\s*var\(--am26-panel-strong/, '批量确认弹窗应使用 360px 阅读宽度和统一面板 token');
+    assert.doesNotMatch(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-card\s*\{[\s\S]*?width:\s*min\(320px,\s*calc\(100vw - 28px\)\);/, '批量确认弹窗宽度不应回退到 320px');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-submit,[\s\S]*?border-radius:\s*10px/, '批量确认按钮圆角应符合统一按钮口径');
+    assert.match(quickEntryStyle, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item/, '批量+自有控件应适配减少动画');
+});
+
 test('批量+ 读取表格勾选计划并按业务线分组', () => {
     assert.match(quickEntry, /getCurrentCampaignBizCode\(\)[\s\S]*?#\\!\\\/manage\\\/display[\s\S]*?onebpDisplay[\s\S]*?#\\!\\\/manage\\\/hky[\s\S]*?onebpAdStrategyLiuZi[\s\S]*?#\\!\\\/manage\\\/search[\s\S]*?onebpSearch/, '批量+应从当前管理页路由识别业务线');
     assert.match(quickEntry, /collectSelectedCampaignContexts\(preferredBizCode = ''\)[\s\S]*?input\[type="checkbox"\]:checked,[\s\S]*?\[role="checkbox"\]\[aria-checked="true"\]/, '批量+应读取原生表格勾选项');

@@ -340,18 +340,53 @@ test('场景弹窗支持 ESC 关闭并在销毁时解绑事件', () => {
   const renderBlock = getRenderSceneDynamicConfigBlock();
   assert.match(
     renderBlock,
-    /const handleEscClose = \(event\) => \{[\s\S]*?event\?\.key !== 'Escape'/,
+    /const titleId = 'am-wxt-scene-popup-title';[\s\S]*?role="dialog" aria-modal="true" aria-labelledby="\$\{titleId\}"[\s\S]*?<span id="\$\{titleId\}">/,
+    '通用场景弹窗缺少稳定标题关联'
+  );
+  assert.match(
+    renderBlock,
+    /const previousActiveElement = document\.activeElement instanceof HTMLElement \? document\.activeElement : null;/,
+    '通用场景弹窗打开时应记录前置焦点'
+  );
+  assert.match(
+    renderBlock,
+    /const getPopupFocusableElements = \(\) => Array\.from\(mask\.querySelectorAll\(\[[\s\S]*?'button:not\(\[disabled\]\)'[\s\S]*?'input:not\(\[disabled\]\)'[\s\S]*?'\[tabindex\]:not\(\[tabindex="-1"\]\)'/,
+    '通用场景弹窗缺少可聚焦元素收集'
+  );
+  assert.match(
+    renderBlock,
+    /const resolveDefaultFocusTarget = \(\) => \{[\s\S]*?if \(defaultFocus === 'save'\) return saveBtn;[\s\S]*?if \(defaultFocus === 'cancel'\) return cancelBtn;[\s\S]*?if \(defaultFocus === 'close'\) return closeBtn;[\s\S]*?return getPopupFocusableElements\(\)\[0\] \|\| null;/,
+    '通用场景弹窗缺少默认焦点兜底'
+  );
+  assert.match(
+    renderBlock,
+    /const trapPopupFocus = \(event\) => \{[\s\S]*?if \(event\.shiftKey && activeEl === firstEl\) \{[\s\S]*?focusPopupElement\(lastEl\);[\s\S]*?\} else if \(!event\.shiftKey && activeEl === lastEl\) \{[\s\S]*?focusPopupElement\(firstEl\);/,
+    '通用场景弹窗缺少 Tab\/Shift\+Tab 焦点循环'
+  );
+  assert.match(
+    renderBlock,
+    /const handlePopupKeydown = \(event\) => \{[\s\S]*?event\?\.key === 'Escape'[\s\S]*?close\(null\);[\s\S]*?event\?\.key === 'Tab'[\s\S]*?trapPopupFocus\(event\);/,
     '缺少 ESC 关闭处理逻辑'
   );
   assert.match(
     renderBlock,
-    /document\.addEventListener\('keydown', handleEscClose, true\);/,
+    /document\.addEventListener\('keydown', handlePopupKeydown, true\);/,
     '弹窗打开时未绑定 ESC 事件'
   );
   assert.match(
     renderBlock,
-    /document\.removeEventListener\('keydown', handleEscClose, true\);/,
+    /document\.removeEventListener\('keydown', handlePopupKeydown, true\);/,
     '弹窗关闭时未解绑 ESC 事件'
+  );
+  assert.match(
+    renderBlock,
+    /if \(previousActiveElement\?\.isConnected\) \{[\s\S]*?requestAnimationFrame\(\(\) => focusPopupElement\(previousActiveElement\)\);/,
+    '通用场景弹窗关闭后应恢复到打开前焦点'
+  );
+  assert.match(
+    renderBlock,
+    /document\.body\.appendChild\(mask\);\s*focusDefaultTarget\(\);/,
+    '通用场景弹窗打开后应默认聚焦弹窗内控件'
   );
   assert.match(
     renderBlock,
@@ -412,6 +447,31 @@ test('场景弹窗支持 ESC 关闭并在销毁时解绑事件', () => {
     renderBlock,
     /title:\s*'设置过滤人群'[\s\S]*?am-wxt-scene-filter-option-check[\s\S]*?type="checkbox"/,
     '过滤人群弹窗选项未对齐为复选框语义'
+  );
+  assert.match(
+    renderBlock,
+    /class="am-wxt-scene-filter-remove"[\s\S]*?data-scene-popup-filter-remove="\$\{Utils\.escapeHtml\(item\.key \|\| ''\)\}"[\s\S]*?aria-label="移除已选屏蔽人群：\$\{selectedLabel\}"[\s\S]*?title="移除已选屏蔽人群"[\s\S]*?renderAmIcon\('close', \{ size: 12, strokeWidth: 2\.2 \}\)/,
+    '过滤人群已选列表移除按钮未使用共享 close 图标或缺少可访问名称'
+  );
+  assert.doesNotMatch(
+    renderBlock,
+    /class="am-wxt-btn"\s+data-scene-popup-filter-remove="\$\{Utils\.escapeHtml\(item\.key \|\| ''\)\}"[\s\S]*?>移除<\/button>/,
+    '过滤人群已选列表移除按钮不应回退为通用文字“移除”按钮'
+  );
+  assert.match(
+    source,
+    /#am-wxt-scene-popup-mask \.am-wxt-scene-filter-remove \{[\s\S]*?display:\s*inline-flex;[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?background:\s*var\(--am26-surface,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-remove svg \{[\s\S]*?width:\s*12px;[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-remove:focus-visible \{[\s\S]*?box-shadow:\s*0 0 0 3px rgba\(37,99,235,0\.22\);/,
+    '过滤人群已选列表移除按钮缺少局部 token 样式或可见 focus 态'
+  );
+  assert.match(
+    source,
+    /#am-wxt-scene-popup-mask \.am-wxt-scene-filter-selected-head \{[\s\S]*?border-bottom:\s*1px solid var\(--am26-border,[\s\S]*?background:\s*var\(--am26-surface,[\s\S]*?color:\s*var\(--am26-text,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-selected-row \{[\s\S]*?border:\s*1px solid var\(--am26-border,[\s\S]*?background:\s*var\(--am26-surface-strong,[\s\S]*?color:\s*var\(--am26-text,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-selected-empty \{[\s\S]*?border:\s*1px dashed var\(--am26-border,[\s\S]*?color:\s*var\(--am26-text-soft,[\s\S]*?background:\s*var\(--am26-surface,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-footnote \{[\s\S]*?color:\s*var\(--am26-text-soft,/,
+    '过滤人群已选区、空状态或脚注未收敛到 --am26 token'
+  );
+  assert.doesNotMatch(
+    source,
+    /#am-wxt-scene-popup-mask \.am-wxt-scene-filter-selected-head \{[\s\S]*?background:\s*#f8fafc;[\s\S]*?color:\s*#334155;[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-selected-row \{[\s\S]*?background:\s*#fff;[\s\S]*?color:\s*#334155;[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-selected-empty \{[\s\S]*?background:\s*#f8fafc;[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-filter-footnote \{[\s\S]*?color:\s*#64748b;/,
+    '过滤人群已选区不应回退到硬编码白/灰底和灰色文字'
   );
   assert.match(
     renderBlock,

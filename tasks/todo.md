@@ -1,3 +1,1433 @@
+# TODO - 2026-05-30 组建计划矩阵页维度选择器 Chrome 验收闭环
+
+## 需求规格
+- 目标：收尾当前已实现的组建计划矩阵页维度选择器 token 收敛切片，完成真实 `one.alimama.com` 只读验收和审计记录，确保矩阵页维度类型下拉、维度值下拉、目标成本/ROI 包下拉和原生多选兜底在运行态命中统一 `--am26-*` 浅玻璃样式。
+- 范围：只做已实现 CSS/断言的验证闭环、必要构建检查和记录回填；不改矩阵维度增删、预设应用、补齐推荐、清空维度、生成计划、请求构建、计划物化、提交创建或真实网络链路。
+- 成功标准：专项测试和构建检查通过；Chrome DevTools MCP 在真实页面打开 `组建计划 -> 矩阵页`，只展开一个维度选择器读取 computed style 并截图；运行态确认触发器、下拉面板、选项、箭头和原生兜底不再由旧白底/灰边/旧蓝紫色作为最终样式事实源；验收期间未触发创建、复制、保存、删除或提交类请求。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、审计表和当前矩阵页维度选择器源码/测试，确认本轮是验证闭环，不扩大源码改动。
+- [x] 运行矩阵页相关专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开 `组建计划 -> 矩阵页`，展开一个维度选择器并读取样式。
+- [x] 保存运行态截图，确认未出现创建/保存/删除/提交类请求。
+- [x] 回填验证记录、审计表、风险和复盘。
+
+## 高层操作摘要
+- 当前源码已有矩阵页维度选择器后置最终覆盖：触发器、hover/open/disabled、胶囊型维度类型、CSS chevron、下拉面板、选项、空状态、趋势主题新增按钮和原生 select 兜底均使用 `--am26-*` 或统一弱品牌色。
+- `tests/matrix-plan-config.test.mjs` 已有 `矩阵页维度选择器收敛到统一 token` 断言，读取最后有效 CSS 块并禁止回退到 `#fff`、`#f8fafc`、`#334155`、`#64748b`、`#3354d1`、旧灰边和旧蓝紫事实源。
+- 本轮重点补齐真实页面证据；验收只打开下拉并读取样式，不点击 `补齐5维`、`生成计划`、`清空维度`、`提交创建`、`批量创建` 或 `保存并关闭`。
+
+## 验证记录
+- `node --test tests/matrix-plan-config.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-edit-strategy-settings.test.mjs`：通过，54/54；矩阵页维度选择器最终 CSS 块断言继续覆盖触发器、hover/open/disabled、胶囊型维度类型、CSS chevron、下拉面板、选项、空状态、趋势主题新增按钮和原生 select 兜底。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/matrix-plan-config.test.mjs tasks/todo.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?orderField=charge&orderBy=desc&offset=0&searchKey=campaignNameLike&searchValue=AI` 人群推广页，页面 API 已就绪；通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 打开组建计划，只切到 `矩阵页`，未点击 `补齐5维`、`生成计划`、`清空`、`提交创建`、`批量创建`、`保存并关闭` 或任何真实创建/保存入口。由于当前矩阵页没有已有维度行，只点击本地 UI 的 `添加维度` 生成 1 条临时维度行，再展开维度类型下拉读取样式；运行态确认触发器为胶囊形态，背景 `rgba(69, 84, 229, 0.14)`、边框 `rgba(69, 84, 229, 0.42)`、文字 `rgb(29, 63, 207)`、`background-image:none`；下拉面板背景为 `linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2))`、边框 `rgba(255, 255, 255, 0.6)`、阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`、`backdrop-filter: blur(12px) saturate(1.25)`；选项文字 `rgb(80, 90, 116)`、背景透明；箭头最终 `background-image:none`，由 `::before` 8px CSS chevron 绘制；隐藏原生 select 兜底背景为 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(27, 36, 56)`。截图见 `tasks/ui-audit-keyword-matrix-picker-token-chrome-2026-05-30.png`。
+- 验收后点击临时维度行的本地 `删除维度` 按钮移除该行，并关闭主向导；确认 `remainingDimensions=0`、`overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`matrixPickerOpen=0`、`sceneMaskExists=false`、`itemMaskExists=false`；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。
+
+## 结果复盘
+- 结果：完成矩阵页维度选择器 token 收敛的 Chrome 验收闭环；运行态已证明矩阵维度类型下拉、面板、选项、箭头和原生兜底命中统一浅玻璃样式。
+- 风险：本轮只补验证闭环和记录，未改业务逻辑；真实页面中临时添加的维度行已本地移除，未触发生成、清空、提交、保存或任何创建/更新/删除请求。
+- 回滚方式：本轮没有新增源码改动，只需移除本次截图与任务/审计记录即可回到验收前记录状态。
+
+---
+
+# TODO - 2026-05-29 组建计划主弹窗窗口外白色玻璃渐变
+
+## 需求规格
+- 目标：按用户最新反馈“弹窗‘组建计划’窗口外的增加，白色玻璃渐变，类似组建计划里的增加商品的弹窗外的背景”，将主向导弹窗窗口外的 overlay 从透明背景改成白色玻璃渐变，强化当前弹窗内容聚焦。
+- 范围：只改 `#am-wxt-keyword-overlay` 在主向导打开且未打开 `添加商品` 二级弹窗时的窗口外背景、blur 和专项断言；保留 `#am-wxt-keyword-modal` 主面板本体上一版轻透明玻璃背景，不改主面板内部内容区、添加商品弹窗、计划详情背板、批量编辑弹窗、矩阵配置、提交创建、保存并关闭或任何真实请求链路。
+- 成功标准：主向导 `#am-wxt-keyword-overlay:not(.item-picker-open)` 最终背景为白色玻璃渐变 `rgba(255,255,255,0.78) -> rgba(255,255,255,0.48)`，并具备 `blur(8px) saturate(1.15)`；`#am-wxt-keyword-modal` 背景仍保持 `rgba(255,255,255,0.6) -> rgba(255,255,255,0.2)` 轻透明面板；`item-picker-open` 时主 overlay 不叠加第二层背景；相关测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 真实页面只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、审计表和用户连续修正，确认本轮只处理“组建计划”主弹窗窗口外 overlay，不改主面板本体。
+- [x] 将主向导窗口外 overlay 改为与 `添加商品` 弹窗外层接近的白色玻璃渐变，并保留 `item-picker-open` 透明隔离。
+- [x] 更新专项断言，锁定主向导 overlay 白色玻璃渐变，同时防止主面板本体被再次强白化。
+- [x] 构建同步产物，并运行组建计划相关专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开 `组建计划` 主弹窗读取窗口外背景并截图；不点击补齐、生成、清空、提交、保存或任何真实创建入口。
+- [x] 回填验证记录、审计表、风险和复盘。
+
+## 高层操作摘要
+- 用户最新反馈把目标明确到“弹窗‘组建计划’窗口外”，因此本轮停止继续推进矩阵页维度选择器验收，先修正主向导弹窗外层背景。
+- 需要区分两个层级：`#am-wxt-keyword-modal` 是用户此前要求回退的主面板本体，继续保持轻透明玻璃；`#am-wxt-keyword-overlay:not(.item-picker-open)` 是当前窗口外背景，改成白色玻璃渐变用于聚焦当前弹窗内容。
+- `添加商品` 二级弹窗已有独立 `#am-wxt-keyword-item-picker-mask` 白色轻玻璃背景；主 overlay 在 `item-picker-open` 时保持透明，避免二级弹窗打开后叠加两层玻璃背景。
+- 已完成源码与专项断言：最终 CSS 将 `#am-wxt-keyword-overlay:not(.item-picker-open)` 改为白色玻璃渐变 `rgba(255,255,255,0.78) -> rgba(255,255,255,0.48)` 与 `blur(8px) saturate(1.15)`；新增 `#am-wxt-keyword-overlay.item-picker-open` 最终透明隔离；测试读取最后有效 CSS 块并防止 `#am-wxt-keyword-modal` 回到 `0.9x` 强白背景。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-item-picker-popup.test.mjs tests/matrix-plan-config.test.mjs tests/keyword-edit-strategy-settings.test.mjs`：通过，63/63；新增覆盖主向导窗口外白色玻璃渐变、`item-picker-open` 透明隔离和主面板本体不强白化。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/lessons.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?orderField=charge&orderBy=desc&offset=0&searchKey=campaignNameLike&searchValue=AI` 人群推广页，硬刷新后页面 API 已就绪，`window.__AM_WXT_KEYWORD_API__.openWizard()` 只打开组建计划主弹窗；未点击 `补齐5维`、`生成计划`、`清空`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。运行态确认 `#am-wxt-keyword-overlay.open` 为 `display:flex`，窗口外背景为 `linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48))`，`backdrop-filter: blur(8px) saturate(1.15)`；`#am-wxt-keyword-modal` 仍保持轻透明玻璃 `linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2))`，边框 `rgba(255, 255, 255, 0.6)`，阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`，面板 blur 为 `blur(20px) saturate(1.4)`。截图见 `tasks/ui-audit-keyword-main-overlay-white-glass-chrome-2026-05-29.png`。
+- 验收后点击组建计划关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`itemMaskExists=false`、`sceneMaskExists=false`；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。
+
+## 结果复盘
+- 结果：已按用户最新反馈把“组建计划”主弹窗窗口外改成白色玻璃渐变，视觉层级接近 `添加商品` 弹窗外层，并保留主面板本体上一版轻透明背景。
+- 风险：本轮只改主向导外层 overlay 背景、专项断言和任务/审计记录，不改变主面板内部布局、添加商品候选器、计划详情、批量编辑、矩阵维度、请求构建、提交创建、保存并关闭或任何真实网络链路。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可；不需要改业务逻辑。
+
+---
+
+# TODO - 2026-05-29 批量编辑弹窗外层背景白色玻璃化
+
+## 需求规格
+- 目标：按用户最新反馈“点击‘批量编辑’还是灰色背景”，修正关键词推广批量建计划 API 向导中点击 `批量编辑` 后弹出的批量编辑数值窗口外层遮罩背景，从通用深灰遮罩改为白色轻玻璃背景。
+- 范围：只改批量编辑数值弹窗的外层 mask 标识、mask 背景/blur 和专项断言；保留弹窗卡片、输入、错误态、按钮、批量应用逻辑和通用场景弹窗默认样式；不改提交创建、保存、清空、计划选择、数值校验或真实请求链路。
+- 成功标准：点击 `批量编辑` 后 `#am-wxt-scene-popup-mask` 具备批量编辑专属 class，computed background 为白色半透明轻玻璃，不再是 `rgba(15, 23, 42, 0.52)` 深灰遮罩；其它非批量编辑场景弹窗默认 mask 不被本轮扩大改动；构建、专项测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 真实页面只读验收完成。
+
+## 执行计划（可核对）
+- [x] 确认用户最新修正目标是点击 `批量编辑` 后的弹窗外层背景，而不是首页 `批量编辑` 按钮。
+- [x] 写入 lessons，避免“按钮”和“按钮点击后的弹窗”目标混淆。
+- [x] 为批量编辑数值弹窗外层 mask 增加专属 class，并只在该 class 下改成白色轻玻璃背景。
+- [x] 更新专项断言，禁止批量编辑弹窗 mask 回退到通用深灰遮罩，同时确认通用场景弹窗未被扩大替换。
+- [x] 构建同步产物，并运行组建计划相关专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面点击 `批量编辑` 打开弹窗，只读取背景样式并取消关闭，不点击 `批量修改`、`提交创建` 或任何真实创建/保存入口。
+- [x] 回填验证记录、审计表、风险和复盘。
+
+## 高层操作摘要
+- 本轮用户明确说的是“点击‘批量编辑’还是灰色背景”，因此上一轮首页头部按钮白色玻璃化虽然有效，但目标不完整；真正灰色来源是点击后弹窗复用的通用 `#am-wxt-scene-popup-mask { background: rgba(15, 23, 42, 0.52); }`。
+- 实施策略：在 `openBatchStrategyPopupDialog()` 创建 mask 时，根据 `dialogClassName` 为批量编辑数值弹窗添加 `am-wxt-scene-popup-mask-batch-number`，CSS 只覆盖这个专属 mask；不把所有 `#am-wxt-scene-popup-mask` 默认背景改白，避免误伤高级设置、确认、风险类通用弹窗。
+- 已新增 L81 教训：用户描述“点击某按钮后”的视觉问题时，先真实或受保护触发按钮并读取后续弹窗/浮层的 computed style，记录里区分“触发按钮”和“触发后的容器/遮罩”。
+- 已完成源码与专项断言：批量编辑数值弹窗外层 mask 具备 `am-wxt-scene-popup-mask-batch-number`，该专属 class 使用白色玻璃渐变 `rgba(255,255,255,0.78) -> rgba(255,255,255,0.48)` 与 `blur(8px) saturate(1.15)`；通用场景弹窗默认 mask 仍保持深色遮罩，避免扩大影响。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/matrix-plan-config.test.mjs tests/keyword-edit-strategy-settings.test.mjs`：通过，53/53；新增覆盖批量编辑弹窗专属 mask class、白色玻璃渐变、blur 和通用场景 mask 未扩大替换。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md tasks/lessons.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?orderField=charge&orderBy=desc&offset=0&searchKey=campaignNameLike&searchValue=AI` 人群推广页，页面 API 已就绪，`window.__AM_WXT_KEYWORD_API__.buildVersion` 为 `2026-02-18 04:00`；通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 打开组建计划，只点击 `#am-wxt-keyword-batch-edit-strategy` 打开“批量修改数值（已选 1 个计划）”弹窗，未点击弹窗内 `批量修改`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。运行态确认 `#am-wxt-scene-popup-mask` 类名为 `am-wxt-scene-popup-mask am-wxt-scene-popup-mask-batch-number`，计算背景为 `linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48))`，`backdrop-filter: blur(8px) saturate(1.15)`，`display:flex`，不再是通用深灰 `rgba(15, 23, 42, 0.52)`。弹窗本体仍为 560px 宽、18px 圆角、浅玻璃背景、`blur(18px) saturate(1.35)`，标题关联为 `aria-labelledby="am-wxt-scene-popup-title"`。截图见 `tasks/ui-audit-keyword-batch-edit-popup-white-mask-chrome-2026-05-29.png`。
+- 验收后只点击弹窗 `取消` 并关闭主向导，确认 `maskExists=false`、`overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。
+
+## 结果复盘
+- 结果：已按用户最新反馈把点击 `批量编辑` 后弹窗外层背景从灰色遮罩改为白色玻璃渐变，并保留通用场景弹窗默认深灰遮罩。
+- 风险：本轮只改弹窗外层 mask class、CSS 视觉事实源和专项断言；不改变批量编辑数值校验、计划选择、批量应用、提交创建、保存或任何真实请求链路。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划批量编辑按钮白色玻璃化
+
+## 需求规格
+- 目标：按用户最新反馈“关键词推广批量建计划 API 向导里的‘批量编辑’还是灰色”，将首页计划头部的 `批量编辑` 按钮从灰色/蓝灰视觉改为白色轻玻璃按钮，和组建计划已迁移的白色玻璃方向一致。
+- 范围：只改 `#am-wxt-keyword-batch-edit-strategy` 及同组 `清空` 操作按钮的视觉背景、边框、文字、hover/focus 和 disabled 态，以及专项断言；不改批量编辑弹窗业务逻辑、数值校验、计划选择状态、批量应用、提交创建、请求构建或真实网络提交链路。
+- 成功标准：`批量编辑` 按钮最终 CSS 使用 `--am26-surface-strong` / `--am26-border` / `--am26-text-soft` / `--am26-text`，disabled 态也保持白色轻玻璃弱化而非灰块；按钮最终样式不再由 `#f8fafc`、`#eff6ff`、`#cbd5e1`、`#475569`、`#1d4ed8` 等旧灰蓝事实源控制；构建、专项测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 真实页面只读验收完成。
+
+## 执行计划（可核对）
+- [x] 确认用户最新修正目标是向导内 `批量编辑` 按钮，而不是继续处理窗口外背景。
+- [x] 写入 lessons，避免相邻 UI 修正时继续推进旧对象。
+- [x] 将 `批量编辑` / `清空` 所在首页头部操作按钮收敛到白色轻玻璃 token，补齐 disabled 弱化态。
+- [x] 更新专项断言，禁止该按钮回退到旧灰蓝背景、灰边和蓝灰文字。
+- [x] 构建同步产物，并运行组建计划相关专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开组建计划首页验收按钮视觉，不点击 `批量编辑`、`清空`、`提交创建` 或任何真实创建/保存入口。
+- [x] 回填验证记录、审计表、风险和复盘。
+
+## 高层操作摘要
+- 当前用户反馈明确指向“关键词推广批量建计划 API 向导里的批量编辑”，因此本轮停止继续处理上一条“窗口外背景”方向，先修正这个可见按钮。
+- 初步定位：`批量编辑` 是首页计划头部 `#am-wxt-keyword-batch-edit-strategy`，属于 `.am-wxt-strategy-head-actions .am-wxt-btn`；当前后置样式仍可能被通用 `.am-wxt-btn` 或旧灰蓝按钮事实源影响，disabled 时更容易显示为灰色。
+- 本轮只处理视觉层和断言；批量编辑弹窗已有独立 UI 迁移记录，除非 Chrome computed style 证明灰色来自弹窗本体，否则不扩大到弹窗业务链路。
+- 已新增 L80 教训：用户点名具体控件时先验 DOM、最终 CSS 块和运行态 computed style，避免把相邻背景/弹窗切片继续推进到错误对象。
+- 已在组建计划首页头部操作区新增最终覆盖：`.am-wxt-strategy-head-actions .am-wxt-btn`、`#am-wxt-keyword-batch-edit-strategy`、`#am-wxt-keyword-clear-strategy` 默认态使用 `--am26-surface-strong` / `--am26-border` / `--am26-text-soft`，hover/focus 提升为白色玻璃强态，disabled 态保持 `--am26-surface` 弱白玻璃、弱文本、`opacity: 1` 和 `not-allowed`。
+- 已扩展 `首页计划头部包含计划配置、搜索、批量编辑与清空按钮，并挂到向导元素缓存` 专项断言，读取构建后根 userscript 的最后有效 CSS 块，禁止该按钮组默认态和 disabled 态回退到旧 `#f8fafc`、`#eff6ff`、`#cbd5e1`、`#475569`、`#1d4ed8`。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/matrix-plan-config.test.mjs tests/keyword-edit-strategy-settings.test.mjs`：通过，53/53；新增覆盖首页计划头部 `批量编辑` / `清空` 按钮默认、hover/focus 和 disabled 白色轻玻璃 token。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md tasks/lessons.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 线索推广页，硬刷新后版本为 `7.05`；通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 只打开组建计划首页，未点击 `批量编辑`、`清空`、`提交创建`、`批量创建`、`保存并关闭` 或任何真实创建/保存入口。运行态确认新增头部按钮规则已注入，旧灰蓝色未出现在头部按钮最终规则；`#am-wxt-keyword-batch-edit-strategy` 背景 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(80, 90, 116)`、内高光存在，`#am-wxt-keyword-clear-strategy` 同样命中白色轻玻璃。临时只读切换 disabled 并等待 transition 后，`批量编辑` 和 `清空` disabled 背景均为 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgba(80, 90, 116, 0.62)`、`opacity: 1`、`cursor: not-allowed`。截图见 `tasks/ui-audit-keyword-batch-edit-button-white-chrome-2026-05-29.png`。
+- 验收后点击主关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`overlayRectCount=0`、`modalRectCount=0`，无可见向导残留；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。控制台保留页面外部资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，本次只读验收未产生创建/保存/删除类请求。
+
+## 结果复盘
+- 结果：完成关键词推广批量建计划 API 向导首页头部 `批量编辑` 按钮白色玻璃化；同组 `清空` 保持一致，默认态和 disabled 态都不再显示为旧灰蓝按钮。
+- 风险：本轮只改 CSS 视觉事实源、专项断言和任务/审计记录，不改变批量编辑弹窗业务逻辑、数值校验、计划选择、批量应用、请求构建、提交创建或真实网络提交链路。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划日志页容器 token 收敛
+
+## 需求规格
+- 目标：继续推进组建计划内部样式事实源收敛，将“日志页 / 预览与执行日志”里的摘要盒、预览日志、请求预览和执行日志容器从旧硬编码白底/灰边/深色预览底收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改 `#am-wxt-keyword-previewlog-panel`、`#am-wxt-workbench-preview-log`、`#am-wxt-keyword-preview`、`#am-wxt-keyword-log` 的可见样式与专项断言；不点击或修改 `预览请求`、`生成其他策略`、`批量创建`、`提交创建`、矩阵生成、请求构建、日志写入语义或任何真实网络提交逻辑。
+- 成功标准：日志页摘要盒、预览日志、请求预览和执行日志最终 CSS 使用 `--am26-border`、`--am26-surface`、`--am26-text`、`--am26-text-soft`、`--am26-success`、`--am26-danger`；最终有效样式不再由 `#fff`、`#0f172a`、`#d1d5db`、`#334155`、`rgba(148,163,184,...)` 作为该区域事实源；相关测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 真实页面只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、审计表、历史教训和日志页当前源码样式，确认本轮只处理日志页视觉层。
+- [x] 将日志页摘要盒、预览日志、请求预览和执行日志容器收敛到 `--am26-*` token。
+- [x] 更新专项断言，防止日志页容器回退到硬编码白底/灰边/深色预览底和旧日志文字色。
+- [x] 构建同步产物，并运行组建计划相关专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开 `组建计划 -> 日志页` 验收，不点击预览/生成/提交。
+- [x] 回填验证记录、审计表、风险和复盘。
+
+## 高层操作摘要
+- 审计表当前剩余明确缺口集中在组建计划内部 `--am-wxt-*` 与硬编码样式事实源；本轮选择安全可见的“日志页/预览日志容器”切片，避免继续扩大到提交、矩阵或请求构建逻辑。
+- 运行前源码定位：`#am-wxt-workbench-preview-log` 早期规则仍使用 `#fff`、`rgba(148,163,184,0.35)` 和 `#334155`；`#am-wxt-keyword-preview` 仍有 `#0f172a` 深色底和 `#d1d5db` 文字；最终后置覆盖只统一了圆角/背景，未把文字色、语义色和边框 fully token 化。
+- 本轮将通过后置高优先级规则覆盖日志页相关容器，保持主面板背景回退后的轻透明玻璃方向，不把主面板重新强白化。
+- 已新增 `#am-wxt-keyword-previewlog-panel` 作用域内的最终覆盖：摘要盒、摘要标题/值、`#am-wxt-workbench-preview-log`、`#am-wxt-keyword-preview`、`#am-wxt-keyword-log` 和日志行成功/失败态均改用 `--am26-*` token；没有改预览生成、日志写入、请求构建或提交链路。
+- 已新增 `日志页预览与执行日志容器收敛到统一 token` 专项断言，读取构建后的根 userscript 最后生效 CSS 块，禁止该区域回退到 `#fff`、`#0f172a`、`#d1d5db`、`#334155`、`#b91c1c`、`#15803d` 或旧 `rgba(148,163,184,...)` 灰边事实源。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/matrix-plan-config.test.mjs tests/keyword-edit-strategy-settings.test.mjs`：通过，53/53；新增覆盖日志页摘要盒、预览日志、请求预览、执行日志和日志行语义色 token。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 线索推广页，硬刷新后版本为 `7.05`；通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 打开组建计划，只切到 `日志页`，未点击 `预览请求`、`生成其他策略`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。运行态确认 `#am-wxt-keyword-previewlog-panel` 背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(27, 36, 56)`；摘要盒背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、标题色 `rgb(80, 90, 116)`；`#am-wxt-workbench-preview-log` 背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(80, 90, 116)`；隐藏的 `#am-wxt-keyword-preview` / `#am-wxt-keyword-log` 节点 computed style 也已命中新背景、边框和文字 token。截图见 `tasks/ui-audit-keyword-previewlog-token-chrome-2026-05-29.png`。
+- 验收后点击主关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。控制台保留页面外部资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，本次日志页只读验收未产生创建/保存/删除类请求。
+
+## 结果复盘
+- 结果：完成组建计划日志页/预览日志容器 token 收敛；日志页摘要盒、预览日志、请求预览、执行日志和日志行语义色已统一到 `--am26-*` 浅玻璃体系，主面板背景仍保持用户要求的上一版轻透明玻璃。
+- 风险：本轮只改 CSS 视觉事实源和专项断言，不改变 `预览请求`、`生成其他策略`、矩阵生成、请求构建、日志写入语义、批量创建或提交链路；真实页面验收仅打开、切页、读取样式、截图和关闭。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划主面板背景回退
+
+## 需求规格
+- 目标：按用户最新反馈“面板的背景回退刚刚那种”，将组建计划主面板从刚才过白的强白玻璃回退到上一版轻透明玻璃面。
+- 范围：只处理组建计划主面板背景回退、过时测试断言和任务/审计记录；保留外层 overlay 透明、内部整块灰底移除、详情背板、添加商品候选器、复制计划弹窗等已明确完成的白色轻玻璃切片；不继续改 `批量+`，不改矩阵维度增删、预设应用、补齐推荐、生成计划、提交创建、保存并关闭或任何真实写操作逻辑。
+- 成功标准：源码和构建产物中 `#am-wxt-keyword-modal` 最终背景回到上一版 `rgba(255,255,255,0.6) -> rgba(255,255,255,0.2)` 轻透明玻璃；不再有针对组建计划主面板 `0.96 -> 0.88` 强白背景的专项断言或审计结论；构建、相关测试、构建检查、语法检查、空白检查和真实页面只读验收完成；验收不点击 `补齐推荐5维`、`生成计划`、`清空维度`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。
+
+## 执行计划（可核对）
+- [x] 回顾用户最新反馈，确认只回退组建计划主面板过白背景，不扩大到复制计划、添加商品或详情背板。
+- [x] 清理组建计划主面板强白背景相关源码覆盖、专项断言和矩阵页强白断言。
+- [x] 更新任务记录、审计记录和教训，明确主面板保持上一版轻透明玻璃。
+- [x] 构建同步产物，并运行相关组建计划专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实页面复验主面板背景，记录 computed style、截图和未触发写请求。
+- [x] 回填最终验证记录、风险和复盘。
+
+## 高层操作摘要
+- 用户最新反馈明确不喜欢刚才过白的组建计划主面板背景，因此本轮回退主面板本体到上一版轻透明玻璃，不继续把矩阵主背景推高到强白。
+- 当前源码最终覆盖块已回到 `#am-wxt-keyword-modal { background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2))) }`，外层 overlay 仍是透明且无整页 blur。
+- 已移除测试里锁定 `0.96 -> 0.88` 强白主面板和矩阵页强白背景的断言，避免后续被过时测试带回错误状态。
+- 已新增 L71 教训：组建计划主面板默认保持轻透明玻璃，除非用户明确要求更白/更实，不再主动提升主面板和矩阵主背景 opacity。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/matrix-plan-config.test.mjs tests/keyword-edit-strategy-settings.test.mjs`：通过，52/52。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tests/matrix-plan-config.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md tasks/lessons.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 线索推广页，硬刷新后通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 只打开组建计划主面板；未点击 `补齐5维`、`生成计划`、`清空`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。运行态确认 `#am-wxt-keyword-overlay.open` 为 `display:flex`、透明背景、无整页 blur；`#am-wxt-keyword-modal` 背景已回退为 `linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2))`，边框 `rgba(255, 255, 255, 0.6)`，阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`，面板 blur 为 `blur(20px) saturate(1.4)`。截图见 `tasks/ui-audit-keyword-background-reverted-chrome-2026-05-29.png`。
+- 验收后点击组建计划关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。控制台仅有页面外部资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，本次组建计划背景回退验收未产生创建/保存/删除类请求。
+
+## 结果复盘
+- 结果：已按用户反馈把组建计划主面板从过白强玻璃回退到上一版轻透明玻璃；外层透明 overlay、内部整块灰底移除、详情背板、添加商品候选器和复制计划弹窗等已完成切片保持不变。
+- 风险：本轮只回退视觉背景和清理过时断言/记录，不改变矩阵维度增删、预设应用、补齐推荐、生成计划、请求预览、提交创建、计划详情保存、商品添加或任何网络提交逻辑；真实页面验收仅打开、读取样式、截图并关闭。
+- 回滚方式：如需恢复强白背景，可重新添加组建计划 overlay 作用域内的 `--am26-*` 高白 token 覆盖和对应矩阵背景覆盖；当前按用户偏好不保留该方案。
+
+---
+
+# TODO - 2026-05-29 组建计划计划详情背板白色化
+
+## 需求规格
+- 目标：继续按“组建计划去掉灰色背景、与小万护航一致”的方向，将计划详情打开态的 `#am-wxt-keyword-detail-backdrop` 从暗色/灰色背板改为白色轻玻璃背板，并让详情面板壳层、标题栏和底部操作区继续使用统一 `--am26-*` token。
+- 范围：只改计划详情打开态的遮罩/背板、详情面板外壳、详情标题栏和底部操作区视觉样式，以及专项断言；不改 `openStrategyDetail`、`showStrategyDetail`、计划字段回填、动态配置、保存并关闭、提交创建或任何请求构建逻辑。
+- 成功标准：详情背板最终 CSS 不再使用 `rgba(15, 23, 42, ...)` 暗色背景；背板使用白色半透明背景和轻玻璃 blur；`#am-wxt-keyword-detail-config` 使用 `--am26-panel-strong`、`--am26-border-strong`、`--am26-shadow`、`--am26-text`；标题栏/底部操作区使用 `--am26-surface-strong` / `--am26-border`；专项测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 真实页只读验收完成；验收不点击 `保存并关闭`、`提交创建` 或 `批量创建`。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、历史灰底切片和计划详情当前 `detail-backdrop` 最终样式。
+- [x] 将计划详情背板、详情面板壳层、标题栏和底部操作区收敛到白色轻玻璃 token。
+- [x] 更新专项断言，禁止详情背板回退到旧暗色遮罩，并锁定详情面板壳层 token。
+- [x] 构建同步产物，并运行编辑详情专项测试、组建计划相关回归、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开 `组建计划 -> 计划详情` 验收，不点击保存/提交。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 当前组建计划主向导、首页内容区和 `添加商品` 二级选择器已完成白色轻玻璃化；进入计划详情时，`#am-wxt-keyword-detail-backdrop` 仍保留暗色 `rgba(15, 23, 42, ...)` 背板。
+- 本轮只处理打开详情即可观察的视觉层，不保存字段、不提交创建、不触发计划请求。
+- 已将 `#am-wxt-keyword-detail-backdrop` 改为 `rgba(255, 255, 255, 0.72)` + `blur(8px) saturate(1.15)` 白色轻玻璃背板。
+- 已将 `#am-wxt-keyword-modal #am-wxt-keyword-detail-config` 提升为最终优先级规则，避免被通用 `.am-wxt-config` 覆盖；详情面板壳层、标题栏和底部操作区改用 `--am26-panel-strong`、`--am26-border-strong`、`--am26-shadow`、`--am26-text`、`--am26-surface-strong` 和 `--am26-border`。
+- 已新增编辑详情专项断言，锁定最终生效 CSS 块，防止详情背板回退到旧暗色遮罩，也防止详情面板壳层回退到旧硬编码白底灰边。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-edit-strategy-settings.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-item-picker-popup.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，73/73；新增覆盖计划详情背板、详情面板壳层、标题栏和底部操作区白色轻玻璃 token。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-edit-strategy-settings.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=Ai&orderField=charge&orderBy=desc` 人群推广页，刷新后只点击插件悬浮球/主面板、`组建计划`、计划行 `编辑` 打开计划详情；未点击 `保存并关闭`、`批量创建`、`提交创建`、`生成其他策略` 或任何真实创建/保存入口。运行态确认 `#am-wxt-keyword-detail-backdrop` 背景为 `rgba(255, 255, 255, 0.72)`、`backdrop-filter: blur(8px) saturate(1.15)`；`#am-wxt-keyword-detail-config` 为白色轻玻璃渐变、边框 `rgba(255, 255, 255, 0.6)`、18px 圆角、阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`、`blur(18px) saturate(1.35)`；标题栏/底部操作区背景 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`，最终规则不含旧暗色背板或旧硬编码白底灰边。截图见 `tasks/ui-audit-keyword-detail-backdrop-white-chrome-2026-05-29.png`。
+- 验收后点击详情背板和主关闭按钮关闭，确认 `overlayOpen=false`、`overlayDisplay=none`、`detailBackdropOpen=false`、`detailVisible=false`、`modalVisible=false`；performance resource 基线后未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/update*`、`/campaign/create`、`/campaign/batch`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。
+
+## 结果复盘
+- 结果：完成组建计划计划详情背板和详情面板壳层白色轻玻璃化；详情打开态不再用暗色/灰色背板压暗页面，视觉方向与小万护航一致。
+- 风险：本轮只改 CSS 视觉事实源和专项断言，不改变 `openStrategyDetail`、`showStrategyDetail`、计划字段回填、动态配置、保存并关闭、提交创建或请求构建逻辑；真实页面验收仅打开、读取样式并关闭。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-edit-strategy-settings.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划添加商品候选行与按钮 token 收敛
+
+## 需求规格
+- 目标：继续迁移 `添加商品` 候选选择器，将候选商品行、商品名称/ID 文本、工具条按钮、单项 `添加/已添加` 按钮和主按钮从旧硬编码白底/灰边/蓝底收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改 `#am-wxt-keyword-item-picker-mask` 内商品候选行与按钮的视觉背景、边框、文字和状态样式，以及专项断言；不改商品候选加载、搜索、热销最近、全部商品、全部添加、单项添加、已添加禁用、确定/取消或主向导数据回写逻辑。
+- 成功标准：候选行使用 `--am26-border` / `--am26-surface-strong` / `--am26-text` / `--am26-text-soft`；按钮默认/hover/primary/disabled 使用 `--am26-*` 与品牌弱光状态；旧 `rgba(148,163,184,...)` 灰边、`#fff` 白底、`#111827`、`#64748b`、`#eef2ff`、`#2e3ab8` 不再作为该弹窗候选行/按钮最终样式事实源；专项测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 只读验收完成；验收不点击 `全部添加`、单项 `添加` 或 `确定`。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、上一轮候选选择器白底切片和当前候选行/按钮硬编码样式。
+- [x] 将候选选择器内按钮、候选商品行、商品名和商品 ID 文本收敛到 `--am26-*` token。
+- [x] 更新专项断言，禁止候选行和按钮回退到旧硬编码白底、灰边和蓝色按钮。
+- [x] 构建同步产物，并运行商品弹窗专项测试、组建计划相关回归、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开 `组建计划 -> 添加商品` 验收候选行与按钮，不点击添加/确定。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 上一轮已完成 `添加商品` 候选选择器外层遮罩和弹窗面板白色轻玻璃化；当前剩余可见硬编码集中在候选商品行、商品名/ID 和按钮。
+- 本轮继续保持只读视觉迁移，不触发商品添加或计划创建。
+- 已将候选选择器内普通按钮、主按钮、禁用按钮、候选商品行、商品名称和宝贝 ID 文本改为 `--am26-border`、`--am26-surface*`、`--am26-text*`、`--am26-primary*` 事实源，并补齐 hover/focus-visible 反馈。
+- 已新增商品弹窗专项断言，锁定候选行与按钮最终 CSS 块，禁止回退到旧浅蓝按钮、硬编码主按钮渐变、旧灰边和深灰/灰蓝文字。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-item-picker-popup.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，67/67；新增覆盖商品候选选择器候选行、普通按钮、主按钮、禁用按钮、名称和宝贝 ID 文本 token 收敛。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-item-picker-popup.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=Ai&orderField=charge&orderBy=desc` 人群推广页，刷新后只点击插件悬浮球/主面板、`组建计划`、`添加商品` 打开候选选择器；未点击 `全部添加`、单项 `添加`、底部 `确定`、`提交创建`、`批量创建`、`生成其他策略` 或任何真实创建/保存入口。运行态确认遮罩仍为白色轻玻璃；普通按钮背景 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(80, 90, 116)`；主按钮渐变为 `rgb(69, 84, 229)` 到 `rgb(29, 63, 207)`，文字 `rgba(255, 255, 255, 0.96)`；禁用 `已添加` 按钮背景 `rgba(255, 255, 255, 0.25)`、文字 `rgba(80, 90, 116, 0.62)`、`cursor: not-allowed`；候选行背景 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`、内高光存在；商品名 `rgb(27, 36, 56)`，宝贝 ID `rgb(80, 90, 116)`。最终 CSS 规则不含旧 `#eef2ff`、`#2e3ab8`、`#4554e5, #4f68ff`、`rgba(148, 163, 184, 0.34)`、`#111827`、`#64748b`。截图见 `tasks/ui-audit-keyword-item-picker-row-button-token-chrome-2026-05-29.png`。
+- 验收后只点击二级选择器 `取消` 和主向导关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`itemPickerExists=false`；performance resource 基线后未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/delete`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/item/add` 或 `/item/update`。
+
+## 结果复盘
+- 结果：完成 `添加商品` 候选选择器内部候选行与按钮 token 收敛；二级选择器从遮罩、面板到候选列表可见控件均已对齐白色轻玻璃方向。
+- 风险：本轮只改 CSS 视觉事实源和专项断言，不改变商品候选加载、搜索、热销最近、全部商品、全部添加、单项添加、已添加禁用、确定/取消或主向导数据回写逻辑；真实页面验收仅打开、读取样式并取消/关闭。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-item-picker-popup.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划添加商品候选选择器灰色遮罩改白色
+
+## 需求规格
+- 目标：延续“组建计划去掉灰色背景、与小万护航一致”的迁移方向，将 `添加商品` 候选选择器从深色整屏遮罩改为白色轻玻璃遮罩，避免打开二级选择器时重新压暗页面。
+- 范围：只改 `#am-wxt-keyword-item-picker-mask` 及其商品候选选择器容器/工具条的视觉背景事实源和专项断言；不改商品搜索、热销最近、全部商品、全部添加、单项添加、已添加状态或确定/取消逻辑。
+- 成功标准：候选选择器外层遮罩不再使用 `rgba(15,23,42,0.48)` / 深色整屏背景；容器保持白色轻玻璃面，工具条/输入继续使用 `--am26-*` token；专项测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 只读验收完成；验收不点击 `全部添加`、单项 `添加` 或 `确定`。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、审计表和上一轮 Chrome MCP 暴露的候选选择器深色遮罩证据。
+- [x] 定位候选选择器 mask/container 最终生效 CSS，改为白色轻玻璃遮罩与面板背景。
+- [x] 更新专项断言，禁止候选选择器遮罩回退到旧深色背景，并锁定 `--am26-*` token。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开 `组建计划 -> 添加商品` 验收，不点击添加/确定。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 上一轮真实页面验收打开 `添加商品` 候选选择器时，运行态 `#am-wxt-keyword-item-picker-mask` 仍为 `rgba(15, 23, 42, 0.48)` 深色整屏遮罩。
+- 本轮只处理该二级选择器的视觉层级，保持商品搜索、候选加载和添加逻辑不变。
+- 已将候选选择器外层遮罩改为 `rgba(255, 255, 255, 0.72)` + `blur(8px) saturate(1.15)`；弹窗主体、头部、候选面板和底部操作区改用 `--am26-panel-strong`、`--am26-border*`、`--am26-shadow`、`--am26-surface*` 和 `--am26-text`。
+- 已在商品弹窗专项测试中新增 mask/dialog/head/panel/toolbar/foot 断言，禁止旧 `rgba(15, 23, 42, 0.48)`、`#f7f8fc`、旧深阴影、旧浅蓝头部和硬编码 `#fff` 灰边回退。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-item-picker-popup.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，66/66；新增覆盖商品候选选择器白色轻玻璃遮罩、主体 token、候选面板 token 和旧深色遮罩回退防护。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-item-picker-popup.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=Ai&orderField=charge&orderBy=desc` 人群推广页，刷新后确认插件重新注入；只点击插件悬浮球、`组建计划`、`添加商品` 打开候选选择器，未点击 `全部添加`、单项 `添加`、底部 `确定`、`提交创建`、`批量创建`、`生成其他策略` 或任何真实创建/保存入口。运行态确认 `#am-wxt-keyword-item-picker-mask` 背景为 `rgba(255, 255, 255, 0.72)`、`backdrop-filter: blur(8px) saturate(1.15)`；最终 mask CSS 规则不含旧 `rgba(15, 23, 42, 0.48)`。候选弹窗主体为 `--am26-panel-strong` 对应白色轻玻璃渐变、边框 `rgba(255, 255, 255, 0.6)`、阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`、`blur(18px) saturate(1.35)`；头部背景 `rgba(255, 255, 255, 0.45)`，工具条/候选面板/底部操作区背景 `rgba(255, 255, 255, 0.25)`，搜索输入保持品牌弱光 focus ring。截图见 `tasks/ui-audit-keyword-item-picker-white-bg-chrome-2026-05-29.png`。
+- 验收后点击候选选择器关闭按钮退出，再关闭主向导，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`itemPickerExists=false`、执行模式菜单和详情页均无残留；performance resource 基线后未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/delete`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/item/add` 或 `/item/update`。控制台存在页面外部资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，本次候选选择器 UI 验收未产生添加/创建/保存类请求。
+
+## 结果复盘
+- 结果：完成组建计划 `添加商品` 候选选择器灰色/深色遮罩改白色轻玻璃，二级选择器打开时不再压暗整屏，视觉层级与主向导、小万护航方向一致。
+- 风险：本轮只改 CSS 视觉事实源和专项断言，不改变商品搜索、热销最近、全部商品、全部添加、单项添加、已添加状态或确定/取消逻辑；真实页面验收仅打开、读取样式并关闭。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-item-picker-popup.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 复制计划弹窗灰色背景改白色
+
+## 需求规格
+- 目标：按用户最新反馈，将计划行“复制”打开的复制计划一览窗和复制成功窗从灰色遮罩/灰感玻璃背景调整为白色轻玻璃背景，减少整屏灰色压暗感。
+- 范围：只改复制计划一览窗 `#am-campaign-copy-overview-popup`、复制成功窗 `#am-campaign-copy-success-popup` 的视觉背景与专项断言；不改复制按钮挂载、计划详情读取、复制 API、确认生成、成功后搜索或创建后暂停逻辑。
+- 成功标准：两个复制弹窗外层遮罩为白色半透明背景，禁止回退到旧 `rgba(27, 36, 56, 0.28)` 灰色遮罩；卡片本体呈明确白色轻玻璃面；专项测试、构建同步、语法/构建检查和 Chrome DevTools MCP 只读验收完成；验收不点击“确认生成”，不触发真实复制创建。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、复制计划历史教训和当前复制弹窗样式断言。
+- [x] 将复制计划一览窗与复制成功窗外层遮罩改为白色半透明，并让卡片本体更明确地呈现白色轻玻璃面。
+- [x] 更新专项断言，锁定白色背景并禁止旧灰色遮罩回退。
+- [x] 构建同步产物，并运行复制计划专项测试、相关快捷入口测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只打开复制一览窗验收，不点击确认生成/不触发复制创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 用户最新反馈聚焦“复制计划”的灰色背景，本轮从组建计划整体迁移中切出独立小切片，避免误改其它页面或真实复制链路。
+- 旧灰色来源是 `src/main-assistant/ui.js` 中复制一览窗和成功窗外层遮罩 `rgba(27, 36, 56, 0.28)`，专项测试当前也锁定了这个旧值。
+- 本轮只处理视觉背景，不改变复制前只读查询、确认后提交、成功后页内搜索等业务行为。
+- 已将复制一览窗和成功窗外层遮罩改为 `rgba(255, 255, 255, 0.72)`，并补 `-webkit-backdrop-filter`；卡片本体改为 `rgba(255,255,255,0.96 -> 0.88)` 白色轻玻璃渐变。
+- 已更新复制计划专项断言，分别提取一览窗/成功窗 CSS 规则，锁定白色遮罩和白色卡片，并禁止旧 `rgba(27, 36, 56, 0.28)` / `blur(10px)` 在复制弹窗规则内回退。
+
+## 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，12/12；覆盖复制一览窗/成功窗白色遮罩、白色卡片和旧灰色遮罩回退防护。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs`：通过，27/27。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/main-assistant/ui.js tests/campaign-copy-current-plan-quick-entry.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7&orderField=charge&orderBy=desc` 人群推广页，刷新后确认复制弹窗样式已重新注入；只点击行级 `复制` 按钮打开 `复制计划一览`，未点击 `确认生成`。运行态确认一览窗 `role="dialog"`、`aria-modal="true"`、标题关联 `am-copy-overview-title`，状态文案为 `确认后才会提交创建请求。`；外层遮罩计算样式 `background-color: rgba(255, 255, 255, 0.72)`、`backdrop-filter: blur(8px) saturate(1.15)`，卡片背景为 `linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88))`；一览窗和成功窗 CSS 规则均不含旧 `rgba(27, 36, 56, 0.28)` / `blur(10px)`。截图见 `tasks/ui-audit-copy-popup-white-bg-chrome-2026-05-29.png`。
+- 验收后点击 `取消` 关闭一览窗，确认一览窗与成功窗均不存在；performance resource 中未出现 `/solution/copy.json`、`/solution/addList.json`、`/campaign/copy/campaignCheck.json` 或 `/campaign/updatePart.json`，未触发复制创建/提交。控制台存在页面外部资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，本次复制弹窗交互未产生创建类接口或可见业务错误。
+
+## 结果复盘
+- 结果：完成复制计划一览窗和复制成功窗灰色背景改白色；复制弹窗不再压暗整屏，卡片本体更接近白色轻玻璃面。
+- 风险：本轮只改 CSS 背景和静态断言，不改复制按钮挂载、计划详情读取、复制 API、确认生成、成功后搜索或创建后暂停逻辑；真实页面验收只打开并取消一览窗。
+- 回滚方式：还原 `src/main-assistant/ui.js`、`tests/campaign-copy-current-plan-quick-entry.test.mjs`、本次构建产物、截图和任务/审计/教训记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划首页工具条与计划行文字控件 token 收敛
+
+## 需求规格
+- 目标：继续迁移组建计划首页可见内容区，将商品候选选择器工具条输入、计划配置标题、计划搜索框、计划名称/摘要文字、行内编辑输入和复制数量徽标从硬编码白底/灰边/深灰字收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改首页工具条/搜索框/计划行文本控件的 CSS 与专项断言；商品搜索输入的真实运行态宿主为 `#am-wxt-keyword-item-picker-mask`，不是主弹窗内 `#am-wxt-keyword-modal`；不改商品搜索、计划筛选、计划名称/预算编辑逻辑、复制数量交互、删除/编辑/提交创建、请求构建或真实投放链路。
+- 成功标准：相关最终 CSS 块使用 `--am26-border` / `--am26-surface` / `--am26-surface-strong` / `--am26-text` / `--am26-text-soft` / `--am26-primary*`；旧 `#fff`、`#cbd5e1`、`#111827`、`#0f172a`、`#475569`、`#94a3b8` 不再作为这些区域最终样式事实源；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、审计表和组建计划首页剩余硬编码样式。
+- [x] 将首页工具条输入、计划标题、搜索框、计划名称/摘要、行内编辑输入和复制数量徽标收敛到 `--am26-*` token。
+- [x] 更新专项断言，防止该区域回退到硬编码白底、灰边和深灰文字。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划首页验收，不点击提交创建/批量创建/删除/编辑保存。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 审计表剩余缺口集中在组建计划内部局部 token 与硬编码蓝灰/白底样式；当前切片选择打开首页即可安全观察的工具条、搜索框和计划行文本控件。
+- 本轮只改视觉 token 事实源和静态断言，不触发任何真实创建、提交、删除或保存动作。
+- `@chrome` 上轮观察确认 `#am-wxt-keyword-search-input` 被移动到商品候选选择器 `#am-wxt-keyword-item-picker-mask` 内，本轮已按真实宿主补齐样式和专项断言。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，58/58；覆盖首页工具条、搜索框、计划行文字控件、商品候选选择器真实宿主和相关弹窗局部 token。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7&orderField=charge&orderBy=desc` 人群推广页，只点击插件悬浮球与 `组建计划` 打开主向导首页；未点击 `提交创建`、`批量创建`、`生成其他策略`、`删除`、`编辑保存` 或任何真实创建/提交入口。运行态确认 `#am-wxt-keyword-overlay.open` 为透明背景且无整页 blur，主面板仍为 1320px 浅玻璃工作台；计划配置标题文字 `rgb(27, 36, 56)`，计划搜索框背景 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(27, 36, 56)`、内高光存在；计划名称文字 `rgb(27, 36, 56)`，计划摘要 `rgb(80, 90, 116)`、弱摘要 `rgba(80, 90, 116, 0.62)`；行内编辑输入为 `--am26-surface-strong` 对应白色轻玻璃面、编辑按钮默认色 `rgb(80, 90, 116)`；复制数量徽标背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(80, 90, 116)`。随后只点击 `添加商品` 打开商品候选选择器，未点击 `全部添加` 或单项 `添加`；运行态确认真实宿主 `#am-wxt-keyword-item-picker-mask` 内工具条背景 `rgba(255, 255, 255, 0.25)`，搜索输入聚焦态为白色轻玻璃背景、品牌弱光边框 `rgba(69, 84, 229, 0.42)` 和 `0 0 0 3px rgba(69,84,229,0.12)`。截图见 `tasks/ui-audit-keyword-home-toolbar-row-token-chrome-2026-05-29.png`。
+- 验收后关闭商品候选选择器与主向导，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`itemPickerExists=false`；performance resource 基线后未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/delete`、`/campaign/update`、`/campaign/create` 或 `/campaign/batch`。控制台存在页面外部资源 `ERR_TUNNEL_CONNECTION_FAILED` 与 `ScriptProcessorNode is deprecated` 噪声，本次组建计划 UI 验收未产生创建/保存/删除类请求。
+
+## 结果复盘
+- 结果：完成组建计划首页工具条、计划配置标题、计划搜索框、计划名称/摘要、行内编辑输入、行内编辑按钮和复制数量徽标 token 收敛闭环；商品候选选择器搜索输入也按真实运行态宿主完成验证。
+- 风险：本轮只改 CSS 事实源、专项断言和任务记录，不改变商品搜索、计划筛选、计划名称/预算编辑逻辑、复制数量交互、删除/编辑/提交创建、请求构建或真实投放链路；真实页面验收仅打开、读取样式并关闭。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划首页摘要卡片 token 收敛（继续）
+
+## 需求规格
+- 目标：继续迁移组建计划首页内容区，将顶部 3 个摘要卡片从硬编码白底/灰边/深色数字收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改首页摘要卡片 `.am-wxt-home-summary`、`.am-wxt-home-stat`、`.am-wxt-home-stat-label`、`.am-wxt-home-stat strong/small` 的 CSS 与专项断言；不改摘要动态计算、商品/计划/预算逻辑、执行模式、请求构建、批量创建、提交创建或真实投放链路。
+- 成功标准：摘要卡片最终 CSS 块使用 `--am26-surface-strong` / `--am26-border` / `--am26-text` / `--am26-text-soft` / `--am26-primary-strong`；旧 `#fff`、`#eef2f7`、`#64748b`、`#0f172a` 不再作为该区域最终样式事实源；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、审计表、历史灰底切片和摘要卡片当前源码。
+- [x] 确认摘要卡片最终覆盖块已切到 `--am26-*` token。
+- [x] 更新专项断言，防止摘要卡片回退到硬编码白底、灰边和深色数字。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划首页验收摘要卡片，不点击提交创建/批量创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认源码最终覆盖块中 `.am-wxt-home-stat`、标签、数字和单位已使用 `--am26-*` token；本轮补齐专项断言和真实页面验收闭环。
+- 本轮只处理打开首页即可观察的摘要区，不进入计划详情、不展开业务弹窗、不触发任何提交。
+- 已补充专项断言锁定首页摘要容器、摘要卡片、标签、数字和单位的最终生效 CSS 块，避免该区域回退到硬编码白底、灰边和深色数字。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，57/57；新增覆盖组建计划首页摘要卡片 token 收敛。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后只点击插件悬浮球与 `组建计划` 打开主向导首页；未点击 `提交创建`、`批量创建`、`生成其他策略` 或任何真实创建/提交入口。运行态确认顶部 3 个摘要卡片可见，文案为 `已添加商品 8 / 30`、`已选计划 4`、`预算合计 400元`；计算样式显示卡片背景 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`、标签色 `rgb(80, 90, 116)`、数字色 `rgb(29, 63, 207)`、内高光存在；控制台 error/warn 为 0。历史样式文本中仍能检索到旧色值片段，但最终有效 CSS 块、专项断言和 computed style 均指向 `--am26-*` token。截图见 `tasks/ui-audit-keyword-home-summary-token-chrome-2026-05-29.png`。
+
+## 结果复盘
+- 结果：完成组建计划首页摘要卡片 token 收敛，卡片边框、背景、标签、数字和单位均由统一浅玻璃 token 控制。
+- 风险：本轮只改 CSS 事实源和专项断言，不改变摘要动态计算、商品/计划/预算逻辑、执行模式、请求构建、批量创建、提交创建或真实投放链路；真实页面验收只打开和关闭主向导首页。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划整块灰底去除
+
+## 需求规格
+- 目标：按用户最新反馈，将组建计划主向导里“整块灰色背景”去掉，呈现方式对齐小万护航：页面外层透明，只有独立工具面板本身承载浅玻璃背景，不在内容区额外铺一层灰底。
+- 范围：只处理组建计划主向导外壳、内容区和首页主内容容器的背景事实源；不改商品选择、计划配置、摘要计算、执行模式、请求构建、批量创建、提交创建或真实投放链路。
+- 成功标准：`#am-wxt-keyword-overlay` 仍为透明无整页 blur；`#am-wxt-keyword-modal` 保留 `--am26-panel-strong` 浅玻璃面板；`.am-wxt-body` 不再使用整块灰/白蒙层背景；首页主要容器不再靠硬编码 `#fff` / `#f8fafc` 铺满内容区；专项断言、构建检查和 `@chrome` 只读验收通过。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、历史灰底切片记录和当前组建计划最终覆盖块。
+- [x] 对照小万护航面板方式，移除主向导内容区整块灰/白底，只保留独立玻璃面板背景。
+- [x] 更新专项断言，防止 `.am-wxt-body` 与首页主容器回退到整块灰/白底。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划验收，不点击提交创建/批量创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认上一轮只去除了整屏 overlay 灰遮罩；当前用户反馈指向组建计划面板内部仍存在大面积灰/白底板。
+- 本轮只改视觉背景层级，不进入计划详情、不展开二级业务弹窗、不触发任何创建/提交。
+- 已将最终覆盖块中的 `.am-wxt-body`、工作台页签和计划列表背景改为透明；主内容容器、工具条、商品行、计划表头改用 `--am26-surface*` 半透明 token，保留主弹窗自身 `--am26-panel-strong` 浅玻璃面板。
+- 已补充专项断言，锁定最终生效 CSS 块，不再让内容区、页签、计划列表、表头和计划行回退到整块 `#fff` / `#f8fafc` / 灰白背景。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，56/56；新增覆盖组建计划主向导内部整块灰底去除。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后只点击插件悬浮球与 `组建计划` 打开主向导；未点击 `提交创建`、`批量创建`、`生成其他策略` 或任何真实创建/提交入口。运行态确认 `#am-wxt-keyword-overlay.open` 仍为透明背景、无背景图、无整页 `backdrop-filter`；`#am-wxt-keyword-modal` 保持 `--am26-panel-strong` 对应浅玻璃渐变、18px 圆角、`--am26-shadow` 和 `blur(20px) saturate(1.4)`；`.am-wxt-body`、`.am-wxt-workbench-tabs`、`.am-wxt-strategy-list` 和 `.am-wxt-strategy-item` 计算背景均为 `rgba(0, 0, 0, 0)` / `none`；`.am-wxt-strategy-board` 与 `.am-wxt-strategy-list-head` 为 `rgba(255, 255, 255, 0.25)` 半透明 token 背景；控制台 error/warn 为 0。截图见 `tasks/ui-audit-keyword-wizard-no-inner-gray-chrome-2026-05-29.png`。验收后点击关闭，确认 overlay 不再打开；modal 等节点保留在 DOM 中属于向导挂载结构，不作为可见残留判断。
+
+## 结果复盘
+- 结果：完成组建计划内部整块灰/白底去除，当前呈现为页面外层透明、主弹窗独立浅玻璃、内容区不再额外铺整块底色，视觉层级与小万护航方式一致。
+- 风险：本轮只改最终 CSS 覆盖块和专项断言，不改变商品选择、计划配置、摘要计算、执行模式、请求构建、批量创建、提交创建或真实投放链路；真实页面验收只打开和关闭主向导。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划首页摘要卡片 token 收敛
+
+## 需求规格
+- 目标：继续迁移组建计划首页内容区，将顶部 3 个摘要卡片从硬编码白底/灰边/深色数字收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改首页摘要卡片 `.am-wxt-home-summary`、`.am-wxt-home-stat`、`.am-wxt-home-stat-label`、`.am-wxt-home-stat strong/small` 的 CSS 与专项断言；不改摘要动态计算、商品/计划/预算逻辑、执行模式、请求构建、批量创建、提交创建或真实投放链路。
+- 成功标准：摘要卡片使用 `--am26-surface` / `--am26-surface-strong` / `--am26-border` / `--am26-text` / `--am26-text-soft` / `--am26-primary-strong`；旧 `#fff`、`#eef2f7`、`#64748b`、`#0f172a` 不再作为该区域最终样式事实源；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、审计表和首页摘要卡片现状。
+- [ ] 将首页摘要卡片容器、卡片、标签、数字和单位收敛到 `--am26-*` token。
+- [ ] 更新专项断言，防止摘要卡片回退到硬编码白底、灰边和深色数字。
+- [ ] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [ ] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划首页验收摘要卡片，不点击提交创建/批量创建。
+- [ ] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认组建计划首页摘要卡片在最终覆盖块中仍使用 `border: 1px solid #eef2f7`、`background: #fff`、标签 `#64748b` 和数字 `#0f172a`。
+- 本轮只处理打开首页即可观察的摘要区，不进入计划详情、不展开业务弹窗、不触发任何提交。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待补充。
+
+---
+
+# TODO - 2026-05-29 组建计划执行模式下拉菜单 token 收敛（继续）
+
+## 需求规格
+- 目标：继续迁移组建计划首页内容区，将执行模式下拉菜单容器、菜单项、hover/active 态从硬编码白底/蓝色状态收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改执行模式下拉菜单 CSS 与专项断言；不改执行模式切换、并发数调整、提交按钮、日志写入、请求构建、批量创建、提交创建或真实投放链路。
+- 成功标准：`#am-wxt-keyword-run-mode-menu` 和 scoped `.am-wxt-run-mode-menu` 最终生效覆盖使用 `--am26-panel-strong`、`--am26-border-strong`、`--am26-shadow`、`--am26-text-soft`、`--am26-primary-strong`；旧白底浅蓝渐变、`#334155`、`#1d4ed8`、`rgba(37,99,235,...)` 不再作为该菜单最终样式事实源；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、审计表、历史教训和上一轮执行模式数量徽标验收结果。
+- [x] 将执行模式下拉菜单最终覆盖块收敛到 `--am26-*` token，避免后置规则覆盖基础 token 样式。
+- [x] 更新专项断言，覆盖菜单容器、菜单项、hover/active 态和旧白底浅蓝回退。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划并展开执行模式菜单验收，不点击提交创建/批量创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认基础菜单规则已使用 `--am26-*`，但后置覆盖块 `#am-wxt-keyword-modal .am-wxt-run-mode-menu, #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu` 仍使用 `rgba(255,255,255,0.96)` 白底浅蓝渐变、`blur(8px)` 和蓝色阴影，运行态会覆盖前面的 token 样式。
+- 本轮只处理菜单视觉事实源；运行态验收只展开菜单读取样式，不选择模式、不调整并发数、不触发任何提交。
+- 已将后置覆盖块改为 `--am26-border-strong`、`--am26-panel-strong`、`--am26-shadow` 和 `blur(12px) saturate(1.25)`，与前置菜单样式保持同一浅玻璃事实源。
+- 已补充专项断言，提取最终覆盖块逐项校验菜单容器 token，同时校验菜单项、hover 和 active 态不回退。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，55/55；新增覆盖执行模式菜单容器、菜单项、hover/active 态和旧白底浅蓝回退。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后只点击插件悬浮球、`组建计划` 和执行模式下拉按钮；未点击 `提交创建`、`批量创建`、`生成其他策略` 或任何真实创建/提交入口。运行态确认 `#am-wxt-keyword-run-mode-menu` 可见，容器计算样式为 `background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2))`、`border-color: rgba(255, 255, 255, 0.6)`、`box-shadow: rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`、`backdrop-filter: blur(12px) saturate(1.25)`；最终 CSS 覆盖块命中 `--am26-border-strong` / `--am26-panel-strong` / `--am26-shadow`，旧 `rgba(255,255,255,0.96)`、`rgba(246,249,255,0.9)` 和旧蓝色阴影不存在。菜单项默认文字 `rgb(80, 90, 116)`，active 背景 `rgba(69, 84, 229, 0.1)`、文字 `rgb(29, 63, 207)`，数量徽标继续为 `--am26-surface`/`--am26-border` 对应样式；控制台 error/warn 为 0。截图见 `tasks/ui-audit-keyword-run-mode-menu-token-chrome-2026-05-29.png`。验收后关闭主向导，确认 overlay 关闭、菜单隐藏、详情和二级弹窗无残留。
+
+## 结果复盘
+- 结果：完成组建计划执行模式下拉菜单 token 收敛，菜单容器、菜单项、hover/active 态和数量徽标均由 `--am26-*` 浅玻璃事实源控制。
+- 风险：本轮只改 CSS 和静态断言，不改变执行模式切换、并发数调整、提交按钮、日志写入、请求构建或真实创建提交链路；真实页面验收只展开菜单并关闭向导。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划去除整屏灰色背景复核
+
+## 需求规格
+- 目标：按用户最新反馈复核“组建计划去掉整个灰色背景，与小万护航一样”的运行态效果，并修复验证中发现的产物未同步问题。
+- 范围：只处理主向导外层 overlay 透明背景的复核、构建产物同步和记录更新；不继续推进执行模式下拉菜单、内部弹窗、请求构建、创建/提交或真实投放链路。
+- 成功标准：源码和构建产物同步；`#am-wxt-keyword-overlay.open` 运行态无灰色/暗色整屏遮罩、无背景图、无整页 blur；主向导面板仍保持 `--am26-*` 浅玻璃工作台；测试、构建检查、语法检查、空白检查和 `@chrome` 只读验收通过。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、审计表、历史教训和既有去灰底切片记录。
+- [x] 核对 `src/` 中 overlay 最终样式，确认只需复核与同步产物，不扩大源码改动。
+- [x] 运行构建同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- [x] 运行组建计划相关测试、构建检查、语法检查、extension bundle 检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划验收外层透明背景，不点击创建/提交。
+- [x] 回填复核记录、截图路径、风险和复盘。
+
+## 高层操作摘要
+- 复核发现源码中 `#am-wxt-keyword-overlay` 已是 `background: transparent`、`backdrop-filter: none`，但初次 `npm run build:check` 失败，提示根 userscript 未与 `src/` 同步。
+- 已运行 `npm run build` 重新同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`，随后构建检查恢复通过。
+- `@chrome` 复核只展开主面板并点击 `组建计划`，没有点击 `提交创建`、`批量创建`、`生成其他策略` 或任何真实创建/提交入口。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过；初次失败原因是根 userscript 未同步，构建后已恢复。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/matrix-plan-config.test.mjs`：通过，49/49。
+- `node --test tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，37/37。
+- `npm run check:syntax`：通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- `@chrome` 运行态复核：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后点击插件悬浮球与 `组建计划` 打开主向导；运行态确认 `#am-wxt-keyword-overlay.open` 为 `display:flex`、`background-color: rgba(0, 0, 0, 0)`、`background-image: none`、`backdrop-filter: none`，最终 CSS 覆盖块命中 `background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;`，且不包含旧 `rgba(27, 36, 56, 0.28)` 或 overlay 规则内 `blur(10px)`；`#am-wxt-keyword-modal` 仍为 1320px 宽、18px 圆角、浅玻璃背景、`var(--am26-shadow)` 阴影和 `blur(20px) saturate(1.4)` 面板模糊；控制台 error/warn 为 0。截图见 `tasks/ui-audit-keyword-wizard-no-gray-overlay-chrome-2026-05-29-recheck.png`。验收后关闭主向导，确认 overlay 隐藏、modal 不可见。
+
+## 结果复盘
+- 结果：组建计划整屏灰色背景已按小万护航方式移除，复核中发现并修复了构建产物未同步问题。
+- 风险：本轮只同步产物并复核主向导外层视觉，不改变内部弹窗、执行模式下拉菜单、批量编辑、矩阵配置、请求构建或真实创建/提交链路。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划执行模式下拉菜单 token 收敛
+
+## 需求规格
+- 目标：继续迁移组建计划首页内容区，将执行模式下拉菜单容器、菜单项、hover/active 态从硬编码白底/蓝色状态收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改执行模式下拉菜单 CSS 与专项断言；不改执行模式切换、并发数调整、提交按钮、日志写入、请求构建、批量创建、提交创建或真实投放链路。
+- 成功标准：`#am-wxt-keyword-run-mode-menu` 和 scoped `.am-wxt-run-mode-menu` 使用 `--am26-panel-strong` / `--am26-border` / `--am26-shadow` / `--am26-text-soft` / `--am26-primary-strong` 等 token；旧 `#fff`、`#334155`、`#1d4ed8`、`rgba(37,99,235,...)` 不再作为该菜单最终样式事实源；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范、审计表和上一轮执行模式数量徽标验收结果。
+- [ ] 将执行模式下拉菜单容器、菜单项、hover/active 态收敛到 `--am26-*` token。
+- [ ] 更新专项断言，防止菜单回退到白底、硬编码深灰字和旧蓝色状态。
+- [ ] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [ ] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划并展开执行模式菜单验收，不点击提交创建/批量创建。
+- [ ] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 上一轮已收敛执行模式数量徽标，但真实页验收可见菜单容器仍是白底浅蓝渐变，菜单项 hover/active 仍使用硬编码蓝色状态。
+- 本轮只处理菜单视觉事实源；打开下拉菜单用于验收，不选择菜单项、不调整并发数、不触发任何提交。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待补充。
+
+---
+
+# TODO - 2026-05-29 组建计划首页底部提交条与快捷日志 token 收敛
+
+## 需求规格
+- 目标：继续迁移组建计划首页内容区，将底部提交摘要条、执行模式数量徽标和快捷日志区从硬编码白/灰底收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改主向导首页底部提交条、提交摘要、执行模式数量徽标、快捷日志面板和快捷日志行的 CSS 与专项断言；不改提交按钮行为、执行模式切换、日志写入格式、请求构建、批量创建、提交创建或真实投放链路。
+- 成功标准：底部提交条与快捷日志区域使用 `--am26-surface*` / `--am26-border*` / `--am26-text*` / `--am26-primary*` / 语义色 token；旧 `#fff`、`#f8fafc`、`#475569`、`#64748b` 不再作为这些区域最终样式事实源；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、审计表和组建计划首页底部/日志区现状。
+- [x] 将底部提交条、提交摘要、执行模式数量徽标和快捷日志区收敛到 `--am26-*` token。
+- [x] 更新专项断言，防止该区域回退到硬编码白/灰底与灰色文字。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划首页验收底部提交条和快捷日志区，不点击提交创建/批量创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 本轮选择主向导首页可安全验收区域：打开组建计划即可观察底部提交条和快捷日志区，不需要进入详情弹窗，也不需要触发任何创建提交。
+- 当前缺口集中在 `.am-wxt-strategy-footer`、`.am-wxt-submit-summary`、`.am-wxt-run-mode-count`、`.am-wxt-quick-log-panel`、`.am-wxt-quick-log-title`、`#am-wxt-keyword-quick-log` 和日志行色值；本轮不扩大到计划列表、提交确认弹窗或其它场景弹窗。
+- 已将底部提交条、提交摘要、快捷日志面板、日志标题、日志容器和日志行切到 `--am26-border`、`--am26-surface`、`--am26-surface-strong`、`--am26-text-soft` 与 `--am26-primary-strong`。
+- `@chrome` 初次验收发现执行模式下拉菜单里的并发数量徽标仍是旧白底/蓝紫边框；已将 `#am-wxt-keyword-run-mode-menu .am-wxt-run-mode-count` 一并收敛到 `--am26-*`，并补专项断言防回退。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，54/54；新增覆盖底部提交条、提交摘要、执行模式数量徽标、执行模式下拉菜单数量徽标和快捷日志区 token 收敛。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后只点击插件悬浮球与 `组建计划` 打开主向导首页；未点击 `提交创建`、`批量创建`、`生成其他策略` 或任何真实创建/提交入口。运行态确认底部提交条 `background-color: rgba(255, 255, 255, 0.45)`、`border-top-color: rgba(255, 255, 255, 0.4)`、提交摘要文字 `rgb(80, 90, 116)`、强调数字 `rgb(29, 63, 207)`；快捷日志面板/容器为 `rgba(255, 255, 255, 0.25)` 与 `rgba(255, 255, 255, 0.4)` 边框，日志行文字 `rgb(80, 90, 116)`；执行模式下拉菜单打开后可见并发数量徽标背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(80, 90, 116)`。注入 CSS 命中底部/日志/菜单徽标 `--am26-*` token，旧白底/灰字/蓝紫徽标回退块均不存在，控制台 error/warn 为空。截图见 `tasks/ui-audit-keyword-footer-log-token-chrome-2026-05-29.png`。验收后关闭主向导，确认 `overlayOpen=false`、执行模式菜单、详情页和二级弹窗均无残留。
+
+## 结果复盘
+- 结果：完成组建计划首页底部提交条、执行模式数量徽标和快捷日志区 token 收敛，并在真实页复验中补齐执行模式下拉菜单数量徽标漏项。
+- 风险：本轮只改首页底部/日志相关 CSS 与静态断言，不改提交按钮绑定、执行模式切换逻辑、日志写入格式、请求构建或真实创建提交链路；真实页面验收只打开、展开菜单和关闭向导。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划屏蔽人群弹窗已选区 token 收敛
+
+## 需求规格
+- 目标：继续迁移组建计划内部内容区，将“设置过滤人群”弹窗右侧已选区、已选行、空状态和脚注从硬编码白/灰底收敛到统一 `--am26-*` 浅玻璃 token。
+- 范围：只改屏蔽人群设置弹窗已选区相关 CSS 与专项断言；不改候选勾选数据、移除事件、保存映射、请求构建、创建/提交或真实投放链路。
+- 成功标准：已选区标题、行、空状态、脚注使用 `--am26-surface` / `--am26-surface-strong` / `--am26-border` / `--am26-text*`，保留 24px close 图标按钮与省略保护；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、审计表和上一轮屏蔽人群弹窗验收路径。
+- [x] 将屏蔽人群弹窗已选区标题、已选行、空状态、脚注收敛到 `--am26-*` token。
+- [x] 更新专项断言，防止回退到 `#fff` / `#f8fafc` / `#334155` / `#64748b` 作为该区域样式事实源。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开屏蔽人群设置弹窗验收，不点击确定/保存/提交创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 本轮复用上一切片已验证的安全路径：打开组建计划 -> 第 4 条计划详情 -> 人群推广 -> 自定义推广 -> 设置过滤人群；只做弹窗内临时勾选和取消，不保存过滤人群。
+- 当前缺口集中在 `.am-wxt-scene-filter-selected-head`、`.am-wxt-scene-filter-selected-row`、`.am-wxt-scene-filter-selected-empty`、`.am-wxt-scene-filter-footnote` 的硬编码白/灰/深灰色；本轮不扩大到整个筛选弹窗。
+- 已将已选区标题、已选行、空状态和脚注统一切到 `--am26-border`、`--am26-surface`、`--am26-surface-strong`、`--am26-text` 和 `--am26-text-soft`，保留上一轮 close 图标按钮、ARIA、title 与行内省略保护。
+- 已在 `tests/crowd-custom-native-parity-ui.test.mjs` 增加断言，锁定该区域不回退到硬编码白/灰底与灰色文字。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs`：通过，53/53；覆盖屏蔽人群已选区 token、已选列表 close 图标按钮、通用场景弹窗和首页计划区回归。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，延续上一轮安全路径进入第 4 条计划详情，只打开 `设置过滤人群` 弹窗；先验证空状态，再临时勾选 `18-24岁` 生成已选行。运行态确认已选区标题、空状态、脚注和已选行 CSS 均命中 `--am26-*` token，旧 `#f8fafc` / `#fff` / `#334155` / `#64748b` 回退块不存在；已选行计算样式为背景 `rgba(255, 255, 255, 0.45)`、边框 `rgba(255, 255, 255, 0.4)`、文字 `rgb(27, 36, 56)`，控制台 error/warn 为空。截图见 `tasks/ui-audit-keyword-crowd-filter-token-chrome-2026-05-29.png`。随后点击 `取消` 关闭弹窗，确认 `popupExists=false`、过滤摘要仍为 `未设置过滤`，临时勾选未保存。
+
+## 结果复盘
+- 结果：完成组建计划屏蔽人群弹窗已选区 token 收敛，空状态、已选行和脚注不再以硬编码白/灰底作为样式事实源。
+- 风险：本轮只改弹窗右侧已选区视觉和断言，不改过滤候选、保存映射、请求构建或创建提交；真实页面验收只临时勾选并取消，没有保存过滤人群。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/crowd-custom-native-parity-ui.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 关键词向导弹窗单版设计稿重绘
+
+## 需求规格
+- 目标：根据上一轮 UI 问题诊断，重新生成一张更接近可落地实现的“关键词推广批量建计划 API 向导”弹窗设计稿图片。
+- 范围：仅新增静态设计稿 HTML/CSS 与导出 PNG，不修改插件源码、构建产物、真实创建/提交链路或线上页面状态。
+- 成功标准：图片清晰表达“商品选择 -> 计划配置 -> 提交确认”的核心流程；去除无功能装饰背景，强化层级、目标成本输入、底部提交确认和风险摘要；设计稿文件落在 `tasks/keyword-wizard-redesign-final-2026-05-29/`；通过本地浏览器渲染截图与图片查看验证非空、无明显溢出和遮挡。
+
+## 执行计划（可核对）
+- [x] 回顾项目 UI/图标规范和上一轮诊断要点，确定单版设计方向。
+- [x] 创建独立静态设计稿页面，复刻阿里妈妈后台页面环境中的插件弹窗。
+- [x] 用本地服务和浏览器截图导出 PNG 设计稿。
+- [x] 目视检查图片可读性、层级、提交区、文字/控件无明显重叠。
+- [x] 回填导出路径、验证记录和复盘。
+
+## 高层操作摘要
+- 本轮只生成设计稿图片，不触发真实页面创建、提交、保存或投放。
+- 设计方向采用项目浅色玻璃工作台规范，但弱化顶部装饰，优先服务批量建计划的核对与提交。
+- 已新增静态设计稿 `tasks/keyword-wizard-redesign-final-2026-05-29/index.html`，模拟阿里妈妈后台环境中的插件弹窗。
+- 设计稿将原始弹窗重构为标题摘要、三步流程、三栏内容区和底部固定提交确认栏；目标成本输入高亮，日志默认折叠，右侧集中展示创建风险。
+- 初版截图发现中央表格目标成本列被右侧确认区挤压；已收窄两侧栏、压缩表格列宽并重新导出最终 PNG。
+
+## 验证记录
+- `python3 -m http.server 6173 --bind 127.0.0.1`：通过，本地服务可访问 `http://127.0.0.1:6173/index.html`。
+- `curl -I http://127.0.0.1:6173/index.html`：通过，返回 200。
+- `Browser` 插件渲染页面成功，但截图接口连续在 `Page.captureScreenshot` 超时；改用本机 headless Chrome 导出静态 PNG。
+- `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --hide-scrollbars --window-size=1365,768 --screenshot=... http://127.0.0.1:6173/index.html`：通过，生成最终截图。
+- `file tasks/keyword-wizard-redesign-final-2026-05-29/keyword-wizard-final-redesign.png`：PNG，尺寸 `1365 x 768`。
+- `git diff --check -- tasks/todo.md tasks/keyword-wizard-redesign-final-2026-05-29/index.html`：通过。
+- `view_image` 目视检查最终 PNG：弹窗主体完整，三步流程、商品选择、计划表、目标成本、右侧提交确认和底部提交栏可读；未发现明显文字/控件重叠，底部提交栏未遮挡内容。
+
+## 结果复盘
+- 结果：已生成一张单版重绘设计稿 `tasks/keyword-wizard-redesign-final-2026-05-29/keyword-wizard-final-redesign.png`，用于后续按该方向实现插件弹窗。
+- 风险：这是静态设计稿，不代表真实插件交互已实现；若进入实现，需要再改 `src/`、补专项测试并做真实页面只读/受保护验收。
+- 回滚方式：删除 `tasks/keyword-wizard-redesign-final-2026-05-29/` 并还原本节 `tasks/todo.md` 记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划屏蔽人群移除按钮 UI 规范迁移
+
+## 需求规格
+- 目标：继续迁移组建计划内部内容区，将“屏蔽人群设置”已选列表里的文字“移除”按钮收敛为共享 close 图标按钮，并补齐可访问名称和可见焦点态。
+- 范围：只改屏蔽人群设置弹窗已选列表中 `[data-scene-popup-filter-remove]` 按钮的 DOM/CSS 与专项断言；不改筛选项增删数据结构、保存映射、请求构建、创建/提交或真实业务链路。
+- 成功标准：已选屏蔽人群行的移除按钮为 `button type="button"`，使用 `renderAmIcon('close')`，具备 `aria-label`、`title`、局部 class、hover 危险态和 `focus-visible`；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、审计表和组建计划内部剩余文字移除按钮缺口。
+- [x] 将屏蔽人群设置已选列表移除按钮从纯文字迁移为共享 close 图标按钮，并保留原 data 标识。
+- [x] 为该按钮补齐局部 token/focus/hover 样式，不扩大影响其它通用按钮。
+- [x] 更新专项断言，防止回退为裸文字“移除”、无可访问名称或无 focus-visible。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划屏蔽人群设置弹窗验收，不点击保存/提交创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认并发日志弹窗在 `tasks/todo.md` 中已有 `@chrome` 安全运行态验收记录，审计表“仍需验收”属于过期记录，本轮先修正审计状态。
+- 已确认本切片优先处理组建计划“少量通用移除按钮仍以文字为主”的剩余缺口；先从屏蔽人群设置已选列表开始，保持单点迁移和单点验收。
+- 本轮不保存屏蔽人群设置、不点击 `确定`、不点击 `保存并关闭`、不触发 `批量创建` 或 `提交创建`。
+- 已将已选屏蔽人群行的移除按钮改为 `button.am-wxt-scene-filter-remove`，内容使用 `renderAmIcon('close')`，保留 `[data-scene-popup-filter-remove]` 事件委托入口，并补齐 `aria-label` 与 `title`。
+- 已为该按钮补齐 24px 圆形图标热区、局部 token 背景、危险 hover、可见 `focus-visible`，并为已选行文本增加省略保护。
+- 已在 `tests/crowd-custom-native-parity-ui.test.mjs` 增加断言，防止回退成通用 `.am-wxt-btn` 文字“移除”、缺少共享 close 图标或缺少焦点态。
+- `@chrome` 验收只在弹窗内临时勾选 `18-24岁` 生成已选行，随后点击 `取消` 关闭弹窗；详情页仍显示 `未设置过滤`，临时勾选未保存。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs`：通过，53/53；覆盖屏蔽人群已选列表 close 图标按钮、通用场景弹窗、AI 点睛和首页计划区回归。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后打开主面板 -> `组建计划`，进入第 4 条计划详情，将场景切到 `人群推广`，营销目标切到 `自定义推广`，只点击 `设置过滤人群` 打开弹窗；未点击 `确定`、`保存并关闭`、`批量创建` 或 `提交创建`。弹窗内临时勾选 `18-24岁` 生成已选行后，运行态确认移除按钮为 `BUTTON type="button"`、类名 `am-wxt-scene-filter-remove`、`data-scene-popup-filter-remove="age:18-24"`、可见文本为空、`aria-label="移除已选屏蔽人群：18-24岁"`、`title="移除已选屏蔽人群"`、包含 `svg.am-ui-icon.am-ui-icon-close`；计算样式为 24px 正圆、`display:flex` 居中、背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(148, 163, 184, 0.24)`，注入 CSS 包含危险 hover 与 `.am-wxt-scene-filter-remove:focus-visible`；旧文字移除按钮数量为 0，控制台 error/warn 为空。截图见 `tasks/ui-audit-keyword-crowd-filter-remove-chrome-2026-05-29.png`。随后点击 `取消` 关闭弹窗，确认 `popupExists=false`、详情仍打开且过滤摘要为 `未设置过滤`，再关闭详情页和主向导，最终 `wizardOpen=false`。
+
+## 结果复盘
+- 结果：完成组建计划屏蔽人群设置已选列表移除按钮迁移，按钮已从文字“移除”收敛为共享 close 图标按钮，并具备可访问名称、title、局部 hover/focus 样式和运行态证据。
+- 风险：本轮只改已选列表移除按钮的 DOM/CSS/断言，不改变过滤人群候选、保存映射、请求构建或创建提交链路；真实页面验收只做临时弹窗内勾选并取消，没有保存过滤人群。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-crowd-popup.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/crowd-custom-native-parity-ui.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 关键词向导新设计图片方案
+
+## 需求规格
+- 目标：按用户要求，根据上一轮设计问题诊断，为当前“关键词推广批量建计划 API 向导”重新生成 5 张弹窗设计方案图，用于快速评审结构、层级和视觉方向。
+- 范围：仅新增静态设计稿 HTML 与导出 PNG，不修改插件源码、构建产物、真实创建/提交链路或线上页面状态。
+- 成功标准：5 张图片均能清楚表达“商品选择 -> 计划配置 -> 提交确认”的核心流程；符合插件浅色玻璃工作台规范；图片文件落在 `tasks/keyword-wizard-redesign-concepts-2026-05-29/`；通过本地渲染和图片查看验证非空、无明显溢出和遮挡。
+
+## 执行计划（可核对）
+- [x] 回顾项目 UI 规范、图标规范和当前向导截图问题。
+- [x] 创建独立静态设计稿页面，覆盖 5 个不同布局方向。
+- [x] 通过本地渲染导出 5 张 PNG。
+- [x] 检查图片可读性、首屏完整性、文字/控件无明显重叠。
+- [x] 回填导出路径、验证记录和复盘。
+
+## 高层操作摘要
+- 已确认本轮是设计图片产出，不进入真实页面写操作，不点击任何创建/提交入口。
+- 已确认设计基调沿用项目“浅色玻璃工作台、高密度、强确认”的插件 UI 规范。
+- 已发现该任务目录只有 `.DS_Store`，旧记录提到的 5 张 PNG 实际不存在；本轮按最新用户要求重新生成。
+- 已新增独立静态设计稿 `tasks/keyword-wizard-redesign-concepts-2026-05-29/concepts.html`，包含 5 个方案方向：三步流程工作台、左右分栏调度台、提交审查优先、紧凑插件浮层、表格增强与右侧检查器。
+- `Browser` 插件安全策略拒绝打开本地 `file://` 页面，改用本地 SVG + `sharp` 渲染 PNG，不触发浏览器访问本地文件。
+- 已新增 `tasks/keyword-wizard-redesign-concepts-2026-05-29/render-concepts.mjs`，生成 5 张 SVG 源稿和 5 张 PNG 图片，并写入 `manifest.json`。
+- 目视检查时发现并修正两处设计稿排版问题：方案 02 窄栏商品名溢出、方案 04/05 底部提交栏遮挡内容。
+
+## 验证记录
+- `node tasks/keyword-wizard-redesign-concepts-2026-05-29/render-concepts.mjs`：通过，已生成 `keyword-wizard-redesign-01.png` 到 `keyword-wizard-redesign-05.png`，同步生成 SVG 源稿和 `manifest.json`。
+- `file tasks/keyword-wizard-redesign-concepts-2026-05-29/keyword-wizard-redesign-*.png`：5 张均为 PNG，尺寸均为 `1280 x 922`。
+- `node --check tasks/keyword-wizard-redesign-concepts-2026-05-29/render-concepts.mjs`：通过。
+- `git diff --check -- tasks/todo.md tasks/keyword-wizard-redesign-concepts-2026-05-29/concepts.html tasks/keyword-wizard-redesign-concepts-2026-05-29/render-concepts.mjs`：通过。
+- `view_image` 目视检查 5 张 PNG：弹窗主体完整，方案标题、商品/计划/目标成本/预算/提交确认信息可读，未发现明显文字或控件重叠；方案 02、04、05 的初版排版问题已修正后复查通过。
+
+## 结果复盘
+- 结果：已完成 5 张新设计方向图，作为后续选择实现方案的评审稿；本轮没有修改插件源码或构建产物，也没有触发真实页面创建/提交。
+- 风险：这是静态设计稿，不代表真实插件交互已实现；若选定某一版，需要再进入源码迁移、专项测试和真实页面只读/受保护验收。
+- 回滚方式：删除 `tasks/keyword-wizard-redesign-concepts-2026-05-29/` 并还原本节 `tasks/todo.md` 记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划去除整屏灰色背景
+
+## 需求规格
+- 目标：按用户反馈，将组建计划主向导去掉整屏灰色/暗色背景，呈现为和小万/算法护航一致的独立浅玻璃工作台面板。
+- 范围：只改组建计划主向导外层 overlay 的视觉背景、模糊和相关静态断言；不改向导 modal 尺寸、内部弹窗、AI 点睛、批量编辑、矩阵配置、请求构建、创建/提交或真实投放链路。
+- 成功标准：`#am-wxt-keyword-overlay` 打开后不再绘制灰色/暗色整屏遮罩，也不再模糊整页背景；`#am-wxt-keyword-modal` 保持 `--am26-*` 浅玻璃、1320px 工作台宽度、18px 圆角、低对比边框和可见 focus；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI 规范和组建计划现状，确认本切片只处理主向导外层背景。
+- [x] 将组建计划最终生效 overlay 改为透明背景，并移除整页 backdrop blur。
+- [x] 更新组建计划主弹窗外壳专项断言，防止回退到灰色/暗色整屏遮罩。
+- [x] 构建同步产物，并运行组建计划相关专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面打开组建计划，验证整屏灰底消失、面板仍正常可见，不点击创建/提交。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认用户最新优先级是“组建计划的去掉整个灰色背景与小万护航一样的方式”，需优先于未完成的通用场景弹窗焦点约束切片。
+- 已确认当前外层背景缺口集中在 `#am-wxt-keyword-overlay` 的最终覆盖样式；本轮不改变内部弹窗和任何提交链路。
+- 已将组建计划基础 overlay、前置玻璃覆写和最终 `--am26-*` 覆写都改为 `background: transparent`、`backdrop-filter: none`，保留 `#am-wxt-keyword-modal` 自身浅玻璃材质。
+- 已更新组建计划主弹窗专项断言，明确禁止最终 overlay 回退到 `rgba(27, 36, 56, 0.28)` 与 `blur(10px)` 的整屏灰底。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js`：通过；同步覆盖上一段通用场景弹窗焦点改动的语法状态。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/matrix-plan-config.test.mjs`：通过，48/48；新增外层 overlay 透明背景、禁止灰色遮罩/整页 blur 回退断言。
+- `node --test tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs`：通过，37/37；同步确认未破坏通用场景弹窗与 AI 点睛/自定义推广配置弹窗断言。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-style-and-state/style.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js tests/keyword-home-strategy-batch-actions.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后只点击插件悬浮球与 `组建计划` 打开主向导；未点击 `提交创建`、`批量创建` 或任何真实创建/提交入口。运行态确认 `#am-wxt-keyword-overlay.open` 计算样式为 `display:flex`、`background-color: rgba(0, 0, 0, 0)`、`background-image: none`、`backdrop-filter: none`，最终覆盖 CSS 命中 `background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;`，且不包含旧 `rgba(27, 36, 56, 0.28)` / `blur(10px)` 规则。`#am-wxt-keyword-modal` 仍为 1320px 宽、18px 圆角、`var(--am26-panel-strong)` 浅玻璃背景、`var(--am26-shadow)` 阴影和 `blur(20px) saturate(1.4)` 面板模糊；控制台 error/warn 为空。截图见 `tasks/ui-audit-keyword-wizard-no-gray-overlay-chrome-2026-05-29.png`。验收后点击关闭，确认 `overlayOpen=false`、`modalVisible=false`。
+
+## 结果复盘
+- 结果：完成组建计划主向导去除整屏灰色背景，外层 overlay 不再遮灰或模糊整页，视觉呈现为独立浅玻璃工作台面板，和小万/算法护航的工作台方式一致。
+- 风险：本轮只改外层视觉背景与静态断言；不改变向导打开、内部弹窗、批量编辑、矩阵配置、请求构建或创建提交链路。真实页面验收只打开并关闭向导，没有触发任何创建/提交。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划通用场景弹窗焦点约束
+
+## 需求规格
+- 目标：继续迁移组建计划内部内容区，补齐通用场景配置弹窗的标题关联、默认聚焦、Tab 焦点约束和关闭后回焦。
+- 范围：只改 `openScenePopupDialog()` 公共弹窗壳层的 ARIA 与键盘焦点管理；不改高级设置、AI 点睛、人群、资源位、地域、时段等弹窗的保存映射、请求构建、提交创建或真实业务链路。
+- 成功标准：通用场景弹窗具备稳定 `aria-labelledby`；打开后默认聚焦到指定控件或首个可聚焦控件；Tab/Shift+Tab 在弹窗内循环；Esc/关闭/取消后恢复到打开前焦点；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾组建计划审计项，确认本切片只处理通用场景弹窗焦点约束。
+- [x] 为 `openScenePopupDialog()` 增加稳定标题 id 与 `aria-labelledby`。
+- [x] 增加弹窗内可聚焦元素收集、默认聚焦、Tab/Shift+Tab 焦点循环和关闭后回焦。
+- [x] 更新组建计划弹窗专项断言，防止无标题关联、默认不聚焦或 Tab 逃出弹窗回退。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面打开组建计划通用场景弹窗验收焦点，不点击保存/提交创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认本切片对应审计表中“通用场景弹窗默认不聚焦，缺少完整 focus trap”的缺口。
+- 已确认主要公共 helper 为 `render-scene-dynamic-grid.js` 中的 `openScenePopupDialog()`；本轮不触碰各弹窗 `onSave`、业务数据回写或创建提交链路。
+- 当前实现已在公共弹窗壳层补齐 `am-wxt-scene-popup-title`、打开前焦点记录、默认焦点解析、可聚焦元素收集、Tab/Shift+Tab 循环、Esc 关闭、关闭时事件解绑和关闭后回焦。
+- 当前专项断言已覆盖稳定标题关联、前置焦点记录、可聚焦元素收集、默认焦点兜底、Tab 循环、Esc 关闭、事件解绑、关闭后回焦和打开后默认聚焦。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-custom-popup-config.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs`：通过，53/53；覆盖通用场景弹窗标题关联、默认聚焦、Tab/Shift+Tab 焦点循环、Esc 关闭、事件解绑、关闭后回焦，以及 AI 点睛/批量编辑相关弹窗回归。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，打开主面板 -> `组建计划`，悬停第 4 条自定义推广计划行并点击 `编辑` 进入详情，只点击 `投放资源位/投放地域/分时折扣` 的 `编辑设置` 打开“高级设置”通用场景弹窗；未点击 `确定`、`保存并关闭`、`批量创建` 或 `提交创建`。运行态确认弹窗 `role="dialog"`、`aria-modal="true"`、`aria-labelledby="am-wxt-scene-popup-title"`、标题文本“高级设置”；打开后默认焦点在第 1 个可聚焦控件关闭按钮，弹窗内可聚焦控件共 12 个；在关闭按钮上按 `Shift+Tab` 后焦点循环到末项 `确定`，在 `确定` 上按 `Tab` 后焦点回到关闭按钮；按 `Escape` 后弹窗移除，焦点恢复到 `编辑设置` 触发按钮，详情页和主向导仍打开；控制台 error/warn 为空。截图见 `tasks/ui-audit-keyword-scene-popup-focus-trap-chrome-2026-05-29.png`。验收后已关闭主向导，确认 `popupExists=false`、`wizardOpen=false`、`detailVisible=false`。
+
+## 结果复盘
+- 结果：完成组建计划通用场景弹窗焦点约束迁移，公共 `openScenePopupDialog()` 已具备稳定标题关联、默认聚焦、Tab/Shift+Tab 循环、Esc 关闭、关闭后事件解绑和回焦。
+- 风险：本轮只验证并收口公共弹窗壳层交互，不保存高级设置、不改写场景配置、不触发创建/提交；各具体弹窗保存映射和请求构建保持原逻辑。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js`、`tests/crowd-custom-native-parity-ui.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 批量+ 确认弹窗宽度收敛
+
+## 需求规格
+- 目标：处理批量+ 确认弹窗卡片宽度偏小的问题，使多计划状态文案有更稳定的阅读空间。
+- 范围：只改批量+ 自有确认弹窗卡片宽度和静态断言；不改批量开启、暂停、删除的选择、确认、提交、接口和真实写操作链路。
+- 成功标准：确认弹窗卡片宽度从 `320px` 扩到 `360px`，仍保留移动端 `calc(100vw - 28px)` 约束、统一 token、18px 圆角和可见 focus；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾批量+ 审计项，确认本切片只处理确认弹窗宽度。
+- [x] 将批量确认卡片宽度调整为 `min(360px, calc(100vw - 28px))`，不触碰确认逻辑。
+- [x] 更新批量+ 专项断言，防止宽度回退到 320px。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开批量+ 确认弹窗并取消，不点击确认执行。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认批量+ 菜单/确认弹窗图标、ARIA、token 化此前已完成，本轮只调整确认弹窗阅读宽度。
+- 已确认确认弹窗由 `openBatchPlusConfirmDialog()` 生成，宽度只在 `src/main-assistant/ui.js` 样式中控制。
+- 已将 `.am-batch-confirm-card` 宽度从 `min(320px, calc(100vw - 28px))` 调整为 `min(360px, calc(100vw - 28px))`，移动端约束保持不变。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，8/8；新增批量确认弹窗 360px 阅读宽度和禁止回退 320px 断言。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/main-assistant/ui.js tests/campaign-batch-plus-quick-entry.test.mjs tasks/todo.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，先用 Playwright 勾选 1 条可见计划行，再只点击 `批量+` -> `批量暂停` 打开二次确认弹窗；未点击 `确认暂停`。运行态显示弹窗 `role="dialog"`、`aria-modal="true"`、标题为“确认暂停计划”，正文为“确认暂停选中的 1 个人群推广计划？...”，提交按钮文本“确认暂停”、取消按钮文本“取消”；卡片计算宽度 `360px`、`rectWidth=360`、18px 圆角、`var(--am26-panel-strong)` 对应浅玻璃背景，注入 CSS 命中 `width: min(360px, calc(100vw - 28px))` 且不包含 320px 回退；随后点击 `取消`，确认 `popupStillOpen=false`、`menuStillOpen=false`、控制台 error/warn 为空。验收后已将临时勾选的计划行恢复为未勾选。截图见 `tasks/ui-audit-batch-plus-confirm-width-chrome-2026-05-29.png`。
+
+## 结果复盘
+- 结果：完成批量+ 确认弹窗宽度收敛，二次确认卡片从 320px 扩到 360px，保留移动端约束和既有 token/ARIA/focus 规范。
+- 风险：本轮没有点击确认按钮，不触发批量暂停/开启/删除接口；只验证二次确认弹窗打开、宽度和取消关闭。
+- 回滚方式：还原 `src/main-assistant/ui.js`、`tests/campaign-batch-plus-quick-entry.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 主面板 P2 局部样式收敛
+
+## 需求规格
+- 目标：继续收敛主面板剩余 P2 UI 规范差距，处理悬浮球 hover 过度缩放、日志区硬编码暗色和辅助开关 hover 边框硬编码。
+- 范围：只改主面板静态 CSS 与对应断言；不改主面板入口行为、辅助显示配置、日志 API、工具按钮触发链路、真实页面业务动作。
+- 成功标准：悬浮球 hover 不再使用 `scale(1.08)`，日志区使用统一浅玻璃 token/语义色，辅助开关 hover 使用 `--am26-*` token；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾审计项，确认本切片只处理主面板局部样式收敛。
+- [x] 将悬浮球 hover 反馈改为更克制的位移/阴影/背景反馈，并保留减少动画适配。
+- [x] 将日志区背景、边框、分隔线、时间色收敛到统一浅玻璃 token 与语义色。
+- [x] 将辅助开关 hover 边框与弱态圆点收敛到统一 token，避免硬编码蓝紫/灰阶事实源。
+- [x] 更新主面板专项断言，防止回退到 `scale(1.08)`、暗色日志底和硬编码 hover 边框。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面打开主面板验收，只检查样式/DOM/控制台，不点击业务工具入口。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认复制计划成功弹窗在此前切片已迁移完成，审计中的“旧文本 `!` 图标”是陈旧记录，本轮不重复处理。
+- 已确认本轮只触碰主面板静态样式，不修改 `Logger`、辅助显示配置、工具按钮触发和任何业务链路。
+- 已将悬浮球 hover 从 `translateY(-1px) scale(1.08)` 改为 `translateY(-2px)` + 统一浅玻璃表面和轻阴影反馈。
+- 已将日志区背景、边框、分隔线、时间色收敛到 `--am26-surface`、`--am26-border` 和 `--am26-text-soft` 派生值。
+- 已将辅助开关 hover 边框/背景和关闭态圆点收敛到统一 token/柔色，不再以硬编码蓝紫边框作为事实源。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/logger-api.test.mjs tests/magic-report-panel-resilience.test.mjs`：通过，20/20；新增主面板 P2 样式 token 和旧硬编码回退断言。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/main-assistant/ui.js tests/logger-api.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，刷新后只点击插件悬浮球、`辅助显示` 和日志 `展开`。运行态显示主面板打开、辅助显示展开、悬浮球为 `BUTTON type="button"`；注入 CSS 命中 `#am-helper-icon:hover { transform: translateY(-2px); background: var(--am26-surface-strong); ... }` 且不包含 `scale(1.08)`；日志展开态计算样式为 `background-color: rgba(255, 255, 255, 0.25)`、`border-top: 1px solid rgba(255, 255, 255, 0.4)`、轻量双层阴影；辅助开关 hover 规则使用 `var(--am26-border-strong)` 与 `var(--am26-surface-strong)`；控制台 error/warn 为空。未点击算法护航、组建计划、万能查数或任何业务工具入口。截图见 `tasks/ui-audit-main-panel-p2-chrome-2026-05-29.png`。
+
+## 结果复盘
+- 结果：完成主面板 P2 局部样式收敛，清理审计中的悬浮球过度缩放、日志区暗色硬编码、辅助开关 hover 硬编码边框等缺口。
+- 风险：本轮只改主面板 CSS 与静态断言，不触碰工具入口和业务行为；运行态只做只读样式验收。
+- 回滚方式：还原 `src/main-assistant/ui.js`、`tests/logger-api.test.mjs`、本次构建产物、截图和任务/审计记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划 AI 点睛屏蔽词删除按钮 UI 规范迁移
+
+## 需求规格
+- 目标：继续迁移组建计划内部内容区，处理 AI 点睛设置弹窗中屏蔽词 tag 的裸文本 `x` 删除按钮。
+- 范围：只改屏蔽词 tag 删除按钮的 DOM 图标、可访问名称和局部焦点样式；不改 AI 点睛开关、模板、屏蔽词增删数据结构、保存映射、创建/提交链路。
+- 成功标准：屏蔽词删除按钮使用共享 `renderAmIcon('close')`，具备 `type="button"`、`aria-label`、`title` 和可见 `focus-visible`；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾 AI 点睛弹窗审计项，确认本切片只处理屏蔽词删除按钮。
+- [x] 将屏蔽词 tag 删除按钮从裸文本 `x` 替换为共享 close SVG，并补齐可访问名称。
+- [x] 将屏蔽词 tag 与删除按钮样式收敛到局部 token/focus 规则，不扩大影响其它 tag。
+- [x] 更新 AI 点睛专项断言，防止回退到裸文本 `x`、无 `aria-label` 或无 focus-visible。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划/AI 点睛设置弹窗验收，不点击保存或提交创建。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已定位裸文本 `x` 位于 `renderShieldList()` 生成的 `[data-ai-max-shield-remove]` 按钮；删除逻辑通过事件委托读取 `data-ai-max-shield-remove` 和 `data-ai-max-shield-word`，本切片不改该逻辑。
+- 已将删除按钮改为 `button.am-wxt-ai-max-shield-remove`，内容为 `renderAmIcon('close')`，并补齐 `aria-label="删除屏蔽词：..."` 与 `title="删除屏蔽词"`。
+- 已将屏蔽词 tag 与删除按钮样式收敛到局部 `--am26-*` token，补齐 hover 危险色和 `focus-visible`，不扩大影响其它弹窗按钮或屏蔽词数据逻辑。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-custom-popup-config.test.mjs`：通过，26/26；新增 AI 点睛屏蔽词删除按钮共享 close SVG、`aria-label/title`、禁止裸文本 `x` 回退、局部 token 和 `focus-visible` 断言。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs`：通过，16/16。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，25/25。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-crowd-popup.js src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-custom-popup-config.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过；`render-scene-dynamic-crowd-popup.js` 是构建拼接片段，直接 `node --check` 会因片段尾部闭包报 `Unexpected token '}'`，已用 `npm run build`、`npm run check:syntax` 和 extension bundle 语法检查覆盖完整产物。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，打开主面板 -> `组建计划`，编辑第 4 个“自定义推广”计划，只点击 `AI点睛设置` 入口打开设置弹窗；待 AI 点睛生成完成后，弹窗显示“表达更多流量诉求 / 屏蔽词设置 / 已选需求”。为验证删除按钮，只在弹窗内临时添加“测试屏蔽词”，未点击保存；运行态显示删除按钮为 `BUTTON type="button"`、类名 `am-wxt-ai-max-shield-remove`、文本为空、`aria-label="删除屏蔽词：测试屏蔽词"`、`title="删除屏蔽词"`、包含 `svg.am-ui-icon.am-ui-icon-close`，按钮 16px 正圆、inline-flex 居中，tag 背景为 `rgba(69, 84, 229, 0.1)`，注入 CSS 包含 `.am-wxt-ai-max-shield-remove:focus-visible`；控制台 error/warn 为空。随后点击 `取消` 关闭弹窗，确认 `popupStillOpen=false`、向导仍打开且 `hasTempWordInOverlay=false`，临时词未保存。截图见 `tasks/ui-audit-keyword-ai-max-shield-remove-chrome-2026-05-29.png`。
+
+## 结果复盘
+- 结果：完成组建计划 AI 点睛屏蔽词删除按钮 UI 规范迁移，消除裸文本 `x`，补齐共享图标、可访问名称和可见焦点态。
+- 风险：本轮只验证弹窗内临时添加词后的删除按钮 DOM/CSS，未点击“保存”，避免改写真实计划配置；删除事件委托和保存映射未改，由既有逻辑与专项测试覆盖。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-crowd-popup.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-custom-popup-config.test.mjs`、本次构建产物、截图和任务记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划批量编辑弹窗 UI 规范迁移
+
+## 需求规格
+- 目标：继续迁移组建计划内部内容区，先处理首页“批量编辑数值”弹窗的可见错误态、焦点态和局部样式 token。
+- 范围：只改批量编辑数值弹窗的 DOM/CSS 与静态校验反馈；不改计划创建、提交、请求构建、矩阵物化、商品选择或真实批量创建链路。
+- 成功标准：空提交或不适用目标成本时，错误在弹窗内以 `role="alert"` / `aria-live` 可见展示并聚焦回相关输入；数值表单、提示、禁用态、按钮 focus 使用 `--am26-*`/统一浅玻璃 token；专项测试、构建检查和 `@chrome` 只读验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾组建计划内部内容区审计项，确认本切片只处理“批量编辑数值”弹窗。
+- [x] 为批量编辑弹窗增加可见错误容器，并在校验失败时同步弹窗内错误、日志和输入焦点。
+- [x] 将批量编辑数值表单的提示、输入、禁用态、错误态和按钮 focus 收敛到统一 token。
+- [x] 更新组建计划专项断言，防止错误只写日志、旧白底/灰蓝硬编码和无 focus 回退。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面打开组建计划 -> 批量编辑弹窗，只触发空表单校验，不点击批量创建/提交。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认本切片对应审计表中“批量编辑弹窗校验失败只写向导日志，弹窗内没有可见错误状态区”的缺口。
+- 已确认 `openBatchStrategyNumberEditPopup()` 只做已选计划表单回写，不触发真实创建/提交请求；`@chrome` 验收只会打开弹窗并触发空提交校验。
+- 已为通用场景弹窗补齐 `aria-labelledby`、稳定标题 id 和 `role="alert"` / `aria-live="assertive"` 错误容器；批量数值弹窗空提交、目标成本不可用和字段格式异常均返回弹窗内错误与对应 `focusSelector`。
+- 已将批量数值弹窗外壳、输入、禁用态、错误态和按钮局部覆盖收敛到 `--am26-*` 浅玻璃 token；通用 `.am-wxt-btn` 旧事实源保留，避免扩大影响其它场景弹窗。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-scene-config/batch-edit-popup.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs`：通过，16/16；新增批量编辑弹窗标题关联、错误容器、校验失败 focus 回退、字段异常 `focusSelector`、局部 token 和按钮作用域断言。
+- `node --test tests/keyword-wizard-entry-regression.test.mjs`：通过，7/7。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，25/25。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js src/optimizer/keyword-plan-api/wizard-scene-config/batch-edit-popup.js src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页，打开主面板 -> `组建计划`，确认向导样式已包含 `.am-wxt-scene-popup-dialog-batch-number`、`.am-wxt-scene-popup-error` 和局部按钮规则；4 个计划默认选中，点击 `批量编辑` 打开“批量修改数值（已选 4 个计划）”弹窗。弹窗 `role="dialog"`、`aria-modal="true"`、`aria-labelledby="am-wxt-scene-popup-title"`，错误节点 `role="alert"`、`aria-live="assertive"` 初始 hidden；弹窗计算样式为 560px 宽、18px 圆角、浅玻璃背景、`var(--am26-shadow)` 对应阴影、`blur(18px) saturate(1.35)`。只点击 `批量修改` 触发空表单校验，弹窗未关闭，错误条显示“请至少填写 1 个需要批量修改的数值字段”，错误 display 为 flex，颜色为 `rgb(234, 79, 79)`，焦点回到 `dayAverageBudget` 输入且 outline 为 solid 2px；控制台 error/warn 为空。未点击 `批量创建`、`提交创建` 或任何真实创建/提交入口。截图见 `tasks/ui-audit-keyword-batch-edit-popup-chrome-2026-05-29.png`。
+
+## 结果复盘
+- 结果：完成组建计划“批量编辑数值”弹窗 UI 规范迁移，解决校验失败只写日志、弹窗内无可见错误、无字段焦点回退，以及局部输入/按钮样式未对齐统一 token 的问题。
+- 风险：目标成本不可用路径和非法数值路径由源码与专项断言覆盖，本轮 `@chrome` 只触发空提交校验，未提交有效批量修改，避免改变真实计划配置。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js`、`src/optimizer/keyword-plan-api/wizard-scene-config/batch-edit-popup.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务记录即可。
+
+---
+
+# TODO - 2026-05-29 算法护航 P2 控件样式收敛
+
+## 需求规格
+- 目标：继续收敛算法护航面板的手动设置区、窗口控制、启动按钮和输入控件，使其对齐统一 UI token、可见焦点态和减少动画规范。
+- 范围：只改 `src/optimizer/ui.js` 中算法护航面板/手动设置预览的样式和静态控件语义；不改扫描、openV3 提交、弹窗读取、手动参数映射、Token 或 API 请求逻辑。
+- 成功标准：手动设置区不再使用旧硬编码蓝紫/白底块作为事实源，卡片、输入、下拉、分段按钮、提示文案使用 `--am26-*` token；窗口控制、启动按钮、输入框、手动控件具备 `focus-visible`；动画有 `prefers-reduced-motion` 覆盖；专项测试、构建检查和 `@chrome` 安全验收完成。
+
+## 执行计划（可核对）
+- [x] 回顾算法护航 P2 审计项，确认只处理样式和可达性，不触碰真实提交链路。
+- [x] 将手动设置面板的卡片、输入、下拉、分段按钮、提示文案收敛到 `--am26-*` token。
+- [x] 为窗口图标按钮、启动按钮、输入框、手动设置按钮/输入/下拉/分段按钮补齐可见 `focus-visible`。
+- [x] 增加算法护航 reduced-motion 覆盖，避免 panel/log/manual 控件使用不可关闭动效。
+- [x] 更新算法护航专项静态断言，防止回退到旧硬编码色、无 focus 或无 reduced-motion。
+- [x] 构建同步产物，并运行算法护航专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面打开算法护航面板并展开手动设置，只验证样式/DOM/焦点，不点击“立即扫描并优化”。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认本切片延续算法护航页面，不触碰 `src/optimizer/core.js` 的 openV3、手动参数映射和真实请求链路。
+- 已定位主要差距在 `renderLatestEscortSettingPreview()` 的手动设置 CSS，以及主面板窗口控制/启动按钮/输入控件缺少系统性 `focus-visible` 和 reduced-motion。
+- 已将手动设置卡片、输入、下拉、分段按钮、禁用态和提示文案收敛到 `--am26-*` token，移除旧蓝紫/白底硬编码事实源。
+- 已将算法护航窗口控制从可点击 `span` 收敛为真实 `button type="button"`，并为窗口控制、启动按钮、输入框和手动设置控件补齐 `focus-visible`。
+- 已补齐主护航面板与手动设置区 `prefers-reduced-motion` 覆盖；本切片未触碰“立即扫描并优化”、openV3、Token、API 或手动参数映射逻辑。
+
+## 验证记录
+- `node --check src/optimizer/ui.js`：通过。
+- `node --test tests/optimizer-escort-new-flow-fallback.test.mjs`：通过，39/39；新增手动设置 token/focus/reduced-motion、窗口按钮语义、主面板 focus/reduced-motion 和旧硬编码色回退断言。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/optimizer-escort-new-flow-fallback.test.mjs tests/matrix-plan-config.test.mjs`：通过，64/64。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/ui.js tests/optimizer-escort-new-flow-fallback.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：先接管 `货品全站推广_万相台无界版` 标签，刷新/导航曾被 Chrome 拦截到 `ERR_BLOCKED_BY_CLIENT`；随后恢复到真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 人群推广页。打开主面板后只点击插件面板内 `算法护航`，使用正确运行态 ID `#alimama-escort-helper-ui` 展开手动设置；运行态显示手动设置 `aria-expanded="true"`、6 个 `.am26-manual-card`、下拉箭头为 `svg.am-ui-icon` 且 `aria-hidden="true"`，窗口控制 `居中/最大化/关闭` 均为 `BUTTON type="button"` 并具备 `aria-label`，运行态样式块包含手动区和主面板 `focus-visible`、`prefers-reduced-motion`，旧手动设置硬编码色未出现。未点击 `立即扫描并优化`，控制台 error/warn 为空。截图见 `tasks/ui-audit-algorithm-p2-chrome-2026-05-29.png`。
+
+## 结果复盘
+- 结果：完成算法护航 P2 控件样式收敛，手动设置区、窗口控制、启动按钮和输入区已对齐统一 token、按钮语义、可见焦点态和减少动画规范。
+- 风险：真实优化提交链路未触发，符合本切片边界；结果浮层仍由专项断言覆盖，不通过真实执行制造投放/优化请求。
+- 回滚方式：还原 `src/optimizer/ui.js`、`tests/optimizer-escort-new-flow-fallback.test.mjs`、本次构建产物、截图和任务记录即可。
+
+---
+
+# TODO - 2026-05-29 授权/错误遮罩 UI 规范迁移
+
+## 需求规格
+- 目标：将 extension 授权失败/错误锁定遮罩从旧深色卡片迁移到统一浅玻璃工作台风格，并补齐基础 dialog 语义与展示安全性。
+- 范围：只改 `src/entries/extension-license-guard.js` 的遮罩壳层 DOM、ARIA、样式 token、图标和 meta 展示方式；不改授权校验、缓存恢复、续租、shopId 解析、policy token 验签、background 桥或服务端请求。
+- 成功标准：遮罩根节点具备 `role="dialog"`、`aria-modal`、`aria-labelledby`、`aria-describedby`；视觉使用 `--am26-*` 浅玻璃 token、18px 圆角、低对比边框、可见 focus 和 reduced-motion；meta 值通过 DOM/textContent 渲染，不再拼接 state 字符串为 HTML；专项测试、构建检查和 `@chrome` 验证记录完成。
+
+## 执行计划（可核对）
+- [x] 回顾 UI/图标规范、历史审计与授权遮罩现状，确认本切片边界。
+- [x] 补齐遮罩 dialog ARIA、稳定标题/描述 id、共享 SVG 状态图标和非交互 focus 入口。
+- [x] 将遮罩 overlay/card/meta badge 样式收敛到 `--am26-*` 浅玻璃规范，并补齐 reduced-motion。
+- [x] 将授权状态 meta 从 `innerHTML` 拼接改为 DOM/textContent 渲染，避免 state 字符串变成 HTML。
+- [x] 增加授权遮罩 UI 专项静态断言，防止回退到旧深色遮罩、无 ARIA 或 HTML 拼接。
+- [x] 构建同步产物，并运行授权专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面做安全验收；若当前授权正常无法触发遮罩，则只读验证新版 bundle/CSS/DOM 模板已加载，不强制破坏授权状态。
+- [x] 回填审计报告、验证记录、风险和复盘。
+
+## 高层操作摘要
+- 已确认本切片属于剩余 P2/P3 错误/授权遮罩迁移，真实页面验收只能使用 `@chrome`，不能使用 chrome-devtools MCP。
+- 已确认当前旧遮罩位于 `src/entries/extension-license-guard.js` 的 `renderOverlayStyle()` / `renderOverlay()`，存在深色全屏背景、无 dialog 标题关联、无共享图标、meta 用 `innerHTML` 拼接 state 字符串的问题。
+- 已完成遮罩源码迁移：根节点每次渲染同步 `role="dialog"`、`aria-modal`、`aria-labelledby="am-license-lock-title"`、`aria-describedby="am-license-lock-message"`，卡片可聚焦，标题/正文具备稳定 id。
+- 已完成视觉迁移：overlay 改为统一浅遮罩和 blur，卡片改为 `--am26-panel-strong`、18px 圆角、`--am26-shadow`、浅玻璃 blur，状态图标改为共享 `alert-triangle` SVG 和危险语义色。
+- 已完成展示安全收敛：meta 信息改为 `replaceChildren()` + `createElement('span')` + `textContent` 渲染，并在测试中禁止遮罩块展示 `leaseToken`、`policyToken`、`deviceHash`、`nonce`。
+
+## 验证记录
+- `node --test tests/extension-license-cache-policy-token.test.mjs`：通过，6/6；新增授权遮罩 ARIA、统一 token、DOM/textContent 安全渲染、敏感字段不展示断言。
+- `node --test tests/extension-static-build.test.mjs`：通过，9/9；新增 extension page bundle 授权遮罩规范断言。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs`：通过，18/18。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `node --check src/entries/extension-license-guard.js`：通过。
+- `git diff --check -- src/entries/extension-license-guard.js tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs tasks/todo.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 安全运行态验收：接管真实 `one.alimama.com` 标签，刷新原人群推广 URL 时 Chrome 将 `redirect.action` 阶段拦截为 `ERR_BLOCKED_BY_CLIENT`；后退恢复到可用 `货品全站推广_万相台无界版` 页面后，只读检查显示插件主入口 `#am-helper-icon` 为 1、统一样式 `#am-helper-pro-v26-style` 为 1、授权锁定遮罩 `#am-license-lock-overlay` 为 0、授权样式 `#am-license-lock-style` 为 0、控制台 error/warn 为空。当前授权正常，未调用 `LicenseGuard.lock()`，避免清授权缓存或改变用户页面状态；失败态 DOM/CSS 由源码和 extension bundle 专项断言覆盖。
+
+## 结果复盘
+- 结果：完成授权/错误锁定遮罩 UI 规范迁移，解决旧深色遮罩、无标题关联、无共享告警图标、meta HTML 拼接和缺少 reduced-motion 的问题。
+- 风险：真实授权失败态未强制触发，因为 `lock()` 会清空授权缓存并改变当前业务页状态；本轮按安全边界用专项测试和构建产物断言覆盖失败态结构。
+- 回滚方式：还原 `src/entries/extension-license-guard.js`、`tests/extension-license-cache-policy-token.test.mjs`、`tests/extension-license-shopid-guard.test.mjs`、`tests/extension-static-build.test.mjs`、本次构建产物和任务记录即可。
+
+---
+
+# TODO - 2026-05-29 组建计划样式事实源收敛
+
+## 需求规格
+- 目标：按统一 UI 规范收敛组建计划向导主弹窗外壳，优先修正标题关联、关闭按钮语义、最终生效样式事实源和可见焦点态。
+- 范围：只改向导 modal/header/close/button focus/reduced-motion 外壳样式与静态语义；不改创建、提交、矩阵组合、商品选择、请求构建或修复链路。
+- 成功标准：源码与构建产物均显示组建计划主弹窗具备 `aria-labelledby`、标题 id、关闭按钮 `type="button"`，最终样式使用 `--am26-*` 浅玻璃 token、18px 圆角、低对比边框、可见 `focus-visible` 和减少动画；专项测试、构建检查和 `@chrome` 真实页面验收通过。
+
+## 执行计划（可核对）
+- [x] 回顾 `AGENTS.md`、`tasks/lessons.md`、UI 统一规范、图标规范和现有审计结论。
+- [x] 定位组建计划向导壳层模板、最终覆盖样式和相关专项测试。
+- [x] 为主弹窗补齐 `aria-labelledby`、稳定标题 id 和关闭按钮 `type="button"`。
+- [x] 将最终生效的 overlay/modal/header/close/按钮 focus 样式收敛到 `--am26-*` 浅玻璃规范，保留现有宽度与业务布局。
+- [x] 更新组建计划专项断言，防止回退到旧黑遮罩、10px 方卡、无标题关联或无 focus/reduced-motion。
+- [x] 构建同步产物，并运行专项测试、构建检查、语法检查和空白检查。
+- [x] 用 `@chrome` 在真实 `one.alimama.com` 页面只打开组建计划向导验收，不点击 `提交创建` / `批量创建` / 修复类真实动作。
+- [x] 回填验证记录、审计状态、风险与复盘。
+
+## 高层操作摘要
+- 已确认本切片是非简单 UI 任务，验证必须纳入计划，且浏览器验收只使用 `@chrome`，不使用 chrome-devtools MCP。
+- 已确认向导模板在 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`，样式事实源主要在 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`，且后置首页样式会覆盖前置旧壳层样式。
+- 已确认本轮只处理主向导外壳与基础控件焦点态，不触碰真实创建/提交/请求链路。
+- 已完成源码迁移：主弹窗补齐 `aria-labelledby="am-wxt-keyword-title"`，标题改为稳定 `h3#am-wxt-keyword-title`，主/详情关闭按钮显式 `type="button"`。
+- 已完成最终样式事实源迁移：后置生效的 overlay/modal/header/close/按钮 focus 规则改用 `--am26-*` token、18px 浅玻璃面板、低对比边框、可见 `focus-visible` 和 `prefers-reduced-motion`。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs`：通过，15/15；新增组建计划主弹窗外壳规范断言。
+- `node --test tests/keyword-wizard-entry-regression.test.mjs`：通过，7/7。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，25/25。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-mount-intro.js src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs tasks/todo.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- 最终规则抽取：`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js` 中最后一个 `#am-wxt-keyword-modal` 规则为 `width: min(1320px, calc(100vw - 48px))`、`background: var(--am26-panel-strong...)`、`border-radius: 18px`、`box-shadow: var(--am26-shadow...)`、`backdrop-filter: blur(20px) saturate(1.4)`。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面，打开主面板后只点击 `组建计划`。运行态 DOM/计算样式显示弹窗 `role="dialog"`、`aria-modal="true"`、`aria-labelledby="am-wxt-keyword-title"`，标题为 `H3#am-wxt-keyword-title`，关闭按钮为 `BUTTON type="button"` 且包含共享 SVG；overlay 背景为 `rgba(27, 36, 56, 0.28)`、`backdrop-filter: blur(10px)`，modal 为 1320px 宽、18px 圆角、`var(--am26-panel-strong)` 玻璃背景、`var(--am26-shadow)` 阴影、`blur(20px) saturate(1.4)`，控制台 error/warning 为空。未点击 `提交创建`、`批量创建` 或修复类动作。截图见 `tasks/ui-audit-keyword-wizard-shell-chrome-2026-05-29.png`。
+
+## 结果复盘
+- 结果：完成组建计划主向导外壳样式事实源收敛，解决主弹窗无标题关联、关闭按钮默认 type 不明确、最终覆盖块回退到 10px 方卡/深遮罩的问题。
+- 风险：组建计划内部内容区仍保留部分局部 `--am-wxt-*` token、硬编码浅灰背景和 10px 小控件圆角；本切片按范围只处理主弹窗外壳，不触碰创建/提交/请求链路。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、本次构建产物、截图和任务记录即可。
+
+---
+
+# TODO - 2026-05-29 全量页面 UI 规范逐页迁移
+
+## 需求规格
+- 目标：按 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md` 逐页优化所有规范适用 UI，已经覆盖主面板、算法护航、组建计划、批量+、下载面板，继续覆盖万能查数、人群对比看板、快捷话术、计划行快捷入口、复制计划弹窗、并发日志、授权/错误遮罩等剩余页面。
+- 范围：每次只推进一个页面或一个紧密弹窗族；不触碰真实投放、创建、提交、删除链路；不手工修改构建产物；涉及真实页面运行态必须用 `@chrome` 验证后再进入下一页。
+- 成功标准：审计结果持续落到 `tasks/ui-gap-audit-2026-05-29.md`；每页都有源码迁移、专项测试/构建检查和 `@chrome` 或明确不可触发的替代验证记录；所有规范适用页面完成前不标记 goal 完成。
+
+## 执行计划（可核对）
+- [x] 回顾 `AGENTS.md`、`tasks/lessons.md`、UI 统一规范和图标规范，确认审计口径。
+- [x] 定位五个页面/入口的源码与现有样式事实源，必要时用只读子代理并行收集证据。
+- [x] 输出差距审计表：逐页列出已符合、需要改、暂不改和风险说明。
+- [x] 基于影响面、复用价值和改动风险给出迁移优先级，选择第一页做最小迁移方案。
+- [x] 按优先级迁移第一页，更新/补充必要测试并构建校验。
+- [x] 如涉及运行态 UI，使用真实浏览器或可用截图完成验收；无法验收时记录原因和替代检查。
+- [x] 回填验证记录、风险、回滚方式和结果复盘。
+
+## 继续迁移 - 算法护航（可核对）
+- [x] 复核算法护航 UI 审计项，优先处理裸文本箭头、结果浮层语义和键盘可达性。
+- [x] 迁移计划卡片折叠箭头与手动设置下拉箭头为统一 `renderAmIcon('chevron-down')`。
+- [x] 将执行结果浮层补齐 `dialog`/`aria-modal`/`aria-labelledby`、Esc 关闭、焦点恢复、键盘焦点态和减少动画适配。
+- [x] 增加算法护航专项静态断言，防止回退到裸文本箭头或无语义结果浮层。
+- [x] 重新构建并验证产物同步。
+- [x] 使用 `@chrome` 做运行态验收，并记录可见状态或阻塞原因。
+- [x] 回填本页迁移复盘和下一页优先级。
+
+## 继续迁移 - 批量+（可核对）
+- [x] 复核批量+ UI 审计项和历史教训，确认触发按钮保持原生同构。
+- [x] 将插件自有菜单浮层收敛到 `--am26-*` token、统一图标和可见 focus 态。
+- [x] 替换自造 fallback 私有字体箭头，保留真实原生 DOM 箭头兼容策略。
+- [x] 将批量确认弹窗文本 `!` 改为共享 SVG 图标，并补齐标题关联与焦点恢复。
+- [x] 增加批量+ UI 规范专项断言，防止菜单/弹窗回退到私有字体或硬编码视觉。
+- [x] 构建同步产物，并运行专项测试、语法与构建检查。
+- [x] 使用 `@chrome` 在真实页面只读打开批量+ 菜单验收，不点击真实动作。
+- [x] 回填审计报告、验证记录和复盘。
+
+## 继续迁移 - 计划行复制弹窗（可核对）
+- [x] 复核计划行快捷入口与复制计划弹窗审计项，确认本切片只改复制前一览窗和复制成功弹窗的 UI 规范。
+- [x] 将复制前一览窗和复制成功弹窗从文本 `!` / `×` 图标迁移到共享 SVG 图标，并补齐 `aria-labelledby`。
+- [x] 为复制前一览窗和复制成功弹窗补齐 Esc 关闭、关闭后焦点恢复、focus-visible 和减少动画适配。
+- [x] 将复制弹窗样式收敛到 `--am26-*` token、浅玻璃面板、低对比边框和规范圆角。
+- [x] 更新复制计划专项断言，防止回退到文本图标、无标题关联或旧硬编码样式。
+- [x] 构建同步产物，并运行专项测试、语法与构建检查。
+- [x] 使用 `@chrome` 在真实页面只打开/模拟复制弹窗 UI 验收，不触发真实复制提交。
+- [x] 回填审计报告、验证记录和复盘。
+
+## 继续迁移 - 万能查数/人群对比看板（可核对）
+- [x] 复核万能查数、人群对比看板、快捷话术 UI 审计项，确认本切片只改窗口动作按钮与视图页签语义。
+- [x] 将弹窗刷新/关闭从 `span` 控件迁移为真实 `button type="button"`，补齐 `aria-label`、focus-visible 与减少动画适配。
+- [x] 为万能查数/人群对比看板页签补齐 `tablist`/`tab`/`tabpanel`、`aria-selected`、`aria-controls`、`aria-labelledby` 和键盘左右切换。
+- [x] 保持快捷话术、iframe 查数提交、人群看板加载请求和商品下拉业务逻辑不变。
+- [x] 增加或更新 MagicReport 专项断言，防止窗口动作退回 `span` 控件或页签丢失语义。
+- [x] 构建同步产物，并运行专项测试、语法与构建检查。
+- [x] 使用 `@chrome` 打开真实页面弹窗验收结构、键盘 focus 和页签状态，不触发快捷话术提交或看板刷新。
+- [x] 回填审计报告、验证记录和复盘。
+
+## 继续迁移 - 万能查数/人群对比看板 P2 控件语义（可核对）
+- [x] 复核快捷话术、顶部图例和商品 ID 下拉的剩余语义差距，限定本切片不触碰真实查数、刷新、重试或商品请求链路。
+- [x] 为快捷话术补齐 `aria-label` / `aria-pressed` 同步和可见 `focus-visible`。
+- [x] 为顶部图例按钮补齐稳定 `aria-label`，保持 `aria-pressed` 随显隐状态同步，并增加可见 `focus-visible`。
+- [x] 为商品 ID 自定义下拉补齐 `aria-label`、`aria-controls`、`aria-activedescendant`、option id 和键盘打开/切换/选择/关闭边界。
+- [x] 更新 MagicReport 专项断言，防止控件语义和键盘边界回退。
+- [x] 构建同步产物，并运行专项测试、语法与构建检查。
+- [x] 使用 `@chrome` 在真实页面只验证 DOM/键盘行为，不点击快捷话术、刷新、重试或提交入口。
+- [x] 回填审计报告、验证记录和复盘。
+
+## 继续迁移 - 并发日志弹窗（可核对）
+- [x] 复核并发日志弹窗审计项，限定本切片只改弹窗壳层、语义、焦点、Esc 和样式 token，不触碰并发开启/重启请求链路。
+- [x] 为并发日志弹窗补齐 `aria-labelledby`、打开/关闭 `aria-hidden`、状态/日志区 live 语义和日志区键盘滚动焦点。
+- [x] 为并发日志弹窗补齐 Esc 关闭、关闭后焦点恢复、打开后聚焦关闭按钮。
+- [x] 将并发日志弹窗遮罩、卡片、头部、状态条和日志区收敛到 `--am26-*` 浅玻璃 token，并增加 `focus-visible` 与减少动画适配。
+- [x] 更新并发开启专项断言，防止弹窗回退到无标题关联、旧黑遮罩/白卡片或无焦点恢复。
+- [x] 构建同步产物，并运行专项测试、语法与构建检查。
+- [x] 使用 `@chrome` 在真实页面做安全运行态验收：刷新业务页确认新版并发日志 CSS、入口和控制台状态；不点击并发开启按钮触发真实状态更新，弹窗打开/关闭由专项测试覆盖。
+- [x] 回填审计报告、验证记录和复盘。
+
+## 继续迁移 - 主面板（可核对）
+- [x] 复核主面板审计项，优先处理交互元素语义化和键盘/focus 可达性。
+- [x] 将悬浮球、关闭按钮、工具入口、辅助显示开关和日志操作迁移为真实 `button type="button"`。
+- [x] 在 `updateState()` 同步 `aria-pressed`、`aria-expanded`、`aria-controls` 等状态。
+- [x] 收敛本切片涉及的硬编码文字色与 focus-visible 样式。
+- [x] 增加主面板专项断言，防止回退到 `div/span` 交互控件。
+- [x] 构建同步产物，并运行专项测试、语法与构建检查。
+- [x] 使用 `@chrome` 打开主面板验收按钮语义、状态与可见 focus，不触发真实业务提交。
+- [x] 回填审计报告、验证记录和复盘。
+
+## 继续迁移 - 下载面板（可核对）
+- [x] 复核下载面板审计项，确认只处理响应式宽度与可见 focus 态。
+- [x] 将下载捕获面板宽度改为 `min(340px, calc(100vw - 24px))`，同步内联可见性兜底。
+- [x] 为下载链接补可访问名称，并为复制/关闭按钮显式声明 `type="button"`。
+- [x] 为下载、复制、关闭补齐 `focus-visible` 和减少动画适配。
+- [x] 增加下载面板专项断言。
+- [x] 构建同步产物，并运行专项测试、语法与构建检查。
+- [x] 完成运行态或等价静态验收记录。
+- [x] 回填审计报告、验证记录和复盘。
+
+## 高层操作摘要
+- 已确认本轮属于非简单 UI 任务，必须先规划，并将验证纳入计划。
+- 已回顾历史教训：UI/图标任务需避免局部近似、emoji/私有图标、弱验证；涉及真实页面行为时要记录浏览器验收。
+- 已确认统一 UI 规范口径：浅色玻璃拟态工作台、复用 `--am26-*` token、统一骨架、线性图标、紧凑高密度、状态覆盖和真实截图核对。
+- 已用只读子代理分块审计主助手/批量+/下载面板、算法护航、组建计划，并由主线程复核源码关键位置。
+- 已输出审计报告：`tasks/ui-gap-audit-2026-05-29.md`。
+- 已确定第一批迁移从组建计划矩阵预设按钮开始：先消除 inline `onclick` 与统一点击监听并存造成的重复触发风险，再进入算法护航、批量+、主面板、下载面板。
+- 已完成组建计划第一处迁移前置修复：矩阵预设按钮只保留 `matrixPresetList` 统一点击监听，移除 inline `onclick` 与每次渲染后逐个绑定的重复触发路径。
+- 已更新矩阵配置专项测试，新增反向断言防止预设按钮回退到 inline 事件或重复绑定。
+- Chrome DevTools 验收尝试失败：MCP 报 `Failed to fetch browser webSocket URL from http://127.0.0.1:9222/json/version: HTTP Not Found`；运行 `scripts/recover-chrome-devtools-mcp.sh` 返回 `Chrome DevTools 端口 9222 未就绪`；直接启动调试 Chrome 后 `127.0.0.1:9222/json/version` 仍返回 HTTP 404。因此本轮未完成真实 `one.alimama.com` 截图/点击验收，已用专项测试、构建检查和静态产物扫描替代。
+- 已进入第二页迁移：算法护航首批仅处理高收益 UI 规范项，不触碰真实护航提交链路。
+- 已替换算法护航计划卡片折叠箭头和手动设置下拉箭头，统一使用 `renderAmIcon('chevron-down')`，移除裸文本 `▼`。
+- 已为算法护航结果浮层补齐 dialog 语义、标题关联、Esc 关闭、打开前焦点恢复、关闭按钮键盘焦点态与减少动画适配。
+- 已用 `@chrome` 连接用户 Chrome，接管真实 `one.alimama.com` 人群推广页。首次检查发现旧 DOM 仍是文本 `▼`，说明页面尚未刷新到最新构建；尝试打开 `chrome://extensions/?id=cfegfgaodnfeigffdknhgciapojejflk` 被 Chrome Browser Use 安全策略阻止，因此未自动进入扩展管理页 reload。
+- 已安全刷新真实页面并打开主面板 -> 算法护航 -> 手动设置；刷新后运行态 DOM 显示下拉箭头为 SVG chevron、`aria-hidden="true"`、不再包含裸文本 `▼`。
+- 结果浮层未通过真实执行触发，避免碰真实护航提交链路；本轮用源码/产物静态断言覆盖 dialog 语义、Esc 关闭、焦点恢复和 reduced-motion。
+- 已保存运行态截图：`tasks/ui-audit-algorithm-chrome-2026-05-29.png`。
+- 已进入第三页迁移：批量+ 本轮只处理插件自有菜单、确认弹窗和 fallback 图标；继续保留触发按钮复刻官方“批量计划设置”的兼容策略，不触碰真实批量提交链路。
+- 已完成批量+ 自有菜单初步迁移：菜单项增加共享 SVG 图标，浮层改用 `--am26-*` token、玻璃面板、可见 focus 态和减少动画适配。
+- 已替换批量+ 自造 fallback 私有字体箭头为共享 chevron；真实原生 DOM 箭头仍按兼容策略保留。
+- 已将批量确认弹窗的文本 `!` 替换为共享 `alert-triangle` / `x-circle` 图标，并补齐 `aria-labelledby` 与关闭后焦点恢复。
+- 已用 `@chrome` 在真实人群推广页关闭官方升级说明弹窗后，只点击 `批量+` 触发菜单并做 DOM/计算样式断言；未点击任何批量开启、暂停、删除或人群设置动作。
+- 已保存批量+ 运行态截图：`tasks/ui-audit-batch-plus-chrome-2026-05-29.png`。
+- 已进入第四页迁移：主面板首批只处理交互元素语义化、状态同步与 focus 可达性，不改变工具入口业务逻辑。
+- 已完成主面板首批源码迁移：悬浮球、关闭按钮、工具入口、辅助开关、日志清空/展开均改为真实 `button type="button"`，并在 `updateState()` 同步辅助开关、辅助面板和日志区域的可访问状态。
+- 已用 `@chrome` 在真实人群推广页关闭官方活动弹窗后打开主面板，只点击 `辅助显示` 展开辅助开关并用键盘 Tab 验证 focus；未点击算法护航、组建计划、万能查数等业务入口。
+- 已保存主面板运行态截图：`tasks/ui-audit-main-panel-chrome-2026-05-29.png`。
+- 已进入第五页迁移：下载面板只处理响应式宽度、按钮语义和可见 focus，保留 `Interceptor.createPanel()` 的内联兜底定位职责。
+- 已完成下载面板迁移：面板宽度改为窄屏安全的 `min(340px, calc(100vw - 24px))`，下载链接补可访问名称，复制/关闭按钮显式 `type="button"`，并增加 focus-visible 与 reduced-motion 样式。
+- 已用 `@chrome` 在真实页面确认新版下载面板节点和 CSS 已注入；未触发真实下载请求。
+- 已进入第六页迁移：计划行复制弹窗只处理复制前一览窗和复制成功窗的 UI 规范，不触碰真实复制提交、官方复制接口、创建后暂停兜底或页内搜索逻辑。
+- 已将复制前一览窗/复制成功窗的文本 `!`、`×` 迁移为共享 `campaign-copy`、`close`、`check-circle` SVG 图标，并补齐 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`。
+- 已将复制弹窗样式收敛到 `--am26-*` 浅玻璃面板、18px 规范圆角、低对比边框、可见 focus 和减少动画适配。
+- 已修复真实页面 Esc 关闭后焦点落到 `BODY` 的问题：关闭时保存 `campaignId + copyMode` 焦点目标，等待运行中按钮解除禁用，并在原 DOM 引用失效时重新定位当前可见复制按钮。
+- 已用 `@chrome` 在真实人群推广页只打开复制一览窗并按 Esc 关闭；未点击“确认生成”，未触发真实复制提交。
+- 已进入第七页迁移：万能查数/人群对比看板本轮只处理窗口动作按钮与视图页签语义，不触碰快捷话术提交、iframe 查数、看板刷新请求或商品下拉业务逻辑。
+- 已将万能查数弹窗刷新/关闭从可点击 `span` 迁移为真实 `button type="button"`，补齐 `aria-label`、`title`、可见 `focus-visible` 和 reduced-motion。
+- 已为“万能查数 / 人群对比看板”视图切换补齐 `tablist`、`tab`、`tabpanel`、`aria-selected`、`aria-controls`、`aria-labelledby`、`aria-hidden` 和 Arrow/Home/End 键盘切换。
+- 已用 `@chrome` 打开真实页面万能查数弹窗，只验证 DOM/样式和键盘页签切换；未点击快捷话术、刷新当前视图、重试或任何查数提交入口。
+- 已进入万能查数/人群对比看板 P2 控件语义迁移：本切片只处理快捷话术、顶部图例和商品 ID 下拉的 ARIA、focus 与键盘边界，不触碰查数请求链路。
+- 已完成万能查数/人群对比看板 P2 控件语义迁移：快捷话术具备稳定 `aria-label`、临时 `aria-pressed` 和 `focus-visible`；顶部图例具备稳定 `aria-label`、装饰色点 `aria-hidden` 和 `focus-visible`；商品 ID 下拉补齐触发器/listbox/option 关联与 Arrow/Home/End/Enter/Space/Escape/Tab 键盘边界。
+- 已用只读子代理审计 MagicReport 剩余 P2 控件，主线程按最小安全修复落地并补充专项断言；未改 `runQuickPrompt`、人群看板刷新、重试或商品请求链路。
+- 已进入并发日志弹窗迁移：本切片只处理日志弹窗壳层 UI、ARIA、焦点和样式 token，不触碰并发开启、全量暂停、重开或状态校验请求链路。
+- 已完成并发日志弹窗源码迁移：弹窗补齐标题关联、标题共享启动图标、状态/日志 live 语义、打开/关闭 `aria-hidden`、Esc 关闭、关闭后焦点恢复、打开后聚焦关闭按钮，并将遮罩/卡片/状态/日志区收敛到 `--am26-*` 浅玻璃样式。
+- 用户更新 goal：后续验证只允许使用 `@chrome`，不能使用 `chrome-devtools` MCP；已切换到 Codex Chrome Extension 的 `@chrome` 浏览器客户端，停止 DevTools MCP 路线。
+- 已用 `@chrome` 接管真实人群推广页并刷新运行态，确认新版并发日志 CSS 已注入，旧深色终端样式已消失；未点击并发开启按钮，避免触发真实状态更新请求。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/matrix-plan-config.test.mjs`：通过，25/25。
+- `rg -n "onclick=|querySelectorAll\\('\\[data-matrix-preset-key\\]'\\)[\\s\\S]*addEventListener\\('click'" src/optimizer/keyword-plan-api/request-builder-preview.js 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：无匹配，确认源码和产物中矩阵预设按钮无 inline 事件和重复逐个绑定。
+- `git diff --check -- src/optimizer/keyword-plan-api/request-builder-preview.js tests/matrix-plan-config.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- Chrome DevTools MCP 真实验收：未完成，原因见高层操作摘要中的 9222 端口 HTTP 404 记录。
+- `node --test tests/optimizer-escort-new-flow-fallback.test.mjs`：通过，37/37；新增断言覆盖算法护航 chevron 图标、结果浮层 dialog 语义、Esc 关闭、焦点恢复、focus-visible 和 reduced-motion。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/optimizer-escort-new-flow-fallback.test.mjs tests/matrix-plan-config.test.mjs`：通过，62/62。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/optimizer/ui.js tests/optimizer-escort-new-flow-fallback.test.mjs src/optimizer/keyword-plan-api/request-builder-preview.js tests/matrix-plan-config.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面，刷新后打开 `阿里助手 Pro v7.05` -> `算法护航` -> 展开手动设置；DOM 断言 `dropdownArrowHasSvg=true`、`dropdownArrowAriaHidden="true"`、`loadedStyleHasBareTextArrow=false`、`loadedStyleHasSvgArrowRule=true`。截图见 `tasks/ui-audit-algorithm-chrome-2026-05-29.png`。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，8/8；新增批量+ 菜单图标、fallback chevron、确认弹窗 SVG 图标、标题关联、焦点恢复、token 样式和 reduced-motion 断言。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/matrix-plan-config.test.mjs`：通过，70/70。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/main-assistant/campaign-id-quick-entry.js src/main-assistant/ui.js tests/campaign-batch-plus-quick-entry.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- 静态扫描：批量+ 新增菜单图标、fallback chevron、确认弹窗 `aria-labelledby`、批量+ reduced-motion 均已同步到源码、根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`；剩余 `icon.textContent = '!'` 属于复制计划成功弹窗，不在本轮批量+ 菜单/确认切片范围。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面，关闭官方升级说明弹窗后只点击 `批量+` 触发器；菜单 DOM 断言 `role="menu"`、5 个 `role="menuitem"`、5 个 `.am-campaign-batch-plus-item-icon svg.am-ui-icon`、1 个危险项、`aria-expanded="true"`、菜单文本不含私有字体箭头。计算样式为 `border-radius: 10px`、`padding: 6px`、玻璃渐变背景、`box-shadow` 为 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`、`backdrop-filter: blur(18px) saturate(1.6)`；控制台 error/warning 为空。截图见 `tasks/ui-audit-batch-plus-chrome-2026-05-29.png`。
+- `node --test tests/logger-api.test.mjs tests/magic-report-panel-resilience.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/matrix-plan-config.test.mjs`：通过，89/89；新增主面板 button 语义、`aria-pressed`、`aria-expanded` 与日志区域断言。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/main-assistant/ui.js src/main-assistant/campaign-id-quick-entry.js tests/logger-api.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- 静态扫描：源码、根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js` 均不再包含主面板 `<div class="am-tool-btn">`、`<div class="am-switch-btn">`、`<span class="am-action-btn">`、`<div class="am-close-btn">` 或 `<div id="am-helper-icon">`。
+- `@chrome` 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面，关闭官方活动弹窗后打开主面板；DOM 断言悬浮球、关闭按钮、4 个工具入口、8 个辅助开关、日志清空/展开均为 `BUTTON type="button"`，辅助显示入口展开后 `aria-expanded="true"`、`aria-pressed="true"`、`aria-controls="am-assist-switches"`，辅助区域 `aria-hidden="false"`；键盘 Tab 后焦点落在辅助开关，outline 为 solid；控制台 error/warning 为空。截图见 `tasks/ui-audit-main-panel-chrome-2026-05-29.png`。
+- `node --test tests/download-link-depth-guard.test.mjs tests/logger-api.test.mjs tests/magic-report-panel-resilience.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/matrix-plan-config.test.mjs`：通过，92/92；新增下载面板响应式宽度、内联兜底、可访问名称、按钮 type、focus-visible 和 reduced-motion 断言。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/main-assistant/interceptor.js src/main-assistant/ui.js src/main-assistant/campaign-id-quick-entry.js tests/download-link-depth-guard.test.mjs tests/logger-api.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 下载面板运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面刷新后，不触发真实下载请求；DOM 断言 `#am-report-capture-panel` 存在，内联兜底样式包含 `width: min(340px, -24px + 100vw)`，注入 CSS 包含响应式宽度、下载/复制/关闭 `focus-visible` 和 `prefers-reduced-motion` 规则；控制台 error/warning 为空。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，12/12；新增复制弹窗共享 SVG、标题关联、Esc 关闭、可重新定位焦点恢复、token 样式和 reduced-motion 断言。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/main-assistant/campaign-id-quick-entry.js tests/campaign-copy-current-plan-quick-entry.test.mjs src/main-assistant/ui.js 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- 静态扫描：源码、根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js` 均包含 `createCopyFocusTarget`、`resolveCopyFocusTargetElement`、`readyElement.focus({ preventScroll: true })`、成功窗 `campaignId: id` 与 `mode: copyMode` 焦点描述符。
+- `@chrome` 复制弹窗运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面，刷新后点击可见行级 `复制` 按钮，只打开一览窗，不点击 `确认生成`；DOM/样式断言 `role="dialog"`、`aria-modal="true"`、`aria-labelledby="am-copy-overview-title"`、标题关联成功、头部与关闭按钮均为 `svg.am-ui-icon`、关闭按钮 `type="button"`、状态文案为 `确认后才会提交创建请求。`、表格 1 行、焦点进入首个计划名输入框、遮罩 `rgba(27, 36, 56, 0.28)`、`backdrop-filter: blur(10px)`、卡片 `border-radius: 18px`、玻璃背景、`box-shadow` 为 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`、表格横向溢出隐藏。按 Esc 关闭后弹窗移除，复制按钮解除禁用，焦点回到同一行 `BUTTON[data-campaign-id="81021969209"][data-am-campaign-copy="inherit"]`。截图见 `tasks/ui-audit-copy-popup-chrome-2026-05-29.png`。控制台存在官方 `getDingCard.json` callback error，来源为阿里妈妈 `merge.js`，未观察到插件侧 error/warning。
+- `node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs`：通过，62/62；新增万能查数窗口动作 button、页签/面板 ARIA、键盘切换和 reduced-motion 断言。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/main-assistant/magic-report.js tests/magic-report-crowd-matrix.test.mjs tasks/todo.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 万能查数运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面刷新后打开主面板并点击 `万能查数`；运行态 DOM 显示刷新/关闭均为 `BUTTON type="button"`、有 `aria-label` 与 SVG 图标，视图切换容器 `role="tablist"`，两个页签 `role="tab"` 且 `aria-selected`/`tabindex`/`aria-controls` 正确，两个内容区 `role="tabpanel"` 且 `aria-labelledby`/`aria-hidden` 正确。默认人群看板为全屏弹窗；在当前看板 tab 上按 ArrowLeft 后切换到万能查数 tab，焦点落到 `#am-magic-tab-query`，query panel 显示、matrix panel 隐藏，弹窗恢复到 900px/18px 圆角普通尺寸。未点击快捷话术、刷新当前视图、重试或查数提交入口；控制台 error/warning 为空。截图见 `tasks/ui-audit-magic-report-chrome-2026-05-29.png`。
+- `node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs`：通过，64/64；新增快捷话术 `aria-label/aria-pressed/focus-visible`、图例 `aria-label/aria-hidden/focus-visible`、商品 ID 下拉 listbox/option/键盘边界断言。首次运行前未构建导致旧根 userscript 断言失败；运行 `npm run build` 同步产物后通过，并将慢正则收窄到方法切片，避免 90s 回溯。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/main-assistant/magic-report.js tests/magic-report-crowd-matrix.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 万能查数 P2 控件运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面，刷新后打开主面板并点击 `万能查数`；仅做 DOM 属性和样式断言，未点击快捷话术、刷新、重试或查数提交。运行态显示 7 个快捷话术均为 `BUTTON type="button"` 且有 `aria-label="快捷话术：..."` 与 `aria-pressed="false"`；10 个顶部图例按钮均有稳定 `aria-label`、`aria-pressed` 和装饰色点 `aria-hidden="true"`；商品 ID 触发器在未识别计划态禁用，但具备 `aria-controls="am-crowd-matrix-item-listbox"`、listbox `role="listbox"`、`aria-label="商品ID候选列表"`、`aria-hidden="true"`；注入 CSS 包含快捷话术、图例、商品触发器 `focus-visible` 和 reduced-motion 覆盖；控制台 error/warning 为空。截图见 `tasks/ui-audit-magic-report-p2-chrome-2026-05-29.png`。
+- `node --test tests/campaign-concurrent-start-quick-entry.test.mjs`：通过，7/7；新增并发日志标题关联、共享启动图标、status/log live 语义、Esc 关闭、焦点恢复、统一 token 玻璃样式、focus-visible、warning 状态和 reduced-motion 断言。
+- `node --test tests/campaign-concurrent-start-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，27/27；确认共享 `campaign-id-quick-entry.js` 改动未破坏批量+ 与复制弹窗回归。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `git diff --check -- src/main-assistant/campaign-id-quick-entry.js src/main-assistant/ui.js tests/campaign-concurrent-start-quick-entry.test.mjs tasks/todo.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过，无空白格式问题。
+- `@chrome` 并发日志运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 页面，使用 Codex Chrome Extension 浏览器客户端接管并刷新页面。运行态证据：`#am-helper-pro-v26-style` 已注入，并发日志样式块存在，`background: rgba(27, 36, 56, 0.28)`、`background: var(--am26-panel-strong)`、18px 圆角、`.am-concurrent-log-close:focus-visible`、`.am-concurrent-log-body:focus-visible`、`.am-concurrent-log-status.is-warning`、`prefers-reduced-motion` 均存在，旧 `background: #0f172a` 与旧纯白卡片样式不存在；页面存在 9 个 `BUTTON[data-am-campaign-concurrent-start="1"]` 并带计划 aria-label；控制台 error/warn 为空。未点击并发开启按钮，避免真实全量暂停/重开请求；尝试用 `javascript:` 插入 mock DOM 被 `@chrome` 安全策略拦截，因此弹窗打开/关闭行为以专项测试覆盖。
+
+## 结果复盘
+- 结果：完成五个现有页面/入口的 UI 规范差距审计，并完成第一处最高优先级迁移前置修复，消除组建计划矩阵预设按钮重复触发风险。
+- 追加结果：完成第二页算法护航首批迁移，已将裸文本下拉/折叠箭头替换为共享 SVG chevron，并补齐结果浮层的模态语义与键盘关闭/焦点恢复。
+- 追加结果：完成第三页批量+ 首批迁移，插件自有菜单、fallback 箭头和批量确认弹窗已对齐统一 token/图标/焦点规范，并在真实页面只读验收通过。
+- 追加结果：完成第四页主面板首批迁移，主要交互控件已改为真实 button，并补齐辅助显示与日志区域的可访问状态同步。
+- 追加结果：完成第五页下载面板首批迁移，已补齐响应式宽度、按钮语义、链接可访问名称、focus-visible 与减少动画适配。
+- 追加结果：完成第六页计划行复制弹窗迁移，复制前一览窗和复制成功窗已对齐共享图标、dialog 语义、Esc 关闭、焦点恢复和统一 token 样式；真实页面验收只打开并取消一览窗，未触发复制提交。
+- 追加结果：完成第七页万能查数/人群对比看板首批迁移，窗口动作已改为真实按钮，视图页签已补齐 ARIA 语义与键盘切换，并在真实页面只读验收通过。
+- 追加结果：完成万能查数/人群对比看板 P2 控件语义迁移，快捷话术、顶部图例和商品 ID 下拉已补齐可访问名称、状态同步、可见 focus 和键盘边界；真实页面只读验收通过，商品候选下拉因当前列表页未识别计划 ID 无可选项，键盘选项分支由专项断言覆盖。
+- 追加结果：完成并发日志弹窗迁移和安全运行态验收，已对齐共享图标、dialog 标题关联、live 语义、Esc 关闭、焦点恢复、`--am26-*` 浅玻璃样式、可见 focus 与减少动画；真实页面已确认新版样式加载，未触发真实并发开启。
+- 风险：`@chrome` 自动打开 `chrome://extensions` 被安全策略阻止，无法在本轮自动点击扩展管理页 Reload；但刷新真实业务页后已加载到最新构建并验证算法护航、批量+、主面板、下载面板和复制弹窗样式注入。算法护航结果浮层、批量+真实动作、下载面板真实下载弹出和复制成功弹窗未通过真实提交触发，避免碰真实提交/下载/创建链路，已用专项断言和可触发部分的运行态 DOM/CSS 断言覆盖。
+- 风险：`@chrome` 自动打开 `chrome://extensions` 被安全策略阻止，无法在本轮自动点击扩展管理页 Reload；但刷新真实业务页后已加载到最新构建并验证算法护航、批量+、主面板、下载面板、复制弹窗和万能查数弹窗样式注入。算法护航结果浮层、批量+真实动作、下载面板真实下载弹出、复制成功弹窗和万能查数快捷话术提交未通过真实提交触发，避免碰真实提交/下载/创建/查数链路，已用专项断言和可触发部分的运行态 DOM/CSS 断言覆盖。
+- 下一步：审计列出的五个页面首批迁移、复制弹窗、万能查数首批和 P2 控件语义迁移已完成；后续可按剩余 P2/P3 项继续处理并发日志、组建计划样式事实源收敛、授权/错误遮罩和下载失败态。
+- 最新下一步：并发日志弹窗切片已完成；继续进入下一个剩余页面切片：组建计划样式事实源收敛、授权/错误遮罩或下载失败态三者中选择风险最小且可用 `@chrome` 验收的一项。
+- 回滚方式：还原 `src/optimizer/keyword-plan-api/request-builder-preview.js`、`src/optimizer/ui.js`、`src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/magic-report.js`、`src/main-assistant/ui.js`、相关测试、本次构建产物、截图和 `tasks/` 记录即可。
+
+---
+
+# TODO - 2026-05-29 精简重写 AGENTS 规则
+
+## 需求规格
+- 目标：参考外部 `AGENT-v2.md` 的规则风格，重写本仓库 `AGENTS.md`，保持项目关键约束完整且更精简有效，便于 Codex、Claude 和其它代码代理执行。
+- 范围：只修改项目级代理规则与本任务记录；不修改运行时代码、构建产物或业务文档。
+- 成功标准：`AGENTS.md` 保留规划、debug-first、根因修复、子代理、验证、浏览器验收、生成产物、安全边界等硬约束；删除冗长重复描述；Markdown 结构清晰且无格式错误。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md`、当前 `AGENTS.md`、用户提供的 `codex://threads/...` 线索和外部 `AGENT-v2.md`。
+- [x] 重写 `AGENTS.md`，合并重复规则并补入参考文档中的 debug-first、结构性修复触发、diff 自审和验证顺序。
+- [x] 检查文档格式、关键约束覆盖和工作区 diff。
+- [x] 回填验证记录与结果复盘。
+
+## 高层操作摘要
+- 已确认外部参考强调：中文默认回复、少问多做、debug-first、根因修复、避免隐藏兜底、结构性修复触发、验证顺序、diff 自审和并行子代理。
+- 已确认 `codex://threads/019e6f8d-0750-7ad1-8af8-0f69e1624b1c` 对应上一轮插件 UI 规范会话，未追加本轮 `AGENTS.md` 专属要求。
+- 已回顾当前 `tasks/lessons.md` 中与验证闭环、真实页面验收、设计规范、debug bridge、用户修正沉淀相关教训。
+- 已将 `AGENTS.md` 从长清单重写为 154 行的精简规则，保留项目事实源、计划记录、真实浏览器验收、关键路径测试、安全边界、构建产物和提交发布要求。
+- 已补入参考规则中的 debug-first、结构性修复触发、验证顺序、diff 自审、少问多做和并行子代理策略。
+- 已确认 `codex://threads/019e6f8d-0750-7ad1-8af8-0f69e1624b1c` 已生成 `docs/插件UI统一设计规范.md`（当前为未跟踪文件），因此 `AGENTS.md` 将 UI 规范阅读设为硬约束。
+
+## 验证记录
+- `git diff --check -- AGENTS.md tasks/todo.md`：通过，无空白格式问题。
+- `wc -l AGENTS.md`：154 行，较原文件更紧凑。
+- `rg -n "Debug-First|结构性修复|diff 自审|chrome-devtools|recover-chrome-devtools|tasks/todo.md|tasks/lessons.md|node scripts/build.mjs|policy token|__AM_HOOK_MANAGER__|docs/图标设计规范.md|docs/插件UI统一设计规范.md" AGENTS.md`：通过，关键约束均可定位。
+- `test -f docs/插件UI统一设计规范.md && test -f docs/图标设计规范.md && test -f docs/源码结构速查.md && test -f scripts/recover-chrome-devtools-mcp.sh`：通过，硬引用文件存在。
+- `git status --short`：本轮改动为 `AGENTS.md` 与 `tasks/todo.md`；另有未跟踪 `docs/插件UI统一设计规范.md` 来自关联线程，本轮未修改。
+
+## 结果复盘
+- 结果：完成项目级代理规则精简重写；保留本仓库关键硬约束，并吸收外部参考的根因优先、debug-first、结构性修复和交付前 diff 自审规则。
+- 风险：本轮只改文档，不涉及运行时代码；未运行业务构建或测试。`docs/插件UI统一设计规范.md` 当前在工作区但未跟踪，若提交本规范约束，需要同时纳入该文档或确认它已在目标分支。
+- 回滚方式：还原 `AGENTS.md` 与本次 `tasks/todo.md` 顶部任务记录即可。
+
+---
+
 # TODO - 2026-05-28 GitHub 展示版本与 Release 同步到 7.05
 
 ## 需求规格

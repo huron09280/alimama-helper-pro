@@ -216,7 +216,16 @@
                                 listEl.innerHTML = words.map(word => `
                                     <span class="am-wxt-ai-max-shield-tag">
                                         ${Utils.escapeHtml(word)}
-                                        <button type="button" data-ai-max-shield-remove="${Utils.escapeHtml(type)}" data-ai-max-shield-word="${Utils.escapeHtml(word)}">x</button>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-ai-max-shield-remove"
+                                            data-ai-max-shield-remove="${Utils.escapeHtml(type)}"
+                                            data-ai-max-shield-word="${Utils.escapeHtml(word)}"
+                                            aria-label="删除屏蔽词：${Utils.escapeHtml(word)}"
+                                            title="删除屏蔽词"
+                                        >
+                                            ${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}
+                                        </button>
                                     </span>
                                 `).join('');
                             };
@@ -513,16 +522,21 @@
                                     selectedListEl.innerHTML = '<div class="am-wxt-scene-filter-selected-empty">请从左侧添加人群</div>';
                                     return;
                                 }
-                                selectedListEl.innerHTML = selectedList.map(item => `
+                                selectedListEl.innerHTML = selectedList.map(item => {
+                                    const selectedLabel = Utils.escapeHtml(item.label || item.value || '');
+                                    return `
                                     <div class="am-wxt-scene-filter-selected-row">
-                                        <span>${Utils.escapeHtml(item.label || item.value || '')}</span>
+                                        <span>${selectedLabel}</span>
                                         <button
                                             type="button"
-                                            class="am-wxt-btn"
+                                            class="am-wxt-scene-filter-remove"
                                             data-scene-popup-filter-remove="${Utils.escapeHtml(item.key || '')}"
-                                        >移除</button>
+                                            aria-label="移除已选屏蔽人群：${selectedLabel}"
+                                            title="移除已选屏蔽人群"
+                                        >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                     </div>
-                                `).join('');
+                                `;
+                                }).join('');
                             };
                             const removeSelectedByKey = (key = '') => {
                                 const safeKey = String(key || '').trim();

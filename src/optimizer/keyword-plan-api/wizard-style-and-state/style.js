@@ -6,9 +6,9 @@
                 #am-wxt-keyword-overlay {
                     position: fixed;
                     inset: 0;
-                    background: rgba(15, 23, 42, 0.36);
-                    backdrop-filter: blur(4px);
-                    -webkit-backdrop-filter: blur(4px);
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                     z-index: 1000006;
                     display: none;
                     align-items: center;
@@ -497,7 +497,9 @@
                 #am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop {
                     position: fixed;
                     inset: 0;
-                    background: rgba(15, 23, 42, 0.28);
+                    background: rgba(255, 255, 255, 0.72);
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                     z-index: 1000007;
                     display: none;
                 }
@@ -524,7 +526,13 @@
                     overflow: auto;
                     z-index: 1000008;
                     margin-top: 0;
-                    box-shadow: 0 18px 48px rgba(17,24,39,0.26);
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                 }
                 #am-wxt-keyword-modal .am-wxt-config.collapsed {
                     display: none;
@@ -532,20 +540,23 @@
                 #am-wxt-keyword-detail-config .am-wxt-detail-title {
                     position: sticky;
                     top: 0;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
                     z-index: 2;
                     margin: -10px -10px 10px;
                     padding: 10px;
-                    border-bottom: 1px solid rgba(148,163,184,0.28);
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                 }
                 #am-wxt-keyword-detail-config .am-wxt-detail-footer {
                     position: sticky;
                     bottom: 0;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
                     z-index: 2;
                     margin: 10px -10px -10px;
                     padding: 10px;
-                    border-top: 1px solid rgba(148,163,184,0.28);
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                     display: flex;
                     justify-content: flex-end;
                     align-items: center;
@@ -2831,18 +2842,38 @@
                     align-items: center;
                     gap: 5px;
                     border-radius: 999px;
-                    background: #eef2ff;
-                    color: #3730a3;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
                     padding: 4px 8px;
                     font-size: 12px;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-tag button {
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 16px;
+                    height: 16px;
                     border: 0;
+                    border-radius: 999px;
                     background: transparent;
                     color: inherit;
                     cursor: pointer;
                     padding: 0;
                     line-height: 1;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove svg {
+                    width: 12px;
+                    height: 12px;
+                    flex: 0 0 auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove:hover {
+                    background: rgba(234,79,79,0.12);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-ai-max-empty {
                     color: #94a3b8;
@@ -3115,7 +3146,9 @@
                     position: fixed;
                     inset: 0;
                     z-index: 1000010;
-                    background: rgba(15, 23, 42, 0.48);
+                    background: rgba(255, 255, 255, 0.72);
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                     display: flex;
                     align-items: flex-start;
                     justify-content: center;
@@ -3127,15 +3160,17 @@
                     width: min(620px, 96vw);
                     min-height: min(310px, calc(100vh - 80px));
                     max-height: 92vh;
-                    background: #f7f8fc;
-                    border: 1px solid rgba(69,84,229,0.2);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
                     border-radius: 14px;
-                    box-shadow: 0 16px 42px rgba(17,24,39,0.28);
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
                     font-family: PingFangSC-Regular,PingFang SC,"Microsoft Yahei","SimHei",sans-serif;
-                    color: #1f2937;
+                    color: var(--am26-text, #1b2438);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-head {
                     height: 48px;
@@ -3146,9 +3181,9 @@
                     gap: 8px;
                     font-size: 14px;
                     font-weight: 600;
-                    color: #1f2937;
-                    background: linear-gradient(135deg, #eef2ff, #f8f9ff);
-                    border-bottom: 1px solid rgba(69,84,229,0.18);
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-body {
                     padding: 12px 14px 14px;
@@ -3190,9 +3225,10 @@
                     display: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-panel {
-                    border: 1px solid rgba(148,163,184,0.35);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 10px;
-                    background: #fff;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
                     display: flex;
                     flex-direction: column;
                     height: 100%;
@@ -3204,33 +3240,56 @@
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-toolbar {
                     padding: 10px;
-                    border-bottom: 1px solid rgba(148,163,184,0.28);
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                     display: flex;
                     gap: 8px;
                     align-items: center;
                     flex-wrap: wrap;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]) {
-                    border: 1px solid rgba(148,163,184,0.5);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 6px 8px;
                     font-size: 12px;
-                    background: #fff;
-                    color: #1f2937;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
                     min-height: 30px;
                     box-sizing: border-box;
                     flex: 1;
                     min-width: 180px;
                 }
+                #am-wxt-keyword-item-picker-mask .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"])::placeholder {
+                    color: rgba(80,90,116,0.62);
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]):focus {
+                    outline: none;
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(255,255,255,0.62);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12);
+                }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn {
-                    border: 1px solid rgba(69,84,229,0.3);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 6px 10px;
                     font-size: 12px;
                     line-height: 1;
-                    background: #eef2ff;
-                    color: #2e3ab8;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                     cursor: pointer;
+                    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn:hover {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(255,255,255,0.62);
+                    color: var(--am26-text, #1b2438);
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn.am-wxt-icon-only-btn {
                     display: inline-flex;
@@ -3247,13 +3306,17 @@
                     height: 14px;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn.primary {
-                    background: linear-gradient(135deg, #4554e5, #4f68ff);
-                    color: #fff;
-                    border-color: #4554e5;
+                    background: linear-gradient(135deg, var(--am26-primary, rgba(69,84,229,1)), var(--am26-primary-strong, #1d3fcf));
+                    color: rgba(255,255,255,0.96);
+                    border-color: var(--am26-primary, rgba(69,84,229,1));
+                    box-shadow: 0 8px 18px rgba(69,84,229,0.18);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn:disabled {
                     cursor: not-allowed;
                     opacity: 0.55;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
+                    box-shadow: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-list {
                     padding: 6px;
@@ -3269,10 +3332,12 @@
                     max-height: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-item {
-                    border: 1px solid rgba(148,163,184,0.34);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 8px;
                     margin-bottom: 6px;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                     display: flex;
                     justify-content: space-between;
                     gap: 8px;
@@ -3281,11 +3346,11 @@
                 #am-wxt-keyword-item-picker-mask .am-wxt-item .name {
                     font-size: 12px;
                     line-height: 1.35;
-                    color: #111827;
+                    color: var(--am26-text, #1b2438);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-item .meta {
                     font-size: 11px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     margin-top: 2px;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-item .actions {
@@ -3298,7 +3363,7 @@
                     display: flex;
                     justify-content: flex-end;
                     gap: 8px;
-                    background: #f7f8fc;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                 }
                 #am-wxt-scene-popup-mask {
                     position: fixed;
@@ -3309,6 +3374,11 @@
                     align-items: center;
                     justify-content: center;
                     padding: 16px;
+                }
+                #am-wxt-scene-popup-mask.am-wxt-scene-popup-mask-batch-number {
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog {
                     width: min(720px, 96vw);
@@ -4707,9 +4777,9 @@
                     justify-content: space-between;
                     gap: 8px;
                     padding: 10px;
-                    border-bottom: 1px solid rgba(148,163,184,0.2);
-                    background: #f8fafc;
-                    color: #334155;
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text, #1b2438);
                     font-size: 12px;
                     font-weight: 600;
                 }
@@ -4727,27 +4797,64 @@
                     align-items: center;
                     justify-content: space-between;
                     gap: 8px;
-                    border: 1px solid rgba(148,163,184,0.24);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 8px;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text, #1b2438);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-selected-row > span {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove {
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 24px;
+                    height: 24px;
+                    padding: 0;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    cursor: pointer;
+                    line-height: 1;
+                    transition: color .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove svg {
+                    width: 12px;
+                    height: 12px;
+                    flex: 0 0 auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove:hover {
+                    color: var(--am26-danger, #ea4f4f);
+                    border-color: rgba(234,79,79,0.22);
+                    background: rgba(234,79,79,0.1);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove:focus-visible {
+                    outline: none;
+                    border-color: rgba(37,99,235,0.42);
+                    box-shadow: 0 0 0 3px rgba(37,99,235,0.22);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-filter-selected-empty {
-                    border: 1px dashed rgba(148,163,184,0.3);
+                    border: 1px dashed var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 12px;
                     text-align: center;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     line-height: 1.45;
-                    background: #f8fafc;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-filter-footnote {
                     margin-top: 6px;
                     font-size: 12px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-budget-guard {
                     width: min(760px, 96vw);
@@ -4853,7 +4960,12 @@
                     line-height: 1.45;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-batch-number {
-                    width: min(560px, 96vw);
+                    width: min(560px, calc(100vw - 32px));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-form {
                     display: flex;
@@ -4870,29 +4982,50 @@
                     flex-direction: column;
                     gap: 6px;
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text, #1b2438);
                     font-weight: 600;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"] {
                     width: 100%;
                     min-width: 0;
                     height: 34px;
-                    border: 1px solid rgba(148,163,184,0.36);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 0 10px;
-                    background: #fff;
-                    color: #1f2937;
+                    background: rgba(255,255,255,0.72);
+                    color: var(--am26-text, #1b2438);
                     font-size: 13px;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"]:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
+                }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"]:disabled {
-                    background: #f1f5f9;
-                    color: #94a3b8;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
                     cursor: not-allowed;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-note {
                     font-size: 12px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     line-height: 1.45;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-error {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    border: 1px solid rgba(234,79,79,0.26);
+                    border-radius: 10px;
+                    padding: 8px 10px;
+                    background: rgba(234,79,79,0.10);
+                    color: var(--am26-danger, #ea4f4f);
+                    font-size: 12px;
+                    line-height: 1.45;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-error[hidden] {
+                    display: none !important;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-btn {
                     border: 1px solid rgba(69,84,229,0.3);
@@ -4908,6 +5041,21 @@
                     background: linear-gradient(135deg, #4554e5, #4f68ff);
                     color: #fff;
                     border-color: #4554e5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-batch-number .am-wxt-btn {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-batch-number .am-wxt-btn.primary {
+                    background: linear-gradient(135deg, var(--am26-primary, #4554e5), var(--am26-primary-strong, #1d3fcf));
+                    color: #fff;
+                    border-color: var(--am26-primary, #4554e5);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-batch-number .am-wxt-btn:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-btn.danger {
                     background: #fee2e2;
@@ -6470,9 +6618,11 @@
                     width: max-content;
                     padding: 4px;
                     border-radius: 10px;
-                    border: 1px solid rgba(148,163,184,0.35);
-                    background: #fff;
-                    box-shadow: 0 10px 24px rgba(15,23,42,0.18);
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
                     display: flex;
                     flex-direction: column;
                     gap: 4px;
@@ -6492,7 +6642,7 @@
                     padding: 6px 10px;
                     border-radius: 8px;
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text-soft, #505a74);
                     cursor: pointer;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-label {
@@ -6504,9 +6654,9 @@
                     gap: 2px;
                     padding: 2px 6px;
                     border-radius: 10px;
-                    border: 1px solid rgba(99,102,241,0.32);
-                    background: rgba(255,255,255,0.88);
-                    color: #3344c8;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 11px;
                     line-height: 1;
                     user-select: none;
@@ -6523,12 +6673,12 @@
                     font-weight: 600;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-item:hover {
-                    background: rgba(37,99,235,0.1);
-                    color: #1d4ed8;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-item.active {
-                    background: rgba(37,99,235,0.14);
-                    color: #1d4ed8;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-weight: 600;
                 }
                 #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu {
@@ -6541,9 +6691,11 @@
                     width: max-content;
                     padding: 4px;
                     border-radius: 10px;
-                    border: 1px solid rgba(148,163,184,0.35);
-                    background: #fff;
-                    box-shadow: 0 10px 24px rgba(15,23,42,0.18);
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
                     display: flex;
                     flex-direction: column;
                     gap: 4px;
@@ -6563,7 +6715,7 @@
                     padding: 6px 10px;
                     border-radius: 8px;
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text-soft, #505a74);
                     cursor: pointer;
                 }
                 #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-label {
@@ -6575,9 +6727,9 @@
                     gap: 2px;
                     padding: 2px 6px;
                     border-radius: 10px;
-                    border: 1px solid rgba(99,102,241,0.32);
-                    background: rgba(255,255,255,0.88);
-                    color: #3344c8;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 11px;
                     line-height: 1;
                     user-select: none;
@@ -6594,12 +6746,12 @@
                     font-weight: 600;
                 }
                 #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-item:hover {
-                    background: rgba(37,99,235,0.1);
-                    color: #1d4ed8;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
                 }
                 #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-item.active {
-                    background: rgba(37,99,235,0.14);
-                    color: #1d4ed8;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-weight: 600;
                 }
                 #am-wxt-keyword-quick-log {
@@ -6854,14 +7006,15 @@
                     --am-wxt-glass-bg: rgba(248, 250, 255, 0.72);
                     --am-wxt-soft-stroke: rgba(79, 102, 224, 0.24);
                     --am-wxt-surface: rgba(255, 255, 255, 0.85);
-                    background: linear-gradient(120deg, rgba(15, 23, 42, 0.26), rgba(30, 64, 175, 0.18));
-                    backdrop-filter: blur(12px);
-                    -webkit-backdrop-filter: blur(12px);
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                 }
 
                 #am-wxt-keyword-overlay:not(.item-picker-open) {
-                    background: linear-gradient(120deg, rgba(15, 23, 42, 0.3), rgba(30, 64, 175, 0.2));
-                    backdrop-filter: blur(10px);
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                 }
 
                 #am-wxt-keyword-modal {
@@ -7012,17 +7165,21 @@
                 }
 
                 #am-wxt-keyword-detail-config {
-                    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.95));
-                    border: 1px solid rgba(255, 255, 255, 0.72);
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
                     border-radius: 18px;
-                    backdrop-filter: blur(12px);
-                    -webkit-backdrop-filter: blur(12px);
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31, 38, 135, 0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                 }
 
                 #am-wxt-keyword-detail-config .am-wxt-detail-title,
                 #am-wxt-keyword-detail-config .am-wxt-detail-footer {
-                    background: rgba(255, 255, 255, 0.95);
-                    border-color: rgba(148, 163, 184, 0.2);
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
+                    border-color: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
                 }
 
                 #am-wxt-keyword-modal #am-wxt-workbench-preview-log,
@@ -7041,16 +7198,17 @@
 
                 #am-wxt-keyword-modal .am-wxt-run-mode-menu,
                 #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu {
-                    border: 1px solid rgba(255, 255, 255, 0.8);
-                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 249, 255, 0.9));
-                    backdrop-filter: blur(8px);
-                    -webkit-backdrop-filter: blur(8px);
-                    box-shadow: 0 12px 24px rgba(42, 91, 255, 0.12);
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
                 }
 
                 #am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop {
-                    background: rgba(15, 23, 42, 0.2);
-                    backdrop-filter: blur(8px);
+                    background: rgba(255, 255, 255, 0.72);
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
 
                 #am-wxt-keyword-detail-config .am-wxt-inline-check,
@@ -7096,37 +7254,46 @@
                     background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.9));
                 }
 
-                #am-wxt-keyword-overlay,
+                #am-wxt-keyword-overlay {
+                    --am-wxt-primary: var(--am26-primary, #4554e5);
+                    --am-wxt-primary-soft: rgba(69, 84, 229, 0.1);
+                    --am-wxt-border: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    --am-wxt-muted-border: rgba(255, 255, 255, 0.48);
+                    --am-wxt-text: var(--am26-text, #1b2438);
+                    --am-wxt-muted: var(--am26-text-soft, #505a74);
+                }
+
                 #am-wxt-keyword-overlay:not(.item-picker-open) {
-                    --am-wxt-primary: #2563eb;
-                    --am-wxt-primary-soft: #eff6ff;
-                    --am-wxt-border: #dbe3ef;
-                    --am-wxt-muted-border: #e5eaf2;
-                    --am-wxt-text: #111827;
-                    --am-wxt-muted: #64748b;
-                    background: rgba(15, 23, 42, 0.42);
-                    backdrop-filter: blur(6px);
-                    -webkit-backdrop-filter: blur(6px);
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                }
+
+                #am-wxt-keyword-overlay.item-picker-open {
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                 }
 
                 #am-wxt-keyword-modal {
                     width: min(1320px, calc(100vw - 48px));
-                    color: var(--am-wxt-text);
-                    background: #f8fafc;
-                    border: 1px solid rgba(203, 213, 225, 0.95);
-                    border-radius: 10px;
-                    box-shadow: 0 22px 56px rgba(15, 23, 42, 0.26);
-                    backdrop-filter: none;
-                    -webkit-backdrop-filter: none;
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
+                    backdrop-filter: blur(20px) saturate(1.4);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+                    font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-header {
                     height: 48px;
                     padding: 0 16px;
-                    background: #fff;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    color: var(--am-wxt-text);
-                    box-shadow: none;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.24));
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-header-main {
@@ -7137,15 +7304,43 @@
                     font-weight: 700;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-close {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    color: var(--am26-text-soft, #505a74);
+                    background: transparent !important;
+                    border: 0;
+                    box-shadow: none !important;
+                    transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-close:hover {
+                    background: rgba(234, 79, 79, 0.1) !important;
+                    color: var(--am26-danger, #ea4f4f);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-title {
+                    margin: 0;
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 14px;
+                    line-height: 20px;
+                    font-weight: 700;
+                    letter-spacing: 0;
+                }
+
                 #am-wxt-keyword-modal .am-wxt-runtime-pill {
                     display: inline-flex;
                     align-items: center;
                     min-height: 22px;
                     padding: 0 9px;
-                    border: 1px solid #bfdbfe;
+                    border: 1px solid rgba(69, 84, 229, 0.22);
                     border-radius: 999px;
-                    background: #eff6ff;
-                    color: #2563eb;
+                    background: rgba(69, 84, 229, 0.08);
+                    color: var(--am26-primary, #4554e5);
                     font-size: 11px;
                     font-weight: 600;
                     white-space: nowrap;
@@ -7153,7 +7348,7 @@
 
                 #am-wxt-keyword-modal .am-wxt-body {
                     padding: 12px;
-                    background: #f8fafc;
+                    background: transparent;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-workbench-tabs {
@@ -7162,8 +7357,8 @@
                     padding: 0 16px;
                     min-height: 42px;
                     align-items: flex-end;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: transparent;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn {
@@ -7205,25 +7400,33 @@
                     min-height: 32px;
                     padding: 0 12px;
                     border-radius: 8px;
-                    border: 1px solid #cbd5e1;
-                    background: #fff;
-                    color: #334155;
+                    border: 1px solid rgba(69, 84, 229, 0.2);
+                    background: rgba(255, 255, 255, 0.46);
+                    color: var(--am26-text-soft, #505a74);
                     box-shadow: none;
                     line-height: 30px;
                     transform: none;
+                    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-btn:hover {
-                    border-color: #93c5fd;
-                    background: #f8fbff;
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.68);
                     transform: none;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-btn:focus-visible,
+                #am-wxt-keyword-modal .am-wxt-close:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69, 84, 229, 0.12);
+                }
+
                 #am-wxt-keyword-modal .am-wxt-btn.primary {
-                    background: var(--am-wxt-primary);
-                    border-color: var(--am-wxt-primary);
+                    background: linear-gradient(135deg, var(--am26-primary, #4554e5), var(--am26-primary-strong, #1d3fcf));
+                    border-color: rgba(69, 84, 229, 0.68);
                     color: #fff;
-                    box-shadow: none;
+                    box-shadow: 0 8px 18px rgba(69, 84, 229, 0.18);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-home-summary {
@@ -7240,21 +7443,21 @@
                     gap: 10px;
                     min-height: 54px;
                     padding: 10px 14px;
-                    border: 1px solid #eef2f7;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
                     box-sizing: border-box;
-                    box-shadow: none;
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-home-stat-label {
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     white-space: nowrap;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-home-stat strong {
-                    color: #0f172a;
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-size: 18px;
                     font-weight: 750;
                     line-height: 1.1;
@@ -7263,7 +7466,7 @@
 
                 #am-wxt-keyword-modal .am-wxt-home-stat strong small {
                     margin-left: 2px;
-                    color: #0f172a;
+                    color: var(--am26-text, #1b2438);
                     font-size: 14px;
                     font-weight: 700;
                 }
@@ -7274,20 +7477,30 @@
                 #am-wxt-keyword-modal .am-wxt-strategy-board,
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-row,
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-panel {
-                    border: 1px solid var(--am-wxt-muted-border);
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px;
-                    background: #fff;
-                    box-shadow: none;
-                    backdrop-filter: none;
-                    -webkit-backdrop-filter: none;
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
+                    backdrop-filter: blur(10px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.15);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config {
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31, 38, 135, 0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-toolbar {
                     min-height: 42px;
                     padding: 8px 10px;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px 8px 0 0;
-                    background: #fff;
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-product-toolbar {
@@ -7311,18 +7524,55 @@
                 #am-wxt-keyword-modal .am-wxt-setting-control select,
                 #am-wxt-keyword-modal .am-wxt-strategy-search-input {
                     min-height: 32px;
-                    border: 1px solid #cbd5e1;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px;
-                    background: #fff;
-                    color: #111827;
-                    box-shadow: none;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"])::placeholder,
+                #am-wxt-keyword-modal .am-wxt-config input:not([type="checkbox"]):not([type="radio"])::placeholder,
+                #am-wxt-keyword-modal .am-wxt-config textarea::placeholder,
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input::placeholder {
+                    color: rgba(80, 90, 116, 0.62);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]):focus,
+                #am-wxt-keyword-modal .am-wxt-config input:not([type="checkbox"]):not([type="radio"]):focus,
+                #am-wxt-keyword-modal .am-wxt-config select:focus,
+                #am-wxt-keyword-modal .am-wxt-config textarea:focus,
+                #am-wxt-keyword-modal .am-wxt-setting-control select:focus,
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input:focus {
+                    outline: none;
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.62);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-search-input {
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-search-input::placeholder {
+                    color: rgba(80, 90, 116, 0.62);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-search-input:focus {
+                    outline: none;
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.62);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-item {
                     border-radius: 8px;
-                    border-color: var(--am-wxt-muted-border);
-                    background: #fff;
-                    box-shadow: none;
+                    border-color: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
                 }
 
                 #am-wxt-keyword-modal #am-wxt-keyword-added-list {
@@ -7344,12 +7594,12 @@
                     gap: 10px;
                     margin: 0;
                     padding: 12px;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-section-title {
-                    color: #0f172a;
+                    color: var(--am26-text, #1b2438);
                     font-size: 13px;
                     font-weight: 700;
                     white-space: nowrap;
@@ -7374,22 +7624,50 @@
                     justify-content: flex-end;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn,
+                #am-wxt-keyword-modal #am-wxt-keyword-batch-edit-strategy,
+                #am-wxt-keyword-modal #am-wxt-keyword-clear-strategy {
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn:hover,
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn:focus-visible {
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.72);
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.36);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn:disabled,
+                #am-wxt-keyword-modal #am-wxt-keyword-batch-edit-strategy:disabled,
+                #am-wxt-keyword-modal #am-wxt-keyword-clear-strategy:disabled {
+                    border-color: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
+                    color: rgba(80, 90, 116, 0.62);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+                    opacity: 1;
+                    cursor: not-allowed;
+                }
+
                 #am-wxt-keyword-modal .am-wxt-strategy-search-input {
                     width: min(280px, 100%);
                     padding: 0 10px;
-                    color: #111827;
-                    background: #fff;
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-search-input::placeholder {
-                    color: #94a3b8;
+                    color: rgba(80, 90, 116, 0.62);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-list {
                     display: flex;
                     flex-direction: column;
                     gap: 0;
-                    background: #fff;
+                    background: transparent;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-list-head,
@@ -7403,19 +7681,19 @@
                 #am-wxt-keyword-modal .am-wxt-strategy-list-head {
                     min-height: 34px;
                     padding: 0 12px;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    color: #64748b;
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 11px;
                     font-weight: 600;
-                    background: #f8fafc;
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-item {
                     border: 0;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 0;
                     padding: 0;
-                    background: #fff;
+                    background: transparent;
                     box-shadow: none;
                 }
 
@@ -7435,7 +7713,7 @@
                     display: flex;
                     align-items: center;
                     min-width: 0;
-                    color: #0f172a;
+                    color: var(--am26-text, #1b2438);
                     font-size: 12px;
                     font-weight: 700;
                     overflow: hidden;
@@ -7474,10 +7752,10 @@
                     height: 28px;
                     box-sizing: border-box;
                     padding: 0 8px;
-                    border: 1px solid #cbd5e1;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 6px;
-                    background: #fff;
-                    color: #0f172a;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
                     font-size: 12px;
                     font-weight: 600;
                     line-height: 26px;
@@ -7485,8 +7763,9 @@
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-inline-input:focus {
-                    border-color: #2563eb;
-                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.62);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-budget-input {
@@ -7513,7 +7792,7 @@
                     border: 0;
                     border-radius: 6px;
                     background: transparent;
-                    color: #94a3b8;
+                    color: var(--am26-text-soft, #505a74);
                     cursor: pointer;
                     opacity: 0;
                     visibility: hidden;
@@ -7522,9 +7801,10 @@
 
                 #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:hover,
                 #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:focus-visible {
-                    background: #f1f5f9;
-                    color: #64748b;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
                     outline: none;
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-item:hover .am-wxt-strategy-inline-edit-btn,
@@ -7664,13 +7944,13 @@
                     border: 0;
                     border-radius: 0;
                     background: transparent;
-                    color: #475569;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     white-space: nowrap;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-summary.muted {
-                    color: #94a3b8;
+                    color: rgba(80, 90, 116, 0.62);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost {
@@ -7729,12 +8009,18 @@
                     border-color: #fca5a5;
                 }
 
-                #am-wxt-keyword-modal .am-wxt-copy-multi,
+                #am-wxt-keyword-modal .am-wxt-copy-multi {
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    color: var(--am26-text-soft, #505a74);
+                }
+
                 #am-wxt-keyword-modal .am-wxt-run-mode-count {
                     border-radius: 999px;
-                    background: #f8fafc;
-                    border-color: #cbd5e1;
-                    color: #334155;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    color: var(--am26-text-soft, #505a74);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-footer {
@@ -7746,8 +8032,9 @@
                     justify-content: space-between;
                     gap: 12px;
                     padding: 12px;
-                    border-top: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    box-shadow: 0 -8px 18px rgba(31,38,135,0.06);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-submit-summary {
@@ -7755,7 +8042,7 @@
                     align-items: center;
                     gap: 10px;
                     flex-wrap: wrap;
-                    color: #475569;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 13px;
                     line-height: 1.4;
                 }
@@ -7768,7 +8055,7 @@
                 }
 
                 #am-wxt-keyword-modal .am-wxt-submit-summary strong {
-                    color: #2563eb;
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-size: 18px;
                     font-weight: 750;
                     margin: 0 3px;
@@ -7796,13 +8083,13 @@
 
                 #am-wxt-keyword-modal .am-wxt-quick-log-panel {
                     padding: 10px;
-                    border-top: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-quick-log-title {
                     margin-bottom: 6px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     font-weight: 700;
                 }
@@ -7812,16 +8099,219 @@
                     min-height: 82px;
                     max-height: 112px;
                     padding: 8px 10px;
-                    border: 1px solid var(--am-wxt-muted-border);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
-                    background: #fff;
-                    box-shadow: none;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.42);
                 }
 
                 #am-wxt-keyword-quick-log .line {
                     min-height: 24px;
-                    color: #475569;
+                    color: var(--am26-text-soft, #505a74);
                     line-height: 1.45;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel {
+                    color: var(--am26-text, #1b2438);
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-box {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.32);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title {
+                    min-width: 0;
+                    padding-bottom: 6px;
+                    border-bottom: 1px dashed rgba(255,255,255,0.32);
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title:last-child {
+                    margin-bottom: 0;
+                    padding-bottom: 0;
+                    border-bottom: 0;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title span:last-child {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    color: var(--am26-text, #1b2438);
+                    font-weight: 700;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log,
+                #am-wxt-keyword-modal #am-wxt-keyword-log,
+                #am-wxt-keyword-modal #am-wxt-keyword-preview {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.42);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-preview {
+                    color: var(--am26-text, #1b2438);
+                    font-family: Menlo, Consolas, monospace;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line,
+                #am-wxt-keyword-modal #am-wxt-keyword-log .line {
+                    color: var(--am26-text-soft, #505a74);
+                    line-height: 1.45;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.error,
+                #am-wxt-keyword-modal #am-wxt-keyword-log .line.error {
+                    color: var(--am26-danger, #ea4f4f);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.success,
+                #am-wxt-keyword-modal #am-wxt-keyword-log .line.success {
+                    color: var(--am26-success, #0ea86f);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger:hover:not(:disabled),
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker.open .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker.open .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(255,255,255,0.68);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.34);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger:disabled {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker.open .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(69,84,229,0.14);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow {
+                    color: var(--am26-text-soft, #505a74);
+                    background-image: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow::before {
+                    content: "";
+                    width: 8px;
+                    height: 8px;
+                    border-right: 2px solid currentColor;
+                    border-bottom: 2px solid currentColor;
+                    transform: translateY(-2px) rotate(45deg);
+                    border-radius: 1px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-arrow {
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    background-image: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel {
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option {
+                    color: var(--am26-text-soft, #505a74);
+                    background: transparent;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:has(input:checked),
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option.is-active,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option:hover {
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-empty,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-summary,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-note,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-meta {
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-actions {
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-edit,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-edit:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit:hover {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(69,84,229,0.14);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form input {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select:disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit.is-disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit:disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit.is-disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit:disabled {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
+                    opacity: 1;
+                    cursor: not-allowed;
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm {
@@ -7937,6 +8427,15 @@
 
                     #am-wxt-scene-popup-mask .am-wxt-submit-confirm-grid {
                         grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    #am-wxt-keyword-modal .am-wxt-btn,
+                    #am-wxt-keyword-modal .am-wxt-close,
+                    #am-wxt-keyword-modal .am-wxt-strategy-actions,
+                    #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn {
+                        transition: none !important;
                     }
                 }
             `;

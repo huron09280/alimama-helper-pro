@@ -5,6 +5,14 @@ import { readFileSync } from 'node:fs';
 const coreSource = readFileSync(new URL('../src/optimizer/core.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/optimizer/ui.js', import.meta.url), 'utf8');
 const bootstrapSource = readFileSync(new URL('../src/optimizer/bootstrap.js', import.meta.url), 'utf8');
+const latestSettingPreviewSource = uiSource.slice(
+    uiSource.indexOf('renderLatestEscortSettingPreview: () => {'),
+    uiSource.indexOf('// 渲染护航方案表格（到卡片）')
+);
+const mainPanelCreateSource = uiSource.slice(
+    uiSource.indexOf('create: () => {'),
+    uiSource.indexOf('// 创建最小化按钮')
+);
 
 test('无 actionList 时可识别小万护航新链路信号', () => {
     assert.match(
@@ -169,6 +177,34 @@ test('手动设置面板 checkbox 有独立可见样式兜底', () => {
     );
 });
 
+test('算法护航手动设置面板使用统一 token 与可见焦点态', () => {
+    assert.match(
+        latestSettingPreviewSource,
+        /\.am26-manual-card \{[\s\S]*border:1px solid var\(--am26-border,rgba\(255,255,255,\.4\)\);[\s\S]*background:linear-gradient\(145deg,rgba\(246,250,255,\.72\),rgba\(235,243,255,\.48\)\);/,
+        '手动设置卡片未收敛到统一浅玻璃 token'
+    );
+    assert.match(
+        latestSettingPreviewSource,
+        /\.am26-dropdown-menu \{[\s\S]*background:var\(--am26-panel-strong,rgba\(255,255,255,\.45\)\);[\s\S]*box-shadow:var\(--am26-shadow,0 8px 32px rgba\(31,38,135,\.15\)\);/,
+        '手动设置下拉菜单未使用统一 panel/shadow token'
+    );
+    assert.match(
+        latestSettingPreviewSource,
+        /\.am26-manual-expand:focus-visible,[\s\S]*\.am26-dropdown-trigger:focus-visible,[\s\S]*\.am26-dropdown-item:focus-visible,[\s\S]*\.am26-segment button:focus-visible[\s\S]*outline:2px solid rgba\(37,99,235,\.45\);/,
+        '手动设置控件缺少统一 focus-visible'
+    );
+    assert.match(
+        latestSettingPreviewSource,
+        /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.am26-manual-root \*[\s\S]*transition:none !important;[\s\S]*animation:none !important;/,
+        '手动设置面板缺少 reduced-motion 覆盖'
+    );
+    assert.doesNotMatch(
+        latestSettingPreviewSource,
+        /#d7e2fb|#f9fbff|#f4f7ff|#d7dfef|#dbe3f1|#edf2ff|#ebf2ff|#f3f6ff|#1f49d4|#6a789a|#5f6c8e|#5b6785|#7f8bab/,
+        '手动设置面板仍保留旧硬编码视觉色'
+    );
+});
+
 test('手动设置默认勾选项全部关闭', () => {
     assert.match(
         bootstrapSource,
@@ -230,6 +266,115 @@ test('手动设置默认折叠并支持点击展开内部设置', () => {
         uiSource,
         /manual-expand-toggle[\s\S]*>\s*展开设置\s*</,
         '展开入口仍保留“展开设置”文本按钮，未简化为图标'
+    );
+});
+
+test('算法护航折叠与下拉入口使用统一线性图标', () => {
+    assert.match(
+        uiSource,
+        /class="arrow"[\s\S]*renderAmIcon\('chevron-down',\s*\{\s*size:\s*12,\s*strokeWidth:\s*2\.2\s*\}\)/,
+        '计划卡片折叠入口未使用统一 chevron 图标'
+    );
+    assert.match(
+        uiSource,
+        /class="am26-dropdown-arrow"[\s\S]*renderAmIcon\('chevron-down',\s*\{\s*size:\s*12,\s*strokeWidth:\s*2\.2\s*\}\)/,
+        '手动设置下拉入口未使用统一 chevron 图标'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        />\s*▼\s*<\/span>/,
+        '算法护航 UI 仍保留裸文本下拉箭头'
+    );
+});
+
+test('算法护航主面板基础控件具备按钮语义与焦点态', () => {
+    assert.match(
+        mainPanelCreateSource,
+        /<button id="\$\{CONFIG\.UI_ID\}-center" class="am-icon-btn" type="button" title="居中" aria-label="居中">/,
+        '居中窗口控制应为真实 button 并具备可访问名称'
+    );
+    assert.match(
+        mainPanelCreateSource,
+        /<button id="\$\{CONFIG\.UI_ID\}-maximize" class="am-icon-btn" type="button" title="最大化" aria-label="最大化">/,
+        '最大化窗口控制应为真实 button 并具备可访问名称'
+    );
+    assert.match(
+        mainPanelCreateSource,
+        /<button id="\$\{CONFIG\.UI_ID\}-close" class="am-icon-btn danger" type="button" title="关闭" aria-label="关闭算法护航">/,
+        '关闭窗口控制应为真实 button 并具备可访问名称'
+    );
+    assert.doesNotMatch(
+        mainPanelCreateSource,
+        /<span id="\$\{CONFIG\.UI_ID\}-(?:center|maximize|close)" class="am-icon-btn"/,
+        '算法护航窗口控制不应退回可点击 span'
+    );
+    assert.match(
+        mainPanelCreateSource,
+        /#\$\{CONFIG\.UI_ID\} \.am-icon-btn:focus-visible,[\s\S]*#\$\{CONFIG\.UI_ID\}-run:focus-visible,[\s\S]*#\$\{CONFIG\.UI_ID\}-prompt:focus-visible,[\s\S]*#\$\{CONFIG\.UI_ID\}-concurrency:focus-visible[\s\S]*outline:2px solid rgba\(37,99,235,\.45\);/,
+        '算法护航窗口控制、启动按钮和输入框缺少统一 focus-visible'
+    );
+    assert.match(
+        mainPanelCreateSource,
+        /@media \(prefers-reduced-motion: reduce\)[\s\S]*#\$\{CONFIG\.UI_ID\},[\s\S]*#\$\{CONFIG\.UI_ID\} \*[\s\S]*transition:none !important;[\s\S]*animation:none !important;/,
+        '算法护航主面板缺少 reduced-motion 覆盖'
+    );
+    assert.match(
+        mainPanelCreateSource,
+        /runBtn\.style\.background = 'linear-gradient\(135deg,var\(--am26-text-soft,#505a74\),var\(--am26-text,#1b2438\)\)'/,
+        '返回态按钮仍未使用统一文本 token'
+    );
+    assert.doesNotMatch(
+        mainPanelCreateSource,
+        /#4d5875|#6b7280|#4b5563/,
+        '算法护航主面板仍保留旧硬编码灰色'
+    );
+});
+
+test('算法护航结果浮层具备 dialog 语义与键盘关闭能力', () => {
+    assert.match(
+        uiSource,
+        /overlay\.setAttribute\('role',\s*'dialog'\);[\s\S]*overlay\.setAttribute\('aria-modal',\s*'true'\);[\s\S]*overlay\.setAttribute\('aria-labelledby',\s*`\$\{CONFIG\.UI_ID\}-result-title`\);/,
+        '结果浮层缺少 dialog/aria-modal/aria-labelledby 语义'
+    );
+    assert.match(
+        uiSource,
+        /id="\$\{CONFIG\.UI_ID\}-result-title"[\s\S]*执行完成/,
+        '结果浮层标题未提供可引用 id'
+    );
+    assert.match(
+        uiSource,
+        /const previousActiveElement = document\.activeElement instanceof HTMLElement \? document\.activeElement : null;/,
+        '结果浮层未记录打开前焦点'
+    );
+    assert.match(
+        uiSource,
+        /const restoreFocus = \(\) => \{[\s\S]*previousActiveElement\.focus\(\{ preventScroll: true \}\);[\s\S]*\};/,
+        '结果浮层关闭后未恢复焦点'
+    );
+    assert.match(
+        uiSource,
+        /const handleResultKeydown = \(event\) => \{[\s\S]*event\.key !== 'Escape'[\s\S]*closeResultOverlay\(\);[\s\S]*\};/,
+        '结果浮层缺少 Escape 键关闭逻辑'
+    );
+    assert.match(
+        uiSource,
+        /document\.addEventListener\('keydown',\s*handleResultKeydown,\s*true\);[\s\S]*document\.removeEventListener\('keydown',\s*handleResultKeydown,\s*true\);|document\.removeEventListener\('keydown',\s*handleResultKeydown,\s*true\);[\s\S]*document\.addEventListener\('keydown',\s*handleResultKeydown,\s*true\);/,
+        '结果浮层未成对绑定/解绑 keydown 监听'
+    );
+    assert.match(
+        uiSource,
+        /#\$\{CONFIG\.UI_ID\}-result-close:focus-visible[\s\S]*outline:2px solid rgba\(42,91,255,\.45\);/,
+        '结果浮层关闭按钮缺少键盘焦点态'
+    );
+    assert.match(
+        uiSource,
+        /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation:none !important;[\s\S]*transition:none !important;/,
+        '结果浮层缺少减少动画适配'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /scale\(1\.05\)/,
+        '结果浮层关闭按钮仍使用放大 hover 动效'
     );
 });
 

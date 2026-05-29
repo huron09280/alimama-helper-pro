@@ -70,3 +70,37 @@ test('extension 模式从有效缓存恢复授权并静默续租', () => {
     assert.match(source, /const hydratedFromCache = hydrateCurrentLeaseFromCache\('extension_cache_bootstrap'\);[\s\S]*if \(hydratedFromCache\) \{[\s\S]*triggerOnDemandVerify\('extension_cache_bootstrap'\);[\s\S]*\} else \{[\s\S]*LicenseGuard\.assertAuthorized\(\{[\s\S]*source: 'bootstrap_preflight'[\s\S]*silentTransientFailure: true/s, 'extension 启动未先恢复缓存并做静默校验');
     assert.match(source, /if \(options\?\.silentTransientFailure && isTransientVerifyErrorCode\(code\)\) \{[\s\S]*reason: 'license_refresh_deferred'[\s\S]*throw createError\(code, msg, err\?\.detail \|\| null\);[\s\S]*\}\s*lock\(code, msg, source\);/s, '启动静默校验遇到瞬时失败不应直接弹锁定遮罩');
 });
+
+test('授权锁定遮罩使用统一 UI 语义并避免 HTML 拼接展示状态', () => {
+    assert.match(source, /root\.setAttribute\('role', 'dialog'\);/, '授权遮罩缺少 dialog 语义');
+    assert.match(source, /root\.setAttribute\('aria-modal', 'true'\);/, '授权遮罩缺少 aria-modal');
+    assert.match(source, /root\.setAttribute\('aria-labelledby', 'am-license-lock-title'\);/, '授权遮罩缺少标题关联');
+    assert.match(source, /root\.setAttribute\('aria-describedby', 'am-license-lock-message'\);/, '授权遮罩缺少描述关联');
+    assert.match(source, /<h2 class="am-license-lock-title" id="am-license-lock-title">/, '授权遮罩标题缺少稳定 id');
+    assert.match(source, /<p class="am-license-lock-desc" id="am-license-lock-message" data-license-message="1">/, '授权遮罩正文缺少稳定 id');
+    assert.match(source, /__AM_RENDER_ICON__\('alert-triangle', \{ size: 20, strokeWidth: 2\.2 \}\)/, '授权遮罩缺少共享告警图标');
+    assert.match(source, /messageNode\.textContent = reason;/, '授权遮罩正文必须通过 textContent 展示');
+    assert.match(source, /metaNode\.replaceChildren\(\);[\s\S]*document\.createElement\('span'\)[\s\S]*badge\.textContent = `\$\{label\}: \$\{value\}`;[\s\S]*metaNode\.appendChild\(badge\);/, '授权遮罩 meta 必须通过 DOM/textContent 渲染');
+    assert.doesNotMatch(source, /metaNode\.innerHTML\s*=/, '授权遮罩 meta 不得用 innerHTML 拼接 state 字符串');
+    assert.doesNotMatch(source, /<span class="am-license-lock-badge">/, '授权遮罩 meta 不得通过模板 HTML 生成 badge');
+
+    const overlayBlock = source.slice(
+        source.indexOf('const renderOverlay = () => {'),
+        source.indexOf('const lock = (reasonCode =')
+    );
+    assert.doesNotMatch(overlayBlock, /leaseToken|policyToken|deviceHash|nonce/, '授权遮罩不应展示敏感授权字段');
+});
+
+test('授权锁定遮罩视觉收敛到浅玻璃 token', () => {
+    assert.match(source, /background: rgba\(27, 36, 56, 0\.28\);/, '授权遮罩 overlay 未使用统一浅遮罩');
+    assert.match(source, /color: var\(--am26-text, #1b2438\);/, '授权遮罩未使用统一文本 token');
+    assert.match(source, /font-family: var\(--am26-font,/, '授权遮罩未使用统一字体 token');
+    assert.match(source, /border-radius: 18px;/, '授权遮罩卡片未使用 18px 规范圆角');
+    assert.match(source, /background: var\(--am26-panel-strong,/, '授权遮罩卡片未使用统一 panel token');
+    assert.match(source, /box-shadow: var\(--am26-shadow,/, '授权遮罩卡片未使用统一阴影 token');
+    assert.match(source, /color: var\(--am26-danger, #ea4f4f\);/, '授权遮罩状态图标未使用危险语义色');
+    assert.match(source, /@media \(prefers-reduced-motion: reduce\)/, '授权遮罩缺少 reduced-motion 覆盖');
+    assert.doesNotMatch(source, /background: rgba\(6, 9, 19, 0\.82\);/, '授权遮罩仍保留旧深色遮罩');
+    assert.doesNotMatch(source, /rgba\(17, 24, 39, 0\.94\)/, '授权遮罩仍保留旧深色卡片背景');
+    assert.doesNotMatch(source, /box-shadow: 0 20px 40px rgba\(0, 0, 0, 0\.4\);/, '授权遮罩仍保留旧重黑阴影');
+});

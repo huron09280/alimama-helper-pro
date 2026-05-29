@@ -77,6 +77,29 @@ test('extension page bundle 包含 GM 兼容层与核心桥接', () => {
   assert.match(pageBundle, /window\.__ALIMAMA_OPTIMIZER_TOGGLE__ = \(\) => \{/, '缺少核心桥接入口');
 });
 
+test('extension page bundle 授权锁定遮罩符合统一 UI 规范', () => {
+  assert.match(pageBundle, /root\.setAttribute\('role', 'dialog'\);/, '授权遮罩缺少 dialog 语义');
+  assert.match(pageBundle, /root\.setAttribute\('aria-modal', 'true'\);/, '授权遮罩缺少 aria-modal');
+  assert.match(pageBundle, /root\.setAttribute\('aria-labelledby', 'am-license-lock-title'\);/, '授权遮罩缺少标题关联');
+  assert.match(pageBundle, /root\.setAttribute\('aria-describedby', 'am-license-lock-message'\);/, '授权遮罩缺少描述关联');
+  assert.match(pageBundle, /__AM_RENDER_ICON__\('alert-triangle', \{ size: 20, strokeWidth: 2\.2 \}\)/, '授权遮罩缺少共享告警图标');
+  assert.match(pageBundle, /messageNode\.textContent = reason;/, '授权遮罩正文必须通过 textContent 展示');
+  assert.match(pageBundle, /metaNode\.replaceChildren\(\);[\s\S]*document\.createElement\('span'\)[\s\S]*badge\.textContent = `\$\{label\}: \$\{value\}`;[\s\S]*metaNode\.appendChild\(badge\);/, '授权遮罩 meta 必须通过 DOM/textContent 渲染');
+  assert.match(pageBundle, /background: rgba\(27, 36, 56, 0\.28\);/, '授权遮罩 overlay 未使用统一浅遮罩');
+  assert.match(pageBundle, /background: var\(--am26-panel-strong,/, '授权遮罩卡片未使用统一 panel token');
+  assert.match(pageBundle, /box-shadow: var\(--am26-shadow,/, '授权遮罩卡片未使用统一阴影 token');
+  assert.match(pageBundle, /@media \(prefers-reduced-motion: reduce\)/, '授权遮罩缺少 reduced-motion 覆盖');
+  assert.doesNotMatch(pageBundle, /metaNode\.innerHTML\s*=/, '授权遮罩 meta 不得用 innerHTML 拼接 state 字符串');
+  assert.doesNotMatch(pageBundle, /background: rgba\(6, 9, 19, 0\.82\);/, '授权遮罩仍保留旧深色遮罩');
+  assert.doesNotMatch(pageBundle, /rgba\(17, 24, 39, 0\.94\)/, '授权遮罩仍保留旧深色卡片背景');
+
+  const overlayBlock = pageBundle.slice(
+    pageBundle.indexOf('const renderOverlay = () => {'),
+    pageBundle.indexOf('const lock = (reasonCode =')
+  );
+  assert.doesNotMatch(overlayBlock, /leaseToken|policyToken|deviceHash|nonce/, '授权遮罩不应展示敏感授权字段');
+});
+
 test('extension page bundle 包含完整计划 API 且不默认暴露到页面全局', () => {
   assert.match(pageBundle, /const isExtensionPageRuntime = \(\) => \{[\s\S]*__AM_PLATFORM_RUNTIME__\?\.mode === 'extension'/, '缺少 extension 运行态判定');
   assert.match(pageBundle, /const KeywordPlanApi = \(\(\) => \{/, 'extension page bundle 应包含完整 KeywordPlanApi 主体，避免点击时首次解析大包');

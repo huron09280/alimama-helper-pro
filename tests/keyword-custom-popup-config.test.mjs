@@ -103,6 +103,16 @@ test('AI点睛提供原生同构流量诉求、模板、屏蔽词和已选需求
   );
   assert.match(
     block,
+    /class="am-wxt-ai-max-shield-remove"[\s\S]*data-ai-max-shield-remove="\$\{Utils\.escapeHtml\(type\)\}"[\s\S]*data-ai-max-shield-word="\$\{Utils\.escapeHtml\(word\)\}"[\s\S]*aria-label="删除屏蔽词：\$\{Utils\.escapeHtml\(word\)\}"[\s\S]*title="删除屏蔽词"[\s\S]*renderAmIcon\('close', \{ size: 12, strokeWidth: 2\.2 \}\)/,
+    'AI点睛屏蔽词删除按钮未使用共享 close 图标或缺少可访问名称'
+  );
+  assert.doesNotMatch(
+    block,
+    /data-ai-max-shield-remove="\$\{Utils\.escapeHtml\(type\)\}" data-ai-max-shield-word="\$\{Utils\.escapeHtml\(word\)\}">x<\/button>/,
+    'AI点睛屏蔽词删除按钮不得回退为裸文本 x'
+  );
+  assert.match(
+    block,
     /data-ai-max-demand-all[\s\S]*data-ai-max-demand-check/,
     'AI点睛已选需求缺少全选与单项 checkbox'
   );
@@ -130,6 +140,11 @@ test('AI点睛提供原生同构流量诉求、模板、屏蔽词和已选需求
     block,
     /dispatchSceneControlUpdate\(aiMaxInfoControl,\s*result\.aiMaxInfoRaw/,
     'AI点睛设置保存后未回写 campaign.aiMaxInfo'
+  );
+  assert.match(
+    source,
+    /#am-wxt-scene-popup-mask \.am-wxt-ai-max-shield-tag \{[\s\S]*?background:\s*rgba\(69,84,229,0\.10\);[\s\S]*?color:\s*var\(--am26-primary-strong,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-ai-max-shield-remove \{[\s\S]*?display:\s*inline-flex;[\s\S]*?width:\s*16px;[\s\S]*?height:\s*16px;[\s\S]*?border-radius:\s*999px;[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-ai-max-shield-remove svg \{[\s\S]*?width:\s*12px;[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-ai-max-shield-remove:focus-visible \{[\s\S]*?outline:\s*2px solid rgba\(37,99,235,0\.45\);/,
+    'AI点睛屏蔽词 tag 删除按钮缺少 token 化样式或可见 focus 态'
   );
 });
 

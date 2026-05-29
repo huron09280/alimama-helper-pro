@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
+const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const getLastCssBlock = (selector) => {
+  const pattern = new RegExp(`${escapeRegExp(selector)}\\s*\\{[\\s\\S]*?\\n\\s*\\}`, 'g');
+  return Array.from(source.matchAll(pattern)).map(match => match[0]).at(-1) || '';
+};
+const getLastMatch = (pattern) => Array.from(source.matchAll(pattern)).map(match => match[0]).at(-1) || '';
+const getLastCssBlockForSelectors = (selectors = []) => {
+  const selectorPattern = selectors.map(escapeRegExp).join('\\s*,\\s*');
+  const pattern = new RegExp(`${selectorPattern}\\s*\\{[\\s\\S]*?\\n\\s*\\}`, 'g');
+  return Array.from(source.matchAll(pattern)).map(match => match[0]).at(-1) || '';
+};
 
 test('会话草稿包含矩阵默认配置', () => {
   assert.match(source, /const SESSION_DRAFT_SCHEMA_VERSION = 3;/, 'schemaVersion 未升级到 3');
@@ -597,6 +608,99 @@ test('维度类型单选展开面板复用矩阵下拉面板样式与同步链�
   );
 });
 
+test('矩阵页维度选择器收敛到统一 token', () => {
+  const finalTriggerBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger'
+  ]);
+  const finalTriggerHoverBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger:hover:not(:disabled)',
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker.open .am-wxt-matrix-dimension-picker-trigger',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger:hover',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker.open .am-wxt-matrix-dimension-picker-trigger'
+  ]);
+  const finalTriggerDisabledBlock = getLastCssBlock('#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger:disabled');
+  const finalKeyTriggerBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger'
+  ]);
+  const finalKeyTriggerHoverBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger:hover',
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker.open .am-wxt-matrix-dimension-picker-trigger'
+  ]);
+  const finalArrowBlock = getLastCssBlock('#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow');
+  const finalPanelBlock = getLastCssBlock('#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel');
+  const finalOptionBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option',
+    '#am-wxt-keyword-modal .am-wxt-matrix-value-batch-option',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option'
+  ]);
+  const finalOptionHoverBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:hover',
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:has(input:checked)',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option:hover',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option.is-active',
+    '#am-wxt-keyword-modal .am-wxt-matrix-value-batch-option:hover',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option:hover'
+  ]);
+  const finalEmptyBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-empty',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-summary',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-note',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-meta'
+  ]);
+  const finalTrendButtonBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-trend-theme-edit',
+    '#am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit'
+  ]);
+  const finalNativeSelectBlock = getLastCssBlockForSelectors([
+    '#am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item',
+    '#am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form input'
+  ]);
+
+  assert.match(finalTriggerBlock, /border:\s*1px solid var\(--am26-border,/, '矩阵维度选择器触发器边框未使用 --am26 token');
+  assert.match(finalTriggerBlock, /background:\s*var\(--am26-surface-strong,/, '矩阵维度选择器触发器背景未使用 --am26 token');
+  assert.match(finalTriggerBlock, /color:\s*var\(--am26-text,/, '矩阵维度选择器触发器文字未使用 --am26 token');
+  assert.match(finalTriggerHoverBlock, /background:\s*rgba\(255,255,255,0\.68\);/, '矩阵维度选择器 hover 背景未使用白色轻玻璃');
+  assert.match(finalTriggerHoverBlock, /color:\s*var\(--am26-primary-strong,/, '矩阵维度选择器 hover 文字未使用主色 token');
+  assert.match(finalTriggerDisabledBlock, /background:\s*var\(--am26-surface,/, '矩阵维度选择器 disabled 背景未使用 --am26-surface');
+  assert.match(finalKeyTriggerBlock, /background:\s*rgba\(69,84,229,0\.10\);/, '矩阵维度类型胶囊背景未使用统一品牌弱光');
+  assert.match(finalKeyTriggerBlock, /color:\s*var\(--am26-primary-strong,/, '矩阵维度类型胶囊文字未使用主色 token');
+  assert.match(finalKeyTriggerHoverBlock, /background:\s*rgba\(69,84,229,0\.14\);/, '矩阵维度类型胶囊 hover 背景未使用统一品牌弱光');
+  assert.match(finalArrowBlock, /color:\s*var\(--am26-text-soft,/, '矩阵维度下拉箭头未继承统一次级文本色');
+  assert.match(finalArrowBlock, /background-image:\s*none;/, '矩阵维度下拉箭头最终规则不得继续依赖 data URI 旧色图标');
+  assert.match(finalPanelBlock, /border:\s*1px solid var\(--am26-border-strong,/, '矩阵维度下拉面板边框未使用 --am26 token');
+  assert.match(finalPanelBlock, /background:\s*var\(--am26-panel-strong,/, '矩阵维度下拉面板背景未使用 --am26 token');
+  assert.match(finalPanelBlock, /backdrop-filter:\s*blur\(12px\) saturate\(1\.25\);/, '矩阵维度下拉面板缺少统一浅玻璃 blur');
+  assert.match(finalOptionBlock, /color:\s*var\(--am26-text-soft,/, '矩阵维度下拉选项文字未使用 --am26 token');
+  assert.match(finalOptionHoverBlock, /background:\s*var\(--am26-surface-strong,/, '矩阵维度下拉选项 hover 背景未使用 --am26 token');
+  assert.match(finalOptionHoverBlock, /color:\s*var\(--am26-primary-strong,/, '矩阵维度下拉选项 hover 文字未使用主色 token');
+  assert.match(finalEmptyBlock, /color:\s*var\(--am26-text-soft,/, '矩阵维度下拉空状态/说明文字未使用 --am26 token');
+  assert.match(finalTrendButtonBlock, /border:\s*1px solid var\(--am26-border,/, '矩阵趋势主题或批量提交按钮边框未使用 --am26 token');
+  assert.match(finalTrendButtonBlock, /color:\s*var\(--am26-primary-strong,/, '矩阵趋势主题或批量提交按钮文字未使用主色 token');
+  assert.match(finalNativeSelectBlock, /background:\s*var\(--am26-surface-strong,/, '矩阵原生多选兜底背景未使用 --am26 token');
+  assert.match(finalNativeSelectBlock, /color:\s*var\(--am26-text,/, '矩阵原生多选兜底文字未使用 --am26 token');
+
+  [
+    finalTriggerBlock,
+    finalTriggerHoverBlock,
+    finalTriggerDisabledBlock,
+    finalKeyTriggerBlock,
+    finalKeyTriggerHoverBlock,
+    finalPanelBlock,
+    finalOptionBlock,
+    finalOptionHoverBlock,
+    finalEmptyBlock,
+    finalTrendButtonBlock,
+    finalNativeSelectBlock
+  ].forEach((block) => {
+    assert.doesNotMatch(block, /(?:background:\s*#fff|background:\s*#f8fafc|color:\s*#334155|color:\s*#64748b|color:\s*#3354d1|rgba\(148,\s*163,\s*184|rgba\(79,104,255)/, '矩阵维度选择器最终规则不得回退到旧白底、灰边或旧蓝紫色事实源');
+  });
+});
+
 test('矩阵维度卡片采用瀑布流排布，移动端退回单列', () => {
   assert.match(
     source,
@@ -667,6 +771,12 @@ test('矩阵页编辑行会同步回 draft.matrixConfig', () => {
     /wizardState\.els\.matrixPresetList\.addEventListener\('click',[\s\S]*?const presetKey = String\(target\.getAttribute\('data-matrix-preset-key'\) \|\| ''\)\.trim\(\);[\s\S]*?applyMatrixPreset\(presetKey\);/,
     '矩阵模板按钮未复用统一 applyMatrixPreset 链路'
   );
+  const presetRenderStart = source.indexOf('wizardState.els.matrixPresetList.innerHTML = quickPresetCatalog.map');
+  const presetRenderEnd = source.indexOf('const displayMatrixBatchCount = matrixConfig.enabled', presetRenderStart);
+  assert.ok(presetRenderStart > -1 && presetRenderEnd > presetRenderStart, '未定位到矩阵预设按钮渲染片段');
+  const presetRenderBlock = source.slice(presetRenderStart, presetRenderEnd);
+  assert.doesNotMatch(presetRenderBlock, /onclick=/, '矩阵预设按钮不得使用 inline onclick，避免和统一点击监听重复触发');
+  assert.doesNotMatch(presetRenderBlock, /querySelectorAll\('\[data-matrix-preset-key\]'\)[\s\S]*?addEventListener\('click'/, '矩阵预设按钮不得在每次渲染时逐个重复绑定点击事件');
 });
 
 test('矩阵摘要在没有 request 时也会按当前草稿兜底计算', () => {

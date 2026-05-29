@@ -1015,17 +1015,10 @@
                             type="button"
                             class="am-wxt-btn"
                             data-matrix-preset-key="${Utils.escapeHtml(item.key)}"
-                            onclick="window.__AM_WXT_PLAN_API__ && typeof window.__AM_WXT_PLAN_API__.applyMatrixPreset === 'function' && window.__AM_WXT_PLAN_API__.applyMatrixPreset('${Utils.escapeHtml(item.key)}');"
                             title="${Utils.escapeHtml(item.hint || item.label)}"
                             ${canEditMatrixDimensions ? '' : 'disabled'}
                         >${Utils.escapeHtml(item.label)}</button>
                     `).join('');
-                    wizardState.els.matrixPresetList.querySelectorAll('[data-matrix-preset-key]').forEach((button) => {
-                        button.addEventListener('click', () => {
-                            const presetKey = String(button.getAttribute('data-matrix-preset-key') || '').trim();
-                            applyMatrixPreset(presetKey);
-                        });
-                    });
                 }
                 const displayMatrixBatchCount = matrixConfig.enabled && canEditMatrixDimensions
                     ? toNumber(matrixPreview?.batchCount, 0)

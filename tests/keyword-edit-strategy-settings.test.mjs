@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
+const escapeRegExp = (text) => String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const getLastCssBlock = (selector) => {
+  const matches = Array.from(source.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{[^}]*\\}`, 'g')));
+  return matches.at(-1)?.[0] || '';
+};
+const getLastCssBlockByPattern = (pattern) => {
+  const matches = Array.from(source.matchAll(pattern));
+  return matches.at(-1)?.[0] || '';
+};
 
 function getApplyStrategyBlock() {
   const start = source.indexOf('const applyStrategyToDetailForm = (strategy, options = {}) => {');
@@ -120,5 +129,83 @@ test('编辑计划弹层高于遮罩，避免输入框点击命中遮罩', () =>
         source,
         /#am-wxt-keyword-overlay\s+#am-wxt-keyword-detail-backdrop\.open\s*\+\s*#am-wxt-keyword-modal\s*\{[^}]*overflow:\s*visible\s*;/,
         '详情遮罩打开时 modal 必须允许 fixed 详情面板参与命中测试'
+    );
+});
+
+test('编辑计划详情背板和详情面板壳层改为白色轻玻璃背景', () => {
+    const finalBackdropBlock = getLastCssBlock('#am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop');
+    const finalDetailConfigBlock = getLastCssBlock('#am-wxt-keyword-modal #am-wxt-keyword-detail-config');
+    const finalTitleFooterBlock = getLastCssBlockByPattern(/#am-wxt-keyword-detail-config \.am-wxt-detail-title,\s*#am-wxt-keyword-detail-config \.am-wxt-detail-footer\s*\{[^}]*\}/g);
+
+    assert.match(
+        finalBackdropBlock,
+        /background:\s*rgba\(255,\s*255,\s*255,\s*0\.72\);/,
+        '详情背板未改为白色半透明背景'
+    );
+    assert.match(
+        finalBackdropBlock,
+        /backdrop-filter:\s*blur\(8px\) saturate\(1\.15\);/,
+        '详情背板缺少白色轻玻璃模糊'
+    );
+    assert.match(
+        finalBackdropBlock,
+        /-webkit-backdrop-filter:\s*blur\(8px\) saturate\(1\.15\);/,
+        '详情背板缺少 WebKit 玻璃模糊'
+    );
+    assert.match(
+        finalDetailConfigBlock,
+        /background:\s*var\(--am26-panel-strong,/,
+        '详情面板壳层未使用 --am26-panel-strong'
+    );
+    assert.match(
+        finalDetailConfigBlock,
+        /border:\s*1px solid var\(--am26-border-strong,/,
+        '详情面板壳层边框未使用 --am26-border-strong'
+    );
+    assert.match(
+        finalDetailConfigBlock,
+        /box-shadow:\s*var\(--am26-shadow,/,
+        '详情面板壳层阴影未使用 --am26-shadow'
+    );
+    assert.match(
+        finalDetailConfigBlock,
+        /color:\s*var\(--am26-text,/,
+        '详情面板壳层文字未使用 --am26-text'
+    );
+    assert.match(
+        finalDetailConfigBlock,
+        /backdrop-filter:\s*blur\(18px\) saturate\(1\.35\);/,
+        '详情面板壳层缺少浅玻璃面板模糊'
+    );
+    assert.match(
+        finalTitleFooterBlock,
+        /background:\s*var\(--am26-surface-strong,/,
+        '详情标题栏和底部操作区未使用 --am26-surface-strong'
+    );
+    assert.match(
+        finalTitleFooterBlock,
+        /border-color:\s*var\(--am26-border,/,
+        '详情标题栏和底部操作区分割线未使用 --am26-border'
+    );
+    assert.match(
+        finalTitleFooterBlock,
+        /box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.28\);/,
+        '详情标题栏和底部操作区缺少轻量内高光'
+    );
+
+    assert.doesNotMatch(
+        finalBackdropBlock,
+        /rgba\(15,\s*23,\s*42,\s*(?:0\.2|0\.28)\)/,
+        '详情背板不得回退到旧暗色遮罩'
+    );
+    assert.doesNotMatch(
+        finalDetailConfigBlock,
+        /(?:background:\s*linear-gradient\(145deg,\s*rgba\(255,\s*255,\s*255,\s*0\.98\)|border:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.72\)|backdrop-filter:\s*blur\(12px\);)/,
+        '详情面板壳层不得回退到旧硬编码白底面板'
+    );
+    assert.doesNotMatch(
+        finalTitleFooterBlock,
+        /(?:background:\s*rgba\(255,\s*255,\s*255,\s*0\.95\)|border-color:\s*rgba\(148,\s*163,\s*184,\s*0\.2\))/,
+        '详情标题栏和底部操作区不得回退到旧硬编码白底灰边'
     );
 });

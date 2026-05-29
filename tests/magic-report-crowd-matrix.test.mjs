@@ -18,6 +18,17 @@ function getBuildMetricPromptBlock() {
   return match[1];
 }
 
+function getMagicReportMethodSlice(methodName, nextMethodName) {
+  const block = getMagicReportBlock();
+  const start = block.search(new RegExp(`\\n\\s*${methodName}\\(`));
+  assert.ok(start > -1, `无法定位 ${methodName} 代码块`);
+  const rest = block.slice(start);
+  if (!nextMethodName) return rest;
+  const end = rest.search(new RegExp(`\\n\\s*${nextMethodName}\\(`));
+  assert.ok(end > 0, `无法定位 ${methodName} 的结束位置`);
+  return rest.slice(0, end);
+}
+
 test('MagicReport 声明人群看板固定周期/维度/指标常量', () => {
   const block = getMagicReportBlock();
   assert.match(block, /CROWD_PERIODS:\s*\[\s*3\s*,\s*7\s*,\s*30\s*,\s*90\s*\]/, '缺少 4 周期常量或顺序不符');
@@ -260,6 +271,31 @@ test('万能查数弹窗默认打开人群对比看板，并支持默认 tab 持
   assert.match(block, /const defaultView = this\.getMagicDefaultView\(\);\s*this\.activeView = defaultView;\s*this\.switchMagicView\(defaultView \|\| 'matrix'\);/, '弹窗打开时未按默认视图重置');
 });
 
+test('万能查数窗口动作与视图页签具备可访问语义', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /<button type="button" class="am-magic-window-btn" id="am-magic-refresh" title="刷新当前视图" aria-label="刷新当前视图">/, '刷新窗口动作应是有名称的 button');
+  assert.match(block, /<button type="button" class="am-magic-window-btn" id="am-magic-close" title="关闭万能查数" aria-label="关闭万能查数弹窗">/, '关闭窗口动作应是有名称的 button');
+  assert.doesNotMatch(block, /<span id="am-magic-(?:refresh|close)"/, '刷新/关闭窗口动作不应退回 span 控件');
+  assert.match(block, /\.am-magic-window-btn:focus-visible[\s\S]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.45\)/, '窗口动作缺少可见 focus 态');
+  assert.match(block, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*#am-magic-report-popup \.am-magic-window-btn,[\s\S]*transition:\s*none !important;[\s\S]*animation:\s*none !important;/, '万能查数弹窗动效未适配减少动画');
+  assert.match(block, /id="am-magic-view-tabs" role="tablist" aria-label="万能查数视图"/, '视图切换容器缺少 tablist 语义');
+  assert.match(block, /id="am-magic-tab-query" data-view="query" role="tab" aria-selected="false" aria-controls="am-magic-panel-query" tabindex="-1"/, '万能查数 tab 缺少 aria-selected/controls/tabindex');
+  assert.match(block, /id="am-magic-tab-matrix" data-view="matrix" role="tab" aria-selected="true" aria-controls="am-magic-panel-matrix" tabindex="0"/, '人群看板 tab 缺少 aria-selected/controls/tabindex');
+  assert.match(block, /id="am-magic-panel-query" data-view-panel="query" role="tabpanel" aria-labelledby="am-magic-tab-query" aria-hidden="true" tabindex="0"/, '万能查数 panel 缺少 tabpanel 关联');
+  assert.match(block, /id="am-magic-panel-matrix" data-view-panel="matrix" role="tabpanel" aria-labelledby="am-magic-tab-matrix" aria-hidden="false" tabindex="0"/, '人群看板 panel 缺少 tabpanel 关联');
+  assert.match(block, /node\.setAttribute\('aria-selected', selected \? 'true' : 'false'\);[\s\S]*node\.tabIndex = selected \? 0 : -1;/, '切换视图时未同步 tab aria-selected 与 tabindex');
+  assert.match(block, /this\.queryPanelEl\.setAttribute\('aria-hidden', active \? 'false' : 'true'\);[\s\S]*this\.matrixPanelEl\.setAttribute\('aria-hidden', active \? 'false' : 'true'\);/, '切换视图时未同步 panel aria-hidden');
+  assert.match(block, /this\.viewTabsEl\.addEventListener\('keydown'[\s\S]*\['ArrowLeft', 'ArrowRight', 'Home', 'End'\][\s\S]*nextTab\.focus\(\{ preventScroll: true \}\);[\s\S]*this\.switchMagicView\(nextTab\.dataset\.view \|\| 'matrix'\);/, '视图页签缺少键盘左右/Home/End 切换');
+});
+
+test('万能查数快捷话术按钮具备焦点与临时激活语义', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /btn\.setAttribute\('aria-label', `快捷话术：\$\{label\}`\);/, '快捷话术缺少稳定 aria-label');
+  assert.match(block, /btn\.setAttribute\('aria-pressed', 'false'\);/, '快捷话术初始化缺少 aria-pressed=false');
+  assert.match(block, /quickPrompts\.querySelectorAll\('\.am-quick-prompt'\)\.forEach\(\(node\) => \{[\s\S]*node\.setAttribute\('aria-pressed', 'false'\);[\s\S]*\}\);[\s\S]*btn\.setAttribute\('aria-pressed', 'true'\);[\s\S]*setTimeout\(\(\) => \{[\s\S]*btn\.setAttribute\('aria-pressed', 'false'\);/, '快捷话术点击时未同步临时 aria-pressed 状态');
+  assert.match(block, /\.am-quick-prompt:focus-visible[\s\S]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.45\)/, '快捷话术缺少可见 focus 态');
+});
+
 test('tab 上提供默认图标，点击后写入默认视图并切换到对应 tab', () => {
   const block = getMagicReportBlock();
   assert.match(block, /class="am-magic-view-default-icon" data-default-view="query"/, '万能查数 tab 缺少默认图标');
@@ -279,9 +315,17 @@ test('人群看板使用顶部统一图例，并支持点击切换系列显隐',
   assert.match(block, /btn\.dataset\.crowdPeriod = String\(period\);/, '统一图例未渲染周期按钮');
   assert.match(block, /ratioBtn\.dataset\.crowdRatioToggle = '1';/, '统一图例未渲染显示占比按钮');
   assert.match(block, /insightBtn\.dataset\.crowdInsightToggle = '1';/, '统一图例未渲染显示提示按钮');
+  assert.match(block, /dot\.setAttribute\('aria-hidden', 'true'\);/, '人群/周期图例色点未标记为装饰性');
+  assert.match(block, /ratioDot\.setAttribute\('aria-hidden', 'true'\);/, '占比图例色点未标记为装饰性');
+  assert.match(block, /insightDot\.setAttribute\('aria-hidden', 'true'\);/, '提示图例色点未标记为装饰性');
+  assert.match(block, /node\.setAttribute\('aria-label', `切换人群：\$\{label\}`\);/, '人群图例缺少稳定 aria-label');
+  assert.match(block, /node\.setAttribute\('aria-label', `切换周期：过去\$\{period\}天`\);/, '周期图例缺少稳定 aria-label');
+  assert.match(block, /node\.setAttribute\('aria-label', '切换显示占比'\);/, '显示占比按钮缺少稳定 aria-label');
+  assert.match(block, /node\.setAttribute\('aria-label', '切换显示提示'\);/, '显示提示按钮缺少稳定 aria-label');
   assert.match(block, /classList\.toggle\(`am-hide-metric-\$\{metric\}`,\s*!this\.getCrowdMetricVisible\(metric\)\);/, '网格缺少系列显隐 class 切换');
   assert.match(block, /this\.matrixGridEl\.classList\.toggle\('am-show-ratio-values', this\.getCrowdRatioVisible\(\)\);/, '网格缺少占比显隐 class 切换');
   assert.match(block, /this\.matrixGridEl\.classList\.toggle\('am-hide-insights', !this\.getCrowdInsightsVisible\(\)\);/, '网格缺少提示显隐 class 切换');
+  assert.match(block, /\.am-crowd-matrix-legend-toggle:focus-visible[\s\S]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.45\)/, '图例按钮缺少可见 focus 态');
 });
 
 test('单人群与多人群切换时自动联动“显示占比/显示提示”状态', () => {
@@ -304,17 +348,37 @@ test('看板计划信息展示计划名/计划ID，并将商品ID改为下拉单
   assert.match(block, /data-crowd-campaign-name/, '计划信息缺少计划名节点');
   assert.match(block, /data-crowd-campaign-id/, '计划信息缺少计划ID节点');
   assert.match(block, /id="am-crowd-matrix-item-select"/, '计划信息缺少商品ID下拉节点');
-  assert.match(block, /data-crowd-item-trigger/, '商品ID缺少自定义下拉触发器节点');
-  assert.match(block, /data-crowd-item-dropdown/, '商品ID缺少自定义下拉菜单节点');
+  assert.match(block, /data-crowd-item-trigger aria-label="选择商品ID" aria-expanded="false" aria-haspopup="listbox" aria-controls="am-crowd-matrix-item-listbox"/, '商品ID触发器缺少 aria-label/controls/listbox 关联');
+  assert.match(block, /id="am-crowd-matrix-item-listbox" data-crowd-item-dropdown role="listbox" aria-label="商品ID候选列表" aria-hidden="true"/, '商品ID listbox 缺少 id、可访问名称或隐藏状态');
   assert.match(block, /this\.matrixCampaignNameEl\.textContent = `计划名：\$\{name \|\| '未识别'\}`;/, '计划名文案未按节点更新');
   assert.match(block, /this\.matrixCampaignIdEl\.textContent = `计划ID：\$\{id \|\| '--'\}`;/, '计划ID文案未按节点更新');
   assert.match(block, /this\.renderCrowdCampaignItemSelect\(id\);/, '计划信息刷新未触发商品ID下拉渲染');
   assert.match(block, /buildCrowdCampaignItemOptionLabel\(item\)\s*\{[\s\S]*normalizeCrowdItemTitle[\s\S]*花费/, '商品ID下拉未展示商品标题和花费信息');
+  assert.match(block, /optionBtn\.id = `am-crowd-matrix-item-option-\$\{item\.itemId\}`;/, '商品ID option 缺少稳定 id');
   assert.match(block, /optionBtn\.dataset\.crowdItemId = item\.itemId;/, '商品ID下拉未写入选项 data-item-id');
+  assert.match(block, /optionBtn\.tabIndex = -1;[\s\S]*optionBtn\.setAttribute\('role', 'option'\);[\s\S]*optionBtn\.setAttribute\('aria-label', item\.label\);/, '商品ID option 缺少 option 语义或可访问名称');
+  assert.match(block, /this\.matrixCampaignItemDropdownEl\.setAttribute\('aria-hidden', next \? 'false' : 'true'\);/, '商品ID下拉打开状态未同步 aria-hidden');
+  assert.match(block, /this\.matrixCampaignItemTriggerEl\.setAttribute\('aria-label', `选择商品ID：\$\{pickedOption\?\.label \|\| '--'\}`\);/, '商品ID触发器未同步当前选项可访问名称');
   assert.match(block, /itemOptions = itemOptions[\s\S]*\.filter\(item => item\.active !== false\)/, '商品候选未过滤暂停推广状态');
   assert.match(block, /const leftRank = left\?\.active === true \? 0 : 1;[\s\S]*const rightRank = right\?\.active === true \? 0 : 1;/, '商品候选排序未优先推广中状态');
   assert.match(block, /this\.matrixCampaignEl\.addEventListener\('click', \(e\) => \{[\s\S]*target\.closest\('\[data-crowd-item-trigger\]'\)[\s\S]*target\.closest\('\[data-crowd-item-id\]'\)/, '商品ID下拉未绑定触发器/选项点击事件');
   assert.match(block, /handleCrowdCampaignItemSelect\(itemId = ''\)\s*\{[\s\S]*this\.setCrowdCampaignSelectedItemId\(id,\s*selectedItemId,\s*\{\s*manual:\s*true\s*\}\);[\s\S]*this\.reloadCrowdMatrixMetric\(\{\s*campaignId:\s*id,\s*metricType:\s*'itemdeal'\s*\}\);/, '商品ID下拉切换后未仅刷新商品成交人群');
+});
+
+test('商品ID下拉支持键盘导航且仅复用局部商品成交刷新路径', () => {
+  const block = getMagicReportBlock();
+  const keydownBlock = getMagicReportMethodSlice('handleCrowdCampaignItemDropdownKeydown', 'renderCrowdCampaignItemSelect');
+  const selectBlock = getMagicReportMethodSlice('selectCrowdCampaignItemActiveOption', 'handleCrowdCampaignItemDropdownKeydown');
+  const handleSelectBlock = getMagicReportMethodSlice('handleCrowdCampaignItemSelect', 'refreshCrowdMatrixCampaignMeta');
+  assert.match(keydownBlock, /target\.closest\('#am-crowd-matrix-item-select'\)/, '商品ID下拉键盘事件未限制在下拉区域');
+  assert.match(keydownBlock, /if \(key === 'Tab'\) \{[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(false\);[\s\S]*return;[\s\S]*\}/, 'Tab 未关闭商品ID下拉');
+  assert.match(keydownBlock, /if \(key === 'Escape'\) \{[\s\S]*event\.preventDefault\(\);[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(false\);[\s\S]*this\.matrixCampaignItemTriggerEl\.focus\(\{ preventScroll: true \}\);/, 'Escape 未关闭商品ID下拉并回焦触发器');
+  assert.match(keydownBlock, /if \(key === 'Enter' \|\| key === ' '\) \{[\s\S]*if \(!isOpen\) \{[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(true\);[\s\S]*return;[\s\S]*\}[\s\S]*this\.selectCrowdCampaignItemActiveOption\(\);/, 'Enter/Space 未打开或选中商品ID选项');
+  assert.match(keydownBlock, /if \(key === 'ArrowDown' \|\| key === 'ArrowUp'\) \{[\s\S]*this\.moveCrowdCampaignItemActiveOption\(key === 'ArrowDown' \? 1 : -1\);/, '上下方向键未移动商品ID活跃选项');
+  assert.match(keydownBlock, /if \(key === 'Home' \|\| key === 'End'\) \{[\s\S]*this\.setCrowdCampaignItemActiveOptionByIndex\(key === 'Home' \? 0 : options\.length - 1\);/, 'Home/End 未移动到首尾商品ID选项');
+  assert.match(block, /this\.matrixCampaignEl\.addEventListener\('keydown', \(e\) => \{[\s\S]*this\.handleCrowdCampaignItemDropdownKeydown\(e\);[\s\S]*\}\);/, '商品ID下拉未绑定 keydown 事件');
+  assert.match(selectBlock, /this\.handleCrowdCampaignItemSelect\(optionItemId\);/, '键盘选中未复用现有商品选择路径');
+  assert.match(handleSelectBlock, /this\.reloadCrowdMatrixMetric\(\{\s*campaignId:\s*id,\s*metricType:\s*'itemdeal'\s*\}\);/, '商品键盘选择不应触发全量刷新，只能刷新 itemdeal');
 });
 
 test('商品成交人群局部刷新会替换同指标缓存，避免旧周期残留', () => {

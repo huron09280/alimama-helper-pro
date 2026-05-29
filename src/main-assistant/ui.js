@@ -100,6 +100,7 @@
                     position: fixed; top: 120px; right: 20px; z-index: 999999;
                     width: 40px; height: 40px; border-radius: 50%;
                     border: 1px solid var(--am26-border);
+                    padding: 0;
                     background: var(--am26-surface-strong);
                     backdrop-filter: blur(10px);
                     -webkit-backdrop-filter: blur(10px);
@@ -107,6 +108,9 @@
                     cursor: pointer;
                     display: flex; align-items: center; justify-content: center;
                     color: var(--am26-primary);
+                    font: inherit;
+                    appearance: none;
+                    -webkit-appearance: none;
                     transition: all 0.3s ease;
                 }
                 #am-helper-icon svg {
@@ -115,13 +119,18 @@
                     will-change: transform;
                 }
                 #am-helper-icon:hover {
-                    transform: translateY(-1px) scale(1.08);
+                    transform: translateY(-2px);
                     border-color: var(--am26-border-strong);
                     color: var(--am26-primary-strong);
-                    background: rgba(255,255,255,0.6);
+                    background: var(--am26-surface-strong);
+                    box-shadow: 0 10px 28px rgba(31, 38, 135, 0.18), var(--am26-glow);
                 }
                 #am-helper-icon:hover svg {
                     animation-duration: 1.2s;
+                }
+                #am-helper-icon:focus-visible {
+                    outline: 2px solid rgba(69, 84, 229, 0.42);
+                    outline-offset: 3px;
                 }
                 @keyframes am-helper-icon-pulse {
                     0%, 100% { transform: scale(1); }
@@ -178,8 +187,14 @@
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
                     width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
+                    border: 0; padding: 0; background: transparent; font: inherit;
+                    appearance: none; -webkit-appearance: none;
                 }
                 .am-close-btn:hover { background: rgba(234, 79, 79, 0.1); color: var(--am26-danger); }
+                .am-close-btn:focus-visible {
+                    outline: 2px solid rgba(234, 79, 79, 0.34);
+                    outline-offset: 2px;
+                }
 
                 /* 内容区 */
                 .am-body { padding: 18px; }
@@ -199,11 +214,12 @@
                     position: relative;
                     border: none;
                     background: transparent;
-                    color: #6b7280;
+                    color: var(--am26-text-soft, #505a74);
                     border-radius: 12px;
                     padding: 8px 12px;
                     min-height: 34px;
                     font-size: 13px;
+                    font-family: inherit;
                     font-weight: 600;
                     line-height: 1;
                     cursor: pointer;
@@ -227,7 +243,7 @@
                 .am-tool-btn:hover,
                 .am-tool-btn.active {
                     background: rgba(255, 255, 255, 0.88);
-                    color: #111827;
+                    color: var(--am26-text, #1b2438);
                     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
                     font-weight: 700;
                 }
@@ -268,9 +284,10 @@
                 .am-switch-btn {
                     border: 1px solid transparent;
                     background: rgba(255, 255, 255, 0.9);
-                    color: #1a2a47;
+                    color: var(--am26-text, #1b2438);
                     border-radius: 999px;
                     font-size: 11px;
+                    font-family: inherit;
                     line-height: 1.2;
                     font-weight: 600;
                     cursor: pointer;
@@ -296,7 +313,12 @@
                 .am-switch-btn:hover {
                     transform: translateY(-2px);
                     box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
-                    border-color: rgba(47, 84, 235, 0.4);
+                    border-color: var(--am26-border-strong);
+                    background: var(--am26-surface-strong);
+                }
+                .am-switch-btn:focus-visible {
+                    outline: 2px solid rgba(69, 84, 229, 0.36);
+                    outline-offset: 2px;
                 }
                 .am-switch-btn:not(.active) {
                     opacity: 0.5;
@@ -306,7 +328,7 @@
                     transform: none;
                 }
                 .am-switch-btn:not(.active)::before {
-                    background: #cbd5e1;
+                    background: rgba(80, 90, 116, 0.28);
                     box-shadow: none;
                 }
 
@@ -437,43 +459,67 @@
                     z-index: 2147483646;
                     width: max-content;
                     min-width: 120px;
-                    padding: 4px 0;
-                    border: 1px solid rgba(0, 0, 0, 0.08);
-                    border-radius: 4px;
-                    background: #ffffff;
-                    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+                    padding: 6px;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    border-radius: 10px;
+                    background: var(--am26-panel-strong, rgba(255, 255, 255, 0.88));
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
                     box-sizing: border-box;
+                    color: var(--am26-text, #1b2438);
+                    font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    backdrop-filter: blur(18px) saturate(160%);
+                    -webkit-backdrop-filter: blur(18px) saturate(160%);
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item {
                     width: 100%;
                     min-height: 32px;
                     display: flex;
                     align-items: center;
+                    gap: 8px;
                     border: 0;
-                    border-radius: 0;
-                    padding: 0 12px;
+                    border-radius: 8px;
+                    padding: 0 10px;
                     background: transparent;
-                    color: #333333;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     line-height: 18px;
                     text-align: left;
                     white-space: nowrap;
                     cursor: pointer;
                     box-sizing: border-box;
+                    transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item-icon {
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: currentColor;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item-icon svg {
+                    width: 14px;
+                    height: 14px;
+                    display: block;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item-label {
+                    min-width: 0;
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:hover,
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:focus-visible {
-                    background: #f5f7fa;
-                    color: #111111;
-                    outline: none;
+                    background: rgba(255, 255, 255, 0.52);
+                    color: var(--am26-text, #1b2438);
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger {
-                    color: #d93026;
+                    color: var(--am26-danger, #ea4f4f);
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:hover,
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:focus-visible {
-                    background: #fff2f0;
-                    color: #d93026;
+                    background: rgba(234, 79, 79, 0.12);
+                    color: var(--am26-danger, #ea4f4f);
                 }
                 .am-campaign-search-btn.is-running {
                     color: #1677ff;
@@ -558,7 +604,9 @@
                 #am-campaign-concurrent-log-popup {
                     position: fixed;
                     inset: 0;
-                    background: rgba(0, 0, 0, 0.45);
+                    padding: 24px;
+                    background: rgba(27, 36, 56, 0.28);
+                    backdrop-filter: blur(10px);
                     display: none;
                     align-items: center;
                     justify-content: center;
@@ -569,27 +617,58 @@
                     max-height: min(78vh, 720px);
                     display: flex;
                     flex-direction: column;
-                    border-radius: 14px;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    background: #ffffff;
-                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+                    border-radius: 18px;
+                    border: 1px solid var(--am26-border-strong);
+                    background: var(--am26-panel-strong);
+                    color: var(--am26-text);
+                    box-shadow: var(--am26-shadow);
+                    backdrop-filter: blur(20px) saturate(1.4);
                     overflow: hidden;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-header {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
+                    gap: 12px;
                     padding: 12px 14px;
                     font-size: 14px;
                     font-weight: 600;
-                    color: #111827;
-                    border-bottom: 1px solid #eef1f5;
-                    background: linear-gradient(180deg, #f9fbff 0%, #f4f7fb 100%);
+                    color: var(--am26-text);
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+                    background: rgba(255, 255, 255, 0.28);
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-heading {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-icon {
+                    width: 28px;
+                    height: 28px;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 10px;
+                    background: rgba(69, 84, 229, 0.12);
+                    color: var(--am26-primary);
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-title {
+                    margin: 0;
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 14px;
+                    line-height: 20px;
+                    font-weight: 700;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-close {
-                    border: 0;
-                    background: transparent;
-                    color: #6b7280;
+                    flex: 0 0 auto;
+                    border: 1px solid transparent;
+                    background: rgba(255, 255, 255, 0.36);
+                    color: var(--am26-text-soft);
                     line-height: 1;
                     cursor: pointer;
                     width: 32px;
@@ -599,40 +678,55 @@
                     align-items: center;
                     justify-content: center;
                     border-radius: 8px;
+                    transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-close:hover {
                     background: rgba(234, 79, 79, 0.1);
                     color: var(--am26-danger, #ea4f4f);
                 }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-close:focus-visible {
+                    outline: none;
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
+                }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status {
                     padding: 10px 14px;
-                    border-bottom: 1px solid #eef1f5;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.34);
                     font-size: 12px;
-                    color: #1f2937;
-                    background: #f8fafc;
+                    font-weight: 600;
+                    color: var(--am26-text-soft);
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-running {
-                    color: #0f4fce;
-                    background: #eff6ff;
+                    color: var(--am26-primary);
+                    background: rgba(69, 84, 229, 0.12);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-success {
-                    color: #0f6b3f;
-                    background: #edf9f2;
+                    color: var(--am26-success);
+                    background: rgba(14, 168, 111, 0.12);
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-warning {
+                    color: #a16207;
+                    background: rgba(232, 163, 37, 0.14);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-error {
-                    color: #a43131;
-                    background: #fff1f1;
+                    color: var(--am26-danger);
+                    background: rgba(234, 79, 79, 0.12);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-body {
                     flex: 1;
+                    min-height: 180px;
                     overflow: auto;
                     overscroll-behavior: contain;
-                    background: #0f172a;
+                    background: linear-gradient(145deg, rgba(246, 250, 255, 0.78), rgba(235, 243, 255, 0.56));
                     padding: 10px 12px;
                     font-family: var(--am26-mono);
                     font-size: 12px;
                     line-height: 1.5;
-                    color: #dbe4ff;
+                    color: var(--am26-text-soft);
+                    outline: none;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-body:focus-visible {
+                    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.22);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line {
                     white-space: pre-wrap;
@@ -640,16 +734,22 @@
                     margin-bottom: 6px;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-error {
-                    color: #ffb3b3;
+                    color: var(--am26-danger);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-warn {
-                    color: #ffe08a;
+                    color: #a16207;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-success {
-                    color: #99f6c6;
+                    color: var(--am26-success);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line:last-child {
                     margin-bottom: 0;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-campaign-concurrent-log-popup .am-concurrent-log-close {
+                        transition: none !important;
+                        transform: none !important;
+                    }
                 }
 
                 #am-campaign-copy-overview-popup {
@@ -660,17 +760,22 @@
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.36);
+                    background: rgba(255, 255, 255, 0.72);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                    backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-card {
                     width: min(1080px, calc(100vw - 48px));
                     max-height: min(84vh, 680px);
                     display: flex;
                     flex-direction: column;
-                    border-radius: 24px;
-                    background: #ffffff;
-                    color: #333333;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    border: 1px solid var(--am26-border-strong);
+                    border-radius: 18px;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
+                    color: var(--am26-text);
+                    box-shadow: var(--am26-shadow);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.45);
+                    backdrop-filter: blur(20px) saturate(1.45);
                     overflow: hidden;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-header {
@@ -679,7 +784,7 @@
                     justify-content: space-between;
                     gap: 12px;
                     padding: 16px 24px 8px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-heading {
                     min-width: 0;
@@ -696,42 +801,43 @@
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
-                    background: #ffa33b;
-                    color: #ffffff;
-                    font-size: 12px;
-                    line-height: 1;
-                    font-weight: 700;
-                    font-family: Arial, Helvetica, sans-serif;
+                    background: rgba(69, 84, 229, 0.12);
+                    color: var(--am26-primary);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-title {
                     margin: 0;
                     font-size: 16px;
                     line-height: 24px;
                     font-weight: 700;
-                    color: #333333;
+                    color: var(--am26-text);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-subtitle {
                     margin: 4px 0 0;
                     font-size: 12px;
                     line-height: 18px;
-                    color: #666666;
+                    color: var(--am26-text-soft);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-close {
                     width: 28px;
                     height: 28px;
-                    border: 0;
-                    border-radius: 50%;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid transparent;
+                    border-radius: 8px;
                     background: transparent;
-                    color: #999999;
-                    font-size: 20px;
-                    line-height: 28px;
+                    color: var(--am26-text-soft);
+                    line-height: 1;
                     cursor: pointer;
+                    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-close:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-close:focus-visible {
-                    background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
-                    outline: none;
+                    background: rgba(255, 255, 255, 0.48);
+                    border-color: rgba(69, 84, 229, 0.18);
+                    color: var(--am26-primary);
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulkbar {
                     display: flex;
@@ -740,20 +846,20 @@
                     gap: 8px 18px;
                     margin: 12px 24px 0;
                     padding: 0 0 10px;
-                    border-bottom: 1px solid #edf0f5;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.42);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-group {
                     display: flex;
                     align-items: center;
                     gap: 8px;
                     min-width: 0;
-                    color: #666666;
+                    color: var(--am26-text-soft);
                     font-size: 12px;
                     line-height: 28px;
                     white-space: nowrap;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-title {
-                    color: #333333;
+                    color: var(--am26-text);
                     font-weight: 600;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-field {
@@ -761,7 +867,7 @@
                     align-items: center;
                     gap: 4px;
                     margin: 0;
-                    color: #666666;
+                    color: var(--am26-text-soft);
                     font-weight: 400;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-input,
@@ -769,12 +875,12 @@
                     width: 72px;
                     height: 28px;
                     border: 0;
-                    border-bottom: 1px solid #d9dee8;
+                    border-bottom: 1px solid rgba(80, 90, 116, 0.28);
                     border-radius: 0;
                     padding: 0 2px;
                     box-sizing: border-box;
                     background: transparent;
-                    color: #111827;
+                    color: var(--am26-text);
                     font-size: 12px;
                     line-height: 28px;
                     outline: none;
@@ -784,8 +890,8 @@
                     appearance: none;
                     padding-right: 16px;
                     background-image:
-                        linear-gradient(45deg, transparent 50%, #8a93a3 50%),
-                        linear-gradient(135deg, #8a93a3 50%, transparent 50%);
+                        linear-gradient(45deg, transparent 50%, var(--am26-text-soft) 50%),
+                        linear-gradient(135deg, var(--am26-text-soft) 50%, transparent 50%);
                     background-position:
                         calc(100% - 9px) 12px,
                         calc(100% - 5px) 12px;
@@ -794,30 +900,31 @@
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-input:focus,
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-select:focus {
-                    border-bottom-color: #4554e5;
+                    border-bottom-color: var(--am26-primary);
                     background-color: rgba(69, 84, 229, 0.04);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-step {
                     min-width: 52px;
-                    color: #8a93a3;
+                    color: var(--am26-text-soft);
                     font-variant-numeric: tabular-nums;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn {
                     height: 28px;
                     min-width: 72px;
-                    border: 1px solid rgba(69, 84, 229, 0.28);
+                    border: 1px solid rgba(69, 84, 229, 0.26);
                     border-radius: 500px;
                     padding: 0 12px;
-                    background: #ffffff;
-                    color: #4554e5;
+                    background: rgba(255, 255, 255, 0.38);
+                    color: var(--am26-primary);
                     font-size: 12px;
                     line-height: 26px;
                     cursor: pointer;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:focus-visible {
-                    background: rgba(69, 84, 229, 0.08);
-                    outline: none;
+                    background: rgba(69, 84, 229, 0.1);
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:disabled {
                     cursor: not-allowed;
@@ -827,11 +934,11 @@
                     flex: 1;
                     min-height: 180px;
                     margin: 14px 24px 0;
-                    border: 1px solid #edf0f5;
+                    border: 1px solid rgba(255, 255, 255, 0.52);
                     border-radius: 8px;
                     overflow-x: hidden;
                     overflow-y: auto;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.36);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table {
                     width: 100%;
@@ -842,7 +949,7 @@
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table th,
                 #am-campaign-copy-overview-popup .am-copy-overview-table td {
-                    border-bottom: 1px solid #edf0f5;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.46);
                     padding: 9px 10px;
                     box-sizing: border-box;
                     text-align: left;
@@ -852,8 +959,8 @@
                     position: sticky;
                     top: 0;
                     z-index: 1;
-                    background: #fafbff;
-                    color: #666666;
+                    background: rgba(246, 250, 255, 0.72);
+                    color: var(--am26-text-soft);
                     font-weight: 600;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table th:nth-child(1),
@@ -885,7 +992,7 @@
                     white-space: nowrap;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-index {
-                    color: #6b7280;
+                    color: var(--am26-text-soft);
                     font-variant-numeric: tabular-nums;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-input,
@@ -893,12 +1000,12 @@
                     width: 100%;
                     height: 30px;
                     border: 0;
-                    border-bottom: 1px solid #d9dee8;
+                    border-bottom: 1px solid rgba(80, 90, 116, 0.28);
                     border-radius: 0;
                     padding: 0 2px;
                     box-sizing: border-box;
                     background: transparent;
-                    color: #111827;
+                    color: var(--am26-text);
                     font-size: 12px;
                     line-height: 30px;
                     outline: none;
@@ -908,8 +1015,8 @@
                     appearance: none;
                     padding-right: 16px;
                     background-image:
-                        linear-gradient(45deg, transparent 50%, #8a93a3 50%),
-                        linear-gradient(135deg, #8a93a3 50%, transparent 50%);
+                        linear-gradient(45deg, transparent 50%, var(--am26-text-soft) 50%),
+                        linear-gradient(135deg, var(--am26-text-soft) 50%, transparent 50%);
                     background-position:
                         calc(100% - 9px) 13px,
                         calc(100% - 5px) 13px;
@@ -918,7 +1025,7 @@
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-input:focus,
                 #am-campaign-copy-overview-popup .am-copy-overview-select:focus {
-                    border-bottom-color: #4554e5;
+                    border-bottom-color: var(--am26-primary);
                     background-color: rgba(69, 84, 229, 0.04);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-name {
@@ -931,7 +1038,7 @@
                     box-sizing: border-box;
                     padding: 6px 2px;
                     background: transparent;
-                    color: #333333;
+                    color: var(--am26-text);
                     font-size: 12px;
                     line-height: 18px;
                     white-space: nowrap;
@@ -947,8 +1054,8 @@
                 #am-campaign-copy-overview-popup .am-copy-overview-status {
                     min-height: 34px;
                     padding: 10px 24px 6px;
-                    color: #666666;
-                    background: #ffffff;
+                    color: var(--am26-text-soft);
+                    background: rgba(255, 255, 255, 0.24);
                     font-size: 12px;
                     line-height: 18px;
                 }
@@ -969,7 +1076,7 @@
                     justify-content: flex-start;
                     gap: 8px;
                     padding: 0 24px 16px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.24);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-submit,
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel {
@@ -982,25 +1089,27 @@
                     font-size: 12px;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+                    transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-submit {
-                    background: #4554e5;
+                    background: var(--am26-primary);
                     color: #ffffff;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel {
                     background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
+                    color: var(--am26-primary);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-submit:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-submit:focus-visible {
-                    background: #3546df;
-                    outline: none;
+                    background: var(--am26-primary-strong);
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel:focus-visible {
                     background: rgba(69, 84, 229, 0.16);
-                    outline: none;
+                    outline: 2px solid rgba(69, 84, 229, 0.3);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup button:disabled,
                 #am-campaign-copy-overview-popup input:disabled,
@@ -1017,17 +1126,22 @@
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.36);
+                    background: rgba(255, 255, 255, 0.72);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                    backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-card {
-                    width: min(320px, calc(100vw - 28px));
+                    width: min(420px, calc(100vw - 28px));
                     max-height: min(84vh, 680px);
                     display: flex;
                     flex-direction: column;
-                    border-radius: 24px;
-                    background: #ffffff;
-                    color: #333333;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    border: 1px solid var(--am26-border-strong);
+                    border-radius: 18px;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
+                    color: var(--am26-text);
+                    box-shadow: var(--am26-shadow);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.45);
+                    backdrop-filter: blur(20px) saturate(1.45);
                     overflow: hidden;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-header {
@@ -1035,28 +1149,25 @@
                     align-items: center;
                     gap: 8px;
                     padding: 16px 24px 8px;
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-icon {
-                    width: 16px;
-                    height: 16px;
+                    width: 22px;
+                    height: 22px;
                     flex: 0 0 auto;
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
-                    background: #ffa33b;
-                    color: #ffffff;
-                    font-size: 12px;
-                    line-height: 1;
-                    font-weight: 700;
-                    font-family: Arial, Helvetica, sans-serif;
+                    background: rgba(14, 168, 111, 0.14);
+                    color: var(--am26-success);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-title {
                     margin: 0;
                     font-size: 16px;
                     line-height: 24px;
                     font-weight: 700;
-                    color: #333333;
+                    color: var(--am26-text);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-body {
                     margin: 0;
@@ -1067,15 +1178,15 @@
                     font-family: inherit;
                     font-size: 12px;
                     line-height: 18px;
-                    color: #333333;
-                    background: #ffffff;
+                    color: var(--am26-text-soft);
+                    background: rgba(255, 255, 255, 0.36);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-footer {
                     display: flex;
                     justify-content: flex-start;
                     gap: 8px;
                     padding: 0 24px 16px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-confirm,
                 #am-campaign-copy-success-popup .am-copy-success-cancel {
@@ -1091,23 +1202,35 @@
                     transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-confirm {
-                    background: #4554e5;
+                    background: var(--am26-primary);
                     color: #ffffff;
                     box-shadow: none;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-cancel {
                     background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
+                    color: var(--am26-primary);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-confirm:hover,
                 #am-campaign-copy-success-popup .am-copy-success-confirm:focus-visible {
-                    background: #3546df;
-                    outline: none;
+                    background: var(--am26-primary-strong);
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-cancel:hover,
                 #am-campaign-copy-success-popup .am-copy-success-cancel:focus-visible {
                     background: rgba(69, 84, 229, 0.16);
-                    outline: none;
+                    outline: 2px solid rgba(69, 84, 229, 0.3);
+                    outline-offset: 2px;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-campaign-copy-overview-popup .am-copy-overview-close,
+                    #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn,
+                    #am-campaign-copy-overview-popup .am-copy-overview-submit,
+                    #am-campaign-copy-overview-popup .am-copy-overview-cancel,
+                    #am-campaign-copy-success-popup .am-copy-success-confirm,
+                    #am-campaign-copy-success-popup .am-copy-success-cancel {
+                        transition: none;
+                    }
                 }
 
                 #am-campaign-batch-confirm-popup {
@@ -1118,17 +1241,23 @@
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.36);
+                    background: rgba(15, 23, 42, 0.42);
+                    backdrop-filter: blur(6px);
+                    -webkit-backdrop-filter: blur(6px);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-card {
-                    width: min(320px, calc(100vw - 28px));
+                    width: min(360px, calc(100vw - 28px));
                     display: flex;
                     flex-direction: column;
-                    border-radius: 24px;
-                    background: #ffffff;
-                    color: #333333;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    border-radius: 18px;
+                    background: var(--am26-panel-strong, rgba(255, 255, 255, 0.92));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
                     overflow: hidden;
+                    font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    backdrop-filter: blur(18px) saturate(160%);
+                    -webkit-backdrop-filter: blur(18px) saturate(160%);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-header {
                     display: flex;
@@ -1144,22 +1273,24 @@
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
-                    background: #ffa33b;
-                    color: #ffffff;
-                    font-size: 12px;
-                    line-height: 1;
-                    font-weight: 700;
-                    font-family: Arial, Helvetica, sans-serif;
+                    background: rgba(232, 163, 37, 0.14);
+                    color: var(--am26-warning, #e8a325);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-icon.is-danger {
-                    background: #b42318;
+                    background: rgba(234, 79, 79, 0.14);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-icon svg {
+                    width: 16px;
+                    height: 16px;
+                    display: block;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-title {
                     margin: 0;
                     font-size: 16px;
                     line-height: 24px;
                     font-weight: 700;
-                    color: #333333;
+                    color: var(--am26-text, #1b2438);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-body {
                     margin: 0;
@@ -1169,22 +1300,22 @@
                     font-family: inherit;
                     font-size: 12px;
                     line-height: 18px;
-                    color: #333333;
-                    background: #ffffff;
+                    color: var(--am26-text-soft, #505a74);
+                    background: rgba(255, 255, 255, 0.2);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-footer {
                     display: flex;
                     justify-content: flex-start;
                     gap: 8px;
                     padding: 0 24px 16px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.2);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
                     min-width: 64px;
                     height: 32px;
                     border: 0;
-                    border-radius: 500px;
+                    border-radius: 10px;
                     padding: 0 12px;
                     box-sizing: border-box;
                     font-size: 12px;
@@ -1193,30 +1324,40 @@
                     transition: background-color 0.16s ease, color 0.16s ease;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit {
-                    background: #4554e5;
+                    background: var(--am26-primary, #4554e5);
                     color: #ffffff;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger {
-                    background: #b42318;
+                    background: var(--am26-danger, #ea4f4f);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
-                    background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
+                    background: var(--am26-primary-soft, rgba(42, 91, 255, 0.15));
+                    color: var(--am26-primary, #4554e5);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit:focus-visible {
-                    background: #3546df;
-                    outline: none;
+                    background: var(--am26-primary-strong, #1d3fcf);
+                    outline: 2px solid rgba(69, 84, 229, 0.36);
+                    outline-offset: 2px;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:focus-visible {
-                    background: #9f1f14;
-                    outline: none;
+                    background: #d63e3e;
+                    outline: 2px solid rgba(234, 79, 79, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:focus-visible {
                     background: rgba(69, 84, 229, 0.16);
-                    outline: none;
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-campaign-batch-plus-menu .am-campaign-batch-plus-item,
+                    #am-campaign-batch-confirm-popup .am-batch-confirm-submit,
+                    #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
+                        transition: none;
+                    }
                 }
 
                 /* 算法护航弹窗居中 */
@@ -1247,28 +1388,41 @@
                     cursor: pointer; color: var(--am26-text-soft); margin-left: 10px;
                     padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
                     background: rgba(255,255,255,0.2);
+                    border: 0;
+                    font: inherit;
+                    appearance: none;
+                    -webkit-appearance: none;
                 }
-                .am-action-btn:hover { background: rgba(255, 255, 255, 0.5); color: var(--am26-primary-strong); }
+                .am-action-btn:hover {
+                    background: rgba(255, 255, 255, 0.5);
+                    color: var(--am26-primary-strong);
+                }
+                .am-action-btn:focus-visible {
+                    background: rgba(255, 255, 255, 0.5);
+                    color: var(--am26-primary-strong);
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
+                }
                 #am-log-content {
                     height: 100px; overflow-y: auto;
                     overscroll-behavior: contain;
-                    background: rgba(0, 0, 0, 0.03);
-                    border: 1px solid inset rgba(0,0,0,0.05);
+                    background: var(--am26-surface);
+                    border: 1px solid var(--am26-border);
                     border-radius: 10px;
                     padding: 10px;
                     font-size: 11px;
                     color: var(--am26-text);
                     font-family: var(--am26-mono);
-                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48), 0 2px 8px rgba(31, 53, 109, 0.04);
                     transition: all 0.3s ease;
                 }
                 #am-log-content.collapsed { height: 0; padding: 0; border: none; opacity: 0; }
                 .am-log-line {
                     padding: 3px 0; line-height: 1.5;
-                    border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+                    border-bottom: 1px dashed rgba(80, 90, 116, 0.16);
                 }
                 .am-log-line:last-child { border-bottom: none; }
-                .am-log-time { color: rgba(0,0,0,0.4); margin-right: 6px; }
+                .am-log-time { color: var(--am26-text-soft); opacity: 0.72; margin-right: 6px; }
 
                 /* 拖拽调整宽度 */
                 .am-resizer-left {
@@ -1282,7 +1436,7 @@
                     position: fixed;
                     bottom: 20px;
                     right: 20px;
-                    width: 340px;
+                    width: min(340px, calc(100vw - 24px));
                     padding: 14px;
                     border-radius: 12px;
                     border: 1px solid var(--am26-border);
@@ -1352,6 +1506,7 @@
                     background: rgba(255, 255, 255, 0.72);
                     border-color: var(--am26-border);
                     color: var(--am26-text-soft);
+                    font: inherit;
                 }
                 #am-report-capture-panel .am-download-close {
                     width: 32px;
@@ -1375,6 +1530,28 @@
                 #am-report-capture-panel .am-download-btn:hover,
                 #am-report-capture-panel .am-download-link:hover {
                     transform: translateY(-1px);
+                }
+                #am-report-capture-panel .am-download-btn:focus-visible,
+                #am-report-capture-panel .am-download-link:focus-visible {
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
+                    transform: translateY(-1px);
+                }
+                #am-report-capture-panel .am-download-close:focus-visible {
+                    color: var(--am26-danger, #ea4f4f);
+                    border-color: rgba(234, 79, 79, 0.22);
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-report-capture-panel .am-download-btn,
+                    #am-report-capture-panel .am-download-link {
+                        transition: none;
+                    }
+                    #am-report-capture-panel .am-download-btn:hover,
+                    #am-report-capture-panel .am-download-link:hover,
+                    #am-report-capture-panel .am-download-btn:focus-visible,
+                    #am-report-capture-panel .am-download-link:focus-visible {
+                        transform: none;
+                    }
                 }
                 #am-report-capture-panel .am-download-copy { flex: 1; }
                 #am-report-capture-panel .am-download-hint {
@@ -1430,9 +1607,9 @@
             });
             const root = document.createElement('div');
             root.innerHTML = `
-                <div id="am-helper-icon" title="点击展开助手面板">
+                <button id="am-helper-icon" type="button" title="点击展开助手面板" aria-label="展开助手面板">
                     ${renderAmIcon('logo', { size: 22, strokeWidth: 2.2 })}
-                </div>
+                </button>
                 <div id="am-helper-panel">
             <div class="am-resizer-left"></div>
             <div class="am-header">
@@ -1441,54 +1618,54 @@
                     阿里助手 Pro
                     <span class="am-version">v${CURRENT_VERSION}</span>
                 </span>
-                <div class="am-close-btn" title="最小化">
+                <button type="button" class="am-close-btn" title="最小化" aria-label="最小化助手面板">
                     ${renderAmWindowIcon('close')}
-                </div>
+                </button>
             </div>
             <div class="am-body">
                 <!-- Section 1: Tools -->
                 <div class="am-tools-row">
-                    <div class="am-tool-btn" id="am-trigger-optimizer">
+                    <button type="button" class="am-tool-btn" id="am-trigger-optimizer">
                         ${renderAmIcon('shield-check', { size: 16 })}
                         算法护航
-                    </div>
-                    <div class="am-tool-btn" id="am-trigger-keyword-plan-api">
+                    </button>
+                    <button type="button" class="am-tool-btn" id="am-trigger-keyword-plan-api">
                         ${renderAmIcon('plan', { size: 16 })}
                         组建计划
-                    </div>
-                    <div class="am-tool-btn" id="am-trigger-magic-report">
+                    </button>
+                    <button type="button" class="am-tool-btn" id="am-trigger-magic-report">
                         ${renderAmIcon('chart', { size: 16 })}
                         万能查数
-                    </div>
-                    <div class="am-tool-btn" id="am-toggle-assist-display">
+                    </button>
+                    <button type="button" class="am-tool-btn" id="am-toggle-assist-display" aria-expanded="false" aria-controls="am-assist-switches" aria-pressed="false">
                         ${renderAmIcon('eye', { size: 16 })}
                         辅助显示
-                    </div>
+                    </button>
                 </div>
 
                 <!-- Section 2: Settings -->
                 <div id="am-assist-switches">
                     <div class="am-switches-grid">
-                        <div class="am-switch-btn" data-key="showCost">询单成本</div>
-                        <div class="am-switch-btn" data-key="showCartCost">加购成本</div>
-                        <div class="am-switch-btn" data-key="showPercent">潜客占比</div>
-                        <div class="am-switch-btn" data-key="showCostRatio">花费占比</div>
-                        <div class="am-switch-btn" data-key="showBudget">预算进度</div>
-                        <div class="am-switch-btn" data-key="unlockBudgetFrontendLimit">预算破限</div>
-                        <div class="am-switch-btn" data-key="autoSortCharge">花费排序</div>
-                        <div class="am-switch-btn" data-key="showConcurrentStartButton">计划并发</div>
-                        <!-- <div class="am-switch-btn" data-key="autoClose">弹窗速闭</div> -->
+                        <button type="button" class="am-switch-btn" data-key="showCost" aria-pressed="false">询单成本</button>
+                        <button type="button" class="am-switch-btn" data-key="showCartCost" aria-pressed="false">加购成本</button>
+                        <button type="button" class="am-switch-btn" data-key="showPercent" aria-pressed="false">潜客占比</button>
+                        <button type="button" class="am-switch-btn" data-key="showCostRatio" aria-pressed="false">花费占比</button>
+                        <button type="button" class="am-switch-btn" data-key="showBudget" aria-pressed="false">预算进度</button>
+                        <button type="button" class="am-switch-btn" data-key="unlockBudgetFrontendLimit" aria-pressed="false">预算破限</button>
+                        <button type="button" class="am-switch-btn" data-key="autoSortCharge" aria-pressed="false">花费排序</button>
+                        <button type="button" class="am-switch-btn" data-key="showConcurrentStartButton" aria-pressed="false">计划并发</button>
+                        <!-- <button type="button" class="am-switch-btn" data-key="autoClose" aria-pressed="false">弹窗速闭</button> -->
                     </div>
                 </div>
                 <div class="am-log-section">
                     <div class="am-log-header">
                         <span class="am-log-title">${renderAmIcon('list', { size: 14 })}<span>运行日志</span></span>
                         <div>
-                            <span class="am-action-btn" id="am-log-clear">清空</span>
-                            <span class="am-action-btn" id="am-log-toggle">展开</span>
+                            <button type="button" class="am-action-btn" id="am-log-clear">清空</button>
+                            <button type="button" class="am-action-btn" id="am-log-toggle" aria-controls="am-log-content" aria-expanded="false">展开</button>
                         </div>
                     </div>
-                    <div id="am-log-content"></div>
+                    <div id="am-log-content" role="log" aria-live="polite" aria-label="运行日志"></div>
                 </div>
             </div>
         </div>
@@ -1759,15 +1936,19 @@
             // 功能开关状态
             document.querySelectorAll('.am-switch-btn').forEach(btn => {
                 const key = btn.dataset.key;
-                if (State.config[key]) btn.classList.add('active');
-                else btn.classList.remove('active');
+                const active = !!State.config[key];
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
             });
 
             if (assistPanel) {
                 assistPanel.classList.toggle('open', this.runtime.assistExpanded);
+                assistPanel.setAttribute('aria-hidden', this.runtime.assistExpanded ? 'false' : 'true');
             }
             if (assistToggleBtn) {
                 assistToggleBtn.classList.toggle('active', this.runtime.assistExpanded);
+                assistToggleBtn.setAttribute('aria-expanded', this.runtime.assistExpanded ? 'true' : 'false');
+                assistToggleBtn.setAttribute('aria-pressed', this.runtime.assistExpanded ? 'true' : 'false');
             }
             CampaignIdQuickEntry.syncConcurrentButtonsVisibility();
 
@@ -1775,9 +1956,13 @@
             if (logExpanded) {
                 logContent.classList.remove('collapsed');
                 logToggle.textContent = '隐藏';
+                logToggle.setAttribute('aria-expanded', 'true');
+                logContent.setAttribute('aria-hidden', 'false');
             } else {
                 logContent.classList.add('collapsed');
                 logToggle.textContent = '展开';
+                logToggle.setAttribute('aria-expanded', 'false');
+                logContent.setAttribute('aria-hidden', 'true');
             }
         }
     };

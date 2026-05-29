@@ -558,6 +558,10 @@
 
             const normalizeBatchStrategyNumberEditValues = (rawValues = {}) => {
                 const normalizedValues = {};
+                const createFieldError = (message = '', focusSelector = '') => Object.assign(
+                    new Error(message),
+                    { focusSelector: String(focusSelector || '') }
+                );
                 const normalizeDecimalValue = (rawValue = '', label = '', options = {}) => {
                     const text = String(rawValue || '').trim();
                     if (!text) return '';
@@ -565,7 +569,10 @@
                     const min = Number.isFinite(options.min) ? options.min : 0;
                     const max = Number.isFinite(options.max) ? options.max : 9999;
                     if (!Number.isFinite(amount) || amount <= min || amount > max) {
-                        throw new Error(`${label}需填写大于 ${min} 且不超过 ${max} 的数值`);
+                        throw createFieldError(
+                            `${label}需填写大于 ${min} 且不超过 ${max} 的数值`,
+                            options.focusSelector
+                        );
                     }
                     return toShortSceneValue(String(amount)) || String(amount);
                 };
@@ -576,14 +583,33 @@
                     const min = Number.isFinite(options.min) ? options.min : 1;
                     const max = Number.isFinite(options.max) ? options.max : 200;
                     if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount < min || amount > max) {
-                        throw new Error(`${label}需填写 ${min}-${max} 的整数`);
+                        throw createFieldError(
+                            `${label}需填写 ${min}-${max} 的整数`,
+                            options.focusSelector
+                        );
                     }
                     return String(amount);
                 };
-                const budgetValue = normalizeDecimalValue(rawValues.dayAverageBudget, '预算值', { min: 0, max: 999999 });
-                const bidValue = normalizeDecimalValue(rawValues.defaultBidPrice, '默认出价', { min: 0, max: 9999 });
-                const recommendValue = normalizeIntegerValue(rawValues.recommendCount, '推荐词目标数', { min: 1, max: 200 });
-                const targetCostValue = normalizeDecimalValue(rawValues.targetCostValue, '目标成本/ROI', { min: 0, max: 9999 });
+                const budgetValue = normalizeDecimalValue(rawValues.dayAverageBudget, '预算值', {
+                    min: 0,
+                    max: 999999,
+                    focusSelector: '[data-batch-strategy-number-field="dayAverageBudget"]'
+                });
+                const bidValue = normalizeDecimalValue(rawValues.defaultBidPrice, '默认出价', {
+                    min: 0,
+                    max: 9999,
+                    focusSelector: '[data-batch-strategy-number-field="defaultBidPrice"]'
+                });
+                const recommendValue = normalizeIntegerValue(rawValues.recommendCount, '推荐词目标数', {
+                    min: 1,
+                    max: 200,
+                    focusSelector: '[data-batch-strategy-number-field="recommendCount"]'
+                });
+                const targetCostValue = normalizeDecimalValue(rawValues.targetCostValue, '目标成本/ROI', {
+                    min: 0,
+                    max: 9999,
+                    focusSelector: '[data-batch-strategy-number-field="targetCostValue"]'
+                });
                 if (budgetValue) normalizedValues.dayAverageBudget = budgetValue;
                 if (bidValue) normalizedValues.defaultBidPrice = bidValue;
                 if (recommendValue) normalizedValues.recommendCount = recommendValue;
@@ -647,17 +673,25 @@
                     if (previousMask) previousMask.remove();
                     const mask = document.createElement('div');
                     mask.id = 'am-wxt-scene-popup-mask';
-                    mask.className = 'am-wxt-scene-popup-mask';
-                    const dialogClass = `am-wxt-scene-popup-dialog${String(dialogClassName || '').trim() ? ` ${String(dialogClassName || '').trim()}` : ''}`;
+                    const normalizedDialogClassName = String(dialogClassName || '').trim();
+                    const maskClassNames = ['am-wxt-scene-popup-mask'];
+                    if (normalizedDialogClassName.split(/\s+/).includes('am-wxt-scene-popup-dialog-batch-number')) {
+                        maskClassNames.push('am-wxt-scene-popup-mask-batch-number');
+                    }
+                    mask.className = maskClassNames.join(' ');
+                    const dialogClass = `am-wxt-scene-popup-dialog${normalizedDialogClassName ? ` ${normalizedDialogClassName}` : ''}`;
+                    const titleId = 'am-wxt-scene-popup-title';
+                    const errorId = 'am-wxt-scene-popup-error';
                     mask.innerHTML = `
-                        <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true">
+                        <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
                             <div class="am-wxt-scene-popup-head">
-                                <span>${Utils.escapeHtml(title || '批量修改')}</span>
+                                <span id="${titleId}">${Utils.escapeHtml(title || '批量修改')}</span>
                                 <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-scene-popup-close="1" aria-label="关闭">
                                     ${renderAmWindowIcon('close')}
                                 </button>
                             </div>
                             <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
+                            <div class="am-wxt-scene-popup-error" id="${errorId}" role="alert" aria-live="assertive" hidden></div>
                             <div class="am-wxt-scene-popup-foot">
                                 <button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">${Utils.escapeHtml(cancelLabel || '取消')}</button>
                                 <button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">${Utils.escapeHtml(saveLabel || '保存')}</button>
@@ -681,16 +715,47 @@
                     const closeBtn = mask.querySelector('[data-scene-popup-close]');
                     const cancelBtn = mask.querySelector('[data-scene-popup-cancel]');
                     const saveBtn = mask.querySelector('[data-scene-popup-save]');
+                    const errorNode = mask.querySelector(`#${errorId}`);
+                    const clearPopupError = () => {
+                        if (!(errorNode instanceof HTMLElement)) return;
+                        errorNode.textContent = '';
+                        errorNode.hidden = true;
+                    };
+                    const focusPopupTarget = (selector = '') => {
+                        const normalizedSelector = String(selector || '').trim();
+                        if (!normalizedSelector) return;
+                        const target = mask.querySelector(normalizedSelector);
+                        if (!(target instanceof HTMLElement)) return;
+                        try {
+                            target.focus({ preventScroll: true });
+                        } catch {
+                            target.focus();
+                        }
+                    };
+                    const showPopupError = (message = '', focusSelector = '') => {
+                        const text = String(message || '').trim();
+                        if (errorNode instanceof HTMLElement && text) {
+                            errorNode.textContent = text;
+                            errorNode.hidden = false;
+                        }
+                        focusPopupTarget(focusSelector);
+                    };
                     if (closeBtn instanceof HTMLButtonElement) closeBtn.onclick = () => close(null);
                     if (cancelBtn instanceof HTMLButtonElement) cancelBtn.onclick = () => close(null);
                     if (saveBtn instanceof HTMLButtonElement) {
                         saveBtn.onclick = () => {
+                            clearPopupError();
                             try {
                                 const payload = typeof onSave === 'function' ? onSave(mask) : {};
-                                if (payload && payload.ok === false) return;
+                                if (payload && payload.ok === false) {
+                                    showPopupError(payload.error || payload.message || '', payload.focusSelector || '');
+                                    return;
+                                }
                                 close(payload || {});
                             } catch (err) {
-                                appendWizardLog(`保存配置失败：${err?.message || err}`, 'error');
+                                const errorMessage = String(err?.message || err || '保存配置失败');
+                                appendWizardLog(`保存配置失败：${errorMessage}`, 'error');
+                                showPopupError(errorMessage, err?.focusSelector || '');
                             }
                         };
                     }

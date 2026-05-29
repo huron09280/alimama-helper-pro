@@ -1606,51 +1606,93 @@
                 position: fixed;
                 inset: 0;
                 z-index: 2147483647;
-                background: rgba(6, 9, 19, 0.82);
-                color: #e8edf7;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+                background: rgba(27, 36, 56, 0.28);
+                color: var(--am26-text, #1b2438);
+                font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                padding: 16px;
+                padding: 24px;
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
             }
             #${OVERLAY_ID} .am-license-lock-card {
-                width: min(560px, 92vw);
-                border-radius: 14px;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                background: linear-gradient(145deg, rgba(17, 24, 39, 0.94), rgba(31, 41, 55, 0.92));
-                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+                width: min(560px, calc(100vw - 48px));
+                border-radius: 18px;
+                border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
+                background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
                 padding: 24px;
+                backdrop-filter: blur(20px) saturate(1.4);
+                -webkit-backdrop-filter: blur(20px) saturate(1.4);
+                outline: none;
+            }
+            #${OVERLAY_ID} .am-license-lock-card:focus-visible {
+                box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15)), 0 0 0 3px rgba(37, 99, 235, 0.22);
+            }
+            #${OVERLAY_ID} .am-license-lock-head {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                min-width: 0;
+            }
+            #${OVERLAY_ID} .am-license-lock-icon {
+                width: 38px;
+                height: 38px;
+                flex: 0 0 38px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 12px;
+                color: var(--am26-danger, #ea4f4f);
+                background: rgba(234, 79, 79, 0.12);
+                border: 1px solid rgba(234, 79, 79, 0.18);
+            }
+            #${OVERLAY_ID} .am-license-lock-heading {
+                min-width: 0;
+                flex: 1 1 auto;
             }
             #${OVERLAY_ID} .am-license-lock-title {
                 margin: 0 0 8px;
-                font-size: 20px;
+                font-size: 16px;
                 line-height: 1.3;
                 font-weight: 700;
-                color: #f3f6ff;
+                color: var(--am26-text, #1b2438);
             }
             #${OVERLAY_ID} .am-license-lock-desc {
                 margin: 0;
                 font-size: 14px;
                 line-height: 1.6;
-                color: rgba(232, 237, 247, 0.92);
+                color: var(--am26-text-soft, #505a74);
                 word-break: break-word;
             }
             #${OVERLAY_ID} .am-license-lock-meta {
-                margin-top: 14px;
+                margin-top: 18px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
                 font-size: 12px;
                 line-height: 1.6;
-                color: rgba(206, 216, 230, 0.92);
+                color: var(--am26-text-soft, #505a74);
             }
             #${OVERLAY_ID} .am-license-lock-badge {
                 display: inline-flex;
                 align-items: center;
-                padding: 2px 8px;
+                max-width: 100%;
+                min-width: 0;
+                padding: 3px 9px;
                 border-radius: 999px;
-                border: 1px solid rgba(255, 255, 255, 0.24);
-                background: rgba(255, 255, 255, 0.08);
-                margin-right: 6px;
-                margin-top: 6px;
+                border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                background: var(--am26-surface, rgba(255, 255, 255, 0.25));
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #${OVERLAY_ID}, #${OVERLAY_ID} * {
+                    transition: none !important;
+                    animation: none !important;
+                }
             }
         `;
         (document.head || document.documentElement || document.body || document).appendChild(style);
@@ -1664,26 +1706,49 @@
     const renderOverlay = () => {
         renderOverlayStyle();
         const reason = String(state.message || state.reason || '授权失败');
-        const shopId = String(state.shopId || '-');
-        const shopName = normalizeShopName(state.shopName) || '-';
-        const runtimeMode = String(state.runtimeMode || '-');
-        const scriptVersion = String(state.scriptVersion || '-');
-        const buildId = String(BUILD_ID || '-');
-        const buildChannel = String(BUILD_CHANNEL || '-');
+        const metaEntries = [
+            ['shopId', String(state.shopId || '-')],
+            ['shopName', normalizeShopName(state.shopName) || '-'],
+            ['runtime', String(state.runtimeMode || '-')],
+            ['version', String(state.scriptVersion || '-')],
+            ['build', String(BUILD_ID || '-')],
+            ['channel', String(BUILD_CHANNEL || '-')]
+        ];
 
+        const iconMarkup = typeof guardGlobal.__AM_RENDER_ICON__ === 'function'
+            ? guardGlobal.__AM_RENDER_ICON__('alert-triangle', { size: 20, strokeWidth: 2.2 })
+            : '';
+        const cardMarkup = `
+            <div class="am-license-lock-card" tabindex="-1">
+                <div class="am-license-lock-head">
+                    <span class="am-license-lock-icon" aria-hidden="true">
+                        ${iconMarkup}
+                    </span>
+                    <div class="am-license-lock-heading">
+                        <h2 class="am-license-lock-title" id="am-license-lock-title">店铺授权校验失败，功能已锁定</h2>
+                        <p class="am-license-lock-desc" id="am-license-lock-message" data-license-message="1"></p>
+                    </div>
+                </div>
+                <div class="am-license-lock-meta" data-license-meta="1"></div>
+            </div>
+        `;
         let root = document.getElementById(OVERLAY_ID);
         if (!root) {
             root = document.createElement('div');
             root.id = OVERLAY_ID;
-            root.innerHTML = `
-                <div class="am-license-lock-card">
-                    <h2 class="am-license-lock-title">店铺授权校验失败，功能已锁定</h2>
-                    <p class="am-license-lock-desc" data-license-message="1"></p>
-                    <div class="am-license-lock-meta" data-license-meta="1"></div>
-                </div>
-            `;
+            root.innerHTML = cardMarkup;
             (document.body || document.documentElement || document).appendChild(root);
+        } else if (
+            !root.querySelector('#am-license-lock-title')
+            || !root.querySelector('#am-license-lock-message')
+            || !root.querySelector('[data-license-meta="1"]')
+        ) {
+            root.innerHTML = cardMarkup;
         }
+        root.setAttribute('role', 'dialog');
+        root.setAttribute('aria-modal', 'true');
+        root.setAttribute('aria-labelledby', 'am-license-lock-title');
+        root.setAttribute('aria-describedby', 'am-license-lock-message');
 
         const messageNode = root.querySelector('[data-license-message="1"]');
         if (messageNode) {
@@ -1692,14 +1757,19 @@
 
         const metaNode = root.querySelector('[data-license-meta="1"]');
         if (metaNode) {
-            metaNode.innerHTML = [
-                `<span class="am-license-lock-badge">shopId: ${shopId}</span>`,
-                `<span class="am-license-lock-badge">shopName: ${shopName}</span>`,
-                `<span class="am-license-lock-badge">runtime: ${runtimeMode}</span>`,
-                `<span class="am-license-lock-badge">version: ${scriptVersion}</span>`,
-                `<span class="am-license-lock-badge">build: ${buildId}</span>`,
-                `<span class="am-license-lock-badge">channel: ${buildChannel}</span>`
-            ].join('');
+            metaNode.replaceChildren();
+            metaEntries.forEach(([label, value]) => {
+                const badge = document.createElement('span');
+                badge.className = 'am-license-lock-badge';
+                badge.textContent = `${label}: ${value}`;
+                badge.title = badge.textContent;
+                metaNode.appendChild(badge);
+            });
+        }
+
+        const cardNode = root.querySelector('.am-license-lock-card');
+        if (cardNode && typeof cardNode.focus === 'function') {
+            cardNode.focus({ preventScroll: true });
         }
     };
 

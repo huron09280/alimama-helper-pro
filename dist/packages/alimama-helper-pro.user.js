@@ -3218,6 +3218,7 @@ if (typeof globalThis !== 'undefined') {
                     position: fixed; top: 120px; right: 20px; z-index: 999999;
                     width: 40px; height: 40px; border-radius: 50%;
                     border: 1px solid var(--am26-border);
+                    padding: 0;
                     background: var(--am26-surface-strong);
                     backdrop-filter: blur(10px);
                     -webkit-backdrop-filter: blur(10px);
@@ -3225,6 +3226,9 @@ if (typeof globalThis !== 'undefined') {
                     cursor: pointer;
                     display: flex; align-items: center; justify-content: center;
                     color: var(--am26-primary);
+                    font: inherit;
+                    appearance: none;
+                    -webkit-appearance: none;
                     transition: all 0.3s ease;
                 }
                 #am-helper-icon svg {
@@ -3233,13 +3237,18 @@ if (typeof globalThis !== 'undefined') {
                     will-change: transform;
                 }
                 #am-helper-icon:hover {
-                    transform: translateY(-1px) scale(1.08);
+                    transform: translateY(-2px);
                     border-color: var(--am26-border-strong);
                     color: var(--am26-primary-strong);
-                    background: rgba(255,255,255,0.6);
+                    background: var(--am26-surface-strong);
+                    box-shadow: 0 10px 28px rgba(31, 38, 135, 0.18), var(--am26-glow);
                 }
                 #am-helper-icon:hover svg {
                     animation-duration: 1.2s;
+                }
+                #am-helper-icon:focus-visible {
+                    outline: 2px solid rgba(69, 84, 229, 0.42);
+                    outline-offset: 3px;
                 }
                 @keyframes am-helper-icon-pulse {
                     0%, 100% { transform: scale(1); }
@@ -3296,8 +3305,14 @@ if (typeof globalThis !== 'undefined') {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
                     width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
                     border-radius: 8px; transition: all 0.2s;
+                    border: 0; padding: 0; background: transparent; font: inherit;
+                    appearance: none; -webkit-appearance: none;
                 }
                 .am-close-btn:hover { background: rgba(234, 79, 79, 0.1); color: var(--am26-danger); }
+                .am-close-btn:focus-visible {
+                    outline: 2px solid rgba(234, 79, 79, 0.34);
+                    outline-offset: 2px;
+                }
 
                 /* 内容区 */
                 .am-body { padding: 18px; }
@@ -3317,11 +3332,12 @@ if (typeof globalThis !== 'undefined') {
                     position: relative;
                     border: none;
                     background: transparent;
-                    color: #6b7280;
+                    color: var(--am26-text-soft, #505a74);
                     border-radius: 12px;
                     padding: 8px 12px;
                     min-height: 34px;
                     font-size: 13px;
+                    font-family: inherit;
                     font-weight: 600;
                     line-height: 1;
                     cursor: pointer;
@@ -3345,7 +3361,7 @@ if (typeof globalThis !== 'undefined') {
                 .am-tool-btn:hover,
                 .am-tool-btn.active {
                     background: rgba(255, 255, 255, 0.88);
-                    color: #111827;
+                    color: var(--am26-text, #1b2438);
                     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
                     font-weight: 700;
                 }
@@ -3386,9 +3402,10 @@ if (typeof globalThis !== 'undefined') {
                 .am-switch-btn {
                     border: 1px solid transparent;
                     background: rgba(255, 255, 255, 0.9);
-                    color: #1a2a47;
+                    color: var(--am26-text, #1b2438);
                     border-radius: 999px;
                     font-size: 11px;
+                    font-family: inherit;
                     line-height: 1.2;
                     font-weight: 600;
                     cursor: pointer;
@@ -3414,7 +3431,12 @@ if (typeof globalThis !== 'undefined') {
                 .am-switch-btn:hover {
                     transform: translateY(-2px);
                     box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
-                    border-color: rgba(47, 84, 235, 0.4);
+                    border-color: var(--am26-border-strong);
+                    background: var(--am26-surface-strong);
+                }
+                .am-switch-btn:focus-visible {
+                    outline: 2px solid rgba(69, 84, 229, 0.36);
+                    outline-offset: 2px;
                 }
                 .am-switch-btn:not(.active) {
                     opacity: 0.5;
@@ -3424,7 +3446,7 @@ if (typeof globalThis !== 'undefined') {
                     transform: none;
                 }
                 .am-switch-btn:not(.active)::before {
-                    background: #cbd5e1;
+                    background: rgba(80, 90, 116, 0.28);
                     box-shadow: none;
                 }
 
@@ -3555,43 +3577,67 @@ if (typeof globalThis !== 'undefined') {
                     z-index: 2147483646;
                     width: max-content;
                     min-width: 120px;
-                    padding: 4px 0;
-                    border: 1px solid rgba(0, 0, 0, 0.08);
-                    border-radius: 4px;
-                    background: #ffffff;
-                    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+                    padding: 6px;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    border-radius: 10px;
+                    background: var(--am26-panel-strong, rgba(255, 255, 255, 0.88));
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
                     box-sizing: border-box;
+                    color: var(--am26-text, #1b2438);
+                    font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    backdrop-filter: blur(18px) saturate(160%);
+                    -webkit-backdrop-filter: blur(18px) saturate(160%);
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item {
                     width: 100%;
                     min-height: 32px;
                     display: flex;
                     align-items: center;
+                    gap: 8px;
                     border: 0;
-                    border-radius: 0;
-                    padding: 0 12px;
+                    border-radius: 8px;
+                    padding: 0 10px;
                     background: transparent;
-                    color: #333333;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     line-height: 18px;
                     text-align: left;
                     white-space: nowrap;
                     cursor: pointer;
                     box-sizing: border-box;
+                    transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item-icon {
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: currentColor;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item-icon svg {
+                    width: 14px;
+                    height: 14px;
+                    display: block;
+                }
+                #am-campaign-batch-plus-menu .am-campaign-batch-plus-item-label {
+                    min-width: 0;
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:hover,
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:focus-visible {
-                    background: #f5f7fa;
-                    color: #111111;
-                    outline: none;
+                    background: rgba(255, 255, 255, 0.52);
+                    color: var(--am26-text, #1b2438);
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger {
-                    color: #d93026;
+                    color: var(--am26-danger, #ea4f4f);
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:hover,
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:focus-visible {
-                    background: #fff2f0;
-                    color: #d93026;
+                    background: rgba(234, 79, 79, 0.12);
+                    color: var(--am26-danger, #ea4f4f);
                 }
                 .am-campaign-search-btn.is-running {
                     color: #1677ff;
@@ -3676,7 +3722,9 @@ if (typeof globalThis !== 'undefined') {
                 #am-campaign-concurrent-log-popup {
                     position: fixed;
                     inset: 0;
-                    background: rgba(0, 0, 0, 0.45);
+                    padding: 24px;
+                    background: rgba(27, 36, 56, 0.28);
+                    backdrop-filter: blur(10px);
                     display: none;
                     align-items: center;
                     justify-content: center;
@@ -3687,27 +3735,58 @@ if (typeof globalThis !== 'undefined') {
                     max-height: min(78vh, 720px);
                     display: flex;
                     flex-direction: column;
-                    border-radius: 14px;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    background: #ffffff;
-                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+                    border-radius: 18px;
+                    border: 1px solid var(--am26-border-strong);
+                    background: var(--am26-panel-strong);
+                    color: var(--am26-text);
+                    box-shadow: var(--am26-shadow);
+                    backdrop-filter: blur(20px) saturate(1.4);
                     overflow: hidden;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-header {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
+                    gap: 12px;
                     padding: 12px 14px;
                     font-size: 14px;
                     font-weight: 600;
-                    color: #111827;
-                    border-bottom: 1px solid #eef1f5;
-                    background: linear-gradient(180deg, #f9fbff 0%, #f4f7fb 100%);
+                    color: var(--am26-text);
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+                    background: rgba(255, 255, 255, 0.28);
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-heading {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-icon {
+                    width: 28px;
+                    height: 28px;
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 10px;
+                    background: rgba(69, 84, 229, 0.12);
+                    color: var(--am26-primary);
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-title {
+                    margin: 0;
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 14px;
+                    line-height: 20px;
+                    font-weight: 700;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-close {
-                    border: 0;
-                    background: transparent;
-                    color: #6b7280;
+                    flex: 0 0 auto;
+                    border: 1px solid transparent;
+                    background: rgba(255, 255, 255, 0.36);
+                    color: var(--am26-text-soft);
                     line-height: 1;
                     cursor: pointer;
                     width: 32px;
@@ -3717,40 +3796,55 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     border-radius: 8px;
+                    transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-close:hover {
                     background: rgba(234, 79, 79, 0.1);
                     color: var(--am26-danger, #ea4f4f);
                 }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-close:focus-visible {
+                    outline: none;
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
+                }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status {
                     padding: 10px 14px;
-                    border-bottom: 1px solid #eef1f5;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.34);
                     font-size: 12px;
-                    color: #1f2937;
-                    background: #f8fafc;
+                    font-weight: 600;
+                    color: var(--am26-text-soft);
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-running {
-                    color: #0f4fce;
-                    background: #eff6ff;
+                    color: var(--am26-primary);
+                    background: rgba(69, 84, 229, 0.12);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-success {
-                    color: #0f6b3f;
-                    background: #edf9f2;
+                    color: var(--am26-success);
+                    background: rgba(14, 168, 111, 0.12);
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-warning {
+                    color: #a16207;
+                    background: rgba(232, 163, 37, 0.14);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-error {
-                    color: #a43131;
-                    background: #fff1f1;
+                    color: var(--am26-danger);
+                    background: rgba(234, 79, 79, 0.12);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-body {
                     flex: 1;
+                    min-height: 180px;
                     overflow: auto;
                     overscroll-behavior: contain;
-                    background: #0f172a;
+                    background: linear-gradient(145deg, rgba(246, 250, 255, 0.78), rgba(235, 243, 255, 0.56));
                     padding: 10px 12px;
                     font-family: var(--am26-mono);
                     font-size: 12px;
                     line-height: 1.5;
-                    color: #dbe4ff;
+                    color: var(--am26-text-soft);
+                    outline: none;
+                }
+                #am-campaign-concurrent-log-popup .am-concurrent-log-body:focus-visible {
+                    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.22);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line {
                     white-space: pre-wrap;
@@ -3758,16 +3852,22 @@ if (typeof globalThis !== 'undefined') {
                     margin-bottom: 6px;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-error {
-                    color: #ffb3b3;
+                    color: var(--am26-danger);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-warn {
-                    color: #ffe08a;
+                    color: #a16207;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-success {
-                    color: #99f6c6;
+                    color: var(--am26-success);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line:last-child {
                     margin-bottom: 0;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-campaign-concurrent-log-popup .am-concurrent-log-close {
+                        transition: none !important;
+                        transform: none !important;
+                    }
                 }
 
                 #am-campaign-copy-overview-popup {
@@ -3778,17 +3878,22 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.36);
+                    background: rgba(255, 255, 255, 0.72);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                    backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-card {
                     width: min(1080px, calc(100vw - 48px));
                     max-height: min(84vh, 680px);
                     display: flex;
                     flex-direction: column;
-                    border-radius: 24px;
-                    background: #ffffff;
-                    color: #333333;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    border: 1px solid var(--am26-border-strong);
+                    border-radius: 18px;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
+                    color: var(--am26-text);
+                    box-shadow: var(--am26-shadow);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.45);
+                    backdrop-filter: blur(20px) saturate(1.45);
                     overflow: hidden;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-header {
@@ -3797,7 +3902,7 @@ if (typeof globalThis !== 'undefined') {
                     justify-content: space-between;
                     gap: 12px;
                     padding: 16px 24px 8px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-heading {
                     min-width: 0;
@@ -3814,42 +3919,43 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
-                    background: #ffa33b;
-                    color: #ffffff;
-                    font-size: 12px;
-                    line-height: 1;
-                    font-weight: 700;
-                    font-family: Arial, Helvetica, sans-serif;
+                    background: rgba(69, 84, 229, 0.12);
+                    color: var(--am26-primary);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-title {
                     margin: 0;
                     font-size: 16px;
                     line-height: 24px;
                     font-weight: 700;
-                    color: #333333;
+                    color: var(--am26-text);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-subtitle {
                     margin: 4px 0 0;
                     font-size: 12px;
                     line-height: 18px;
-                    color: #666666;
+                    color: var(--am26-text-soft);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-close {
                     width: 28px;
                     height: 28px;
-                    border: 0;
-                    border-radius: 50%;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid transparent;
+                    border-radius: 8px;
                     background: transparent;
-                    color: #999999;
-                    font-size: 20px;
-                    line-height: 28px;
+                    color: var(--am26-text-soft);
+                    line-height: 1;
                     cursor: pointer;
+                    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-close:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-close:focus-visible {
-                    background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
-                    outline: none;
+                    background: rgba(255, 255, 255, 0.48);
+                    border-color: rgba(69, 84, 229, 0.18);
+                    color: var(--am26-primary);
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulkbar {
                     display: flex;
@@ -3858,20 +3964,20 @@ if (typeof globalThis !== 'undefined') {
                     gap: 8px 18px;
                     margin: 12px 24px 0;
                     padding: 0 0 10px;
-                    border-bottom: 1px solid #edf0f5;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.42);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-group {
                     display: flex;
                     align-items: center;
                     gap: 8px;
                     min-width: 0;
-                    color: #666666;
+                    color: var(--am26-text-soft);
                     font-size: 12px;
                     line-height: 28px;
                     white-space: nowrap;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-title {
-                    color: #333333;
+                    color: var(--am26-text);
                     font-weight: 600;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-field {
@@ -3879,7 +3985,7 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     gap: 4px;
                     margin: 0;
-                    color: #666666;
+                    color: var(--am26-text-soft);
                     font-weight: 400;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-input,
@@ -3887,12 +3993,12 @@ if (typeof globalThis !== 'undefined') {
                     width: 72px;
                     height: 28px;
                     border: 0;
-                    border-bottom: 1px solid #d9dee8;
+                    border-bottom: 1px solid rgba(80, 90, 116, 0.28);
                     border-radius: 0;
                     padding: 0 2px;
                     box-sizing: border-box;
                     background: transparent;
-                    color: #111827;
+                    color: var(--am26-text);
                     font-size: 12px;
                     line-height: 28px;
                     outline: none;
@@ -3902,8 +4008,8 @@ if (typeof globalThis !== 'undefined') {
                     appearance: none;
                     padding-right: 16px;
                     background-image:
-                        linear-gradient(45deg, transparent 50%, #8a93a3 50%),
-                        linear-gradient(135deg, #8a93a3 50%, transparent 50%);
+                        linear-gradient(45deg, transparent 50%, var(--am26-text-soft) 50%),
+                        linear-gradient(135deg, var(--am26-text-soft) 50%, transparent 50%);
                     background-position:
                         calc(100% - 9px) 12px,
                         calc(100% - 5px) 12px;
@@ -3912,30 +4018,31 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-input:focus,
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-select:focus {
-                    border-bottom-color: #4554e5;
+                    border-bottom-color: var(--am26-primary);
                     background-color: rgba(69, 84, 229, 0.04);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-step {
                     min-width: 52px;
-                    color: #8a93a3;
+                    color: var(--am26-text-soft);
                     font-variant-numeric: tabular-nums;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn {
                     height: 28px;
                     min-width: 72px;
-                    border: 1px solid rgba(69, 84, 229, 0.28);
+                    border: 1px solid rgba(69, 84, 229, 0.26);
                     border-radius: 500px;
                     padding: 0 12px;
-                    background: #ffffff;
-                    color: #4554e5;
+                    background: rgba(255, 255, 255, 0.38);
+                    color: var(--am26-primary);
                     font-size: 12px;
                     line-height: 26px;
                     cursor: pointer;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:focus-visible {
-                    background: rgba(69, 84, 229, 0.08);
-                    outline: none;
+                    background: rgba(69, 84, 229, 0.1);
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:disabled {
                     cursor: not-allowed;
@@ -3945,11 +4052,11 @@ if (typeof globalThis !== 'undefined') {
                     flex: 1;
                     min-height: 180px;
                     margin: 14px 24px 0;
-                    border: 1px solid #edf0f5;
+                    border: 1px solid rgba(255, 255, 255, 0.52);
                     border-radius: 8px;
                     overflow-x: hidden;
                     overflow-y: auto;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.36);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table {
                     width: 100%;
@@ -3960,7 +4067,7 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table th,
                 #am-campaign-copy-overview-popup .am-copy-overview-table td {
-                    border-bottom: 1px solid #edf0f5;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.46);
                     padding: 9px 10px;
                     box-sizing: border-box;
                     text-align: left;
@@ -3970,8 +4077,8 @@ if (typeof globalThis !== 'undefined') {
                     position: sticky;
                     top: 0;
                     z-index: 1;
-                    background: #fafbff;
-                    color: #666666;
+                    background: rgba(246, 250, 255, 0.72);
+                    color: var(--am26-text-soft);
                     font-weight: 600;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table th:nth-child(1),
@@ -4003,7 +4110,7 @@ if (typeof globalThis !== 'undefined') {
                     white-space: nowrap;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-index {
-                    color: #6b7280;
+                    color: var(--am26-text-soft);
                     font-variant-numeric: tabular-nums;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-input,
@@ -4011,12 +4118,12 @@ if (typeof globalThis !== 'undefined') {
                     width: 100%;
                     height: 30px;
                     border: 0;
-                    border-bottom: 1px solid #d9dee8;
+                    border-bottom: 1px solid rgba(80, 90, 116, 0.28);
                     border-radius: 0;
                     padding: 0 2px;
                     box-sizing: border-box;
                     background: transparent;
-                    color: #111827;
+                    color: var(--am26-text);
                     font-size: 12px;
                     line-height: 30px;
                     outline: none;
@@ -4026,8 +4133,8 @@ if (typeof globalThis !== 'undefined') {
                     appearance: none;
                     padding-right: 16px;
                     background-image:
-                        linear-gradient(45deg, transparent 50%, #8a93a3 50%),
-                        linear-gradient(135deg, #8a93a3 50%, transparent 50%);
+                        linear-gradient(45deg, transparent 50%, var(--am26-text-soft) 50%),
+                        linear-gradient(135deg, var(--am26-text-soft) 50%, transparent 50%);
                     background-position:
                         calc(100% - 9px) 13px,
                         calc(100% - 5px) 13px;
@@ -4036,7 +4143,7 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-input:focus,
                 #am-campaign-copy-overview-popup .am-copy-overview-select:focus {
-                    border-bottom-color: #4554e5;
+                    border-bottom-color: var(--am26-primary);
                     background-color: rgba(69, 84, 229, 0.04);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-name {
@@ -4049,7 +4156,7 @@ if (typeof globalThis !== 'undefined') {
                     box-sizing: border-box;
                     padding: 6px 2px;
                     background: transparent;
-                    color: #333333;
+                    color: var(--am26-text);
                     font-size: 12px;
                     line-height: 18px;
                     white-space: nowrap;
@@ -4065,8 +4172,8 @@ if (typeof globalThis !== 'undefined') {
                 #am-campaign-copy-overview-popup .am-copy-overview-status {
                     min-height: 34px;
                     padding: 10px 24px 6px;
-                    color: #666666;
-                    background: #ffffff;
+                    color: var(--am26-text-soft);
+                    background: rgba(255, 255, 255, 0.24);
                     font-size: 12px;
                     line-height: 18px;
                 }
@@ -4087,7 +4194,7 @@ if (typeof globalThis !== 'undefined') {
                     justify-content: flex-start;
                     gap: 8px;
                     padding: 0 24px 16px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.24);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-submit,
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel {
@@ -4100,25 +4207,27 @@ if (typeof globalThis !== 'undefined') {
                     font-size: 12px;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+                    transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-submit {
-                    background: #4554e5;
+                    background: var(--am26-primary);
                     color: #ffffff;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel {
                     background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
+                    color: var(--am26-primary);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-submit:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-submit:focus-visible {
-                    background: #3546df;
-                    outline: none;
+                    background: var(--am26-primary-strong);
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel:hover,
                 #am-campaign-copy-overview-popup .am-copy-overview-cancel:focus-visible {
                     background: rgba(69, 84, 229, 0.16);
-                    outline: none;
+                    outline: 2px solid rgba(69, 84, 229, 0.3);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-overview-popup button:disabled,
                 #am-campaign-copy-overview-popup input:disabled,
@@ -4135,17 +4244,22 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.36);
+                    background: rgba(255, 255, 255, 0.72);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                    backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-card {
-                    width: min(320px, calc(100vw - 28px));
+                    width: min(420px, calc(100vw - 28px));
                     max-height: min(84vh, 680px);
                     display: flex;
                     flex-direction: column;
-                    border-radius: 24px;
-                    background: #ffffff;
-                    color: #333333;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    border: 1px solid var(--am26-border-strong);
+                    border-radius: 18px;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
+                    color: var(--am26-text);
+                    box-shadow: var(--am26-shadow);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.45);
+                    backdrop-filter: blur(20px) saturate(1.45);
                     overflow: hidden;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-header {
@@ -4153,28 +4267,25 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     gap: 8px;
                     padding: 16px 24px 8px;
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-icon {
-                    width: 16px;
-                    height: 16px;
+                    width: 22px;
+                    height: 22px;
                     flex: 0 0 auto;
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
-                    background: #ffa33b;
-                    color: #ffffff;
-                    font-size: 12px;
-                    line-height: 1;
-                    font-weight: 700;
-                    font-family: Arial, Helvetica, sans-serif;
+                    background: rgba(14, 168, 111, 0.14);
+                    color: var(--am26-success);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-title {
                     margin: 0;
                     font-size: 16px;
                     line-height: 24px;
                     font-weight: 700;
-                    color: #333333;
+                    color: var(--am26-text);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-body {
                     margin: 0;
@@ -4185,15 +4296,15 @@ if (typeof globalThis !== 'undefined') {
                     font-family: inherit;
                     font-size: 12px;
                     line-height: 18px;
-                    color: #333333;
-                    background: #ffffff;
+                    color: var(--am26-text-soft);
+                    background: rgba(255, 255, 255, 0.36);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-footer {
                     display: flex;
                     justify-content: flex-start;
                     gap: 8px;
                     padding: 0 24px 16px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.28);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-confirm,
                 #am-campaign-copy-success-popup .am-copy-success-cancel {
@@ -4209,23 +4320,35 @@ if (typeof globalThis !== 'undefined') {
                     transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-confirm {
-                    background: #4554e5;
+                    background: var(--am26-primary);
                     color: #ffffff;
                     box-shadow: none;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-cancel {
                     background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
+                    color: var(--am26-primary);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-confirm:hover,
                 #am-campaign-copy-success-popup .am-copy-success-confirm:focus-visible {
-                    background: #3546df;
-                    outline: none;
+                    background: var(--am26-primary-strong);
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-copy-success-popup .am-copy-success-cancel:hover,
                 #am-campaign-copy-success-popup .am-copy-success-cancel:focus-visible {
                     background: rgba(69, 84, 229, 0.16);
-                    outline: none;
+                    outline: 2px solid rgba(69, 84, 229, 0.3);
+                    outline-offset: 2px;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-campaign-copy-overview-popup .am-copy-overview-close,
+                    #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn,
+                    #am-campaign-copy-overview-popup .am-copy-overview-submit,
+                    #am-campaign-copy-overview-popup .am-copy-overview-cancel,
+                    #am-campaign-copy-success-popup .am-copy-success-confirm,
+                    #am-campaign-copy-success-popup .am-copy-success-cancel {
+                        transition: none;
+                    }
                 }
 
                 #am-campaign-batch-confirm-popup {
@@ -4236,17 +4359,23 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.36);
+                    background: rgba(15, 23, 42, 0.42);
+                    backdrop-filter: blur(6px);
+                    -webkit-backdrop-filter: blur(6px);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-card {
-                    width: min(320px, calc(100vw - 28px));
+                    width: min(360px, calc(100vw - 28px));
                     display: flex;
                     flex-direction: column;
-                    border-radius: 24px;
-                    background: #ffffff;
-                    color: #333333;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    border-radius: 18px;
+                    background: var(--am26-panel-strong, rgba(255, 255, 255, 0.92));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
                     overflow: hidden;
+                    font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    backdrop-filter: blur(18px) saturate(160%);
+                    -webkit-backdrop-filter: blur(18px) saturate(160%);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-header {
                     display: flex;
@@ -4262,22 +4391,24 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
-                    background: #ffa33b;
-                    color: #ffffff;
-                    font-size: 12px;
-                    line-height: 1;
-                    font-weight: 700;
-                    font-family: Arial, Helvetica, sans-serif;
+                    background: rgba(232, 163, 37, 0.14);
+                    color: var(--am26-warning, #e8a325);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-icon.is-danger {
-                    background: #b42318;
+                    background: rgba(234, 79, 79, 0.14);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+                #am-campaign-batch-confirm-popup .am-batch-confirm-icon svg {
+                    width: 16px;
+                    height: 16px;
+                    display: block;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-title {
                     margin: 0;
                     font-size: 16px;
                     line-height: 24px;
                     font-weight: 700;
-                    color: #333333;
+                    color: var(--am26-text, #1b2438);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-body {
                     margin: 0;
@@ -4287,22 +4418,22 @@ if (typeof globalThis !== 'undefined') {
                     font-family: inherit;
                     font-size: 12px;
                     line-height: 18px;
-                    color: #333333;
-                    background: #ffffff;
+                    color: var(--am26-text-soft, #505a74);
+                    background: rgba(255, 255, 255, 0.2);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-footer {
                     display: flex;
                     justify-content: flex-start;
                     gap: 8px;
                     padding: 0 24px 16px;
-                    background: #ffffff;
+                    background: rgba(255, 255, 255, 0.2);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
                     min-width: 64px;
                     height: 32px;
                     border: 0;
-                    border-radius: 500px;
+                    border-radius: 10px;
                     padding: 0 12px;
                     box-sizing: border-box;
                     font-size: 12px;
@@ -4311,30 +4442,40 @@ if (typeof globalThis !== 'undefined') {
                     transition: background-color 0.16s ease, color 0.16s ease;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit {
-                    background: #4554e5;
+                    background: var(--am26-primary, #4554e5);
                     color: #ffffff;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger {
-                    background: #b42318;
+                    background: var(--am26-danger, #ea4f4f);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
-                    background: rgba(69, 84, 229, 0.1);
-                    color: #4554e5;
+                    background: var(--am26-primary-soft, rgba(42, 91, 255, 0.15));
+                    color: var(--am26-primary, #4554e5);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit:focus-visible {
-                    background: #3546df;
-                    outline: none;
+                    background: var(--am26-primary-strong, #1d3fcf);
+                    outline: 2px solid rgba(69, 84, 229, 0.36);
+                    outline-offset: 2px;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:focus-visible {
-                    background: #9f1f14;
-                    outline: none;
+                    background: #d63e3e;
+                    outline: 2px solid rgba(234, 79, 79, 0.34);
+                    outline-offset: 2px;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:focus-visible {
                     background: rgba(69, 84, 229, 0.16);
-                    outline: none;
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-campaign-batch-plus-menu .am-campaign-batch-plus-item,
+                    #am-campaign-batch-confirm-popup .am-batch-confirm-submit,
+                    #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
+                        transition: none;
+                    }
                 }
 
                 /* 算法护航弹窗居中 */
@@ -4365,28 +4506,41 @@ if (typeof globalThis !== 'undefined') {
                     cursor: pointer; color: var(--am26-text-soft); margin-left: 10px;
                     padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
                     background: rgba(255,255,255,0.2);
+                    border: 0;
+                    font: inherit;
+                    appearance: none;
+                    -webkit-appearance: none;
                 }
-                .am-action-btn:hover { background: rgba(255, 255, 255, 0.5); color: var(--am26-primary-strong); }
+                .am-action-btn:hover {
+                    background: rgba(255, 255, 255, 0.5);
+                    color: var(--am26-primary-strong);
+                }
+                .am-action-btn:focus-visible {
+                    background: rgba(255, 255, 255, 0.5);
+                    color: var(--am26-primary-strong);
+                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline-offset: 2px;
+                }
                 #am-log-content {
                     height: 100px; overflow-y: auto;
                     overscroll-behavior: contain;
-                    background: rgba(0, 0, 0, 0.03);
-                    border: 1px solid inset rgba(0,0,0,0.05);
+                    background: var(--am26-surface);
+                    border: 1px solid var(--am26-border);
                     border-radius: 10px;
                     padding: 10px;
                     font-size: 11px;
                     color: var(--am26-text);
                     font-family: var(--am26-mono);
-                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48), 0 2px 8px rgba(31, 53, 109, 0.04);
                     transition: all 0.3s ease;
                 }
                 #am-log-content.collapsed { height: 0; padding: 0; border: none; opacity: 0; }
                 .am-log-line {
                     padding: 3px 0; line-height: 1.5;
-                    border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+                    border-bottom: 1px dashed rgba(80, 90, 116, 0.16);
                 }
                 .am-log-line:last-child { border-bottom: none; }
-                .am-log-time { color: rgba(0,0,0,0.4); margin-right: 6px; }
+                .am-log-time { color: var(--am26-text-soft); opacity: 0.72; margin-right: 6px; }
 
                 /* 拖拽调整宽度 */
                 .am-resizer-left {
@@ -4400,7 +4554,7 @@ if (typeof globalThis !== 'undefined') {
                     position: fixed;
                     bottom: 20px;
                     right: 20px;
-                    width: 340px;
+                    width: min(340px, calc(100vw - 24px));
                     padding: 14px;
                     border-radius: 12px;
                     border: 1px solid var(--am26-border);
@@ -4470,6 +4624,7 @@ if (typeof globalThis !== 'undefined') {
                     background: rgba(255, 255, 255, 0.72);
                     border-color: var(--am26-border);
                     color: var(--am26-text-soft);
+                    font: inherit;
                 }
                 #am-report-capture-panel .am-download-close {
                     width: 32px;
@@ -4493,6 +4648,28 @@ if (typeof globalThis !== 'undefined') {
                 #am-report-capture-panel .am-download-btn:hover,
                 #am-report-capture-panel .am-download-link:hover {
                     transform: translateY(-1px);
+                }
+                #am-report-capture-panel .am-download-btn:focus-visible,
+                #am-report-capture-panel .am-download-link:focus-visible {
+                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline-offset: 2px;
+                    transform: translateY(-1px);
+                }
+                #am-report-capture-panel .am-download-close:focus-visible {
+                    color: var(--am26-danger, #ea4f4f);
+                    border-color: rgba(234, 79, 79, 0.22);
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-report-capture-panel .am-download-btn,
+                    #am-report-capture-panel .am-download-link {
+                        transition: none;
+                    }
+                    #am-report-capture-panel .am-download-btn:hover,
+                    #am-report-capture-panel .am-download-link:hover,
+                    #am-report-capture-panel .am-download-btn:focus-visible,
+                    #am-report-capture-panel .am-download-link:focus-visible {
+                        transform: none;
+                    }
                 }
                 #am-report-capture-panel .am-download-copy { flex: 1; }
                 #am-report-capture-panel .am-download-hint {
@@ -4548,9 +4725,9 @@ if (typeof globalThis !== 'undefined') {
             });
             const root = document.createElement('div');
             root.innerHTML = `
-                <div id="am-helper-icon" title="点击展开助手面板">
+                <button id="am-helper-icon" type="button" title="点击展开助手面板" aria-label="展开助手面板">
                     ${renderAmIcon('logo', { size: 22, strokeWidth: 2.2 })}
-                </div>
+                </button>
                 <div id="am-helper-panel">
             <div class="am-resizer-left"></div>
             <div class="am-header">
@@ -4559,54 +4736,54 @@ if (typeof globalThis !== 'undefined') {
                     阿里助手 Pro
                     <span class="am-version">v${CURRENT_VERSION}</span>
                 </span>
-                <div class="am-close-btn" title="最小化">
+                <button type="button" class="am-close-btn" title="最小化" aria-label="最小化助手面板">
                     ${renderAmWindowIcon('close')}
-                </div>
+                </button>
             </div>
             <div class="am-body">
                 <!-- Section 1: Tools -->
                 <div class="am-tools-row">
-                    <div class="am-tool-btn" id="am-trigger-optimizer">
+                    <button type="button" class="am-tool-btn" id="am-trigger-optimizer">
                         ${renderAmIcon('shield-check', { size: 16 })}
                         算法护航
-                    </div>
-                    <div class="am-tool-btn" id="am-trigger-keyword-plan-api">
+                    </button>
+                    <button type="button" class="am-tool-btn" id="am-trigger-keyword-plan-api">
                         ${renderAmIcon('plan', { size: 16 })}
                         组建计划
-                    </div>
-                    <div class="am-tool-btn" id="am-trigger-magic-report">
+                    </button>
+                    <button type="button" class="am-tool-btn" id="am-trigger-magic-report">
                         ${renderAmIcon('chart', { size: 16 })}
                         万能查数
-                    </div>
-                    <div class="am-tool-btn" id="am-toggle-assist-display">
+                    </button>
+                    <button type="button" class="am-tool-btn" id="am-toggle-assist-display" aria-expanded="false" aria-controls="am-assist-switches" aria-pressed="false">
                         ${renderAmIcon('eye', { size: 16 })}
                         辅助显示
-                    </div>
+                    </button>
                 </div>
 
                 <!-- Section 2: Settings -->
                 <div id="am-assist-switches">
                     <div class="am-switches-grid">
-                        <div class="am-switch-btn" data-key="showCost">询单成本</div>
-                        <div class="am-switch-btn" data-key="showCartCost">加购成本</div>
-                        <div class="am-switch-btn" data-key="showPercent">潜客占比</div>
-                        <div class="am-switch-btn" data-key="showCostRatio">花费占比</div>
-                        <div class="am-switch-btn" data-key="showBudget">预算进度</div>
-                        <div class="am-switch-btn" data-key="unlockBudgetFrontendLimit">预算破限</div>
-                        <div class="am-switch-btn" data-key="autoSortCharge">花费排序</div>
-                        <div class="am-switch-btn" data-key="showConcurrentStartButton">计划并发</div>
-                        <!-- <div class="am-switch-btn" data-key="autoClose">弹窗速闭</div> -->
+                        <button type="button" class="am-switch-btn" data-key="showCost" aria-pressed="false">询单成本</button>
+                        <button type="button" class="am-switch-btn" data-key="showCartCost" aria-pressed="false">加购成本</button>
+                        <button type="button" class="am-switch-btn" data-key="showPercent" aria-pressed="false">潜客占比</button>
+                        <button type="button" class="am-switch-btn" data-key="showCostRatio" aria-pressed="false">花费占比</button>
+                        <button type="button" class="am-switch-btn" data-key="showBudget" aria-pressed="false">预算进度</button>
+                        <button type="button" class="am-switch-btn" data-key="unlockBudgetFrontendLimit" aria-pressed="false">预算破限</button>
+                        <button type="button" class="am-switch-btn" data-key="autoSortCharge" aria-pressed="false">花费排序</button>
+                        <button type="button" class="am-switch-btn" data-key="showConcurrentStartButton" aria-pressed="false">计划并发</button>
+                        <!-- <button type="button" class="am-switch-btn" data-key="autoClose" aria-pressed="false">弹窗速闭</button> -->
                     </div>
                 </div>
                 <div class="am-log-section">
                     <div class="am-log-header">
                         <span class="am-log-title">${renderAmIcon('list', { size: 14 })}<span>运行日志</span></span>
                         <div>
-                            <span class="am-action-btn" id="am-log-clear">清空</span>
-                            <span class="am-action-btn" id="am-log-toggle">展开</span>
+                            <button type="button" class="am-action-btn" id="am-log-clear">清空</button>
+                            <button type="button" class="am-action-btn" id="am-log-toggle" aria-controls="am-log-content" aria-expanded="false">展开</button>
                         </div>
                     </div>
-                    <div id="am-log-content"></div>
+                    <div id="am-log-content" role="log" aria-live="polite" aria-label="运行日志"></div>
                 </div>
             </div>
         </div>
@@ -4877,15 +5054,19 @@ if (typeof globalThis !== 'undefined') {
             // 功能开关状态
             document.querySelectorAll('.am-switch-btn').forEach(btn => {
                 const key = btn.dataset.key;
-                if (State.config[key]) btn.classList.add('active');
-                else btn.classList.remove('active');
+                const active = !!State.config[key];
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
             });
 
             if (assistPanel) {
                 assistPanel.classList.toggle('open', this.runtime.assistExpanded);
+                assistPanel.setAttribute('aria-hidden', this.runtime.assistExpanded ? 'false' : 'true');
             }
             if (assistToggleBtn) {
                 assistToggleBtn.classList.toggle('active', this.runtime.assistExpanded);
+                assistToggleBtn.setAttribute('aria-expanded', this.runtime.assistExpanded ? 'true' : 'false');
+                assistToggleBtn.setAttribute('aria-pressed', this.runtime.assistExpanded ? 'true' : 'false');
             }
             CampaignIdQuickEntry.syncConcurrentButtonsVisibility();
 
@@ -4893,9 +5074,13 @@ if (typeof globalThis !== 'undefined') {
             if (logExpanded) {
                 logContent.classList.remove('collapsed');
                 logToggle.textContent = '隐藏';
+                logToggle.setAttribute('aria-expanded', 'true');
+                logContent.setAttribute('aria-hidden', 'false');
             } else {
                 logContent.classList.add('collapsed');
                 logToggle.textContent = '展开';
+                logToggle.setAttribute('aria-expanded', 'false');
+                logContent.setAttribute('aria-hidden', 'true');
             }
         }
     };
@@ -5517,7 +5702,7 @@ if (typeof globalThis !== 'undefined') {
             const div = document.createElement('div');
             div.id = 'am-report-capture-panel';
             // Inline fallback: even if style injection fails, ensure popup is visible and clickable.
-            div.style.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;z-index:2147483647;display:none;';
+            div.style.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;width:min(340px, calc(100vw - 24px));z-index:2147483647;display:none;';
             document.body.appendChild(div);
             this.panel = div;
         },
@@ -5637,13 +5822,16 @@ if (typeof globalThis !== 'undefined') {
             dlLink.target = '_blank';
             dlLink.rel = 'noopener noreferrer';
             dlLink.className = 'am-download-link';
+            dlLink.setAttribute('aria-label', '直连下载捕获到的报表');
             dlLink.innerHTML = `${renderAmIcon('logo', { size: 14, strokeWidth: 2.2 })}<span>直连下载</span>`;
 
             const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
             copyBtn.className = 'am-download-btn am-download-copy';
             copyBtn.textContent = '复制';
 
             const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
             closeBtn.className = 'am-download-btn am-download-close';
             closeBtn.innerHTML = renderAmWindowIcon('close');
             closeBtn.setAttribute('aria-label', '关闭');
@@ -6514,7 +6702,12 @@ if (typeof globalThis !== 'undefined') {
                 const idx = Number(btn.dataset.index);
                 const item = this.QUICK_PROMPTS[idx];
                 if (!item) return;
+                const label = this.resolvePromptLabel(item);
                 btn.innerHTML = this.renderQuickPromptContent(item);
+                btn.setAttribute('aria-label', `快捷话术：${label}`);
+                if (!btn.hasAttribute('aria-pressed')) {
+                    btn.setAttribute('aria-pressed', 'false');
+                }
             });
         },
 
@@ -6533,6 +6726,16 @@ if (typeof globalThis !== 'undefined') {
             if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
                 this.matrixCampaignItemTriggerEl.setAttribute('aria-expanded', next ? 'true' : 'false');
             }
+            if (this.matrixCampaignItemDropdownEl instanceof HTMLElement) {
+                this.matrixCampaignItemDropdownEl.setAttribute('aria-hidden', next ? 'false' : 'true');
+            }
+            if (next) {
+                const options = this.getCrowdCampaignItemOptionNodes();
+                const selectedOption = options.find(node => node.getAttribute('aria-selected') === 'true') || options[0];
+                this.setCrowdCampaignItemActiveOption(selectedOption, { scroll: false });
+            } else {
+                this.clearCrowdCampaignItemActiveOption();
+            }
         },
 
         toggleCrowdCampaignItemDropdown(forceOpen) {
@@ -6545,6 +6748,123 @@ if (typeof globalThis !== 'undefined') {
                 ? forceOpen
                 : !this.matrixCampaignItemSelectEl.classList.contains('is-open');
             this.setCrowdCampaignItemDropdownOpen(nextOpen);
+        },
+
+        getCrowdCampaignItemOptionNodes() {
+            if (!(this.matrixCampaignItemDropdownEl instanceof HTMLElement)) return [];
+            return Array.from(this.matrixCampaignItemDropdownEl.querySelectorAll('[data-crowd-item-id]'))
+                .filter(node => node instanceof HTMLElement);
+        },
+
+        clearCrowdCampaignItemActiveOption() {
+            this.getCrowdCampaignItemOptionNodes().forEach(node => node.classList.remove('is-keyboard-active'));
+            if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
+                this.matrixCampaignItemTriggerEl.removeAttribute('aria-activedescendant');
+            }
+        },
+
+        setCrowdCampaignItemActiveOption(optionEl, options = {}) {
+            if (!(optionEl instanceof HTMLElement)) return;
+            this.getCrowdCampaignItemOptionNodes().forEach(node => {
+                node.classList.toggle('is-keyboard-active', node === optionEl);
+            });
+            if (this.matrixCampaignItemTriggerEl instanceof HTMLElement && optionEl.id) {
+                this.matrixCampaignItemTriggerEl.setAttribute('aria-activedescendant', optionEl.id);
+            }
+            if (options?.scroll !== false && typeof optionEl.scrollIntoView === 'function') {
+                optionEl.scrollIntoView({ block: 'nearest' });
+            }
+        },
+
+        moveCrowdCampaignItemActiveOption(step = 0) {
+            const options = this.getCrowdCampaignItemOptionNodes();
+            if (!options.length) return;
+            const activeId = this.matrixCampaignItemTriggerEl instanceof HTMLElement
+                ? this.matrixCampaignItemTriggerEl.getAttribute('aria-activedescendant')
+                : '';
+            let currentIndex = activeId ? options.findIndex(node => node.id === activeId) : -1;
+            if (currentIndex < 0) {
+                currentIndex = options.findIndex(node => node.getAttribute('aria-selected') === 'true');
+            }
+            if (currentIndex < 0) currentIndex = 0;
+            const nextIndex = Math.max(0, Math.min(options.length - 1, currentIndex + Number(step || 0)));
+            this.setCrowdCampaignItemActiveOption(options[nextIndex]);
+        },
+
+        setCrowdCampaignItemActiveOptionByIndex(index = 0) {
+            const options = this.getCrowdCampaignItemOptionNodes();
+            if (!options.length) return;
+            const safeIndex = Math.max(0, Math.min(options.length - 1, Number(index) || 0));
+            this.setCrowdCampaignItemActiveOption(options[safeIndex]);
+        },
+
+        selectCrowdCampaignItemActiveOption() {
+            const options = this.getCrowdCampaignItemOptionNodes();
+            if (!options.length) return;
+            const activeId = this.matrixCampaignItemTriggerEl instanceof HTMLElement
+                ? this.matrixCampaignItemTriggerEl.getAttribute('aria-activedescendant')
+                : '';
+            const activeOption = options.find(node => node.id === activeId)
+                || options.find(node => node.getAttribute('aria-selected') === 'true')
+                || options[0];
+            const optionItemId = PlanIdentityUtils.normalizeItemId(activeOption?.dataset?.crowdItemId || '');
+            if (!optionItemId) return;
+            this.handleCrowdCampaignItemSelect(optionItemId);
+        },
+
+        handleCrowdCampaignItemDropdownKeydown(event) {
+            if (!(event instanceof KeyboardEvent)) return;
+            if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
+            if (this.matrixCampaignItemSelectEl.classList.contains('is-disabled')) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (!target.closest('#am-crowd-matrix-item-select')) return;
+            const key = event.key;
+            const isOpen = this.matrixCampaignItemSelectEl.classList.contains('is-open');
+            if (key === 'Tab') {
+                this.setCrowdCampaignItemDropdownOpen(false);
+                return;
+            }
+            if (key === 'Escape') {
+                if (isOpen) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.setCrowdCampaignItemDropdownOpen(false);
+                    if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
+                        this.matrixCampaignItemTriggerEl.focus({ preventScroll: true });
+                    }
+                }
+                return;
+            }
+            if (key === 'Enter' || key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!isOpen) {
+                    this.setCrowdCampaignItemDropdownOpen(true);
+                    return;
+                }
+                this.selectCrowdCampaignItemActiveOption();
+                return;
+            }
+            if (key === 'ArrowDown' || key === 'ArrowUp') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!isOpen) {
+                    this.setCrowdCampaignItemDropdownOpen(true);
+                    return;
+                }
+                this.moveCrowdCampaignItemActiveOption(key === 'ArrowDown' ? 1 : -1);
+                return;
+            }
+            if (key === 'Home' || key === 'End') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!isOpen) {
+                    this.setCrowdCampaignItemDropdownOpen(true);
+                }
+                const options = this.getCrowdCampaignItemOptionNodes();
+                this.setCrowdCampaignItemActiveOptionByIndex(key === 'Home' ? 0 : options.length - 1);
+            }
         },
 
         renderCrowdCampaignItemSelect(campaignId = '') {
@@ -6568,6 +6888,7 @@ if (typeof globalThis !== 'undefined') {
             if (!id) {
                 this.matrixCampaignItemTriggerTextEl.textContent = '--';
                 this.matrixCampaignItemTriggerEl.title = '--';
+                this.matrixCampaignItemTriggerEl.setAttribute('aria-label', '选择商品ID：未识别计划');
                 applyDisabledState(true);
                 return;
             }
@@ -6577,6 +6898,7 @@ if (typeof globalThis !== 'undefined') {
             if (!normalizedOptions.length) {
                 this.matrixCampaignItemTriggerTextEl.textContent = '--';
                 this.matrixCampaignItemTriggerEl.title = '--';
+                this.matrixCampaignItemTriggerEl.setAttribute('aria-label', '选择商品ID：暂无可选商品');
                 applyDisabledState(true);
                 return;
             }
@@ -6590,10 +6912,13 @@ if (typeof globalThis !== 'undefined') {
                 const optionBtn = document.createElement('button');
                 optionBtn.type = 'button';
                 optionBtn.className = 'am-crowd-matrix-item-option';
+                optionBtn.id = `am-crowd-matrix-item-option-${item.itemId}`;
                 optionBtn.dataset.crowdItemId = item.itemId;
                 optionBtn.textContent = item.label;
                 optionBtn.title = item.label;
+                optionBtn.tabIndex = -1;
                 optionBtn.setAttribute('role', 'option');
+                optionBtn.setAttribute('aria-label', item.label);
                 this.matrixCampaignItemDropdownEl.appendChild(optionBtn);
             });
 
@@ -6615,6 +6940,7 @@ if (typeof globalThis !== 'undefined') {
             const pickedOption = optionViews.find(item => item.itemId === pickedItemId) || optionViews[0];
             this.matrixCampaignItemTriggerTextEl.textContent = pickedOption?.label || '--';
             this.matrixCampaignItemTriggerEl.title = pickedOption?.label || '--';
+            this.matrixCampaignItemTriggerEl.setAttribute('aria-label', `选择商品ID：${pickedOption?.label || '--'}`);
             applyDisabledState(false);
         },
 
@@ -9857,9 +10183,11 @@ if (typeof globalThis !== 'undefined') {
                     const metric = this.normalizeCrowdMetricType(node.dataset.crowdMetric || '');
                     if (!metric) return;
                     const visible = this.getCrowdMetricVisible(metric);
+                    const label = this.getCrowdMetricMeta(metric).seriesLabel;
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
-                    node.title = `${this.getCrowdMetricMeta(metric).seriesLabel}${visible ? '（点击隐藏）' : '（点击显示）'}`;
+                    node.setAttribute('aria-label', `切换人群：${label}`);
+                    node.title = `${label}${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
                 this.matrixLegendEl.querySelectorAll('[data-crowd-period]').forEach((node) => {
                     if (!(node instanceof HTMLElement)) return;
@@ -9868,6 +10196,7 @@ if (typeof globalThis !== 'undefined') {
                     const visible = this.getCrowdPeriodVisible(period);
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.setAttribute('aria-label', `切换周期：过去${period}天`);
                     node.title = `过去${period}天${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
                 this.matrixLegendEl.querySelectorAll('[data-crowd-ratio-toggle]').forEach((node) => {
@@ -9875,6 +10204,7 @@ if (typeof globalThis !== 'undefined') {
                     const visible = this.getCrowdRatioVisible();
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.setAttribute('aria-label', '切换显示占比');
                     node.title = `显示占比${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
                 this.matrixLegendEl.querySelectorAll('[data-crowd-insight-toggle]').forEach((node) => {
@@ -9882,6 +10212,7 @@ if (typeof globalThis !== 'undefined') {
                     const visible = this.getCrowdInsightsVisible();
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    node.setAttribute('aria-label', '切换显示提示');
                     node.title = `显示提示${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
             }
@@ -9948,6 +10279,7 @@ if (typeof globalThis !== 'undefined') {
                 btn.dataset.crowdMetric = metric;
                 btn.style.setProperty('--am-crowd-legend-color', meta.color);
                 const dot = document.createElement('i');
+                dot.setAttribute('aria-hidden', 'true');
                 const text = document.createElement('span');
                 text.textContent = meta.seriesLabel;
                 btn.appendChild(dot);
@@ -9971,6 +10303,7 @@ if (typeof globalThis !== 'undefined') {
                 btn.dataset.crowdPeriod = String(period);
                 btn.style.setProperty('--am-crowd-legend-color', '#7f8ca9');
                 const dot = document.createElement('i');
+                dot.setAttribute('aria-hidden', 'true');
                 const text = document.createElement('span');
                 text.textContent = `过去${period}天`;
                 btn.appendChild(dot);
@@ -9993,6 +10326,7 @@ if (typeof globalThis !== 'undefined') {
             ratioBtn.dataset.crowdRatioToggle = '1';
             ratioBtn.style.setProperty('--am-crowd-legend-color', '#2f54eb');
             const ratioDot = document.createElement('i');
+            ratioDot.setAttribute('aria-hidden', 'true');
             const ratioText = document.createElement('span');
             ratioText.textContent = '显示占比';
             ratioBtn.appendChild(ratioDot);
@@ -10005,6 +10339,7 @@ if (typeof globalThis !== 'undefined') {
             insightBtn.dataset.crowdInsightToggle = '1';
             insightBtn.style.setProperty('--am-crowd-legend-color', '#7f8ca9');
             const insightDot = document.createElement('i');
+            insightDot.setAttribute('aria-hidden', 'true');
             const insightText = document.createElement('span');
             insightText.textContent = '显示提示';
             insightBtn.appendChild(insightDot);
@@ -10400,15 +10735,22 @@ if (typeof globalThis !== 'undefined') {
             if (this.viewTabsEl instanceof HTMLElement) {
                 this.viewTabsEl.querySelectorAll('[data-view]').forEach((node) => {
                     if (!(node instanceof HTMLElement)) return;
-                    node.classList.toggle('active', node.dataset.view === next);
+                    const selected = node.dataset.view === next;
+                    node.classList.toggle('active', selected);
+                    node.setAttribute('aria-selected', selected ? 'true' : 'false');
+                    node.tabIndex = selected ? 0 : -1;
                 });
             }
             this.refreshMagicViewTabDefaultState();
             if (this.queryPanelEl instanceof HTMLElement) {
-                this.queryPanelEl.style.display = next === 'query' ? 'block' : 'none';
+                const active = next === 'query';
+                this.queryPanelEl.style.display = active ? 'block' : 'none';
+                this.queryPanelEl.setAttribute('aria-hidden', active ? 'false' : 'true');
             }
             if (this.matrixPanelEl instanceof HTMLElement) {
-                this.matrixPanelEl.style.display = next === 'matrix' ? 'flex' : 'none';
+                const active = next === 'matrix';
+                this.matrixPanelEl.style.display = active ? 'flex' : 'none';
+                this.matrixPanelEl.setAttribute('aria-hidden', active ? 'false' : 'true');
             }
             if (this.quickPromptsEl instanceof HTMLElement) {
                 this.quickPromptsEl.style.display = next === 'query' ? 'flex' : 'none';
@@ -10852,17 +11194,28 @@ if (typeof globalThis !== 'undefined') {
                 #am-magic-report-popup .am-magic-header .am-btn-group {
                     display: flex; align-items: center; gap: 4px; border-left: 1px solid rgba(0,0,0,0.06); padding-left: 12px;
                 }
-                #am-magic-report-popup .am-magic-header .am-btn-group span {
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn {
+                    appearance: none;
                     width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-                    border-radius: 8px; color: #666; font-size: 18px; transition: all 0.2s;
+                    padding: 0; border: 0; background: transparent;
+                    border-radius: 8px; color: #666; font: inherit; font-size: 18px;
+                    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
                 }
                 #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-refresh {
                     font-size: 20px; font-weight: bold;
                 }
-                #am-magic-report-popup .am-magic-header .am-btn-group span:hover {
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn:hover,
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn:focus-visible {
                     background: rgba(0,0,0,0.05); color: var(--am26-primary);
                 }
+                #am-magic-report-popup .am-magic-header .am-magic-window-btn:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                }
                 #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-close:hover {
+                    background: rgba(234, 79, 79, 0.1); color: var(--am26-danger);
+                }
+                #am-magic-report-popup .am-magic-header .am-btn-group #am-magic-close:focus-visible {
                     background: rgba(234, 79, 79, 0.1); color: var(--am26-danger);
                 }
                 #am-magic-report-popup .am-magic-header .am-quick-prompts {
@@ -10888,6 +11241,12 @@ if (typeof globalThis !== 'undefined') {
                 #am-magic-report-popup .am-magic-header .am-quick-prompt:hover {
                     background: rgba(42, 91, 255, 0.12); border-color: rgba(42, 91, 255, 0.34); color: var(--am26-primary);
                     transform: translateY(-1px);
+                }
+                #am-magic-report-popup .am-magic-header .am-quick-prompt:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    border-color: rgba(42, 91, 255, 0.36);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
                 #am-magic-report-popup .am-magic-header .am-quick-prompt.type-action {
                     background: rgba(255, 159, 24, 0.1); border-color: rgba(255, 159, 24, 0.3); color: #d48806;
@@ -10968,6 +11327,12 @@ if (typeof globalThis !== 'undefined') {
                     background: rgba(255, 255, 255, 0.42);
                 }
                 #am-magic-report-popup .am-magic-header .am-magic-view-tab.active {
+                    background: rgba(255, 255, 255, 0.88);
+                    color: #111827;
+                    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+                    font-weight: 700;
+                }
+                #am-magic-report-popup .am-magic-header .am-magic-view-tab[aria-selected="true"] {
                     background: rgba(255, 255, 255, 0.88);
                     color: #111827;
                     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -11100,6 +11465,12 @@ if (typeof globalThis !== 'undefined') {
                     gap: 4px;
                     cursor: pointer;
                 }
+                #am-magic-report-popup .am-crowd-matrix-item-trigger:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    border-radius: 8px;
+                    background: rgba(42, 91, 255, 0.08);
+                }
                 #am-magic-report-popup .am-crowd-matrix-item-trigger-text {
                     min-width: 0;
                     flex: 1 1 auto;
@@ -11166,6 +11537,14 @@ if (typeof globalThis !== 'undefined') {
                     border-color: rgba(42, 91, 255, 0.2);
                     background: rgba(255, 255, 255, 0.95);
                     box-shadow: 0 2px 6px rgba(42, 91, 255, 0.08);
+                }
+                #am-magic-report-popup .am-crowd-matrix-item-option:focus-visible,
+                #am-magic-report-popup .am-crowd-matrix-item-option.is-keyboard-active {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 1px;
+                    border-color: rgba(42, 91, 255, 0.28);
+                    background: rgba(255, 255, 255, 0.98);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-option.is-active {
                     color: #1e4de8;
@@ -11264,6 +11643,12 @@ if (typeof globalThis !== 'undefined') {
                     transform: translateY(-2px);
                     box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
                     border-color: color-mix(in srgb, var(--am-crowd-legend-color) 40%, transparent);
+                }
+                #am-magic-report-popup .am-crowd-matrix-legend-toggle:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    border-color: color-mix(in srgb, var(--am-crowd-legend-color) 46%, transparent);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
                 #am-magic-report-popup .am-crowd-matrix-legend-toggle.is-off {
                     opacity: 0.5;
@@ -11742,6 +12127,21 @@ if (typeof globalThis !== 'undefined') {
                     }
                 }
                 @keyframes am-spin { to { transform: rotate(360deg); } }
+                @media (prefers-reduced-motion: reduce) {
+                    #am-magic-report-popup .am-magic-window-btn,
+                    #am-magic-report-popup .am-quick-prompt,
+                    #am-magic-report-popup .am-magic-view-tab,
+                    #am-magic-report-popup .am-magic-view-default-icon,
+                    #am-magic-report-popup .am-crowd-matrix-legend-toggle,
+                    #am-magic-report-popup .am-crowd-matrix-item-trigger-arrow,
+                    #am-magic-report-popup .am-crowd-matrix-cell-chart {
+                        transition: none !important;
+                        animation: none !important;
+                    }
+                    #am-magic-report-popup .am-quick-prompt:hover {
+                        transform: none !important;
+                    }
+                }
             `;
             style.id = 'am-magic-report-popup-style';
             document.head.appendChild(style);
@@ -11764,22 +12164,22 @@ if (typeof globalThis !== 'undefined') {
                                 <span class="asiYysqLCj asiYysqLCl font-special asiYysqLCm">万能查数输入您想要了解的数据，小万帮您收集</span>
                             </div>
                         </div>
-                        <div class="am-btn-group">
-                            <span id="am-magic-refresh" title="刷新">
+                        <div class="am-btn-group" aria-label="万能查数窗口操作">
+                            <button type="button" class="am-magic-window-btn" id="am-magic-refresh" title="刷新当前视图" aria-label="刷新当前视图">
                                 ${renderAmWindowIcon('refresh')}
-                            </span>
-                            <span id="am-magic-close" title="关闭">
+                            </button>
+                            <button type="button" class="am-magic-window-btn" id="am-magic-close" title="关闭万能查数" aria-label="关闭万能查数弹窗">
                                 ${renderAmWindowIcon('close')}
-                            </span>
+                            </button>
                         </div>
                     </div>
                     <div class="am-magic-view-meta">
-                        <div class="am-magic-view-tabs" id="am-magic-view-tabs">
-                            <button type="button" class="am-magic-view-tab" data-view="query">
+                        <div class="am-magic-view-tabs" id="am-magic-view-tabs" role="tablist" aria-label="万能查数视图">
+                            <button type="button" class="am-magic-view-tab" id="am-magic-tab-query" data-view="query" role="tab" aria-selected="false" aria-controls="am-magic-panel-query" tabindex="-1">
                                 <span class="am-magic-view-tab-label">万能查数</span>
                                 <span class="am-magic-view-default-icon" data-default-view="query" aria-label="设为默认打开：万能查数" title="设为默认打开：万能查数">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
-                            <button type="button" class="am-magic-view-tab active" data-view="matrix">
+                            <button type="button" class="am-magic-view-tab active" id="am-magic-tab-matrix" data-view="matrix" role="tab" aria-selected="true" aria-controls="am-magic-panel-matrix" tabindex="0">
                                 <span class="am-magic-view-tab-label">人群对比看板</span>
                                 <span class="am-magic-view-default-icon" data-default-view="matrix" aria-label="设为默认打开：人群对比看板" title="设为默认打开：人群对比看板">${renderAmIcon('star', { size: 10, strokeWidth: 1.8 })}</span>
                             </button>
@@ -11792,11 +12192,11 @@ if (typeof globalThis !== 'undefined') {
                             <label class="am-crowd-matrix-item-select-wrap">
                                 <span class="am-crowd-matrix-item-label">商品ID：</span>
                                 <div class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
-                                    <button type="button" class="am-crowd-matrix-item-trigger" data-crowd-item-trigger aria-expanded="false" aria-haspopup="listbox">
+                                    <button type="button" class="am-crowd-matrix-item-trigger" data-crowd-item-trigger aria-label="选择商品ID" aria-expanded="false" aria-haspopup="listbox" aria-controls="am-crowd-matrix-item-listbox">
                                         <span class="am-crowd-matrix-item-trigger-text" data-crowd-item-trigger-text>--</span>
                                         <span class="am-crowd-matrix-item-trigger-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 14, strokeWidth: 2 })}</span>
                                     </button>
-                                    <div class="am-crowd-matrix-item-dropdown" data-crowd-item-dropdown role="listbox"></div>
+                                    <div class="am-crowd-matrix-item-dropdown" id="am-crowd-matrix-item-listbox" data-crowd-item-dropdown role="listbox" aria-label="商品ID候选列表" aria-hidden="true"></div>
                                 </div>
                             </label>
                         </div>
@@ -11805,7 +12205,7 @@ if (typeof globalThis !== 'undefined') {
                         ${quickPromptHtml}
                     </div>
                 </div>
-                <div class="am-magic-content am-magic-content-query" data-view-panel="query">
+                <div class="am-magic-content am-magic-content-query" id="am-magic-panel-query" data-view-panel="query" role="tabpanel" aria-labelledby="am-magic-tab-query" aria-hidden="true" tabindex="0">
                     <div class="am-iframe-loading" id="am-magic-loading">
                         <div class="am-spinner"></div>
                         <span>正在加载万能查数...</span>
@@ -11816,7 +12216,7 @@ if (typeof globalThis !== 'undefined') {
                         allow="clipboard-write"
                     ></iframe>
                 </div>
-                <div class="am-magic-content am-magic-content-matrix" data-view-panel="matrix">
+                <div class="am-magic-content am-magic-content-matrix" id="am-magic-panel-matrix" data-view-panel="matrix" role="tabpanel" aria-labelledby="am-magic-tab-matrix" aria-hidden="false" tabindex="0">
                     <div class="am-crowd-matrix-state is-info" id="am-crowd-matrix-state"><span class="am-crowd-matrix-state-text">点击“人群对比看板”开始加载</span></div>
                     <div class="am-crowd-matrix-toolbar">
                         <div class="am-crowd-matrix-legend-global" id="am-crowd-matrix-global-legend"></div>
@@ -11920,11 +12320,14 @@ if (typeof globalThis !== 'undefined') {
                 Logger.warn('⚠️ 万能查数刷新失败，请检查登录状态或网络后重试');
             };
 
-            // 关闭按钮
-            div.querySelector('#am-magic-close').onclick = () => this.toggle(false);
+            const closeBtn = div.querySelector('#am-magic-close');
+            if (closeBtn instanceof HTMLButtonElement) {
+                closeBtn.addEventListener('click', () => this.toggle(false));
+            }
 
-            // 刷新按钮
-            div.querySelector('#am-magic-refresh').onclick = () => {
+            const refreshBtn = div.querySelector('#am-magic-refresh');
+            if (refreshBtn instanceof HTMLButtonElement) {
+                refreshBtn.addEventListener('click', () => {
                 if (this.activeView === 'matrix') {
                     this.ensureCrowdMatrixLoaded(true);
                     return;
@@ -11933,7 +12336,8 @@ if (typeof globalThis !== 'undefined') {
                 if (loading) loading.style.display = 'flex';
                 this.iframe.style.opacity = '0';
                 this.iframe.src = this.buildIframeUrl(true);
-            };
+                });
+            }
 
             if (this.viewTabsEl instanceof HTMLElement) {
                 this.viewTabsEl.addEventListener('click', (e) => {
@@ -11954,6 +12358,27 @@ if (typeof globalThis !== 'undefined') {
                     const nextView = String(btn.dataset.view || '').trim();
                     if (!nextView) return;
                     this.switchMagicView(nextView);
+                });
+                this.viewTabsEl.addEventListener('keydown', (e) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const currentTab = target.closest('[role="tab"][data-view]');
+                    if (!(currentTab instanceof HTMLElement)) return;
+                    const tabs = Array.from(this.viewTabsEl.querySelectorAll('[role="tab"][data-view]'))
+                        .filter(node => node instanceof HTMLElement);
+                    const currentIndex = tabs.indexOf(currentTab);
+                    if (currentIndex < 0 || !tabs.length) return;
+                    e.preventDefault();
+                    let nextIndex = currentIndex;
+                    if (e.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                    if (e.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+                    if (e.key === 'Home') nextIndex = 0;
+                    if (e.key === 'End') nextIndex = tabs.length - 1;
+                    const nextTab = tabs[nextIndex];
+                    if (!(nextTab instanceof HTMLElement)) return;
+                    nextTab.focus({ preventScroll: true });
+                    this.switchMagicView(nextTab.dataset.view || 'matrix');
                 });
             }
             if (this.matrixRetryBtn instanceof HTMLElement) {
@@ -12018,6 +12443,9 @@ if (typeof globalThis !== 'undefined') {
                     if (!optionItemId) return;
                     this.handleCrowdCampaignItemSelect(optionItemId);
                 });
+                this.matrixCampaignEl.addEventListener('keydown', (e) => {
+                    this.handleCrowdCampaignItemDropdownKeydown(e);
+                });
             }
 
             document.addEventListener('click', (e) => {
@@ -12049,7 +12477,14 @@ if (typeof globalThis !== 'undefined') {
 
                     quickPrompts.querySelectorAll('.am-quick-prompt').forEach(node => node.classList.remove('active'));
                     btn.classList.add('active');
-                    setTimeout(() => btn.classList.remove('active'), 1200);
+                    quickPrompts.querySelectorAll('.am-quick-prompt').forEach((node) => {
+                        if (node instanceof HTMLElement) node.setAttribute('aria-pressed', 'false');
+                    });
+                    if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'true');
+                    setTimeout(() => {
+                        btn.classList.remove('active');
+                        if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'false');
+                    }, 1200);
 
                     const promptText = await this.resolvePromptText(promptItem);
                     if (!promptText) return;
@@ -12158,6 +12593,8 @@ if (typeof globalThis !== 'undefined') {
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
         concurrentLogBodyEl: null,
+        concurrentLogFocusBackEl: null,
+        concurrentLogKeydownHandler: null,
         campaignItemIdCache: new Map(),
         IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
@@ -12268,10 +12705,13 @@ if (typeof globalThis !== 'undefined') {
                         this.rememberCopiedPlanNames(newPlanNames);
                         Logger.log(`✅ ${label}完成：已复制计划 ${newPlanNames.length || copyCount} 个（保留源计划），源计划${id}，新计划${newPlanText}，目标状态=${statusText}，成功=${successCount}，失败=${failCount}`);
                         this.showCopySuccessDialogAndRefresh(result, {
+                            campaignId: id,
                             sourceCampaignId: id,
                             label,
+                            mode: copyMode,
                             copyCount,
-                            statusText
+                            statusText,
+                            triggerEl: copyBtn
                         });
                     }).catch((err) => {
                         if (err?.cancelled || err?.code === 'copy_preview_cancelled') {
@@ -12301,7 +12741,7 @@ if (typeof globalThis !== 'undefined') {
                     allowLocationFallback: false,
                     allowBodyFallback: false
                 });
-                this.openConcurrentLogPopup(id, itemId);
+                this.openConcurrentLogPopup(id, itemId, concurrentBtn);
                 this.appendConcurrentLog(`收到并发开启指令：计划${id}${itemId ? ` / 商品${itemId}` : ''}`);
                 if (this.runningCampaignIds.has(id)) {
                     Logger.log(`⏳ 并发开启进行中：${id} `);
@@ -12422,27 +12862,32 @@ if (typeof globalThis !== 'undefined') {
             return [
                 {
                     action: 'start',
+                    icon: 'layers-play',
                     label: '批量开启',
                     title: `开启选中的${sceneName}计划`
                 },
                 {
                     action: 'pause',
+                    icon: 'minus',
                     label: '批量暂停',
                     title: `暂停选中的${sceneName}计划`
                 },
                 {
                     action: 'delete',
+                    icon: 'x-circle',
                     label: '批量删除',
                     danger: true,
                     title: `删除选中的${sceneName}计划`
                 },
                 {
                     action: 'shieldCrowd',
+                    icon: 'shield-check',
                     label: '批量修改屏蔽人群',
                     title: isDisplayScene || isLeadScene ? '打开官方编辑过滤人群弹窗并批量同步屏蔽人群' : '打开选中计划的原生屏蔽/过滤人群设置入口'
                 },
                 {
                     action: 'crowdSetting',
+                    icon: 'user',
                     label: '批量人群设置',
                     title: isDisplayScene ? '打开官方批量编辑人群抽屉' : '打开选中计划的原生人群设置入口'
                 }
@@ -12548,7 +12993,8 @@ if (typeof globalThis !== 'undefined') {
                     role="menuitem"
                     title="${this.escapeHtml(item.title || item.label)}"
                 >
-                    <span>${this.escapeHtml(item.label)}</span>
+                    <span class="am-campaign-batch-plus-item-icon" aria-hidden="true">${renderAmIcon(item.icon || 'logo', { size: 14, strokeWidth: 2.1 })}</span>
+                    <span class="am-campaign-batch-plus-item-label">${this.escapeHtml(item.label)}</span>
                 </button>
             `).join('');
             document.body.appendChild(menu);
@@ -12678,9 +13124,11 @@ if (typeof globalThis !== 'undefined') {
 
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-batch-confirm-popup';
+                const titleId = `am-campaign-batch-confirm-title-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
-                popup.setAttribute('aria-label', title);
+                popup.setAttribute('aria-labelledby', titleId);
 
                 const card = document.createElement('section');
                 card.className = 'am-batch-confirm-card';
@@ -12688,8 +13136,10 @@ if (typeof globalThis !== 'undefined') {
                 header.className = 'am-batch-confirm-header';
                 const icon = document.createElement('span');
                 icon.className = `am-batch-confirm-icon${danger ? ' is-danger' : ''}`;
-                icon.textContent = '!';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.innerHTML = renderAmIcon(danger ? 'x-circle' : 'alert-triangle', { size: 16, strokeWidth: 2.2 });
                 const titleEl = document.createElement('h3');
+                titleEl.id = titleId;
                 titleEl.className = 'am-batch-confirm-title';
                 titleEl.textContent = title;
                 const body = document.createElement('pre');
@@ -12712,6 +13162,9 @@ if (typeof globalThis !== 'undefined') {
                     settled = true;
                     document.removeEventListener('keydown', onKeydown, true);
                     popup.remove();
+                    if (previousActiveElement?.isConnected) {
+                        requestAnimationFrame(() => previousActiveElement.focus({ preventScroll: true }));
+                    }
                     resolve(!!confirmed);
                 };
                 const onKeydown = (event) => {
@@ -14290,16 +14743,114 @@ if (typeof globalThis !== 'undefined') {
             ].join('\n');
         },
 
+        createCopyFocusTarget(context = {}, fallbackElement = null) {
+            const triggerEl = context.triggerEl instanceof HTMLElement ? context.triggerEl : null;
+            const fallbackEl = fallbackElement instanceof HTMLElement && fallbackElement !== document.body
+                ? fallbackElement
+                : null;
+            const sourceEl = triggerEl || fallbackEl;
+            const campaignId = this.normalizeCampaignId(
+                context.campaignId
+                || context.sourceCampaignId
+                || sourceEl?.getAttribute?.('data-campaign-id')
+                || sourceEl?.dataset?.campaignId
+                || ''
+            );
+            const mode = this.normalizeCopyMode(
+                context.mode
+                || context.copyMode
+                || sourceEl?.getAttribute?.('data-am-campaign-copy')
+                || sourceEl?.dataset?.amCampaignCopy
+                || ''
+            );
+            return {
+                element: triggerEl,
+                fallbackElement: fallbackEl,
+                campaignId,
+                mode
+            };
+        },
+
+        resolveCopyFocusTargetElement(target = null, allowDisabled = true) {
+            const candidates = [];
+            if (target instanceof HTMLElement) {
+                candidates.push(target);
+            } else if (target?.element instanceof HTMLElement) {
+                candidates.push(target.element);
+            }
+
+            const id = this.normalizeCampaignId(target?.campaignId || '');
+            const mode = this.normalizeCopyMode(target?.mode || target?.copyMode || '');
+            if (id) {
+                const selectors = mode
+                    ? [
+                        `.am-campaign-search-btn[data-am-campaign-copy="${mode}"][data-campaign-id="${id}"]`,
+                        `.am-campaign-search-btn[data-am-campaign-copy][data-campaign-id="${id}"]`
+                    ]
+                    : [`.am-campaign-search-btn[data-am-campaign-copy][data-campaign-id="${id}"]`];
+                selectors.forEach((selector) => {
+                    document.querySelectorAll(selector).forEach((node) => {
+                        if (node instanceof HTMLElement && !candidates.includes(node)) {
+                            candidates.push(node);
+                        }
+                    });
+                });
+            }
+            if (!(target instanceof HTMLElement) && target?.fallbackElement instanceof HTMLElement && !candidates.includes(target.fallbackElement)) {
+                candidates.push(target.fallbackElement);
+            }
+
+            return candidates.find((candidate) => {
+                if (!(candidate instanceof HTMLElement)) return false;
+                if (!candidate.isConnected || typeof candidate.focus !== 'function') return false;
+                if (!this.isElementVisible(candidate)) return false;
+                if (!allowDisabled && 'disabled' in candidate && candidate.disabled) return false;
+                return true;
+            }) || null;
+        },
+
+        restoreFocusWhenReady(target = null, attempt = 0) {
+            const element = this.resolveCopyFocusTargetElement(target, true);
+            if (!element) {
+                if (attempt < 6) {
+                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
+                }
+                return;
+            }
+            if ('disabled' in element && element.disabled) {
+                if (attempt < 6) {
+                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
+                }
+                return;
+            }
+            window.setTimeout(() => {
+                requestAnimationFrame(() => {
+                    const readyElement = this.resolveCopyFocusTargetElement(target, false)
+                        || this.resolveCopyFocusTargetElement(target, true);
+                    if (!readyElement) return;
+                    if (!readyElement.isConnected || typeof readyElement.focus !== 'function') return;
+                    if ('disabled' in readyElement && readyElement.disabled) {
+                        if (attempt < 6) this.restoreFocusWhenReady(target, attempt + 1);
+                        return;
+                    }
+                    readyElement.focus({ preventScroll: true });
+                });
+            }, 0);
+        },
+
         showCopySuccessDialogAndRefresh(result = {}, context = {}) {
             const message = this.buildCopySuccessDialogMessage(result, context);
             const oldPopup = document.getElementById('am-campaign-copy-success-popup');
             if (oldPopup) oldPopup.remove();
+            const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            const focusBackTarget = this.createCopyFocusTarget(context, previousActiveElement);
+            const titleId = 'am-copy-success-title';
 
             const popup = document.createElement('div');
             popup.id = 'am-campaign-copy-success-popup';
             popup.setAttribute('role', 'dialog');
             popup.setAttribute('aria-modal', 'true');
-            popup.setAttribute('aria-label', '复制计划成功');
+            popup.setAttribute('aria-labelledby', titleId);
 
             const card = document.createElement('section');
             card.className = 'am-copy-success-card';
@@ -14307,9 +14858,10 @@ if (typeof globalThis !== 'undefined') {
             header.className = 'am-copy-success-header';
             const icon = document.createElement('span');
             icon.className = 'am-copy-success-icon';
-            icon.textContent = '!';
+            icon.innerHTML = renderAmIcon('check-circle', { size: 18, strokeWidth: 2.2 });
             const title = document.createElement('h3');
             title.className = 'am-copy-success-title';
+            title.id = titleId;
             title.textContent = '复制计划已成功';
             const body = document.createElement('pre');
             body.className = 'am-copy-success-body';
@@ -14320,6 +14872,13 @@ if (typeof globalThis !== 'undefined') {
             confirmBtn.type = 'button';
             confirmBtn.className = 'am-copy-success-confirm';
             confirmBtn.textContent = '确定并搜索';
+            const restoreFocus = () => {
+                this.restoreFocusWhenReady(focusBackTarget);
+            };
+            const closePopup = () => {
+                popup.remove();
+                restoreFocus();
+            };
             confirmBtn.addEventListener('click', () => {
                 popup.remove();
                 try {
@@ -14333,8 +14892,13 @@ if (typeof globalThis !== 'undefined') {
             cancelBtn.className = 'am-copy-success-cancel';
             cancelBtn.textContent = '取消';
             cancelBtn.addEventListener('click', () => {
-                popup.remove();
+                closePopup();
             }, { once: true });
+            popup.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                closePopup();
+            });
 
             header.appendChild(icon);
             header.appendChild(title);
@@ -14471,17 +15035,23 @@ if (typeof globalThis !== 'undefined') {
             if (!(popup instanceof HTMLElement)) {
                 popup = document.createElement('div');
                 popup.id = 'am-campaign-concurrent-log-popup';
+                document.body.appendChild(popup);
+            }
+            if (!popup.querySelector('.am-concurrent-log-card[aria-labelledby="am-concurrent-log-title"]')) {
+                popup.setAttribute('aria-hidden', 'true');
                 popup.innerHTML = `
-                    <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-label="并发开启执行日志">
+                    <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-labelledby="am-concurrent-log-title">
                         <div class="am-concurrent-log-header">
-                            <span id="am-concurrent-log-title">并发开启执行日志</span>
+                            <div class="am-concurrent-log-heading">
+                                <span class="am-concurrent-log-icon" aria-hidden="true">${renderAmIcon('campaign-concurrent-start', { size: 16, strokeWidth: 2.2 })}</span>
+                                <h3 class="am-concurrent-log-title" id="am-concurrent-log-title">并发开启执行日志</h3>
+                            </div>
                             <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">${renderAmIcon('close', { size: 16, strokeWidth: 2.2 })}</button>
                         </div>
-                        <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status">执行中...</div>
-                        <div class="am-concurrent-log-body" id="am-concurrent-log-body"></div>
+                        <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status" role="status" aria-live="polite">执行中...</div>
+                        <div class="am-concurrent-log-body" id="am-concurrent-log-body" role="log" aria-live="polite" aria-relevant="additions text" aria-label="并发开启日志明细" tabindex="0"></div>
                     </div>
                 `;
-                document.body.appendChild(popup);
             }
             this.concurrentLogPopup = popup;
             this.concurrentLogTitleEl = popup.querySelector('#am-concurrent-log-title');
@@ -14490,17 +15060,36 @@ if (typeof globalThis !== 'undefined') {
             const closeBtn = popup.querySelector('.am-concurrent-log-close');
             if (closeBtn && !closeBtn.dataset.amBound) {
                 closeBtn.dataset.amBound = '1';
-                closeBtn.addEventListener('click', () => {
-                    if (popup) popup.style.display = 'none';
-                });
+                closeBtn.addEventListener('click', () => this.closeConcurrentLogPopup());
             }
             return popup;
         },
 
-        openConcurrentLogPopup(campaignId, itemId = '') {
+        closeConcurrentLogPopup({ restoreFocus = true } = {}) {
+            const popup = this.concurrentLogPopup;
+            if (popup instanceof HTMLElement) {
+                popup.style.display = 'none';
+                popup.setAttribute('aria-hidden', 'true');
+            }
+            if (this.concurrentLogKeydownHandler) {
+                document.removeEventListener('keydown', this.concurrentLogKeydownHandler, true);
+                this.concurrentLogKeydownHandler = null;
+            }
+            const focusBackEl = this.concurrentLogFocusBackEl;
+            this.concurrentLogFocusBackEl = null;
+            if (restoreFocus && focusBackEl instanceof HTMLElement && focusBackEl.isConnected && typeof focusBackEl.focus === 'function') {
+                requestAnimationFrame(() => focusBackEl.focus({ preventScroll: true }));
+            }
+        },
+
+        openConcurrentLogPopup(campaignId, itemId = '', triggerEl = null) {
             const popup = this.ensureConcurrentLogPopup();
             if (!(popup instanceof HTMLElement)) return;
+            this.concurrentLogFocusBackEl = triggerEl instanceof HTMLElement
+                ? triggerEl
+                : (document.activeElement instanceof HTMLElement ? document.activeElement : null);
             popup.style.display = 'flex';
+            popup.setAttribute('aria-hidden', 'false');
             if (this.concurrentLogTitleEl) {
                 this.concurrentLogTitleEl.textContent = `并发开启执行日志 - 计划${campaignId}${itemId ? ` / 商品${itemId}` : ''}`;
             }
@@ -14508,12 +15097,26 @@ if (typeof globalThis !== 'undefined') {
                 this.concurrentLogBodyEl.innerHTML = '';
             }
             this.setConcurrentLogStatus('执行中：正在识别商品计划并准备并发开启', 'running');
+            if (!this.concurrentLogKeydownHandler) {
+                this.concurrentLogKeydownHandler = (event) => {
+                    if (event.key !== 'Escape') return;
+                    if (!(this.concurrentLogPopup instanceof HTMLElement)) return;
+                    if (this.concurrentLogPopup.style.display === 'none') return;
+                    event.preventDefault();
+                    this.closeConcurrentLogPopup();
+                };
+                document.addEventListener('keydown', this.concurrentLogKeydownHandler, true);
+            }
+            const closeBtn = popup.querySelector('.am-concurrent-log-close');
+            if (closeBtn instanceof HTMLElement) {
+                requestAnimationFrame(() => closeBtn.focus({ preventScroll: true }));
+            }
         },
 
         setConcurrentLogStatus(text, level = 'running') {
             this.ensureConcurrentLogPopup();
             if (!(this.concurrentLogStatusEl instanceof HTMLElement)) return;
-            const normalizedLevel = ['running', 'success', 'error'].includes(level) ? level : 'running';
+            const normalizedLevel = ['running', 'success', 'warning', 'error'].includes(level) ? level : 'running';
             this.concurrentLogStatusEl.className = `am-concurrent-log-status is-${normalizedLevel}`;
             this.concurrentLogStatusEl.textContent = String(text || '').trim() || '执行中...';
         },
@@ -16279,6 +16882,9 @@ if (typeof globalThis !== 'undefined') {
             return new Promise((resolve, reject) => {
                 const oldPopup = document.getElementById('am-campaign-copy-overview-popup');
                 if (oldPopup) oldPopup.remove();
+                const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                const focusBackTarget = this.createCopyFocusTarget(context, previousActiveElement);
+                const titleId = 'am-copy-overview-title';
                 const rows = Array.isArray(context.previewRows) && context.previewRows.length
                     ? context.previewRows
                     : this.buildCopyOverviewRows(context);
@@ -16286,7 +16892,7 @@ if (typeof globalThis !== 'undefined') {
                 popup.id = 'am-campaign-copy-overview-popup';
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
-                popup.setAttribute('aria-label', '复制计划一览');
+                popup.setAttribute('aria-labelledby', titleId);
                 const sourceName = String(context.source?.campaign?.campaignName || context.source?.campaignName || '').trim();
                 const firstRow = rows[0] || {};
                 const lastRow = rows[rows.length - 1] || firstRow;
@@ -16315,13 +16921,13 @@ if (typeof globalThis !== 'undefined') {
                     <section class="am-copy-overview-card">
                         <header class="am-copy-overview-header">
                             <div class="am-copy-overview-heading">
-                                <span class="am-copy-overview-icon">!</span>
+                                <span class="am-copy-overview-icon">${renderAmIcon('campaign-copy', { size: 18, strokeWidth: 2.1 })}</span>
                                 <div>
-                                <h3 class="am-copy-overview-title">复制计划一览</h3>
+                                <h3 class="am-copy-overview-title" id="${titleId}">复制计划一览</h3>
                                 <p class="am-copy-overview-subtitle">${this.escapeHtml(sourceName || `源计划 ${context.campaignId || ''}`)} · ${this.escapeHtml(context.sceneName || '')} · 共 ${rows.length} 个</p>
                                 </div>
                             </div>
-                            <button type="button" class="am-copy-overview-close" aria-label="关闭">×</button>
+                            <button type="button" class="am-copy-overview-close" aria-label="关闭">${renderAmIcon('close', { size: 14, strokeWidth: 2.4 })}</button>
                         </header>
                         <div class="am-copy-overview-bulkbar">
                             <div class="am-copy-overview-bulk-group">
@@ -16380,6 +16986,13 @@ if (typeof globalThis !== 'undefined') {
                 const bidEndInput = popup.querySelector('[data-am-copy-bulk="bidEnd"]');
                 const bidGradientBtn = popup.querySelector('[data-am-copy-bulk-action="bidGradient"]');
                 const budgetBulkBtn = popup.querySelector('[data-am-copy-bulk-action="budgetAll"]');
+                const restoreFocus = () => {
+                    this.restoreFocusWhenReady(focusBackTarget);
+                };
+                const removePopup = () => {
+                    popup.remove();
+                    restoreFocus();
+                };
                 const rejectCancelled = () => {
                     const err = new Error('已取消复制');
                     err.cancelled = true;
@@ -16408,11 +17021,16 @@ if (typeof globalThis !== 'undefined') {
                 };
                 const cancel = () => {
                     if (popup.classList.contains('is-running')) return;
-                    popup.remove();
+                    removePopup();
                     rejectCancelled();
                 };
                 cancelBtn?.addEventListener('click', cancel);
                 closeBtn?.addEventListener('click', cancel);
+                popup.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Escape') return;
+                    event.preventDefault();
+                    cancel();
+                });
                 bidStartInput?.addEventListener('input', () => this.previewCopyBidGradientStep(popup));
                 bidEndInput?.addEventListener('input', () => this.previewCopyBidGradientStep(popup));
                 bidGradientBtn?.addEventListener('click', () => {
@@ -16507,6 +17125,7 @@ if (typeof globalThis !== 'undefined') {
                 usedPlanNames,
                 targetOnlineStatus,
                 previewRows,
+                triggerEl,
                 options
             };
         },
@@ -16964,6 +17583,10 @@ if (typeof globalThis !== 'undefined') {
             });
         },
 
+        renderBatchPlusChevronIcon() {
+            return `<span class="asiYysjJaJ am-campaign-batch-plus-chevron" data-am-batch-plus-fallback-chevron="1" aria-hidden="true">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.2 })}</span>`;
+        },
+
         buildBatchPlusNativeFallback() {
             const host = document.createElement('span');
             host.className = 'wO_WXbzf mxgc-popmenu';
@@ -16972,7 +17595,7 @@ if (typeof globalThis !== 'undefined') {
                     <button type="button" class="asiYysjJaL asiYysjJaS-normal asiYysjJaS-custom">
                         <span class="asiYysjJaM">
                             批量+
-                            <span class="asiYysjJaJ"><i class="mxicon mxgc-icon asiYysjJaK"></i></span>
+                            ${this.renderBatchPlusChevronIcon()}
                         </span>
                     </button>
                 </span>
@@ -16988,7 +17611,7 @@ if (typeof globalThis !== 'undefined') {
                 || button;
             if (contentEl instanceof HTMLElement) {
                 const arrowHost = contentEl.querySelector('.asiYysjJaJ')?.outerHTML
-                    || '<span class="asiYysjJaJ"><i class="mxicon mxgc-icon asiYysjJaK"></i></span>';
+                    || this.renderBatchPlusChevronIcon();
                 contentEl.innerHTML = `批量+${arrowHost}`;
             }
             root.querySelectorAll('[title], [aria-label]').forEach((el) => {
@@ -33582,9 +34205,9 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-overlay {
                     position: fixed;
                     inset: 0;
-                    background: rgba(15, 23, 42, 0.36);
-                    backdrop-filter: blur(4px);
-                    -webkit-backdrop-filter: blur(4px);
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                     z-index: 1000006;
                     display: none;
                     align-items: center;
@@ -34073,7 +34696,9 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop {
                     position: fixed;
                     inset: 0;
-                    background: rgba(15, 23, 42, 0.28);
+                    background: rgba(255, 255, 255, 0.72);
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                     z-index: 1000007;
                     display: none;
                 }
@@ -34100,7 +34725,13 @@ if (typeof globalThis !== 'undefined') {
                     overflow: auto;
                     z-index: 1000008;
                     margin-top: 0;
-                    box-shadow: 0 18px 48px rgba(17,24,39,0.26);
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                 }
                 #am-wxt-keyword-modal .am-wxt-config.collapsed {
                     display: none;
@@ -34108,20 +34739,23 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-detail-config .am-wxt-detail-title {
                     position: sticky;
                     top: 0;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
                     z-index: 2;
                     margin: -10px -10px 10px;
                     padding: 10px;
-                    border-bottom: 1px solid rgba(148,163,184,0.28);
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                 }
                 #am-wxt-keyword-detail-config .am-wxt-detail-footer {
                     position: sticky;
                     bottom: 0;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
                     z-index: 2;
                     margin: 10px -10px -10px;
                     padding: 10px;
-                    border-top: 1px solid rgba(148,163,184,0.28);
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                     display: flex;
                     justify-content: flex-end;
                     align-items: center;
@@ -36407,18 +37041,38 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     gap: 5px;
                     border-radius: 999px;
-                    background: #eef2ff;
-                    color: #3730a3;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
                     padding: 4px 8px;
                     font-size: 12px;
                 }
-                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-tag button {
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 16px;
+                    height: 16px;
                     border: 0;
+                    border-radius: 999px;
                     background: transparent;
                     color: inherit;
                     cursor: pointer;
                     padding: 0;
                     line-height: 1;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove svg {
+                    width: 12px;
+                    height: 12px;
+                    flex: 0 0 auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove:hover {
+                    background: rgba(234,79,79,0.12);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-ai-max-shield-remove:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-ai-max-empty {
                     color: #94a3b8;
@@ -36691,7 +37345,9 @@ if (typeof globalThis !== 'undefined') {
                     position: fixed;
                     inset: 0;
                     z-index: 1000010;
-                    background: rgba(15, 23, 42, 0.48);
+                    background: rgba(255, 255, 255, 0.72);
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                     display: flex;
                     align-items: flex-start;
                     justify-content: center;
@@ -36703,15 +37359,17 @@ if (typeof globalThis !== 'undefined') {
                     width: min(620px, 96vw);
                     min-height: min(310px, calc(100vh - 80px));
                     max-height: 92vh;
-                    background: #f7f8fc;
-                    border: 1px solid rgba(69,84,229,0.2);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
                     border-radius: 14px;
-                    box-shadow: 0 16px 42px rgba(17,24,39,0.28);
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
                     font-family: PingFangSC-Regular,PingFang SC,"Microsoft Yahei","SimHei",sans-serif;
-                    color: #1f2937;
+                    color: var(--am26-text, #1b2438);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-head {
                     height: 48px;
@@ -36722,9 +37380,9 @@ if (typeof globalThis !== 'undefined') {
                     gap: 8px;
                     font-size: 14px;
                     font-weight: 600;
-                    color: #1f2937;
-                    background: linear-gradient(135deg, #eef2ff, #f8f9ff);
-                    border-bottom: 1px solid rgba(69,84,229,0.18);
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-body {
                     padding: 12px 14px 14px;
@@ -36766,9 +37424,10 @@ if (typeof globalThis !== 'undefined') {
                     display: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-panel {
-                    border: 1px solid rgba(148,163,184,0.35);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 10px;
-                    background: #fff;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
                     display: flex;
                     flex-direction: column;
                     height: 100%;
@@ -36780,33 +37439,56 @@ if (typeof globalThis !== 'undefined') {
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-toolbar {
                     padding: 10px;
-                    border-bottom: 1px solid rgba(148,163,184,0.28);
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                     display: flex;
                     gap: 8px;
                     align-items: center;
                     flex-wrap: wrap;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]) {
-                    border: 1px solid rgba(148,163,184,0.5);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 6px 8px;
                     font-size: 12px;
-                    background: #fff;
-                    color: #1f2937;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
                     min-height: 30px;
                     box-sizing: border-box;
                     flex: 1;
                     min-width: 180px;
                 }
+                #am-wxt-keyword-item-picker-mask .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"])::placeholder {
+                    color: rgba(80,90,116,0.62);
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]):focus {
+                    outline: none;
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(255,255,255,0.62);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12);
+                }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn {
-                    border: 1px solid rgba(69,84,229,0.3);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 6px 10px;
                     font-size: 12px;
                     line-height: 1;
-                    background: #eef2ff;
-                    color: #2e3ab8;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                     cursor: pointer;
+                    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn:hover {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(255,255,255,0.62);
+                    color: var(--am26-text, #1b2438);
+                }
+                #am-wxt-keyword-item-picker-mask .am-wxt-btn:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn.am-wxt-icon-only-btn {
                     display: inline-flex;
@@ -36823,13 +37505,17 @@ if (typeof globalThis !== 'undefined') {
                     height: 14px;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn.primary {
-                    background: linear-gradient(135deg, #4554e5, #4f68ff);
-                    color: #fff;
-                    border-color: #4554e5;
+                    background: linear-gradient(135deg, var(--am26-primary, rgba(69,84,229,1)), var(--am26-primary-strong, #1d3fcf));
+                    color: rgba(255,255,255,0.96);
+                    border-color: var(--am26-primary, rgba(69,84,229,1));
+                    box-shadow: 0 8px 18px rgba(69,84,229,0.18);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-btn:disabled {
                     cursor: not-allowed;
                     opacity: 0.55;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
+                    box-shadow: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-list {
                     padding: 6px;
@@ -36845,10 +37531,12 @@ if (typeof globalThis !== 'undefined') {
                     max-height: none;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-item {
-                    border: 1px solid rgba(148,163,184,0.34);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 8px;
                     margin-bottom: 6px;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                     display: flex;
                     justify-content: space-between;
                     gap: 8px;
@@ -36857,11 +37545,11 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-item-picker-mask .am-wxt-item .name {
                     font-size: 12px;
                     line-height: 1.35;
-                    color: #111827;
+                    color: var(--am26-text, #1b2438);
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-item .meta {
                     font-size: 11px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     margin-top: 2px;
                 }
                 #am-wxt-keyword-item-picker-mask .am-wxt-item .actions {
@@ -36874,7 +37562,7 @@ if (typeof globalThis !== 'undefined') {
                     display: flex;
                     justify-content: flex-end;
                     gap: 8px;
-                    background: #f7f8fc;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                 }
                 #am-wxt-scene-popup-mask {
                     position: fixed;
@@ -36885,6 +37573,11 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     padding: 16px;
+                }
+                #am-wxt-scene-popup-mask.am-wxt-scene-popup-mask-batch-number {
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog {
                     width: min(720px, 96vw);
@@ -38283,9 +38976,9 @@ if (typeof globalThis !== 'undefined') {
                     justify-content: space-between;
                     gap: 8px;
                     padding: 10px;
-                    border-bottom: 1px solid rgba(148,163,184,0.2);
-                    background: #f8fafc;
-                    color: #334155;
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text, #1b2438);
                     font-size: 12px;
                     font-weight: 600;
                 }
@@ -38303,27 +38996,64 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: space-between;
                     gap: 8px;
-                    border: 1px solid rgba(148,163,184,0.24);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 8px;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text, #1b2438);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-selected-row > span {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove {
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 24px;
+                    height: 24px;
+                    padding: 0;
+                    border: 1px solid rgba(148,163,184,0.24);
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    cursor: pointer;
+                    line-height: 1;
+                    transition: color .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove svg {
+                    width: 12px;
+                    height: 12px;
+                    flex: 0 0 auto;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove:hover {
+                    color: var(--am26-danger, #ea4f4f);
+                    border-color: rgba(234,79,79,0.22);
+                    background: rgba(234,79,79,0.1);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-filter-remove:focus-visible {
+                    outline: none;
+                    border-color: rgba(37,99,235,0.42);
+                    box-shadow: 0 0 0 3px rgba(37,99,235,0.22);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-filter-selected-empty {
-                    border: 1px dashed rgba(148,163,184,0.3);
+                    border: 1px dashed var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 12px;
                     text-align: center;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     line-height: 1.45;
-                    background: #f8fafc;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-filter-footnote {
                     margin-top: 6px;
                     font-size: 12px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-budget-guard {
                     width: min(760px, 96vw);
@@ -38429,7 +39159,12 @@ if (typeof globalThis !== 'undefined') {
                     line-height: 1.45;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-batch-number {
-                    width: min(560px, 96vw);
+                    width: min(560px, calc(100vw - 32px));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-form {
                     display: flex;
@@ -38446,29 +39181,50 @@ if (typeof globalThis !== 'undefined') {
                     flex-direction: column;
                     gap: 6px;
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text, #1b2438);
                     font-weight: 600;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"] {
                     width: 100%;
                     min-width: 0;
                     height: 34px;
-                    border: 1px solid rgba(148,163,184,0.36);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
                     padding: 0 10px;
-                    background: #fff;
-                    color: #1f2937;
+                    background: rgba(255,255,255,0.72);
+                    color: var(--am26-text, #1b2438);
                     font-size: 13px;
                 }
+                #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"]:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
+                }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-field input[type="number"]:disabled {
-                    background: #f1f5f9;
-                    color: #94a3b8;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
                     cursor: not-allowed;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-strategy-batch-number-note {
                     font-size: 12px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     line-height: 1.45;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-error {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    border: 1px solid rgba(234,79,79,0.26);
+                    border-radius: 10px;
+                    padding: 8px 10px;
+                    background: rgba(234,79,79,0.10);
+                    color: var(--am26-danger, #ea4f4f);
+                    font-size: 12px;
+                    line-height: 1.45;
+                    font-weight: 600;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-error[hidden] {
+                    display: none !important;
                 }
                 #am-wxt-scene-popup-mask .am-wxt-btn {
                     border: 1px solid rgba(69,84,229,0.3);
@@ -38484,6 +39240,21 @@ if (typeof globalThis !== 'undefined') {
                     background: linear-gradient(135deg, #4554e5, #4f68ff);
                     color: #fff;
                     border-color: #4554e5;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-batch-number .am-wxt-btn {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-batch-number .am-wxt-btn.primary {
+                    background: linear-gradient(135deg, var(--am26-primary, #4554e5), var(--am26-primary-strong, #1d3fcf));
+                    color: #fff;
+                    border-color: var(--am26-primary, #4554e5);
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-batch-number .am-wxt-btn:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-btn.danger {
                     background: #fee2e2;
@@ -40046,9 +40817,11 @@ if (typeof globalThis !== 'undefined') {
                     width: max-content;
                     padding: 4px;
                     border-radius: 10px;
-                    border: 1px solid rgba(148,163,184,0.35);
-                    background: #fff;
-                    box-shadow: 0 10px 24px rgba(15,23,42,0.18);
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
                     display: flex;
                     flex-direction: column;
                     gap: 4px;
@@ -40068,7 +40841,7 @@ if (typeof globalThis !== 'undefined') {
                     padding: 6px 10px;
                     border-radius: 8px;
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text-soft, #505a74);
                     cursor: pointer;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-label {
@@ -40080,9 +40853,9 @@ if (typeof globalThis !== 'undefined') {
                     gap: 2px;
                     padding: 2px 6px;
                     border-radius: 10px;
-                    border: 1px solid rgba(99,102,241,0.32);
-                    background: rgba(255,255,255,0.88);
-                    color: #3344c8;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 11px;
                     line-height: 1;
                     user-select: none;
@@ -40099,12 +40872,12 @@ if (typeof globalThis !== 'undefined') {
                     font-weight: 600;
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-item:hover {
-                    background: rgba(37,99,235,0.1);
-                    color: #1d4ed8;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
                 }
                 #am-wxt-keyword-modal .am-wxt-run-mode-item.active {
-                    background: rgba(37,99,235,0.14);
-                    color: #1d4ed8;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-weight: 600;
                 }
                 #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu {
@@ -40117,9 +40890,11 @@ if (typeof globalThis !== 'undefined') {
                     width: max-content;
                     padding: 4px;
                     border-radius: 10px;
-                    border: 1px solid rgba(148,163,184,0.35);
-                    background: #fff;
-                    box-shadow: 0 10px 24px rgba(15,23,42,0.18);
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
                     display: flex;
                     flex-direction: column;
                     gap: 4px;
@@ -40139,7 +40914,7 @@ if (typeof globalThis !== 'undefined') {
                     padding: 6px 10px;
                     border-radius: 8px;
                     font-size: 12px;
-                    color: #334155;
+                    color: var(--am26-text-soft, #505a74);
                     cursor: pointer;
                 }
                 #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-label {
@@ -40151,9 +40926,9 @@ if (typeof globalThis !== 'undefined') {
                     gap: 2px;
                     padding: 2px 6px;
                     border-radius: 10px;
-                    border: 1px solid rgba(99,102,241,0.32);
-                    background: rgba(255,255,255,0.88);
-                    color: #3344c8;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 11px;
                     line-height: 1;
                     user-select: none;
@@ -40170,12 +40945,12 @@ if (typeof globalThis !== 'undefined') {
                     font-weight: 600;
                 }
                 #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-item:hover {
-                    background: rgba(37,99,235,0.1);
-                    color: #1d4ed8;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
                 }
                 #am-wxt-keyword-run-mode-menu .am-wxt-run-mode-item.active {
-                    background: rgba(37,99,235,0.14);
-                    color: #1d4ed8;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-weight: 600;
                 }
                 #am-wxt-keyword-quick-log {
@@ -40430,14 +41205,15 @@ if (typeof globalThis !== 'undefined') {
                     --am-wxt-glass-bg: rgba(248, 250, 255, 0.72);
                     --am-wxt-soft-stroke: rgba(79, 102, 224, 0.24);
                     --am-wxt-surface: rgba(255, 255, 255, 0.85);
-                    background: linear-gradient(120deg, rgba(15, 23, 42, 0.26), rgba(30, 64, 175, 0.18));
-                    backdrop-filter: blur(12px);
-                    -webkit-backdrop-filter: blur(12px);
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                 }
 
                 #am-wxt-keyword-overlay:not(.item-picker-open) {
-                    background: linear-gradient(120deg, rgba(15, 23, 42, 0.3), rgba(30, 64, 175, 0.2));
-                    backdrop-filter: blur(10px);
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                 }
 
                 #am-wxt-keyword-modal {
@@ -40588,17 +41364,21 @@ if (typeof globalThis !== 'undefined') {
                 }
 
                 #am-wxt-keyword-detail-config {
-                    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.95));
-                    border: 1px solid rgba(255, 255, 255, 0.72);
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
                     border-radius: 18px;
-                    backdrop-filter: blur(12px);
-                    -webkit-backdrop-filter: blur(12px);
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31, 38, 135, 0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                 }
 
                 #am-wxt-keyword-detail-config .am-wxt-detail-title,
                 #am-wxt-keyword-detail-config .am-wxt-detail-footer {
-                    background: rgba(255, 255, 255, 0.95);
-                    border-color: rgba(148, 163, 184, 0.2);
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
+                    border-color: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
                 }
 
                 #am-wxt-keyword-modal #am-wxt-workbench-preview-log,
@@ -40617,16 +41397,17 @@ if (typeof globalThis !== 'undefined') {
 
                 #am-wxt-keyword-modal .am-wxt-run-mode-menu,
                 #am-wxt-keyword-run-mode-menu.am-wxt-run-mode-menu {
-                    border: 1px solid rgba(255, 255, 255, 0.8);
-                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 249, 255, 0.9));
-                    backdrop-filter: blur(8px);
-                    -webkit-backdrop-filter: blur(8px);
-                    box-shadow: 0 12px 24px rgba(42, 91, 255, 0.12);
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
                 }
 
                 #am-wxt-keyword-overlay #am-wxt-keyword-detail-backdrop {
-                    background: rgba(15, 23, 42, 0.2);
-                    backdrop-filter: blur(8px);
+                    background: rgba(255, 255, 255, 0.72);
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
 
                 #am-wxt-keyword-detail-config .am-wxt-inline-check,
@@ -40672,37 +41453,46 @@ if (typeof globalThis !== 'undefined') {
                     background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.9));
                 }
 
-                #am-wxt-keyword-overlay,
+                #am-wxt-keyword-overlay {
+                    --am-wxt-primary: var(--am26-primary, #4554e5);
+                    --am-wxt-primary-soft: rgba(69, 84, 229, 0.1);
+                    --am-wxt-border: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    --am-wxt-muted-border: rgba(255, 255, 255, 0.48);
+                    --am-wxt-text: var(--am26-text, #1b2438);
+                    --am-wxt-muted: var(--am26-text-soft, #505a74);
+                }
+
                 #am-wxt-keyword-overlay:not(.item-picker-open) {
-                    --am-wxt-primary: #2563eb;
-                    --am-wxt-primary-soft: #eff6ff;
-                    --am-wxt-border: #dbe3ef;
-                    --am-wxt-muted-border: #e5eaf2;
-                    --am-wxt-text: #111827;
-                    --am-wxt-muted: #64748b;
-                    background: rgba(15, 23, 42, 0.42);
-                    backdrop-filter: blur(6px);
-                    -webkit-backdrop-filter: blur(6px);
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                }
+
+                #am-wxt-keyword-overlay.item-picker-open {
+                    background: transparent;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
                 }
 
                 #am-wxt-keyword-modal {
                     width: min(1320px, calc(100vw - 48px));
-                    color: var(--am-wxt-text);
-                    background: #f8fafc;
-                    border: 1px solid rgba(203, 213, 225, 0.95);
-                    border-radius: 10px;
-                    box-shadow: 0 22px 56px rgba(15, 23, 42, 0.26);
-                    backdrop-filter: none;
-                    -webkit-backdrop-filter: none;
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
+                    backdrop-filter: blur(20px) saturate(1.4);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+                    font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-header {
                     height: 48px;
                     padding: 0 16px;
-                    background: #fff;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    color: var(--am-wxt-text);
-                    box-shadow: none;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.24));
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-header-main {
@@ -40713,15 +41503,43 @@ if (typeof globalThis !== 'undefined') {
                     font-weight: 700;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-close {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    color: var(--am26-text-soft, #505a74);
+                    background: transparent !important;
+                    border: 0;
+                    box-shadow: none !important;
+                    transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-close:hover {
+                    background: rgba(234, 79, 79, 0.1) !important;
+                    color: var(--am26-danger, #ea4f4f);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-title {
+                    margin: 0;
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 14px;
+                    line-height: 20px;
+                    font-weight: 700;
+                    letter-spacing: 0;
+                }
+
                 #am-wxt-keyword-modal .am-wxt-runtime-pill {
                     display: inline-flex;
                     align-items: center;
                     min-height: 22px;
                     padding: 0 9px;
-                    border: 1px solid #bfdbfe;
+                    border: 1px solid rgba(69, 84, 229, 0.22);
                     border-radius: 999px;
-                    background: #eff6ff;
-                    color: #2563eb;
+                    background: rgba(69, 84, 229, 0.08);
+                    color: var(--am26-primary, #4554e5);
                     font-size: 11px;
                     font-weight: 600;
                     white-space: nowrap;
@@ -40729,7 +41547,7 @@ if (typeof globalThis !== 'undefined') {
 
                 #am-wxt-keyword-modal .am-wxt-body {
                     padding: 12px;
-                    background: #f8fafc;
+                    background: transparent;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-workbench-tabs {
@@ -40738,8 +41556,8 @@ if (typeof globalThis !== 'undefined') {
                     padding: 0 16px;
                     min-height: 42px;
                     align-items: flex-end;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: transparent;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-workbench-tabs .am-wxt-btn {
@@ -40781,25 +41599,33 @@ if (typeof globalThis !== 'undefined') {
                     min-height: 32px;
                     padding: 0 12px;
                     border-radius: 8px;
-                    border: 1px solid #cbd5e1;
-                    background: #fff;
-                    color: #334155;
+                    border: 1px solid rgba(69, 84, 229, 0.2);
+                    background: rgba(255, 255, 255, 0.46);
+                    color: var(--am26-text-soft, #505a74);
                     box-shadow: none;
                     line-height: 30px;
                     transform: none;
+                    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-btn:hover {
-                    border-color: #93c5fd;
-                    background: #f8fbff;
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.68);
                     transform: none;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-btn:focus-visible,
+                #am-wxt-keyword-modal .am-wxt-close:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69, 84, 229, 0.12);
+                }
+
                 #am-wxt-keyword-modal .am-wxt-btn.primary {
-                    background: var(--am-wxt-primary);
-                    border-color: var(--am-wxt-primary);
+                    background: linear-gradient(135deg, var(--am26-primary, #4554e5), var(--am26-primary-strong, #1d3fcf));
+                    border-color: rgba(69, 84, 229, 0.68);
                     color: #fff;
-                    box-shadow: none;
+                    box-shadow: 0 8px 18px rgba(69, 84, 229, 0.18);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-home-summary {
@@ -40816,21 +41642,21 @@ if (typeof globalThis !== 'undefined') {
                     gap: 10px;
                     min-height: 54px;
                     padding: 10px 14px;
-                    border: 1px solid #eef2f7;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px;
-                    background: #fff;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
                     box-sizing: border-box;
-                    box-shadow: none;
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-home-stat-label {
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     white-space: nowrap;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-home-stat strong {
-                    color: #0f172a;
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-size: 18px;
                     font-weight: 750;
                     line-height: 1.1;
@@ -40839,7 +41665,7 @@ if (typeof globalThis !== 'undefined') {
 
                 #am-wxt-keyword-modal .am-wxt-home-stat strong small {
                     margin-left: 2px;
-                    color: #0f172a;
+                    color: var(--am26-text, #1b2438);
                     font-size: 14px;
                     font-weight: 700;
                 }
@@ -40850,20 +41676,30 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-modal .am-wxt-strategy-board,
                 #am-wxt-keyword-modal .am-wxt-matrix-dimension-row,
                 #am-wxt-keyword-modal .am-wxt-manual-keyword-panel {
-                    border: 1px solid var(--am-wxt-muted-border);
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px;
-                    background: #fff;
-                    box-shadow: none;
-                    backdrop-filter: none;
-                    -webkit-backdrop-filter: none;
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
+                    backdrop-filter: blur(10px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.15);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config {
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2)));
+                    border: 1px solid var(--am26-border-strong, rgba(255, 255, 255, 0.6));
+                    border-radius: 18px;
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31, 38, 135, 0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-toolbar {
                     min-height: 42px;
                     padding: 8px 10px;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px 8px 0 0;
-                    background: #fff;
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-product-toolbar {
@@ -40887,18 +41723,55 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-modal .am-wxt-setting-control select,
                 #am-wxt-keyword-modal .am-wxt-strategy-search-input {
                     min-height: 32px;
-                    border: 1px solid #cbd5e1;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 8px;
-                    background: #fff;
-                    color: #111827;
-                    box-shadow: none;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"])::placeholder,
+                #am-wxt-keyword-modal .am-wxt-config input:not([type="checkbox"]):not([type="radio"])::placeholder,
+                #am-wxt-keyword-modal .am-wxt-config textarea::placeholder,
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input::placeholder {
+                    color: rgba(80, 90, 116, 0.62);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-toolbar input:not([type="checkbox"]):not([type="radio"]):focus,
+                #am-wxt-keyword-modal .am-wxt-config input:not([type="checkbox"]):not([type="radio"]):focus,
+                #am-wxt-keyword-modal .am-wxt-config select:focus,
+                #am-wxt-keyword-modal .am-wxt-config textarea:focus,
+                #am-wxt-keyword-modal .am-wxt-setting-control select:focus,
+                #am-wxt-keyword-modal .am-wxt-strategy-search-input:focus {
+                    outline: none;
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.62);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-search-input {
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-search-input::placeholder {
+                    color: rgba(80, 90, 116, 0.62);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-search-input:focus {
+                    outline: none;
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.62);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-item {
                     border-radius: 8px;
-                    border-color: var(--am-wxt-muted-border);
-                    background: #fff;
-                    box-shadow: none;
+                    border-color: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
                 }
 
                 #am-wxt-keyword-modal #am-wxt-keyword-added-list {
@@ -40920,12 +41793,12 @@ if (typeof globalThis !== 'undefined') {
                     gap: 10px;
                     margin: 0;
                     padding: 12px;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-section-title {
-                    color: #0f172a;
+                    color: var(--am26-text, #1b2438);
                     font-size: 13px;
                     font-weight: 700;
                     white-space: nowrap;
@@ -40950,22 +41823,50 @@ if (typeof globalThis !== 'undefined') {
                     justify-content: flex-end;
                 }
 
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn,
+                #am-wxt-keyword-modal #am-wxt-keyword-batch-edit-strategy,
+                #am-wxt-keyword-modal #am-wxt-keyword-clear-strategy {
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn:hover,
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn:focus-visible {
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.72);
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.36);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-strategy-head-actions .am-wxt-btn:disabled,
+                #am-wxt-keyword-modal #am-wxt-keyword-batch-edit-strategy:disabled,
+                #am-wxt-keyword-modal #am-wxt-keyword-clear-strategy:disabled {
+                    border-color: var(--am26-border, rgba(255, 255, 255, 0.4));
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
+                    color: rgba(80, 90, 116, 0.62);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+                    opacity: 1;
+                    cursor: not-allowed;
+                }
+
                 #am-wxt-keyword-modal .am-wxt-strategy-search-input {
                     width: min(280px, 100%);
                     padding: 0 10px;
-                    color: #111827;
-                    background: #fff;
+                    color: var(--am26-text, #1b2438);
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-search-input::placeholder {
-                    color: #94a3b8;
+                    color: rgba(80, 90, 116, 0.62);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-list {
                     display: flex;
                     flex-direction: column;
                     gap: 0;
-                    background: #fff;
+                    background: transparent;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-list-head,
@@ -40979,19 +41880,19 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-keyword-modal .am-wxt-strategy-list-head {
                     min-height: 34px;
                     padding: 0 12px;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
-                    color: #64748b;
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 11px;
                     font-weight: 600;
-                    background: #f8fafc;
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-item {
                     border: 0;
-                    border-bottom: 1px solid var(--am-wxt-muted-border);
+                    border-bottom: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 0;
                     padding: 0;
-                    background: #fff;
+                    background: transparent;
                     box-shadow: none;
                 }
 
@@ -41011,7 +41912,7 @@ if (typeof globalThis !== 'undefined') {
                     display: flex;
                     align-items: center;
                     min-width: 0;
-                    color: #0f172a;
+                    color: var(--am26-text, #1b2438);
                     font-size: 12px;
                     font-weight: 700;
                     overflow: hidden;
@@ -41050,10 +41951,10 @@ if (typeof globalThis !== 'undefined') {
                     height: 28px;
                     box-sizing: border-box;
                     padding: 0 8px;
-                    border: 1px solid #cbd5e1;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
                     border-radius: 6px;
-                    background: #fff;
-                    color: #0f172a;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-text, #1b2438);
                     font-size: 12px;
                     font-weight: 600;
                     line-height: 26px;
@@ -41061,8 +41962,9 @@ if (typeof globalThis !== 'undefined') {
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-inline-input:focus {
-                    border-color: #2563eb;
-                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+                    border-color: rgba(69, 84, 229, 0.42);
+                    background: rgba(255, 255, 255, 0.62);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-budget-input {
@@ -41089,7 +41991,7 @@ if (typeof globalThis !== 'undefined') {
                     border: 0;
                     border-radius: 6px;
                     background: transparent;
-                    color: #94a3b8;
+                    color: var(--am26-text-soft, #505a74);
                     cursor: pointer;
                     opacity: 0;
                     visibility: hidden;
@@ -41098,9 +42000,10 @@ if (typeof globalThis !== 'undefined') {
 
                 #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:hover,
                 #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn:focus-visible {
-                    background: #f1f5f9;
-                    color: #64748b;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
                     outline: none;
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-item:hover .am-wxt-strategy-inline-edit-btn,
@@ -41240,13 +42143,13 @@ if (typeof globalThis !== 'undefined') {
                     border: 0;
                     border-radius: 0;
                     background: transparent;
-                    color: #475569;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     white-space: nowrap;
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-summary.muted {
-                    color: #94a3b8;
+                    color: rgba(80, 90, 116, 0.62);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-target-cost {
@@ -41305,12 +42208,18 @@ if (typeof globalThis !== 'undefined') {
                     border-color: #fca5a5;
                 }
 
-                #am-wxt-keyword-modal .am-wxt-copy-multi,
+                #am-wxt-keyword-modal .am-wxt-copy-multi {
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    color: var(--am26-text-soft, #505a74);
+                }
+
                 #am-wxt-keyword-modal .am-wxt-run-mode-count {
                     border-radius: 999px;
-                    background: #f8fafc;
-                    border-color: #cbd5e1;
-                    color: #334155;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    color: var(--am26-text-soft, #505a74);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-strategy-footer {
@@ -41322,8 +42231,9 @@ if (typeof globalThis !== 'undefined') {
                     justify-content: space-between;
                     gap: 12px;
                     padding: 12px;
-                    border-top: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    box-shadow: 0 -8px 18px rgba(31,38,135,0.06);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-submit-summary {
@@ -41331,7 +42241,7 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     gap: 10px;
                     flex-wrap: wrap;
-                    color: #475569;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 13px;
                     line-height: 1.4;
                 }
@@ -41344,7 +42254,7 @@ if (typeof globalThis !== 'undefined') {
                 }
 
                 #am-wxt-keyword-modal .am-wxt-submit-summary strong {
-                    color: #2563eb;
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-size: 18px;
                     font-weight: 750;
                     margin: 0 3px;
@@ -41372,13 +42282,13 @@ if (typeof globalThis !== 'undefined') {
 
                 #am-wxt-keyword-modal .am-wxt-quick-log-panel {
                     padding: 10px;
-                    border-top: 1px solid var(--am-wxt-muted-border);
-                    background: #fff;
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
                 }
 
                 #am-wxt-keyword-modal .am-wxt-quick-log-title {
                     margin-bottom: 6px;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     font-weight: 700;
                 }
@@ -41388,16 +42298,219 @@ if (typeof globalThis !== 'undefined') {
                     min-height: 82px;
                     max-height: 112px;
                     padding: 8px 10px;
-                    border: 1px solid var(--am-wxt-muted-border);
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
                     border-radius: 8px;
-                    background: #fff;
-                    box-shadow: none;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.42);
                 }
 
                 #am-wxt-keyword-quick-log .line {
                     min-height: 24px;
-                    color: #475569;
+                    color: var(--am26-text-soft, #505a74);
                     line-height: 1.45;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel {
+                    color: var(--am26-text, #1b2438);
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-box {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.32);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title {
+                    min-width: 0;
+                    padding-bottom: 6px;
+                    border-bottom: 1px dashed rgba(255,255,255,0.32);
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title:last-child {
+                    margin-bottom: 0;
+                    padding-bottom: 0;
+                    border-bottom: 0;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-previewlog-panel .am-wxt-crowd-title span:last-child {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    color: var(--am26-text, #1b2438);
+                    font-weight: 700;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log,
+                #am-wxt-keyword-modal #am-wxt-keyword-log,
+                #am-wxt-keyword-modal #am-wxt-keyword-preview {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.42);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-preview {
+                    color: var(--am26-text, #1b2438);
+                    font-family: Menlo, Consolas, monospace;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line,
+                #am-wxt-keyword-modal #am-wxt-keyword-log .line {
+                    color: var(--am26-text-soft, #505a74);
+                    line-height: 1.45;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.error,
+                #am-wxt-keyword-modal #am-wxt-keyword-log .line.error {
+                    color: var(--am26-danger, #ea4f4f);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-workbench-preview-log .line.success,
+                #am-wxt-keyword-modal #am-wxt-keyword-log .line.success {
+                    color: var(--am26-success, #0ea86f);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger:hover:not(:disabled),
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker.open .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker.open .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(255,255,255,0.68);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.34);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-trigger:disabled {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-picker .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-trigger:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker.open .am-wxt-matrix-dimension-picker-trigger {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(69,84,229,0.14);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow {
+                    color: var(--am26-text-soft, #505a74);
+                    background-image: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-arrow::before {
+                    content: "";
+                    width: 8px;
+                    height: 8px;
+                    border-right: 2px solid currentColor;
+                    border-bottom: 2px solid currentColor;
+                    transform: translateY(-2px) rotate(45deg);
+                    border-radius: 1px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-key-picker .am-wxt-matrix-dimension-picker-arrow {
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    background-image: none;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-panel {
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(12px) saturate(1.25);
+                    -webkit-backdrop-filter: blur(12px) saturate(1.25);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-option,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option {
+                    color: var(--am26-text-soft, #505a74);
+                    background: transparent;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-option:has(input:checked),
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-target-option.is-active,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-option:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-option:hover {
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-picker-empty,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-summary,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-note,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-meta {
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-actions {
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-edit,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-trend-theme-edit:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit:hover,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit:hover {
+                    border-color: rgba(69,84,229,0.42);
+                    background: rgba(69,84,229,0.14);
+                    box-shadow: 0 0 0 3px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-cost-item,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-form input {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-matrix-dimension-value-select:disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit.is-disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-value-batch-submit:disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit.is-disabled,
+                #am-wxt-keyword-modal .am-wxt-matrix-bid-package-batch-submit:disabled {
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: rgba(80,90,116,0.62);
+                    opacity: 1;
+                    cursor: not-allowed;
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm {
@@ -41513,6 +42626,15 @@ if (typeof globalThis !== 'undefined') {
 
                     #am-wxt-scene-popup-mask .am-wxt-submit-confirm-grid {
                         grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    #am-wxt-keyword-modal .am-wxt-btn,
+                    #am-wxt-keyword-modal .am-wxt-close,
+                    #am-wxt-keyword-modal .am-wxt-strategy-actions,
+                    #am-wxt-keyword-modal .am-wxt-strategy-inline-edit-btn {
+                        transition: none !important;
                     }
                 }
             `;
@@ -44648,13 +45770,13 @@ if (typeof globalThis !== 'undefined') {
             overlay.id = 'am-wxt-keyword-overlay';
             overlay.innerHTML = `
                 <div id="am-wxt-keyword-detail-backdrop"></div>
-                <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true">
+                <div id="am-wxt-keyword-modal" role="dialog" aria-modal="true" aria-labelledby="am-wxt-keyword-title">
                     <div class="am-wxt-header">
                         <div class="am-wxt-header-main">
-                            <span>关键词推广批量建计划 API 向导</span>
+                            <h3 class="am-wxt-title" id="am-wxt-keyword-title">关键词推广批量建计划 API 向导</h3>
                             <span class="am-wxt-runtime-pill">向导就绪</span>
                         </div>
-                        <button class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
+                        <button type="button" class="am-wxt-close" id="am-wxt-keyword-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                     </div>
                     <div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">
                         <button type="button" class="am-wxt-btn primary" data-workbench-page="home">首页</button>
@@ -44764,7 +45886,7 @@ if (typeof globalThis !== 'undefined') {
                             <div class="am-wxt-detail-title">
                                 <span id="am-wxt-keyword-detail-title">同步计划</span>
                                 <div class="am-wxt-detail-title-right">
-                                    <button class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
+                                    <button type="button" class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                                 </div>
                             </div>
                             <div id="am-wxt-keyword-static-settings" class="am-wxt-static-settings">
@@ -52643,6 +53765,7 @@ if (typeof globalThis !== 'undefined') {
                         mask.id = 'am-wxt-scene-popup-mask';
                         mask.className = 'am-wxt-scene-popup-mask';
                         const dialogClass = `am-wxt-scene-popup-dialog${String(dialogClassName || '').trim() ? ` ${String(dialogClassName || '').trim()}` : ''}`;
+                        const titleId = 'am-wxt-scene-popup-title';
                         const normalizedCloseLabel = String(closeLabel || '关闭').trim();
                         const isIconClose = closeIcon === true;
                         const closeBtnHtml = hideCloseButton
@@ -52651,10 +53774,11 @@ if (typeof globalThis !== 'undefined') {
                         const cancelBtnHtml = `<button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">${Utils.escapeHtml(cancelLabel || '取消')}</button>`;
                         const saveBtnHtml = `<button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">${Utils.escapeHtml(saveLabel || '保存')}</button>`;
                         const footButtonsHtml = saveFirst ? `${saveBtnHtml}${cancelBtnHtml}` : `${cancelBtnHtml}${saveBtnHtml}`;
+                        const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                         mask.innerHTML = `
-                            <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true">
+                            <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
                                 <div class="am-wxt-scene-popup-head">
-                                    <span>${Utils.escapeHtml(title || '配置设置')}</span>
+                                    <span id="${titleId}">${Utils.escapeHtml(title || '配置设置')}</span>
                                     ${closeBtnHtml}
                                 </div>
                                 <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
@@ -52663,25 +53787,85 @@ if (typeof globalThis !== 'undefined') {
                                 </div>
                             </div>
                         `;
-                        const handleEscClose = (event) => {
-                            if (event?.key !== 'Escape') return;
-                            event.preventDefault();
-                            close(null);
+                        const focusPopupElement = (target) => {
+                            if (!(target instanceof HTMLElement)) return;
+                            try {
+                                target.focus({ preventScroll: true });
+                            } catch {
+                                target.focus();
+                            }
+                        };
+                        const getPopupFocusableElements = () => Array.from(mask.querySelectorAll([
+                            'button:not([disabled])',
+                            '[href]',
+                            'input:not([disabled])',
+                            'select:not([disabled])',
+                            'textarea:not([disabled])',
+                            '[tabindex]:not([tabindex="-1"])'
+                        ].join(',')))
+                            .filter(el => el instanceof HTMLElement
+                                && el.getAttribute('aria-hidden') !== 'true'
+                                && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+                        const resolveDefaultFocusTarget = () => {
+                            if (defaultFocus === 'save') return saveBtn;
+                            if (defaultFocus === 'cancel') return cancelBtn;
+                            if (defaultFocus === 'close') return closeBtn;
+                            return getPopupFocusableElements()[0] || null;
+                        };
+                        const focusDefaultTarget = () => {
+                            const focusTarget = resolveDefaultFocusTarget();
+                            if (!(focusTarget instanceof HTMLElement)) return;
+                            requestAnimationFrame(() => focusPopupElement(focusTarget));
+                        };
+                        const trapPopupFocus = (event) => {
+                            const focusableEls = getPopupFocusableElements();
+                            if (!focusableEls.length) {
+                                event.preventDefault();
+                                return;
+                            }
+                            const firstEl = focusableEls[0];
+                            const lastEl = focusableEls[focusableEls.length - 1];
+                            const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                            if (!activeEl || !mask.contains(activeEl)) {
+                                event.preventDefault();
+                                focusPopupElement(firstEl);
+                                return;
+                            }
+                            if (event.shiftKey && activeEl === firstEl) {
+                                event.preventDefault();
+                                focusPopupElement(lastEl);
+                            } else if (!event.shiftKey && activeEl === lastEl) {
+                                event.preventDefault();
+                                focusPopupElement(firstEl);
+                            }
+                        };
+                        const handlePopupKeydown = (event) => {
+                            if (event?.key === 'Escape') {
+                                event.preventDefault();
+                                close(null);
+                                return;
+                            }
+                            if (event?.key === 'Tab') {
+                                trapPopupFocus(event);
+                            }
                         };
                         const close = (payload = null) => {
-                            document.removeEventListener('keydown', handleEscClose, true);
+                            document.removeEventListener('keydown', handlePopupKeydown, true);
                             if (typeof mask._amWxtCleanup === 'function') {
                                 try {
                                     mask._amWxtCleanup();
                                 } catch { }
                             }
                             mask.remove();
+                            if (previousActiveElement?.isConnected) {
+                                requestAnimationFrame(() => focusPopupElement(previousActiveElement));
+                            }
                             resolve(payload);
                         };
                         mask.addEventListener('click', (event) => {
                             if (event.target === mask) close(null);
                         });
-                        document.addEventListener('keydown', handleEscClose, true);
+                        document.addEventListener('keydown', handlePopupKeydown, true);
                         const closeBtn = mask.querySelector('[data-scene-popup-close]');
                         const cancelBtn = mask.querySelector('[data-scene-popup-cancel]');
                         const saveBtn = mask.querySelector('[data-scene-popup-save]');
@@ -52699,23 +53883,7 @@ if (typeof globalThis !== 'undefined') {
                             };
                         }
                         document.body.appendChild(mask);
-                        if (defaultFocus) {
-                            const focusTarget = (() => {
-                                if (defaultFocus === 'save') return saveBtn;
-                                if (defaultFocus === 'cancel') return cancelBtn;
-                                if (defaultFocus === 'close') return closeBtn;
-                                return null;
-                            })();
-                            if (focusTarget instanceof HTMLElement) {
-                                requestAnimationFrame(() => {
-                                    try {
-                                        focusTarget.focus({ preventScroll: true });
-                                    } catch {
-                                        focusTarget.focus();
-                                    }
-                                });
-                            }
-                        }
+                        focusDefaultTarget();
                         if (typeof onMounted === 'function') {
                             try {
                                 onMounted(mask);
@@ -57427,7 +58595,16 @@ if (typeof globalThis !== 'undefined') {
                                 listEl.innerHTML = words.map(word => `
                                     <span class="am-wxt-ai-max-shield-tag">
                                         ${Utils.escapeHtml(word)}
-                                        <button type="button" data-ai-max-shield-remove="${Utils.escapeHtml(type)}" data-ai-max-shield-word="${Utils.escapeHtml(word)}">x</button>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-ai-max-shield-remove"
+                                            data-ai-max-shield-remove="${Utils.escapeHtml(type)}"
+                                            data-ai-max-shield-word="${Utils.escapeHtml(word)}"
+                                            aria-label="删除屏蔽词：${Utils.escapeHtml(word)}"
+                                            title="删除屏蔽词"
+                                        >
+                                            ${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}
+                                        </button>
                                     </span>
                                 `).join('');
                             };
@@ -57724,16 +58901,21 @@ if (typeof globalThis !== 'undefined') {
                                     selectedListEl.innerHTML = '<div class="am-wxt-scene-filter-selected-empty">请从左侧添加人群</div>';
                                     return;
                                 }
-                                selectedListEl.innerHTML = selectedList.map(item => `
+                                selectedListEl.innerHTML = selectedList.map(item => {
+                                    const selectedLabel = Utils.escapeHtml(item.label || item.value || '');
+                                    return `
                                     <div class="am-wxt-scene-filter-selected-row">
-                                        <span>${Utils.escapeHtml(item.label || item.value || '')}</span>
+                                        <span>${selectedLabel}</span>
                                         <button
                                             type="button"
-                                            class="am-wxt-btn"
+                                            class="am-wxt-scene-filter-remove"
                                             data-scene-popup-filter-remove="${Utils.escapeHtml(item.key || '')}"
-                                        >移除</button>
+                                            aria-label="移除已选屏蔽人群：${selectedLabel}"
+                                            title="移除已选屏蔽人群"
+                                        >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                     </div>
-                                `).join('');
+                                `;
+                                }).join('');
                             };
                             const removeSelectedByKey = (key = '') => {
                                 const safeKey = String(key || '').trim();
@@ -60270,6 +61452,10 @@ if (typeof globalThis !== 'undefined') {
 
             const normalizeBatchStrategyNumberEditValues = (rawValues = {}) => {
                 const normalizedValues = {};
+                const createFieldError = (message = '', focusSelector = '') => Object.assign(
+                    new Error(message),
+                    { focusSelector: String(focusSelector || '') }
+                );
                 const normalizeDecimalValue = (rawValue = '', label = '', options = {}) => {
                     const text = String(rawValue || '').trim();
                     if (!text) return '';
@@ -60277,7 +61463,10 @@ if (typeof globalThis !== 'undefined') {
                     const min = Number.isFinite(options.min) ? options.min : 0;
                     const max = Number.isFinite(options.max) ? options.max : 9999;
                     if (!Number.isFinite(amount) || amount <= min || amount > max) {
-                        throw new Error(`${label}需填写大于 ${min} 且不超过 ${max} 的数值`);
+                        throw createFieldError(
+                            `${label}需填写大于 ${min} 且不超过 ${max} 的数值`,
+                            options.focusSelector
+                        );
                     }
                     return toShortSceneValue(String(amount)) || String(amount);
                 };
@@ -60288,14 +61477,33 @@ if (typeof globalThis !== 'undefined') {
                     const min = Number.isFinite(options.min) ? options.min : 1;
                     const max = Number.isFinite(options.max) ? options.max : 200;
                     if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount < min || amount > max) {
-                        throw new Error(`${label}需填写 ${min}-${max} 的整数`);
+                        throw createFieldError(
+                            `${label}需填写 ${min}-${max} 的整数`,
+                            options.focusSelector
+                        );
                     }
                     return String(amount);
                 };
-                const budgetValue = normalizeDecimalValue(rawValues.dayAverageBudget, '预算值', { min: 0, max: 999999 });
-                const bidValue = normalizeDecimalValue(rawValues.defaultBidPrice, '默认出价', { min: 0, max: 9999 });
-                const recommendValue = normalizeIntegerValue(rawValues.recommendCount, '推荐词目标数', { min: 1, max: 200 });
-                const targetCostValue = normalizeDecimalValue(rawValues.targetCostValue, '目标成本/ROI', { min: 0, max: 9999 });
+                const budgetValue = normalizeDecimalValue(rawValues.dayAverageBudget, '预算值', {
+                    min: 0,
+                    max: 999999,
+                    focusSelector: '[data-batch-strategy-number-field="dayAverageBudget"]'
+                });
+                const bidValue = normalizeDecimalValue(rawValues.defaultBidPrice, '默认出价', {
+                    min: 0,
+                    max: 9999,
+                    focusSelector: '[data-batch-strategy-number-field="defaultBidPrice"]'
+                });
+                const recommendValue = normalizeIntegerValue(rawValues.recommendCount, '推荐词目标数', {
+                    min: 1,
+                    max: 200,
+                    focusSelector: '[data-batch-strategy-number-field="recommendCount"]'
+                });
+                const targetCostValue = normalizeDecimalValue(rawValues.targetCostValue, '目标成本/ROI', {
+                    min: 0,
+                    max: 9999,
+                    focusSelector: '[data-batch-strategy-number-field="targetCostValue"]'
+                });
                 if (budgetValue) normalizedValues.dayAverageBudget = budgetValue;
                 if (bidValue) normalizedValues.defaultBidPrice = bidValue;
                 if (recommendValue) normalizedValues.recommendCount = recommendValue;
@@ -60359,17 +61567,25 @@ if (typeof globalThis !== 'undefined') {
                     if (previousMask) previousMask.remove();
                     const mask = document.createElement('div');
                     mask.id = 'am-wxt-scene-popup-mask';
-                    mask.className = 'am-wxt-scene-popup-mask';
-                    const dialogClass = `am-wxt-scene-popup-dialog${String(dialogClassName || '').trim() ? ` ${String(dialogClassName || '').trim()}` : ''}`;
+                    const normalizedDialogClassName = String(dialogClassName || '').trim();
+                    const maskClassNames = ['am-wxt-scene-popup-mask'];
+                    if (normalizedDialogClassName.split(/\s+/).includes('am-wxt-scene-popup-dialog-batch-number')) {
+                        maskClassNames.push('am-wxt-scene-popup-mask-batch-number');
+                    }
+                    mask.className = maskClassNames.join(' ');
+                    const dialogClass = `am-wxt-scene-popup-dialog${normalizedDialogClassName ? ` ${normalizedDialogClassName}` : ''}`;
+                    const titleId = 'am-wxt-scene-popup-title';
+                    const errorId = 'am-wxt-scene-popup-error';
                     mask.innerHTML = `
-                        <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true">
+                        <div class="${Utils.escapeHtml(dialogClass)}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
                             <div class="am-wxt-scene-popup-head">
-                                <span>${Utils.escapeHtml(title || '批量修改')}</span>
+                                <span id="${titleId}">${Utils.escapeHtml(title || '批量修改')}</span>
                                 <button type="button" class="am-wxt-btn am-wxt-icon-only-btn" data-scene-popup-close="1" aria-label="关闭">
                                     ${renderAmWindowIcon('close')}
                                 </button>
                             </div>
                             <div class="am-wxt-scene-popup-body">${bodyHtml || ''}</div>
+                            <div class="am-wxt-scene-popup-error" id="${errorId}" role="alert" aria-live="assertive" hidden></div>
                             <div class="am-wxt-scene-popup-foot">
                                 <button type="button" class="am-wxt-btn" data-scene-popup-cancel="1">${Utils.escapeHtml(cancelLabel || '取消')}</button>
                                 <button type="button" class="am-wxt-btn primary" data-scene-popup-save="1">${Utils.escapeHtml(saveLabel || '保存')}</button>
@@ -60393,16 +61609,47 @@ if (typeof globalThis !== 'undefined') {
                     const closeBtn = mask.querySelector('[data-scene-popup-close]');
                     const cancelBtn = mask.querySelector('[data-scene-popup-cancel]');
                     const saveBtn = mask.querySelector('[data-scene-popup-save]');
+                    const errorNode = mask.querySelector(`#${errorId}`);
+                    const clearPopupError = () => {
+                        if (!(errorNode instanceof HTMLElement)) return;
+                        errorNode.textContent = '';
+                        errorNode.hidden = true;
+                    };
+                    const focusPopupTarget = (selector = '') => {
+                        const normalizedSelector = String(selector || '').trim();
+                        if (!normalizedSelector) return;
+                        const target = mask.querySelector(normalizedSelector);
+                        if (!(target instanceof HTMLElement)) return;
+                        try {
+                            target.focus({ preventScroll: true });
+                        } catch {
+                            target.focus();
+                        }
+                    };
+                    const showPopupError = (message = '', focusSelector = '') => {
+                        const text = String(message || '').trim();
+                        if (errorNode instanceof HTMLElement && text) {
+                            errorNode.textContent = text;
+                            errorNode.hidden = false;
+                        }
+                        focusPopupTarget(focusSelector);
+                    };
                     if (closeBtn instanceof HTMLButtonElement) closeBtn.onclick = () => close(null);
                     if (cancelBtn instanceof HTMLButtonElement) cancelBtn.onclick = () => close(null);
                     if (saveBtn instanceof HTMLButtonElement) {
                         saveBtn.onclick = () => {
+                            clearPopupError();
                             try {
                                 const payload = typeof onSave === 'function' ? onSave(mask) : {};
-                                if (payload && payload.ok === false) return;
+                                if (payload && payload.ok === false) {
+                                    showPopupError(payload.error || payload.message || '', payload.focusSelector || '');
+                                    return;
+                                }
                                 close(payload || {});
                             } catch (err) {
-                                appendWizardLog(`保存配置失败：${err?.message || err}`, 'error');
+                                const errorMessage = String(err?.message || err || '保存配置失败');
+                                appendWizardLog(`保存配置失败：${errorMessage}`, 'error');
+                                showPopupError(errorMessage, err?.focusSelector || '');
                             }
                         };
                     }
@@ -60484,12 +61731,22 @@ if (typeof globalThis !== 'undefined') {
                             targetCostValue: mask.querySelector('[data-batch-strategy-number-field="targetCostValue"]')?.value || ''
                         });
                         if (!Object.keys(normalizedValues).length) {
-                            appendWizardLog('请至少填写 1 个需要批量修改的数值字段', 'error');
-                            return { ok: false };
+                            const message = '请至少填写 1 个需要批量修改的数值字段';
+                            appendWizardLog(message, 'error');
+                            return {
+                                ok: false,
+                                error: message,
+                                focusSelector: '[data-batch-strategy-number-field="dayAverageBudget"]'
+                            };
                         }
                         if (normalizedValues.targetCostValue && targetCostPlanCount <= 0) {
-                            appendWizardLog('已选计划中没有可批量修改目标成本/ROI的计划', 'error');
-                            return { ok: false };
+                            const message = '已选计划中没有可批量修改目标成本/ROI的计划';
+                            appendWizardLog(message, 'error');
+                            return {
+                                ok: false,
+                                error: message,
+                                focusSelector: '[data-batch-strategy-number-field="targetCostValue"]'
+                            };
                         }
                         return {
                             ok: true,
@@ -63001,17 +64258,10 @@ if (typeof globalThis !== 'undefined') {
                             type="button"
                             class="am-wxt-btn"
                             data-matrix-preset-key="${Utils.escapeHtml(item.key)}"
-                            onclick="window.__AM_WXT_PLAN_API__ && typeof window.__AM_WXT_PLAN_API__.applyMatrixPreset === 'function' && window.__AM_WXT_PLAN_API__.applyMatrixPreset('${Utils.escapeHtml(item.key)}');"
                             title="${Utils.escapeHtml(item.hint || item.label)}"
                             ${canEditMatrixDimensions ? '' : 'disabled'}
                         >${Utils.escapeHtml(item.label)}</button>
                     `).join('');
-                    wizardState.els.matrixPresetList.querySelectorAll('[data-matrix-preset-key]').forEach((button) => {
-                        button.addEventListener('click', () => {
-                            const presetKey = String(button.getAttribute('data-matrix-preset-key') || '').trim();
-                            applyMatrixPreset(presetKey);
-                        });
-                    });
                 }
                 const displayMatrixBatchCount = matrixConfig.enabled && canEditMatrixDimensions
                     ? toNumber(matrixPreview?.batchCount, 0)
@@ -69545,9 +70795,10 @@ if (typeof globalThis !== 'undefined') {
                             background:rgba(42,91,255,.12);color:var(--am26-primary,#2a5bff);border:1px solid rgba(42,91,255,.28);
                         ">处理中</span>
                         <span class="arrow" style="
-                            display:inline-block;transition:transform 0.2s;
-                            font-size:10px;color:var(--am26-text-soft,#505a74);
-                        ">▼</span>
+                            display:inline-flex;align-items:center;justify-content:center;
+                            width:14px;height:14px;transition:transform 0.2s;
+                            color:var(--am26-text-soft,#505a74);
+                        " aria-hidden="true">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.2 })}</span>
                     </div>
                 </div>
                 <div class="card-body" style="padding:8px 12px;font-size:11px;max-height:150px;overflow-y:auto;background:rgba(255,255,255,.12);">
@@ -70929,9 +72180,9 @@ if (typeof globalThis !== 'undefined') {
 
             content.innerHTML = `
                 <style>
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:#1f2433; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root { display:grid; gap:10px; color:var(--am26-text,#1b2438); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-top { display:flex; justify-content:flex-start; align-items:center; gap:6px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1b2438; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-main-switch { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--am26-text,#1b2438); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand {
                         width:18px;
                         height:18px;
@@ -70939,15 +72190,23 @@ if (typeof globalThis !== 'undefined') {
                         border-radius:4px;
                         padding:0;
                         background:transparent;
-                        color:#6a789a;
+                        color:var(--am26-text-soft,#505a74);
                         font-size:12px;
                         line-height:18px;
                         text-align:center;
                         cursor:pointer;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand:hover {
-                        background:#edf2ff;
-                        color:#2a5bff;
+                        background:var(--am26-surface-strong,rgba(255,255,255,.45));
+                        color:var(--am26-primary,#2a5bff);
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:focus-visible,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-segment button:focus-visible {
+                        outline:2px solid rgba(37,99,235,.45);
+                        outline-offset:2px;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand::before {
                         content:'';
@@ -70965,14 +72224,14 @@ if (typeof globalThis !== 'undefined') {
                         transform:rotate(45deg);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-expand[aria-expanded="true"] {
-                        color:#2a5bff;
-                        background:#edf2ff;
+                        color:var(--am26-primary,#2a5bff);
+                        background:var(--am26-surface-strong,rgba(255,255,255,.45));
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-body[hidden] { display:none !important; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"] {
                         -webkit-appearance:auto !important;
                         appearance:auto !important;
-                        accent-color:#2a5bff;
+                        accent-color:var(--am26-primary,#2a5bff);
                         display:inline-block !important;
                         width:14px !important;
                         height:14px !important;
@@ -70984,9 +72243,9 @@ if (typeof globalThis !== 'undefined') {
                         visibility:visible !important;
                         vertical-align:middle;
                         box-sizing:border-box;
-                        border:1px solid #b8c7ec;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4));
                         border-radius:4px;
-                        background:#fff;
+                        background:rgba(255,255,255,.72);
                         box-shadow:none;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input[type="checkbox"]:disabled {
@@ -70997,60 +72256,79 @@ if (typeof globalThis !== 'undefined') {
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card {
                         display:inline-block; width:100%; box-sizing:border-box; margin:0 0 10px;
                         break-inside:avoid; -webkit-column-break-inside:avoid;
-                        padding:10px 12px; border:1px solid #d7e2fb; border-radius:12px;
-                        background:linear-gradient(180deg,#f9fbff,#f4f7ff);
+                        padding:10px 12px; border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:12px;
+                        background:linear-gradient(145deg,rgba(246,250,255,.72),rgba(235,243,255,.48));
                         box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-card-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-toggle { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1f2638; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline { display:flex; align-items:center; gap:6px; color:#5b6785; font-size:11px; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-toggle { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--am26-text,#1b2438); }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline { display:flex; align-items:center; gap:6px; color:var(--am26-text-soft,#505a74); font-size:11px; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline input[type="number"],
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-inline input[type="text"] {
                         width:68px; box-sizing:border-box; padding:5px 8px; height:18px;
-                        border:1px solid #d7dfef; border-radius:8px; background:#fff; color:#1f2638;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:8px; background:rgba(255,255,255,.72); color:var(--am26-text,#1b2438);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field { display:grid; gap:4px; font-size:10px; color:#5f6c8e; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field { display:grid; gap:4px; font-size:10px; color:var(--am26-text-soft,#505a74); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field.full { grid-column:1 / -1; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-field input {
                         width:100%; box-sizing:border-box; padding:5px 8px; height:28px;
-                        border:1px solid #d7dfef; border-radius:8px; background:#fff; color:#1f2638;
+                        border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:8px; background:rgba(255,255,255,.72); color:var(--am26-text,#1b2438);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-manual-switch-item {
                         display:flex; align-items:center; gap:6px; padding:7px 8px;
-                        background:#fff; border:1px solid #dbe3f1; border-radius:9px; color:#5b6785; font-size:11px;
+                        background:var(--am26-surface,rgba(255,255,255,.25)); border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:9px; color:var(--am26-text-soft,#505a74); font-size:11px;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown { position:relative; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger {
-                        width:100%; height:26px; padding:0 10px; border:1px solid #d7dfef; border-radius:8px;
-                        background:#fff; color:#1f2638; display:flex; align-items:center; gap:6px; cursor:pointer;
+                        width:100%; height:26px; padding:0 10px; border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:8px;
+                        background:rgba(255,255,255,.72); color:var(--am26-text,#1b2438); display:flex; align-items:center; gap:6px; cursor:pointer;
                     }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-prefix { color:#5f6c8e; font-size:11px; white-space:nowrap; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-prefix { color:var(--am26-text-soft,#505a74); font-size:11px; white-space:nowrap; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-value { flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-arrow { font-size:10px; color:#5f6c8e; transition:transform .2s ease; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-arrow {
+                        display:inline-flex; align-items:center; justify-content:center;
+                        width:14px; height:14px; color:var(--am26-text-soft,#505a74);
+                        transition:transform .2s ease;
+                    }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger[aria-expanded="true"] .am26-dropdown-arrow { transform:rotate(180deg); }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-menu {
                         display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:20;
-                        border:1px solid #d7dfef; border-radius:10px; background:#fff;
-                        box-shadow:0 8px 24px rgba(30,64,175,.16); padding:6px;
+                        border:1px solid var(--am26-border-strong,rgba(255,255,255,.6)); border-radius:10px; background:var(--am26-panel-strong,rgba(255,255,255,.45));
+                        box-shadow:var(--am26-shadow,0 8px 32px rgba(31,38,135,.15)); padding:6px;
+                        backdrop-filter:blur(12px);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-group-title {
-                        font-size:10px; color:#7b86a6; font-weight:600; padding:4px 8px; margin-top:2px;
+                        font-size:10px; color:var(--am26-text-soft,#505a74); font-weight:600; padding:4px 8px; margin-top:2px;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item {
                         width:100%; border:none; background:transparent; border-radius:8px; cursor:pointer;
-                        padding:6px 8px; text-align:left; font-size:11px; color:#1f2638;
+                        padding:6px 8px; text-align:left; font-size:11px; color:var(--am26-text,#1b2438);
                     }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:hover { background:#f3f6ff; }
-                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item.is-selected { background:#ebf2ff; color:#2a5bff; font-weight:600; }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:hover { background:var(--am26-surface-strong,rgba(255,255,255,.45)); }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item.is-selected { background:rgba(69,84,229,.12); color:var(--am26-primary,#2a5bff); font-weight:600; }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-segment {
-                        height:30px; display:flex; border:1px solid #d7dfef; border-radius:9px; overflow:hidden; background:#fff;
+                        height:30px; display:flex; border:1px solid var(--am26-border,rgba(255,255,255,.4)); border-radius:9px; overflow:hidden; background:rgba(255,255,255,.72);
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-segment button {
-                        flex:1; border:none; background:transparent; font-size:11px; color:#5f6c8e; cursor:pointer;
+                        flex:1; border:none; background:transparent; font-size:11px; color:var(--am26-text-soft,#505a74); cursor:pointer;
                     }
                     #${CONFIG.UI_ID}-latest-setting-content .am26-segment button.is-active {
-                        background:linear-gradient(180deg,#2a5bff,#1f49d4); color:#fff; font-weight:600;
+                        background:linear-gradient(180deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf)); color:#fff; font-weight:600;
+                    }
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root input:disabled,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-trigger:disabled,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-dropdown-item:disabled,
+                    #${CONFIG.UI_ID}-latest-setting-content .am26-segment button:disabled {
+                        cursor:not-allowed;
+                        opacity:.55;
+                    }
+                    @media (prefers-reduced-motion: reduce) {
+                        #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root,
+                        #${CONFIG.UI_ID}-latest-setting-content .am26-manual-root * {
+                            transition:none !important;
+                            animation:none !important;
+                        }
                     }
                     @media (max-width:760px) {
                         #${CONFIG.UI_ID}-latest-setting-content .am26-manual-waterfall { column-count:1; }
@@ -71173,7 +72451,7 @@ if (typeof globalThis !== 'undefined') {
                                         <button id="${CONFIG.UI_ID}-manual-keyword-preference-trigger" type="button" class="am26-dropdown-trigger" aria-expanded="false">
                                             <span class="am26-dropdown-prefix">我希望增加：</span>
                                             <span id="${CONFIG.UI_ID}-manual-keyword-preference-value" class="am26-dropdown-value">类目流量飙升词</span>
-                                            <span class="am26-dropdown-arrow">▼</span>
+                                            <span class="am26-dropdown-arrow" aria-hidden="true">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.2 })}</span>
                                         </button>
                                         <div id="${CONFIG.UI_ID}-manual-keyword-preference-menu" class="am26-dropdown-menu" data-open="false">
                                             <div class="am26-dropdown-group-title">相似商家买词</div>
@@ -71221,7 +72499,7 @@ if (typeof globalThis !== 'undefined') {
                             </div>
                         </div>
                     </div>
-                    <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:#7f8bab;line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
+                    <div id="${CONFIG.UI_ID}-manual-setting-hint" style="margin-top:6px;color:var(--am26-text-soft,#505a74);line-height:1.45;">你可直接修改以上参数，提交时按此配置生效。</div>
                     </div>
                 </div>
             `;
@@ -71288,6 +72566,10 @@ if (typeof globalThis !== 'undefined') {
             // 创建模态遮罩层
             const overlay = document.createElement('div');
             overlay.id = `${CONFIG.UI_ID}-result-overlay`;
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-labelledby', `${CONFIG.UI_ID}-result-title`);
+            overlay.tabIndex = -1;
             overlay.style.cssText = `
                 position:fixed;top:0;left:0;right:0;bottom:0;
                 background:rgba(15,23,42,0.42);backdrop-filter:blur(6px);
@@ -71300,6 +72582,7 @@ if (typeof globalThis !== 'undefined') {
             const failCount = failList.length;
             const totalCount = successCount + failCount;
             const isAllSuccess = failCount === 0;
+            const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
             const rowsHtml = data.map((row, i) => {
                 const safeName = Utils.escapeHtml(row.name ?? '-');
@@ -71320,8 +72603,19 @@ if (typeof globalThis !== 'undefined') {
                 <style>
                     @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
                     @keyframes slideUp { from { transform:translateY(20px);opacity:0; } to { transform:translateY(0);opacity:1; } }
+                    #${CONFIG.UI_ID}-result-close:focus-visible {
+                        outline:2px solid rgba(42,91,255,.45);
+                        outline-offset:2px;
+                    }
+                    @media (prefers-reduced-motion: reduce) {
+                        #${CONFIG.UI_ID}-result-overlay,
+                        #${CONFIG.UI_ID}-result-overlay .am26-result-dialog {
+                            animation:none !important;
+                            transition:none !important;
+                        }
+                    }
                 </style>
-                <div style="
+                <div class="am26-result-dialog" style="
                     background:var(--am26-panel-strong,rgba(255,255,255,.45));
                     border:1px solid var(--am26-border,rgba(255,255,255,.4));
                     border-radius:18px;padding:24px 32px;min-width:400px;max-width:600px;
@@ -71331,7 +72625,7 @@ if (typeof globalThis !== 'undefined') {
                 ">
                     <div style="text-align:center;margin-bottom:20px;">
                         <div style="width:56px;height:56px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;color:${isAllSuccess ? 'var(--am26-success,#0ea86f)' : 'var(--am26-warning,#e8a325)'};">${renderAmIcon(isAllSuccess ? 'check-circle' : 'alert-triangle', { size: 52, strokeWidth: 1.6 })}</div>
-                        <div style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
+                        <div id="${CONFIG.UI_ID}-result-title" style="font-size:20px;font-weight:600;color:var(--am26-text,#1b2438);">执行完成</div>
                         <div style="font-size:14px;color:var(--am26-text-soft,#505a74);margin-top:8px;">
                             共 ${totalCount} 个计划，
                             <span style="color:var(--am26-success,#0ea86f);font-weight:600;">${successCount} 成功</span>
@@ -71366,28 +72660,43 @@ if (typeof globalThis !== 'undefined') {
 
             // 绑定关闭事件
             const closeBtn = document.getElementById(`${CONFIG.UI_ID}-result-close`);
+            const restoreFocus = () => {
+                if (previousActiveElement && previousActiveElement.isConnected) {
+                    previousActiveElement.focus({ preventScroll: true });
+                }
+            };
+            const closeResultOverlay = () => {
+                document.removeEventListener('keydown', handleResultKeydown, true);
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.24s ease';
+                setTimeout(() => {
+                    overlay.remove();
+                    restoreFocus();
+                }, 240);
+            };
+            const handleResultKeydown = (event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                closeResultOverlay();
+            };
+            document.addEventListener('keydown', handleResultKeydown, true);
             if (closeBtn) {
                 closeBtn.addEventListener('mouseenter', () => {
-                    closeBtn.style.transform = 'scale(1.05)';
+                    closeBtn.style.transform = 'translateY(-1px)';
                     closeBtn.style.boxShadow = '0 4px 12px rgba(42,91,255,0.35)';
                 });
                 closeBtn.addEventListener('mouseleave', () => {
-                    closeBtn.style.transform = 'scale(1)';
+                    closeBtn.style.transform = 'translateY(0)';
                     closeBtn.style.boxShadow = 'none';
                 });
+                closeBtn.focus({ preventScroll: true });
             }
-            if (closeBtn) closeBtn.onclick = () => {
-                overlay.style.opacity = '0';
-                overlay.style.transition = 'opacity 0.3s ease';
-                setTimeout(() => overlay.remove(), 300);
-            };
+            if (closeBtn) closeBtn.addEventListener('click', closeResultOverlay);
 
             // 点击遮罩层也可关闭
             overlay.onclick = (e) => {
                 if (e.target === overlay) {
-                    overlay.style.opacity = '0';
-                    overlay.style.transition = 'opacity 0.3s ease';
-                    setTimeout(() => overlay.remove(), 300);
+                    closeResultOverlay();
                 }
             };
         },
@@ -71414,33 +72723,76 @@ if (typeof globalThis !== 'undefined') {
 
             panel.innerHTML = `
                 <style>
+                    #${CONFIG.UI_ID} .am-icon-btn {
+                        width:28px;
+                        height:28px;
+                        border:0;
+                        border-radius:8px;
+                        padding:0;
+                        background:transparent;
+                        color:var(--am26-text-soft,#505a74);
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        cursor:pointer;
+                        font:inherit;
+                    }
+                    #${CONFIG.UI_ID} .am-icon-btn:hover {
+                        background:var(--am26-surface-strong,rgba(255,255,255,.45));
+                        color:var(--am26-primary,#2a5bff);
+                    }
+                    #${CONFIG.UI_ID} .am-icon-btn.danger:hover {
+                        background:rgba(234,79,79,.12);
+                        color:var(--am26-danger,#ea4f4f);
+                    }
+                    #${CONFIG.UI_ID} .am-icon-btn:focus-visible,
+                    #${CONFIG.UI_ID}-run:focus-visible,
+                    #${CONFIG.UI_ID}-prompt:focus-visible,
+                    #${CONFIG.UI_ID}-concurrency:focus-visible {
+                        outline:2px solid rgba(37,99,235,.45);
+                        outline-offset:2px;
+                    }
+                    #${CONFIG.UI_ID}-run {
+                        transition:transform .2s ease, box-shadow .2s ease;
+                    }
+                    #${CONFIG.UI_ID}-run:hover {
+                        transform:translateY(-1px);
+                        box-shadow:0 6px 16px rgba(42,91,255,.24);
+                    }
                     #${CONFIG.UI_ID}-log.am26-log-waterfall { column-count:2; column-gap:10px; }
                     #${CONFIG.UI_ID}-log .am26-campaign-card { width:100%; }
                     #${CONFIG.UI_ID}-log .am26-log-status-line { width:100%; }
                     @media (max-width:1100px) {
                         #${CONFIG.UI_ID}-log.am26-log-waterfall { column-count:1; }
                     }
+                    @media (prefers-reduced-motion: reduce) {
+                        #${CONFIG.UI_ID},
+                        #${CONFIG.UI_ID} * {
+                            transition:none !important;
+                            animation:none !important;
+                        }
+                    }
                 </style>
                 <div style="font-weight:bold;margin-bottom:12px;border-bottom:0;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
                     <span style="color:var(--am26-primary,#2a5bff);display:inline-flex;align-items:center;gap:6px;">${renderAmIcon('shield-check', { size: 16 })} 小万护航 v${CONFIG.VERSION}</span>
                     <div style="display:flex;align-items:center;gap:2px;">
                         <span style="font-size:10px;color:var(--am26-text-soft,#505a74);margin-right:6px;opacity:0.6;">API版</span>
-                        <span id="${CONFIG.UI_ID}-center" class="am-icon-btn" title="居中">
+                        <button id="${CONFIG.UI_ID}-center" class="am-icon-btn" type="button" title="居中" aria-label="居中">
                             ${renderAmWindowIcon('center')}
-                        </span>
-                        <span id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" title="最大化">
+                        </button>
+                        <button id="${CONFIG.UI_ID}-maximize" class="am-icon-btn" type="button" title="最大化" aria-label="最大化">
                             ${renderAmWindowIcon('expand')}
-                        </span>
-                        <span id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" title="关闭">
+                        </button>
+                        <button id="${CONFIG.UI_ID}-close" class="am-icon-btn danger" type="button" title="关闭" aria-label="关闭算法护航">
                             ${renderAmWindowIcon('close')}
-                        </span>
+                        </button>
                     </div>
                 </div>
                 <div id="${CONFIG.UI_ID}-log-wrapper" style="background:rgba(255,255,255,.22);padding:0;border-radius:12px;font-size:11px;height:0;max-height:500px;overflow:hidden;margin-bottom:0;border:1px solid var(--am26-border,rgba(255,255,255,.35));font-family:Monaco,Consolas,monospace;opacity:0;transform:scaleY(0.8);transform-origin:top;transition:all 0.6s ease-out;">
                     <div id="${CONFIG.UI_ID}-log" style="color:var(--am26-text-soft,#505a74);line-height:1.5;padding:10px;"></div>
                 </div>
                 <div id="${CONFIG.UI_ID}-latest-setting-panel" style="margin-bottom:8px;padding:8px;border:1px solid var(--am26-border,rgba(255,255,255,.35));border-radius:10px;background:rgba(255,255,255,.24);">
-                    <div id="${CONFIG.UI_ID}-latest-setting-content" style="font-size:10px;line-height:1.45;color:#4d5875;">正在读取...</div>
+                    <div id="${CONFIG.UI_ID}-latest-setting-content" style="font-size:10px;line-height:1.45;color:var(--am26-text-soft,#505a74);">正在读取...</div>
                 </div>
                 <button id="${CONFIG.UI_ID}-run" style="width:100%;padding:8px;background:linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf));color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:8px;">立即扫描并优化</button>
                 <div style="margin-bottom:8px;display:flex;gap:5px;align-items:center;">
@@ -71515,7 +72867,7 @@ if (typeof globalThis !== 'undefined') {
                 if (mode === 'back') {
                     runBtn.dataset.mode = 'back';
                     runBtn.textContent = '返回';
-                    runBtn.style.background = 'linear-gradient(135deg,#6b7280,#4b5563)';
+                    runBtn.style.background = 'linear-gradient(135deg,var(--am26-text-soft,#505a74),var(--am26-text,#1b2438))';
                     return;
                 }
                 runBtn.dataset.mode = 'run';

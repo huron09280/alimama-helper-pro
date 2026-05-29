@@ -78,6 +78,31 @@ test('主面板工具区包含算法护航/万能查数/辅助显示三个入口
   }
 });
 
+test('主面板交互控件使用原生 button 并同步可访问状态', () => {
+  const uiBlock = getMainUIBlock();
+  assert.match(uiBlock, /<button id="am-helper-icon" type="button"[\s\S]*?aria-label="展开助手面板"/, '悬浮球应是可聚焦 button');
+  assert.match(uiBlock, /<button type="button" class="am-close-btn"[\s\S]*?aria-label="最小化助手面板"/, '关闭控件应是 button 且有 aria-label');
+  for (const id of ['am-trigger-optimizer', 'am-trigger-keyword-plan-api', 'am-trigger-magic-report']) {
+    assert.match(
+      uiBlock,
+      new RegExp(`<button type="button" class="am-tool-btn" id="${id}"`),
+      `工具入口 ${id} 应使用 button`
+    );
+  }
+  assert.match(
+    uiBlock,
+    /<button type="button" class="am-tool-btn" id="am-toggle-assist-display"[\s\S]*?aria-expanded="false"[\s\S]*?aria-controls="am-assist-switches"[\s\S]*?aria-pressed="false"/,
+    '辅助显示入口应声明展开与按下状态'
+  );
+  assert.match(uiBlock, /<button type="button" class="am-switch-btn" data-key="showCost" aria-pressed="false">询单成本<\/button>/, '辅助开关应使用 button 与 aria-pressed');
+  assert.match(uiBlock, /<button type="button" class="am-action-btn" id="am-log-clear">清空<\/button>/, '日志清空应使用 button');
+  assert.match(uiBlock, /<button type="button" class="am-action-btn" id="am-log-toggle" aria-controls="am-log-content" aria-expanded="false">展开<\/button>/, '日志展开按钮应关联日志区域');
+  assert.doesNotMatch(uiBlock, /<div class="am-tool-btn"|<div class="am-switch-btn"|<span class="am-action-btn"/, '主面板交互控件不得回退为 div/span');
+  assert.match(uiBlock, /btn\.setAttribute\('aria-pressed',\s*active \? 'true' : 'false'\)/, '辅助开关状态应同步 aria-pressed');
+  assert.match(uiBlock, /assistToggleBtn\.setAttribute\('aria-expanded',\s*this\.runtime\.assistExpanded \? 'true' : 'false'\)/, '辅助显示入口应同步 aria-expanded');
+  assert.match(uiBlock, /logToggle\.setAttribute\('aria-expanded',\s*'true'\)[\s\S]*?logToggle\.setAttribute\('aria-expanded',\s*'false'\)/, '日志展开按钮应同步 aria-expanded');
+});
+
 test('默认配置中日志收起且包含配置版本号', () => {
   assert.match(source, /logExpanded:\s*false/, '默认日志未设为收起');
   assert.match(source, /configRevision:\s*CONSTANTS\.CONFIG_REVISION/, '默认配置缺少 configRevision');
@@ -92,6 +117,42 @@ test('辅助显示具备容器与展开状态同步逻辑', () => {
     /assistPanel\.classList\.toggle\(['"]open['"],\s*this\.runtime\.assistExpanded\)/,
     '辅助显示容器未在 updateState 中同步 open 状态'
   );
+});
+
+test('主面板 P2 样式收敛到统一浅玻璃 token', () => {
+  const uiBlock = getMainUIBlock();
+  assert.match(
+    uiBlock,
+    /#am-helper-icon:hover \{[\s\S]*?transform:\s*translateY\(-2px\);[\s\S]*?background:\s*var\(--am26-surface-strong\);[\s\S]*?box-shadow:\s*0 10px 28px rgba\(31,\s*38,\s*135,\s*0\.18\), var\(--am26-glow\);/,
+    '悬浮球 hover 应使用克制位移、统一表面 token 和轻阴影'
+  );
+  assert.doesNotMatch(
+    uiBlock,
+    /#am-helper-icon:hover \{[\s\S]*?scale\(1\.08\)/,
+    '悬浮球 hover 不应使用大幅缩放'
+  );
+  assert.match(
+    uiBlock,
+    /\.am-switch-btn:hover \{[\s\S]*?border-color:\s*var\(--am26-border-strong\);[\s\S]*?background:\s*var\(--am26-surface-strong\);/,
+    '辅助开关 hover 应使用统一边框和表面 token'
+  );
+  assert.match(
+    uiBlock,
+    /\.am-switch-btn:not\(\.active\)::before \{[\s\S]*?background:\s*rgba\(80,\s*90,\s*116,\s*0\.28\);/,
+    '辅助开关弱态圆点应使用统一文本柔色派生值'
+  );
+  assert.match(
+    uiBlock,
+    /#am-log-content \{[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.48\), 0 2px 8px rgba\(31,\s*53,\s*109,\s*0\.04\);/,
+    '日志区应使用统一浅玻璃背景、边框和轻阴影'
+  );
+  assert.match(
+    uiBlock,
+    /\.am-log-line \{[\s\S]*?border-bottom:\s*1px dashed rgba\(80,\s*90,\s*116,\s*0\.16\);[\s\S]*?\.am-log-time \{ color:\s*var\(--am26-text-soft\); opacity:\s*0\.72;/,
+    '日志行分隔线和时间色应使用统一柔色'
+  );
+  assert.doesNotMatch(uiBlock, /rgba\(0,\s*0,\s*0,\s*0\.03\)/, '主面板不应保留暗色日志底');
+  assert.doesNotMatch(uiBlock, /border-color:\s*rgba\(47,\s*84,\s*235,\s*0\.4\)/, '辅助开关 hover 不应保留硬编码蓝色边框');
 });
 
 test('主助手配置读写使用安全存储封装，避免部分浏览器阻断辅助显示启动', () => {

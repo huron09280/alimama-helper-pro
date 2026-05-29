@@ -9,6 +9,8 @@
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
         concurrentLogBodyEl: null,
+        concurrentLogFocusBackEl: null,
+        concurrentLogKeydownHandler: null,
         campaignItemIdCache: new Map(),
         IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
@@ -119,10 +121,13 @@
                         this.rememberCopiedPlanNames(newPlanNames);
                         Logger.log(`✅ ${label}完成：已复制计划 ${newPlanNames.length || copyCount} 个（保留源计划），源计划${id}，新计划${newPlanText}，目标状态=${statusText}，成功=${successCount}，失败=${failCount}`);
                         this.showCopySuccessDialogAndRefresh(result, {
+                            campaignId: id,
                             sourceCampaignId: id,
                             label,
+                            mode: copyMode,
                             copyCount,
-                            statusText
+                            statusText,
+                            triggerEl: copyBtn
                         });
                     }).catch((err) => {
                         if (err?.cancelled || err?.code === 'copy_preview_cancelled') {
@@ -152,7 +157,7 @@
                     allowLocationFallback: false,
                     allowBodyFallback: false
                 });
-                this.openConcurrentLogPopup(id, itemId);
+                this.openConcurrentLogPopup(id, itemId, concurrentBtn);
                 this.appendConcurrentLog(`收到并发开启指令：计划${id}${itemId ? ` / 商品${itemId}` : ''}`);
                 if (this.runningCampaignIds.has(id)) {
                     Logger.log(`⏳ 并发开启进行中：${id} `);
@@ -273,27 +278,32 @@
             return [
                 {
                     action: 'start',
+                    icon: 'layers-play',
                     label: '批量开启',
                     title: `开启选中的${sceneName}计划`
                 },
                 {
                     action: 'pause',
+                    icon: 'minus',
                     label: '批量暂停',
                     title: `暂停选中的${sceneName}计划`
                 },
                 {
                     action: 'delete',
+                    icon: 'x-circle',
                     label: '批量删除',
                     danger: true,
                     title: `删除选中的${sceneName}计划`
                 },
                 {
                     action: 'shieldCrowd',
+                    icon: 'shield-check',
                     label: '批量修改屏蔽人群',
                     title: isDisplayScene || isLeadScene ? '打开官方编辑过滤人群弹窗并批量同步屏蔽人群' : '打开选中计划的原生屏蔽/过滤人群设置入口'
                 },
                 {
                     action: 'crowdSetting',
+                    icon: 'user',
                     label: '批量人群设置',
                     title: isDisplayScene ? '打开官方批量编辑人群抽屉' : '打开选中计划的原生人群设置入口'
                 }
@@ -399,7 +409,8 @@
                     role="menuitem"
                     title="${this.escapeHtml(item.title || item.label)}"
                 >
-                    <span>${this.escapeHtml(item.label)}</span>
+                    <span class="am-campaign-batch-plus-item-icon" aria-hidden="true">${renderAmIcon(item.icon || 'logo', { size: 14, strokeWidth: 2.1 })}</span>
+                    <span class="am-campaign-batch-plus-item-label">${this.escapeHtml(item.label)}</span>
                 </button>
             `).join('');
             document.body.appendChild(menu);
@@ -529,9 +540,11 @@
 
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-batch-confirm-popup';
+                const titleId = `am-campaign-batch-confirm-title-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
-                popup.setAttribute('aria-label', title);
+                popup.setAttribute('aria-labelledby', titleId);
 
                 const card = document.createElement('section');
                 card.className = 'am-batch-confirm-card';
@@ -539,8 +552,10 @@
                 header.className = 'am-batch-confirm-header';
                 const icon = document.createElement('span');
                 icon.className = `am-batch-confirm-icon${danger ? ' is-danger' : ''}`;
-                icon.textContent = '!';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.innerHTML = renderAmIcon(danger ? 'x-circle' : 'alert-triangle', { size: 16, strokeWidth: 2.2 });
                 const titleEl = document.createElement('h3');
+                titleEl.id = titleId;
                 titleEl.className = 'am-batch-confirm-title';
                 titleEl.textContent = title;
                 const body = document.createElement('pre');
@@ -563,6 +578,9 @@
                     settled = true;
                     document.removeEventListener('keydown', onKeydown, true);
                     popup.remove();
+                    if (previousActiveElement?.isConnected) {
+                        requestAnimationFrame(() => previousActiveElement.focus({ preventScroll: true }));
+                    }
                     resolve(!!confirmed);
                 };
                 const onKeydown = (event) => {
@@ -2141,16 +2159,114 @@
             ].join('\n');
         },
 
+        createCopyFocusTarget(context = {}, fallbackElement = null) {
+            const triggerEl = context.triggerEl instanceof HTMLElement ? context.triggerEl : null;
+            const fallbackEl = fallbackElement instanceof HTMLElement && fallbackElement !== document.body
+                ? fallbackElement
+                : null;
+            const sourceEl = triggerEl || fallbackEl;
+            const campaignId = this.normalizeCampaignId(
+                context.campaignId
+                || context.sourceCampaignId
+                || sourceEl?.getAttribute?.('data-campaign-id')
+                || sourceEl?.dataset?.campaignId
+                || ''
+            );
+            const mode = this.normalizeCopyMode(
+                context.mode
+                || context.copyMode
+                || sourceEl?.getAttribute?.('data-am-campaign-copy')
+                || sourceEl?.dataset?.amCampaignCopy
+                || ''
+            );
+            return {
+                element: triggerEl,
+                fallbackElement: fallbackEl,
+                campaignId,
+                mode
+            };
+        },
+
+        resolveCopyFocusTargetElement(target = null, allowDisabled = true) {
+            const candidates = [];
+            if (target instanceof HTMLElement) {
+                candidates.push(target);
+            } else if (target?.element instanceof HTMLElement) {
+                candidates.push(target.element);
+            }
+
+            const id = this.normalizeCampaignId(target?.campaignId || '');
+            const mode = this.normalizeCopyMode(target?.mode || target?.copyMode || '');
+            if (id) {
+                const selectors = mode
+                    ? [
+                        `.am-campaign-search-btn[data-am-campaign-copy="${mode}"][data-campaign-id="${id}"]`,
+                        `.am-campaign-search-btn[data-am-campaign-copy][data-campaign-id="${id}"]`
+                    ]
+                    : [`.am-campaign-search-btn[data-am-campaign-copy][data-campaign-id="${id}"]`];
+                selectors.forEach((selector) => {
+                    document.querySelectorAll(selector).forEach((node) => {
+                        if (node instanceof HTMLElement && !candidates.includes(node)) {
+                            candidates.push(node);
+                        }
+                    });
+                });
+            }
+            if (!(target instanceof HTMLElement) && target?.fallbackElement instanceof HTMLElement && !candidates.includes(target.fallbackElement)) {
+                candidates.push(target.fallbackElement);
+            }
+
+            return candidates.find((candidate) => {
+                if (!(candidate instanceof HTMLElement)) return false;
+                if (!candidate.isConnected || typeof candidate.focus !== 'function') return false;
+                if (!this.isElementVisible(candidate)) return false;
+                if (!allowDisabled && 'disabled' in candidate && candidate.disabled) return false;
+                return true;
+            }) || null;
+        },
+
+        restoreFocusWhenReady(target = null, attempt = 0) {
+            const element = this.resolveCopyFocusTargetElement(target, true);
+            if (!element) {
+                if (attempt < 6) {
+                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
+                }
+                return;
+            }
+            if ('disabled' in element && element.disabled) {
+                if (attempt < 6) {
+                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
+                }
+                return;
+            }
+            window.setTimeout(() => {
+                requestAnimationFrame(() => {
+                    const readyElement = this.resolveCopyFocusTargetElement(target, false)
+                        || this.resolveCopyFocusTargetElement(target, true);
+                    if (!readyElement) return;
+                    if (!readyElement.isConnected || typeof readyElement.focus !== 'function') return;
+                    if ('disabled' in readyElement && readyElement.disabled) {
+                        if (attempt < 6) this.restoreFocusWhenReady(target, attempt + 1);
+                        return;
+                    }
+                    readyElement.focus({ preventScroll: true });
+                });
+            }, 0);
+        },
+
         showCopySuccessDialogAndRefresh(result = {}, context = {}) {
             const message = this.buildCopySuccessDialogMessage(result, context);
             const oldPopup = document.getElementById('am-campaign-copy-success-popup');
             if (oldPopup) oldPopup.remove();
+            const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            const focusBackTarget = this.createCopyFocusTarget(context, previousActiveElement);
+            const titleId = 'am-copy-success-title';
 
             const popup = document.createElement('div');
             popup.id = 'am-campaign-copy-success-popup';
             popup.setAttribute('role', 'dialog');
             popup.setAttribute('aria-modal', 'true');
-            popup.setAttribute('aria-label', '复制计划成功');
+            popup.setAttribute('aria-labelledby', titleId);
 
             const card = document.createElement('section');
             card.className = 'am-copy-success-card';
@@ -2158,9 +2274,10 @@
             header.className = 'am-copy-success-header';
             const icon = document.createElement('span');
             icon.className = 'am-copy-success-icon';
-            icon.textContent = '!';
+            icon.innerHTML = renderAmIcon('check-circle', { size: 18, strokeWidth: 2.2 });
             const title = document.createElement('h3');
             title.className = 'am-copy-success-title';
+            title.id = titleId;
             title.textContent = '复制计划已成功';
             const body = document.createElement('pre');
             body.className = 'am-copy-success-body';
@@ -2171,6 +2288,13 @@
             confirmBtn.type = 'button';
             confirmBtn.className = 'am-copy-success-confirm';
             confirmBtn.textContent = '确定并搜索';
+            const restoreFocus = () => {
+                this.restoreFocusWhenReady(focusBackTarget);
+            };
+            const closePopup = () => {
+                popup.remove();
+                restoreFocus();
+            };
             confirmBtn.addEventListener('click', () => {
                 popup.remove();
                 try {
@@ -2184,8 +2308,13 @@
             cancelBtn.className = 'am-copy-success-cancel';
             cancelBtn.textContent = '取消';
             cancelBtn.addEventListener('click', () => {
-                popup.remove();
+                closePopup();
             }, { once: true });
+            popup.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                closePopup();
+            });
 
             header.appendChild(icon);
             header.appendChild(title);
@@ -2322,17 +2451,23 @@
             if (!(popup instanceof HTMLElement)) {
                 popup = document.createElement('div');
                 popup.id = 'am-campaign-concurrent-log-popup';
+                document.body.appendChild(popup);
+            }
+            if (!popup.querySelector('.am-concurrent-log-card[aria-labelledby="am-concurrent-log-title"]')) {
+                popup.setAttribute('aria-hidden', 'true');
                 popup.innerHTML = `
-                    <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-label="并发开启执行日志">
+                    <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-labelledby="am-concurrent-log-title">
                         <div class="am-concurrent-log-header">
-                            <span id="am-concurrent-log-title">并发开启执行日志</span>
+                            <div class="am-concurrent-log-heading">
+                                <span class="am-concurrent-log-icon" aria-hidden="true">${renderAmIcon('campaign-concurrent-start', { size: 16, strokeWidth: 2.2 })}</span>
+                                <h3 class="am-concurrent-log-title" id="am-concurrent-log-title">并发开启执行日志</h3>
+                            </div>
                             <button type="button" class="am-concurrent-log-close" aria-label="关闭并发日志">${renderAmIcon('close', { size: 16, strokeWidth: 2.2 })}</button>
                         </div>
-                        <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status">执行中...</div>
-                        <div class="am-concurrent-log-body" id="am-concurrent-log-body"></div>
+                        <div class="am-concurrent-log-status is-running" id="am-concurrent-log-status" role="status" aria-live="polite">执行中...</div>
+                        <div class="am-concurrent-log-body" id="am-concurrent-log-body" role="log" aria-live="polite" aria-relevant="additions text" aria-label="并发开启日志明细" tabindex="0"></div>
                     </div>
                 `;
-                document.body.appendChild(popup);
             }
             this.concurrentLogPopup = popup;
             this.concurrentLogTitleEl = popup.querySelector('#am-concurrent-log-title');
@@ -2341,17 +2476,36 @@
             const closeBtn = popup.querySelector('.am-concurrent-log-close');
             if (closeBtn && !closeBtn.dataset.amBound) {
                 closeBtn.dataset.amBound = '1';
-                closeBtn.addEventListener('click', () => {
-                    if (popup) popup.style.display = 'none';
-                });
+                closeBtn.addEventListener('click', () => this.closeConcurrentLogPopup());
             }
             return popup;
         },
 
-        openConcurrentLogPopup(campaignId, itemId = '') {
+        closeConcurrentLogPopup({ restoreFocus = true } = {}) {
+            const popup = this.concurrentLogPopup;
+            if (popup instanceof HTMLElement) {
+                popup.style.display = 'none';
+                popup.setAttribute('aria-hidden', 'true');
+            }
+            if (this.concurrentLogKeydownHandler) {
+                document.removeEventListener('keydown', this.concurrentLogKeydownHandler, true);
+                this.concurrentLogKeydownHandler = null;
+            }
+            const focusBackEl = this.concurrentLogFocusBackEl;
+            this.concurrentLogFocusBackEl = null;
+            if (restoreFocus && focusBackEl instanceof HTMLElement && focusBackEl.isConnected && typeof focusBackEl.focus === 'function') {
+                requestAnimationFrame(() => focusBackEl.focus({ preventScroll: true }));
+            }
+        },
+
+        openConcurrentLogPopup(campaignId, itemId = '', triggerEl = null) {
             const popup = this.ensureConcurrentLogPopup();
             if (!(popup instanceof HTMLElement)) return;
+            this.concurrentLogFocusBackEl = triggerEl instanceof HTMLElement
+                ? triggerEl
+                : (document.activeElement instanceof HTMLElement ? document.activeElement : null);
             popup.style.display = 'flex';
+            popup.setAttribute('aria-hidden', 'false');
             if (this.concurrentLogTitleEl) {
                 this.concurrentLogTitleEl.textContent = `并发开启执行日志 - 计划${campaignId}${itemId ? ` / 商品${itemId}` : ''}`;
             }
@@ -2359,12 +2513,26 @@
                 this.concurrentLogBodyEl.innerHTML = '';
             }
             this.setConcurrentLogStatus('执行中：正在识别商品计划并准备并发开启', 'running');
+            if (!this.concurrentLogKeydownHandler) {
+                this.concurrentLogKeydownHandler = (event) => {
+                    if (event.key !== 'Escape') return;
+                    if (!(this.concurrentLogPopup instanceof HTMLElement)) return;
+                    if (this.concurrentLogPopup.style.display === 'none') return;
+                    event.preventDefault();
+                    this.closeConcurrentLogPopup();
+                };
+                document.addEventListener('keydown', this.concurrentLogKeydownHandler, true);
+            }
+            const closeBtn = popup.querySelector('.am-concurrent-log-close');
+            if (closeBtn instanceof HTMLElement) {
+                requestAnimationFrame(() => closeBtn.focus({ preventScroll: true }));
+            }
         },
 
         setConcurrentLogStatus(text, level = 'running') {
             this.ensureConcurrentLogPopup();
             if (!(this.concurrentLogStatusEl instanceof HTMLElement)) return;
-            const normalizedLevel = ['running', 'success', 'error'].includes(level) ? level : 'running';
+            const normalizedLevel = ['running', 'success', 'warning', 'error'].includes(level) ? level : 'running';
             this.concurrentLogStatusEl.className = `am-concurrent-log-status is-${normalizedLevel}`;
             this.concurrentLogStatusEl.textContent = String(text || '').trim() || '执行中...';
         },
@@ -4130,6 +4298,9 @@
             return new Promise((resolve, reject) => {
                 const oldPopup = document.getElementById('am-campaign-copy-overview-popup');
                 if (oldPopup) oldPopup.remove();
+                const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                const focusBackTarget = this.createCopyFocusTarget(context, previousActiveElement);
+                const titleId = 'am-copy-overview-title';
                 const rows = Array.isArray(context.previewRows) && context.previewRows.length
                     ? context.previewRows
                     : this.buildCopyOverviewRows(context);
@@ -4137,7 +4308,7 @@
                 popup.id = 'am-campaign-copy-overview-popup';
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
-                popup.setAttribute('aria-label', '复制计划一览');
+                popup.setAttribute('aria-labelledby', titleId);
                 const sourceName = String(context.source?.campaign?.campaignName || context.source?.campaignName || '').trim();
                 const firstRow = rows[0] || {};
                 const lastRow = rows[rows.length - 1] || firstRow;
@@ -4166,13 +4337,13 @@
                     <section class="am-copy-overview-card">
                         <header class="am-copy-overview-header">
                             <div class="am-copy-overview-heading">
-                                <span class="am-copy-overview-icon">!</span>
+                                <span class="am-copy-overview-icon">${renderAmIcon('campaign-copy', { size: 18, strokeWidth: 2.1 })}</span>
                                 <div>
-                                <h3 class="am-copy-overview-title">复制计划一览</h3>
+                                <h3 class="am-copy-overview-title" id="${titleId}">复制计划一览</h3>
                                 <p class="am-copy-overview-subtitle">${this.escapeHtml(sourceName || `源计划 ${context.campaignId || ''}`)} · ${this.escapeHtml(context.sceneName || '')} · 共 ${rows.length} 个</p>
                                 </div>
                             </div>
-                            <button type="button" class="am-copy-overview-close" aria-label="关闭">×</button>
+                            <button type="button" class="am-copy-overview-close" aria-label="关闭">${renderAmIcon('close', { size: 14, strokeWidth: 2.4 })}</button>
                         </header>
                         <div class="am-copy-overview-bulkbar">
                             <div class="am-copy-overview-bulk-group">
@@ -4231,6 +4402,13 @@
                 const bidEndInput = popup.querySelector('[data-am-copy-bulk="bidEnd"]');
                 const bidGradientBtn = popup.querySelector('[data-am-copy-bulk-action="bidGradient"]');
                 const budgetBulkBtn = popup.querySelector('[data-am-copy-bulk-action="budgetAll"]');
+                const restoreFocus = () => {
+                    this.restoreFocusWhenReady(focusBackTarget);
+                };
+                const removePopup = () => {
+                    popup.remove();
+                    restoreFocus();
+                };
                 const rejectCancelled = () => {
                     const err = new Error('已取消复制');
                     err.cancelled = true;
@@ -4259,11 +4437,16 @@
                 };
                 const cancel = () => {
                     if (popup.classList.contains('is-running')) return;
-                    popup.remove();
+                    removePopup();
                     rejectCancelled();
                 };
                 cancelBtn?.addEventListener('click', cancel);
                 closeBtn?.addEventListener('click', cancel);
+                popup.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Escape') return;
+                    event.preventDefault();
+                    cancel();
+                });
                 bidStartInput?.addEventListener('input', () => this.previewCopyBidGradientStep(popup));
                 bidEndInput?.addEventListener('input', () => this.previewCopyBidGradientStep(popup));
                 bidGradientBtn?.addEventListener('click', () => {
@@ -4358,6 +4541,7 @@
                 usedPlanNames,
                 targetOnlineStatus,
                 previewRows,
+                triggerEl,
                 options
             };
         },
@@ -4815,6 +4999,10 @@
             });
         },
 
+        renderBatchPlusChevronIcon() {
+            return `<span class="asiYysjJaJ am-campaign-batch-plus-chevron" data-am-batch-plus-fallback-chevron="1" aria-hidden="true">${renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.2 })}</span>`;
+        },
+
         buildBatchPlusNativeFallback() {
             const host = document.createElement('span');
             host.className = 'wO_WXbzf mxgc-popmenu';
@@ -4823,7 +5011,7 @@
                     <button type="button" class="asiYysjJaL asiYysjJaS-normal asiYysjJaS-custom">
                         <span class="asiYysjJaM">
                             批量+
-                            <span class="asiYysjJaJ"><i class="mxicon mxgc-icon asiYysjJaK"></i></span>
+                            ${this.renderBatchPlusChevronIcon()}
                         </span>
                     </button>
                 </span>
@@ -4839,7 +5027,7 @@
                 || button;
             if (contentEl instanceof HTMLElement) {
                 const arrowHost = contentEl.querySelector('.asiYysjJaJ')?.outerHTML
-                    || '<span class="asiYysjJaJ"><i class="mxicon mxgc-icon asiYysjJaK"></i></span>';
+                    || this.renderBatchPlusChevronIcon();
                 contentEl.innerHTML = `批量+${arrowHost}`;
             }
             root.querySelectorAll('[title], [aria-label]').forEach((el) => {
