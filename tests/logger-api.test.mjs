@@ -126,10 +126,30 @@ test('主面板 P2 样式收敛到统一浅玻璃 token', () => {
     /#am-helper-icon:hover \{[\s\S]*?transform:\s*translateY\(-2px\);[\s\S]*?background:\s*var\(--am26-surface-strong\);[\s\S]*?box-shadow:\s*0 10px 28px rgba\(31,\s*38,\s*135,\s*0\.18\), var\(--am26-glow\);/,
     '悬浮球 hover 应使用克制位移、统一表面 token 和轻阴影'
   );
+  assert.match(
+    uiBlock,
+    /\.am-tools-row \{[\s\S]*?border-radius:\s*14px;[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.56\), 0 4px 14px rgba\(31,\s*53,\s*109,\s*0\.05\);/,
+    '主工具区应收敛为统一浅玻璃控制组'
+  );
+  assert.match(
+    uiBlock,
+    /\.am-tool-label \{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/,
+    '工具按钮文字应防止窄面板溢出'
+  );
   assert.doesNotMatch(
     uiBlock,
     /#am-helper-icon:hover \{[\s\S]*?scale\(1\.08\)/,
     '悬浮球 hover 不应使用大幅缩放'
+  );
+  assert.match(
+    uiBlock,
+    /#am-assist-switches\.open \{[\s\S]*?padding:\s*8px;[\s\S]*?border-color:\s*var\(--am26-border\);[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.52\), 0 4px 14px rgba\(31,\s*53,\s*109,\s*0\.04\);/,
+    '辅助显示展开区应使用统一浅玻璃容器'
+  );
+  assert.match(
+    uiBlock,
+    /\.am-switch-btn\.active \{[\s\S]*?border-color:\s*rgba\(69,\s*84,\s*229,\s*0\.26\);[\s\S]*?background:\s*rgba\(69,\s*84,\s*229,\s*0\.10\);[\s\S]*?color:\s*var\(--am26-primary-strong\);/,
+    '辅助开关 active 态应有清晰品牌状态'
   );
   assert.match(
     uiBlock,
@@ -145,6 +165,11 @@ test('主面板 P2 样式收敛到统一浅玻璃 token', () => {
     uiBlock,
     /#am-log-content \{[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.48\), 0 2px 8px rgba\(31,\s*53,\s*109,\s*0\.04\);/,
     '日志区应使用统一浅玻璃背景、边框和轻阴影'
+  );
+  assert.match(
+    uiBlock,
+    /\.am-log-header \{[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?border-radius:\s*12px;[\s\S]*?background:\s*var\(--am26-surface\);/,
+    '日志头部应使用统一工具条容器'
   );
   assert.match(
     uiBlock,

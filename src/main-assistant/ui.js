@@ -147,9 +147,9 @@
                     position: fixed; top: 120px; right: 20px; z-index: 999999;
                     background: var(--am26-panel-strong);
                     border-radius: 18px;
-                    width: 280px; min-width: 250px; max-width: 500px;
+                    width: 304px; min-width: 280px; max-width: 520px;
                     opacity: 1; transform: scale(1); transform-origin: top right;
-                    transition: opacity 0.3s ease, transform 0.3s ease, width 0.5s ease;
+                    transition: opacity 0.3s ease, transform 0.3s ease, width 0.5s ease, box-shadow 0.24s ease;
                     overflow: hidden;
                 }
                 #am-helper-panel.hidden {
@@ -158,14 +158,15 @@
 
                 /* 头部 */
                 .am-header {
-                    padding: 14px 18px;
+                    padding: 12px 14px 12px 16px;
                     border-bottom: 1px solid var(--am26-border);
-                    background: rgba(255, 255, 255, 0.3);
-                    display: flex; justify-content: space-between; align-items: center;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.22));
+                    display: flex; justify-content: space-between; align-items: center; gap: 10px;
                 }
                 .am-title {
                     font-weight: 600; font-size: 15px; color: var(--am26-text);
                     display: flex; align-items: center; gap: 8px;
+                    min-width: 0;
                     text-shadow: 0 1px 0 rgba(255,255,255,0.4);
                 }
                 .am-title .am-brand-icon {
@@ -173,7 +174,8 @@
                 }
                 .am-version {
                     font-size: 10px; color: var(--am26-text-soft); font-weight: normal;
-                    background: rgba(255,255,255,0.3); padding: 1px 4px; border-radius: 6px;
+                    background: rgba(255,255,255,0.48); padding: 1px 5px; border-radius: 999px;
+                    border: 1px solid rgba(255, 255, 255, 0.48);
                 }
                 .am-icon-btn {
                     cursor: pointer; color: var(--am26-text-soft); font-size: 16px; font-weight: bold;
@@ -197,7 +199,12 @@
                 }
 
                 /* 内容区 */
-                .am-body { padding: 18px; }
+                .am-body {
+                    padding: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
 
 
 
@@ -206,35 +213,47 @@
                     grid-template-columns: repeat(2, minmax(0, 1fr));
                     width: 100%;
                     gap: 8px;
-                    padding: 0 4px;
+                    padding: 8px;
                     margin-bottom: 0;
                     box-sizing: border-box;
+                    border-radius: 14px;
+                    border: 1px solid var(--am26-border);
+                    background: var(--am26-surface);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56), 0 4px 14px rgba(31, 53, 109, 0.05);
                 }
                 .am-tool-btn {
                     position: relative;
-                    border: none;
-                    background: transparent;
+                    border: 1px solid rgba(255, 255, 255, 0.46);
+                    background: rgba(255, 255, 255, 0.56);
                     color: var(--am26-text-soft, #505a74);
                     border-radius: 12px;
-                    padding: 8px 12px;
-                    min-height: 34px;
-                    font-size: 13px;
+                    padding: 0 11px;
+                    min-height: 38px;
+                    font-size: 12px;
                     font-family: inherit;
                     font-weight: 600;
                     line-height: 1;
                     cursor: pointer;
-                    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+                    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
                     display: inline-flex;
                     align-items: center;
                     justify-content: flex-start;
                     gap: 6px;
                     white-space: nowrap;
+                    min-width: 0;
+                    overflow: hidden;
                     box-sizing: border-box;
                 }
                 .am-tool-btn svg {
                     width: 14px;
                     height: 14px;
                     flex: 0 0 14px;
+                }
+                .am-tool-label {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
                 }
                 .am-tool-btn:focus-visible {
                     outline: 2px solid rgba(37, 99, 235, 0.45);
@@ -243,8 +262,10 @@
                 .am-tool-btn:hover,
                 .am-tool-btn.active {
                     background: rgba(255, 255, 255, 0.88);
+                    border-color: var(--am26-border-strong);
                     color: var(--am26-text, #1b2438);
                     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+                    transform: translateY(-1px);
                     font-weight: 700;
                 }
 
@@ -255,20 +276,23 @@
                     overflow: hidden;
                     pointer-events: none;
                     margin-top: 0;
-                    padding: 0 10px;
-                    border-radius: 12px;
+                    padding: 0;
+                    border-radius: 14px;
                     border: 1px solid transparent;
                     background: transparent;
-                    transition: max-height 0.32s ease, opacity 0.24s ease, transform 0.32s ease, margin-top 0.32s ease, padding 0.32s ease, border-color 0.32s ease;
+                    box-shadow: none;
+                    transition: max-height 0.32s ease, opacity 0.24s ease, transform 0.32s ease, margin-top 0.32s ease, padding 0.32s ease, border-color 0.32s ease, background 0.32s ease, box-shadow 0.32s ease;
                 }
                 #am-assist-switches.open {
-                    max-height: 220px;
+                    max-height: 240px;
                     opacity: 1;
                     transform: translateY(0);
                     pointer-events: auto;
-                    margin-top: 8px;
-                    padding: 4px 0;
-                    border-color: transparent;
+                    margin-top: 0;
+                    padding: 8px;
+                    border-color: var(--am26-border);
+                    background: var(--am26-surface);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 4px 14px rgba(31, 53, 109, 0.04);
                 }
 
                 .am-switches-grid {
@@ -276,14 +300,14 @@
                     grid-template-columns: repeat(2, 1fr);
                     gap: 8px;
                     background: transparent;
-                    padding: 8px 4px;
+                    padding: 0;
                     border-radius: 0;
                     border: none;
                     box-shadow: none;
                 }
                 .am-switch-btn {
-                    border: 1px solid transparent;
-                    background: rgba(255, 255, 255, 0.9);
+                    border: 1px solid rgba(255, 255, 255, 0.42);
+                    background: rgba(255, 255, 255, 0.62);
                     color: var(--am26-text, #1b2438);
                     border-radius: 999px;
                     font-size: 11px;
@@ -291,7 +315,8 @@
                     line-height: 1.2;
                     font-weight: 600;
                     cursor: pointer;
-                    padding: 5px 12px;
+                    min-height: 28px;
+                    padding: 6px 10px;
                     display: inline-flex;
                     width: 100%;
                     align-items: center;
@@ -311,7 +336,7 @@
                     transition: all 0.2s;
                 }
                 .am-switch-btn:hover {
-                    transform: translateY(-2px);
+                    transform: translateY(-1px);
                     box-shadow: 0 6px 14px rgba(31, 53, 109, 0.12);
                     border-color: var(--am26-border-strong);
                     background: var(--am26-surface-strong);
@@ -321,11 +346,16 @@
                     outline-offset: 2px;
                 }
                 .am-switch-btn:not(.active) {
-                    opacity: 0.5;
-                    border-color: transparent;
+                    opacity: 0.78;
+                    border-color: rgba(255, 255, 255, 0.24);
                     box-shadow: none;
-                    background: transparent;
+                    background: rgba(255, 255, 255, 0.28);
                     transform: none;
+                }
+                .am-switch-btn.active {
+                    border-color: rgba(69, 84, 229, 0.26);
+                    background: rgba(69, 84, 229, 0.10);
+                    color: var(--am26-primary-strong);
                 }
                 .am-switch-btn:not(.active)::before {
                     background: rgba(80, 90, 116, 0.28);
@@ -1369,15 +1399,23 @@
                 }
 
                 /* 日志区 */
-                .am-log-section { margin-top: 16px; }
+                .am-log-section { margin-top: 0; }
                 .am-log-header {
                     display: flex; justify-content: space-between; align-items: center;
-                    font-size: 12px; color: var(--am26-text-soft); margin-bottom: 8px; padding: 0 4px;
+                    gap: 8px;
+                    font-size: 12px; color: var(--am26-text-soft); margin-bottom: 8px; padding: 6px 8px;
+                    border: 1px solid var(--am26-border);
+                    border-radius: 12px;
+                    background: var(--am26-surface);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48), 0 2px 8px rgba(31, 53, 109, 0.04);
                 }
                 .am-log-title {
                     display: inline-flex;
                     align-items: center;
                     gap: 6px;
+                    min-width: 0;
+                    font-weight: 700;
+                    color: var(--am26-text);
                 }
                 .am-log-title svg {
                     width: 14px;
@@ -1385,21 +1423,25 @@
                     flex: 0 0 14px;
                 }
                 .am-action-btn {
-                    cursor: pointer; color: var(--am26-text-soft); margin-left: 10px;
-                    padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
-                    background: rgba(255,255,255,0.2);
-                    border: 0;
+                    cursor: pointer; color: var(--am26-text-soft); margin-left: 6px;
+                    min-height: 24px;
+                    padding: 3px 9px; border-radius: 999px; transition: all 0.2s;
+                    background: rgba(255,255,255,0.46);
+                    border: 1px solid rgba(255, 255, 255, 0.38);
                     font: inherit;
+                    font-weight: 600;
                     appearance: none;
                     -webkit-appearance: none;
                 }
                 .am-action-btn:hover {
-                    background: rgba(255, 255, 255, 0.5);
+                    background: rgba(255, 255, 255, 0.82);
                     color: var(--am26-primary-strong);
+                    border-color: var(--am26-border-strong);
                 }
                 .am-action-btn:focus-visible {
-                    background: rgba(255, 255, 255, 0.5);
+                    background: rgba(255, 255, 255, 0.82);
                     color: var(--am26-primary-strong);
+                    border-color: var(--am26-border-strong);
                     outline: 2px solid rgba(69, 84, 229, 0.32);
                     outline-offset: 2px;
                 }
@@ -1627,19 +1669,19 @@
                 <div class="am-tools-row">
                     <button type="button" class="am-tool-btn" id="am-trigger-optimizer">
                         ${renderAmIcon('shield-check', { size: 16 })}
-                        算法护航
+                        <span class="am-tool-label">算法护航</span>
                     </button>
                     <button type="button" class="am-tool-btn" id="am-trigger-keyword-plan-api">
                         ${renderAmIcon('plan', { size: 16 })}
-                        组建计划
+                        <span class="am-tool-label">组建计划</span>
                     </button>
                     <button type="button" class="am-tool-btn" id="am-trigger-magic-report">
                         ${renderAmIcon('chart', { size: 16 })}
-                        万能查数
+                        <span class="am-tool-label">万能查数</span>
                     </button>
                     <button type="button" class="am-tool-btn" id="am-toggle-assist-display" aria-expanded="false" aria-controls="am-assist-switches" aria-pressed="false">
                         ${renderAmIcon('eye', { size: 16 })}
-                        辅助显示
+                        <span class="am-tool-label">辅助显示</span>
                     </button>
                 </div>
 

@@ -1,3 +1,59 @@
+# TODO - 2026-05-30 全页面 UI 规范逐页优化
+
+## 需求规格
+- 目标：按 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md` 逐页优化插件所有页面/入口；每完成一个页面切片，必须完成 Chrome MCP 运行态验证、记录结果、中文 commit 并 push，再进入下一个页面。
+- 范围：按页面/入口拆分推进，优先 P0：悬浮球+主面板/辅助显示、万能查数/人群看板、算法护航、组建计划主向导、矩阵配置、场景配置弹窗、提交确认、行内复制/并发/批量+；P1/P2 后续继续覆盖下载捕获、商品选择弹窗、extension 注入提示、潜力词导出、授权管理页。
+- 设计约束：浅色玻璃拟态、高密度后台工作台、复用 `--am26-*` token、共享 `renderAmIcon()` 图标、紧凑控件、状态可见、无卡片套卡片、无 emoji/1024 iconfont、文本不溢出。
+- 安全边界：真实页面验收默认只读；不点击创建、投放、提交、删除、扣费入口。提交类页面只验证弹窗打开、布局、取消/关闭和 dry-run/受保护路径，除非用户另行明确授权。
+- 成功标准：每个页面切片都有源码/测试/构建同步、Chrome MCP 页面身份/DOM/截图/控制台核对、`tasks/todo.md` 复盘、中文 commit 和 push。
+
+## 执行计划（可核对）
+- [x] 使用不少于 3 个子代理完成页面清单、设计约束、验证路径并行梳理。
+- [x] 页面 1：悬浮球 + 主面板 + 辅助显示展开区。
+- [ ] 页面 2：万能查数弹窗 + 人群对比看板入口。
+- [ ] 页面 3：算法护航主面板 + 执行结果浮层。
+- [ ] 页面 4：组建计划主向导首页/日志区。
+- [ ] 页面 5：组建计划矩阵配置页。
+- [ ] 页面 6：建计划商品选择弹窗。
+- [ ] 页面 7：场景配置/策略详情/高级设置弹窗。
+- [ ] 页面 8：建计划提交确认弹窗。
+- [ ] 页面 9：计划行复制入口 + 一览/成功弹窗。
+- [ ] 页面 10：计划行并发开启入口 + 日志弹窗。
+- [ ] 页面 11：批量+ 菜单 + 批量确认弹窗。
+- [ ] 页面 12：下载捕获面板。
+- [ ] 页面 13：潜力词日维度导出入口。
+- [ ] 页面 14：extension 注入/授权可见状态。
+- [ ] 页面 15：授权管理页。
+
+## 高层操作摘要
+- 已读取外部 `AGENT-v2.md`、本仓库 `AGENTS.md`、`tasks/lessons.md`、统一 UI/图标规范。
+- 已完成 3 个只读子代理：页面入口清单、设计/代码/验证约束、构建与 Chrome MCP 验证路径。
+- 当前从页面 1 开始，优先保证主入口更像统一工作台：标题、主操作、辅助开关、日志状态清晰且可扫描。
+- 页面 1 已完成：主工具区改为统一浅玻璃控制组，辅助显示展开区改为浅玻璃胶囊开关组，日志头改为同体系工具条；工具按钮文字增加 `am-tool-label`，避免窄面板溢出。
+
+## 验证记录
+- 页面 1 自动化：
+  - `node --test tests/logger-api.test.mjs tests/magic-report-panel-resilience.test.mjs tests/icon-system-regression.test.mjs`：通过，26/26。
+  - `node --check src/main-assistant/ui.js`：通过。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+- 页面 1 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，硬刷新真实 `one.alimama.com` 关键词推广详情页。
+  - 页面身份：`关键词推广详情页_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218`。
+  - 交互：打开悬浮球主面板，点击“辅助显示”，`aria-expanded="true"`，辅助开关 `aria-pressed` 与 active 状态同步。
+  - 样式核对：主面板宽度 `304px`；`.am-tools-row`、`#am-assist-switches.open`、`.am-log-header` 均为 `var(--am26-surface)` 背景、统一边框和浅玻璃阴影；工具文字 `am-tool-label` 正常渲染。
+  - 截图：`tasks/ui-page1-main-panel-before-2026-05-30.png`、`tasks/ui-page1-main-panel-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED`，未发现插件 UI 相关运行时异常。
+
+## 结果复盘
+- 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
+- 页面 1 风险：本次只覆盖桌面真实页面视口；移动/窄屏只由 CSS `max-width` 和文字省略保护，后续如主面板需要移动端专门验收再补。
+- 页面 1 回滚：回退 `src/main-assistant/ui.js`、`tests/logger-api.test.mjs`、构建产物和两张任务截图即可。
+
+---
+
 # TODO - 2026-05-30 关键词推广复制计划关键词未落库返修
 
 ## 需求规格
