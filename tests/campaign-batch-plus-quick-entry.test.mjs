@@ -48,6 +48,7 @@ test('批量+ 菜单覆盖批量计划设置缺失的首批能力', () => {
     assert.match(quickEntry, /document\.addEventListener\('mouseout'[\s\S]*?scheduleBatchPlusMenuClose\(\)/, '批量+鼠标移出按钮和菜单后应延迟关闭');
     assert.match(quickEntry, /isInsideOpenBatchPlusSurface\(node\)[\s\S]*?menu\.contains\(node\)[\s\S]*?trigger\.contains\(node\)/, '批量+菜单内移动不得误关闭弹层');
     assert.match(quickEntry, /const batchPlusItem = target\.closest\('\[data-am-campaign-batch-plus-action\]'\)/, '缺少批量+菜单项点击入口');
+    assert.match(quickEntry, /const focusBackTarget = this\.getOpenBatchPlusTrigger\(\)[\s\S]*?this\.closeBatchPlusMenu\(\)[\s\S]*?this\.runBatchPlusAction\(action,\s*bizCode,\s*focusBackTarget \|\| batchPlusItem\)/, '点击菜单项后应在菜单移除前记录批量+触发器用于确认窗关闭回焦');
     assert.match(quickEntry, /const batchPlusBtn = target\.closest\('\[data-am-campaign-batch-plus="1"\]'\)/, '缺少批量+按钮点击入口');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu\s*\{[\s\S]*?min-width:\s*120px;[\s\S]*?box-shadow:/, '批量+菜单应按原生 popmenu 尺寸渲染');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item\.is-danger/, '批量删除菜单项应有危险态样式');
@@ -64,11 +65,24 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     assert.match(quickEntry, /renderBatchPlusChevronIcon\(\)[\s\S]*?data-am-batch-plus-fallback-chevron="1"[\s\S]*?renderAmIcon\('chevron-down'/, '批量+ fallback 箭头应使用共享 chevron 图标');
     assert.doesNotMatch(quickEntry, /\uE646/, '批量+源码不得再自造私有字体箭头字符');
     assert.match(confirmDialogBlock, /popup\.setAttribute\('aria-labelledby',\s*titleId\)/, '批量确认弹窗应通过标题建立可访问名称');
+    assert.match(confirmDialogBlock, /const bodyId = `am-campaign-batch-confirm-body-/, '批量确认弹窗应生成稳定正文 id');
+    assert.match(confirmDialogBlock, /popup\.setAttribute\('aria-describedby',\s*bodyId\)/, '批量确认弹窗应通过正文建立可访问描述');
+    assert.match(confirmDialogBlock, /body\.id = bodyId/, '批量确认正文节点应挂载 aria-describedby 对应 id');
     assert.match(confirmDialogBlock, /icon\.innerHTML = renderAmIcon\(danger \? 'x-circle' : 'alert-triangle'/, '批量确认弹窗应使用共享 SVG 告警/危险图标');
     assert.doesNotMatch(confirmDialogBlock, /icon\.textContent = '!'/, '批量确认弹窗不得使用文本感叹号作为功能图标');
-    assert.match(confirmDialogBlock, /previousActiveElement[\s\S]*?focus\(\{ preventScroll: true \}\)/, '批量确认弹窗关闭后应恢复焦点');
+    assert.match(confirmDialogBlock, /focusBackTarget = null/, '批量确认弹窗应支持外部传入回焦目标');
+    assert.match(confirmDialogBlock, /const focusableSelector = 'button, \[href\], input, select, textarea, \[tabindex\]:not\(\[tabindex="-1"\]\)'/, '批量确认弹窗应复用可聚焦选择器');
+    assert.match(confirmDialogBlock, /const resolveFocusTarget = \(candidate\) => \{[\s\S]*?candidate\.querySelector\(focusableSelector\)[\s\S]*?isFocusableElement\(nested\) \? nested : null/, '批量确认弹窗应能把外层触发器解析到内部可聚焦按钮');
+    assert.match(confirmDialogBlock, /const focusTarget = resolveFocusTarget\(focusBackTarget\) \|\| resolveFocusTarget\(previousActiveElement\)[\s\S]*?focusTarget\.focus\(\{ preventScroll: true \}\)/, '批量确认弹窗关闭后应优先恢复到批量+触发器内部按钮，兜底恢复原焦点');
+    assert.match(confirmDialogBlock, /const getFocusableElements = \(\) => Array\.from\(popup\.querySelectorAll\(focusableSelector\)\)[\s\S]*?\.filter\(isFocusableElement\)/, '批量确认弹窗应收集弹窗内可聚焦元素');
+    assert.match(confirmDialogBlock, /event\.key !== 'Tab'[\s\S]*?const focusable = getFocusableElements\(\)/, '批量确认弹窗应处理 Tab 焦点循环');
+    assert.match(confirmDialogBlock, /event\.preventDefault\(\);[\s\S]*?const activeIndex = focusable\.indexOf\(document\.activeElement\)/, '批量确认弹窗应完全接管 Tab 默认焦点移动');
+    assert.match(confirmDialogBlock, /const direction = event\.shiftKey \? -1 : 1[\s\S]*?const nextIndex = activeIndex >= 0[\s\S]*?\(activeIndex \+ direction \+ focusable\.length\) % focusable\.length/, '批量确认弹窗 Tab/Shift+Tab 应按方向循环计算下一焦点');
+    assert.match(confirmDialogBlock, /focusable\[nextIndex\]\.focus\(\{ preventScroll: true \}\)/, '批量确认弹窗应把焦点移动到循环后的下一项');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu\s*\{[\s\S]*?border:\s*1px solid var\(--am26-border[\s\S]*?background:\s*var\(--am26-panel-strong[\s\S]*?box-shadow:\s*var\(--am26-shadow/, '批量+菜单应使用统一 token');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item:focus-visible[\s\S]*?outline:\s*2px solid/, '批量+菜单项应有可见 focus 态');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.78\),\s*rgba\(255,\s*255,\s*255,\s*0\.48\)\);[\s\S]*?backdrop-filter:\s*blur\(8px\) saturate\(1\.15\);/, '批量确认弹窗外层应使用白色玻璃渐变遮罩');
+    assert.doesNotMatch(quickEntryStyle, /#am-campaign-batch-confirm-popup\s*\{[\s\S]*?background:\s*rgba\(15,\s*23,\s*42,\s*0\.42\)/, '批量确认弹窗外层不得回退为深灰遮罩');
     assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-card\s*\{[\s\S]*?width:\s*min\(360px,\s*calc\(100vw - 28px\)\);[\s\S]*?border:\s*1px solid var\(--am26-border[\s\S]*?border-radius:\s*18px[\s\S]*?background:\s*var\(--am26-panel-strong/, '批量确认弹窗应使用 360px 阅读宽度和统一面板 token');
     assert.doesNotMatch(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-card\s*\{[\s\S]*?width:\s*min\(320px,\s*calc\(100vw - 28px\)\);/, '批量确认弹窗宽度不应回退到 320px');
     assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-submit,[\s\S]*?border-radius:\s*10px/, '批量确认按钮圆角应符合统一按钮口径');
@@ -91,24 +105,43 @@ test('批量+ 读取表格勾选计划并按业务线分组', () => {
 });
 
 test('批量开启与批量暂停使用原生状态接口且有二次确认', () => {
+    const batchStatusBlock = quickEntry.slice(
+        quickEntry.indexOf('async runBatchUpdateCampaignStatus'),
+        quickEntry.indexOf('async runBatchDeleteCampaigns')
+    );
     assert.match(quickEntry, /getBatchStatusActionMeta\(action = ''\)[\s\S]*?normalized === 'start'[\s\S]*?onlineStatus:\s*1[\s\S]*?label:\s*'批量开启'/, '批量开启应映射到 onlineStatus=1');
     assert.match(quickEntry, /getBatchStatusActionMeta\(action = ''\)[\s\S]*?normalized === 'pause'[\s\S]*?onlineStatus:\s*0[\s\S]*?label:\s*'批量暂停'/, '批量暂停应映射到 onlineStatus=0');
-    assert.match(quickEntry, /runBatchUpdateCampaignStatus\(action = '',\s*contexts = \[\],\s*fallbackBizCode = ''\)/, '缺少批量状态执行函数');
-    assert.match(quickEntry, /openBatchPlusConfirmDialog\(\{[\s\S]*?title:\s*`确认\$\{meta\.verb\}计划`[\s\S]*?message:\s*`确认\$\{meta\.verb\}选中的 \$\{ids\.length\} 个\$\{sceneName\}计划/, '批量开启/暂停前必须二次确认');
+    assert.match(quickEntry, /runBatchUpdateCampaignStatus\(action = '',\s*contexts = \[\],\s*fallbackBizCode = '',\s*triggerEl = null\)/, '缺少批量状态执行函数');
+    assert.match(quickEntry, /openBatchPlusConfirmDialog\(\{[\s\S]*?title:\s*`确认\$\{meta\.verb\}计划`[\s\S]*?message:\s*`确认\$\{meta\.verb\}选中的 \$\{ids\.length\} 个\$\{sceneName\}计划[\s\S]*?focusBackTarget:\s*triggerEl/, '批量开启/暂停前必须二次确认并传入回焦目标');
     assert.match(quickEntry, /updateCampaignStatusBatchByBiz\(campaignIds = \[\],\s*bizCode,\s*onlineStatus,\s*authContext\)[\s\S]*?campaign\/updatePart\.json\?\$\{query\.toString\(\)\}[\s\S]*?displayStatus:\s*status === 1 \? 'start' : 'pause'/, '批量开启/暂停应调用原生 campaign/updatePart.json 并写 displayStatus');
     assert.match(quickEntry, /runBatchUpdateCampaignStatus\(action = '',[\s\S]*?updateCampaignStatusBatchByBiz\(list\.map\(item => item\.campaignId\),\s*bizCode,\s*meta\.onlineStatus,\s*authContext\)/, '批量状态执行应按业务线分组调用状态接口');
-    assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'start' \|\| action === 'pause'\)[\s\S]*?runBatchUpdateCampaignStatus\(action,\s*contexts,\s*normalizedBizCode\)/, '批量+ start/pause 动作应接入状态流程');
-    assert.match(quickEntry, /window\.setTimeout\(\(\) => window\.location\.reload\(\),\s*600\)/, '批量状态变更成功后应刷新列表');
+    assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'start' \|\| action === 'pause'\)[\s\S]*?runBatchUpdateCampaignStatus\(action,\s*contexts,\s*normalizedBizCode,\s*triggerEl\)/, '批量+ start/pause 动作应接入状态流程');
+    assert.match(batchStatusBlock, /refreshCampaignListOnly\(\{[\s\S]*?reason:\s*meta\.label/, '批量状态变更成功后应只刷新计划列表');
+    assert.doesNotMatch(batchStatusBlock, /window\.location\.reload\(\)/, '批量状态变更成功后不得整页刷新');
 });
 
 test('批量删除使用原生删除接口且有二次确认', () => {
+    const batchDeleteBlock = quickEntry.slice(
+        quickEntry.indexOf('async runBatchDeleteCampaigns'),
+        quickEntry.indexOf('getDisplayCrowdDateRange()')
+    );
     assert.match(quickEntry, /deleteCampaignsBatchByBiz\(campaignIds = \[\],\s*bizCode = '',\s*authContext = \{\}\)/, '缺少批量删除执行函数');
     assert.match(quickEntry, /campaign\/delete\.json\?\$\{query\.toString\(\)\}/, '批量删除应调用原生 campaign/delete.json');
     assert.match(quickEntry, /campaignIdList:\s*normalizedIds\.map\(id => Number\(id\)\)/, '批量删除应提交 campaignIdList');
-    assert.match(quickEntry, /openBatchPlusConfirmDialog\(\{[\s\S]*?title:\s*'确认删除计划'[\s\S]*?message:\s*`确认删除选中的 \$\{ids\.length\} 个\$\{sceneName\}计划/, '批量删除前必须二次确认');
+    assert.match(quickEntry, /openBatchPlusConfirmDialog\(\{[\s\S]*?title:\s*'确认删除计划'[\s\S]*?message:\s*`确认删除选中的 \$\{ids\.length\} 个\$\{sceneName\}计划[\s\S]*?focusBackTarget:\s*triggerEl/, '批量删除前必须二次确认并传入回焦目标');
     assert.doesNotMatch(quickEntry, /window\.confirm\(/, '批量删除不得使用浏览器原生 confirm');
-    assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'delete'\)[\s\S]*?runBatchDeleteCampaigns/, '批量+ delete 动作应接入删除流程');
-    assert.match(quickEntry, /window\.setTimeout\(\(\) => window\.location\.reload\(\),\s*600\)/, '批量删除成功后应刷新列表');
+    assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'delete'\)[\s\S]*?runBatchDeleteCampaigns\(contexts,\s*normalizedBizCode,\s*triggerEl\)/, '批量+ delete 动作应接入删除流程');
+    assert.match(batchDeleteBlock, /refreshCampaignListOnly\(\{[\s\S]*?reason:\s*'批量删除'/, '批量删除成功后应只刷新计划列表');
+    assert.doesNotMatch(batchDeleteBlock, /window\.location\.reload\(\)/, '批量删除成功后不得整页刷新');
+});
+
+test('批量+ 成功后复用原生计划列表刷新而不整页 reload', () => {
+    assert.match(quickEntry, /findCampaignListVframe\(magixRef = null,\s*bizCode = ''\)[\s\S]*?expectedViewPath = `onebp\/views\/pages\/manage\/\$\{listPath\}\/campaign-list`/, '应按当前业务线定位官方计划列表 VFrame');
+    assert.match(quickEntry, /refreshCampaignListVframe\(bizCode = ''\)[\s\S]*?const methods = \['render',\s*'asyncRenderData'\][\s\S]*?vf\.invoke\(method,\s*\[\]\)/, '局部刷新应优先复用官方列表 render 以重新拉取 findPage 列表');
+    assert.match(quickEntry, /triggerCampaignListSearchRefresh\(\)[\s\S]*?findCopySuccessPlanNameSearchInput\(\)[\s\S]*?dispatchCopySuccessSearchEnter\(input\)/, '局部刷新应可触发原生列表搜索框回车刷新');
+    assert.match(quickEntry, /refreshCampaignListOnlyNow\(\{ bizCode = '',\s*reason = '批量操作' \} = \{\}\)[\s\S]*?refreshCampaignListVframe\(targetBizCode\)[\s\S]*?vframeTriggered \? false : this\.triggerCampaignListSearchRefresh\(\)/, '成功收尾应优先刷新列表 VFrame，找不到时再回车触发搜索刷新');
+    assert.match(quickEntry, /refreshCampaignListOnly\(options = \{\}\)[\s\S]*?window\.setTimeout\(\(\) => \{[\s\S]*?refreshCampaignListOnlyNow\(options\)/, '成功收尾应延迟触发局部列表刷新');
+    assert.doesNotMatch(quickEntry, /window\.location\.reload\(\)/, '批量+ 成功收尾不得再整页刷新');
 });
 
 test('人群推广屏蔽人群与人群设置走官方接口且不跳转', () => {

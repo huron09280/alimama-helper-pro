@@ -38,8 +38,9 @@
 
                     const action = String(batchPlusItem.getAttribute('data-am-campaign-batch-plus-action') || '').trim();
                     const bizCode = this.normalizeBizCode(batchPlusItem.getAttribute('data-biz-code') || batchPlusItem.dataset?.bizCode || '');
+                    const focusBackTarget = this.getOpenBatchPlusTrigger();
                     this.closeBatchPlusMenu();
-                    this.runBatchPlusAction(action, bizCode, batchPlusItem).catch((err) => {
+                    this.runBatchPlusAction(action, bizCode, focusBackTarget || batchPlusItem).catch((err) => {
                         Logger.log(`⚠️ 批量+执行失败：${err?.message || '未知错误'} `, true);
                     });
                     return;
@@ -533,7 +534,7 @@
             };
         },
 
-        openBatchPlusConfirmDialog({ title = '确认操作', message = '', confirmLabel = '确定', cancelLabel = '取消', danger = false } = {}) {
+        openBatchPlusConfirmDialog({ title = '确认操作', message = '', confirmLabel = '确定', cancelLabel = '取消', danger = false, focusBackTarget = null } = {}) {
             return new Promise((resolve) => {
                 const oldPopup = document.getElementById('am-campaign-batch-confirm-popup');
                 if (oldPopup) oldPopup.remove();
@@ -541,10 +542,12 @@
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-batch-confirm-popup';
                 const titleId = `am-campaign-batch-confirm-title-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                const bodyId = `am-campaign-batch-confirm-body-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
                 const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
                 popup.setAttribute('aria-labelledby', titleId);
+                popup.setAttribute('aria-describedby', bodyId);
 
                 const card = document.createElement('section');
                 card.className = 'am-batch-confirm-card';
@@ -559,6 +562,7 @@
                 titleEl.className = 'am-batch-confirm-title';
                 titleEl.textContent = title;
                 const body = document.createElement('pre');
+                body.id = bodyId;
                 body.className = 'am-batch-confirm-body';
                 body.textContent = String(message || '');
                 const footer = document.createElement('div');
@@ -573,20 +577,48 @@
                 cancelBtn.textContent = cancelLabel;
 
                 let settled = false;
+                const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+                const isFocusableElement = (el) => el instanceof HTMLElement
+                    && !el.matches(':disabled')
+                    && el.getClientRects().length > 0;
+                const getFocusableElements = () => Array.from(popup.querySelectorAll(focusableSelector))
+                    .filter(isFocusableElement);
+                const resolveFocusTarget = (candidate) => {
+                    if (!(candidate instanceof HTMLElement) || !candidate.isConnected) return null;
+                    if (isFocusableElement(candidate)) return candidate;
+                    const nested = candidate.querySelector(focusableSelector);
+                    return isFocusableElement(nested) ? nested : null;
+                };
                 const close = (confirmed) => {
                     if (settled) return;
                     settled = true;
                     document.removeEventListener('keydown', onKeydown, true);
                     popup.remove();
-                    if (previousActiveElement?.isConnected) {
-                        requestAnimationFrame(() => previousActiveElement.focus({ preventScroll: true }));
+                    const focusTarget = resolveFocusTarget(focusBackTarget) || resolveFocusTarget(previousActiveElement);
+                    if (focusTarget?.isConnected) {
+                        requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
                     }
                     resolve(!!confirmed);
                 };
                 const onKeydown = (event) => {
-                    if (event.key !== 'Escape') return;
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        close(false);
+                        return;
+                    }
+                    if (event.key !== 'Tab') return;
+                    const focusable = getFocusableElements();
+                    if (!focusable.length) {
+                        event.preventDefault();
+                        return;
+                    }
                     event.preventDefault();
-                    close(false);
+                    const activeIndex = focusable.indexOf(document.activeElement);
+                    const direction = event.shiftKey ? -1 : 1;
+                    const nextIndex = activeIndex >= 0
+                        ? (activeIndex + direction + focusable.length) % focusable.length
+                        : (event.shiftKey ? focusable.length - 1 : 0);
+                    focusable[nextIndex].focus({ preventScroll: true });
                 };
                 confirmBtn.addEventListener('click', () => close(true), { once: true });
                 cancelBtn.addEventListener('click', () => close(false), { once: true });
@@ -627,7 +659,7 @@
             return null;
         },
 
-        async runBatchUpdateCampaignStatus(action = '', contexts = [], fallbackBizCode = '') {
+        async runBatchUpdateCampaignStatus(action = '', contexts = [], fallbackBizCode = '', triggerEl = null) {
             const meta = this.getBatchStatusActionMeta(action);
             if (!meta) {
                 Logger.log(`⚠️ 未识别的批量状态动作：${action || '-'}`, true);
@@ -648,7 +680,8 @@
                 title: `确认${meta.verb}计划`,
                 message: `确认${meta.verb}选中的 ${ids.length} 个${sceneName}计划？\n该操作会调用原生${meta.label}接口，请确认这些计划都可以${meta.verb}。`,
                 confirmLabel: `确认${meta.verb}`,
-                cancelLabel: '取消'
+                cancelLabel: '取消',
+                focusBackTarget: triggerEl
             });
             if (!confirmed) {
                 Logger.log(`已取消${meta.label}`);
@@ -672,10 +705,13 @@
                 return;
             }
             Logger.log(`✅ ${meta.label}完成：${successCount} 个计划`);
-            window.setTimeout(() => window.location.reload(), 600);
+            this.refreshCampaignListOnly({
+                bizCode: fallbackBizCode || selected[0]?.bizCode || this.DEFAULT_BIZ_CODE,
+                reason: meta.label
+            });
         },
 
-        async runBatchDeleteCampaigns(contexts = [], fallbackBizCode = '') {
+        async runBatchDeleteCampaigns(contexts = [], fallbackBizCode = '', triggerEl = null) {
             const selected = Array.isArray(contexts) ? contexts : [];
             if (!selected.length) {
                 Logger.log('⚠️ 请先勾选需要批量删除的计划', true);
@@ -688,7 +724,8 @@
                 message: `确认删除选中的 ${ids.length} 个${sceneName}计划？\n该操作会调用原生删除接口，请确认这些计划都可以删除。`,
                 confirmLabel: '确认删除',
                 cancelLabel: '取消',
-                danger: true
+                danger: true,
+                focusBackTarget: triggerEl
             });
             if (!confirmed) {
                 Logger.log('已取消批量删除');
@@ -712,7 +749,10 @@
                 return;
             }
             Logger.log(`✅ 批量删除完成：${successCount} 个计划`);
-            window.setTimeout(() => window.location.reload(), 600);
+            this.refreshCampaignListOnly({
+                bizCode: fallbackBizCode || selected[0]?.bizCode || this.DEFAULT_BIZ_CODE,
+                reason: '批量删除'
+            });
         },
 
         getDisplayCrowdDateRange() {
@@ -1287,6 +1327,88 @@
             return null;
         },
 
+        getCampaignListPathByBizCode(bizCode = '') {
+            const normalizedBizCode = this.normalizeBizCode(bizCode) || this.getCurrentCampaignBizCode() || this.DEFAULT_BIZ_CODE;
+            if (normalizedBizCode === 'onebpDisplay') return 'display';
+            if (normalizedBizCode === 'onebpSite') return 'onesite';
+            if (normalizedBizCode === 'onebpAdStrategyLiuZi') return 'hky';
+            return 'search';
+        },
+
+        findCampaignListVframe(magixRef = null, bizCode = '') {
+            const Vframe = magixRef?.Vframe;
+            if (!Vframe || typeof Vframe.all !== 'function') return null;
+            const all = Vframe.all() || {};
+            const listPath = this.getCampaignListPathByBizCode(bizCode);
+            const preferredId = `universalBP_common_layout_main_content_${listPath}_campaign_list`;
+            const expectedViewPath = `onebp/views/pages/manage/${listPath}/campaign-list`;
+            const isUsable = (vf, id = '') => {
+                if (!vf || typeof vf.invoke !== 'function') return false;
+                const root = id ? document.getElementById(id) : null;
+                const rootView = String(root?.getAttribute('mx-view') || '');
+                const vfPath = String(vf.path || vf.$v?.path || vf.$v?.tmpl || '');
+                return rootView.includes(expectedViewPath) || vfPath.includes(expectedViewPath);
+            };
+            const preferred = typeof Vframe.get === 'function' ? Vframe.get(preferredId) : all[preferredId];
+            if (isUsable(preferred, preferredId)) return preferred;
+            const ids = Object.keys(all);
+            for (let i = 0; i < ids.length; i++) {
+                const id = ids[i];
+                if (isUsable(all[id], id)) return all[id];
+            }
+            return null;
+        },
+
+        async refreshCampaignListVframe(bizCode = '') {
+            const magixRef = await this.getPageMagix();
+            const vf = this.findCampaignListVframe(magixRef, bizCode);
+            if (!vf || typeof vf.invoke !== 'function') return false;
+            const methods = ['render', 'asyncRenderData'];
+            for (const method of methods) {
+                try {
+                    const result = vf.invoke(method, []);
+                    if (result && typeof result.then === 'function') await result;
+                    return true;
+                } catch (err) {
+                    // Try the next official list render method before reporting fallback.
+                }
+            }
+            return false;
+        },
+
+        triggerCampaignListSearchRefresh() {
+            const input = this.findCopySuccessPlanNameSearchInput();
+            if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLTextAreaElement)) return false;
+            try {
+                input.focus({ preventScroll: true });
+            } catch (err) {
+                input.focus();
+            }
+            this.dispatchCopySuccessSearchEnter(input);
+            return true;
+        },
+
+        async refreshCampaignListOnlyNow({ bizCode = '', reason = '批量操作' } = {}) {
+            const targetBizCode = this.normalizeBizCode(bizCode) || this.getCurrentCampaignBizCode() || this.DEFAULT_BIZ_CODE;
+            const vframeTriggered = await this.refreshCampaignListVframe(targetBizCode);
+            const searchTriggered = vframeTriggered ? false : this.triggerCampaignListSearchRefresh();
+            if (searchTriggered || vframeTriggered) {
+                Logger.log(`✅ ${reason}后已刷新计划列表`);
+                return true;
+            }
+            Logger.log(`⚠️ ${reason}已完成，但未找到可复用的原生列表刷新入口，请手动刷新计划列表`, true);
+            return false;
+        },
+
+        refreshCampaignListOnly(options = {}) {
+            const delay = Number.isFinite(Number(options?.delay)) ? Number(options.delay) : 600;
+            window.setTimeout(() => {
+                this.refreshCampaignListOnlyNow(options).catch((err) => {
+                    Logger.log(`⚠️ ${options?.reason || '批量操作'}已完成，但自动刷新计划列表失败：${err?.message || err}`, true);
+                });
+            }, delay);
+        },
+
         openDisplayBlackCrowdEditorModal({ campaignId, campaignName = '', crowdList = [], targetIds = [], oldCrowdMap = {}, authContext = {} } = {}) {
             return this.getPageMagix().then((magixRef) => {
                 const vf = this.findMagixModalVframe(magixRef);
@@ -1332,7 +1454,10 @@
                             return;
                         }
                         Logger.log(`✅ 批量修改屏蔽人群完成：已同步并回查确认 ${successCount} 个计划，过滤人群 ${nextCrowdList.length} 个`);
-                        window.setTimeout(() => window.location.reload(), 600);
+                        this.refreshCampaignListOnly({
+                            bizCode: 'onebpDisplay',
+                            reason: '批量修改屏蔽人群'
+                        });
                     } catch (err) {
                         Logger.log(`⚠️ 批量修改屏蔽人群失败：${err?.message || err}`, true);
                     }
@@ -1399,7 +1524,10 @@
                             return;
                         }
                         Logger.log(`✅ 线索推广批量修改屏蔽人群完成：已同步并回查确认 ${successCount} 个计划，过滤人群 ${nextCrowdList.length} 个`);
-                        window.setTimeout(() => window.location.reload(), 600);
+                        this.refreshCampaignListOnly({
+                            bizCode: 'onebpAdStrategyLiuZi',
+                            reason: '线索推广批量修改屏蔽人群'
+                        });
                     } catch (err) {
                         Logger.log(`⚠️ 线索推广批量修改屏蔽人群失败：${err?.message || err}`, true);
                     }
@@ -1839,11 +1967,11 @@
             const normalizedBizCode = this.normalizeBizCode(bizCode || this.getCurrentCampaignBizCode() || this.DEFAULT_BIZ_CODE) || this.DEFAULT_BIZ_CODE;
             const contexts = this.collectSelectedCampaignContexts(normalizedBizCode);
             if (action === 'start' || action === 'pause') {
-                await this.runBatchUpdateCampaignStatus(action, contexts, normalizedBizCode);
+                await this.runBatchUpdateCampaignStatus(action, contexts, normalizedBizCode, triggerEl);
                 return;
             }
             if (action === 'delete') {
-                await this.runBatchDeleteCampaigns(contexts, normalizedBizCode);
+                await this.runBatchDeleteCampaigns(contexts, normalizedBizCode, triggerEl);
                 return;
             }
             if (action === 'shieldCrowd' || action === 'crowdSetting') {

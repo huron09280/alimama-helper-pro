@@ -3462,7 +3462,13 @@
                                         </div>
                                         <div class="am-wxt-crowd-target-suggest">${Utils.escapeHtml(suggestionText)}</div>
                                         <div class="am-wxt-crowd-target-actions">
-                                            <button type="button" class="am-wxt-btn" data-scene-crowd-target-remove="${Utils.escapeHtml(key)}">移除</button>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-remove-icon-btn am-wxt-crowd-target-remove-btn"
+                                                data-scene-crowd-target-remove="${Utils.escapeHtml(key)}"
+                                                aria-label="移除目标人群：${Utils.escapeHtml(crowdName)}"
+                                                title="移除目标人群"
+                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                         </div>
                                     </div>
                                 `;

@@ -422,7 +422,13 @@
                                         <div class="am-wxt-scene-trend-selected-summary">
                                             <span>已选明星趋势主题 <b data-scene-popup-trend-selected-count="1">0</b>/6</span>
                                             <span>含相关宝贝 <b data-scene-popup-trend-selected-item-count="1">0</b></span>
-                                            <a href="javascript:;" data-scene-popup-trend-clear="1">全部移除</a>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-remove-icon-btn am-wxt-scene-trend-clear-btn"
+                                                data-scene-popup-trend-clear="1"
+                                                aria-label="移除全部已选趋势主题"
+                                                title="移除全部已选趋势主题"
+                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                             <span class="am-wxt-scene-trend-selected-actions" data-scene-popup-trend-actions="1"></span>
                                         </div>
                                         <div class="am-wxt-scene-trend-selected-chip-list" data-scene-popup-trend-selected-list="1"></div>
@@ -814,11 +820,12 @@
                                     const cvrText = getMetricText(item, ['cvr', 'convertIndex']);
                                     const roiText = getMetricText(item, ['roi', 'roiIndex']);
                                     const tagText = normalizeSceneSettingValue(item?.tagText || item?.resourceType?.tagText || '');
+                                    const themeName = normalizeSceneSettingValue(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`);
                                     return `
                                         <div class="am-wxt-scene-trend-association-row ${selected ? 'selected' : ''}">
                                             <div class="am-wxt-scene-trend-association-theme">
                                                 ${tagText ? `<i>${Utils.escapeHtml(tagText)}</i>` : ''}
-                                                <span>${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</span>
+                                                <span>${Utils.escapeHtml(themeName)}</span>
                                             </div>
                                             <div>宝贝：${Utils.escapeHtml(itemCountText)}</div>
                                             <div>${Utils.escapeHtml(trendText)}</div>
@@ -829,10 +836,11 @@
                                             <div>${Utils.escapeHtml(roiText)}</div>
                                             <button
                                                 type="button"
-                                                class="am-wxt-scene-trend-association-op"
+                                                class="am-wxt-scene-trend-association-op${selected ? ' am-wxt-remove-icon-btn am-wxt-scene-trend-association-remove-btn' : ''}"
                                                 data-scene-popup-trend-association-toggle="${Utils.escapeHtml(key)}"
+                                                ${selected ? `aria-label="移除趋势主题：${Utils.escapeHtml(themeName)}" title="移除趋势主题"` : ''}
                                                 ${disabled ? 'disabled' : ''}
-                                            >${selected ? '移除' : '添加'}</button>
+                                            >${selected ? renderAmIcon('close', { size: 12, strokeWidth: 2.2 }) : '添加'}</button>
                                         </div>
                                     `;
                                 }).join('');
@@ -1415,7 +1423,13 @@
                                                 <div>${Utils.escapeHtml(itemName)}</div>
                                                 <div class="am-wxt-scene-crowd-selected-name meta">${Utils.escapeHtml(itemId)}</div>
                                             </div>
-                                            <button type="button" class="am-wxt-btn" data-scene-popup-item-remove="${Utils.escapeHtml(itemId)}">移除</button>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-remove-icon-btn am-wxt-scene-item-remove-btn"
+                                                data-scene-popup-item-remove="${Utils.escapeHtml(itemId)}"
+                                                aria-label="移除商品：${Utils.escapeHtml(itemName)}"
+                                                title="移除商品"
+                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                         </div>
                                     `;
                                 }).join('');

@@ -42,6 +42,20 @@ test('SmartAssistant 预算校验短路覆盖 setError/getErrors/getState/valida
     assert.match(block, /isSmartAssistantBudgetWarning\(context, reason\)/, '缺少 SmartAssistant warning 识别短路条件');
 });
 
+test('通用预算破限保留原生 check 副作用，只放行预算下限结果', () => {
+    const block = getBudgetBlock();
+    assert.match(block, /const originalCheck = hasCheck \? view\.check : null;/, 'patch 前应保存原生 check');
+    assert.match(block, /const originalIsValid = hasIsValidFn \? view\.isValid : null;/, 'patch 前应保存原生 isValid');
+    assert.match(block, /view\.check = function \(\.\.\.args\) \{[\s\S]*const result = originalCheck\.apply\(this, args\)/, 'patch 后必须先调用原生 check，保留取值同步等副作用');
+    assert.match(block, /view\.isValid = function \(\.\.\.args\) \{[\s\S]*const result = originalIsValid\.apply\(this, args\)/, '函数型 isValid 也必须先调用原生实现');
+    assert.match(block, /normalizeBudgetCheckResult\(value\)/, '原生 check 结果应只做预算下限类归一化');
+    assert.match(block, /const normalizeBudgetIsValidResult = \(value\) => \([\s\S]*isBudgetMinValidationResult\(value\) \? true : value[\s\S]*\);/, '函数型 isValid 的预算下限失败应保持布尔语义');
+    assert.match(block, /view\.isValid = function \(\.\.\.args\) \{[\s\S]*normalizeBudgetIsValidResult\(value\)[\s\S]*normalizeBudgetIsValidResult\(result\)/, 'isValid 不应复用 check 的对象归一化结果');
+    assert.match(block, /isBudgetMinValidationError\(err\)[\s\S]*return \{ ok: true, msg: '' \};/, '只有预算下限类异常可转为通过');
+    assert.doesNotMatch(block, /view\.check = \(\) => Promise\.resolve\(\{ ok: true, msg: '' \}\);/, '不得再次把原生 check 直接短路为恒成功');
+    assert.doesNotMatch(block, /view\.isValid = \(\) => true;/, '不得再次把原生 isValid 直接短路为恒成功');
+});
+
 test('SmartAssistant 预算页面补丁支持恢复机制，避免误污染全局', () => {
     const block = getBudgetBlock();
     assert.match(block, /smartAssistantPatchedTargets\s*=\s*new Map\(\)/, 'SmartAssistant patch 快照需要可遍历 Map 支持恢复');

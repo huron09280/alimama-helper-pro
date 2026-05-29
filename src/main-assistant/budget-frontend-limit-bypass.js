@@ -83,11 +83,46 @@
                         || hasOriginRulesMin;
                 };
 
+                const isBudgetMinValidationResult = (value) => {
+                    if (!value || typeof value !== 'object') return false;
+                    const ok = value.ok === false
+                        || value.success === false
+                        || value.valid === false
+                        || value.result === false;
+                    if (!ok) return false;
+                    const text = [
+                        value.msg,
+                        value.message,
+                        value.error,
+                        value.reason,
+                        value.tip,
+                        value.title
+                    ].filter(Boolean).join(' ');
+                    return /(预算|日预算|每日预算|dayBudget|dayAverageBudget|totalBudget|futureBudget|constraintValue).{0,40}(低于|不少于|至少|不能|min|minimum)/i.test(text);
+                };
+
+                const normalizeBudgetCheckResult = (value) => (
+                    isBudgetMinValidationResult(value)
+                        ? { ...value, ok: true, success: true, valid: true, result: true, msg: '', message: '' }
+                        : value
+                );
+
+                const normalizeBudgetIsValidResult = (value) => (
+                    isBudgetMinValidationResult(value) ? true : value
+                );
+
+                const isBudgetMinValidationError = (err) => {
+                    const text = String(err?.message || err?.msg || err || '');
+                    return /(预算|日预算|每日预算|dayBudget|dayAverageBudget|totalBudget|futureBudget|constraintValue).{0,40}(低于|不少于|至少|不能|min|minimum)/i.test(text);
+                };
+
                 const patchView = (view) => {
                     if (!canPatch(view)) return;
                     if (snapshots.has(view)) return;
                     const hasCheck = typeof view.check === 'function';
+                    const originalCheck = hasCheck ? view.check : null;
                     const hasIsValidFn = typeof view.isValid === 'function';
+                    const originalIsValid = hasIsValidFn ? view.isValid : null;
                     const hasIsValidBool = typeof view.isValid === 'boolean';
                     const rules = view && view.updater ? view.updater.rules : null;
                     const originRules = view && view.updater ? view.updater.originRules : null;
@@ -109,10 +144,44 @@
                     patchedViews.add(view);
 
                     if (hasCheck) {
-                        view.check = () => Promise.resolve({ ok: true, msg: '' });
+                        view.check = function (...args) {
+                            try {
+                                const result = originalCheck.apply(this, args);
+                                if (result && typeof result.then === 'function') {
+                                    return result.then(
+                                        (value) => normalizeBudgetCheckResult(value),
+                                        (err) => {
+                                            if (isBudgetMinValidationError(err)) return { ok: true, msg: '' };
+                                            throw err;
+                                        }
+                                    );
+                                }
+                                return normalizeBudgetCheckResult(result);
+                            } catch (err) {
+                                if (isBudgetMinValidationError(err)) return { ok: true, msg: '' };
+                                throw err;
+                            }
+                        };
                     }
                     if (hasIsValidFn) {
-                        view.isValid = () => true;
+                        view.isValid = function (...args) {
+                            try {
+                                const result = originalIsValid.apply(this, args);
+                                if (result && typeof result.then === 'function') {
+                                    return result.then(
+                                        (value) => normalizeBudgetIsValidResult(value),
+                                        (err) => {
+                                            if (isBudgetMinValidationError(err)) return true;
+                                            throw err;
+                                        }
+                                    );
+                                }
+                                return normalizeBudgetIsValidResult(result);
+                            } catch (err) {
+                                if (isBudgetMinValidationError(err)) return true;
+                                throw err;
+                            }
+                        };
                     } else if (hasIsValidBool) {
                         view.isValid = true;
                     }

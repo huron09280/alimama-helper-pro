@@ -267,6 +267,9 @@
             'adRotation',
             'openAutoCreative',
             'openStaticCreative',
+            'creativeList',
+            'creativeInfo',
+            'materialList',
             'itemResource'
         ];
         const COPY_DROP_STATUS_FIELDS = ['status', 'displayStatus', 'planStatus', 'campaignStatus'];
@@ -498,6 +501,23 @@
             if (compact === 'roi' || compact === 'roicontrol' || compact === '控投产比') return 'roi_control';
             return raw;
         };
+        const normalizeCopyKeywordWordList = (wordList = []) => {
+            if (!Array.isArray(wordList)) return [];
+            return uniqueBy(
+                wordList
+                    .map((item) => {
+                        if (!item || typeof item !== 'object') return null;
+                        const word = String(item.word || item.keyword || item.bidword || item.name || '').trim();
+                        if (!word) return null;
+                        return {
+                            ...deepClone(item),
+                            word
+                        };
+                    })
+                    .filter(Boolean),
+                item => item.word
+            ).slice(0, 200);
+        };
         const applyCurrentPlanCopyRowOverrides = (plan = {}, planCampaign = {}, planAdgroup = {}, row = {}) => {
             if (!isPlainObject(row)) return;
             const bidMode = normalizeCurrentPlanCopyBidMode(row.bidMode || '');
@@ -576,14 +596,40 @@
             if (!targetScene) throw new Error('复制计划缺少场景参数');
             const campaign = normalizeCopySourceCampaign(source);
             const adgroup = normalizeCopySourceAdgroup(source);
-            const item = normalizeCopySourceItem(source, campaign, adgroup);
-            if (!item) throw new Error('复制计划缺少商品参数');
             const sourcePlanName = campaign.campaignName || source?.campaignName || source?.name || '';
             const copyCount = normalizeCurrentPlanCopyCount(options);
             const copyPlanRows = normalizeCurrentPlanCopyRowList(options);
             const newPlanNames = buildCurrentPlanCopiedPlanNames(sourcePlanName, targetScene, copyCount, source, options);
             const newPlanName = newPlanNames[0] || buildCurrentPlanCopyName(sourcePlanName || targetScene || '计划');
             const targetOnlineStatus = resolveCurrentPlanCopyStatus(source, options);
+            const bizCode = normalizeSceneBizCode(campaign.bizCode || source?.bizCode || resolveSceneBizCodeHint(targetScene) || '');
+            const baseMeta = {
+                sourceCampaignId: String(source?.campaignId || source?.campaign?.campaignId || campaign?.campaignId || '').trim(),
+                sourceCampaignName: String(source?.campaignName || source?.campaign?.campaignName || campaign?.campaignName || '').trim(),
+                newPlanName,
+                newPlanNames,
+                copyCount,
+                targetOnlineStatus,
+                sceneName: targetScene,
+                bizCode,
+                itemId: '',
+                copyPlanRows
+            };
+            if (isOfficialCopyScene(baseMeta)) {
+                return {
+                    request: {
+                        sceneName: targetScene,
+                        bizCode,
+                        marketingGoal: '',
+                        planNamePrefix: newPlanName,
+                        __copyCurrentPlan: true,
+                        plans: []
+                    },
+                    meta: baseMeta
+                };
+            }
+            const item = normalizeCopySourceItem(source, campaign, adgroup);
+            if (!item) throw new Error('复制计划缺少商品参数');
             const commonCampaign = deepClone(campaign);
             const commonAdgroup = deepClone(adgroup);
             delete commonCampaign.campaignName;
@@ -594,12 +640,14 @@
             const marketingGoal = resolveCurrentPlanCopyMarketingGoal(targetScene, source, campaign, options);
             const request = {
                 sceneName: targetScene,
-                bizCode: normalizeSceneBizCode(campaign.bizCode || source?.bizCode || resolveSceneBizCodeHint(targetScene) || ''),
+                bizCode,
                 marketingGoal,
                 planNamePrefix: newPlanName,
                 __copyCurrentPlan: true,
                 common: {
                     marketingGoal,
+                    keywordMode: Array.isArray(adgroup.wordList) && adgroup.wordList.length ? 'manual' : undefined,
+                    useWordPackage: Array.isArray(adgroup.wordPackageList) && adgroup.wordPackageList.length,
                     rawOverrides: {
                         campaign: commonCampaign,
                         adgroup: commonAdgroup
@@ -609,6 +657,10 @@
                     const planCampaign = deepClone(campaign);
                     const planAdgroup = deepClone(adgroup);
                     const row = copyPlanRows[index] || {};
+                    const sourceWordList = normalizeCopyKeywordWordList(planAdgroup.wordList || []);
+                    const sourceWordPackageList = Array.isArray(planAdgroup.wordPackageList)
+                        ? deepClone(planAdgroup.wordPackageList).slice(0, 100)
+                        : [];
                     planCampaign.campaignName = planName;
                     planCampaign.onlineStatus = targetOnlineStatus;
                     planAdgroup.onlineStatus = targetOnlineStatus;
@@ -619,6 +671,13 @@
                         itemId: item.itemId || item.materialId,
                         materialId: item.materialId || item.itemId,
                         budget,
+                        keywords: sourceWordList,
+                        keywordSource: {
+                            mode: sourceWordList.length ? 'manual' : 'mixed',
+                            source: 'copy_current_plan',
+                            useWordPackage: sourceWordPackageList.length > 0
+                        },
+                        useWordPackage: sourceWordPackageList.length > 0,
                         __copyCurrentPlan: true,
                         rawOverrides: {
                             campaign: planCampaign,
@@ -632,16 +691,9 @@
             return {
                 request,
                 meta: {
-                    sourceCampaignId: String(source?.campaignId || source?.campaign?.campaignId || '').trim(),
-                    sourceCampaignName: String(source?.campaignName || source?.campaign?.campaignName || '').trim(),
-                    newPlanName,
-                    newPlanNames,
-                    copyCount,
-                    targetOnlineStatus,
-                    sceneName: targetScene,
-                    bizCode: request.bizCode,
+                    ...baseMeta,
                     itemId: String(item.itemId || item.materialId || '').trim(),
-                    copyPlanRows
+                    bizCode: request.bizCode
                 }
             };
         };
@@ -774,9 +826,10 @@
                 error: rows.filter(row => !row.ok).map(row => `${row.campaignId}: ${row.error || '暂停失败'}`).join('；')
             };
         };
-        const isDisplayOfficialCopyScene = (meta = {}) => {
+        const isOfficialCopyScene = (meta = {}) => {
             const bizCode = normalizeSceneBizCode(meta?.bizCode || '');
-            return bizCode === 'onebpDisplay' || meta?.sceneName === '人群推广';
+            return bizCode === 'onebpDisplay'
+                || meta?.sceneName === '人群推广';
         };
         const formatOfficialCopyDate = (value = '') => {
             const raw = String(value || '').trim();
@@ -792,7 +845,7 @@
             const pad = (num) => String(num).padStart(2, '0');
             return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
         };
-        const buildDisplayOfficialCopyPayload = (meta = {}, planName = '', source = {}, options = {}) => {
+        const buildOfficialCopyPayload = (meta = {}, planName = '', source = {}, options = {}) => {
             const campaign = normalizeCopySourceCampaign(source);
             const sourceCampaignId = toPositiveIdText(
                 meta?.sourceCampaignId
@@ -801,7 +854,7 @@
                 || campaign?.campaignId
                 || ''
             );
-            if (!sourceCampaignId) throw new Error('人群推广官方复制缺少源计划ID');
+            if (!sourceCampaignId) throw new Error('官方复制缺少源计划ID');
             const startTime = formatOfficialCopyDate(
                 options.startTime
                 || options.copyStartTime
@@ -809,7 +862,7 @@
                 || ''
             );
             const payload = {
-                bizCode: normalizeSceneBizCode(meta?.bizCode || source?.bizCode || campaign?.bizCode || 'onebpDisplay') || 'onebpDisplay',
+                bizCode: normalizeSceneBizCode(meta?.bizCode || source?.bizCode || campaign?.bizCode || DEFAULTS.bizCode) || DEFAULTS.bizCode,
                 copyCampaignId: Number(sourceCampaignId),
                 campaignName: String(planName || meta?.newPlanName || '').trim(),
                 campaignGroupName: String(options.campaignGroupName ?? ''),
@@ -817,19 +870,19 @@
                 startTime,
                 launchForever: options.launchForever !== false
             };
-            if (!payload.campaignName) throw new Error('人群推广官方复制缺少新计划名称');
+            if (!payload.campaignName) throw new Error('官方复制缺少新计划名称');
             return payload;
         };
-        const copyDisplayCurrentPlanByOfficialApi = async (meta = {}, source = {}, options = {}) => {
-            const bizCode = normalizeSceneBizCode(meta?.bizCode || source?.bizCode || 'onebpDisplay') || 'onebpDisplay';
+        const copyCurrentPlanByOfficialApi = async (meta = {}, source = {}, options = {}) => {
+            const bizCode = normalizeSceneBizCode(meta?.bizCode || source?.bizCode || DEFAULTS.bizCode) || DEFAULTS.bizCode;
             const planNames = uniqueBy(
                 (Array.isArray(meta?.newPlanNames) ? meta.newPlanNames : [meta?.newPlanName])
                     .map(name => String(name || '').trim())
                     .filter(Boolean),
                 name => name
             );
-            if (!planNames.length) throw new Error('人群推广官方复制缺少新计划名称');
-            const payloads = planNames.map(planName => buildDisplayOfficialCopyPayload(meta, planName, source, options));
+            if (!planNames.length) throw new Error('官方复制缺少新计划名称');
+            const payloads = planNames.map(planName => buildOfficialCopyPayload(meta, planName, source, options));
             if (options.dryRunOnly) {
                 return {
                     ok: true,
@@ -903,8 +956,8 @@
         const copyCurrentPlanByScene = async (sceneName, source = {}, options = {}) => {
             if (!isPlainObject(source)) throw new Error('复制计划缺少源计划数据');
             const { request, meta } = buildCurrentPlanCopyRequestByScene(sceneName, source, options);
-            const result = isDisplayOfficialCopyScene(meta)
-                ? await copyDisplayCurrentPlanByOfficialApi(meta, source, options)
+            const result = isOfficialCopyScene(meta)
+                ? await copyCurrentPlanByOfficialApi(meta, source, options)
                 : await createPlansByScene(meta.sceneName, request, {
                     ...options,
                     batchRetry: Math.max(0, toNumber(options.batchRetry, 0)),

@@ -3358,6 +3358,54 @@
                     gap: 4px;
                     flex-shrink: 0;
                 }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 24px;
+                    height: 24px;
+                    min-width: 24px;
+                    padding: 0;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    line-height: 1;
+                    cursor: pointer;
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.24);
+                    transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn svg,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn svg,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn svg {
+                    width: 12px;
+                    height: 12px;
+                    pointer-events: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn:hover,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn:hover,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn:hover {
+                    background: rgba(234,79,79,0.1);
+                    border-color: rgba(234,79,79,0.28);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn:focus-visible,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn:focus-visible,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn:focus-visible {
+                    outline: none;
+                    border-color: rgba(37,99,235,0.45);
+                    box-shadow: 0 0 0 3px rgba(37,99,235,0.18), inset 0 1px 0 rgba(255,255,255,0.24);
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn:disabled,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn:disabled,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn:disabled {
+                    cursor: not-allowed;
+                    color: rgba(80,90,116,0.42);
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-foot {
                     padding: 0 14px 14px;
                     display: flex;
@@ -4511,6 +4559,20 @@
                 #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-op:disabled {
                     color: #cbd5e1;
                     cursor: not-allowed;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-op.am-wxt-remove-icon-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 24px;
+                    height: 24px;
+                    min-width: 24px;
+                    padding: 0;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.24);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-name .name,
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-name {

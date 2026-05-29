@@ -1,3 +1,30 @@
+# Lessons - 2026-05-30
+
+## L86 关键词推广复制不能走官方 copy
+- 触发：用户反馈关键词推广里复制 `E7pro_自定义` 后，发货关键词、地区等隐藏配置没有复制。
+- 原因：dry-run 只能证明插件可生成官方复制 payload，不能证明服务端支持；真实 `onebpSearch` 调用 `/solution/copy.json` 返回“该场景暂无此功能”。关键词推广复制必须走受控 `/solution/addList.json`，但旧 addList 组包会重建关键词 bundle，并经过复制白名单、关键词自定义 `prune/normalize` 多轮裁剪，导致关键词、地域、创意、时间折扣、全能调价等源字段有丢失风险。
+- 规则：`onebpSearch` 当前计划复制禁止进入官方 `/campaign/copy/campaignCheck.json -> /solution/copy.json` 分支；必须走受控 addList，并把源 `wordList/wordPackageList/crowdList/launchAreaStrList/launchPeriodList/creative*/ruleCommand/enableRuleAuto` 等合同字段纳入白名单和提交 payload。涉及官方复制能力判断时，真实服务端提交结果优先于 dry-run。
+
+## L85 计划列表局部刷新优先用列表 VFrame render
+- 触发：排查原生“批量修改每日预算”提交后的刷新方式时，发现页面只是刷新计划列表，而插件 `批量+` 成功路径仍用整页 `window.location.reload()`。
+- 原因：真实页面中 `campaign-list` VFrame 的 `render()` 会重新请求 `/campaign/horizontal/findPage.json` 并带上当前筛选、排序、分页参数；`asyncRenderData()` 主要刷新报表和动态模块，不一定重新拉取计划列表行。
+- 规则：批量操作成功后需要刷新计划列表时，优先定位当前业务线的 `onebp/views/pages/manage/{search|display|onesite|hky}/campaign-list` VFrame 并调用 `render()`；`asyncRenderData()` 和搜索框回车只能作为兜底，禁止默认整页 reload。
+
+## L84 原生批量预算真实接口以运行态抓包为准
+- 触发：真实提交 1 个暂停计划的“批量修改每日预算”时，提交前按旧经验预估允许 `/campaign/updatePart.json`，但实际官方接口是 `/campaign/budget/batchUpdate.json`。
+- 原因：同属预算/计划修改的官方入口可能使用不同端点；只按相邻功能或旧验证经验布置写请求守卫，容易漏记真实提交接口，甚至在未授权场景误拦截正确官方请求。
+- 规则：涉及真实提交前，先用只读打开官方弹窗和抓包确认目标提交接口；守卫策略应记录所有写请求，只阻断明确不属于本次动作的创建、删除、复制、保存、商品/方案写入口。提交后必须记录请求体中的计划 ID、新预算、响应 `ok/errorCount` 和页面最终状态。
+
+## L83 原生功能关闭插件后生效时优先查全局补丁副作用
+- 触发：用户反馈原生“批量计划设置 -> 批量修改每日预算”提交后不生效，但关闭插件后生效。
+- 原因：问题不一定来自同屏新增入口（如 `批量+`）的点击拦截，也可能来自插件开启后的全局页面补丁、Magix 组件 monkey patch、请求 hook 或状态同步副作用。
+- 规则：遇到“关插件恢复”的原生功能缺陷，先把排查范围扩到所有全局补丁；涉及预算、出价、校验类原生弹窗时，特别检查是否跳过了官方组件 `check()/validate()` 的内部取值同步，修复优先保留官方校验副作用，只在明确的前端限制错误上放行。
+
+## L82 重复强调“窗口外/弹窗外”时先复核运行态 overlay
+- 触发：用户再次强调“弹窗‘组建计划’窗口外的增加，白色玻璃渐变，类似组建计划里的增加商品的弹窗外的背景”，而当前顶部任务已切到移除类按钮图标化。
+- 原因：连续 UI 迁移中容易把上一切片继续推进，忽略用户最新纠偏其实是在要求当前弹窗外层遮罩聚焦效果。
+- 规则：用户重复强调“窗口外/弹窗外/点击后弹窗外”时，先暂停当前非同对象切片，复核运行态 overlay/mask 的 computed style、截图和未触发写请求；只有确认目标层级正确后再继续其它迁移。
+
 # Lessons - 2026-04-15
 
 ## L71 组建计划主面板背景不要过度白化

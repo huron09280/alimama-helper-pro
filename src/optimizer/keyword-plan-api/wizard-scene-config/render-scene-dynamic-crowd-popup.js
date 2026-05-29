@@ -875,7 +875,13 @@
                                     </div>
                                     <div class="am-wxt-crowd-target-suggest">${Utils.escapeHtml(suggestionText)}</div>
                                     <div class="am-wxt-crowd-target-actions">
-                                        <button type="button" class="am-wxt-btn" data-scene-crowd-target-remove="${Utils.escapeHtml(key)}">移除</button>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-remove-icon-btn am-wxt-crowd-target-remove-btn"
+                                            data-scene-crowd-target-remove="${Utils.escapeHtml(key)}"
+                                            aria-label="移除目标人群：${Utils.escapeHtml(crowdName)}"
+                                            title="移除目标人群"
+                                        >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                     </div>
                                 </div>
                             `;
@@ -1314,7 +1320,13 @@
                                                     <section class="am-wxt-scene-crowd-native-right">
                                                         <div class="am-wxt-scene-crowd-native-selected-head">
                                                             <span>已选人群（<b data-scene-popup-crowd-native-selected-count="1">0</b>/100）</span>
-                                                            <a href="javascript:;" data-scene-popup-crowd-native-clear="1">全部移除</a>
+                                                            <button
+                                                                type="button"
+                                                                class="am-wxt-remove-icon-btn am-wxt-scene-crowd-native-clear-btn"
+                                                                data-scene-popup-crowd-native-clear="1"
+                                                                aria-label="移除全部已选人群"
+                                                                title="移除全部已选人群"
+                                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                                         </div>
                                                         <div class="am-wxt-scene-crowd-native-selected-table-head">
                                                             <span>人群名称</span>
@@ -1649,7 +1661,7 @@
                                                     </div>
                                                     <div class="am-wxt-scene-crowd-candidate-actions">
                                                         ${selected
-                                                    ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>`
+                                                    ? `<button type="button" class="am-wxt-remove-icon-btn am-wxt-scene-crowd-remove-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}" aria-label="移除候选人群：${name}" title="移除人群">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>`
                                                     : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-add="${Utils.escapeHtml(key)}">添加</button>`}
                                                     </div>
                                                 </div>
@@ -1667,7 +1679,8 @@
                                         }
                                         crowdSelectedListEl.innerHTML = selectedList.map((item, idx) => {
                                             const key = getCrowdKey(item, idx);
-                                            const name = Utils.escapeHtml(getCrowdDisplayName(item) || `已选人群${idx + 1}`);
+                                            const rawName = getCrowdDisplayName(item) || `已选人群${idx + 1}`;
+                                            const name = Utils.escapeHtml(rawName);
                                             const labelId = Utils.escapeHtml(
                                                 normalizeSceneSettingValue(item?.crowd?.label?.labelId || key)
                                             );
@@ -1682,7 +1695,13 @@
                                                         <input type="number" min="30" max="300" step="1" value="${Utils.escapeHtml(String(bid))}" data-scene-popup-crowd-selected-bid="${Utils.escapeHtml(key)}" />
                                                         <span>%</span>
                                                     </div>
-                                                    <button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>
+                                                    <button
+                                                        type="button"
+                                                        class="am-wxt-remove-icon-btn am-wxt-scene-crowd-remove-btn"
+                                                        data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}"
+                                                        aria-label="移除已选人群：${Utils.escapeHtml(rawName)}"
+                                                        title="移除人群"
+                                                    >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                                 </div>
                                             `;
                                         }).join('');
@@ -1853,7 +1872,7 @@
                                                     </div>
                                                     <div class="am-wxt-scene-crowd-native-candidate-actions">
                                                         ${selected
-                                                    ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-remove="${Utils.escapeHtml(key)}">取消添加</button>`
+                                                    ? `<button type="button" class="am-wxt-remove-icon-btn am-wxt-scene-crowd-native-remove-btn" data-scene-popup-crowd-native-remove="${Utils.escapeHtml(key)}" aria-label="取消添加人群：${Utils.escapeHtml(rawName)}" title="取消添加">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>`
                                                     : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-native-add="${Utils.escapeHtml(key)}">添加</button>`}
                                                     </div>
                                                 </div>
@@ -1878,7 +1897,13 @@
                                                     <div class="am-wxt-scene-crowd-native-selected-name">${Utils.escapeHtml(crowdName)}</div>
                                                     <div class="am-wxt-scene-crowd-native-selected-source">${Utils.escapeHtml(source)}</div>
                                                     <div class="am-wxt-scene-crowd-native-selected-actions">
-                                                        <a href="javascript:;" data-scene-popup-crowd-native-remove-selected="${Utils.escapeHtml(key)}">移除</a>
+                                                        <button
+                                                            type="button"
+                                                            class="am-wxt-remove-icon-btn am-wxt-scene-crowd-native-remove-selected-btn"
+                                                            data-scene-popup-crowd-native-remove-selected="${Utils.escapeHtml(key)}"
+                                                            aria-label="移除已选人群：${Utils.escapeHtml(crowdName)}"
+                                                            title="移除人群"
+                                                        >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                                     </div>
                                                 </div>
                                             `;

@@ -4359,9 +4359,9 @@ if (typeof globalThis !== 'undefined') {
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.42);
-                    backdrop-filter: blur(6px);
-                    -webkit-backdrop-filter: blur(6px);
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-card {
                     width: min(360px, calc(100vw - 28px));
@@ -5169,11 +5169,46 @@ if (typeof globalThis !== 'undefined') {
                         || hasOriginRulesMin;
                 };
 
+                const isBudgetMinValidationResult = (value) => {
+                    if (!value || typeof value !== 'object') return false;
+                    const ok = value.ok === false
+                        || value.success === false
+                        || value.valid === false
+                        || value.result === false;
+                    if (!ok) return false;
+                    const text = [
+                        value.msg,
+                        value.message,
+                        value.error,
+                        value.reason,
+                        value.tip,
+                        value.title
+                    ].filter(Boolean).join(' ');
+                    return /(预算|日预算|每日预算|dayBudget|dayAverageBudget|totalBudget|futureBudget|constraintValue).{0,40}(低于|不少于|至少|不能|min|minimum)/i.test(text);
+                };
+
+                const normalizeBudgetCheckResult = (value) => (
+                    isBudgetMinValidationResult(value)
+                        ? { ...value, ok: true, success: true, valid: true, result: true, msg: '', message: '' }
+                        : value
+                );
+
+                const normalizeBudgetIsValidResult = (value) => (
+                    isBudgetMinValidationResult(value) ? true : value
+                );
+
+                const isBudgetMinValidationError = (err) => {
+                    const text = String(err?.message || err?.msg || err || '');
+                    return /(预算|日预算|每日预算|dayBudget|dayAverageBudget|totalBudget|futureBudget|constraintValue).{0,40}(低于|不少于|至少|不能|min|minimum)/i.test(text);
+                };
+
                 const patchView = (view) => {
                     if (!canPatch(view)) return;
                     if (snapshots.has(view)) return;
                     const hasCheck = typeof view.check === 'function';
+                    const originalCheck = hasCheck ? view.check : null;
                     const hasIsValidFn = typeof view.isValid === 'function';
+                    const originalIsValid = hasIsValidFn ? view.isValid : null;
                     const hasIsValidBool = typeof view.isValid === 'boolean';
                     const rules = view && view.updater ? view.updater.rules : null;
                     const originRules = view && view.updater ? view.updater.originRules : null;
@@ -5195,10 +5230,44 @@ if (typeof globalThis !== 'undefined') {
                     patchedViews.add(view);
 
                     if (hasCheck) {
-                        view.check = () => Promise.resolve({ ok: true, msg: '' });
+                        view.check = function (...args) {
+                            try {
+                                const result = originalCheck.apply(this, args);
+                                if (result && typeof result.then === 'function') {
+                                    return result.then(
+                                        (value) => normalizeBudgetCheckResult(value),
+                                        (err) => {
+                                            if (isBudgetMinValidationError(err)) return { ok: true, msg: '' };
+                                            throw err;
+                                        }
+                                    );
+                                }
+                                return normalizeBudgetCheckResult(result);
+                            } catch (err) {
+                                if (isBudgetMinValidationError(err)) return { ok: true, msg: '' };
+                                throw err;
+                            }
+                        };
                     }
                     if (hasIsValidFn) {
-                        view.isValid = () => true;
+                        view.isValid = function (...args) {
+                            try {
+                                const result = originalIsValid.apply(this, args);
+                                if (result && typeof result.then === 'function') {
+                                    return result.then(
+                                        (value) => normalizeBudgetIsValidResult(value),
+                                        (err) => {
+                                            if (isBudgetMinValidationError(err)) return true;
+                                            throw err;
+                                        }
+                                    );
+                                }
+                                return normalizeBudgetIsValidResult(result);
+                            } catch (err) {
+                                if (isBudgetMinValidationError(err)) return true;
+                                throw err;
+                            }
+                        };
                     } else if (hasIsValidBool) {
                         view.isValid = true;
                     }
@@ -12622,8 +12691,9 @@ if (typeof globalThis !== 'undefined') {
 
                     const action = String(batchPlusItem.getAttribute('data-am-campaign-batch-plus-action') || '').trim();
                     const bizCode = this.normalizeBizCode(batchPlusItem.getAttribute('data-biz-code') || batchPlusItem.dataset?.bizCode || '');
+                    const focusBackTarget = this.getOpenBatchPlusTrigger();
                     this.closeBatchPlusMenu();
-                    this.runBatchPlusAction(action, bizCode, batchPlusItem).catch((err) => {
+                    this.runBatchPlusAction(action, bizCode, focusBackTarget || batchPlusItem).catch((err) => {
                         Logger.log(`⚠️ 批量+执行失败：${err?.message || '未知错误'} `, true);
                     });
                     return;
@@ -13117,7 +13187,7 @@ if (typeof globalThis !== 'undefined') {
             };
         },
 
-        openBatchPlusConfirmDialog({ title = '确认操作', message = '', confirmLabel = '确定', cancelLabel = '取消', danger = false } = {}) {
+        openBatchPlusConfirmDialog({ title = '确认操作', message = '', confirmLabel = '确定', cancelLabel = '取消', danger = false, focusBackTarget = null } = {}) {
             return new Promise((resolve) => {
                 const oldPopup = document.getElementById('am-campaign-batch-confirm-popup');
                 if (oldPopup) oldPopup.remove();
@@ -13125,10 +13195,12 @@ if (typeof globalThis !== 'undefined') {
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-batch-confirm-popup';
                 const titleId = `am-campaign-batch-confirm-title-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                const bodyId = `am-campaign-batch-confirm-body-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
                 const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
                 popup.setAttribute('aria-labelledby', titleId);
+                popup.setAttribute('aria-describedby', bodyId);
 
                 const card = document.createElement('section');
                 card.className = 'am-batch-confirm-card';
@@ -13143,6 +13215,7 @@ if (typeof globalThis !== 'undefined') {
                 titleEl.className = 'am-batch-confirm-title';
                 titleEl.textContent = title;
                 const body = document.createElement('pre');
+                body.id = bodyId;
                 body.className = 'am-batch-confirm-body';
                 body.textContent = String(message || '');
                 const footer = document.createElement('div');
@@ -13157,20 +13230,48 @@ if (typeof globalThis !== 'undefined') {
                 cancelBtn.textContent = cancelLabel;
 
                 let settled = false;
+                const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+                const isFocusableElement = (el) => el instanceof HTMLElement
+                    && !el.matches(':disabled')
+                    && el.getClientRects().length > 0;
+                const getFocusableElements = () => Array.from(popup.querySelectorAll(focusableSelector))
+                    .filter(isFocusableElement);
+                const resolveFocusTarget = (candidate) => {
+                    if (!(candidate instanceof HTMLElement) || !candidate.isConnected) return null;
+                    if (isFocusableElement(candidate)) return candidate;
+                    const nested = candidate.querySelector(focusableSelector);
+                    return isFocusableElement(nested) ? nested : null;
+                };
                 const close = (confirmed) => {
                     if (settled) return;
                     settled = true;
                     document.removeEventListener('keydown', onKeydown, true);
                     popup.remove();
-                    if (previousActiveElement?.isConnected) {
-                        requestAnimationFrame(() => previousActiveElement.focus({ preventScroll: true }));
+                    const focusTarget = resolveFocusTarget(focusBackTarget) || resolveFocusTarget(previousActiveElement);
+                    if (focusTarget?.isConnected) {
+                        requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
                     }
                     resolve(!!confirmed);
                 };
                 const onKeydown = (event) => {
-                    if (event.key !== 'Escape') return;
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        close(false);
+                        return;
+                    }
+                    if (event.key !== 'Tab') return;
+                    const focusable = getFocusableElements();
+                    if (!focusable.length) {
+                        event.preventDefault();
+                        return;
+                    }
                     event.preventDefault();
-                    close(false);
+                    const activeIndex = focusable.indexOf(document.activeElement);
+                    const direction = event.shiftKey ? -1 : 1;
+                    const nextIndex = activeIndex >= 0
+                        ? (activeIndex + direction + focusable.length) % focusable.length
+                        : (event.shiftKey ? focusable.length - 1 : 0);
+                    focusable[nextIndex].focus({ preventScroll: true });
                 };
                 confirmBtn.addEventListener('click', () => close(true), { once: true });
                 cancelBtn.addEventListener('click', () => close(false), { once: true });
@@ -13211,7 +13312,7 @@ if (typeof globalThis !== 'undefined') {
             return null;
         },
 
-        async runBatchUpdateCampaignStatus(action = '', contexts = [], fallbackBizCode = '') {
+        async runBatchUpdateCampaignStatus(action = '', contexts = [], fallbackBizCode = '', triggerEl = null) {
             const meta = this.getBatchStatusActionMeta(action);
             if (!meta) {
                 Logger.log(`⚠️ 未识别的批量状态动作：${action || '-'}`, true);
@@ -13232,7 +13333,8 @@ if (typeof globalThis !== 'undefined') {
                 title: `确认${meta.verb}计划`,
                 message: `确认${meta.verb}选中的 ${ids.length} 个${sceneName}计划？\n该操作会调用原生${meta.label}接口，请确认这些计划都可以${meta.verb}。`,
                 confirmLabel: `确认${meta.verb}`,
-                cancelLabel: '取消'
+                cancelLabel: '取消',
+                focusBackTarget: triggerEl
             });
             if (!confirmed) {
                 Logger.log(`已取消${meta.label}`);
@@ -13256,10 +13358,13 @@ if (typeof globalThis !== 'undefined') {
                 return;
             }
             Logger.log(`✅ ${meta.label}完成：${successCount} 个计划`);
-            window.setTimeout(() => window.location.reload(), 600);
+            this.refreshCampaignListOnly({
+                bizCode: fallbackBizCode || selected[0]?.bizCode || this.DEFAULT_BIZ_CODE,
+                reason: meta.label
+            });
         },
 
-        async runBatchDeleteCampaigns(contexts = [], fallbackBizCode = '') {
+        async runBatchDeleteCampaigns(contexts = [], fallbackBizCode = '', triggerEl = null) {
             const selected = Array.isArray(contexts) ? contexts : [];
             if (!selected.length) {
                 Logger.log('⚠️ 请先勾选需要批量删除的计划', true);
@@ -13272,7 +13377,8 @@ if (typeof globalThis !== 'undefined') {
                 message: `确认删除选中的 ${ids.length} 个${sceneName}计划？\n该操作会调用原生删除接口，请确认这些计划都可以删除。`,
                 confirmLabel: '确认删除',
                 cancelLabel: '取消',
-                danger: true
+                danger: true,
+                focusBackTarget: triggerEl
             });
             if (!confirmed) {
                 Logger.log('已取消批量删除');
@@ -13296,7 +13402,10 @@ if (typeof globalThis !== 'undefined') {
                 return;
             }
             Logger.log(`✅ 批量删除完成：${successCount} 个计划`);
-            window.setTimeout(() => window.location.reload(), 600);
+            this.refreshCampaignListOnly({
+                bizCode: fallbackBizCode || selected[0]?.bizCode || this.DEFAULT_BIZ_CODE,
+                reason: '批量删除'
+            });
         },
 
         getDisplayCrowdDateRange() {
@@ -13871,6 +13980,88 @@ if (typeof globalThis !== 'undefined') {
             return null;
         },
 
+        getCampaignListPathByBizCode(bizCode = '') {
+            const normalizedBizCode = this.normalizeBizCode(bizCode) || this.getCurrentCampaignBizCode() || this.DEFAULT_BIZ_CODE;
+            if (normalizedBizCode === 'onebpDisplay') return 'display';
+            if (normalizedBizCode === 'onebpSite') return 'onesite';
+            if (normalizedBizCode === 'onebpAdStrategyLiuZi') return 'hky';
+            return 'search';
+        },
+
+        findCampaignListVframe(magixRef = null, bizCode = '') {
+            const Vframe = magixRef?.Vframe;
+            if (!Vframe || typeof Vframe.all !== 'function') return null;
+            const all = Vframe.all() || {};
+            const listPath = this.getCampaignListPathByBizCode(bizCode);
+            const preferredId = `universalBP_common_layout_main_content_${listPath}_campaign_list`;
+            const expectedViewPath = `onebp/views/pages/manage/${listPath}/campaign-list`;
+            const isUsable = (vf, id = '') => {
+                if (!vf || typeof vf.invoke !== 'function') return false;
+                const root = id ? document.getElementById(id) : null;
+                const rootView = String(root?.getAttribute('mx-view') || '');
+                const vfPath = String(vf.path || vf.$v?.path || vf.$v?.tmpl || '');
+                return rootView.includes(expectedViewPath) || vfPath.includes(expectedViewPath);
+            };
+            const preferred = typeof Vframe.get === 'function' ? Vframe.get(preferredId) : all[preferredId];
+            if (isUsable(preferred, preferredId)) return preferred;
+            const ids = Object.keys(all);
+            for (let i = 0; i < ids.length; i++) {
+                const id = ids[i];
+                if (isUsable(all[id], id)) return all[id];
+            }
+            return null;
+        },
+
+        async refreshCampaignListVframe(bizCode = '') {
+            const magixRef = await this.getPageMagix();
+            const vf = this.findCampaignListVframe(magixRef, bizCode);
+            if (!vf || typeof vf.invoke !== 'function') return false;
+            const methods = ['render', 'asyncRenderData'];
+            for (const method of methods) {
+                try {
+                    const result = vf.invoke(method, []);
+                    if (result && typeof result.then === 'function') await result;
+                    return true;
+                } catch (err) {
+                    // Try the next official list render method before reporting fallback.
+                }
+            }
+            return false;
+        },
+
+        triggerCampaignListSearchRefresh() {
+            const input = this.findCopySuccessPlanNameSearchInput();
+            if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLTextAreaElement)) return false;
+            try {
+                input.focus({ preventScroll: true });
+            } catch (err) {
+                input.focus();
+            }
+            this.dispatchCopySuccessSearchEnter(input);
+            return true;
+        },
+
+        async refreshCampaignListOnlyNow({ bizCode = '', reason = '批量操作' } = {}) {
+            const targetBizCode = this.normalizeBizCode(bizCode) || this.getCurrentCampaignBizCode() || this.DEFAULT_BIZ_CODE;
+            const vframeTriggered = await this.refreshCampaignListVframe(targetBizCode);
+            const searchTriggered = vframeTriggered ? false : this.triggerCampaignListSearchRefresh();
+            if (searchTriggered || vframeTriggered) {
+                Logger.log(`✅ ${reason}后已刷新计划列表`);
+                return true;
+            }
+            Logger.log(`⚠️ ${reason}已完成，但未找到可复用的原生列表刷新入口，请手动刷新计划列表`, true);
+            return false;
+        },
+
+        refreshCampaignListOnly(options = {}) {
+            const delay = Number.isFinite(Number(options?.delay)) ? Number(options.delay) : 600;
+            window.setTimeout(() => {
+                this.refreshCampaignListOnlyNow(options).catch((err) => {
+                    Logger.log(`⚠️ ${options?.reason || '批量操作'}已完成，但自动刷新计划列表失败：${err?.message || err}`, true);
+                });
+            }, delay);
+        },
+
         openDisplayBlackCrowdEditorModal({ campaignId, campaignName = '', crowdList = [], targetIds = [], oldCrowdMap = {}, authContext = {} } = {}) {
             return this.getPageMagix().then((magixRef) => {
                 const vf = this.findMagixModalVframe(magixRef);
@@ -13916,7 +14107,10 @@ if (typeof globalThis !== 'undefined') {
                             return;
                         }
                         Logger.log(`✅ 批量修改屏蔽人群完成：已同步并回查确认 ${successCount} 个计划，过滤人群 ${nextCrowdList.length} 个`);
-                        window.setTimeout(() => window.location.reload(), 600);
+                        this.refreshCampaignListOnly({
+                            bizCode: 'onebpDisplay',
+                            reason: '批量修改屏蔽人群'
+                        });
                     } catch (err) {
                         Logger.log(`⚠️ 批量修改屏蔽人群失败：${err?.message || err}`, true);
                     }
@@ -13983,7 +14177,10 @@ if (typeof globalThis !== 'undefined') {
                             return;
                         }
                         Logger.log(`✅ 线索推广批量修改屏蔽人群完成：已同步并回查确认 ${successCount} 个计划，过滤人群 ${nextCrowdList.length} 个`);
-                        window.setTimeout(() => window.location.reload(), 600);
+                        this.refreshCampaignListOnly({
+                            bizCode: 'onebpAdStrategyLiuZi',
+                            reason: '线索推广批量修改屏蔽人群'
+                        });
                     } catch (err) {
                         Logger.log(`⚠️ 线索推广批量修改屏蔽人群失败：${err?.message || err}`, true);
                     }
@@ -14423,11 +14620,11 @@ if (typeof globalThis !== 'undefined') {
             const normalizedBizCode = this.normalizeBizCode(bizCode || this.getCurrentCampaignBizCode() || this.DEFAULT_BIZ_CODE) || this.DEFAULT_BIZ_CODE;
             const contexts = this.collectSelectedCampaignContexts(normalizedBizCode);
             if (action === 'start' || action === 'pause') {
-                await this.runBatchUpdateCampaignStatus(action, contexts, normalizedBizCode);
+                await this.runBatchUpdateCampaignStatus(action, contexts, normalizedBizCode, triggerEl);
                 return;
             }
             if (action === 'delete') {
-                await this.runBatchDeleteCampaigns(contexts, normalizedBizCode);
+                await this.runBatchDeleteCampaigns(contexts, normalizedBizCode, triggerEl);
                 return;
             }
             if (action === 'shieldCrowd' || action === 'crowdSetting') {
@@ -28786,14 +28983,19 @@ if (typeof globalThis !== 'undefined') {
             if (!Array.isArray(wordList)) return [];
             return uniqueBy(
                 wordList
-                    .map(item => applyKeywordDefaults(item || {}, {}))
-                    .filter(item => item.word)
-                    .map(item => ({
-                        word: item.word,
-                        bidPrice: item.bidPrice,
-                        matchScope: item.matchScope,
-                        onlineStatus: item.onlineStatus
-                    })),
+                    .map((item) => {
+                        const original = isPlainObject(item) ? purgeCreateTransientFields(item) : {};
+                        const normalized = applyKeywordDefaults(item || {}, {});
+                        if (!normalized.word) return null;
+                        return {
+                            ...original,
+                            word: normalized.word,
+                            bidPrice: normalized.bidPrice,
+                            matchScope: normalized.matchScope,
+                            onlineStatus: normalized.onlineStatus
+                        };
+                    })
+                    .filter(item => item && item.word),
                 item => item.word
             ).slice(0, 200);
         };
@@ -29357,9 +29559,38 @@ if (typeof globalThis !== 'undefined') {
             return out;
         };
 
+        const KEYWORD_CUSTOM_ADGROUP_ALLOW_KEYS = new Set([
+            'bizCode',
+            'promotionType',
+            'subPromotionType',
+            'campaignBidType',
+            'smartCreative',
+            'creativeSetMode',
+            'material',
+            'rightList',
+            'wordList',
+            'wordPackageList',
+            'adzoneList',
+            'crowdList',
+            'adgroupLandingPageVO',
+            'adgroupLandingPageVOList',
+            'smartTeemo',
+            'adRotation',
+            'openAutoCreative',
+            'openStaticCreative',
+            'itemResource',
+            'creativeList',
+            'creativeInfo',
+            'materialList'
+        ]);
+
         const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null, options = {}) => {
             const input = isPlainObject(adgroup) ? adgroup : {};
             const out = {};
+            Object.keys(input).forEach((key) => {
+                if (!KEYWORD_CUSTOM_ADGROUP_ALLOW_KEYS.has(key)) return;
+                out[key] = deepClone(input[key]);
+            });
             out.rightList = Array.isArray(input.rightList) ? deepClone(input.rightList) : [];
             out.wordList = normalizeKeywordWordListForSubmit(input.wordList || []);
             if (hasOwn(input, 'wordPackageList')) {
@@ -37557,6 +37788,54 @@ if (typeof globalThis !== 'undefined') {
                     gap: 4px;
                     flex-shrink: 0;
                 }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 24px;
+                    height: 24px;
+                    min-width: 24px;
+                    padding: 0;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    line-height: 1;
+                    cursor: pointer;
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.24);
+                    transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease;
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn svg,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn svg,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn svg {
+                    width: 12px;
+                    height: 12px;
+                    pointer-events: none;
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn:hover,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn:hover,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn:hover {
+                    background: rgba(234,79,79,0.1);
+                    border-color: rgba(234,79,79,0.28);
+                    color: var(--am26-danger, #ea4f4f);
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn:focus-visible,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn:focus-visible,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn:focus-visible {
+                    outline: none;
+                    border-color: rgba(37,99,235,0.45);
+                    box-shadow: 0 0 0 3px rgba(37,99,235,0.18), inset 0 1px 0 rgba(255,255,255,0.24);
+                }
+                #am-wxt-keyword-modal .am-wxt-remove-icon-btn:disabled,
+                #am-wxt-keyword-item-picker-mask .am-wxt-remove-icon-btn:disabled,
+                #am-wxt-scene-popup-mask .am-wxt-remove-icon-btn:disabled {
+                    cursor: not-allowed;
+                    color: rgba(80,90,116,0.42);
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                }
                 #am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-foot {
                     padding: 0 14px 14px;
                     display: flex;
@@ -38710,6 +38989,20 @@ if (typeof globalThis !== 'undefined') {
                 #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-op:disabled {
                     color: #cbd5e1;
                     cursor: not-allowed;
+                }
+                #am-wxt-scene-popup-mask .am-wxt-scene-trend-association-op.am-wxt-remove-icon-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 24px;
+                    height: 24px;
+                    min-width: 24px;
+                    padding: 0;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.24);
                 }
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-candidate-name .name,
                 #am-wxt-scene-popup-mask .am-wxt-scene-crowd-native-selected-name {
@@ -52270,7 +52563,13 @@ if (typeof globalThis !== 'undefined') {
                                         </div>
                                         <div class="am-wxt-crowd-target-suggest">${Utils.escapeHtml(suggestionText)}</div>
                                         <div class="am-wxt-crowd-target-actions">
-                                            <button type="button" class="am-wxt-btn" data-scene-crowd-target-remove="${Utils.escapeHtml(key)}">移除</button>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-remove-icon-btn am-wxt-crowd-target-remove-btn"
+                                                data-scene-crowd-target-remove="${Utils.escapeHtml(key)}"
+                                                aria-label="移除目标人群：${Utils.escapeHtml(crowdName)}"
+                                                title="移除目标人群"
+                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                         </div>
                                     </div>
                                 `;
@@ -56774,7 +57073,13 @@ if (typeof globalThis !== 'undefined') {
                                         <div class="am-wxt-scene-trend-selected-summary">
                                             <span>已选明星趋势主题 <b data-scene-popup-trend-selected-count="1">0</b>/6</span>
                                             <span>含相关宝贝 <b data-scene-popup-trend-selected-item-count="1">0</b></span>
-                                            <a href="javascript:;" data-scene-popup-trend-clear="1">全部移除</a>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-remove-icon-btn am-wxt-scene-trend-clear-btn"
+                                                data-scene-popup-trend-clear="1"
+                                                aria-label="移除全部已选趋势主题"
+                                                title="移除全部已选趋势主题"
+                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                             <span class="am-wxt-scene-trend-selected-actions" data-scene-popup-trend-actions="1"></span>
                                         </div>
                                         <div class="am-wxt-scene-trend-selected-chip-list" data-scene-popup-trend-selected-list="1"></div>
@@ -57166,11 +57471,12 @@ if (typeof globalThis !== 'undefined') {
                                     const cvrText = getMetricText(item, ['cvr', 'convertIndex']);
                                     const roiText = getMetricText(item, ['roi', 'roiIndex']);
                                     const tagText = normalizeSceneSettingValue(item?.tagText || item?.resourceType?.tagText || '');
+                                    const themeName = normalizeSceneSettingValue(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`);
                                     return `
                                         <div class="am-wxt-scene-trend-association-row ${selected ? 'selected' : ''}">
                                             <div class="am-wxt-scene-trend-association-theme">
                                                 ${tagText ? `<i>${Utils.escapeHtml(tagText)}</i>` : ''}
-                                                <span>${Utils.escapeHtml(item.trendThemeName || item.trendThemeId || `趋势主题${index + 1}`)}</span>
+                                                <span>${Utils.escapeHtml(themeName)}</span>
                                             </div>
                                             <div>宝贝：${Utils.escapeHtml(itemCountText)}</div>
                                             <div>${Utils.escapeHtml(trendText)}</div>
@@ -57181,10 +57487,11 @@ if (typeof globalThis !== 'undefined') {
                                             <div>${Utils.escapeHtml(roiText)}</div>
                                             <button
                                                 type="button"
-                                                class="am-wxt-scene-trend-association-op"
+                                                class="am-wxt-scene-trend-association-op${selected ? ' am-wxt-remove-icon-btn am-wxt-scene-trend-association-remove-btn' : ''}"
                                                 data-scene-popup-trend-association-toggle="${Utils.escapeHtml(key)}"
+                                                ${selected ? `aria-label="移除趋势主题：${Utils.escapeHtml(themeName)}" title="移除趋势主题"` : ''}
                                                 ${disabled ? 'disabled' : ''}
-                                            >${selected ? '移除' : '添加'}</button>
+                                            >${selected ? renderAmIcon('close', { size: 12, strokeWidth: 2.2 }) : '添加'}</button>
                                         </div>
                                     `;
                                 }).join('');
@@ -57767,7 +58074,13 @@ if (typeof globalThis !== 'undefined') {
                                                 <div>${Utils.escapeHtml(itemName)}</div>
                                                 <div class="am-wxt-scene-crowd-selected-name meta">${Utils.escapeHtml(itemId)}</div>
                                             </div>
-                                            <button type="button" class="am-wxt-btn" data-scene-popup-item-remove="${Utils.escapeHtml(itemId)}">移除</button>
+                                            <button
+                                                type="button"
+                                                class="am-wxt-remove-icon-btn am-wxt-scene-item-remove-btn"
+                                                data-scene-popup-item-remove="${Utils.escapeHtml(itemId)}"
+                                                aria-label="移除商品：${Utils.escapeHtml(itemName)}"
+                                                title="移除商品"
+                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                         </div>
                                     `;
                                 }).join('');
@@ -59254,7 +59567,13 @@ if (typeof globalThis !== 'undefined') {
                                     </div>
                                     <div class="am-wxt-crowd-target-suggest">${Utils.escapeHtml(suggestionText)}</div>
                                     <div class="am-wxt-crowd-target-actions">
-                                        <button type="button" class="am-wxt-btn" data-scene-crowd-target-remove="${Utils.escapeHtml(key)}">移除</button>
+                                        <button
+                                            type="button"
+                                            class="am-wxt-remove-icon-btn am-wxt-crowd-target-remove-btn"
+                                            data-scene-crowd-target-remove="${Utils.escapeHtml(key)}"
+                                            aria-label="移除目标人群：${Utils.escapeHtml(crowdName)}"
+                                            title="移除目标人群"
+                                        >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                     </div>
                                 </div>
                             `;
@@ -59693,7 +60012,13 @@ if (typeof globalThis !== 'undefined') {
                                                     <section class="am-wxt-scene-crowd-native-right">
                                                         <div class="am-wxt-scene-crowd-native-selected-head">
                                                             <span>已选人群（<b data-scene-popup-crowd-native-selected-count="1">0</b>/100）</span>
-                                                            <a href="javascript:;" data-scene-popup-crowd-native-clear="1">全部移除</a>
+                                                            <button
+                                                                type="button"
+                                                                class="am-wxt-remove-icon-btn am-wxt-scene-crowd-native-clear-btn"
+                                                                data-scene-popup-crowd-native-clear="1"
+                                                                aria-label="移除全部已选人群"
+                                                                title="移除全部已选人群"
+                                                            >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                                         </div>
                                                         <div class="am-wxt-scene-crowd-native-selected-table-head">
                                                             <span>人群名称</span>
@@ -60028,7 +60353,7 @@ if (typeof globalThis !== 'undefined') {
                                                     </div>
                                                     <div class="am-wxt-scene-crowd-candidate-actions">
                                                         ${selected
-                                                    ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>`
+                                                    ? `<button type="button" class="am-wxt-remove-icon-btn am-wxt-scene-crowd-remove-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}" aria-label="移除候选人群：${name}" title="移除人群">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>`
                                                     : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-add="${Utils.escapeHtml(key)}">添加</button>`}
                                                     </div>
                                                 </div>
@@ -60046,7 +60371,8 @@ if (typeof globalThis !== 'undefined') {
                                         }
                                         crowdSelectedListEl.innerHTML = selectedList.map((item, idx) => {
                                             const key = getCrowdKey(item, idx);
-                                            const name = Utils.escapeHtml(getCrowdDisplayName(item) || `已选人群${idx + 1}`);
+                                            const rawName = getCrowdDisplayName(item) || `已选人群${idx + 1}`;
+                                            const name = Utils.escapeHtml(rawName);
                                             const labelId = Utils.escapeHtml(
                                                 normalizeSceneSettingValue(item?.crowd?.label?.labelId || key)
                                             );
@@ -60061,7 +60387,13 @@ if (typeof globalThis !== 'undefined') {
                                                         <input type="number" min="30" max="300" step="1" value="${Utils.escapeHtml(String(bid))}" data-scene-popup-crowd-selected-bid="${Utils.escapeHtml(key)}" />
                                                         <span>%</span>
                                                     </div>
-                                                    <button type="button" class="am-wxt-btn" data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}">移除</button>
+                                                    <button
+                                                        type="button"
+                                                        class="am-wxt-remove-icon-btn am-wxt-scene-crowd-remove-btn"
+                                                        data-scene-popup-crowd-remove="${Utils.escapeHtml(key)}"
+                                                        aria-label="移除已选人群：${Utils.escapeHtml(rawName)}"
+                                                        title="移除人群"
+                                                    >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                                 </div>
                                             `;
                                         }).join('');
@@ -60232,7 +60564,7 @@ if (typeof globalThis !== 'undefined') {
                                                     </div>
                                                     <div class="am-wxt-scene-crowd-native-candidate-actions">
                                                         ${selected
-                                                    ? `<button type="button" class="am-wxt-btn" data-scene-popup-crowd-native-remove="${Utils.escapeHtml(key)}">取消添加</button>`
+                                                    ? `<button type="button" class="am-wxt-remove-icon-btn am-wxt-scene-crowd-native-remove-btn" data-scene-popup-crowd-native-remove="${Utils.escapeHtml(key)}" aria-label="取消添加人群：${Utils.escapeHtml(rawName)}" title="取消添加">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>`
                                                     : `<button type="button" class="am-wxt-btn primary" data-scene-popup-crowd-native-add="${Utils.escapeHtml(key)}">添加</button>`}
                                                     </div>
                                                 </div>
@@ -60257,7 +60589,13 @@ if (typeof globalThis !== 'undefined') {
                                                     <div class="am-wxt-scene-crowd-native-selected-name">${Utils.escapeHtml(crowdName)}</div>
                                                     <div class="am-wxt-scene-crowd-native-selected-source">${Utils.escapeHtml(source)}</div>
                                                     <div class="am-wxt-scene-crowd-native-selected-actions">
-                                                        <a href="javascript:;" data-scene-popup-crowd-native-remove-selected="${Utils.escapeHtml(key)}">移除</a>
+                                                        <button
+                                                            type="button"
+                                                            class="am-wxt-remove-icon-btn am-wxt-scene-crowd-native-remove-selected-btn"
+                                                            data-scene-popup-crowd-native-remove-selected="${Utils.escapeHtml(key)}"
+                                                            aria-label="移除已选人群：${Utils.escapeHtml(crowdName)}"
+                                                            title="移除人群"
+                                                        >${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                                                     </div>
                                                 </div>
                                             `;
@@ -62978,9 +63316,10 @@ if (typeof globalThis !== 'undefined') {
                     const row = document.createElement('div');
                     row.className = 'am-wxt-crowd-item';
                     const labelId = crowdItem?.crowd?.label?.labelId || '';
+                    const crowdName = getCrowdDisplayName(crowdItem) || `人群${idx + 1}`;
                     row.innerHTML = `
-                        <span>${Utils.escapeHtml(getCrowdDisplayName(crowdItem))}${labelId ? `（${Utils.escapeHtml(labelId)}）` : ''}</span>
-                        <button class="am-wxt-btn">移除</button>
+                        <span>${Utils.escapeHtml(crowdName)}${labelId ? `（${Utils.escapeHtml(labelId)}）` : ''}</span>
+                        <button type="button" class="am-wxt-remove-icon-btn am-wxt-crowd-remove-btn" aria-label="移除人群：${Utils.escapeHtml(crowdName)}" title="移除人群">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                     `;
                     const removeBtn = row.querySelector('button');
                     removeBtn.onclick = () => {
@@ -63127,18 +63466,19 @@ if (typeof globalThis !== 'undefined') {
                 wizardState.addedItems.forEach((item, idx) => {
                     const row = document.createElement('div');
                     row.className = 'am-wxt-item';
+                    const itemName = item.materialName || '(无标题商品)';
                     row.innerHTML = `
                         <div class="am-wxt-item-main">
                             ${renderKeywordItemThumb(item)}
                             <div class="am-wxt-item-info">
-                                <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
+                                <div class="name">${Utils.escapeHtml(itemName)}</div>
                                 <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
                             </div>
                         </div>
                         <div class="actions">
                             <button class="am-wxt-btn">上移</button>
                             <button class="am-wxt-btn">下移</button>
-                            <button class="am-wxt-btn">移除</button>
+                            <button type="button" class="am-wxt-remove-icon-btn am-wxt-item-remove-btn" aria-label="移除商品：${Utils.escapeHtml(itemName)}" title="移除商品">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                         </div>
                     `;
                     const [upBtn, downBtn, removeBtn] = row.querySelectorAll('button');
@@ -66779,6 +67119,9 @@ if (typeof globalThis !== 'undefined') {
             'adRotation',
             'openAutoCreative',
             'openStaticCreative',
+            'creativeList',
+            'creativeInfo',
+            'materialList',
             'itemResource'
         ];
         const COPY_DROP_STATUS_FIELDS = ['status', 'displayStatus', 'planStatus', 'campaignStatus'];
@@ -67010,6 +67353,23 @@ if (typeof globalThis !== 'undefined') {
             if (compact === 'roi' || compact === 'roicontrol' || compact === '控投产比') return 'roi_control';
             return raw;
         };
+        const normalizeCopyKeywordWordList = (wordList = []) => {
+            if (!Array.isArray(wordList)) return [];
+            return uniqueBy(
+                wordList
+                    .map((item) => {
+                        if (!item || typeof item !== 'object') return null;
+                        const word = String(item.word || item.keyword || item.bidword || item.name || '').trim();
+                        if (!word) return null;
+                        return {
+                            ...deepClone(item),
+                            word
+                        };
+                    })
+                    .filter(Boolean),
+                item => item.word
+            ).slice(0, 200);
+        };
         const applyCurrentPlanCopyRowOverrides = (plan = {}, planCampaign = {}, planAdgroup = {}, row = {}) => {
             if (!isPlainObject(row)) return;
             const bidMode = normalizeCurrentPlanCopyBidMode(row.bidMode || '');
@@ -67088,14 +67448,40 @@ if (typeof globalThis !== 'undefined') {
             if (!targetScene) throw new Error('复制计划缺少场景参数');
             const campaign = normalizeCopySourceCampaign(source);
             const adgroup = normalizeCopySourceAdgroup(source);
-            const item = normalizeCopySourceItem(source, campaign, adgroup);
-            if (!item) throw new Error('复制计划缺少商品参数');
             const sourcePlanName = campaign.campaignName || source?.campaignName || source?.name || '';
             const copyCount = normalizeCurrentPlanCopyCount(options);
             const copyPlanRows = normalizeCurrentPlanCopyRowList(options);
             const newPlanNames = buildCurrentPlanCopiedPlanNames(sourcePlanName, targetScene, copyCount, source, options);
             const newPlanName = newPlanNames[0] || buildCurrentPlanCopyName(sourcePlanName || targetScene || '计划');
             const targetOnlineStatus = resolveCurrentPlanCopyStatus(source, options);
+            const bizCode = normalizeSceneBizCode(campaign.bizCode || source?.bizCode || resolveSceneBizCodeHint(targetScene) || '');
+            const baseMeta = {
+                sourceCampaignId: String(source?.campaignId || source?.campaign?.campaignId || campaign?.campaignId || '').trim(),
+                sourceCampaignName: String(source?.campaignName || source?.campaign?.campaignName || campaign?.campaignName || '').trim(),
+                newPlanName,
+                newPlanNames,
+                copyCount,
+                targetOnlineStatus,
+                sceneName: targetScene,
+                bizCode,
+                itemId: '',
+                copyPlanRows
+            };
+            if (isOfficialCopyScene(baseMeta)) {
+                return {
+                    request: {
+                        sceneName: targetScene,
+                        bizCode,
+                        marketingGoal: '',
+                        planNamePrefix: newPlanName,
+                        __copyCurrentPlan: true,
+                        plans: []
+                    },
+                    meta: baseMeta
+                };
+            }
+            const item = normalizeCopySourceItem(source, campaign, adgroup);
+            if (!item) throw new Error('复制计划缺少商品参数');
             const commonCampaign = deepClone(campaign);
             const commonAdgroup = deepClone(adgroup);
             delete commonCampaign.campaignName;
@@ -67106,12 +67492,14 @@ if (typeof globalThis !== 'undefined') {
             const marketingGoal = resolveCurrentPlanCopyMarketingGoal(targetScene, source, campaign, options);
             const request = {
                 sceneName: targetScene,
-                bizCode: normalizeSceneBizCode(campaign.bizCode || source?.bizCode || resolveSceneBizCodeHint(targetScene) || ''),
+                bizCode,
                 marketingGoal,
                 planNamePrefix: newPlanName,
                 __copyCurrentPlan: true,
                 common: {
                     marketingGoal,
+                    keywordMode: Array.isArray(adgroup.wordList) && adgroup.wordList.length ? 'manual' : undefined,
+                    useWordPackage: Array.isArray(adgroup.wordPackageList) && adgroup.wordPackageList.length,
                     rawOverrides: {
                         campaign: commonCampaign,
                         adgroup: commonAdgroup
@@ -67121,6 +67509,10 @@ if (typeof globalThis !== 'undefined') {
                     const planCampaign = deepClone(campaign);
                     const planAdgroup = deepClone(adgroup);
                     const row = copyPlanRows[index] || {};
+                    const sourceWordList = normalizeCopyKeywordWordList(planAdgroup.wordList || []);
+                    const sourceWordPackageList = Array.isArray(planAdgroup.wordPackageList)
+                        ? deepClone(planAdgroup.wordPackageList).slice(0, 100)
+                        : [];
                     planCampaign.campaignName = planName;
                     planCampaign.onlineStatus = targetOnlineStatus;
                     planAdgroup.onlineStatus = targetOnlineStatus;
@@ -67131,6 +67523,13 @@ if (typeof globalThis !== 'undefined') {
                         itemId: item.itemId || item.materialId,
                         materialId: item.materialId || item.itemId,
                         budget,
+                        keywords: sourceWordList,
+                        keywordSource: {
+                            mode: sourceWordList.length ? 'manual' : 'mixed',
+                            source: 'copy_current_plan',
+                            useWordPackage: sourceWordPackageList.length > 0
+                        },
+                        useWordPackage: sourceWordPackageList.length > 0,
                         __copyCurrentPlan: true,
                         rawOverrides: {
                             campaign: planCampaign,
@@ -67144,16 +67543,9 @@ if (typeof globalThis !== 'undefined') {
             return {
                 request,
                 meta: {
-                    sourceCampaignId: String(source?.campaignId || source?.campaign?.campaignId || '').trim(),
-                    sourceCampaignName: String(source?.campaignName || source?.campaign?.campaignName || '').trim(),
-                    newPlanName,
-                    newPlanNames,
-                    copyCount,
-                    targetOnlineStatus,
-                    sceneName: targetScene,
-                    bizCode: request.bizCode,
+                    ...baseMeta,
                     itemId: String(item.itemId || item.materialId || '').trim(),
-                    copyPlanRows
+                    bizCode: request.bizCode
                 }
             };
         };
@@ -67286,9 +67678,10 @@ if (typeof globalThis !== 'undefined') {
                 error: rows.filter(row => !row.ok).map(row => `${row.campaignId}: ${row.error || '暂停失败'}`).join('；')
             };
         };
-        const isDisplayOfficialCopyScene = (meta = {}) => {
+        const isOfficialCopyScene = (meta = {}) => {
             const bizCode = normalizeSceneBizCode(meta?.bizCode || '');
-            return bizCode === 'onebpDisplay' || meta?.sceneName === '人群推广';
+            return bizCode === 'onebpDisplay'
+                || meta?.sceneName === '人群推广';
         };
         const formatOfficialCopyDate = (value = '') => {
             const raw = String(value || '').trim();
@@ -67304,7 +67697,7 @@ if (typeof globalThis !== 'undefined') {
             const pad = (num) => String(num).padStart(2, '0');
             return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
         };
-        const buildDisplayOfficialCopyPayload = (meta = {}, planName = '', source = {}, options = {}) => {
+        const buildOfficialCopyPayload = (meta = {}, planName = '', source = {}, options = {}) => {
             const campaign = normalizeCopySourceCampaign(source);
             const sourceCampaignId = toPositiveIdText(
                 meta?.sourceCampaignId
@@ -67313,7 +67706,7 @@ if (typeof globalThis !== 'undefined') {
                 || campaign?.campaignId
                 || ''
             );
-            if (!sourceCampaignId) throw new Error('人群推广官方复制缺少源计划ID');
+            if (!sourceCampaignId) throw new Error('官方复制缺少源计划ID');
             const startTime = formatOfficialCopyDate(
                 options.startTime
                 || options.copyStartTime
@@ -67321,7 +67714,7 @@ if (typeof globalThis !== 'undefined') {
                 || ''
             );
             const payload = {
-                bizCode: normalizeSceneBizCode(meta?.bizCode || source?.bizCode || campaign?.bizCode || 'onebpDisplay') || 'onebpDisplay',
+                bizCode: normalizeSceneBizCode(meta?.bizCode || source?.bizCode || campaign?.bizCode || DEFAULTS.bizCode) || DEFAULTS.bizCode,
                 copyCampaignId: Number(sourceCampaignId),
                 campaignName: String(planName || meta?.newPlanName || '').trim(),
                 campaignGroupName: String(options.campaignGroupName ?? ''),
@@ -67329,19 +67722,19 @@ if (typeof globalThis !== 'undefined') {
                 startTime,
                 launchForever: options.launchForever !== false
             };
-            if (!payload.campaignName) throw new Error('人群推广官方复制缺少新计划名称');
+            if (!payload.campaignName) throw new Error('官方复制缺少新计划名称');
             return payload;
         };
-        const copyDisplayCurrentPlanByOfficialApi = async (meta = {}, source = {}, options = {}) => {
-            const bizCode = normalizeSceneBizCode(meta?.bizCode || source?.bizCode || 'onebpDisplay') || 'onebpDisplay';
+        const copyCurrentPlanByOfficialApi = async (meta = {}, source = {}, options = {}) => {
+            const bizCode = normalizeSceneBizCode(meta?.bizCode || source?.bizCode || DEFAULTS.bizCode) || DEFAULTS.bizCode;
             const planNames = uniqueBy(
                 (Array.isArray(meta?.newPlanNames) ? meta.newPlanNames : [meta?.newPlanName])
                     .map(name => String(name || '').trim())
                     .filter(Boolean),
                 name => name
             );
-            if (!planNames.length) throw new Error('人群推广官方复制缺少新计划名称');
-            const payloads = planNames.map(planName => buildDisplayOfficialCopyPayload(meta, planName, source, options));
+            if (!planNames.length) throw new Error('官方复制缺少新计划名称');
+            const payloads = planNames.map(planName => buildOfficialCopyPayload(meta, planName, source, options));
             if (options.dryRunOnly) {
                 return {
                     ok: true,
@@ -67415,8 +67808,8 @@ if (typeof globalThis !== 'undefined') {
         const copyCurrentPlanByScene = async (sceneName, source = {}, options = {}) => {
             if (!isPlainObject(source)) throw new Error('复制计划缺少源计划数据');
             const { request, meta } = buildCurrentPlanCopyRequestByScene(sceneName, source, options);
-            const result = isDisplayOfficialCopyScene(meta)
-                ? await copyDisplayCurrentPlanByOfficialApi(meta, source, options)
+            const result = isOfficialCopyScene(meta)
+                ? await copyCurrentPlanByOfficialApi(meta, source, options)
                 : await createPlansByScene(meta.sceneName, request, {
                     ...options,
                     batchRetry: Math.max(0, toNumber(options.batchRetry, 0)),

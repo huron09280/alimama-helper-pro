@@ -1643,14 +1643,19 @@
             if (!Array.isArray(wordList)) return [];
             return uniqueBy(
                 wordList
-                    .map(item => applyKeywordDefaults(item || {}, {}))
-                    .filter(item => item.word)
-                    .map(item => ({
-                        word: item.word,
-                        bidPrice: item.bidPrice,
-                        matchScope: item.matchScope,
-                        onlineStatus: item.onlineStatus
-                    })),
+                    .map((item) => {
+                        const original = isPlainObject(item) ? purgeCreateTransientFields(item) : {};
+                        const normalized = applyKeywordDefaults(item || {}, {});
+                        if (!normalized.word) return null;
+                        return {
+                            ...original,
+                            word: normalized.word,
+                            bidPrice: normalized.bidPrice,
+                            matchScope: normalized.matchScope,
+                            onlineStatus: normalized.onlineStatus
+                        };
+                    })
+                    .filter(item => item && item.word),
                 item => item.word
             ).slice(0, 200);
         };
@@ -2214,9 +2219,38 @@
             return out;
         };
 
+        const KEYWORD_CUSTOM_ADGROUP_ALLOW_KEYS = new Set([
+            'bizCode',
+            'promotionType',
+            'subPromotionType',
+            'campaignBidType',
+            'smartCreative',
+            'creativeSetMode',
+            'material',
+            'rightList',
+            'wordList',
+            'wordPackageList',
+            'adzoneList',
+            'crowdList',
+            'adgroupLandingPageVO',
+            'adgroupLandingPageVOList',
+            'smartTeemo',
+            'adRotation',
+            'openAutoCreative',
+            'openStaticCreative',
+            'itemResource',
+            'creativeList',
+            'creativeInfo',
+            'materialList'
+        ]);
+
         const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null, options = {}) => {
             const input = isPlainObject(adgroup) ? adgroup : {};
             const out = {};
+            Object.keys(input).forEach((key) => {
+                if (!KEYWORD_CUSTOM_ADGROUP_ALLOW_KEYS.has(key)) return;
+                out[key] = deepClone(input[key]);
+            });
             out.rightList = Array.isArray(input.rightList) ? deepClone(input.rightList) : [];
             out.wordList = normalizeKeywordWordListForSubmit(input.wordList || []);
             if (hasOwn(input, 'wordPackageList')) {

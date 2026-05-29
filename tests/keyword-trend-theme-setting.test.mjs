@@ -158,6 +158,16 @@ test('趋势主题弹窗读取原生推荐并按对象结构保存', () => {
     );
     assert.match(
         popupBlock,
+        /class="am-wxt-remove-icon-btn am-wxt-scene-trend-clear-btn"[\s\S]*data-scene-popup-trend-clear="1"[\s\S]*aria-label="移除全部已选趋势主题"[\s\S]*title="移除全部已选趋势主题"[\s\S]*renderAmIcon\('close', \{ size: 12, strokeWidth: 2\.2 \}\)/,
+        '趋势主题弹窗“全部移除”未迁移为共享 close 图标按钮'
+    );
+    assert.doesNotMatch(
+        popupBlock,
+        /href="javascript:;"\s+data-scene-popup-trend-clear="1"/,
+        '趋势主题弹窗“全部移除”不应回退为 javascript 链接'
+    );
+    assert.match(
+        popupBlock,
         /saveFirst:\s*true[\s\S]*selectedActionsEl[\s\S]*popupFootEl[\s\S]*querySelectorAll\('\[data-scene-popup-save\], \[data-scene-popup-cancel\]'\)[\s\S]*appendChild\(button\)/,
         '趋势主题弹窗未把确定/取消按钮移动到全部移除右侧'
     );
@@ -225,6 +235,16 @@ test('趋势主题弹窗读取原生推荐并按对象结构保存', () => {
         popupBlock,
         /const runAssociationSearch = async[\s\S]*resolveAssociationSearchQueries\(query\)[\s\S]*fetchAssociationThemes\(queryCandidate\)[\s\S]*data-scene-popup-trend-association-toggle[\s\S]*findThemeByKey\(key\)[\s\S]*toggleTheme\(item\)/,
         '趋势主题弹窗手动联想结果未接入当前勾选/移除逻辑'
+    );
+    assert.match(
+        popupBlock,
+        /class="am-wxt-scene-trend-association-op\$\{selected \? ' am-wxt-remove-icon-btn am-wxt-scene-trend-association-remove-btn' : ''\}"[\s\S]*\$\{selected \? `aria-label="移除趋势主题：\$\{Utils\.escapeHtml\(themeName\)\}" title="移除趋势主题"` : ''\}[\s\S]*>\$\{selected \? renderAmIcon\('close', \{ size: 12, strokeWidth: 2\.2 \}\) : '添加'\}<\/button>/,
+        '趋势主题联想结果选中态未迁移为共享 close 图标按钮'
+    );
+    assert.match(
+        trendLayoutStyleBlock,
+        /am-wxt-scene-trend-association-op\.am-wxt-remove-icon-btn[\s\S]*display:\s*inline-flex[\s\S]*width:\s*24px[\s\S]*height:\s*24px[\s\S]*background:\s*var\(--am26-surface,/,
+        '趋势主题联想结果选中态图标按钮缺少后置圆形 token 样式'
     );
     assert.match(
         popupBlock,

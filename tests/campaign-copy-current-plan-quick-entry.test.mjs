@@ -12,6 +12,14 @@ const exportsSource = read('src/optimizer/keyword-plan-api/exports.js');
 const bridgeSource = read('src/optimizer/bridge.js');
 const bootstrapSource = read('src/main-assistant/bootstrap.js');
 
+const extractFunctionSegment = (source, marker, endMarker = '\n        };') => {
+    const start = source.indexOf(marker);
+    assert.notEqual(start, -1, `缺少函数片段：${marker}`);
+    const end = source.indexOf(endMarker, start);
+    assert.notEqual(end, -1, `函数片段未闭合：${marker}`);
+    return source.slice(start, end);
+};
+
 const extractCssRule = (source, selector) => {
     const start = source.indexOf(`${selector} {`);
     assert.notEqual(start, -1, `缺少 CSS 规则：${selector}`);
@@ -203,23 +211,43 @@ test('copyCurrentPlanByScene 通过白名单和瞬态字段清理构造创建请
     assert.match(wizardApi, /plan\.keywordDefaults = \{[\s\S]*?bidPrice[\s\S]*?planAdgroup\.bidPrice = bidPrice;/, '每行出价价格应写入关键词默认出价和 adgroup');
 });
 
-test('人群推广当前计划复制使用官方复制接口并保留暂停兜底', () => {
-    assert.match(wizardApi, /const isDisplayOfficialCopyScene = \(meta = \{\}\) => \{[\s\S]*?bizCode === 'onebpDisplay' \|\| meta\?\.sceneName === '人群推广';/, '人群推广复制应进入官方复制分支');
-    assert.match(wizardApi, /const buildDisplayOfficialCopyPayload = \(meta = \{\},\s*planName = '',\s*source = \{\},\s*options = \{\}\) => \{[\s\S]*?copyCampaignId:\s*Number\(sourceCampaignId\),[\s\S]*?campaignName:[\s\S]*?campaignGroupName:[\s\S]*?campaignGroupId:[\s\S]*?startTime,[\s\S]*?launchForever:/, '官方复制请求应对齐原生弹窗提交字段');
+test('人群当前计划复制使用官方复制接口，关键词走通用创建路径', () => {
+    const officialCopySceneSegment = extractFunctionSegment(
+        wizardApi,
+        'const isOfficialCopyScene = (meta = {}) => {',
+        '        const formatOfficialCopyDate'
+    );
+    assert.match(officialCopySceneSegment, /bizCode === 'onebpDisplay'[\s\S]*?meta\?\.sceneName === '人群推广';/, '人群推广应进入官方复制分支');
+    assert.doesNotMatch(officialCopySceneSegment, /onebpSearch/, '关键词推广不能进入官方 solution/copy 分支');
+    assert.doesNotMatch(officialCopySceneSegment, /关键词推广/, '关键词推广不能进入官方 solution/copy 分支');
+    const officialCopyBranchIndex = wizardApi.indexOf('if (isOfficialCopyScene(baseMeta))');
+    const itemRequiredIndex = wizardApi.indexOf("if (!item) throw new Error('复制计划缺少商品参数');");
+    assert.ok(officialCopyBranchIndex > -1, '官方复制场景应在组包阶段提前返回官方复制 meta');
+    assert.ok(itemRequiredIndex > officialCopyBranchIndex, '人群官方复制场景不应先要求商品参数');
+    assert.match(wizardApi, /const buildOfficialCopyPayload = \(meta = \{\},\s*planName = '',\s*source = \{\},\s*options = \{\}\) => \{[\s\S]*?copyCampaignId:\s*Number\(sourceCampaignId\),[\s\S]*?campaignName:[\s\S]*?campaignGroupName:[\s\S]*?campaignGroupId:[\s\S]*?startTime,[\s\S]*?launchForever:/, '官方复制请求应对齐原生弹窗提交字段');
     assert.match(wizardApi, /requestOne\('\/campaign\/copy\/campaignCheck\.json',\s*bizCode,[\s\S]*?campaignId:\s*payload\.copyCampaignId/, '提交官方复制前应走原生 campaignCheck');
-    assert.match(wizardApi, /requestOne\('\/solution\/copy\.json',\s*bizCode,\s*payload,\s*options\.requestOptions \|\| \{\}\)/, '人群推广应调用原生 solution/copy.json，而不是自己组 addList');
-    assert.match(wizardApi, /const result = isDisplayOfficialCopyScene\(meta\)[\s\S]*?\? await copyDisplayCurrentPlanByOfficialApi\(meta,\s*source,\s*options\)[\s\S]*?: await createPlansByScene/, 'copyCurrentPlanByScene 应只把人群推广切到官方复制接口');
+    assert.match(wizardApi, /requestOne\('\/solution\/copy\.json',\s*bizCode,\s*payload,\s*options\.requestOptions \|\| \{\}\)/, '人群推广应调用原生 solution/copy.json');
+    assert.match(wizardApi, /const result = isOfficialCopyScene\(meta\)[\s\S]*?\? await copyCurrentPlanByOfficialApi\(meta,\s*source,\s*options\)[\s\S]*?: await createPlansByScene/, '关键词推广应落到 createPlansByScene 通用创建路径');
     assert.match(wizardApi, /officialCopyPayloads:\s*payloads/, '官方复制 dry-run/结果应暴露官方 payload 方便受保护验证');
     assert.match(wizardApi, /const postCreateStatus = await pauseCopiedCampaignsAfterCreate\(meta\.sceneName,\s*resultWithCreatedIds,\s*meta,\s*options\);/, '官方复制后仍应复用创建后暂停兜底');
+    assert.match(wizardApi, /keywordMode:\s*Array\.isArray\(adgroup\.wordList\) && adgroup\.wordList\.length \? 'manual' : undefined/, '关键词复制应使用源计划关键词，不应默认重建推荐词');
+    assert.match(wizardApi, /keywords:\s*sourceWordList,[\s\S]*?keywordSource:\s*\{[\s\S]*?mode:\s*sourceWordList\.length \? 'manual' : 'mixed'/, '关键词复制 plan 应显式带源 wordList');
 });
 
-test('关键词当前计划复制保留 AI 点睛和原生智能出价目标合同', () => {
-    for (const field of ['aiMaxInfo', 'aiMaxSwitch', 'campaignShieldWords', 'shieldWords', 'shieldCenterWords']) {
+test('关键词当前计划复制保留隐藏配置、创意和原生智能出价目标合同', () => {
+    for (const field of ['aiMaxInfo', 'aiMaxSwitch', 'campaignShieldWords', 'shieldWords', 'shieldCenterWords', 'launchAreaStrList', 'launchPeriodList', 'enableRuleAuto', 'ruleCommand', 'smartCreative', 'creativeSetMode', 'openAutoCreative', 'openStaticCreative']) {
         assert.match(draftBuilder, new RegExp(`KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS[\\s\\S]*?'${field}'`), `关键词复制裁剪白名单缺少 ${field}`);
+    }
+    for (const field of ['wordList', 'wordPackageList', 'adzoneList', 'crowdList', 'smartCreative', 'creativeSetMode', 'openAutoCreative', 'openStaticCreative', 'creativeList', 'creativeInfo', 'materialList']) {
+        assert.match(draftBuilder, new RegExp(`KEYWORD_CUSTOM_ADGROUP_ALLOW_KEYS[\\s\\S]*?'${field}'`), `关键词单元裁剪白名单缺少 ${field}`);
+        assert.match(wizardApi, new RegExp(`COPY_ADGROUP_FIELD_WHITELIST[\\s\\S]*?'${field}'`), `复制单元白名单缺少 ${field}`);
     }
     assert.match(wizardApi, /const pickCopyCampaignCrowdList = \(source = \{\}\) => \{[\s\S]*?source\?\.campaign\?\.crowdList,[\s\S]*?source\?\.crowdList,[\s\S]*?source\?\.aiMaxCrowdList/, '复制 API 应兼容源计划需求人群字段');
     assert.match(wizardApi, /campaign\.crowdList = purgeCreateTransientFields\(sourceCrowdList\);/, '复制 API 应把原生需求人群写入创建 campaign.crowdList 并清理旧计划 ID');
     assert.match(wizardApi, /COPY_CAMPAIGN_FIELD_WHITELIST[\s\S]*?'crowdList'/, 'campaign 白名单必须保留需求人群 crowdList');
+    assert.match(draftBuilder, /const resolvedLaunchAreaList = resolveNonEmptyArrayField\([\s\S]*?'launchAreaStrList'[\s\S]*?out\.launchAreaStrList = Array\.isArray\(resolvedLaunchAreaList\) && resolvedLaunchAreaList\.length[\s\S]*?: \['all'\];/, '地域仅应在源字段为空时回落 all');
+    assert.match(draftBuilder, /out\.wordList = normalizeKeywordWordListForSubmit\(input\.wordList \|\| \[]\);/, '关键词单元应从源 wordList 归一提交');
+    assert.match(draftBuilder, /const normalized = applyKeywordDefaults\(item \|\| \{\}, \{\}\);[\s\S]*?\.\.\.original,[\s\S]*?word: normalized\.word,[\s\S]*?onlineStatus: normalized\.onlineStatus/, '关键词归一应保留源关键词扩展字段');
     assert.doesNotMatch(
         draftBuilder,
         /KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS[\s\S]*?'supportAiDigitalLaunch'/,

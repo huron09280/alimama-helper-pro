@@ -1,3 +1,430 @@
+# TODO - 2026-05-30 关键词推广真实复制浏览器验收
+
+## 需求规格
+- 目标：按用户授权，在真实浏览器关键词推广页面测试插件复制 `E7pro_自定义`，直到新计划实际复制成功并可在页面查到。
+- 范围：只验证关键词推广当前计划复制链路；复制合同必须覆盖关键词/词包、人群、地域、创意、时间折扣、全能调价/规则自动化、预算出价和暂停状态；不操作批量+、预算修改、删除、开启投放、商品编辑、地域编辑或其它写操作。
+- 安全边界：本轮用户已授权真实复制计划；新计划名称使用可识别的测试后缀，目标状态优先保持暂停或通过复制后暂停兜底处理；除复制和必要的暂停兜底外，不触发其它创建/更新/删除/投放类写请求。
+- 成功标准：浏览器运行态确认加载了最新官方复制接口修复；执行真实复制请求成功；页面或只读接口能查到新计划；记录源计划 ID、新计划名称、新计划 ID、复制/暂停接口响应、页面最终状态和异常情况。
+
+## 执行计划（可核对）
+- [x] 确认测试浏览器、扩展运行态和目标关键词推广页面可用，必要时重载扩展并硬刷新页面。
+- [x] 定位源计划 `E7pro_自定义`，记录源计划 ID、状态和当前页面上下文。
+- [x] 验证关键词推广官方 copy dry-run 与真实提交差异，确认 `/solution/copy.json` 真实不可用。
+- [x] 修正关键词推广复制策略：撤回官方 copy，回到受控 addList 路径，并保留关键词/词包、人群、地域、创意、时间折扣、全能调价等源字段。
+- [x] 通过插件运行态执行真实复制，使用唯一测试计划名并设置目标暂停状态。
+- [x] 等待复制结果，记录创建接口、暂停兜底响应和关键字段 payload。
+- [x] 搜索新计划并验证页面可见，记录最终状态；如失败，按错误继续定位并重试到成功或明确阻塞。
+
+## 高层操作摘要
+- 用户明确要求“请在浏览器里测试，直到复制成功”，因此本轮从 dry-run 升级为真实复制验收。
+- 为降低真实投放风险，本轮只复制指定关键词推广计划，命名使用测试后缀，复制后目标状态按暂停处理。
+- 已按用户要求启动 5 个子代理分工：接口路径、字段保留、测试断言、浏览器验收、任务记录；其中 3 个结论支持撤回关键词官方 copy，1 个浏览器方案误判为继续官方 copy，主线程以真实抓包“该场景暂无此功能”为准。
+- dry-run 成功只能证明运行态会生成 `onebpSearch` 官方 copy payload；真实调用 `/solution/copy.json` 返回“该场景暂无此功能”，证明关键词推广服务端不支持该官方复制能力。
+- 最新补充要求复制合同覆盖关键词、人群、地域、创意、时间折扣、全能调价等，因此后续修复不能只解决接口路径，还要证明这些源字段不会被默认值或推荐词重建覆盖。
+
+## 验证记录
+- Chrome DevTools MCP：真实关键词推广页 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc&offset=0&searchKey=campaignNameLike&searchValue=E7` 可用；页面 API 存在 `window.__AM_WXT_PLAN_API__.copyCurrentPlanByScene`；扩展 ID `egaeghgcogbdikndhlmmmolelbfffnjk`，加载路径为本仓库 `dist/extension`。
+- Chrome dry-run：此前调用 `copyCurrentPlanByScene('关键词推广', source, { dryRunOnly:true, ... })` 成功生成 `bizCode:"onebpSearch"` 的官方 copy payload，未触发真实写请求。
+- Chrome 真实官方 copy：`/campaign/copy/campaignCheck.json` 返回成功后，`/solution/copy.json` 对 `bizCode:"onebpSearch"` 返回业务错误“该场景暂无此功能”；随后搜索新名称未查到新计划。
+- 结论：此前“关键词推广优先走官方复制接口”的判断被真实接口否定；不能把 dry-run 成功当作服务端能力可用证明。
+- 代码修复：`src/optimizer/keyword-plan-api/wizard-open-and-create.js` 已将官方复制场景收回到 `onebpDisplay/人群推广`；关键词推广 `onebpSearch` 改回受控 `/solution/addList.json` 创建路径，并显式携带源 `wordList/wordPackageList`、`keywordMode='manual'`，避免复制时重建推荐词覆盖源词。
+- 字段合同：`src/optimizer/keyword-plan-api/search-and-draft.js` 已补充关键词单元复制白名单，允许 `wordList/wordPackageList/adzoneList/crowdList/smartCreative/creativeSetMode/openAutoCreative/openStaticCreative/creativeList/creativeInfo/materialList` 等源字段透传；关键词归一化保留源关键词扩展字段。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，12/12；覆盖人群推广仍走官方复制、关键词推广不进官方 copy、关键词/地域/时间折扣/全能调价/创意字段保留。
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- Chrome 扩展重载：`chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 已 Reload，加载路径确认为 `/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/dist/extension`；刷新关键词页后运行态 `page.bundle.js` 中 `isOfficialCopyScene` 不含 `onebpSearch/关键词推广`。
+- Chrome 新版 dry-run：`copyCurrentPlanByScene('关键词推广', source, { dryRunOnly:true })` 返回 `dryRunOnly:true`，无 `officialCopyPayloads`，`sample.meta.submitEndpoint="/solution/addList.json"`；样例保留 `launchAreaStrList`、`launchPeriodList`、`wordList`、`wordPackageList`、`crowdList`、`adzone/right`、`creative*`、`enableRuleAuto/ruleCommand`。
+- Chrome 真实复制：通过真实行级复制按钮链路复制源计划 `E7pro_自定义 / campaignId 69514602419 / adgroupId 69510831221 / bizCode onebpSearch`；为避免源计划在投导致新计划在投，临时把按钮 `data-am-campaign-copy` 改为 `pause` 后执行。
+- 创建结果：`POST /solution/addList.json` 返回 `info.ok=true`、`data.list[0].campaignId=81122466501`、`errorDetails=[]`；新计划名 `E7pro_自定义_2`，新 `campaignId=81122466501`、`adgroupId=81122204956`。
+- 暂停兜底：随后 `POST /campaign/updatePart.json` 返回 `info.ok=true`，新计划 `onlineStatus=0`；列表和只读详情显示 `displayStatus="pause"`，没有开启投放。
+- 安全核对：新版真实复制未再调用 `/solution/copy.json` 或 `/campaign/copy/campaignCheck.json`；除创建和必要暂停兜底外，未执行删除、开启投放、商品编辑、预算修改等无关写操作。
+- 提交 payload 关键字段：`body.solutionList[0].campaign.campaignName="E7pro_自定义_2"`，`bizCode="onebpSearch"`，`launchAreaStrList` 数量 87，`launchPeriodList` 数量 7，`dayBudget=1000`，`dmcType="normal"`，`bidType/bidTypeV2="custom_bid"`，`campaign.crowdList` 数量 23，`adgroup.wordList` 数量 5，`adgroup.smartCreative=1`。请求结构为 `solutionList[0].campaign` 与 `solutionList[0].adgroupList[0]`，不是 `campaignList`。
+- 关键词核对：提交的 5 个源关键词为 `美的` 出价 `1.13`、`美的家用全自动洗碗机` 出价 `1`、`美的13套洗碗机` 出价 `1`、`美的洗碗机d1` 出价 `1`、`美的 e7por` 出价 `1`，均带源匹配配置。
+- 只读详情核对：源计划与新计划均保持地域 87、分时 7、预算 1000、出价方式 custom、`smartCreative=1`、人群读取成功；`adgroup/get` 不直接返回 `wordList`，但创建 payload 已明确带 5 个词且服务端创建成功。
+- 页面核对：在关键词推广列表搜索新计划可见 `E7pro_自定义_2`，状态为暂停。
+
+## 结果复盘
+- 结果：关键词推广复制已从真实不可用的官方 `/solution/copy.json` 改回受控 `/solution/addList.json`，并补齐复制合同；真实浏览器中已成功从 `E7pro_自定义` 复制出暂停的新计划 `E7pro_自定义_2 / campaignId 81122466501`。
+- 风险：源计划详情接口本轮没有返回独立 `creativeList`，因此无法对比独立创意列表；现有复制已保留 `smartCreative=1`，并在白名单中支持 `creativeList/creativeInfo/materialList`，后续源接口返回独立创意字段时会透传。
+- 回滚方式：回退 `src/optimizer/keyword-plan-api/wizard-open-and-create.js`、`src/optimizer/keyword-plan-api/search-and-draft.js`、`tests/campaign-copy-current-plan-quick-entry.test.mjs` 和构建产物即可恢复旧行为；不建议回滚到关键词官方 copy，因为真实服务端返回“该场景暂无此功能”。
+
+---
+
+# TODO - 2026-05-30 关键词推广复制计划发货关键词与地区未复制
+
+## 需求规格
+- 目标：修复关键词推广 `onebpSearch` 中通过插件“复制计划”复制 `E7pro_自定义` 类计划时，源计划的发货关键词、地区/地域等关键配置未复制到新计划的问题。
+- 范围：只处理关键词推广复制计划链路；不扩大到人群推广、线索推广、批量+、预算修改、UI 主题迁移或真实投放提交。
+- 安全边界：除非用户明确授权，不在真实页面点击最终确认生成，不触发创建/复制/保存/投放类写请求；浏览器验证优先只读检查源计划详情、运行态接口选择和 payload 组装。
+- 成功标准：明确字段丢失根因；复制链路应优先使用关键词推广官方完整复制接口，或在无法使用官方接口时完整保留源计划发货关键词、地域等字段；补充回归测试覆盖这些字段；专项测试、构建同步检查和语法检查通过。
+
+## 执行计划（可核对）
+- [x] 复核关键词推广复制按钮到 `copyCurrentPlanByScene` 的调用路径，确认当前走官方 copy 还是通用 addList 组包。
+- [x] 定位发货关键词、地区/地域字段在源计划详情、提取、裁剪、提交 payload 中的字段名和丢失位置。
+- [x] 设计并实施最小根因修复，避免新增第二套事实源或仅靠手写兜底字段。
+- [x] 补充或更新关键词推广复制计划回归测试，覆盖发货关键词和地区/地域保留。
+- [x] 运行专项测试、构建同步检查、语法检查和 diff 自审；必要时做受保护浏览器只读验收。
+
+## 高层操作摘要
+- 用户最新补充确认问题发生在“关键词推广”内，当前排查范围收窄到 `onebpSearch` 复制计划。
+- 已启动两个只读 explorer 并行调研：一个看复制链路与接口选择，一个看发货关键词/地区字段映射；主线程同步推进本地定位。
+- 根因：关键词推广复制此前落到通用 `createPlansByScene -> addList` 组包链路。该链路会先按复制白名单保留字段，再在关键词自定义场景里重新构建 `wordList/wordPackageList`、裁剪 campaign/adgroup，发货关键词、地区别名或隐藏合同字段容易被覆盖为默认值。
+- 方案选择：不继续追补单个隐藏字段，改为让关键词推广和人群推广一样走官方 `/campaign/copy/campaignCheck.json -> /solution/copy.json` 服务端复制链路；插件继续负责复制数量、命名、目标暂停兜底和成功后搜索。
+- 外部规则已按用户给的 `AGENT-v2.md` 读取，本轮遵循其中“Debug-First、结构性修复、验证顺序、diff review”规则。
+
+## 验证记录
+- 代码修改：`src/optimizer/keyword-plan-api/wizard-open-and-create.js` 将官方复制判定从 `onebpDisplay/人群推广` 扩展为 `onebpDisplay/onebpSearch/人群推广/关键词推广`；官方复制 payload 构造改为通用命名，不再硬编码人群推广默认 `bizCode`。
+- 回归测试：`tests/campaign-copy-current-plan-quick-entry.test.mjs` 更新断言，明确关键词推广和人群推广都必须调用原生 `/solution/copy.json`，而不是通用 `addList` 自组 payload。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，12/12。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-open-and-create.js tests/campaign-copy-current-plan-quick-entry.test.mjs tasks/todo.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/packages/alimama-helper-pro.meta.js dist/extension/page.bundle.js dist/extension/content.js dist/extension/background.js dist/extension/manifest.json`：通过。
+- Chrome DevTools MCP 只读验证：真实关键词推广页 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc&offset=0&searchKey=campaignNameLike&searchValue=E7`，刷新后可见源计划 `E7pro_自定义 / 69514602419`。
+- Chrome dry-run：调用运行态 `copyCurrentPlanByScene('关键词推广', source, { dryRunOnly:true, newPlanName:'E7pro_自定义_dryrun', targetOnlineStatus:0 })` 返回 `ok=true`、`dryRunOnly=true`，`officialCopyPayloads[0]` 为 `bizCode:"onebpSearch"`、`copyCampaignId:69514602419`、`campaignName:"E7pro_自定义_dryrun"`、`startTime:"2026-05-30"`、`launchForever:true`。
+- Chrome 安全核对：dry-run 前后 performance resource 未新增 `/solution/copy.json`、`/solution/addList.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json` 或其它创建/复制/暂停类写请求；本轮未点击真实“确认生成”。
+
+## 结果复盘
+- 结果：关键词推广复制计划已切到官方复制接口，避免通用 addList 组包重建时遗漏发货关键词、地区/地域等隐藏配置；运行态 dry-run 已证明会生成 `onebpSearch` 官方复制 payload，且不会在 dry-run 时触发真实写请求。
+- 风险：本轮没有真实点击确认生成，因此验证到接口选择和 payload 形态；真正服务端落库仍需用户授权后用暂停计划做受控真实复制，再只读对比源计划与新计划详情。
+- 回滚方式：回退 `src/optimizer/keyword-plan-api/wizard-open-and-create.js`、`tests/campaign-copy-current-plan-quick-entry.test.mjs` 及构建产物即可恢复旧的关键词通用 addList 复制链路，但会重新承担隐藏字段复制不完整风险。
+
+---
+
+# TODO - 2026-05-30 批量+成功后只刷新计划列表
+
+## 需求规格
+- 目标：参考原生“批量修改每日预算”提交后的行为，把插件 `批量+` 成功后的整页刷新改为只刷新当前计划列表。
+- 范围：只调整 `批量+` 批量开启/暂停、删除，以及已接入官方批量修改人群/屏蔽人群成功后的刷新收尾；不改变请求 payload、确认弹窗、选择计划逻辑、官方弹窗复用或任何真实提交接口。
+- 安全边界：本轮浏览器验收不真实点击 `批量+` 确认提交；只验证源码、测试和运行态可找到原生列表刷新入口。若需要真实提交，只能另行明确授权并使用暂停计划。
+- 成功标准：源码中 `批量+` 成功路径不再直接 `window.location.reload()`；优先触发当前页面原生搜索/列表刷新按钮或 Magix 列表 view 的刷新事件；专项测试、构建同步检查、语法检查通过；Chrome 只读验证确认原生预算提交后页面刷新的是列表请求，并确认 `批量+` 运行态具备列表刷新函数。
+
+## 执行计划（可核对）
+- [x] 复核 `批量+` 成功后的所有 `location.reload()` 使用点，区分业务提交和兜底错误提示。
+- [x] 实现共享 `refreshCampaignListOnly()`，优先复用 Magix 计划列表 VFrame 的 `render()`，找不到时才兜底触发原生计划名称搜索框回车刷新。
+- [x] 将 `批量+` 状态、删除、人群类官方提交成功回调切到列表刷新函数，并补测试禁止成功路径直接整页刷新。
+- [x] 运行专项测试、构建同步检查、语法检查、bundle 检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实页面只读验证运行态列表刷新能力与无真实写操作。
+
+## 高层操作摘要
+- 用户刚刚观察到原生批量预算修改提交后只是刷新计划列表；当前 `批量+` 成功路径仍有多个 `window.location.reload()`，会打断页面状态。
+- 本轮目标是把刷新行为对齐原生：提交成功后触发列表局部刷新，不改变批量动作本身。
+- 原生机制已通过真实页面网络监听确认：预算提交成功后页面不触发 document navigation，而是列表 VFrame 重新请求 `/campaign/horizontal/findPage.json`，随后刷新 `report/query.json` 和 `cube/triggerDynamicModule.json`。
+- 真实页面进一步验证：`universalBP_common_layout_main_content_search_campaign_list` 的 `render()` 会发 `POST /campaign/horizontal/findPage.json`；`asyncRenderData()` 主要刷新报表/动态模块，因此插件局部刷新优先级调整为 `render` -> `asyncRenderData`，搜索框回车仅作兜底。
+
+## 验证记录
+- 代码审计：`src/main-assistant/campaign-id-quick-entry.js` 中 `批量+` 成功路径已不再出现 `window.location.reload()`；批量开启/暂停、批量删除、人群推广/线索推广批量修改屏蔽人群成功回调均改为 `refreshCampaignListOnly()`。
+- 实现细节：`findCampaignListVframe()` 按当前业务线定位 `onebp/views/pages/manage/{search|display|onesite|hky}/campaign-list`；`refreshCampaignListVframe()` 优先调用官方列表 VFrame `render()`，再兜底 `asyncRenderData()`；若无法找到 VFrame，才触发计划名称搜索框回车刷新。
+- Chrome DevTools MCP 只读验证：真实 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` 页面通过 `seajs.use(['magix'])` 找到 `universalBP_common_layout_main_content_search_campaign_list`，`rootView` 为 `onebp/views/pages/manage/search/campaign-list?...`，具备 `vf.invoke()`。
+- Chrome 网络探针：调用该 VFrame `render()` 后记录到 `POST /campaign/horizontal/findPage.json?...bizCode=onebpSearch`，请求体包含 `mx_bizCode:"onebpSearch"`、`bizCode:"onebpSearch"`、`offset:0`、`pageSize:40`、`orderField:"charge"`、`orderBy:"desc"`、`queryRuleAuto:"1"` 和当天 `rptQuery`；随后出现 `report/query.json`、`cube/triggerDynamicModule.json`。未出现 document 导航或整页刷新。
+- Chrome 对比探针：调用 `asyncRenderData()` 只记录到 `report/query.json` 和 `cube/triggerDynamicModule.json`，没有稳定重新拉取 `findPage.json`；因此最终实现选择 `render()` 为首选列表刷新方法。
+- 本轮未点击 `批量+` 确认、未执行开启/暂停/删除/人群修改等真实写操作；Chrome 探针只触发计划列表读取和报表/动态模块读取。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，9/9。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/main-assistant/campaign-id-quick-entry.js tests/campaign-batch-plus-quick-entry.test.mjs tasks/todo.md tasks/lessons.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/packages/alimama-helper-pro.meta.js dist/extension/page.bundle.js dist/extension/content.js dist/extension/background.js dist/extension/manifest.json`：通过。
+
+## 结果复盘
+- 结论：原生“批量修改每日预算”的刷新是列表局部刷新，不是 `window.location.reload()`；核心是让当前计划列表 VFrame 重新 `render()`，由页面自己带着当前筛选、排序、分页参数重新请求 `campaign/horizontal/findPage.json`。
+- 结果：`批量+` 成功收尾已对齐该机制，成功后只刷新计划列表；若当前页面找不到列表 VFrame，才保守用原生计划名称搜索框回车触发列表刷新，并提示用户手动刷新，而不再自动整页 reload。
+- 风险：本轮没有真实执行 `批量+` 写操作，只验证了刷新入口、源码和测试；真实写后服务端状态仍依赖对应批量接口本身的成功返回。若后续要端到端验证 `批量+` 写后列表更新，需要用户另行明确授权并继续只使用暂停计划。
+- 回滚方式：回退 `src/main-assistant/campaign-id-quick-entry.js`、`tests/campaign-batch-plus-quick-entry.test.mjs` 及构建产物即可恢复旧刷新行为；不涉及请求 payload 或接口权限回滚。
+
+---
+
+# TODO - 2026-05-30 真实提交 1 个暂停计划批量修改每日预算验证
+
+## 需求规格
+- 目标：按用户明确授权，在真实 `one.alimama.com` 页面只选择 1 个暂停计划，使用原生“批量计划设置 -> 批量修改每日预算”完成一次真实提交，并核对提交是否生效。
+- 范围：只验证原生批量修改每日预算链路；不使用插件 `批量+` 提交，不创建/删除/开启计划，不批量选择多个计划，不操作在投计划。
+- 安全边界：提交前确认被选中计划状态为暂停；预算改为一个保守且可识别的新值；只允许实测原生预算修改必要写请求通过，继续记录并禁止其它创建、删除、复制、保存、商品/方案写接口。
+- 成功标准：页面只选中 1 个暂停计划；原生每日预算弹窗完成真实提交；网络返回成功或页面可见预算更新；关闭/刷新后能在列表或详情中核对新预算；记录请求、计划 ID、原值、新值和未触发的其它写请求。
+
+## 执行计划（可核对）
+- [x] 进入真实页面并刷新运行态，确认当前插件补丁已加载且 `批量+` 菜单未参与原生入口。
+- [x] 选择 1 个暂停计划，记录计划名称、ID、当前每日预算和状态。
+- [x] 打开原生“批量计划设置 -> 批量修改每日预算”，读取弹窗目标，填入保守新预算。
+- [x] 临时安装网络监控：记录预算修改接口并阻止其它非本次写接口。
+- [x] 点击官方提交/确定，等待接口返回和页面提示，核对预算是否生效。
+- [x] 取消选择计划、记录验证结果；必要时更新 `tasks/lessons.md` 和本任务复盘。
+
+## 高层操作摘要
+- 用户已明确授权本次真实提交，边界从此前“不真实提交”切换为“仅 1 个暂停计划的预算修改提交”。
+- 子代理审计按用户规则再次尝试 3 路并行，但当前会话仍返回 `agent thread limit reached`；主线程继续执行并记录该阻塞。
+- 实测原生“批量修改每日预算”的写接口是 `/campaign/budget/batchUpdate.json`，不是此前提交前链路排查里预估的 `/campaign/updatePart.json`；本次记录已按真实接口修正。
+
+## 验证记录
+- Chrome DevTools MCP：真实 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` 页面，运行态确认 `window.__AM_BUDGET_FRONTEND_UNLOCK__=true`，`批量+` 包装存在但 `#am-campaign-batch-plus-menu=false`，本次未使用插件 `批量+` 入口。
+- 选择计划：只勾选 1 个暂停计划 `E7pro_自定义_1 / ID 81075718778`；DOM 状态 host 为 `mx-status/index?...selected=pause`，提交前预算单元格为 `1,000元 / 每日预算`。
+- 原生弹窗：通过官方 `批量计划设置` host `mx_1431` 打开原生菜单 `popmenu_mx_1431`，点击第一项 `batchChangeDmcType / 批量修改每日预算`；官方弹窗 `wrapper_dlg_17968` / `dlg_17968` 显示 `选择 1 / 1 个计划批量修改每日预算`，行内计划 ID 为 `81075718778`。
+- 预算值：官方建议接口返回 `budgetMin=1000`，因此没有使用预想的 `999`；为避免低于下限导致额外变量，改为保守增加 1 元，行内“修改预算”输入框填入 `1001`。
+- 真实提交：点击官方弹窗“确定”后，实测请求为 `POST /campaign/budget/batchUpdate.json`，请求体包含 `bizCode:"onebpSearch"`、`campaignId:81075718778`、`dmcType:"normal"`、`dayBudget:"1001"`；响应 200，`info.ok=true`，`data.errorCount=0`，返回 `list:[{ campaignId:81075718778, newDayBudget:1001, dmcType:"normal" }]`。
+- 页面核对：提交后官方弹窗自动关闭，页面列表刷新；目标行显示 `1,001元 / 每日预算`，状态仍为 `selected=pause`，没有勾选项残留，`#am-campaign-batch-plus-menu=false`。
+- 安全核对：临时 XHR/fetch 守卫记录本轮没有 blocked 写请求；未触发 `/campaign/delete`、`/campaign/create`、`/campaign/batch`、`/solution/addList`、`/solution/copy`、`/solution/save`、`/solution/update`、`/item/add`、`/item/update`、`/campaign/update`、`/campaign/save` 等非本次创建/删除/保存类写入口。提交完成后已恢复临时 XHR/fetch 守卫。
+- 截图：`tasks/native-batch-daily-budget-real-submit-1001-2026-05-30.png`。
+- 额外只读核对：尝试手动 `fetch /campaign/horizontal/findPage.json` 时因未复用正确 csrf，返回 `bizLogin csrf检查未通过`；该失败不影响本次结论，因为官方预算提交接口已返回成功，且官方列表刷新后页面显示 `1,001元`。
+
+## 结果复盘
+- 结论：在修复后的插件运行态下，原生“批量计划设置 -> 批量修改每日预算”对暂停计划真实提交已生效；本次不是 `批量+` 拦截导致，`批量+` 菜单全程未打开。
+- 结果：暂停计划 `81075718778 / E7pro_自定义_1` 的每日预算已由 `1,000元` 改为 `1,001元`，服务端接口和页面列表均验证成功。
+- 风险：这是用户明确授权的真实预算修改；虽只增加 1 元且计划处于暂停状态，但账户中该计划预算已实际变更。若需要回到原值，可再次用同一路径把该暂停计划预算改回 `1,000元`。
+- 回滚方式：只针对同一暂停计划 `81075718778` 使用原生“批量修改每日预算”，把日预算填回 `1000` 并确认；不要使用 `批量+` 或其它批量动作。
+
+---
+
+# TODO - 2026-05-30 原生批量计划设置不生效与批量+拦截排查
+
+## 需求规格
+- 目标：排查原生网页中“批量计划设置”里的功能批量提交后不生效，确认是否被插件 `批量+` 功能拦截、覆盖或误阻断。
+- 范围：只排查原生 `批量计划设置` 与插件 `批量+` 的事件、DOM、网络请求和提交前链路关系；不真实提交原生批量修改，不点击会真正保存/生效的确认按钮；Chrome 验证只能选择暂停计划作为测试对象。
+- 成功标准：明确给出“是否由 `批量+` 拦截导致”的证据；若是插件问题，修复且证明不再影响原生入口；若不是插件问题，给出原生提交链路未被插件触碰的运行态证据和后续可查方向。
+
+## 执行计划（可核对）
+- [x] 尝试并行启动 3 个子代理做代码拦截审计、原生链路/验证边界审计、提交范围与风险审计；当前会话达到 agent thread limit，主线程承接排查。
+- [x] 本地主线程定位 `批量+` 注入、菜单、确认弹窗、请求拦截/桥接代码，确认是否监听或覆盖原生 `批量计划设置`。
+- [x] 基于用户补充“关闭插件后生效”，扩展排查插件全局补丁，重点检查 `预算破限` 对原生每日预算 Magix 组件 `check()/isValid/rules.min` 的副作用。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面安装写请求守卫，只选择暂停计划，打开原生 `批量计划设置` 并验证提交前链路；不点击真实提交确认。
+- [x] 修复 `预算破限` 全局 Magix 校验补丁：保留官方 `check()/isValid()` 原生执行副作用，只放行预算下限类失败；补充回归测试。
+- [x] 跑相关测试/构建/语法/空白检查，回填验证记录与复盘。
+- [ ] 完成后按用户规则交给子代理执行中文 commit + push；本轮再次尝试仍被 `agent thread limit reached` 阻塞，且工作区有多段历史 UI 迁移脏改，暂不由主线程混合提交。
+
+## 高层操作摘要
+- 用户关心的是原生“批量计划设置”批量提交不生效是否被插件 `批量+` 拦截。本轮排查会把原生入口与插件自有入口严格区分。
+- 安全边界：真实页面只允许选择暂停计划做测试对象；所有保存、提交、修改、删除、开启/暂停等写接口均通过守卫拦截或停在确认前，不做真实提交。
+- 子代理启动因当前会话达到 agent thread limit 未能创建；主线程继续推进并记录阻塞，不因子代理不可用阻塞缺陷修复。
+- 用户补充关键事实：原生“批量修改每日预算”点击修改后提交不生效，但关闭插件后生效。排查结论需从“是否 `批量+` 拦截”升级为“插件开启后的哪条运行态路径影响原生预算提交”。
+- 代码初查：`批量+` 自身点击拦截只命中 `[data-am-campaign-batch-plus-action]` 与 `[data-am-campaign-batch-plus="1"]`，原生菜单 host 被排除；更高风险候选是 `src/main-assistant/budget-frontend-limit-bypass.js` 的 `预算破限` 通用 Magix patch，会覆盖含 `dayBudget` 的原生组件 `check()` 为恒成功，可能跳过官方批量预算弹窗在 `check()` 内做的取值同步。
+- 根因修复：`预算破限` 不再把通用 Magix 组件的 `check()` 直接替换成恒成功，也不再把函数型 `isValid()` 直接替换成 `true`；新逻辑先调用官方原始实现，保留原生弹窗取值同步/校验副作用，再仅对明确的预算下限类错误结果做通过归一化。`check()` 保持对象结果形态，`isValid()` 对预算下限失败保持布尔通过语义，避免布尔调用方拿到 truthy 对象。
+
+## 验证记录
+- 代码审计：`src/main-assistant/campaign-id-quick-entry.js` 的 `批量+` 点击拦截只命中 `[data-am-campaign-batch-plus-action]` 和 `[data-am-campaign-batch-plus="1"]`；`findNativeBatchPlanSettingHost()`、`findNativeBatchPlanMenuItem()` 和批量+克隆逻辑均排除 `.am-campaign-batch-plus-wrap` / `#am-campaign-batch-plus-menu`，没有覆盖原生 `批量计划设置` 菜单。
+- 修复文件：`src/main-assistant/budget-frontend-limit-bypass.js`；新增回归：`tests/budget-frontend-limit-bypass.test.mjs`，断言通用预算破限必须保存并调用原生 `check()` / `isValid()`，禁止回退到恒成功短路，并要求函数型 `isValid()` 使用布尔归一化而不是复用 `check()` 的对象归一化。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `node --test tests/budget-frontend-limit-bypass.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs`：通过，14/14；同时覆盖预算破限新约束和 `批量+` 不继承/不污染原生入口的既有结构断言。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- src/main-assistant/budget-frontend-limit-bypass.js tests/budget-frontend-limit-bypass.test.mjs tasks/todo.md tasks/lessons.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP：真实 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` 页面，强制刷新后运行态已注入预算补丁，`预算破限` 复现条件为开启状态：`window.__AM_BUDGET_FRONTEND_UNLOCK__=true`、`window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__` 可用。
+- Chrome 安全验证：安装写请求守卫拦截 `/campaign/updatePart.json`、`/campaign/delete.json`、`/campaign/create.json`、`/campaign/batch*.json`、`/solution/addList.json`、`/solution/copy.json`、`/solution/save/update.json`、`/item/add/update.json` 等写接口；只选择状态 `selected=pause` 的暂停计划 `E7pro_自定义_1 / ID 81075718778`，未选择在投计划。
+- Chrome 原生链路验证：打开原生 `批量计划设置` host `mx_1431`，`batchPlusMenuOpen=false`；可见原生菜单项在 `popmenu_mx_1431`，第一项为官方 `batchChangeDmcType / 批量修改每日预算`，点击后打开官方弹窗 `wrapper_dlg_12229` / `dlg_12229`，未出现 `#am-campaign-batch-plus-menu`，未触发任何写请求。
+- Chrome 运行态补丁验证：官方每日预算弹窗内 `cnt_dlg_12229` 的 Magix view 同时具备 `checkHasOriginalApply=true` 和 `isValidHasOriginalApply=true`，`checkOldShortCircuit=false`、`isValidOldShortCircuit=false`；聚焦检查 `oldShortCircuitCount=0`、`originalApplyCount=2`，且 `isValidUsesBooleanNormalize=true`、`isValidUsesCheckNormalize=false`。截图见 `tasks/native-batch-daily-budget-dialog-guarded-bool-normalize-2026-05-30.png`。
+- Chrome 收尾：通过官方“取消”关闭弹窗，确认 `stillOpen=false`，写请求记录 `beforeWrites=[]`、`afterWrites=[]`；随后取消勾选暂停计划，`checked=false`。
+
+## 结果复盘
+- 结论：不是 `批量+` 自有菜单/点击拦截导致；用户反馈的“关闭插件后生效”与 `预算破限` 全局 Magix 校验补丁更吻合。旧补丁把原生预算组件 `check()` / `isValid()` 直接短路，可能跳过官方“批量修改每日预算”弹窗在校验阶段完成的取值同步，导致点击提交后服务端没有拿到正确修改语义或页面回写不生效。
+- 结果：已把补丁改为“先执行官方原生校验，保留内部同步副作用；只放行预算下限类失败”。`check()` 的预算下限失败归一化为成功对象，`isValid()` 的预算下限失败归一化为布尔 `true`。这保留了预算破限的目标，同时降低对原生批量预算弹窗的污染。
+- 风险：本轮严格遵守“不真实提交”，没有点击最终“确定/修改”触发服务端更新；因此浏览器验证证明到提交前链路和运行态补丁形态，不能宣称已完成真实服务端落库验证。若后续需要闭环生效结果，必须由用户明确授权，并继续仅使用暂停计划、先启用写请求守卫或做受控提交。
+- 回滚方式：回退 `src/main-assistant/budget-frontend-limit-bypass.js`、`tests/budget-frontend-limit-bypass.test.mjs` 及构建产物即可；不涉及 `批量+` 菜单业务逻辑回滚。
+
+---
+
+# TODO - 2026-05-30 组建计划主弹窗窗口外白色玻璃最新复核
+
+## 需求规格
+- 目标：响应用户最新再次强调“弹窗‘组建计划’窗口外的增加，白色玻璃渐变，类似组建计划里的增加商品的弹窗外的背景，专注现在弹窗里的内容”，只复核主向导窗口外层遮罩，不改主面板本体。
+- 范围：只看 `#am-wxt-keyword-overlay:not(.item-picker-open)` 外层背景、`#am-wxt-keyword-modal` 主面板背景和关闭后的残留/写请求；不继续推进 `批量+`、移除按钮、矩阵、批量编辑、提交创建、保存或任何真实请求链路。
+- 成功标准：真实页面运行态显示窗口外为白色玻璃渐变 `rgba(255,255,255,0.78) -> rgba(255,255,255,0.48)`，具备 `blur(8px) saturate(1.15)`；主面板仍是轻透明玻璃 `rgba(255,255,255,0.6) -> rgba(255,255,255,0.2)`；关闭后无弹层残留且无创建/保存/删除/提交类请求。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md` 中“窗口外/弹窗外”相关教训，确认本轮目标是 overlay，不是主面板。
+- [x] 核对源码最终选择器仍是 `#am-wxt-keyword-overlay:not(.item-picker-open)`，且主面板没有被强白化。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面加写请求守卫，只读打开组建计划主弹窗并读取 computed style。
+- [x] 截图、关闭弹窗、确认无写请求和无残留。
+- [x] 运行组建计划外壳专项测试，并回填审计记录。
+
+## 高层操作摘要
+- 最新请求再次聚焦“组建计划窗口外”，因此本轮停止继续推进顶部 `批量+` 切片，只复核主向导外层遮罩。
+- 源码和运行态均已确认目标层级正确：白色玻璃在 `#am-wxt-keyword-overlay:not(.item-picker-open)`，不是 `#am-wxt-keyword-modal`；主面板保留用户此前要求的轻透明玻璃。
+- 运行态已经符合用户要求，本轮不新增重复 CSS 覆盖，避免把已符合的主面板扰动成厚白卡片。
+
+## 验证记录
+- Chrome DevTools MCP：真实 `https://one.alimama.com/index.html#!/manage/search?orderField=charge&orderBy=desc` 页面，已安装只读写请求守卫；通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 只打开组建计划主弹窗，未点击 `补齐5维`、`生成计划`、`清空`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。
+- 运行态确认 `#am-wxt-keyword-overlay.open` 为 `display:flex`，窗口外 computed background 为 `linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48))`，`backdrop-filter: blur(8px) saturate(1.15)`，且最后注入 CSS 块命中 `#am-wxt-keyword-overlay:not(.item-picker-open)`。
+- 同时确认 `#am-wxt-keyword-modal` 主面板本体仍为轻透明玻璃：`linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2))`，边框 `rgba(255, 255, 255, 0.6)`，阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`，面板 blur 为 `blur(20px) saturate(1.4)`。
+- 截图见 `tasks/ui-audit-keyword-main-overlay-white-glass-latest-2026-05-30.png`。
+- 验收后点击组建计划关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`itemMaskExists=false`、`sceneMaskExists=false`；守卫记录 `forbiddenCount=0`，未出现创建/复制/更新/保存/删除/提交类请求。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs`：通过，22/22；继续覆盖主向导窗口外白色玻璃渐变、`item-picker-open` 透明隔离和主面板本体不强白化。
+
+## 结果复盘
+- 结果：当前“组建计划”弹窗窗口外已经是白色玻璃渐变，效果与添加商品弹窗外层一致，能够聚焦现在弹窗里的内容；主面板本体没有变成厚白背景。
+- 风险：本轮只做运行态复核与记录补充，不改变业务源码；如果用户看到旧灰底，优先判断浏览器运行态未刷新、安装包未同步或页面仍加载旧脚本。
+- 回滚方式：本轮新增的是记录与截图；如后续要取消白色玻璃，应只回退 `#am-wxt-keyword-overlay:not(.item-picker-open)` 最终覆盖块。
+
+---
+
+# TODO - 2026-05-30 批量+确认弹窗白色玻璃遮罩与焦点循环
+
+## 需求规格
+- 目标：继续按 UI 统一规范迁移 `批量+` 页面，把插件自有二次确认弹窗的外层深灰遮罩改为白色玻璃渐变，并补齐正文关联与 Tab/Shift+Tab 焦点循环。
+- 范围：只改 `#am-campaign-batch-confirm-popup` 自有确认弹窗的遮罩视觉、`aria-describedby` 和键盘焦点约束，以及对应专项测试/任务记录；不改 `批量+` 原生同构按钮、菜单项、选中计划识别、状态更新、删除、屏蔽人群、官方弹窗复用或任何真实提交接口。
+- 成功标准：确认弹窗外层 computed background 为白色玻璃渐变，不再是 `rgba(15, 23, 42, 0.42)` 深灰遮罩；dialog 同时具备 `aria-labelledby` 和 `aria-describedby`；Tab/Shift+Tab 被约束在弹窗按钮内循环；Chrome 验收只打开确认弹窗并取消/关闭，未点击确认写操作且无写接口请求。
+
+## 执行计划（可核对）
+- [ ] 复核现有 `批量+` 确认弹窗源码、样式和专项测试，确认本轮不碰真实批量业务逻辑。
+- [ ] 并行收集 3 个子代理只读审计建议，重点关注遮罩、ARIA、焦点循环和 Chrome 验收边界。
+- [ ] 修改确认弹窗 DOM/键盘处理和外层遮罩样式，并更新专项断言。
+- [ ] 运行专项测试、构建同步检查、语法检查、extension bundle 检查和空白检查。
+- [ ] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 只读打开确认弹窗，验证样式/焦点/关闭/无写请求。
+- [ ] 回填审计记录和复盘；完成后按用户最新要求交给子代理做中文 commit + push。
+
+## 高层操作摘要
+- 现状：`批量+` 菜单与确认卡片已迁移到统一 token，但 `#am-campaign-batch-confirm-popup` 外层仍是深灰 `rgba(15, 23, 42, 0.42)`，和当前白色玻璃弹层规范不一致。
+- 本轮只处理插件自有确认弹窗的 UI/可访问性，不点击确认按钮，也不改变 `campaign/updatePart.json`、`campaign/delete.json`、屏蔽人群或官方抽屉链路。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待回填。
+
+---
+
+# TODO - 2026-05-30 组建计划主弹窗窗口外白色玻璃再验收与加固
+
+## 需求规格
+- 目标：响应用户再次强调“弹窗‘组建计划’窗口外的增加白色玻璃渐变，类似组建计划里的增加商品弹窗外背景”，只聚焦主向导窗口外层遮罩，让弹窗外视觉更白、更轻、更能聚焦当前弹窗内容。
+- 范围：只核对并必要加固 `#am-wxt-keyword-overlay:not(.item-picker-open)` 的外层背景和 blur；保留 `#am-wxt-keyword-modal` 主面板本体上一版轻透明玻璃，不改添加商品二级弹窗、批量编辑、矩阵、提交创建、保存或任何真实网络链路。
+- 成功标准：源码/产物最后生效 CSS 和真实页面 computed style 均显示主向导窗口外为白色玻璃渐变，且 `item-picker-open` 时不叠加第二层背景；Chrome 验收期间不触发创建/保存/提交/删除类请求。
+
+## 执行计划（可核对）
+- [x] 复核源码、测试和产物中最后生效的 overlay/modal CSS 规则，确认目标 selector 正确且主面板未被强白化。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 只读打开组建计划主弹窗，读取窗口外背景、blur、主面板背景并截图。
+- [x] 若运行态仍不是用户要的白色玻璃，做最小 CSS 加固并构建同步；否则只记录验收结论。
+- [x] 运行相关专项测试/语法检查/构建同步检查，并回填验证记录、审计表和复盘。
+
+## 高层操作摘要
+- 最新用户再次点名“窗口外/弹窗外”，本轮不切到 `批量+` 或其它页面；验证对象是 `#am-wxt-keyword-overlay:not(.item-picker-open)`，不是主面板 `#am-wxt-keyword-modal`。
+- 当前源码底部已有白色玻璃覆盖块，但需要用真实页面确认运行态是否刷新命中；如果 Chrome 仍看到灰底，优先处理最终覆盖强度或构建/注入同步。
+- 已确认最后生效 CSS 块与真实页面 computed style 均命中白色玻璃窗口外背景；本轮不重复修改源码，避免扰动用户已要求保留的主面板轻透明玻璃背景。
+
+## 验证记录
+- Chrome DevTools MCP 运行态再验收：真实 `https://one.alimama.com/index.html#!/manage/display?orderField=charge&orderBy=desc` 页面，通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 只打开组建计划主弹窗；未点击 `补齐5维`、`生成计划`、`清空`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。
+- 运行态确认 `#am-wxt-keyword-overlay.open` 类名为 `open`、`display:flex`，窗口外 computed background 为 `linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48))`，`backdrop-filter: blur(8px) saturate(1.15)`；最后注入的 CSS 块为 `#am-wxt-keyword-overlay:not(.item-picker-open)` 白色玻璃覆盖，后续 `#am-wxt-keyword-overlay.item-picker-open` 仍为透明隔离。
+- 同时确认 `#am-wxt-keyword-modal` 主面板本体仍是用户要求的轻透明玻璃：`linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2))`，边框 `rgba(255, 255, 255, 0.6)`，阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`，面板 blur 为 `blur(20px) saturate(1.4)`。
+- 截图见 `tasks/ui-audit-keyword-main-overlay-white-glass-rerun-2026-05-30.png`。
+- 验收后点击组建计划关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`itemMaskExists=false`、`sceneMaskExists=false`；打开和关闭基线后均未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save`、`/solution/update` 或 `/campaign/updatePart`。
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs`：通过，22/22；继续覆盖主向导窗口外白色玻璃渐变、`item-picker-open` 透明隔离和主面板本体不强白化。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+
+## 结果复盘
+- 结果：当前“组建计划”主弹窗窗口外已经是白色玻璃渐变，视觉层级与添加商品弹窗外层一致，能聚焦当前弹窗内容；主面板本体没有被再次白化。
+- 决策：不再新增重复 CSS 覆盖；继续保留 `#am-wxt-keyword-overlay:not(.item-picker-open)` 作为外层背景事实源，避免把已符合的主面板背景扰动回强白卡片。
+- 风险：本轮是运行态再验收与记录更新，未改业务源码；后续若用户看到旧灰底，优先判断浏览器运行态是否未刷新或安装包是否未同步。
+- 回滚方式：如需取消外层白色玻璃，只回退 `#am-wxt-keyword-overlay:not(.item-picker-open)` 最终覆盖块；本轮新增的是任务/审计记录和截图，不涉及业务逻辑回滚。
+
+---
+
+# TODO - 2026-05-30 组建计划移除类文字按钮图标化收口
+
+## 需求规格
+- 目标：继续按 UI 统一规范迁移组建计划，把当前半成品切片收口：`移除`、`取消添加`、`全部移除` 等删除动作统一为共享 close 图标按钮，补齐 `type="button"`、`aria-label`、`title`、浅玻璃 token 样式和可见 `focus-visible`。
+- 范围：只改组建计划人群/商品/趋势主题选择相关的移除类动作表达与对应测试；不改添加、确定、取消、清空维度、批量创建、提交创建、保存并关闭、请求构建或任何真实网络链路。
+- 成功标准：源码中本切片目标动作不再以裸文字按钮或 `href="javascript:;"` 链接作为删除动作主体；专项测试、构建、构建同步检查、语法检查、空白检查通过；Chrome DevTools MCP 在真实 `one.alimama.com` 只读验收至少覆盖主向导已添加商品/人群，以及一个场景二级弹窗移除按钮，且未触发创建/保存/删除/提交请求。
+
+## 执行计划（可核对）
+- [x] 基于 3 个子代理审计结果，确认本轮只收口组建计划移除类按钮，不切到批量+或算法护航。
+- [x] 补齐源码遗漏：趋势主题移除按钮样式覆盖、趋势主题/商品场景弹窗移除类按钮测试断言。
+- [x] 构建同步产物，并运行相关专项测试、构建检查、语法检查和空白检查。
+- [x] 用 Chrome DevTools MCP 在真实页面只读打开目标弹窗读取样式并截图；不点击确定、保存、提交或真实创建入口。
+- [x] 回填验证记录、审计表、风险和复盘。
+
+## 高层操作摘要
+- 子代理审计一致认为当前优先级是收口组建计划人群/商品选择类移除动作；批量+确认弹窗和算法护航入口反馈作为后续切片。
+- 当前源码已完成大部分替换，但趋势主题选中态按钮受 `.am-wxt-scene-trend-association-op` 后置规则影响，可能覆盖共享图标按钮 24px 圆形样式；同时趋势主题和商品场景弹窗缺少专项断言。
+- 已完成：主向导已添加商品/人群、目标人群行、人群推荐/已选、新增人群候选/已选/全部移除、趋势主题全部移除/联想选中态、场景商品已选移除均迁移为共享 close SVG 图标按钮；趋势主题选中态增加后置圆形 token 覆盖，避免被旧操作列样式压回文字按钮形态。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`。
+- `node --test tests/keyword-item-picker-popup.test.mjs tests/keyword-custom-popup-config.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-trend-theme-setting.test.mjs`：通过，50/50；新增/更新断言覆盖主向导已添加商品/人群、人群弹窗候选/已选、新增人群全部移除/取消添加/已选移除、趋势主题全部移除/联想选中态、添加商品弹窗已选商品移除，以及共享 `am-wxt-remove-icon-btn` token/focus 样式。
+- `npm run build:check`：通过，构建产物与源码同步。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `rg -n "href=\"javascript:;\" data-scene-popup-(trend-clear|crowd-native-(clear|remove-selected))|data-scene-popup-(crowd|item)-remove=\"[^\"]*\"[\\s\\S]{0,120}>移除</button>|data-scene-popup-crowd-native-remove=\"[^\"]*\"[\\s\\S]{0,140}>取消添加</button>|>全部移除</a>" src/optimizer/keyword-plan-api/wizard-scene-config tests`：无匹配，确认本切片目标回退模式不存在。
+- `git diff --check -- src/optimizer/keyword-plan-api/wizard-scene-config/item-selection.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-crowd-popup.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-core.js src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-item-adzone-popup.js src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-item-picker-popup.test.mjs tests/keyword-custom-popup-config.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-trend-theme-setting.test.mjs tasks/todo.md tasks/lessons.md tasks/ui-gap-audit-2026-05-29.md 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/packages/alimama-helper-pro.meta.js dist/extension/page.bundle.js dist/extension/content.js dist/extension/background.js dist/extension/manifest.json`：通过。
+- Chrome DevTools MCP 运行态验收：真实 `https://one.alimama.com/index.html#!/manage/display?orderField=charge&orderBy=desc` 人群推广页，页面 API 已就绪；通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 只打开组建计划主向导，确认运行态已注入 `am-wxt-remove-icon-btn` 共享样式和 `.am-wxt-scene-trend-association-op.am-wxt-remove-icon-btn` 趋势主题后置覆盖。主向导已添加商品移除按钮为 `BUTTON type="button"`、文本为空、含 close SVG、`aria-label="移除商品：..."`、`title="移除商品"`。
+- Chrome 继续只读验收：进入计划详情后仅在向导内存中切到 `人群推广 / 自定义推广`，未点击保存；打开 `添加商品` 二级弹窗，已添加商品移除按钮为 `am-wxt-remove-icon-btn am-wxt-scene-item-remove-btn`、24px 圆形、背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、文本为空、含 close SVG，弹窗内无文字 `移除/取消添加/全部移除` 按钮或 `javascript:` 链接。截图见 `tasks/ui-audit-keyword-remove-icon-item-popup-chrome-2026-05-30.png`。
+- Chrome 继续只读验收：关闭商品弹窗后打开 `手动添加人群` 弹窗，`全部移除` 为 `am-wxt-remove-icon-btn am-wxt-scene-crowd-native-clear-btn`、24px 圆形、背景 `rgba(255, 255, 255, 0.25)`、边框 `rgba(255, 255, 255, 0.4)`、文本为空、含 close SVG，弹窗内无文字 `移除/取消添加/全部移除` 按钮或 `javascript:` 链接。截图见 `tasks/ui-audit-keyword-remove-icon-crowd-popup-chrome-2026-05-30.png`。
+- 验收后只通过取消/Esc/关闭退出二级弹窗、详情和主向导，最终确认 `sceneMaskExists=false`、`itemMaskExists=false`、`detailVisible=false`、`overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save`、`/solution/update` 或 `/campaign/updatePart`。
+
+## 结果复盘
+- 结果：完成组建计划移除类文字按钮图标化收口；本切片目标动作已统一为共享 close 图标按钮，保留添加/确定/取消/保存/提交等业务链路不变。
+- 风险：Chrome 实测的当前计划详情需要先在向导内存中切换到 `人群推广 / 自定义推广` 才能展示商品/人群二级弹窗入口；该切换未保存、未提交，仅用于本地 UI 验收。趋势主题联想选中态由专项测试覆盖，当前真实页面没有进入趋势明星计划详情触发该弹窗。
+- 回滚方式：还原本次修改的 `wizard-scene-config` 渲染文件、`wizard-style-and-state/style.js`、专项测试和构建产物即可；不涉及请求构建或提交链路回滚。
+
+---
+
+# TODO - 2026-05-30 组建计划主弹窗窗口外白色玻璃复核
+
+## 需求规格
+- 目标：按用户最新强调“弹窗‘组建计划’窗口外的增加，白色玻璃渐变，类似组建计划里的增加商品的弹窗外的背景，专注现在弹窗里的内容”，复核并确保主向导弹窗窗口外层 `#am-wxt-keyword-overlay:not(.item-picker-open)` 命中白色玻璃渐变，用于聚焦当前“组建计划”弹窗内容。
+- 范围：只处理/复核主向导窗口外 overlay 背景、主面板本体背景不强白化、二级 `添加商品` 打开时 overlay 透明隔离；不继续推进当前未完成的移除按钮图标化切片，不改计划生成、批量创建、提交、保存、清空或任何真实网络链路。
+- 成功标准：源码和运行态最后生效规则显示主向导窗口外背景为 `rgba(255,255,255,0.78) -> rgba(255,255,255,0.48)` 白色玻璃渐变，具备 `blur(8px) saturate(1.15)`；`#am-wxt-keyword-modal` 仍保持上一版轻透明玻璃 `rgba(255,255,255,0.6) -> rgba(255,255,255,0.2)`；Chrome DevTools MCP 真实页面只读验收未触发创建/保存/删除/提交请求。
+
+## 执行计划（可核对）
+- [x] 暂停顶部未完成的移除按钮图标化切片，确认本轮只复核组建计划主弹窗窗口外背景。
+- [x] 核对源码、根 userscript 和 extension 产物中最后生效的 overlay / modal CSS 规则。
+- [x] 运行相关专项静态测试和语法检查；构建同步检查如受未完成脏改影响，需明确记录原因。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只读打开组建计划，读取 overlay / modal computed style 并截图。
+- [x] 回填验证记录、风险和复盘。
+
+## 高层操作摘要
+- 用户最新语义再次指向“弹窗外/窗口外”，不是主面板本体，也不是批量编辑、复制计划或移除按钮；因此本轮只看 `#am-wxt-keyword-overlay:not(.item-picker-open)`。
+- 当前源码已有最终覆盖块：主向导 overlay 白色玻璃渐变，`item-picker-open` 透明隔离，主面板 `#am-wxt-keyword-modal` 保持轻透明玻璃；接下来用测试和真实页面确认运行态是否已刷新命中。
+- 复核未改业务源码：当前工作区仍保留上一段未完成的“移除类按钮图标化”脏改，本轮只新增任务/教训记录和运行态截图，不把该未完成切片混入构建产物。
+
+## 验证记录
+- `node --test tests/keyword-home-strategy-batch-actions.test.mjs`：通过，22/22；其中 `组建计划主弹窗外壳对齐统一 UI 规范` 继续断言 `#am-wxt-keyword-overlay:not(.item-picker-open)` 白色玻璃渐变、`item-picker-open` 透明隔离，以及 `#am-wxt-keyword-modal` 不回到强白背景。
+- `npm run check:syntax`：通过，根 userscript 语法检查通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check -- tasks/todo.md tasks/lessons.md src/optimizer/keyword-plan-api/wizard-style-and-state/style.js tests/keyword-home-strategy-batch-actions.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js`：通过。
+- Chrome DevTools MCP 运行态复核：真实 `https://one.alimama.com/index.html#!/manage/display?orderField=charge&orderBy=desc&offset=0&searchKey=campaignNameLike&searchValue=AI` 人群推广页，页面 API 已就绪；通过 `window.__AM_WXT_KEYWORD_API__.openWizard()` 只打开组建计划主弹窗，未点击 `补齐5维`、`生成计划`、`清空`、`批量创建`、`提交创建`、`保存并关闭` 或任何真实创建/保存入口。运行态确认 `#am-wxt-keyword-overlay.open` 为 `display:flex`，窗口外背景为 `linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48))`，`backdrop-filter: blur(8px) saturate(1.15)`；`#am-wxt-keyword-modal` 仍保持轻透明玻璃 `linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2))`，边框 `rgba(255, 255, 255, 0.6)`，阴影 `rgba(31, 38, 135, 0.15) 0px 8px 32px 0px`，面板 blur 为 `blur(20px) saturate(1.4)`。截图见 `tasks/ui-audit-keyword-main-overlay-white-glass-recheck-2026-05-30.png`。
+- 验收后点击组建计划关闭按钮，确认 `overlayOpen=false`、`overlayDisplay=none`、`modalVisible=false`、`itemMaskExists=false`、`sceneMaskExists=false`；performance resource 基线后未出现 `/solution/addList`、`/solution/copy`、`/campaign/update`、`/campaign/create`、`/campaign/batch`、`/campaign/delete`、`/item/add`、`/item/update`、`/solution/save` 或 `/solution/update`。
+- `npm run build:check` 未在本次复核中执行：当前工作区存在上一段未完成的移除按钮图标化源码/测试脏改，运行构建同步检查会把未完成切片纳入判断；本轮未改业务源码，已用根 userscript/extension 语法、专项断言和真实页面 computed style 证明窗口外背景生效。
+
+## 结果复盘
+- 结果：组建计划主弹窗窗口外白色玻璃渐变已在真实页面复核生效，视觉聚焦当前弹窗内容；主面板本体仍保持用户要求的上一版轻透明玻璃。
+- 风险：本轮只复核并记录最新用户指定对象，不继续推进未完成的移除按钮图标化切片；未触发任何创建、保存、删除、提交或扣费相关请求。
+- 回滚方式：如需取消窗口外白色玻璃，只需回退 `#am-wxt-keyword-overlay:not(.item-picker-open)` 最终覆盖块到透明背景；当前按用户最新偏好保留白色玻璃渐变。
+
+---
+
+# TODO - 2026-05-30 组建计划移除类文字按钮图标化
+
+## 需求规格
+- 目标：继续按 UI 统一规范迁移组建计划，把仍以文字呈现的 `移除`、`取消添加`、`全部移除` 等配置删除动作收敛为共享 close 图标按钮，并补齐可访问名称、title 和可见 focus。
+- 范围：只改组建计划人群/商品选择相关的局部按钮表达与样式断言，包括已添加商品、人群推荐候选/已选、二级新增人群候选/已选/全部移除、目标人群行；不改添加、上移、下移、批量溢价、清空、确定/取消、保存、提交创建、请求构建或任何真实网络链路。
+- 成功标准：目标按钮均为 `button type="button"`，包含共享 `renderAmIcon('close')`，无裸文字 `移除/取消添加/全部移除` 作为动作主体；具备稳定 `aria-label` / `title`；局部样式使用 `--am26-*` 浅玻璃 token 与可见 `focus-visible`；专项测试、构建检查、语法检查、空白检查和 Chrome DevTools MCP 真实页面只读验收完成。
+
+## 执行计划（可核对）
+- [ ] 回顾 UI/图标规范、审计表和子代理定位结果，确认本轮只处理组建计划移除类按钮。
+- [ ] 将剩余人群/商品选择中的移除类文字动作替换为共享 close 图标按钮。
+- [ ] 增加局部 token 样式和专项静态断言，防止回退为文字按钮或 `href="javascript:;"` 链接。
+- [ ] 构建同步产物，并运行组建计划相关专项测试、构建检查、语法检查和空白检查。
+- [ ] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只读打开相关弹窗验收，不点击确定、保存、提交或真实创建入口。
+- [ ] 回填验证记录、审计表、风险和复盘。
+
+## 高层操作摘要
+- 子代理只读审计指出剩余缺口集中在组建计划人群/商品选择类移除动作：`item-selection.js` 的已添加商品/人群移除，`render-scene-dynamic-crowd-popup.js` 的人群推荐与新增人群弹窗移除/取消添加/全部移除，`render-scene-dynamic-core.js` 的目标人群行移除。
+- 本轮实现只改变动作按钮的可见表达和可访问性，不改变选中列表、溢价输入、添加/清空/确定/取消逻辑。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待回填。
+
+---
+
 # TODO - 2026-05-30 组建计划矩阵页维度选择器 Chrome 验收闭环
 
 ## 需求规格

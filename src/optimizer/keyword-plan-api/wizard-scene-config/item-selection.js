@@ -20,9 +20,10 @@
                     const row = document.createElement('div');
                     row.className = 'am-wxt-crowd-item';
                     const labelId = crowdItem?.crowd?.label?.labelId || '';
+                    const crowdName = getCrowdDisplayName(crowdItem) || `人群${idx + 1}`;
                     row.innerHTML = `
-                        <span>${Utils.escapeHtml(getCrowdDisplayName(crowdItem))}${labelId ? `（${Utils.escapeHtml(labelId)}）` : ''}</span>
-                        <button class="am-wxt-btn">移除</button>
+                        <span>${Utils.escapeHtml(crowdName)}${labelId ? `（${Utils.escapeHtml(labelId)}）` : ''}</span>
+                        <button type="button" class="am-wxt-remove-icon-btn am-wxt-crowd-remove-btn" aria-label="移除人群：${Utils.escapeHtml(crowdName)}" title="移除人群">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                     `;
                     const removeBtn = row.querySelector('button');
                     removeBtn.onclick = () => {
@@ -169,18 +170,19 @@
                 wizardState.addedItems.forEach((item, idx) => {
                     const row = document.createElement('div');
                     row.className = 'am-wxt-item';
+                    const itemName = item.materialName || '(无标题商品)';
                     row.innerHTML = `
                         <div class="am-wxt-item-main">
                             ${renderKeywordItemThumb(item)}
                             <div class="am-wxt-item-info">
-                                <div class="name">${Utils.escapeHtml(item.materialName || '(无标题商品)')}</div>
+                                <div class="name">${Utils.escapeHtml(itemName)}</div>
                                 <div class="meta">宝贝ID：${Utils.escapeHtml(item.materialId)}</div>
                             </div>
                         </div>
                         <div class="actions">
                             <button class="am-wxt-btn">上移</button>
                             <button class="am-wxt-btn">下移</button>
-                            <button class="am-wxt-btn">移除</button>
+                            <button type="button" class="am-wxt-remove-icon-btn am-wxt-item-remove-btn" aria-label="移除商品：${Utils.escapeHtml(itemName)}" title="移除商品">${renderAmIcon('close', { size: 12, strokeWidth: 2.2 })}</button>
                         </div>
                     `;
                     const [upBtn, downBtn, removeBtn] = row.querySelectorAll('button');

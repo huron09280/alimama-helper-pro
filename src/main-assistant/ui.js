@@ -1241,9 +1241,9 @@
                     align-items: center;
                     justify-content: center;
                     padding: 24px;
-                    background: rgba(15, 23, 42, 0.42);
-                    backdrop-filter: blur(6px);
-                    -webkit-backdrop-filter: blur(6px);
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-card {
                     width: min(360px, calc(100vw - 28px));

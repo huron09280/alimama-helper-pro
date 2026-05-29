@@ -114,6 +114,29 @@ test('商品弹窗候选行和按钮收敛到浅玻璃 token', () => {
   assert.doesNotMatch(metaBlock, /color:\s*#64748b;/, '商品候选 ID 不得回退到旧灰蓝硬编码');
 });
 
+test('商品与向导人群移除动作使用共享 close 图标按钮', () => {
+  assert.match(
+    source,
+    /class="am-wxt-remove-icon-btn am-wxt-item-remove-btn"[\s\S]*?aria-label="移除商品：\$\{Utils\.escapeHtml\(itemName\)\}"[\s\S]*?title="移除商品"[\s\S]*?renderAmIcon\('close', \{ size: 12, strokeWidth: 2\.2 \}\)/,
+    '已添加商品移除操作未使用共享 close 图标按钮'
+  );
+  assert.match(
+    source,
+    /class="am-wxt-remove-icon-btn am-wxt-crowd-remove-btn"[\s\S]*?aria-label="移除人群：\$\{Utils\.escapeHtml\(crowdName\)\}"[\s\S]*?title="移除人群"[\s\S]*?renderAmIcon\('close', \{ size: 12, strokeWidth: 2\.2 \}\)/,
+    '向导人群移除操作未使用共享 close 图标按钮'
+  );
+  assert.match(
+    source,
+    /#am-wxt-keyword-modal \.am-wxt-remove-icon-btn,[\s\S]*?#am-wxt-keyword-item-picker-mask \.am-wxt-remove-icon-btn,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-remove-icon-btn \{[\s\S]*?display:\s*inline-flex;[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?background:\s*var\(--am26-surface,[\s\S]*?color:\s*var\(--am26-text-soft,[\s\S]*?#am-wxt-keyword-modal \.am-wxt-remove-icon-btn svg,[\s\S]*?width:\s*12px;[\s\S]*?#am-wxt-keyword-modal \.am-wxt-remove-icon-btn:focus-visible,[\s\S]*?box-shadow:\s*0 0 0 3px rgba\(37,99,235,0\.18\),/,
+    '移除类图标按钮缺少统一浅玻璃 token 样式或 focus-visible'
+  );
+  assert.doesNotMatch(
+    source,
+    /<button class="am-wxt-btn">移除<\/button>/,
+    '商品或向导人群移除操作不应回退为通用文字按钮'
+  );
+});
+
 test('候选商品与已添加商品渲染主图缩略图', () => {
   assert.match(
     source,
