@@ -55,6 +55,10 @@ test('批量+ 菜单覆盖批量计划设置缺失的首批能力', () => {
 });
 
 test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
+    const menuBlock = quickEntry.slice(
+        quickEntry.indexOf('showBatchPlusMenu(triggerEl)'),
+        quickEntry.indexOf('findSelectedCampaignContextFromCheckbox')
+    );
     const confirmDialogBlock = quickEntry.slice(
         quickEntry.indexOf('openBatchPlusConfirmDialog({'),
         quickEntry.indexOf('async runBatchUpdateCampaignStatus')
@@ -62,6 +66,12 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'start'[\s\S]*?icon:\s*'layers-play'/, '批量开启菜单项应使用共享图标');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'delete'[\s\S]*?icon:\s*'x-circle'/, '批量删除菜单项应使用危险动作共享图标');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?am-campaign-batch-plus-item-icon[\s\S]*?renderAmIcon\(item\.icon \|\| 'logo'/, '批量+菜单项应渲染共享 SVG 图标');
+    assert.match(menuBlock, /triggerEl\.setAttribute\('aria-controls',\s*'am-campaign-batch-plus-menu'\)/, '批量+菜单打开时触发器应指向菜单 id');
+    assert.match(menuBlock, /menu\.setAttribute\('aria-label',\s*'批量\+菜单'\)/, '批量+菜单应提供可访问名称');
+    assert.match(menuBlock, /menu\.addEventListener\('keydown'[\s\S]*?event\.key === 'Escape'[\s\S]*?this\.closeBatchPlusMenu\(\)[\s\S]*?triggerEl\.focus\(\{ preventScroll: true \}\)/, '批量+菜单应支持 Escape 关闭并回焦触发器');
+    assert.match(menuBlock, /event\.key !== 'ArrowDown' && event\.key !== 'ArrowUp'[\s\S]*?const direction = event\.key === 'ArrowDown' \? 1 : -1[\s\S]*?items\[nextIndex\]\.focus\(\{ preventScroll: true \}\)/, '批量+菜单应支持上下方向键移动菜单项焦点');
+    assert.match(quickEntry, /closeBatchPlusMenu\(\)[\s\S]*?btn\.removeAttribute\('aria-controls'\)/, '批量+菜单关闭时应清理触发器 aria-controls');
+    assert.match(quickEntry, /syncBatchPlusNativeState\(batchPlusHost,\s*nativeHost = null,\s*bizCode = ''\)[\s\S]*?if \(open\) \{[\s\S]*?setAttribute\('aria-controls',\s*'am-campaign-batch-plus-menu'\)[\s\S]*?\} else \{[\s\S]*?removeAttribute\('aria-controls'\)/, '批量+原生克隆状态同步应维护 aria-controls');
     assert.match(quickEntry, /renderBatchPlusChevronIcon\(\)[\s\S]*?data-am-batch-plus-fallback-chevron="1"[\s\S]*?renderAmIcon\('chevron-down'/, '批量+ fallback 箭头应使用共享 chevron 图标');
     assert.doesNotMatch(quickEntry, /\uE646/, '批量+源码不得再自造私有字体箭头字符');
     assert.match(confirmDialogBlock, /popup\.setAttribute\('aria-labelledby',\s*titleId\)/, '批量确认弹窗应通过标题建立可访问名称');
@@ -79,13 +89,22 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     assert.match(confirmDialogBlock, /event\.preventDefault\(\);[\s\S]*?const activeIndex = focusable\.indexOf\(document\.activeElement\)/, '批量确认弹窗应完全接管 Tab 默认焦点移动');
     assert.match(confirmDialogBlock, /const direction = event\.shiftKey \? -1 : 1[\s\S]*?const nextIndex = activeIndex >= 0[\s\S]*?\(activeIndex \+ direction \+ focusable\.length\) % focusable\.length/, '批量确认弹窗 Tab/Shift+Tab 应按方向循环计算下一焦点');
     assert.match(confirmDialogBlock, /focusable\[nextIndex\]\.focus\(\{ preventScroll: true \}\)/, '批量确认弹窗应把焦点移动到循环后的下一项');
+    assert.match(confirmDialogBlock, /requestAnimationFrame\(\(\) => cancelBtn\.focus\(\)\)/, '批量确认弹窗默认焦点应落在取消按钮，降低误触真实写操作风险');
+    assert.match(quickEntryStyle, /--am26-focus:\s*rgba\(69,\s*84,\s*229,\s*0\.32\);[\s\S]*?--am26-danger-soft:\s*rgba\(234,\s*79,\s*79,\s*0\.12\);[\s\S]*?--am26-warning-soft:\s*rgba\(232,\s*163,\s*37,\s*0\.14\);/, 'Page 11 交互态应有统一 focus/危险/警告 soft token');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu\s*\{[\s\S]*?border:\s*1px solid var\(--am26-border[\s\S]*?background:\s*var\(--am26-panel-strong[\s\S]*?box-shadow:\s*var\(--am26-shadow/, '批量+菜单应使用统一 token');
+    assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item:hover,[\s\S]*?background:\s*var\(--am26-surface-strong[\s\S]*?outline:\s*2px solid var\(--am26-focus/, '批量+菜单 hover/focus 应使用统一 token');
+    assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item\.is-danger:hover,[\s\S]*?background:\s*var\(--am26-danger-soft/, '批量删除菜单项 hover/focus 应使用危险 soft token');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item:focus-visible[\s\S]*?outline:\s*2px solid/, '批量+菜单项应有可见 focus 态');
     assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.78\),\s*rgba\(255,\s*255,\s*255,\s*0\.48\)\);[\s\S]*?backdrop-filter:\s*blur\(8px\) saturate\(1\.15\);/, '批量确认弹窗外层应使用白色玻璃渐变遮罩');
     assert.doesNotMatch(quickEntryStyle, /#am-campaign-batch-confirm-popup\s*\{[\s\S]*?background:\s*rgba\(15,\s*23,\s*42,\s*0\.42\)/, '批量确认弹窗外层不得回退为深灰遮罩');
     assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-card\s*\{[\s\S]*?width:\s*min\(360px,\s*calc\(100vw - 28px\)\);[\s\S]*?border:\s*1px solid var\(--am26-border[\s\S]*?border-radius:\s*18px[\s\S]*?background:\s*var\(--am26-panel-strong/, '批量确认弹窗应使用 360px 阅读宽度和统一面板 token');
     assert.doesNotMatch(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-card\s*\{[\s\S]*?width:\s*min\(320px,\s*calc\(100vw - 28px\)\);/, '批量确认弹窗宽度不应回退到 320px');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-icon\s*\{[\s\S]*?background:\s*var\(--am26-warning-soft[\s\S]*?color:\s*var\(--am26-warning/, '批量确认警告图标应使用 warning token');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-icon\.is-danger\s*\{[\s\S]*?background:\s*var\(--am26-danger-soft[\s\S]*?color:\s*var\(--am26-danger/, '批量确认危险图标应使用 danger token');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-body\s*\{[\s\S]*?color:\s*var\(--am26-text-soft[\s\S]*?background:\s*var\(--am26-surface/, '批量确认正文应使用统一正文与 surface token');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-footer\s*\{[\s\S]*?background:\s*var\(--am26-surface/, '批量确认底部应使用统一 surface token');
     assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-submit,[\s\S]*?border-radius:\s*10px/, '批量确认按钮圆角应符合统一按钮口径');
+    assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-submit\.is-danger:hover,[\s\S]*?background:\s*var\(--am26-danger[\s\S]*?outline:\s*2px solid var\(--am26-danger-soft/, '批量确认危险按钮 hover/focus 不应回退硬编码红色');
     assert.match(quickEntryStyle, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item/, '批量+自有控件应适配减少动画');
 });
 

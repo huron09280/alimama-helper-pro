@@ -69,6 +69,9 @@
                     --am26-primary: rgba(69, 84, 229, 1);
                     --am26-primary-strong: #1d3fcf;
                     --am26-primary-soft: rgba(42, 91, 255, 0.15);
+                    --am26-focus: rgba(69, 84, 229, 0.32);
+                    --am26-danger-soft: rgba(234, 79, 79, 0.12);
+                    --am26-warning-soft: rgba(232, 163, 37, 0.14);
                     --am26-success: #0ea86f;
                     --am26-warning: #e8a325;
                     --am26-danger: #ea4f4f;
@@ -547,9 +550,9 @@
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:hover,
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item:focus-visible {
-                    background: rgba(255, 255, 255, 0.52);
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.52));
                     color: var(--am26-text, #1b2438);
-                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
                     outline-offset: 2px;
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger {
@@ -557,7 +560,7 @@
                 }
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:hover,
                 #am-campaign-batch-plus-menu .am-campaign-batch-plus-item.is-danger:focus-visible {
-                    background: rgba(234, 79, 79, 0.12);
+                    background: var(--am26-danger-soft, rgba(234, 79, 79, 0.12));
                     color: var(--am26-danger, #ea4f4f);
                 }
                 .am-campaign-search-btn.is-running {
@@ -1346,11 +1349,11 @@
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
-                    background: rgba(232, 163, 37, 0.14);
+                    background: var(--am26-warning-soft, rgba(232, 163, 37, 0.14));
                     color: var(--am26-warning, #e8a325);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-icon.is-danger {
-                    background: rgba(234, 79, 79, 0.14);
+                    background: var(--am26-danger-soft, rgba(234, 79, 79, 0.12));
                     color: var(--am26-danger, #ea4f4f);
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-icon svg {
@@ -1374,14 +1377,14 @@
                     font-size: 12px;
                     line-height: 18px;
                     color: var(--am26-text-soft, #505a74);
-                    background: rgba(255, 255, 255, 0.2);
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-footer {
                     display: flex;
                     justify-content: flex-start;
                     gap: 8px;
                     padding: 0 24px 16px;
-                    background: rgba(255, 255, 255, 0.2);
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
@@ -1410,19 +1413,19 @@
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit:focus-visible {
                     background: var(--am26-primary-strong, #1d3fcf);
-                    outline: 2px solid rgba(69, 84, 229, 0.36);
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
                     outline-offset: 2px;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-submit.is-danger:focus-visible {
-                    background: #d63e3e;
-                    outline: 2px solid rgba(234, 79, 79, 0.34);
+                    background: var(--am26-danger, #ea4f4f);
+                    outline: 2px solid var(--am26-danger-soft, rgba(234, 79, 79, 0.12));
                     outline-offset: 2px;
                 }
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:hover,
                 #am-campaign-batch-confirm-popup .am-batch-confirm-cancel:focus-visible {
-                    background: rgba(69, 84, 229, 0.16);
-                    outline: 2px solid rgba(69, 84, 229, 0.32);
+                    background: var(--am26-primary-soft, rgba(42, 91, 255, 0.15));
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
                     outline-offset: 2px;
                 }
                 @media (prefers-reduced-motion: reduce) {

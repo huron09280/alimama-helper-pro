@@ -320,6 +320,7 @@
                 if (!(btn instanceof HTMLElement)) return;
                 btn.classList.remove('is-open');
                 btn.setAttribute('aria-expanded', 'false');
+                btn.removeAttribute('aria-controls');
             });
         },
 
@@ -394,11 +395,13 @@
             triggerEl.dataset.amBatchPlusAnchor = anchorId;
             triggerEl.classList.add('is-open');
             triggerEl.setAttribute('aria-expanded', 'true');
+            triggerEl.setAttribute('aria-controls', 'am-campaign-batch-plus-menu');
 
             const menu = document.createElement('div');
             menu.id = 'am-campaign-batch-plus-menu';
             menu.className = 'mxgc-popmenu am-campaign-batch-plus-native-menu';
             menu.setAttribute('role', 'menu');
+            menu.setAttribute('aria-label', '批量+菜单');
             menu.setAttribute('data-anchor-id', anchorId);
             menu.setAttribute('data-biz-code', bizCode);
             menu.innerHTML = this.getBatchPlusMenuItems(bizCode).map((item) => `
@@ -414,6 +417,25 @@
                     <span class="am-campaign-batch-plus-item-label">${this.escapeHtml(item.label)}</span>
                 </button>
             `).join('');
+            menu.addEventListener('keydown', (event) => {
+                const items = Array.from(menu.querySelectorAll('[data-am-campaign-batch-plus-action]'))
+                    .filter(el => el instanceof HTMLElement && !el.matches(':disabled'));
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    this.closeBatchPlusMenu();
+                    triggerEl.focus({ preventScroll: true });
+                    return;
+                }
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+                if (!items.length) return;
+                event.preventDefault();
+                const activeIndex = items.indexOf(document.activeElement);
+                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                const nextIndex = activeIndex >= 0
+                    ? (activeIndex + direction + items.length) % items.length
+                    : (direction > 0 ? 0 : items.length - 1);
+                items[nextIndex].focus({ preventScroll: true });
+            });
             document.body.appendChild(menu);
 
             const rect = triggerEl.getBoundingClientRect();
@@ -636,7 +658,7 @@
                 card.appendChild(footer);
                 popup.appendChild(card);
                 document.body.appendChild(popup);
-                requestAnimationFrame(() => confirmBtn.focus());
+                requestAnimationFrame(() => cancelBtn.focus());
             });
         },
 
@@ -5277,6 +5299,11 @@
             batchPlusHost.dataset.bizCode = targetBizCode;
             batchPlusHost.setAttribute('aria-haspopup', 'menu');
             batchPlusHost.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                batchPlusHost.setAttribute('aria-controls', 'am-campaign-batch-plus-menu');
+            } else {
+                batchPlusHost.removeAttribute('aria-controls');
+            }
             batchPlusHost.setAttribute('aria-disabled', 'false');
             batchPlusHost.classList.remove('is-disabled');
             batchPlusHost.title = '批量+';

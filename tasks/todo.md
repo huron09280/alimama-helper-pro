@@ -19,7 +19,7 @@
 - [x] 页面 8：建计划提交确认弹窗。
 - [x] 页面 9：计划行复制入口 + 一览/成功弹窗。
 - [x] 页面 10：计划行并发开启入口 + 日志弹窗。
-- [ ] 页面 11：批量+ 菜单 + 批量确认弹窗。
+- [x] 页面 11：批量+ 菜单 + 批量确认弹窗。
 - [ ] 页面 12：下载捕获面板。
 - [ ] 页面 13：潜力词日维度导出入口。
 - [ ] 页面 14：extension 注入/授权可见状态。
@@ -39,6 +39,7 @@
 - 页面 8 已完成：组建计划“提交创建”二次确认弹窗统一为浅玻璃工作台确认层，补齐专用白玻璃遮罩、待提交状态、统计卡、场景摘要、warning 风险提示和 token 化底部按钮；保留 `openKeywordSubmitConfirmPopup()` 只做确认 gating，确认后仍进入现有 `handleRun()` 创建链路；真实页只打开弹窗并取消关闭，未点击“确认提交创建”。
 - 页面 9 已完成：计划行复制入口、复制数量徽标、复制计划一览窗和成功窗按统一浅玻璃规范收敛；补齐待确认/已完成状态胶囊、`aria-describedby`、live status 语义和 token 化状态色；真实页只打开一览窗并取消关闭，未点击“确认生成”，不改 `prepareCopyCurrentPlanContext()`、`submitPreparedCopyCurrentPlan()`、真实创建、暂停兜底和页内搜索业务链路。
 - 页面 10 已完成：计划行并发开启入口和并发执行日志弹窗按统一浅玻璃规范收敛；20px 行内启动入口、日志标题/状态/明细区和 warning/error/success 语义色已 token 化，弹窗补齐 `aria-describedby`；真实页验收在 Offline + 本地写接口阻断双保护下打开日志弹窗并关闭，未让 `/campaign/updatePart.json` 触达服务端，不改 `runConcurrentStartFlow()`、同商品全量暂停、原在投重开、重试、状态校验和真实写入链路。
+- 页面 11 已完成：批量+ 菜单和批量开启/暂停/删除确认弹窗按统一浅玻璃规范收敛；菜单补齐 `aria-controls`、`aria-label`、Esc/方向键焦点导航，确认窗默认焦点改到“取消”降低误触真实写操作风险；样式补齐 `--am26-focus/danger-soft/warning-soft` token。保留原生“批量计划设置”克隆宿主、hover 弹出、选中项读取、业务线分组、人群官方弹窗、`/campaign/updatePart.json` 与 `/campaign/delete.json` 写接口链路不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -222,6 +223,29 @@
   - 安全核对：阻断记录显示唯一写接口为本地拦截的 `https://one.alimama.com/campaign/updatePart.json?...&bizCode=onebpSearch`；未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/bidword/add.json`、`/campaign/onebpSite/oneClick.json` 等写接口触达。
   - 截图：`tasks/ui-page10-campaign-concurrent-log-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 噪声；受保护阻断以弹窗日志显式展示，未发现并发日志弹窗相关未捕获异常。
+- 页面 11 自动化：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --check src/main-assistant/ui.js`：通过。
+  - `node --check tests/campaign-batch-plus-quick-entry.test.mjs`：通过。
+  - `node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/icon-system-regression.test.mjs`：通过，15/15。
+  - `node --test tests/campaign-concurrent-start-quick-entry.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/icon-system-regression.test.mjs`：通过，35/35。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `node --check dist/extension/page.bundle.js`：通过。
+  - `node --check 阿里妈妈多合一助手.js`：通过。
+- 页面 11 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，进入真实关键词推广列表页 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc`。
+  - 安全保护：点击前安装本地 fetch/XHR 写接口阻断 hook，覆盖 `/campaign/updatePart.json`、`/campaign/delete.json`、`/blackCrowd/batchModify.json`、`/blackCrowd/batchDelete.json`、`/solution/addList.json`、`/solution/business/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/bidword/add.json`、`/campaign/onebpSite/oneClick.json`。
+  - 菜单语义核对：`批量+` 触发器打开后 `aria-expanded=true`、`aria-controls=am-campaign-batch-plus-menu`、`aria-disabled=false`、`data-am-native-disabled=1`；菜单 `role=menu`、`aria-label=批量+菜单`、`data-biz-code=onebpSearch`。
+  - 菜单内容核对：5 个菜单项分别为 `批量开启 / 批量暂停 / 批量删除 / 批量修改屏蔽人群 / 批量人群设置`，全部为 `role=menuitem` 并使用共享 SVG 图标；Esc 和方向键焦点导航由专项测试覆盖。
+  - 菜单样式核对：菜单宽度 `120px`、10px 圆角、`var(--am26-panel-strong)` 浅玻璃渐变、`rgba(255,255,255,.4)` 边框、`rgba(31,38,135,.15) 0px 8px 32px` 阴影和 `blur(18px) saturate(1.6)` 背景滤镜。
+  - 确认窗交互核对：程序化选中 1 条真实计划 `E7pro_自定义`，campaignId `69514602419`；只打开 `批量暂停` 二次确认，未点击“确认暂停”；弹窗标题为“确认暂停计划”，正文说明会调用原生批量暂停接口。
+  - 确认窗语义核对：`#am-campaign-batch-confirm-popup` 为 `role=dialog`、`aria-modal=true`，具备 `aria-labelledby` 和 `aria-describedby`；按钮为 `确认暂停 / 取消`，默认焦点停在“取消”。
+  - 确认窗样式核对：遮罩为全屏白色玻璃渐变并带 `blur(8px) saturate(1.15)`；卡片约 `360x200`、18px 圆角、浅玻璃渐变和 `var(--am26-shadow)`；正文背景为 `rgba(255,255,255,.25)`，图标为共享 SVG。
+  - 取消与安全核对：点击“取消”后确认窗和菜单均关闭，选中计数恢复为 0；本地写接口 guard 记录为空，performance resource 未发现本轮危险写接口触达；验收后恢复原 fetch/XHR。
+  - 截图：`tasks/ui-page11-campaign-batch-plus-confirm-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现批量+ 菜单或确认窗相关未捕获异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -254,6 +278,9 @@
 - 页面 10 结果：计划行并发开启入口与执行日志弹窗已按统一浅玻璃工作台规范收敛，入口 hover/focus、弹窗遮罩、日志卡片、状态区、日志明细和警告/错误/成功语义色更一致；真实页验证覆盖入口注入、受保护打开日志、关闭恢复和写接口阻断。
 - 页面 10 风险：真实验收刻意不执行真实并发开启/暂停，无法证明服务端状态更新闭环；业务执行链路由既有并发专项测试覆盖，本轮仅证明 UI/语义和受保护失败路径稳定。
 - 页面 10 回滚：回退 `src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/ui.js`、`tests/campaign-concurrent-start-quick-entry.test.mjs`、构建产物和页面 10 截图即可。
+- 页面 11 结果：批量+ 菜单和批量确认弹窗已按统一浅玻璃工作台规范收敛，菜单 ARIA、键盘关闭/导航、危险项语义色和确认窗默认取消焦点更稳；真实页验证覆盖菜单打开、确认窗打开、取消关闭和不触发写接口。
+- 页面 11 风险：真实验收刻意不点击批量开启/暂停/删除确认按钮，无法证明服务端写入闭环；对应状态更新、删除、人群官方弹窗和刷新链路仍由既有业务实现与专项测试覆盖。
+- 页面 11 回滚：回退 `src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/ui.js`、`tests/campaign-batch-plus-quick-entry.test.mjs`、构建产物和页面 11 截图即可。
 
 ---
 
