@@ -307,12 +307,17 @@ test('万能查数头部与人群看板顶部控制区收敛到统一浅玻璃 t
   );
   assert.match(
     block,
-    /#am-magic-report-popup \.am-crowd-matrix-campaign \{[\s\S]*?flex:\s*1 1 420px;[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?overflow:\s*visible;/,
+    /#am-magic-report-popup \.am-crowd-matrix-campaign \{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(180px,\s*1fr\) minmax\(118px,\s*max-content\) minmax\(220px,\s*1\.1fr\);[\s\S]*?justify-items:\s*start;[\s\S]*?text-align:\s*left;/,
+    '计划信息胶囊未使用左对齐三列布局'
+  );
+  assert.match(
+    block,
+    /#am-magic-report-popup \.am-crowd-matrix-campaign \{[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?overflow:\s*visible;/,
     '计划信息胶囊未使用统一 token 或未保留商品下拉弹出空间'
   );
   assert.match(
     block,
-    /#am-magic-report-popup \.am-crowd-matrix-campaign-part \{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/,
+    /#am-magic-report-popup \.am-crowd-matrix-campaign-part \{[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;[\s\S]*?text-align:\s*left;/,
     '计划信息长文本缺少省略保护'
   );
   assert.match(
@@ -340,6 +345,28 @@ test('万能查数头部与人群看板顶部控制区收敛到统一浅玻璃 t
     /#am-magic-report-popup \.am-magic-header \.am-btn-group \{[\s\S]*?border-left:\s*1px solid rgba\(0,\s*0,\s*0,\s*0\.06\)/,
     '窗口动作组不应保留旧左分割线样式'
   );
+});
+
+test('商品ID候选弹层使用 body portal 高层级定位，避免被工具条遮挡点击', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /matrixCampaignItemDropdownHomeEl:\s*null/, '商品ID弹层缺少原始宿主记录状态');
+  assert.match(block, /mountCrowdCampaignItemDropdownPortal\(\)\s*\{[\s\S]*document\.body\.appendChild\(this\.matrixCampaignItemDropdownEl\);[\s\S]*this\.matrixCampaignItemDropdownEl\.classList\.add\('is-body-portal'\);/, '商品ID弹层打开时未挂到 body 级 portal');
+  assert.match(block, /restoreCrowdCampaignItemDropdownHome\(\)\s*\{[\s\S]*homeEl\.appendChild\(this\.matrixCampaignItemDropdownEl\);[\s\S]*this\.matrixCampaignItemDropdownEl\.classList\.remove\('is-body-portal'\);/, '商品ID弹层关闭时未还原到原宿主');
+  assert.match(block, /if \(next\) \{[\s\S]*this\.mountCrowdCampaignItemDropdownPortal\(\);[\s\S]*this\.matrixCampaignItemDropdownEl\.classList\.toggle\('is-open', next\);/, '商品ID弹层打开时未先挂载 portal 或未同步独立打开态');
+  assert.match(block, /positionCrowdCampaignItemDropdown\(\)\s*\{[\s\S]*const triggerRect = this\.matrixCampaignItemTriggerEl\.getBoundingClientRect\(\);/, '商品ID弹层缺少基于触发器的定位方法');
+  assert.match(block, /const availableWidth = Math\.max\(80,\s*viewportWidth - gutter \* 2\);[\s\S]*const dropdownWidth = Math\.min\([\s\S]*420,[\s\S]*Math\.max\(260,\s*Math\.round\(triggerRect\.width \|\| 0\)\),[\s\S]*availableWidth[\s\S]*\);/, '商品ID弹层宽度未按视口与触发器约束计算');
+  assert.doesNotMatch(block, /getCrowdCampaignItemDropdownBaseRect\(\)/, 'body portal 后不应继续依赖内部 fixed containing block 偏移纠偏');
+  assert.match(block, /this\.mountCrowdCampaignItemDropdownPortal\(\);[\s\S]*this\.matrixCampaignItemDropdownEl\.style\.left = `\$\{Math\.round\(left\)\}px`;/, '商品ID弹层未使用 body portal 视口坐标写入 fixed left');
+  assert.match(block, /this\.matrixCampaignItemDropdownEl\.style\.width = `\$\{dropdownWidth\}px`;/, '商品ID弹层未写入 fixed width');
+  assert.match(block, /this\.matrixCampaignItemDropdownEl\.style\.maxHeight = `\$\{maxHeight\}px`;/, '商品ID弹层未写入可用高度');
+  assert.match(block, /const measuredHeight = Math\.min\([\s\S]*this\.matrixCampaignItemDropdownEl\.getBoundingClientRect\(\)\.height[\s\S]*const top = openAbove[\s\S]*triggerRect\.top - measuredHeight - 6[\s\S]*triggerRect\.bottom \+ 6/, '商品ID弹层没有按实际高度选择向上或向下展开');
+  assert.match(block, /this\.matrixCampaignItemDropdownEl\.style\.top = `\$\{Math\.round\(top\)\}px`;/, '商品ID弹层未使用 body portal 视口坐标写入 fixed top');
+  assert.match(block, /body > \.am-crowd-matrix-item-dropdown \{[\s\S]*?position:\s*fixed;[\s\S]*?z-index:\s*2147483647;[\s\S]*?pointer-events:\s*auto;[\s\S]*?overscroll-behavior:\s*contain;/, '商品ID弹层 CSS 未覆盖 body portal 或层级仍可能被遮挡');
+  assert.match(block, /\.am-crowd-matrix-item-dropdown\.is-open \{[\s\S]*?display:\s*block;/, 'body portal 弹层缺少独立打开态 display 规则');
+  assert.match(block, /this\.positionCrowdCampaignItemDropdown\(\);[\s\S]*const options = this\.getCrowdCampaignItemOptionNodes\(\);/, '打开商品ID弹层时未立即定位');
+  assert.match(block, /this\.matrixCampaignItemDropdownEl\.addEventListener\('click', \(e\) => \{[\s\S]*target\.closest\('\[data-crowd-item-id\]'\)[\s\S]*this\.handleCrowdCampaignItemSelect\(optionItemId\);/, '商品ID弹层挂到 body 后缺少 listbox 自有选项点击事件');
+  assert.match(block, /if \(this\.matrixCampaignItemDropdownEl instanceof HTMLElement && this\.matrixCampaignItemDropdownEl\.contains\(target\)\) return;/, 'document 点击关闭逻辑未排除 body portal 弹层内部点击');
+  assert.match(block, /this\.popupDropdownPositionHandler = \(\) => this\.requestCrowdCampaignItemDropdownPositionUpdate\(\);[\s\S]*document\.addEventListener\('scroll', this\.popupDropdownPositionHandler, true\);/, '商品ID弹层未在页面滚动时重新定位');
 });
 
 test('万能查数快捷话术按钮具备焦点与临时激活语义', () => {
@@ -412,10 +439,12 @@ test('看板计划信息展示计划名/计划ID，并将商品ID改为下拉单
   assert.match(block, /optionBtn\.dataset\.crowdItemId = item\.itemId;/, '商品ID下拉未写入选项 data-item-id');
   assert.match(block, /optionBtn\.tabIndex = -1;[\s\S]*optionBtn\.setAttribute\('role', 'option'\);[\s\S]*optionBtn\.setAttribute\('aria-label', item\.label\);/, '商品ID option 缺少 option 语义或可访问名称');
   assert.match(block, /this\.matrixCampaignItemDropdownEl\.setAttribute\('aria-hidden', next \? 'false' : 'true'\);/, '商品ID下拉打开状态未同步 aria-hidden');
+  assert.match(block, /this\.matrixCampaignItemDropdownHomeEl = this\.matrixCampaignItemSelectEl;/, '商品ID listbox 缺少原始宿主初始化');
   assert.match(block, /this\.matrixCampaignItemTriggerEl\.setAttribute\('aria-label', `选择商品ID：\$\{pickedOption\?\.label \|\| '--'\}`\);/, '商品ID触发器未同步当前选项可访问名称');
   assert.match(block, /itemOptions = itemOptions[\s\S]*\.filter\(item => item\.active !== false\)/, '商品候选未过滤暂停推广状态');
   assert.match(block, /const leftRank = left\?\.active === true \? 0 : 1;[\s\S]*const rightRank = right\?\.active === true \? 0 : 1;/, '商品候选排序未优先推广中状态');
   assert.match(block, /this\.matrixCampaignEl\.addEventListener\('click', \(e\) => \{[\s\S]*target\.closest\('\[data-crowd-item-trigger\]'\)[\s\S]*target\.closest\('\[data-crowd-item-id\]'\)/, '商品ID下拉未绑定触发器/选项点击事件');
+  assert.match(block, /this\.matrixCampaignItemDropdownEl\.addEventListener\('click', \(e\) => \{[\s\S]*target\.closest\('\[data-crowd-item-id\]'\)[\s\S]*this\.handleCrowdCampaignItemSelect\(optionItemId\);/, '商品ID body portal 下拉未绑定自身选项点击事件');
   assert.match(block, /handleCrowdCampaignItemSelect\(itemId = ''\)\s*\{[\s\S]*this\.setCrowdCampaignSelectedItemId\(id,\s*selectedItemId,\s*\{\s*manual:\s*true\s*\}\);[\s\S]*this\.reloadCrowdMatrixMetric\(\{\s*campaignId:\s*id,\s*metricType:\s*'itemdeal'\s*\}\);/, '商品ID下拉切换后未仅刷新商品成交人群');
 });
 

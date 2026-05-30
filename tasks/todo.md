@@ -1,3 +1,96 @@
+# TODO - 2026-05-30 人群看板商品选择弹层置顶
+
+## 需求规格
+- 目标：修复万能查数「人群对比看板」顶部计划信息显示与商品 ID 选择交互。
+- 范围：仅调整人群看板顶部 `计划名 / 计划ID / 商品ID` 的运行态布局和商品 ID 下拉弹层层级定位；不改查数接口、商品候选来源、切换后刷新逻辑或真实投放相关功能。
+- UI 要求：计划名、计划ID、商品ID 在同一信息胶囊内靠左排列；商品 ID 候选弹层打开后置于页面上层，不能落到底部或被内容区遮挡导致无法选择。
+- 安全边界：真实 `one.alimama.com` 页面只做打开弹窗、点击商品 ID 下拉和关闭/选择类只读交互；不点击创建、投放、提交、删除、扣费入口。
+- 成功标准：源码和测试覆盖布局/弹层约束；构建、语法和相关测试通过；Chrome 真实页面验证顶部信息左对齐、下拉层高 z-index 且可操作，记录控制台和网络风险。
+
+## 执行计划（可核对）
+- [x] 定位 `magic-report.js` 顶部信息条和商品 ID 下拉实现，确认只需局部修复。
+- [x] 更新顶部信息胶囊为左对齐稳定布局，长计划名继续省略。
+- [x] 将商品 ID 下拉改为固定定位高层级弹层，并在打开/渲染/窗口变化时计算位置。
+- [x] 补充 `tests/magic-report-crowd-matrix.test.mjs` 回归断言。
+- [x] 运行相关测试、构建和语法校验。
+- [x] 在真实 Chrome `one.alimama.com` 页面验证并回填结果复盘。
+- [x] 修复用户复测发现的命中层级问题：商品 ID 下拉改为 body 级 portal，避免工具条遮挡点击。
+- [x] 更新商品 ID 下拉 portal 回归断言。
+- [x] 重新运行相关测试、构建、语法和 diff 校验。
+- [x] 在真实 Chrome `one.alimama.com` 页面用 `elementFromPoint` 与实际点击复验。
+
+## 高层操作摘要
+- 已读取项目规则、历史教训、UI 规范、图标规范和 Chrome 技能说明；本次使用 `frontend-testing-debugging` 的渲染回归思路，最终走真实 Chrome 登录态页面验收。
+- 已将人群看板顶部信息胶囊改为三列 grid：计划名、计划ID、商品ID 均左对齐；删除旧分隔符，长文本继续省略。
+- 已将商品 ID 候选弹层从局部 absolute 改为 fixed 高层级弹层，打开、商品候选刷新、窗口 resize 和页面 scroll 时都会重新计算位置。
+- 真实页复验时发现 `backdrop-filter` 会让 fixed 弹层以信息胶囊作为实际包含块，导致坐标偏移；已补充 `getCrowdCampaignItemDropdownBaseRect()`，按实际 offsetParent 扣减 left/top，避免弹层落到页面底部或错位。
+- 用户复测仍失败：虽然弹层 rect 位于触发器下方，但 `document.elementFromPoint(optionCenter)` 命中 `.am-crowd-matrix-toolbar` 而不是 option，说明弹层仍被内容区层级遮住；改为 body 级 portal 后重新验证。
+- 准备改为 body 级 portal：打开商品 ID 下拉时将 listbox 临时挂到 `document.body`，关闭时还原到商品选择器，定位改用 viewport 坐标直接写入，选项点击改为绑定在 listbox 本身。
+- 已完成 body 级 portal 修复：`[data-crowd-item-dropdown]` 打开时移动到 `document.body`，同步 `.is-open/.is-body-portal` 与 `z-index:2147483647`，选项点击绑定到 listbox 自身，document 外部点击排除 portal 内部点击；关闭后还原回 `#am-crowd-matrix-item-select`。
+
+## 验证记录
+- `node --check src/main-assistant/magic-report.js`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `node --test tests/magic-report-crowd-matrix.test.mjs`：通过，60/60。
+- `npm run build:check`：通过。
+- `npm run check:syntax`：通过。
+- `git diff --check -- src/main-assistant/magic-report.js tests/magic-report-crowd-matrix.test.mjs tasks/todo.md '阿里妈妈多合一助手.js' dist/packages/alimama-helper-pro.user.js dist/packages/alimama-helper-pro.meta.js dist/extension/page.bundle.js`：通过。
+- `node --check src/main-assistant/magic-report.js`：portal 修复后通过。
+- `npm run build`：portal 修复后通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `node --check 阿里妈妈多合一助手.js`：通过。
+- `node --test tests/magic-report-crowd-matrix.test.mjs`：portal 修复后通过，60/60。
+- `npm run build:check`：portal 修复后通过。
+- `npm run check:syntax`：portal 修复后通过。
+- `git diff --check -- src/main-assistant/magic-report.js tests/magic-report-crowd-matrix.test.mjs tasks/todo.md tasks/lessons.md '阿里妈妈多合一助手.js' dist/packages/alimama-helper-pro.user.js dist/packages/alimama-helper-pro.meta.js dist/extension/page.bundle.js`：portal 修复后通过。
+- Chrome DevTools 真实页：在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 重载 unpacked extension 后，硬刷新 `https://one.alimama.com/index.html#!/manage/display`，再进入只读详情页 `campaignId=81063984683`。
+- Chrome DevTools 真实页：打开主助手 -> 万能查数 -> 人群对比看板，识别到 `计划ID：81063984683`，商品按钮可用；顶部胶囊 computed style 为 `display:grid`、`justify-items:start`、`text-align:left`、`overflow:visible`。
+- Chrome DevTools 真实页：点击商品 ID 后，弹层 computed style 为 `position:fixed`、`z-index:1000005`、`min-width:0px`；实际 rect 为 `left=1095 top=101 right=1515 bottom=153`，触发器 rect 为 `left=1094 top=72 right=1762 bottom=94`，`nearTrigger=true` 且 `insideViewport=true`。
+- Chrome DevTools 真实页：点击当前唯一商品选项后，`aria-expanded=false`、弹层 `display:none`、`aria-hidden=true`，证明弹层可操作并可关闭。
+- Chrome DevTools 真实页：用户复测失败后重新验证同一详情页 `campaignId=81063984683`，打开商品 ID 下拉时 `dropdownParent=BODY`、class 为 `am-crowd-matrix-item-dropdown is-body-portal is-open`、`z-index=2147483647`、`aria-hidden=false`、`display=block`。
+- Chrome DevTools 真实页：下拉选项 rect 为 `left=1103 top=109 right=1505 bottom=143`，中心点 `{x:1304,y:126}` 的 `document.elementFromPoint()` 命中 `BUTTON.am-crowd-matrix-item-option is-active is-keyboard-active`，`hitIsOption=true`；这次不再命中 `.am-crowd-matrix-toolbar`。
+- Chrome DevTools 真实页：对命中的 option 做真实点击后，`aria-expanded=false`、`aria-hidden=true`、`display=none`，并且 `dropdownParent=DIV` 还原到商品选择器。
+- Chrome DevTools 控制台：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED`，未发现插件 UI 相关运行时异常。
+- Chrome DevTools 网络资源：performance resource 未命中 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy`、`/campaign/copy`、`/campaign/updatePart.json`、`/campaign/delete.json`、`oneClick.json`、`submit`、`budget`、`delete` 等写接口。
+
+## 结果复盘
+- 结果：已修复人群对比看板顶部 `计划名 / 计划ID / 商品ID` 左对齐问题，并修复商品 ID 下拉被工具条遮挡导致无法选择的问题。
+- 根因：商品 ID 弹层第一版 fixed 定位仍留在弹窗内部层叠上下文里，视觉坐标贴近触发器，但真实鼠标命中被 `.am-crowd-matrix-toolbar` 截走；必须使用 body 级 portal 才能脱离内部 stacking context。
+- 验证重点：本次以 `document.elementFromPoint(optionCenter)` 命中 option 作为关键验收，并补充真实点击关闭状态；不再只依赖 rect 坐标或 JS 直接调用 option click。
+- 风险：当前验证计划只有 1 个商品候选，因此已验证“打开、定位、命中当前选项、点击关闭”，未覆盖多商品切换后的局部商品成交刷新；对应切换链路由既有测试覆盖。
+
+# TODO - 2026-05-30 精简重写项目 AGENTS.md
+
+## 需求规格
+- 目标：读取外部 `AGENT-v2.md` 并对照当前 `AGENTS.md`，重写为更短、更硬的项目级代理规则。
+- 范围：仅改 `AGENTS.md` 与任务记录；不改业务源码、构建产物或发布文档，除非发现已有测试明确依赖 AGENTS 文案。
+- 成功标准：保留高约束规则（Claude 复审、规划记录、Debug-first、结构性修复、验证、真实页面安全边界、UI 规范、任务记录），删除重复流程和任务级噪声；完成 diff 自审与基础验证。
+
+## 执行计划（可核对）
+- [x] 回顾 `tasks/lessons.md` 顶部教训和当前 `AGENTS.md`。
+- [x] 读取外部 `AGENT-v2.md`，提炼可迁移的全局硬规则。
+- [x] 对照仓库 UI/真实页面/验证约束，重写 `AGENTS.md`。
+- [x] 检查是否需要同步测试；至少完成文档格式、检索范围和 diff 自审。
+- [x] 回填验证记录、风险和结果复盘。
+
+## 高层操作摘要
+- 已读取当前 `AGENTS.md`、`tasks/lessons.md`、`tasks/todo.md` 顶部内容，并拉取外部 `AGENT-v2.md` raw 文档。
+- 已启动两个只读子代理分别复核外部规则迁移点与仓库项目级约束去噪点；主线程先推进不依赖子代理的文档重写。
+- 已将 `AGENTS.md` 从 154 行压缩为项目级硬规则，保留规划记录、Debug-first、结构性修复、验证、UI 规范、真实页面和安全边界。
+- 已根据复核建议补充轻量文档契约测试 `tests/agents-rules-contract.test.mjs`，防止核心边界丢失或 AGENTS 重新膨胀进任务级噪声。
+- 已完成最终 diff 自审：本轮只改 `AGENTS.md`、新增文档契约测试、更新本任务记录；未触碰业务源码或构建产物。
+
+## 验证记录
+- `node --test tests/agents-rules-contract.test.mjs tests/codex-context-script.test.mjs`：通过，4/4。
+- `git diff --check -- AGENTS.md tests/agents-rules-contract.test.mjs tasks/todo.md`：通过。
+- `wc -l AGENTS.md tests/agents-rules-contract.test.mjs`：`AGENTS.md` 为 70 行，新增契约测试为 34 行。
+- `npm run test`：通过，558 个测试中 556 通过、2 个历史 skip（缺少 `agent-cluster/index.mjs`），0 失败。
+
+## 结果复盘
+- 结果：已按外部 `AGENT-v2.md` 的高价值规则重写本仓库 `AGENTS.md`，从 154 行收敛为 70 行；保留真正项目级的任务记录、Debug-first、结构性修复、测试验证、UI 规范、Chrome DevTools 真实页面验收和真实写操作安全边界。
+- 测试：新增 `tests/agents-rules-contract.test.mjs`，约束 `AGENTS.md` 不重新膨胀进页面切片/临时命令等任务级噪声，并确保 `tasks/todo.md`、`tasks/lessons.md`、`src/`/`dist/` 事实源、UI 文档、`one.alimama.com`、`policy token`、`shopId`、`__AM_WXT_*`、真实写操作边界和 60 秒测试超时等核心规则存在。
+- 风险：本次是文档与文档契约测试变更，不涉及运行态 UI 或业务逻辑，因此未做 Chrome DevTools 真实页面验收；全量测试已覆盖新增测试能进入默认回归入口。
+- 回滚：回退 `AGENTS.md`、`tests/agents-rules-contract.test.mjs` 和本段 `tasks/todo.md` 记录即可。
+
 # TODO - 2026-05-30 全页面 UI 规范逐页优化
 
 ## 需求规格

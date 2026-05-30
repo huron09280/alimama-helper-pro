@@ -1,5 +1,10 @@
 # Lessons - 2026-05-30
 
+## L87 下拉弹层修复必须验证命中测试而不只看坐标
+- 触发：人群看板商品 ID 弹层上一版真实页 computed rect 已贴近触发器，但用户反馈点击后仍无法选择，被其它层遮住。
+- 原因：`getBoundingClientRect()` 和 JS `option.click()` 只能证明 DOM 坐标和程序点击可用，不能证明鼠标命中链路未被 iframe、玻璃层或 stacking context 拦截；fixed 弹层留在复杂弹窗内部时，仍可能被祖先层级或指针事件遮挡。
+- 规则：修复跨层弹层时，必须把候选层挂到真正顶层宿主（如 `document.body` 或明确 portal root），并用 `document.elementFromPoint(optionCenter)`、Chrome DevTools 真实点击、`aria-expanded/display/aria-hidden` 变化共同证明可操作；不得只用坐标或 JS 直接调用 click 作为验收。
+
 ## L86 关键词推广复制不能走官方 copy
 - 触发：用户反馈关键词推广里复制 `E7pro_自定义` 后，发货关键词、地区等隐藏配置没有复制。
 - 原因：dry-run 只能证明插件可生成官方复制 payload，不能证明服务端支持；真实 `onebpSearch` 调用 `/solution/copy.json` 返回“该场景暂无此功能”。关键词推广复制必须走受控 `/solution/addList.json`，但旧 addList 组包会重建关键词 bundle，并经过复制白名单、关键词自定义 `prune/normalize` 多轮裁剪，导致关键词、地域、创意、时间折扣、全能调价等源字段有丢失风险。

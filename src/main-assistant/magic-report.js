@@ -20,6 +20,8 @@
         matrixCampaignItemTriggerEl: null,
         matrixCampaignItemTriggerTextEl: null,
         matrixCampaignItemDropdownEl: null,
+        matrixCampaignItemDropdownHomeEl: null,
+        matrixCampaignItemDropdownPositionFrame: 0,
         matrixHoverTipEl: null,
         matrixHoverActiveBar: null,
         matrixHoverActiveBars: [],
@@ -31,6 +33,7 @@
         popupMatrixMaximized: false,
         popupLayoutBeforeMatrix: null,
         popupResizeHandler: null,
+        popupDropdownPositionHandler: null,
         lastCampaignId: '',
         lastCampaignName: '',
         activeView: 'matrix',
@@ -767,20 +770,110 @@
         setCrowdCampaignItemDropdownOpen(open) {
             if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
             const next = open === true;
+            if (next) {
+                this.mountCrowdCampaignItemDropdownPortal();
+            }
             this.matrixCampaignItemSelectEl.classList.toggle('is-open', next);
             if (this.matrixCampaignItemTriggerEl instanceof HTMLElement) {
                 this.matrixCampaignItemTriggerEl.setAttribute('aria-expanded', next ? 'true' : 'false');
             }
             if (this.matrixCampaignItemDropdownEl instanceof HTMLElement) {
+                this.matrixCampaignItemDropdownEl.classList.toggle('is-open', next);
                 this.matrixCampaignItemDropdownEl.setAttribute('aria-hidden', next ? 'false' : 'true');
             }
             if (next) {
+                this.positionCrowdCampaignItemDropdown();
                 const options = this.getCrowdCampaignItemOptionNodes();
                 const selectedOption = options.find(node => node.getAttribute('aria-selected') === 'true') || options[0];
                 this.setCrowdCampaignItemActiveOption(selectedOption, { scroll: false });
             } else {
                 this.clearCrowdCampaignItemActiveOption();
+                this.resetCrowdCampaignItemDropdownPosition();
+                this.restoreCrowdCampaignItemDropdownHome();
             }
+        },
+
+        mountCrowdCampaignItemDropdownPortal() {
+            if (!(this.matrixCampaignItemDropdownEl instanceof HTMLElement)) return;
+            if (!(this.matrixCampaignItemDropdownHomeEl instanceof HTMLElement)) {
+                this.matrixCampaignItemDropdownHomeEl = this.matrixCampaignItemDropdownEl.parentElement instanceof HTMLElement
+                    ? this.matrixCampaignItemDropdownEl.parentElement
+                    : this.matrixCampaignItemSelectEl;
+            }
+            if (this.matrixCampaignItemDropdownEl.parentElement !== document.body) {
+                document.body.appendChild(this.matrixCampaignItemDropdownEl);
+            }
+            this.matrixCampaignItemDropdownEl.classList.add('is-body-portal');
+        },
+
+        restoreCrowdCampaignItemDropdownHome() {
+            if (!(this.matrixCampaignItemDropdownEl instanceof HTMLElement)) return;
+            const homeEl = this.matrixCampaignItemDropdownHomeEl instanceof HTMLElement
+                ? this.matrixCampaignItemDropdownHomeEl
+                : this.matrixCampaignItemSelectEl;
+            if (homeEl instanceof HTMLElement && homeEl.isConnected && this.matrixCampaignItemDropdownEl.parentElement !== homeEl) {
+                homeEl.appendChild(this.matrixCampaignItemDropdownEl);
+            }
+            this.matrixCampaignItemDropdownEl.classList.remove('is-body-portal');
+        },
+
+        resetCrowdCampaignItemDropdownPosition() {
+            if (!(this.matrixCampaignItemDropdownEl instanceof HTMLElement)) return;
+            this.matrixCampaignItemDropdownEl.style.left = '';
+            this.matrixCampaignItemDropdownEl.style.top = '';
+            this.matrixCampaignItemDropdownEl.style.bottom = '';
+            this.matrixCampaignItemDropdownEl.style.width = '';
+            this.matrixCampaignItemDropdownEl.style.maxHeight = '';
+        },
+
+        positionCrowdCampaignItemDropdown() {
+            if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
+            if (!(this.matrixCampaignItemTriggerEl instanceof HTMLElement)) return;
+            if (!(this.matrixCampaignItemDropdownEl instanceof HTMLElement)) return;
+            if (!this.matrixCampaignItemSelectEl.classList.contains('is-open')) return;
+            this.mountCrowdCampaignItemDropdownPortal();
+            const triggerRect = this.matrixCampaignItemTriggerEl.getBoundingClientRect();
+            const viewportWidth = Math.max(document.documentElement?.clientWidth || 0, window.innerWidth || 0);
+            const viewportHeight = Math.max(document.documentElement?.clientHeight || 0, window.innerHeight || 0);
+            const gutter = 12;
+            const availableWidth = Math.max(80, viewportWidth - gutter * 2);
+            const dropdownWidth = Math.min(
+                420,
+                Math.max(260, Math.round(triggerRect.width || 0)),
+                availableWidth
+            );
+            const left = Math.max(gutter, Math.min(Math.round(triggerRect.left), viewportWidth - dropdownWidth - gutter));
+            const spaceBelow = viewportHeight - triggerRect.bottom - gutter;
+            const spaceAbove = triggerRect.top - gutter;
+            const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+            const maxHeight = Math.max(160, Math.min(320, Math.floor((openAbove ? spaceAbove : spaceBelow) - 8)));
+            this.matrixCampaignItemDropdownEl.style.left = `${Math.round(left)}px`;
+            this.matrixCampaignItemDropdownEl.style.width = `${dropdownWidth}px`;
+            this.matrixCampaignItemDropdownEl.style.maxHeight = `${maxHeight}px`;
+            this.matrixCampaignItemDropdownEl.style.bottom = '';
+            const measuredHeight = Math.min(
+                maxHeight,
+                Math.max(0, Math.ceil(this.matrixCampaignItemDropdownEl.getBoundingClientRect().height || 0))
+            );
+            const top = openAbove
+                ? Math.max(gutter, triggerRect.top - measuredHeight - 6)
+                : Math.min(viewportHeight - gutter, triggerRect.bottom + 6);
+            if (openAbove) {
+                this.matrixCampaignItemDropdownEl.style.top = `${Math.round(top)}px`;
+            } else {
+                this.matrixCampaignItemDropdownEl.style.top = `${Math.round(top)}px`;
+            }
+        },
+
+        requestCrowdCampaignItemDropdownPositionUpdate() {
+            if (this.matrixCampaignItemDropdownPositionFrame) return;
+            const schedule = typeof requestAnimationFrame === 'function'
+                ? requestAnimationFrame
+                : (fn) => setTimeout(fn, 16);
+            this.matrixCampaignItemDropdownPositionFrame = schedule(() => {
+                this.matrixCampaignItemDropdownPositionFrame = 0;
+                this.positionCrowdCampaignItemDropdown();
+            });
         },
 
         toggleCrowdCampaignItemDropdown(forceOpen) {
@@ -987,6 +1080,7 @@
             this.matrixCampaignItemTriggerEl.title = pickedOption?.label || '--';
             this.matrixCampaignItemTriggerEl.setAttribute('aria-label', `选择商品ID：${pickedOption?.label || '--'}`);
             applyDisabledState(false);
+            this.positionCrowdCampaignItemDropdown();
         },
 
         handleCrowdCampaignItemSelect(itemId = '') {
@@ -5477,9 +5571,11 @@
                     text-overflow: ellipsis;
                 }
                 #am-magic-report-popup .am-crowd-matrix-campaign {
-                    display: flex;
+                    display: grid;
+                    grid-template-columns: minmax(180px, 1fr) minmax(118px, max-content) minmax(220px, 1.1fr);
                     align-items: center;
-                    gap: 6px;
+                    justify-items: start;
+                    gap: 8px;
                     flex: 1 1 420px;
                     min-width: 0;
                     max-width: 100%;
@@ -5496,30 +5592,31 @@
                     backdrop-filter: blur(10px) saturate(1.12);
                     white-space: nowrap;
                     overflow: visible;
+                    text-align: left;
                 }
                 #am-magic-report-popup .am-crowd-matrix-campaign-part {
-                    flex: 0 1 auto;
+                    display: block;
+                    width: 100%;
                     min-width: 0;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
+                    text-align: left;
                 }
                 #am-magic-report-popup .am-crowd-matrix-campaign-part[data-crowd-campaign-name] {
-                    flex: 1 1 220px;
+                    justify-self: stretch;
                 }
                 #am-magic-report-popup .am-crowd-matrix-campaign-part[data-crowd-campaign-id] {
-                    flex: 0 1 142px;
-                }
-                #am-magic-report-popup .am-crowd-matrix-campaign-sep {
-                    color: #7f8ca9;
-                    flex: 0 0 auto;
+                    justify-self: start;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-select-wrap {
-                    display: inline-flex;
+                    display: flex;
                     align-items: center;
                     gap: 4px;
-                    flex: 0 1 260px;
+                    justify-self: stretch;
+                    width: 100%;
                     min-width: 0;
+                    text-align: left;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-label {
                     color: #3f4e6f;
@@ -5529,7 +5626,7 @@
                     position: relative;
                     flex: 1 1 auto;
                     min-width: 0;
-                    max-width: min(360px, 58vw);
+                    max-width: none;
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-trigger {
                     width: 100%;
@@ -5574,16 +5671,19 @@
                 #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-trigger-arrow {
                     transform: rotate(180deg);
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-dropdown {
-                    position: absolute;
-                    top: calc(100% + 6px);
-                    left: 0;
-                    z-index: 35;
-                    min-width: 100%;
+                #am-magic-report-popup .am-crowd-matrix-item-dropdown,
+                body > .am-crowd-matrix-item-dropdown {
+                    position: fixed;
+                    top: auto;
+                    left: auto;
+                    bottom: auto;
+                    z-index: 2147483647;
+                    min-width: 0;
                     max-width: min(420px, 70vw);
                     max-height: 260px;
                     overflow-y: auto;
                     display: none;
+                    pointer-events: auto;
                     padding: 8px;
                     border-radius: 14px;
                     border: 1px solid rgba(255, 255, 255, 0.8);
@@ -5591,11 +5691,14 @@
                     backdrop-filter: blur(8px);
                     box-shadow: 0 8px 20px rgba(31, 53, 109, 0.08), 0 2px 6px rgba(42, 91, 255, 0.05);
                     white-space: normal;
+                    overscroll-behavior: contain;
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-dropdown {
+                #am-magic-report-popup .am-crowd-matrix-item-select.is-open .am-crowd-matrix-item-dropdown,
+                .am-crowd-matrix-item-dropdown.is-open {
                     display: block;
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-option {
+                #am-magic-report-popup .am-crowd-matrix-item-option,
+                body > .am-crowd-matrix-item-dropdown .am-crowd-matrix-item-option {
                     display: block;
                     width: 100%;
                     border: 1px solid transparent;
@@ -5612,23 +5715,28 @@
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-option + .am-crowd-matrix-item-option {
+                #am-magic-report-popup .am-crowd-matrix-item-option + .am-crowd-matrix-item-option,
+                body > .am-crowd-matrix-item-dropdown .am-crowd-matrix-item-option + .am-crowd-matrix-item-option {
                     margin-top: 6px;
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-option:hover {
+                #am-magic-report-popup .am-crowd-matrix-item-option:hover,
+                body > .am-crowd-matrix-item-dropdown .am-crowd-matrix-item-option:hover {
                     border-color: rgba(42, 91, 255, 0.2);
                     background: rgba(255, 255, 255, 0.95);
                     box-shadow: 0 2px 6px rgba(42, 91, 255, 0.08);
                 }
                 #am-magic-report-popup .am-crowd-matrix-item-option:focus-visible,
-                #am-magic-report-popup .am-crowd-matrix-item-option.is-keyboard-active {
+                #am-magic-report-popup .am-crowd-matrix-item-option.is-keyboard-active,
+                body > .am-crowd-matrix-item-dropdown .am-crowd-matrix-item-option:focus-visible,
+                body > .am-crowd-matrix-item-dropdown .am-crowd-matrix-item-option.is-keyboard-active {
                     outline: 2px solid rgba(37, 99, 235, 0.45);
                     outline-offset: 1px;
                     border-color: rgba(42, 91, 255, 0.28);
                     background: rgba(255, 255, 255, 0.98);
                     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
-                #am-magic-report-popup .am-crowd-matrix-item-option.is-active {
+                #am-magic-report-popup .am-crowd-matrix-item-option.is-active,
+                body > .am-crowd-matrix-item-dropdown .am-crowd-matrix-item-option.is-active {
                     color: #1e4de8;
                     background: linear-gradient(135deg, rgba(42, 91, 255, 0.12), rgba(42, 91, 255, 0.06));
                     border-color: rgba(42, 91, 255, 0.22);
@@ -6284,9 +6392,7 @@
                         </div>
                         <div class="am-crowd-matrix-campaign" id="am-crowd-matrix-campaign">
                             <span class="am-crowd-matrix-campaign-part" data-crowd-campaign-name>计划名：未识别</span>
-                            <span class="am-crowd-matrix-campaign-sep" aria-hidden="true">｜</span>
                             <span class="am-crowd-matrix-campaign-part" data-crowd-campaign-id>计划ID：--</span>
-                            <span class="am-crowd-matrix-campaign-sep" aria-hidden="true">｜</span>
                             <label class="am-crowd-matrix-item-select-wrap">
                                 <span class="am-crowd-matrix-item-label">商品ID：</span>
                                 <div class="am-crowd-matrix-item-select" id="am-crowd-matrix-item-select">
@@ -6345,6 +6451,7 @@
             this.matrixCampaignItemTriggerEl = div.querySelector('[data-crowd-item-trigger]');
             this.matrixCampaignItemTriggerTextEl = div.querySelector('[data-crowd-item-trigger-text]');
             this.matrixCampaignItemDropdownEl = div.querySelector('[data-crowd-item-dropdown]');
+            this.matrixCampaignItemDropdownHomeEl = this.matrixCampaignItemSelectEl;
             this.bindCrowdMatrixHoverTipEvents();
             this.refreshQuickPromptLabels();
             this.refreshCrowdMatrixCampaignMeta();
@@ -6358,8 +6465,14 @@
                     if (this.activeView === 'matrix') {
                         this.maximizePopupForMatrix();
                     }
+                    this.requestCrowdCampaignItemDropdownPositionUpdate();
                 };
                 window.addEventListener('resize', this.popupResizeHandler);
+            }
+            if (!this.popupDropdownPositionHandler) {
+                this.popupDropdownPositionHandler = () => this.requestCrowdCampaignItemDropdownPositionUpdate();
+                window.addEventListener('resize', this.popupDropdownPositionHandler);
+                document.addEventListener('scroll', this.popupDropdownPositionHandler, true);
             }
 
             // iframe 加载完成后先清理，再显示，避免首屏闪现整页内容
@@ -6545,12 +6658,26 @@
                     this.handleCrowdCampaignItemDropdownKeydown(e);
                 });
             }
+            if (this.matrixCampaignItemDropdownEl instanceof HTMLElement) {
+                this.matrixCampaignItemDropdownEl.addEventListener('click', (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+                    const option = target.closest('[data-crowd-item-id]');
+                    if (!(option instanceof HTMLElement)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const optionItemId = PlanIdentityUtils.normalizeItemId(option.dataset.crowdItemId || '');
+                    if (!optionItemId) return;
+                    this.handleCrowdCampaignItemSelect(optionItemId);
+                });
+            }
 
             document.addEventListener('click', (e) => {
                 const target = e.target;
                 if (!(target instanceof Node)) return;
                 if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
                 if (this.matrixCampaignItemSelectEl.contains(target)) return;
+                if (this.matrixCampaignItemDropdownEl instanceof HTMLElement && this.matrixCampaignItemDropdownEl.contains(target)) return;
                 this.setCrowdCampaignItemDropdownOpen(false);
             });
             document.addEventListener('keydown', (e) => {
