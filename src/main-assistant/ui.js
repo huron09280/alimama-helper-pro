@@ -579,33 +579,55 @@
                     pointer-events: none;
                 }
                 .am-potential-plan-export-btn {
+                    position: relative;
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
                     margin-left: 6px;
-                    gap: 4px;
+                    gap: 5px;
                     height: 32px;
-                    padding: 0 12px;
-                    border: 1px solid #e4e7f0;
+                    padding: 0 10px;
+                    border: 1px solid var(--am26-border);
                     border-radius: 8px;
-                    background: #fff;
-                    color: #333;
+                    background: var(--am26-surface-strong);
+                    color: var(--am26-text);
                     font-size: 12px;
-                    font-weight: 400;
+                    font-weight: 600;
                     line-height: normal;
                     cursor: pointer;
                     transition: all 0.18s ease;
                     vertical-align: middle;
                     white-space: nowrap;
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36);
                 }
-                .am-potential-plan-export-btn:hover {
-                    border-color: #d5dbe8;
-                    background: #fff;
-                    color: #111827;
+                .am-potential-plan-export-btn:hover,
+                .am-potential-plan-export-btn:focus-visible {
+                    border-color: rgba(69, 84, 229, 0.28);
+                    background: var(--am26-panel-strong);
+                    color: var(--am26-primary-strong);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.36);
+                    outline: none;
+                    transform: translateY(-1px);
                 }
                 .am-potential-plan-export-btn.is-running {
                     opacity: 0.72;
                     pointer-events: none;
+                }
+                .am-potential-plan-export-icon {
+                    display: inline-flex;
+                    width: 13px;
+                    height: 13px;
+                    align-items: center;
+                    justify-content: center;
+                    color: var(--am26-primary);
+                    flex: 0 0 auto;
+                }
+                .am-potential-plan-export-icon svg {
+                    width: 13px;
+                    height: 13px;
+                    display: block;
+                    fill: none;
+                    stroke: currentColor;
                 }
                 .am-potential-plan-export-wrap {
                     display: inline-block;
@@ -616,10 +638,10 @@
                     width: 44px !important;
                     min-width: 44px;
                     height: 20px !important;
-                    border: 0 !important;
+                    border: 1px solid var(--am26-border) !important;
                     border-radius: 4px;
-                    background: #f0f2f5 !important;
-                    color: #334155 !important;
+                    background: rgba(255, 255, 255, 0.58) !important;
+                    color: var(--am26-text) !important;
                     font-size: 12px;
                     line-height: 20px;
                     padding: 0 1px !important;
@@ -631,17 +653,41 @@
                     appearance: auto !important;
                     -webkit-appearance: auto !important;
                 }
+                .am-potential-plan-export-btn .am-potential-plan-export-days-input:focus-visible {
+                    border-color: rgba(69, 84, 229, 0.42) !important;
+                    box-shadow: 0 0 0 2px rgba(69, 84, 229, 0.12) !important;
+                }
                 .am-potential-plan-export-btn .am-potential-plan-export-days-input:disabled {
                     opacity: 1;
-                    -webkit-text-fill-color: #334155;
+                    -webkit-text-fill-color: var(--am26-text);
                 }
                 .am-potential-plan-export-days-unit {
-                    color: #64748b;
+                    color: var(--am26-text-soft);
                     font-size: 12px;
                     line-height: normal;
                 }
                 .am-potential-plan-export-label {
                     margin-left: 4px;
+                }
+                .am-potential-plan-export-status {
+                    position: absolute;
+                    width: 1px;
+                    height: 1px;
+                    padding: 0;
+                    margin: -1px;
+                    overflow: hidden;
+                    clip: rect(0, 0, 0, 0);
+                    white-space: nowrap;
+                    border: 0;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .am-potential-plan-export-btn {
+                        transition: none;
+                    }
+                    .am-potential-plan-export-btn:hover,
+                    .am-potential-plan-export-btn:focus-visible {
+                        transform: none;
+                    }
                 }
                 #am-campaign-concurrent-log-popup {
                     position: fixed;

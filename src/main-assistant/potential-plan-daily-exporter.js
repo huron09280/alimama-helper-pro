@@ -334,6 +334,15 @@
             else btn.textContent = nextText;
             const input = btn.querySelector(this.DAYS_INPUT_SELECTOR);
             if (input instanceof HTMLInputElement) input.disabled = !!running;
+            const days = input instanceof HTMLInputElement
+                ? (this.normalizeExportDays(input.value) || this.getPreferredExportDays())
+                : this.getPreferredExportDays();
+            const statusText = running ? nextText : `可导出最近 ${days} 天潜力词日维度 CSV`;
+            btn.setAttribute('aria-busy', running ? 'true' : 'false');
+            btn.setAttribute('aria-label', `潜力词日维度导出，${statusText}`);
+            btn.title = `潜力词日维度导出，${statusText}`;
+            const status = btn.querySelector('.am-potential-plan-export-status');
+            if (status instanceof HTMLElement) status.textContent = statusText;
         },
 
         removeButtons() {
@@ -481,6 +490,8 @@
                 input.step = '1';
                 input.className = 'am-potential-plan-export-days-input';
                 input.setAttribute('data-am-potential-plan-days', '1');
+                input.setAttribute('aria-label', '导出天数');
+                input.title = `导出天数，1-${this.MAX_EXPORT_DAYS}`;
                 btn.appendChild(input);
                 const unit = document.createElement('span');
                 unit.className = 'am-potential-plan-export-days-unit';
@@ -498,15 +509,30 @@
             }
             input.setAttribute('data-am-anchor-id', mount.anchorId);
             input.setAttribute('data-am-anchor-mode', mount.mode);
+            input.setAttribute('aria-label', '导出天数');
+            input.title = `导出天数，1-${this.MAX_EXPORT_DAYS}`;
             const current = this.normalizeExportDays(input.value);
             if (!current) {
                 input.value = String(this.getPreferredExportDays());
+            }
+            let icon = btn.querySelector('.am-potential-plan-export-icon');
+            if (!(icon instanceof HTMLElement)) {
+                icon = document.createElement('span');
+                icon.className = 'am-potential-plan-export-icon';
+                icon.innerHTML = renderAmIcon('download', { size: 13, strokeWidth: 2.2 });
+                btn.insertBefore(icon, btn.firstChild);
+            } else if (!icon.querySelector('svg')) {
+                icon.innerHTML = renderAmIcon('download', { size: 13, strokeWidth: 2.2 });
             }
             const unit = btn.querySelector('.am-potential-plan-export-days-unit');
             const label = btn.querySelector('.am-potential-plan-export-label');
             if (unit instanceof HTMLElement && label instanceof HTMLElement) {
                 if (input.nextSibling !== unit) btn.insertBefore(unit, input.nextSibling);
                 if (unit.nextSibling !== label) btn.insertBefore(label, unit.nextSibling);
+            }
+            const status = btn.querySelector('.am-potential-plan-export-status');
+            if (status instanceof HTMLElement && label instanceof HTMLElement && label.nextSibling !== status) {
+                btn.insertBefore(status, label.nextSibling);
             }
             return input;
         },
@@ -521,17 +547,32 @@
                 btn.setAttribute('data-am-potential-plan-export', '1');
                 wrap.appendChild(btn);
             }
+            btn.setAttribute('aria-busy', 'false');
             btn.setAttribute('data-am-anchor-id', mount.anchorId);
             btn.setAttribute('data-am-anchor-mode', mount.mode);
             Array.from(btn.childNodes).forEach((node) => {
                 if (node.nodeType === 3 && String(node.textContent || '').trim()) node.remove();
             });
+            let icon = btn.querySelector('.am-potential-plan-export-icon');
+            if (!(icon instanceof HTMLElement)) {
+                icon = document.createElement('span');
+                icon.className = 'am-potential-plan-export-icon';
+                icon.innerHTML = renderAmIcon('download', { size: 13, strokeWidth: 2.2 });
+                btn.insertBefore(icon, btn.firstChild);
+            }
             let label = btn.querySelector('.am-potential-plan-export-label');
             if (!(label instanceof HTMLElement)) {
                 label = document.createElement('span');
                 label.className = 'am-potential-plan-export-label';
                 label.textContent = '下载CSV';
                 btn.appendChild(label);
+            }
+            let status = btn.querySelector('.am-potential-plan-export-status');
+            if (!(status instanceof HTMLElement)) {
+                status = document.createElement('span');
+                status.className = 'am-potential-plan-export-status';
+                status.setAttribute('aria-live', 'polite');
+                btn.appendChild(status);
             }
             return btn;
         },
@@ -1156,4 +1197,3 @@
             }
         }
     };
-

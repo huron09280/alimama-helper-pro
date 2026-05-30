@@ -21,7 +21,7 @@
 - [x] 页面 10：计划行并发开启入口 + 日志弹窗。
 - [x] 页面 11：批量+ 菜单 + 批量确认弹窗。
 - [x] 页面 12：下载捕获面板。
-- [ ] 页面 13：潜力词日维度导出入口。
+- [x] 页面 13：潜力词日维度导出入口。
 - [ ] 页面 14：extension 注入/授权可见状态。
 - [ ] 页面 15：授权管理页。
 
@@ -41,6 +41,7 @@
 - 页面 10 已完成：计划行并发开启入口和并发执行日志弹窗按统一浅玻璃规范收敛；20px 行内启动入口、日志标题/状态/明细区和 warning/error/success 语义色已 token 化，弹窗补齐 `aria-describedby`；真实页验收在 Offline + 本地写接口阻断双保护下打开日志弹窗并关闭，未让 `/campaign/updatePart.json` 触达服务端，不改 `runConcurrentStartFlow()`、同商品全量暂停、原在投重开、重试、状态校验和真实写入链路。
 - 页面 11 已完成：批量+ 菜单和批量开启/暂停/删除确认弹窗按统一浅玻璃规范收敛；菜单补齐 `aria-controls`、`aria-label`、Esc/方向键焦点导航，确认窗默认焦点改到“取消”降低误触真实写操作风险；样式补齐 `--am26-focus/danger-soft/warning-soft` token。保留原生“批量计划设置”克隆宿主、hover 弹出、选中项读取、业务线分组、人群官方弹窗、`/campaign/updatePart.json` 与 `/campaign/delete.json` 写接口链路不变。
 - 页面 12 已完成：下载捕获面板补齐 `role=region`、`aria-live`、标题/URL/状态关联、完整 URL `title/aria-label`、复制状态 live、Esc 关闭和关闭后 `aria-hidden`；直连下载图标改为共享 `external-link`，面板和 URL/来源/状态区按浅玻璃 token 收敛。保留下载 URL 识别、Fetch/XHR 拦截、响应解析、剪贴板和直连下载业务链路不变。
+- 页面 13 已完成：潜力词日维度导出入口补齐共享 `download` SVG、按钮/input ARIA、运行态 `aria-busy`、live 状态、可见 focus、浅玻璃 token 和 reduced-motion；保留真实导出 API、CSV 字段、日期/计划/单元查询和下载链路不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -268,6 +269,25 @@
   - 关闭与安全核对：聚焦面板后按 Esc，面板 `display=none`、`aria-hidden=true`；performance resource 和 `__AM_HOOK_MANAGER__` history 均无 `example.com`、`addList`、`copy`、`updatePart`、`delete`、`batchModify` 记录；临时 guard 已移除。
   - 截图：`tasks/ui-page12-download-capture-panel-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现下载捕获面板相关未捕获异常。
+- 页面 13 自动化：
+  - `node --check src/main-assistant/potential-plan-daily-exporter.js`：通过。
+  - `node --check src/main-assistant/ui.js`：通过。
+  - `node --check src/shared/script-preamble.js`：通过。
+  - `node --check tests/potential-plan-daily-exporter.test.mjs`：通过。
+  - `node --test tests/potential-plan-daily-exporter.test.mjs`：通过，3/3。
+  - `node --test tests/potential-plan-daily-exporter.test.mjs tests/icon-system-regression.test.mjs`：通过，9/9。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+- 页面 13 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，进入真实潜力词页面 `https://one.alimama.com/index.html#!/report/bidword/index?mainTab=potential&mdWordType=B&target=bidword&bizCode=onebpSearch&itemId=757440599385`。
+  - 偏差处理：首次检查发现当前 SPA 文档仍保留旧注入脚本，导出按钮没有新图标和 ARIA；立即硬刷新真实页后重新验证，新构建命中。
+  - 语义核对：导出按钮可见，`aria-busy="false"`，`aria-label/title="潜力词日维度导出，可导出最近 30 天潜力词日维度 CSV"`；输入框为 `type=number`，`min=1`、`max=365`、`step=1`、`value=30`，具备 `aria-label="导出天数"` 和 `title="导出天数，1-365"`；状态节点 `aria-live=polite`，视觉隐藏但可读屏读取。
+  - 样式核对：按钮为 `inline-flex`、高度 `32px`、8px 圆角、浅玻璃背景 `rgba(255,255,255,.45)`、边框 `rgba(255,255,255,.4)`、`white-space=nowrap`；输入框为 44px × 20px、浅玻璃背景；共享 `download` SVG 为 13px、3 个 path、`stroke: currentColor`、`fill:none`。
+  - 安全核对：本轮不点击真实导出，不触发 CSV 下载、Blob URL 或直连下载；Network 中仅有页面加载和潜力词列表读取请求，未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/updatePart.json`、创建、投放、删除或 CSV 下载类写接口。
+  - 截图：`tasks/ui-page13-potential-export-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现潜力词导出入口相关未捕获异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -306,6 +326,9 @@
 - 页面 12 结果：下载捕获面板已按统一浅玻璃工作台规范补齐面板级语义、完整 URL 说明、复制 live 状态、Esc 关闭和 token 化视觉；真实页验证覆盖不发请求的捕获触发、面板展示、截图、Esc 关闭和无下载/无写接口。
 - 页面 12 风险：真实验收刻意不点击“直连下载”，也不触发阿里妈妈真实报表导出；真实报表服务端生成下载链接仍由既有拦截逻辑覆盖，本轮只证明捕获面板 UI/语义和安全触发路径稳定。
 - 页面 12 回滚：回退 `src/main-assistant/interceptor.js`、`src/main-assistant/ui.js`、`tests/download-link-depth-guard.test.mjs`、构建产物和页面 12 截图即可。
+- 页面 13 结果：潜力词日维度导出入口已按统一浅玻璃规范收敛，运行态具备共享下载图标、可访问名称、导出天数输入边界、live 状态和 reduced-motion 适配；真实页硬刷新后已验证新构建命中，未改动导出数据链路。
+- 页面 13 风险：真实验收刻意不点击“下载CSV”，因此没有验证服务端导出、CSV 字段和浏览器下载文件本身；本轮只证明入口 UI/语义和默认状态稳定。
+- 页面 13 回滚：回退 `src/main-assistant/potential-plan-daily-exporter.js`、`src/main-assistant/ui.js`、`src/shared/script-preamble.js`、`tests/potential-plan-daily-exporter.test.mjs`、构建产物和页面 13 截图即可。
 
 ---
 

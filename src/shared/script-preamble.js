@@ -321,6 +321,9 @@ const AM_ICON_DEFS = {
     'external-link': {
         body: '<path d="M14 5h5v5"></path><path d="M10 14L19 5"></path><path d="M19 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4"></path>'
     },
+    download: {
+        body: '<path d="M12 4v10"></path><path d="M8 10l4 4 4-4"></path><path d="M5 19h14"></path>'
+    },
     'chevron-down': {
         body: '<path d="M7 10l5 5 5-5"></path>'
     },
