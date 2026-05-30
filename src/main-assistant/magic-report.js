@@ -5,6 +5,7 @@
         popup: null,
         header: null,
         iframe: null,
+        iframeLoadStarted: false,
         quickPromptsEl: null,
         viewTabsEl: null,
         queryPanelEl: null,
@@ -52,6 +53,7 @@
         crowdCampaignSelectedItemIdMap: new Map(),
         crowdCampaignManualItemSelectionMap: new Map(),
         crowdInsightRunContext: null,
+        crowdAuthParamsCache: null,
         crowdRequestSlotPromise: null,
         crowdRequestLastAt: 0,
         BASE_URL: 'https://one.alimama.com/index.html#!/report/ai-report',
@@ -61,7 +63,7 @@
         CROWD_EXTRA_DIMENSION_GROUPS: ['省份', '城市'],
         CROWD_GROUP_SORT_PERIOD_PRIORITY: [90, 30, 7, 3],
         CROWD_METRICS: ['click', 'cart', 'deal', 'itemdeal'],
-        CROWD_REQUEST_CONCURRENCY: 2,
+        CROWD_REQUEST_CONCURRENCY: 4,
         CROWD_REQUEST_THROTTLE_MS: 340,
         CROWD_REQUEST_JITTER_MS: 180,
         CROWD_REQUEST_MAX_ATTEMPTS: 3,
@@ -156,11 +158,28 @@
 
         buildIframeUrl(forceReload = false) {
             const rawUrl = this.iframe?.getAttribute('src') || this.BASE_URL;
-            const url = new URL(rawUrl, window.location.href);
+            const baseUrl = !rawUrl || rawUrl === 'about:blank'
+                ? this.BASE_URL
+                : rawUrl;
+            const url = new URL(baseUrl, window.location.href);
             if (forceReload) {
                 url.searchParams.set('_am_refresh_ts', String(Date.now()));
             }
             return url.toString();
+        },
+
+        ensureMagicIframeLoaded(forceReload = false) {
+            if (!(this.iframe instanceof HTMLIFrameElement)) return false;
+            const loading = this.popup instanceof HTMLElement
+                ? this.popup.querySelector('#am-magic-loading')
+                : null;
+            const shouldReload = forceReload === true || !this.iframeLoadStarted || !this.iframe.getAttribute('src');
+            if (!shouldReload) return true;
+            this.iframeLoadStarted = true;
+            if (loading instanceof HTMLElement) loading.style.display = 'flex';
+            this.iframe.style.opacity = '0';
+            this.iframe.src = this.buildIframeUrl(forceReload);
+            return true;
         },
 
         extractCampaignId(rawText) {
@@ -1190,6 +1209,7 @@
         },
 
         trySubmitPrompt(promptText) {
+            this.ensureMagicIframeLoaded(false);
             const iframeDoc = this.getIframeDoc();
             if (!iframeDoc) return { ok: false, reason: 'iframe-not-ready' };
             return MagicPromptDriver.trySubmitPromptInDocument(iframeDoc, promptText);
@@ -1288,7 +1308,10 @@
             }
 
             this.toggle(true);
-            this.runQuickPrompt(promptText);
+            const shouldSubmitPrompt = options.autoSubmitPrompt !== false && this.normalizeMagicView(this.activeView || this.getMagicDefaultView()) === 'query';
+            if (shouldSubmitPrompt) {
+                this.runQuickPrompt(promptText);
+            }
             return true;
         },
 
@@ -1967,7 +1990,7 @@
         refreshCrowdCampaignItemOptionsInBackground(campaignId, options = {}) {
             const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
             if (!id) return;
-            Promise.resolve()
+            const startRefresh = () => Promise.resolve()
                 .then(() => this.refreshCrowdCampaignItemOptions(id, options))
                 .then(() => {
                     if (this.lastCampaignId === id || this.crowdMatrixLoadedCampaignId === id) {
@@ -1977,6 +2000,16 @@
                 .catch((err) => {
                     Logger.warn(`🔮 商品列表后台识别失败：${err?.message || '未知错误'}`);
                 });
+            if (options?.idle === true) {
+                const scheduleIdle = typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function'
+                    ? window.requestIdleCallback.bind(window)
+                    : (fn) => setTimeout(fn, 600);
+                scheduleIdle(() => {
+                    startRefresh();
+                }, { timeout: 1800 });
+                return;
+            }
+            startRefresh();
         },
 
         getCrowdCampaignItemCandidates(campaignId, preferredItemId = '') {
@@ -2538,7 +2571,10 @@
             }
         },
 
-        resolveCrowdAuthParams() {
+        resolveCrowdAuthParams(options = {}) {
+            if (options?.useCache !== false && this.crowdAuthParamsCache && typeof this.crowdAuthParamsCache === 'object') {
+                return { ...this.crowdAuthParamsCache };
+            }
             const out = {
                 bizCode: 'universalBP',
                 dynamicToken: '',
@@ -2577,6 +2613,9 @@
                     } catch { }
                     if (out.dynamicToken && out.csrfID && out.loginPointId) break;
                 }
+            }
+            if (options?.cache !== false) {
+                this.crowdAuthParamsCache = { ...out };
             }
             return out;
         },
@@ -3290,8 +3329,11 @@
             }
 
             const baseResult = await context.basePromiseMap.get(metric);
-            await this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric });
             if (days === 7) {
+                this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric })
+                    .catch((err) => {
+                        Logger.warn(`🔮 省份/城市维度后台补齐失败：${err?.message || '未知错误'}`);
+                    });
                 return {
                     periodDays: days,
                     metricType: metric,
@@ -3307,6 +3349,8 @@
                     }
                 };
             }
+
+            await this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric });
 
             if (baseResult.unsupportedReason) {
                 return {
@@ -4555,6 +4599,10 @@
 
         toggleCrowdInsightsVisibility() {
             this.crowdInsightsVisibility = !this.getCrowdInsightsVisible();
+            if (this.crowdMatrixDataset) {
+                this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: false });
+                return;
+            }
             this.applyCrowdMetricVisibility();
         },
 
@@ -4602,9 +4650,9 @@
 
             const metrics = this.CROWD_METRICS.slice();
             const visibleMetrics = metrics.filter(metric => this.getCrowdMetricVisible(metric));
+            const renderMetrics = visibleMetrics.length ? visibleMetrics : metrics;
             const visibleMetricCount = Math.max(1, visibleMetrics.length);
-            const scaleMetrics = visibleMetrics.length ? visibleMetrics : metrics;
-            const cellMaxRatio = scaleMetrics.reduce((maxValue, metric) => {
+            const cellMaxRatio = renderMetrics.reduce((maxValue, metric) => {
                 const list = Array.isArray(cell?.[metric]) ? cell[metric] : [];
                 const currentMax = list.reduce((innerMax, value) => Math.max(innerMax, this.toNumericValue(value)), 0);
                 return Math.max(maxValue, currentMax);
@@ -4630,7 +4678,7 @@
                 const columns = document.createElement('div');
                 columns.className = 'am-crowd-matrix-bar-columns';
 
-                metrics.forEach((metric) => {
+                renderMetrics.forEach((metric) => {
                     const metricMeta = this.getCrowdMetricMeta(metric);
                     const ratio = this.toNumericValue(cell?.[metric]?.[labelIdx] ?? 0);
                     const rawValue = cell?.[`${metric}Raw`]?.[labelIdx];
@@ -4696,33 +4744,35 @@
                 this.enableCrowdMatrixHorizontalDrag(wrap);
             }
 
-            const insights = document.createElement('div');
-            insights.className = 'am-crowd-matrix-insights';
-            insights.style.setProperty('--am-crowd-metric-count', String(metrics.length));
-            metrics.forEach((metric) => {
-                const metricMeta = this.getCrowdMetricMeta(metric);
-                const values = Array.isArray(cell?.[metric]) ? cell[metric] : [];
-                let topIdx = -1;
-                let topValue = -1;
-                values.forEach((value, idx) => {
-                    const num = this.toNumericValue(value);
-                    if (num > topValue) {
-                        topValue = num;
-                        topIdx = idx;
+            if (this.getCrowdInsightsVisible()) {
+                const insights = document.createElement('div');
+                insights.className = 'am-crowd-matrix-insights';
+                insights.style.setProperty('--am-crowd-metric-count', String(renderMetrics.length));
+                renderMetrics.forEach((metric) => {
+                    const metricMeta = this.getCrowdMetricMeta(metric);
+                    const values = Array.isArray(cell?.[metric]) ? cell[metric] : [];
+                    let topIdx = -1;
+                    let topValue = -1;
+                    values.forEach((value, idx) => {
+                        const num = this.toNumericValue(value);
+                        if (num > topValue) {
+                            topValue = num;
+                            topIdx = idx;
+                        }
+                    });
+                    const insightItem = document.createElement('div');
+                    insightItem.className = 'am-crowd-matrix-insight-item';
+                    insightItem.dataset.metric = metric;
+                    insightItem.style.setProperty('--am-crowd-insight-color', metricMeta.color);
+                    if (topIdx > -1 && topValue > 0 && labels[topIdx]) {
+                        insightItem.textContent = `${metricMeta.seriesLabel}: ${labels[topIdx]} ${this.formatCrowdPercent(topValue)}`;
+                    } else {
+                        insightItem.textContent = `${metricMeta.seriesLabel}: 无数据`;
                     }
+                    insights.appendChild(insightItem);
                 });
-                const insightItem = document.createElement('div');
-                insightItem.className = 'am-crowd-matrix-insight-item';
-                insightItem.dataset.metric = metric;
-                insightItem.style.setProperty('--am-crowd-insight-color', metricMeta.color);
-                if (topIdx > -1 && topValue > 0 && labels[topIdx]) {
-                    insightItem.textContent = `${metricMeta.seriesLabel}: ${labels[topIdx]} ${this.formatCrowdPercent(topValue)}`;
-                } else {
-                    insightItem.textContent = `${metricMeta.seriesLabel}: 无数据`;
-                }
-                insights.appendChild(insightItem);
-            });
-            wrap.appendChild(insights);
+                wrap.appendChild(insights);
+            }
 
             return wrap;
         },
@@ -4897,6 +4947,9 @@
             if (this.matrixCampaignEl instanceof HTMLElement) {
                 this.matrixCampaignEl.style.display = next === 'matrix' ? '' : 'none';
             }
+            if (next === 'query') {
+                this.ensureMagicIframeLoaded(false);
+            }
             if (next === 'matrix' && options.skipLoad !== true) {
                 this.ensureCrowdMatrixLoaded(false);
             }
@@ -4997,6 +5050,7 @@
             this.crowdMatrixPendingMetricReload = null;
             this.crowdMatrixGroupSortModeMap = {};
             this.crowdInsightRunContext = null;
+            this.crowdAuthParamsCache = null;
             this.crowdRequestSlotPromise = Promise.resolve();
             this.crowdRequestLastAt = 0;
             this.setCrowdMatrixStatus(`正在加载计划 ${id} 的人群对比看板...`, 'loading', { showRetry: false, progress: 0 });
@@ -5004,10 +5058,11 @@
 
             try {
                 const initialMetrics = this.getCrowdMetricsForInitialLoad();
+                let pendingBackgroundItemRefresh = false;
                 if (initialMetrics.includes('itemdeal')) {
                     await this.refreshCrowdCampaignItemOptions(id, { forceRefresh: forceRefreshItems });
                 } else {
-                    this.refreshCrowdCampaignItemOptionsInBackground(id, { forceRefresh: forceRefreshItems });
+                    pendingBackgroundItemRefresh = true;
                 }
                 this.refreshCrowdMatrixCampaignMeta(id);
                 const taskFns = [];
@@ -5050,6 +5105,10 @@
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
                 if (runId !== this.crowdMatrixRunId) return;
+                if (pendingBackgroundItemRefresh) {
+                    pendingBackgroundItemRefresh = false;
+                    this.refreshCrowdCampaignItemOptionsInBackground(id, { forceRefresh: forceRefreshItems, idle: true });
+                }
 
                 const successResults = [];
                 let failCount = 0;
@@ -6415,7 +6474,6 @@
                         <span>正在加载万能查数...</span>
                     </div>
                     <iframe id="am-magic-iframe"
-                        src="${this.buildIframeUrl(false)}"
                         style="width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.3s;"
                         allow="clipboard-write"
                     ></iframe>
@@ -6477,6 +6535,7 @@
 
             // iframe 加载完成后先清理，再显示，避免首屏闪现整页内容
             this.iframe.onload = () => {
+                if (!this.iframeLoadStarted) return;
                 const loading = div.querySelector('#am-magic-loading');
                 this.iframe.style.opacity = '0';
 
@@ -6543,10 +6602,7 @@
                     this.ensureCrowdMatrixLoaded(true);
                     return;
                 }
-                const loading = div.querySelector('#am-magic-loading');
-                if (loading) loading.style.display = 'flex';
-                this.iframe.style.opacity = '0';
-                this.iframe.src = this.buildIframeUrl(true);
+                this.ensureMagicIframeLoaded(true);
                 });
             }
 
@@ -6717,6 +6773,7 @@
                     if (promptItem.autoSubmit) {
                         this.runQuickPrompt(promptText);
                     } else {
+                        this.ensureMagicIframeLoaded(false);
                         // 只填充不提交
                         const iframeDoc = this.getIframeDoc();
                         if (iframeDoc) {
