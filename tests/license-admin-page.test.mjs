@@ -14,6 +14,7 @@ test('本地授权管理页包含核心配置区与筛选区', () => {
     assert.match(html, /id="am-license-admin-app"/, '缺少管理页根节点');
     assert.match(html, /id="baseUrlInput"/, '缺少授权服务地址输入框');
     assert.match(html, /id="tokenInput"/, '缺少管理员 token 输入框');
+    assert.match(html, /id="rememberTokenInput"[^>]*type="checkbox"/, '缺少管理员 token 持久化开关');
     assert.match(html, /id="operatorInput"/, '缺少操作人输入框');
     assert.match(html, /id="keywordInput"/, '缺少关键词筛选输入框');
     assert.match(html, /id="statusSelect"/, '缺少状态筛选下拉');
@@ -50,6 +51,39 @@ test('本地授权管理页包含店铺列表与行级授权操作', () => {
     assert.match(html, /id="logBox"/, '缺少操作日志容器');
 });
 
+test('授权管理页使用统一浅玻璃工作台视觉', () => {
+    assert.match(html, /--am26-panel-strong:/, '管理页缺少统一 am26 面板 token');
+    assert.match(html, /background:\s*var\(--am26-panel-strong\);/, '管理页面板未使用统一浅玻璃背景');
+    assert.match(html, /backdrop-filter:\s*blur\(20px\) saturate\(1\.24\);/, '管理页面板缺少玻璃模糊');
+    assert.match(html, /box-shadow:\s*var\(--am26-shadow\);/, '管理页未使用统一浅玻璃阴影');
+    assert.match(html, /class="confirm-mask"/, '管理页缺少统一确认遮罩');
+    assert.match(html, /background: linear-gradient\(135deg, rgba\(255, 255, 255, 0\.72\), rgba\(255, 255, 255, 0\.48\)\);/, '确认遮罩未使用白色玻璃背景');
+});
+
+test('授权管理页默认不把管理员 token 持久化到本机', () => {
+    const saveSettingsBlock = html.slice(
+        html.indexOf('const saveSettings = () => {'),
+        html.indexOf('const getSettings = () => {')
+    );
+    assert.match(html, /const SESSION_TOKEN_KEY = '__AM_LICENSE_ADMIN_SESSION_TOKEN_V1__';/, '缺少 session token 存储键');
+    assert.match(html, /const rememberToken = !!dom\.rememberTokenInput\.checked;/, '缺少 token 持久化开关读取');
+    assert.match(html, /if \(rememberToken\) \{[\s\S]*next\.token = token;[\s\S]*sessionStorage\.removeItem\(SESSION_TOKEN_KEY\);[\s\S]*\} else \{[\s\S]*sessionStorage\.setItem\(SESSION_TOKEN_KEY, token\);[\s\S]*\}/, '管理员 token 默认应只保存到 sessionStorage');
+    assert.match(html, /localStorage\.setItem\(SETTINGS_KEY, JSON\.stringify\(next\)\);/, '非敏感设置仍应保存到 localStorage');
+    assert.doesNotMatch(saveSettingsBlock, /token:\s*String\(dom\.tokenInput\.value \|\| ''\)\.trim\(\)/, '管理员 token 不应无条件写入 localStorage settings');
+});
+
+test('授权管理页写操作必须经过自定义确认弹窗', () => {
+    assert.match(html, /id="confirmMask" role="dialog" aria-modal="true"/, '缺少确认弹窗 dialog 语义');
+    assert.match(html, /id="confirmCancelBtn">取消<\/button>/, '确认弹窗缺少取消按钮');
+    assert.match(html, /const requestActionConfirm = \(shopId, action, context = \{\}\) => new Promise/, '缺少写操作确认流程');
+    assert.match(html, /dom\.confirmCancelBtn\.focus\(\{ preventScroll: true \}\);/, '确认弹窗默认焦点应停在取消按钮');
+    assert.match(html, /await executeShopActionWithConfirm\(shopId, 'delete-row'\);/, '删除当前行未先进入确认弹窗');
+    assert.match(html, /await executeShopActionWithConfirm\(shopId, action\);/, '菜单写操作未先进入确认弹窗');
+    assert.match(html, /await executeShopActionWithConfirm\(shopId, 'set-expire-date', \{ expireDate \}\);/, '日期直设未先进入确认弹窗');
+    assert.match(html, /if \(!executed\) \{[\s\S]*renderTable\(\);[\s\S]*\}/, '取消日期直设后应恢复当前渲染值');
+    assert.doesNotMatch(html, /window\.confirm\(/, '不应使用浏览器 confirm');
+});
+
 test('本地授权管理页调用固定管理 API 路径', () => {
     assert.match(html, /state:\s*'\/v1\/license\/admin\/state'/, '管理状态 API 路径缺失或变更');
     assert.match(html, /allow:\s*'\/v1\/license\/admin\/allow'/, '授权接口路径缺失或变更');
@@ -70,6 +104,10 @@ test('本地授权管理页调用固定管理 API 路径', () => {
     assert.match(html, /按店铺名称维度同步/, '缺少店铺维度授权同步日志提示');
     assert.match(html, /网络请求失败：\$\{method\} \$\{requestUrl\}/, '网络错误日志缺少 method 与 URL 上下文');
     assert.match(html, /请求失败：\$\{method\} \$\{requestUrl\} ->/, 'HTTP 错误日志缺少 method 与 URL 上下文');
+});
+
+test('本地与服务端授权管理页模板保持一致', () => {
+    assert.equal(serviceHtml, html, '本地授权管理页与服务端模板必须完全一致');
 });
 
 test('服务端管理页模板包含首次使用与到期日期直设能力', () => {

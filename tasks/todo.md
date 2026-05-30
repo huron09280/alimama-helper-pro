@@ -23,7 +23,7 @@
 - [x] 页面 12：下载捕获面板。
 - [x] 页面 13：潜力词日维度导出入口。
 - [x] 页面 14：extension 注入/授权可见状态。
-- [ ] 页面 15：授权管理页。
+- [x] 页面 15：授权管理页。
 
 ## 高层操作摘要
 - 已读取外部 `AGENT-v2.md`、本仓库 `AGENTS.md`、`tasks/lessons.md`、统一 UI/图标规范。
@@ -43,6 +43,7 @@
 - 页面 12 已完成：下载捕获面板补齐 `role=region`、`aria-live`、标题/URL/状态关联、完整 URL `title/aria-label`、复制状态 live、Esc 关闭和关闭后 `aria-hidden`；直连下载图标改为共享 `external-link`，面板和 URL/来源/状态区按浅玻璃 token 收敛。保留下载 URL 识别、Fetch/XHR 拦截、响应解析、剪贴板和直连下载业务链路不变。
 - 页面 13 已完成：潜力词日维度导出入口补齐共享 `download` SVG、按钮/input ARIA、运行态 `aria-busy`、live 状态、可见 focus、浅玻璃 token 和 reduced-motion；保留真实导出 API、CSV 字段、日期/计划/单元查询和下载链路不变。
 - 页面 14 已完成：extension 注入失败提示改为自包含浅玻璃 `alert`，补齐 `aria-live/assertive`、`aria-atomic`、焦点锚点和 `textContent` 渲染断言；授权锁定遮罩外层改为白色玻璃背景并补强源码/打包静态断言。保留授权 verify、policy token、shopId 识别、缓存恢复、background 桥和 API 暴露策略不变。
+- 页面 15 已完成：授权管理页本地页与服务端模板同步迁移到统一浅玻璃工作台；管理员 Token 默认只保存在 `sessionStorage`，勾选“记住 Token 到本机”才写入本机持久化设置；行级授权、取消授权、吊销、删除和到期日期直设统一进入自定义确认弹窗，默认焦点停在“取消”。保留管理 API 路径、请求字段、授权真值和插件 verify 合同不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -306,6 +307,22 @@
   - 可见状态核对：正常路径下 `#am-helper-pro-extension-injection-error` 不存在，`#am-license-lock-overlay` 不存在，证明新注入失败提示不会误报、授权锁遮罩不会误锁授权用户；锁定遮罩白玻璃样式和敏感字段排除由源码与打包静态断言覆盖。
   - 截图：`tasks/ui-page14-extension-authorized-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 `ScriptProcessorNode` 弃用警告，未发现插件注入或授权遮罩相关运行时异常。
+- 页面 15 自动化：
+  - `node --test tests/license-admin-page.test.mjs`：通过，11/11。
+  - `node -e "const fs=require('fs'); for (const file of ['dev/license-admin.html','services/license-server/license-admin.html']) { const s=fs.readFileSync(file,'utf8'); const scripts=[...s.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].map(m=>m[1]); console.log(file, 'scripts', scripts.length); scripts.forEach((code,i)=>{ new Function(code); console.log('ok', i+1); }); }"`：通过，本地页与服务端模板各 1 个脚本均可解析。
+  - `cmp -s dev/license-admin.html services/license-server/license-admin.html`：通过，两份模板完全一致。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+- 页面 15 Chrome MCP：
+  - 本地静态服务 `python3 -m http.server 8174` 打开 `http://127.0.0.1:8174/dev/license-admin.html`，通过预注入 fetch mock 返回管理状态，只允许 `GET /v1/license/admin/state`，管理写接口只记录不触达真实服务。
+  - 页面身份：标题为 `阿里妈妈助手 - 店铺授权管理台（本地）`，H1 为 `店铺授权管理台（本地 HTML）`，mock 数据渲染 2 行店铺记录，统计区显示全量店铺、已授权、未授权、24h 活跃、默认授权有效期与服务端时间。
+  - 样式核对：`.panel` 计算背景为 `linear-gradient(135deg, rgba(255,255,255,.72), rgba(255,255,255,.28))`，边框 `rgba(255,255,255,.6)`，圆角 `14px`，阴影 `rgba(31,38,135,.15) 0px 8px 32px`，`backdrop-filter: blur(20px) saturate(1.24)`；表格和日志区为浅白玻璃背景。
+  - Token 策略核对：干净 origin 下保存 `codex-test-token` 且不勾选“记住 Token 到本机”后，`localStorage.__AM_LICENSE_ADMIN_SETTINGS_V1__` 不含 token，只保存 `baseUrl/operator/rememberToken=false`；`sessionStorage.__AM_LICENSE_ADMIN_SESSION_TOKEN_V1__` 保存本次会话 token。
+  - 确认弹窗核对：点击第一行授权状态下拉中的“未授权”只打开 `确认高风险操作：取消授权` 确认弹窗，`role=dialog`、`aria-modal=true`，默认焦点为 `confirmCancelBtn`；弹窗 meta 显示 shopId、店铺、子账号和同店铺影响范围；点击“取消”后弹窗关闭。
+  - 安全核对：确认弹窗打开前、取消后 `window.__AM_ADMIN_WRITE_REQUESTS__` 均为空；只记录到 1 次 mock `GET /v1/license/admin/state`，未出现 `/v1/license/admin/allow`、`/revoke`、`/delete` 写请求。
+  - 截图：`tasks/ui-page15-license-admin-confirm-open-2026-05-30.png`、`tasks/ui-page15-license-admin-confirm-after-2026-05-30.png`。
+  - Console：仅观察到本地静态服务 favicon 类 `404 File not found`，未发现授权管理页脚本异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -350,6 +367,9 @@
 - 页面 14 结果：extension 注入失败和授权锁定两个异常可见状态已按统一浅玻璃规范收敛；正常授权运行态已在真实页面验证没有注入失败提示和误锁遮罩，安全链路保持不变。
 - 页面 14 风险：真实验收未刻意破坏 extension 注入或授权缓存来触发失败态，避免影响当前账号授权与页面运行；失败态视觉由源码断言、打包断言和静态测试覆盖。
 - 页面 14 回滚：回退 `src/entries/extension-content.js`、`src/entries/extension-license-guard.js`、`tests/extension-static-build.test.mjs`、`tests/extension-license-cache-policy-token.test.mjs`、`dist/extension/content.js`、`dist/extension/page.bundle.js` 和页面 14 截图即可。
+- 页面 15 结果：授权管理页已按统一浅玻璃后台工作台规范收敛，本地页与服务端模板完全一致；管理员 Token 默认不进入本机持久化存储，危险写操作先进入确认弹窗，取消路径已证明不触发写请求。
+- 页面 15 风险：真实验收使用 mock 管理状态和本地写请求记录，刻意不点击确认执行真实授权、吊销、删除或到期修改；真实服务端写入闭环未在本轮执行，保留给有明确授权的管理操作验收。
+- 页面 15 回滚：回退 `dev/license-admin.html`、`services/license-server/license-admin.html`、`tests/license-admin-page.test.mjs`、`tasks/todo.md` 和页面 15 截图即可。
 
 ---
 

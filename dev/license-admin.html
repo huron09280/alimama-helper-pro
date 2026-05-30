@@ -6,20 +6,36 @@
     <title>阿里妈妈助手 - 店铺授权管理台（本地）</title>
     <style>
         :root {
-            --bg: #f4f6fb;
-            --panel: #ffffff;
-            --text: #16202c;
-            --muted: #5f6b7a;
-            --line: #dce3ee;
-            --brand: #2f63ff;
-            --brand-soft: #ebf1ff;
-            --danger: #cb2f3b;
-            --danger-soft: #ffecef;
-            --ok: #12875f;
-            --ok-soft: #eaf8f2;
-            --warn: #9b5d00;
-            --warn-soft: #fff4df;
-            --radius: 12px;
+            --am26-font: "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            --am26-text: #1b2438;
+            --am26-text-soft: #505a74;
+            --am26-border: rgba(255, 255, 255, 0.4);
+            --am26-border-strong: rgba(255, 255, 255, 0.6);
+            --am26-surface: rgba(255, 255, 255, 0.25);
+            --am26-surface-strong: rgba(255, 255, 255, 0.45);
+            --am26-panel: linear-gradient(135deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.14));
+            --am26-panel-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.28));
+            --am26-primary: rgba(69, 84, 229, 1);
+            --am26-primary-strong: #1d3fcf;
+            --am26-success: #0ea86f;
+            --am26-success-soft: rgba(14, 168, 111, 0.12);
+            --am26-warning: #e8a325;
+            --am26-warning-soft: rgba(232, 163, 37, 0.14);
+            --am26-danger: #ea4f4f;
+            --am26-danger-soft: rgba(234, 79, 79, 0.12);
+            --am26-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --text: var(--am26-text);
+            --muted: var(--am26-text-soft);
+            --line: rgba(213, 223, 240, 0.86);
+            --brand: var(--am26-primary);
+            --brand-soft: rgba(69, 84, 229, 0.1);
+            --danger: var(--am26-danger);
+            --danger-soft: var(--am26-danger-soft);
+            --ok: var(--am26-success);
+            --ok-soft: var(--am26-success-soft);
+            --warn: #a16207;
+            --warn-soft: var(--am26-warning-soft);
+            --radius: 14px;
         }
 
         * {
@@ -28,8 +44,12 @@
 
         body {
             margin: 0;
-            font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: linear-gradient(180deg, #f8faff 0%, #f1f4fb 100%);
+            min-height: 100vh;
+            font-family: var(--am26-font);
+            background:
+                radial-gradient(circle at 12% 0%, rgba(69, 84, 229, 0.12), transparent 30%),
+                radial-gradient(circle at 82% 8%, rgba(14, 168, 111, 0.08), transparent 28%),
+                linear-gradient(180deg, #f8faff 0%, #eef3fb 100%);
             color: var(--text);
         }
 
@@ -37,15 +57,17 @@
             width: min(1400px, 96vw);
             margin: 24px auto;
             display: grid;
-            gap: 14px;
+            gap: 12px;
         }
 
         .panel {
-            background: var(--panel);
-            border: 1px solid var(--line);
+            background: var(--am26-panel-strong);
+            border: 1px solid var(--am26-border-strong);
             border-radius: var(--radius);
-            box-shadow: 0 4px 16px rgba(12, 31, 64, 0.06);
+            box-shadow: var(--am26-shadow);
             padding: 14px;
+            backdrop-filter: blur(20px) saturate(1.24);
+            -webkit-backdrop-filter: blur(20px) saturate(1.24);
         }
 
         .title {
@@ -57,8 +79,9 @@
 
         .title h1 {
             margin: 0;
-            font-size: 20px;
+            font-size: 18px;
             line-height: 1.35;
+            letter-spacing: 0;
         }
 
         .title p {
@@ -91,6 +114,13 @@
             gap: 6px;
             font-size: 12px;
             color: var(--muted);
+            min-width: 0;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
         }
 
         input,
@@ -104,12 +134,13 @@
         select,
         textarea {
             width: 100%;
-            border: 1px solid var(--line);
+            border: 1px solid var(--am26-border);
             border-radius: 10px;
             padding: 8px 10px;
             font-size: 13px;
             color: var(--text);
-            background: #fff;
+            background: rgba(255, 255, 255, 0.58);
+            min-width: 0;
         }
 
         input:focus,
@@ -117,13 +148,13 @@
         textarea:focus {
             outline: none;
             border-color: var(--brand);
-            box-shadow: 0 0 0 3px rgba(47, 99, 255, 0.14);
+            box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.18);
         }
 
         button {
-            border: 1px solid var(--line);
+            border: 1px solid var(--am26-border);
             border-radius: 10px;
-            background: #fff;
+            background: rgba(255, 255, 255, 0.56);
             padding: 8px 12px;
             cursor: pointer;
             color: var(--text);
@@ -132,7 +163,8 @@
         }
 
         button:hover:not(:disabled) {
-            border-color: #b7c2d4;
+            border-color: rgba(69, 84, 229, 0.26);
+            box-shadow: 0 8px 18px rgba(31, 38, 135, 0.08);
             transform: translateY(-1px);
         }
 
@@ -143,7 +175,7 @@
 
         .btn-primary {
             border-color: var(--brand);
-            background: var(--brand);
+            background: linear-gradient(135deg, var(--am26-primary), var(--am26-primary-strong));
             color: #fff;
         }
 
@@ -154,8 +186,24 @@
         }
 
         .btn-soft {
-            border-color: #cfd7e6;
-            background: #f7f9fd;
+            border-color: var(--am26-border);
+            background: rgba(255, 255, 255, 0.48);
+        }
+
+        .token-remember {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            color: var(--am26-text-soft);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .token-remember input {
+            width: 14px;
+            height: 14px;
+            flex: 0 0 auto;
         }
 
         .stats {
@@ -165,19 +213,20 @@
         }
 
         .stat {
-            background: #f8fafc;
-            border: 1px solid #dce3ee;
+            background: var(--am26-surface);
+            border: 1px solid var(--am26-border);
             border-radius: 10px;
             padding: 8px 10px;
             font-size: 12px;
-            color: #334155;
+            color: var(--am26-text-soft);
+            font-variant-numeric: tabular-nums;
         }
 
         .table-wrap {
-            border: 1px solid var(--line);
-            border-radius: 10px;
+            border: 1px solid var(--am26-border);
+            border-radius: 14px;
             overflow: auto;
-            background: #fff;
+            background: rgba(255, 255, 255, 0.42);
         }
 
         table {
@@ -188,7 +237,7 @@
 
         th,
         td {
-            border-bottom: 1px solid #edf1f8;
+            border-bottom: 1px solid rgba(213, 223, 240, 0.72);
             padding: 6px 8px;
             text-align: left;
             font-size: 12px;
@@ -198,14 +247,16 @@
         thead th {
             position: sticky;
             top: 0;
-            background: #f8fafd;
+            background: rgba(248, 250, 255, 0.92);
             z-index: 2;
             color: #3a4759;
             font-weight: 600;
+            backdrop-filter: blur(10px) saturate(1.12);
+            -webkit-backdrop-filter: blur(10px) saturate(1.12);
         }
 
         tbody tr:hover {
-            background: #fbfcff;
+            background: rgba(255, 255, 255, 0.52);
         }
 
         .badge {
@@ -265,9 +316,9 @@
             height: 20px;
             padding: 0;
             border-radius: 999px;
-            border: 1px solid #ffc4cb;
-            background: #fff1f3;
-            color: #b9293a;
+            border: 1px solid rgba(234, 79, 79, 0.22);
+            background: var(--am26-danger-soft);
+            color: var(--am26-danger);
             font-size: 13px;
             line-height: 18px;
             text-align: center;
@@ -306,8 +357,8 @@
         }
 
         .inline-menu.open .inline-menu-toggle {
-            border-color: #9eb6ff;
-            box-shadow: 0 0 0 2px rgba(47, 99, 255, 0.12);
+            border-color: rgba(69, 84, 229, 0.42);
+            box-shadow: 0 0 0 2px rgba(69, 84, 229, 0.14);
         }
 
         .inline-menu-toggle {
@@ -320,8 +371,8 @@
             font-size: 12px;
             line-height: 1.2;
             border-radius: 8px;
-            border: 1px solid #d7dfed;
-            background: #fff;
+            border: 1px solid var(--am26-border);
+            background: rgba(255, 255, 255, 0.58);
             color: #2b3b52;
         }
 
@@ -363,7 +414,7 @@
         }
 
         .inline-menu-toggle::after {
-            content: '▾';
+            content: '⌄';
             color: #52627b;
             font-size: 11px;
             transform-origin: center;
@@ -383,11 +434,13 @@
             max-width: 220px;
             display: grid;
             gap: 3px;
-            border: 1px solid #d8e1f0;
+            border: 1px solid var(--am26-border-strong);
             border-radius: 10px;
             padding: 4px;
-            background: #fff;
-            box-shadow: 0 10px 20px rgba(18, 33, 60, 0.12);
+            background: var(--am26-panel-strong);
+            box-shadow: var(--am26-shadow);
+            backdrop-filter: blur(16px) saturate(1.2);
+            -webkit-backdrop-filter: blur(16px) saturate(1.2);
             z-index: 20;
         }
 
@@ -412,7 +465,7 @@
         }
 
         .inline-menu-item:hover:not(:disabled) {
-            background: #f2f6ff;
+            background: rgba(69, 84, 229, 0.1);
             transform: none;
         }
 
@@ -425,10 +478,10 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            border: 1px solid #dbe4f2;
+            border: 1px solid var(--am26-border);
             border-radius: 12px;
             padding: 4px;
-            background: #f8fafd;
+            background: rgba(255, 255, 255, 0.36);
         }
 
         .expiry-cell input[type="date"] {
@@ -459,10 +512,10 @@
         .log {
             height: 170px;
             width: 100%;
-            border: 1px solid #d9e2ef;
-            border-radius: 10px;
-            background: #101826;
-            color: #d5e0f3;
+            border: 1px solid var(--am26-border);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.36);
+            color: var(--am26-text-soft);
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
             font-size: 12px;
             line-height: 1.5;
@@ -479,6 +532,73 @@
 
         .error {
             color: var(--danger);
+        }
+
+        .confirm-mask {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.48));
+            backdrop-filter: blur(12px) saturate(1.18);
+            -webkit-backdrop-filter: blur(12px) saturate(1.18);
+        }
+
+        .confirm-mask[hidden] {
+            display: none;
+        }
+
+        .confirm-card {
+            width: min(520px, calc(100vw - 48px));
+            border: 1px solid var(--am26-border-strong);
+            border-radius: 18px;
+            background: var(--am26-panel-strong);
+            box-shadow: var(--am26-shadow);
+            padding: 18px;
+            color: var(--am26-text);
+        }
+
+        .confirm-title {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.35;
+            font-weight: 700;
+        }
+
+        .confirm-desc {
+            margin: 8px 0 0;
+            color: var(--am26-text-soft);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .confirm-meta {
+            margin-top: 12px;
+            display: grid;
+            gap: 6px;
+            padding: 10px;
+            border: 1px solid var(--am26-border);
+            border-radius: 12px;
+            background: var(--am26-surface);
+            color: var(--am26-text-soft);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .confirm-actions {
+            margin-top: 16px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .confirm-primary.is-danger {
+            border-color: var(--am26-danger);
+            background: var(--am26-danger);
+            color: #fff;
         }
 
         @media (max-width: 1024px) {
@@ -511,10 +631,16 @@
                 授权服务地址（Base URL）
                 <input id="baseUrlInput" placeholder="https://your-license-server.example.com" />
             </label>
-            <label>
-                管理员 Token（可选）
+            <div class="field">
+                <label for="tokenInput">
+                    管理员 Token（可选）
+                </label>
                 <input id="tokenInput" placeholder="x-am-admin-token 的值（不加 Bearer）" />
-            </label>
+                <label class="token-remember" for="rememberTokenInput">
+                    <input id="rememberTokenInput" type="checkbox" />
+                    记住 Token 到本机
+                </label>
+            </div>
             <label>
                 本地备注（仅本页显示）
                 <input id="operatorInput" placeholder="例如：liangchao@team" />
@@ -604,12 +730,24 @@
             <div class="log" id="logBox"></div>
         </section>
     </main>
+    <div class="confirm-mask" id="confirmMask" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmDesc" hidden>
+        <div class="confirm-card" id="confirmCard" tabindex="-1">
+            <h2 class="confirm-title" id="confirmTitle">确认操作</h2>
+            <p class="confirm-desc" id="confirmDesc">确认后将调用授权管理接口。</p>
+            <div class="confirm-meta" id="confirmMeta"></div>
+            <div class="confirm-actions">
+                <button type="button" id="confirmCancelBtn">取消</button>
+                <button type="button" class="confirm-primary" id="confirmSubmitBtn">确认执行</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         (() => {
             'use strict';
 
             const SETTINGS_KEY = '__AM_LICENSE_ADMIN_SETTINGS_V1__';
+            const SESSION_TOKEN_KEY = '__AM_LICENSE_ADMIN_SESSION_TOKEN_V1__';
             const LEGACY_DEFAULT_BASE_URL = 'https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run';
             const STATIC_HOST_RE = /(?:^|\.)(github\.io|vercel\.app|netlify\.app)$/i;
 
@@ -654,6 +792,7 @@
             const dom = {
                 baseUrlInput: document.getElementById('baseUrlInput'),
                 tokenInput: document.getElementById('tokenInput'),
+                rememberTokenInput: document.getElementById('rememberTokenInput'),
                 operatorInput: document.getElementById('operatorInput'),
                 saveSettingsBtn: document.getElementById('saveSettingsBtn'),
                 pingBtn: document.getElementById('pingBtn'),
@@ -670,7 +809,14 @@
                 prevPageBtn: document.getElementById('prevPageBtn'),
                 nextPageBtn: document.getElementById('nextPageBtn'),
                 pageInfo: document.getElementById('pageInfo'),
-                logBox: document.getElementById('logBox')
+                logBox: document.getElementById('logBox'),
+                confirmMask: document.getElementById('confirmMask'),
+                confirmCard: document.getElementById('confirmCard'),
+                confirmTitle: document.getElementById('confirmTitle'),
+                confirmDesc: document.getElementById('confirmDesc'),
+                confirmMeta: document.getElementById('confirmMeta'),
+                confirmCancelBtn: document.getElementById('confirmCancelBtn'),
+                confirmSubmitBtn: document.getElementById('confirmSubmitBtn')
             };
 
             const pad = (value) => String(value).padStart(2, '0');
@@ -699,20 +845,36 @@
             const readSettings = () => {
                 try {
                     const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-                    return parsed && typeof parsed === 'object' ? parsed : {};
+                    if (!parsed || typeof parsed !== 'object') return {};
+                    const sessionToken = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
+                    const rememberedToken = String(parsed.token || '').trim();
+                    const rememberToken = parsed.rememberToken === true || (!!rememberedToken && parsed.rememberToken !== false);
+                    return {
+                        ...parsed,
+                        token: rememberToken ? rememberedToken : sessionToken,
+                        rememberToken
+                    };
                 } catch {
                     return {};
                 }
             };
 
             const saveSettings = () => {
+                const token = String(dom.tokenInput.value || '').trim();
+                const rememberToken = !!dom.rememberTokenInput.checked;
                 const next = {
                     baseUrl: String(dom.baseUrlInput.value || '').trim() || DEFAULT_BASE_URL,
-                    token: String(dom.tokenInput.value || '').trim(),
-                    operator: String(dom.operatorInput.value || '').trim()
+                    operator: String(dom.operatorInput.value || '').trim(),
+                    rememberToken
                 };
+                if (rememberToken) {
+                    next.token = token;
+                    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+                } else {
+                    sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+                }
                 localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-                log('配置已保存到 localStorage');
+                log(rememberToken ? '配置已保存，Token 已保存到本机 localStorage' : '配置已保存，Token 仅保存在本次会话');
                 return next;
             };
 
@@ -1444,6 +1606,105 @@
                 return true;
             };
 
+            const actionLabelMap = {
+                'allow-on': '授权放行（默认3天）',
+                'allow-1m': '授权放行（1个月）',
+                'allow-3m': '授权放行（3个月）',
+                'allow-1y': '授权放行（1年）',
+                'allow-permanent': '授权放行（永久）',
+                'set-expire-date': '设置到期日期',
+                'set-expire-permanent': '设置到期日期为永久',
+                'allow-off': '取消授权',
+                'revoke-on': '吊销授权',
+                'revoke-off': '取消吊销',
+                'delete-row': '删除当前行'
+            };
+
+            const dangerousActionSet = new Set([
+                'allow-off',
+                'revoke-on',
+                'delete-row',
+                'set-expire-date',
+                'set-expire-permanent'
+            ]);
+
+            const resolveActionTargetInfo = (shopId = '', action = '', context = {}) => {
+                const normalizedShopId = String(shopId || '').trim();
+                const item = state.allItems.find((entry) => String(entry.shopId || '').trim() === normalizedShopId) || null;
+                const scopedShopIds = action.startsWith('allow') || action.startsWith('set-expire')
+                    ? resolveStoreScopedShopIds(normalizedShopId)
+                    : [normalizedShopId].filter(Boolean);
+                const meta = [
+                    ['shopId', normalizedShopId || '-'],
+                    ['店铺', String(item?.storeName || '-').trim() || '-'],
+                    ['子账号', String(item?.subAccount || '-').trim() || '-'],
+                    ['影响范围', scopedShopIds.length > 1 ? `同店铺 ${scopedShopIds.length} 个子账号` : '当前行']
+                ];
+                if (context.expireDate) {
+                    meta.push(['目标到期日', String(context.expireDate || '-')]);
+                }
+                return {
+                    item,
+                    scopedShopIds,
+                    meta
+                };
+            };
+
+            const closeActionConfirm = () => {
+                dom.confirmMask.hidden = true;
+                dom.confirmSubmitBtn.onclick = null;
+                dom.confirmCancelBtn.onclick = null;
+                document.removeEventListener('keydown', onConfirmKeydown, true);
+            };
+
+            function onConfirmKeydown(event) {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                const cancel = dom.confirmCancelBtn;
+                if (typeof cancel.click === 'function') cancel.click();
+            }
+
+            const requestActionConfirm = (shopId, action, context = {}) => new Promise((resolve) => {
+                const label = actionLabelMap[action] || action || '授权操作';
+                const danger = dangerousActionSet.has(action);
+                const targetInfo = resolveActionTargetInfo(shopId, action, context);
+                dom.confirmTitle.textContent = `${danger ? '确认高风险操作' : '确认授权操作'}：${label}`;
+                dom.confirmDesc.textContent = danger
+                    ? '确认后将调用授权管理写接口，可能影响店铺插件使用权限。'
+                    : '确认后将调用授权管理写接口，请核对目标店铺后继续。';
+                dom.confirmMeta.replaceChildren();
+                targetInfo.meta.forEach(([name, value]) => {
+                    const row = document.createElement('div');
+                    row.textContent = `${name}: ${value}`;
+                    dom.confirmMeta.appendChild(row);
+                });
+                dom.confirmSubmitBtn.textContent = danger ? '确认执行' : '确认';
+                dom.confirmSubmitBtn.classList.toggle('is-danger', danger);
+                dom.confirmMask.hidden = false;
+
+                const finish = (confirmed) => {
+                    closeActionConfirm();
+                    resolve(confirmed);
+                };
+
+                dom.confirmCancelBtn.onclick = () => finish(false);
+                dom.confirmSubmitBtn.onclick = () => finish(true);
+                document.addEventListener('keydown', onConfirmKeydown, true);
+                if (typeof dom.confirmCancelBtn.focus === 'function') {
+                    dom.confirmCancelBtn.focus({ preventScroll: true });
+                }
+            });
+
+            const executeShopActionWithConfirm = async (shopId, action, context = {}) => {
+                const confirmed = await requestActionConfirm(shopId, action, context);
+                if (!confirmed) {
+                    log(`已取消操作：shopId=${shopId}，action=${action || '-'}`, 'warn');
+                    return false;
+                }
+                await executeShopAction(shopId, action, context);
+                return true;
+            };
+
             const executeShopAction = async (shopId, action, context = {}) => {
                 if (action === 'allow-on') {
                     await runStoreScopedAllowAction(shopId, '授权放行（默认3天）', (currentShopId) => callAllow(currentShopId, true));
@@ -1528,7 +1789,7 @@
                     const shopId = String(row?.dataset.shopId || '').trim();
                     if (!row || !shopId) return;
                     closeInlineMenus();
-                    await executeShopAction(shopId, 'delete-row');
+                    await executeShopActionWithConfirm(shopId, 'delete-row');
                     return;
                 }
                 const menuToggle = target.closest('button[data-role="inline-menu-toggle"]');
@@ -1554,7 +1815,7 @@
                     const shopId = String(row?.dataset.shopId || '').trim();
                     if (!row || !shopId) return;
                     closeInlineMenus();
-                    await executeShopAction(shopId, action);
+                    await executeShopActionWithConfirm(shopId, action);
                     return;
                 }
             };
@@ -1568,7 +1829,10 @@
                     const shopId = String(row?.dataset.shopId || '').trim();
                     const expireDate = String(dateInput.value || '').trim();
                     if (!row || !shopId || !expireDate) return;
-                    await executeShopAction(shopId, 'set-expire-date', { expireDate });
+                    const executed = await executeShopActionWithConfirm(shopId, 'set-expire-date', { expireDate });
+                    if (!executed) {
+                        renderTable();
+                    }
                 }
             };
 
@@ -1663,6 +1927,7 @@
                 const settings = readSettings();
                 dom.baseUrlInput.value = String(settings.baseUrl || DEFAULT_BASE_URL);
                 dom.tokenInput.value = String(settings.token || '');
+                dom.rememberTokenInput.checked = settings.rememberToken === true;
                 dom.operatorInput.value = String(settings.operator || '');
                 dom.pageSizeSelect.value = '50';
                 bindEvents();
