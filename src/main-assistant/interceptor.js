@@ -21,6 +21,11 @@
         createPanel() {
             const div = document.createElement('div');
             div.id = 'am-report-capture-panel';
+            div.setAttribute('role', 'region');
+            div.setAttribute('aria-label', '报表下载捕获');
+            div.setAttribute('aria-live', 'polite');
+            div.setAttribute('aria-hidden', 'true');
+            div.tabIndex = -1;
             // Inline fallback: even if style injection fails, ensure popup is visible and clickable.
             div.style.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;width:min(340px, calc(100vw - 24px));z-index:2147483647;display:none;';
             document.body.appendChild(div);
@@ -118,20 +123,28 @@
             Logger.log(`📂 捕获报表: ${source} `, true);
 
             this.panel.textContent = '';
+            this.panel.setAttribute('aria-hidden', 'false');
+            this.panel.setAttribute('aria-labelledby', 'am-report-capture-title');
+            this.panel.setAttribute('aria-describedby', 'am-report-capture-url am-report-capture-status');
 
             const header = document.createElement('div');
             header.className = 'am-download-header';
             const headerTitle = document.createElement('span');
             headerTitle.className = 'am-download-title';
+            headerTitle.id = 'am-report-capture-title';
             headerTitle.innerHTML = `${renderAmIcon('check-circle', { size: 14 })}<span>捕获报表</span>`;
             const headerSource = document.createElement('span');
             headerSource.className = 'am-download-source';
+            headerSource.setAttribute('aria-label', `来源：${source}`);
             headerSource.textContent = source;
             header.appendChild(headerTitle);
             header.appendChild(headerSource);
 
             const urlBox = document.createElement('div');
             urlBox.className = 'am-download-url';
+            urlBox.id = 'am-report-capture-url';
+            urlBox.title = safeUrl;
+            urlBox.setAttribute('aria-label', `下载地址：${safeUrl}`);
             urlBox.textContent = safeUrl;
 
             const actions = document.createElement('div');
@@ -143,12 +156,13 @@
             dlLink.rel = 'noopener noreferrer';
             dlLink.className = 'am-download-link';
             dlLink.setAttribute('aria-label', '直连下载捕获到的报表');
-            dlLink.innerHTML = `${renderAmIcon('logo', { size: 14, strokeWidth: 2.2 })}<span>直连下载</span>`;
+            dlLink.innerHTML = `${renderAmIcon('external-link', { size: 14, strokeWidth: 2.1 })}<span>直连下载</span>`;
 
             const copyBtn = document.createElement('button');
             copyBtn.type = 'button';
             copyBtn.className = 'am-download-btn am-download-copy';
             copyBtn.textContent = '复制';
+            copyBtn.setAttribute('aria-describedby', 'am-report-capture-status');
 
             const closeBtn = document.createElement('button');
             closeBtn.type = 'button';
@@ -161,6 +175,13 @@
             actions.appendChild(copyBtn);
             actions.appendChild(closeBtn);
 
+            const status = document.createElement('div');
+            status.id = 'am-report-capture-status';
+            status.className = 'am-download-copy-status';
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+            status.textContent = '链接已捕获，可复制或直连下载';
+
             const hint = document.createElement('div');
             hint.className = 'am-download-hint';
             hint.textContent = '提示：如果下载的文件名无后缀，请手动添加 .xlsx';
@@ -168,15 +189,28 @@
             this.panel.appendChild(header);
             this.panel.appendChild(urlBox);
             this.panel.appendChild(actions);
+            this.panel.appendChild(status);
             this.panel.appendChild(hint);
             this.panel.style.display = 'block';
 
             copyBtn.onclick = function () {
                 GM_setClipboard(safeUrl);
                 this.innerText = '已复制';
-                setTimeout(() => this.innerText = '复制', 1500);
+                status.textContent = '下载链接已复制';
+                setTimeout(() => {
+                    this.innerText = '复制';
+                    status.textContent = '链接已捕获，可复制或直连下载';
+                }, 1500);
             };
-            closeBtn.onclick = () => this.panel.style.display = 'none';
+            closeBtn.onclick = () => {
+                this.panel.style.display = 'none';
+                this.panel.setAttribute('aria-hidden', 'true');
+            };
+            this.panel.onkeydown = (event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                closeBtn.click();
+            };
         },
 
         // --- 递归解析 JSON (Restored Original Logic) ---

@@ -20,7 +20,7 @@
 - [x] 页面 9：计划行复制入口 + 一览/成功弹窗。
 - [x] 页面 10：计划行并发开启入口 + 日志弹窗。
 - [x] 页面 11：批量+ 菜单 + 批量确认弹窗。
-- [ ] 页面 12：下载捕获面板。
+- [x] 页面 12：下载捕获面板。
 - [ ] 页面 13：潜力词日维度导出入口。
 - [ ] 页面 14：extension 注入/授权可见状态。
 - [ ] 页面 15：授权管理页。
@@ -40,6 +40,7 @@
 - 页面 9 已完成：计划行复制入口、复制数量徽标、复制计划一览窗和成功窗按统一浅玻璃规范收敛；补齐待确认/已完成状态胶囊、`aria-describedby`、live status 语义和 token 化状态色；真实页只打开一览窗并取消关闭，未点击“确认生成”，不改 `prepareCopyCurrentPlanContext()`、`submitPreparedCopyCurrentPlan()`、真实创建、暂停兜底和页内搜索业务链路。
 - 页面 10 已完成：计划行并发开启入口和并发执行日志弹窗按统一浅玻璃规范收敛；20px 行内启动入口、日志标题/状态/明细区和 warning/error/success 语义色已 token 化，弹窗补齐 `aria-describedby`；真实页验收在 Offline + 本地写接口阻断双保护下打开日志弹窗并关闭，未让 `/campaign/updatePart.json` 触达服务端，不改 `runConcurrentStartFlow()`、同商品全量暂停、原在投重开、重试、状态校验和真实写入链路。
 - 页面 11 已完成：批量+ 菜单和批量开启/暂停/删除确认弹窗按统一浅玻璃规范收敛；菜单补齐 `aria-controls`、`aria-label`、Esc/方向键焦点导航，确认窗默认焦点改到“取消”降低误触真实写操作风险；样式补齐 `--am26-focus/danger-soft/warning-soft` token。保留原生“批量计划设置”克隆宿主、hover 弹出、选中项读取、业务线分组、人群官方弹窗、`/campaign/updatePart.json` 与 `/campaign/delete.json` 写接口链路不变。
+- 页面 12 已完成：下载捕获面板补齐 `role=region`、`aria-live`、标题/URL/状态关联、完整 URL `title/aria-label`、复制状态 live、Esc 关闭和关闭后 `aria-hidden`；直连下载图标改为共享 `external-link`，面板和 URL/来源/状态区按浅玻璃 token 收敛。保留下载 URL 识别、Fetch/XHR 拦截、响应解析、剪贴板和直连下载业务链路不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -246,6 +247,27 @@
   - 取消与安全核对：点击“取消”后确认窗和菜单均关闭，选中计数恢复为 0；本地写接口 guard 记录为空，performance resource 未发现本轮危险写接口触达；验收后恢复原 fetch/XHR。
   - 截图：`tasks/ui-page11-campaign-batch-plus-confirm-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现批量+ 菜单或确认窗相关未捕获异常。
+- 页面 12 自动化：
+  - `node --check src/main-assistant/interceptor.js`：通过。
+  - `node --check src/main-assistant/ui.js`：通过。
+  - `node --check tests/download-link-depth-guard.test.mjs`：通过。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `node --test tests/download-link-depth-guard.test.mjs tests/icon-system-regression.test.mjs tests/logger-api.test.mjs`：通过，24/24。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `node --check dist/extension/page.bundle.js`：通过。
+  - `node --check 阿里妈妈多合一助手.js`：通过。
+  - `git diff --check`：通过。
+- 页面 12 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，进入真实关键词推广列表页 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc`。
+  - 安全触发：安装临时点击 guard 阻断 `#am-report-capture-panel .am-download-link`，清空 resource timing 与 hook history；用 `XMLHttpRequest.open('GET', 'https://example.com/am-download-capture-probe.xlsx?download=1')` 触发捕获面板，但不调用 `send()`，未产生真实网络请求或下载。
+  - 面板语义核对：`#am-report-capture-panel` 可见，`role=region`、`aria-label=报表下载捕获`、`aria-live=polite`、`aria-hidden=false`、`aria-labelledby=am-report-capture-title`、`aria-describedby=am-report-capture-url am-report-capture-status`、`tabIndex=-1`。
+  - 内容核对：标题为“捕获报表”并包含 1 个共享 SVG；来源为 `XHR:OpenURL` 且有 `aria-label=来源：XHR:OpenURL`；URL 区 text/title/aria-label 均为 probe URL，使用 `word-break: break-all`、`max-height=56px`、`overflow=hidden` 和等宽字体。
+  - 操作核对：直连下载链接 `href` 为 probe URL，`target=_blank`、`rel=noopener noreferrer`、`aria-label=直连下载捕获到的报表`，图标 class 为 `am-ui-icon-external-link`；复制按钮和关闭按钮均为 `button`，复制按钮关联 `am-report-capture-status`，状态区 `role=status`、`aria-live=polite`。
+  - 样式核对：面板右下固定 `right/bottom=20px`、宽度 `340px`、12px 圆角、`var(--am26-panel-strong)` 浅玻璃渐变、`blur(18px) saturate(1.35)` 背景滤镜和 `var(--am26-shadow)`；复制按钮背景为 `rgba(255,255,255,.45)` token 计算值。
+  - 关闭与安全核对：聚焦面板后按 Esc，面板 `display=none`、`aria-hidden=true`；performance resource 和 `__AM_HOOK_MANAGER__` history 均无 `example.com`、`addList`、`copy`、`updatePart`、`delete`、`batchModify` 记录；临时 guard 已移除。
+  - 截图：`tasks/ui-page12-download-capture-panel-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现下载捕获面板相关未捕获异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -281,6 +303,9 @@
 - 页面 11 结果：批量+ 菜单和批量确认弹窗已按统一浅玻璃工作台规范收敛，菜单 ARIA、键盘关闭/导航、危险项语义色和确认窗默认取消焦点更稳；真实页验证覆盖菜单打开、确认窗打开、取消关闭和不触发写接口。
 - 页面 11 风险：真实验收刻意不点击批量开启/暂停/删除确认按钮，无法证明服务端写入闭环；对应状态更新、删除、人群官方弹窗和刷新链路仍由既有业务实现与专项测试覆盖。
 - 页面 11 回滚：回退 `src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/ui.js`、`tests/campaign-batch-plus-quick-entry.test.mjs`、构建产物和页面 11 截图即可。
+- 页面 12 结果：下载捕获面板已按统一浅玻璃工作台规范补齐面板级语义、完整 URL 说明、复制 live 状态、Esc 关闭和 token 化视觉；真实页验证覆盖不发请求的捕获触发、面板展示、截图、Esc 关闭和无下载/无写接口。
+- 页面 12 风险：真实验收刻意不点击“直连下载”，也不触发阿里妈妈真实报表导出；真实报表服务端生成下载链接仍由既有拦截逻辑覆盖，本轮只证明捕获面板 UI/语义和安全触发路径稳定。
+- 页面 12 回滚：回退 `src/main-assistant/interceptor.js`、`src/main-assistant/ui.js`、`tests/download-link-depth-guard.test.mjs`、构建产物和页面 12 截图即可。
 
 ---
 

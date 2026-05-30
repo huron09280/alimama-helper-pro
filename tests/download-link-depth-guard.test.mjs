@@ -61,7 +61,7 @@ test('下载链接递归解析：默认 maxDepth=20 时第 21 层仍受限', () 
     assert.equal(hits.length, 0, '第 21 层 URL 应被默认深度限制拦截');
 });
 
-test('下载捕获面板具备响应式宽度与可见焦点态', () => {
+test('下载捕获面板具备统一语义、响应式宽度与可见焦点态', () => {
     const interceptorBlock = getInterceptorBlock();
     const uiBlock = getUiBlock();
     assert.match(
@@ -69,9 +69,19 @@ test('下载捕获面板具备响应式宽度与可见焦点态', () => {
         /div\.style\.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;width:min\(340px, calc\(100vw - 24px\)\);/,
         '下载面板内联兜底宽度应适配窄视口'
     );
+    assert.match(interceptorBlock, /div\.setAttribute\('role', 'region'\);[\s\S]*?div\.setAttribute\('aria-label', '报表下载捕获'\);[\s\S]*?div\.setAttribute\('aria-live', 'polite'\);[\s\S]*?div\.setAttribute\('aria-hidden', 'true'\);[\s\S]*?div\.tabIndex = -1;/, '下载面板容器应具备 region/live 语义与可聚焦兜底');
+    assert.match(interceptorBlock, /this\.panel\.setAttribute\('aria-hidden', 'false'\);[\s\S]*?this\.panel\.setAttribute\('aria-labelledby', 'am-report-capture-title'\);[\s\S]*?this\.panel\.setAttribute\('aria-describedby', 'am-report-capture-url am-report-capture-status'\);/, '下载面板展示时应关联标题、地址和状态说明');
+    assert.match(interceptorBlock, /headerTitle\.id = 'am-report-capture-title';[\s\S]*?headerSource\.setAttribute\('aria-label', `来源：\$\{source\}`\);/, '下载面板标题和来源应有可访问名称');
+    assert.match(interceptorBlock, /urlBox\.id = 'am-report-capture-url';[\s\S]*?urlBox\.title = safeUrl;[\s\S]*?urlBox\.setAttribute\('aria-label', `下载地址：\$\{safeUrl\}`\);[\s\S]*?urlBox\.textContent = safeUrl;/, '下载地址应使用 textContent 且暴露完整地址说明');
     assert.match(uiBlock, /#am-report-capture-panel\s*\{[\s\S]*?width:\s*min\(340px,\s*calc\(100vw - 24px\)\);/, '下载面板 CSS 宽度应适配窄视口');
+    assert.match(uiBlock, /#am-report-capture-panel\s*\{[\s\S]*?background:\s*var\(--am26-panel-strong\);[\s\S]*?backdrop-filter:\s*blur\(18px\) saturate\(1\.35\);[\s\S]*?box-shadow:\s*var\(--am26-shadow\),\s*var\(--am26-glow\);/, '下载面板应使用统一浅玻璃 token 与阴影');
     assert.match(interceptorBlock, /dlLink\.setAttribute\('aria-label',\s*'直连下载捕获到的报表'\)/, '下载链接应有可访问名称');
+    assert.match(interceptorBlock, /dlLink\.innerHTML = `\$\{renderAmIcon\('external-link', \{ size: 14, strokeWidth: 2\.1 \}\)\}<span>直连下载<\/span>`;/, '直连下载按钮应使用共享 external-link 图标');
     assert.match(interceptorBlock, /copyBtn\.type = 'button';[\s\S]*?closeBtn\.type = 'button';/, '下载面板操作按钮应显式声明 type=button');
+    assert.match(interceptorBlock, /status\.id = 'am-report-capture-status';[\s\S]*?status\.setAttribute\('role', 'status'\);[\s\S]*?status\.setAttribute\('aria-live', 'polite'\);[\s\S]*?status\.textContent = '链接已捕获，可复制或直连下载';/, '下载面板复制状态应使用 live status');
+    assert.match(interceptorBlock, /GM_setClipboard\(safeUrl\);[\s\S]*?status\.textContent = '下载链接已复制';[\s\S]*?status\.textContent = '链接已捕获，可复制或直连下载';/, '复制按钮应更新并恢复状态提示');
+    assert.match(interceptorBlock, /closeBtn\.onclick = \(\) => \{[\s\S]*?this\.panel\.style\.display = 'none';[\s\S]*?this\.panel\.setAttribute\('aria-hidden', 'true'\);[\s\S]*?\};[\s\S]*?this\.panel\.onkeydown = \(event\) => \{[\s\S]*?event\.key !== 'Escape'[\s\S]*?closeBtn\.click\(\);/, '下载面板应支持关闭后隐藏语义并用 Escape 关闭');
     assert.match(uiBlock, /#am-report-capture-panel \.am-download-btn:focus-visible,[\s\S]*?#am-report-capture-panel \.am-download-link:focus-visible[\s\S]*?outline:\s*2px solid/, '下载面板按钮与链接应有可见 focus 态');
+    assert.match(uiBlock, /#am-report-capture-panel \.am-download-copy-status\s*\{[\s\S]*?background:\s*rgba\(14,\s*168,\s*111,\s*0\.08\);[\s\S]*?color:\s*var\(--am26-success\);/, '下载面板复制状态应使用成功语义 token');
     assert.match(uiBlock, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-report-capture-panel \.am-download-btn,[\s\S]*?#am-report-capture-panel \.am-download-link/, '下载面板 hover/focus 动效应适配减少动画');
 });

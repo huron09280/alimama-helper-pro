@@ -1529,9 +1529,16 @@
                     border-radius: 12px;
                     border: 1px solid var(--am26-border);
                     background: var(--am26-panel-strong);
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+                    box-shadow: var(--am26-shadow), var(--am26-glow);
                     color: var(--am26-text);
                     z-index: 2147483647;
                     display: none;
+                }
+                #am-report-capture-panel:focus-visible {
+                    outline: 2px solid var(--am26-focus);
+                    outline-offset: 3px;
                 }
                 #am-report-capture-panel .am-download-header {
                     margin-bottom: 10px;
@@ -1544,6 +1551,14 @@
                 #am-report-capture-panel .am-download-source {
                     color: var(--am26-text-soft);
                     font-size: 10px;
+                    max-width: 118px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    padding: 3px 7px;
+                    border-radius: 999px;
+                    background: var(--am26-surface);
+                    border: 1px solid var(--am26-border);
                 }
                 #am-report-capture-panel .am-download-title,
                 #am-report-capture-panel .am-download-link {
@@ -1559,7 +1574,7 @@
                     flex: 0 0 14px;
                 }
                 #am-report-capture-panel .am-download-url {
-                    background: rgba(255, 255, 255, 0.60);
+                    background: var(--am26-surface-strong);
                     border: 1px solid var(--am26-border);
                     border-radius: 8px;
                     margin-bottom: 12px;
@@ -1569,6 +1584,8 @@
                     color: var(--am26-text-soft);
                     max-height: 56px;
                     overflow: hidden;
+                    font-family: var(--am26-mono);
+                    line-height: 1.45;
                 }
                 #am-report-capture-panel .am-download-actions {
                     display: flex;
@@ -1591,7 +1608,7 @@
                     color: #fff;
                 }
                 #am-report-capture-panel .am-download-btn {
-                    background: rgba(255, 255, 255, 0.72);
+                    background: var(--am26-surface-strong);
                     border-color: var(--am26-border);
                     color: var(--am26-text-soft);
                     font: inherit;
@@ -1611,7 +1628,7 @@
                     height: 16px;
                 }
                 #am-report-capture-panel .am-download-close:hover {
-                    background: rgba(234, 79, 79, 0.1);
+                    background: var(--am26-danger-soft);
                     color: var(--am26-danger, #ea4f4f);
                     border-color: rgba(234, 79, 79, 0.22);
                 }
@@ -1621,7 +1638,7 @@
                 }
                 #am-report-capture-panel .am-download-btn:focus-visible,
                 #am-report-capture-panel .am-download-link:focus-visible {
-                    outline: 2px solid rgba(69, 84, 229, 0.34);
+                    outline: 2px solid var(--am26-focus);
                     outline-offset: 2px;
                     transform: translateY(-1px);
                 }
@@ -1642,10 +1659,22 @@
                     }
                 }
                 #am-report-capture-panel .am-download-copy { flex: 1; }
+                #am-report-capture-panel .am-download-copy-status {
+                    margin-top: 9px;
+                    padding: 6px 8px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(14, 168, 111, 0.18);
+                    background: rgba(14, 168, 111, 0.08);
+                    color: var(--am26-success);
+                    font-size: 10px;
+                    font-weight: 600;
+                    line-height: 1.4;
+                }
                 #am-report-capture-panel .am-download-hint {
                     margin-top: 8px;
                     font-size: 10px;
                     color: var(--am26-text-soft);
+                    line-height: 1.45;
                 }
 
                 #am-magic-report-popup {
