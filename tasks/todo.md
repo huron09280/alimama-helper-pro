@@ -16,7 +16,7 @@
 - [x] 页面 5：组建计划矩阵配置页。
 - [x] 页面 6：建计划商品选择弹窗。
 - [x] 页面 7：场景配置/策略详情/高级设置弹窗。
-- [ ] 页面 8：建计划提交确认弹窗。
+- [x] 页面 8：建计划提交确认弹窗。
 - [ ] 页面 9：计划行复制入口 + 一览/成功弹窗。
 - [ ] 页面 10：计划行并发开启入口 + 日志弹窗。
 - [ ] 页面 11：批量+ 菜单 + 批量确认弹窗。
@@ -36,6 +36,7 @@
 - 页面 5 已完成：组建计划矩阵页的配置容器、工作台统计、预设按钮、场景/维度卡片、维度下拉和批量菜单统一为浅玻璃 token；矩阵选择器箭头改为共享 `chevron-down` SVG，保留矩阵生成算法、提交创建、安全阻断和弹窗业务逻辑不变。
 - 页面 6 已完成：组建计划“添加商品”二级弹窗统一为浅玻璃工作台弹层，补齐标题图标、已选数量状态、搜索工具条、候选/已选商品卡片状态、空态和底部操作区；添加/取消本地状态已在真实页验证，保留候选加载、添加/移除商品、取消回滚、确认回写和创建提交逻辑不变。
 - 页面 7 已完成：组建计划“编辑计划”详情层和内部“高级设置”弹窗统一为浅玻璃工作台弹层，补齐详情标题图标、二级说明、编辑状态、场景配置行、操作区和高级设置资源位/地域/分时控件 token；验证只打开编辑页、修改可回滚输入、切换高级设置 tab 和关闭弹窗，未点击批量创建或提交创建。
+- 页面 8 已完成：组建计划“提交创建”二次确认弹窗统一为浅玻璃工作台确认层，补齐专用白玻璃遮罩、待提交状态、统计卡、场景摘要、warning 风险提示和 token 化底部按钮；保留 `openKeywordSubmitConfirmPopup()` 只做确认 gating，确认后仍进入现有 `handleRun()` 创建链路；真实页只打开弹窗并取消关闭，未点击“确认提交创建”。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -156,6 +157,25 @@
   - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口；仅观察到商品/地域配置读取请求。
   - 截图：`tasks/ui-page7-keyword-detail-editor-after-2026-05-30.png`、`tasks/ui-page7-keyword-advanced-popup-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现插件 UI 相关运行时异常。
+- 页面 8 自动化：
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+  - `node --check tests/keyword-home-strategy-batch-actions.test.mjs`：通过。
+  - `node --test tests/keyword-home-strategy-batch-actions.test.mjs tests/matrix-plan-config.test.mjs tests/icon-system-regression.test.mjs`：通过，58/58。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+  - 说明：`node --check src/optimizer/keyword-plan-api/request-builder-preview.js` 在 `HEAD` 上同类片段也不可作为独立模块检查，本文件是构建片段，本轮以 `npm run build`、`build:check` 和根 userscript 语法检查为准。
+- 页面 8 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，硬刷新真实关键词推广详情页，再打开主助手并进入“组建计划 > 首页 > 提交创建”。
+  - 页面身份：`关键词推广详情页_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218`。
+  - 触发核对：首页提交摘要为 `将提交 1 个计划 / 预算合计 200元 / 提交方式：单条`；点击首页 `提交创建` 后仅打开二次确认弹窗，未点击弹窗内“确认提交创建”。
+  - 样式核对：确认窗 `role=dialog`、`aria-modal=true`；外层 class 为 `am-wxt-scene-popup-mask am-wxt-scene-popup-mask-submit-confirm`；遮罩为浅白玻璃渐变并带 `blur(10px) saturate(1.18)`；弹窗约 `560x370`、圆角 `18px`、边框 `rgba(255,255,255,.6)`、浅玻璃背景和 `blur(18px) saturate(1.35)`。
+  - 内容核对：可见“即将调用创建接口”“待提交”；统计卡为 `计划数 1 / 预算合计 200元 / 商品数 1 / 提交方式 单条`；场景摘要为 `人群推广×1`；风险提示为“确认后会调用创建接口。本弹窗关闭或取消不会提交。”。
+  - 取消核对：点击“取消”后 `#am-wxt-scene-popup-mask` 消失，向导日志出现“已取消提交创建”。
+  - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
+  - 截图：`tasks/ui-page8-keyword-submit-confirm-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现插件确认窗相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -179,6 +199,9 @@
 - 页面 7 结果：编辑计划详情层和高级设置弹窗已按统一浅玻璃工作台规范收敛，详情标题、状态、场景配置、高级设置 tab、地域/分时/资源位容器在真实页中可见且可操作；未改动策略字段回填、保存/取消、预览和提交创建链路。
 - 页面 7 风险：真实验收覆盖了打开编辑详情、可回滚输入、高级设置 tab 切换和取消关闭；未点击高级设置“确定”写回配置，也未触发后续预览或提交创建。
 - 页面 7 回滚：回退 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-edit-strategy-settings.test.mjs`、构建产物和页面 7 截图即可。
+- 页面 8 结果：提交创建二次确认弹窗已按统一浅玻璃工作台规范收敛，统计信息、场景摘要、待提交状态和风险提示在真实页中可见且取消稳定；确认 gating 仍保留，未改动实际创建提交链路。
+- 页面 8 风险：真实验收刻意不点击“确认提交创建”，因此确认后的真实创建执行仍由既有提交链路和专项测试覆盖；本轮只证明二次确认打开、取消和不触发写接口。
+- 页面 8 回滚：回退 `src/optimizer/keyword-plan-api/request-builder-preview.js`、`src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、构建产物和页面 8 截图即可。
 
 ---
 

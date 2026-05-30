@@ -2796,6 +2796,14 @@
                     saveLabel: '确认提交创建',
                     bodyHtml: `
                         <div class="am-wxt-submit-confirm" data-submit-confirm-dialog="1">
+                            <div class="am-wxt-submit-confirm-hero">
+                                <span class="am-wxt-submit-confirm-icon" aria-hidden="true">${renderAmIcon('alert-triangle', { size: 18, strokeWidth: 2.1 })}</span>
+                                <div class="am-wxt-submit-confirm-copy">
+                                    <strong>即将调用创建接口</strong>
+                                    <span>确认前请核对计划、预算、商品和提交方式</span>
+                                </div>
+                                <span class="am-wxt-submit-confirm-status">待提交</span>
+                            </div>
                             <div class="am-wxt-submit-confirm-grid">
                                 <div class="am-wxt-submit-confirm-stat">
                                     <span>计划数</span>
@@ -2814,8 +2822,14 @@
                                     <strong data-submit-confirm-mode="1">${Utils.escapeHtml(modeText)}</strong>
                                 </div>
                             </div>
-                            <div class="am-wxt-submit-confirm-scenes" data-submit-confirm-scenes="1">${Utils.escapeHtml(sceneSummaryText)}</div>
-                            <div class="am-wxt-submit-confirm-risk">确认后会调用创建接口，请再次核对计划名、预算、商品和提交方式。本弹窗关闭或取消不会提交。</div>
+                            <div class="am-wxt-submit-confirm-scenes">
+                                <span>场景摘要</span>
+                                <strong data-submit-confirm-scenes="1">${Utils.escapeHtml(sceneSummaryText)}</strong>
+                            </div>
+                            <div class="am-wxt-submit-confirm-risk">
+                                <span class="am-wxt-submit-confirm-risk-icon" aria-hidden="true">${renderAmIcon('alert-triangle', { size: 14, strokeWidth: 2.2 })}</span>
+                                <span>确认后会调用创建接口。本弹窗关闭或取消不会提交。</span>
+                            </div>
                         </div>
                     `,
                     onSave() {

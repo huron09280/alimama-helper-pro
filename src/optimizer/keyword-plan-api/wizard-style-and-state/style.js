@@ -3428,6 +3428,11 @@
                     backdrop-filter: blur(8px) saturate(1.15);
                     -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
+                #am-wxt-scene-popup-mask.am-wxt-scene-popup-mask-submit-confirm {
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+                    backdrop-filter: blur(10px) saturate(1.18);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.18);
+                }
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog {
                     width: min(720px, 96vw);
                     max-height: 86vh;
@@ -8375,13 +8380,136 @@
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm {
-                    width: min(520px, calc(100vw - 32px));
+                    width: min(560px, calc(100vw - 32px));
+                    padding: 0;
+                    gap: 0;
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    border-radius: 18px;
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(18px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+                    overflow: hidden;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-scene-popup-head,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-scene-popup-foot {
+                    min-height: 52px;
+                    padding: 10px 14px;
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: linear-gradient(135deg, rgba(255,255,255,0.56), rgba(255,255,255,0.24));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-scene-popup-head {
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    color: var(--am26-text, #1b2438);
+                    font-size: 14px;
+                    font-weight: 750;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-scene-popup-body {
+                    padding: 12px;
+                    gap: 10px;
+                    background: rgba(255,255,255,0.08);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-scene-popup-foot {
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-btn {
+                    min-height: 32px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 10px;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-btn.primary {
+                    border-color: rgba(69,84,229,0.68);
+                    background: linear-gradient(135deg, var(--am26-primary, #4554e5), var(--am26-primary-strong, #1d3fcf));
+                    color: #fff;
+                    box-shadow: 0 8px 18px rgba(69,84,229,0.18);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm .am-wxt-btn:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.3);
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-submit-confirm {
                     display: flex;
                     flex-direction: column;
                     gap: 12px;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-hero {
+                    display: grid;
+                    grid-template-columns: auto minmax(0, 1fr) auto;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 14px;
+                    background: linear-gradient(145deg, var(--am26-surface-strong, rgba(255,255,255,0.45)), var(--am26-surface, rgba(255,255,255,0.25)));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 8px 20px rgba(31,38,135,0.05);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-icon,
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-risk-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex: 0 0 auto;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-icon {
+                    width: 32px;
+                    height: 32px;
+                    border: 1px solid rgba(232,163,37,0.28);
+                    border-radius: 11px;
+                    background: rgba(232,163,37,0.12);
+                    color: var(--am26-warning, #e8a325);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-copy {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    min-width: 0;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-copy strong {
+                    color: var(--am26-text, #1b2438);
+                    font-size: 13px;
+                    font-weight: 750;
+                    line-height: 18px;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-copy span {
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 12px;
+                    line-height: 16px;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-status {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 24px;
+                    padding: 0 9px;
+                    border: 1px solid rgba(232,163,37,0.26);
+                    border-radius: 999px;
+                    background: rgba(232,163,37,0.10);
+                    color: var(--am26-warning, #e8a325);
+                    font-size: 11px;
+                    font-weight: 700;
+                    white-space: nowrap;
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-submit-confirm-grid {
@@ -8393,14 +8521,15 @@
                 #am-wxt-scene-popup-mask .am-wxt-submit-confirm-stat {
                     min-width: 0;
                     padding: 10px;
-                    border: 1px solid #e5eaf2;
-                    border-radius: 8px;
-                    background: #f8fafc;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-submit-confirm-stat span {
                     display: block;
-                    color: #64748b;
+                    color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
                     line-height: 1.35;
                 }
@@ -8408,8 +8537,9 @@
                 #am-wxt-scene-popup-mask .am-wxt-submit-confirm-stat strong {
                     display: block;
                     margin-top: 4px;
-                    color: #0f172a;
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-size: 18px;
+                    font-weight: 780;
                     line-height: 1.2;
                     white-space: nowrap;
                     overflow: hidden;
@@ -8417,22 +8547,54 @@
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-submit-confirm-scenes {
-                    padding: 8px 10px;
-                    border-radius: 8px;
-                    background: #eff6ff;
-                    color: #1d4ed8;
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: space-between;
+                    gap: 10px;
+                    padding: 10px;
+                    border: 1px solid rgba(69,84,229,0.22);
+                    border-radius: 12px;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
                     font-size: 12px;
                     line-height: 1.45;
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-scenes span {
+                    flex: 0 0 auto;
+                    color: var(--am26-text-soft, #505a74);
+                    font-weight: 700;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-scenes strong {
+                    min-width: 0;
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    font-weight: 750;
+                    overflow-wrap: anywhere;
+                    text-align: right;
                 }
 
                 #am-wxt-scene-popup-mask .am-wxt-submit-confirm-risk {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 8px;
                     padding: 10px 12px;
-                    border: 1px solid #fed7aa;
-                    border-radius: 8px;
-                    background: #fff7ed;
-                    color: #9a3412;
+                    border: 1px solid rgba(232,163,37,0.28);
+                    border-radius: 12px;
+                    background: rgba(232,163,37,0.10);
+                    color: var(--am26-warning, #e8a325);
                     font-size: 12px;
                     line-height: 1.55;
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-submit-confirm-risk-icon {
+                    width: 18px;
+                    height: 18px;
+                    margin-top: 1px;
+                    color: var(--am26-warning, #e8a325);
                 }
 
                 #am-wxt-keyword-modal .am-wxt-workbench-tabs {

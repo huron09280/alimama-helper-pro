@@ -263,7 +263,7 @@ test('首页类型列标签按设置语义使用不同色系和深浅', () => {
 test('首页提交创建会先二次确认，确认后才调用现有创建链路', () => {
   assert.match(
     source,
-    /const openKeywordSubmitConfirmPopup = async \(\{ req = \{\}, sceneRequests = \[\] \} = \{\}\) => \{[\s\S]*?data-submit-confirm-dialog="1"[\s\S]*?data-submit-confirm-plan-count="1"[\s\S]*?data-submit-confirm-budget="1"[\s\S]*?data-submit-confirm-item-count="1"[\s\S]*?data-submit-confirm-mode="1"[\s\S]*?确认后会调用创建接口/,
+    /const openKeywordSubmitConfirmPopup = async \(\{ req = \{\}, sceneRequests = \[\] \} = \{\}\) => \{[\s\S]*?data-submit-confirm-dialog="1"[\s\S]*?renderAmIcon\('alert-triangle', \{ size: 18, strokeWidth: 2\.1 \}\)[\s\S]*?即将调用创建接口[\s\S]*?待提交[\s\S]*?data-submit-confirm-plan-count="1"[\s\S]*?data-submit-confirm-budget="1"[\s\S]*?data-submit-confirm-item-count="1"[\s\S]*?data-submit-confirm-mode="1"[\s\S]*?data-submit-confirm-scenes="1"[\s\S]*?确认后会调用创建接口/,
     '缺少提交创建二次确认弹窗或关键摘要'
   );
   assert.match(
@@ -609,8 +609,8 @@ test('批量编辑改为独立弹窗，只批量修改数值字段', () => {
   assert.match(source, /const openBatchStrategyPopupDialog = \(\{/, '缺少首页计划批量编辑弹窗 helper');
   assert.match(
     source,
-    /const maskClassNames = \['am-wxt-scene-popup-mask'\];[\s\S]*?normalizedDialogClassName\.split\(\/\\s\+\/\)\.includes\('am-wxt-scene-popup-dialog-batch-number'\)[\s\S]*?maskClassNames\.push\('am-wxt-scene-popup-mask-batch-number'\);[\s\S]*?mask\.className = maskClassNames\.join\(' '\);/,
-    '批量编辑弹窗未给外层 mask 增加专属 class，无法只覆盖批量编辑背景'
+    /const maskClassNames = \['am-wxt-scene-popup-mask'\];[\s\S]*?normalizedDialogClassName\.split\(\/\\s\+\/\)\.includes\('am-wxt-scene-popup-dialog-batch-number'\)[\s\S]*?maskClassNames\.push\('am-wxt-scene-popup-mask-batch-number'\);[\s\S]*?normalizedDialogClassName\.split\(\/\\s\+\/\)\.includes\('am-wxt-scene-popup-dialog-submit-confirm'\)[\s\S]*?maskClassNames\.push\('am-wxt-scene-popup-mask-submit-confirm'\);[\s\S]*?mask\.className = maskClassNames\.join\(' '\);/,
+    '批量编辑/提交确认弹窗未给外层 mask 增加专属 class，无法局部覆盖背景'
   );
   assert.match(
     source,
@@ -698,6 +698,40 @@ test('批量编辑数值弹窗样式局部收敛到统一 UI token', () => {
     /#am-wxt-scene-popup-mask \.am-wxt-btn \{[\s\S]*?background:\s*#eef2ff;[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-popup-dialog-batch-number \.am-wxt-btn \{[\s\S]*?background:\s*var\(--am26-surface-strong,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-popup-dialog-batch-number \.am-wxt-btn\.primary \{[\s\S]*?background:\s*linear-gradient\(135deg,\s*var\(--am26-primary,[\s\S]*?#am-wxt-scene-popup-mask \.am-wxt-scene-popup-dialog-batch-number \.am-wxt-btn:focus-visible \{/,
     '批量编辑按钮 token 覆盖必须局限在 batch-number 弹窗内，不能替换通用场景弹窗按钮事实源'
   );
+});
+
+test('提交确认弹窗样式局部收敛到统一 UI token', () => {
+  const finalGenericSceneMaskBlock = getLastCssBlock('#am-wxt-scene-popup-mask');
+  const finalSubmitConfirmMaskBlock = getLastCssBlock('#am-wxt-scene-popup-mask.am-wxt-scene-popup-mask-submit-confirm');
+  const finalSubmitConfirmDialogBlock = getLastCssBlock('#am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-submit-confirm');
+  const finalSubmitConfirmHeroBlock = getLastCssBlock('#am-wxt-scene-popup-mask .am-wxt-submit-confirm-hero');
+  const finalSubmitConfirmStatBlock = getLastCssBlock('#am-wxt-scene-popup-mask .am-wxt-submit-confirm-stat');
+  const finalSubmitConfirmScenesBlock = getLastCssBlock('#am-wxt-scene-popup-mask .am-wxt-submit-confirm-scenes');
+  const finalSubmitConfirmRiskBlock = getLastCssBlock('#am-wxt-scene-popup-mask .am-wxt-submit-confirm-risk');
+
+  assert.match(finalGenericSceneMaskBlock, /background:\s*rgba\(15,\s*23,\s*42,\s*0\.52\);/, '通用场景弹窗默认 mask 不应被提交确认背景改动扩大替换');
+  assert.match(finalSubmitConfirmMaskBlock, /background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.78\),\s*rgba\(255,\s*255,\s*255,\s*0\.48\)\);/, '提交确认弹窗外层 mask 未改为白色玻璃渐变背景');
+  assert.match(finalSubmitConfirmMaskBlock, /backdrop-filter:\s*blur\(10px\) saturate\(1\.18\);/, '提交确认弹窗外层 mask 缺少白色玻璃 blur');
+  assert.match(finalSubmitConfirmDialogBlock, /width:\s*min\(560px,\s*calc\(100vw - 32px\)\);/, '提交确认弹窗宽度未按工作台弹窗收敛');
+  assert.match(finalSubmitConfirmDialogBlock, /background:\s*var\(--am26-panel-strong,/, '提交确认弹窗外壳未使用 --am26-panel-strong');
+  assert.match(finalSubmitConfirmDialogBlock, /border:\s*1px solid var\(--am26-border-strong,/, '提交确认弹窗外壳未使用 --am26-border-strong');
+  assert.match(finalSubmitConfirmDialogBlock, /border-radius:\s*18px;/, '提交确认弹窗外壳未使用统一圆角');
+  assert.match(finalSubmitConfirmDialogBlock, /box-shadow:\s*var\(--am26-shadow,/, '提交确认弹窗外壳未使用 --am26-shadow');
+  assert.match(finalSubmitConfirmDialogBlock, /backdrop-filter:\s*blur\(18px\) saturate\(1\.35\);/, '提交确认弹窗外壳未使用统一浅玻璃 blur');
+  assert.match(
+    finalSubmitConfirmHeroBlock,
+    /background:\s*linear-gradient\(145deg,\s*var\(--am26-surface-strong,[\s\S]*?var\(--am26-surface,/,
+    '提交确认头部提示区未使用统一浅玻璃 surface token'
+  );
+  assert.match(finalSubmitConfirmStatBlock, /border:\s*1px solid var\(--am26-border,/, '提交确认统计卡未使用 --am26-border');
+  assert.match(finalSubmitConfirmStatBlock, /background:\s*var\(--am26-surface,/, '提交确认统计卡未使用 --am26-surface');
+  assert.match(finalSubmitConfirmScenesBlock, /background:\s*rgba\(69,84,229,0\.10\);/, '提交确认场景摘要未使用主色浅背景');
+  assert.match(finalSubmitConfirmScenesBlock, /color:\s*var\(--am26-primary-strong,/, '提交确认场景摘要未使用主色文字');
+  assert.match(finalSubmitConfirmRiskBlock, /border:\s*1px solid rgba\(232,163,37,0\.28\);/, '提交确认风险提示未使用 warning 语义边框');
+  assert.match(finalSubmitConfirmRiskBlock, /color:\s*var\(--am26-warning,/, '提交确认风险提示未使用 warning 语义文字');
+  assert.doesNotMatch(finalSubmitConfirmStatBlock, /#f8fafc|#64748b|#0f172a/, '提交确认统计卡不得回退到旧硬编码灰色');
+  assert.doesNotMatch(finalSubmitConfirmScenesBlock, /#eff6ff|#1d4ed8/, '提交确认场景摘要不得回退到旧硬编码蓝色');
+  assert.doesNotMatch(finalSubmitConfirmRiskBlock, /#fff7ed|#9a3412/, '提交确认风险提示不得回退到旧硬编码橙色');
 });
 
 test('首页计划清空会删除已选计划，但至少保留 1 条', () => {

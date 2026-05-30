@@ -678,6 +678,9 @@
                     if (normalizedDialogClassName.split(/\s+/).includes('am-wxt-scene-popup-dialog-batch-number')) {
                         maskClassNames.push('am-wxt-scene-popup-mask-batch-number');
                     }
+                    if (normalizedDialogClassName.split(/\s+/).includes('am-wxt-scene-popup-dialog-submit-confirm')) {
+                        maskClassNames.push('am-wxt-scene-popup-mask-submit-confirm');
+                    }
                     mask.className = maskClassNames.join(' ');
                     const dialogClass = `am-wxt-scene-popup-dialog${normalizedDialogClassName ? ` ${normalizedDialogClassName}` : ''}`;
                     const titleId = 'am-wxt-scene-popup-title';
