@@ -250,6 +250,10 @@
         return manager;
     };
 
+    try {
+        createHookManager();
+    } catch { }
+
     const safeParseJSON = (raw) => {
         if (!raw) return null;
         try {

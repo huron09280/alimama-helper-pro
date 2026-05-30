@@ -14,8 +14,35 @@
         debugHints: new Set(),
 
         init() {
+            if (this.shouldSkipForCurrentHost()) {
+                this.ensureHookManager();
+                return;
+            }
             this.createPanel();
             this.registerHooks();
+        },
+
+        ensureHookManager() {
+            try {
+                createHookManager()?.install?.();
+            } catch { }
+        },
+
+        shouldSkipForCurrentHost() {
+            try {
+                return this.isDisabledHost(window.location.hostname);
+            } catch { }
+            return false;
+        },
+
+        isDisabledHost(hostname) {
+            const host = String(hostname || '').trim().toLowerCase();
+            return (
+                host === 'mai.taobao.com'
+                || host.endsWith('.mai.taobao.com')
+                || host === 'myseller.taobao.com'
+                || host.endsWith('.myseller.taobao.com')
+            );
         },
 
         createPanel() {

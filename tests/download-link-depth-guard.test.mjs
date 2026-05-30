@@ -85,3 +85,27 @@ test('下载捕获面板具备统一语义、响应式宽度与可见焦点态',
     assert.match(uiBlock, /#am-report-capture-panel \.am-download-copy-status\s*\{[\s\S]*?background:\s*rgba\(14,\s*168,\s*111,\s*0\.08\);[\s\S]*?color:\s*var\(--am26-success\);/, '下载面板复制状态应使用成功语义 token');
     assert.match(uiBlock, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-report-capture-panel \.am-download-btn,[\s\S]*?#am-report-capture-panel \.am-download-link/, '下载面板 hover/focus 动效应适配减少动画');
 });
+
+test('下载捕获在 mai.taobao.com 与 myseller.taobao.com 不启动', () => {
+    const interceptorBlock = getInterceptorBlock();
+    assert.match(
+        interceptorBlock,
+        /init\(\)\s*\{\s*if \(this\.shouldSkipForCurrentHost\(\)\) \{\s*this\.ensureHookManager\(\);\s*return;\s*\}\s*this\.createPanel\(\);\s*this\.registerHooks\(\);/,
+        'Interceptor.init 应先判断当前域名，禁用域名不得创建面板或注册捕获 hook'
+    );
+    assert.match(
+        interceptorBlock,
+        /ensureHookManager\(\)\s*\{[\s\S]*createHookManager\(\)\?\.install\?\.\(\);[\s\S]*\}/,
+        '禁用下载捕获时仍应保留基础 Hook 管理器，避免影响其它助手模块'
+    );
+    assert.match(
+        interceptorBlock,
+        /shouldSkipForCurrentHost\(\)\s*\{[\s\S]*return this\.isDisabledHost\(window\.location\.hostname\);[\s\S]*return false;[\s\S]*\}/,
+        '下载捕获缺少当前 hostname 禁用判断'
+    );
+    assert.match(
+        interceptorBlock,
+        /isDisabledHost\(hostname\)\s*\{[\s\S]*const host = String\(hostname \|\| ''\)\.trim\(\)\.toLowerCase\(\);[\s\S]*host === 'mai\.taobao\.com'[\s\S]*host\.endsWith\('\.mai\.taobao\.com'\)[\s\S]*host === 'myseller\.taobao\.com'[\s\S]*host\.endsWith\('\.myseller\.taobao\.com'\)[\s\S]*\}/,
+        '下载捕获应在 mai.taobao.com、myseller.taobao.com 及其子域禁用'
+    );
+});

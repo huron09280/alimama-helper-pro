@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const tokenSource = readFileSync(new URL('../src/optimizer/token-manager.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/optimizer/ui.js', import.meta.url), 'utf8');
+const mainBootstrapSource = readFileSync(new URL('../src/main-assistant/bootstrap.js', import.meta.url), 'utf8');
 
 test('TokenManager 会从 hook history 回填 dynamicToken/loginPointId/csrf', () => {
     assert.match(
@@ -18,6 +19,14 @@ test('TokenManager 会同时注册 fetch/XHR 捕获 token', () => {
         tokenSource,
         /hooks\.registerXHROpen\([\s\S]*hooks\.registerXHRSend\([\s\S]*hooks\.registerFetch\([\s\S]*TokenManager\.syncFromUrl\(requestUrl\)[\s\S]*TokenManager\.syncFromBody\(requestBody\)/,
         'Token hook 未覆盖 fetch + XHR 两条链路'
+    );
+});
+
+test('统一 Hook 管理器在下载捕获模块之前创建', () => {
+    assert.match(
+        mainBootstrapSource,
+        /const createHookManager = \(\) => \{[\s\S]*hookWindow\.__AM_HOOK_MANAGER__ = manager;[\s\S]*window\.__AM_HOOK_MANAGER__ = manager;[\s\S]*return manager;[\s\S]*\};[\s\S]*try \{\s*createHookManager\(\);\s*\} catch \{ \}/,
+        '主助手 bootstrap 应先创建统一 Hook 管理器，不能依赖下载捕获模块初始化'
     );
 });
 

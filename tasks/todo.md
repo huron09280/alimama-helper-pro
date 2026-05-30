@@ -1,3 +1,45 @@
+# TODO - 2026-05-30 mai/myseller.taobao.com 禁用报表捕获
+
+## 需求规格
+- 目标：`mai.taobao.com` 及其跳转落地的 `myseller.taobao.com/home.htm/QnworkbenchHome/` 页面内不启动「捕获报表」下载捕获模块。
+- 范围：仅限制 `src/main-assistant/interceptor.js` 的报表下载捕获初始化；不改变主面板、预算破限、万能查数、计划辅助、统一 Hook 管理器或其它页面功能。
+- 根因判断：当前捕获模块在 `Interceptor.init()` 中无域名自保护，若运行时代码被 extension 或 userscript 注入到 `mai.taobao.com` 或 `myseller.taobao.com`，会创建捕获面板并注册下载捕获回调。
+- 修复策略：在捕获模块内部增加 `mai.taobao.com` 与 `myseller.taobao.com` 域名禁用守卫；命中时仅保留基础 Hook 管理器，不创建 `#am-report-capture-panel`，不注册下载捕获回调。
+- 成功标准：源码和测试锁定 `mai.taobao.com`、`myseller.taobao.com` 禁用边界；构建、语法、相关测试、真实页只读验证和 diff 自审通过。
+
+## 执行计划（可核对）
+- [x] 定位报表捕获初始化入口和现有注入匹配范围。
+- [x] 在 `Interceptor.init()` 增加 `mai.taobao.com` 禁用守卫。
+- [x] 按用户补充扩展到 `myseller.taobao.com/home.htm/QnworkbenchHome/`。
+- [x] 保留基础 Hook 管理器，避免禁用捕获报表后影响其它助手模块。
+- [x] 补充下载捕获域名守卫回归测试。
+- [x] 运行构建、相关测试、语法和 diff 校验。
+- [x] 回填验证记录和结果复盘。
+
+## 高层操作摘要
+- 已读取项目规则、`tasks/lessons.md` 和下载捕获相关源码/测试；确认最小改动点是 `Interceptor.init()`，不是全局 manifest 或主助手入口。
+- 已在 `Interceptor.init()` 前置 `shouldSkipForCurrentHost()`，命中 `mai.taobao.com`、`myseller.taobao.com` 或其子域时直接返回，不创建捕获面板、不注册下载捕获回调。
+- 已在 `tests/download-link-depth-guard.test.mjs` 增加回归断言，锁定 `init()` 早退和 `mai.taobao.com` / `myseller.taobao.com` 域名禁用规则。
+- Chrome 初验发现 `https://mai.taobao.com/` 会跳转到 `https://myseller.taobao.com/home.htm/QnworkbenchHome/`；用户确认该落地页也不要启动捕获报表，因此禁用边界扩展到 `myseller.taobao.com`。
+- Chrome 初验还发现完全早退会让其它模块提示统一 Hook 管理器不可用；已改为禁用域名上只初始化基础 Hook 管理器，不创建捕获报表面板、不注册 `Interceptor.registerHooks()` 捕获回调。
+
+## 验证记录
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `node --test tests/download-link-depth-guard.test.mjs tests/optimizer-token-capture-history.test.mjs`：通过，8/8。
+- `node --check src/main-assistant/interceptor.js`：通过。
+- `npm run check:syntax`：通过，根 userscript 语法有效。
+- `npm run build:check`：通过，源码与构建产物同步。
+- `git diff --check -- src/main-assistant/bootstrap.js src/main-assistant/interceptor.js tests/download-link-depth-guard.test.mjs tests/optimizer-token-capture-history.test.mjs tasks/todo.md '阿里妈妈多合一助手.js' dist/packages/alimama-helper-pro.user.js dist/packages/alimama-helper-pro.meta.js dist/extension/page.bundle.js`：通过。
+- 说明：`node --check src/main-assistant/bootstrap.js` 单独执行会报 `Unexpected end of input`，该文件是构建片段而非独立 JS 模块；以 `npm run check:syntax` 和 `npm run build:check` 作为有效语法/装配验证。
+- Chrome DevTools 真实页：重载 unpacked extension 后刷新 `https://myseller.taobao.com/home.htm/QnworkbenchHome/`，运行态返回 `hasCapturePanel=false`、`helperPanel=true`、`hookManager=true`、`fetchHandlers=1`、`xhrOpenHandlers=1`、`xhrLoadHandlers=0`、`scriptVersion=7.05`。
+- Chrome DevTools 控制台：插件侧从此前 `[EscortAPI] 统一 Hook 管理器不可用` 变为 `[EscortAPI] Token Hook 已接入统一管理器`；仍有原站 `ERR_TUNNEL_CONNECTION_FAILED`、`APLUS` 上报失败、框架日志等站点噪声，未发现捕获报表面板相关异常。
+
+## 结果复盘
+- 结果：`mai.taobao.com` 以及 `myseller.taobao.com` 域名下不再启动「捕获报表」面板，也不注册下载捕获的 `XHR load` 回调；主助手和基础 Hook 管理器仍保留，避免影响其它助手模块。
+- 根因：捕获报表模块原先没有域名自保护，只要运行时代码注入就会创建面板并注册捕获回调；同时旧代码让部分模块隐式依赖捕获模块创建统一 Hook 管理器。
+- 取舍：没有收窄 extension/userscript 的站点匹配，避免误伤卖家工作台已有能力；改为在 `Interceptor` 内部禁用捕获报表，并在 bootstrap 阶段提前创建基础 Hook 管理器。
+- 风险：本轮只读验证覆盖了 `myseller.taobao.com/home.htm/QnworkbenchHome/` 的运行态；未触发任何真实下载、报表导出、创建、投放、提交、删除或扣费入口。
+
 # TODO - 2026-05-30 人群看板商品选择弹层置顶
 
 ## 需求规格
