@@ -45,6 +45,15 @@ test('extension content script 负责注入 page bundle', () => {
   assert.doesNotMatch(contentSource, /keyword-plan-api\.bundle\.js/, 'content script 不应把 keyword-plan-api 大包延后到点击路径');
   assert.match(contentSource, /SCRIPT_ID = 'am-helper-pro-extension-page-bundle'/, '缺少固定注入节点 ID');
   assert.match(contentSource, /const renderInjectionError = \(message = ''\) => \{/, '缺少 extension 注入失败可见反馈');
+  assert.match(contentSource, /root\.setAttribute\('role', 'alert'\);/, 'extension 注入失败提示缺少 alert 语义');
+  assert.match(contentSource, /root\.setAttribute\('aria-live', 'assertive'\);/, 'extension 注入失败提示缺少 assertive live 区域');
+  assert.match(contentSource, /root\.setAttribute\('aria-atomic', 'true'\);/, 'extension 注入失败提示缺少 aria-atomic');
+  assert.match(contentSource, /root\.tabIndex = -1;/, 'extension 注入失败提示缺少可聚焦锚点');
+  assert.match(contentSource, /root\.textContent = message \|\| '阿里妈妈助手加载失败，请刷新页面或重新加载扩展。';/, 'extension 注入失败提示必须通过 textContent 渲染');
+  assert.match(contentSource, /background:linear-gradient\(135deg, rgba\(255,255,255,\.86\), rgba\(255,255,255,\.58\)\)/, 'extension 注入失败提示未使用浅玻璃背景');
+  assert.match(contentSource, /backdrop-filter:blur\(18px\) saturate\(1\.28\)/, 'extension 注入失败提示缺少玻璃模糊效果');
+  assert.doesNotMatch(contentSource, /root\.innerHTML\s*=/, 'extension 注入失败提示不得用 innerHTML 渲染');
+  assert.doesNotMatch(contentSource, /background:#b91c1c/, 'extension 注入失败提示仍保留旧红色实底');
   assert.match(contentSource, /script\.onerror = \(\) => \{[\s\S]*renderInjectionError\(\);[\s\S]*\};/, 'page bundle 注入失败未展示页面错误');
   assert.match(contentSource, /mountNode\.appendChild\(script\);[\s\S]*catch \{[\s\S]*renderInjectionError\(\);/, 'appendChild 失败未兜底展示页面错误');
   assert.match(contentSource, /const LICENSE_VERIFY_BRIDGE_CHANNEL = 'am-helper-pro:license-verify';/, '缺少授权桥 channel 常量');
@@ -85,11 +94,13 @@ test('extension page bundle 授权锁定遮罩符合统一 UI 规范', () => {
   assert.match(pageBundle, /__AM_RENDER_ICON__\('alert-triangle', \{ size: 20, strokeWidth: 2\.2 \}\)/, '授权遮罩缺少共享告警图标');
   assert.match(pageBundle, /messageNode\.textContent = reason;/, '授权遮罩正文必须通过 textContent 展示');
   assert.match(pageBundle, /metaNode\.replaceChildren\(\);[\s\S]*document\.createElement\('span'\)[\s\S]*badge\.textContent = `\$\{label\}: \$\{value\}`;[\s\S]*metaNode\.appendChild\(badge\);/, '授权遮罩 meta 必须通过 DOM/textContent 渲染');
-  assert.match(pageBundle, /background: rgba\(27, 36, 56, 0\.28\);/, '授权遮罩 overlay 未使用统一浅遮罩');
+  assert.match(pageBundle, /background: linear-gradient\(135deg, rgba\(255, 255, 255, 0\.72\), rgba\(255, 255, 255, 0\.48\)\);/, '授权遮罩 overlay 未使用白色玻璃遮罩');
+  assert.match(pageBundle, /backdrop-filter: blur\(12px\) saturate\(1\.18\);/, '授权遮罩 overlay 未使用统一玻璃模糊');
   assert.match(pageBundle, /background: var\(--am26-panel-strong,/, '授权遮罩卡片未使用统一 panel token');
   assert.match(pageBundle, /box-shadow: var\(--am26-shadow,/, '授权遮罩卡片未使用统一阴影 token');
   assert.match(pageBundle, /@media \(prefers-reduced-motion: reduce\)/, '授权遮罩缺少 reduced-motion 覆盖');
   assert.doesNotMatch(pageBundle, /metaNode\.innerHTML\s*=/, '授权遮罩 meta 不得用 innerHTML 拼接 state 字符串');
+  assert.doesNotMatch(pageBundle, /background: rgba\(27, 36, 56, 0\.28\);/, '授权遮罩仍保留旧灰蓝遮罩');
   assert.doesNotMatch(pageBundle, /background: rgba\(6, 9, 19, 0\.82\);/, '授权遮罩仍保留旧深色遮罩');
   assert.doesNotMatch(pageBundle, /rgba\(17, 24, 39, 0\.94\)/, '授权遮罩仍保留旧深色卡片背景');
 

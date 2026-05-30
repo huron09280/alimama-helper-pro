@@ -22,7 +22,7 @@
 - [x] 页面 11：批量+ 菜单 + 批量确认弹窗。
 - [x] 页面 12：下载捕获面板。
 - [x] 页面 13：潜力词日维度导出入口。
-- [ ] 页面 14：extension 注入/授权可见状态。
+- [x] 页面 14：extension 注入/授权可见状态。
 - [ ] 页面 15：授权管理页。
 
 ## 高层操作摘要
@@ -42,6 +42,7 @@
 - 页面 11 已完成：批量+ 菜单和批量开启/暂停/删除确认弹窗按统一浅玻璃规范收敛；菜单补齐 `aria-controls`、`aria-label`、Esc/方向键焦点导航，确认窗默认焦点改到“取消”降低误触真实写操作风险；样式补齐 `--am26-focus/danger-soft/warning-soft` token。保留原生“批量计划设置”克隆宿主、hover 弹出、选中项读取、业务线分组、人群官方弹窗、`/campaign/updatePart.json` 与 `/campaign/delete.json` 写接口链路不变。
 - 页面 12 已完成：下载捕获面板补齐 `role=region`、`aria-live`、标题/URL/状态关联、完整 URL `title/aria-label`、复制状态 live、Esc 关闭和关闭后 `aria-hidden`；直连下载图标改为共享 `external-link`，面板和 URL/来源/状态区按浅玻璃 token 收敛。保留下载 URL 识别、Fetch/XHR 拦截、响应解析、剪贴板和直连下载业务链路不变。
 - 页面 13 已完成：潜力词日维度导出入口补齐共享 `download` SVG、按钮/input ARIA、运行态 `aria-busy`、live 状态、可见 focus、浅玻璃 token 和 reduced-motion；保留真实导出 API、CSV 字段、日期/计划/单元查询和下载链路不变。
+- 页面 14 已完成：extension 注入失败提示改为自包含浅玻璃 `alert`，补齐 `aria-live/assertive`、`aria-atomic`、焦点锚点和 `textContent` 渲染断言；授权锁定遮罩外层改为白色玻璃背景并补强源码/打包静态断言。保留授权 verify、policy token、shopId 识别、缓存恢复、background 桥和 API 暴露策略不变。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -288,6 +289,23 @@
   - 安全核对：本轮不点击真实导出，不触发 CSV 下载、Blob URL 或直连下载；Network 中仅有页面加载和潜力词列表读取请求，未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/updatePart.json`、创建、投放、删除或 CSV 下载类写接口。
   - 截图：`tasks/ui-page13-potential-export-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现潜力词导出入口相关未捕获异常。
+- 页面 14 自动化：
+  - `node --check src/entries/extension-content.js`：通过。
+  - `node --check src/entries/extension-license-guard.js`：通过。
+  - `node --check tests/extension-static-build.test.mjs`：通过。
+  - `node --check tests/extension-license-cache-policy-token.test.mjs`：通过。
+  - `node --test tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/package-scripts.test.mjs`：通过，33/33。
+  - `npm run build`：通过，已同步 `dist/extension/content.js` 与 `dist/extension/page.bundle.js`。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+- 页面 14 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认当前 unpacked extension 加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 Reload 后硬刷新真实潜力词页面。
+  - 页面身份：`关键词结案_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/report/bidword/index?mainTab=potential&mdWordType=B&target=bidword&bizCode=onebpSearch&itemId=757440599385`。
+  - 运行态核对：只读取非敏感摘要，`runtimeMode="extension"`，授权状态为 `authorized`，`source="extension_cache_bootstrap"`，版本 `7.05`，build 为 `mcp-e2e-20260331/release`；未读取 Cookie、请求体、`leaseToken`、`policyToken`、`deviceHash`、`nonce` 或完整 shop 信息。
+  - 可见状态核对：正常路径下 `#am-helper-pro-extension-injection-error` 不存在，`#am-license-lock-overlay` 不存在，证明新注入失败提示不会误报、授权锁遮罩不会误锁授权用户；锁定遮罩白玻璃样式和敏感字段排除由源码与打包静态断言覆盖。
+  - 截图：`tasks/ui-page14-extension-authorized-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 `ScriptProcessorNode` 弃用警告，未发现插件注入或授权遮罩相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -329,6 +347,9 @@
 - 页面 13 结果：潜力词日维度导出入口已按统一浅玻璃规范收敛，运行态具备共享下载图标、可访问名称、导出天数输入边界、live 状态和 reduced-motion 适配；真实页硬刷新后已验证新构建命中，未改动导出数据链路。
 - 页面 13 风险：真实验收刻意不点击“下载CSV”，因此没有验证服务端导出、CSV 字段和浏览器下载文件本身；本轮只证明入口 UI/语义和默认状态稳定。
 - 页面 13 回滚：回退 `src/main-assistant/potential-plan-daily-exporter.js`、`src/main-assistant/ui.js`、`src/shared/script-preamble.js`、`tests/potential-plan-daily-exporter.test.mjs`、构建产物和页面 13 截图即可。
+- 页面 14 结果：extension 注入失败和授权锁定两个异常可见状态已按统一浅玻璃规范收敛；正常授权运行态已在真实页面验证没有注入失败提示和误锁遮罩，安全链路保持不变。
+- 页面 14 风险：真实验收未刻意破坏 extension 注入或授权缓存来触发失败态，避免影响当前账号授权与页面运行；失败态视觉由源码断言、打包断言和静态测试覆盖。
+- 页面 14 回滚：回退 `src/entries/extension-content.js`、`src/entries/extension-license-guard.js`、`tests/extension-static-build.test.mjs`、`tests/extension-license-cache-policy-token.test.mjs`、`dist/extension/content.js`、`dist/extension/page.bundle.js` 和页面 14 截图即可。
 
 ---
 

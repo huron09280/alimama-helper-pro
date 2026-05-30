@@ -1606,15 +1606,15 @@
                 position: fixed;
                 inset: 0;
                 z-index: 2147483647;
-                background: rgba(27, 36, 56, 0.28);
+                background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.48));
                 color: var(--am26-text, #1b2438);
                 font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 padding: 24px;
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px);
+                backdrop-filter: blur(12px) saturate(1.18);
+                -webkit-backdrop-filter: blur(12px) saturate(1.18);
             }
             #${OVERLAY_ID} .am-license-lock-card {
                 width: min(560px, calc(100vw - 48px));

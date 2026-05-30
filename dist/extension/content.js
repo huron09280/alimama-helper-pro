@@ -12,6 +12,10 @@
         const root = document.createElement('div');
         root.id = ERROR_ID;
         root.className = 'am-helper-pro-extension-error';
+        root.setAttribute('role', 'alert');
+        root.setAttribute('aria-live', 'assertive');
+        root.setAttribute('aria-atomic', 'true');
+        root.tabIndex = -1;
         root.textContent = message || '阿里妈妈助手加载失败，请刷新页面或重新加载扩展。';
         root.style.cssText = [
             'position:fixed',
@@ -19,14 +23,21 @@
             'bottom:16px',
             'z-index:2147483647',
             'max-width:360px',
-            'padding:10px 12px',
-            'border-radius:8px',
-            'background:#b91c1c',
-            'color:#fff',
-            'font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-            'box-shadow:0 10px 28px rgba(15,23,42,.24)'
+            'padding:12px 14px',
+            'border-radius:14px',
+            'border:1px solid rgba(255,255,255,.62)',
+            'background:linear-gradient(135deg, rgba(255,255,255,.86), rgba(255,255,255,.58))',
+            'color:#7f1d1d',
+            'font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+            'box-shadow:0 12px 32px rgba(31,38,135,.16)',
+            'backdrop-filter:blur(18px) saturate(1.28)',
+            '-webkit-backdrop-filter:blur(18px) saturate(1.28)',
+            'outline:none'
         ].join(';');
         (document.body || document.documentElement || document).appendChild(root);
+        if (typeof root.focus === 'function') {
+            root.focus({ preventScroll: true });
+        }
     };
 
     const mountNode = document.head || document.documentElement || document.body;

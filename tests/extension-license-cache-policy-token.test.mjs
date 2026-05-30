@@ -92,7 +92,8 @@ test('授权锁定遮罩使用统一 UI 语义并避免 HTML 拼接展示状态'
 });
 
 test('授权锁定遮罩视觉收敛到浅玻璃 token', () => {
-    assert.match(source, /background: rgba\(27, 36, 56, 0\.28\);/, '授权遮罩 overlay 未使用统一浅遮罩');
+    assert.match(source, /background: linear-gradient\(135deg, rgba\(255, 255, 255, 0\.72\), rgba\(255, 255, 255, 0\.48\)\);/, '授权遮罩 overlay 未使用白色玻璃遮罩');
+    assert.match(source, /backdrop-filter: blur\(12px\) saturate\(1\.18\);/, '授权遮罩 overlay 未使用统一玻璃模糊');
     assert.match(source, /color: var\(--am26-text, #1b2438\);/, '授权遮罩未使用统一文本 token');
     assert.match(source, /font-family: var\(--am26-font,/, '授权遮罩未使用统一字体 token');
     assert.match(source, /border-radius: 18px;/, '授权遮罩卡片未使用 18px 规范圆角');
@@ -100,6 +101,7 @@ test('授权锁定遮罩视觉收敛到浅玻璃 token', () => {
     assert.match(source, /box-shadow: var\(--am26-shadow,/, '授权遮罩卡片未使用统一阴影 token');
     assert.match(source, /color: var\(--am26-danger, #ea4f4f\);/, '授权遮罩状态图标未使用危险语义色');
     assert.match(source, /@media \(prefers-reduced-motion: reduce\)/, '授权遮罩缺少 reduced-motion 覆盖');
+    assert.doesNotMatch(source, /background: rgba\(27, 36, 56, 0\.28\);/, '授权遮罩仍保留旧灰蓝遮罩');
     assert.doesNotMatch(source, /background: rgba\(6, 9, 19, 0\.82\);/, '授权遮罩仍保留旧深色遮罩');
     assert.doesNotMatch(source, /rgba\(17, 24, 39, 0\.94\)/, '授权遮罩仍保留旧深色卡片背景');
     assert.doesNotMatch(source, /box-shadow: 0 20px 40px rgba\(0, 0, 0, 0\.4\);/, '授权遮罩仍保留旧重黑阴影');
