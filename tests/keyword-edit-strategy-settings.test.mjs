@@ -54,8 +54,9 @@ test('编辑计划切换策略时会覆盖 sceneSettingValues/sceneSettingTouche
 });
 
 test('编辑计划入口共用 showStrategyDetail 链路，顶部编辑页 tab 已移除', () => {
-  const tabBlockStart = source.indexOf('<div class="am-wxt-workbench-tabs" id="am-wxt-workbench-tabs">');
-  const tabBlockEnd = source.indexOf('</div>', tabBlockStart);
+  const tabIdIndex = source.indexOf('id="am-wxt-workbench-tabs"');
+  const tabBlockStart = tabIdIndex > -1 ? source.lastIndexOf('<div', tabIdIndex) : -1;
+  const tabBlockEnd = tabIdIndex > -1 ? source.indexOf('</div>', tabIdIndex) : -1;
   const tabBlock = tabBlockStart > -1 && tabBlockEnd > tabBlockStart
     ? source.slice(tabBlockStart, tabBlockEnd)
     : '';
@@ -207,5 +208,111 @@ test('编辑计划详情背板和详情面板壳层改为白色轻玻璃背景',
         finalTitleFooterBlock,
         /(?:background:\s*rgba\(255,\s*255,\s*255,\s*0\.95\)|border-color:\s*rgba\(148,\s*163,\s*184,\s*0\.2\))/,
         '详情标题栏和底部操作区不得回退到旧硬编码白底灰边'
+    );
+});
+
+test('编辑计划详情标题和场景配置区收敛到统一工作台结构', () => {
+    assert.match(
+        source,
+        /<div class="am-wxt-detail-title-main">[\s\S]*?class="am-wxt-detail-title-icon"[\s\S]*?renderAmIcon\('edit', \{ size: 16, strokeWidth: 2\.1 \}\)[\s\S]*?<span id="am-wxt-keyword-detail-title">同步计划<\/span>[\s\S]*?<span class="am-wxt-detail-title-sub">场景配置 \/ 计划参数<\/span>[\s\S]*?<span class="am-wxt-detail-status">编辑中<\/span>/,
+        '编辑计划详情标题缺少图标、说明或编辑状态'
+    );
+    assert.match(
+        source,
+        /#am-wxt-keyword-modal #am-wxt-keyword-detail-config \.am-wxt-detail-title \{[\s\S]*?min-height:\s*56px;[\s\S]*?border-bottom:\s*1px solid var\(--am26-border,[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,255,255,0\.56\),\s*rgba\(255,255,255,0\.24\)\);/,
+        '编辑计划详情标题未使用统一浅玻璃标题栏'
+    );
+    assert.match(
+        source,
+        /#am-wxt-keyword-modal \.am-wxt-detail-title-icon \{[\s\S]*?width:\s*30px;[\s\S]*?height:\s*30px;[\s\S]*?background:\s*rgba\(69,84,229,0\.10\);[\s\S]*?color:\s*var\(--am26-primary-strong,/,
+        '编辑计划详情标题图标缺少主色浅玻璃容器'
+    );
+    assert.match(
+        source,
+        /#am-wxt-keyword-modal \.am-wxt-detail-status \{[\s\S]*?border:\s*1px solid rgba\(14,168,111,0\.22\);[\s\S]*?background:\s*rgba\(14,168,111,0\.10\);[\s\S]*?color:\s*var\(--am26-success,/,
+        '编辑计划状态胶囊缺少成功语义 token'
+    );
+    assert.match(
+        source,
+        /#am-wxt-keyword-modal #am-wxt-keyword-detail-config \.am-wxt-scene-dynamic \{[\s\S]*?border:\s*1px solid var\(--am26-border,[\s\S]*?border-radius:\s*14px;[\s\S]*?background:\s*linear-gradient\(145deg,\s*var\(--am26-surface-strong,[\s\S]*?backdrop-filter:\s*blur\(10px\) saturate\(1\.15\);/,
+        '编辑计划场景配置区未收敛到统一浅玻璃工作区'
+    );
+    assert.match(
+        source,
+        /#am-wxt-keyword-modal #am-wxt-keyword-detail-config \.am-wxt-scene-setting-row \{[\s\S]*?grid-template-columns:\s*150px minmax\(0,\s*1fr\);[\s\S]*?border:\s*1px solid var\(--am26-border,[\s\S]*?border-radius:\s*12px;[\s\S]*?background:\s*var\(--am26-surface,/,
+        '编辑计划场景配置行未使用稳定两列和 token 背景'
+    );
+});
+
+test('高级设置弹窗局部收敛到浅玻璃，不扩大影响通用场景弹窗', () => {
+    const finalAdvancedMaskBlock = getLastCssBlock('#am-wxt-scene-popup-mask:has(.am-wxt-scene-popup-dialog-advanced)');
+    const finalAdvancedDialogBlock = getLastCssBlock('#am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-advanced');
+    const finalAdvancedTabActiveBlock = getLastCssBlock('#am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-tab.active');
+    const finalAdvancedSurfaceBlock = getLastCssBlockByPattern(/#am-wxt-scene-popup-mask \.am-wxt-scene-popup-dialog-advanced \.am-wxt-scene-popup-time-grid,\s*#am-wxt-scene-popup-mask \.am-wxt-scene-popup-dialog-advanced \.am-wxt-scene-advanced-adzone-table,\s*#am-wxt-scene-popup-mask \.am-wxt-scene-popup-dialog-advanced \.am-wxt-scene-advanced-area-selector\s*\{[^}]*\}/g);
+
+    assert.match(
+        finalAdvancedMaskBlock,
+        /background:\s*linear-gradient\(135deg,\s*rgba\(255,255,255,0\.78\),\s*rgba\(255,255,255,0\.48\)\);/,
+        '高级设置弹窗遮罩未局部收敛到浅玻璃'
+    );
+    assert.match(
+        finalAdvancedMaskBlock,
+        /backdrop-filter:\s*blur\(10px\) saturate\(1\.18\);/,
+        '高级设置弹窗遮罩缺少浅玻璃模糊'
+    );
+    assert.match(
+        finalAdvancedDialogBlock,
+        /width:\s*min\(1080px,\s*calc\(100vw - 32px\)\);/,
+        '高级设置弹窗宽度未按工作台弹窗收敛'
+    );
+    assert.match(
+        finalAdvancedDialogBlock,
+        /background:\s*var\(--am26-panel-strong,/,
+        '高级设置弹窗外壳未使用 --am26-panel-strong'
+    );
+    assert.match(
+        finalAdvancedDialogBlock,
+        /border:\s*1px solid var\(--am26-border-strong,/,
+        '高级设置弹窗外壳未使用 --am26-border-strong'
+    );
+    assert.match(
+        finalAdvancedDialogBlock,
+        /backdrop-filter:\s*blur\(20px\) saturate\(1\.35\);/,
+        '高级设置弹窗外壳未使用统一浅玻璃 token'
+    );
+    assert.match(
+        finalAdvancedTabActiveBlock,
+        /background:\s*var\(--am26-surface-strong,/,
+        '高级设置 tab 激活态未使用 --am26-surface-strong'
+    );
+    assert.match(
+        finalAdvancedTabActiveBlock,
+        /color:\s*var\(--am26-primary-strong,/,
+        '高级设置 tab 激活态未使用主色文本'
+    );
+    assert.match(
+        finalAdvancedTabActiveBlock,
+        /box-shadow:\s*0 8px 18px rgba\(69,84,229,0\.12\),/,
+        '高级设置 tab 激活态未使用主色 token'
+    );
+    assert.match(
+        finalAdvancedSurfaceBlock,
+        /border:\s*1px solid var\(--am26-border,/,
+        '高级设置时间/地域容器未使用 --am26-border'
+    );
+    assert.match(
+        finalAdvancedSurfaceBlock,
+        /border-radius:\s*12px;/,
+        '高级设置时间/地域容器未使用统一圆角'
+    );
+    assert.match(
+        finalAdvancedSurfaceBlock,
+        /background:\s*var\(--am26-surface-strong,/,
+        '高级设置时间/地域容器未使用 token 化面板'
+    );
+    assert.doesNotMatch(
+        getLastCssBlock('#am-wxt-scene-popup-mask'),
+        /rgba\(255,255,255,0\.78\)/,
+        '通用场景弹窗遮罩不应被高级设置浅玻璃背景覆盖'
     );
 });

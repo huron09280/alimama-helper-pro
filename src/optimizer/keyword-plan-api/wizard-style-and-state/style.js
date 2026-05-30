@@ -9228,6 +9228,305 @@
                     box-shadow: inset 0 1px 0 rgba(255,255,255,0.24);
                 }
 
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-detail-title {
+                    min-height: 56px;
+                    padding: 10px 12px 10px 14px;
+                    align-items: center;
+                    gap: 12px;
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 18px 18px 0 0;
+                    background: linear-gradient(135deg, rgba(255,255,255,0.56), rgba(255,255,255,0.24));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.32);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-title-main {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-title-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex: 0 0 auto;
+                    width: 30px;
+                    height: 30px;
+                    border: 1px solid rgba(69,84,229,0.22);
+                    border-radius: 10px;
+                    background: rgba(69,84,229,0.10);
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-title-icon svg {
+                    width: 16px;
+                    height: 16px;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-title-copy {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    min-width: 0;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-title {
+                    min-width: 0;
+                    overflow: hidden;
+                    color: var(--am26-text, #1b2438);
+                    font-size: 14px;
+                    font-weight: 750;
+                    line-height: 18px;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-title-sub {
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 15px;
+                    white-space: nowrap;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-title-right {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    gap: 8px;
+                    min-width: 0;
+                    margin-left: auto;
+                }
+
+                #am-wxt-keyword-modal .am-wxt-detail-status {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 24px;
+                    padding: 0 9px;
+                    border: 1px solid rgba(14,168,111,0.22);
+                    border-radius: 999px;
+                    background: rgba(14,168,111,0.10);
+                    color: var(--am26-success, #0ea86f);
+                    font-size: 11px;
+                    font-weight: 700;
+                    white-space: nowrap;
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-scene-dynamic {
+                    margin: 10px;
+                    padding: 10px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 14px;
+                    background: linear-gradient(145deg, var(--am26-surface-strong, rgba(255,255,255,0.45)), var(--am26-surface, rgba(255,255,255,0.25)));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 8px 20px rgba(31,38,135,0.05);
+                    backdrop-filter: blur(10px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.15);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-scene-dynamic .title {
+                    margin: 0 0 10px;
+                    color: var(--am26-text, #1b2438);
+                    font-size: 13px;
+                    font-weight: 750;
+                    letter-spacing: 0;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-scene-dynamic .meta,
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-scene-empty {
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-scene-grid {
+                    gap: 8px;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-scene-setting-row {
+                    grid-template-columns: 150px minmax(0, 1fr);
+                    gap: 12px;
+                    min-height: 42px;
+                    padding: 9px 10px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-scene-setting-label {
+                    display: flex;
+                    align-items: center;
+                    min-height: 32px;
+                    color: var(--am26-text, #1b2438);
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 16px;
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-actions,
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-crowd-box,
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config #am-wxt-keyword-debug-wrap {
+                    margin: 10px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-keyword-modal #am-wxt-keyword-detail-config .am-wxt-actions {
+                    padding: 10px;
+                    gap: 8px;
+                }
+
+                #am-wxt-scene-popup-mask:has(.am-wxt-scene-popup-dialog-advanced) {
+                    background: linear-gradient(135deg, rgba(255,255,255,0.78), rgba(255,255,255,0.48));
+                    backdrop-filter: blur(10px) saturate(1.18);
+                    -webkit-backdrop-filter: blur(10px) saturate(1.18);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog.am-wxt-scene-popup-dialog-advanced {
+                    width: min(1080px, calc(100vw - 32px));
+                    max-height: min(900px, calc(100vh - 32px));
+                    padding: 0;
+                    gap: 0;
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    border-radius: 18px;
+                    background: var(--am26-panel-strong, linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2)));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: var(--am26-shadow, 0 8px 32px rgba(31,38,135,0.15));
+                    backdrop-filter: blur(20px) saturate(1.35);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.35);
+                    overflow: hidden;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-head,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-foot {
+                    min-height: 52px;
+                    padding: 10px 14px;
+                    border-color: var(--am26-border, rgba(255,255,255,0.4));
+                    background: linear-gradient(135deg, rgba(255,255,255,0.56), rgba(255,255,255,0.24));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-head {
+                    border-bottom: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    color: var(--am26-text, #1b2438);
+                    font-size: 14px;
+                    font-weight: 750;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-foot {
+                    border-top: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-body {
+                    padding: 10px;
+                    gap: 10px;
+                    overflow: auto;
+                    background: rgba(255,255,255,0.08);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-main,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-quick-lift-layout,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-panel,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-preview,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-quick-lift-section {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-tabs {
+                    padding: 6px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 999px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-tab {
+                    min-height: 30px;
+                    border: 0;
+                    border-radius: 999px;
+                    background: transparent;
+                    color: var(--am26-text-soft, #505a74);
+                    font-weight: 700;
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-tab.active {
+                    border: 1px solid var(--am26-border-strong, rgba(255,255,255,0.6));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-primary-strong, #1d3fcf);
+                    box-shadow: 0 8px 18px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.38);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-tip,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-tip-inline,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-preview-desc {
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-toolbar,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-area-config-row,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-area-tools {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-area-select,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-area-search,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-quick-lift-summary {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text, #1b2438);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-popup-time-grid,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-adzone-table,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-area-selector {
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 12px;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-time-head,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-time-week-label,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-time-week-actions,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-adzone-head {
+                    background: var(--am26-surface, rgba(255,255,255,0.25));
+                    color: var(--am26-text-soft, #505a74);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-btn {
+                    min-height: 32px;
+                    border: 1px solid var(--am26-border, rgba(255,255,255,0.4));
+                    border-radius: 10px;
+                    background: var(--am26-surface-strong, rgba(255,255,255,0.45));
+                    color: var(--am26-text-soft, #505a74);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-btn.primary {
+                    background: linear-gradient(135deg, var(--am26-primary, #4554e5), var(--am26-primary-strong, #1d3fcf));
+                    border-color: rgba(69,84,229,0.68);
+                    color: #fff;
+                    box-shadow: 0 8px 18px rgba(69,84,229,0.18);
+                }
+
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-btn:focus-visible,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-advanced-tab:focus-visible,
+                #am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog-advanced .am-wxt-scene-time-cell:focus-visible {
+                    outline: 2px solid rgba(37,99,235,0.45);
+                    outline-offset: 2px;
+                    box-shadow: 0 0 0 4px rgba(69,84,229,0.12), inset 0 1px 0 rgba(255,255,255,0.3);
+                }
+
                 @media (max-width: 980px) {
                     #am-wxt-keyword-modal .am-wxt-home-summary,
                     #am-wxt-keyword-modal .am-wxt-strategy-head,

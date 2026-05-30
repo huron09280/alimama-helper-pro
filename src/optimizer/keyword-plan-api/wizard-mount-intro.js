@@ -121,8 +121,15 @@
 
                         <div class="am-wxt-config collapsed" id="am-wxt-keyword-detail-config" data-workbench-page-panel="editor">
                             <div class="am-wxt-detail-title">
-                                <span id="am-wxt-keyword-detail-title">同步计划</span>
+                                <div class="am-wxt-detail-title-main">
+                                    <span class="am-wxt-detail-title-icon" aria-hidden="true">${renderAmIcon('edit', { size: 16, strokeWidth: 2.1 })}</span>
+                                    <div class="am-wxt-detail-title-copy">
+                                        <span id="am-wxt-keyword-detail-title">同步计划</span>
+                                        <span class="am-wxt-detail-title-sub">场景配置 / 计划参数</span>
+                                    </div>
+                                </div>
                                 <div class="am-wxt-detail-title-right">
+                                    <span class="am-wxt-detail-status">编辑中</span>
                                     <button type="button" class="am-wxt-close" id="am-wxt-keyword-detail-close" title="关闭" aria-label="关闭">${renderAmWindowIcon('close')}</button>
                                 </div>
                             </div>

@@ -15,7 +15,7 @@
 - [x] 页面 4：组建计划主向导首页/日志区。
 - [x] 页面 5：组建计划矩阵配置页。
 - [x] 页面 6：建计划商品选择弹窗。
-- [ ] 页面 7：场景配置/策略详情/高级设置弹窗。
+- [x] 页面 7：场景配置/策略详情/高级设置弹窗。
 - [ ] 页面 8：建计划提交确认弹窗。
 - [ ] 页面 9：计划行复制入口 + 一览/成功弹窗。
 - [ ] 页面 10：计划行并发开启入口 + 日志弹窗。
@@ -35,6 +35,7 @@
 - 页面 4 已完成：组建计划主向导首页/日志区统一为浅玻璃工作台，首页摘要、商品区、计划区、执行条、快速日志与日志页按 `--am26-*` token 收敛；首页/矩阵/日志切换补齐 ARIA tab 语义，执行模式折叠箭头改为共享 SVG 图标；提交、创建、矩阵和弹窗业务逻辑保持不变。
 - 页面 5 已完成：组建计划矩阵页的配置容器、工作台统计、预设按钮、场景/维度卡片、维度下拉和批量菜单统一为浅玻璃 token；矩阵选择器箭头改为共享 `chevron-down` SVG，保留矩阵生成算法、提交创建、安全阻断和弹窗业务逻辑不变。
 - 页面 6 已完成：组建计划“添加商品”二级弹窗统一为浅玻璃工作台弹层，补齐标题图标、已选数量状态、搜索工具条、候选/已选商品卡片状态、空态和底部操作区；添加/取消本地状态已在真实页验证，保留候选加载、添加/移除商品、取消回滚、确认回写和创建提交逻辑不变。
+- 页面 7 已完成：组建计划“编辑计划”详情层和内部“高级设置”弹窗统一为浅玻璃工作台弹层，补齐详情标题图标、二级说明、编辑状态、场景配置行、操作区和高级设置资源位/地域/分时控件 token；验证只打开编辑页、修改可回滚输入、切换高级设置 tab 和关闭弹窗，未点击批量创建或提交创建。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -138,6 +139,23 @@
   - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
   - 截图：`tasks/ui-page6-keyword-item-picker-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与浏览器 `ScriptProcessorNode` 弃用警告，未发现插件 UI 相关运行时异常。
+- 页面 7 自动化：
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `node --check tests/keyword-edit-strategy-settings.test.mjs`：通过。
+  - `node --check src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`：通过。
+  - `node --test tests/keyword-edit-strategy-settings.test.mjs tests/keyword-custom-popup-config.test.mjs tests/keyword-custom-settings-sync.test.mjs`：通过，49/49。
+  - `node --test tests/keyword-custom-native-parity-ui.test.mjs tests/crowd-custom-native-parity-ui.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/keyword-custom-preview-submit-parity.test.mjs`：通过，52/52。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+- 页面 7 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，硬刷新真实关键词推广详情页，再打开主助手并进入“组建计划 > 首页 > 编辑计划”。
+  - 页面身份：`关键词推广详情页_万相台无界版`，URL 为 `https://one.alimama.com/index.html#!/manage/search-detail?...campaignId=81165438388&adgroupId=81080977218`。
+  - 详情层核对：`#am-wxt-keyword-overlay` 为打开态，编辑详情层可见；标题显示计划名，副标题为“场景配置 / 计划参数”，状态胶囊为“编辑中”，场景配置行数量 14；计划名称输入框命中为 `INPUT`，输入 `_验证` 后可恢复原值。
+  - 高级设置核对：点击“编辑设置”打开 `高级设置` 弹窗；遮罩为浅白玻璃渐变并带 `blur(10px) saturate(1.18)`；弹窗约 `1080x760`、圆角 `18px`、边框 `rgba(255,255,255,.6)`、浅玻璃背景和 `blur(20px) saturate(1.35)`；`投放资源位`、`投放地域`、`分时折扣` 三个 tab 可切换。
+  - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口；仅观察到商品/地域配置读取请求。
+  - 截图：`tasks/ui-page7-keyword-detail-editor-after-2026-05-30.png`、`tasks/ui-page7-keyword-advanced-popup-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现插件 UI 相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -158,6 +176,9 @@
 - 页面 6 结果：添加商品弹窗已按统一浅玻璃工作台规范收敛，标题、搜索、候选、已选、状态和底部动作在真实页中可见且交互稳定；添加/取消只影响本地弹窗状态，未触发创建或写接口。
 - 页面 6 风险：真实验收覆盖了默认候选列表、添加和取消回滚；未执行关键词搜索后的远端候选刷新，也未点击“确认”写回新商品后继续提交创建。
 - 页面 6 回滚：回退 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`、`src/optimizer/keyword-plan-api/wizard-scene-config/item-selection.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-item-picker-popup.test.mjs`、构建产物和页面 6 截图即可。
+- 页面 7 结果：编辑计划详情层和高级设置弹窗已按统一浅玻璃工作台规范收敛，详情标题、状态、场景配置、高级设置 tab、地域/分时/资源位容器在真实页中可见且可操作；未改动策略字段回填、保存/取消、预览和提交创建链路。
+- 页面 7 风险：真实验收覆盖了打开编辑详情、可回滚输入、高级设置 tab 切换和取消关闭；未点击高级设置“确定”写回配置，也未触发后续预览或提交创建。
+- 页面 7 回滚：回退 `src/optimizer/keyword-plan-api/wizard-mount-intro.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-edit-strategy-settings.test.mjs`、构建产物和页面 7 截图即可。
 
 ---
 
