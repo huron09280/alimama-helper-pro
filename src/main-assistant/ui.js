@@ -374,10 +374,10 @@
                     margin-left: 3px;
                     -webkit-appearance: none;
                     appearance: none;
-                    border: 0;
-                    border-radius: 5px;
+                    border: 1px solid transparent;
+                    border-radius: 999px;
                     background: transparent;
-                    color: #8f9aa7;
+                    color: var(--am26-text-soft);
                     line-height: 1;
                     cursor: pointer;
                     user-select: none;
@@ -399,17 +399,20 @@
                     pointer-events: auto;
                 }
                 .am-campaign-search-btn:hover {
-                    color: #1677ff;
-                    background: rgba(22, 119, 255, 0.08);
+                    color: var(--am26-primary);
+                    border-color: var(--am26-border);
+                    background: var(--am26-surface);
                 }
                 .am-campaign-search-btn:focus-visible {
                     outline: none;
-                    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.24);
-                    background: rgba(22, 119, 255, 0.08);
+                    box-shadow: 0 0 0 2px rgba(69, 84, 229, 0.24);
+                    border-color: rgba(69, 84, 229, 0.28);
+                    background: var(--am26-surface-strong);
                 }
                 .am-campaign-concurrent-start-btn:hover {
-                    color: #157a43;
-                    background: rgba(21, 122, 67, 0.1);
+                    color: var(--am26-success);
+                    border-color: rgba(14, 168, 111, 0.28);
+                    background: rgba(14, 168, 111, 0.12);
                 }
                 .am-campaign-copy-btn {
                     width: auto;
@@ -641,8 +644,9 @@
                     position: fixed;
                     inset: 0;
                     padding: 24px;
-                    background: rgba(27, 36, 56, 0.28);
-                    backdrop-filter: blur(10px);
+                    background: rgba(255, 255, 255, 0.72);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                    backdrop-filter: blur(8px) saturate(1.15);
                     display: none;
                     align-items: center;
                     justify-content: center;
@@ -655,9 +659,10 @@
                     flex-direction: column;
                     border-radius: 18px;
                     border: 1px solid var(--am26-border-strong);
-                    background: var(--am26-panel-strong);
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
                     color: var(--am26-text);
                     box-shadow: var(--am26-shadow);
+                    -webkit-backdrop-filter: blur(20px) saturate(1.4);
                     backdrop-filter: blur(20px) saturate(1.4);
                     overflow: hidden;
                 }
@@ -670,8 +675,8 @@
                     font-size: 14px;
                     font-weight: 600;
                     color: var(--am26-text);
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.42);
-                    background: rgba(255, 255, 255, 0.28);
+                    border-bottom: 1px solid var(--am26-border);
+                    background: var(--am26-surface-strong);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-heading {
                     min-width: 0;
@@ -703,7 +708,7 @@
                 #am-campaign-concurrent-log-popup .am-concurrent-log-close {
                     flex: 0 0 auto;
                     border: 1px solid transparent;
-                    background: rgba(255, 255, 255, 0.36);
+                    background: var(--am26-surface);
                     color: var(--am26-text-soft);
                     line-height: 1;
                     cursor: pointer;
@@ -719,21 +724,22 @@
                 #am-campaign-concurrent-log-popup .am-concurrent-log-close:hover {
                     background: rgba(234, 79, 79, 0.1);
                     color: var(--am26-danger, #ea4f4f);
+                    border-color: rgba(234, 79, 79, 0.24);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-close:focus-visible {
                     outline: none;
-                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
+                    box-shadow: 0 0 0 3px rgba(69, 84, 229, 0.28);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status {
                     padding: 10px 14px;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.34);
+                    border-bottom: 1px solid var(--am26-border);
                     font-size: 12px;
                     font-weight: 600;
                     color: var(--am26-text-soft);
-                    background: rgba(255, 255, 255, 0.28);
+                    background: var(--am26-surface);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-running {
-                    color: var(--am26-primary);
+                    color: var(--am26-primary-strong);
                     background: rgba(69, 84, 229, 0.12);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-success {
@@ -741,7 +747,7 @@
                     background: rgba(14, 168, 111, 0.12);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-warning {
-                    color: #a16207;
+                    color: var(--am26-warning, #e8a325);
                     background: rgba(232, 163, 37, 0.14);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-status.is-error {
@@ -753,7 +759,7 @@
                     min-height: 180px;
                     overflow: auto;
                     overscroll-behavior: contain;
-                    background: linear-gradient(145deg, rgba(246, 250, 255, 0.78), rgba(235, 243, 255, 0.56));
+                    background: linear-gradient(145deg, rgba(255, 255, 255, 0.52), rgba(246, 250, 255, 0.72));
                     padding: 10px 12px;
                     font-family: var(--am26-mono);
                     font-size: 12px;
@@ -762,7 +768,7 @@
                     outline: none;
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-body:focus-visible {
-                    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.22);
+                    box-shadow: inset 0 0 0 2px rgba(69, 84, 229, 0.22);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line {
                     white-space: pre-wrap;
@@ -773,7 +779,7 @@
                     color: var(--am26-danger);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-warn {
-                    color: #a16207;
+                    color: var(--am26-warning, #e8a325);
                 }
                 #am-campaign-concurrent-log-popup .am-concurrent-log-line.is-success {
                     color: var(--am26-success);

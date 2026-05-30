@@ -18,6 +18,13 @@ function getConcurrentLogStyleBlock() {
     return source.slice(start, end);
 }
 
+function getCssRule(selector) {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = source.match(new RegExp(`${escaped}\\s*\\{[\\s\\S]*?\\}`));
+    assert.ok(match, `无法定位 ${selector} 样式规则`);
+    return match[0];
+}
+
 test('计划ID快捷入口包含并发开启按钮与样式标识', () => {
     const block = getCampaignQuickEntryBlock();
     assert.match(block, /ICON_SVG:\s*renderAmIcon\('campaign-query',\s*\{\s*size:\s*14,\s*strokeWidth:\s*2\.1\s*\}\)/, '快捷查数按钮未使用专用查询图标');
@@ -31,7 +38,12 @@ test('计划ID快捷入口图标按钮保留热区和线性 SVG 样式', () => {
     assert.match(source, /'campaign-concurrent-start':\s*\{[\s\S]*?<path d="M8 6l10 6-10 6V6z"><\/path>/, '缺少简约启动图标定义');
     assert.match(source, /\.am-campaign-search-btn \{[\s\S]*?width:\s*20px;[\s\S]*?height:\s*20px;[\s\S]*?padding:\s*2px;/, '计划ID图标按钮缺少 20px 热区');
     assert.match(source, /\.am-campaign-search-btn svg \{[\s\S]*?width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;/, '计划ID图标 SVG 应保持线性无填充');
-    assert.match(source, /\.am-campaign-search-btn:focus-visible \{[\s\S]*?box-shadow:\s*0 0 0 2px rgba\(22,\s*119,\s*255,\s*0\.24\);/, '计划ID图标按钮缺少键盘焦点状态');
+    assert.match(source, /\.am-campaign-search-btn \{[\s\S]*?border:\s*1px solid transparent;[\s\S]*?border-radius:\s*999px;[\s\S]*?color:\s*var\(--am26-text-soft\);/, '计划ID图标按钮应使用统一 token 胶囊底座');
+    assert.match(source, /\.am-campaign-search-btn:hover \{[\s\S]*?color:\s*var\(--am26-primary\);[\s\S]*?border-color:\s*var\(--am26-border\);[\s\S]*?background:\s*var\(--am26-surface\);/, '计划ID图标按钮 hover 应使用统一 token');
+    assert.match(source, /\.am-campaign-search-btn:focus-visible \{[\s\S]*?box-shadow:\s*0 0 0 2px rgba\(69,\s*84,\s*229,\s*0\.24\);[\s\S]*?background:\s*var\(--am26-surface-strong\);/, '计划ID图标按钮缺少 token 化键盘焦点状态');
+    assert.match(source, /\.am-campaign-concurrent-start-btn:hover \{[\s\S]*?color:\s*var\(--am26-success\);[\s\S]*?background:\s*rgba\(14,\s*168,\s*111,\s*0\.12\);/, '并发开启入口 hover 应使用成功语义 token');
+    assert.doesNotMatch(getCssRule('.am-campaign-search-btn:hover'), /#1677ff|rgba\(22,\s*119,\s*255/, '计划ID图标按钮 hover 不应回退到旧蓝色硬编码');
+    assert.doesNotMatch(getCssRule('.am-campaign-concurrent-start-btn:hover'), /#157a43|rgba\(21,\s*122,\s*67/, '并发开启入口 hover 不应回退到旧绿色硬编码');
 });
 
 test('并发开启流程包含全量暂停与原在投并发重试', () => {
@@ -94,7 +106,7 @@ test('并发开启流程包含弹窗日志并在成功后提示', () => {
 
 test('并发日志弹窗对齐统一弹窗语义和焦点规范', () => {
     const block = getCampaignQuickEntryBlock();
-    assert.match(block, /class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-labelledby="am-concurrent-log-title"/, '并发日志弹窗应通过标题建立可访问名称');
+    assert.match(block, /class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-labelledby="am-concurrent-log-title" aria-describedby="am-concurrent-log-status"/, '并发日志弹窗应通过标题和状态建立可访问名称与描述');
     assert.match(block, /class="am-concurrent-log-icon" aria-hidden="true">\$\{renderAmIcon\('campaign-concurrent-start'/, '并发日志标题应使用共享启动图标');
     assert.match(block, /<h3 class="am-concurrent-log-title" id="am-concurrent-log-title">并发开启执行日志<\/h3>/, '并发日志标题应使用 heading 结构');
     assert.match(block, /id="am-concurrent-log-status" role="status" aria-live="polite"/, '并发日志状态条应具备 live status 语义');
@@ -108,13 +120,16 @@ test('并发日志弹窗对齐统一弹窗语义和焦点规范', () => {
 
 test('并发日志弹窗样式使用统一 token 和可见焦点', () => {
     const styleBlock = getConcurrentLogStyleBlock();
-    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \{[\s\S]*?background:\s*rgba\(27,\s*36,\s*56,\s*0\.28\);[\s\S]*?backdrop-filter:\s*blur\(10px\);/, '并发日志遮罩应使用统一浅玻璃遮罩');
-    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-card\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?border:\s*1px solid var\(--am26-border-strong\);[\s\S]*?background:\s*var\(--am26-panel-strong\);[\s\S]*?box-shadow:\s*var\(--am26-shadow\);[\s\S]*?backdrop-filter:\s*blur\(20px\) saturate\(1\.4\);/, '并发日志卡片应收敛到统一 token 玻璃面板');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \{[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.72\);[\s\S]*?-webkit-backdrop-filter:\s*blur\(8px\) saturate\(1\.15\);[\s\S]*?backdrop-filter:\s*blur\(8px\) saturate\(1\.15\);/, '并发日志遮罩应使用统一白色轻玻璃遮罩');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-card\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?border:\s*1px solid var\(--am26-border-strong\);[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.96\),\s*rgba\(255,\s*255,\s*255,\s*0\.88\)\);[\s\S]*?box-shadow:\s*var\(--am26-shadow\);[\s\S]*?backdrop-filter:\s*blur\(20px\) saturate\(1\.4\);/, '并发日志卡片应收敛到统一白色玻璃面板');
     assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-title\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/, '并发日志标题应防止挤压关闭按钮');
-    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-close:focus-visible\s*\{[\s\S]*?box-shadow:\s*0 0 0 3px rgba\(37,\s*99,\s*235,\s*0\.28\);/, '并发日志关闭按钮缺少可见键盘焦点');
-    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-body:focus-visible\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 2px rgba\(37,\s*99,\s*235,\s*0\.22\);/, '并发日志明细区缺少可见键盘焦点');
-    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-status\.is-warning\s*\{[\s\S]*?background:\s*rgba\(232,\s*163,\s*37,\s*0\.14\);/, '并发日志状态缺少 warning 语义样式');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-close:focus-visible\s*\{[\s\S]*?box-shadow:\s*0 0 0 3px rgba\(69,\s*84,\s*229,\s*0\.28\);/, '并发日志关闭按钮缺少可见键盘焦点');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-body:focus-visible\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 2px rgba\(69,\s*84,\s*229,\s*0\.22\);/, '并发日志明细区缺少可见键盘焦点');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-status\.is-warning\s*\{[\s\S]*?color:\s*var\(--am26-warning,[\s\S]*?background:\s*rgba\(232,\s*163,\s*37,\s*0\.14\);/, '并发日志状态缺少 warning 语义样式');
+    assert.match(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-line\.is-warn\s*\{[\s\S]*?color:\s*var\(--am26-warning,/, '并发日志警告行应使用 warning token');
     assert.match(styleBlock, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-campaign-concurrent-log-popup \.am-concurrent-log-close/, '并发日志动效应适配减少动画');
+    assert.doesNotMatch(styleBlock, /background:\s*rgba\(27,\s*36,\s*56,\s*0\.28\)|backdrop-filter:\s*blur\(10px\);/, '并发日志遮罩不应回退到旧灰色遮罩');
     assert.doesNotMatch(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-card\s*\{[\s\S]*?background:\s*#ffffff;/, '并发日志卡片不应回退到旧纯白硬编码背景');
     assert.doesNotMatch(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-body\s*\{[\s\S]*?background:\s*#0f172a;/, '并发日志明细区不应回退到旧深色终端背景');
+    assert.doesNotMatch(styleBlock, /#am-campaign-concurrent-log-popup \.am-concurrent-log-status\.is-warning\s*\{[\s\S]*?color:\s*#a16207|#am-campaign-concurrent-log-popup \.am-concurrent-log-line\.is-warn\s*\{[\s\S]*?color:\s*#a16207/, '并发日志警告状态不应回退到旧硬编码黄褐色');
 });

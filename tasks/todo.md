@@ -18,7 +18,7 @@
 - [x] 页面 7：场景配置/策略详情/高级设置弹窗。
 - [x] 页面 8：建计划提交确认弹窗。
 - [x] 页面 9：计划行复制入口 + 一览/成功弹窗。
-- [ ] 页面 10：计划行并发开启入口 + 日志弹窗。
+- [x] 页面 10：计划行并发开启入口 + 日志弹窗。
 - [ ] 页面 11：批量+ 菜单 + 批量确认弹窗。
 - [ ] 页面 12：下载捕获面板。
 - [ ] 页面 13：潜力词日维度导出入口。
@@ -38,6 +38,7 @@
 - 页面 7 已完成：组建计划“编辑计划”详情层和内部“高级设置”弹窗统一为浅玻璃工作台弹层，补齐详情标题图标、二级说明、编辑状态、场景配置行、操作区和高级设置资源位/地域/分时控件 token；验证只打开编辑页、修改可回滚输入、切换高级设置 tab 和关闭弹窗，未点击批量创建或提交创建。
 - 页面 8 已完成：组建计划“提交创建”二次确认弹窗统一为浅玻璃工作台确认层，补齐专用白玻璃遮罩、待提交状态、统计卡、场景摘要、warning 风险提示和 token 化底部按钮；保留 `openKeywordSubmitConfirmPopup()` 只做确认 gating，确认后仍进入现有 `handleRun()` 创建链路；真实页只打开弹窗并取消关闭，未点击“确认提交创建”。
 - 页面 9 已完成：计划行复制入口、复制数量徽标、复制计划一览窗和成功窗按统一浅玻璃规范收敛；补齐待确认/已完成状态胶囊、`aria-describedby`、live status 语义和 token 化状态色；真实页只打开一览窗并取消关闭，未点击“确认生成”，不改 `prepareCopyCurrentPlanContext()`、`submitPreparedCopyCurrentPlan()`、真实创建、暂停兜底和页内搜索业务链路。
+- 页面 10 已完成：计划行并发开启入口和并发执行日志弹窗按统一浅玻璃规范收敛；20px 行内启动入口、日志标题/状态/明细区和 warning/error/success 语义色已 token 化，弹窗补齐 `aria-describedby`；真实页验收在 Offline + 本地写接口阻断双保护下打开日志弹窗并关闭，未让 `/campaign/updatePart.json` 触达服务端，不改 `runConcurrentStartFlow()`、同商品全量暂停、原在投重开、重试、状态校验和真实写入链路。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -199,6 +200,28 @@
   - 安全核对：点击复制到取消期间未出现 `/solution/addList.json`、`/solution/business/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/bidword/add.json`、`/campaign/onebpSite/oneClick.json` 等写接口；仅观察到只读 `campaign/get.json` 和 `campaign/horizontal/findPage.json`。
   - 截图：`tasks/ui-page9-campaign-copy-overview-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 噪声，未发现插件复制一览窗相关运行时异常。
+- 页面 10 自动化：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --check src/main-assistant/ui.js`：通过。
+  - `node --check tests/campaign-concurrent-start-quick-entry.test.mjs`：通过。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `node --test tests/campaign-concurrent-start-quick-entry.test.mjs tests/icon-system-regression.test.mjs`：通过，13/13；期间发现负向断言过宽扫到历史日志颜色文本，已收窄到具体 CSS rule 后通过。
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，13/13。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `node --check dist/extension/page.bundle.js`：通过。
+  - `git diff --check`：通过。
+- 页面 10 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，进入真实关键词推广列表页 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc`。
+  - 页面身份：`关键词推广_万相台无界版`；运行态临时打开本地 `AM_HELPER_CONFIG.showConcurrentStartButton=true` 后重载，找到 40 个 `.am-campaign-concurrent-start-btn`，首个入口 campaignId `75310601591`，`aria-label="并发开启关联计划：75310601591"`；验收结束已恢复 `showConcurrentStartButton=false` 并隐藏按钮。
+  - 入口样式核对：并发入口按钮为 `20px × 20px` 热区、999px 胶囊、`rgb(80,90,116)` token 文本色、透明边框和背景；内部 SVG 为 `14px × 14px`、`fill:none`、`stroke: currentColor`。按钮遵循 hover host 规则，默认 `opacity=0`/`visibility=hidden`，不破坏原生行布局。
+  - 安全保护：点击前安装本地 fetch/XHR 写接口阻断 hook，并将 DevTools Network 切为 Offline；阻断范围包含 `/campaign/updatePart.json`、`/solution/addList.json`、`/solution/business/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/bidword/add.json`、`/campaign/onebpSite/oneClick.json`。
+  - 交互核对：在 Offline + 阻断保护下触发首个并发入口，日志弹窗先打开；后续流程因本地阻断 `/campaign/updatePart.json` 显示失败日志，这是受保护验收的预期结果。点击“关闭并发日志”后弹窗关闭，验收后恢复网络和原 fetch/XHR。
+  - 弹窗语义核对：`.am-concurrent-log-card` 为 `role=dialog`、`aria-modal=true`、`aria-labelledby=am-concurrent-log-title`、`aria-describedby=am-concurrent-log-status`；状态区 `role=status`、`aria-live=polite`；日志区 `role=log`、`aria-live=polite`、`aria-relevant="additions text"`、`tabindex=0`；关闭按钮 `aria-label="关闭并发日志"`。
+  - 弹窗样式核对：遮罩为 `rgba(255,255,255,.72)` 白色轻玻璃并带 `blur(8px) saturate(1.15)`；卡片约 `760x646`、18px 圆角、白色轻玻璃渐变、`rgba(255,255,255,.6)` 边框、`blur(20px) saturate(1.4)` 和 `var(--am26-shadow)`；失败状态条使用 `var(--am26-danger)` 语义色，日志体为浅色渐变且页面无横向溢出。
+  - 安全核对：阻断记录显示唯一写接口为本地拦截的 `https://one.alimama.com/campaign/updatePart.json?...&bizCode=onebpSearch`；未出现 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/bidword/add.json`、`/campaign/onebpSite/oneClick.json` 等写接口触达。
+  - 截图：`tasks/ui-page10-campaign-concurrent-log-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 噪声；受保护阻断以弹窗日志显式展示，未发现并发日志弹窗相关未捕获异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -228,6 +251,9 @@
 - 页面 9 结果：计划行复制入口和复制一览/成功弹窗已按统一浅玻璃工作台规范收敛，入口按钮、数量徽标、待确认/已完成状态和状态条语义更清晰；真实页验证覆盖入口、一览窗、取消关闭和不触发写接口。
 - 页面 9 风险：真实验收刻意不点击“确认生成”，因此成功弹窗无法在不真实创建计划的前提下触发；成功窗的 `aria-describedby`、已完成状态胶囊和成功语义 token 由源码与专项测试覆盖。
 - 页面 9 回滚：回退 `src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/ui.js`、`tests/campaign-copy-current-plan-quick-entry.test.mjs`、构建产物和页面 9 截图即可。
+- 页面 10 结果：计划行并发开启入口与执行日志弹窗已按统一浅玻璃工作台规范收敛，入口 hover/focus、弹窗遮罩、日志卡片、状态区、日志明细和警告/错误/成功语义色更一致；真实页验证覆盖入口注入、受保护打开日志、关闭恢复和写接口阻断。
+- 页面 10 风险：真实验收刻意不执行真实并发开启/暂停，无法证明服务端状态更新闭环；业务执行链路由既有并发专项测试覆盖，本轮仅证明 UI/语义和受保护失败路径稳定。
+- 页面 10 回滚：回退 `src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/ui.js`、`tests/campaign-concurrent-start-quick-entry.test.mjs`、构建产物和页面 10 截图即可。
 
 ---
 

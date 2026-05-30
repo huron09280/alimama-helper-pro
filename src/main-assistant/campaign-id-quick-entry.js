@@ -2591,7 +2591,7 @@
             if (!popup.querySelector('.am-concurrent-log-card[aria-labelledby="am-concurrent-log-title"]')) {
                 popup.setAttribute('aria-hidden', 'true');
                 popup.innerHTML = `
-                    <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-labelledby="am-concurrent-log-title">
+                    <div class="am-concurrent-log-card" role="dialog" aria-modal="true" aria-labelledby="am-concurrent-log-title" aria-describedby="am-concurrent-log-status">
                         <div class="am-concurrent-log-header">
                             <div class="am-concurrent-log-heading">
                                 <span class="am-concurrent-log-icon" aria-hidden="true">${renderAmIcon('campaign-concurrent-start', { size: 16, strokeWidth: 2.2 })}</span>
