@@ -11,6 +11,45 @@ function getBlock(startMarker, endMarker) {
   return source.slice(start, end);
 }
 
+function extractNormalizeWordPackageListForSubmit() {
+  const block = getBlock(
+    'const DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST = [',
+    'const pruneKeywordCampaignForCustomScene = (campaign = {}, options = {}) => {'
+  );
+  const helpers = `
+    const DEFAULTS = { keywordOnlineStatus: 1 };
+    const isPlainObject = (value) => Object.prototype.toString.call(value) === '[object Object]';
+    const deepClone = (value) => value === undefined ? value : JSON.parse(JSON.stringify(value));
+    const toNumber = (value, fallback = 0) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
+    const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+    const uniqueBy = (list, getKey) => {
+      const map = new Map();
+      (list || []).forEach(item => {
+        const key = getKey(item);
+        if (!key && key !== 0) return;
+        if (!map.has(key)) map.set(key, item);
+      });
+      return Array.from(map.values());
+    };
+    const purgeCreateTransientFields = (value) => {
+      const dropKeys = new Set(['campaignId', 'adgroupId', 'copyCampaignId', 'copyAdgroupId', 'id', 'gmtCreate', 'gmtModified', 'createTime', 'modifyTime']);
+      if (Array.isArray(value)) return value.map(v => purgeCreateTransientFields(v));
+      if (!isPlainObject(value)) return value;
+      const out = {};
+      Object.keys(value).forEach(key => {
+        if (key.startsWith('mx_')) return;
+        if (dropKeys.has(key)) return;
+        out[key] = purgeCreateTransientFields(value[key]);
+      });
+      return out;
+    };
+  `;
+  return Function(`${helpers}\n${block}\nreturn normalizeKeywordWordPackageListForSubmit;`)();
+}
+
 test('关键词推广自定义推广默认策略改为智能出价', () => {
   const block = getBlock(
     'const getDefaultStrategyList = () => ([',
@@ -322,8 +361,8 @@ test('关键词词包提交裁剪保留上限并在关闭流量智选时清理�
   );
   assert.match(
     adgroupPruneBlock,
-    /deepClone\(input\.wordPackageList\)\.slice\(0, 100\)/,
-    '关键词单元词包提交未限制最多 100 条'
+    /normalizeKeywordWordPackageListForSubmit\(input\.wordPackageList\)/,
+    '关键词单元词包提交未先按新增单元合同归一'
   );
 
   const disabledFlowBlock = getBlock(
@@ -345,4 +384,71 @@ test('关键词词包提交裁剪保留上限并在关闭流量智选时清理�
     /merged\.adgroup = stripKeywordTrafficArtifacts\(merged\.adgroup\);/,
     '关闭流量智选时未裁剪关键词流量智选噪音字段'
   );
+});
+
+test('关键词复制词包提交前会清理源详情旧 ID 并保留流量智选合同', () => {
+  const normalizeWordPackageList = extractNormalizeWordPackageListForSubmit();
+  const output = normalizeWordPackageList([
+    {
+      campaignId: 80404078368,
+      adgroupId: 80404070001,
+      id: 991122,
+      gmtCreate: '2026-05-01 00:00:00',
+      displayStatus: 'pause',
+      wordPackageId: 0,
+      wordPackageName: '流量智选',
+      wordPackageType: 0,
+      onlineStatus: 1,
+      status: 0,
+      bidPrice: 1.2,
+      strategyList: [
+        { id: 11, strategyId: 1, strategyName: '好词优选', onlineStatus: 1, campaignId: 80404078368 },
+        { strategyId: 2, strategyName: '捡漏', onlineStatus: 0, adgroupId: 80404070001 }
+      ]
+    }
+  ]);
+
+  assert.deepEqual(output, [
+    {
+      wordPackageId: 0,
+      wordPackageName: '流量智选',
+      wordPackageType: 0,
+      onlineStatus: 1,
+      status: 0,
+      bidPrice: 1.2,
+      strategyList: [
+        { strategyId: 1, strategyName: '好词优选', onlineStatus: 1 },
+        { strategyId: 2, strategyName: '捡漏', onlineStatus: 0 }
+      ]
+    }
+  ]);
+  assert.ok(!('campaignId' in output[0]), '词包不应保留源计划 ID');
+  assert.ok(!('adgroupId' in output[0]), '词包不应保留源单元 ID');
+  assert.ok(!('id' in output[0]), '流量智选词包不应保留详情态 id');
+  assert.ok(!('displayStatus' in output[0]), '词包不应保留展示状态字段');
+});
+
+test('关键词流量智选默认词包按服务端新增合同补齐三条策略', () => {
+  const normalizeWordPackageList = extractNormalizeWordPackageListForSubmit();
+  const output = normalizeWordPackageList([
+    {
+      wordPackageId: 0
+    }
+  ]);
+
+  assert.deepEqual(output, [
+    {
+      wordPackageId: 0,
+      wordPackageName: '流量智选',
+      wordPackageType: 0,
+      onlineStatus: 1,
+      status: 0,
+      bidPrice: 1,
+      strategyList: [
+        { strategyId: 1, strategyName: '好词优选', onlineStatus: 1 },
+        { strategyId: 2, strategyName: '捡漏', onlineStatus: 0 },
+        { strategyId: 3, strategyName: '类目优选', onlineStatus: 1 }
+      ]
+    }
+  ]);
 });

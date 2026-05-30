@@ -221,3 +221,31 @@ test('buildSolutionFromPlan: 非关键词场景模板裁剪与 itemIdList 二次
         '缺少非关键词模板 optional keys 裁剪分支'
     );
 });
+
+test('buildSolutionFromPlan: AI点睛当前计划复制在最终 payload 补齐单元流量智选词包', () => {
+    assert.match(
+        source,
+        /const DEFAULT_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST = \[[\s\S]*?wordPackageId:\s*0,[\s\S]*?wordPackageName:\s*'流量智选'[\s\S]*?strategyList:\s*DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST/,
+        '最终组包层缺少默认流量智选词包合同'
+    );
+    assert.match(
+        source,
+        /const isCopyKeywordAiMaxEnabled = \(campaign = \{\}\) => \{[\s\S]*?campaign\.aiMaxSwitch \?\? aiMaxInfo\.aiMaxSwitch[\s\S]*?=== 1;/,
+        '最终组包层未识别 AI点睛开关'
+    );
+    assert.match(
+        source,
+        /const copyKeywordAiMaxNeedsWordPackage = isKeywordScene[\s\S]*?request\?\.__copyCurrentPlan === true \|\| plan\?\.__copyCurrentPlan === true[\s\S]*?isCopyKeywordAiMaxEnabled\(merged\.campaign\);[\s\S]*?if \(copyKeywordAiMaxNeedsWordPackage\) \{/,
+        '最终组包层未在当前计划复制 + AI点睛时进入词包兜底'
+    );
+    assert.match(
+        source,
+        /const normalizedCopyWordPackageList = normalizeKeywordWordPackageListForSubmit\(merged\.adgroup\?\.wordPackageList \|\| \[]\);[\s\S]*?const copyWordPackageList = normalizedCopyWordPackageList\.length[\s\S]*?: buildDefaultKeywordTrafficSmartWordPackageList\(\);[\s\S]*?merged\.adgroup\.wordPackageList = copyWordPackageList;[\s\S]*?keywordBundle\.useWordPackage = true;/,
+        '最终 payload 未把默认流量智选词包写入 adgroup 并同步 useWordPackage'
+    );
+    assert.doesNotMatch(
+        source,
+        /merged\.campaign\.wordPackageList = copyWordPackageList/,
+        '流量智选词包不应写入 campaign'
+    );
+});

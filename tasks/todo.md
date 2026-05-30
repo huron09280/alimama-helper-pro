@@ -1,3 +1,477 @@
+# TODO - 2026-05-31 插件窗口新版设计稿大师级优化
+
+## 需求规格
+- 目标：按用户反馈“没有原来的好”，重做 `tasks/plugin-window-redesign-code-2026-05-31.html`，让新版代码设计稿明显优于旧版原稿，而不是只做干净重排。
+- 范围：只更新 `tasks/plugin-window-redesign-code-2026-05-31.html`、任务记录和必要 lessons；不改 `src/`、不改构建产物、不触发真实创建/提交/删除/投放/扣费。
+- 覆盖窗口：主面板/辅助显示/日志、组建计划、万能查数/人群对比看板、算法护航、下载捕获浮层、复制计划一览。
+- 设计标准：沿用项目浅玻璃、高密度、低噪声工作台方向，但提升到更强的空间秩序、真实后台上下文、材质层次、控件节奏、数据可读性和专业完成度。
+- 成功标准：新版 HTML 可直接打开；六类窗口可读且视觉层级更完整；无截图拼版和远程图片；无明显 AI 设计禁忌；通过静态审查和浏览器渲染快照验证。
+
+## 执行计划（可核对）
+- [ ] 沉淀用户纠偏 lessons，明确“设计稿不能只是干净重排”。
+- [ ] 重写新版 HTML 的舞台布局、窗口层级、控件样式和细节状态。
+- [ ] 进行静态 pre-flight：六窗口模块、无截图/远程图片、无长破折号、关键文案和响应式规则。
+- [ ] 用 Chrome DevTools 打开本地 HTML，确认渲染非空、内容可读、模块完整。
+- [ ] 回填验证记录和复盘。
+
+## 高层操作摘要
+- 待执行。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待完成。
+
+# TODO - 2026-05-31 复制按钮对齐原生颜色与圆角
+
+## 需求规格
+- 目标：按用户修正，让复制按钮图标和字体颜色与左侧同组原生按钮一致，把 `+` 图标改为 `12px`，按钮圆角大小与左侧按钮一致。
+- 范围：仅调整复制按钮 CSS、`+` 图标尺寸、样式回归测试、任务记录和教训沉淀；不改复制按钮 DOM 语义、数量调节、预览弹窗或提交链路。
+- UI 依据：真实页面同组原生 `高级设置/更多` computed style 为 `color: rgb(51,51,51)`、`font-size: 12px`、`font-weight: 400`、`border-radius: 500px`。
+- 成功标准：复制按钮文案、复制图标和数量徽标文字/图标均继承 `#333333`；`+` SVG computed 尺寸为 `12px`；复制按钮 computed `border-radius` 与左侧按钮同为 `500px`；光影动画保留但不改变原生按钮层级。
+
+## 执行计划（可核对）
+- [x] 将复制按钮圆角从 `mx_807` 的 `8px` 改为同组原生按钮 `500px`。
+- [x] 将数量徽标里的 `+` 图标渲染尺寸改为 `12px`，并确保颜色继承按钮文字色。
+- [x] 更新样式回归测试和 lessons，锁定“参考动画服从原生按钮层级”。
+- [x] 运行相关单测、语法/构建检查和 diff 自审。
+- [x] 在真实页面刷新后验证颜色、圆角、`+` 尺寸和控制台风险。
+
+## 高层操作摘要
+- 已用 Chrome DevTools MCP 量取真实页面同组原生按钮：`高级设置/更多` 为 `12px / rgb(51,51,51) / 400`，按钮圆角 `500px`；本轮以这些原生值覆盖参考卡片的 `8px` 圆角。
+- 已将 `.am-campaign-copy-btn` 的圆角改为 `500px`，保留白底光影动画但恢复同组原生胶囊形态。
+- 已将复制数量徽标里的 `+` 改为 `renderAmIcon('plus', { size: 12 })`，并通过 CSS 固定 SVG 为 `12px`、继承 `#333333`、`opacity: 1`。
+- 已补充 `L92` 教训：行内按钮可借参考动画，但圆角、颜色、字号和小图标尺寸必须以同组原生 computed style 为准。
+
+## 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14/14。
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：硬刷新真实 `one.alimama.com` 关键词推广页后，复制按钮 `24px` 高，左侧同组原生按钮 `详情/高级设置/更多` 也为 `24px` 高。
+- Chrome DevTools MCP computed style：复制按钮、复制文案、复制图标、数量徽标和 `+` 图标均为 `rgb(51, 51, 51)`；复制文案 `12px / 400` 与原生 `高级设置/更多` 一致。
+- Chrome DevTools MCP computed style：复制按钮 `border-radius: 500px`，与原生 `高级设置/更多` 的 `500px` 一致；`+` SVG `width/height` 为 `12px`，SVG 属性也为 `width="12" height="12"`。
+- Chrome DevTools MCP 截图证据：`tasks/campaign-copy-button-native-radius-color-2026-05-31.png`。
+- Chrome DevTools MCP 控制台/网络：页面仍有原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 和原站噪声；未观察到复制按钮样式/注入相关异常。本轮未点击复制预览、“确认生成”或任何创建/提交入口。
+
+## 结果复盘
+- 结果：复制按钮图标、文字和 `+` 已与同组原生二级按钮颜色一致；`+` 图标已改为 `12px`；按钮圆角已从参考入口 `8px` 改回原生胶囊 `500px`。
+- 取舍：保留 `mx_807` 的白底光影动画作为背景层，但按钮外形、颜色和小图标尺寸以计划行原生操作按钮为准。
+- 风险：本轮只验证视觉，不触发复制弹窗或真实复制提交；复制交互逻辑由既有回归测试覆盖。
+
+# TODO - 2026-05-31 插件窗口新版代码设计稿
+
+## 需求规格
+- 目标：基于 `tasks/plugin-window-original-code-2026-05-31.html` 的真实旧版窗口结构，产出一份新的代码版设计稿 HTML，用于后续和旧版原稿对照。
+- 范围：只新增/更新 `tasks/` 下设计稿文件和任务记录；不改 `src/` 运行态源码、不改构建产物、不触发真实创建、提交、删除、投放或扣费。
+- 覆盖窗口：主面板/辅助显示/日志、组建计划、万能查数/人群对比看板、算法护航、下载捕获浮层、复制计划一览。
+- 设计依据：使用 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md`，延续 `--am26-*` token、浅色玻璃、高密度后台工具语言；`design-taste-frontend` 只用于 brief inference、redesign audit 和 pre-flight，不套营销页套路。
+- 成功标准：生成可直接打开的 HTML；六类窗口都能在静态页中看到新版结构；代码中不使用截图拼版，不依赖远端图片；完成基础静态校验和浏览器文本快照验证。
+
+## 执行计划（可核对）
+- [x] 审阅旧版原稿元数据和窗口信息结构，确认新版稿覆盖范围。
+- [x] 生成新版代码设计稿 HTML，保留旧版核心功能入口和状态信息。
+- [x] 校验 HTML 中六个窗口模块、关键文案、无截图依赖和无明显 AI 设计禁忌。
+- [x] 用浏览器打开本地 HTML 验证渲染非空且窗口模块可读。
+- [x] 回填验证记录、设计取舍和结果复盘。
+
+## 高层操作摘要
+- 已读取 `AGENTS.md`、`tasks/lessons.md`、`docs/插件UI统一设计规范.md`、`docs/图标设计规范.md` 和 `design-taste-frontend` 规则；本轮仅做代码版设计稿，不改运行态源码。
+- 设计读法：插件运行态窗口 redesign-overhaul，面向高频投放操作用户，采用低噪声、高密度、浅玻璃的生产工具语言，保留现有信息架构。
+- 已根据旧版原稿元数据确认覆盖 6 个窗口：主面板/辅助显示/日志、组建计划、万能查数/人群对比看板、算法护航、下载捕获浮层、复制计划一览。
+- 已生成新版代码设计稿：`tasks/plugin-window-redesign-code-2026-05-31.html`。新版稿复用 `--am26-*` 视觉 token，采用浅玻璃窗口、胶囊控制、紧凑表格、行内下划线输入和状态条组织复杂功能。
+- 本轮仅做静态设计稿，没有修改 `src/`、`dist/` 或真实插件运行态。
+
+## 验证记录
+- `ls -lh tasks/plugin-window-redesign-code-2026-05-31.html`：通过，文件约 46K。
+- `rg` 检查新版稿：存在 `helper-panel-preview`、`keyword-wizard-preview`、`magic-report-preview`、`escort-preview`、`download-capture-preview`、`copy-overview-preview` 六个模块。
+- Node 静态审查：通过，六个模块均存在；未发现 `<img>`；未发现长破折号 `—` 或 `–`。
+- Chrome DevTools MCP 打开 `file:///Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/tasks/plugin-window-redesign-code-2026-05-31.html`：通过。
+- Chrome DevTools MCP 文本快照：可读到新版稿标题、来源说明、六个窗口内容、关键按钮、表格、看板、复制预览和设计取舍说明。
+
+## 结果复盘
+- 结果：已产出可直接打开的新版代码设计稿，后续可以和 `tasks/plugin-window-original-code-2026-05-31.html` 并排对照。
+- 取舍：设计稿保持原插件的信息架构和操作密度，没有改成营销页或大留白展示页；为便于后续落地，静态稿中的字形图标只表达布局，落地时需映射到项目共享 `renderAmIcon()`。
+- 风险：这是静态 HTML 设计稿，尚未迁移到运行态源码；真实落地前还需要逐模块拆到 `src/` 并在 `one.alimama.com` 上做交互和安全边界验证。
+
+# TODO - 2026-05-31 复制按钮复刻 mx_807 光影样式
+
+## 需求规格
+- 目标：按用户指定 XPath `//*[@id="mx_807"]/div`，把该入口的白底卡片、圆角、轻阴影和蓝紫双向光影动画迁移到计划行“复制”按钮。
+- 范围：仅调整复制按钮 CSS、样式回归测试和任务记录；不改按钮 DOM 语义、复制数量调节、预览弹窗提速或提交链路。
+- UI 依据：目标节点为白底 `28px` 内层卡片，父级 `32px` 卡片使用 `border-radius: 8px`、`box-shadow: rgba(0,0,0,.06) 0 4px 8px`，内部两条 `5s linear infinite alternate` 蓝紫 blur 光影动画。
+- 兼容要求：保留计划行操作区已验证的 `24px` 高度，与左侧原生按钮对齐；字体继续保持同组原生二级按钮的 `12px / #333333 / 400`；光影作为按钮背景层，不给复制图标单独加深色底。
+- 成功标准：源码和测试锁定光影伪元素、关键帧、reduced-motion、简约图标和原生字体；构建产物同步；真实 `one.alimama.com` 页面 computed style 可见动画且按钮高度仍对齐。
+
+## 执行计划（可核对）
+- [x] 将 `.am-campaign-copy-btn` 调整为 `mx_807` 风格的白底光影卡片容器。
+- [x] 使用 `::before` / `::after` 复刻蓝紫双向 blur 光影动画，保持内容层在光影上方。
+- [x] 更新复制按钮样式回归测试，锁定动画、简约图标和字体层级。
+- [x] 运行相关单测、语法/构建检查和 diff 自审。
+- [x] 在真实页面刷新后验证 computed style、截图和控制台风险。
+
+## 高层操作摘要
+- 已读取 `AGENTS.md`、`tasks/lessons.md`、`docs/插件UI统一设计规范.md`、`docs/图标设计规范.md`，本轮按运行态 UI 小改处理。
+- 已将复制按钮本体改为 `mx_807` 风格白底卡片：`border-radius: 8px`、白底、内部裁剪、轻黑影；保留 `24px` 高度与左侧原生操作按钮对齐。
+- 已用 `.am-campaign-copy-btn::before/::after` 承载蓝紫两条 blur 光影，复刻 `5s linear infinite alternate` 的交错移动动画；图标、文案和数量徽标提升到光影层上方。
+- 已保留上一轮修正：复制图标本身仍是透明背景、无深色底；字体仍为 `12px / #333333 / 400`。
+
+## 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14/14。
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：硬刷新真实 `one.alimama.com` 关键词推广页后，复制按钮 computed style 命中新样式：`24px` 高、`border-radius: 8px`、`background: rgb(255, 255, 255)`、`box-shadow: rgba(0, 0, 0, 0.06) 0px 4px 8px 0px`，同组原生按钮均为 `24px` 高，`heightMatchesNative=true`。
+- Chrome DevTools MCP 伪元素：`::before` 为 `rgb(51, 51, 255)`，`::after` 为 `rgb(153, 51, 255)`，均 `opacity: 0.2`、`filter: blur(14px)`、`animation-duration: 5s`、`animation-timing-function: linear`、`animation-iteration-count: infinite`、`animation-direction: alternate`。
+- Chrome DevTools MCP 文案/图标：复制文案为 `12px / rgb(51, 51, 51) / 400`；图标为透明背景、无阴影，仍保持简约；数量徽标在光影层上方且字体一致。
+- Chrome DevTools MCP 截图证据：`tasks/campaign-copy-button-mx807-glow-2026-05-31.png`。
+- Chrome DevTools MCP 控制台/网络：页面仍有原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 和原站噪声；未观察到复制按钮样式/注入相关异常。本轮未点击复制预览、“确认生成”或任何创建/提交入口。
+
+## 结果复盘
+- 结果：复制按钮已复刻 `mx_807` 的白底卡片、8px 圆角、轻阴影和蓝紫双向光影动画；按钮高度仍与左侧原生操作按钮一致。
+- 取舍：原目标卡片为 `32px/28px` 结构，计划行操作区必须维持 `24px`，因此光影尺寸和位移按行内按钮缩放；动画存在但视觉保持克制，不恢复图标下的深色背景。
+- 风险：本轮只验证视觉和运行态 CSS，不触发复制弹窗或真实复制提交；复制交互逻辑由既有回归测试覆盖。
+
+# TODO - 2026-05-31 复制按钮简约修正
+
+## 需求规格
+- 目标：按用户修正，去掉复制图标下面的深色/蓝色背景，让复制按钮保持简约；“复制”文案字号和颜色与左侧原生操作按钮一致。
+- 范围：仅调整复制按钮视觉样式、测试断言和任务记录；不改复制按钮 DOM 语义、复制数量调节、预览弹窗或提交链路。
+- UI 依据：同组原生二级操作按钮 computed style 为 `font-size: 12px`、`color: #333333`、`font-weight: 400`；复制按钮应跟随该文字层级。
+- 成功标准：图标容器无深色背景/阴影，图标继承按钮文字色；复制文案和数量徽标使用 `12px / #333333 / 400`；真实页面仍保持 `24px` 高并与左侧按钮对齐。
+
+## 执行计划（可核对）
+- [x] 去掉 `.am-campaign-copy-icon` 的蓝色背景、圆底和阴影。
+- [x] 调整复制按钮、文案和数量徽标字号/颜色/字重，与左侧原生二级按钮一致。
+- [x] 更新复制按钮样式回归测试，防止回退到深色图标底。
+- [x] 运行相关单测、语法/构建检查和 diff 自审。
+- [x] 在真实页面刷新后验证 computed style、截图和控制台风险。
+
+## 高层操作摘要
+- 用户修正后，本轮将参考图方案收敛为“简约行内按钮”：只保留胶囊和数量控件的结构，不再使用高强调蓝色图标圆底。
+- 已将复制按钮颜色统一为 `#333333`，字号 `12px`，字重 `400`；图标容器改为透明背景、无阴影并继承文字色。
+- 已运行 `npm run build` 同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+
+## 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14/14。
+- `node --check src/main-assistant/ui.js && node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `npm run build`：通过，已同步构建产物。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：硬刷新真实 `one.alimama.com` 关键词推广页后，复制按钮 `98x24px`，同组原生二级按钮均为 `24px` 高，`heightMatchesNative=true`。
+- Chrome DevTools MCP computed style：复制文案 `font-size: 12px`、`color: rgb(51, 51, 51)`、`font-weight: 400`，与同组原生“高级设置”一致，`matchesNativeTextStyle=true`；`.am-campaign-copy-icon` 为透明背景、无背景图、无阴影，`iconIsSimple=true`；数量徽标也为 `12px / #333 / 400`。
+- Chrome DevTools MCP 截图证据：`tasks/campaign-copy-button-simple-style-2026-05-31.png`。
+- Chrome DevTools MCP 控制台：页面仍有原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 和 `ScriptProcessorNode` deprecation 噪声；未观察到复制按钮样式/注入相关异常。本轮未点击“确认生成”或任何创建/提交入口。
+
+## 结果复盘
+- 结果：复制图标的深色/蓝色背景已去掉，按钮整体保持简约；复制文案和数量样式已与左侧同组二级操作按钮对齐。
+- 取舍：保留轻白色胶囊和右侧数量胶囊，用于维持插件入口可识别和数量调节可点击区域；去掉高强调蓝色图标底，避免行内操作区视觉过重。
+- 风险：本轮只验证样式和 DOM 语义，未点击复制预览或真实提交；复制交互由现有回归测试覆盖。
+
+# TODO - 2026-05-31 插件旧版窗口代码版 1:1 原稿对照稿
+
+## 需求规格
+- 目标：把当前插件真实运行态窗口用代码做成与插件一模一样的静态 HTML 原稿，用来和新版设计稿对照。
+- 范围：只读打开真实插件窗口，采集 DOM 和插件 CSS 规则；生成 `tasks/` 下可检查/可编辑的 HTML/CSS 原稿。不用截图拼版，不改运行态源码、不改构建产物、不触发创建/提交/删除/投放/扣费。
+- 覆盖窗口：主面板/辅助显示/日志、下载捕获、组建计划、复制计划一览、万能查数/人群对比看板、算法护航。无法安全打开的窗口必须明确标注，不允许手画近似替代。
+- 成功标准：原稿来自真实插件 DOM/CSS；本地 HTML 可打开；浏览器渲染非空；记录哪些窗口为真实采集、哪些因安全或运行态条件未采集。
+
+## 执行计划（可核对）
+- [x] 在真实 `one.alimama.com` 页面只读打开插件主要窗口。
+- [x] 用浏览器脚本采集窗口 DOM、插件 style 标签和关键 viewport 定位。
+- [x] 生成代码版 1:1 静态 HTML 原稿，保留真实 class、结构、尺寸、间距、颜色、边框、阴影和文字。
+- [x] 浏览器打开静态原稿并验证渲染非空。
+- [x] 回填验证记录、采集边界和结果复盘。
+
+## 高层操作摘要
+- 用户修正：原稿必须与插件一模一样，上一版“按源码风格复刻”的参考稿不满足要求。
+- 本轮升级为真实运行态 DOM/CSS 代码采集；不再用手写近似窗口或截图拼版代替原插件窗口。
+- 已通过 Chrome DevTools 真实页面按钮打开主面板、组建计划、万能查数/人群看板、算法护航和复制计划一览，只停留在预览/读取态，未点击确认生成或其它写入入口。
+- 已生成代码版原稿：`tasks/plugin-window-original-code-2026-05-31.html`；抽取元数据：`tasks/plugin-window-original-code-2026-05-31.json`。
+- 已删除中途生成的近似手写稿和截图拼版尝试，避免误用。
+
+## 验证记录
+- Chrome DevTools MCP 打开 `file:///Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/tasks/plugin-window-original-code-2026-05-31.html`：通过。
+- 静态页快照可读到 6 个窗口 iframe：主面板/辅助显示/日志、组建计划、万能查数/人群对比看板、算法护航、下载捕获浮层、复制计划一览。
+- 元数据记录：抽取 5 个插件 style 标签，共 597,761 字符；主面板、组建计划、万能查数/人群看板、算法护航、复制计划一览均为真实 DOM/CSS 抽取。
+- 安全边界：本轮只打开窗口和复制预览读取态；未点击“确认生成”、提交创建、投放、删除或扣费入口。
+
+## 结果复盘
+- 结果：已得到代码版 1:1 原稿，可直接与新版 `tasks/plugin-window-redesign-mockup-2026-05-31.html` 对照。
+- 取舍：下载捕获浮层当前真实页面没有触发下载事件，因此使用真实容器并按插件源码同结构填入示例内容；其它主要窗口来自真实运行态 DOM/CSS。
+- 废弃：上一版“静态复刻稿”不是 1:1 原稿，已不作为交付物使用。
+
+# TODO - 2026-05-31 复制按钮参考图样式试稿
+
+## 需求规格
+- 目标：把计划行操作区“复制”按钮调整为用户参考图方向的浅紫白胶囊样式。
+- 范围：仅修改复制按钮 DOM 包装和运行态 CSS；保留“复制”文案、复制数量徽标、点击增加/右键减少/滚轮调节和复制弹窗逻辑。
+- UI 依据：参考图为白紫浅底圆角胶囊、左侧蓝色圆形图标、右侧白色小圆按钮；项目规范要求继续复用 `--am26-*` token、`renderAmIcon()`、`am-` 类名，不用 emoji 或独立图标系统。
+- 兼容要求：延续上一轮与原生操作按钮高度对齐的结论，外层按钮仍保持 `24px` 高，只做压缩版参考样式，避免撑高计划行。
+- 成功标准：源码和测试锁定新结构/样式；构建产物同步；真实 `one.alimama.com` 页面可见复制按钮呈浅紫白胶囊、左侧蓝色图标圆点、右侧数量圆点，且无相关控制台异常。
+
+## 执行计划（可核对）
+- [x] 调整复制按钮 HTML，给左侧图标增加独立圆点容器。
+- [x] 调整复制按钮 CSS 为参考图压缩版胶囊样式，并保持数量徽标可交互。
+- [x] 更新复制按钮样式回归测试。
+- [x] 运行相关单测、语法/构建检查和 diff 自审。
+- [x] 在真实页面刷新后验证按钮视觉、尺寸、控制台/网络风险并回填结果。
+
+## 高层操作摘要
+- 已读取 `AGENTS.md`、`tasks/lessons.md`、`docs/插件UI统一设计规范.md` 和 `docs/图标设计规范.md`；本轮按运行态 UI 小改处理。
+- 当前设计取舍：参考图样式做成计划行内的紧凑版本，保留 `24px` 高度，避免破坏上一轮“与前面的原生按钮高度一致”的交付。
+- 已将复制按钮内部改为左侧 `.am-campaign-copy-icon` 蓝色圆形图标、居中文案和右侧白色圆形数量控件；右侧仍保留 `data-am-campaign-copy-count-badge`、数字节点和数量调节提示。
+- 已把复制按钮样式改为浅紫白渐变胶囊、淡紫边框和轻阴影，并补充 `:focus-visible`，键盘聚焦时保持同一视觉方向。
+- 已运行 `npm run build` 同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14/14。
+- `npm run build`：通过，已同步构建产物。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：硬刷新真实 `one.alimama.com` 关键词推广页后，复制按钮 DOM 为 `.am-campaign-copy-icon + .am-campaign-copy-label + [data-am-campaign-copy-count-badge]`，文案仍为“复制”，数量为 `1`。
+- Chrome DevTools MCP computed style：复制按钮 `98x24px`，同组原生按钮“详情/高级设置/AI点睛设置/删除/更多”均为 `24px` 高，`heightMatchesNative=true`；按钮背景为浅紫白 `linear-gradient(135deg, rgba(255,255,255,.96), rgba(245,240,255,.88))`，边框 `rgba(196,184,255,.68)`；左侧图标圆点 `18x18px` 蓝色渐变，右侧数量圆点 `35x18px` 白底淡紫边框。
+- Chrome DevTools MCP 截图证据：`tasks/campaign-copy-button-reference-style-2026-05-31.png`。
+- Chrome DevTools MCP 控制台/网络：控制台存在原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED`、原站组件依赖警告和 `ScriptProcessorNode` deprecation 噪声；未观察到复制按钮样式/注入相关异常。本轮只做刷新和视觉测量，未点击“确认生成”或任何创建/提交入口。
+
+## 结果复盘
+- 结果：复制按钮已改成参考图方向的紧凑行内版白紫胶囊，左侧蓝色圆形图标、右侧白色数量圆点都已在真实页面可见。
+- 取舍：参考图原尺寸较高，本项目计划行操作区高度为 `24px`，本轮保留 `24px` 以维持与原生操作按钮对齐；如果后续要完全复刻参考图的大号胶囊，需要接受计划行高度被撑高。
+- 风险：本轮没有点击复制按钮打开预览，也没有触发真实复制提交；交互逻辑由静态测试锁定，视觉由真实页面 computed style 和截图验证。
+
+# TODO - 2026-05-31 复制计划按钮高度对齐
+
+## 需求规格
+- 目标：让计划行操作区里的“复制计划”按钮与前面的原生操作按钮高度一致。
+- 范围：仅调整复制按钮和内部复制数量徽标的运行态样式；不改复制逻辑、数量调节逻辑或提交链路。
+- UI 依据：真实页面同组原生按钮高度为 `24px`，当前复制按钮为 `22px`，导致截图中视觉高度不一致。
+- 成功标准：源码和测试锁定 `24px` 高度；构建产物同步；真实 `one.alimama.com` 页面实测复制按钮与同组原生按钮高度一致。
+
+## 执行计划（可核对）
+- [x] 调整 `.am-campaign-copy-btn` 高度、内边距和内部徽标高度。
+- [x] 更新复制按钮样式回归测试。
+- [x] 运行相关测试、语法/构建检查。
+- [x] 在真实页面测量原生按钮与复制按钮高度并回填结果。
+
+## 高层操作摘要
+- 已用 Chrome DevTools MCP 实测当前页面：原生操作按钮高度 `24px`，复制按钮高度 `22px`，两者 top 相同但视觉高度不一致。
+- 已将 `.am-campaign-copy-btn` 改为 `height/min-height: 24px`，内边距改为 `0 4px 0 8px`；内部 `.am-wxt-copy-multi` 徽标固定 `18px` 高，避免撑高或压矮按钮。
+- 已运行 `npm run build` 同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+
+## 验证记录
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14/14。
+- `npm run build`：通过，已同步构建产物。
+- Chrome DevTools MCP：硬刷新真实 `one.alimama.com` 关键词推广页后，测得同组原生按钮“详情/高级设置/AI点睛设置/删除/更多”高度均为 `24px`，复制按钮高度 `24px`，`heightMatches=true`；复制数量徽标高度 `18px`。
+
+## 结果复盘
+- 结果：复制按钮已与前面的原生操作按钮高度一致，按钮顶边也与同组按钮对齐。
+- 根因：旧 `.am-campaign-copy-btn` 明确写死 `height: 22px`，比原生 `asiYysqNaS-small` 操作按钮少 2px。
+- 风险：本轮只调整按钮尺寸和内部徽标排版，不触发复制弹窗或真实创建/提交链路。
+
+# TODO - 2026-05-31 插件旧版窗口静态对照稿（已废弃）
+
+## 需求规格
+- 目标：把当前插件原有运行态窗口视觉整理成一个独立静态 HTML，用来和新版设计稿直接参考、对比。
+- 范围：仅新增 `tasks/` 下静态参考稿和预览截图；不改运行态源码、不改构建产物、不触发真实业务接口。
+- 覆盖窗口：主入口/辅助显示/日志、下载捕获、组建计划、复制计划一览、万能查数、人群对比看板、算法护航。
+- 成功标准：HTML 可本地打开；视觉语言基于现有源码样式和窗口结构；浏览器渲染非空并导出截图。
+
+## 执行计划（可核对）
+- [x] 抽取现有窗口结构和旧版样式特征。
+- [x] 创建旧版静态 HTML 对照稿。
+- [x] 用浏览器打开并导出预览图。
+- [x] 回填验证记录和结果复盘。
+
+## 高层操作摘要
+- 当前按用户要求暂停新版落地，实现“旧版参考稿”用于对照评审。
+- 本任务只生成静态设计资产，不修改 `src/`、根 userscript 或 `dist/`。
+- 已基于 `src/main-assistant/ui.js`、`src/main-assistant/magic-report.js`、`src/optimizer/ui.js` 和组建计划向导结构整理旧版静态稿。
+- 用户随后要求“原稿需要与插件一模一样”，并进一步要求“不用截图，用代码”；此近似稿已废弃，最终以顶部“代码版 1:1 原稿对照稿”为准。
+
+## 验证记录
+- 近似稿文件已删除，不再作为参考来源。
+
+## 结果复盘
+- 结果：废弃。原因是它是按源码风格复刻，不满足“与插件一模一样”和“用代码”的最新要求。
+
+# TODO - 2026-05-31 插件窗口二次统一重设计
+
+## 需求规格
+- 目标：在既有全页面 UI 规范迁移基础上，二次统一插件运行态窗口、弹窗和浮层的外壳、窗口动作、状态反馈和键盘可访问性，让各功能看起来属于同一个高密度浅玻璃工作台。
+- 设计读法：这是嵌入阿里妈妈后台的扩展工作台，不是营销页；按 `DESIGN_VARIANCE=4`、`MOTION_INTENSITY=3`、`VISUAL_DENSITY=8` 执行，优先信息密度、低噪声和可扫描。
+- 范围：主面板/悬浮球、万能查数/人群看板、算法护航、复制预览/成功窗、下载捕获浮层、批量/并发相关浮层、组建计划现有窗口壳的低风险视觉和语义统一。
+- 不做：不重写业务流程，不改创建/复制/提交/投放/删除 payload，不新增独立主题系统，不直接编辑 `dist/` 或根 userscript。
+- UI 规范：继续复用 `--am26-*` token、`renderAmIcon()` / `renderAmWindowIcon()`、浅色玻璃、紧凑控件、可见 focus、reduced-motion、loading/success/warn/error/empty/retry 状态。
+- 安全边界：真实页面验收只打开/关闭窗口、切换 tab、查看状态和只读交互；不点击真实创建、投放、提交、删除、扣费确认。
+- 成功标准：相关源码和测试锁定窗口统一点；构建产物由 `npm run build` 同步；相关测试、语法、构建检查、diff 自审通过；Chrome DevTools MCP 在真实 `one.alimama.com` 页面完成只读验证并记录。
+
+## 执行计划（可核对）
+- [ ] 审计子代理结果和现有窗口样式，确认本轮只做低风险 CSS/语义切片。
+- [ ] 统一主面板/行内浮层窗口按钮、focus-visible、文本溢出和 running 状态 token。
+- [ ] 统一复制预览/成功窗横向容错、输入 focus、reduced-motion 和状态表达。
+- [ ] 统一万能查数 warning/loading/reduced-motion 与下载捕获浮层圆角。
+- [ ] 优化算法护航日志卡折叠区键盘语义与硬编码灰阶。
+- [ ] 更新对应静态回归测试。
+- [ ] 运行相关单测、语法、构建检查和 diff 自审。
+- [ ] 在真实页面只读验证主要窗口打开、可见状态、控制台/网络风险。
+
+## 高层操作摘要
+- 已使用 `design-taste-frontend` 做设计读法，但该 skill 明确不主导 dense product UI；本轮按项目 `docs/插件UI统一设计规范.md` 和 `docs/图标设计规范.md` 落地。
+- 已启动 3 个只读子代理分别审计窗口地图、视觉债务和验证入口；结论一致：本轮适合做 CSS/语义小修，不适合重写业务窗口。
+- 当前工作区已有复制计划等未提交改动，本轮只叠加必要源码、测试和任务记录，不回退既有改动。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待完成。
+
+# TODO - 2026-05-31 复制计划预览弹窗提速
+
+## 需求规格
+- 目标：优化点击行内“复制计划”到预览确认弹窗出现的速度，让用户点击后尽快看到弹窗骨架/加载态，后续数据异步补齐。
+- 范围：聚焦当前计划复制入口、预览弹窗打开路径、必要数据拉取与确认前状态同步；不改变复制提交合同、不新增无关 UI 风格、不触碰投放/删除等高风险入口。
+- 性能判断：点击路径不能同步等待重 API 包加载、源计划详情拉取、推荐词/商品/人群等慢操作后才创建弹窗；应先打开可见预览弹窗，再在弹窗内展示 loading/success/error。
+- UI 规范：本轮只调整已有复制预览弹窗的打开时机与状态，不新增设计系统；继续复用现有 `am-`/`am-wxt-` 类名和浅色玻璃弹窗样式。
+- 安全边界：真实页面验证只点击复制入口、观察弹窗和只读/必要详情请求；不点击“确认生成”，不触发真实创建或扣费。
+- 成功标准：真实 `one.alimama.com` 页面点击复制后，预览弹窗能在当前交互内快速出现；相关单测、语法、构建检查通过；`tasks/todo.md` 记录性能证据、未验证风险和复盘。
+
+## 执行计划（可核对）
+- [x] 定位复制入口到预览弹窗的完整调用链，区分点击同步工作、API 加载、详情拉取和弹窗渲染。
+- [x] 找出阻塞弹窗出现的最重步骤，确定最小结构性优化方案。
+- [x] 实现“先显示预览弹窗/加载态，再异步填充复制数据”的打开路径，保留错误反馈和确认按钮禁用。
+- [x] 补充或更新回归测试，锁定点击路径不再等待重工作后才出现弹窗。
+- [x] 运行相关单测、语法、构建检查和 diff 自审。
+- [x] 使用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面验证弹窗出现速度、控制台/网络异常和无写请求。
+
+## 高层操作摘要
+- 已读取项目级 `AGENTS.md`、`tasks/lessons.md` 和当前任务记录；本次按性能/运行态 UI 优化处理，先记录计划再修改源码。
+- 当前工作树已有上一轮复制计划词包修复相关未提交改动，本轮会在其基础上继续，不回退或覆盖既有改动。
+- 调用链定位：原复制入口在 `runCopyCurrentPlanFlow()` 中先执行 `prepareCopyCurrentPlanContext()`，会等待受控 API、源计划详情、单元详情、远端名称列表和页面可见名称扫描完成后才打开 `openCopyPlanOverviewDialog()`。
+- 性能根因：弹窗被源详情读取和 API 就绪等待阻塞；其中真实页面详情读取约 1.7s，导致用户点击后长时间无预览反馈。
+- 实现策略：新增 `buildQuickCopyCurrentPlanContext()` 生成只含 campaignId/bizCode/copyCount 的轻量预览上下文，点击后立即打开一览窗，状态为“读取中”，确认按钮与编辑控件禁用。
+- 异步补齐：`openCopyPlanOverviewDialog()` 支持 `prepareContext`，在弹窗首帧 `requestAnimationFrame` 后再启动 API 预热和源计划详情读取；详情完成后重渲染行数据并切换到“待确认”。
+- 提交安全：确认提交只使用异步补齐后的真实 `preparedContext`；若详情未读取完成则提示“源计划详情仍在读取中，请稍候。”，不会提交创建请求；`preloadedApiPromise` 在提交前从 options 剥离。
+- 产物同步：已运行 `npm run build`，同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14/14。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs`：通过，42/42。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --check 阿里妈妈多合一助手.js`：通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：真实页面 `https://one.alimama.com/index.html#!/manage/search?...&bizCode=onebpSearch&searchValue=E7pro`，页面已有 4 个 `.am-campaign-search-btn[data-am-campaign-copy]` 复制按钮，运行态可见新“读取中”预览逻辑。
+- Chrome DevTools MCP 真实点击测速：点击可见行内 `复制1` 后，`#am-campaign-copy-overview-popup` DOM attached = 1.9ms，可见 = 1.9ms，加载态文案出现 = 1.9ms；详情读取完成并切换“待确认” = 1744.4ms。
+- Chrome DevTools MCP 真实元素点击复测：用 DevTools 真实点击计划行按钮 `复制：80404078368`，探针起点绑定按钮 `pointerdown`；`#am-campaign-copy-overview-popup` DOM attached = 7.0ms，可见 = 7.0ms，加载态文案出现 = 7.0ms；详情读取完成并切换“待确认” = 2622.0ms。
+- Chrome DevTools MCP 状态核对：弹窗出现时文案为“已打开预览，正在读取源计划详情...”，确认按钮 `disabled=true`，禁用控件 11 个；详情完成后源计划名更新为 `相似投_E7Pro`，状态文案为“源计划详情已读取完成，确认后才会提交创建请求。”
+- Chrome DevTools MCP 安全核对：本轮只点击“复制”，未点击“确认生成”；脚本点击测速新增 performance resource 1 条、真实元素点击复测新增 resource 6 条，均未命中 `/solution/addList.json`、`/solution/copy`、`/campaign/updatePart`、`/campaign/delete`、`submit`、`create`、`addList` 等创建/提交/删除类可疑写接口。
+- Chrome DevTools MCP 控制台/网络：页面存在大量原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 和一个 `ScriptProcessorNode is deprecated` 站点噪声；未观察到本次复制弹窗相关运行时异常。网络记录中本次详情阶段只出现 `/campaign/get.json`、`/adgroup/get.json`、`/crowd/findList.json`、`/campaign/horizontal/findPage.json` 等只读详情/名称查询请求。
+
+## 结果复盘
+- 结果：点击复制后的预览弹窗已经从“等待详情读取后打开”改为“点击首帧内先打开预览加载态”；真实页面脚本点击测得弹窗出现/可见 1.9ms，DevTools 真实元素点击按 `pointerdown` 起算为 7.0ms，详情继续异步补齐约 1.7-2.6s。
+- 根因：旧路径把 API 加载、源计划详情读取、远端名称查询和页面名称扫描放在弹窗创建之前，用户感知速度被最慢只读请求决定。
+- 取舍：快速弹窗初始展示占位源计划名和可用的行内出价/预算骨架，确认按钮禁用，避免用户在详情未完整时提交；这样优先满足“最快弹出预览弹窗”，同时不牺牲确认前数据完整性。
+- 风险：本轮按用户目标只验证到预览弹窗出现和详情补齐，没有点击“确认生成”，因此未再次创建真实计划；提交链路由前一任务真实复制成功闭环和本轮回归测试覆盖。
+
+# TODO - 2026-05-30 复制计划流量智选词包校验失败
+
+## 2026-05-31 当前复测继续
+- 状态：用户反馈线上复制仍失败，上一轮真实成功记录只作为历史参考；本轮必须重新在当前运行态完成真实复制成功闭环。
+- 计划：
+  - [x] 重建并重载 unpacked extension。
+  - [x] 真实页面复制源计划 `80404078368 / E7Pro_AI点睛_测试`，捕获 `/solution/addList.json` 请求与响应。
+  - [x] 若失败，按当前真实 payload 修正源码、测试和构建产物。（本轮当前运行态未再失败，无需新增源码修正。）
+  - [x] 重载后再次真实确认生成，记录新 `campaignId/adgroupId`、词包 payload、暂停状态和只读查询结果。
+  - [x] 运行最终相关测试、语法、构建检查和 diff 自审。
+- 2026-05-31 00:48 CST 真实复测结果：在当前 Chrome 运行态点击源计划 `80404078368 / E7Pro_AI点睛_测试` 行内复制，确认窗默认生成 `E7Pro_AI点睛_测试_3`，点击“确认生成”后成功弹窗显示新计划 `81059995769`，目标状态暂停。
+- 写接口证据：`/solution/addList.json` 返回 200，`data.errorDetails=[]`，`campaignId=81059995769`，`adgroupId=81060027689`；提交 payload 的 `adgroupList[0].wordPackageList[0]` 为 `流量智选`，字段为 `wordPackageId=0`、`wordPackageType=0`、`onlineStatus=1`、`status=0`、`bidPrice=1`，策略为 `好词优选=1 / 捡漏=0 / 类目优选=1`，未携带旧 `campaignId/adgroupId/id`。
+- 暂停与只读确认：创建后 `/campaign/updatePart.json` 返回 200，`errorCount=0`；只读 `/campaign/get.json` 查询新计划 `81059995769 / E7Pro_AI点睛_测试_3` 返回 `onlineStatus=0`、`displayStatus=pause`、`aiMaxSwitch=1`。只读 `/adgroup/get.json` 查询新单元 `81060027689` 存在。
+- 2026-05-31 01:36 CST 追加审计：当前真实页面列表无 `INVALID_PARAMETER` 或“流量智选词包校验失败”错误；只读服务端查询确认 `E7Pro_AI点睛_测试_3`（`campaignId=81059995769`、`adgroupId=81060027689`）和最新再次生成的 `E7Pro_AI点睛_测试_4`（`campaignId=81185586433`、`adgroupId=81101137093`）均存在，`campaign.onlineStatus=0`、`campaign.displayStatus=pause`、`aiMaxSwitch=1`。
+- 最终验证：`node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`、`node --check src/optimizer/keyword-plan-api/search-and-draft.js`、`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs`（42/42）、`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js`、`npm run check:syntax`、`npm run build:check`、`git diff --check` 均通过。
+
+## 2026-05-31 复测失败追加
+- 用户反馈：上一轮修复后实际使用仍报 `INVALID_PARAMETER：新增单元，流量智选词包校验失败`，继续按“必须在浏览器里复制成功为止”处理。
+- 当前策略：重新重建并重载真实运行态，复制同一源计划并抓取本轮最终 `/solution/addList.json` payload/响应；若仍失败，以本轮真实 payload 为准修正，而不是沿用 2026-05-30 的成功结论。
+- 新成功标准：在 2026-05-31 当前运行态真实确认提交，捕获成功创建响应，确认新计划 ID/单元 ID 和暂停状态；同步记录本轮与上一轮成功记录的差异。
+
+## 需求规格
+- 目标：修复复制计划 `E7Pro_AI点睛_测试` 时新增单元接口报 `INVALID_PARAMETER：新增单元，流量智选词包校验失败` 的问题。
+- 范围：优先聚焦关键词推广/复制计划链路中 `wordPackageList`、`wordList`、新增单元 payload 的保留、清洗和提交合同；不改无关 UI 风格或其它业务线行为。
+- 根因判断：真实失败 payload 的 `solutionList[0].adgroupList[0]` 没有 `wordPackageList`；源计划 `aiMaxInfo.aiMaxSwitch=1` 但 `campaign.wordPackageList=[]`、`adgroup/get.json` 未返回词包，导致 AI 点睛关键词复制在新增单元时缺少流量智选合同。
+- 修复策略：复制关键词 AI 点睛计划时，若源详情词包为空但 AI 点睛开启，给新增单元补齐默认 `流量智选` 词包合同；同时继续清洗词包详情态旧 ID，保证最终提交只保留新增接口认可字段。
+- 成功标准：用户已授权真实复制，本任务必须在浏览器真实确认提交后捕获创建接口成功响应，获得新计划 ID/名称，并通过只读查询或列表搜索确认新计划存在；相关单测、语法、构建检查也必须通过。
+
+## 执行计划（可核对）
+- [x] 定位复制计划入口、`addList` 组包逻辑和词包字段处理规则。
+- [x] 构造或找到覆盖 `E7Pro_AI点睛_测试` 类似流量智选词包的回归测试。
+- [x] 修复新增单元 payload 中词包/关键词字段的合同不一致问题。
+- [x] 运行相关单测、语法检查和必要构建检查。
+- [x] 自审 diff，回填验证记录、结果复盘和未验证风险。
+- [x] 按用户复测失败反馈，在真实浏览器复现同样错误并抓取最终写接口请求/响应。
+- [x] 根据真实失败 payload/响应继续修正提交合同。
+- [x] 重建并重载扩展后，在真实浏览器完成一次复制成功闭环。
+- [x] 回填真实复制成功证据、最终验证记录和新的复盘。
+
+## 高层操作摘要
+- 已读取项目规则、`tasks/lessons.md`、现有 `tasks/todo.md`；本次按缺陷修复处理，先计划再定位。
+- 定位结果：复制按钮进入 `campaign-id-quick-entry.js -> copyCurrentPlanByScene()`；关键词推广按历史 L86 走 `createPlansByScene -> /solution/addList.json`，组包在 `src/optimizer/keyword-plan-api/wizard-open-and-create.js` 与 `search-and-draft.js`。
+- 初步根因：构建阶段会先用推荐接口/模板生成可新增的 `keywordBundle.wordPackageList`，但随后 `applyOverrides()` 会把源计划 `rawOverrides.adgroup.wordPackageList` 覆盖回单元；若源详情里的词包对象含旧计划/旧单元/服务端详情字段，就会在新增单元时报“流量智选词包校验失败”。
+- 修复实现：在 `search-and-draft.js` 增加 `normalizeKeywordWordPackageListForSubmit()`，统一清洗推荐词包、模板词包和复制源详情词包；保留流量智选的 `wordPackageId/wordPackageName/wordPackageType/onlineStatus/status/bidPrice/strategyList` 合同，移除旧 `campaignId/adgroupId/id/gmt*/displayStatus` 等详情态字段。
+- 取舍：不做“词包校验失败后关闭流量智选再重提”，避免改变源计划语义，也符合既有测试中“失败后不再执行词包校验降级重提”的约束。
+- 用户复测反馈“还是一样”，已按 L89 升级验收标准：必须真实浏览器确认复制成功，dry-run 只作为辅助定位。
+- 真实失败证据：重载扩展后在真实关键词推广页复制 `80404078368 / E7Pro_AI点睛_测试`，`/solution/addList.json` 仍返回 `INVALID_PARAMETER：新增单元，流量智选词包校验失败`；最终提交 payload 的 `solutionList[0].adgroupList[0]` 没有任何 `wordPackageList`。
+- 源详情证据：`campaign/get.json` 返回 `aiMaxInfo.aiMaxSwitch=1`、`campaign.wordPackageList=[]`，`adgroup/get.json` 未返回 `wordPackageList`；说明 AI 点睛搜索计划需要流量智选合同，但源详情不一定显式给词包列表。
+- 服务端合同实验：复用同一失败 payload，仅给单元补充 `wordPackageId:0 / wordPackageName:'流量智选' / wordPackageType:0 / onlineStatus:1 / status:0 / bidPrice:1` 和三条策略（好词优选开、捡漏关、类目优选开）后，合法名称 `E7Pro_AI点睛_测试_1` 创建成功，返回 `campaignId=81142294871`、`adgroupId=81185202340`、`errorDetails=[]`。
+- 最终实现：`wizard-open-and-create.js` 和 `search-and-draft.js` 均识别 `onebpSearch + aiMaxSwitch=1` 的当前计划复制；源详情无词包时注入默认流量智选词包，并把 `useWordPackage` 打开，保证最终 `addList` payload 的词包保留在 `adgroup.wordPackageList`。
+- 真实成功闭环：重建并重载 unpacked extension 后，在真实关键词推广列表复制源计划 `80404078368 / E7Pro_AI点睛_测试`，确认窗默认生成 `E7Pro_AI点睛_测试_2`，点击“确认生成”后成功创建 `campaignId=81100781422`、`adgroupId=81185456253`。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- `node --check tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过。
+- `node --test tests/keyword-custom-mode-wordpackage.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，42/42。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+- `node --check 阿里妈妈多合一助手.js`：通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `git diff --check`：通过，全量工作区 diff 未发现空白或补丁格式问题。
+- Chrome DevTools MCP：重载 unpacked extension 后刷新真实关键词推广页 `searchValue=E7Pro_AI点睛_测试`，运行态 `copyCurrentPlanByScene` 可用。
+- Chrome DevTools MCP 构造 dry-run：传入带旧 `campaignId/adgroupId/id/gmtCreate/displayStatus` 的流量智选词包源对象，`dryRunOnly=true` 返回 `submitEndpoint="/solution/addList.json"`、`wordPackageCount=1`；最终 `sample.adgroup.wordPackageList[0]` 仅含 `wordPackageId/wordPackageName/wordPackageType/onlineStatus/status/bidPrice/strategyList`，策略项仅含 `strategyId/strategyName/onlineStatus`，且 `hasBadTopKeys=false`、`hasBadStrategyKeys=false`、无 `officialCopyPayloads`。
+- Chrome DevTools MCP 真实源只读 dry-run：只读调用 `campaign/get.json` 与 `adgroup/get.json` 均 200，命中源计划 `80404078368 / E7Pro_AI点睛_测试`、单元 `80364050696`、商品 `757440599385`、需求人群 5 个；`dryRunOnly=true` 最终仍走 `/solution/addList.json`，无 `officialCopyPayloads`。本次接口未返回源词包，构造 dry-run 已覆盖脏词包清洗风险。
+- Chrome DevTools MCP 真实失败复现：重载扩展后在真实关键词推广页复制 `80404078368 / E7Pro_AI点睛_测试`，捕获 `/solution/addList.json` 返回 `INVALID_PARAMETER：新增单元，流量智选词包校验失败`；失败 payload 的新增单元无 `wordPackageList`。
+- Chrome DevTools MCP 真实成功提交：最终 `/solution/addList.json` 返回 200，`data.errorDetails=[]`，`campaignId=81100781422`，`adgroupId=81185456253`，`campaignName=E7Pro_AI点睛_测试_2`。
+- Chrome DevTools MCP payload 核对：最终提交 `solutionList[0].adgroupList[0].wordPackageList[0]` 为 `流量智选`，字段为 `wordPackageId=0`、`wordPackageType=0`、`onlineStatus=1`、`status=0`、`bidPrice=1`，策略为 `好词优选=1 / 捡漏=0 / 类目优选=1`，未携带旧 `campaignId/adgroupId/id`。
+- Chrome DevTools MCP 暂停兜底：创建后 `/campaign/updatePart.json` 返回 200，请求 `campaignId=81100781422, displayStatus=pause`；只读 `campaign/get.json` 查到新计划 `onlineStatus=0`、`displayStatus=pause`，单元 `81185456253` 存在。
+- Chrome DevTools MCP 结果确认：成功弹窗“确定并搜索”后页面按公共名称 `E7Pro_AI点睛_测试` 触发搜索；列表快照仍受页面缓存/刷新影响显示 2 项，因此最终以服务端只读 `campaign/get.json` 作为存在性证据，已确认 `E7Pro_AI点睛_测试_2` 存在且为暂停状态。
+
+## 结果复盘
+- 结果：复制 `E7Pro_AI点睛_测试` 已真实成功，新建 `E7Pro_AI点睛_测试_2`，计划 ID `81100781422`，单元 ID `81185456253`，创建后已按复制语义暂停。
+- 根因：AI 点睛关键词计划需要新增单元携带流量智选词包合同，但源详情接口可能不返回 `wordPackageList`；旧逻辑只在源详情有词包时清洗，没有在 `aiMaxSwitch=1` 且词包为空时补齐默认词包。
+- 取舍：没有做“校验失败后关闭流量智选重提”的降级，避免改变源计划语义；改为在复制组包阶段表达 AI 点睛关键词计划的必要不变量。
+- 风险：诊断阶段为证明服务端合同已真实创建过 `E7Pro_AI点睛_测试_1`（`campaignId=81142294871`），最终验收又创建 `E7Pro_AI点睛_测试_2`（`campaignId=81100781422`）。本轮未做删除或投放操作。
+
 # TODO - 2026-05-30 mai/myseller.taobao.com 禁用报表捕获
 
 ## 需求规格

@@ -4317,6 +4317,131 @@
             }));
         },
 
+        buildQuickCopyCurrentPlanContext(campaignId, triggerEl, copyMode = 'inherit', options = {}) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) throw new Error('计划ID无效');
+            const mode = this.normalizeCopyMode(copyMode);
+            const label = this.getCopyModeLabel(mode);
+            const bizCandidates = this.getCandidateBizCodes(triggerEl);
+            const primaryBizCode = this.normalizeBizCode(bizCandidates[0] || '') || this.DEFAULT_BIZ_CODE;
+            const sceneName = this.getSceneNameByBizCode(primaryBizCode) || '当前场景';
+            const copyCount = this.normalizeCopyBatchCount(options.copyCount || this.readCopyBatchCount(triggerEl));
+            const usedPlanNames = Array.from(this.copyPlanNameCache || []);
+            const source = {
+                campaignId: id,
+                campaignName: '',
+                name: '',
+                bizCode: primaryBizCode,
+                campaign: {
+                    campaignId: id,
+                    campaignName: '',
+                    bizCode: primaryBizCode
+                }
+            };
+            const context = {
+                campaignId: id,
+                mode,
+                label,
+                source,
+                sceneName,
+                copyCount,
+                usedPlanNames,
+                targetOnlineStatus: mode === 'start' ? 1 : (mode === 'pause' ? 0 : null),
+                previewRows: [],
+                triggerEl,
+                options,
+                preparing: true
+            };
+            context.previewRows = this.buildCopyOverviewRows(context);
+            return context;
+        },
+
+        preloadCopyPlanApi(options = {}) {
+            return waitForKeywordPlanApiAccessor({
+                requiredMethod: 'copyCurrentPlanByScene',
+                timeoutMs: Math.max(1200, Number(options.apiReadyTimeoutMs || 6000) || 6000),
+                intervalMs: 120
+            }).catch((err) => {
+                Logger.log(`⚠️ 计划复制 API 预热失败：${err?.message || '未知错误'} `, true);
+                return null;
+            });
+        },
+
+        buildCopyOverviewRowHtml(rows = []) {
+            return (Array.isArray(rows) ? rows : []).map((row, index) => `
+                    <tr data-am-copy-overview-row="${index}">
+                        <td class="am-copy-overview-index">${index + 1}</td>
+                        <td>
+                            <input data-am-copy-field="planName" class="am-copy-overview-input am-copy-overview-name" value="${this.escapeHtml(row.planName || '')}" />
+                        </td>
+                        <td>
+                            <span data-am-copy-field="bidModeDisplay" class="am-copy-overview-static">${this.escapeHtml(row.bidModeDisplay || '跟随源计划')}</span>
+                        </td>
+                        <td>
+                            <input data-am-copy-field="bidPrice" class="am-copy-overview-input" type="number" min="0.01" step="0.01" value="${this.escapeHtml(row.bidPrice || '')}" ${row.bidPriceEditable === false ? 'disabled data-am-copy-readonly="1" placeholder="无出价"' : ''} />
+                        </td>
+                        <td>
+                            <div class="am-copy-overview-budget-cell">
+                                <select data-am-copy-field="budgetField" class="am-copy-overview-select">${this.buildCopyBudgetFieldOptions(row.budgetField || 'dayAverageBudget')}</select>
+                                <input data-am-copy-field="budgetValue" class="am-copy-overview-input" type="number" min="0.01" step="0.01" value="${this.escapeHtml(row.budgetValue || '')}" />
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+        },
+
+        getCopyOverviewSubtitle(context = {}, rows = []) {
+            const sourceName = String(context.source?.campaign?.campaignName || context.source?.campaignName || '').trim();
+            return `${sourceName || `源计划 ${context.campaignId || ''}`} · ${context.sceneName || ''} · 共 ${rows.length} 个`;
+        },
+
+        renderCopyOverviewRows(popup, context = {}) {
+            if (!(popup instanceof HTMLElement)) return [];
+            const rows = Array.isArray(context.previewRows) && context.previewRows.length
+                ? context.previewRows
+                : this.buildCopyOverviewRows(context);
+            const tbody = popup.querySelector('[data-am-copy-overview-tbody]');
+            if (tbody instanceof HTMLElement) {
+                tbody.innerHTML = this.buildCopyOverviewRowHtml(rows);
+            }
+            const subtitleEl = popup.querySelector('[data-am-copy-overview-subtitle]');
+            if (subtitleEl instanceof HTMLElement) {
+                subtitleEl.textContent = this.getCopyOverviewSubtitle(context, rows);
+            }
+            const firstRow = rows[0] || {};
+            const lastRow = rows[rows.length - 1] || firstRow;
+            const hasEditableBidPrice = rows.some(row => row?.bidPriceEditable !== false && this.normalizeCopyEditableNumber(row?.bidPrice || ''));
+            const bidStartInput = popup.querySelector('[data-am-copy-bulk="bidStart"]');
+            const bidEndInput = popup.querySelector('[data-am-copy-bulk="bidEnd"]');
+            const bidGradientBtn = popup.querySelector('[data-am-copy-bulk-action="bidGradient"]');
+            const budgetFieldInput = popup.querySelector('[data-am-copy-bulk="budgetField"]');
+            const budgetValueInput = popup.querySelector('[data-am-copy-bulk="budgetValue"]');
+            if (bidStartInput instanceof HTMLInputElement) {
+                bidStartInput.value = hasEditableBidPrice ? (firstRow.bidPrice || '') : '';
+                bidStartInput.disabled = !hasEditableBidPrice;
+                bidStartInput.dataset.amCopyReadonly = hasEditableBidPrice ? '' : '1';
+                bidStartInput.placeholder = hasEditableBidPrice ? '' : '无出价';
+            }
+            if (bidEndInput instanceof HTMLInputElement) {
+                bidEndInput.value = hasEditableBidPrice ? (lastRow.bidPrice || firstRow.bidPrice || '') : '';
+                bidEndInput.disabled = !hasEditableBidPrice;
+                bidEndInput.dataset.amCopyReadonly = hasEditableBidPrice ? '' : '1';
+                bidEndInput.placeholder = hasEditableBidPrice ? '' : '无出价';
+            }
+            if (bidGradientBtn instanceof HTMLButtonElement) {
+                bidGradientBtn.disabled = !hasEditableBidPrice;
+                bidGradientBtn.dataset.amCopyReadonly = hasEditableBidPrice ? '' : '1';
+            }
+            if (budgetFieldInput instanceof HTMLSelectElement) {
+                budgetFieldInput.value = firstRow.budgetField || 'dayAverageBudget';
+            }
+            if (budgetValueInput instanceof HTMLInputElement) {
+                budgetValueInput.value = firstRow.budgetValue || '';
+            }
+            this.previewCopyBidGradientStep(popup);
+            return rows;
+        },
+
         getCopyBudgetFieldLabel(field = '') {
             const map = {
                 dayBudget: '每日预算',
@@ -4451,7 +4576,7 @@
             return { ok: true, message: `已批量设置预算：${this.getCopyBudgetFieldLabel(budgetField)} ${budgetValue}` };
         },
 
-        openCopyPlanOverviewDialog(context = {}, submitCallback) {
+        openCopyPlanOverviewDialog(context = {}, submitCallback, options = {}) {
             return new Promise((resolve, reject) => {
                 const oldPopup = document.getElementById('am-campaign-copy-overview-popup');
                 if (oldPopup) oldPopup.remove();
@@ -4462,36 +4587,19 @@
                 const rows = Array.isArray(context.previewRows) && context.previewRows.length
                     ? context.previewRows
                     : this.buildCopyOverviewRows(context);
+                let activeContext = context;
+                let contextReady = context.preparing !== true;
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-copy-overview-popup';
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
                 popup.setAttribute('aria-labelledby', titleId);
                 popup.setAttribute('aria-describedby', statusId);
-                const sourceName = String(context.source?.campaign?.campaignName || context.source?.campaignName || '').trim();
+                const subtitleText = this.getCopyOverviewSubtitle(context, rows);
                 const firstRow = rows[0] || {};
                 const lastRow = rows[rows.length - 1] || firstRow;
                 const hasEditableBidPrice = rows.some(row => row?.bidPriceEditable !== false && this.normalizeCopyEditableNumber(row?.bidPrice || ''));
-                const rowHtml = rows.map((row, index) => `
-                    <tr data-am-copy-overview-row="${index}">
-                        <td class="am-copy-overview-index">${index + 1}</td>
-                        <td>
-                            <input data-am-copy-field="planName" class="am-copy-overview-input am-copy-overview-name" value="${this.escapeHtml(row.planName || '')}" />
-                        </td>
-                        <td>
-                            <span data-am-copy-field="bidModeDisplay" class="am-copy-overview-static">${this.escapeHtml(row.bidModeDisplay || '跟随源计划')}</span>
-                        </td>
-                        <td>
-                            <input data-am-copy-field="bidPrice" class="am-copy-overview-input" type="number" min="0.01" step="0.01" value="${this.escapeHtml(row.bidPrice || '')}" ${row.bidPriceEditable === false ? 'disabled data-am-copy-readonly="1" placeholder="无出价"' : ''} />
-                        </td>
-                        <td>
-                            <div class="am-copy-overview-budget-cell">
-                                <select data-am-copy-field="budgetField" class="am-copy-overview-select">${this.buildCopyBudgetFieldOptions(row.budgetField || 'dayAverageBudget')}</select>
-                                <input data-am-copy-field="budgetValue" class="am-copy-overview-input" type="number" min="0.01" step="0.01" value="${this.escapeHtml(row.budgetValue || '')}" />
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
+                const rowHtml = this.buildCopyOverviewRowHtml(rows);
                 popup.innerHTML = `
                     <section class="am-copy-overview-card">
                         <header class="am-copy-overview-header">
@@ -4500,9 +4608,9 @@
                                 <div>
                                     <div class="am-copy-overview-title-row">
                                         <h3 class="am-copy-overview-title" id="${titleId}">复制计划一览</h3>
-                                        <span class="am-copy-overview-state">待确认</span>
+                                        <span class="am-copy-overview-state" data-am-copy-overview-state>${contextReady ? '待确认' : '读取中'}</span>
                                     </div>
-                                    <p class="am-copy-overview-subtitle">${this.escapeHtml(sourceName || `源计划 ${context.campaignId || ''}`)} · ${this.escapeHtml(context.sceneName || '')} · 共 ${rows.length} 个</p>
+                                    <p class="am-copy-overview-subtitle" data-am-copy-overview-subtitle>${this.escapeHtml(subtitleText)}</p>
                                 </div>
                             </div>
                             <button type="button" class="am-copy-overview-close" aria-label="关闭">${renderAmIcon('close', { size: 14, strokeWidth: 2.4 })}</button>
@@ -4545,10 +4653,10 @@
                                         <th>预算</th>
                                     </tr>
                                 </thead>
-                                <tbody>${rowHtml}</tbody>
+                                <tbody data-am-copy-overview-tbody>${rowHtml}</tbody>
                             </table>
                         </div>
-                        <div class="am-copy-overview-status is-info" id="${statusId}" data-am-copy-overview-status role="status" aria-live="polite">确认后才会提交创建请求。</div>
+                        <div class="am-copy-overview-status ${contextReady ? 'is-info' : 'is-running'}" id="${statusId}" data-am-copy-overview-status role="status" aria-live="polite">${contextReady ? '确认后才会提交创建请求。' : '已打开预览，正在读取源计划详情...'}</div>
                         <footer class="am-copy-overview-footer">
                             <button type="button" class="am-copy-overview-submit">确认生成</button>
                             <button type="button" class="am-copy-overview-cancel">取消</button>
@@ -4581,6 +4689,24 @@
                     if (!(statusEl instanceof HTMLElement)) return;
                     statusEl.textContent = message;
                     statusEl.className = `am-copy-overview-status is-${level}`;
+                };
+                const setReadyState = (ready, message = '') => {
+                    contextReady = !!ready;
+                    popup.classList.toggle('is-preparing', !contextReady);
+                    const stateEl = popup.querySelector('[data-am-copy-overview-state]');
+                    if (stateEl instanceof HTMLElement) {
+                        stateEl.textContent = contextReady ? '待确认' : '读取中';
+                    }
+                    if (submitBtn instanceof HTMLButtonElement) {
+                        submitBtn.disabled = !contextReady;
+                    }
+                    popup.querySelectorAll('[data-am-copy-bulk-action]').forEach((el) => {
+                        if ('disabled' in el) el.disabled = !contextReady || el.dataset.amCopyReadonly === '1';
+                    });
+                    popup.querySelectorAll('input, select').forEach((el) => {
+                        if ('disabled' in el) el.disabled = !contextReady || el.dataset.amCopyReadonly === '1';
+                    });
+                    if (message) setStatus(message, contextReady ? 'info' : 'running');
                 };
                 const setRunning = (running) => {
                     popup.classList.toggle('is-running', !!running);
@@ -4620,7 +4746,14 @@
                     setStatus(result.message, result.ok ? 'info' : 'error');
                 });
                 this.previewCopyBidGradientStep(popup);
+                if (!contextReady) {
+                    setReadyState(false);
+                }
                 submitBtn?.addEventListener('click', async () => {
+                    if (!contextReady) {
+                        setStatus('源计划详情仍在读取中，请稍候。', 'running');
+                        return;
+                    }
                     const editedRows = this.readCopyOverviewRowsFromPopup(popup).map((row) => ({
                         ...row,
                         rawBidPrice: popup.querySelector(`[data-am-copy-overview-row="${row.index}"] [data-am-copy-field="bidPrice"]`)?.value || '',
@@ -4634,7 +4767,7 @@
                     try {
                         setRunning(true);
                         setStatus('生成中：正在提交复制请求，请勿重复操作。', 'running');
-                        const result = await submitCallback(editedRows);
+                        const result = await submitCallback(editedRows, activeContext);
                         setStatus('生成成功，正在打开成功确认。', 'success');
                         popup.remove();
                         resolve(result);
@@ -4643,9 +4776,33 @@
                         setStatus(err?.message || '生成失败，请检查日志后重试。', 'error');
                     }
                 });
+                const startPrepareContext = () => {
+                    Promise.resolve(typeof options.prepareContext === 'function' ? options.prepareContext() : activeContext)
+                        .then((preparedContext) => {
+                        if (!preparedContext || popup.isConnected === false) return;
+                        activeContext = preparedContext;
+                        activeContext.preparing = false;
+                        this.renderCopyOverviewRows(popup, activeContext);
+                        setReadyState(true, '源计划详情已读取完成，确认后才会提交创建请求。');
+                        })
+                        .catch((err) => {
+                        contextReady = false;
+                        setStatus(err?.message || '读取源计划详情失败，请关闭后重试。', 'error');
+                        const stateEl = popup.querySelector('[data-am-copy-overview-state]');
+                        if (stateEl instanceof HTMLElement) stateEl.textContent = '读取失败';
+                        });
+                };
+                const schedulePrepareContext = () => {
+                    if (typeof setTimeout === 'function') {
+                        setTimeout(startPrepareContext, 0);
+                        return;
+                    }
+                    startPrepareContext();
+                };
                 requestAnimationFrame(() => {
                     const firstInput = popup.querySelector('[data-am-copy-field="planName"]');
                     if (firstInput && typeof firstInput.focus === 'function') firstInput.focus();
+                    schedulePrepareContext();
                 });
             });
         },
@@ -4657,16 +4814,13 @@
             const label = this.getCopyModeLabel(mode);
             const bizCandidates = this.getCandidateBizCodes(triggerEl);
             const authContext = this.resolveAuthContext(bizCandidates[0] || this.DEFAULT_BIZ_CODE);
+            const apiPromise = options.preloadedApiPromise || this.preloadCopyPlanApi(options);
             const source = await this.resolveCopySourcePlan(id, triggerEl, bizCandidates, authContext);
             const sceneName = this.getSceneNameByBizCode(source.bizCode || bizCandidates[0] || '');
             if (!sceneName) {
                 throw new Error(`暂不支持复制该业务线：${source.bizCode || bizCandidates[0] || '-'}`);
             }
-            const api = await waitForKeywordPlanApiAccessor({
-                requiredMethod: 'copyCurrentPlanByScene',
-                timeoutMs: Math.max(1200, Number(options.apiReadyTimeoutMs || 6000) || 6000),
-                intervalMs: 120
-            });
+            const api = await apiPromise;
             if (!api || typeof api.copyCurrentPlanByScene !== 'function') {
                 throw new Error('计划复制 API 未就绪，请刷新页面后重试');
             }
@@ -4725,8 +4879,10 @@
                 throw new Error('计划复制 API 未就绪，请刷新页面后重试');
             }
             const copyPlanRows = Array.isArray(editedRows) && editedRows.length ? editedRows : (context.previewRows || []);
+            const submitOptions = this.isPlainRecord(context.options) ? { ...context.options } : {};
+            delete submitOptions.preloadedApiPromise;
             const result = await api.copyCurrentPlanByScene(context.sceneName, context.source, {
-                ...(this.isPlainRecord(context.options) ? context.options : {}),
+                ...submitOptions,
                 copyMode: mode,
                 copyCount: copyPlanRows.length || context.copyCount,
                 usedPlanNames: context.usedPlanNames,
@@ -4756,14 +4912,26 @@
         },
 
         async runCopyCurrentPlanFlow(campaignId, triggerEl, copyMode = 'inherit', options = {}) {
-            const context = await this.prepareCopyCurrentPlanContext(campaignId, triggerEl, copyMode, options);
-            Logger.log(`📋 ${context.label}准备：源计划${context.campaignId}，场景=${context.sceneName}，商品=${context.source.itemId || '-'}，复制数量=${context.copyCount}，跟随源状态=${context.targetOnlineStatus === 1 ? '开启' : '暂停'}`);
+            const quickContext = this.buildQuickCopyCurrentPlanContext(campaignId, triggerEl, copyMode, options);
             if (options.skipCopyOverview === true) {
+                const context = await this.prepareCopyCurrentPlanContext(campaignId, triggerEl, copyMode, options);
+                Logger.log(`📋 ${context.label}准备：源计划${context.campaignId}，场景=${context.sceneName}，商品=${context.source.itemId || '-'}，复制数量=${context.copyCount}，跟随源状态=${context.targetOnlineStatus === 1 ? '开启' : '暂停'}`);
                 return this.submitPreparedCopyCurrentPlan(context, context.previewRows);
             }
-            return this.openCopyPlanOverviewDialog(context, (editedRows) => (
-                this.submitPreparedCopyCurrentPlan(context, editedRows)
-            ));
+            return this.openCopyPlanOverviewDialog(quickContext, (editedRows, preparedContext) => (
+                this.submitPreparedCopyCurrentPlan(preparedContext, editedRows)
+            ), {
+                prepareContext: async () => {
+                    const preloadedApiPromise = this.preloadCopyPlanApi(options);
+                    const contextOptions = {
+                        ...(this.isPlainRecord(options) ? options : {}),
+                        preloadedApiPromise
+                    };
+                    const context = await this.prepareCopyCurrentPlanContext(campaignId, triggerEl, copyMode, contextOptions);
+                    Logger.log(`📋 ${context.label}准备：源计划${context.campaignId}，场景=${context.sceneName}，商品=${context.source.itemId || '-'}，复制数量=${context.copyCount}，跟随源状态=${context.targetOnlineStatus === 1 ? '开启' : '暂停'}`);
+                    return context;
+                }
+            });
         },
 
         setConcurrentButtonRunning(campaignId, running) {
@@ -5022,7 +5190,7 @@
                 btn.dataset.amCopyBatchCount = String(copyBatchCount);
                 btn.title = `${label}：${id}`;
                 btn.setAttribute('aria-label', `${label}：${id}`);
-                btn.innerHTML = `${this.COPY_ICON_SVG.trim()}<span class="am-campaign-copy-label">${label}</span><span class="am-wxt-copy-multi" data-am-campaign-copy-count-badge="${copyBatchCount}" title="点击增加，右键减少，滚轮可调节"><span class="am-wxt-copy-multi-icon">${renderAmIcon('multiply', { size: 10, strokeWidth: 2.4 })}</span><span class="am-wxt-copy-multi-num">${copyBatchCount}</span></span>`;
+                btn.innerHTML = `<span class="am-campaign-copy-icon">${this.COPY_ICON_SVG.trim()}</span><span class="am-campaign-copy-label">${label}</span><span class="am-wxt-copy-multi" data-am-campaign-copy-count-badge="${copyBatchCount}" title="点击增加，右键减少，滚轮可调节"><span class="am-wxt-copy-multi-icon">${renderAmIcon('plus', { size: 12, strokeWidth: 2.6 })}</span><span class="am-wxt-copy-multi-num">${copyBatchCount}</span></span>`;
             } else {
                 btn.setAttribute('data-am-campaign-quick', '1');
                 btn.title = `查数计划ID：${id}`;

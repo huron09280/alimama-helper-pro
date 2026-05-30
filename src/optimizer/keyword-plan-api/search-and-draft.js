@@ -1661,6 +1661,98 @@
             ).slice(0, 200);
         };
 
+        const DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST = [
+            { strategyId: 1, strategyName: '好词优选', onlineStatus: 1 },
+            { strategyId: 2, strategyName: '捡漏', onlineStatus: 0 },
+            { strategyId: 3, strategyName: '类目优选', onlineStatus: 1 }
+        ];
+        const DEFAULT_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST = [
+            {
+                wordPackageId: 0,
+                wordPackageName: '流量智选',
+                wordPackageType: 0,
+                onlineStatus: 1,
+                status: 0,
+                bidPrice: 1,
+                strategyList: DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST
+            }
+        ];
+
+        const normalizeKeywordWordPackageStrategyListForSubmit = (strategyList = [], fallbackStrategyList = []) => {
+            const sourceList = Array.isArray(strategyList) && strategyList.length
+                ? strategyList
+                : fallbackStrategyList;
+            return uniqueBy(
+                sourceList
+                    .map((item) => {
+                        if (!isPlainObject(item)) return null;
+                        const strategyId = toNumber(item.strategyId ?? item.id, NaN);
+                        if (!Number.isFinite(strategyId)) return null;
+                        return {
+                            strategyId,
+                            strategyName: String(item.strategyName || item.name || '').trim(),
+                            onlineStatus: toNumber(item.onlineStatus, DEFAULTS.keywordOnlineStatus)
+                        };
+                    })
+                    .filter(Boolean),
+                item => item.strategyId
+            );
+        };
+
+        const normalizeKeywordWordPackageItemForSubmit = (item = {}) => {
+            if (!isPlainObject(item)) return null;
+            const rawPackageId = item.id ?? item.wordPackageId ?? item.packageId;
+            const input = purgeCreateTransientFields(item);
+            if (isPlainObject(input.tag) && !hasOwn(input, 'wordPackageId') && !hasOwn(input, 'wordPackageName') && !hasOwn(input, 'strategyList')) {
+                const packageId = rawPackageId;
+                if (packageId === undefined || packageId === null || packageId === '') return null;
+                return {
+                    id: String(packageId),
+                    tag: deepClone(input.tag)
+                };
+            }
+            const rawName = String(input.wordPackageName || input.packageName || input.name || '').trim();
+            const isTrafficSmartPackage = /流量智选/.test(rawName)
+                || toNumber(input.wordPackageId, NaN) === 0
+                || (toNumber(input.wordPackageType, NaN) === 0 && Array.isArray(input.strategyList));
+            const wordPackageId = isTrafficSmartPackage
+                ? 0
+                : toNumber(input.wordPackageId ?? input.packageId, NaN);
+            if (!Number.isFinite(wordPackageId)) return null;
+            return {
+                wordPackageId,
+                wordPackageName: rawName || (isTrafficSmartPackage ? '流量智选' : ''),
+                wordPackageType: toNumber(input.wordPackageType, isTrafficSmartPackage ? 0 : 0),
+                onlineStatus: toNumber(input.onlineStatus, DEFAULTS.keywordOnlineStatus),
+                status: toNumber(input.status, 0),
+                bidPrice: toNumber(input.bidPrice ?? input.price, 1),
+                strategyList: normalizeKeywordWordPackageStrategyListForSubmit(
+                    input.strategyList,
+                    isTrafficSmartPackage ? DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST : []
+                )
+            };
+        };
+
+        const normalizeKeywordWordPackageListForSubmit = (wordPackageList = []) => {
+            if (!Array.isArray(wordPackageList)) return [];
+            return uniqueBy(
+                wordPackageList
+                    .map(item => normalizeKeywordWordPackageItemForSubmit(item))
+                    .filter(Boolean),
+                item => hasOwn(item, 'wordPackageId')
+                    ? `wordPackageId:${item.wordPackageId}`
+                    : `id:${item.id || ''}`
+            ).slice(0, 100);
+        };
+        const buildDefaultKeywordTrafficSmartWordPackageList = () => normalizeKeywordWordPackageListForSubmit(
+            deepClone(DEFAULT_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST)
+        );
+        const isCopyKeywordAiMaxEnabled = (campaign = {}) => {
+            if (!isPlainObject(campaign)) return false;
+            const aiMaxInfo = isPlainObject(campaign.aiMaxInfo) ? campaign.aiMaxInfo : {};
+            return toNumber(campaign.aiMaxSwitch ?? aiMaxInfo.aiMaxSwitch, 0) === 1;
+        };
+
         const pruneKeywordCampaignForCustomScene = (campaign = {}, options = {}) => {
             const request = options?.request || {};
             const plan = isPlainObject(options?.plan) ? options.plan : {};
@@ -2255,9 +2347,7 @@
             out.rightList = Array.isArray(input.rightList) ? deepClone(input.rightList) : [];
             out.wordList = normalizeKeywordWordListForSubmit(input.wordList || []);
             if (hasOwn(input, 'wordPackageList')) {
-                out.wordPackageList = Array.isArray(input.wordPackageList)
-                    ? deepClone(input.wordPackageList).slice(0, 100)
-                    : [];
+                out.wordPackageList = normalizeKeywordWordPackageListForSubmit(input.wordPackageList);
             }
             if (item && (item.materialId || item.itemId)) {
                 const fallbackMaterialName = `商品${item.itemId || item.materialId || ''}`;
@@ -2396,7 +2486,7 @@
             if (!mergedWordList.length) {
                 mergedWordList = deriveFallbackKeywordListFromItem(item, keywordDefaults);
             }
-            const wordPackageList = Array.isArray(recommendedPackages) ? recommendedPackages.slice(0, 100) : [];
+            const wordPackageList = normalizeKeywordWordPackageListForSubmit(recommendedPackages);
             return {
                 wordList: mergedWordList,
                 wordPackageList,
@@ -4593,7 +4683,7 @@
                     requestOptions
                 });
                 const templateWordPackageList = Array.isArray(baseAdgroup?.wordPackageList)
-                    ? deepClone(baseAdgroup.wordPackageList)
+                    ? normalizeKeywordWordPackageListForSubmit(baseAdgroup.wordPackageList)
                     : [];
                 if (keywordBundle.useWordPackage && !keywordBundle.wordPackageList.length && templateWordPackageList.length) {
                     keywordBundle.wordPackageList = templateWordPackageList.slice(0, 100);
@@ -4648,6 +4738,19 @@
             applyOverrides(merged, request, plan);
             if (sceneBizCodeHint) {
                 merged.campaign.bizCode = sceneBizCodeHint;
+            }
+            const copyKeywordAiMaxNeedsWordPackage = isKeywordScene
+                && sceneCapabilities.enableKeywords
+                && (request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true)
+                && isCopyKeywordAiMaxEnabled(merged.campaign);
+            if (copyKeywordAiMaxNeedsWordPackage) {
+                const normalizedCopyWordPackageList = normalizeKeywordWordPackageListForSubmit(merged.adgroup?.wordPackageList || []);
+                const copyWordPackageList = normalizedCopyWordPackageList.length
+                    ? normalizedCopyWordPackageList
+                    : buildDefaultKeywordTrafficSmartWordPackageList();
+                merged.adgroup.wordPackageList = copyWordPackageList;
+                keywordBundle.wordPackageList = copyWordPackageList;
+                keywordBundle.useWordPackage = true;
             }
             const hasExplicitCampaignField = (key = '') => {
                 const sourceValues = [

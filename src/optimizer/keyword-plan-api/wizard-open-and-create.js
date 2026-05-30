@@ -522,6 +522,27 @@
                 item => item.word
             ).slice(0, 200);
         };
+        const COPY_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST = [
+            {
+                wordPackageId: 0,
+                wordPackageName: '流量智选',
+                wordPackageType: 0,
+                onlineStatus: 1,
+                status: 0,
+                bidPrice: 1,
+                strategyList: [
+                    { strategyId: 1, strategyName: '好词优选', onlineStatus: 1 },
+                    { strategyId: 2, strategyName: '捡漏', onlineStatus: 0 },
+                    { strategyId: 3, strategyName: '类目优选', onlineStatus: 1 }
+                ]
+            }
+        ];
+        const buildCopyKeywordTrafficSmartWordPackageList = () => deepClone(COPY_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST);
+        const isCurrentPlanCopyKeywordAiMaxEnabled = (campaign = {}) => {
+            if (!isPlainObject(campaign)) return false;
+            const aiMaxInfo = isPlainObject(campaign.aiMaxInfo) ? campaign.aiMaxInfo : {};
+            return toNumber(campaign.aiMaxSwitch ?? aiMaxInfo.aiMaxSwitch, 0) === 1;
+        };
         const applyCurrentPlanCopyRowOverrides = (plan = {}, planCampaign = {}, planAdgroup = {}, row = {}) => {
             if (!isPlainObject(row)) return;
             const bidMode = normalizeCurrentPlanCopyBidMode(row.bidMode || '');
@@ -645,6 +666,13 @@
             if (commonSourceWordList.length) {
                 commonAdgroup.wordList = deepClone(commonSourceWordList);
             }
+            const isKeywordAiMaxCopy = bizCode === 'onebpSearch' && isCurrentPlanCopyKeywordAiMaxEnabled(campaign);
+            const commonSourceWordPackageList = Array.isArray(adgroup.wordPackageList) && adgroup.wordPackageList.length
+                ? deepClone(adgroup.wordPackageList).slice(0, 100)
+                : (isKeywordAiMaxCopy ? buildCopyKeywordTrafficSmartWordPackageList() : []);
+            if (commonSourceWordPackageList.length) {
+                commonAdgroup.wordPackageList = deepClone(commonSourceWordPackageList);
+            }
             delete commonCampaign.campaignName;
             delete commonCampaign.onlineStatus;
             delete commonAdgroup.onlineStatus;
@@ -660,7 +688,7 @@
                 common: {
                     marketingGoal,
                     keywordMode: commonSourceWordList.length ? 'manual' : undefined,
-                    useWordPackage: Array.isArray(adgroup.wordPackageList) && adgroup.wordPackageList.length,
+                    useWordPackage: isKeywordAiMaxCopy || commonSourceWordPackageList.length > 0,
                     rawOverrides: {
                         campaign: commonCampaign,
                         adgroup: commonAdgroup
@@ -673,9 +701,14 @@
                     const sourceWordList = commonSourceWordList.length
                         ? deepClone(commonSourceWordList)
                         : normalizeCopyKeywordWordList(planAdgroup.wordList || []);
-                    const sourceWordPackageList = Array.isArray(planAdgroup.wordPackageList)
+                    const sourceWordPackageList = Array.isArray(planAdgroup.wordPackageList) && planAdgroup.wordPackageList.length
                         ? deepClone(planAdgroup.wordPackageList).slice(0, 100)
-                        : [];
+                        : deepClone(commonSourceWordPackageList);
+                    const planUseWordPackage = isKeywordAiMaxCopy || sourceWordPackageList.length > 0;
+                    if (sourceWordPackageList.length) {
+                        planAdgroup.wordPackageList = deepClone(sourceWordPackageList);
+                    }
+                    const keywordSourceMode = sourceWordList.length ? 'manual' : 'mixed';
                     if (sourceWordList.length) {
                         planAdgroup.wordList = deepClone(sourceWordList);
                     }
@@ -691,11 +724,11 @@
                         budget,
                         keywords: sourceWordList,
                         keywordSource: {
-                            mode: sourceWordList.length ? 'manual' : 'mixed',
+                            mode: keywordSourceMode,
                             source: 'copy_current_plan',
-                            useWordPackage: sourceWordPackageList.length > 0
+                            useWordPackage: planUseWordPackage
                         },
-                        useWordPackage: sourceWordPackageList.length > 0,
+                        useWordPackage: planUseWordPackage,
                         __copyCurrentPlan: true,
                         rawOverrides: {
                             campaign: planCampaign,

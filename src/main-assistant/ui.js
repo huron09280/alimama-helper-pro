@@ -418,19 +418,74 @@
                     background: rgba(14, 168, 111, 0.12);
                 }
                 .am-campaign-copy-btn {
+                    position: relative;
                     width: auto;
-                    min-width: 88px;
-                    height: 22px;
-                    gap: 3px;
-                    padding: 2px 4px 2px 6px;
-                    border: 1px solid var(--am26-border);
-                    border-radius: 999px;
-                    background: var(--am26-surface);
-                    color: var(--am26-primary);
-                    box-shadow: 0 4px 12px rgba(31, 53, 109, 0.08);
+                    min-width: 90px;
+                    height: 24px;
+                    min-height: 24px;
+                    gap: 5px;
+                    padding: 0 5px 0 8px;
+                    overflow: hidden;
+                    isolation: isolate;
+                    border: 0;
+                    border-radius: 500px;
+                    background: rgb(255, 255, 255);
+                    color: #333333;
+                    box-shadow: rgba(0, 0, 0, 0.06) 0 4px 8px 0;
                     font-size: 12px;
+                    font-weight: 400;
                     line-height: 1;
                     white-space: nowrap;
+                }
+                .am-campaign-copy-btn::before,
+                .am-campaign-copy-btn::after {
+                    content: '';
+                    position: absolute;
+                    z-index: 0;
+                    width: 48px;
+                    height: 28px;
+                    bottom: -24px;
+                    left: 0;
+                    border-radius: 999px;
+                    opacity: 0.2;
+                    filter: blur(14px);
+                    pointer-events: none;
+                }
+                .am-campaign-copy-btn::before {
+                    background: rgb(51, 51, 255);
+                    animation: am-campaign-copy-shadow-left 5s linear infinite alternate;
+                }
+                .am-campaign-copy-btn::after {
+                    background: rgb(153, 51, 255);
+                    animation: am-campaign-copy-shadow-right 5s linear infinite alternate;
+                }
+                @keyframes am-campaign-copy-shadow-left {
+                    0% {
+                        bottom: -24px;
+                        left: 0;
+                    }
+                    50% {
+                        bottom: -16px;
+                        left: 50%;
+                    }
+                    100% {
+                        bottom: -24px;
+                        left: 0;
+                    }
+                }
+                @keyframes am-campaign-copy-shadow-right {
+                    0% {
+                        bottom: -16px;
+                        left: 50%;
+                    }
+                    50% {
+                        bottom: -24px;
+                        left: 0;
+                    }
+                    100% {
+                        bottom: -16px;
+                        left: 50%;
+                    }
                 }
                 .am-campaign-operation-copy-btn {
                     float: left;
@@ -443,40 +498,88 @@
                     pointer-events: auto;
                 }
                 .am-campaign-copy-btn:hover {
-                    color: var(--am26-primary-strong);
-                    background: var(--am26-surface-strong);
-                    border-color: rgba(69, 84, 229, 0.28);
-                    box-shadow: 0 6px 16px rgba(31, 53, 109, 0.12);
+                    color: #333333;
+                    background: rgb(255, 255, 255);
+                    box-shadow: rgba(0, 0, 0, 0.08) 0 5px 10px 0;
+                }
+                .am-campaign-copy-btn:focus-visible {
+                    color: #333333;
+                    background: rgb(255, 255, 255);
+                    box-shadow: 0 0 0 2px rgba(69, 84, 229, 0.18), rgba(0, 0, 0, 0.06) 0 4px 8px 0;
+                }
+                .am-campaign-copy-icon {
+                    position: relative;
+                    z-index: 1;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
+                    color: inherit;
+                    background: transparent;
+                    box-shadow: none;
+                    pointer-events: none;
+                }
+                .am-campaign-copy-icon svg {
+                    width: 13px;
+                    height: 13px;
+                    stroke-width: 2.1;
                 }
                 .am-campaign-copy-label {
+                    position: relative;
+                    z-index: 1;
+                    line-height: 18px;
+                    font-weight: 400;
+                    letter-spacing: 0;
+                    color: inherit;
                     pointer-events: none;
                 }
                 .am-campaign-copy-btn .am-wxt-copy-multi {
+                    position: relative;
+                    z-index: 1;
                     display: inline-flex;
                     align-items: center;
+                    justify-content: center;
                     gap: 2px;
-                    margin-left: 2px;
-                    padding: 2px 5px;
-                    border-radius: 10px;
-                    border: 1px solid var(--am26-border);
-                    background: var(--am26-surface-strong);
-                    color: var(--am26-primary);
-                    font-size: 11px;
-                    line-height: 1;
+                    margin-left: 0;
+                    height: 18px;
+                    min-width: 22px;
+                    padding: 0 5px;
+                    border-radius: 999px;
+                    border: 1px solid rgba(218, 222, 235, 0.95);
+                    background: rgba(255, 255, 255, 0.86);
+                    color: #333333;
+                    font-size: 12px;
+                    font-weight: 400;
+                    line-height: 16px;
+                    box-sizing: border-box;
                     user-select: none;
                     pointer-events: auto;
+                    box-shadow: none;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .am-campaign-copy-btn::before,
+                    .am-campaign-copy-btn::after {
+                        animation: none;
+                    }
                 }
                 .am-campaign-copy-btn .am-wxt-copy-multi-icon {
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    opacity: 0.9;
+                    color: inherit;
+                    opacity: 1;
                     pointer-events: none;
                 }
+                .am-campaign-copy-btn .am-wxt-copy-multi-icon svg {
+                    width: 12px;
+                    height: 12px;
+                }
                 .am-campaign-copy-btn .am-wxt-copy-multi-num {
-                    min-width: 12px;
+                    min-width: 7px;
                     text-align: center;
-                    font-weight: 600;
+                    font-weight: 400;
                     pointer-events: none;
                 }
                 .am-campaign-batch-plus-wrap {
