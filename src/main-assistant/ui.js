@@ -417,7 +417,11 @@
                     height: 22px;
                     gap: 3px;
                     padding: 2px 4px 2px 6px;
-                    border-radius: 4px;
+                    border: 1px solid var(--am26-border);
+                    border-radius: 999px;
+                    background: var(--am26-surface);
+                    color: var(--am26-primary);
+                    box-shadow: 0 4px 12px rgba(31, 53, 109, 0.08);
                     font-size: 12px;
                     line-height: 1;
                     white-space: nowrap;
@@ -433,8 +437,10 @@
                     pointer-events: auto;
                 }
                 .am-campaign-copy-btn:hover {
-                    color: #7c3aed;
-                    background: rgba(124, 58, 237, 0.1);
+                    color: var(--am26-primary-strong);
+                    background: var(--am26-surface-strong);
+                    border-color: rgba(69, 84, 229, 0.28);
+                    box-shadow: 0 6px 16px rgba(31, 53, 109, 0.12);
                 }
                 .am-campaign-copy-label {
                     pointer-events: none;
@@ -446,9 +452,9 @@
                     margin-left: 2px;
                     padding: 2px 5px;
                     border-radius: 10px;
-                    border: 1px solid rgba(99, 102, 241, 0.32);
-                    background: rgba(255, 255, 255, 0.88);
-                    color: #3344c8;
+                    border: 1px solid var(--am26-border);
+                    background: var(--am26-surface-strong);
+                    color: var(--am26-primary);
                     font-size: 11px;
                     line-height: 1;
                     user-select: none;
@@ -841,6 +847,27 @@
                     font-weight: 700;
                     color: var(--am26-text);
                 }
+                #am-campaign-copy-overview-popup .am-copy-overview-title-row {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-state,
+                #am-campaign-copy-success-popup .am-copy-success-state {
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    height: 22px;
+                    padding: 0 9px;
+                    border: 1px solid var(--am26-border);
+                    border-radius: 999px;
+                    background: var(--am26-surface-strong);
+                    color: var(--am26-primary);
+                    font-size: 11px;
+                    font-weight: 700;
+                    line-height: 20px;
+                }
                 #am-campaign-copy-overview-popup .am-copy-overview-subtitle {
                     margin: 4px 0 0;
                     font-size: 12px;
@@ -1089,17 +1116,21 @@
                     font-size: 12px;
                     line-height: 18px;
                 }
+                #am-campaign-copy-overview-popup .am-copy-overview-status.is-info {
+                    color: var(--am26-text-soft);
+                    background: var(--am26-surface);
+                }
                 #am-campaign-copy-overview-popup .am-copy-overview-status.is-running {
-                    color: #0f4fce;
-                    background: #eff6ff;
+                    color: var(--am26-primary-strong);
+                    background: rgba(69, 84, 229, 0.1);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-status.is-success {
-                    color: #0f6b3f;
-                    background: #edf9f2;
+                    color: var(--am26-success);
+                    background: rgba(14, 168, 111, 0.12);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-status.is-error {
-                    color: #a43131;
-                    background: #fff1f1;
+                    color: var(--am26-danger);
+                    background: rgba(234, 79, 79, 0.12);
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-footer {
                     display: flex;
@@ -1193,11 +1224,17 @@
                     color: var(--am26-success);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-title {
+                    min-width: 0;
+                    flex: 1 1 auto;
                     margin: 0;
                     font-size: 16px;
                     line-height: 24px;
                     font-weight: 700;
                     color: var(--am26-text);
+                }
+                #am-campaign-copy-success-popup .am-copy-success-state {
+                    color: var(--am26-success);
+                    background: rgba(14, 168, 111, 0.12);
                 }
                 #am-campaign-copy-success-popup .am-copy-success-body {
                     margin: 0;

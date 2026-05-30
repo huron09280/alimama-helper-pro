@@ -75,7 +75,12 @@ test('复制按钮复刻组建计划的数量调节操作', () => {
     assert.match(quickEntry, /normalizeCopyBatchCount\(value\)[\s\S]*?Math\.min\(99,\s*Math\.max\(1,/, '复制数量应限制在 1-99');
     assert.match(quickEntry, /countBadge\.setAttribute\('data-am-campaign-copy-count-badge',\s*String\(count\)\)/, '复制数量徽标 data 值应同步更新');
     assert.match(quickEntry, /copyPlanNameCache:\s*new Set\(\)/, '缺少已复制计划名缓存，重复复制可能命名冲突');
-    assert.match(quickEntryStyle, /\.am-campaign-copy-btn \.am-wxt-copy-multi\s*\{[\s\S]*?border-radius:\s*10px;[\s\S]*?border:\s*1px solid rgba\(99,\s*102,\s*241,\s*0\.32\);/, '复制数量徽标样式应复用组建计划视觉');
+    const copyButtonRule = extractCssRule(quickEntryStyle, '.am-campaign-copy-btn');
+    const copyBadgeRule = extractCssRule(quickEntryStyle, '.am-campaign-copy-btn .am-wxt-copy-multi');
+    assert.match(copyButtonRule, /border:\s*1px solid var\(--am26-border\);[\s\S]*?border-radius:\s*999px;[\s\S]*?background:\s*var\(--am26-surface\);[\s\S]*?color:\s*var\(--am26-primary\);/, '复制按钮应收敛为统一 token 胶囊入口');
+    assert.match(copyBadgeRule, /border-radius:\s*10px;[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?background:\s*var\(--am26-surface-strong\);[\s\S]*?color:\s*var\(--am26-primary\);/, '复制数量徽标样式应复用统一 token 玻璃视觉');
+    assert.doesNotMatch(copyButtonRule, /border-radius:\s*4px;/, '复制按钮不应回退到旧小圆角');
+    assert.doesNotMatch(copyBadgeRule, /rgba\(99,\s*102,\s*241,\s*0\.32\)|#3344c8/, '复制数量徽标不应回退到旧紫色硬编码');
 });
 
 test('复制入口读取当前计划详情并调用受控 API', () => {
@@ -99,7 +104,7 @@ test('复制成功后弹窗说明明细并确认页内搜索', () => {
     assert.match(quickEntry, /showCopySuccessDialogAndRefresh\(result,\s*\{[\s\S]*?campaignId:\s*id,[\s\S]*?sourceCampaignId:\s*id,[\s\S]*?mode:\s*copyMode,[\s\S]*?copyCount,[\s\S]*?statusText,[\s\S]*?triggerEl:\s*copyBtn[\s\S]*?\}\);/, '复制成功后应展示明细弹窗并保留可重新定位的触发按钮焦点目标');
     assert.match(quickEntry, /resolveCopiedCampaignIds\(result = \{\}\)[\s\S]*?copySource\.createdCampaignIds[\s\S]*?result\?\.postCreateStatus\?\.campaignIds/, '弹窗明细应优先使用创建后确认的新计划 ID');
     assert.match(quickEntry, /buildCopySuccessDialogMessage\(result = \{\},\s*context = \{\}\)[\s\S]*?'复制计划已成功'[\s\S]*?`本次复制成功：\$\{successCount\} 个`[\s\S]*?'新计划明细：'[\s\S]*?'点击“确定并搜索”后将在计划名称框搜索公共名称。'/, '弹窗应说明复制数量、明细和页内搜索行为');
-    assert.match(quickEntry, /popup\.id = 'am-campaign-copy-success-popup';[\s\S]*?popup\.setAttribute\('aria-labelledby',\s*titleId\);[\s\S]*?icon\.innerHTML = renderAmIcon\('check-circle'[\s\S]*?title\.id = titleId;[\s\S]*?body\.textContent = message\.replace[\s\S]*?confirmBtn\.textContent = '确定并搜索';[\s\S]*?cancelBtn\.textContent = '取消';/, '复制成功后应使用共享 SVG 和标题关联展示明细');
+    assert.match(quickEntry, /popup\.id = 'am-campaign-copy-success-popup';[\s\S]*?popup\.setAttribute\('aria-labelledby',\s*titleId\);[\s\S]*?popup\.setAttribute\('aria-describedby',\s*bodyId\);[\s\S]*?icon\.innerHTML = renderAmIcon\('check-circle'[\s\S]*?title\.id = titleId;[\s\S]*?state\.className = 'am-copy-success-state';[\s\S]*?state\.textContent = '已完成';[\s\S]*?body\.id = bodyId;[\s\S]*?body\.textContent = message\.replace[\s\S]*?confirmBtn\.textContent = '确定并搜索';[\s\S]*?cancelBtn\.textContent = '取消';/, '复制成功后应使用共享 SVG、状态胶囊和标题/描述关联展示明细');
     assert.match(quickEntry, /resolveCopySuccessSearchKeyword\(result = \{\},\s*context = \{\}\)[\s\S]*?const normalizedNewPlanNames = newPlanNames[\s\S]*?\.map\(name => this\.normalizeCopyPlanSearchSeed\(name\)\)[\s\S]*?const newPlanCommonName = this\.resolvePlanNameCommonPart\(normalizedNewPlanNames\);/, '确认搜索应先去掉新计划名最右侧复制序号');
     assert.match(quickEntry, /findCopySuccessPlanNameSearchInput\(\)[\s\S]*?计划名称[\s\S]*?回车搜索/, '确认搜索应定位当前页计划名称搜索框');
     assert.match(quickEntry, /applyCopySuccessPlanNameSearch\(searchValue = '',\s*result = \{\},\s*context = \{\}\)[\s\S]*?setNativeInputValue\(input,\s*normalizedSearchValue\);[\s\S]*?dispatchCopySuccessSearchEnter\(input\);/, '确认搜索应写入输入框并触发回车搜索');
@@ -119,6 +124,7 @@ test('复制成功后弹窗说明明细并确认页内搜索', () => {
     assert.doesNotMatch(successPopupRule, /rgba\(27,\s*36,\s*56,\s*0\.28\)|blur\(10px\)/, '复制成功弹窗遮罩不应回退到旧灰色遮罩');
     assert.match(successCardRule, /width:\s*min\(420px,[\s\S]*?border:\s*1px solid var\(--am26-border-strong\);[\s\S]*?border-radius:\s*18px;[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.96\),\s*rgba\(255,\s*255,\s*255,\s*0\.88\)\);[\s\S]*?box-shadow:\s*var\(--am26-shadow\);/, '复制成功弹窗应呈现明确白色轻玻璃面板');
     assert.match(quickEntryStyle, /#am-campaign-copy-success-popup \.am-copy-success-icon\s*\{[\s\S]*?border-radius:\s*50%;[\s\S]*?background:\s*rgba\(14,\s*168,\s*111,\s*0\.14\);[\s\S]*?color:\s*var\(--am26-success\);/, '复制成功弹窗应使用成功语义图标容器');
+    assert.match(quickEntryStyle, /#am-campaign-copy-success-popup \.am-copy-success-state\s*\{[\s\S]*?color:\s*var\(--am26-success\);[\s\S]*?background:\s*rgba\(14,\s*168,\s*111,\s*0\.12\);/, '复制成功弹窗应显示成功语义状态胶囊');
     assert.match(quickEntryStyle, /#am-campaign-copy-success-popup \.am-copy-success-title\s*\{[\s\S]*?font-size:\s*16px;[\s\S]*?line-height:\s*24px;[\s\S]*?#am-campaign-copy-success-popup \.am-copy-success-body\s*\{[\s\S]*?font-size:\s*12px;[\s\S]*?line-height:\s*18px;/, '复制成功弹窗字体应按参考原生弹窗尺寸');
     assert.match(quickEntryStyle, /#am-campaign-copy-success-popup \.am-copy-success-confirm,[\s\S]*?#am-campaign-copy-success-popup \.am-copy-success-cancel\s*\{[\s\S]*?min-width:\s*64px;[\s\S]*?height:\s*32px;[\s\S]*?border-radius:\s*500px;[\s\S]*?font-size:\s*12px;/, '复制成功弹窗按钮应保持紧凑胶囊尺寸');
     assert.match(quickEntry, /createCopyFocusTarget\(context = \{\},\s*fallbackElement = null\)[\s\S]*?campaignId[\s\S]*?context\.campaignId[\s\S]*?context\.sourceCampaignId[\s\S]*?data-campaign-id[\s\S]*?mode[\s\S]*?data-am-campaign-copy/, '复制弹窗焦点目标应保存 campaignId 与复制模式，支持运行态重定位');
@@ -129,8 +135,8 @@ test('复制成功后弹窗说明明细并确认页内搜索', () => {
 });
 
 test('复制提交前先展示可编辑一览窗并在确认后显示生成中', () => {
-    assert.match(quickEntry, /popup\.id = 'am-campaign-copy-overview-popup';[\s\S]*?popup\.setAttribute\('aria-labelledby',\s*titleId\);/, '复制前一览窗应通过标题建立可访问名称');
-    assert.match(quickEntry, /class="am-copy-overview-icon">\$\{renderAmIcon\('campaign-copy'[\s\S]*?class="am-copy-overview-title" id="\$\{titleId\}"[\s\S]*?class="am-copy-overview-close" aria-label="关闭">\$\{renderAmIcon\('close'/, '复制前一览窗应使用共享 SVG 图标和 close 图标');
+    assert.match(quickEntry, /popup\.id = 'am-campaign-copy-overview-popup';[\s\S]*?popup\.setAttribute\('aria-labelledby',\s*titleId\);[\s\S]*?popup\.setAttribute\('aria-describedby',\s*statusId\);/, '复制前一览窗应通过标题和状态区建立可访问名称与描述');
+    assert.match(quickEntry, /class="am-copy-overview-icon">\$\{renderAmIcon\('campaign-copy'[\s\S]*?class="am-copy-overview-title" id="\$\{titleId\}"[\s\S]*?class="am-copy-overview-state">待确认<\/span>[\s\S]*?class="am-copy-overview-close" aria-label="关闭">\$\{renderAmIcon\('close'/, '复制前一览窗应使用共享 SVG 图标、状态胶囊和 close 图标');
     for (const label of ['计划名称', '计划出价方式', '出价价格', '预算']) {
         assert.match(quickEntry, new RegExp(`<th>${label}<\\/th>`), `一览窗缺少 ${label} 列`);
     }
@@ -167,7 +173,7 @@ test('复制提交前先展示可编辑一览窗并在确认后显示生成中',
     assert.match(quickEntry, /querySelectorAll\(`a\[href\*="campaignId=\$\{campaignId\}"\], a\[href\*="campaignId%3D\$\{campaignId\}"\]`\)/, '固定操作列按钮应通过 campaignId 回到当前计划行提取出价方式');
     assert.match(quickEntry, /campaignLinkCount > 3/, '出价方式提取必须避开包含多计划的整表容器');
     assert.match(quickEntry, /if \(text\.length > 2500\) break;[\s\S]*?if \(text\.length > 1200\)/, '出价方式行文本提取不能扫到整张表导致误取其它计划');
-    assert.match(quickEntry, /确认后才会提交创建请求。/, '一览窗应明确确认后才提交');
+    assert.match(quickEntry, /id="\$\{statusId\}" data-am-copy-overview-status role="status" aria-live="polite">确认后才会提交创建请求。/, '一览窗应明确确认后才提交并使用 live status 语义');
     assert.match(quickEntry, /setStatus\('生成中：正在提交复制请求，请勿重复操作。',\s*'running'\);/, '确认提交后应显示生成中状态');
     assert.match(quickEntry, /validateCopyOverviewRows\(editedRows\)/, '确认提交前应校验编辑行');
     const overviewPopupRule = extractCssRule(quickEntryStyle, '#am-campaign-copy-overview-popup');
@@ -179,6 +185,7 @@ test('复制提交前先展示可编辑一览窗并在确认后显示生成中',
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-table-wrap\s*\{[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;/, '一览窗不应出现横向滚动条');
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-table[\s\S]*?table-layout:\s*auto;/, '一览窗表格应按内容自动适配列宽');
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-bulkbar\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?border-bottom:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.42\);/, '批量编辑区应为可换行轻量玻璃工具条');
+    assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-state,[\s\S]*?#am-campaign-copy-success-popup \.am-copy-success-state\s*\{[\s\S]*?border:\s*1px solid var\(--am26-border\);[\s\S]*?border-radius:\s*999px;[\s\S]*?background:\s*var\(--am26-surface-strong\);[\s\S]*?color:\s*var\(--am26-primary\);/, '复制弹窗状态胶囊应复用统一 token');
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-bulk-input,[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-bulk-select\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-bottom:\s*1px solid rgba\(80,\s*90,\s*116,\s*0\.28\);/, '批量编辑输入也应使用 token 化轻量下划线样式');
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-bulk-btn\s*\{[\s\S]*?border-radius:\s*500px;[\s\S]*?color:\s*var\(--am26-primary\);/, '批量编辑按钮应沿用弹窗胶囊按钮风格');
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-table th:nth-child\(3\),[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-table td:nth-child\(3\)\s*\{[\s\S]*?width:\s*1%;[\s\S]*?min-width:\s*146px;[\s\S]*?white-space:\s*nowrap;/, '计划出价方式列应容纳智能出价目标明细并保持紧凑展示');
@@ -186,6 +193,8 @@ test('复制提交前先展示可编辑一览窗并在确认后显示生成中',
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-budget-cell\s*\{[\s\S]*?grid-template-columns:\s*76px 82px;/, '预算编辑控件不应撑宽整列');
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-input,[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-select\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-bottom:\s*1px solid rgba\(80,\s*90,\s*116,\s*0\.28\);[\s\S]*?background:\s*transparent;/, '一览窗编辑控件应使用无外框的 token 下划线样式');
     assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-input:focus,[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-select:focus\s*\{[\s\S]*?border-bottom-color:\s*var\(--am26-primary\);/, '一览窗编辑控件 focus 仅强调底部线条');
+    assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-status\.is-running\s*\{[\s\S]*?color:\s*var\(--am26-primary-strong\);[\s\S]*?background:\s*rgba\(69,\s*84,\s*229,\s*0\.1\);[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-status\.is-success\s*\{[\s\S]*?color:\s*var\(--am26-success\);[\s\S]*?background:\s*rgba\(14,\s*168,\s*111,\s*0\.12\);[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-status\.is-error\s*\{[\s\S]*?color:\s*var\(--am26-danger\);[\s\S]*?background:\s*rgba\(234,\s*79,\s*79,\s*0\.12\);/, '一览窗状态条应使用统一语义 token');
+    assert.doesNotMatch(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-status\.is-running\s*\{[\s\S]*?#eff6ff|#am-campaign-copy-overview-popup \.am-copy-overview-status\.is-success\s*\{[\s\S]*?#edf9f2|#am-campaign-copy-overview-popup \.am-copy-overview-status\.is-error\s*\{[\s\S]*?#fff1f1/, '一览窗状态条不应回退到旧硬编码状态底色');
     assert.match(quickEntry, /openCopyPlanOverviewDialog\(context = \{\},\s*submitCallback\)[\s\S]*?const focusBackTarget = this\.createCopyFocusTarget\(context,\s*previousActiveElement\);[\s\S]*?const restoreFocus = \(\) => \{[\s\S]*?this\.restoreFocusWhenReady\(focusBackTarget\);[\s\S]*?popup\.addEventListener\('keydown'[\s\S]*?event\.key !== 'Escape'/, '复制前一览窗应支持 Esc 关闭并优先恢复到触发按钮');
     assert.match(quickEntryStyle, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-close,[\s\S]*?#am-campaign-copy-success-popup \.am-copy-success-confirm/, '复制弹窗动效应适配减少动画');
 });

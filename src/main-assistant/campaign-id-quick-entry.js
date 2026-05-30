@@ -2389,12 +2389,14 @@
             const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
             const focusBackTarget = this.createCopyFocusTarget(context, previousActiveElement);
             const titleId = 'am-copy-success-title';
+            const bodyId = 'am-copy-success-body';
 
             const popup = document.createElement('div');
             popup.id = 'am-campaign-copy-success-popup';
             popup.setAttribute('role', 'dialog');
             popup.setAttribute('aria-modal', 'true');
             popup.setAttribute('aria-labelledby', titleId);
+            popup.setAttribute('aria-describedby', bodyId);
 
             const card = document.createElement('section');
             card.className = 'am-copy-success-card';
@@ -2407,7 +2409,11 @@
             title.className = 'am-copy-success-title';
             title.id = titleId;
             title.textContent = '复制计划已成功';
+            const state = document.createElement('span');
+            state.className = 'am-copy-success-state';
+            state.textContent = '已完成';
             const body = document.createElement('pre');
+            body.id = bodyId;
             body.className = 'am-copy-success-body';
             body.textContent = message.replace(/^复制计划已成功\n?/, '');
             const footer = document.createElement('div');
@@ -2446,6 +2452,7 @@
 
             header.appendChild(icon);
             header.appendChild(title);
+            header.appendChild(state);
             footer.appendChild(confirmBtn);
             footer.appendChild(cancelBtn);
             card.appendChild(header);
@@ -4429,6 +4436,7 @@
                 const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 const focusBackTarget = this.createCopyFocusTarget(context, previousActiveElement);
                 const titleId = 'am-copy-overview-title';
+                const statusId = 'am-copy-overview-status';
                 const rows = Array.isArray(context.previewRows) && context.previewRows.length
                     ? context.previewRows
                     : this.buildCopyOverviewRows(context);
@@ -4437,6 +4445,7 @@
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
                 popup.setAttribute('aria-labelledby', titleId);
+                popup.setAttribute('aria-describedby', statusId);
                 const sourceName = String(context.source?.campaign?.campaignName || context.source?.campaignName || '').trim();
                 const firstRow = rows[0] || {};
                 const lastRow = rows[rows.length - 1] || firstRow;
@@ -4467,8 +4476,11 @@
                             <div class="am-copy-overview-heading">
                                 <span class="am-copy-overview-icon">${renderAmIcon('campaign-copy', { size: 18, strokeWidth: 2.1 })}</span>
                                 <div>
-                                <h3 class="am-copy-overview-title" id="${titleId}">复制计划一览</h3>
-                                <p class="am-copy-overview-subtitle">${this.escapeHtml(sourceName || `源计划 ${context.campaignId || ''}`)} · ${this.escapeHtml(context.sceneName || '')} · 共 ${rows.length} 个</p>
+                                    <div class="am-copy-overview-title-row">
+                                        <h3 class="am-copy-overview-title" id="${titleId}">复制计划一览</h3>
+                                        <span class="am-copy-overview-state">待确认</span>
+                                    </div>
+                                    <p class="am-copy-overview-subtitle">${this.escapeHtml(sourceName || `源计划 ${context.campaignId || ''}`)} · ${this.escapeHtml(context.sceneName || '')} · 共 ${rows.length} 个</p>
                                 </div>
                             </div>
                             <button type="button" class="am-copy-overview-close" aria-label="关闭">${renderAmIcon('close', { size: 14, strokeWidth: 2.4 })}</button>
@@ -4514,7 +4526,7 @@
                                 <tbody>${rowHtml}</tbody>
                             </table>
                         </div>
-                        <div class="am-copy-overview-status" data-am-copy-overview-status>确认后才会提交创建请求。</div>
+                        <div class="am-copy-overview-status is-info" id="${statusId}" data-am-copy-overview-status role="status" aria-live="polite">确认后才会提交创建请求。</div>
                         <footer class="am-copy-overview-footer">
                             <button type="button" class="am-copy-overview-submit">确认生成</button>
                             <button type="button" class="am-copy-overview-cancel">取消</button>

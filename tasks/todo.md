@@ -17,7 +17,7 @@
 - [x] 页面 6：建计划商品选择弹窗。
 - [x] 页面 7：场景配置/策略详情/高级设置弹窗。
 - [x] 页面 8：建计划提交确认弹窗。
-- [ ] 页面 9：计划行复制入口 + 一览/成功弹窗。
+- [x] 页面 9：计划行复制入口 + 一览/成功弹窗。
 - [ ] 页面 10：计划行并发开启入口 + 日志弹窗。
 - [ ] 页面 11：批量+ 菜单 + 批量确认弹窗。
 - [ ] 页面 12：下载捕获面板。
@@ -37,6 +37,7 @@
 - 页面 6 已完成：组建计划“添加商品”二级弹窗统一为浅玻璃工作台弹层，补齐标题图标、已选数量状态、搜索工具条、候选/已选商品卡片状态、空态和底部操作区；添加/取消本地状态已在真实页验证，保留候选加载、添加/移除商品、取消回滚、确认回写和创建提交逻辑不变。
 - 页面 7 已完成：组建计划“编辑计划”详情层和内部“高级设置”弹窗统一为浅玻璃工作台弹层，补齐详情标题图标、二级说明、编辑状态、场景配置行、操作区和高级设置资源位/地域/分时控件 token；验证只打开编辑页、修改可回滚输入、切换高级设置 tab 和关闭弹窗，未点击批量创建或提交创建。
 - 页面 8 已完成：组建计划“提交创建”二次确认弹窗统一为浅玻璃工作台确认层，补齐专用白玻璃遮罩、待提交状态、统计卡、场景摘要、warning 风险提示和 token 化底部按钮；保留 `openKeywordSubmitConfirmPopup()` 只做确认 gating，确认后仍进入现有 `handleRun()` 创建链路；真实页只打开弹窗并取消关闭，未点击“确认提交创建”。
+- 页面 9 已完成：计划行复制入口、复制数量徽标、复制计划一览窗和成功窗按统一浅玻璃规范收敛；补齐待确认/已完成状态胶囊、`aria-describedby`、live status 语义和 token 化状态色；真实页只打开一览窗并取消关闭，未点击“确认生成”，不改 `prepareCopyCurrentPlanContext()`、`submitPreparedCopyCurrentPlan()`、真实创建、暂停兜底和页内搜索业务链路。
 
 ## 验证记录
 - 页面 1 自动化：
@@ -176,6 +177,28 @@
   - 安全核对：performance resource 未发现 `/solution/addList.json`、`/solution/business/addList.json`、`/bidword/add.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/campaign/onebpSite/oneClick.json` 等写接口。
   - 截图：`tasks/ui-page8-keyword-submit-confirm-after-2026-05-30.png`。
   - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 与原站 `endGroup Error` 噪声，未发现插件确认窗相关运行时异常。
+- 页面 9 自动化：
+  - `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+  - `node --check src/main-assistant/ui.js`：通过。
+  - `node --check tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过。
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，13/13。
+  - `npm run build`：通过，已同步根 userscript、`dist/packages/` 和 `dist/extension/page.bundle.js`。
+  - `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/icon-system-regression.test.mjs`：通过，26/26。
+  - `npm run build:check`：通过。
+  - `npm run check:syntax`：通过。
+  - `git diff --check`：通过。
+  - `node --check dist/extension/page.bundle.js`：通过。
+- 页面 9 Chrome MCP：
+  - 扩展详情页 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload 后，进入真实关键词推广列表页 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc`。
+  - 页面身份：`关键词推广_万相台无界版`；运行态找到 39 个 `.am-campaign-copy-btn`，首个可见入口 campaignId `75310601591`，按钮文案 `复制1`，`aria-label="复制：75310601591"`。
+  - 入口样式核对：复制按钮为 999px 胶囊、`rgba(255,255,255,.25)` 浅玻璃背景、`rgb(69,84,229)` 主色、`rgba(255,255,255,.4)` 边框、`min-width=88px`、`white-space=nowrap`；数量徽标为浅玻璃 token 背景和 10px 圆角。
+  - 交互核对：点击首个“复制”只打开 `复制计划一览`，未点击“确认生成”；弹窗 `role=dialog`、`aria-modal=true`、`aria-labelledby=am-copy-overview-title`、`aria-describedby=am-copy-overview-status`；可见“待确认”和状态文案“确认后才会提交创建请求。”。
+  - 内容核对：一览窗显示源计划摘要 `智能计划_0521_1748_6 · 关键词推广 · 共 1 个`，表格含计划名称、计划出价方式、出价价格、预算字段，底部“确认生成/取消”按钮可见。
+  - 样式核对：遮罩为浅白玻璃并带 `blur(8px) saturate(1.15)`；卡片为 18px 圆角、白色轻玻璃渐变、`rgba(255,255,255,.6)` 边框；状态胶囊为 999px 圆角浅玻璃，颜色使用主色 token；页面无横向溢出。
+  - 取消核对：点击“取消”后 `#am-campaign-copy-overview-popup` 消失。
+  - 安全核对：点击复制到取消期间未出现 `/solution/addList.json`、`/solution/business/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、`/bidword/add.json`、`/campaign/onebpSite/oneClick.json` 等写接口；仅观察到只读 `campaign/get.json` 和 `campaign/horizontal/findPage.json`。
+  - 截图：`tasks/ui-page9-campaign-copy-overview-after-2026-05-30.png`。
+  - Console：仅观察到原站资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 噪声，未发现插件复制一览窗相关运行时异常。
 
 ## 结果复盘
 - 页面 1 结果：主入口工作台视觉已按规范收敛，按钮和开关状态更清晰，未改动业务开关逻辑。
@@ -202,6 +225,9 @@
 - 页面 8 结果：提交创建二次确认弹窗已按统一浅玻璃工作台规范收敛，统计信息、场景摘要、待提交状态和风险提示在真实页中可见且取消稳定；确认 gating 仍保留，未改动实际创建提交链路。
 - 页面 8 风险：真实验收刻意不点击“确认提交创建”，因此确认后的真实创建执行仍由既有提交链路和专项测试覆盖；本轮只证明二次确认打开、取消和不触发写接口。
 - 页面 8 回滚：回退 `src/optimizer/keyword-plan-api/request-builder-preview.js`、`src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js`、`src/optimizer/keyword-plan-api/wizard-style-and-state/style.js`、`tests/keyword-home-strategy-batch-actions.test.mjs`、构建产物和页面 8 截图即可。
+- 页面 9 结果：计划行复制入口和复制一览/成功弹窗已按统一浅玻璃工作台规范收敛，入口按钮、数量徽标、待确认/已完成状态和状态条语义更清晰；真实页验证覆盖入口、一览窗、取消关闭和不触发写接口。
+- 页面 9 风险：真实验收刻意不点击“确认生成”，因此成功弹窗无法在不真实创建计划的前提下触发；成功窗的 `aria-describedby`、已完成状态胶囊和成功语义 token 由源码与专项测试覆盖。
+- 页面 9 回滚：回退 `src/main-assistant/campaign-id-quick-entry.js`、`src/main-assistant/ui.js`、`tests/campaign-copy-current-plan-quick-entry.test.mjs`、构建产物和页面 9 截图即可。
 
 ---
 
