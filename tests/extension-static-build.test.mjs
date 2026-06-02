@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Script, createContext } from 'node:vm';
 import { normalizeExtensionManifestVersion, renderBuildOutputs } from '../scripts/build.mjs';
 
 const outputs = renderBuildOutputs();
@@ -7,6 +8,125 @@ const manifest = JSON.parse(outputs.extensionFiles['manifest.json']);
 const contentSource = outputs.extensionFiles['content.js'];
 const backgroundSource = outputs.extensionFiles['background.js'];
 const pageBundle = outputs.extensionFiles['page.bundle.js'];
+
+function createContentScriptHarness(initialUrl) {
+  const appendedScripts = [];
+  const intervals = new Map();
+  const listeners = new Map();
+  const nodesById = new Map();
+  let currentUrl = new URL(initialUrl);
+  let nextTimerId = 1;
+  const updateLocation = (nextUrl) => {
+    currentUrl = new URL(nextUrl, currentUrl.href);
+    windowRef.location.href = currentUrl.href;
+    windowRef.location.origin = currentUrl.origin;
+  };
+  const makeElement = (tagName) => {
+    const element = {
+      tagName: String(tagName || '').toUpperCase(),
+      id: '',
+      className: '',
+      tabIndex: 0,
+      textContent: '',
+      style: {},
+      dataset: {},
+      attrs: {},
+      setAttribute(name, value) {
+        this.attrs[name] = String(value);
+      },
+      appendChild(child) {
+        if (child?.id) nodesById.set(child.id, child);
+        return child;
+      },
+      remove() {
+        if (this.id) nodesById.delete(this.id);
+        this.removed = true;
+      },
+      focus() { }
+    };
+    return element;
+  };
+  const mountNode = {
+    appendChild(node) {
+      if (node?.id) nodesById.set(node.id, node);
+      if (node?.tagName === 'SCRIPT') {
+        appendedScripts.push(node);
+        if (typeof node.onload === 'function') node.onload();
+      }
+      return node;
+    }
+  };
+  const documentRef = {
+    head: mountNode,
+    documentElement: mountNode,
+    body: mountNode,
+    getElementById(id) {
+      return nodesById.get(id) || null;
+    },
+    createElement: makeElement
+  };
+  const windowRef = {
+    location: {
+      href: currentUrl.href,
+      origin: currentUrl.origin
+    },
+    history: {
+      pushState(_state, _title, url) {
+        if (url) updateLocation(url);
+        return null;
+      },
+      replaceState(_state, _title, url) {
+        if (url) updateLocation(url);
+        return null;
+      }
+    },
+    postMessage() { },
+    addEventListener(type, handler) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(handler);
+    },
+    setTimeout(handler) {
+      if (typeof handler === 'function') handler();
+      return 1;
+    },
+    setInterval(handler) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') intervals.set(timerId, handler);
+      return timerId;
+    },
+    clearInterval(timerId) {
+      intervals.delete(timerId);
+    }
+  };
+  const context = createContext({
+    window: windowRef,
+    document: documentRef,
+    chrome: {
+      runtime: {
+        getURL: (path) => `chrome-extension://am-helper/${path}`,
+        sendMessage: (_payload, callback) => {
+          if (typeof callback === 'function') callback({ ok: true });
+        },
+        lastError: null
+      }
+    },
+    URL,
+    String,
+    Date,
+    Object
+  });
+  new Script(contentSource).runInContext(context);
+  return {
+    appendedScripts,
+    intervals,
+    listeners,
+    window: windowRef,
+    tickIntervals() {
+      Array.from(intervals.values()).forEach((handler) => handler());
+    }
+  };
+}
 
 test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
   assert.equal(manifest.manifest_version, 3, 'manifest_version 必须为 3');
@@ -44,6 +164,15 @@ test('extension content script 负责注入 page bundle', () => {
   assert.match(contentSource, /chrome\.runtime\.getURL\('page\.bundle\.js'\)/, '未通过 runtime URL 注入 page bundle');
   assert.doesNotMatch(contentSource, /keyword-plan-api\.bundle\.js/, 'content script 不应把 keyword-plan-api 大包延后到点击路径');
   assert.match(contentSource, /SCRIPT_ID = 'am-helper-pro-extension-page-bundle'/, '缺少固定注入节点 ID');
+  assert.match(contentSource, /const shouldInjectPageBundle = \(\) => \{/, 'content script 缺少 page bundle 注入资格守卫');
+  assert.match(contentSource, /let pageBundleInjected = false;/, 'content script 缺少已注入状态位，路由变化可能重复注入 page bundle');
+  assert.match(contentSource, /if \(hostname === 'one\.alimama\.com'\) return true;/, 'one.alimama.com 必须继续注入完整 page bundle');
+  assert.match(contentSource, /if \(isMysellerHost\(hostname\)\) return isSmartAssistantBudgetPage\(url\);/, 'myseller.taobao.com 只应允许 SmartAssistant 预算页注入');
+  assert.match(contentSource, /const shouldWatchForDeferredInjection = \(\) => \{[\s\S]*return isMysellerHost\(normalizeHostname\(url\.hostname\)\);[\s\S]*\};/, '只有 myseller 普通页需要保留延迟注入监听');
+  assert.match(contentSource, /return false;\s*\};[\s\S]*const renderInjectionError/, '非业务匹配页默认不应注入完整 page bundle');
+  assert.match(contentSource, /const URL_POLL_INTERVAL_MS = 600;/, '未注入页应使用轻量 URL 轮询兜底捕获主世界 SPA 路由变化');
+  assert.match(contentSource, /window\.addEventListener\('hashchange', scheduleInjectionCheck\);[\s\S]*window\.addEventListener\('popstate', scheduleInjectionCheck\);[\s\S]*startUrlPolling\(\);/, '未注入页面应监听 URL 变化以便后续进入业务页时恢复注入');
+  assert.doesNotMatch(contentSource, /historyRef\[methodName\] = wrapped;/, 'content script 不应依赖隔离世界包装页面 history 方法捕获主世界 SPA 跳转');
   assert.match(contentSource, /const renderInjectionError = \(message = ''\) => \{/, '缺少 extension 注入失败可见反馈');
   assert.match(contentSource, /root\.setAttribute\('role', 'alert'\);/, 'extension 注入失败提示缺少 alert 语义');
   assert.match(contentSource, /root\.setAttribute\('aria-live', 'assertive'\);/, 'extension 注入失败提示缺少 assertive live 区域');
@@ -55,13 +184,43 @@ test('extension content script 负责注入 page bundle', () => {
   assert.doesNotMatch(contentSource, /root\.innerHTML\s*=/, 'extension 注入失败提示不得用 innerHTML 渲染');
   assert.doesNotMatch(contentSource, /background:#b91c1c/, 'extension 注入失败提示仍保留旧红色实底');
   assert.match(contentSource, /script\.onerror = \(\) => \{[\s\S]*renderInjectionError\(\);[\s\S]*\};/, 'page bundle 注入失败未展示页面错误');
-  assert.match(contentSource, /mountNode\.appendChild\(script\);[\s\S]*catch \{[\s\S]*renderInjectionError\(\);/, 'appendChild 失败未兜底展示页面错误');
+  assert.match(contentSource, /nextMountNode\.appendChild\(script\);[\s\S]*catch \{[\s\S]*renderInjectionError\(\);/, 'appendChild 失败未兜底展示页面错误');
   assert.match(contentSource, /const LICENSE_VERIFY_BRIDGE_CHANNEL = 'am-helper-pro:license-verify';/, '缺少授权桥 channel 常量');
   assert.match(contentSource, /if \(data\.channel !== LICENSE_VERIFY_BRIDGE_CHANNEL\) return;/, 'content script 未限制授权桥 channel');
   assert.match(contentSource, /if \(data\.type !== LICENSE_VERIFY_REQUEST_TYPE\) return;/, 'content script 未限制授权桥消息类型');
   assert.match(contentSource, /try \{[\s\S]*chrome\.runtime\.sendMessage\(\{\s*type: LICENSE_VERIFY_MESSAGE_TYPE,\s*payload\s*\},\s*\(response\) => \{/, 'content script 未保护式转发授权请求给 background');
   assert.match(contentSource, /catch \(err\) \{[\s\S]*markLicenseBridgeRuntimeUnavailable\(err\);[\s\S]*postLicenseBridgeRuntimeUnavailable\(requestId\);[\s\S]*\}/, 'content script 未捕获扩展上下文失效错误');
   assert.match(contentSource, /type: LICENSE_VERIFY_RESPONSE_TYPE,/, 'content script 未回传授权桥响应');
+});
+
+test('extension content script 只在业务页面注入完整 page bundle', () => {
+  const one = createContentScriptHarness('https://one.alimama.com/index.html#!/manage/display');
+  assert.equal(one.appendedScripts.length, 1, 'one.alimama.com 应继续注入完整 page bundle');
+  assert.match(one.appendedScripts[0].src, /page\.bundle\.js$/, 'one.alimama.com 注入的脚本应为 page.bundle.js');
+
+  const mysellerHome = createContentScriptHarness('https://myseller.taobao.com/home.htm/QnworkbenchHome/');
+  assert.equal(mysellerHome.appendedScripts.length, 0, 'myseller 普通工作台不应注入完整 page bundle');
+  assert.ok(mysellerHome.listeners.has('hashchange'), '未注入页应监听 hashchange 以恢复注入');
+  assert.ok(mysellerHome.listeners.has('popstate'), '未注入页应监听 popstate 以恢复注入');
+  assert.equal(mysellerHome.intervals.size, 1, '未注入页应启动轻量 URL 轮询兜底');
+
+  mysellerHome.window.history.pushState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant');
+  assert.equal(mysellerHome.appendedScripts.length, 0, '隔离世界不应假设页面主世界 pushState 会直接触发注入');
+  mysellerHome.tickIntervals();
+  assert.equal(mysellerHome.appendedScripts.length, 1, 'myseller 跳转 SmartAssistant 后应恢复注入');
+  assert.equal(mysellerHome.intervals.size, 0, 'page bundle 成功注入后应停止 URL 轮询');
+  mysellerHome.window.history.replaceState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant?from=codex');
+  mysellerHome.window.history.pushState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant#dailyBudget');
+  mysellerHome.tickIntervals();
+  assert.equal(mysellerHome.appendedScripts.length, 1, 'page bundle 成功注入后不应被后续 URL 变化重复注入');
+
+  const smartAssistant = createContentScriptHarness('https://myseller.taobao.com/home.htm/crm-workbench/smartassistant');
+  assert.equal(smartAssistant.appendedScripts.length, 1, 'SmartAssistant 预算页应允许注入预算补丁运行时');
+
+  const broadAlimama = createContentScriptHarness('https://pub.alimama.com/');
+  assert.equal(broadAlimama.appendedScripts.length, 0, '宽泛 alimama 子域默认不应注入 4.4MB page bundle');
+  assert.equal(broadAlimama.intervals.size, 0, '宽泛 alimama 子域不应保留 myseller 专用 URL 轮询');
+  assert.equal(broadAlimama.listeners.size, 1, '宽泛 alimama 子域仅应保留授权 bridge message 监听');
 });
 
 test('extension build output 包含授权 background 桥', () => {

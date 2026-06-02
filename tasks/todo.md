@@ -15,8 +15,8 @@
 - [x] 第一轮实现：按证据做最小侵入结构优化，补充必要测试或探针，避免把成本转移到点击路径。
 - [x] 验证闭环：运行相关单测、`npm run check:syntax`、`npm run build:check`，并做 Chrome 运行态复测或说明替代证据。
 - [x] 结果对比：每次优化写清优化前指标、优化后指标、差值、结论和下一轮是否继续。
-- [ ] 中文提交：每完成一项优化或本轮对话收口前，检查 diff 后用中文提交信息提交本轮实质改动。
-- [ ] 结果归档：更新本节高层操作摘要、验证记录、结果复盘和下一轮建议。
+- [x] 中文提交：每完成一项优化或本轮对话收口前，检查 diff 后用中文提交信息提交本轮实质改动。
+- [x] 结果归档：更新本节高层操作摘要、验证记录、结果复盘和下一轮建议。
 
 ## 高层操作摘要
 - 已启动目标型任务，按项目规则先回顾 `tasks/lessons.md`；最相关教训是 L43：性能拆包不能把大包首次解析成本转移到用户点击路径。
@@ -27,22 +27,37 @@
 - Chrome 基线：真实页 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 中，`requestHistory.length` 已满 `4000`，其中 `3998` 条是 `club.alimama.com/api/b/side/engine/trace/report.json` 高频曝光埋点。
 - 第一轮优化方案已落地：`createHookManager()` 过滤无业务价值 trace 埋点、默认请求历史上限从 `4000` 收敛到 `1200`，并对超大 body 做摘要化截断；保留普通业务 JSON、`URLSearchParams`、`FormData`、`Blob`、`ArrayBuffer` 的可回放表示。
 - 只读子代理复核结论：过滤 trace 埋点不影响 token/shopId/lifecycle/magic-report 的已知事实源；需注意 `1200` 上限会淘汰更早历史，请求体超过 `240000` 字符后只能解析截断前字段。已补行为测试覆盖 trace 过滤、业务请求保留、AI report URLSearchParams body 和上限裁剪。
+- 第一轮已提交：`0bf433d 优化 Chrome 请求历史内存占用`。
+- 第二轮计划：收窄 Chrome extension `page.bundle.js` 注入资格。`one.alimama.com` 继续完整注入；`myseller.taobao.com` 仅 SmartAssistant 预算页允许注入；其它 broad match 页面只保留轻量 content script，不加载 4.4MB page bundle。
+- 第二轮复核修正：MV3 content script 默认隔离世界，不能只靠包装页面 `history.pushState/replaceState` 证明能捕获主世界 SPA 跳转；本轮改为在未注入的 `myseller` 页保留轻量 URL 轮询兜底，进入 SmartAssistant 后注入一次并停止轮询。
+- 第二轮优化已落地：`extension-content` 在 content script 层先判断页面资格，只有 `one.alimama.com` 和 `myseller` SmartAssistant 预算页挂载完整 `page.bundle.js`；普通 `myseller` 页保留 600ms URL 轮询，宽泛 `alimama` 子域不保留轮询。
+- 第二轮自审取舍：没有改 manifest match，避免丢失授权 bridge 和未来同源路由恢复能力；内存收益来自阻止 4.4MB `page.bundle.js` 在非业务页解析和启动，而不是把大包推迟到用户点击路径。
 
 ## 验证记录
 - 本地验证：`node --test tests/logger-api.test.mjs` 通过，18 项测试全绿；新增行为测试直接执行 hook manager 片段，覆盖 trace 过滤、业务请求保留、`URLSearchParams` body 可回放、历史上限裁剪和大 body 截断。
-- 本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，16 项测试全绿。
+- 本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，17 项测试全绿。
 - 本地验证：`npm run check:syntax` 通过，根 userscript 语法检查无错误。
 - 本地验证：`npm run build:check` 通过，根 userscript、`dist/packages/` 和 `dist/extension/` 与源码同步。
 - Chrome 真实页基线：刷新前旧运行态 `requestHistoryLimit: 4000`、`historyLength: 4000`、`traceHistoryCount: 3998`；页面 JS heap 为 `usedJSHeapSize: 2601561440`、`totalJSHeapSize: 2718210496`，DOM 节点 `5032`，helper-matched 节点 `316`。
 - Chrome 真实页复测：刷新后新运行态 `requestHistoryLimit: 1200`、`requestHistoryBodyCharLimit: 240000`、`hasSkipFn: true`、`beforeProbeHistoryLength: 76`、`traceHistoryCount: 0`；页面 JS heap 为 `usedJSHeapSize: 89595957`、`totalJSHeapSize: 117022521`，DOM 节点 `4270`，helper-matched 节点 `156`。
 - Chrome 探针验证：手动调用 `recordRequest()` 写入 trace report 后历史长度保持 `76`；写入普通业务 JSON 探针后历史长度变为 `77`，`URLSearchParams` body 保留为 `dynamicToken=probe_token&loginPointId=probe_lp&csrfID=probe_csrf`，随后已移除探针业务记录。
 - Chrome 控制台检查：仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复失败，未见本次插件请求历史优化新增错误。
+- 第二轮本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，17 项测试全绿；覆盖 one 主业务页继续注入、普通 myseller 不注入、SmartAssistant 直接注入、普通 myseller 经 URL 轮询进入 SmartAssistant 后注入一次、宽泛 alimama 子域不注入也不保留 myseller 专用轮询。
+- 第二轮本地验证：`npm run check:syntax` 通过；`npm run build:check` 通过；`git diff --check` 通过。
+- 第二轮 Chrome 运行态准备：已在 `chrome://extensions/` 重载当前启用的 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk`，路径为 `/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/dist/extension`；旧 worktree `313b` 对应扩展为禁用状态。
+- 第二轮 Chrome 负例复测：`https://myseller.taobao.com/home.htm/QnworkbenchHome/` 普通工作台打开 1.5s 后，`hasToggle: false`、`hasPlatformRuntime: false`、`hasHookManager: false`、`pageBundleEntries: []`；JS heap `usedJSHeapSize: 79658927`、`totalJSHeapSize: 106309623`、DOM 节点 `3651`。
+- 第二轮 Chrome 延迟注入复测：同一普通 `myseller` 页面用同文档 `history.pushState` 进入 `https://myseller.taobao.com/home.htm/crm-workbench/smartassistant` 后等待 1.3s，`hasToggle: true`、`hasPlatformRuntime: true`、`platformRuntime.mode: "extension"`、`hasHookManager: true`，证明轻量 URL 轮询可恢复注入。
+- 第二轮 Chrome 直接 SmartAssistant 复测：直接打开 `https://myseller.taobao.com/home.htm/crm-workbench/smartassistant` 后，`hasToggle: true`、`hasPlatformRuntime: true`、`platformRuntime.mode: "extension"`、`hasHookManager: true`；JS heap `usedJSHeapSize: 74031888`、`totalJSHeapSize: 77616448`。
+- 第二轮 Chrome 主业务正例复测：`https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 中 `hasToggle: true`、`hasPlatformRuntime: true`、`hasHookManager: true`、`requestHistoryLimit: 1200`，未误伤主助手、hook manager 和第一轮请求历史上限。
+- 第二轮 Chrome 宽泛子域负例复测：`https://pub.alimama.com/` 中 `hasToggle: false`、`hasPlatformRuntime: false`、`hasHookManager: false`、`pageBundleEntries: []`；JS heap `usedJSHeapSize: 20216987`、`totalJSHeapSize: 21453363`。
 
 ## 结果复盘
 - 第一轮结果：常驻请求历史从满载 `4000` 条降到 `76` 条，减少 `3924` 条；trace 埋点保留从 `3998` 条降到 `0` 条，减少 `100%`；默认上限从 `4000` 降到 `1200`，并增加单条 body `240000` 字符上限。
 - 对比结论：本轮解决的是插件长期保留高频无业务埋点 URL 和请求对象的问题，不改变 fetch/XHR hook、授权、预算、创建、复制、查数、生命周期合同等业务链路；收益明确且风险低。
-- 轮次预估：达到当前最佳预计需要 `3-4` 轮。第 1 轮为请求历史常驻对象瘦身；第 2 轮最值得做 Chrome extension/page bundle 注入资格收窄，避免非业务匹配页加载 4.4MB `page.bundle.js`；第 3 轮考虑大模块/大样式预热式拆分，必须遵守 L43，不能把大包首次解析压到点击路径；第 4 轮视 heap snapshot 再做覆盖层、observer、iframe 和 detached node 清理。
-- 剩余风险：本轮 Chrome heap 前后数值包含页面刷新影响，不能单独归因到请求历史优化；更可靠的本轮指标是同页面同插件 hook manager 的历史长度、trace 占比和探针入队行为。下一轮应以“是否加载 page.bundle.js”和 Chrome heap snapshot retained size 作为主指标。
+- 第二轮结果：普通 `myseller` 工作台从会进入完整 extension runtime（旧运行态曾测得 `hasPlatformRuntime: true`、`hasHookManager: true`、JS heap `82716091/112302731`）变为不进入完整 runtime（新运行态 `hasPlatformRuntime: false`、`hasHookManager: false`、JS heap `79658927/106309623`）；宽泛 `pub.alimama.com` 同样不进入完整 runtime。按构建产物体积，非业务页每次加载避免解析和启动 `dist/extension/page.bundle.js` 的 4.4MB 原始脚本。
+- 第二轮对比结论：本轮解决的是 extension manifest broad match 带来的非业务页常驻大运行时问题；主业务页 `one.alimama.com` 和 SmartAssistant 预算页仍能完整注入，且普通 `myseller` SPA 跳转 SmartAssistant 可通过 600ms 轻量 URL 轮询恢复注入一次。
+- 轮次预估：达到当前最佳仍预计需要 `3-4` 轮，当前已完成前 2 轮。第 3 轮建议对 `page.bundle.js` 内大模块/大样式做 heap snapshot 与初始化路径拆解，必须遵守 L43，不能把 4.4MB 解析成本转移到用户点击“组建计划”的首次路径；第 4 轮视 snapshot 再做覆盖层、observer、iframe 和 detached node 清理。
+- 剩余风险：第二轮 Chrome heap 前后仍受页面内容和登录态影响，不能把几 MB heap 差值全部归因到插件；更可靠指标是非业务页全局 runtime/hook manager 从存在变为不存在，以及 4.4MB `page.bundle.js` 不再注入。下一轮应以 heap snapshot retained size 和初始化调用图作为主指标。
 
 # TODO - 2026-06-01 预算破限 199 元修改失败修复
 
