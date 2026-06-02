@@ -1,0 +1,56 @@
+uid=1_0 RootWebArea "Extensions - 阿里妈妈多合一助手 (Pro版)" url="chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk"
+  uid=1_1 banner
+    uid=1_2 heading "Extensions" level="1"
+    uid=1_3 searchbox "Search extensions"
+    uid=1_4 StaticText "Developer mode"
+    uid=1_5 button "Developer mode" pressed
+    uid=1_6 button "Load unpacked"
+    uid=1_7 button "Pack extension"
+    uid=1_8 button "Update" description="Update extensions now"
+  uid=1_9 navigation
+    uid=1_10 menu orientation="vertical"
+      uid=1_11 menuitem "My extensions"
+      uid=1_12 menuitem "Keyboard shortcuts"
+    uid=1_13 StaticText "Developing extensions? Stay up to date on "
+    uid=1_14 link "What's New" url="https://developer.chrome.com/docs/extensions/whats-new?utm_source=ext_sidebar&hl=en-US"
+      uid=1_15 StaticText "What's New"
+    uid=1_16 StaticText " with Chrome Extension developer documentation."
+    uid=1_17 StaticText "Discover more extensions and themes on the "
+    uid=1_18 link "Chrome Web Store" url="https://chromewebstore.google.com/category/extensions?utm_source=ext_sidebar&hl=en-US"
+      uid=1_19 StaticText "Chrome Web Store"
+  uid=1_20 main
+    uid=1_21 button "阿里妈妈多合一助手 (Pro版) details page back button" focusable focused roledescription="Click to navigate away from é¿éå¦å¦å¤åä¸å©æ (Proç) details page."
+    uid=1_22 heading "阿里妈妈多合一助手 (Pro版)" level="1"
+    uid=1_23 button "Reload" description="Related to 阿里妈妈多合一助手 (Pro版)"
+    uid=1_24 StaticText "On"
+    uid=1_25 button "On, extension enabled" description="阿里妈妈多合一助手 (Pro版)" pressed
+    uid=1_26 heading "Description" level="2"
+    uid=1_27 StaticText "阿里妈妈投放平台增强工具，支持主面板、万能查数、算法护航与计划辅助能力。"
+    uid=1_28 heading "Version" level="2"
+    uid=1_29 StaticText "7.05"
+    uid=1_30 heading "Size" level="2"
+    uid=1_31 StaticText "4.0 MB"
+    uid=1_32 heading "ID" level="2"
+    uid=1_33 StaticText "egaeghgcogbdikndhlmmmolelbfffnjk"
+    uid=1_34 heading "Inspect views" level="2"
+    uid=1_35 link "service worker (Inactive)"
+      uid=1_36 StaticText "service worker (Inactive)"
+    uid=1_37 heading "Permissions" level="2"
+    uid=1_38 heading "Site access" level="2"
+    uid=1_39 StaticText "This extension can read and change your data on sites. You can control which sites the extension can access."
+    uid=1_40 link "Learn more about extension permissions" url="https://support.google.com/chrome?p=enable_extensions"
+    uid=1_41 button "Automatically allow access on the following sites Learn more about extension permissions" pressed
+    uid=1_42 button "*://*.alimama.com/*" disableable disabled pressed
+    uid=1_43 button "https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/*" disableable disabled pressed
+    uid=1_44 button "https://myseller.taobao.com/*" disableable disabled pressed
+    uid=1_45 link "Site settings" description="Opens in new tab"
+    uid=1_46 button "Pin to toolbar"
+    uid=1_47 button "Allow in Incognito Warning: Google Chrome cannot prevent extensions from recording your browsing history. To disable this extension in Incognito mode, unselect this option. Changes to this setting will be applied once Chrome restarts. "
+    uid=1_48 button "Allow access to file URLs Changes to this setting will be applied once Chrome restarts." pressed
+    uid=1_49 button "Collect errors" pressed
+    uid=1_50 heading "Source" level="2"
+    uid=1_51 StaticText "Unpacked extension"
+    uid=1_52 StaticText "Loaded from:"
+    uid=1_53 link "~/.codex/worktrees/f880/alimama-helper-pro/dist/extension"
+      uid=1_54 StaticText "~/.codex/worktrees/f880/alimama-helper-pro/dist/extension"
+    uid=1_55 link "Remove extension"
