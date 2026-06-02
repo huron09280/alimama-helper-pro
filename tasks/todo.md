@@ -1,3 +1,49 @@
+# TODO - 2026-06-03 插件浏览器内存占用优化
+
+## 需求规格
+- 目标：优化当前插件在 Chrome 浏览器中的内存占用，找出主要内存来源，给出“需要几轮优化到当前最佳”的预估，并完成至少第一轮可验证的最佳优化方案。
+- 范围：优先覆盖 `src/` 中会注入 `one.alimama.com` 的常驻入口、主助手、optimizer 运行时、extension/page bridge、缓存/观察器/定时器/iframe/大对象生命周期；不改无关业务逻辑，不直接编辑构建产物。
+- 成功标准：形成 Chrome 内存热点证据与分轮方案；完成低风险结构优化；每次优化都记录基线、改动、复测结果和前后对比；相关单测、语法检查、构建检查通过；在真实或可复现 Chrome 运行态记录优化前后或静态替代证据，说明剩余瓶颈与下一轮收益；每完成一项优化或本轮对话收口前，先用中文提交信息 commit 再继续。
+- 安全边界：真实页面验证只做打开、刷新、观察、只读入口和内存采集；不点击创建、投放、提交、删除、扣费类入口。若必须操作 Chrome/系统 UI，只做只读测量或另行确认风险。
+- 计划校验：本轮先追根因，优先减少常驻内存、重复注入、未释放 DOM/observer/cache 与点击路径大包解析；不会为了数字好看隐藏错误、删除必要安全校验或牺牲已验证功能。
+
+## 执行计划（可核对）
+- [x] 规划与基线：读取历史教训、源码结构、构建脚本和当前任务相关入口，建立 `tasks/memory-optimization-notes-2026-06-03.md` 记录剖析证据。
+- [x] 静态定位：统计构建产物/源码模块体积、入口依赖、常驻全局、observer/interval/cache/iframe/DOM 热点，判断首轮最高收益点。
+- [x] 运行态测量：用 Chrome/DevTools 在真实或本地可复现页面采集插件注入后的内存、DOM 节点、JS heap、长生命周期对象和控制台异常。
+- [x] 方案设计：明确预计优化轮次、每轮目标、收益/风险/验证方式，并暂停自问是否有更优雅实现。
+- [x] 第一轮实现：按证据做最小侵入结构优化，补充必要测试或探针，避免把成本转移到点击路径。
+- [x] 验证闭环：运行相关单测、`npm run check:syntax`、`npm run build:check`，并做 Chrome 运行态复测或说明替代证据。
+- [x] 结果对比：每次优化写清优化前指标、优化后指标、差值、结论和下一轮是否继续。
+- [ ] 中文提交：每完成一项优化或本轮对话收口前，检查 diff 后用中文提交信息提交本轮实质改动。
+- [ ] 结果归档：更新本节高层操作摘要、验证记录、结果复盘和下一轮建议。
+
+## 高层操作摘要
+- 已启动目标型任务，按项目规则先回顾 `tasks/lessons.md`；最相关教训是 L43：性能拆包不能把大包首次解析成本转移到用户点击路径。
+- 已读取 `planning-with-files`、`goal-driven` 和 `computer-use` 技能说明；本轮用持久化任务记录和目标验收推进，Computer Use 仅在需要直接操作本机 UI 且无更专用工具时使用。
+- 用户补充约束已纳入：优化对象明确为 Chrome 浏览器内存；每完成一项优化或本轮对话收口前，需要先做中文 commit 再继续。
+- 用户追加约束已纳入：每次优化结果都必须记录下来并做前后对比。
+- 静态基线：`dist/extension/page.bundle.js` 为 4,400,575 bytes，`dist/packages/alimama-helper-pro.user.js` 为 4,305,400 bytes；最大源码切片为建计划样式、万能查数、行级快捷入口和建计划搜索/草稿模块。
+- Chrome 基线：真实页 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 中，`requestHistory.length` 已满 `4000`，其中 `3998` 条是 `club.alimama.com/api/b/side/engine/trace/report.json` 高频曝光埋点。
+- 第一轮优化方案已落地：`createHookManager()` 过滤无业务价值 trace 埋点、默认请求历史上限从 `4000` 收敛到 `1200`，并对超大 body 做摘要化截断；保留普通业务 JSON、`URLSearchParams`、`FormData`、`Blob`、`ArrayBuffer` 的可回放表示。
+- 只读子代理复核结论：过滤 trace 埋点不影响 token/shopId/lifecycle/magic-report 的已知事实源；需注意 `1200` 上限会淘汰更早历史，请求体超过 `240000` 字符后只能解析截断前字段。已补行为测试覆盖 trace 过滤、业务请求保留、AI report URLSearchParams body 和上限裁剪。
+
+## 验证记录
+- 本地验证：`node --test tests/logger-api.test.mjs` 通过，18 项测试全绿；新增行为测试直接执行 hook manager 片段，覆盖 trace 过滤、业务请求保留、`URLSearchParams` body 可回放、历史上限裁剪和大 body 截断。
+- 本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，16 项测试全绿。
+- 本地验证：`npm run check:syntax` 通过，根 userscript 语法检查无错误。
+- 本地验证：`npm run build:check` 通过，根 userscript、`dist/packages/` 和 `dist/extension/` 与源码同步。
+- Chrome 真实页基线：刷新前旧运行态 `requestHistoryLimit: 4000`、`historyLength: 4000`、`traceHistoryCount: 3998`；页面 JS heap 为 `usedJSHeapSize: 2601561440`、`totalJSHeapSize: 2718210496`，DOM 节点 `5032`，helper-matched 节点 `316`。
+- Chrome 真实页复测：刷新后新运行态 `requestHistoryLimit: 1200`、`requestHistoryBodyCharLimit: 240000`、`hasSkipFn: true`、`beforeProbeHistoryLength: 76`、`traceHistoryCount: 0`；页面 JS heap 为 `usedJSHeapSize: 89595957`、`totalJSHeapSize: 117022521`，DOM 节点 `4270`，helper-matched 节点 `156`。
+- Chrome 探针验证：手动调用 `recordRequest()` 写入 trace report 后历史长度保持 `76`；写入普通业务 JSON 探针后历史长度变为 `77`，`URLSearchParams` body 保留为 `dynamicToken=probe_token&loginPointId=probe_lp&csrfID=probe_csrf`，随后已移除探针业务记录。
+- Chrome 控制台检查：仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复失败，未见本次插件请求历史优化新增错误。
+
+## 结果复盘
+- 第一轮结果：常驻请求历史从满载 `4000` 条降到 `76` 条，减少 `3924` 条；trace 埋点保留从 `3998` 条降到 `0` 条，减少 `100%`；默认上限从 `4000` 降到 `1200`，并增加单条 body `240000` 字符上限。
+- 对比结论：本轮解决的是插件长期保留高频无业务埋点 URL 和请求对象的问题，不改变 fetch/XHR hook、授权、预算、创建、复制、查数、生命周期合同等业务链路；收益明确且风险低。
+- 轮次预估：达到当前最佳预计需要 `3-4` 轮。第 1 轮为请求历史常驻对象瘦身；第 2 轮最值得做 Chrome extension/page bundle 注入资格收窄，避免非业务匹配页加载 4.4MB `page.bundle.js`；第 3 轮考虑大模块/大样式预热式拆分，必须遵守 L43，不能把大包首次解析压到点击路径；第 4 轮视 heap snapshot 再做覆盖层、observer、iframe 和 detached node 清理。
+- 剩余风险：本轮 Chrome heap 前后数值包含页面刷新影响，不能单独归因到请求历史优化；更可靠的本轮指标是同页面同插件 hook manager 的历史长度、trace 占比和探针入队行为。下一轮应以“是否加载 page.bundle.js”和 Chrome heap snapshot retained size 作为主指标。
+
 # TODO - 2026-06-01 预算破限 199 元修改失败修复
 
 ## 需求规格

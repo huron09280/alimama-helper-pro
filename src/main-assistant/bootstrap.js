@@ -63,28 +63,96 @@
             xhrSendHandlers: [],
             xhrLoadHandlers: [],
             requestHistory: [],
-            requestHistoryLimit: 4000,
+            requestHistoryLimit: 1200,
+            requestHistoryBodyCharLimit: 240000,
+
+            normalizeRequestHistoryUrl(rawUrl) {
+                if (!rawUrl) return '';
+                try {
+                    return new URL(String(rawUrl), window.location.origin).toString();
+                } catch {
+                    return String(rawUrl || '').trim();
+                }
+            },
+
+            shouldSkipRequestHistory(normalizedUrl = '') {
+                if (!normalizedUrl) return true;
+                try {
+                    const parsed = new URL(String(normalizedUrl), window.location.origin);
+                    const hostname = parsed.hostname.toLowerCase();
+                    const pathname = parsed.pathname.toLowerCase();
+                    return (
+                        hostname === 'club.alimama.com'
+                        && pathname === '/api/b/side/engine/trace/report.json'
+                    );
+                } catch { }
+                return /club\.alimama\.com\/api\/b\/side\/engine\/trace\/report\.json/i.test(String(normalizedUrl || ''));
+            },
+
+            capRequestHistoryText(value = '') {
+                const text = String(value ?? '');
+                const maxLengthRaw = Number(this.requestHistoryBodyCharLimit);
+                const maxLength = Math.max(12000, Number.isFinite(maxLengthRaw) ? maxLengthRaw : 240000);
+                if (text.length <= maxLength) return text;
+                return `${text.slice(0, maxLength)}...[AM_TRUNCATED:${text.length}]`;
+            },
+
+            normalizeRequestHistoryBody(body = null) {
+                if (body === null || body === undefined) return null;
+                if (typeof body === 'string') return this.capRequestHistoryText(body);
+                try {
+                    if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+                        return this.capRequestHistoryText(body.toString());
+                    }
+                } catch { }
+                try {
+                    if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                        const params = new URLSearchParams();
+                        body.forEach((value, key) => {
+                            if (typeof value === 'string') {
+                                params.append(key, value);
+                                return;
+                            }
+                            const filename = typeof value?.name === 'string' ? value.name : 'blob';
+                            const size = Number.isFinite(value?.size) ? value.size : 0;
+                            params.append(key, `[File:${filename}:${size}]`);
+                        });
+                        return this.capRequestHistoryText(params.toString());
+                    }
+                } catch { }
+                try {
+                    if (typeof Blob !== 'undefined' && body instanceof Blob) {
+                        return `[Blob:${Number.isFinite(body.size) ? body.size : 0}]`;
+                    }
+                } catch { }
+                try {
+                    if (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer) {
+                        return `[ArrayBuffer:${body.byteLength || 0}]`;
+                    }
+                    if (typeof ArrayBuffer !== 'undefined' && typeof ArrayBuffer.isView === 'function' && ArrayBuffer.isView(body)) {
+                        const name = body?.constructor?.name || 'TypedArray';
+                        return `[${name}:${body.byteLength || 0}]`;
+                    }
+                } catch { }
+                return this.capRequestHistoryText(String(body));
+            },
 
             recordRequest(entry = {}) {
                 const rawUrl = entry?.url;
                 if (!rawUrl) return;
-                let normalizedUrl = '';
-                try {
-                    normalizedUrl = new URL(String(rawUrl), window.location.origin).toString();
-                } catch {
-                    normalizedUrl = String(rawUrl || '').trim();
-                }
+                const normalizedUrl = this.normalizeRequestHistoryUrl(rawUrl);
+                if (this.shouldSkipRequestHistory(normalizedUrl)) return;
                 if (!normalizedUrl) return;
                 const method = String(entry?.method || 'GET').trim().toUpperCase() || 'GET';
                 this.requestHistory.push({
                     ts: Date.now(),
                     method,
                     url: normalizedUrl,
-                    body: entry?.body ?? null,
+                    body: this.normalizeRequestHistoryBody(entry?.body ?? null),
                     source: String(entry?.source || '').trim()
                 });
                 const maxSizeRaw = Number(this.requestHistoryLimit);
-                const maxSize = Math.max(500, Number.isFinite(maxSizeRaw) ? maxSizeRaw : 4000);
+                const maxSize = Math.max(300, Number.isFinite(maxSizeRaw) ? maxSizeRaw : 1200);
                 if (this.requestHistory.length > maxSize) {
                     this.requestHistory.splice(0, this.requestHistory.length - maxSize);
                 }
@@ -96,7 +164,7 @@
                 const since = Math.max(0, Number.isFinite(sinceRaw) ? sinceRaw : 0);
                 const limitRaw = Number(options.limit);
                 const fallbackLimitRaw = Number(this.requestHistoryLimit);
-                const fallbackLimit = Number.isFinite(fallbackLimitRaw) ? fallbackLimitRaw : 4000;
+                const fallbackLimit = Number.isFinite(fallbackLimitRaw) ? fallbackLimitRaw : 1200;
                 const limit = Math.max(1, Math.min(20000, Number.isFinite(limitRaw) ? limitRaw : fallbackLimit));
                 let list = Array.isArray(this.requestHistory) ? this.requestHistory.slice() : [];
                 if (since > 0) {
