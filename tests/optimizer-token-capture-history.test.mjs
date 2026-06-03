@@ -55,3 +55,46 @@ test('算法护航关闭后会释放 token 状态轮询，再次展示时恢复'
         '创建算法护航面板时应只做一次 token 状态刷新，不应直接常驻轮询'
     );
 });
+
+test('算法护航手动关键词偏好外部点击监听只在菜单打开期间绑定', () => {
+    assert.match(
+        uiSource,
+        /manualKeywordOutsideHandler:\s*null,\s*\n\s*manualKeywordOutsideHandlerBound:\s*false,/,
+        '手动关键词偏好外部点击监听缺少绑定状态'
+    );
+    assert.match(
+        uiSource,
+        /bindManualKeywordOutsideHandler:\s*\(\) => \{[\s\S]*if \(UI\.manualKeywordOutsideHandlerBound\) return;[\s\S]*if \(typeof UI\.manualKeywordOutsideHandler !== 'function'\) return;[\s\S]*document\.addEventListener\('mousedown', UI\.manualKeywordOutsideHandler, true\);[\s\S]*UI\.manualKeywordOutsideHandlerBound = true;[\s\S]*\},/,
+        '手动关键词偏好菜单应在打开时按需绑定外部点击监听'
+    );
+    assert.match(
+        uiSource,
+        /unbindManualKeywordOutsideHandler:\s*\(\) => \{[\s\S]*if \(!UI\.manualKeywordOutsideHandlerBound\) return;[\s\S]*document\.removeEventListener\('mousedown', UI\.manualKeywordOutsideHandler, true\);[\s\S]*UI\.manualKeywordOutsideHandlerBound = false;[\s\S]*\},/,
+        '手动关键词偏好菜单应支持释放外部点击监听'
+    );
+    assert.match(
+        uiSource,
+        /closeManualKeywordPreferenceMenu:\s*\(\) => \{[\s\S]*trigger\.setAttribute\('aria-expanded', 'false'\);[\s\S]*UI\.unbindManualKeywordOutsideHandler\(\);[\s\S]*\},/,
+        '关闭关键词偏好菜单时应释放 document mousedown 监听'
+    );
+    assert.match(
+        uiSource,
+        /preferenceMenu\.style\.display = 'block';[\s\S]*preferenceMenu\.dataset\.open = 'true';[\s\S]*preferenceTrigger\.setAttribute\('aria-expanded', 'true'\);[\s\S]*UI\.bindManualKeywordOutsideHandler\(\);/,
+        '打开关键词偏好菜单时应绑定 document mousedown 监听'
+    );
+    assert.match(
+        uiSource,
+        /UI\.unbindManualKeywordOutsideHandler\(\);[\s\S]*UI\.manualKeywordOutsideHandler = \(event\) => \{[\s\S]*UI\.closeManualKeywordPreferenceMenu\(\);[\s\S]*\};[\s\S]*UI\.refreshManualKeywordControls\(\);/,
+        '初始化手动关键词控件时应只准备 handler，不应直接常驻绑定'
+    );
+    assert.match(
+        uiSource,
+        /panel\.style\.pointerEvents = 'none';[\s\S]*UI\.stopTokenStatusMonitor\(\);[\s\S]*UI\.closeManualKeywordPreferenceMenu\(\);/,
+        '关闭算法护航面板时应兜底释放手动关键词偏好外部点击监听'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /bindManualKeywordControls:\s*\(\) => \{[\s\S]*document\.addEventListener\('mousedown', UI\.manualKeywordOutsideHandler, true\);[\s\S]*UI\.refreshManualKeywordControls\(\);/,
+        'bindManualKeywordControls 不应在初始化时常驻绑定 document mousedown'
+    );
+});

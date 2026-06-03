@@ -1,3 +1,45 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十二子项
+
+## 需求规格
+- 目标：在店铺名回填重试链单例化后，继续收口算法护航手动设置里“关键词偏好”下拉菜单的外部点击监听，避免算法护航面板初始化后长期保留只服务打开菜单的 `document mousedown` 委托。
+- 根因判断：`UI.bindManualKeywordControls()` 当前在绑定控件时立即注册 `document.addEventListener('mousedown', UI.manualKeywordOutsideHandler, true)`；但该 handler 只有在 `#am-optimizer-manual-keyword-preference-menu` 打开时才需要识别外部点击并关闭菜单，菜单关闭或面板关闭后不应继续常驻。
+- 范围：仅覆盖 `src/optimizer/ui.js` 中手动关键词偏好菜单外部点击监听的绑定/解绑生命周期和对应测试；不改算法护航 token 轮询、openV3 提交、手动设置字段映射、关键词偏好枚举、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“菜单打开时绑定，菜单关闭/面板关闭时解绑”的单一生命周期；不新增第二套下拉状态，不改变 `data-open`/`aria-expanded` 事实源，不用宽泛兜底隐藏交互异常。
+- 成功标准：静态测试证明 `bindManualKeywordControls()` 不再冷态常驻绑定 `document mousedown`，打开偏好菜单时绑定外部点击 handler，`closeManualKeywordPreferenceMenu()` 和算法护航面板关闭路径都会解绑；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读连接/DOM/全局状态观察，最多打开/关闭无写入面板和下拉。
+
+## 执行计划（可核对）
+- [x] 复核第十一子项提交后工作区状态，确认本子项只处理算法护航手动关键词偏好外部点击监听。
+- [x] 定位 `bindManualKeywordControls()`、`closeManualKeywordPreferenceMenu()` 和算法护航面板关闭路径，确认监听只服务打开菜单。
+- [x] 实现外部点击监听按菜单打开绑定、关闭菜单/关闭面板释放。
+- [x] 补充/更新目标测试，锁定不再初始化常驻绑定、打开绑定、关闭解绑。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `e2505b7 优化 Chrome 店铺名回填重试链`，工作区干净。
+- 定位结论：关键词偏好菜单用 `data-open`/`aria-expanded` 表示打开状态；外部点击监听只有菜单打开时才有收益，当前却在 `bindManualKeywordControls()` 初始化时常驻 document。
+- 方案判断：新增 `bindManualKeywordOutsideHandler()` / `unbindManualKeywordOutsideHandler()`，`closeManualKeywordPreferenceMenu()` 统一解绑；触发器打开菜单后绑定，选择选项或再次点击关闭时沿原关闭函数释放；算法护航面板关闭时再做兜底解绑。
+- 实现摘要：`src/optimizer/ui.js` 新增 `manualKeywordOutsideHandlerBound` 和外部点击监听 bind/unbind helpers；`bindManualKeywordControls()` 只准备 handler，不再直接注册 document 监听；打开关键词偏好菜单后按需绑定，关闭菜单或关闭算法护航面板时释放。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 增加静态回归，覆盖绑定状态、打开绑定、关闭解绑、面板关闭兜底释放，以及禁止 `bindManualKeywordControls()` 初始化阶段常驻 `document mousedown`。
+
+## 验证记录
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，6 项测试全绿；新增断言覆盖关键词偏好外部点击监听绑定状态、打开菜单按需绑定、关闭菜单解绑、面板关闭兜底解绑，以及禁止 `bindManualKeywordControls()` 初始化阶段常驻 `document mousedown`。
+- 源码语法：`node --check src/optimizer/ui.js` 与 `node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-manual-escort-settings.test.mjs` 通过，26 项测试全绿。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 真实页验证：仅使用 `mcp__chrome_devtools.*`。`list_pages` 连接成功；在 `https://one.alimama.com/...#!/manage/hky?...` 真实页面只读验证插件运行态已注入、授权有效、算法护航面板 `#alimama-escort-helper-ui` 可打开。通过临时监听探针观察 `document.addEventListener/removeEventListener` 后已恢复原函数：展开手动设置不产生 `mousedown` 绑定；打开关键词偏好菜单产生 1 次 capture `mousedown` add；外部 `mousedown` 后菜单 `data-open=false`、`aria-expanded=false` 且产生 remove；再次打开后关闭算法护航面板同样产生 remove，菜单关闭且面板 `pointer-events:none`。未点击执行、创建、复制、预算提交、删除、上下线或投放入口。
+- Diff 自审：改动集中在算法护航手动关键词偏好菜单外部点击监听生命周期、对应静态测试和构建产物；未改 token 轮询、openV3 提交、手动设置字段映射、关键词偏好枚举、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十二子项结果：算法护航手动设置的关键词偏好菜单从“面板初始化后常驻 document capture `mousedown` 委托”优化为“菜单打开期间绑定，菜单关闭、外部点击和算法护航面板关闭时释放”。面板可见但菜单未打开时，不再长期保留只服务下拉关闭的全局监听闭包。
+- 取舍结论：保留 `data-open` 与 `aria-expanded` 作为菜单状态事实源，只增加绑定状态防重；没有新增第二套菜单状态，也没有改变手动设置持久化和 openV3 提交合同。
+- 验证结论：静态测试、构建、相关回归、全量回归与 Chrome MCP 真实页只读验收均通过。本子项已完成，可进入下一轮继续寻找更小粒度的 Chrome 内存占用优化点。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第十一子项
 
 ## 需求规格

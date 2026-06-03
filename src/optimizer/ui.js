@@ -6,6 +6,7 @@
             td: `padding:4px 6px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.28));color:var(--am26-text-soft,#505a74);`
         },
         manualKeywordOutsideHandler: null,
+        manualKeywordOutsideHandlerBound: false,
         manualEscortExpandHandler: null,
         manualEscortMainSwitchGuardHandler: null,
         tokenStatusIntervalId: null,
@@ -39,6 +40,21 @@
             if (UI.tokenStatusIntervalId === null) return;
             clearInterval(UI.tokenStatusIntervalId);
             UI.tokenStatusIntervalId = null;
+        },
+
+        bindManualKeywordOutsideHandler: () => {
+            if (UI.manualKeywordOutsideHandlerBound) return;
+            if (typeof UI.manualKeywordOutsideHandler !== 'function') return;
+            document.addEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
+            UI.manualKeywordOutsideHandlerBound = true;
+        },
+
+        unbindManualKeywordOutsideHandler: () => {
+            if (!UI.manualKeywordOutsideHandlerBound) return;
+            if (typeof UI.manualKeywordOutsideHandler === 'function') {
+                document.removeEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
+            }
+            UI.manualKeywordOutsideHandlerBound = false;
         },
 
         // 全局状态日志（用于非计划相关的消息）
@@ -1290,6 +1306,7 @@
             if (trigger instanceof HTMLButtonElement) {
                 trigger.setAttribute('aria-expanded', 'false');
             }
+            UI.unbindManualKeywordOutsideHandler();
         },
 
         refreshManualKeywordControls: () => {
@@ -1350,6 +1367,7 @@
                         preferenceMenu.style.display = 'block';
                         preferenceMenu.dataset.open = 'true';
                         preferenceTrigger.setAttribute('aria-expanded', 'true');
+                        UI.bindManualKeywordOutsideHandler();
                     }
                 };
 
@@ -1381,9 +1399,7 @@
                 });
             }
 
-            if (UI.manualKeywordOutsideHandler) {
-                document.removeEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
-            }
+            UI.unbindManualKeywordOutsideHandler();
             UI.manualKeywordOutsideHandler = (event) => {
                 if (!(preferenceMenu instanceof HTMLElement) || preferenceMenu.dataset.open !== 'true') return;
                 if (
@@ -1395,7 +1411,6 @@
                 }
                 UI.closeManualKeywordPreferenceMenu();
             };
-            document.addEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
             UI.refreshManualKeywordControls();
         },
 
@@ -2429,6 +2444,7 @@
                 panel.style.transform = 'scale(0.8)';
                 panel.style.pointerEvents = 'none';
                 UI.stopTokenStatusMonitor();
+                UI.closeManualKeywordPreferenceMenu();
             };
 
             // 居中按钮事件（切换模式）
