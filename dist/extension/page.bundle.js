@@ -705,6 +705,7 @@ if (typeof globalThis !== 'undefined') {
     const SHOP_NAME_BACKFILL_ATTEMPTS_DEFAULT = 8;
     const SHOP_NAME_BACKFILL_BASE_DELAY_MS = 320;
     const SHOP_NAME_BACKFILL_MAX_DELAY_MS = 2200;
+    const shopNameBackfillTimers = new Map();
 
     const normalizeShopId = (value) => {
         const raw = value === null || value === undefined ? '' : String(value).trim();
@@ -1623,6 +1624,20 @@ if (typeof globalThis !== 'undefined') {
         } catch { }
     };
 
+    const buildShopNameBackfillKey = (shopId = '', source = '') => {
+        return `${normalizeShopId(shopId)}::${String(source || 'shop_name_backfill')}`;
+    };
+
+    const scheduleShopNameBackfillTimer = (timerKey = '', callback = null, delayMs = 0) => {
+        if (!timerKey || typeof callback !== 'function') return;
+        const timerId = setTimeout(() => {
+            if (shopNameBackfillTimers.get(timerKey) !== timerId) return;
+            shopNameBackfillTimers.delete(timerKey);
+            callback();
+        }, Math.max(0, Number(delayMs) || 0));
+        shopNameBackfillTimers.set(timerKey, timerId);
+    };
+
     const scheduleShopNameBackfill = (context = {}) => {
         const shopId = normalizeShopId(context.shopId || '');
         const source = String(context.source || 'shop_name_backfill');
@@ -1649,6 +1664,8 @@ if (typeof globalThis !== 'undefined') {
         );
         if (!shopId) return;
         if (!force && normalizeShopName(context.shopName || '')) return;
+        const timerKey = buildShopNameBackfillKey(shopId, source);
+        if (shopNameBackfillTimers.has(timerKey)) return;
 
         let attempt = 0;
         const run = () => {
@@ -1680,10 +1697,10 @@ if (typeof globalThis !== 'undefined') {
             if (resolved) return;
             if (attempt >= maxAttempts) return;
             const nextDelay = Math.min(maxDelayMs, baseDelayMs * attempt);
-            setTimeout(run, nextDelay);
+            scheduleShopNameBackfillTimer(timerKey, run, nextDelay);
         };
 
-        setTimeout(run, initialDelayMs);
+        scheduleShopNameBackfillTimer(timerKey, run, initialDelayMs);
     };
 
     const createError = (code, message, detail = null) => {

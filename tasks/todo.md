@@ -1,3 +1,47 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第十一子项
+
+## 需求规格
+- 目标：在授权锁定遮罩 style 节点生命周期收口后，继续优化 extension 授权 guard 的店铺名异步回填重试链，避免同一 `shopId/source` 在授权校验、租约刷新或失败锁定路径中重复启动多条 `setTimeout` 链。
+- 根因判断：`scheduleShopNameBackfill()` 当前只创建局部 `attempt/run` 闭包并直接 `setTimeout`，没有保存 timer 句柄；若相同 `shopId/source` 在店名仍为空时被多次调度，会叠加多条回填重试链，页面闲置时保留重复闭包。
+- 范围：仅覆盖 `src/entries/extension-license-guard.js` 中店铺名回填 timer 的单例生命周期和对应测试；不改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥、遮罩展示字段或业务入口。
+- 热修 vs 结构性修复取舍：采用“按 `shopId/source` 生成稳定 key，同 key 回填链运行中不重复调度，命中或耗尽后释放句柄”的单一生命周期；不新增第二事实源，不吞店名解析错误以外的授权错误，不改变已有重试次数和延迟配置。
+- 成功标准：静态测试证明存在 `shopNameBackfillTimers` 单一注册表、同 key 重复调用直接复用/跳过、timer 执行后清理 key、后续重试仍沿同 key 调度；授权链路和 after_lock 二次回填调用仍保留；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读连接/DOM/全局状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第十子项提交后工作区状态，确认本子项只处理店铺名回填 timer 生命周期。
+- [x] 定位 `scheduleShopNameBackfill()` 调用点和现有测试约束，确认同 `shopId/source` 重复调度风险。
+- [x] 实现按 `shopId/source` 单例化的回填 timer 注册/释放，不改变授权判定。
+- [x] 补充/更新目标测试，锁定重复调度不会叠加 timer、命中或耗尽后释放 key、调用点不退化。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `5b2eee4 优化 Chrome 授权遮罩样式释放`，工作区干净。
+- 已回顾 `tasks/lessons.md`，本轮遵守 L97：Chrome 真实页验收只使用 Chrome MCP，不用 CDP、Browser 插件或其它浏览器通道替代。
+- 定位结论：`scheduleShopNameBackfill()` 在授权主路径和 `after_lock` 路径均可能被调用；函数内部没有全局 timer 句柄或 key，店名为空时重复调用会创建独立闭包和重试 timeout。
+- 计划校验：更优雅的实现是把生命周期放回 `scheduleShopNameBackfill()` 所属模块内，以 `shopId + source` 表达单例不变量；不把回填绑定到授权成功/失败状态，也不触碰未授权阻断和续租安全边界。
+- 子代理只读审计确认：同一 `shopId/source` 重复调用存在叠加多条 `setTimeout` 重试链风险；最小不变量是同一时刻最多一条店铺名回填链，且 shopName 回填只能补展示/cache，不能成为授权通过条件。
+- 实现摘要：`src/entries/extension-license-guard.js` 新增 `shopNameBackfillTimers`、`buildShopNameBackfillKey()` 和 `scheduleShopNameBackfillTimer()`；同 key 回填链运行中直接跳过重复调度，timer 触发时释放 key，未命中且未耗尽时沿同 key 重新登记下一次重试。
+- 测试摘要：`tests/extension-license-shopid-guard.test.mjs` 增加静态断言，覆盖 timer 注册表、`shopId/source` 稳定 key、同 key 去重、timer 触发清理、重试复用 key，以及禁止回填链绕过注册表直接 `setTimeout(run, ...)`。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`。
+- 源码语法：`node --check src/entries/extension-license-guard.js` 与 `node --check tests/extension-license-shopid-guard.test.mjs` 通过。
+- 目标测试：`node --test tests/extension-license-shopid-guard.test.mjs tests/extension-license-cache-policy-token.test.mjs` 通过，10 项测试全绿。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/extension-license-shopid-guard.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，30 项测试全绿。
+- 全量回归：`npm test` 通过，602 项中 600 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：`mcp__chrome_devtools.list_pages` 失败于 `Could not connect to Chrome. Check if Chrome is running and remote debugging is enabled by going to chrome://inspect/#remote-debugging. Cause: Failed to fetch browser webSocket URL from http://127.0.0.1:9222/json/version: HTTP Not Found`；恢复脚本 `bash scripts/recover-chrome-devtools-mcp.sh` 失败于 `Chrome DevTools 端口 9222 未就绪`。按 L97 和用户“只用chrome mcp”，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在店铺名回填 timer 单例注册表、授权静态测试和构建产物；未改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥、遮罩字段或业务入口。
+
+## 结果复盘
+- 第十一轮第十一子项结果：店铺名异步回填从“每次调用独立创建一条 `setTimeout` 重试链”优化为“按 `shopId/source` 同一时刻最多一条活动回填链”。授权校验、租约刷新或锁定后二次回填在店名为空时重复触发，不再叠加保留重复闭包和 timer。
+- 取舍结论：同 key 运行中选择跳过重复调度而非清掉重建，保持首条链的既有重试节奏；不同 `source` 或不同 `shopId` 仍可独立运行，避免把 after_lock 补偿和常规回填混成全局单例。
+- 验证缺口：Chrome MCP 当前端点不健康，真实页只读观察未完成；后续继续优化仍只用 Chrome MCP 尝试，不用其它通道冒充验收。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第十子项
 
 ## 需求规格

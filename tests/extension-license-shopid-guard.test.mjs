@@ -36,8 +36,15 @@ test('授权模块补齐 shopId 多来源识别与缓存兜底', () => {
   assert.match(pageBundle, /else if \(!shopInfo\.shopId && cacheShopId\) \{[\s\S]*license_cache_fallback/, '缺少 cache shopId 兜底分支');
   assert.match(pageBundle, /const scheduleShopNameBackfill = \(context = \{\}\) => \{/, '缺少店铺名异步回填任务');
   assert.match(pageBundle, /const SHOP_NAME_BACKFILL_ATTEMPTS_DEFAULT = 8;/, '缺少店铺名回填重试默认配置');
+  assert.match(pageBundle, /const shopNameBackfillTimers = new Map\(\);/, '店铺名回填缺少活动 timer 注册表');
+  assert.match(pageBundle, /const buildShopNameBackfillKey = \(shopId = '', source = ''\) => \{[\s\S]*return `\$\{normalizeShopId\(shopId\)\}::\$\{String\(source \|\| 'shop_name_backfill'\)\}`;[\s\S]*\};/, '店铺名回填缺少 shopId/source 稳定 key');
+  assert.match(pageBundle, /const scheduleShopNameBackfillTimer = \(timerKey = '', callback = null, delayMs = 0\) => \{[\s\S]*if \(shopNameBackfillTimers\.get\(timerKey\) !== timerId\) return;[\s\S]*shopNameBackfillTimers\.delete\(timerKey\);[\s\S]*callback\(\);[\s\S]*shopNameBackfillTimers\.set\(timerKey, timerId\);[\s\S]*\};/, '店铺名回填 timer 触发后应清理 key 并通过注册表登记');
+  assert.match(pageBundle, /const timerKey = buildShopNameBackfillKey\(shopId, source\);[\s\S]*if \(shopNameBackfillTimers\.has\(timerKey\)\) return;/, '同一 shopId/source 回填链运行中不应重复调度');
   assert.match(pageBundle, /const fallbackName = resolveLooseShopNameCandidate\(shopId\);/, '店铺名异步回填未使用 shopId 定向兜底');
   assert.match(pageBundle, /if \(!state\.authorized \|\| document\.getElementById\(OVERLAY_ID\)\) \{\s*renderOverlay\(\);\s*\}/, '店铺名回填后未刷新锁定遮罩');
+  assert.match(pageBundle, /const nextDelay = Math\.min\(maxDelayMs, baseDelayMs \* attempt\);[\s\S]*scheduleShopNameBackfillTimer\(timerKey, run, nextDelay\);/, '店铺名回填重试应沿同一 timer key 调度');
+  assert.match(pageBundle, /scheduleShopNameBackfillTimer\(timerKey, run, initialDelayMs\);/, '店铺名回填首次调度应进入 timer 注册表');
+  assert.doesNotMatch(pageBundle, /setTimeout\(run,\s*(?:initialDelayMs|nextDelay)\)/, '店铺名回填不应绕过注册表直接 setTimeout');
   assert.match(pageBundle, /const verifiedShopName = normalizeShopName\(shopInfo\.shopName \|\| normalized\?\.policy\?\.shopName \|\| ''\);/, '授权成功未接入 policy.shopName 回填');
   assert.match(pageBundle, /source: `\$\{source\}\+after_lock`/, '授权失败后未触发二次店铺名回填任务');
   assert.match(pageBundle, /scheduleShopNameBackfill\(\{\s*shopId: shopInfo\.shopId,\s*shopName: shopInfo\.shopName,\s*source\s*\}\);/, '授权链路未接入店铺名回填调用');
