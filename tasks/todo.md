@@ -22,6 +22,10 @@
 - [x] 第三轮本地验证：补静态测试覆盖 bundle 缩减、CSS 暴露、userscript 内联保留、CSS 加载兜底和组建计划不懒加载大包；运行单测、语法检查、构建检查。
 - [x] 第三轮 Chrome DevTools MCP 正例烟测：恢复可用 MCP 后确认 `wizard-style.css` 实际加载、组建计划弹窗可见、控制台无新增异常。
 - [x] 第三轮记录与提交：写入前后体积、运行态结果、风险和结论，并用中文提交信息 commit。
+- [x] 第四轮范围校验：基于 Chrome heap snapshot / 页面探针定位 retained size 热点，只处理插件常驻对象；不碰服务器写接口，遵守 `20rpm` 限制。
+- [x] 第四轮方案判断：如果热点来自可释放 DOM、缓存、observer、timer 或一次性初始化对象，设计最小侵入释放方案；如果热点主要来自页面原生或必要运行时，记录“不值得改”的证据。
+- [x] 第四轮实现与验证：只在有明确收益和低风险方案时改代码；补充测试，运行相关单测、语法检查、构建检查，并用 Chrome DevTools MCP 复测前后差异。
+- [x] 第四轮记录与提交：写入指标、前后对比、风险和结论；若有实质优化，用中文提交信息 commit。
 
 ## 高层操作摘要
 - 已启动目标型任务，按项目规则先回顾 `tasks/lessons.md`；最相关教训是 L43：性能拆包不能把大包首次解析成本转移到用户点击路径。
@@ -42,6 +46,9 @@
 - 第三轮计划校验：不得把 `keyword-plan-api` 主体或 4.4MB 解析成本移动到点击“组建计划”路径；若 CSS 外置导致首次点击 FOUC，需要用 preload 或同步等待 CSS load 解决，并用本地/Chrome 运行态验证。
 - 第三轮早期曾按旧约束使用只读子代理复核；用户最新要求改为“用 Chrome DevTools MCP，不使用子代理”，本轮继续验证与提交未再派发或依赖子代理结果。
 - 第三轮实现已落地：extension 构建从 `style.js` 提取 `wizard-style.css`，manifest 暴露该资源，page bundle 只保留 critical CSS 与外链 loader；`extension-page-compat` 在 page world 暴露 `resourceBaseUrl`；`openWizard()` 等待样式加载结果后再展示 overlay，失败时只展示 critical 外壳错误态。userscript 与根脚本继续内联完整组建计划样式，不依赖 extension 资源。
+- 第四轮启动计划：先用 Chrome DevTools MCP 的 heap snapshot 和页面内探针确认插件 retained size 热点，再判断是否存在比第三轮更优雅的释放点；候选方向包括关闭后仍保留的组建计划大 DOM、插件面板节点、Observer/Interval、请求历史对象和 iframe/弹层生命周期。
+- 第四轮诊断结论：Chrome 探针发现组建计划关闭后仍常驻 `overlayDescendantCount: 631`、`modalDescendantCount: 629`、`keywordNodes: 450`，属于可释放的隐藏 DOM 与元素引用，不是必要运行时状态。
+- 第四轮实现已落地：组建计划关闭时先保存草稿、关闭运行模式菜单、失效异步 open 任务，然后移除 `overlay` 和 body 上的 `runModeMenu`，清空 `wizardState.els`，将 `mounted` 置回 `false` 以便下次重建；同步清理 resize/scroll 全局监听，并重置绑定在旧 `sceneDynamic` 上的手动关键词委托标记。
 
 ## 验证记录
 - 本地验证：`node --test tests/logger-api.test.mjs` 通过，18 项测试全绿；新增行为测试直接执行 hook manager 片段，覆盖 trace 过滤、业务请求保留、`URLSearchParams` body 可回放、历史上限裁剪和大 body 截断。
@@ -70,6 +77,13 @@
 - 第三轮 Chrome open bridge 烟测：通过 `__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__` 打开组建计划，不点击创建、提交、删除、投放或扣费入口；结果 `bridgeResult.ok: true`，`link#am-wxt-keyword-style.href` 为 `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/wizard-style.css`，`data-am-helper-external-style="1"`、`data-am-helper-full-style-loaded="1"`，旧隐藏 inline style 已清理，`critical` 样式 `loaded: "1"`、无失败标记。
 - 第三轮 Chrome 可见性烟测：弹窗打开时 overlay `display: "flex"`、`zIndex: "1000006"`、无 `styleLoadFailed`；modal 可见尺寸约 `1320x821`，标题为 `关键词推广批量建计划 API 向导`。采样后已移除 overlay `open` 类关闭弹窗。
 - 第三轮 Chrome 请求与控制台：open bridge 烟测前后 `fetchResourcesAdded: 0`、`newFetchEntries: []`，符合 `20rpm` 限速和只读边界；控制台仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复 18 次，未见本次外置 CSS 优化新增插件错误。
+- 第四轮本地诊断：已保存 `tmp/chrome-memory-round4-before.heapsnapshot` 与 `tmp/chrome-memory-round4-after.heapsnapshot`，`tmp/` 在 `.gitignore` 内，不纳入提交；heap 文件用于辅助判断，最终指标以页面 DOM 探针和 Chrome 运行态为准。
+- 第四轮本地验证：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，28 项测试全绿；新增测试覆盖关闭后卸载隐藏 DOM、清理全局监听、重置手动关键词委托标记，以及组建计划不在点击同步路径构建预览。
+- 第四轮本地验证：`npm run check:syntax` 通过；`npm run build:check` 通过；`git diff --check` 通过。
+- 第四轮 Chrome DevTools MCP 运行态：硬刷新当前 `one.alimama.com` 登录路由后，页面运行态 `window.__AM_PLATFORM_RUNTIME__.mode === "extension"`、`version: "7.05"`、`resourceBaseUrl: "chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/"`；从当前扩展资源读取的 `page.bundle.js` 包含 `removeWizardDomAfterClose`、`cleanupHandlers`、`wizardState.manualKeywordDelegatedBound = false`、`currentEls.overlay.remove()` 和 `wizardState.mounted = false`。
+- 第四轮 Chrome 对比：打开组建计划前 `totalNodesApprox: 461`、`helperNodes: 46`、`keywordNodes: 0`、无 overlay/modal；第一次打开后 `totalNodesApprox: 1095`、`helperNodes: 532`、`keywordNodes: 450`、`overlayDescendantCount: 631`、`modalDescendantCount: 629`；第一次关闭后回到 `totalNodesApprox: 463`、`helperNodes: 48`、`keywordNodes: 2`、overlay/modal 均不存在。
+- 第四轮 Chrome 重开验证：第二次打开后再次得到 `overlayDescendantCount: 631`、`modalDescendantCount: 629`，说明可重建；第二次关闭后仍回到 `totalNodesApprox: 463`、`helperNodes: 48`、`keywordNodes: 2`，overlay/modal 均不存在。
+- 第四轮 Chrome 请求与控制台：打开/关闭/重开/关闭全程 `fetchResourcesAdded: 0`，不触发业务接口，符合 `20rpm` 限制和只读边界；控制台仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复，未见本轮关闭卸载逻辑新增插件错误。
 
 ## 结果复盘
 - 第一轮结果：常驻请求历史从满载 `4000` 条降到 `76` 条，减少 `3924` 条；trace 埋点保留从 `3998` 条降到 `0` 条，减少 `100%`；默认上限从 `4000` 降到 `1200`，并增加单条 body `240000` 字符上限。
@@ -78,8 +92,10 @@
 - 第二轮对比结论：本轮解决的是 extension manifest broad match 带来的非业务页常驻大运行时问题；主业务页 `one.alimama.com` 和 SmartAssistant 预算页仍能完整注入，且普通 `myseller` SPA 跳转 SmartAssistant 可通过 600ms 轻量 URL 轮询恢复注入一次。
 - 第三轮结果：extension 首包 JS 减少 `431,149` bytes raw / `33,805` bytes gzip，并把组建计划完整 CSS 从 JS 模板字符串改为 `wizard-style.css`；没有把 `keyword-plan-api` 主体改成点击时懒加载，遵守 L43；userscript 仍自包含。
 - 第三轮对比结论：本轮解决的是 extension document_start 阶段解析/编译超大 CSS 模板字符串和主世界常驻字符串的问题。因为 CSS 被外置，extension 总资源 gzip 只小幅下降，但 JS 首包明显变小，属于对 Chrome 主线程解析和 JS heap 更直接的优化。
-- 轮次预估：达到当前最佳仍预计需要 `4` 轮，当前已完成前 3 轮代码优化并补齐第三轮 Chrome 正例烟测。第 4 轮应基于 heap snapshot / retained size 检查覆盖层、observer、iframe、detached node、初始化调用图和可关闭缓存，判断是否还有值得提交的常驻内存优化。
-- 剩余风险：第三轮 Chrome heap 前后尚未在原浏览器复测，不能直接宣称真实 heap 数字下降；外置 CSS 的资源加载、弹窗可见性和控制台结果已通过 Chrome DevTools MCP 验证，后续仍需用 heap snapshot 证明 retained size 变化。
+- 第四轮结果：组建计划关闭后的常驻隐藏 DOM 从 `overlayDescendantCount: 631 / modalDescendantCount: 629 / keywordNodes: 450` 降到 overlay/modal 不存在、`keywordNodes: 2`；重复打开关闭后指标稳定，未新增 fetch/xhr。
+- 第四轮对比结论：本轮解决的是用户只关闭弹窗后仍长期保留大型组建计划 DOM、元素引用和窗口级监听的问题；草稿通过 `commitDraftState()` 保留，下次打开重新 mount，避免把大 DOM 常驻在 Chrome 页面里。
+- 轮次预估：本次内存优化达到当前最佳需要 `4` 轮，已完成并分别提交。继续深入仍可做 heap retained-size 细查，但当前低风险高收益项已经覆盖：请求历史、非业务页注入、首包超大 CSS 字符串、关闭后隐藏 DOM。
+- 剩余风险：第四轮复测在 `one.alimama.com` 登录路由完成，证明插件运行态和组建计划 DOM 生命周期有效；未在已登录管理列表页再次打开完整业务数据流，后续若要验证创建/选品草稿恢复，需要在真实业务页只读打开后补一轮交互烟测，仍不得点击创建/提交/投放类入口。
 
 # TODO - 2026-06-01 预算破限 199 元修改失败修复
 

@@ -136,6 +136,8 @@
             keywordMetricMap: {},
             keywordAiMaxGenerationMap: {},
             crowdCustomDefaultItemPending: null,
+            styleReadyPromise: null,
+            cleanupHandlers: [],
             els: {}
         };
 

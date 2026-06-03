@@ -6,7 +6,9 @@ const gridSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizar
 const assistantBootstrapSource = readFileSync(new URL('../src/main-assistant/bootstrap.js', import.meta.url), 'utf8');
 const assistantUiSource = readFileSync(new URL('../src/main-assistant/ui.js', import.meta.url), 'utf8');
 const optimizerBridgeSource = readFileSync(new URL('../src/optimizer/bridge.js', import.meta.url), 'utf8');
+const wizardIntroSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/intro.js', import.meta.url), 'utf8');
 const wizardOpenSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-open-and-create.js', import.meta.url), 'utf8');
+const requestBuilderPreviewSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/request-builder-preview.js', import.meta.url), 'utf8');
 const searchAndDraftSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/search-and-draft.js', import.meta.url), 'utf8');
 const strategyStateSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/strategy-state-and-draft.js', import.meta.url), 'utf8');
 const batchEditPopupSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/batch-edit-popup.js', import.meta.url), 'utf8');
@@ -109,6 +111,34 @@ test('组建计划打开路径不在点击同步任务里构建预览', () => {
     wizardOpenSource,
     /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?refreshPreview: false,[\s\S]*?\}\);[\s\S]*?revealWizardAfterStyleReady\(openToken\);/,
     '后台 runtime 初始化前的首次渲染不应同步构建预览'
+  );
+});
+
+test('组建计划关闭后卸载隐藏 DOM 并清理全局监听', () => {
+  assert.match(
+    wizardIntroSource,
+    /styleReadyPromise: null,[\s\S]*?cleanupHandlers: \[\],[\s\S]*?els: \{\}/,
+    'wizardState 应显式初始化样式加载 Promise 和关闭清理队列'
+  );
+  assert.match(
+    requestBuilderPreviewSource,
+    /const removeWizardDomAfterClose = \(\) => \{[\s\S]*?wizardState\.cleanupHandlers\.forEach\(\(cleanup\) => \{[\s\S]*?currentEls\.runModeMenu\.remove\(\);[\s\S]*?currentEls\.overlay\.remove\(\);[\s\S]*?wizardState\.els = \{\};[\s\S]*?wizardState\.mounted = false;[\s\S]*?wizardState\.styleReadyPromise = null;[\s\S]*?\};/,
+    '关闭组建计划后必须移除隐藏 overlay DOM、清空元素引用，并允许下次重新 mount'
+  );
+  assert.match(
+    requestBuilderPreviewSource,
+    /wizardState\.styleReadyPromise = null;[\s\S]*?wizardState\.manualKeywordDelegatedBound = false;/,
+    '卸载旧弹窗 DOM 后必须重置绑定在 sceneDynamic 上的委托标记，避免重开后手动关键词控件失效'
+  );
+  assert.match(
+    requestBuilderPreviewSource,
+    /const closeWizardOverlay = \(\) => \{[\s\S]*?commitDraftState\(\);[\s\S]*?setRunModeMenuOpen\(false\);[\s\S]*?wizardState\.openToken = toNumber\(wizardState\.openToken, 0\) \+ 1;[\s\S]*?removeWizardDomAfterClose\(\);[\s\S]*?\};/,
+    '关闭路径应先保存草稿和关闭浮层状态，再失效异步 open 任务并卸载 DOM'
+  );
+  assert.match(
+    requestBuilderPreviewSource,
+    /window\.addEventListener\('resize', repositionRunModeMenuIfOpen\);[\s\S]*?window\.addEventListener\('scroll', repositionRunModeMenuIfOpen, true\);[\s\S]*?wizardState\.cleanupHandlers\.push\(\(\) => \{[\s\S]*?window\.removeEventListener\('resize', repositionRunModeMenuIfOpen\);[\s\S]*?window\.removeEventListener\('scroll', repositionRunModeMenuIfOpen, true\);[\s\S]*?\}\);/,
+    '可重建弹窗上的 window 级监听必须在关闭卸载时同步清理，避免重复打开叠加监听'
   );
 });
 

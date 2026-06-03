@@ -24092,6 +24092,8 @@ if (typeof globalThis !== 'undefined') {
             keywordMetricMap: {},
             keywordAiMaxGenerationMap: {},
             crowdCustomDefaultItemPending: null,
+            styleReadyPromise: null,
+            cleanupHandlers: [],
             els: {}
         };
 
@@ -60810,7 +60812,28 @@ if (typeof globalThis !== 'undefined') {
                 }
             };
 
-            wizardState.els.closeBtn.onclick = () => {
+            const removeWizardDomAfterClose = () => {
+                const currentEls = wizardState.els || {};
+                if (Array.isArray(wizardState.cleanupHandlers)) {
+                    wizardState.cleanupHandlers.forEach((cleanup) => {
+                        try {
+                            if (typeof cleanup === 'function') cleanup();
+                        } catch { }
+                    });
+                    wizardState.cleanupHandlers = [];
+                }
+                if (currentEls.runModeMenu instanceof HTMLElement) {
+                    currentEls.runModeMenu.remove();
+                }
+                if (currentEls.overlay instanceof HTMLElement) {
+                    currentEls.overlay.remove();
+                }
+                wizardState.els = {};
+                wizardState.mounted = false;
+                wizardState.styleReadyPromise = null;
+                wizardState.manualKeywordDelegatedBound = false;
+            };
+            const closeWizardOverlay = () => {
                 if (wizardState.repairRunning) {
                     wizardState.repairStopRequested = true;
                     appendWizardLog('弹窗已关闭，停止信号已发送（当前 case 结束后停止）', 'error');
@@ -60820,7 +60843,10 @@ if (typeof globalThis !== 'undefined') {
                 setRunModeMenuOpen(false);
                 overlay.classList.remove('open');
                 wizardState.visible = false;
+                wizardState.openToken = toNumber(wizardState.openToken, 0) + 1;
+                removeWizardDomAfterClose();
             };
+            wizardState.els.closeBtn.onclick = closeWizardOverlay;
             overlay.addEventListener('click', (e) => {
                 const target = e.target instanceof Element ? e.target : null;
                 if (!(target && target.closest('#am-wxt-keyword-run-mode-wrap'))) {
@@ -60847,12 +60873,16 @@ if (typeof globalThis !== 'undefined') {
                     if (!(event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')) return;
                     toggleRunModeMenu(event);
                 });
-                window.addEventListener('resize', () => {
+                const repositionRunModeMenuIfOpen = () => {
                     if (wizardState.els.runModeToggleBtn?.dataset?.open === '1') positionRunModeMenu();
+                };
+                window.addEventListener('resize', repositionRunModeMenuIfOpen);
+                window.addEventListener('scroll', repositionRunModeMenuIfOpen, true);
+                wizardState.cleanupHandlers = Array.isArray(wizardState.cleanupHandlers) ? wizardState.cleanupHandlers : [];
+                wizardState.cleanupHandlers.push(() => {
+                    window.removeEventListener('resize', repositionRunModeMenuIfOpen);
+                    window.removeEventListener('scroll', repositionRunModeMenuIfOpen, true);
                 });
-                window.addEventListener('scroll', () => {
-                    if (wizardState.els.runModeToggleBtn?.dataset?.open === '1') positionRunModeMenu();
-                }, true);
             }
             if (wizardState.els.runModeMenu instanceof HTMLElement) {
                 const runModeCountBadge = wizardState.els.runModeMenu.querySelector('[data-action="run-mode-count-badge"]');
