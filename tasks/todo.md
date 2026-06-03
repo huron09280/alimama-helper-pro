@@ -1,3 +1,45 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第六轮
+
+## 需求规格
+- 目标：在前 5 轮已完成请求历史、非业务页注入、外置组建计划 CSS、关闭卸载 DOM、样式/子浮层生命周期清理后，继续用 retained-size 与运行态证据确认是否还有低风险高收益内存优化点，并在有明确插件自有热点时完成第六轮优化。
+- 范围：只覆盖 Chrome extension 运行态、`one.alimama.com` 页面插件常驻对象、全局监听、定时器、Observer、DOM/样式节点、缓存和构建产物；不改创建/复制/预算/授权/token/shopId 等安全边界，不点击真实创建、提交、投放、删除或扣费入口，不直接编辑生成产物。
+- 成功标准：若发现插件自有低风险热点，必须落地最小侵入优化，记录前后指标并通过相关测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 复测；若 retained-size 证据显示剩余热点主要是必要运行时或页面原生，必须记录排除证据，不做高风险结构切分。
+- 根因判断口径：优先处理“打开/关闭后残留”“重复绑定/重复启动”“无上限缓存”“可清空的大 DOM/大数组/大字符串”“非目标页误注入”；不接受把首包成本挪到点击路径、隐藏异常、增加第二事实源或牺牲已验证功能。
+- 计划校验：开发前先确认是否有比新增补丁更优雅的释放/收窄生命周期方式；若候选需要拆分核心业务模块或改变运行态合同，先记录风险并停止，不强行推进。
+
+## 执行计划（可核对）
+- [x] 回顾当前源码、提交和第五轮后的运行态证据，确认第六轮不重复已完成项。
+- [x] 用 Chrome DevTools MCP 采集当前页面插件运行态、DOM/样式节点、全局对象、hook history、performance memory 和 heap snapshot。
+- [x] 静态交叉定位可能的残留源：全局监听、interval/timeout、Observer、Map/cache、body 级浮层、样式注入和 extension content script。
+- [x] 方案判断：基于 retained-size/运行态证据选择一项低风险优化；若没有明确热点，记录“当前最佳”证据。
+- [x] 实现与测试：只改必要源码，补充或更新覆盖测试，不改变安全边界或点击路径解析成本。
+- [x] 验证闭环：运行目标单测、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并用 Chrome DevTools MCP 做前后复测。
+- [x] 结果归档与提交：写入高层操作摘要、验证记录、结果复盘和前后对比；有实质改动时用中文提交信息 commit。
+
+## 高层操作摘要
+- 已启动第六轮，目标不是重复前五轮结论，而是基于 retained-size 和当前运行态判断是否还存在插件自有、低风险、高收益的常驻内存热点。
+- 已回顾 `tasks/lessons.md`，本轮重点遵守 L96（按项记录/中文提交）和 L43（不能把大包首次解析转移到点击路径）。
+- 第六轮冷态/heap 证据：`tmp/chrome-memory-round6-cold.heapsnapshot` 显示大 self-size 主要来自页面 Magix 业务 JSON 和页面代码字符串；冷态插件侧无组建计划 overlay/style/promise 残留，请求历史 `traceCount: 0`，唯一 body 级插件浮层是隐藏的空 `#am-report-capture-panel`。
+- 只读子代理复核：前五轮之外更高收益候选是万能查数关闭后的 iframe/popup/data 释放；低风险冷态项是下载捕获面板生命周期。第六轮先提交下载捕获面板按需挂载与关闭卸载，后续继续验证万能查数候选。
+- 第六轮实现：`Interceptor.init()` 不再冷态创建下载捕获面板；`show()` 命中真实下载 URL 时才 `createPanel()`；关闭按钮和退出模式分支统一走 `removePanel()` 卸载 DOM、清空 `this.panel`，并取消复制按钮的恢复定时器，避免关闭后短暂保留已卸载节点引用。
+
+## 验证记录
+- Chrome DevTools MCP 冷态基线：当前 `one.alimama.com` 管理页在第五轮后无组建计划残留，但冷态存在隐藏空面板 `bodyFloating: [{ id: "am-report-capture-panel", childCount: 0, display: "none" }]`；`hook.historyLength: 100`、`requestHistoryLimit: 1200`、`traceCount: 0`。
+- Heap 辅助证据：`tmp/chrome-memory-round6-cold.heapsnapshot` 约 `170MB`，解析后 `string` self-size 最大；插件关键词命中的大对象前列主要是页面 `magix-ports` JSON 和页面函数代码字符串，未发现新的插件自有大 retained 字符串或组建计划 DOM 残留。
+- Chrome DevTools MCP 组建计划回归：按当前 `callId` bridge 合同打开组建计划成功，打开态 `overlayDescendantCount: 626`、`modalDescendantCount: 624`、`stylePromise: true`；关闭 150ms 后 `overlay.exists: false`、`keywordNodes: 0`、只剩主样式 `style#am-helper-pro-v26-style`，第五轮生命周期清理仍稳定。
+- 本地验证：`node --test tests/download-link-depth-guard.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/keyword-wizard-entry-regression.test.mjs` 通过，51 项测试全绿。
+- 本地验证：`npm run check:syntax` 通过，根 userscript 语法检查无错误。
+- 本地验证：`npm run build:check` 通过，根 userscript、`dist/packages/` 和 `dist/extension/` 与源码同步。
+- 本地验证：`git diff --check` 通过，无空白错误。
+- Chrome DevTools MCP 新构建冷态复测：刷新同一 `one.alimama.com` 页面后，当前 extension `page.bundle.js` 包含 `hasLazyPanelShow: true`、`hasRemovePanel: true`、`hasColdCreatePanel: false`；冷态 `capturePanel.exists: false`、`bodyFloating: []`、`overlay.exists: false`、`stylePromise: false`、`hook.historyLength: 98`、`traceCount: 0`。
+- Chrome DevTools MCP 下载捕获模拟复测：通过内存内调用 `__AM_HOOK_MANAGER__.fetchHandlers` 模拟下载 URL，未发起真实下载/业务请求；触发前 `panelExists: false`，触发后面板 `display: "block"`、`ariaHidden: "false"`、`childCount: 21`、`lastUrl` 为模拟 xlsx 链接；点击关闭后 `afterClose.exists: false`，1.7s 后 `afterTimer.panelExists: false`，`historyAdded: 0`。
+- Chrome 网络边界：下载捕获模拟新增网络条目仅为页面自身 `https://gm.mmstat.com/aes.1.1` beacon 2 条；未触发创建、提交、投放、删除、扣费或真实下载请求。
+
+## 结果复盘
+- 第六轮当前子项结果：下载捕获面板从“插件冷态即在 body 常驻一个隐藏空 DOM，命中下载后关闭仅隐藏并保留 21 个子节点”优化为“冷态不创建，命中下载才创建，关闭后直接卸载并清空引用，复制恢复定时器同步取消”。
+- 对比结论：本项收益小于前几轮大 DOM/CSS/request history 优化，但风险低、生命周期更准确，避免无下载场景常驻 `#am-report-capture-panel`，也避免捕获后关闭态长期保留面板子树。
+- 后续判断：子代理和静态证据均指向万能查数关闭后 iframe/popup/data 缓存可能是下一项更高收益候选；本提交后继续用 Chrome DevTools MCP 做打开/关闭实测，再决定是否进入第七轮或作为第六轮后续子项优化。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第五轮
 
 ## 需求规格

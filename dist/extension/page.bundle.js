@@ -8909,6 +8909,7 @@ if (typeof globalThis !== 'undefined') {
             /\/logstores\/[^/?#]+\/track(?:[/?#]|$)/i
         ],
         hooksRegistered: false,
+        copyResetTimer: 0,
         maxParseBytes: 1024 * 1024,
         parsableTypeHints: ['json', 'text', 'javascript', 'xml', 'html', 'csv', 'plain', 'event-stream'],
         debugHints: new Set(),
@@ -8918,7 +8919,6 @@ if (typeof globalThis !== 'undefined') {
                 this.ensureHookManager();
                 return;
             }
-            this.createPanel();
             this.registerHooks();
         },
 
@@ -8946,6 +8946,14 @@ if (typeof globalThis !== 'undefined') {
         },
 
         createPanel() {
+            if (this.panel instanceof HTMLElement && this.panel.isConnected) return this.panel;
+            const existing = document.getElementById('am-report-capture-panel');
+            if (existing instanceof HTMLElement) {
+                this.panel = existing;
+                return existing;
+            }
+            const mountNode = document.body || document.documentElement;
+            if (!mountNode) return null;
             const div = document.createElement('div');
             div.id = 'am-report-capture-panel';
             div.setAttribute('role', 'region');
@@ -8955,8 +8963,21 @@ if (typeof globalThis !== 'undefined') {
             div.tabIndex = -1;
             // Inline fallback: even if style injection fails, ensure popup is visible and clickable.
             div.style.cssText = 'font-size:13px;position:fixed;right:20px;bottom:20px;width:min(340px, calc(100vw - 24px));z-index:2147483647;display:none;';
-            document.body.appendChild(div);
+            mountNode.appendChild(div);
             this.panel = div;
+            return div;
+        },
+
+        removePanel() {
+            if (this.copyResetTimer) {
+                clearTimeout(this.copyResetTimer);
+                this.copyResetTimer = 0;
+            }
+            if (this.panel instanceof HTMLElement) {
+                this.panel.onkeydown = null;
+                this.panel.remove();
+            }
+            this.panel = null;
         },
 
         debugOnce(key, msg) {
@@ -9044,15 +9065,21 @@ if (typeof globalThis !== 'undefined') {
                 return;
             }
 
-            if (this.panel.dataset.lastUrl === safeUrl && this.panel.style.display === 'block') return;
-            this.panel.dataset.lastUrl = safeUrl;
+            const panel = this.createPanel();
+            if (!panel) {
+                this.debugOnce('panel-mount-failed', '下载捕获面板挂载失败，已跳过渲染');
+                return;
+            }
+
+            if (panel.dataset.lastUrl === safeUrl && panel.style.display === 'block') return;
+            panel.dataset.lastUrl = safeUrl;
 
             Logger.log(`📂 捕获报表: ${source} `, true);
 
-            this.panel.textContent = '';
-            this.panel.setAttribute('aria-hidden', 'false');
-            this.panel.setAttribute('aria-labelledby', 'am-report-capture-title');
-            this.panel.setAttribute('aria-describedby', 'am-report-capture-url am-report-capture-status');
+            panel.textContent = '';
+            panel.setAttribute('aria-hidden', 'false');
+            panel.setAttribute('aria-labelledby', 'am-report-capture-title');
+            panel.setAttribute('aria-describedby', 'am-report-capture-url am-report-capture-status');
 
             const header = document.createElement('div');
             header.className = 'am-download-header';
@@ -9113,27 +9140,31 @@ if (typeof globalThis !== 'undefined') {
             hint.className = 'am-download-hint';
             hint.textContent = '提示：如果下载的文件名无后缀，请手动添加 .xlsx';
 
-            this.panel.appendChild(header);
-            this.panel.appendChild(urlBox);
-            this.panel.appendChild(actions);
-            this.panel.appendChild(status);
-            this.panel.appendChild(hint);
-            this.panel.style.display = 'block';
+            panel.appendChild(header);
+            panel.appendChild(urlBox);
+            panel.appendChild(actions);
+            panel.appendChild(status);
+            panel.appendChild(hint);
+            panel.style.display = 'block';
 
             copyBtn.onclick = function () {
                 GM_setClipboard(safeUrl);
                 this.innerText = '已复制';
                 status.textContent = '下载链接已复制';
-                setTimeout(() => {
+                if (Interceptor.copyResetTimer) {
+                    clearTimeout(Interceptor.copyResetTimer);
+                }
+                Interceptor.copyResetTimer = setTimeout(() => {
+                    Interceptor.copyResetTimer = 0;
                     this.innerText = '复制';
                     status.textContent = '链接已捕获，可复制或直连下载';
                 }, 1500);
             };
             closeBtn.onclick = () => {
-                this.panel.style.display = 'none';
-                this.panel.setAttribute('aria-hidden', 'true');
+                panel.setAttribute('aria-hidden', 'true');
+                this.removePanel();
             };
-            this.panel.onkeydown = (event) => {
+            panel.onkeydown = (event) => {
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
                 closeBtn.click();
@@ -9226,7 +9257,7 @@ if (typeof globalThis !== 'undefined') {
                 const isExitModeText = text.includes('退出模式');
 
                 if (isExitModeBtn || isExitModeText) {
-                    if (this.panel) this.panel.style.display = 'none';
+                    this.removePanel();
                 }
             }, true);
 
