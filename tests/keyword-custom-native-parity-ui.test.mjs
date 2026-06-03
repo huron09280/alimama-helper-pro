@@ -454,6 +454,26 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
+    /const unbindAiMaxDetailDelegatedHandlers = \(\) => \{[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDetailToggleClickHandler\);[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxStepToggleClickHandler\);[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDemandNextClickHandler\);[\s\S]*wizardState\.aiMaxDetailDelegatedBound = false;/,
+    'AI点睛详情区 document click 委托关闭向导时必须释放'
+  );
+  assert.match(
+    source,
+    /wizardState\.aiMaxDetailToggleClickHandler = \(event\) => \{[\s\S]*wizardState\.aiMaxStepToggleClickHandler = \(event\) => \{[\s\S]*wizardState\.aiMaxDemandNextClickHandler = \(event\) => \{[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxDetailToggleClickHandler\);[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxStepToggleClickHandler\);[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxDemandNextClickHandler\);/,
+    'AI点睛详情区 document click 委托必须使用可解绑的命名 handler'
+  );
+  assert.match(
+    source,
+    /wizardState\.cleanupHandlers = Array\.isArray\(wizardState\.cleanupHandlers\)[\s\S]*wizardState\.cleanupHandlers\.push\(unbindAiMaxDetailDelegatedHandlers\);[\s\S]*wizardState\.aiMaxDetailDelegatedCleanupRegistered = true;/,
+    'AI点睛详情区 document click 委托解绑函数必须注册进向导 cleanupHandlers'
+  );
+  assert.doesNotMatch(
+    source,
+    /aiMaxDetailDelegatedBound[\s\S]{0,180}document\.addEventListener\('click', \(event\) => \{/,
+    'AI点睛详情区不能继续注册匿名 document click 委托'
+  );
+  assert.match(
+    source,
     /data-ai-max-demand-selector-trigger="1"[\s\S]*data-ai-max-info-field="\$\{Utils\.escapeHtml\(normalizedInfoField\)\}"/,
     'AI点睛“5个需求”入口未绑定独立需求下拉浮层'
   );

@@ -1,3 +1,45 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十三子项
+
+## 需求规格
+- 目标：在关键词偏好下拉外部点击监听收口后，继续释放关键词向导矩阵 AI 点睛详情区的 document 级 click 委托，避免向导关闭后仍长期保留只服务 AI Max 展开/步骤/需求翻页按钮的 3 条全局点击闭包。
+- 根因判断：`renderSceneDynamicConfig()` 里用 `wizardState.aiMaxDetailDelegatedBound` 防重复注册，但当前 3 个 `document.addEventListener('click', anonymous)` 没有命名 handler，也没有加入 `wizardState.cleanupHandlers`；关闭向导时 `removeWizardDomAfterClose()` 会清理 overlay 和 cleanupHandlers，但无法释放这些匿名 document 监听。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 中 AI Max 详情/步骤/需求箭头的 document click 委托生命周期和对应静态测试；不改 AI Max 展示文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“命名 handler + 单一解绑函数 + 注册进向导 cleanupHandlers”的生命周期；不新增第二套 AI Max 状态，不改变已有 `aiMaxDetailDelegatedBound` 防重复语义，不用隐藏 fallback 掩盖事件异常。
+- 成功标准：静态测试证明 3 个 AI Max document click 委托不再匿名常驻，绑定时保存到 `wizardState`，解绑函数会移除 3 个 click handler 并重置状态，且解绑函数进入 `wizardState.cleanupHandlers`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和只读观察 document click 监听绑定/释放。
+
+## 执行计划（可核对）
+- [x] 复核第十二子项提交后工作区状态，确认本子项只处理 AI Max 详情委托生命周期。
+- [x] 定位 AI Max 详情区 3 条 document click 委托和向导关闭 cleanupHandlers 清理路径。
+- [x] 实现命名 handler、统一解绑函数，并把解绑函数注册进 `wizardState.cleanupHandlers`。
+- [x] 补充/更新目标测试，锁定关闭向导会释放 AI Max 详情 document click 委托。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `362b40c 优化 Chrome 关键词偏好监听生命周期`，工作区干净。
+- 定位结论：AI Max 详情/步骤/需求翻页按钮使用 3 条 document 级委托，并通过 `wizardState.aiMaxDetailDelegatedBound` 保证单运行态只注册一次；但这些委托是匿名函数，向导关闭时无法通过现有 `cleanupHandlers` 释放。
+- 方案判断：更优雅的实现是在同一模块内表达生命周期不变量：AI Max 委托绑定时保存 handler 引用，关闭向导时由现有 cleanupHandlers 统一调用解绑；不额外引入轮询、observer 或第二状态源。
+- 实现摘要：`render-scene-dynamic-grid.js` 新增 AI Max 详情委托的 bind/unbind/cleanup 注册函数，把详情展开、步骤展开和需求翻页 3 个 document click handler 命名保存到 `wizardState`；向导 cleanupHandlers 执行时会统一 remove 3 条 handler 并重置绑定状态。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 增加静态回归，覆盖 3 个 handler 引用、3 次 document click 绑定、统一解绑函数、cleanupHandlers 注册，以及禁止继续在 `aiMaxDetailDelegatedBound` 分支内注册匿名 document click 委托。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 与 `node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿；新增断言覆盖 AI Max 详情 3 条 document click 委托保存 handler 引用、绑定、解绑和向导关闭 cleanup 注册。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，40 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；恢复后当前工具列表仍未暴露 `mcp__chrome_devtools.*`，`tool_search` 查询 `mcp__chrome_devtools Chrome DevTools list_pages evaluate_script` 与 `chrome control browser tab devtools` 均返回 0 个可用工具，因此真实页只读验收未完成。
+- Diff 自审：改动集中在 AI Max 详情 document click 委托生命周期、对应静态测试和构建产物；未改 AI Max 展示文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十三子项结果：关键词向导矩阵 AI 点睛详情区从“向导首次渲染后常驻 3 条匿名 document click 委托”优化为“绑定时保存 handler 引用，并在向导关闭 cleanupHandlers 中统一释放”。关闭向导后，不再长期保留只服务 AI Max 详情展开、步骤展开和需求翻页按钮的全局监听闭包。
+- 取舍结论：复用现有 `wizardState.aiMaxDetailDelegatedBound` 和向导 cleanupHandlers 作为唯一生命周期事实源；没有新增第二套 AI Max 展开状态，也没有改变矩阵物化、AI Max 表单、原生接口生成或提交链路。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十二子项
 
 ## 需求规格

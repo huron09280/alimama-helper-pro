@@ -49713,9 +49713,37 @@ if (typeof globalThis !== 'undefined') {
                     });
                 };
 
-                if (!(wizardState.aiMaxDetailDelegatedBound)) {
-                    wizardState.aiMaxDetailDelegatedBound = true;
-                    document.addEventListener('click', (event) => {
+                const unbindAiMaxDetailDelegatedHandlers = () => {
+                    if (!wizardState.aiMaxDetailDelegatedBound) return;
+                    if (typeof wizardState.aiMaxDetailToggleClickHandler === 'function') {
+                        document.removeEventListener('click', wizardState.aiMaxDetailToggleClickHandler);
+                    }
+                    if (typeof wizardState.aiMaxStepToggleClickHandler === 'function') {
+                        document.removeEventListener('click', wizardState.aiMaxStepToggleClickHandler);
+                    }
+                    if (typeof wizardState.aiMaxDemandNextClickHandler === 'function') {
+                        document.removeEventListener('click', wizardState.aiMaxDemandNextClickHandler);
+                    }
+                    wizardState.aiMaxDetailToggleClickHandler = null;
+                    wizardState.aiMaxStepToggleClickHandler = null;
+                    wizardState.aiMaxDemandNextClickHandler = null;
+                    wizardState.aiMaxDetailDelegatedBound = false;
+                    wizardState.aiMaxDetailDelegatedCleanupRegistered = false;
+                };
+                const registerAiMaxDetailDelegatedCleanup = () => {
+                    wizardState.cleanupHandlers = Array.isArray(wizardState.cleanupHandlers)
+                        ? wizardState.cleanupHandlers
+                        : [];
+                    if (wizardState.aiMaxDetailDelegatedCleanupRegistered) return;
+                    wizardState.cleanupHandlers.push(unbindAiMaxDetailDelegatedHandlers);
+                    wizardState.aiMaxDetailDelegatedCleanupRegistered = true;
+                };
+                const bindAiMaxDetailDelegatedHandlers = () => {
+                    if (wizardState.aiMaxDetailDelegatedBound) {
+                        registerAiMaxDetailDelegatedCleanup();
+                        return;
+                    }
+                    wizardState.aiMaxDetailToggleClickHandler = (event) => {
                         const target = event.target instanceof Element
                             ? event.target.closest('button[data-ai-max-detail-toggle="1"]')
                             : null;
@@ -49731,8 +49759,8 @@ if (typeof globalThis !== 'undefined') {
                         });
                         syncAiMaxDetailButtonLabel(target);
                         if (!expanded) runAiMaxTypewriter(panel);
-                    });
-                    document.addEventListener('click', (event) => {
+                    };
+                    wizardState.aiMaxStepToggleClickHandler = (event) => {
                         const target = event.target instanceof Element
                             ? event.target.closest('button[data-ai-max-step-toggle="1"]')
                             : null;
@@ -49746,8 +49774,8 @@ if (typeof globalThis !== 'undefined') {
                         setAiMaxToggleButtonContent(target, !expanded);
                         target.classList.toggle('is-expanded', !expanded);
                         if (!expanded) runAiMaxTypewriter(step);
-                    });
-                    document.addEventListener('click', (event) => {
+                    };
+                    wizardState.aiMaxDemandNextClickHandler = (event) => {
                         const target = event.target instanceof Element
                             ? event.target.closest('button[data-ai-max-demand-next="1"]')
                             : null;
@@ -49764,8 +49792,14 @@ if (typeof globalThis !== 'undefined') {
                         } else {
                             list.scrollBy({ left: step, behavior: 'smooth' });
                         }
-                    });
-                }
+                    };
+                    document.addEventListener('click', wizardState.aiMaxDetailToggleClickHandler);
+                    document.addEventListener('click', wizardState.aiMaxStepToggleClickHandler);
+                    document.addEventListener('click', wizardState.aiMaxDemandNextClickHandler);
+                    wizardState.aiMaxDetailDelegatedBound = true;
+                    registerAiMaxDetailDelegatedCleanup();
+                };
+                bindAiMaxDetailDelegatedHandlers();
 
                 const aiMaxDetailToggleButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-detail-toggle="1"]');
                 aiMaxDetailToggleButtons.forEach(button => {
