@@ -4952,6 +4952,9 @@
                 const titleBak = btn.dataset.amTitleBak;
                 btn.title = titleBak || `并发开启关联计划：${id}`;
                 delete btn.dataset.amTitleBak;
+                if (!this.isConcurrentStartEnabled()) {
+                    btn.remove();
+                }
             });
         },
 
@@ -5223,9 +5226,45 @@
 
         syncConcurrentButtonsVisibility() {
             const enabled = this.isConcurrentStartEnabled();
+            if (!enabled) {
+                document.querySelectorAll('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]').forEach((btn) => {
+                    if (!(btn instanceof HTMLElement)) return;
+                    if (btn.classList.contains('is-running') || btn.disabled) return;
+                    btn.remove();
+                });
+                return;
+            }
+            this.ensureConcurrentButtonsForQuickEntries();
             document.querySelectorAll('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]').forEach((btn) => {
                 if (!(btn instanceof HTMLElement)) return;
-                btn.style.display = enabled ? '' : 'none';
+                btn.style.display = '';
+            });
+        },
+
+        ensureConcurrentButtonsForQuickEntries() {
+            if (!this.isConcurrentStartEnabled()) return;
+            document.querySelectorAll('.am-campaign-search-btn[data-am-campaign-quick="1"]').forEach((quickBtn) => {
+                if (!(quickBtn instanceof HTMLElement) || !quickBtn.isConnected) return;
+                const campaignId = this.normalizeCampaignId(quickBtn.getAttribute('data-campaign-id') || quickBtn.dataset?.campaignId || '');
+                if (!campaignId) return;
+                let pointer = quickBtn.nextElementSibling;
+                let anchor = quickBtn;
+                for (let i = 0; i < 10 && pointer; i++) {
+                    if (!pointer.matches?.('.am-campaign-search-btn')) break;
+                    if (
+                        pointer.matches?.('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]')
+                        && pointer.getAttribute('data-campaign-id') === campaignId
+                    ) {
+                        return;
+                    }
+                    pointer = pointer.nextElementSibling;
+                }
+                const concurrentBtn = this.createButton(campaignId, {
+                    mode: 'concurrent',
+                    bizCode: quickBtn.getAttribute('data-biz-code') || quickBtn.dataset?.bizCode || '',
+                    itemId: quickBtn.getAttribute('data-item-id') || quickBtn.dataset?.itemId || ''
+                });
+                if (concurrentBtn) anchor.insertAdjacentElement('afterend', concurrentBtn);
             });
         },
 
@@ -5720,12 +5759,14 @@
                             itemId: contextItemId
                         });
                         if (quickBtn) frag.appendChild(quickBtn);
-                        const concurrentBtn = this.createButton(campaignId, {
-                            mode: 'concurrent',
-                            bizCode: contextBizCode,
-                            itemId: contextItemId
-                        });
-                        if (concurrentBtn) frag.appendChild(concurrentBtn);
+                        if (this.isConcurrentStartEnabled()) {
+                            const concurrentBtn = this.createButton(campaignId, {
+                                mode: 'concurrent',
+                                bizCode: contextBizCode,
+                                itemId: contextItemId
+                            });
+                            if (concurrentBtn) frag.appendChild(concurrentBtn);
+                        }
                         hasMatch = true;
                     } else {
                         frag.appendChild(document.createTextNode(fullText));
@@ -5799,7 +5840,7 @@
                         anchor = createdQuick;
                     }
                 }
-                if (!concurrentBtn) {
+                if (this.isConcurrentStartEnabled() && !concurrentBtn) {
                     const createdConcurrent = this.createButton(id, { mode: 'concurrent', bizCode, itemId });
                     if (createdConcurrent) {
                         anchor.insertAdjacentElement('afterend', createdConcurrent);

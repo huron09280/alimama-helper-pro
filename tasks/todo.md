@@ -1,3 +1,46 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第九轮
+
+## 需求规格
+- 目标：在第八轮预算破限冷态生命周期收口后，继续基于当前 Chrome 运行态和源码证据审计主助手常驻扫描、辅助显示标签、计划并发入口、潜力词导出入口和主面板日志，寻找剩余插件自有低风险内存优化点，继续逼近“当前最佳”。
+- 范围：只覆盖冷态或普通列表页常驻的插件自有 observer/timer/listener、DOM 标签、缓存、日志、主助手扫描节流和辅助显示渲染；不改创建/复制/预算/授权/token/shopId 安全边界，不改变真实提交链路，不直接编辑生成产物。
+- 成功标准：若发现插件自有低风险热点，采用最小侵入方案落地并通过目标测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 复测；若证据显示剩余项属于必要主 bundle、页面原生运行时或需要高风险架构拆分，记录排除证据和下一阶段建议。
+- 判断口径：优先处理默认关闭功能仍常驻、重复扫描、可按配置禁用的 DOM 更新、无上限日志/缓存、关闭后残留；不接受隐藏异常、削弱安全校验、减少用户可见必要状态，或把重解析成本挪到点击路径。
+- 安全边界：Chrome 验证只刷新、读取 DOM/heap/资源/控制台、切换无写入配置开关或做内存内只读探针；不触发创建、复制、预算提交、删除、投放、扣费接口。
+
+## 执行计划（可核对）
+- [x] 采集第八轮提交后的 Chrome 冷态运行态：DOM、helper 节点、requestHistory、预算补丁、主助手扫描相关指标。
+- [x] 静态定位主助手 `Core.run()`、辅助显示标签、计划并发入口、潜力词导出、日志和 observer/timer 常驻路径。
+- [x] 方案判断：若存在默认关闭或配置关闭仍常驻的低风险项则实现；若主要是必要扫描或页面原生则记录排除。
+- [x] 实现最小侵入优化并补充目标测试，避免影响辅助显示、计划并发、潜力词导出和主面板交互。
+- [x] 验证闭环：运行目标测试、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome DevTools MCP 复测前后差异。
+- [x] 结果归档与提交：写入验证记录、结果复盘和对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已完成并提交第八轮 `eb168f7 优化 Chrome 预算破限冷态内存占用`；第九轮继续审计，不把预算补丁收口当作终点。
+- 本轮优先看主助手扫描与配置开关生命周期，尤其是默认关闭的 `showConcurrentStartButton`、非潜力词页的潜力词导出、辅助显示标签渲染和主面板日志是否仍有冷态常驻或重复扫描。
+- 静态定位结论：`main()` 的全页 `MutationObserver` 会串行触发 `Core.run()`、`CampaignIdQuickEntry.run()`、`PotentialPlanDailyExporter.run()`；其中潜力词导出在非目标页先判 hash 并移除按钮，预算破限第八轮已按需安装，剩余低风险热点是默认关闭的 `showConcurrentStartButton=false` 仍由 `enhanceTextNodes()` / `enhanceLinkNodes()` 为每个计划 ID 创建并发按钮，再用 `display:none` 隐藏。
+- 方案判断：采用“关闭不创建 DOM，开启按已有快捷查数按钮补建，关闭时移除”的生命周期修复。它只收窄并发入口的冷态 DOM 常驻，不改并发开启请求、复制、预算、授权、token、shopId 或真实提交链路。
+- 只读子代理复核结论与主线程一致：UI 开关旧逻辑依赖“并发按钮已存在”，因此关闭时移除后，开启必须从 `.am-campaign-search-btn[data-am-campaign-quick="1"]` 补建，并透传 `campaignId/bizCode/itemId`；另外运行中按钮不能被开关关闭直接拆掉。
+- 实现摘要：`enhanceTextNodes()` / `enhanceLinkNodes()` 仅在 `showConcurrentStartButton=true` 时创建并发按钮；`syncConcurrentButtonsVisibility()` 关闭时移除空闲并发按钮，开启时调用 `ensureConcurrentButtonsForQuickEntries()` 从既有 quick 按钮补建；运行中按钮保留到流程结束，`setConcurrentButtonRunning(..., false)` 会在开关仍关闭时清理。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过；`node --check 阿里妈妈多合一助手.js` 通过。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/campaign-concurrent-start-quick-entry.test.mjs` 通过，8 项测试全绿；新增断言覆盖默认关闭不保留隐藏并发 DOM、开启按 quick 按钮补建、文本/链接注入受开关控制、运行中按钮结束后按开关清理。首次运行该测试失败于构建产物未同步，执行 `npm run build` 后复测通过。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/magic-report-panel-resilience.test.mjs tests/magic-report-crowd-matrix.test.mjs` 通过，87 项测试全绿；复制、万能查数和人群看板相关静态回归未受影响。
+- 构建静态测试：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，588 项中 586 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome DevTools MCP 冷态复测：真实页 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 中，`showConcurrentStartButton` 按钮 `aria-pressed=false`，`quickCount=26`、`concurrentCount=0`、`hiddenConcurrentCount=0`、`runningConcurrentCount=0`、`copyCount=3`、`batchPlusCount=1`、`helperNodes=302`。
+- Chrome DevTools MCP 开关往返：点击“计划并发”打开后 `quickCount=26`、`concurrentCount=26`、`hiddenConcurrentCount=0`，第一个 quick 后紧跟 concurrent，首个并发按钮透传 `campaignId=77783773024`、`bizCode=onebpSite`、`itemId=973306665230`，`display=inline-flex`、`disabled=false`、`title/aria-label=并发开启关联计划：77783773024`；再关闭后 `concurrentCount=0`、`hiddenConcurrentCount=0`。
+- Chrome 安全边界：本轮真实页面只刷新、读取 DOM/配置、点击“计划并发”开关打开再关闭；未点击任何并发执行、复制、预算、删除、上下线或提交按钮。开关往返探针 `dangerousWriteLikeEntriesAdded=[]`，未新增 `/campaign/budget/batchUpdate.json`、`/solution/addList|copy`、`campaign/delete|updatePart` 等写接口资源。
+- Chrome 控制台/网络：控制台只见页面既有 `Deprecated feature used`、`net::ERR_TUNNEL_CONNECTION_FAILED` 外部资源失败和页面 SSE/trace 日志；未见本轮并发按钮生命周期改动新增插件异常。网络列表主要为页面既有只读/报表/trace 请求，本轮开关往返无写接口增量。
+
+## 结果复盘
+- 第九轮结果：`计划并发`默认关闭时从“每个计划 ID 都创建一个隐藏并发按钮”优化为“冷态不创建并发按钮，开启时按需补建，关闭时释放空闲并发按钮”。真实页面当前列表冷态减少 26 个隐藏并发按钮，开启后仍能即时补建 26 个，关闭后回到 0。
+- 取舍结论：该项收益小而明确，属于配置关闭功能的 DOM 生命周期收口；它不改变并发开启请求链路，也不把重业务逻辑移到点击路径。运行中按钮采用保守策略，避免用户执行期间关闭开关导致 disabled/title/focus 恢复链路失效。
+- 后续判断：第九轮后，默认关闭功能的明显冷态隐藏 DOM 又收口一处。剩余主助手扫描和辅助显示 `Core.run()` 属于当前可见表格功能的必要扫描；继续优化应优先做更细粒度的 MutationObserver 变更过滤或主 bundle 拆分评估，收益/风险高于本轮小生命周期补丁。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第八轮
 
 ## 需求规格
