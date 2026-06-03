@@ -24646,7 +24646,8 @@ if (typeof globalThis !== 'undefined') {
             nativeAdzoneList: null,
             nativeAdzoneTs: 0,
             nativeAdzoneBizCode: '',
-            nativeAdzonePending: null
+            nativeAdzonePending: null,
+            nativeRuntimeCacheCleanupTimer: 0
         };
         const componentConfigCache = {
             data: null,
@@ -32276,7 +32277,69 @@ if (typeof globalThis !== 'undefined') {
             );
         };
 
-        const NATIVE_CROWD_CACHE_TTL_MS = 8 * 1000;
+        const NATIVE_RUNTIME_CACHE_TTL_MS = 8 * 1000;
+        const NATIVE_CROWD_CACHE_TTL_MS = NATIVE_RUNTIME_CACHE_TTL_MS;
+        const CROWD_NATIVE_RUNTIME_CACHE_TTL_MS = NATIVE_RUNTIME_CACHE_TTL_MS;
+        const NATIVE_RUNTIME_LIST_CACHE_SLOTS = [
+            {
+                valueKey: 'nativeCrowdList',
+                tsKey: 'nativeCrowdTs',
+                bizCodeKey: 'nativeCrowdBizCode',
+                ttlMs: NATIVE_CROWD_CACHE_TTL_MS
+            },
+            {
+                valueKey: 'nativeCrowdCustomBidTargetOptions',
+                tsKey: 'nativeCrowdCustomBidTargetTs',
+                bizCodeKey: 'nativeCrowdCustomBidTargetBizCode',
+                ttlMs: CROWD_NATIVE_RUNTIME_CACHE_TTL_MS
+            },
+            {
+                valueKey: 'nativeAdzoneList',
+                tsKey: 'nativeAdzoneTs',
+                bizCodeKey: 'nativeAdzoneBizCode',
+                ttlMs: CROWD_NATIVE_RUNTIME_CACHE_TTL_MS
+            }
+        ];
+        const clearNativeRuntimeListCacheSlot = (slot = {}) => {
+            if (!slot?.valueKey || !slot?.tsKey) return;
+            runtimeCache[slot.valueKey] = null;
+            runtimeCache[slot.tsKey] = 0;
+            if (slot.bizCodeKey) runtimeCache[slot.bizCodeKey] = '';
+        };
+        const cleanupNativeRuntimeListCaches = () => {
+            const now = Date.now();
+            let nextDelayMs = 0;
+            NATIVE_RUNTIME_LIST_CACHE_SLOTS.forEach(slot => {
+                const value = runtimeCache[slot.valueKey];
+                const ts = toNumber(runtimeCache[slot.tsKey], 0);
+                const ttlMs = Math.max(1, toNumber(slot.ttlMs, NATIVE_RUNTIME_CACHE_TTL_MS));
+                const hasCachedList = Array.isArray(value) && value.length;
+                if (!hasCachedList || !ts) {
+                    if (value !== null || runtimeCache[slot.tsKey] || runtimeCache[slot.bizCodeKey]) {
+                        clearNativeRuntimeListCacheSlot(slot);
+                    }
+                    return;
+                }
+                const ageMs = now - ts;
+                if (!Number.isFinite(ageMs) || ageMs >= ttlMs) {
+                    clearNativeRuntimeListCacheSlot(slot);
+                    return;
+                }
+                const delayMs = ttlMs - Math.max(0, ageMs);
+                nextDelayMs = nextDelayMs ? Math.min(nextDelayMs, delayMs) : delayMs;
+            });
+            return nextDelayMs;
+        };
+        const scheduleNativeRuntimeListCacheCleanup = () => {
+            if (runtimeCache.nativeRuntimeCacheCleanupTimer) return;
+            const nextDelayMs = cleanupNativeRuntimeListCaches();
+            if (!nextDelayMs) return;
+            runtimeCache.nativeRuntimeCacheCleanupTimer = window.setTimeout(() => {
+                runtimeCache.nativeRuntimeCacheCleanupTimer = 0;
+                cleanupNativeRuntimeListCaches();
+                scheduleNativeRuntimeListCacheCleanup();
+            }, nextDelayMs);
+        };
         const getCrowdUniqueKey = (item = {}, fallback = '') => {
             const label = isPlainObject(item?.crowd?.label) ? item.crowd.label : {};
             const labelMxId = (label?.labelId || label?.targetType) ? getCrowdMxId(label) : '';
@@ -32504,6 +32567,7 @@ if (typeof globalThis !== 'undefined') {
                 runtimeCache.nativeCrowdList = deepClone(bestList);
                 runtimeCache.nativeCrowdTs = now;
                 runtimeCache.nativeCrowdBizCode = expectedBizCode;
+                scheduleNativeRuntimeListCacheCleanup();
             }
             return deepClone(bestList);
         };
@@ -32528,8 +32592,6 @@ if (typeof globalThis !== 'undefined') {
             display_click: '增加点击量（最大化拿量）',
             display_shentou: '拉新渗透（竞店重合人群）'
         };
-        const CROWD_NATIVE_RUNTIME_CACHE_TTL_MS = 8 * 1000;
-
         const normalizeCrowdCustomBidTargetOptionCandidate = (option = {}, fallbackIndex = 0) => {
             const source = isPlainObject(option) ? option : { value: option };
             const codeCandidate = normalizeSceneSettingValue(
@@ -32730,6 +32792,7 @@ if (typeof globalThis !== 'undefined') {
                 runtimeCache.nativeCrowdCustomBidTargetOptions = deepClone(bestOptions);
                 runtimeCache.nativeCrowdCustomBidTargetTs = now;
                 runtimeCache.nativeCrowdCustomBidTargetBizCode = expectedBizCode;
+                scheduleNativeRuntimeListCacheCleanup();
             }
             return deepClone(bestOptions);
         };
@@ -32917,6 +32980,7 @@ if (typeof globalThis !== 'undefined') {
                 runtimeCache.nativeAdzoneList = deepClone(bestList);
                 runtimeCache.nativeAdzoneTs = now;
                 runtimeCache.nativeAdzoneBizCode = expectedBizCode;
+                scheduleNativeRuntimeListCacheCleanup();
             }
             return deepClone(bestList);
         };

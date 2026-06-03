@@ -1,3 +1,47 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第九子项
+
+## 需求规格
+- 目标：在下载捕获退出模式 click 委托生命周期收口后，继续优化关键词向导运行态候选列表缓存，避免原生人群、出价目标、资源位候选列表在 8 秒 TTL 到期后无后续读取时仍滞留在 `runtimeCache`。
+- 根因判断：`resolveNativeCrowdListFromVframes()`、`resolveNativeCrowdCustomBidTargetOptionsFromVframes()`、`resolveNativeAdzoneListFromVframes()` 已有 8 秒 freshness 判断，但只在下一次读取时被动判过期；用户关闭向导或页面闲置后，最后一次从 VFrame 深拷贝出的列表会继续被运行时对象持有。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api` 内三类 native runtime list cache 的主动 TTL 释放和对应测试；不改原生 VFrame 抽取评分、bizCode 匹配、请求 payload、候选列表归一化、创建/复制/提交链路、授权、policy token、shopId 或 bridge 白名单，不手改生成产物。
+- 热修 vs 结构性修复取舍：采用“写入缓存时安排单一 cleanup timer，TTL 到期释放已过期列表，仍未过期则重排下一次清理”的生命周期；不新增第二事实源，不缩短已有 8 秒命中窗口，不吞掉候选解析异常。
+- 成功标准：静态测试证明三类列表写入后会调度 cleanup，过期后清空 value/ts/bizCode，fresh cache 仍按原 TTL 命中；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/全局变量/监听器探针和可见状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第八子项提交后工作区状态，确认本子项只处理关键词向导 native runtime list cache。
+- [x] 排除授权按需校验监听作为本轮对象，避免触碰未授权阻断安全边界。
+- [x] 设计并实现 native runtime list cache 的单一主动 TTL cleanup timer。
+- [x] 补充/更新目标测试，锁定写入调度、过期释放、fresh cache 命中窗口不变。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `f793628 优化 Chrome 下载捕获退出监听生命周期`，工作区干净。
+- Chrome MCP 预检：`mcp__chrome_devtools.list_pages` 仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本轮不使用 CDP、Browser 插件或其它浏览器通道替代验收。
+- 候选排除：`src/entries/extension-license-guard.js` 的 `pointerdown`/`keydown` 按需校验监听虽然冷态常驻，但承担未授权同步阻断与有效租约活跃刷新，属于授权安全边界，本轮不为省内存改动。
+- 定位结论：关键词向导从原生 VFrame 抽取的人群列表、出价目标选项、资源位列表各有 8 秒 TTL，但最后一次写入后没有主动释放路径；适合用单一 timer 做 TTL 到期清理。
+- 子代理审计结论：授权按需校验监听不建议改为弹窗期间绑定；授权遮罩 style 节点在 `removeOverlay()` 后残留是后续低风险小候选，但本子项优先处理体量更大的 native runtime list cache。
+- 实现摘要：`runtimeCache` 新增 `nativeRuntimeCacheCleanupTimer`；`search-and-draft.js` 新增三槽位 `NATIVE_RUNTIME_LIST_CACHE_SLOTS`、`cleanupNativeRuntimeListCaches()` 和 `scheduleNativeRuntimeListCacheCleanup()`，三类列表写入后共用一个 timeout 按最近到期时间主动释放。
+- 自审修正：测试断言首次未覆盖 `Math.max(0, ageMs)` 的时间回拨语义，已修正测试；清理器与原 fresh cache 判断保持一致，系统时间短暂回拨时不提前误删。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-native-runtime-cache.test.mjs` 通过，3 项测试全绿；断言覆盖单一 cleanup timer、三类缓存槽位、过期后清空 value/ts/bizCode、timer 触发后重排，以及三类写入后调度清理且保持 8 秒 fresh cache 命中窗口。
+- 源码语法：`node --check src/optimizer/keyword-plan-api/search-and-draft.js` 与 `node --check tests/keyword-native-runtime-cache.test.mjs` 通过。`src/optimizer/keyword-plan-api/intro.js` 是构建拼接片段，独立 `node --check` 不适用；完整语法以根 userscript 为准。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/keyword-native-runtime-cache.test.mjs tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-plan-api-slim.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，39 项测试全绿。
+- 全量回归：`npm test` 通过，601 项中 599 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在关键词向导 native runtime list cache 主动 TTL 释放、对应测试和构建产物；未改原生 VFrame 抽取评分、bizCode 匹配、候选归一化、创建/复制/提交链路、授权、policy token、shopId 或 bridge 白名单。
+
+## 结果复盘
+- 第十一轮第九子项结果：关键词向导三类原生运行态候选列表从“8 秒 TTL 只在下一次读取时被动判断”优化为“写入后安排单一 timer，TTL 到期主动释放最后一次深拷贝列表”。用户关闭向导或页面闲置后，原生人群、出价目标和资源位候选不会在 TTL 过后继续被 `runtimeCache` 持有。
+- 取舍结论：保留原 8 秒 fresh cache 命中窗口和 bizCode 匹配语义；只增加到期释放机制，不改变候选抽取、排序、提交 payload 或安全边界。
+- 后续候选：授权锁定遮罩 style 节点随 `removeOverlay()` 删除、店铺名回填 timer 单例化，可作为下一轮更小粒度优化；Chrome MCP 当前会话仍连接阻塞，真实页只读探针待 MCP 恢复后补做。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第八子项
 
 ## 需求规格
