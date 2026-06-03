@@ -3165,6 +3165,7 @@ if (typeof globalThis !== 'undefined') {
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
         campaignItemIdCache: new Map(),
         campaignItemCandidatesCache: new Map(),
+        campaignItemCacheLimit: 240,
 
         normalizeCampaignId(rawId) {
             const id = String(rawId || '').trim();
@@ -3206,11 +3207,46 @@ if (typeof globalThis !== 'undefined') {
             return `${y}-${m}-${d}`;
         },
 
+        trimCampaignItemCaches(protectedCampaignId = '') {
+            const limit = Math.max(24, Number(this.campaignItemCacheLimit) || 240);
+            const normalizedProtectedId = this.normalizeCampaignId(protectedCampaignId);
+            const trim = (cache) => {
+                if (!(cache instanceof Map)) return;
+                for (const key of cache.keys()) {
+                    if (cache.size <= limit) break;
+                    if (normalizedProtectedId && key === normalizedProtectedId) continue;
+                    cache.delete(key);
+                }
+                for (const key of cache.keys()) {
+                    if (cache.size <= limit) break;
+                    cache.delete(key);
+                }
+            };
+            trim(this.campaignItemIdCache);
+            trim(this.campaignItemCandidatesCache);
+        },
+
+        rememberRecentMapEntry(cache, key, value, limitKey = key) {
+            if (!(cache instanceof Map) || !key) return;
+            if (cache.has(key)) cache.delete(key);
+            cache.set(key, value);
+            this.trimCampaignItemCaches(limitKey);
+        },
+
+        touchRecentMapEntry(cache, key) {
+            if (!(cache instanceof Map) || !key || !cache.has(key)) return undefined;
+            const value = cache.get(key);
+            cache.delete(key);
+            cache.set(key, value);
+            this.trimCampaignItemCaches(key);
+            return value;
+        },
+
         rememberCampaignItemId(campaignId, itemId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
-            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, normalizedItemId);
             this.rememberCampaignItemIdCandidates(normalizedCampaignId, [normalizedItemId], {
                 prepend: true,
                 maxCount: 24
@@ -3220,12 +3256,12 @@ if (typeof globalThis !== 'undefined') {
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            const direct = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const direct = this.normalizeItemId(this.touchRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId) || '');
             if (direct) return direct;
             const candidates = this.getCampaignItemIdCandidates(normalizedCampaignId);
             const firstCandidate = this.normalizeItemId(candidates[0] || '');
             if (firstCandidate) {
-                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+                this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, firstCandidate);
             }
             return firstCandidate;
         },
@@ -3250,10 +3286,10 @@ if (typeof globalThis !== 'undefined') {
                 deduped.push(normalized);
                 if (deduped.length >= maxCount) break;
             }
-            this.campaignItemCandidatesCache.set(normalizedCampaignId, deduped);
+            this.rememberRecentMapEntry(this.campaignItemCandidatesCache, normalizedCampaignId, deduped);
             const firstCandidate = this.normalizeItemId(deduped[0] || '');
             if (firstCandidate) {
-                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+                this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, firstCandidate);
             }
             return deduped;
         },
@@ -3261,9 +3297,7 @@ if (typeof globalThis !== 'undefined') {
         getCampaignItemIdCandidates(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return [];
-            const rawList = this.campaignItemCandidatesCache instanceof Map
-                ? this.campaignItemCandidatesCache.get(normalizedCampaignId)
-                : [];
+            const rawList = this.touchRecentMapEntry(this.campaignItemCandidatesCache, normalizedCampaignId) || [];
             return this.collectItemIdCandidatesFromSources(rawList, 24);
         },
 
@@ -16402,6 +16436,7 @@ if (typeof globalThis !== 'undefined') {
         runningCampaignIds: new Set(),
         runningCopyKeys: new Set(),
         copyPlanNameCache: new Set(),
+        copyPlanNameCacheLimit: 120,
         batchPlusMenuEl: null,
         batchPlusMenuCloseTimer: null,
         concurrentLogPopup: null,
@@ -16411,6 +16446,7 @@ if (typeof globalThis !== 'undefined') {
         concurrentLogFocusBackEl: null,
         concurrentLogKeydownHandler: null,
         campaignItemIdCache: new Map(),
+        campaignItemCacheLimit: 240,
         IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
         DEFAULT_BIZ_CODE: 'onebpSearch',
@@ -18488,8 +18524,20 @@ if (typeof globalThis !== 'undefined') {
 
         rememberCopiedPlanNames(planNames = []) {
             this.normalizePlanNameList(planNames).forEach((name) => {
+                if (this.copyPlanNameCache.has(name)) this.copyPlanNameCache.delete(name);
                 this.copyPlanNameCache.add(name);
             });
+            this.trimCopiedPlanNameCache();
+        },
+
+        trimCopiedPlanNameCache() {
+            const limit = Math.max(20, Number(this.copyPlanNameCacheLimit) || 120);
+            if (!(this.copyPlanNameCache instanceof Set)) return;
+            while (this.copyPlanNameCache.size > limit) {
+                const oldestName = this.copyPlanNameCache.values().next().value;
+                if (!oldestName) break;
+                this.copyPlanNameCache.delete(oldestName);
+            }
         },
 
         normalizeCampaignIdList(value) {
@@ -19158,20 +19206,56 @@ if (typeof globalThis !== 'undefined') {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
-            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.rememberLocalCampaignItemId(normalizedCampaignId, normalizedItemId);
             PlanIdentityUtils.rememberCampaignItemId(normalizedCampaignId, normalizedItemId);
         },
 
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            const localCached = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const localCached = this.normalizeItemId(this.touchLocalCampaignItemId(normalizedCampaignId) || '');
             if (localCached) return localCached;
             const sharedCached = PlanIdentityUtils.getCampaignItemId(normalizedCampaignId);
             if (sharedCached) {
-                this.campaignItemIdCache.set(normalizedCampaignId, sharedCached);
+                this.rememberLocalCampaignItemId(normalizedCampaignId, sharedCached);
             }
             return sharedCached;
+        },
+
+        rememberLocalCampaignItemId(campaignId, itemId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedCampaignId || !normalizedItemId) return;
+            if (this.campaignItemIdCache.has(normalizedCampaignId)) {
+                this.campaignItemIdCache.delete(normalizedCampaignId);
+            }
+            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.trimLocalCampaignItemIdCache(normalizedCampaignId);
+        },
+
+        touchLocalCampaignItemId(campaignId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId || !this.campaignItemIdCache.has(normalizedCampaignId)) return '';
+            const itemId = this.campaignItemIdCache.get(normalizedCampaignId);
+            this.campaignItemIdCache.delete(normalizedCampaignId);
+            this.campaignItemIdCache.set(normalizedCampaignId, itemId);
+            this.trimLocalCampaignItemIdCache(normalizedCampaignId);
+            return itemId;
+        },
+
+        trimLocalCampaignItemIdCache(protectedCampaignId = '') {
+            const limit = Math.max(24, Number(this.campaignItemCacheLimit) || 240);
+            const normalizedProtectedId = this.normalizeCampaignId(protectedCampaignId);
+            if (!(this.campaignItemIdCache instanceof Map)) return;
+            for (const key of this.campaignItemIdCache.keys()) {
+                if (this.campaignItemIdCache.size <= limit) break;
+                if (normalizedProtectedId && key === normalizedProtectedId) continue;
+                this.campaignItemIdCache.delete(key);
+            }
+            for (const key of this.campaignItemIdCache.keys()) {
+                if (this.campaignItemIdCache.size <= limit) break;
+                this.campaignItemIdCache.delete(key);
+            }
         },
 
         parseItemIdFromRaw(raw) {

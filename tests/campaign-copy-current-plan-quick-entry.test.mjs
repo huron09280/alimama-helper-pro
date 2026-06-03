@@ -76,6 +76,9 @@ test('复制按钮复刻组建计划的数量调节操作', () => {
     assert.match(quickEntry, /normalizeCopyBatchCount\(value\)[\s\S]*?Math\.min\(99,\s*Math\.max\(1,/, '复制数量应限制在 1-99');
     assert.match(quickEntry, /countBadge\.setAttribute\('data-am-campaign-copy-count-badge',\s*String\(count\)\)/, '复制数量徽标 data 值应同步更新');
     assert.match(quickEntry, /copyPlanNameCache:\s*new Set\(\)/, '缺少已复制计划名缓存，重复复制可能命名冲突');
+    assert.match(quickEntry, /copyPlanNameCacheLimit:\s*120/, '已复制计划名缓存缺少容量上限');
+    assert.match(quickEntry, /rememberCopiedPlanNames\(planNames = \[\]\)[\s\S]*?this\.copyPlanNameCache\.delete\(name\)[\s\S]*?this\.copyPlanNameCache\.add\(name\)[\s\S]*?this\.trimCopiedPlanNameCache\(\);/, '已复制计划名写入应刷新最近顺序并裁剪缓存');
+    assert.match(quickEntry, /trimCopiedPlanNameCache\(\)[\s\S]*?Math\.max\(20,\s*Number\(this\.copyPlanNameCacheLimit\) \|\| 120\)[\s\S]*?this\.copyPlanNameCache\.delete\(oldestName\);/, '已复制计划名缓存应按上限删除最旧项');
     const copyButtonRule = extractCssRule(quickEntryStyle, '.am-campaign-copy-btn');
     const copyBadgeRule = extractCssRule(quickEntryStyle, '.am-campaign-copy-btn .am-wxt-copy-multi');
     assert.match(quickEntry, /renderAmIcon\('plus',\s*\{\s*size:\s*12,\s*strokeWidth:\s*2\.6\s*\}\)/, '复制数量 + 图标应按用户要求渲染为 12px');

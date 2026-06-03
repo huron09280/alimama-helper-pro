@@ -811,6 +811,16 @@ test('itemdeal 会遍历候选商品ID并优先使用可查询结果', () => {
   assert.match(block, /const refreshedByCandidates = await queryItemDealByCandidate\(itemId,\s*\{[\s\S]*allowAutoPick:\s*true[\s\S]*\}\);/, 'itemdeal 强刷后未走候选商品探测');
 });
 
+test('PlanIdentity 商品映射缓存有容量上限并保持最近使用项', () => {
+  assert.match(source, /campaignItemCacheLimit:\s*240/, 'PlanIdentity 商品映射缓存缺少容量上限');
+  assert.match(source, /trimCampaignItemCaches\(protectedCampaignId = ''\)[\s\S]*?Math\.max\(24,\s*Number\(this\.campaignItemCacheLimit\) \|\| 240\)[\s\S]*?trim\(this\.campaignItemIdCache\);[\s\S]*?trim\(this\.campaignItemCandidatesCache\);/, 'PlanIdentity 应统一裁剪商品ID与候选商品缓存');
+  assert.match(source, /rememberRecentMapEntry\(cache,\s*key,\s*value,\s*limitKey = key\)[\s\S]*?cache\.delete\(key\);[\s\S]*?cache\.set\(key,\s*value\);[\s\S]*?this\.trimCampaignItemCaches\(limitKey\);/, 'PlanIdentity 缓存写入应刷新最近顺序并裁剪');
+  assert.match(source, /touchRecentMapEntry\(cache,\s*key\)[\s\S]*?cache\.delete\(key\);[\s\S]*?cache\.set\(key,\s*value\);[\s\S]*?this\.trimCampaignItemCaches\(key\);/, 'PlanIdentity 缓存读取应刷新最近使用顺序');
+  assert.match(source, /rememberCampaignItemId\(campaignId,\s*itemId\)[\s\S]*?this\.rememberRecentMapEntry\(this\.campaignItemIdCache,\s*normalizedCampaignId,\s*normalizedItemId\);/, '主商品ID缓存写入未走容量裁剪');
+  assert.match(source, /this\.rememberRecentMapEntry\(this\.campaignItemCandidatesCache,\s*normalizedCampaignId,\s*deduped\);/, '候选商品缓存写入未走容量裁剪');
+  assert.match(source, /const rawList = this\.touchRecentMapEntry\(this\.campaignItemCandidatesCache,\s*normalizedCampaignId\) \|\| \[\];/, '读取候选商品缓存未刷新最近使用顺序');
+});
+
 test('计划详情命中白名单商品时会继续查询单元详情，并仅作为回退候选', () => {
   assert.match(source, /extractWeakItemIdCandidatesFromCampaignPayload\(payload = \{\},\s*expectedCampaignId = ''\)\s*\{/, 'PlanIdentity 缺少弱商品候选提取方法');
   assert.match(source, /const weakCandidateSet = new Set\(Array\.isArray\(detail\?\.weakItemIdCandidates\) \? detail\.weakItemIdCandidates : \[\]\);/, '未构建弱候选集合');

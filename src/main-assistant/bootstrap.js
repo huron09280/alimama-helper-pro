@@ -408,6 +408,7 @@
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
         campaignItemIdCache: new Map(),
         campaignItemCandidatesCache: new Map(),
+        campaignItemCacheLimit: 240,
 
         normalizeCampaignId(rawId) {
             const id = String(rawId || '').trim();
@@ -449,11 +450,46 @@
             return `${y}-${m}-${d}`;
         },
 
+        trimCampaignItemCaches(protectedCampaignId = '') {
+            const limit = Math.max(24, Number(this.campaignItemCacheLimit) || 240);
+            const normalizedProtectedId = this.normalizeCampaignId(protectedCampaignId);
+            const trim = (cache) => {
+                if (!(cache instanceof Map)) return;
+                for (const key of cache.keys()) {
+                    if (cache.size <= limit) break;
+                    if (normalizedProtectedId && key === normalizedProtectedId) continue;
+                    cache.delete(key);
+                }
+                for (const key of cache.keys()) {
+                    if (cache.size <= limit) break;
+                    cache.delete(key);
+                }
+            };
+            trim(this.campaignItemIdCache);
+            trim(this.campaignItemCandidatesCache);
+        },
+
+        rememberRecentMapEntry(cache, key, value, limitKey = key) {
+            if (!(cache instanceof Map) || !key) return;
+            if (cache.has(key)) cache.delete(key);
+            cache.set(key, value);
+            this.trimCampaignItemCaches(limitKey);
+        },
+
+        touchRecentMapEntry(cache, key) {
+            if (!(cache instanceof Map) || !key || !cache.has(key)) return undefined;
+            const value = cache.get(key);
+            cache.delete(key);
+            cache.set(key, value);
+            this.trimCampaignItemCaches(key);
+            return value;
+        },
+
         rememberCampaignItemId(campaignId, itemId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
-            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, normalizedItemId);
             this.rememberCampaignItemIdCandidates(normalizedCampaignId, [normalizedItemId], {
                 prepend: true,
                 maxCount: 24
@@ -463,12 +499,12 @@
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            const direct = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const direct = this.normalizeItemId(this.touchRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId) || '');
             if (direct) return direct;
             const candidates = this.getCampaignItemIdCandidates(normalizedCampaignId);
             const firstCandidate = this.normalizeItemId(candidates[0] || '');
             if (firstCandidate) {
-                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+                this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, firstCandidate);
             }
             return firstCandidate;
         },
@@ -493,10 +529,10 @@
                 deduped.push(normalized);
                 if (deduped.length >= maxCount) break;
             }
-            this.campaignItemCandidatesCache.set(normalizedCampaignId, deduped);
+            this.rememberRecentMapEntry(this.campaignItemCandidatesCache, normalizedCampaignId, deduped);
             const firstCandidate = this.normalizeItemId(deduped[0] || '');
             if (firstCandidate) {
-                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+                this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, firstCandidate);
             }
             return deduped;
         },
@@ -504,9 +540,7 @@
         getCampaignItemIdCandidates(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return [];
-            const rawList = this.campaignItemCandidatesCache instanceof Map
-                ? this.campaignItemCandidatesCache.get(normalizedCampaignId)
-                : [];
+            const rawList = this.touchRecentMapEntry(this.campaignItemCandidatesCache, normalizedCampaignId) || [];
             return this.collectItemIdCandidatesFromSources(rawList, 24);
         },
 

@@ -69,6 +69,10 @@ test('并发开启流程包含全量暂停与原在投并发重试', () => {
     assert.match(block, /queryCampaignDetail\(/, '缺少计划详情兜底反查逻辑');
     assert.match(block, /queryAdgroupDetail\(/, '缺少单元详情兜底反查逻辑');
     assert.match(block, /campaignItemIdCache:\s*new Map\(\)/, '缺少计划与商品映射缓存');
+    assert.match(block, /campaignItemCacheLimit:\s*240/, '计划与商品映射缓存缺少容量上限');
+    assert.match(block, /rememberLocalCampaignItemId\(campaignId,\s*itemId\)[\s\S]*?this\.campaignItemIdCache\.set\(normalizedCampaignId,\s*normalizedItemId\);[\s\S]*?this\.trimLocalCampaignItemIdCache\(normalizedCampaignId\);/, '本地商品映射写入后应裁剪缓存');
+    assert.match(block, /touchLocalCampaignItemId\(campaignId\)[\s\S]*?this\.campaignItemIdCache\.delete\(normalizedCampaignId\);[\s\S]*?this\.campaignItemIdCache\.set\(normalizedCampaignId,\s*itemId\);/, '读取商品映射应刷新最近使用顺序');
+    assert.match(block, /trimLocalCampaignItemIdCache\(protectedCampaignId = ''\)[\s\S]*?Math\.max\(24,\s*Number\(this\.campaignItemCacheLimit\) \|\| 240\)[\s\S]*?this\.campaignItemIdCache\.delete\(key\);/, '本地商品映射缓存应按上限删除最旧项');
     assert.match(block, /collectSiteCustomTargetBuckets\(/, '缺少全站与自定义计划分桶逻辑');
     assert.match(block, /shouldRunSiteCustomBreakthrough\(/, '缺少全站与自定义同开突破触发逻辑');
     assert.match(block, /runSiteCustomBreakthroughStrategy\(/, '缺少全站与自定义同开突破执行逻辑');

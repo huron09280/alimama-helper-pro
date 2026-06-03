@@ -1,3 +1,44 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮
+
+## 需求规格
+- 目标：在第十轮已收口主助手插件自触发扫描后，继续用 Chrome 运行态、heap snapshot retained-size 和源码证据判断是否还有插件自有、低风险、高收益的内存优化点，尽量逼近“当前最佳”。
+- 范围：覆盖默认 `one.alimama.com` 列表页冷态和只读打开/关闭路径中的插件 DOM、observer/timer/listener、Map/cache、全局对象、iframe、样式节点、构建体积和 retained-size；不改创建/复制/预算/并发开启/授权/token/shopId 安全边界，不触发真实提交/投放/删除/扣费接口，不直接编辑生成产物。
+- 成功标准：若发现明确插件自有低风险热点，采用最小侵入方案落地，补充目标测试，并通过目标测试、相关回归、`npm run check:syntax`、`npm run build:check`、`git diff --check`、全量或必要回归和 Chrome DevTools MCP 复测；若证据显示剩余热点主要是必要主 bundle、页面原生运行时或高风险架构拆分，则记录排除证据、最佳判断和下一阶段建议。
+- 判断口径：优先处理打开/关闭后残留、重复绑定、默认关闭仍常驻、无上限缓存、可释放大结果、可按需挂载资源；不接受隐藏异常、削弱安全校验、吞掉原生页面变化、把大包解析转移到首次点击路径，或在没有 heap/运行态证据时继续叠加宽泛补丁。
+- 安全边界：Chrome 验证只刷新、读取 DOM/heap/resources、安装只读探针、打开/关闭已验证只读窗口；不点击并发执行、复制确认、预算提交、批量上下线/删除、立即投放、批量创建等写入口。
+
+## 执行计划（可核对）
+- [x] 确认第十轮提交后工作区干净，采集当前 extension bundle、DOM、hook history、request history、timer/listener 和 heap snapshot 基线。
+- [x] 使用只读子代理并行审计剩余源码候选：常驻缓存/定时器/observer/全局对象，以及构建体积与入口拆分风险。
+- [x] 解析 heap snapshot 与运行态探针，区分插件自有热点、页面原生热点和必要主 bundle 成本。
+- [x] 方案判断：若有明确低风险热点则实施最小侵入优化；若只剩高风险架构拆分或页面原生成本，则记录不继续补丁的证据。
+- [x] 验证闭环：运行目标测试、相关回归、`npm run check:syntax`、`npm run build:check`、`git diff --check`，必要时跑 `npm test`；Chrome DevTools MCP 复测前后差异或记录未改排除证据。
+- [x] 结果归档与提交：补充高层操作摘要、验证记录、结果复盘；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已完成并提交第十轮 `e218f67 优化 Chrome 主助手自触发扫描`；本轮不再继续加宽泛 MutationObserver 过滤，先进入 retained-size/运行态证据审计。
+- 本轮优先确认剩余内存是否来自插件自有可释放对象，还是来自页面原生 Magix 运行时、必要 `page.bundle.js` 主代码字符串，或需要更大架构拆分的 optimizer/keyword 主入口。
+- Chrome DevTools MCP 当前会话绑定异常：调用 `mcp__chrome_devtools.evaluate_script` 失败于 `Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`；项目恢复脚本也提示 `Chrome DevTools 端口 9222 未就绪`。手动启动 9222 后 `curl http://127.0.0.1:9222/json/version` 已返回健康 `webSocketDebuggerUrl`，但 MCP 仍固定找默认 profile，因此本子项先用本地 heap/源码/构建证据闭环，真实页 MCP 复测待会话绑定恢复后补做。
+- 构建/heap 子代理结论：`dist/extension/page.bundle.js` 约 `4,000,325` bytes，gzip 约 `635KB`，其中 `keyword-plan-api` 约占首包 64%；`tmp/chrome-memory-round8-cold.heapsnapshot` 中 self-size 主要是 `string 67.93MB`、`native 37.50MB`、`code 16.25MB`，最大字符串来自页面 Magix JSON、页面 CSS 和页面混淆函数；插件关键词命中 self-size 很小，未出现新的 100MB 级插件自有热点。
+- 源码审计子代理给出小热点优先级：算法护航关闭后 1s token 轮询、`myseller.taobao.com` 非目标页 600ms URL 轮询、bridge 结果 cache 最后一条 TTL 内未主动释放、主助手 resize 监听拖拽期绑定；主线程本子项先处理同样明确且更局部的无上限 Map/Set 缓存，后续按上述优先级继续逐项收口。
+- 本子项实现：`PlanIdentityUtils.campaignItemIdCache/campaignItemCandidatesCache`、`CampaignIdQuickEntry.campaignItemIdCache` 和 `copyPlanNameCache` 都增加容量上限与最近使用顺序刷新；计划商品映射默认保留最近 240 个 campaign，已复制计划名默认保留最近 120 个，避免长时间浏览/复制后插件自有 Map/Set 无界增长。
+
+## 验证记录
+- Chrome DevTools Ready 预检：`lsof -iTCP:9222 -sTCP:LISTEN` 显示端口曾被 Chrome 监听但 `/json/version` 连接失败；`bash scripts/recover-chrome-devtools-mcp.sh` 失败；直接 `open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-codex-debug about:blank` 后 `/json/version` 健康，但 MCP 仍绑定默认 profile 失败，真实页 MCP 复测未完成。
+- Heap 辅助证据：本地解析 `tmp/chrome-memory-round8-cold.heapsnapshot`，节点约 `1,737,963`；top self-size 仍是页面原生 `ExternalStringData`、Magix JSON、页面 CSS 和页面函数代码，插件命中没有新的大 self-size 热点。
+- Bundle 辅助证据：`dist/extension/page.bundle.js` 约 `3.8MB`，当前低风险收益主要来自生命周期/缓存边界；不进入 keyword 主入口点击时拆包，避免重犯 L43。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/campaign-concurrent-start-quick-entry.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs tests/magic-report-crowd-matrix.test.mjs` 通过，87 项测试全绿；新增断言覆盖本地商品映射缓存、共享商品候选缓存和已复制计划名缓存均有上限，且写入/读取会刷新最近使用顺序。
+- 相关回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/logger-api.test.mjs` 通过，40 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，591 项中 589 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+
+## 结果复盘
+- 第十一轮当前子项结果：计划 ID/商品 ID 共享缓存、行级本地缓存和复制计划名缓存从“随浏览/复制长期无上限增长”改为“按最近使用保留有限条目”。这属于小收益但明确的插件自有常驻内存边界收口，不影响创建/复制/预算/并发开启/授权/token/shopId 安全链路。
+- 提交记录：本子项已准备以中文提交信息 `优化 Chrome 计划身份缓存上限` 独立收口。
+- 取舍结论：heap 证据不支持继续为了大数字做宽泛补丁，缓存裁剪的收益主要体现在长时间浏览后的上界可控。240/120 的默认值远高于当前列表页常见 20-30 行规模，能保留近期上下文，同时避免跨店/跨页面长跑积累。
+- 后续判断：本项提交后继续按源码子代理优先级审计算法护航 token 轮询、bridge result cache TTL 主动释放、主助手 resize 拖拽期监听和 myseller content 轮询；若仍无大 retained-size 插件热点，下一阶段应转入 extension enabled/disabled 对照和更大架构拆分评估，而不是继续无证据叠加过滤。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十轮
 
 ## 需求规格

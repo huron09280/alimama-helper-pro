@@ -3,6 +3,7 @@
         runningCampaignIds: new Set(),
         runningCopyKeys: new Set(),
         copyPlanNameCache: new Set(),
+        copyPlanNameCacheLimit: 120,
         batchPlusMenuEl: null,
         batchPlusMenuCloseTimer: null,
         concurrentLogPopup: null,
@@ -12,6 +13,7 @@
         concurrentLogFocusBackEl: null,
         concurrentLogKeydownHandler: null,
         campaignItemIdCache: new Map(),
+        campaignItemCacheLimit: 240,
         IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
         DEFAULT_BIZ_CODE: 'onebpSearch',
@@ -2089,8 +2091,20 @@
 
         rememberCopiedPlanNames(planNames = []) {
             this.normalizePlanNameList(planNames).forEach((name) => {
+                if (this.copyPlanNameCache.has(name)) this.copyPlanNameCache.delete(name);
                 this.copyPlanNameCache.add(name);
             });
+            this.trimCopiedPlanNameCache();
+        },
+
+        trimCopiedPlanNameCache() {
+            const limit = Math.max(20, Number(this.copyPlanNameCacheLimit) || 120);
+            if (!(this.copyPlanNameCache instanceof Set)) return;
+            while (this.copyPlanNameCache.size > limit) {
+                const oldestName = this.copyPlanNameCache.values().next().value;
+                if (!oldestName) break;
+                this.copyPlanNameCache.delete(oldestName);
+            }
         },
 
         normalizeCampaignIdList(value) {
@@ -2759,20 +2773,56 @@
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
-            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.rememberLocalCampaignItemId(normalizedCampaignId, normalizedItemId);
             PlanIdentityUtils.rememberCampaignItemId(normalizedCampaignId, normalizedItemId);
         },
 
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            const localCached = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const localCached = this.normalizeItemId(this.touchLocalCampaignItemId(normalizedCampaignId) || '');
             if (localCached) return localCached;
             const sharedCached = PlanIdentityUtils.getCampaignItemId(normalizedCampaignId);
             if (sharedCached) {
-                this.campaignItemIdCache.set(normalizedCampaignId, sharedCached);
+                this.rememberLocalCampaignItemId(normalizedCampaignId, sharedCached);
             }
             return sharedCached;
+        },
+
+        rememberLocalCampaignItemId(campaignId, itemId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedCampaignId || !normalizedItemId) return;
+            if (this.campaignItemIdCache.has(normalizedCampaignId)) {
+                this.campaignItemIdCache.delete(normalizedCampaignId);
+            }
+            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.trimLocalCampaignItemIdCache(normalizedCampaignId);
+        },
+
+        touchLocalCampaignItemId(campaignId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId || !this.campaignItemIdCache.has(normalizedCampaignId)) return '';
+            const itemId = this.campaignItemIdCache.get(normalizedCampaignId);
+            this.campaignItemIdCache.delete(normalizedCampaignId);
+            this.campaignItemIdCache.set(normalizedCampaignId, itemId);
+            this.trimLocalCampaignItemIdCache(normalizedCampaignId);
+            return itemId;
+        },
+
+        trimLocalCampaignItemIdCache(protectedCampaignId = '') {
+            const limit = Math.max(24, Number(this.campaignItemCacheLimit) || 240);
+            const normalizedProtectedId = this.normalizeCampaignId(protectedCampaignId);
+            if (!(this.campaignItemIdCache instanceof Map)) return;
+            for (const key of this.campaignItemIdCache.keys()) {
+                if (this.campaignItemIdCache.size <= limit) break;
+                if (normalizedProtectedId && key === normalizedProtectedId) continue;
+                this.campaignItemIdCache.delete(key);
+            }
+            for (const key of this.campaignItemIdCache.keys()) {
+                if (this.campaignItemIdCache.size <= limit) break;
+                this.campaignItemIdCache.delete(key);
+            }
         },
 
         parseItemIdFromRaw(raw) {
