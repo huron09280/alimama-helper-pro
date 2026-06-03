@@ -1,3 +1,46 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十轮
+
+## 需求规格
+- 目标：在第九轮计划并发隐藏按钮收口后，继续基于当前 Chrome 运行态和源码证据审计主助手全页 `MutationObserver`、辅助显示标签、日志 DOM、计划快捷入口、潜力词导出和 hook history，寻找剩余插件自有低风险 Chrome 冷态内存/扫描优化点，继续逼近“当前最佳”。
+- 范围：只覆盖默认列表页冷态和普通浏览期间的插件自有 DOM、observer 回调、timer/listener、缓存和扫描调度；不改创建/复制/预算/并发开启/授权/token/shopId 安全边界，不改变真实提交链路，不直接编辑生成产物。
+- 成功标准：若发现明确插件自有低风险热点，采用最小侵入方案落地并通过目标测试、语法检查、构建检查、`git diff --check`、全量或相关回归和 Chrome DevTools MCP 复测；若证据显示剩余热点属于必要主 bundle、页面原生运行时或高风险架构拆分，记录排除证据和下一阶段建议。
+- 判断口径：优先处理插件自身 DOM/日志/标签导致的自触发扫描、默认关闭功能残留、关闭后残留、重复绑定、无上限缓存、可过滤的 observer 噪声；不接受隐藏异常、削弱安全校验、减少用户可见必要状态，或把重解析成本挪到点击路径。
+- 安全边界：Chrome 验证只刷新、读取 DOM/heap/资源/控制台、用只读探针或切换无写入配置开关；不触发创建、复制、预算提交、删除、上下线、并发开启或扣费接口。
+
+## 执行计划（可核对）
+- [x] 采集第九轮提交后的 Chrome 冷态运行态：helper 节点、quick/concurrent/copy/batch 节点、requestHistory、observer 触发来源和主助手扫描相关指标。
+- [x] 静态定位 `main()` 的 MutationObserver、`Core.run()` 辅助显示标签、`Logger.log()`、`CampaignIdQuickEntry.run()` 和 `PotentialPlanDailyExporter.run()` 常驻路径。
+- [x] 方案判断：若插件自身 DOM/日志/标签更新会反复唤醒全页扫描，则设计 observer 噪声过滤；若剩余扫描均为必要页面变化，则记录排除。
+- [x] 实现最小侵入优化并补充目标测试，避免影响辅助显示刷新、计划 ID 快捷入口、复制按钮、批量+、潜力词导出和主面板日志。
+- [x] 验证闭环：运行目标测试、相关回归、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome DevTools MCP 复测前后差异。
+- [x] 结果归档与提交：写入验证记录、结果复盘和对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已完成并提交第九轮 `543bc4e 优化 Chrome 计划并发冷态按钮占用`，工作区干净；第十轮继续审计，不把第九轮小 DOM 收口当作终点。
+- 本轮优先看主助手全页 `MutationObserver` 是否被插件自身 DOM（`.am-helper-tag`、`.am-campaign-search-btn`、主面板日志、弹窗/面板）反复触发，从而造成不必要的 `Core.run()` / `CampaignIdQuickEntry.run()` / `PotentialPlanDailyExporter.run()` 调度。
+- 初始实现只过滤插件 surface 内部变更；Chrome mutation record 复测显示仍有 `CampaignIdQuickEntry.attachHoverHost()` 给原生 `TR/SPAN` 写入 `am-campaign-hover-host` 时触发主助手 1000ms 重扫，因此继续收窄这一处自触发。
+- 最终方案：主助手 observer 对插件根节点、辅助标签、快捷按钮、批量+ 等插件 surface 内部变更直接忽略；对写在原生宿主上的 `am-campaign-hover-host` 不做宽泛 `am-*` 差分忽略，而是由插件写入前调用 `registerExpectedMainAssistantClassMutation()` 登记一次，observer 只消费这一次预期 class mutation。
+- 取舍：不启用 `attributeOldValue`，避免为全页 `class/style/aria` 变化复制旧值；原生节点后续 `class/style/aria/mx-view`、文本和 childList 变化仍会触发 `Core.run()`、快捷入口和潜力词导出的正常重扫。
+
+## 验证记录
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/logger-api.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs` 通过，28 项测试全绿；新增执行型 mutation helper 测试覆盖插件面板属性、插件标签文本/样式、插件节点 childList 可忽略，原生节点 `class/style/aria/text/childList` 必须触发，且登记的 `am-campaign-hover-host` 只消费一次。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/magic-report-panel-resilience.test.mjs tests/magic-report-crowd-matrix.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，107 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，590 项中 588 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome DevTools MCP 运行态刷新确认：真实页 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 已刷新到新 extension bundle；`page.bundle.js` 长度 `3903898`，包含 `AM_EXPECTED_PLUGIN_CLASS_MUTATIONS`、`registerExpectedMainAssistantClassMutation`、`registerExpectedMainAssistantClassMutation(host, 'am-campaign-hover-host')` 和 `shouldIgnoreMainAssistantMutations`，且不包含 `attributeOldValue: true` 或 `getClassMutationDelta`。
+- Chrome DevTools MCP DOM 基线：刷新后 `helperNodes=308`、`helperTags=136`、`quickButtons=26`、`concurrentButtons=0`、`hoverHosts=26`、`batchPlus=1`。
+- Chrome DevTools MCP mutation 复测：带调用栈和 mutation record 摘要的只读探针显示，`scheduleRunCoreCountByPhase={"idle":1,"native":1}`，`plugin` 阶段没有 `scheduleRunCore` 调度；`plugin` 阶段只看到测试插入的 `.am-helper-tag` 和插件按钮/批量+自身 class/childList 变化，均未触发主助手重扫。`native` 阶段插入原生 probe 会触发一次 `scheduleRunCore`，证明页面原生变更仍可重扫。
+- Chrome DevTools MCP 背景噪声说明：`idle` 阶段仍有页面原生轮播/样式/mx-view mutation 触发一次主助手调度，这是阿里妈妈页面自身变化，不属于插件自触发；本轮不吞掉该类原生变化，避免影响 SPA 表格复用和原生按钮状态同步。
+- Chrome 安全边界：真实页面只刷新、读取 DOM/资源、安装内存内只读探针和插入/移除测试 span；未点击并发执行、复制、预算、删除、上下线或提交按钮。探针 `dangerousAdded=[]`，未新增 `/solution/addList|copy`、`/campaign/budget/batchUpdate`、`campaign/delete|updatePart`、`adgroup`、`creative` 等写接口资源。
+- Chrome 控制台限制：当前可用 `chrome_devtools` 工具只暴露 `evaluate_script`/`take_heapsnapshot`，未提供历史 console 读取；本轮用调用栈探针、resource 增量和本地回归替代确认，未观察到页面脚本执行异常。
+
+## 结果复盘
+- 第十轮结果：主助手全页 `MutationObserver` 从“任何插件自身 DOM 更新也会触发 1000ms 后串行跑 `Core.run()` / `CampaignIdQuickEntry.run()` / `PotentialPlanDailyExporter.run()`”优化为“插件 surface 内部变更与登记过的一次性插件 class 写入不再触发重扫，原生页面变化仍触发重扫”。
+- 对比结论：真实页最终探针中，插件阶段 `scheduleRunCore` 从初始复测可见的自触发降为 0；原生 probe 仍触发 1 次调度，说明优化没有把页面真实变更吞掉。
+- 优雅性判断：相比使用 `attributeOldValue` 做全页 class diff，本轮最终方案用 WeakMap 记录插件自己即将写入的原生宿主 class，既避免 oldValue 内存复制，也避免把未来页面原生 `am-*` 或混合 class 状态误忽略。
+- 后续判断：第十轮后，默认关闭 DOM、关闭释放、预算补丁生命周期、万能查数 iframe 释放、下载捕获面板按需挂载和主助手插件自触发扫描均已完成一轮收口。继续逼近“最佳”应进入更高成本的 retained-size 审计或业务入口拆 bundle 评估，不建议在没有新 heap 证据时继续叠加宽泛 observer/filter 补丁。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第九轮
 
 ## 需求规格

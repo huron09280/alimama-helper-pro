@@ -28,10 +28,61 @@ function getMainBootstrapBlock() {
 }
 
 function getMainEntrypointBlock() {
-  const start = source.indexOf('function main() {');
+  const helperStart = source.indexOf('const AM_PLUGIN_MUTATION_SELECTOR = [');
+  const mainStart = source.indexOf('function main() {');
+  const start = helperStart > -1 ? helperStart : mainStart;
   const end = source.indexOf('// ==========================================', start);
-  assert.ok(start > -1 && end > start, '无法定位主助手启动程序定义');
+  assert.ok(start > -1 && mainStart > -1 && end > start, '无法定位主助手启动程序定义');
   return source.slice(start, end);
+}
+
+function getMainMutationHelperBlock() {
+  const start = source.indexOf('const AM_PLUGIN_MUTATION_SELECTOR = [');
+  const end = source.indexOf('function main() {', start);
+  assert.ok(start > -1 && end > start, '无法定位主助手 mutation 过滤函数');
+  return source.slice(start, end);
+}
+
+class FakeElement {
+  constructor({ id = '', className = '', parentElement = null } = {}) {
+    this.id = id;
+    this.className = className;
+    this.parentElement = parentElement;
+    this.classList = {
+      contains: (name) => String(this.className || '').split(/\s+/).includes(name)
+    };
+  }
+
+  matches(selector) {
+    if (selector.startsWith('#')) return this.id === selector.slice(1);
+    if (selector.startsWith('.')) {
+      return String(this.className || '').split(/\s+/).includes(selector.slice(1));
+    }
+    return false;
+  }
+
+  closest(selectorList) {
+    const selectors = String(selectorList || '').split(',').map(selector => selector.trim()).filter(Boolean);
+    let node = this;
+    while (node) {
+      if (selectors.some(selector => node.matches(selector))) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+}
+
+function createMutationHelpersForTest() {
+  const context = createContext({
+    Element: FakeElement
+  });
+  new Script(`${getMainMutationHelperBlock()}
+globalThis.__helpers = {
+  shouldIgnoreMainAssistantMutations,
+  isIgnorableMainAssistantMutation,
+  registerExpectedMainAssistantClassMutation
+};`).runInContext(context);
+  return context.__helpers;
 }
 
 function createHookManagerForTest() {
@@ -315,6 +366,87 @@ test('请求历史运行时裁剪上限并摘要化大 body', () => {
 test('主助手 DOM 观察覆盖属性和文本变化，兼容 SPA 表格复用', () => {
   const entrypointBlock = getMainEntrypointBlock();
   assert.match(entrypointBlock, /observer\.observe\(document\.body,\s*\{[\s\S]*childList:\s*true,[\s\S]*subtree:\s*true,[\s\S]*attributes:\s*true,[\s\S]*attributeFilter:\s*\[[\s\S]*'class'[\s\S]*'style'[\s\S]*'aria-hidden'[\s\S]*'disabled'[\s\S]*'mx-view'[\s\S]*\],[\s\S]*characterData:\s*true[\s\S]*\}\);/, 'MutationObserver 未覆盖属性/文本变化');
+  assert.doesNotMatch(entrypointBlock, /attributeOldValue:\s*true/, '主助手 observer 不应为全页属性变化复制 oldValue');
+});
+
+test('主助手 DOM 观察会过滤插件自有变更，避免自触发全页扫描', () => {
+  const entrypointBlock = getMainEntrypointBlock();
+  assert.match(entrypointBlock, /AM_PLUGIN_MUTATION_SELECTOR[\s\S]*?#am-helper-panel[\s\S]*?\.am-helper-tag[\s\S]*?\.am-campaign-search-btn[\s\S]*?\.am-campaign-batch-plus-wrap/, '插件 mutation 忽略范围缺少主面板、辅助标签或计划入口');
+  assert.match(entrypointBlock, /new MutationObserver\(\(records\) => \{[\s\S]*?if \(shouldIgnoreMainAssistantMutations\(records\)\) return;[\s\S]*?scheduleRunCore\(CORE_RUN_DEBOUNCE_MS\);/, 'MutationObserver 应跳过插件自有变更并保留页面变更调度');
+});
+
+test('主助手 mutation 过滤只忽略插件 surface，不跳过原生页面变化', () => {
+  const { shouldIgnoreMainAssistantMutations, registerExpectedMainAssistantClassMutation } = createMutationHelpersForTest();
+  const nativeCell = new FakeElement({ className: 'next-table-cell' });
+  const pluginPanel = new FakeElement({ id: 'am-helper-panel' });
+  const pluginTag = new FakeElement({ className: 'am-helper-tag cost-tag', parentElement: nativeCell });
+  const pluginButton = new FakeElement({ className: 'am-campaign-search-btn', parentElement: nativeCell });
+  const nativeRow = new FakeElement({ className: 'next-table-row' });
+  const textNodeInPlugin = { parentElement: pluginTag };
+  const textNodeInNative = { parentElement: nativeCell };
+
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'attributes', target: pluginPanel, attributeName: 'style' }]),
+    true,
+    '插件面板属性变化应忽略'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'characterData', target: textNodeInPlugin }]),
+    true,
+    '插件标签文本变化应忽略'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'childList', target: nativeCell, addedNodes: [pluginTag], removedNodes: [] }]),
+    true,
+    '插件向原生单元格插入辅助标签应忽略'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'childList', target: nativeCell, addedNodes: [], removedNodes: [pluginButton] }]),
+    true,
+    '插件从原生单元格移除快捷按钮应忽略'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'attributes', target: nativeCell, attributeName: 'class' }]),
+    false,
+    '原生单元格 class 变化必须触发重扫'
+  );
+  registerExpectedMainAssistantClassMutation(nativeCell, 'am-campaign-hover-host');
+  nativeCell.className = 'next-table-cell am-campaign-hover-host';
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'attributes', target: nativeCell, attributeName: 'class' }]),
+    true,
+    '插件登记的原生宿主 am-* class 变更应只跳过一次'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'attributes', target: nativeCell, attributeName: 'class' }]),
+    false,
+    '预期 class 变更消费后，原生节点后续 class 变化仍必须触发重扫'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'attributes', target: nativeCell, attributeName: 'style' }]),
+    false,
+    '原生单元格 style 变化必须触发重扫'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'attributes', target: nativeRow, attributeName: 'aria-disabled' }]),
+    false,
+    '原生按钮/行 aria 状态变化必须触发重扫'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'characterData', target: textNodeInNative }]),
+    false,
+    '原生表格文本变化必须触发重扫'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'childList', target: nativeCell, addedNodes: [nativeRow], removedNodes: [] }]),
+    false,
+    '原生行新增必须触发重扫'
+  );
+  assert.equal(
+    shouldIgnoreMainAssistantMutations([{ type: 'childList', target: nativeCell, addedNodes: [pluginTag, nativeRow], removedNodes: [] }]),
+    false,
+    '插件节点和原生节点混合变更必须触发重扫'
+  );
 });
 
 test('辅助显示标签样式保留单元格占位宽度', () => {

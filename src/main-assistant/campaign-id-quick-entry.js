@@ -5213,9 +5213,15 @@
                 || anchorEl;
             if (!(host instanceof HTMLElement)) return null;
             if (host === document.body || host === document.documentElement) return null;
-            host.classList.add('am-campaign-hover-host');
+            if (!host.classList.contains('am-campaign-hover-host')) {
+                registerExpectedMainAssistantClassMutation(host, 'am-campaign-hover-host');
+                host.classList.add('am-campaign-hover-host');
+            }
             if (rowHost instanceof HTMLElement && compactHost instanceof HTMLElement && compactHost !== rowHost) {
-                compactHost.classList.add('am-campaign-hover-host');
+                if (!compactHost.classList.contains('am-campaign-hover-host')) {
+                    registerExpectedMainAssistantClassMutation(compactHost, 'am-campaign-hover-host');
+                    compactHost.classList.add('am-campaign-hover-host');
+                }
             }
             return host;
         },

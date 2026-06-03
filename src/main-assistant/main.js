@@ -23,6 +23,100 @@
         return false;
     };
 
+    const AM_PLUGIN_MUTATION_SELECTOR = [
+        '#am-helper-icon',
+        '#am-helper-panel',
+        '#am-magic-report-popup',
+        '#am-report-capture-panel',
+        '#am-campaign-concurrent-log-popup',
+        '#am-campaign-copy-overview-popup',
+        '#am-campaign-copy-success-popup',
+        '#am-campaign-batch-plus-menu',
+        '#am-campaign-batch-confirm-popup',
+        '#am-wxt-keyword-overlay',
+        '#am-wxt-scene-popup-mask',
+        '#am-wxt-keyword-item-picker-mask',
+        '#alimama-escort-helper-ui',
+        '#alimama-escort-helper-ui-result-overlay',
+        '.am-helper-tag',
+        '.am-campaign-id-token',
+        '.am-campaign-search-btn',
+        '.am-campaign-batch-plus-wrap',
+        '.am-campaign-batch-plus-native'
+    ].join(',');
+
+    const getElementFromMutationNode = (node) => {
+        if (node instanceof Element) return node;
+        return node?.parentElement instanceof Element ? node.parentElement : null;
+    };
+
+    const isInsidePluginMutationSurface = (node) => {
+        const el = getElementFromMutationNode(node);
+        return !!(el && el.closest(AM_PLUGIN_MUTATION_SELECTOR));
+    };
+
+    const isIgnorableMutationNode = (node) => {
+        if (node instanceof Element) return isInsidePluginMutationSurface(node);
+        return isInsidePluginMutationSurface(node?.parentElement);
+    };
+
+    const AM_EXPECTED_PLUGIN_CLASS_MUTATIONS = new WeakMap();
+
+    function registerExpectedMainAssistantClassMutation(target, className = '') {
+        const el = getElementFromMutationNode(target);
+        const normalizedClass = String(className || '').trim();
+        if (!el || isInsidePluginMutationSurface(el) || !/^am-/.test(normalizedClass)) return;
+        let classCounts = AM_EXPECTED_PLUGIN_CLASS_MUTATIONS.get(el);
+        if (!classCounts) {
+            classCounts = new Map();
+            AM_EXPECTED_PLUGIN_CLASS_MUTATIONS.set(el, classCounts);
+        }
+        classCounts.set(normalizedClass, (classCounts.get(normalizedClass) || 0) + 1);
+    }
+
+    const consumeExpectedMainAssistantClassMutation = (record) => {
+        if (record?.attributeName !== 'class') return false;
+        const target = getElementFromMutationNode(record?.target);
+        if (!target || isInsidePluginMutationSurface(target)) return false;
+        const classCounts = AM_EXPECTED_PLUGIN_CLASS_MUTATIONS.get(target);
+        if (!classCounts || classCounts.size === 0) return false;
+        for (const [className, count] of classCounts.entries()) {
+            if (!target.classList?.contains?.(className)) continue;
+            if (count > 1) {
+                classCounts.set(className, count - 1);
+            } else {
+                classCounts.delete(className);
+            }
+            if (classCounts.size === 0) AM_EXPECTED_PLUGIN_CLASS_MUTATIONS.delete(target);
+            return true;
+        }
+        return false;
+    };
+
+    const isIgnorableChildListMutation = (record) => {
+        if (isInsidePluginMutationSurface(record?.target)) return true;
+        const changedNodes = [
+            ...Array.from(record?.addedNodes || []),
+            ...Array.from(record?.removedNodes || [])
+        ];
+        return changedNodes.length > 0 && changedNodes.every((node) => isIgnorableMutationNode(node));
+    };
+
+    const isIgnorableMainAssistantMutation = (record) => {
+        if (!record || !record.type) return false;
+        if (record.type === 'childList') return isIgnorableChildListMutation(record);
+        if (record.type === 'characterData') return isInsidePluginMutationSurface(record.target);
+        if (record.type !== 'attributes') return false;
+        if (consumeExpectedMainAssistantClassMutation(record)) return true;
+        return isInsidePluginMutationSurface(record.target);
+    };
+
+    const shouldIgnoreMainAssistantMutations = (records = []) => {
+        return Array.isArray(records)
+            && records.length > 0
+            && records.every(isIgnorableMainAssistantMutation);
+    };
+
     function main() {
         installAssistDisplayDiagnostics();
         UI.init();
@@ -96,7 +190,8 @@
                 }
             }, Math.max(0, Number(delay) || 0));
         };
-        const observer = new MutationObserver(() => {
+        const observer = new MutationObserver((records) => {
+            if (shouldIgnoreMainAssistantMutations(records)) return;
             scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
         });
 
