@@ -9290,6 +9290,7 @@ if (typeof globalThis !== 'undefined') {
         matrixCampaignItemDropdownEl: null,
         matrixCampaignItemDropdownHomeEl: null,
         matrixCampaignItemDropdownPositionFrame: 0,
+        matrixCampaignItemDropdownPositionCancel: null,
         matrixHoverTipEl: null,
         matrixHoverActiveBar: null,
         matrixHoverActiveBars: [],
@@ -9302,6 +9303,12 @@ if (typeof globalThis !== 'undefined') {
         popupLayoutBeforeMatrix: null,
         popupResizeHandler: null,
         popupDropdownPositionHandler: null,
+        popupCleanupHandlers: [],
+        popupLifecycleToken: 0,
+        quickPromptResetTimer: 0,
+        quickPromptRetryTimer: 0,
+        iframeCleanupRetryTimer: 0,
+        magicPromptDraft: '',
         lastCampaignId: '',
         lastCampaignName: '',
         activeView: 'matrix',
@@ -9442,6 +9449,9 @@ if (typeof globalThis !== 'undefined') {
                 : null;
             const shouldReload = forceReload === true || !this.iframeLoadStarted || !this.iframe.getAttribute('src');
             if (!shouldReload) return true;
+            if (forceReload === true) {
+                this.captureMagicPromptDraft();
+            }
             this.iframeLoadStarted = true;
             if (loading instanceof HTMLElement) loading.style.display = 'flex';
             this.iframe.style.opacity = '0';
@@ -10153,11 +10163,16 @@ if (typeof globalThis !== 'undefined') {
 
         requestCrowdCampaignItemDropdownPositionUpdate() {
             if (this.matrixCampaignItemDropdownPositionFrame) return;
-            const schedule = typeof requestAnimationFrame === 'function'
+            const useRaf = typeof requestAnimationFrame === 'function';
+            const schedule = useRaf
                 ? requestAnimationFrame
                 : (fn) => setTimeout(fn, 16);
+            this.matrixCampaignItemDropdownPositionCancel = useRaf && typeof cancelAnimationFrame === 'function'
+                ? cancelAnimationFrame
+                : clearTimeout;
             this.matrixCampaignItemDropdownPositionFrame = schedule(() => {
                 this.matrixCampaignItemDropdownPositionFrame = 0;
+                this.matrixCampaignItemDropdownPositionCancel = null;
                 this.positionCrowdCampaignItemDropdown();
             });
         },
@@ -10464,7 +10479,36 @@ if (typeof globalThis !== 'undefined') {
         },
 
         setPromptInputValue(inputEl, promptText) {
-            return MagicPromptDriver.setPromptInputValue(inputEl, promptText);
+            const ok = MagicPromptDriver.setPromptInputValue(inputEl, promptText);
+            if (ok) this.magicPromptDraft = String(promptText || '').trim();
+            return ok;
+        },
+
+        readPromptInputValue(inputEl) {
+            if (!this.isEditablePromptElement(inputEl)) return '';
+            if (inputEl.isContentEditable) {
+                return String(inputEl.textContent || '').trim();
+            }
+            return String(inputEl.value || '').trim();
+        },
+
+        captureMagicPromptDraft() {
+            const iframeDoc = this.getIframeDoc();
+            if (!iframeDoc) return;
+            const inputEl = this.findPromptInput(iframeDoc);
+            if (!inputEl) return;
+            const draft = this.readPromptInputValue(inputEl);
+            this.magicPromptDraft = draft;
+        },
+
+        restoreMagicPromptDraft() {
+            const draft = String(this.magicPromptDraft || '').trim();
+            if (!draft) return false;
+            const iframeDoc = this.getIframeDoc();
+            if (!iframeDoc) return false;
+            const inputEl = this.findPromptInput(iframeDoc);
+            if (!inputEl) return false;
+            return this.setPromptInputValue(inputEl, draft);
         },
 
         triggerClick(el) {
@@ -10498,7 +10542,13 @@ if (typeof globalThis !== 'undefined') {
 
         runQuickPrompt(promptText) {
             const maxRetries = 16;
+            const promptToken = this.popupLifecycleToken;
+            if (this.quickPromptRetryTimer) {
+                clearTimeout(this.quickPromptRetryTimer);
+                this.quickPromptRetryTimer = 0;
+            }
             const tryRun = (retriesLeft) => {
+                if (promptToken !== this.popupLifecycleToken || !(this.popup instanceof HTMLElement) || !this.popup.isConnected) return;
                 const result = this.trySubmitPrompt(promptText);
                 if (result.ok) {
                     if (result.uncertain) {
@@ -10510,6 +10560,7 @@ if (typeof globalThis !== 'undefined') {
                 }
                 if (retriesLeft <= 0) {
                     this.tryFallbackSubmitPrompt(promptText).then((fallbackOk) => {
+                        if (promptToken !== this.popupLifecycleToken) return;
                         if (fallbackOk) return;
                         if (result.reason === 'input-not-found' || result.reason === 'iframe-not-ready') {
                             Logger.log('⚠️ 万能查数尚未加载完成，请稍后重试', true);
@@ -10519,7 +10570,10 @@ if (typeof globalThis !== 'undefined') {
                     });
                     return;
                 }
-                setTimeout(() => tryRun(retriesLeft - 1), 500);
+                this.quickPromptRetryTimer = setTimeout(() => {
+                    this.quickPromptRetryTimer = 0;
+                    tryRun(retriesLeft - 1);
+                }, 500);
             };
             tryRun(maxRetries);
         },
@@ -14588,9 +14642,124 @@ if (typeof globalThis !== 'undefined') {
             Logger.info('🔮 万能查数 iframe 清理完成');
         },
 
+        addPopupCleanup(cleanup) {
+            if (typeof cleanup !== 'function') return;
+            if (!Array.isArray(this.popupCleanupHandlers)) this.popupCleanupHandlers = [];
+            this.popupCleanupHandlers.push(cleanup);
+        },
+
+        runPopupCleanupHandlers() {
+            const handlers = Array.isArray(this.popupCleanupHandlers)
+                ? this.popupCleanupHandlers.slice()
+                : [];
+            this.popupCleanupHandlers = [];
+            handlers.forEach((cleanup) => {
+                try {
+                    cleanup();
+                } catch { }
+            });
+        },
+
+        clearMagicRuntimeCaches() {
+            this.crowdMatrixRunId += 1;
+            this.crowdMatrixLoading = false;
+            this.crowdMatrixProgress = 0;
+            this.crowdMatrixStateHideTimer && clearTimeout(this.crowdMatrixStateHideTimer);
+            this.crowdMatrixStateHideTimer = null;
+            this.crowdMatrixLoadedCampaignId = '';
+            this.crowdMatrixDataset = null;
+            this.crowdMatrixResultMap = null;
+            this.crowdMatrixPendingMetricReload = null;
+            this.crowdMatrixGroupSortModeMap = {};
+            this.crowdMatrixTaskProgressHandler = null;
+            this.crowdInsightRunContext = null;
+            this.crowdAuthParamsCache = null;
+            this.crowdRequestSlotPromise = null;
+            this.crowdRequestLastAt = 0;
+            this.crowdCampaignItemIdMap = new Map();
+            this.crowdCampaignItemOptionsMap = new Map();
+            this.crowdCampaignSelectedItemIdMap = new Map();
+            this.crowdCampaignManualItemSelectionMap = new Map();
+            if (this.quickPromptResetTimer) {
+                clearTimeout(this.quickPromptResetTimer);
+                this.quickPromptResetTimer = 0;
+            }
+            if (this.quickPromptRetryTimer) {
+                clearTimeout(this.quickPromptRetryTimer);
+                this.quickPromptRetryTimer = 0;
+            }
+            if (this.iframeCleanupRetryTimer) {
+                clearTimeout(this.iframeCleanupRetryTimer);
+                this.iframeCleanupRetryTimer = 0;
+            }
+        },
+
+        releasePopupResources() {
+            this.captureMagicPromptDraft();
+            this.popupLifecycleToken += 1;
+            this.hideCrowdMatrixHoverTip();
+            this.setCrowdCampaignItemDropdownOpen(false);
+            if (this.matrixCampaignItemDropdownPositionFrame) {
+                const cancelPositionUpdate = typeof this.matrixCampaignItemDropdownPositionCancel === 'function'
+                    ? this.matrixCampaignItemDropdownPositionCancel
+                    : (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout);
+                cancelPositionUpdate(this.matrixCampaignItemDropdownPositionFrame);
+                this.matrixCampaignItemDropdownPositionFrame = 0;
+            }
+            this.matrixCampaignItemDropdownPositionCancel = null;
+            this.runPopupCleanupHandlers();
+            this.clearMagicRuntimeCaches();
+            if (this.iframe instanceof HTMLIFrameElement) {
+                this.iframe.onload = null;
+                this.iframe.onerror = null;
+                try {
+                    this.iframe.src = 'about:blank';
+                } catch { }
+            }
+            if (this.header instanceof HTMLElement) {
+                this.header.onmousedown = null;
+            }
+            const popup = this.popup instanceof HTMLElement
+                ? this.popup
+                : document.getElementById('am-magic-report-popup');
+            if (popup instanceof HTMLElement) popup.remove();
+            const style = document.getElementById('am-magic-report-popup-style');
+            if (style instanceof HTMLElement) style.remove();
+            this.popup = null;
+            this.header = null;
+            this.iframe = null;
+            this.iframeLoadStarted = false;
+            this.quickPromptsEl = null;
+            this.viewTabsEl = null;
+            this.queryPanelEl = null;
+            this.matrixPanelEl = null;
+            this.matrixStateEl = null;
+            this.matrixGridEl = null;
+            this.matrixRetryBtn = null;
+            this.matrixLegendEl = null;
+            this.matrixCampaignEl = null;
+            this.matrixCampaignNameEl = null;
+            this.matrixCampaignIdEl = null;
+            this.matrixCampaignItemSelectEl = null;
+            this.matrixCampaignItemTriggerEl = null;
+            this.matrixCampaignItemTriggerTextEl = null;
+            this.matrixCampaignItemDropdownEl = null;
+            this.matrixCampaignItemDropdownHomeEl = null;
+            this.matrixHoverTipEl = null;
+            this.matrixHoverActiveBar = null;
+            this.matrixHoverActiveBars = [];
+            this.matrixHoverMetricIndex = null;
+            this.popupMatrixMaximized = false;
+            this.popupLayoutBeforeMatrix = null;
+            this.popupResizeHandler = null;
+            this.popupDropdownPositionHandler = null;
+        },
+
         createPopup() {
             if (this.popup instanceof HTMLElement && this.popup.isConnected) return;
-            this.popup = null;
+            this.releasePopupResources();
+            this.popupLifecycleToken += 1;
+            const popupToken = this.popupLifecycleToken;
 
             const stalePopup = document.getElementById('am-magic-report-popup');
             if (stalePopup instanceof HTMLElement) stalePopup.remove();
@@ -15793,22 +15962,33 @@ if (typeof globalThis !== 'undefined') {
                     this.requestCrowdCampaignItemDropdownPositionUpdate();
                 };
                 window.addEventListener('resize', this.popupResizeHandler);
+                const resizeHandler = this.popupResizeHandler;
+                this.addPopupCleanup(() => window.removeEventListener('resize', resizeHandler));
             }
             if (!this.popupDropdownPositionHandler) {
                 this.popupDropdownPositionHandler = () => this.requestCrowdCampaignItemDropdownPositionUpdate();
                 window.addEventListener('resize', this.popupDropdownPositionHandler);
                 document.addEventListener('scroll', this.popupDropdownPositionHandler, true);
+                const dropdownPositionHandler = this.popupDropdownPositionHandler;
+                this.addPopupCleanup(() => {
+                    window.removeEventListener('resize', dropdownPositionHandler);
+                    document.removeEventListener('scroll', dropdownPositionHandler, true);
+                });
             }
 
             // iframe 加载完成后先清理，再显示，避免首屏闪现整页内容
             this.iframe.onload = () => {
-                if (!this.iframeLoadStarted) return;
+                if (popupToken !== this.popupLifecycleToken || !this.iframeLoadStarted) return;
                 const loading = div.querySelector('#am-magic-loading');
-                this.iframe.style.opacity = '0';
+                if (this.iframe instanceof HTMLIFrameElement) {
+                    this.iframe.style.opacity = '0';
+                }
 
                 const revealIframe = () => {
+                    if (popupToken !== this.popupLifecycleToken || !(this.iframe instanceof HTMLIFrameElement)) return;
                     if (loading) loading.style.display = 'none';
                     this.iframe.style.opacity = '1';
+                    this.restoreMagicPromptDraft();
                 };
 
                 // 尝试清理（同源才能成功，失败也不影响使用）
@@ -15821,6 +16001,7 @@ if (typeof globalThis !== 'undefined') {
                     const maxRetries = 20;
                     const retryInterval = 120;
                     const tryCleanup = (retries = 0) => {
+                        if (popupToken !== this.popupLifecycleToken) return;
                         try {
                             const target = iframeDoc.getElementById('universalBP_common_layout_main_content');
                             if (target) {
@@ -15841,7 +16022,10 @@ if (typeof globalThis !== 'undefined') {
                             return;
                         }
 
-                        setTimeout(() => tryCleanup(retries + 1), retryInterval);
+                        this.iframeCleanupRetryTimer = setTimeout(() => {
+                            this.iframeCleanupRetryTimer = 0;
+                            tryCleanup(retries + 1);
+                        }, retryInterval);
                     };
 
                     tryCleanup();
@@ -15851,9 +16035,12 @@ if (typeof globalThis !== 'undefined') {
                 }
             };
             this.iframe.onerror = () => {
+                if (popupToken !== this.popupLifecycleToken) return;
                 const loading = div.querySelector('#am-magic-loading');
                 if (loading) loading.style.display = 'none';
-                this.iframe.style.opacity = '1';
+                if (this.iframe instanceof HTMLIFrameElement) {
+                    this.iframe.style.opacity = '1';
+                }
                 Logger.warn('⚠️ 万能查数刷新失败，请检查登录状态或网络后重试');
             };
 
@@ -15995,17 +16182,23 @@ if (typeof globalThis !== 'undefined') {
                 });
             }
 
-            document.addEventListener('click', (e) => {
+            const handleDocumentClick = (e) => {
                 const target = e.target;
                 if (!(target instanceof Node)) return;
                 if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
                 if (this.matrixCampaignItemSelectEl.contains(target)) return;
                 if (this.matrixCampaignItemDropdownEl instanceof HTMLElement && this.matrixCampaignItemDropdownEl.contains(target)) return;
                 this.setCrowdCampaignItemDropdownOpen(false);
-            });
-            document.addEventListener('keydown', (e) => {
+            };
+            const handleDocumentKeydown = (e) => {
                 if (e.key !== 'Escape') return;
                 this.setCrowdCampaignItemDropdownOpen(false);
+            };
+            document.addEventListener('click', handleDocumentClick);
+            document.addEventListener('keydown', handleDocumentKeydown);
+            this.addPopupCleanup(() => {
+                document.removeEventListener('click', handleDocumentClick);
+                document.removeEventListener('keydown', handleDocumentKeydown);
             });
 
             // 头部快捷话术
@@ -16029,12 +16222,19 @@ if (typeof globalThis !== 'undefined') {
                         if (node instanceof HTMLElement) node.setAttribute('aria-pressed', 'false');
                     });
                     if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'true');
-                    setTimeout(() => {
+                    if (this.quickPromptResetTimer) {
+                        clearTimeout(this.quickPromptResetTimer);
+                    }
+                    this.quickPromptResetTimer = setTimeout(() => {
+                        this.quickPromptResetTimer = 0;
+                        if (!btn.isConnected) return;
                         btn.classList.remove('active');
                         if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'false');
                     }, 1200);
 
+                    const promptToken = this.popupLifecycleToken;
                     const promptText = await this.resolvePromptText(promptItem);
+                    if (promptToken !== this.popupLifecycleToken || !btn.isConnected) return;
                     if (!promptText) return;
 
                     if (promptItem.autoSubmit) {
@@ -16087,46 +16287,54 @@ if (typeof globalThis !== 'undefined') {
                 document.body.style.userSelect = 'none';
             };
 
-            document.addEventListener('mousemove', (e) => {
+            const handleDragMove = (e) => {
                 if (!isDragging) return;
                 div.style.left = `${initialLeft + e.clientX - startX}px`;
                 div.style.top = `${initialTop + e.clientY - startY}px`;
-            });
+            };
 
-            document.addEventListener('mouseup', () => {
+            const handleDragEnd = () => {
                 if (isDragging) {
                     isDragging = false;
                     div.style.transition = '';
                     document.body.style.userSelect = '';
                 }
+            };
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+            this.addPopupCleanup(() => {
+                document.removeEventListener('mousemove', handleDragMove);
+                document.removeEventListener('mouseup', handleDragEnd);
+                document.body.style.userSelect = '';
             });
         },
 
         toggle(show) {
+            const nextOpen = show === true;
+            if (!nextOpen) {
+                this.releasePopupResources();
+                State.config.magicReportOpen = false;
+                State.save();
+                UI.updateState();
+                return;
+            }
+
             if (!(this.popup instanceof HTMLElement) || !this.popup.isConnected) {
                 this.popup = null;
             }
-            if (this.popup) {
-                this.popup.style.display = show ? 'flex' : 'none';
-            } else if (show) {
+            if (!this.popup) {
                 this.createPopup();
+            }
+            if (this.popup instanceof HTMLElement) {
                 this.popup.style.display = 'flex';
             }
+            this.refreshQuickPromptLabels();
+            this.refreshCrowdMatrixCampaignMeta();
+            const defaultView = this.getMagicDefaultView();
+            this.activeView = defaultView;
+            this.switchMagicView(defaultView || 'matrix');
 
-            if (!show) {
-                this.hideCrowdMatrixHoverTip();
-                this.setCrowdCampaignItemDropdownOpen(false);
-            }
-
-            if (show) {
-                this.refreshQuickPromptLabels();
-                this.refreshCrowdMatrixCampaignMeta();
-                const defaultView = this.getMagicDefaultView();
-                this.activeView = defaultView;
-                this.switchMagicView(defaultView || 'matrix');
-            }
-
-            State.config.magicReportOpen = show;
+            State.config.magicReportOpen = true;
             State.save();
             UI.updateState();
         }

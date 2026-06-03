@@ -1,3 +1,43 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第七轮
+
+## 需求规格
+- 目标：验证并优化万能查数/人群看板关闭后的 Chrome 内存占用，重点确认关闭后是否仍保留 iframe 子文档、popup DOM、样式节点、图表 DOM、下拉/hover 浮层和人群看板数据缓存。
+- 范围：只覆盖 `src/main-assistant/magic-report.js` 的关闭生命周期和必要测试/构建产物；不改查数接口合同、不改 AI 查询逻辑、不降低授权/token/shopId/预算/创建/复制安全边界，不触发真实创建、提交、投放、删除或扣费入口。
+- 成功标准：若 Chrome 实测证明关闭后有插件自有可释放重资源，采用最小侵入方案释放，并通过相关测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 打开/关闭复测；若证据显示关闭后无重残留或释放会明显破坏用户热缓存/重开体验，记录证据并不改。
+- 取舍原则：优先释放 iframe/src、popup DOM、hover/dropdown 浮层和大结果缓存；保留用户配置与必要入口状态。不得把万能查数 iframe 或看板大初始化挪到点击同步卡顿路径之外的新风险点。
+- 安全边界：Chrome 验证只打开/关闭万能查数窗口、读取 DOM/heap/资源/控制台状态，允许只读模拟和 UI 打开；不在 iframe 内提交查询，不触发真实业务写接口。
+
+## 执行计划（可核对）
+- [x] 回顾 `magic-report.js` 当前创建、打开、关闭、样式注入、iframe 加载和数据缓存逻辑。
+- [x] 用 Chrome DevTools MCP 采集万能查数打开前、打开后、关闭后和延迟后的 DOM/iframe/style/cache/heap 指标。
+- [x] 判断可改点：若关闭后仍保留 iframe/popup/data，设计一个统一关闭释放出口；若只是必要热缓存，记录不改理由。
+- [x] 实现最小侵入释放逻辑，补充测试覆盖关闭卸载和重开可恢复。
+- [x] 运行目标单测、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome 复测前后对比。
+- [x] 写入验证记录、结果复盘和前后对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已根据第六轮子代理静态复核进入万能查数候选验证；该候选预期收益高于下载捕获面板，但风险也更高，因为可能影响 iframe 热缓存和看板重开状态。
+- 源码回顾结论：`toggle(false)` 旧路径只隐藏弹窗并保留 iframe、popup DOM、样式节点、人群矩阵图表 DOM 和缓存；创建弹窗时还有 window/document 级 resize、scroll、drag、快捷话术 timer、iframe onload/onerror 等闭包链路。更优雅的实现是把关闭统一收敛到 `releasePopupResources()`，由它清理监听、timer、iframe、DOM 和可重建缓存，而不是在各个按钮分散补丁。
+- 实现摘要：`toggle(false)` 已改为调用 `releasePopupResources()`，关闭时释放 iframe 子文档、popup/style DOM、hover tip、body portal 下拉、resize/scroll/document click/Escape/drag 监听、iframe 清理轮询 timer 和快捷查询 timer；重开时重新 mount，并通过 `magicPromptDraft` 尽量恢复查询输入，保留 `lastCampaignId/lastCampaignName` 等上下文。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过；`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs tests/magic-report-crowd-matrix.test.mjs tests/logger-api.test.mjs` 通过，91 项测试全绿；新增断言覆盖 `toggle(false) -> releasePopupResources()`、iframe/about:blank 释放、popup/style DOM 卸载、document click/Escape 与 drag/resize/scroll cleanup、timer 清理、查询草稿保存/恢复、且不清空 `lastCampaignId/lastCampaignName`。
+- 构建静态测试：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- Chrome DevTools MCP 运行态确认：刷新真实 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 后，当前 extension `page.bundle.js` 来自 `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/`，包含 `releasePopupResources()`、`toggle` 释放分支、document cleanup、`magicPromptDraft` 和 `quickPromptRetryTimer`。
+- Chrome 冷态对比：刷新后新运行态冷态 `popup.exists=false`、`iframe.exists=false`、`styleExists=false`、`magicNodes=0`、`helperNodes=354`、`usedJSHeapSize≈120.8MB`。刷新前旧隐藏残留曾为 `popup.exists=true/display:none/childCount=127`、`iframe.src=https://one.alimama.com/index.html#!/report/ai-report`、`styleExists=true`、`magicNodes=128`。
+- Chrome 打开态：点击主面板“万能查数”后默认人群看板打开，`popup.exists=true/display:flex/childCount=127`、`styleExists=true`、`dropdown.exists=true`、`magicNodes=128`；切到“万能查数”页签后 iframe 创建并设置 `src=https://one.alimama.com/index.html#!/report/ai-report`，未提交查询。
+- Chrome 关闭态：点击 `#am-magic-close` 后 220ms，`popup.exists=false`、`iframe.exists=false`、`styleExists=false`、`dropdown.exists=false`、`hoverTipExists=false`、`magicNodes=0`、`helperNodes=354`；延迟 1.72s 后指标仍保持释放。
+- Chrome 监听闭环：打开/关闭过程中页面探针记录 `window:resize add=2/remove=2`、`document:scroll add=1/remove=1`、`document:click add=1/remove=1`、`document:keydown add=1/remove=1`、`document:mousemove add=1/remove=1`、`document:mouseup add=1/remove=1`，关闭后无本轮新增全局监听不平衡。
+- Chrome 安全边界：本轮真实页面只打开/切换/关闭万能查数窗口；性能资源探针确认 `dangerousWriteLikeEntries=[]`，未触发 `/solution/addList|copy`、预算 batchUpdate、campaign 删除/上下线、adgroup/creative 写接口。网络列表仅页面自身只读/报表/trace 请求；控制台只有既有外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED`。
+
+## 结果复盘
+- 第七轮结果：万能查数/人群看板关闭路径从“隐藏弹窗并长期保留 iframe、popup/style DOM、图表 DOM、下拉 DOM、监听和运行缓存”改为“关闭即统一释放，重开重新挂载”。真实页面复测中，打开态 `magicNodes=128`，关闭 220ms 后回到 `magicNodes=0`，iframe 与样式节点均不存在。
+- 取舍结论：释放 iframe 会牺牲完整 iframe 热缓存，但这是本轮明确要优化的 Chrome 内存热点；为降低体验损耗，保留最近计划上下文，并用 `magicPromptDraft` 保存/恢复查询输入。人群看板数据缓存关闭后清空，下次打开按当前计划重新加载，避免大结果长期常驻。
+- 后续判断：本轮解决了第六轮指出的更高收益候选。剩余 Chrome 内存主要来自页面原生 Magix/报表运行时、extension 主 bundle 和打开态必要 DOM；继续优化需要更大模块拆分或更细 retained-size 审计，不建议在没有新 heap 证据时继续叠加补丁。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第六轮
 
 ## 需求规格

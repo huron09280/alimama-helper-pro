@@ -22,18 +22,44 @@ test('MagicReport.createPopup 会清理失联弹窗引用与旧 DOM 节点', () 
   const block = getMagicReportBlock();
   assert.match(
     block,
-    /createPopup\(\)\s*\{[\s\S]*if \(this\.popup instanceof HTMLElement && this\.popup\.isConnected\) return;[\s\S]*this\.popup = null;[\s\S]*const stalePopup = document\.getElementById\('am-magic-report-popup'\);[\s\S]*if \(stalePopup instanceof HTMLElement\) stalePopup\.remove\(\);/,
+    /createPopup\(\)\s*\{[\s\S]*if \(this\.popup instanceof HTMLElement && this\.popup\.isConnected\) return;[\s\S]*this\.releasePopupResources\(\);[\s\S]*const stalePopup = document\.getElementById\('am-magic-report-popup'\);[\s\S]*if \(stalePopup instanceof HTMLElement\) stalePopup\.remove\(\);/,
     'createPopup 未清理失联引用/旧弹窗节点，重复注入后可能出现面板不显示'
   );
 });
 
-test('MagicReport.toggle 在展示前会校验 popup 是否仍在 DOM', () => {
+test('MagicReport.toggle 关闭时会释放弹窗资源，展示前会校验 popup 是否仍在 DOM', () => {
   const block = getMagicReportBlock();
   assert.match(
     block,
-    /toggle\(show\)\s*\{[\s\S]*if \(\!\(this\.popup instanceof HTMLElement\) \|\| !this\.popup\.isConnected\) \{[\s\S]*this\.popup = null;[\s\S]*\}[\s\S]*if \(this\.popup\) \{[\s\S]*\} else if \(show\) \{/,
-    'toggle 未校验失联 popup，页面重渲染后可能点击无反应'
+    /toggle\(show\)\s*\{[\s\S]*const nextOpen = show === true;[\s\S]*if \(!nextOpen\) \{[\s\S]*this\.releasePopupResources\(\);[\s\S]*State\.config\.magicReportOpen = false;[\s\S]*return;[\s\S]*if \(\!\(this\.popup instanceof HTMLElement\) \|\| !this\.popup\.isConnected\) \{[\s\S]*this\.popup = null;[\s\S]*\}[\s\S]*if \(!this\.popup\) \{[\s\S]*this\.createPopup\(\);/,
+    'toggle 未在关闭时释放资源，或展示前未校验失联 popup'
   );
+});
+
+test('MagicReport 关闭释放会清理 iframe、DOM、全局监听、timer 和可重建缓存', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /popupCleanupHandlers:\s*\[\],[\s\S]*popupLifecycleToken:\s*0,[\s\S]*quickPromptResetTimer:\s*0,[\s\S]*quickPromptRetryTimer:\s*0,[\s\S]*iframeCleanupRetryTimer:\s*0,[\s\S]*magicPromptDraft:\s*''/, 'MagicReport 未声明关闭生命周期所需状态');
+  assert.match(block, /releasePopupResources\(\)\s*\{[\s\S]*this\.captureMagicPromptDraft\(\);[\s\S]*this\.popupLifecycleToken \+= 1;[\s\S]*this\.hideCrowdMatrixHoverTip\(\);[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(false\);[\s\S]*this\.runPopupCleanupHandlers\(\);[\s\S]*this\.clearMagicRuntimeCaches\(\);/, 'releasePopupResources 未统一收敛浮层、监听和缓存清理');
+  assert.match(block, /if \(this\.iframe instanceof HTMLIFrameElement\) \{[\s\S]*this\.iframe\.onload = null;[\s\S]*this\.iframe\.onerror = null;[\s\S]*this\.iframe\.src = 'about:blank';[\s\S]*\}/, 'releasePopupResources 未释放 iframe 子文档');
+  assert.match(block, /const popup = this\.popup instanceof HTMLElement[\s\S]*document\.getElementById\('am-magic-report-popup'\);[\s\S]*if \(popup instanceof HTMLElement\) popup\.remove\(\);[\s\S]*document\.getElementById\('am-magic-report-popup-style'\);[\s\S]*if \(style instanceof HTMLElement\) style\.remove\(\);/, 'releasePopupResources 未卸载 popup DOM 或样式节点');
+  assert.match(block, /if \(this\.quickPromptResetTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptResetTimer\);[\s\S]*if \(this\.quickPromptRetryTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptRetryTimer\);[\s\S]*if \(this\.iframeCleanupRetryTimer\) \{[\s\S]*clearTimeout\(this\.iframeCleanupRetryTimer\);/, 'clearMagicRuntimeCaches 未清理关闭后的待执行 timer');
+  assert.doesNotMatch(block.match(/releasePopupResources\(\)\s*\{[\s\S]*?\n\s*\},\n\s*\n\s*createPopup\(/)?.[0] || '', /lastCampaignId\s*=\s*''|lastCampaignName\s*=\s*''/, '关闭释放不应清空最近计划上下文');
+});
+
+test('MagicReport document 级监听和拖拽监听会登记到 popup cleanup', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /const handleDocumentClick = \(e\) => \{[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(false\);[\s\S]*\};[\s\S]*const handleDocumentKeydown = \(e\) => \{[\s\S]*if \(e\.key !== 'Escape'\) return;[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(false\);[\s\S]*\};[\s\S]*document\.addEventListener\('click', handleDocumentClick\);[\s\S]*document\.addEventListener\('keydown', handleDocumentKeydown\);[\s\S]*this\.addPopupCleanup\(\(\) => \{[\s\S]*document\.removeEventListener\('click', handleDocumentClick\);[\s\S]*document\.removeEventListener\('keydown', handleDocumentKeydown\);/, 'document click/Escape 监听必须可注销，不能匿名常驻');
+  assert.match(block, /document\.addEventListener\('mousemove', handleDragMove\);[\s\S]*document\.addEventListener\('mouseup', handleDragEnd\);[\s\S]*this\.addPopupCleanup\(\(\) => \{[\s\S]*document\.removeEventListener\('mousemove', handleDragMove\);[\s\S]*document\.removeEventListener\('mouseup', handleDragEnd\);[\s\S]*document\.body\.style\.userSelect = '';[\s\S]*\}\);/, '拖拽监听必须随弹窗释放注销');
+  assert.match(block, /const resizeHandler = this\.popupResizeHandler;[\s\S]*this\.addPopupCleanup\(\(\) => window\.removeEventListener\('resize', resizeHandler\)\);/, 'resize 监听 cleanup 应捕获注册时的 handler');
+  assert.match(block, /const dropdownPositionHandler = this\.popupDropdownPositionHandler;[\s\S]*this\.addPopupCleanup\(\(\) => \{[\s\S]*window\.removeEventListener\('resize', dropdownPositionHandler\);[\s\S]*document\.removeEventListener\('scroll', dropdownPositionHandler, true\);/, 'dropdown resize/scroll 监听 cleanup 应捕获注册时的 handler');
+});
+
+test('MagicReport 释放 iframe 前保存查询草稿并在重开后恢复', () => {
+  const block = getMagicReportBlock();
+  assert.match(block, /setPromptInputValue\(inputEl, promptText\)\s*\{[\s\S]*const ok = MagicPromptDriver\.setPromptInputValue\(inputEl, promptText\);[\s\S]*if \(ok\) this\.magicPromptDraft = String\(promptText \|\| ''\)\.trim\(\);[\s\S]*return ok;/, '设置查询输入时应同步草稿');
+  assert.match(block, /captureMagicPromptDraft\(\)\s*\{[\s\S]*const iframeDoc = this\.getIframeDoc\(\);[\s\S]*const inputEl = this\.findPromptInput\(iframeDoc\);[\s\S]*if \(!inputEl\) return;[\s\S]*const draft = this\.readPromptInputValue\(inputEl\);[\s\S]*this\.magicPromptDraft = draft;[\s\S]*\}/, '关闭前未保存 iframe 查询输入草稿');
+  assert.match(block, /restoreMagicPromptDraft\(\)\s*\{[\s\S]*const draft = String\(this\.magicPromptDraft \|\| ''\)\.trim\(\);[\s\S]*const inputEl = this\.findPromptInput\(iframeDoc\);[\s\S]*return this\.setPromptInputValue\(inputEl, draft\);[\s\S]*\}/, '重开后未恢复查询输入草稿');
+  assert.match(block, /const revealIframe = \(\) => \{[\s\S]*this\.iframe\.style\.opacity = '1';[\s\S]*this\.restoreMagicPromptDraft\(\);[\s\S]*\};/, 'iframe 显示后应尝试恢复查询草稿');
 });
 
 test('UI.createElements 会清理旧主面板节点，避免重复注入导致按钮失联', () => {
