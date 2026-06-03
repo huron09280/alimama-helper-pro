@@ -13,6 +13,7 @@ dist/extension/*
 !dist/extension/manifest.json
 !dist/extension/content.js
 !dist/extension/page.bundle.js
+!dist/extension/wizard-style.css
 !dist/extension/icon-16.png
 !dist/extension/icon-32.png
 !dist/extension/icon-48.png

@@ -17,12 +17,18 @@
 - [x] 结果对比：每次优化写清优化前指标、优化后指标、差值、结论和下一轮是否继续。
 - [x] 中文提交：每完成一项优化或本轮对话收口前，检查 diff 后用中文提交信息提交本轮实质改动。
 - [x] 结果归档：更新本节高层操作摘要、验证记录、结果复盘和下一轮建议。
+- [x] 第三轮范围校验：确认只对 extension 构建输出外置 CSS，userscript 继续内联自包含，不调整 keyword-plan-api 主体加载时机。
+- [x] 第三轮实现：生成 `dist/extension/wizard-style.css`，从 extension `page.bundle.js` 中替换 440KB 组建计划样式模板字符串，并在页面运行态可靠定位扩展资源 base URL。
+- [x] 第三轮本地验证：补静态测试覆盖 bundle 缩减、CSS 暴露、userscript 内联保留、CSS 加载兜底和组建计划不懒加载大包；运行单测、语法检查、构建检查。
+- [x] 第三轮 Chrome DevTools MCP 正例烟测：恢复可用 MCP 后确认 `wizard-style.css` 实际加载、组建计划弹窗可见、控制台无新增异常。
+- [x] 第三轮记录与提交：写入前后体积、运行态结果、风险和结论，并用中文提交信息 commit。
 
 ## 高层操作摘要
 - 已启动目标型任务，按项目规则先回顾 `tasks/lessons.md`；最相关教训是 L43：性能拆包不能把大包首次解析成本转移到用户点击路径。
 - 已读取 `planning-with-files`、`goal-driven` 和 `computer-use` 技能说明；本轮用持久化任务记录和目标验收推进，Computer Use 仅在需要直接操作本机 UI 且无更专用工具时使用。
 - 用户补充约束已纳入：优化对象明确为 Chrome 浏览器内存；每完成一项优化或本轮对话收口前，需要先做中文 commit 再继续。
 - 用户追加约束已纳入：每次优化结果都必须记录下来并做前后对比。
+- 用户最新约束已纳入：Chrome 验证使用 Chrome DevTools MCP；本轮不使用子代理；涉及服务器请求时按 `20rpm` 限速，第三轮烟测只读取扩展本地资源并通过 open bridge 打开弹窗，不触发业务写请求。
 - 静态基线：`dist/extension/page.bundle.js` 为 4,400,575 bytes，`dist/packages/alimama-helper-pro.user.js` 为 4,305,400 bytes；最大源码切片为建计划样式、万能查数、行级快捷入口和建计划搜索/草稿模块。
 - Chrome 基线：真实页 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 中，`requestHistory.length` 已满 `4000`，其中 `3998` 条是 `club.alimama.com/api/b/side/engine/trace/report.json` 高频曝光埋点。
 - 第一轮优化方案已落地：`createHookManager()` 过滤无业务价值 trace 埋点、默认请求历史上限从 `4000` 收敛到 `1200`，并对超大 body 做摘要化截断；保留普通业务 JSON、`URLSearchParams`、`FormData`、`Blob`、`ArrayBuffer` 的可回放表示。
@@ -32,6 +38,10 @@
 - 第二轮复核修正：MV3 content script 默认隔离世界，不能只靠包装页面 `history.pushState/replaceState` 证明能捕获主世界 SPA 跳转；本轮改为在未注入的 `myseller` 页保留轻量 URL 轮询兜底，进入 SmartAssistant 后注入一次并停止轮询。
 - 第二轮优化已落地：`extension-content` 在 content script 层先判断页面资格，只有 `one.alimama.com` 和 `myseller` SmartAssistant 预算页挂载完整 `page.bundle.js`；普通 `myseller` 页保留 600ms URL 轮询，宽泛 `alimama` 子域不保留轮询。
 - 第二轮自审取舍：没有改 manifest match，避免丢失授权 bridge 和未来同源路由恢复能力；内存收益来自阻止 4.4MB `page.bundle.js` 在非业务页解析和启动，而不是把大包推迟到用户点击路径。
+- 第三轮计划：对 `page.bundle.js` 内最大静态块做 extension 专用外置化。候选为 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js` 中约 440KB 的组建计划 CSS；userscript 继续内联自包含，extension 通过 web-accessible `wizard-style.css` 加载，目标是减少 page bundle JS 解析/编译和主世界常驻字符串。
+- 第三轮计划校验：不得把 `keyword-plan-api` 主体或 4.4MB 解析成本移动到点击“组建计划”路径；若 CSS 外置导致首次点击 FOUC，需要用 preload 或同步等待 CSS load 解决，并用本地/Chrome 运行态验证。
+- 第三轮早期曾按旧约束使用只读子代理复核；用户最新要求改为“用 Chrome DevTools MCP，不使用子代理”，本轮继续验证与提交未再派发或依赖子代理结果。
+- 第三轮实现已落地：extension 构建从 `style.js` 提取 `wizard-style.css`，manifest 暴露该资源，page bundle 只保留 critical CSS 与外链 loader；`extension-page-compat` 在 page world 暴露 `resourceBaseUrl`；`openWizard()` 等待样式加载结果后再展示 overlay，失败时只展示 critical 外壳错误态。userscript 与根脚本继续内联完整组建计划样式，不依赖 extension 资源。
 
 ## 验证记录
 - 本地验证：`node --test tests/logger-api.test.mjs` 通过，18 项测试全绿；新增行为测试直接执行 hook manager 片段，覆盖 trace 过滤、业务请求保留、`URLSearchParams` body 可回放、历史上限裁剪和大 body 截断。
@@ -50,14 +60,26 @@
 - 第二轮 Chrome 直接 SmartAssistant 复测：直接打开 `https://myseller.taobao.com/home.htm/crm-workbench/smartassistant` 后，`hasToggle: true`、`hasPlatformRuntime: true`、`platformRuntime.mode: "extension"`、`hasHookManager: true`；JS heap `usedJSHeapSize: 74031888`、`totalJSHeapSize: 77616448`。
 - 第二轮 Chrome 主业务正例复测：`https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 中 `hasToggle: true`、`hasPlatformRuntime: true`、`hasHookManager: true`、`requestHistoryLimit: 1200`，未误伤主助手、hook manager 和第一轮请求历史上限。
 - 第二轮 Chrome 宽泛子域负例复测：`https://pub.alimama.com/` 中 `hasToggle: false`、`hasPlatformRuntime: false`、`hasHookManager: false`、`pageBundleEntries: []`；JS heap `usedJSHeapSize: 20216987`、`totalJSHeapSize: 21453363`。
+- 第三轮本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/keyword-wizard-entry-regression.test.mjs` 通过，27 项测试全绿；覆盖 `wizard-style.css` web-accessible 暴露、extension 外链 loader、critical style、样式加载 Promise/超时/失败兜底、打开向导前等待样式结果、userscript 内联自包含、segment 清单、构建产物同步和组建计划打开路径不做点击同步重任务。
+- 第三轮本地验证：`npm run check:syntax` 通过；`npm run build:check` 通过；`git diff --check` 通过。
+- 第三轮体积对比（以前一轮提交 `59405c8` 为基线）：`dist/extension/page.bundle.js` raw `4,404,170 -> 3,973,021` bytes，减少 `431,149` bytes（约 `9.79%`）；gzip `671,659 -> 637,854` bytes，减少 `33,805` bytes（约 `5.03%`）；行数 `80,711 -> 71,076`，减少 `9,635` 行。新增 `dist/extension/wizard-style.css` raw `289,478` bytes、gzip `31,638` bytes、`9,765` 行。
+- 第三轮总体资源对比：extension 的 `page.bundle.js + wizard-style.css` raw `4,404,170 -> 4,262,499` bytes，合计仍减少 `141,671` bytes；gzip `671,659 -> 669,492` bytes，合计减少 `2,167` bytes。收益重点不是总下载体积，而是减少 document_start JS 解析/编译和主世界常驻的大 CSS 模板字符串。
+- 第三轮 userscript 对比：`dist/packages/alimama-helper-pro.user.js` raw `4,308,995 -> 4,310,802` bytes，gzip `652,576 -> 653,014` bytes；增加来自共享的样式加载契约/打开时序代码，userscript 仍保持内联自包含，没有外置 CSS 依赖。
+- 第三轮 Chrome DevTools MCP 连接状态：`list_pages` 已恢复可用，选择原浏览器 `https://one.alimama.com/...` 页面后可执行 `evaluate_script`。第一次在旧运行态打开向导时只看到 48 字节隐藏占位 `style#am-wxt-keyword-style`，未插入外置 CSS；随后对当前页面执行 ignore-cache reload，确认浏览器已读取第三轮新 extension 资源。
+- 第三轮 Chrome 资源正例：页面运行态 `window.__AM_PLATFORM_RUNTIME__.mode === "extension"`、`version: "7.05"`、`resourceBaseUrl: "chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/"`；从页面 fetch `page.bundle.js` 得到 `hasExternalLoader: true`、`hasCriticalStyle: true`、`hasLegacyCleanup: true`，fetch `wizard-style.css` 得到 `length: 289478`、包含 `#am-wxt-keyword-overlay`、`.am-wxt-workbench-tabs` 和 `.am-wxt-home-summary`。
+- 第三轮 Chrome open bridge 烟测：通过 `__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__` 打开组建计划，不点击创建、提交、删除、投放或扣费入口；结果 `bridgeResult.ok: true`，`link#am-wxt-keyword-style.href` 为 `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/wizard-style.css`，`data-am-helper-external-style="1"`、`data-am-helper-full-style-loaded="1"`，旧隐藏 inline style 已清理，`critical` 样式 `loaded: "1"`、无失败标记。
+- 第三轮 Chrome 可见性烟测：弹窗打开时 overlay `display: "flex"`、`zIndex: "1000006"`、无 `styleLoadFailed`；modal 可见尺寸约 `1320x821`，标题为 `关键词推广批量建计划 API 向导`。采样后已移除 overlay `open` 类关闭弹窗。
+- 第三轮 Chrome 请求与控制台：open bridge 烟测前后 `fetchResourcesAdded: 0`、`newFetchEntries: []`，符合 `20rpm` 限速和只读边界；控制台仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复 18 次，未见本次外置 CSS 优化新增插件错误。
 
 ## 结果复盘
 - 第一轮结果：常驻请求历史从满载 `4000` 条降到 `76` 条，减少 `3924` 条；trace 埋点保留从 `3998` 条降到 `0` 条，减少 `100%`；默认上限从 `4000` 降到 `1200`，并增加单条 body `240000` 字符上限。
 - 对比结论：本轮解决的是插件长期保留高频无业务埋点 URL 和请求对象的问题，不改变 fetch/XHR hook、授权、预算、创建、复制、查数、生命周期合同等业务链路；收益明确且风险低。
 - 第二轮结果：普通 `myseller` 工作台从会进入完整 extension runtime（旧运行态曾测得 `hasPlatformRuntime: true`、`hasHookManager: true`、JS heap `82716091/112302731`）变为不进入完整 runtime（新运行态 `hasPlatformRuntime: false`、`hasHookManager: false`、JS heap `79658927/106309623`）；宽泛 `pub.alimama.com` 同样不进入完整 runtime。按构建产物体积，非业务页每次加载避免解析和启动 `dist/extension/page.bundle.js` 的 4.4MB 原始脚本。
 - 第二轮对比结论：本轮解决的是 extension manifest broad match 带来的非业务页常驻大运行时问题；主业务页 `one.alimama.com` 和 SmartAssistant 预算页仍能完整注入，且普通 `myseller` SPA 跳转 SmartAssistant 可通过 600ms 轻量 URL 轮询恢复注入一次。
-- 轮次预估：达到当前最佳仍预计需要 `3-4` 轮，当前已完成前 2 轮。第 3 轮建议对 `page.bundle.js` 内大模块/大样式做 heap snapshot 与初始化路径拆解，必须遵守 L43，不能把 4.4MB 解析成本转移到用户点击“组建计划”的首次路径；第 4 轮视 snapshot 再做覆盖层、observer、iframe 和 detached node 清理。
-- 剩余风险：第二轮 Chrome heap 前后仍受页面内容和登录态影响，不能把几 MB heap 差值全部归因到插件；更可靠指标是非业务页全局 runtime/hook manager 从存在变为不存在，以及 4.4MB `page.bundle.js` 不再注入。下一轮应以 heap snapshot retained size 和初始化调用图作为主指标。
+- 第三轮结果：extension 首包 JS 减少 `431,149` bytes raw / `33,805` bytes gzip，并把组建计划完整 CSS 从 JS 模板字符串改为 `wizard-style.css`；没有把 `keyword-plan-api` 主体改成点击时懒加载，遵守 L43；userscript 仍自包含。
+- 第三轮对比结论：本轮解决的是 extension document_start 阶段解析/编译超大 CSS 模板字符串和主世界常驻字符串的问题。因为 CSS 被外置，extension 总资源 gzip 只小幅下降，但 JS 首包明显变小，属于对 Chrome 主线程解析和 JS heap 更直接的优化。
+- 轮次预估：达到当前最佳仍预计需要 `4` 轮，当前已完成前 3 轮代码优化并补齐第三轮 Chrome 正例烟测。第 4 轮应基于 heap snapshot / retained size 检查覆盖层、observer、iframe、detached node、初始化调用图和可关闭缓存，判断是否还有值得提交的常驻内存优化。
+- 剩余风险：第三轮 Chrome heap 前后尚未在原浏览器复测，不能直接宣称真实 heap 数字下降；外置 CSS 的资源加载、弹窗可见性和控制台结果已通过 Chrome DevTools MCP 验证，后续仍需用 heap snapshot 证明 retained size 变化。
 
 # TODO - 2026-06-01 预算破限 199 元修改失败修复
 

@@ -31,6 +31,34 @@
             });
         };
 
+        const revealWizardAfterStyleReady = (openToken = 0) => {
+            const overlay = wizardState.els?.overlay;
+            const styleReadyPromise = wizardState.styleReadyPromise && typeof wizardState.styleReadyPromise.then === 'function'
+                ? wizardState.styleReadyPromise
+                : Promise.resolve({ ok: true, source: 'inline' });
+            const reveal = (styleResult = {}) => {
+                if (openToken !== wizardState.openToken) return;
+                if (!overlay) return;
+                delete overlay.dataset.styleLoading;
+                if (styleResult && styleResult.ok === false) {
+                    overlay.dataset.styleLoadFailed = '1';
+                    overlay.dataset.styleLoadReason = String(styleResult.reason || 'wizard_style_load_failed');
+                } else {
+                    delete overlay.dataset.styleLoadFailed;
+                    delete overlay.dataset.styleLoadReason;
+                }
+                overlay.classList.add('open');
+                wizardState.visible = true;
+                scheduleWizardOpenPreviewRefresh(openToken);
+            };
+            styleReadyPromise.then(reveal, (err) => {
+                reveal({
+                    ok: false,
+                    reason: err?.message || String(err || 'wizard_style_ready_failed')
+                });
+            });
+        };
+
         const openWizard = () => {
             mountWizard();
             wizardState.openToken = (toNumber(wizardState.openToken, 0) + 1);
@@ -71,9 +99,10 @@
             wizardState.appendWizardLog(`向导已就绪（构建 ${BUILD_VERSION}），支持双列表选品与批量创建`);
             wizardState.appendWizardLog('正在后台通过接口初始化运行时和商品列表...');
 
-            wizardState.els.overlay.classList.add('open');
             wizardState.visible = true;
-            scheduleWizardOpenPreviewRefresh(openToken);
+            wizardState.els.overlay.dataset.styleLoading = '1';
+            wizardState.els.overlay.classList.remove('open');
+            revealWizardAfterStyleReady(openToken);
 
             scheduleWizardOpenTask(openToken, () => {
                 if (!WIZARD_FORCE_API_ONLY_SCENE_CONFIG && typeof wizardState.refreshSceneProfileFromSpec === 'function') {

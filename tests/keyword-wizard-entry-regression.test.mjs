@@ -97,13 +97,18 @@ test('组建计划打开路径不在点击同步任务里构建预览', () => {
   );
   assert.match(
     wizardOpenSource,
-    /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?clearLogs: true,[\s\S]*?refreshPreview: false,[\s\S]*?\}\);[\s\S]*?wizardState\.els\.overlay\.classList\.add\('open'\);[\s\S]*?scheduleWizardOpenPreviewRefresh\(openToken\);[\s\S]*?scheduleWizardOpenTask\(openToken, \(\) => \{[\s\S]*?refreshSceneProfileFromSpec/,
-    '首次打开向导应先跳过预览构建，overlay 打开后再异步刷新预览'
+    /const revealWizardAfterStyleReady = \(openToken = 0\) => \{[\s\S]*?const styleReadyPromise = wizardState\.styleReadyPromise[\s\S]*?delete overlay\.dataset\.styleLoading;[\s\S]*?overlay\.classList\.add\('open'\);[\s\S]*?scheduleWizardOpenPreviewRefresh\(openToken\);/,
+    '首次打开向导应等待样式加载结果后再打开 overlay，并在打开后异步刷新预览'
   );
   assert.match(
     wizardOpenSource,
-    /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?refreshPreview: false,[\s\S]*?\}\);[\s\S]*?scheduleWizardOpenPreviewRefresh\(openToken\);/,
-    '后台 runtime 初始化后的二次渲染也不应同步构建预览'
+    /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?clearLogs: true,[\s\S]*?refreshPreview: false,[\s\S]*?\}\);[\s\S]*?wizardState\.els\.overlay\.dataset\.styleLoading = '1';[\s\S]*?wizardState\.els\.overlay\.classList\.remove\('open'\);[\s\S]*?revealWizardAfterStyleReady\(openToken\);[\s\S]*?scheduleWizardOpenTask\(openToken, \(\) => \{[\s\S]*?refreshSceneProfileFromSpec/,
+    '首次打开向导应先跳过预览构建，样式加载前保持 overlay 隐藏，后续重任务再异步执行'
+  );
+  assert.match(
+    wizardOpenSource,
+    /KeywordPlanPreviewExecutor\.renderWizardFromState\(\{[\s\S]*?refreshPreview: false,[\s\S]*?\}\);[\s\S]*?revealWizardAfterStyleReady\(openToken\);/,
+    '后台 runtime 初始化前的首次渲染不应同步构建预览'
   );
 });
 

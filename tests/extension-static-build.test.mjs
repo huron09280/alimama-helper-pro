@@ -8,6 +8,7 @@ const manifest = JSON.parse(outputs.extensionFiles['manifest.json']);
 const contentSource = outputs.extensionFiles['content.js'];
 const backgroundSource = outputs.extensionFiles['background.js'];
 const pageBundle = outputs.extensionFiles['page.bundle.js'];
+const wizardStyleCss = outputs.extensionFiles['wizard-style.css'];
 
 function createContentScriptHarness(initialUrl) {
   const appendedScripts = [];
@@ -150,6 +151,7 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
   assert.ok(manifest.content_scripts[0].matches.includes('*://*.alimama.com/*'), '缺少阿里妈妈子域匹配');
   assert.ok(manifest.content_scripts[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com 匹配');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('page.bundle.js'), '缺少 page bundle 暴露');
+  assert.ok(manifest.web_accessible_resources[0].resources.includes('wizard-style.css'), '缺少组建计划外置样式暴露');
   assert.ok(!manifest.web_accessible_resources[0].resources.includes('keyword-plan-api.bundle.js'), '不应暴露点击时加载的 keyword-plan-api lazy bundle');
   assert.ok(manifest.web_accessible_resources[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com web_accessible 匹配');
 });
@@ -241,8 +243,33 @@ test('extension build output 包含授权 background 桥', () => {
 test('extension page bundle 包含 GM 兼容层与核心桥接', () => {
   assert.match(pageBundle, /window\.GM_getValue = GM_getValue_impl/, '缺少 GM_getValue 兼容层');
   assert.match(pageBundle, /window\.__AM_PLATFORM_RUNTIME__ = \{/, '缺少 extension 运行时标记');
+  assert.match(pageBundle, /window\.__AM_EXTENSION_RESOURCE_BASE_URL__ = EXTENSION_RESOURCE_BASE_URL;/, 'extension 运行态未暴露资源 base URL');
+  assert.match(pageBundle, /resourceBaseUrl: EXTENSION_RESOURCE_BASE_URL/, 'extension 运行时标记缺少资源 base URL');
   assert.doesNotMatch(pageBundle, /keywordPlanApiBundle/, 'extension 运行态不应记录点击时加载的 keyword-plan-api lazy bundle');
   assert.match(pageBundle, /window\.__ALIMAMA_OPTIMIZER_TOGGLE__ = \(\) => \{/, '缺少核心桥接入口');
+});
+
+test('extension 组建计划样式外置并保留首屏关键样式', () => {
+  assert.equal(typeof wizardStyleCss, 'string', 'build output 缺少 wizard-style.css');
+  assert.match(wizardStyleCss, /#am-wxt-keyword-overlay\s*\{/, 'wizard-style.css 缺少组建计划 overlay 样式');
+  assert.match(wizardStyleCss, /#am-wxt-keyword-modal \.am-wxt-workbench-tabs/, 'wizard-style.css 缺少组建计划工作台样式');
+  assert.match(wizardStyleCss, /#am-wxt-keyword-modal \.am-wxt-home-summary/, 'wizard-style.css 缺少组建计划首页摘要样式');
+  assert.ok(wizardStyleCss.length > 200000, 'wizard-style.css 体积异常，可能未提取完整组建计划样式');
+
+  assert.match(pageBundle, /const ensureWizardStyle = \(\) => \{[\s\S]*link\.rel = 'stylesheet';[\s\S]*new URL\('wizard-style\.css', baseUrl\)\.href/, 'extension page bundle 未使用外置 CSS loader');
+  assert.match(pageBundle, /link\.dataset\.amHelperExternalStyle = '1';/, '外置 CSS link 缺少可观测标记');
+  assert.match(pageBundle, /isLegacyInlineBlocker[\s\S]*#am-wxt-keyword-overlay\{display:none!important;\}[\s\S]*existingStyleNode\.remove\(\);/, '外置 CSS loader 必须清理旧运行态遗留的隐藏占位 style');
+  assert.match(pageBundle, /inline-existing/, '外置 CSS loader 应识别已有完整内联样式，避免 userscript 或热更新场景重复加载');
+  assert.match(pageBundle, /am-wxt-keyword-critical-style/, '外置 CSS loader 缺少关键首屏样式兜底');
+  assert.match(pageBundle, /extension_resource_base_url_missing/, '外置 CSS loader 缺少资源 base URL 失败信号');
+  assert.match(pageBundle, /__AM_WXT_WIZARD_STYLE_READY_PROMISE__/, '外置 CSS loader 缺少样式加载 Promise 契约');
+  assert.match(pageBundle, /wizard_style_load_timeout/, '外置 CSS loader 缺少加载超时兜底');
+  assert.match(pageBundle, /wizard_style_load_failed/, '外置 CSS loader 缺少加载失败兜底');
+  assert.match(pageBundle, /revealWizardAfterStyleReady\(openToken\);/, '组建计划打开前未等待外置样式加载结果');
+  assert.match(pageBundle, /wizardState\.els\.overlay\.dataset\.styleLoading = '1';[\s\S]*wizardState\.els\.overlay\.classList\.remove\('open'\);/, '组建计划打开时应先保持 overlay 隐藏，避免外置 CSS 加载前露出裸 DOM');
+  assert.match(pageBundle, /delete overlay\.dataset\.styleLoading;[\s\S]*overlay\.classList\.add\('open'\);/, '组建计划展示时应清理样式加载态');
+  assert.doesNotMatch(pageBundle, /style\.textContent = `\s*#am-wxt-keyword-overlay \{/, 'extension page bundle 不应继续内联完整组建计划样式');
+  assert.doesNotMatch(pageBundle, /#am-wxt-keyword-modal \.am-wxt-home-summary \{[\s\S]*#am-wxt-keyword-modal \.am-wxt-strategy-list/, 'extension page bundle 不应保留完整 wizard CSS 大段');
 });
 
 test('extension page bundle 授权锁定遮罩符合统一 UI 规范', () => {

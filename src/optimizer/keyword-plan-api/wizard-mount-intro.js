@@ -1,6 +1,12 @@
         const mountWizard = () => {
             if (wizardState.mounted) return;
-            ensureWizardStyle();
+            const styleReady = ensureWizardStyle();
+            wizardState.styleReadyPromise = styleReady && typeof styleReady.then === 'function'
+                ? styleReady.catch((err) => ({
+                    ok: false,
+                    reason: err?.message || String(err || 'wizard_style_ready_failed')
+                }))
+                : Promise.resolve({ ok: true, source: 'inline' });
 
             const overlay = document.createElement('div');
             overlay.id = 'am-wxt-keyword-overlay';

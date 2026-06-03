@@ -41,7 +41,8 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "page.bundle.js"
+                "page.bundle.js",
+                "wizard-style.css"
             ],
             "matches": [
                 "*://alimama.com/*",
