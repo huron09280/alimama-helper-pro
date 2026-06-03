@@ -1,3 +1,47 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第八轮
+
+## 需求规格
+- 目标：在已完成请求历史、非业务页注入、外置 CSS、组建计划生命周期、下载捕获面板和万能查数关闭释放后，继续用当前 Chrome 运行态和 heap/DOM 证据判断是否还有低风险高收益内存优化点，尽量逼近“当前最佳”。
+- 范围：覆盖 Chrome extension/page 运行态的冷态常驻对象、observer/timer/listener、DOM/样式节点、缓存、授权守卫、主助手扫描、hook manager、optimizer/keyword 入口状态；不改创建/复制/预算/授权/token/shopId 安全边界，不点击真实创建、提交、投放、删除或扣费入口，不直接编辑生成产物。
+- 成功标准：若发现插件自有低风险热点，落地最小侵入优化并通过目标测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 复测；若证据显示剩余热点主要来自页面原生运行时、必要主 bundle 或需要高风险架构拆分，记录证据和“不继续补丁”的原因，并给出下一阶段架构建议。
+- 判断口径：优先处理打开/关闭后残留、重复绑定、冷态不必要 DOM、无上限缓存、可取消 timer/observer、可按需挂载的插件自有面板；不接受把成本转移到点击同步路径、隐藏异常、增加第二事实源、降低安全检查或用空提交冒充优化。
+- 安全边界：Chrome 只做刷新、打开/关闭已验证只读入口、DOM/heap/性能/网络/控制台采集和内存内探针；网络检查排除创建/复制/预算/删除/投放类写接口。
+
+## 执行计划（可核对）
+- [x] 回顾第七轮提交后的源码、任务记录和运行态，确认本轮不重复已完成项。
+- [x] 用 Chrome DevTools MCP 采集当前 `one.alimama.com` 冷态 DOM/样式/iframe/observer/listener/cache/heap 指标。
+- [x] 静态交叉定位剩余候选：主助手扫描、授权守卫、hook manager、潜力词导出、并发日志/复制弹窗、optimizer/keyword 入口、缓存和 timer。
+- [x] 方案判断：若有插件自有低风险热点则实现；若只剩页面原生或高风险架构拆分则记录证据并不改。
+- [x] 验证闭环：运行目标测试、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome 复测或记录无法改的排除证据。
+- [x] 结果归档与提交：写入验证记录、结果复盘和前后对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已开始第八轮，当前工作区干净，上一轮最新提交为 `c6b016b 优化 Chrome 万能查数关闭内存占用`。
+- 本轮先做证据审计，不把第七轮“剩余可能高风险”当作最终结论；若能找到插件自有低风险项继续优化，否则用 Chrome/heap 证据说明当前低风险项已基本收口。
+- Chrome 冷态证据：当前 `one.alimama.com` extension 运行态 `requestHistory.length=97`、`traceCount=0`、`captureNodes=0`、`magicNodes=1`、`helperNodes=287`、`usedJSHeapSize≈165.9MB`；heap snapshot `tmp/chrome-memory-round8-cold.heapsnapshot` 的大 self-size 仍主要是页面字符串/native/code，插件命中对象没有新的大 self-size 热点。
+- 静态交叉定位后，本轮低风险候选收敛为 `BudgetFrontendLimitBypass`：默认配置 `unlockBudgetFrontendLimit=false` 时仍会安装页面级预算 patcher、body `MutationObserver`、`hashchange` 监听和 600ms interval；这属于插件自有冷态生命周期过宽，不涉及创建/复制/预算提交安全边界本身。
+- 方案判断：采用“按需安装 + 关闭统一释放”的结构性修复。冷态只同步开关状态，不安装重页面 patcher；用户打开预算破限时再安装 Magix/SmartAssistant/提交 payload patch；关闭时恢复 patched views、SmartAssistant targets、fetch/XHR wrapper，并清理 observer/timer/listener。
+- 子代理静态复核尝试因 `429 Too Many Requests` 失败，本轮不重试，主线程基于 Chrome/heap/源码证据继续推进。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/budget-frontend-limit-bypass.js` 通过。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/budget-frontend-limit-bypass.test.mjs tests/logger-api.test.mjs` 通过，30 项测试全绿；新增断言覆盖预算破限默认关闭不安装页面级扫描补丁、开启才按需安装、关闭时执行 cleanup、恢复 fetch/XHR wrapper、释放 600ms interval。
+- 构建静态测试：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- Chrome DevTools MCP 新构建冷态复测：刷新真实 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 后，当前 extension `page.bundle.js` 包含 `2026-06-03-budget-lazy-install-v1`、`ensurePagePatcher()`、`__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__` 和 `restoreBudgetSubmitPayloadPatch()`；`BudgetFrontendLimitBypass.init()` 代码块不再包含 `MutationObserver`、`hashchange` 或 `installPagePatcher`。
+- Chrome 冷态预算补丁状态：默认配置 `unlockBudgetFrontendLimit=false` 时，`patcherInstalled=false`、`patcherVersion=""`、`hasRefresh=false`、`hasDisable=false`、`hasSmartAssistantDebug=false`、`fetchPatchVersion=""`、`xhrOpenPatchVersion=""`、`xhrSendPatchVersion=""`；`usedJSHeapSize≈146.9MB`，后续最终冷态约 `134.6MB`。
+- Chrome 开关往返验证：点击“预算破限”打开后，`patcherVersion=2026-06-03-budget-lazy-install-v1`、`hasRefresh/hasDisable/hasSmartAssistantDebug=true`、fetch/XHR open/send 均带 patch version；再点击关闭后全部回到空值或 `false`，`unlockFlag=false`，按钮 `aria-pressed=false`。
+- Chrome 资源释放探针：预算开关往返期间页面内探针记录 `intervalAdds=1/intervalClears=1`、`hashAdd=1/hashRemove=2`、`mutationCreated=1/mutationObserve=1/mutationDisconnect=1`，证明页面级 interval/listener/observer 关闭后释放。`hashRemove=2` 来自显式 remove 与 cleanupHandlers 双保险，结果无残留。
+- Chrome 最终冷态：`totalNodesApprox=6079`、`helperNodes=291`、`captureNodes=0`、`magicNodes=1`、`keywordNodes=10`、`requestHistory.length=98`、`traceCount=0`、`fetchHandlers=2`，预算补丁全局与 fetch/XHR wrapper 均不存在。
+- Chrome 安全边界：本轮真实页面只刷新、点击助手面板里的预算破限开关并立刻关回；未打开预算弹窗、未触发真实预算提交。性能资源探针 `dangerousWriteLikeEntries=[]`，开关往返 `dangerousWriteLikeEntriesAdded=[]`，未触发 `/campaign/budget/batchUpdate.json`、`/solution/addList|copy`、删除/上下线/保存类写接口。
+- Chrome 控制台：仅见页面既有 `Deprecated feature used` 和外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED`，未见本轮预算生命周期改动新增插件异常。
+
+## 结果复盘
+- 第八轮结果：预算破限从“默认关闭也在冷态安装页面级补丁、body observer、hashchange 监听和 600ms interval，并保留 fetch/XHR wrapper”优化为“冷态不安装重补丁；用户开启时按需安装；关闭时统一恢复 Magix/SmartAssistant patch、fetch/XHR wrapper 并清理 observer/timer/listener”。
+- 对比结论：本项收益小于前几轮大 DOM/iframe/CSS 优化，但它消除了一个默认关闭功能的常驻页面扫描和 wrapper 链路，生命周期更符合功能开关语义，且不降低预算服务端硬下限重提、可见输入同步或安全边界。
+- 后续判断：第八轮后，Chrome 冷态中请求历史、下载捕获、万能查数、组建计划 overlay/style、预算破限重补丁均已收口。剩余明显内存主要来自页面原生 Magix/React/AI 模块、必要 extension 主 bundle、主助手辅助显示扫描和授权/bridge 基础能力；继续逼近“最佳”需要更大结构切分或按业务入口拆 bundle，风险和验证成本高于本轮生命周期补丁，应先用 retained-size 对主 bundle/主助手扫描做下一轮证据审计。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第七轮
 
 ## 需求规格

@@ -3,50 +3,50 @@
     // ==========================================
     const BudgetFrontendLimitBypass = {
         initialized: false,
-        observer: null,
-        scanTimer: null,
 
         init() {
             if (this.initialized) return;
             this.initialized = true;
-            this.installPagePatcher();
-            const scheduleRefresh = () => {
-                if (this.scanTimer) return;
-                this.scanTimer = setTimeout(() => {
-                    this.scanTimer = null;
-                    this.refresh();
-                }, 180);
-            };
-            this.observer = new MutationObserver(() => scheduleRefresh());
-            if (document.body) {
-                this.observer.observe(document.body, { childList: true, subtree: true });
-            }
-            window.addEventListener('hashchange', scheduleRefresh, true);
             this.refresh();
         },
 
         refresh() {
             const enabled = !!State.config.unlockBudgetFrontendLimit;
-            this.syncToggle(enabled);
+            if (enabled) {
+                this.ensurePagePatcher();
+                this.syncToggle(true);
+            } else {
+                this.syncToggle(false);
+            }
         },
 
         syncToggle(enabled) {
             const flag = enabled ? 'true' : 'false';
             this.runInPage(`;(() => {
                 window.__AM_BUDGET_FRONTEND_UNLOCK__ = ${flag};
-                if (typeof window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__ === 'function') {
+                if (!window.__AM_BUDGET_FRONTEND_UNLOCK__ && typeof window.__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__ === 'function') {
+                    window.__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__();
+                } else if (typeof window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__ === 'function') {
                     window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__();
                 }
             })();`);
         },
 
+        ensurePagePatcher() {
+            this.installPagePatcher();
+        },
+
         installPagePatcher() {
             this.runInPage(`;(() => {
-                const PATCHER_VERSION = '2026-06-01-budget-submit-v7';
+                const PATCHER_VERSION = '2026-06-03-budget-lazy-install-v1';
                 if (window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_VERSION__ === PATCHER_VERSION) return;
+                if (typeof window.__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__ === 'function') {
+                    window.__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__({ keepFlag: true });
+                }
                 window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_VERSION__ = PATCHER_VERSION;
                 window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_INSTALLED__ = true;
                 window.__AM_BUDGET_FRONTEND_UNLOCK__ = !!window.__AM_BUDGET_FRONTEND_UNLOCK__;
+                const cleanupHandlers = [];
                 const SMART_ASSISTANT_BUDGET_WARNING_RE = /(预算|dailyBudgetAmount|日预算|daily\\s*budget|不能|不能?低于|不少于|低于|至少).{0,20}(100|一百)/i;
                 const SMART_ASSISTANT_BUDGET_FIELD_NAME = 'dailyBudgetAmount';
                 const SMART_ASSISTANT_BUDGET_MIN_VALUE = 100;
@@ -382,6 +382,35 @@
                         snapshots.delete(view);
                     });
                     patchedViews.clear();
+                };
+
+                const restoreBudgetSubmitPayloadPatch = () => {
+                    try {
+                        const currentFetch = window.fetch;
+                        if (typeof currentFetch === 'function'
+                            && currentFetch.__amBudgetSubmitPayloadPatchVersion === PATCHER_VERSION
+                            && typeof currentFetch.__amBudgetSubmitOriginalFetch === 'function') {
+                            window.fetch = currentFetch.__amBudgetSubmitOriginalFetch;
+                        }
+                    } catch { }
+                    try {
+                        const xhrProto = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
+                        if (xhrProto) {
+                            const currentOpen = xhrProto.open;
+                            if (typeof currentOpen === 'function'
+                                && currentOpen.__amBudgetSubmitPayloadPatchVersion === PATCHER_VERSION
+                                && typeof currentOpen.__amBudgetSubmitOriginalOpen === 'function') {
+                                xhrProto.open = currentOpen.__amBudgetSubmitOriginalOpen;
+                            }
+                            const currentSend = xhrProto.send;
+                            if (typeof currentSend === 'function'
+                                && currentSend.__amBudgetSubmitPayloadPatchVersion === PATCHER_VERSION
+                                && typeof currentSend.__amBudgetSubmitOriginalSend === 'function') {
+                                xhrProto.send = currentSend.__amBudgetSubmitOriginalSend;
+                            }
+                        }
+                    } catch { }
+                    budgetRetryFetch = null;
                 };
 
                 const parseBudgetValue = (rawValue) => {
@@ -1064,11 +1093,13 @@
 
                 const startObserver = () => {
                     if (!document.body) {
-                        setTimeout(startObserver, 150);
+                        const waitTimer = setTimeout(startObserver, 150);
+                        cleanupHandlers.push(() => clearTimeout(waitTimer));
                         return;
                     }
                     const mo = new MutationObserver(() => scheduleApply());
                     mo.observe(document.body, { childList: true, subtree: true });
+                    cleanupHandlers.push(() => mo.disconnect());
                 };
 
                 window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__ = scheduleApply;
@@ -1079,12 +1110,39 @@
                     collectSmartAssistantReactTargets,
                     clearSmartAssistantBudgetErrorState
                 };
+                window.__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__ = (options = {}) => {
+                    window.__AM_BUDGET_FRONTEND_UNLOCK__ = false;
+                    if (scanTimer) {
+                        clearTimeout(scanTimer);
+                        scanTimer = null;
+                    }
+                    if (smartAssistantScanTimer) {
+                        clearTimeout(smartAssistantScanTimer);
+                        smartAssistantScanTimer = null;
+                    }
+                    restoreAll();
+                    restoreSmartAssistantPatches();
+                    restoreBudgetSubmitPayloadPatch();
+                    cleanupHandlers.splice(0).forEach((cleanup) => {
+                        try { cleanup(); } catch { }
+                    });
+                    window.removeEventListener('hashchange', scheduleApply, true);
+                    window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__ = null;
+                    window.__AM_BUDGET_SMART_ASSISTANT_DEBUG__ = null;
+                    window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_INSTALLED__ = false;
+                    window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_VERSION__ = '';
+                    if (!options || options.keepFlag !== true) {
+                        window.__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__ = null;
+                    }
+                };
                 installBudgetSubmitPayloadPatch();
                 window.addEventListener('hashchange', scheduleApply, true);
+                cleanupHandlers.push(() => window.removeEventListener('hashchange', scheduleApply, true));
                 startObserver();
-                setInterval(() => {
+                const intervalId = setInterval(() => {
                     if (window.__AM_BUDGET_FRONTEND_UNLOCK__) scheduleApply();
                 }, 600);
+                cleanupHandlers.push(() => clearInterval(intervalId));
                 if (window.__AM_BUDGET_FRONTEND_UNLOCK__) {
                     scheduleSmartAssistantPatch();
                 }
