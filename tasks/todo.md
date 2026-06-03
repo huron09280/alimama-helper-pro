@@ -1,3 +1,43 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第四子项
+
+## 需求规格
+- 目标：在 extension content 已避免普通 `myseller.taobao.com` 工作台注入完整 page bundle 后，继续收口 userscript 直装场景的入口守卫，避免 `myseller.taobao.com/home.htm/QnworkbenchHome/` 等非 SmartAssistant 预算页启动完整主助手、算法护航和关键词 runtime。
+- 根因判断：userscript 元信息为了支持 SmartAssistant 预算破限包含 `myseller.taobao.com` 匹配，但入口只对 SmartAssistant 预算页做轻量分支，缺少普通 `myseller` 非目标页的早退分支；直装 userscript 或构建产物在普通工作台仍可能启动完整运行时。
+- 范围：只修改 `src/` 的 userscript 入口守卫和必要测试/构建产物；保留 `one.alimama.com` 完整启动、`myseller` SmartAssistant 预算页轻量预算补丁、授权与桥接安全边界，不改创建、复制、预算提交、护航执行、policy token、shopId 或业务请求合同。
+- 热修 vs 结构性修复：采用入口不变量修复：`one.alimama.com` 才启动完整运行时，`myseller` 仅 SmartAssistant 预算页进入轻量预算分支，其它 `myseller` 直接安静退出；不在各模块内部叠加分散禁用条件。
+- 成功标准：目标静态测试覆盖普通 `myseller` 非目标页早退、SmartAssistant 预算页仍保留轻量初始化、`one.alimama.com` 仍完整启动；通过目标测试、构建同步/检查、语法检查、`git diff --check`、必要回归和可用 Chrome/调试端口验证。
+- 安全边界：真实页验证只做刷新、只读 DOM/全局变量/资源/控制台探针，不点击预算提交、创建、复制、删除、上下线、投放或护航执行入口。
+
+## 执行计划（可核对）
+- [x] 复核 userscript 入口、meta 匹配和现有 SmartAssistant 预算页分支，确认守卫落点唯一。
+- [x] 实现普通 `myseller` 非目标页早退，确保 SmartAssistant 预算页仍只启动 UI 与预算补丁。
+- [x] 补充/更新目标测试并同步构建产物。
+- [x] 运行目标测试、构建检查、语法/空白检查、必要回归和可用真实页/调试端口验证。
+- [x] 记录验证结果、结果复盘，完成 diff 自审并按本轮规则中文提交。
+
+## 高层操作摘要
+- 已确认第十一轮第三子项最新提交为 `8be0b0e 优化 Chrome myseller 延迟注入轮询`，当前工作区干净；本子项承接其“userscript 普通 myseller 前置守卫”后续判断。
+- 计划先在主入口表达域名/页面不变量，避免在主助手、算法护航、关键词模块里分别加第二套禁用逻辑。
+- 复核结论：userscript/runtime 拼接为 `script-preamble -> main-assistant IIFE -> optimizer IIFE`；若只在 `main()` 内早退，关键词和算法 runtime 仍会解析执行，因此需要在两个 IIFE 顶部表达入口不变量。
+- 实现摘要：`src/shared/script-preamble.js` 新增统一 URL/host/SmartAssistant 判定；`src/main-assistant/bootstrap.js` 在普通 `myseller` 非 SmartAssistant 页直接早退；`src/optimizer/bootstrap.js` 在所有 `myseller` 页早退，SmartAssistant 预算页只保留主助手里的 UI 与预算补丁。
+- 测试摘要：`tests/budget-frontend-limit-bypass.test.mjs` 增加 VM harness，在缺少 `document/GM_getValue` 的普通 `myseller` 工作台环境执行完整 userscript，证明 guard 位于完整运行时依赖之前；同时用静态契约锁定主助手与 optimizer IIFE 顶部早退位置。
+- Diff 自审：生成产物仅来自 `npm run build` 同步，源码改动集中在共享入口判定与两个 IIFE 顶部早退；未引入第二套业务提交逻辑、隐藏 fallback、授权降级或写请求链路变更。
+
+## 验证记录
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js`、`dist/packages/alimama-helper-pro.meta.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/budget-frontend-limit-bypass.test.mjs` 通过，14 项测试全绿；新增断言覆盖普通 `myseller` 非目标页完整 userscript 早退、未安装 hook manager、未暴露算法护航入口，以及 SmartAssistant 判定复用共享 helper。
+- 语法检查：`npm run check:syntax` 通过；`node --check src/shared/script-preamble.js` 与 `node --check tests/budget-frontend-limit-bypass.test.mjs` 通过。`src/main-assistant/bootstrap.js`、`src/main-assistant/main.js`、`src/optimizer/bootstrap.js` 是构建拼接切片，独立 `node --check` 不适用，完整语法以根 userscript 为准。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/budget-frontend-limit-bypass.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-entry-error-handling.test.mjs` 通过，38 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，594 项中 592 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按用户修正“只用chrome mcp”，本子项不采用原生 CDP 或其它浏览器工具替代验收；真实页只读探针待 Chrome MCP 恢复后补做。
+
+## 结果复盘
+- 第十一轮第四子项结果：userscript 直装普通 `myseller.taobao.com/home.htm/QnworkbenchHome/` 等非 SmartAssistant 预算页时，主助手 IIFE 在访问完整运行时依赖前早退，optimizer/关键词 IIFE 在所有 `myseller` 页早退；SmartAssistant 预算页仍保留主助手轻量 UI 与预算破限补丁，不启动算法护航和关键词 runtime。
+- 取舍结论：把域名/页面不变量放在共享 preamble 与两个 IIFE 顶部，避免在主助手、算法护航、关键词模块内部分散添加禁用条件；不改变 `one.alimama.com` 完整启动，不触碰创建、复制、预算提交、护航执行、授权、policy token 或 shopId 合同。
+- 验证缺口：Chrome MCP 当前会话连接阻塞，本子项已用 VM harness、构建同步和全量回归证明源码边界；真实页面 Chrome MCP 只读验证未完成，后续继续优化前优先恢复 MCP。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第三子项
 
 ## 需求规格

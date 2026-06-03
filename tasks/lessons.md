@@ -1,5 +1,10 @@
 # Lessons - 2026-05-30
 
+## L97 用户指定 Chrome MCP 时不得用 CDP/其它浏览器替代
+- 触发：继续优化 Chrome 内存任务中，用户修正“只用chrome mcp”。
+- 原因：原生 CDP、Browser 插件或 shell 直连调试端口虽然能做只读探针，但不满足用户指定的验收工具边界，也容易让任务记录把替代验证误写成真实 Chrome MCP 验证。
+- 规则：用户明确要求使用 Chrome MCP 时，浏览器验收只能调用 `mcp__chrome_devtools.*` 工具；若 MCP 报 `Could not find DevToolsActivePort`、Transport closed 或连接失败，只能按 Chrome DevTools Ready 流程恢复后重试 MCP。恢复后仍不可用时，记录为 Chrome MCP 阻塞，不得改用原生 CDP、Browser 插件、macOS open 结果或手工探针冒充验收。
+
 ## L96 Chrome 内存优化任务必须按项中文提交并对比
 - 触发：用户要求“优化现在插件的chrome浏览器占用浏览器内存，预估优化几轮可以优化到最佳，帮我找到最佳优化方案，每优化完成一项或者一次对话，先中文commit再继续”。
 - 原因：性能优化容易跨多轮混杂调研、实验、代码和验证；如果不按项提交，会增加复审和回滚成本，也难以判断每一项优化的独立收益。

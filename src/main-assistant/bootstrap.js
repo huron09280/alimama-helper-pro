@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    if (shouldSkipAmMainAssistantRuntime()) return;
+
     // 全局版本管理
     const CURRENT_VERSION = typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ === 'function'
         ? globalThis.__AM_GET_SCRIPT_VERSION__()

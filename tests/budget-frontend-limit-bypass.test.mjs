@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
 
@@ -23,6 +24,23 @@ function getUserscriptMetaBlock() {
     const end = source.indexOf('// ==/UserScript==', start);
     assert.ok(start > -1 && end > start, '无法定位 userscript 元信息区块');
     return source.slice(start, end + '// ==/UserScript=='.length);
+}
+
+function createBareMysellerContext(href = 'https://myseller.taobao.com/home.htm/QnworkbenchHome/') {
+    const windowRef = {
+        location: { href },
+        console: {
+            log() { },
+            warn() { },
+            error() { }
+        }
+    };
+    windowRef.window = windowRef;
+    return createContext({
+        URL,
+        window: windowRef,
+        console: windowRef.console
+    });
 }
 
 test('SmartAssistant 预算破限仅聚焦 dailyBudgetAmount 并带入阈值判断', () => {
@@ -144,12 +162,51 @@ test('SmartAssistant 页面主入口只启动UI与预算补丁', () => {
     const block = getMainBlock();
     assert.match(
         block,
+        /const isSmartAssistantBudgetOnlyPage = \(\) => \{[\s\S]*return isAmSmartAssistantBudgetPage\(\);[\s\S]*\};/,
+        'SmartAssistant 页面判断应复用共享入口判定，避免主入口和 content script 分叉'
+    );
+    assert.match(
+        block,
         /if \(isSmartAssistantBudgetOnlyPage\(\)\) \{[\s\S]*Logger\.log\('🔧 SmartAssistant 预算页：仅启动预算破限补丁'\);[\s\S]*notifyRiskChallengeIfNeeded\(window\.location\.href\);[\s\S]*return;[\s\S]*\}/,
         'SmartAssistant 页面未做独立初始化分支'
     );
     assert.match(block, /Interceptor\.init\(\);/, 'SmartAssistant 分支应在主循环初始化之前执行条件判定');
     assert.match(block, /BudgetFrontendLimitBypass\.init\(\);/, '缺少预算补丁初始化入口');
     assert.match(block, /UI\.init\(\);/, '缺少 UI 初始化入口');
+});
+
+test('userscript 普通 myseller 非目标页在完整运行时前早退', () => {
+    const context = createBareMysellerContext();
+    assert.doesNotThrow(
+        () => new Script(source, { filename: 'alimama-helper-pro.user.js' }).runInContext(context, { timeout: 1000 }),
+        '普通 myseller 工作台应在访问 document/GM_getValue 等完整运行时依赖前直接早退'
+    );
+    assert.equal(context.window.__AM_HOOK_MANAGER__, undefined, '普通 myseller 不应安装 hook manager');
+    assert.equal(context.window.__ALIMAMA_OPTIMIZER_TOGGLE__, undefined, '普通 myseller 不应暴露算法护航入口');
+    assert.equal(context.window.__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__, undefined, '普通 myseller 不应暴露算法护航执行入口');
+});
+
+test('userscript myseller 入口 guard 位于主助手与 optimizer IIFE 顶部', () => {
+    assert.match(
+        source,
+        /const shouldSkipAmMainAssistantRuntime = \(\) => \([\s\S]*isAmMysellerHost\(resolveAmCurrentHostname\(\)\) && !isAmSmartAssistantBudgetPage\(\)[\s\S]*\);/,
+        '主助手入口 guard 应只跳过普通 myseller，保留 SmartAssistant 预算页轻量分支'
+    );
+    assert.match(
+        source,
+        /const shouldSkipAmOptimizerRuntime = \(\) => isAmMysellerHost\(resolveAmCurrentHostname\(\)\);/,
+        'optimizer/关键词运行时应在所有 myseller 页面跳过'
+    );
+    assert.match(
+        source,
+        /\(function \(\) \{\s*'use strict';\s*if \(shouldSkipAmMainAssistantRuntime\(\)\) return;\s*\/\/ 全局版本管理/,
+        '主助手 IIFE 顶部缺少普通 myseller 早退'
+    );
+    assert.match(
+        source,
+        /\(function \(\) \{\s*'use strict';\s*if \(shouldSkipAmOptimizerRuntime\(\)\) return;\s*\/\/ 局部版本管理/,
+        'optimizer IIFE 顶部缺少 myseller 早退，关键词 runtime 仍可能执行'
+    );
 });
 
 test('userscript 匹配与授权网关包含 myseller.taobao.com', () => {

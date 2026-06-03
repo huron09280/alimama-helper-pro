@@ -11,16 +11,7 @@
     };
 
     const isSmartAssistantBudgetOnlyPage = () => {
-        try {
-            const href = String(window.location.href || '');
-            const pathname = String(new URL(href).pathname || '').toLowerCase();
-            const hash = String(new URL(href).hash || '').toLowerCase();
-            return (
-                pathname.includes('/home.htm')
-                && (/crm-workbench\/smartassistant/i.test(pathname) || /crm-workbench\/smartassistant/i.test(hash))
-            );
-        } catch { }
-        return false;
+        return isAmSmartAssistantBudgetPage();
     };
 
     const AM_PLUGIN_MUTATION_SELECTOR = [

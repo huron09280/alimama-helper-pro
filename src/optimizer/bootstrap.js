@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    if (shouldSkipAmOptimizerRuntime()) return;
+
     // 局部版本管理 (确保该模块也能读取到正确版本号)
     const CURRENT_VERSION = typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ === 'function'
         ? globalThis.__AM_GET_SCRIPT_VERSION__()

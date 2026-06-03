@@ -201,6 +201,41 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSI
     globalThis.__AM_GET_SCRIPT_VERSION__ = resolveScriptVersion;
 }
 
+const normalizeAmHostname = (value = '') => String(value || '').trim().toLowerCase();
+
+const resolveAmCurrentUrl = () => {
+    try {
+        return new URL(String(window.location?.href || ''));
+    } catch { }
+    return null;
+};
+
+const resolveAmCurrentHostname = () => {
+    const url = resolveAmCurrentUrl();
+    return normalizeAmHostname(url?.hostname || '');
+};
+
+const isAmMysellerHost = (hostname = '') => {
+    const normalized = normalizeAmHostname(hostname);
+    return normalized === 'myseller.taobao.com' || normalized.endsWith('.myseller.taobao.com');
+};
+
+const isAmSmartAssistantBudgetPage = (url = resolveAmCurrentUrl()) => {
+    if (!url) return false;
+    const pathname = String(url.pathname || '').toLowerCase();
+    const hash = String(url.hash || '').toLowerCase();
+    return (
+        pathname.includes('/home.htm')
+        && (/crm-workbench\/smartassistant/i.test(pathname) || /crm-workbench\/smartassistant/i.test(hash))
+    );
+};
+
+const shouldSkipAmMainAssistantRuntime = () => (
+    isAmMysellerHost(resolveAmCurrentHostname()) && !isAmSmartAssistantBudgetPage()
+);
+
+const shouldSkipAmOptimizerRuntime = () => isAmMysellerHost(resolveAmCurrentHostname());
+
 const escapeAmIconHtml = (value) => {
     const str = value === null || value === undefined ? '' : String(value);
     return str.replace(/[&<>"']/g, ch => {
