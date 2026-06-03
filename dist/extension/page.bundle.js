@@ -51306,6 +51306,18 @@ if (typeof globalThis !== 'undefined') {
                                 : defaultFallbackAdzoneList.map(item => deepClone(item));
                             const syntheticOnly = !initialAdzoneList.length;
                             let dragState = { active: false, next: null };
+                            const advancedPopupCleanupHandlers = [];
+                            const addAdvancedPopupCleanup = (cleanup) => {
+                                if (typeof cleanup !== 'function') return;
+                                advancedPopupCleanupHandlers.push(cleanup);
+                            };
+                            mask._amWxtCleanup = () => {
+                                advancedPopupCleanupHandlers.splice(0).forEach((cleanup) => {
+                                    try {
+                                        cleanup();
+                                    } catch { }
+                                });
+                            };
 
                             const tabButtons = Array.from(mask.querySelectorAll('[data-scene-popup-advanced-tab]'));
                             const panelEls = Array.from(mask.querySelectorAll('[data-scene-popup-advanced-panel]'));
@@ -52628,6 +52640,24 @@ if (typeof globalThis !== 'undefined') {
                                     lastHour: null
                                 };
                                 let quickLiftSuppressNextClick = false;
+                                let quickLiftSuppressResetTimer = 0;
+                                const clearQuickLiftSuppressResetTimer = () => {
+                                    if (!quickLiftSuppressResetTimer) return;
+                                    window.clearTimeout(quickLiftSuppressResetTimer);
+                                    quickLiftSuppressResetTimer = 0;
+                                };
+                                const cleanupQuickLiftDrag = () => {
+                                    quickLiftDragState = {
+                                        active: false,
+                                        pointerId: null,
+                                        nextSelected: true,
+                                        lastHour: null
+                                    };
+                                    window.removeEventListener('pointerup', stopQuickLiftDrag, true);
+                                    window.removeEventListener('pointercancel', stopQuickLiftDrag, true);
+                                    clearQuickLiftSuppressResetTimer();
+                                    quickLiftSuppressNextClick = false;
+                                };
                                 const resolveQuickLiftHourFromPointerEvent = (event) => {
                                     let trigger = event.target instanceof HTMLElement
                                         ? event.target.closest('[data-scene-popup-quick-time-hour]')
@@ -52691,10 +52721,13 @@ if (typeof globalThis !== 'undefined') {
                                     } catch { }
                                     window.removeEventListener('pointerup', stopQuickLiftDrag, true);
                                     window.removeEventListener('pointercancel', stopQuickLiftDrag, true);
-                                    setTimeout(() => {
+                                    clearQuickLiftSuppressResetTimer();
+                                    quickLiftSuppressResetTimer = window.setTimeout(() => {
+                                        quickLiftSuppressResetTimer = 0;
                                         quickLiftSuppressNextClick = false;
                                     }, 0);
                                 };
+                                addAdvancedPopupCleanup(cleanupQuickLiftDrag);
                                 quickLiftTimeRangeEl.addEventListener('pointerdown', (event) => {
                                     if (event.button !== 0) return;
                                     const hour = resolveQuickLiftHourFromPointerEvent(event);
@@ -52844,9 +52877,9 @@ if (typeof globalThis !== 'undefined') {
                                     dragState = { active: false, next: null };
                                 };
                                 document.addEventListener('mouseup', handleMouseUp);
-                                mask._amWxtCleanup = () => {
+                                addAdvancedPopupCleanup(() => {
                                     document.removeEventListener('mouseup', handleMouseUp);
-                                };
+                                });
                             }
                             mask.querySelectorAll('[data-scene-popup-time-action]').forEach(btn => {
                                 if (!(btn instanceof HTMLButtonElement)) return;

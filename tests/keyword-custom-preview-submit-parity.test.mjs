@@ -260,6 +260,21 @@ test('货品全站推广原生开关在编辑态与提交映射中保持一致',
   );
   assert.match(
     advancedPopupBlock,
+    /const advancedPopupCleanupHandlers = \[\];[\s\S]*mask\._amWxtCleanup = \(\) => \{[\s\S]*advancedPopupCleanupHandlers\.splice\(0\)\.forEach/,
+    '高级设置弹层外部资源必须统一接入 mask cleanup'
+  );
+  assert.match(
+    advancedPopupBlock,
+    /const cleanupQuickLiftDrag = \(\) => \{[\s\S]*window\.removeEventListener\('pointerup', stopQuickLiftDrag, true\);[\s\S]*window\.removeEventListener\('pointercancel', stopQuickLiftDrag, true\);[\s\S]*clearQuickLiftSuppressResetTimer\(\);[\s\S]*quickLiftSuppressNextClick = false;/,
+    '一键起量拖拽关闭弹层时必须释放 window pointer 监听和 reset timer'
+  );
+  assert.match(
+    advancedPopupBlock,
+    /quickLiftSuppressResetTimer = window\.setTimeout\(\(\) => \{[\s\S]*quickLiftSuppressResetTimer = 0;[\s\S]*quickLiftSuppressNextClick = false;[\s\S]*addAdvancedPopupCleanup\(cleanupQuickLiftDrag\);/,
+    '一键起量拖拽 suppress reset timer 必须保存句柄并接入弹层 cleanup'
+  );
+  assert.match(
+    advancedPopupBlock,
     /quickLiftSuppressNextClick[\s\S]*?quickLiftTimeRangeEl\.addEventListener\('click'[\s\S]*?if \(quickLiftSuppressNextClick\)/,
     '一键起量时间条拖选后未抑制 click 二次反转'
   );

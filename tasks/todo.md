@@ -1,3 +1,45 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十六子项
+
+## 需求规格
+- 目标：在 AI 点睛需求弹层延迟监听释放后，继续收口关键词向导高级设置里“一键起量时段”拖拽的 window 级 pointer 监听，避免弹层在拖拽中关闭时仍保留 `pointerup/pointercancel` 监听和 suppress reset timer。
+- 根因判断：`render-scene-dynamic-advanced-popup.js` 中 `quickLiftTimeRangeEl` 拖拽开始时绑定 `window.addEventListener('pointerup'/'pointercancel', stopQuickLiftDrag, true)`，正常 pointer 结束会释放；但 `openScenePopupDialog()` 关闭只调用 `mask._amWxtCleanup()`，当前一键起量拖拽没有把这些 window 监听和 `setTimeout(...quickLiftSuppressNextClick=false...)` 纳入弹层 cleanup。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-advanced-popup.js` 中一键起量时段拖拽监听和 suppress reset timer 生命周期，以及对应静态测试；不改高级设置弹层 DOM、投放地域/资源位/时段保存、AI Max、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“弹层内 cleanup 注册器 + 拖拽 cleanup 函数”的生命周期，把 quick lift 拖拽资源接回现有 `mask._amWxtCleanup()`；不新增第二套时段状态，不改变拖拽选择语义，不用兜底隐藏保存异常。
+- 成功标准：静态测试证明 quick lift 拖拽 window `pointerup/pointercancel` 监听会在弹层 cleanup 中释放，suppress reset timer 会保存句柄并在 cleanup 中 clear，现有 time grid `mouseup` cleanup 仍保留；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和高级设置弹层、只读观察监听绑定状态。
+
+## 执行计划（可核对）
+- [x] 复核第十五子项提交后工作区状态，确认本子项只处理高级设置一键起量拖拽生命周期。
+- [x] 定位 quick lift pointer 监听、suppress reset timer 和 `mask._amWxtCleanup()` 关闭路径。
+- [x] 实现弹层 cleanup 注册器，将 quick lift 拖拽监听/timer 和 time grid mouseup 统一接入关闭 cleanup。
+- [x] 补充/更新目标测试，锁定拖拽中关闭弹层会释放 window pointer 监听和 suppress reset timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `aca0043 优化 Chrome AI点睛需求弹层监听释放`，工作区干净。
+- 定位结论：一键起量时段拖拽已经在正常 pointer 结束路径释放 window 监听，但关闭弹层不等同于 pointer 结束；如果弹层在拖拽期间关闭，window 监听和下一 tick suppress reset timer 不会被现有关闭 cleanup 统一处理。
+- 方案判断：最小且更优雅的实现是在高级设置弹层 onMounted 内建立 cleanup 注册器，所有弹层级外部资源都通过同一个 `mask._amWxtCleanup()` 释放；time grid 既有 mouseup cleanup 也迁移到同一注册器，避免后续覆盖。
+- 实现摘要：`render-scene-dynamic-advanced-popup.js` 在高级设置弹层 onMounted 内新增 `advancedPopupCleanupHandlers` 和 `addAdvancedPopupCleanup()`；quick lift 拖拽新增 `cleanupQuickLiftDrag()` 与 `quickLiftSuppressResetTimer` 句柄，弹层关闭时释放 window `pointerup/pointercancel` 监听、清理 reset timer 并重置 suppress 状态；time grid `mouseup` 清理改为注册进同一 cleanup。
+- 测试摘要：`tests/keyword-custom-preview-submit-parity.test.mjs` 增加静态回归，覆盖高级设置弹层统一 cleanup 注册器、quick lift 拖拽关闭时释放 window pointer 监听、保存并清理 suppress reset timer，以及原一键起量拖拽选择断言仍保留。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-advanced-popup.js` 与 `node --check tests/keyword-custom-preview-submit-parity.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-preview-submit-parity.test.mjs` 通过，4 项测试全绿；新增断言覆盖 quick lift 拖拽 window pointer 监听、suppress reset timer 和弹层 cleanup 注册。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-preview-submit-parity.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，58 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；按 Chrome DevTools Ready 的工具暴露分支，`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在高级设置一键起量时段拖拽监听/timer 生命周期、对应静态测试和构建产物；未改高级设置弹层 DOM、投放地域/资源位/时段保存、AI Max、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十六子项结果：关键词向导高级设置的一键起量时段拖拽从“正常 pointer 结束才释放 window pointer 监听”优化为“正常结束和弹层关闭都会释放 window `pointerup/pointercancel` 监听，并清理 suppress reset timer”。拖拽中关闭弹层不再保留只服务已销毁弹层的 window 监听闭包。
+- 取舍结论：保留拖拽连续选择/取消、一键起量时间序列化和保存合同；只把弹层级外部资源接回现有 `mask._amWxtCleanup()`，没有新增第二套时间选择状态。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十五子项
 
 ## 需求规格
