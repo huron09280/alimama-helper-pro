@@ -1,3 +1,45 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十四子项
+
+## 需求规格
+- 目标：在 AI 点睛详情 document click 委托释放后，继续收口 AI 点睛详情打字动画 timer 生命周期，避免刚展开详情后关闭关键词向导时，延迟启动的 `setTimeout` 或正在运行的 `setInterval` 短时持有已脱离 DOM 的详情节点。
+- 根因判断：`runAiMaxTypewriter()` 当前只把 interval id 写入 `target.dataset.aiMaxTypeTimer`，且仅在同一 target 再次打字或文本写完时清理；启动前的 delay timer 没有保存，向导关闭的 `cleanupHandlers` 也不会统一清理这些动画 timer。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 中 AI Max typewriter `setTimeout/setInterval` 生命周期和对应静态测试；不改 AI Max 文案、展开交互、详情 DOM、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“timer 句柄集中登记到 `wizardState` + 单一 cleanup 函数注册进向导 cleanupHandlers”的生命周期；不新增第二套展开状态，不改变原打字动画节奏，不用隐藏 fallback 掩盖动画异常。
+- 成功标准：静态测试证明 delay timer 与 interval timer 都登记到 `wizardState.aiMaxTypewriterTimers`，关闭向导时会 clear timeout/interval 并清空集合/DOM dataset；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和只读观察 timer/DOM 状态。
+
+## 执行计划（可核对）
+- [x] 复核第十三子项提交后工作区状态，确认本子项只处理 AI Max typewriter timer 生命周期。
+- [x] 定位 `runAiMaxTypewriter()` 的 delay timeout、interval 和向导关闭 cleanupHandlers 清理路径。
+- [x] 实现 AI Max typewriter timer 登记、完成释放和关闭向导统一清理。
+- [x] 补充/更新目标测试，锁定 delay/interval 不再游离于向导 cleanupHandlers 之外。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c5d71ff 优化 Chrome AI点睛详情监听释放`，工作区干净。
+- 定位结论：AI Max typewriter 只清理同一元素上一次 interval，未保存启动前 `setTimeout`，关闭向导时无法通过现有 cleanupHandlers 释放已安排但尚未启动的动画任务。
+- 方案判断：更优雅的实现是把动画 timer 作为向导运行态资源登记到 `wizardState`，由本模块的 cleanup 函数在向导关闭时统一释放；动画完成后主动从集合移除，避免长期持有无效句柄。
+- 实现摘要：`render-scene-dynamic-grid.js` 新增 `aiMaxTypewriterTimers` Map、timer track/release/cleanup helpers；delay timeout 与 interval 都保存到 `wizardState`，动画完成或重新启动时主动释放，向导关闭时由 cleanupHandlers 统一清理。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 增加静态回归，覆盖 timeout/interval 统一释放、cleanupHandlers 注册、delay 和 interval 都登记到 `wizardState` timer 表。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 与 `node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿；新增断言覆盖 AI Max typewriter timeout/interval 注册、释放和向导 cleanupHandlers 清理。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，40 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；按 Chrome DevTools Ready 的工具暴露分支，`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在 AI Max typewriter timer 生命周期、对应静态测试和构建产物；未改 AI Max 文案、展开交互、详情 DOM、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十四子项结果：AI 点睛详情打字动画从“delay timeout 不可见、interval 只挂在 DOM dataset 上自清理”优化为“timeout/interval 都登记到向导运行态，动画完成、重启或向导关闭时统一释放”。关闭向导后，不再短时保留只服务已脱离 DOM 详情节点的动画 timer 闭包。
+- 取舍结论：保留原 startDelay、14ms interval 和逐字展示节奏，只补齐运行态资源生命周期；没有新增第二套展开状态，也没有触碰 AI Max 表单、矩阵物化或提交链路。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十三子项
 
 ## 需求规格

@@ -444,6 +444,21 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
+    /const cleanupAiMaxTypewriterTimers = \(\) => \{[\s\S]*window\.clearTimeout\(record\.timerId\);[\s\S]*window\.clearInterval\(record\.timerId\);[\s\S]*wizardState\.aiMaxTypewriterTimers\.clear\(\);/,
+    'AI点睛逐字动效 timer 必须支持向导关闭时统一释放'
+  );
+  assert.match(
+    source,
+    /wizardState\.cleanupHandlers = Array\.isArray\(wizardState\.cleanupHandlers\)[\s\S]*wizardState\.cleanupHandlers\.push\(cleanupAiMaxTypewriterTimers\);[\s\S]*wizardState\.aiMaxTypewriterCleanupRegistered = true;/,
+    'AI点睛逐字动效 timer cleanup 必须注册进向导 cleanupHandlers'
+  );
+  assert.match(
+    source,
+    /const delayTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', delayTimer\);[\s\S]*const timer = window\.setInterval\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('interval', timer\);[\s\S]*trackAiMaxTypewriterTimer\('interval', timer, target, 'aiMaxTypeTimer'\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', delayTimer, target, 'aiMaxTypeDelayTimer'\);/,
+    'AI点睛逐字动效 delay timeout 与 interval 必须登记到 wizardState timer 表'
+  );
+  assert.match(
+    source,
     /class="am-wxt-ai-max-demand-next"[\s\S]*data-ai-max-demand-next="1"[\s\S]*aria-label="查看更多AI点睛需求"/,
     'AI点睛需求卡片超过 3 个时缺少右侧灰色切换箭头'
   );
