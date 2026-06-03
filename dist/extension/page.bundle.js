@@ -7770,23 +7770,26 @@ if (typeof globalThis !== 'undefined') {
 
             // 拖拽调整宽度
             let isResizing = false, startX = 0, startWidth = 0;
+            const handlePanelResizeMove = (e) => {
+                if (!isResizing) return;
+                const newWidth = Math.min(500, Math.max(250, startWidth + startX - e.clientX));
+                panel.style.width = newWidth + 'px';
+            };
+            const handlePanelResizeEnd = () => {
+                isResizing = false;
+                document.body.style.userSelect = '';
+                document.removeEventListener('mousemove', handlePanelResizeMove);
+                document.removeEventListener('mouseup', handlePanelResizeEnd);
+            };
             resizer.onmousedown = (e) => {
                 isResizing = true;
                 startX = e.clientX;
                 startWidth = panel.offsetWidth;
                 document.body.style.userSelect = 'none';
+                document.addEventListener('mousemove', handlePanelResizeMove);
+                document.addEventListener('mouseup', handlePanelResizeEnd);
                 e.preventDefault();
             };
-            document.addEventListener('mousemove', (e) => {
-                if (isResizing) {
-                    const newWidth = Math.min(500, Math.max(250, startWidth + startX - e.clientX));
-                    panel.style.width = newWidth + 'px';
-                }
-            });
-            document.addEventListener('mouseup', () => {
-                isResizing = false;
-                document.body.style.userSelect = '';
-            });
 
             // 交互监听
             document.addEventListener('click', (e) => {

@@ -1,3 +1,47 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第六子项
+
+## 需求规格
+- 目标：在 bridge 结果缓存主动 TTL 释放后，继续审计插件自有全局监听器生命周期，优先收口默认常驻、关闭后残留或页面闲置仍持续持有闭包/DOM 的 `mousemove`、`mouseup`、`resize`、`scroll`、拖拽和弹层定位监听。
+- 根因判断：前几轮已收口 timer、cache、observer 和默认关闭 DOM；剩余低风险候选主要来自全局事件监听器是否按功能开关、浮层显示状态或拖拽状态释放。此类资源常持有窗口/面板/按钮闭包，容易在关闭面板后形成不必要 retained graph。
+- 范围：仅覆盖 `src/` 中插件自有 UI/浮层/拖拽相关 listener 生命周期和对应测试；不改创建、复制、预算提交、护航执行、授权、policy token、shopId、bridge 白名单或真实写接口合同，不手改生成产物。
+- 热修 vs 结构性修复取舍：优先在监听器所属模块内表达“显示/拖拽/开启时绑定，隐藏/关闭/结束时解绑”的单一生命周期，不新增第二事实源，不用宽泛 try/catch 静默吞错，不为了省监听牺牲真实页面必要同步。
+- 成功标准：若发现明确低风险热点，完成最小侵入修复并补充静态或行为测试，证明监听器默认不常驻或关闭后释放；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不触发真实创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/全局变量/监听器探针和打开/关闭无写入面板。
+
+## 执行计划（可核对）
+- [x] 复核当前工作区和第十一轮第五子项提交状态，确认不重复已完成 cache/timer/observer 优化。
+- [x] 并行审计全局鼠标、滚动/resize、拖拽与弹层定位监听，筛选证据明确、收益可验证、低风险的落点。
+- [x] 设计更优雅的生命周期边界，确认是否可通过“按需绑定 + 关闭释放”解决，而不是新增兜底或第二套状态。
+- [x] 实现最小改动并补充/更新目标测试，必要时同步构建产物。
+- [x] 运行目标测试、构建检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 已确认 `tasks/todo.md` 顶部第十一轮第五子项完成记录显示 bridge result cache 主动释放已提交，当前工作区 `git status --short` 干净。
+- 本子项先做监听器生命周期证据审计；只有找到明确插件自有低风险热点才改代码，避免无证据继续叠加过滤补丁。
+- 检索过程记录：首次 `rg` 使用 backreference 导致默认正则不支持，已改用简单模式继续，不影响定位结论。
+- 当前定位结论：`MagicReport` 弹窗 document click/Escape、拖拽、resize、dropdown scroll/resize 已有 `addPopupCleanup` 和测试约束；关键词向导 run mode resize/scroll 也挂在 `wizardState.cleanupHandlers`。明确低风险热点收敛到 `src/main-assistant/ui.js` 主助手面板宽度拖拽：初始化时匿名绑定 document 级 `mousemove`/`mouseup`，即使用户从不拖拽也常驻两个闭包。
+- 方案判断：把主助手面板 resizer 改为拖拽开始时绑定 document 级监听，拖拽结束立即解绑；不改变面板尺寸计算、按钮状态、自动闭窗或页面点击监听。
+- 子代理记录：已尝试派发两个只读 explorer 分别审计拖拽/鼠标监听与 resize/scroll/弹层定位监听，均因 `429 Too Many Requests` 超过重试限制失败；本轮不继续重试，主线程基于本地 `rg` 与源码阅读推进。
+- 实现摘要：`src/main-assistant/ui.js` 新增 `handlePanelResizeMove` 与 `handlePanelResizeEnd` 命名 handler，`resizer.onmousedown` 中按需绑定 document 级 `mousemove/mouseup`，`mouseup` 后立即移除；`tests/magic-report-panel-resilience.test.mjs` 增加静态回归，禁止初始化时常驻匿名 mousemove 监听。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，10 项测试全绿；新增断言覆盖主助手面板宽度拖拽监听只在 `mousedown` 后绑定，并在 `mouseup` 后释放，同时禁止初始化时常驻匿名 `mousemove` 监听。
+- 源码语法：`node --check src/main-assistant/ui.js` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-entry-error-handling.test.mjs` 通过，34 项测试全绿。
+- 全量回归：`npm test` 通过，596 项中 594 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。随后按 Chrome DevTools Ready 流程运行 `bash scripts/recover-chrome-devtools-mcp.sh`，恢复脚本完成后再次仅用 `mcp__chrome_devtools.list_pages` 重试，仍为同一 `DevToolsActivePort` 错误。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在主助手面板 resizer 生命周期、对应静态测试和构建产物；未改自动闭窗 click 监听、MagicReport 弹窗清理、关键词向导 cleanup、授权、bridge、安全白名单或任何写请求链路。
+
+## 结果复盘
+- 第十一轮第六子项结果：主助手面板宽度拖拽从“UI 初始化后常驻 document 级匿名 `mousemove`/`mouseup` 监听”优化为“拖拽开始时绑定，拖拽结束立即解绑”。默认不拖拽或页面长时间闲置时，少保留两个 document 级监听闭包及其面板引用链。
+- 取舍结论：这是小而明确的生命周期收口，和算法护航面板 resizer 的按需绑定模式一致；不改变尺寸计算、不影响面板显示/隐藏、不触碰真实提交、安全和业务合同。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读探针未完成；后续继续优化前仍优先尝试恢复 MCP，但不得用其它浏览器通道冒充验收。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第五子项
 
 ## 需求规格
