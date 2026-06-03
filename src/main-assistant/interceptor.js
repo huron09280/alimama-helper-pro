@@ -10,6 +10,8 @@
         ],
         hooksRegistered: false,
         copyResetTimer: 0,
+        exitModeClickHandler: null,
+        exitModeClickHandlerBound: false,
         maxParseBytes: 1024 * 1024,
         parsableTypeHints: ['json', 'text', 'javascript', 'xml', 'html', 'csv', 'plain', 'event-stream'],
         debugHints: new Set(),
@@ -73,11 +75,41 @@
                 clearTimeout(this.copyResetTimer);
                 this.copyResetTimer = 0;
             }
+            this.unbindExitModeClickHandler();
             if (this.panel instanceof HTMLElement) {
                 this.panel.onkeydown = null;
                 this.panel.remove();
             }
             this.panel = null;
+        },
+
+        bindExitModeClickHandler() {
+            if (this.exitModeClickHandlerBound) return;
+            if (typeof this.exitModeClickHandler !== 'function') {
+                this.exitModeClickHandler = (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element)) return;
+
+                    const isExitModeBtn = !!target.closest('#mx_2517 > button');
+                    const textBtn = target.closest('button');
+                    const text = (textBtn?.textContent || '').trim();
+                    const isExitModeText = text.includes('退出模式');
+
+                    if (isExitModeBtn || isExitModeText) {
+                        this.removePanel();
+                    }
+                };
+            }
+            document.addEventListener('click', this.exitModeClickHandler, true);
+            this.exitModeClickHandlerBound = true;
+        },
+
+        unbindExitModeClickHandler() {
+            if (!this.exitModeClickHandlerBound) return;
+            if (typeof this.exitModeClickHandler === 'function') {
+                document.removeEventListener('click', this.exitModeClickHandler, true);
+            }
+            this.exitModeClickHandlerBound = false;
         },
 
         debugOnce(key, msg) {
@@ -171,6 +203,7 @@
                 return;
             }
 
+            this.bindExitModeClickHandler();
             if (panel.dataset.lastUrl === safeUrl && panel.style.display === 'block') return;
             panel.dataset.lastUrl = safeUrl;
 
@@ -346,20 +379,6 @@
 
                 this.handleResponse(text, 'XHR', { contentType, contentLength, responseType });
             });
-
-            document.addEventListener('click', (e) => {
-                const target = e.target;
-                if (!(target instanceof Element)) return;
-
-                const isExitModeBtn = !!target.closest('#mx_2517 > button');
-                const textBtn = target.closest('button');
-                const text = (textBtn?.textContent || '').trim();
-                const isExitModeText = text.includes('退出模式');
-
-                if (isExitModeBtn || isExitModeText) {
-                    this.removePanel();
-                }
-            }, true);
 
             hooks.install();
             this.hooksRegistered = true;

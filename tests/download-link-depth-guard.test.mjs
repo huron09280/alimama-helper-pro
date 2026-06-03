@@ -114,7 +114,7 @@ test('下载捕获面板按需挂载，避免 Chrome 冷态常驻 DOM', () => {
     const interceptorBlock = getInterceptorBlock();
     assert.match(
         interceptorBlock,
-        /copyResetTimer:\s*0,/,
+        /copyResetTimer:\s*0,[\s\S]*exitModeClickHandler:\s*null,[\s\S]*exitModeClickHandlerBound:\s*false,/,
         '下载面板复制恢复定时器应有可清理状态'
     );
     assert.match(
@@ -134,8 +134,8 @@ test('下载捕获面板按需挂载，避免 Chrome 冷态常驻 DOM', () => {
     );
     assert.match(
         interceptorBlock,
-        /removePanel\(\)\s*\{[\s\S]*if \(this\.copyResetTimer\) \{[\s\S]*clearTimeout\(this\.copyResetTimer\);[\s\S]*this\.copyResetTimer = 0;[\s\S]*\}[\s\S]*this\.panel\.onkeydown = null;[\s\S]*this\.panel\.remove\(\);[\s\S]*this\.panel = null;[\s\S]*\}/,
-        'removePanel 应卸载面板并取消复制恢复定时器'
+        /removePanel\(\)\s*\{[\s\S]*if \(this\.copyResetTimer\) \{[\s\S]*clearTimeout\(this\.copyResetTimer\);[\s\S]*this\.copyResetTimer = 0;[\s\S]*\}[\s\S]*this\.unbindExitModeClickHandler\(\);[\s\S]*this\.panel\.onkeydown = null;[\s\S]*this\.panel\.remove\(\);[\s\S]*this\.panel = null;[\s\S]*\}/,
+        'removePanel 应卸载面板、释放退出模式监听并取消复制恢复定时器'
     );
     assert.match(
         interceptorBlock,
@@ -151,5 +151,30 @@ test('下载捕获面板按需挂载，避免 Chrome 冷态常驻 DOM', () => {
         interceptorBlock,
         /init\(\)\s*\{[\s\S]*this\.createPanel\(\);[\s\S]*this\.registerHooks\(\);/,
         'init 不应冷态创建下载捕获面板'
+    );
+});
+
+test('下载捕获退出模式 click 监听只在面板展示期间绑定', () => {
+    const interceptorBlock = getInterceptorBlock();
+    const registerHooksBlock = interceptorBlock.match(/registerHooks\(\)\s*\{[\s\S]*?\n\s*\}\n\s*\};/)?.[0] || '';
+    assert.match(
+        interceptorBlock,
+        /bindExitModeClickHandler\(\)\s*\{[\s\S]*if \(this\.exitModeClickHandlerBound\) return;[\s\S]*this\.exitModeClickHandler = \(e\) => \{[\s\S]*const isExitModeBtn = !!target\.closest\('#mx_2517 > button'\);[\s\S]*const isExitModeText = text\.includes\('退出模式'\);[\s\S]*this\.removePanel\(\);[\s\S]*\};[\s\S]*document\.addEventListener\('click', this\.exitModeClickHandler, true\);[\s\S]*this\.exitModeClickHandlerBound = true;[\s\S]*\}/,
+        '退出模式 click 监听应通过命名 handler 按需绑定'
+    );
+    assert.match(
+        interceptorBlock,
+        /unbindExitModeClickHandler\(\)\s*\{[\s\S]*if \(!this\.exitModeClickHandlerBound\) return;[\s\S]*document\.removeEventListener\('click', this\.exitModeClickHandler, true\);[\s\S]*this\.exitModeClickHandlerBound = false;[\s\S]*\}/,
+        '退出模式 click 监听应可释放'
+    );
+    assert.match(
+        interceptorBlock,
+        /const panel = this\.createPanel\(\);[\s\S]*this\.bindExitModeClickHandler\(\);[\s\S]*if \(panel\.dataset\.lastUrl === safeUrl && panel\.style\.display === 'block'\) return;/,
+        'show 应在面板展示和重复 URL 早退前确保退出模式监听已绑定'
+    );
+    assert.doesNotMatch(
+        registerHooksBlock,
+        /document\.addEventListener\('click'/,
+        'registerHooks 不应冷态常驻注册退出模式 click 监听'
     );
 });

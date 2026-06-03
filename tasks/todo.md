@@ -1,3 +1,44 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第八子项
+
+## 需求规格
+- 目标：在潜力词导出 click 委托按目标页释放后，继续收口下载捕获模块中只服务可见面板的 document click 监听，避免未捕获报表时长期保留“退出模式关闭面板”的无用委托闭包。
+- 根因判断：`Interceptor.registerHooks()` 的 fetch/XHR hook 需要常驻以捕获下载链接，但其中 document click 监听只用于捕获面板显示后识别原生“退出模式”并移除面板；冷态无面板时不需要这条监听。
+- 范围：仅覆盖 `src/main-assistant/interceptor.js` 中退出模式 click 监听的绑定/解绑生命周期和对应测试；不改下载 URL 判定、fetch/XHR hook、响应解析深度、面板 DOM、复制按钮、下载链接或安全过滤逻辑，不手改生成产物。
+- 热修 vs 结构性修复取舍：采用“下载捕获面板显示时绑定，面板移除时解绑”的单一生命周期；不新增第二套捕获入口，不弱化 hook manager，不吞掉下载解析异常。
+- 成功标准：静态测试证明退出模式 click 监听不在 `registerHooks()` 冷态常驻绑定，而是在 `show()`/面板展示时绑定、`removePanel()` 时解绑；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击下载、导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/监听器探针和可见状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第七子项提交后工作区状态，确认本子项只处理下载捕获退出模式 click 委托。
+- [x] 设计并实现 `bindExitModeClickHandler` / `unbindExitModeClickHandler`，让面板展示时绑定、移除时释放。
+- [x] 补充/更新目标测试，锁定 `registerHooks()` 不再常驻绑定退出模式 click，面板展示绑定，移除解绑。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ccc0226 优化 Chrome 潜力词导出点击委托生命周期`，工作区干净。
+- 定位结论：下载捕获的 fetch/XHR hook 是功能必要常驻；但 `registerHooks()` 中的 document click 只负责“退出模式”时关闭已显示的下载捕获面板，面板未显示时无收益。
+- 方案判断：保留 hook 注册位置和下载捕获逻辑不变；新增命名退出模式 click handler 与绑定状态，`show()` 成功展示面板后绑定，`removePanel()` 统一解绑。
+- 实现摘要：`src/main-assistant/interceptor.js` 新增 `exitModeClickHandler` 与 `exitModeClickHandlerBound`，把退出模式判断从 `registerHooks()` 冷态常驻监听迁移到 `bindExitModeClickHandler()`；`show()` 在面板可用后绑定，`removePanel()` 调用 `unbindExitModeClickHandler()` 释放。
+- 自审修正：重复 URL 且面板已显示的 `show()` 早退路径也需要确保退出模式监听已绑定，因此将绑定放在重复 URL 早退判断之前。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/download-link-depth-guard.test.mjs` 通过，6 项测试全绿；新增断言覆盖退出模式 click 监听不在 `registerHooks()` 冷态常驻绑定、面板展示时绑定、`removePanel()` 解绑，以及重复 URL 早退前仍确保监听已绑定。
+- 源码语法：`node --check src/main-assistant/interceptor.js` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/download-link-depth-guard.test.mjs tests/optimizer-token-capture-history.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，31 项测试全绿。
+- 全量回归：`npm test` 通过，598 项中 596 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在下载捕获面板退出模式 click 委托生命周期、对应静态测试和构建产物；未改下载 URL 判定、fetch/XHR hook、响应解析深度、面板 DOM、复制按钮、下载链接或安全过滤逻辑。
+
+## 结果复盘
+- 第十一轮第八子项结果：下载捕获模块从“注册 fetch/XHR hook 时同时常驻 document click 监听退出模式”优化为“捕获面板展示期间绑定退出模式 click，面板移除时释放”。冷态未捕获报表时少保留一条 document 级委托闭包。
+- 取舍结论：fetch/XHR hook 仍按原逻辑常驻，保证下载链接捕获能力不变；只移动可见面板辅助关闭监听的生命周期，不改变下载解析、复制和关闭交互。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读探针未完成；后续继续优化仍只尝试 Chrome MCP，不用其它通道冒充验收。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第七子项
 
 ## 需求规格
