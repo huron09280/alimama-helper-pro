@@ -11,6 +11,7 @@
         manualEscortMainSwitchGuardHandler: null,
         tokenStatusIntervalId: null,
         tokenStatusLastRefreshAt: 0,
+        logOverflowTimerId: null,
 
         refreshTokenStatusIndicator: () => {
             const now = Date.now();
@@ -40,6 +41,22 @@
             if (UI.tokenStatusIntervalId === null) return;
             clearInterval(UI.tokenStatusIntervalId);
             UI.tokenStatusIntervalId = null;
+        },
+
+        clearLogOverflowTimer: () => {
+            if (UI.logOverflowTimerId === null) return;
+            clearTimeout(UI.logOverflowTimerId);
+            UI.logOverflowTimerId = null;
+        },
+
+        scheduleLogOverflowAuto: (wrapper = null) => {
+            UI.clearLogOverflowTimer();
+            if (!wrapper || wrapper.nodeType !== 1) return;
+            UI.logOverflowTimerId = setTimeout(() => {
+                UI.logOverflowTimerId = null;
+                if (!wrapper.isConnected || wrapper.dataset.expanded !== 'true') return;
+                wrapper.style.overflow = 'auto';
+            }, 300);
         },
 
         bindManualKeywordOutsideHandler: () => {
@@ -2444,6 +2461,7 @@
                 panel.style.transform = 'scale(0.8)';
                 panel.style.pointerEvents = 'none';
                 UI.stopTokenStatusMonitor();
+                UI.clearLogOverflowTimer();
                 UI.closeManualKeywordPreferenceMenu();
             };
 
@@ -2490,6 +2508,7 @@
                 runBtn.style.background = 'linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf))';
             };
             const restoreIdlePanelView = ({ clearLog = true } = {}) => {
+                UI.clearLogOverflowTimer();
                 const wrapper = document.getElementById(`${CONFIG.UI_ID}-log-wrapper`);
                 const logEl = document.getElementById(`${CONFIG.UI_ID}-log`);
                 const settingPanel = document.getElementById(`${CONFIG.UI_ID}-latest-setting-panel`);
@@ -2526,6 +2545,7 @@
                 const isMaximized = panel.dataset.maximized === 'true';
 
                 if (isMaximized) {
+                    UI.clearLogOverflowTimer();
                     // 恢复默认尺寸
                     panel.style.top = '20px';
                     panel.style.height = 'auto';
@@ -2547,7 +2567,7 @@
                         wrapper.style.opacity = '1';
                         wrapper.style.marginBottom = '12px';
                         wrapper.style.transform = 'scaleY(1)';
-                        setTimeout(() => wrapper.style.overflow = 'auto', 300);
+                        UI.scheduleLogOverflowAuto(wrapper);
                     }
                     panel.dataset.maximized = 'true';
                 }
@@ -2581,7 +2601,7 @@
                     wrapper.style.opacity = '1';
                     wrapper.style.marginBottom = '12px';
                     wrapper.style.transform = 'scaleY(1)';
-                    setTimeout(() => wrapper.style.overflow = 'auto', 300);
+                    UI.scheduleLogOverflowAuto(wrapper);
                     panel.dataset.maximized = 'true';
                 }
                 setRunButtonMode('back');

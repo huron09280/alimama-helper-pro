@@ -56,6 +56,44 @@ test('算法护航关闭后会释放 token 状态轮询，再次展示时恢复'
     );
 });
 
+test('算法护航日志展开 overflow 延迟 timer 会在返回或关闭时释放', () => {
+    assert.match(
+        uiSource,
+        /logOverflowTimerId:\s*null,/,
+        '日志 overflow 延迟 timer 缺少可清理句柄'
+    );
+    assert.match(
+        uiSource,
+        /clearLogOverflowTimer:\s*\(\) => \{[\s\S]*if \(UI\.logOverflowTimerId === null\) return;[\s\S]*clearTimeout\(UI\.logOverflowTimerId\);[\s\S]*UI\.logOverflowTimerId = null;[\s\S]*\},/,
+        '日志 overflow timer 应支持显式 clear 并归零'
+    );
+    assert.match(
+        uiSource,
+        /scheduleLogOverflowAuto:\s*\(wrapper = null\) => \{[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*if \(!wrapper \|\| wrapper\.nodeType !== 1\) return;[\s\S]*UI\.logOverflowTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.logOverflowTimerId = null;[\s\S]*if \(!wrapper\.isConnected \|\| wrapper\.dataset\.expanded !== 'true'\) return;[\s\S]*wrapper\.style\.overflow = 'auto';[\s\S]*\},\s*300\);[\s\S]*\},/,
+        '日志 overflow timer 应统一调度，并在回调触发前校验 wrapper 仍连接且保持展开'
+    );
+    assert.match(
+        uiSource,
+        /document\.getElementById\(`\$\{CONFIG\.UI_ID\}-close`\)\.onclick = \(\) => \{[\s\S]*UI\.stopTokenStatusMonitor\(\);[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*UI\.closeManualKeywordPreferenceMenu\(\);/,
+        '关闭算法护航面板时应释放日志 overflow timer'
+    );
+    assert.match(
+        uiSource,
+        /const restoreIdlePanelView = \(\{ clearLog = true \} = \{\}\) => \{[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*wrapper\.style\.overflow = 'hidden';/,
+        '返回空闲态时应先释放日志 overflow timer 再折叠日志区域'
+    );
+    assert.equal(
+        (uiSource.match(/wrapper\.style\.transform = 'scaleY\(1\)';\s*\n\s*UI\.scheduleLogOverflowAuto\(wrapper\);/g) || []).length,
+        2,
+        '两个展开日志区域入口都应通过统一 helper 调度 overflow timer'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /setTimeout\(\(\) => wrapper\.style\.overflow = 'auto', 300\);/,
+        '不应继续使用匿名 overflow 延迟 timer'
+    );
+});
+
 test('算法护航手动关键词偏好外部点击监听只在菜单打开期间绑定', () => {
     assert.match(
         uiSource,

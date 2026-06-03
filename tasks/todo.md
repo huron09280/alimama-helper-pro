@@ -1,3 +1,45 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十七子项
+
+## 需求规格
+- 目标：在一键起量拖拽监听释放后，继续收口算法护航面板日志展开动画的 overflow 延迟 timer，避免返回空闲态或关闭面板后，`setTimeout(() => wrapper.style.overflow = 'auto', 300)` 仍短时持有旧日志 DOM。
+- 根因判断：`src/optimizer/ui.js` 中最大化按钮和“立即扫描并优化”都会用匿名 `setTimeout` 延后把日志 wrapper overflow 改为 `auto`；该 timer 没有句柄，`restoreIdlePanelView()` 和面板关闭路径无法取消，可能在 wrapper 已折叠、面板关闭或 DOM 重建后继续执行。
+- 范围：仅覆盖 `src/optimizer/ui.js` 中算法护航日志 wrapper overflow 延迟 timer 生命周期和对应静态测试；不改算法护航 token 捕获、openV3 提交、手动设置字段映射、关键词偏好菜单、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“单一 timer 句柄 + schedule/clear helper + 状态校验后再写 overflow”的生命周期；不新增第二套面板状态，不改变 300ms 动画节奏，不用宽泛兜底隐藏执行异常。
+- 成功标准：静态测试证明 overflow timer 有 `logOverflowTimerId` 句柄，展开日志时通过 `scheduleLogOverflowAuto()` 调度，返回空闲态和关闭面板时通过 `clearLogOverflowTimer()` 释放，timer 触发前会校验 wrapper 仍连接且保持 expanded；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、护航执行、创建、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭算法护航面板和只读观察日志 wrapper/timer 状态。
+
+## 执行计划（可核对）
+- [x] 复核第十六子项提交后工作区状态，确认本子项只处理算法护航日志 overflow timer 生命周期。
+- [x] 定位匿名 overflow delay timer、返回空闲态和面板关闭路径。
+- [x] 实现 `logOverflowTimerId`、调度/清理 helper，并替换两处匿名 `setTimeout`。
+- [x] 补充/更新目标测试，锁定返回/关闭面板会释放 overflow timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c567366 优化 Chrome 一键起量拖拽监听释放`，工作区干净。
+- 定位结论：日志展开动画的 overflow timer 只有视觉延迟作用，不应在面板返回空闲态或关闭后继续保留旧 wrapper 闭包。
+- 方案判断：把 timer 生命周期放回 `UI` 对象内表达，展开时统一调度、状态切换时统一取消；timer 触发时再校验 DOM 连接和 expanded 状态，避免旧 DOM 被延迟回写。
+- 实现摘要：`src/optimizer/ui.js` 新增 `logOverflowTimerId`、`clearLogOverflowTimer()` 和 `scheduleLogOverflowAuto()`；最大化展开和执行展开都改走统一调度，关闭面板、返回空闲态和最大化折回默认尺寸时释放未触发 timer。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增静态回归，锁定 overflow timer 句柄、清理 helper、状态校验、关闭/返回清理，以及两处展开入口不再使用匿名 timer。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 与 `node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，7 项测试全绿；新增断言覆盖日志 overflow timer 句柄、调度、清理、DOM 状态校验、关闭/返回清理和两处展开入口统一调度。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-manual-escort-settings.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，27 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，604 项中 602 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在算法护航日志展开 overflow timer 生命周期、对应静态测试、任务记录和构建产物；未改算法护航 token 捕获、openV3 提交、手动设置字段映射、关键词偏好菜单、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十七子项结果：算法护航日志展开从“两处匿名 `setTimeout` 延迟改 overflow”优化为“单一 `logOverflowTimerId` 句柄统一调度，关闭面板、返回空闲态和最大化折回默认尺寸时清理”。timer 触发时会再次确认 wrapper 仍连接且保持 expanded，避免旧 DOM 被延迟回写。
+- 取舍结论：保留 300ms 动画节奏和日志展开视觉行为，只补齐 timer 生命周期；没有新增第二套面板状态，也没有触碰护航执行、手动设置提交或 token 逻辑。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十六子项
 
 ## 需求规格
