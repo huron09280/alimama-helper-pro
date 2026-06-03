@@ -50154,8 +50154,15 @@ if (typeof globalThis !== 'undefined') {
                     }
                     const existing = document.getElementById('am-wxt-ai-max-demand-popover');
                     if (existing) existing.remove();
-                    document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
-                    document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    if (wizardState.aiMaxDemandPopoverBindTimer) {
+                        window.clearTimeout(wizardState.aiMaxDemandPopoverBindTimer);
+                        wizardState.aiMaxDemandPopoverBindTimer = 0;
+                    }
+                    if (wizardState.aiMaxDemandPopoverListenersBound) {
+                        document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                        document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                        wizardState.aiMaxDemandPopoverListenersBound = false;
+                    }
                     wizardState.aiMaxDemandPopoverOutsideClick = null;
                     wizardState.aiMaxDemandPopoverEscClose = null;
                 };
@@ -50322,12 +50329,14 @@ if (typeof globalThis !== 'undefined') {
                         closeKeywordAiMaxDemandPopover();
                     };
                     wizardState.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;
-                    setTimeout(() => {
+                    wizardState.aiMaxDemandPopoverBindTimer = window.setTimeout(() => {
+                        wizardState.aiMaxDemandPopoverBindTimer = 0;
                         if (!popover.isConnected) return;
                         if (typeof wizardState.aiMaxDemandPopoverOutsideClick !== 'function') return;
                         if (typeof wizardState.aiMaxDemandPopoverEscClose !== 'function') return;
                         document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
                         document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                        wizardState.aiMaxDemandPopoverListenersBound = true;
                     }, 0);
                     syncPopoverState();
                 };

@@ -469,6 +469,16 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
+    /if \(wizardState\.aiMaxDemandPopoverBindTimer\) \{[\s\S]*window\.clearTimeout\(wizardState\.aiMaxDemandPopoverBindTimer\);[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*if \(wizardState\.aiMaxDemandPopoverListenersBound\) \{[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*document\.removeEventListener\('keydown', wizardState\.aiMaxDemandPopoverEscClose, true\);[\s\S]*wizardState\.aiMaxDemandPopoverListenersBound = false;/,
+    'AI点睛需求弹层关闭时必须取消延迟监听绑定并释放已绑定 document 监听'
+  );
+  assert.match(
+    source,
+    /wizardState\.aiMaxDemandPopoverBindTimer = window\.setTimeout\(\(\) => \{[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*document\.addEventListener\('keydown', wizardState\.aiMaxDemandPopoverEscClose, true\);[\s\S]*wizardState\.aiMaxDemandPopoverListenersBound = true;/,
+    'AI点睛需求弹层延迟绑定 timer 必须保存句柄并标记监听绑定状态'
+  );
+  assert.match(
+    source,
     /const unbindAiMaxDetailDelegatedHandlers = \(\) => \{[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDetailToggleClickHandler\);[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxStepToggleClickHandler\);[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDemandNextClickHandler\);[\s\S]*wizardState\.aiMaxDetailDelegatedBound = false;/,
     'AI点睛详情区 document click 委托关闭向导时必须释放'
   );

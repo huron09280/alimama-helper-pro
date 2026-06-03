@@ -1,3 +1,45 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十五子项
+
+## 需求规格
+- 目标：在 AI 点睛打字动画 timer 释放后，继续收口 AI 点睛需求弹层的延迟监听绑定 timer，避免弹层刚打开又关闭时，下一 tick 的 `setTimeout` 仍尝试绑定只服务已关闭弹层的 document click/keydown 监听。
+- 根因判断：`openKeywordAiMaxDemandPopover()` 当前用 `setTimeout(..., 0)` 延后绑定外部 click 与 Escape 监听，但 timer 句柄没有保存；`closeKeywordAiMaxDemandPopover()` 只移除已绑定监听，无法取消尚未触发的延迟绑定任务。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 中 AI Max 需求弹层延迟绑定 timer 和 document click/keydown 绑定状态；不改弹层 DOM、全选/取消/确定交互、AI Max 文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“保存 bind timer 句柄 + close 时清理 + 监听绑定状态位”的生命周期；不新增第二套弹层状态，不改变延迟绑定用于避开当前点击的语义，不用兜底隐藏保存异常。
+- 成功标准：静态测试证明延迟 bind timer 保存到 `wizardState.aiMaxDemandPopoverBindTimer`，关闭弹层时 clearTimeout 并归零，timer 触发后再绑定 document 监听并标记 `aiMaxDemandPopoverListenersBound`，关闭时按状态移除监听；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和 AI Max 需求弹层、只读观察监听绑定状态。
+
+## 执行计划（可核对）
+- [x] 复核第十四子项提交后工作区状态，确认本子项只处理 AI Max 需求弹层延迟绑定生命周期。
+- [x] 定位 `openKeywordAiMaxDemandPopover()` 的延迟监听绑定和 `closeKeywordAiMaxDemandPopover()` 清理路径。
+- [x] 实现 bind timer 句柄保存、关闭取消、触发后归零和监听绑定状态清理。
+- [x] 补充/更新目标测试，锁定需求弹层延迟监听绑定不再游离于关闭路径之外。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `9be6e02 优化 Chrome AI点睛打字动画释放`，工作区干净。
+- 定位结论：AI Max 需求弹层的 document click/keydown 监听是按弹层展示期间绑定的，但延迟绑定的 `setTimeout` 本身未纳入关闭路径；极短时间打开后关闭时仍会保留一次无效延迟回调。
+- 方案判断：保留现有延迟绑定来避开触发点击，只补齐 timer 句柄与绑定状态；关闭弹层统一取消未触发 timer 和已绑定监听，不改变弹层确认保存合同。
+- 实现摘要：`closeKeywordAiMaxDemandPopover()` 现在会清理 `wizardState.aiMaxDemandPopoverBindTimer`，按 `aiMaxDemandPopoverListenersBound` 释放 document click/keydown 监听；延迟回调触发后归零 timer 句柄并标记监听已绑定。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 增加静态回归，覆盖关闭时 clearTimeout/归零、按绑定状态 remove document 监听、延迟回调保存 timer 句柄并标记 listeners bound。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 与 `node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿；新增断言覆盖 AI Max 需求弹层延迟 bind timer 保存、关闭取消、document 监听绑定状态和关闭解绑。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，40 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；按 Chrome DevTools Ready 的工具暴露分支，`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在 AI Max 需求弹层延迟绑定 timer 与 document 监听绑定状态、对应静态测试和构建产物；未改弹层 DOM、全选/取消/确定交互、AI Max 文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十五子项结果：AI 点睛需求弹层从“延迟绑定 document click/keydown 的 setTimeout 无法取消”优化为“延迟 bind timer 可取消，已绑定监听按状态释放”。弹层刚打开又关闭时，不再留下下一 tick 的无效绑定回调。
+- 取舍结论：保留延迟绑定避开当前触发点击的既有语义，只补齐关闭路径；没有新增第二套弹层状态，也没有改变需求选择、确认保存或场景重渲染合同。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十四子项
 
 ## 需求规格
