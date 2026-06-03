@@ -12,7 +12,7 @@ const wizardStyleCss = outputs.extensionFiles['wizard-style.css'];
 
 function createContentScriptHarness(initialUrl) {
   const appendedScripts = [];
-  const intervals = new Map();
+  const timers = new Map();
   const listeners = new Map();
   const nodesById = new Map();
   let currentUrl = new URL(initialUrl);
@@ -86,18 +86,20 @@ function createContentScriptHarness(initialUrl) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(handler);
     },
-    setTimeout(handler) {
-      if (typeof handler === 'function') handler();
-      return 1;
+    removeEventListener(type, handler) {
+      if (!listeners.has(type)) return;
+      const nextHandlers = listeners.get(type).filter((item) => item !== handler);
+      if (nextHandlers.length) listeners.set(type, nextHandlers);
+      else listeners.delete(type);
     },
-    setInterval(handler) {
+    setTimeout(handler, delay = 0) {
       const timerId = nextTimerId;
       nextTimerId += 1;
-      if (typeof handler === 'function') intervals.set(timerId, handler);
+      if (typeof handler === 'function') timers.set(timerId, { handler, delay: Number(delay) || 0 });
       return timerId;
     },
-    clearInterval(timerId) {
-      intervals.delete(timerId);
+    clearTimeout(timerId) {
+      timers.delete(timerId);
     }
   };
   const context = createContext({
@@ -120,11 +122,19 @@ function createContentScriptHarness(initialUrl) {
   new Script(contentSource).runInContext(context);
   return {
     appendedScripts,
-    intervals,
+    timers,
     listeners,
     window: windowRef,
-    tickIntervals() {
-      Array.from(intervals.values()).forEach((handler) => handler());
+    tickTimers() {
+      const entries = Array.from(timers.entries());
+      entries.forEach(([timerId, timer]) => {
+        if (!timers.has(timerId)) return;
+        timers.delete(timerId);
+        timer.handler();
+      });
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map((timer) => timer.delay);
     }
   };
 }
@@ -172,8 +182,12 @@ test('extension content script 负责注入 page bundle', () => {
   assert.match(contentSource, /if \(isMysellerHost\(hostname\)\) return isSmartAssistantBudgetPage\(url\);/, 'myseller.taobao.com 只应允许 SmartAssistant 预算页注入');
   assert.match(contentSource, /const shouldWatchForDeferredInjection = \(\) => \{[\s\S]*return isMysellerHost\(normalizeHostname\(url\.hostname\)\);[\s\S]*\};/, '只有 myseller 普通页需要保留延迟注入监听');
   assert.match(contentSource, /return false;\s*\};[\s\S]*const renderInjectionError/, '非业务匹配页默认不应注入完整 page bundle');
-  assert.match(contentSource, /const URL_POLL_INTERVAL_MS = 600;/, '未注入页应使用轻量 URL 轮询兜底捕获主世界 SPA 路由变化');
+  assert.match(contentSource, /const URL_POLL_INITIAL_INTERVAL_MS = 600;/, '未注入页应使用轻量 URL 快查兜底捕获主世界 SPA 路由变化');
+  assert.match(contentSource, /const URL_POLL_MAX_INTERVAL_MS = 4800;/, '未注入页长期停留时应退避 URL 轮询频率');
+  assert.match(contentSource, /window\.setTimeout\(\(\) => \{[\s\S]*urlPollDelayMs = Math\.min\(URL_POLL_MAX_INTERVAL_MS,[\s\S]*urlPollDelayMs \* 2[\s\S]*scheduleNextUrlPoll\(\);[\s\S]*\}, urlPollDelayMs\);/, '未注入页 URL 轮询应使用可退避 timeout 循环');
   assert.match(contentSource, /window\.addEventListener\('hashchange', scheduleInjectionCheck\);[\s\S]*window\.addEventListener\('popstate', scheduleInjectionCheck\);[\s\S]*startUrlPolling\(\);/, '未注入页面应监听 URL 变化以便后续进入业务页时恢复注入');
+  assert.match(contentSource, /window\.removeEventListener\('hashchange', scheduleInjectionCheck\);[\s\S]*window\.removeEventListener\('popstate', scheduleInjectionCheck\);/, 'page bundle 注入成功后应释放延迟注入 URL 监听');
+  assert.doesNotMatch(contentSource, /setInterval\(\(\) => \{[\s\S]*lastObservedUrl/, '未注入页不应继续保留固定 600ms interval URL 轮询');
   assert.doesNotMatch(contentSource, /historyRef\[methodName\] = wrapped;/, 'content script 不应依赖隔离世界包装页面 history 方法捕获主世界 SPA 跳转');
   assert.match(contentSource, /const renderInjectionError = \(message = ''\) => \{/, '缺少 extension 注入失败可见反馈');
   assert.match(contentSource, /root\.setAttribute\('role', 'alert'\);/, 'extension 注入失败提示缺少 alert 语义');
@@ -204,16 +218,29 @@ test('extension content script 只在业务页面注入完整 page bundle', () =
   assert.equal(mysellerHome.appendedScripts.length, 0, 'myseller 普通工作台不应注入完整 page bundle');
   assert.ok(mysellerHome.listeners.has('hashchange'), '未注入页应监听 hashchange 以恢复注入');
   assert.ok(mysellerHome.listeners.has('popstate'), '未注入页应监听 popstate 以恢复注入');
-  assert.equal(mysellerHome.intervals.size, 1, '未注入页应启动轻量 URL 轮询兜底');
+  assert.equal(mysellerHome.timers.size, 1, '未注入页应启动轻量 URL 轮询兜底');
+  assert.deepEqual(mysellerHome.getTimerDelays(), [600], '未注入页初始 URL 轮询应保持快速捕获');
+  mysellerHome.tickTimers();
+  assert.deepEqual(mysellerHome.getTimerDelays(), [1200], 'URL 未变化时应退避到 1200ms');
+  mysellerHome.tickTimers();
+  assert.deepEqual(mysellerHome.getTimerDelays(), [2400], 'URL 持续未变化时应继续退避');
+  mysellerHome.tickTimers();
+  assert.deepEqual(mysellerHome.getTimerDelays(), [4800], 'URL 轮询退避应达到 4800ms 上限');
+  mysellerHome.tickTimers();
+  assert.deepEqual(mysellerHome.getTimerDelays(), [4800], 'URL 轮询退避达到上限后不应继续增长');
 
   mysellerHome.window.history.pushState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant');
   assert.equal(mysellerHome.appendedScripts.length, 0, '隔离世界不应假设页面主世界 pushState 会直接触发注入');
-  mysellerHome.tickIntervals();
+  mysellerHome.tickTimers();
+  assert.deepEqual(mysellerHome.getTimerDelays().sort((a, b) => a - b), [80, 600], 'URL 变化后应恢复快查并安排注入检查');
+  mysellerHome.tickTimers();
   assert.equal(mysellerHome.appendedScripts.length, 1, 'myseller 跳转 SmartAssistant 后应恢复注入');
-  assert.equal(mysellerHome.intervals.size, 0, 'page bundle 成功注入后应停止 URL 轮询');
+  assert.equal(mysellerHome.timers.size, 0, 'page bundle 成功注入后应停止 URL 轮询');
+  assert.ok(!mysellerHome.listeners.has('hashchange'), 'page bundle 成功注入后应移除 hashchange 监听');
+  assert.ok(!mysellerHome.listeners.has('popstate'), 'page bundle 成功注入后应移除 popstate 监听');
   mysellerHome.window.history.replaceState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant?from=codex');
   mysellerHome.window.history.pushState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant#dailyBudget');
-  mysellerHome.tickIntervals();
+  mysellerHome.tickTimers();
   assert.equal(mysellerHome.appendedScripts.length, 1, 'page bundle 成功注入后不应被后续 URL 变化重复注入');
 
   const smartAssistant = createContentScriptHarness('https://myseller.taobao.com/home.htm/crm-workbench/smartassistant');
@@ -221,7 +248,7 @@ test('extension content script 只在业务页面注入完整 page bundle', () =
 
   const broadAlimama = createContentScriptHarness('https://pub.alimama.com/');
   assert.equal(broadAlimama.appendedScripts.length, 0, '宽泛 alimama 子域默认不应注入 4.4MB page bundle');
-  assert.equal(broadAlimama.intervals.size, 0, '宽泛 alimama 子域不应保留 myseller 专用 URL 轮询');
+  assert.equal(broadAlimama.timers.size, 0, '宽泛 alimama 子域不应保留 myseller 专用 URL 轮询');
   assert.equal(broadAlimama.listeners.size, 1, '宽泛 alimama 子域仅应保留授权 bridge message 监听');
 });
 

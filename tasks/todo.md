@@ -1,3 +1,40 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第三子项
+
+## 需求规格
+- 目标：在已提交算法护航 token 轮询生命周期后，继续审计剩余插件自有低风险 Chrome 内存热点，优先处理 `myseller.taobao.com` 延迟注入 URL 轮询、bridge 结果缓存 TTL 被动释放、拖拽期全局监听这三类候选中证据最明确的一项，继续逼近当前最佳。
+- 范围：只覆盖默认冷态/非目标页/关闭后残留的插件自有 timer、listener、cache 生命周期；不改真实创建、复制、预算、护航提交、授权、policy token、shopId 或业务请求合同，不直接手改生成产物。
+- 成功标准：若发现明确低风险热点，完成最小侵入修复并补充目标测试，通过目标测试、构建同步/检查、`npm run check:syntax`、`git diff --check`、必要回归和可用的 Chrome 真实页/调试端口验证；若候选均缺少低风险收益，记录排除证据并转入更大架构拆分评估。
+- 安全边界：Chrome 验证只做刷新、只读 DOM/heap/timer/listener/resource 探针和非写入入口开关；不点击并发执行、复制确认、预算提交、删除、上下线、立即投放或护航执行。
+
+## 执行计划（可核对）
+- [x] 复核当前工作区、Chrome 调试端口和上一轮候选，不重复已提交项。
+- [x] 并行审计 `myseller` 延迟注入轮询、bridge result cache、拖拽期全局监听，确定低风险高确定性落地点。
+- [x] 设计更优雅的生命周期边界：优先释放/停止已有资源，避免新增第二事实源或隐藏失败。
+- [x] 实现最小改动并补充/更新测试，必要时同步构建产物。
+- [x] 运行目标测试、构建检查、语法/空白检查、必要回归和可用 Chrome 验证。
+- [x] 记录验证结果、结果复盘和中文 commit。
+
+## 高层操作摘要
+- 已确认上一子项最新提交为 `21fadaf 优化 Chrome 护航 token 轮询生命周期`，继续处理剩余小热点；本轮先聚焦源码中已经被任务记录点名的低风险候选，不直接进入 keyword 主入口拆包，避免重犯 L43。
+- Chrome DevTools Ready 预检：`curl http://127.0.0.1:9222/json/version` 已返回有效 `webSocketDebuggerUrl`，9222 端口有 Chrome 监听；当前会话还需确认 Chrome MCP 工具是否暴露。
+- 已派出两个只读子代理分别审计 bridge result cache 与 `myseller.taobao.com` 延迟注入轮询；主线程同步做计划、源码定位和后续实现决策。
+- 子代理结论：extension 普通 `myseller` 页的 600ms URL 轮询是低风险小热点，成功注入后还残留 `hashchange/popstate` 监听；userscript 普通 `myseller` 页完整 runtime 启动和 bridge result cache 是后续更大候选，需独立提交。
+- 本子项实现：`src/entries/extension-content.js` 将固定 600ms `setInterval` URL 轮询改为 `setTimeout` 退避循环，URL 不变时从 600ms 逐步退避到 4800ms；URL 变化时恢复 600ms 快查并安排 80ms 注入检查；成功注入 page bundle 后同时清理 URL timer、注入检查 timer 和 `hashchange/popstate` 监听。
+
+## 验证记录
+- 目标测试：`node --test tests/extension-static-build.test.mjs` 通过，11 项测试全绿；新增/更新断言覆盖普通 `myseller` 页初始 600ms 快查、未变化时 1200/2400/4800ms 退避、达到上限不再增长、跳转 SmartAssistant 后恢复快查、成功注入后停止 URL timer 并移除 `hashchange/popstate` 监听。
+- 源码语法：`node --check src/entries/extension-content.js` 通过。
+- 构建同步：`npm run build` 已同步 `dist/extension/content.js`；`npm run build:check` 通过。
+- 构建/相关回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿；`node --test tests/budget-frontend-limit-bypass.test.mjs tests/download-link-depth-guard.test.mjs` 通过，17 项测试全绿。
+- 项目级语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，592 项中 590 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome DevTools Ready：`curl http://127.0.0.1:9222/json/version` 返回有效 `webSocketDebuggerUrl`，但 `mcp__chrome_devtools.list_pages` 仍报 `Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。本子项真实页 MCP 复测受会话绑定阻塞，未做写入口操作；以 VM harness、构建产物一致性和全量回归闭环。
+
+## 结果复盘
+- 第十一轮第三子项结果：extension 普通 `myseller.taobao.com` 工作台从“长期固定 600ms URL 轮询 + 成功注入后保留 URL 监听”优化为“初始快查、空闲退避、成功注入后释放全部延迟注入资源”。长期停留普通工作台时插件自有唤醒频率降到 4800ms 上限，进入 SmartAssistant 后仍能恢复注入。
+- 取舍结论：不包装页面主世界 history、不改变 `one.alimama.com` 完整注入、不改变 SmartAssistant 预算页注入条件、不触碰授权桥或业务请求合同；只收窄 extension content 的延迟注入 watcher 生命周期。
+- 后续判断：子代理确认 userscript 全量匹配普通 `myseller` 页仍会启动完整 runtime，且 bridge host 结果 cache 会在无后续请求时长期保留最后大 payload。下一步优先处理 userscript 普通 `myseller` 前置守卫或 bridge cache 主动释放，继续按项独立提交。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第二子项
 
 ## 需求规格

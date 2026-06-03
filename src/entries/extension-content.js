@@ -6,7 +6,8 @@
     const LICENSE_VERIFY_RESPONSE_TYPE = 'verify-response';
     const LICENSE_VERIFY_MESSAGE_TYPE = 'AM_LICENSE_VERIFY_REQUEST';
     const INJECTION_CHECK_DELAY_MS = 80;
-    const URL_POLL_INTERVAL_MS = 600;
+    const URL_POLL_INITIAL_INTERVAL_MS = 600;
+    const URL_POLL_MAX_INTERVAL_MS = 4800;
     if (document.getElementById(SCRIPT_ID)) return;
 
     const normalizeHostname = (value = '') => String(value || '').trim().toLowerCase();
@@ -204,36 +205,72 @@
 
     let injectionCheckTimer = 0;
     let urlPollTimer = 0;
+    let urlPollDelayMs = URL_POLL_INITIAL_INTERVAL_MS;
+    let deferredInjectionWatchActive = false;
     let lastObservedUrl = String(window.location?.href || '');
+    const resetUrlPollDelay = () => {
+        urlPollDelayMs = URL_POLL_INITIAL_INTERVAL_MS;
+    };
+    const clearInjectionCheckTimer = () => {
+        if (!injectionCheckTimer) return;
+        window.clearTimeout(injectionCheckTimer);
+        injectionCheckTimer = 0;
+    };
     const clearUrlPollTimer = () => {
         if (!urlPollTimer) return;
-        window.clearInterval(urlPollTimer);
+        window.clearTimeout(urlPollTimer);
         urlPollTimer = 0;
     };
+    let stopDeferredInjectionWatch = () => {
+        clearInjectionCheckTimer();
+        clearUrlPollTimer();
+    };
     const scheduleInjectionCheck = () => {
+        resetUrlPollDelay();
         if (pageBundleInjected || document.getElementById(SCRIPT_ID)) {
-            clearUrlPollTimer();
+            stopDeferredInjectionWatch();
             return;
         }
         if (injectionCheckTimer) return;
         injectionCheckTimer = window.setTimeout(() => {
             injectionCheckTimer = 0;
-            if (tryInjectPageBundle()) clearUrlPollTimer();
+            if (tryInjectPageBundle()) stopDeferredInjectionWatch();
         }, INJECTION_CHECK_DELAY_MS);
+    };
+    stopDeferredInjectionWatch = () => {
+        clearInjectionCheckTimer();
+        clearUrlPollTimer();
+        if (!deferredInjectionWatchActive) return;
+        window.removeEventListener('hashchange', scheduleInjectionCheck);
+        window.removeEventListener('popstate', scheduleInjectionCheck);
+        deferredInjectionWatchActive = false;
+    };
+    const scheduleNextUrlPoll = () => {
+        if (urlPollTimer || pageBundleInjected || document.getElementById(SCRIPT_ID)) return;
+        urlPollTimer = window.setTimeout(() => {
+            urlPollTimer = 0;
+            const currentUrl = String(window.location?.href || '');
+            if (currentUrl !== lastObservedUrl) {
+                lastObservedUrl = currentUrl;
+                scheduleInjectionCheck();
+            } else {
+                urlPollDelayMs = Math.min(URL_POLL_MAX_INTERVAL_MS, Math.max(URL_POLL_INITIAL_INTERVAL_MS, urlPollDelayMs * 2));
+            }
+            if (!pageBundleInjected && !document.getElementById(SCRIPT_ID)) {
+                scheduleNextUrlPoll();
+            }
+        }, urlPollDelayMs);
     };
     const startUrlPolling = () => {
         if (urlPollTimer) return;
-        urlPollTimer = window.setInterval(() => {
-            const currentUrl = String(window.location?.href || '');
-            if (currentUrl === lastObservedUrl) return;
-            lastObservedUrl = currentUrl;
-            scheduleInjectionCheck();
-        }, URL_POLL_INTERVAL_MS);
+        resetUrlPollDelay();
+        scheduleNextUrlPoll();
     };
 
     if (!tryInjectPageBundle() && shouldWatchForDeferredInjection()) {
         window.addEventListener('hashchange', scheduleInjectionCheck);
         window.addEventListener('popstate', scheduleInjectionCheck);
+        deferredInjectionWatchActive = true;
         startUrlPolling();
     }
 })();
