@@ -37,6 +37,7 @@
 
     const revealOptimizerPanel = (panel) => {
         if (!panel) return;
+        UI.startTokenStatusMonitor?.();
         if (panel.style.opacity === '0' || panel.style.opacity === '') {
             panel.style.opacity = '1';
             panel.style.transform = 'scale(1)';

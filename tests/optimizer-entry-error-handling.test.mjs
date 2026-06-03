@@ -20,7 +20,7 @@ test('算法护航公开入口会收口面板切换异常', () => {
     );
     assert.match(
         optimizerPublicApi,
-        /const revealOptimizerPanel = \(panel\) => \{[\s\S]*panel\.style\.pointerEvents = 'auto';/,
+        /const revealOptimizerPanel = \(panel\) => \{[\s\S]*UI\.startTokenStatusMonitor\?\.\(\);[\s\S]*panel\.style\.pointerEvents = 'auto';/,
         '缺少可复用的算法护航面板展示函数'
     );
     assert.match(

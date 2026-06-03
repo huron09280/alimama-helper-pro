@@ -33,7 +33,25 @@ test('统一 Hook 管理器在下载捕获模块之前创建', () => {
 test('Token 指示灯在缺 token 时会主动触发 refresh，避免长期红色误报', () => {
     assert.match(
         uiSource,
-        /let lastTokenRefreshAt = 0;[\s\S]*if \(!tokenReady && now - lastTokenRefreshAt >= 2500\)[\s\S]*TokenManager\.refresh\(\);[\s\S]*tokenDot\.style\.color = \(State\.tokens\.dynamicToken && State\.tokens\.loginPointId\) \? 'var\(--am26-success,#0ea86f\)' : 'var\(--am26-danger,#ea4f4f\)';/,
+        /tokenStatusLastRefreshAt:\s*0,[\s\S]*refreshTokenStatusIndicator:\s*\(\) => \{[\s\S]*if \(!tokenReady && now - UI\.tokenStatusLastRefreshAt >= 2500\)[\s\S]*TokenManager\.refresh\(\);[\s\S]*const nextTokenReady = !!\(State\.tokens\.dynamicToken && State\.tokens\.loginPointId\);[\s\S]*tokenDot\.style\.color = nextTokenReady \? 'var\(--am26-success,#0ea86f\)' : 'var\(--am26-danger,#ea4f4f\)';/,
         'Token 指示灯未在缺 token 时主动刷新'
+    );
+});
+
+test('算法护航关闭后会释放 token 状态轮询，再次展示时恢复', () => {
+    assert.match(
+        uiSource,
+        /tokenStatusIntervalId:\s*null,[\s\S]*startTokenStatusMonitor:\s*\(\) => \{[\s\S]*if \(UI\.tokenStatusIntervalId !== null\) return;[\s\S]*UI\.refreshTokenStatusIndicator\(\);[\s\S]*UI\.tokenStatusIntervalId = setInterval\(\(\) => \{[\s\S]*UI\.refreshTokenStatusIndicator\(\);[\s\S]*\},\s*1000\);[\s\S]*stopTokenStatusMonitor:\s*\(\) => \{[\s\S]*if \(UI\.tokenStatusIntervalId === null\) return;[\s\S]*clearInterval\(UI\.tokenStatusIntervalId\);[\s\S]*UI\.tokenStatusIntervalId = null;/,
+        'Token 状态轮询应具备可启动和可停止的生命周期'
+    );
+    assert.match(
+        uiSource,
+        /document\.getElementById\(`\$\{CONFIG\.UI_ID\}-close`\)\.onclick = \(\) => \{[\s\S]*panel\.style\.pointerEvents = 'none';[\s\S]*UI\.stopTokenStatusMonitor\(\);/,
+        '关闭算法护航面板时应停止 token 状态轮询'
+    );
+    assert.match(
+        uiSource,
+        /UI\.refreshTokenStatusIndicator\(\);[\s\S]*\n\s*\}\n\s*\};/,
+        '创建算法护航面板时应只做一次 token 状态刷新，不应直接常驻轮询'
     );
 });

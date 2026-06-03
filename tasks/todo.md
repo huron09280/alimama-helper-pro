@@ -1,3 +1,37 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第二子项
+
+## 需求规格
+- 目标：在已提交计划身份缓存上限后，继续收口源码审计发现的算法护航面板关闭后 1s token 轮询常驻问题，避免用户关闭算法护航浮层后仍保留插件自有定时器。
+- 范围：只覆盖 `src/optimizer/ui.js` 中算法护航 token 状态指示灯轮询的启动/停止生命周期，以及 `src/optimizer/public-api.js` 中公开入口重新显示面板时的轮询恢复；不改 token 解析、hook history、授权守卫、执行前 `TokenManager.refresh()`、护航提交接口或 UI 视觉。
+- 成功标准：关闭算法护航面板时清理 token 轮询；再次通过公开入口展示面板时恢复 token 状态刷新；相关静态测试覆盖“有 interval id、有 close 清理、有 reveal 恢复”，并通过目标测试、构建检查、语法检查、空白检查和必要回归。
+- 安全边界：本子项不触发真实算法护航执行、不提交护航接口；Chrome MCP 当前会话绑定异常，先用源码契约和本地测试闭环，后续恢复 MCP 后补真实页观察。
+
+## 执行计划（可核对）
+- [x] 定位 `UI.create()` 里 token interval、关闭按钮和公开入口展示逻辑。
+- [x] 设计更优雅的生命周期：轮询函数可重入启动、可重复停止，关闭后释放，再显示恢复。
+- [x] 实现最小改动并补充/更新测试，确保执行前 token refresh 保持不变。
+- [x] 运行目标测试、构建检查、语法/空白检查和必要回归。
+- [x] 记录验证结果与中文 commit。
+
+## 高层操作摘要
+- 已提交第十一轮第一子项 `83c64e9 优化 Chrome 计划身份缓存上限`，当前工作区干净；继续处理源码审计中优先级最高的算法护航 token 轮询生命周期。
+- 已将 `UI.create()` 内部匿名 `setInterval` 收敛为 `refreshTokenStatusIndicator()`、`startTokenStatusMonitor()` 和 `stopTokenStatusMonitor()` 三个生命周期方法；关闭按钮释放 interval，公开入口重新展示时恢复。
+- 自审修正：刷新函数在调用 `TokenManager.refresh()` 后重新读取 token 状态再更新指示灯，避免同步刷新成功后颜色延迟到下一轮。
+
+## 验证记录
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs` 通过，9 项测试全绿；新增/更新断言覆盖 token 状态轮询可启动、可停止、关闭面板释放 interval、公开入口展示时恢复轮询，以及创建面板时只做一次状态刷新。
+- 源码片段检查：`node --check src/optimizer/ui.js` 通过；`src/optimizer/public-api.js` 是构建拼接片段，独立 `node --check` 会因文件尾部外层 IIFE 结束符报 `Unexpected token '}'`，真实语法检查以构建后的根 userscript 为准。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 项目级语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 构建静态回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-escort-keyword-compat.test.mjs` 通过，23 项测试全绿。
+- 全量回归：`npm test` 通过，592 项中 590 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome 真实页复测：本子项未执行真实护航或提交；当前 Chrome DevTools MCP 仍受会话绑定问题影响，先以源码生命周期契约、构建产物一致性和本地回归闭环，后续 MCP 恢复后补观察关闭面板后的 interval 释放。
+
+## 结果复盘
+- 第十一轮第二子项结果：算法护航 token 状态轮询从“创建面板后永久 1s `setInterval`”改为“公开入口展示时启动、关闭面板时清理、再次展示时恢复”。这消除了用户关闭算法护航浮层后的插件自有定时器常驻。
+- 取舍结论：没有改 token 捕获、hook history、授权守卫、执行前 `TokenManager.refresh()` 或护航提交链路；仅把原匿名轮询拆成一个可复用刷新函数和一组显式启动/停止生命周期方法。`RUN_CAMPAIGN` 后台入口仍会创建 UI 容器承载日志，但不强行保持可见面板轮询，符合本项“关闭后释放”的目标。
+- 自审结论：同步刷新 token 后重新读取状态再更新指示灯，避免旧行为退化为颜色延迟；interval id 使用显式 `null` 判定，避免浏览器返回特殊 id 时出现生命周期误判。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮
 
 ## 需求规格

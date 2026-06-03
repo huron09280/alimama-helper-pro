@@ -8,6 +8,38 @@
         manualKeywordOutsideHandler: null,
         manualEscortExpandHandler: null,
         manualEscortMainSwitchGuardHandler: null,
+        tokenStatusIntervalId: null,
+        tokenStatusLastRefreshAt: 0,
+
+        refreshTokenStatusIndicator: () => {
+            const now = Date.now();
+            const tokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
+            if (!tokenReady && now - UI.tokenStatusLastRefreshAt >= 2500) {
+                UI.tokenStatusLastRefreshAt = now;
+                try {
+                    TokenManager.refresh();
+                } catch { }
+            }
+            const tokenDot = document.getElementById(`${CONFIG.UI_ID}-token`);
+            if (tokenDot) {
+                const nextTokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
+                tokenDot.style.color = nextTokenReady ? 'var(--am26-success,#0ea86f)' : 'var(--am26-danger,#ea4f4f)';
+            }
+        },
+
+        startTokenStatusMonitor: () => {
+            if (UI.tokenStatusIntervalId !== null) return;
+            UI.refreshTokenStatusIndicator();
+            UI.tokenStatusIntervalId = setInterval(() => {
+                UI.refreshTokenStatusIndicator();
+            }, 1000);
+        },
+
+        stopTokenStatusMonitor: () => {
+            if (UI.tokenStatusIntervalId === null) return;
+            clearInterval(UI.tokenStatusIntervalId);
+            UI.tokenStatusIntervalId = null;
+        },
 
         // 全局状态日志（用于非计划相关的消息）
         updateStatus: (text, color = '#aaa') => {
@@ -2396,6 +2428,7 @@
                 panel.style.opacity = '0';
                 panel.style.transform = 'scale(0.8)';
                 panel.style.pointerEvents = 'none';
+                UI.stopTokenStatusMonitor();
             };
 
             // 居中按钮事件（切换模式）
@@ -2613,22 +2646,7 @@
             resizerBottom.onmousedown = e => bindResize('height', e);
             resizerCorner.onmousedown = e => bindResize('both', e);
 
-            // Token 状态检测
-            let lastTokenRefreshAt = 0;
-            setInterval(() => {
-                const now = Date.now();
-                const tokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
-                if (!tokenReady && now - lastTokenRefreshAt >= 2500) {
-                    lastTokenRefreshAt = now;
-                    try {
-                        TokenManager.refresh();
-                    } catch { }
-                }
-                const tokenDot = document.getElementById(`${CONFIG.UI_ID}-token`);
-                if (tokenDot) {
-                    tokenDot.style.color = (State.tokens.dynamicToken && State.tokens.loginPointId) ? 'var(--am26-success,#0ea86f)' : 'var(--am26-danger,#ea4f4f)';
-                }
-            }, 1000);
+            UI.refreshTokenStatusIndicator();
         }
     };
 
