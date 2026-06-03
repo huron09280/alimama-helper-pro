@@ -36,6 +36,17 @@ test('潜力词导出天数输入具备稳定边界和可访问名称', () => {
     assert.match(source, /normalizeExportDays\(raw\)[\s\S]*if \(days < 1 \|\| days > this\.MAX_EXPORT_DAYS\) return 0;/, '导出天数归一化应限制 1-MAX_EXPORT_DAYS');
 });
 
+test('潜力词导出 click 委托只在目标页绑定，离开目标页释放', () => {
+    const source = getPotentialSource();
+
+    assert.match(source, /initialized:\s*false,[\s\S]*running:\s*false,[\s\S]*exportClickHandler:\s*null,[\s\S]*exportClickHandlerBound:\s*false,/, '潜力词导出缺少 click 委托生命周期状态');
+    assert.match(source, /init\(\)\s*\{[\s\S]*this\.exportClickHandler = \(e\) => \{[\s\S]*const btn = target\.closest\(this\.BUTTON_SELECTOR\);[\s\S]*this\.exportCsv\(btn\)\.catch[\s\S]*\};[\s\S]*this\.initialized = true;/, 'init 应只创建命名 click handler，不应直接常驻绑定 document click');
+    assert.doesNotMatch(source.match(/init\(\)\s*\{[\s\S]*?\n\s*\},\n\s*\n\s*bindExportClickHandler\(/)?.[0] || '', /document\.addEventListener\('click'/, 'init 不应注册 document click 监听');
+    assert.match(source, /bindExportClickHandler\(\)\s*\{[\s\S]*if \(this\.exportClickHandlerBound\) return;[\s\S]*document\.addEventListener\('click', this\.exportClickHandler, true\);[\s\S]*this\.exportClickHandlerBound = true;[\s\S]*\}/, '目标页应按需绑定导出 click 委托');
+    assert.match(source, /unbindExportClickHandler\(\)\s*\{[\s\S]*if \(!this\.exportClickHandlerBound\) return;[\s\S]*document\.removeEventListener\('click', this\.exportClickHandler, true\);[\s\S]*this\.exportClickHandlerBound = false;[\s\S]*\}/, '离开目标页应释放导出 click 委托');
+    assert.match(source, /run\(\)\s*\{[\s\S]*if \(!this\.isTargetPage\(\)\) \{[\s\S]*this\.removeButtons\(\);[\s\S]*this\.unbindExportClickHandler\(\);[\s\S]*return;[\s\S]*\}[\s\S]*this\.bindExportClickHandler\(\);[\s\S]*this\.ensureButton\(\);/, 'run 应在目标页绑定 click 委托，在非目标页解绑并移除按钮');
+});
+
 test('潜力词导出入口样式收敛到统一浅玻璃 token', () => {
     const block = getPotentialStyleBlock();
 

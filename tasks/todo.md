@@ -1,3 +1,44 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第七子项
+
+## 需求规格
+- 目标：在主助手面板拖拽监听生命周期收口后，继续处理默认常驻 document 级事件委托，优先收口只服务潜力词报表页的 `PotentialPlanDailyExporter` click 监听，避免非潜力词页面长期保留无用委托闭包。
+- 根因判断：`PotentialPlanDailyExporter.init()` 当前在主助手启动时即注册 `document.addEventListener('click', ..., true)`，但潜力词日维度 CSV 导出按钮只在 `#/report/bidword/index?mainTab=potential` 目标页渲染；非目标页只需要移除按钮，不需要常驻点击委托。
+- 范围：仅覆盖 `src/main-assistant/potential-plan-daily-exporter.js` 的 click 委托绑定/解绑生命周期和对应测试；不改潜力词 API、导出 CSV 字段、计划/单元查询、授权上下文、真实请求 payload 或下载逻辑，不手改生成产物。
+- 热修 vs 结构性修复取舍：采用“初始化只建状态，目标页 run 时绑定，离开目标页解绑”的生命周期不变量；不用第二套点击入口，不隐藏导出异常，不改变按钮 DOM 结构和输入阻止冒泡语义。
+- 成功标准：静态测试证明初始化不再常驻绑定 document click，目标页 `run()` 会绑定导出 click，非目标页 `run()` 会解绑并移除按钮；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出按钮，不触发潜力词 API 查询、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/监听器探针和 URL/页面状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第六子项提交后工作区状态，确认本子项只处理潜力词导出 click 委托。
+- [x] 设计并实现 `bindExportClickHandler` / `unbindExportClickHandler`，让目标页绑定、非目标页释放。
+- [x] 补充/更新目标测试，锁定初始化不常驻绑定、目标页绑定、离开目标页解绑。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `bb0de58 优化 Chrome 主面板拖拽监听生命周期`，工作区干净。
+- 定位结论：`PotentialPlanDailyExporter` 只在潜力词报表页渲染导出按钮，但 `init()` 在所有主助手页面提前注册 document click 委托；这是插件自有、非目标页无收益的默认常驻监听。
+- 方案判断：保留 `initialized` 作为模块初始化防重；新增一个命名 click handler 和绑定状态，`run()` 命中目标页时绑定并确保按钮，非目标页先移除按钮再解绑。
+- 实现摘要：`src/main-assistant/potential-plan-daily-exporter.js` 新增 `exportClickHandler` 与 `exportClickHandlerBound`，`init()` 只创建命名 handler；`run()` 在目标页调用 `bindExportClickHandler()`，非目标页调用 `removeButtons()` 后再 `unbindExportClickHandler()`。
+- 自审修正：首次实现后发现文件顶部缩进被误加一层，已修正源文件缩进并重新执行构建同步和验证，最终 diff 仅保留生命周期改动。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/potential-plan-daily-exporter.test.mjs` 通过，4 项测试全绿；新增断言覆盖 `init()` 不常驻注册 document click、目标页按需绑定、非目标页解绑并移除按钮。
+- 源码语法：`node --check src/main-assistant/potential-plan-daily-exporter.js` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/potential-plan-daily-exporter.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/magic-report-panel-resilience.test.mjs` 通过，34 项测试全绿。
+- 全量回归：`npm test` 通过，597 项中 595 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在潜力词导出 click 委托生命周期、对应静态测试和构建产物；未改潜力词 API、CSV 字段、计划/单元查询、授权上下文、真实请求 payload 或下载逻辑。
+
+## 结果复盘
+- 第十一轮第七子项结果：潜力词日维度 CSV 导出入口从“主助手启动后所有页面常驻 document click 委托”优化为“仅潜力词目标页绑定，离开目标页解绑并移除按钮”。非潜力词报表页、计划列表页和其它主助手页面不再保留这条无收益委托闭包。
+- 取舍结论：保留按钮 DOM、输入阻止冒泡和导出异常日志语义；只移动 click 委托生命周期，不改变真实导出链路和请求合同。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读探针未完成；后续继续优化前仍只尝试 Chrome MCP，不用其它通道冒充验收。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第六子项
 
 ## 需求规格

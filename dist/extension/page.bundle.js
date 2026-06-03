@@ -22382,6 +22382,8 @@ if (typeof globalThis !== 'undefined') {
     const PotentialPlanDailyExporter = {
         initialized: false,
         running: false,
+        exportClickHandler: null,
+        exportClickHandlerBound: false,
         TARGET_DAYS: 30,
         MAX_EXPORT_DAYS: 365,
         EXPORT_DAYS_STORAGE_KEY: '__AM_POTENTIAL_EXPORT_DAYS__',
@@ -22406,7 +22408,7 @@ if (typeof globalThis !== 'undefined') {
         init() {
             if (window.top !== window.self) return;
             if (this.initialized) return;
-            document.addEventListener('click', (e) => {
+            this.exportClickHandler = (e) => {
                 const target = e.target;
                 if (!(target instanceof Element)) return;
                 if (target.closest(this.DAYS_INPUT_SELECTOR)) return;
@@ -22417,8 +22419,26 @@ if (typeof globalThis !== 'undefined') {
                 this.exportCsv(btn).catch((err) => {
                     Logger.log(`⚠️ 潜力词计划 CSV 导出失败：${err?.message || '未知错误'} `, true);
                 });
-            }, true);
+            };
             this.initialized = true;
+        },
+
+        bindExportClickHandler() {
+            if (this.exportClickHandlerBound) return;
+            if (typeof this.exportClickHandler !== 'function') {
+                this.init();
+            }
+            if (typeof this.exportClickHandler !== 'function') return;
+            document.addEventListener('click', this.exportClickHandler, true);
+            this.exportClickHandlerBound = true;
+        },
+
+        unbindExportClickHandler() {
+            if (!this.exportClickHandlerBound) return;
+            if (typeof this.exportClickHandler === 'function') {
+                document.removeEventListener('click', this.exportClickHandler, true);
+            }
+            this.exportClickHandlerBound = false;
         },
 
         isTargetPage() {
@@ -22986,8 +23006,10 @@ if (typeof globalThis !== 'undefined') {
             if (!document.body) return;
             if (!this.isTargetPage()) {
                 this.removeButtons();
+                this.unbindExportClickHandler();
                 return;
             }
+            this.bindExportClickHandler();
             this.ensureButton();
         },
 
