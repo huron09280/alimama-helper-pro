@@ -1744,6 +1744,24 @@
 
             const removeWizardDomAfterClose = () => {
                 const currentEls = wizardState.els || {};
+                if (typeof wizardState.closeItemPicker === 'function') {
+                    try {
+                        wizardState.closeItemPicker(false);
+                    } catch { }
+                    wizardState.closeItemPicker = null;
+                }
+                if (typeof wizardState.closeScenePopup === 'function') {
+                    try {
+                        wizardState.closeScenePopup(null);
+                    } catch { }
+                    wizardState.closeScenePopup = null;
+                }
+                if (typeof wizardState.closeKeywordAiMaxDemandPopover === 'function') {
+                    try {
+                        wizardState.closeKeywordAiMaxDemandPopover();
+                    } catch { }
+                    wizardState.closeKeywordAiMaxDemandPopover = null;
+                }
                 if (Array.isArray(wizardState.cleanupHandlers)) {
                     wizardState.cleanupHandlers.forEach((cleanup) => {
                         try {
@@ -1751,6 +1769,14 @@
                         } catch { }
                     });
                     wizardState.cleanupHandlers = [];
+                }
+                if (Array.isArray(wizardState.styleCleanupHandlers)) {
+                    wizardState.styleCleanupHandlers.forEach((cleanup) => {
+                        try {
+                            if (typeof cleanup === 'function') cleanup();
+                        } catch { }
+                    });
+                    wizardState.styleCleanupHandlers = [];
                 }
                 if (currentEls.runModeMenu instanceof HTMLElement) {
                     currentEls.runModeMenu.remove();
@@ -1761,6 +1787,9 @@
                 wizardState.els = {};
                 wizardState.mounted = false;
                 wizardState.styleReadyPromise = null;
+                wizardState.closeItemPicker = null;
+                wizardState.closeScenePopup = null;
+                wizardState.closeKeywordAiMaxDemandPopover = null;
                 wizardState.manualKeywordDelegatedBound = false;
             };
             const closeWizardOverlay = () => {

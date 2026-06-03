@@ -1,3 +1,42 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第五轮
+
+## 需求规格
+- 目标：在已完成 4 轮 Chrome 内存优化后，继续用当前运行态证据寻找剩余可优化热点，优先处理低风险、高收益、不会把成本转移到用户点击路径的常驻内存问题。
+- 范围：只覆盖插件在 Chrome 页面中的常驻对象、运行态 DOM、缓存、观察器、定时器、注入资源和构建产物；不改无关业务逻辑，不降低授权、token、shopId、创建/复制/预算等安全边界，不直接编辑构建产物。
+- 成功标准：完成第五轮可验证优化或用证据证明当前已无低风险高收益项；若有实质代码优化，必须记录前后指标、运行测试、Chrome DevTools MCP 复测，并用中文提交信息 commit；若没有可改项，也必须记录排除证据。
+- 安全边界：Chrome 验证只做打开、刷新、只读探针、内存/DOM/资源采集和弹窗打开关闭；不点击创建、投放、提交、删除、扣费类入口。涉及服务器请求时控制在 10rpm 内，本轮优先使用页面内静态探针和扩展资源读取，避免业务接口。
+- 计划校验：本轮不使用子代理；每次偏离候选方向前先更新计划。先问“有没有更优雅的实现方式”：优先释放或避免常驻对象，其次收窄生命周期；不接受隐藏错误、宽泛 fallback 或重复事实源。
+
+## 执行计划（可核对）
+- [x] 复核当前源码与运行态：确认第 4 轮提交后的 Chrome 页面、扩展资源、hook manager、DOM、observer/timer/cache 状态。
+- [x] 定位第五轮热点：用 Chrome DevTools MCP 采集页面内插件节点、全局对象、资源、heap/DOM 指标，并结合 `rg` 静态定位剩余常驻大对象。
+- [x] 方案判断：若热点来自可释放 DOM、缓存、observer、timer 或一次性大对象，设计最小侵入优化；若主要来自必要业务运行时或页面原生，记录不继续改的证据。
+- [x] 实现与测试：落地一项低风险优化，补充或更新相关测试，避免点击路径同步解析大包。
+- [x] 验证闭环：运行相关单测、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并用 Chrome DevTools MCP 做前后复测。
+- [x] 结果归档与提交：写入本节高层操作摘要、验证记录、结果复盘和前后对比；用中文提交信息 commit。
+
+## 高层操作摘要
+- 已根据用户“继续优化，优化到最佳”的目标重启第五轮；不会把前四轮“当前最佳”当作终点。
+- 已确认用户约束继续生效：使用 Chrome DevTools MCP，不使用子代理；每完成一项优化或本轮收口前，先记录结果与对比并中文 commit；服务器请求按 10rpm 控制。
+- 第五轮运行态热点：第 4 轮已卸载组建计划 overlay DOM，但打开过组建计划后 `link#am-wxt-keyword-style`、`style#am-wxt-keyword-critical-style`、`window.__AM_WXT_WIZARD_STYLE_READY_PROMISE__` 仍可能常驻；若商品选择弹窗、场景配置弹窗或 AI 需求 popover 打开时关闭主窗口，body 级子浮层也缺少统一关闭出口。
+- 第五轮方案：把组建计划关闭路径升级为完整生命周期出口。关闭时先通过登记的关闭函数恢复/关闭商品选择、场景配置、批量编辑和 AI 需求 popover，再执行 window 监听清理、外置/内联样式清理、overlay 卸载和元素引用清空。
+- 第五轮实现：`wizardState` 新增 `styleCleanupHandlers` 与 body 级子浮层关闭句柄；extension 外置样式 loader 在关闭时取消加载超时、移除 `wizard-style.css` link、移除 critical style、清理 style-ready Promise；userscript 内联样式也登记关闭清理；AI popover 延迟注册监听前会确认节点仍连接，避免快关后反向挂监听。
+
+## 验证记录
+- 本地验证：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，28 项测试全绿。
+- 本地验证：`npm run check:syntax` 通过，根 userscript 语法检查无错误。
+- 本地验证：`npm run build:check` 通过，根 userscript、`dist/packages/` 和 `dist/extension/` 与源码同步。
+- 本地验证：`git diff --check` 通过，无空白错误。
+- Chrome DevTools MCP 冷态基线：刷新 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 后，`styleLinkBeforeOpen: false`、`criticalStyleBeforeOpen: false`、`stylePromiseBeforeOpen: false`、`overlayBeforeOpen: false`；当前扩展资源 `page.bundle.js` 包含 `styleCleanupHandlers`、`closeItemPicker`、`closeScenePopup`、`if (!popover.isConnected) return;` 和 `delete window[readyPromiseKey]`。
+- Chrome DevTools MCP 快开快关复测：打开组建计划 80ms 时 `styleLink` 存在、critical style 存在、`stylePromise: true`、overlay 子节点 `609`；关闭 80ms 后 `styleLink: null`、`criticalStyle: null`、`stylePromise: false`、`overlay: null`、`scenePopup/itemPicker/popover: false`、`helperNodes: 281`、`keywordNodes: 0`；关闭后 1880ms 指标保持释放。
+- Chrome DevTools MCP 样式加载完成路径复测：样式加载完成时 `styleLink.loaded: "1"`、`criticalStyle.loaded: "1"`、`overlay.open: true`、overlay 子节点 `626`、`helperNodes: 739`；关闭 120ms 后 `styleLink: null`、`criticalStyle: null`、`stylePromise: false`、`overlay: null`、`scenePopup/itemPicker/popover: false`、`helperNodes: 281`、`keywordNodes: 0`；关闭 620ms 后仍保持释放。
+- Chrome 网络边界：组建计划 open bridge 验证未点击创建、提交、投放、删除或扣费入口；样式加载完成路径新增的非扩展网络为页面自身 `https://gm.mmstat.com/aes.1.1` beacon 2 条，无组建计划创建/提交类业务接口。
+
+## 结果复盘
+- 第五轮结果：关闭组建计划后的残留资源从“打开后可能保留 `wizard-style.css` link / critical style / style Promise，且 body 级子浮层缺少主关闭统一出口”优化为关闭后 `styleLink=null`、`criticalStyle=null`、`stylePromise=false`、`overlay=null`、`scenePopup=false`、`itemPicker=false`、`popover=false`。
+- 对比结论：第四轮解决的是大型 overlay DOM 常驻；第五轮继续收紧完整生命周期，解决外置样式资源、critical style、style Promise 和 body 级子浮层的残留。收益重点不是减少首包体积，而是避免“打开过一次组建计划”后在 Chrome 页面长期保留样式节点、Promise 和子浮层监听。
+- 轮次判断：当前已完成 5 轮低风险优化。剩余明显内存来自必要的 `page.bundle.js` 主运行时与页面原生模块；继续优化需要更大架构切分或按业务入口拆模块，风险会高于本轮生命周期清理，后续应先做 heap retained-size 审计再决定是否进入第六轮。
+
 # TODO - 2026-06-03 插件浏览器内存占用优化
 
 ## 需求规格

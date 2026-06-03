@@ -7,11 +7,13 @@ const assistantBootstrapSource = readFileSync(new URL('../src/main-assistant/boo
 const assistantUiSource = readFileSync(new URL('../src/main-assistant/ui.js', import.meta.url), 'utf8');
 const optimizerBridgeSource = readFileSync(new URL('../src/optimizer/bridge.js', import.meta.url), 'utf8');
 const wizardIntroSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/intro.js', import.meta.url), 'utf8');
+const wizardMountIntroSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-mount-intro.js', import.meta.url), 'utf8');
 const wizardOpenSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-open-and-create.js', import.meta.url), 'utf8');
 const requestBuilderPreviewSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/request-builder-preview.js', import.meta.url), 'utf8');
 const searchAndDraftSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/search-and-draft.js', import.meta.url), 'utf8');
 const strategyStateSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/strategy-state-and-draft.js', import.meta.url), 'utf8');
 const batchEditPopupSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/batch-edit-popup.js', import.meta.url), 'utf8');
+const manualKeywordsAndDetailSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js', import.meta.url), 'utf8');
 const itemSelectionSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/item-selection.js', import.meta.url), 'utf8');
 
 test('场景动态渲染的时间解析 helper 可被前置货品全站配置安全调用', () => {
@@ -117,13 +119,13 @@ test('组建计划打开路径不在点击同步任务里构建预览', () => {
 test('组建计划关闭后卸载隐藏 DOM 并清理全局监听', () => {
   assert.match(
     wizardIntroSource,
-    /styleReadyPromise: null,[\s\S]*?cleanupHandlers: \[\],[\s\S]*?els: \{\}/,
+    /styleReadyPromise: null,[\s\S]*?styleCleanupHandlers: \[\],[\s\S]*?closeItemPicker: null,[\s\S]*?closeScenePopup: null,[\s\S]*?closeKeywordAiMaxDemandPopover: null,[\s\S]*?cleanupHandlers: \[\],[\s\S]*?els: \{\}/,
     'wizardState 应显式初始化样式加载 Promise 和关闭清理队列'
   );
   assert.match(
     requestBuilderPreviewSource,
-    /const removeWizardDomAfterClose = \(\) => \{[\s\S]*?wizardState\.cleanupHandlers\.forEach\(\(cleanup\) => \{[\s\S]*?currentEls\.runModeMenu\.remove\(\);[\s\S]*?currentEls\.overlay\.remove\(\);[\s\S]*?wizardState\.els = \{\};[\s\S]*?wizardState\.mounted = false;[\s\S]*?wizardState\.styleReadyPromise = null;[\s\S]*?\};/,
-    '关闭组建计划后必须移除隐藏 overlay DOM、清空元素引用，并允许下次重新 mount'
+    /const removeWizardDomAfterClose = \(\) => \{[\s\S]*?wizardState\.closeItemPicker\(false\);[\s\S]*?wizardState\.closeScenePopup\(null\);[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover\(\);[\s\S]*?wizardState\.cleanupHandlers\.forEach\(\(cleanup\) => \{[\s\S]*?wizardState\.styleCleanupHandlers\.forEach\(\(cleanup\) => \{[\s\S]*?currentEls\.runModeMenu\.remove\(\);[\s\S]*?currentEls\.overlay\.remove\(\);[\s\S]*?wizardState\.els = \{\};[\s\S]*?wizardState\.mounted = false;[\s\S]*?wizardState\.styleReadyPromise = null;[\s\S]*?wizardState\.closeItemPicker = null;[\s\S]*?wizardState\.closeScenePopup = null;[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover = null;[\s\S]*?\};/,
+    '关闭组建计划后必须先关闭 body 级子浮层，再移除 overlay、样式和元素引用'
   );
   assert.match(
     requestBuilderPreviewSource,
@@ -139,6 +141,26 @@ test('组建计划关闭后卸载隐藏 DOM 并清理全局监听', () => {
     requestBuilderPreviewSource,
     /window\.addEventListener\('resize', repositionRunModeMenuIfOpen\);[\s\S]*?window\.addEventListener\('scroll', repositionRunModeMenuIfOpen, true\);[\s\S]*?wizardState\.cleanupHandlers\.push\(\(\) => \{[\s\S]*?window\.removeEventListener\('resize', repositionRunModeMenuIfOpen\);[\s\S]*?window\.removeEventListener\('scroll', repositionRunModeMenuIfOpen, true\);[\s\S]*?\}\);/,
     '可重建弹窗上的 window 级监听必须在关闭卸载时同步清理，避免重复打开叠加监听'
+  );
+  assert.match(
+    wizardMountIntroSource,
+    /const closePicker = \(confirmed = false\) => \{[\s\S]*?wizardState\.closeItemPicker = null;[\s\S]*?document\.removeEventListener\('keydown', handleEsc, true\);[\s\S]*?restoreItemSplit\(\);[\s\S]*?\};[\s\S]*?wizardState\.closeItemPicker = closePicker;/,
+    '商品选择 body 级弹窗应登记正常关闭句柄，主弹窗关闭时必须先恢复搬出的商品列表 DOM'
+  );
+  assert.match(
+    gridSource,
+    /const closeKeywordAiMaxDemandPopover = \(\) => \{[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover = null;[\s\S]*?document\.removeEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*?\};[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;/,
+    'AI 需求 popover 应登记关闭句柄并清理外部 click/keydown 监听'
+  );
+  assert.match(
+    gridSource,
+    /if \(previousMask\) \{[\s\S]*?wizardState\.closeScenePopup\(null\);[\s\S]*?\}[\s\S]*?const close = \(payload = null\) => \{[\s\S]*?wizardState\.closeScenePopup = null;[\s\S]*?document\.removeEventListener\('keydown', handlePopupKeydown, true\);[\s\S]*?\};[\s\S]*?wizardState\.closeScenePopup = close;/,
+    '场景配置弹窗应登记关闭句柄，替换旧弹窗和主弹窗关闭都应走正常清理'
+  );
+  assert.match(
+    manualKeywordsAndDetailSource,
+    /if \(previousMask\) \{[\s\S]*?wizardState\.closeScenePopup\(null\);[\s\S]*?\}[\s\S]*?const close = \(payload = null\) => \{[\s\S]*?wizardState\.closeScenePopup = null;[\s\S]*?document\.removeEventListener\('keydown', handleEscClose, true\);[\s\S]*?\};[\s\S]*?wizardState\.closeScenePopup = close;/,
+    '批量编辑弹窗应复用同一关闭句柄，避免关闭主弹窗后遗留 body 级遮罩'
   );
 });
 

@@ -961,6 +961,9 @@
                 const closePicker = (confirmed = false) => {
                     if (closed) return;
                     closed = true;
+                    if (wizardState.closeItemPicker === closePicker) {
+                        wizardState.closeItemPicker = null;
+                    }
                     document.removeEventListener('keydown', handleEsc, true);
                     if (!confirmed) {
                         wizardState.addedItems = initialAddedItemsSnapshot.map(item => deepClone(item));
@@ -983,6 +986,7 @@
                 };
 
                 document.addEventListener('keydown', handleEsc, true);
+                wizardState.closeItemPicker = closePicker;
                 const closeBtn = mask.querySelector('[data-am-wxt-item-picker-close="1"]');
                 const cancelBtn = mask.querySelector('[data-am-wxt-item-picker-cancel="1"]');
                 const confirmBtn = mask.querySelector('[data-am-wxt-item-picker-confirm="1"]');

@@ -137,6 +137,10 @@
             keywordAiMaxGenerationMap: {},
             crowdCustomDefaultItemPending: null,
             styleReadyPromise: null,
+            styleCleanupHandlers: [],
+            closeItemPicker: null,
+            closeScenePopup: null,
+            closeKeywordAiMaxDemandPopover: null,
             cleanupHandlers: [],
             els: {}
         };

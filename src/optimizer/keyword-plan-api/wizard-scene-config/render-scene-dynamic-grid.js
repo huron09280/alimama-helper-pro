@@ -642,6 +642,9 @@
                     }
                 };
                 const closeKeywordAiMaxDemandPopover = () => {
+                    if (wizardState.closeKeywordAiMaxDemandPopover === closeKeywordAiMaxDemandPopover) {
+                        wizardState.closeKeywordAiMaxDemandPopover = null;
+                    }
                     const existing = document.getElementById('am-wxt-ai-max-demand-popover');
                     if (existing) existing.remove();
                     document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
@@ -811,7 +814,11 @@
                         event.preventDefault();
                         closeKeywordAiMaxDemandPopover();
                     };
+                    wizardState.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;
                     setTimeout(() => {
+                        if (!popover.isConnected) return;
+                        if (typeof wizardState.aiMaxDemandPopoverOutsideClick !== 'function') return;
+                        if (typeof wizardState.aiMaxDemandPopoverEscClose !== 'function') return;
                         document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
                         document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
                     }, 0);
@@ -833,7 +840,17 @@
                 } = {}) => (
                     new Promise((resolve) => {
                         const previousMask = document.getElementById('am-wxt-scene-popup-mask');
-                        if (previousMask) previousMask.remove();
+                        if (previousMask) {
+                            if (typeof wizardState.closeScenePopup === 'function') {
+                                try {
+                                    wizardState.closeScenePopup(null);
+                                } catch {
+                                    previousMask.remove();
+                                }
+                            } else {
+                                previousMask.remove();
+                            }
+                        }
                         const mask = document.createElement('div');
                         mask.id = 'am-wxt-scene-popup-mask';
                         mask.className = 'am-wxt-scene-popup-mask';
@@ -923,6 +940,9 @@
                             }
                         };
                         const close = (payload = null) => {
+                            if (wizardState.closeScenePopup === close) {
+                                wizardState.closeScenePopup = null;
+                            }
                             document.removeEventListener('keydown', handlePopupKeydown, true);
                             if (typeof mask._amWxtCleanup === 'function') {
                                 try {
@@ -955,6 +975,7 @@
                                 }
                             };
                         }
+                        wizardState.closeScenePopup = close;
                         document.body.appendChild(mask);
                         focusDefaultTarget();
                         if (typeof onMounted === 'function') {

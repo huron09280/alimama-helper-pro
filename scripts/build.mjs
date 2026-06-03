@@ -157,7 +157,7 @@ const replaceTemplateTokens = (text, tokens = {}) => {
     return output;
 };
 
-const WIZARD_STYLE_FUNCTION_PATTERN = /        const ensureWizardStyle = \(\) => \{[\s\S]*?            document\.head\.appendChild\(style\);\n        \};/;
+const WIZARD_STYLE_FUNCTION_PATTERN = /        const ensureWizardStyle = \(\) => \{[\s\S]*?\n        \};/;
 
 export const extractWizardStyleCss = () => {
     const source = readText(WIZARD_STYLE_SEGMENT);
@@ -232,6 +232,7 @@ export const renderExtensionWizardStyleLoader = () => `        const ensureWizar
             link.rel = 'stylesheet';
             link.href = new URL('${EXTENSION_WIZARD_STYLE_FILE}', baseUrl).href;
             link.dataset.amHelperExternalStyle = '1';
+            let loadTimeoutId = 0;
             window[readyPromiseKey] = new Promise((resolve) => {
                 let settled = false;
                 const settle = (result) => {
@@ -239,13 +240,13 @@ export const renderExtensionWizardStyleLoader = () => `        const ensureWizar
                     settled = true;
                     resolve(result);
                 };
-                const timeoutId = setTimeout(() => {
+                loadTimeoutId = setTimeout(() => {
                     const critical = document.getElementById('am-wxt-keyword-critical-style');
                     if (critical) critical.dataset.amHelperFullStyleFailed = 'wizard_style_load_timeout';
                     settle({ ok: false, reason: 'wizard_style_load_timeout' });
                 }, 1600);
                 link.onload = () => {
-                    clearTimeout(timeoutId);
+                    clearTimeout(loadTimeoutId);
                     link.dataset.amHelperFullStyleLoaded = '1';
                     const critical = document.getElementById('am-wxt-keyword-critical-style');
                     if (critical) critical.dataset.amHelperFullStyleLoaded = '1';
@@ -259,7 +260,7 @@ export const renderExtensionWizardStyleLoader = () => `        const ensureWizar
                     settle({ ok: true, source: 'external' });
                 };
                 link.onerror = () => {
-                    clearTimeout(timeoutId);
+                    clearTimeout(loadTimeoutId);
                     link.remove();
                     const critical = document.getElementById('am-wxt-keyword-critical-style');
                     if (critical) critical.dataset.amHelperFullStyleFailed = 'wizard_style_load_failed';
@@ -267,6 +268,24 @@ export const renderExtensionWizardStyleLoader = () => `        const ensureWizar
                 };
             });
             document.head.appendChild(link);
+            wizardState.styleCleanupHandlers = Array.isArray(wizardState.styleCleanupHandlers) ? wizardState.styleCleanupHandlers : [];
+            wizardState.styleCleanupHandlers.push(() => {
+                clearTimeout(loadTimeoutId);
+                link.onload = null;
+                link.onerror = null;
+                if (link.parentNode) link.parentNode.removeChild(link);
+                const critical = document.getElementById('am-wxt-keyword-critical-style');
+                if (critical?.parentNode) {
+                    critical.parentNode.removeChild(critical);
+                }
+                if (window[readyPromiseKey]) {
+                    try {
+                        delete window[readyPromiseKey];
+                    } catch {
+                        window[readyPromiseKey] = null;
+                    }
+                }
+            });
             return window[readyPromiseKey];
         };`;
 

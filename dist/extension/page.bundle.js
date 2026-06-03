@@ -24093,6 +24093,10 @@ if (typeof globalThis !== 'undefined') {
             keywordAiMaxGenerationMap: {},
             crowdCustomDefaultItemPending: null,
             styleReadyPromise: null,
+            styleCleanupHandlers: [],
+            closeItemPicker: null,
+            closeScenePopup: null,
+            closeKeywordAiMaxDemandPopover: null,
             cleanupHandlers: [],
             els: {}
         };
@@ -38353,6 +38357,7 @@ if (typeof globalThis !== 'undefined') {
             link.rel = 'stylesheet';
             link.href = new URL('wizard-style.css', baseUrl).href;
             link.dataset.amHelperExternalStyle = '1';
+            let loadTimeoutId = 0;
             window[readyPromiseKey] = new Promise((resolve) => {
                 let settled = false;
                 const settle = (result) => {
@@ -38360,13 +38365,13 @@ if (typeof globalThis !== 'undefined') {
                     settled = true;
                     resolve(result);
                 };
-                const timeoutId = setTimeout(() => {
+                loadTimeoutId = setTimeout(() => {
                     const critical = document.getElementById('am-wxt-keyword-critical-style');
                     if (critical) critical.dataset.amHelperFullStyleFailed = 'wizard_style_load_timeout';
                     settle({ ok: false, reason: 'wizard_style_load_timeout' });
                 }, 1600);
                 link.onload = () => {
-                    clearTimeout(timeoutId);
+                    clearTimeout(loadTimeoutId);
                     link.dataset.amHelperFullStyleLoaded = '1';
                     const critical = document.getElementById('am-wxt-keyword-critical-style');
                     if (critical) critical.dataset.amHelperFullStyleLoaded = '1';
@@ -38380,7 +38385,7 @@ if (typeof globalThis !== 'undefined') {
                     settle({ ok: true, source: 'external' });
                 };
                 link.onerror = () => {
-                    clearTimeout(timeoutId);
+                    clearTimeout(loadTimeoutId);
                     link.remove();
                     const critical = document.getElementById('am-wxt-keyword-critical-style');
                     if (critical) critical.dataset.amHelperFullStyleFailed = 'wizard_style_load_failed';
@@ -38388,6 +38393,24 @@ if (typeof globalThis !== 'undefined') {
                 };
             });
             document.head.appendChild(link);
+            wizardState.styleCleanupHandlers = Array.isArray(wizardState.styleCleanupHandlers) ? wizardState.styleCleanupHandlers : [];
+            wizardState.styleCleanupHandlers.push(() => {
+                clearTimeout(loadTimeoutId);
+                link.onload = null;
+                link.onerror = null;
+                if (link.parentNode) link.parentNode.removeChild(link);
+                const critical = document.getElementById('am-wxt-keyword-critical-style');
+                if (critical?.parentNode) {
+                    critical.parentNode.removeChild(critical);
+                }
+                if (window[readyPromiseKey]) {
+                    try {
+                        delete window[readyPromiseKey];
+                    } catch {
+                        window[readyPromiseKey] = null;
+                    }
+                }
+            });
             return window[readyPromiseKey];
         };
         const getDefaultStrategyList = () => ([
@@ -42475,6 +42498,9 @@ if (typeof globalThis !== 'undefined') {
                 const closePicker = (confirmed = false) => {
                     if (closed) return;
                     closed = true;
+                    if (wizardState.closeItemPicker === closePicker) {
+                        wizardState.closeItemPicker = null;
+                    }
                     document.removeEventListener('keydown', handleEsc, true);
                     if (!confirmed) {
                         wizardState.addedItems = initialAddedItemsSnapshot.map(item => deepClone(item));
@@ -42497,6 +42523,7 @@ if (typeof globalThis !== 'undefined') {
                 };
 
                 document.addEventListener('keydown', handleEsc, true);
+                wizardState.closeItemPicker = closePicker;
                 const closeBtn = mask.querySelector('[data-am-wxt-item-picker-close="1"]');
                 const cancelBtn = mask.querySelector('[data-am-wxt-item-picker-cancel="1"]');
                 const confirmBtn = mask.querySelector('[data-am-wxt-item-picker-confirm="1"]');
@@ -49345,6 +49372,9 @@ if (typeof globalThis !== 'undefined') {
                     }
                 };
                 const closeKeywordAiMaxDemandPopover = () => {
+                    if (wizardState.closeKeywordAiMaxDemandPopover === closeKeywordAiMaxDemandPopover) {
+                        wizardState.closeKeywordAiMaxDemandPopover = null;
+                    }
                     const existing = document.getElementById('am-wxt-ai-max-demand-popover');
                     if (existing) existing.remove();
                     document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
@@ -49514,7 +49544,11 @@ if (typeof globalThis !== 'undefined') {
                         event.preventDefault();
                         closeKeywordAiMaxDemandPopover();
                     };
+                    wizardState.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;
                     setTimeout(() => {
+                        if (!popover.isConnected) return;
+                        if (typeof wizardState.aiMaxDemandPopoverOutsideClick !== 'function') return;
+                        if (typeof wizardState.aiMaxDemandPopoverEscClose !== 'function') return;
                         document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
                         document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
                     }, 0);
@@ -49536,7 +49570,17 @@ if (typeof globalThis !== 'undefined') {
                 } = {}) => (
                     new Promise((resolve) => {
                         const previousMask = document.getElementById('am-wxt-scene-popup-mask');
-                        if (previousMask) previousMask.remove();
+                        if (previousMask) {
+                            if (typeof wizardState.closeScenePopup === 'function') {
+                                try {
+                                    wizardState.closeScenePopup(null);
+                                } catch {
+                                    previousMask.remove();
+                                }
+                            } else {
+                                previousMask.remove();
+                            }
+                        }
                         const mask = document.createElement('div');
                         mask.id = 'am-wxt-scene-popup-mask';
                         mask.className = 'am-wxt-scene-popup-mask';
@@ -49626,6 +49670,9 @@ if (typeof globalThis !== 'undefined') {
                             }
                         };
                         const close = (payload = null) => {
+                            if (wizardState.closeScenePopup === close) {
+                                wizardState.closeScenePopup = null;
+                            }
                             document.removeEventListener('keydown', handlePopupKeydown, true);
                             if (typeof mask._amWxtCleanup === 'function') {
                                 try {
@@ -49658,6 +49705,7 @@ if (typeof globalThis !== 'undefined') {
                                 }
                             };
                         }
+                        wizardState.closeScenePopup = close;
                         document.body.appendChild(mask);
                         focusDefaultTarget();
                         if (typeof onMounted === 'function') {
@@ -57379,7 +57427,17 @@ if (typeof globalThis !== 'undefined') {
             } = {}) => (
                 new Promise((resolve) => {
                     const previousMask = document.getElementById('am-wxt-scene-popup-mask');
-                    if (previousMask) previousMask.remove();
+                    if (previousMask) {
+                        if (typeof wizardState.closeScenePopup === 'function') {
+                            try {
+                                wizardState.closeScenePopup(null);
+                            } catch {
+                                previousMask.remove();
+                            }
+                        } else {
+                            previousMask.remove();
+                        }
+                    }
                     const mask = document.createElement('div');
                     mask.id = 'am-wxt-scene-popup-mask';
                     const normalizedDialogClassName = String(dialogClassName || '').trim();
@@ -57416,6 +57474,9 @@ if (typeof globalThis !== 'undefined') {
                         close(null);
                     };
                     const close = (payload = null) => {
+                        if (wizardState.closeScenePopup === close) {
+                            wizardState.closeScenePopup = null;
+                        }
                         document.removeEventListener('keydown', handleEscClose, true);
                         mask.remove();
                         resolve(payload);
@@ -57471,6 +57532,7 @@ if (typeof globalThis !== 'undefined') {
                             }
                         };
                     }
+                    wizardState.closeScenePopup = close;
                     document.body.appendChild(mask);
                     if (typeof onMounted === 'function') {
                         try {
@@ -60814,6 +60876,24 @@ if (typeof globalThis !== 'undefined') {
 
             const removeWizardDomAfterClose = () => {
                 const currentEls = wizardState.els || {};
+                if (typeof wizardState.closeItemPicker === 'function') {
+                    try {
+                        wizardState.closeItemPicker(false);
+                    } catch { }
+                    wizardState.closeItemPicker = null;
+                }
+                if (typeof wizardState.closeScenePopup === 'function') {
+                    try {
+                        wizardState.closeScenePopup(null);
+                    } catch { }
+                    wizardState.closeScenePopup = null;
+                }
+                if (typeof wizardState.closeKeywordAiMaxDemandPopover === 'function') {
+                    try {
+                        wizardState.closeKeywordAiMaxDemandPopover();
+                    } catch { }
+                    wizardState.closeKeywordAiMaxDemandPopover = null;
+                }
                 if (Array.isArray(wizardState.cleanupHandlers)) {
                     wizardState.cleanupHandlers.forEach((cleanup) => {
                         try {
@@ -60821,6 +60901,14 @@ if (typeof globalThis !== 'undefined') {
                         } catch { }
                     });
                     wizardState.cleanupHandlers = [];
+                }
+                if (Array.isArray(wizardState.styleCleanupHandlers)) {
+                    wizardState.styleCleanupHandlers.forEach((cleanup) => {
+                        try {
+                            if (typeof cleanup === 'function') cleanup();
+                        } catch { }
+                    });
+                    wizardState.styleCleanupHandlers = [];
                 }
                 if (currentEls.runModeMenu instanceof HTMLElement) {
                     currentEls.runModeMenu.remove();
@@ -60831,6 +60919,9 @@ if (typeof globalThis !== 'undefined') {
                 wizardState.els = {};
                 wizardState.mounted = false;
                 wizardState.styleReadyPromise = null;
+                wizardState.closeItemPicker = null;
+                wizardState.closeScenePopup = null;
+                wizardState.closeKeywordAiMaxDemandPopover = null;
                 wizardState.manualKeywordDelegatedBound = false;
             };
             const closeWizardOverlay = () => {

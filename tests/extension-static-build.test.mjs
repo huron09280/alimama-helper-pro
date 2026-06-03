@@ -265,6 +265,9 @@ test('extension 组建计划样式外置并保留首屏关键样式', () => {
   assert.match(pageBundle, /__AM_WXT_WIZARD_STYLE_READY_PROMISE__/, '外置 CSS loader 缺少样式加载 Promise 契约');
   assert.match(pageBundle, /wizard_style_load_timeout/, '外置 CSS loader 缺少加载超时兜底');
   assert.match(pageBundle, /wizard_style_load_failed/, '外置 CSS loader 缺少加载失败兜底');
+  assert.match(pageBundle, /clearTimeout\(loadTimeoutId\);[\s\S]*link\.onload = null;[\s\S]*link\.onerror = null;[\s\S]*if \(link\.parentNode\) link\.parentNode\.removeChild\(link\);/, '关闭组建计划时必须取消外置样式加载定时器并移除 link');
+  assert.match(pageBundle, /const critical = document\.getElementById\('am-wxt-keyword-critical-style'\);[\s\S]*if \(critical\?\.parentNode\) \{[\s\S]*critical\.parentNode\.removeChild\(critical\);[\s\S]*\}/, '关闭组建计划时必须清理 critical style，覆盖快开快关未加载完成场景');
+  assert.match(pageBundle, /delete window\[readyPromiseKey\]/, '关闭组建计划时必须清理样式 Promise，允许下次打开重新加载样式');
   assert.match(pageBundle, /revealWizardAfterStyleReady\(openToken\);/, '组建计划打开前未等待外置样式加载结果');
   assert.match(pageBundle, /wizardState\.els\.overlay\.dataset\.styleLoading = '1';[\s\S]*wizardState\.els\.overlay\.classList\.remove\('open'\);/, '组建计划打开时应先保持 overlay 隐藏，避免外置 CSS 加载前露出裸 DOM');
   assert.match(pageBundle, /delete overlay\.dataset\.styleLoading;[\s\S]*overlay\.classList\.add\('open'\);/, '组建计划展示时应清理样式加载态');
