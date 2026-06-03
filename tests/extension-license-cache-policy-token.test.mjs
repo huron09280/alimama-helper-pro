@@ -91,6 +91,29 @@ test('授权锁定遮罩使用统一 UI 语义并避免 HTML 拼接展示状态'
     assert.doesNotMatch(overlayBlock, /leaseToken|policyToken|deviceHash|nonce/, '授权遮罩不应展示敏感授权字段');
 });
 
+test('授权锁定遮罩移除时同步释放专用 style 并支持再次锁定重建', () => {
+    assert.match(
+        source,
+        /const removeOverlay = \(\) => \{[\s\S]*const node = document\.getElementById\(OVERLAY_ID\);[\s\S]*if \(node\) node\.remove\(\);[\s\S]*const styleNode = document\.getElementById\(OVERLAY_STYLE_ID\);[\s\S]*if \(styleNode\) styleNode\.remove\(\);[\s\S]*\};/,
+        'removeOverlay 应同步删除授权遮罩 DOM 与专用 style 节点'
+    );
+    assert.match(
+        source,
+        /const updatePendingAuthorizationState = \(source = 'on_demand_interaction'\) => \{[\s\S]*removeOverlay\(\);[\s\S]*\};/,
+        '进入等待态时应通过 removeOverlay 释放历史遮罩和 style'
+    );
+    assert.match(
+        source,
+        /const unlock = \(payload = \{\}\) => \{[\s\S]*removeOverlay\(\);[\s\S]*scheduleExpiryCheck\(\);[\s\S]*\};/,
+        '授权恢复时应通过 removeOverlay 释放遮罩和 style'
+    );
+    assert.match(
+        source,
+        /const renderOverlay = \(\) => \{[\s\S]*renderOverlayStyle\(\);[\s\S]*let root = document\.getElementById\(OVERLAY_ID\);/,
+        '再次锁定时应先按需重建授权遮罩 style'
+    );
+});
+
 test('授权锁定遮罩视觉收敛到浅玻璃 token', () => {
     assert.match(source, /background: linear-gradient\(135deg, rgba\(255, 255, 255, 0\.72\), rgba\(255, 255, 255, 0\.48\)\);/, '授权遮罩 overlay 未使用白色玻璃遮罩');
     assert.match(source, /backdrop-filter: blur\(12px\) saturate\(1\.18\);/, '授权遮罩 overlay 未使用统一玻璃模糊');

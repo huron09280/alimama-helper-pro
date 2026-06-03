@@ -1701,6 +1701,8 @@
     const removeOverlay = () => {
         const node = document.getElementById(OVERLAY_ID);
         if (node) node.remove();
+        const styleNode = document.getElementById(OVERLAY_STYLE_ID);
+        if (styleNode) styleNode.remove();
     };
 
     const renderOverlay = () => {

@@ -1,3 +1,43 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第十子项
+
+## 需求规格
+- 目标：在关键词向导 native runtime list cache 主动释放后，继续收口授权锁定遮罩的专用 style 节点生命周期，避免授权恢复、等待态或遮罩移除后仍残留 `#am-license-lock-style`。
+- 根因判断：`renderOverlayStyle()` 只服务 `#am-license-lock-overlay`，但 `removeOverlay()` 当前只删除遮罩 DOM，不删除对应 style；`unlock()` 和 `updatePendingAuthorizationState()` 会调用 `removeOverlay()`，因此遮罩移除后 CSS 节点可能长期滞留页面。
+- 范围：仅覆盖 `src/entries/extension-license-guard.js` 中授权锁定遮罩 DOM/style 的绑定关系和对应测试；不改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥或业务入口。
+- 热修 vs 结构性修复取舍：采用“遮罩移除时同步移除专用 style，下一次锁定时由 `renderOverlayStyle()` 按需重建”的单一生命周期；不新增状态位，不把安全监听改成弹窗期间绑定，不吞授权错误。
+- 成功标准：静态测试证明 `removeOverlay()` 同时删除 overlay/style，`unlock()` 和等待态会走统一移除路径，`renderOverlay()` 仍先调用 `renderOverlayStyle()` 支持再次锁定重建；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读连接/DOM 观察。
+
+## 执行计划（可核对）
+- [x] 复核第九子项提交后工作区状态，确认本子项只处理授权遮罩 style 生命周期。
+- [x] 实现 `removeOverlay()` 同步移除 `OVERLAY_STYLE_ID`，保留 `renderOverlay()` 按需重建。
+- [x] 补充/更新目标测试，锁定遮罩 style 不在关闭后残留且授权安全监听不被改动。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `4fe7feb 优化 Chrome 关键词向导缓存释放`，工作区干净。
+- 子代理只读审计确认：授权按需校验 `pointerdown`/`keydown` 监听承担未授权阻断和有效租约刷新，不适合为省内存改为弹窗期间绑定；授权锁定遮罩 style 节点随 `removeOverlay()` 删除是低风险候选。
+- 方案判断：只改 `removeOverlay()` 的 DOM 回收边界，让遮罩节点和遮罩专用 style 同生命周期；不改 `lock()`、`unlock()`、`installOnDemandVerifyHooks()` 或任何授权判定。
+- 实现摘要：`src/entries/extension-license-guard.js` 中 `removeOverlay()` 现在同时删除 `OVERLAY_ID` 和 `OVERLAY_STYLE_ID`；再次授权失败时 `renderOverlay()` 仍先调用 `renderOverlayStyle()` 按需重建样式。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs` 通过，10 项测试全绿；新增断言覆盖 `removeOverlay()` 同步删除 overlay/style、等待态和授权恢复走统一回收路径，以及再次锁定前按需重建 style。
+- 源码语法：`node --check src/entries/extension-license-guard.js` 与 `node --check tests/extension-license-cache-policy-token.test.mjs` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，30 项测试全绿。
+- 全量回归：`npm test` 通过，602 项中 600 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在授权遮罩 style 节点生命周期、对应静态测试和构建产物；未改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥或业务入口。
+
+## 结果复盘
+- 第十一轮第十子项结果：授权锁定遮罩从“关闭后只删除 overlay DOM，专用 style 节点可能残留”优化为“关闭/授权恢复/等待态统一释放 overlay 和 style，下次锁定再按需重建”。页面授权恢复后不再长期保留只服务锁定遮罩的 CSS 节点。
+- 取舍结论：这是小范围 DOM 生命周期收口；保留未授权阻断与租约刷新监听常驻，不为节省一个 style 节点触碰授权安全边界。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读观察未完成；后续继续优化仍只尝试 Chrome MCP，不用其它通道冒充验收。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第九子项
 
 ## 需求规格
