@@ -1,3 +1,42 @@
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第五子项
+
+## 需求规格
+- 目标：在普通 `myseller` userscript 入口守卫后，继续收口源码审计中剩余的 bridge 结果缓存生命周期，避免无后续请求时最后一批大结果只能依赖下一次请求被动清理。
+- 根因判断：bridge host 的 result cache 若只在读写路径顺手 prune，长时间无新请求时可能继续保留最后一次大 payload；这是插件自有常驻对象边界，适合做主动 TTL 释放。
+- 范围：仅覆盖 `src/optimizer/bridge.js` 内 bridge 结果缓存的 TTL/主动释放机制和对应测试；不改 bridge 白名单、安全来源校验、计划创建/复制/修复业务合同，不改授权、policy token、shopId 或真实写接口。
+- 方案原则：用单一 cache 元数据和一个可重入 cleanup timer 表达生命周期；不新增第二套结果事实源，不吞错，不延长已有 TTL，不改变成功/失败响应结构。
+- 成功标准：补充静态/行为测试证明结果写入后会安排 cleanup、cleanup 到期会删除过期大结果、读取仍会刷新或遵守既有 TTL 语义；通过目标测试、构建同步/检查、语法/空白检查、必要回归。Chrome MCP 真实页只读验证必须使用 `mcp__chrome_devtools.*`；若 MCP 仍不可用，明确记录阻塞，不使用 CDP/其它浏览器替代。
+- 安全边界：本子项不触发真实创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读探针。
+
+## 执行计划（可核对）
+- [x] 定位 bridge result cache 当前数据结构、TTL、读写和 prune 路径。
+- [x] 设计主动释放机制，确保一个 timer 覆盖最近过期时间并可重复调度/取消。
+- [x] 实现最小改动并补充目标测试。
+- [x] 运行目标测试、构建检查、语法/空白检查和必要回归。
+- [x] 仅用 Chrome MCP 尝试真实页只读验证；若 MCP 仍不可用，记录阻塞。
+- [x] 结果复盘、diff 自审并中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `e9f70d3 优化 Chrome myseller userscript 入口守卫`，工作区干净。
+- Chrome MCP 当前仍失败于 `mcp__chrome_devtools.list_pages` 的 `Could not find DevToolsActivePort...`；按 L97，本子项不会使用原生 CDP 或其它浏览器通道替代。
+- 定位结论：`installPageApiBridgeHost()` 内的 `resolvedPayloadCache` 只有在 `processBridgeRequest()` 入口调用 `cleanupBridgeCache()`，以及写入后等待下一次请求时才会清理；若最后一次请求返回大 payload 后长期无新请求，结果会在 Map 中继续保留。
+- 实现摘要：`src/optimizer/bridge.js` 为 bridge result cache 增加单一 `bridgeCacheCleanupTimer`，写入结果后调度最近过期时间；timer 触发后清理过期结果，并在仍有缓存时继续按最近过期项重排下一次清理。
+- Diff 自审：未改变 `API_BRIDGE_METHOD_SET` 白名单、请求来源处理、响应 payload 结构或任何创建/复制/修复业务方法；只给已有 `resolvedPayloadCache` 增加主动 TTL 生命周期。
+
+## 验证记录
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标/相关回归：`node --test tests/keyword-plan-api-bridge-security.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，42 项测试全绿；新增断言覆盖 cache TTL、单一 Map 事实源、主动 cleanup timer、过期删除、重排下一次 cleanup、写入后立即调度。
+- 构建检查：`npm run build:check` 通过。
+- 语法检查：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，595 项中 593 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97 与用户“只用chrome mcp”要求，本子项未用 CDP 或其它浏览器通道替代。
+
+## 结果复盘
+- 第十一轮第五子项结果：bridge host 的 `resolvedPayloadCache` 从“只在下一次请求时被动清理过期结果”改为“结果写入后按 TTL 主动释放，长期无后续请求也会释放最后一批 payload”。这收口了 extension/page bridge 中一个插件自有 Map 的常驻边界。
+- 取舍结论：保留 90 秒 TTL 与重复 callId 命中语义，不新增第二事实源，不延长缓存时间，不改变 bridge 白名单或业务调用合同；收益主要体现在复制/创建等大结果返回后页面闲置的内存上界。
+- 验证缺口：Chrome MCP 当前会话连接阻塞，真实页只读观察未完成；后续继续优化前仍优先恢复 MCP。
+
 # TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第四子项
 
 ## 需求规格
