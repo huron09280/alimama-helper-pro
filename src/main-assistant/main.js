@@ -231,17 +231,19 @@
     }
 
     let hasBootstrapped = false;
-    let bootstrapRetryIntervalId = 0;
-    let bootstrapRetryTimeoutId = 0;
-    const clearBootstrapRetryTimers = () => {
-        if (bootstrapRetryIntervalId) {
-            clearInterval(bootstrapRetryIntervalId);
-            bootstrapRetryIntervalId = 0;
+    const BOOTSTRAP_RETRY_INITIAL_DELAY_MS = 16;
+    const BOOTSTRAP_RETRY_MAX_DELAY_MS = 250;
+    const BOOTSTRAP_RETRY_TIMEOUT_MS = 10000;
+    let bootstrapRetryTimerId = 0;
+    let bootstrapRetryDeadlineAt = 0;
+    let bootstrapRetryDelayMs = BOOTSTRAP_RETRY_INITIAL_DELAY_MS;
+    const clearBootstrapRetryTimer = () => {
+        if (bootstrapRetryTimerId) {
+            clearTimeout(bootstrapRetryTimerId);
+            bootstrapRetryTimerId = 0;
         }
-        if (bootstrapRetryTimeoutId) {
-            clearTimeout(bootstrapRetryTimeoutId);
-            bootstrapRetryTimeoutId = 0;
-        }
+        bootstrapRetryDeadlineAt = 0;
+        bootstrapRetryDelayMs = BOOTSTRAP_RETRY_INITIAL_DELAY_MS;
     };
     const reportBootstrapError = (err) => {
         try {
@@ -252,29 +254,53 @@
         } catch { }
     };
     const bootstrapMain = () => {
-        if (hasBootstrapped) return;
-        if (!document.body) return;
+        if (hasBootstrapped) return true;
+        if (!document.body) return false;
         hasBootstrapped = true;
-        clearBootstrapRetryTimers();
+        clearBootstrapRetryTimer();
         try {
             main();
         } catch (err) {
             reportBootstrapError(err);
         }
+        return true;
+    };
+    const scheduleBootstrapRetry = () => {
+        if (hasBootstrapped || bootstrapRetryTimerId) return;
+        const now = Date.now();
+        if (!bootstrapRetryDeadlineAt) {
+            bootstrapRetryDeadlineAt = now + BOOTSTRAP_RETRY_TIMEOUT_MS;
+            bootstrapRetryDelayMs = BOOTSTRAP_RETRY_INITIAL_DELAY_MS;
+        }
+        if (now >= bootstrapRetryDeadlineAt) {
+            clearBootstrapRetryTimer();
+            return;
+        }
+        const retryDelay = Math.min(
+            bootstrapRetryDelayMs,
+            Math.max(0, bootstrapRetryDeadlineAt - now)
+        );
+        bootstrapRetryTimerId = setTimeout(() => {
+            bootstrapRetryTimerId = 0;
+            bootstrapMain();
+            if (hasBootstrapped) return;
+            bootstrapRetryDelayMs = Math.min(
+                BOOTSTRAP_RETRY_MAX_DELAY_MS,
+                Math.max(BOOTSTRAP_RETRY_INITIAL_DELAY_MS, bootstrapRetryDelayMs * 2)
+            );
+            scheduleBootstrapRetry();
+        }, retryDelay);
     };
 
     bootstrapMain();
 
     if (!hasBootstrapped) {
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', bootstrapMain, { once: true });
+            document.addEventListener('DOMContentLoaded', () => {
+                if (!bootstrapMain()) scheduleBootstrapRetry();
+            }, { once: true });
         } else {
-            bootstrapRetryIntervalId = setInterval(() => {
-                bootstrapMain();
-            }, 16);
-            bootstrapRetryTimeoutId = setTimeout(() => {
-                clearBootstrapRetryTimers();
-            }, 10000);
+            scheduleBootstrapRetry();
         }
     }
 

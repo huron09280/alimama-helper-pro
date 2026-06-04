@@ -1,3 +1,50 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十九子项
+
+## 需求规格
+- 目标：在 AI 点睛逐字动画收口后，继续优化主助手启动兜底轮询，避免 `src/main-assistant/main.js` 在 `document.readyState !== 'loading'` 但 `document.body` 尚未出现的极少数场景下保留 16ms `setInterval` 重试。
+- 根因判断：当前启动逻辑已能在成功或 10 秒后同时清理 interval/timeout，但兜底路径仍是固定 16ms interval；若页面结构异常或 body 延迟挂载，启动前会产生高频唤醒，且需要双 timer 句柄共同维护。
+- 范围：仅覆盖主助手 bootstrap 兜底重试调度；不改 `main()` 内的核心扫描、MutationObserver、授权、extension 注入、算法护航、组建计划、复制、预算、报表、接口并发或 10rpm 服务端策略。
+- 热修 vs 结构性修复取舍：把固定 interval + timeout 双句柄改为单一可取消递归 timeout，使用 10 秒 deadline 和 16ms -> 250ms 退避；DOMContentLoaded 后若 body 仍不可用，再进入同一兜底调度，保证启动语义集中在一个 helper。
+- 成功标准：静态测试证明主助手启动兜底不再使用 `setInterval`/`clearInterval`，存在 `bootstrapRetryTimerId`、deadline、delay 退避、`clearBootstrapRetryTimer()`、`scheduleBootstrapRetry()`、成功启动立即清理、超出 deadline 清理、DOMContentLoaded 后失败进入兜底；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不改变任何业务按钮和请求路径，不点击组建计划、立即投放、新建、复制、批量+、预算提交、潜力词导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第三十八子项提交后工作区状态，确认本子项只处理主助手 bootstrap 兜底重试。
+- [x] 将 16ms 固定 `setInterval` 改为单一递归 `setTimeout` 调度。
+- [x] 为启动兜底加入 10 秒 deadline、16ms 到 250ms 退避和统一清理 helper。
+- [x] 更新目标测试，锁定不再使用 interval、成功/超时清理和 DOMContentLoaded 后兜底调度。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ab88367 优化点睛打字动画`，工作区干净。
+- 定位结论：源码中剩余明确固定 interval 集中在主助手启动兜底路径；这是启动阶段异常路径，不涉及服务器请求和真实业务写操作。
+- 取舍结论：保留立即 `bootstrapMain()` 与 loading 阶段 DOMContentLoaded 优先策略，只把 body 缺失时的高频兜底改为 deadline 约束的 timeout 退避，减少极端页面状态下的无效唤醒。
+- 实现摘要：`bootstrapRetryIntervalId`/`bootstrapRetryTimeoutId` 双句柄被替换为 `bootstrapRetryTimerId`、`bootstrapRetryDeadlineAt` 和 `bootstrapRetryDelayMs`；`scheduleBootstrapRetry()` 只保留一个 pending timeout，触发后先尝试 `bootstrapMain()`，未成功再按退避重新排下一次。
+- 清理摘要：`clearBootstrapRetryTimer()` 统一释放 pending timeout、清空 deadline 并重置退避；`bootstrapMain()` 成功后立即调用清理 helper，10 秒 deadline 到达时也通过同一 helper 停止重试。
+- DOMContentLoaded 摘要：loading 阶段继续优先等待 DOMContentLoaded；若事件触发后 `document.body` 仍不可用，会进入同一递归 timeout 兜底，避免一次性 listener 后丢失启动机会。
+- 测试摘要：`tests/optimizer-entry-error-handling.test.mjs` 更新启动兜底断言，锁定 timeout 退避、deadline、DOMContentLoaded 后兜底和不再出现 interval 句柄/清理分支。
+
+## 验证记录
+- 测试语法：`node --check tests/optimizer-entry-error-handling.test.mjs` 通过。
+- 源码语法说明：`src/main-assistant/main.js` 是 userscript 构建段，不能作为独立 JS 文件直接 `node --check`；本子项通过 `npm run check:syntax` 校验生成后的根 userscript 语法。
+- 目标测试：`node --test tests/optimizer-entry-error-handling.test.mjs` 通过，5 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-entry-error-handling.test.mjs tests/logger-api.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，46 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Interval 清理检查：`rg -n "setInterval|clearInterval" src tests/optimizer-entry-error-handling.test.mjs` 只命中目标测试里的负向断言，`src/` 无剩余 `setInterval`/`clearInterval`。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在已重载的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"bootstrap_preflight"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`optimizerToggleReady:true`、`helperIcon.exists:true`、`helperIcon.visible:true`、`helperPanel.exists:true`、`helperPanel.visible:false`、`visibleAmHelperTags:141`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:10`；插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`。补充只读探测确认样式 `#am-helper-pro-v26-style` 存在，相关全局键包含 `__ALIMAMA_OPTIMIZER_TOGGLE__`、`__AM_LICENSE_STATE__`、`__AM_PLATFORM_RUNTIME__`、`__AM_WXT_PLAN_API_BRIDGE_HOST__`、`__AM_WXT_PLAN_BUILD__`、`__AM_WXT_PLAN_PATCH__`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台只见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 107 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/main.js`、`tests/optimizer-entry-error-handling.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只把启动兜底 interval/timeout 双句柄改为可取消递归 timeout、deadline 与 16ms 到 250ms 退避，测试 diff 只锁定对应静态回归；未改 `main()` 内核心扫描、MutationObserver、授权、extension 注入、算法护航、组建计划、复制、预算、报表、接口并发或 10rpm 服务端策略。
+
+## 结果复盘
+- 第十一轮第三十九子项结果：主助手 bootstrap 兜底从“body 缺失时固定 16ms interval + 10 秒 timeout 双 timer”优化为“单一递归 timeout，16ms 起步、最大 250ms 退避、10 秒 deadline”，减少异常页面结构下的高频启动唤醒和 timer 句柄复杂度。
+- DOMContentLoaded 取舍：保留 loading 阶段优先等待 DOMContentLoaded；若 DOMContentLoaded 后 `document.body` 仍不可用，进入同一兜底调度，避免旧路径一次 listener 后丢失启动机会。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收、危险请求过滤和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十八子项
 
 ## 需求规格

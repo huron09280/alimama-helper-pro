@@ -74,30 +74,40 @@ test('主助手工具按钮和启动入口会给异常提供反馈', () => {
     );
 });
 
-test('主助手启动兜底轮询成功或超时后会同时释放 interval 和 timeout', () => {
+test('主助手启动兜底轮询使用可取消 timeout 退避并在成功或超时后释放', () => {
     assert.match(
         mainAssistantMain,
-        /let bootstrapRetryIntervalId = 0;\s*\n\s*let bootstrapRetryTimeoutId = 0;/,
-        '主助手启动兜底缺少 interval/timeout 双句柄'
+        /const BOOTSTRAP_RETRY_INITIAL_DELAY_MS = 16;\s*\n\s*const BOOTSTRAP_RETRY_MAX_DELAY_MS = 250;\s*\n\s*const BOOTSTRAP_RETRY_TIMEOUT_MS = 10000;/,
+        '主助手启动兜底缺少明确的初始延迟、最大退避和超时上限'
     );
     assert.match(
         mainAssistantMain,
-        /const clearBootstrapRetryTimers = \(\) => \{[\s\S]*if \(bootstrapRetryIntervalId\) \{[\s\S]*clearInterval\(bootstrapRetryIntervalId\);[\s\S]*bootstrapRetryIntervalId = 0;[\s\S]*if \(bootstrapRetryTimeoutId\) \{[\s\S]*clearTimeout\(bootstrapRetryTimeoutId\);[\s\S]*bootstrapRetryTimeoutId = 0;/,
-        '启动兜底 timer 应通过同一 helper 同时清理 interval 和 timeout'
+        /let bootstrapRetryTimerId = 0;\s*\n\s*let bootstrapRetryDeadlineAt = 0;\s*\n\s*let bootstrapRetryDelayMs = BOOTSTRAP_RETRY_INITIAL_DELAY_MS;/,
+        '主助手启动兜底缺少 timeout 句柄、deadline 和退避状态'
     );
     assert.match(
         mainAssistantMain,
-        /hasBootstrapped = true;\s*\n\s*clearBootstrapRetryTimers\(\);\s*\n\s*try \{\s*\n\s*main\(\);/,
+        /const clearBootstrapRetryTimer = \(\) => \{[\s\S]*if \(bootstrapRetryTimerId\) \{[\s\S]*clearTimeout\(bootstrapRetryTimerId\);[\s\S]*bootstrapRetryTimerId = 0;[\s\S]*bootstrapRetryDeadlineAt = 0;[\s\S]*bootstrapRetryDelayMs = BOOTSTRAP_RETRY_INITIAL_DELAY_MS;/,
+        '启动兜底 timer 应通过同一 helper 清理 pending timeout 并重置退避状态'
+    );
+    assert.match(
+        mainAssistantMain,
+        /if \(hasBootstrapped\) return true;[\s\S]*if \(!document\.body\) return false;[\s\S]*hasBootstrapped = true;\s*\n\s*clearBootstrapRetryTimer\(\);\s*\n\s*try \{\s*\n\s*main\(\);/,
         'bootstrap 成功后应立即释放启动兜底 timer'
     );
     assert.match(
         mainAssistantMain,
-        /bootstrapRetryIntervalId = setInterval\(\(\) => \{[\s\S]*bootstrapMain\(\);[\s\S]*\}, 16\);[\s\S]*bootstrapRetryTimeoutId = setTimeout\(\(\) => \{[\s\S]*clearBootstrapRetryTimers\(\);[\s\S]*\}, 10000\);/,
-        '启动兜底 interval 和 timeout 应保存句柄，超时通过统一 helper 清理'
+        /const scheduleBootstrapRetry = \(\) => \{[\s\S]*if \(hasBootstrapped \|\| bootstrapRetryTimerId\) return;[\s\S]*bootstrapRetryDeadlineAt = now \+ BOOTSTRAP_RETRY_TIMEOUT_MS;[\s\S]*if \(now >= bootstrapRetryDeadlineAt\) \{[\s\S]*clearBootstrapRetryTimer\(\);[\s\S]*bootstrapRetryTimerId = setTimeout\(\(\) => \{[\s\S]*bootstrapRetryTimerId = 0;[\s\S]*bootstrapMain\(\);[\s\S]*bootstrapRetryDelayMs = Math\.min\([\s\S]*BOOTSTRAP_RETRY_MAX_DELAY_MS,[\s\S]*bootstrapRetryDelayMs \* 2[\s\S]*scheduleBootstrapRetry\(\);/,
+        '启动兜底应通过递归 timeout、deadline 和退避继续重试'
+    );
+    assert.match(
+        mainAssistantMain,
+        /document\.addEventListener\('DOMContentLoaded', \(\) => \{[\s\S]*if \(!bootstrapMain\(\)\) scheduleBootstrapRetry\(\);[\s\S]*\}, \{ once: true \}\);/,
+        'DOMContentLoaded 后若 body 仍不可用应进入同一兜底调度'
     );
     assert.doesNotMatch(
         mainAssistantMain,
-        /const timer = setInterval\(\(\) => \{[\s\S]*setTimeout\(\(\) => clearInterval\(timer\), 10000\);/,
-        '启动兜底不应保留成功后仍悬挂的无句柄 timeout'
+        /bootstrapRetryIntervalId|setInterval\(|clearInterval\(/,
+        '启动兜底不应再保留 interval 句柄或 interval 清理分支'
     );
 });
