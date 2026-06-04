@@ -6,6 +6,7 @@
         copyPlanNameCacheLimit: 120,
         batchPlusMenuEl: null,
         batchPlusMenuCloseTimer: null,
+        campaignListRefreshTimer: null,
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -352,6 +353,23 @@
             this.batchPlusMenuCloseTimer = window.setTimeout(() => {
                 this.batchPlusMenuCloseTimer = null;
                 this.closeBatchPlusMenu();
+            }, delay);
+        },
+
+        clearCampaignListRefreshTimer() {
+            if (!this.campaignListRefreshTimer) return;
+            window.clearTimeout(this.campaignListRefreshTimer);
+            this.campaignListRefreshTimer = null;
+        },
+
+        scheduleCampaignListRefresh(options = {}) {
+            this.clearCampaignListRefreshTimer();
+            const delay = Number.isFinite(Number(options?.delay)) ? Number(options.delay) : 600;
+            this.campaignListRefreshTimer = window.setTimeout(() => {
+                this.campaignListRefreshTimer = null;
+                this.refreshCampaignListOnlyNow(options).catch((err) => {
+                    Logger.log(`⚠️ ${options?.reason || '批量操作'}已完成，但自动刷新计划列表失败：${err?.message || err}`, true);
+                });
             }, delay);
         },
 
@@ -1425,12 +1443,7 @@
         },
 
         refreshCampaignListOnly(options = {}) {
-            const delay = Number.isFinite(Number(options?.delay)) ? Number(options.delay) : 600;
-            window.setTimeout(() => {
-                this.refreshCampaignListOnlyNow(options).catch((err) => {
-                    Logger.log(`⚠️ ${options?.reason || '批量操作'}已完成，但自动刷新计划列表失败：${err?.message || err}`, true);
-                });
-            }, delay);
+            this.scheduleCampaignListRefresh(options);
         },
 
         openDisplayBlackCrowdEditorModal({ campaignId, campaignName = '', crowdList = [], targetIds = [], oldCrowdMap = {}, authContext = {} } = {}) {

@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十五子项
+
+## 需求规格
+- 目标：在算法护航首次 reveal timer 收口后，继续优化主助手批量+成功后的计划列表局部刷新 timer，避免 `refreshCampaignListOnly()` 每次成功收尾都排队无句柄 `window.setTimeout(..., delay)`，重复批量动作或后续状态变化时旧 timer 继续持有 options、reason 和刷新闭包。
+- 根因判断：`src/main-assistant/campaign-id-quick-entry.js` 中 `refreshCampaignListOnly(options)` 直接启动延迟刷新，但没有保存句柄；重复调用不会取消旧刷新任务，也无法在同一生命周期内确认 pending 刷新是否已释放。
+- 范围：仅覆盖批量+成功后的延迟局部刷新 timer 生命周期和静态回归；不改官方 VFrame render 优先级、搜索框回车兜底、复制/删除/人群编辑接口、并发开启、真实写入合同或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把刷新收尾 timer 放进 `CampaignIdQuickEntry` 对象生命周期，新增 `campaignListRefreshTimer`、`clearCampaignListRefreshTimer()` 和 `scheduleCampaignListRefresh(options)`；重复调度先取消旧 timer，timer 触发后归零再执行原有局部刷新。
+- 成功标准：静态测试证明刷新 timer 有句柄、可清理、重复调度先取消旧 timer、触发后归零，`refreshCampaignListOnly()` 不再直接保留无句柄 `window.setTimeout`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击批量删除、复制、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认主助手/批量+入口运行态存在，不触发成功刷新路径。
+
+## 执行计划（可核对）
+- [x] 复核第二十四子项提交后工作区状态，确认本子项只处理批量+成功后的延迟列表刷新 timer。
+- [x] 在 `CampaignIdQuickEntry` 生命周期中实现局部刷新 timer 句柄、清理和调度 helper。
+- [x] 将 `refreshCampaignListOnly()` 改为调用 helper，保持原默认 600ms 延迟、VFrame render 优先和搜索兜底行为。
+- [x] 补充/更新目标测试，锁定成功收尾不会累积无句柄刷新 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `bed367d 优化 Chrome 护航面板首次展示计时器`，工作区干净。
+- 定位结论：剩余候选中，`refreshCampaignListOnly()` 的延迟局部刷新 timer 属于短生命周期成功收尾任务，不是长期事实源，也不触发真实写请求；适合作为本轮低风险内存持有优化点。
+- 实现摘要：`src/main-assistant/campaign-id-quick-entry.js` 新增 `campaignListRefreshTimer`、`clearCampaignListRefreshTimer()` 和 `scheduleCampaignListRefresh(options)`；重复成功收尾会先取消旧 timer，timer 触发后归零并执行原有 `refreshCampaignListOnlyNow(options)`。
+- 行为摘要：`refreshCampaignListOnly(options)` 改为只委托调度 helper，保留默认 600ms 延迟、官方 VFrame `render/asyncRenderData` 优先、搜索框回车兜底和失败日志文案。
+- 测试摘要：`tests/campaign-batch-plus-quick-entry.test.mjs` 扩展“批量+成功后复用原生计划列表刷新”回归，锁定 timer 句柄、清理 helper、调度 helper、触发归零和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过。
+- 测试语法：`node --check tests/campaign-batch-plus-quick-entry.test.mjs` 通过。
+- 目标测试：`node --test tests/campaign-batch-plus-quick-entry.test.mjs` 通过，9 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，37 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 只读检查运行态；返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`batchPlusButtonCount:1`、`quickButtonCount:7`、`copyButtonCount:7`、`hasBatchPlusMenuOpen:false`，样例批量+按钮 `title:"批量+"` 且 `isConnected:true`。未打开批量+菜单，未点击批量删除/复制/预算/人群/上下线/护航执行入口。
+- Diff 自审：改动集中在批量+成功后的延迟计划列表刷新 timer 生命周期、对应静态测试、任务记录和构建产物；未改官方 VFrame render 优先级、搜索框回车兜底、复制/删除/人群编辑接口、并发开启、真实写入合同或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第二十五子项结果：批量+成功后的列表刷新从“每次成功收尾都排队一个无句柄延迟 timeout”优化为“`CampaignIdQuickEntry` 统一持有刷新 timer，重复调度先取消旧 timer，触发后立即归零再执行局部刷新”。
+- 取舍结论：保留原局部刷新路径和 600ms 延迟，不新增第二套刷新事实源，也不触碰任何真实写接口；只减少重复收尾时旧 options/闭包被延迟持有的窗口。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实批量+动作或护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十四子项
 
 ## 需求规格
