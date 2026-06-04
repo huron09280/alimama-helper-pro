@@ -70337,6 +70337,8 @@ if (typeof globalThis !== 'undefined') {
         tokenStatusLastRefreshAt: 0,
         logOverflowTimerId: null,
         panelRevealTimerId: null,
+        panelRevealVisibilityHandler: null,
+        panelRevealPendingCallback: null,
         panelHighlightTimerId: null,
 
         refreshTokenStatusIndicator: () => {
@@ -70427,19 +70429,56 @@ if (typeof globalThis !== 'undefined') {
         },
 
         clearPanelRevealTimer: () => {
-            if (UI.panelRevealTimerId === null) return;
-            clearTimeout(UI.panelRevealTimerId);
-            UI.panelRevealTimerId = null;
+            if (UI.panelRevealTimerId !== null) {
+                clearTimeout(UI.panelRevealTimerId);
+                UI.panelRevealTimerId = null;
+            }
+            UI.clearPanelRevealVisibilityHandler();
+            UI.panelRevealPendingCallback = null;
+        },
+
+        clearPanelRevealVisibilityHandler: () => {
+            if (typeof UI.panelRevealVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', UI.panelRevealVisibilityHandler);
+            }
+            UI.panelRevealVisibilityHandler = null;
+        },
+
+        bindPanelRevealVisibilityHandler: () => {
+            if (typeof UI.panelRevealVisibilityHandler === 'function') return;
+            UI.panelRevealVisibilityHandler = () => {
+                if (UI.isDocumentHidden()) {
+                    if (UI.panelRevealTimerId !== null) {
+                        clearTimeout(UI.panelRevealTimerId);
+                        UI.panelRevealTimerId = null;
+                    }
+                    return;
+                }
+                const pendingCallback = UI.panelRevealPendingCallback;
+                if (typeof pendingCallback === 'function') {
+                    UI.schedulePanelReveal(pendingCallback);
+                } else {
+                    UI.clearPanelRevealTimer();
+                }
+            };
+            document.addEventListener('visibilitychange', UI.panelRevealVisibilityHandler);
         },
 
         schedulePanelReveal: (callback) => {
             UI.clearPanelRevealTimer();
             if (typeof callback !== 'function') return;
+            UI.panelRevealPendingCallback = callback;
+            UI.bindPanelRevealVisibilityHandler();
+            if (UI.isDocumentHidden()) return;
             UI.panelRevealTimerId = setTimeout(() => {
                 UI.panelRevealTimerId = null;
+                if (UI.isDocumentHidden()) return;
+                const pendingCallback = UI.panelRevealPendingCallback;
+                UI.clearPanelRevealVisibilityHandler();
+                UI.panelRevealPendingCallback = null;
                 const panel = document.getElementById(CONFIG.UI_ID);
                 if (!panel) return;
-                callback(panel);
+                if (typeof pendingCallback === 'function') pendingCallback(panel);
             }, 100);
         },
 

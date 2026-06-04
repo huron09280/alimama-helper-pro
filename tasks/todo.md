@@ -1,3 +1,54 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十子项
+
+## 需求规格
+- 目标：在主助手悬浮球 reveal timer 收口后，继续优化算法护航面板首次创建后的 `panelRevealTimerId`，避免标签页隐藏时仍排 100ms timeout 去执行面板展示回调。
+- 根因判断：`src/optimizer/public-api.js` 首次打开算法护航时会先 `UI.create()`，再调用 `UI.schedulePanelReveal()` 延迟 100ms 执行 `revealOptimizerPanel()`。当前 `src/optimizer/ui.js` 的 `schedulePanelReveal(callback)` 只具备可取消句柄，不区分页可见状态；若调度后页面转入隐藏，仍会在后台唤醒并执行展示回调。
+- 范围：仅覆盖算法护航首次创建 reveal timer 的隐藏页暂停、恢复可见后按原 100ms 节奏继续、timer/visibility listener/pending callback 生命周期；不改算法护航面板 DOM、样式、动效、按钮、Token 状态轮询、公开入口、护航执行、openV3、预算、创建/复制/提交/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留 `schedulePanelReveal()` 作为首次 reveal 的唯一调度入口，新增 pending callback 与 visibility handler。隐藏页不排 100ms timeout；已排 timer 在转 hidden 时取消并保留 pending；恢复 visible 后重新按原 100ms 节奏补排。关闭面板或重新调度会统一清理 timer、pending 和 listener。
+- 成功标准：静态与行为测试证明 UI 声明算法护航 reveal visibility handler 与 pending callback；存在统一 timer 清理、visibility 释放和隐藏页判定复用；隐藏页 schedule 不排 timeout、恢复可见后按 100ms 执行；可见页原 100ms 调度保留；visible->hidden 会取消已排 timeout；关闭面板会清理 pending 状态；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击算法护航按钮、不打开算法护航面板、不触发 `__ALIMAMA_OPTIMIZER_TOGGLE__`、不调用 openV3/护航执行/预算/创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十九子项提交后工作区状态，确认本子项只处理算法护航首次 reveal timer。
+- [x] 复核 UI/图标规范，确认本轮不改算法护航面板视觉、图标和交互结构。
+- [x] 定位 `schedulePanelReveal()`、`clearPanelRevealTimer()` 与现有 optimizer UI timer 测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为算法护航首次 reveal 增加 visibility handler、pending callback、统一释放 helper 和隐藏态判定复用。
+- [x] 将首次 reveal 调度改为隐藏页暂停、恢复可见后按原 100ms 继续执行。
+- [x] 更新 optimizer UI 目标测试，锁定隐藏页不排 timeout、恢复可见补排、visible->hidden 取消 timer、可见页原 100ms 调度保留和 close 清理 pending。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `3d6fc89 优化悬浮球显示轮询`，tracked 工作区干净；本子项不依赖任何临时取证文件。
+- 定位结论：`riskAlertTimer`、请求超时、授权续租、openV3/护航、预算和创建提交链路都带业务或安全语义，不适合作为“不改变业务逻辑”的下一步。算法护航首次 reveal 是 100ms 纯 UI 展示延迟，隐藏页执行只会带来额外唤醒，适合作为低风险优化点。
+- 计划校验：本子项只降低隐藏标签页中首次创建算法护航面板后的 100ms 展示唤醒；可见页仍保持原延迟 reveal、已打开面板高亮、Token 状态监控和关闭清理行为。若实现需要触碰 `public-api` 的打开合同、Token、openV3 或护航执行，先回到本计划更新后再继续。
+- 实现摘要：`src/optimizer/ui.js` 为算法护航首次 reveal 新增 `panelRevealVisibilityHandler` 与 `panelRevealPendingCallback`，并抽出 `clearPanelRevealVisibilityHandler()`、`bindPanelRevealVisibilityHandler()`；`clearPanelRevealTimer()` 统一释放 timeout、visibility listener 和 pending callback。
+- 调度摘要：`schedulePanelReveal(callback)` 仍是唯一入口。隐藏页只登记 pending callback 与 visibility listener，不排 100ms timeout；可见页保持原 100ms reveal；等待期间转 hidden 会取消已排 timeout 并保留 pending；恢复 visible 后重新按原 100ms 节奏补排；timeout 触发前仍校验页面可见与 panel 存在。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增 `node:vm` fake runtime 行为测试，覆盖 hidden schedule、hidden->visible 补排、visible->hidden 取消、再次 visible 补排、缺少 panel 清理和显式 clear 不残留；静态断言同步锁定状态字段、统一清理 helper、visibility handler 和 public API 首次 reveal 调用合同。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，10 项测试全绿；新增 “算法护航首次 reveal timer 在隐藏页暂停并恢复可见后补排” 行为断言。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test` 覆盖 `tests/optimizer-token-capture-history.test.mjs`、`tests/optimizer-escort-new-flow-fallback.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，91 项测试全绿。
+- 全量回归：`npm test` 通过，624 项中 622 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "panelRevealVisibilityHandler|panelRevealPendingCallback|clearPanelRevealVisibilityHandler|bindPanelRevealVisibilityHandler|schedulePanelReveal|isDocumentHidden" src/optimizer/ui.js tests/optimizer-token-capture-history.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 与隐藏页 reveal 调度已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`hookManager:true`、`keywordOpenBridgeReady:"1"`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4061337`，包含 `panelRevealVisibilityHandler`、`panelRevealPendingCallback`、`clearPanelRevealVisibilityHandler`、`bindPanelRevealVisibilityHandler`、`schedulePanelReveal: (callback) =>` 和 `if (UI.isDocumentHidden()) return;`。
+- Chrome MCP 弹窗/危险请求：`helperIcon` 存在且可见；`helperPanel` 存在但不可见；`magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不存在或不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器` 和主线程卡顿监听启动；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue、页面自身日志，以及读取 4MB bundle 触发的拦截器跳过解析 debug，未见新增插件运行失败。fetch/XHR 清单 47 条，主要为登录路由初始化、菜单、消息、AI context、官方资源和 `chrome-extension://.../page.bundle.js` 读取，可见请求均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/optimizer/ui.js`、`tests/optimizer-token-capture-history.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增算法护航首次 reveal timer 的隐藏页暂停、可见恢复和 pending callback 生命周期，不改算法护航面板 DOM、样式、动效、按钮、Token 状态轮询、公开入口、护航执行、openV3、预算、创建/复制/提交/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十子项结果：算法护航面板首次创建后的展示延迟从“无论页面是否隐藏都排 100ms timeout 执行 reveal callback”优化为“隐藏页不排 timeout，只保留 pending callback 与 visibility listener；恢复可见后再按原 100ms 节奏补排”。
+- 取舍结论：保留可见页原 100ms 延迟、panel 存在校验和 `public-api` 首次创建调用合同；新增 pending callback 只管理首次 reveal 生命周期，不改变 Token 状态监控、面板高亮、openV3、护航执行、预算、创建/复制/提交/下载或任何服务端请求策略。
+- 效果结论：在用户首次打开算法护航导致面板创建后立刻切到后台的场景中，插件不再保留算法护航 reveal timeout 等待隐藏页唤醒，降低后台 timer 唤醒成本。浏览器验收未点击算法护航按钮、未打开 optimizer panel、未触发 `__ALIMAMA_OPTIMIZER_TOGGLE__`，未触发任何业务写动作或服务端提交，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十九子项
 
 ## 需求规格

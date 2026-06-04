@@ -1,11 +1,106 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 
 const tokenSource = readFileSync(new URL('../src/optimizer/token-manager.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/optimizer/ui.js', import.meta.url), 'utf8');
 const mainBootstrapSource = readFileSync(new URL('../src/main-assistant/bootstrap.js', import.meta.url), 'utf8');
 const optimizerPublicApiSource = readFileSync(new URL('../src/optimizer/public-api.js', import.meta.url), 'utf8');
+
+function sliceSource(text, startText, endText) {
+    const start = text.indexOf(startText);
+    const end = text.indexOf(endText, start + startText.length);
+    assert.ok(start > -1 && end > start, `无法定位代码片段：${startText}`);
+    return text.slice(start, end);
+}
+
+function createPanelRevealHarness(initialVisibilityState = 'visible', options = {}) {
+    let visibilityState = String(initialVisibilityState || 'visible');
+    let nextTimerId = 1;
+    const timers = new Map();
+    const listeners = new Map();
+    const panel = options.panel === null
+        ? null
+        : {
+            nodeType: 1,
+            isConnected: true,
+            id: 'am-optimizer-panel'
+        };
+    const addListener = (type, handler) => {
+        if (typeof handler !== 'function') return;
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(handler);
+    };
+    const removeListener = (type, handler) => {
+        listeners.get(type)?.delete(handler);
+    };
+    const panelRevealSource = sliceSource(
+        uiSource,
+        'clearPanelRevealTimer: () => {',
+        'clearPanelHighlightTimer: () => {'
+    );
+    const context = createContext({
+        CONFIG: {
+            UI_ID: 'am-optimizer-panel'
+        },
+        document: {
+            get visibilityState() {
+                return visibilityState;
+            },
+            addEventListener: addListener,
+            removeEventListener: removeListener,
+            getElementById(id) {
+                return id === 'am-optimizer-panel' ? panel : null;
+            }
+        },
+        setTimeout(handler, delay = 0) {
+            const timerId = nextTimerId;
+            nextTimerId += 1;
+            if (typeof handler === 'function') {
+                timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+            }
+            return timerId;
+        },
+        clearTimeout(timerId) {
+            timers.delete(Number(timerId));
+        }
+    });
+    new Script(`const UI = {
+panelRevealTimerId: null,
+panelRevealVisibilityHandler: null,
+panelRevealPendingCallback: null,
+isDocumentHidden: () => document.visibilityState === 'hidden',
+${panelRevealSource}
+};
+globalThis.__UI = UI;`).runInContext(context);
+    return {
+        context,
+        panel,
+        timers,
+        listenerCount(type = 'visibilitychange') {
+            return listeners.get(type)?.size || 0;
+        },
+        getTimerDelays() {
+            return Array.from(timers.values()).map(timer => timer.delay);
+        },
+        setVisibilityState(nextState) {
+            visibilityState = String(nextState || 'visible');
+            const handlers = Array.from(listeners.get('visibilitychange') || []);
+            handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+        },
+        tickNextTimer() {
+            const [timerId, timer] = Array.from(timers.entries())[0] || [];
+            if (!timer) return false;
+            timers.delete(timerId);
+            timer.handler();
+            return true;
+        },
+        get UI() {
+            return context.__UI;
+        }
+    };
+}
 
 test('TokenManager 会从 hook history 回填 dynamicToken/loginPointId/csrf', () => {
     assert.match(
@@ -161,18 +256,28 @@ test('算法护航面板高亮提示 timer 会复用并在关闭时释放', () =
 test('算法护航首次创建 reveal timer 会复用并在关闭时释放', () => {
     assert.match(
         uiSource,
-        /panelRevealTimerId:\s*null,/,
-        '算法护航面板首次 reveal timer 缺少可清理句柄'
+        /panelRevealTimerId:\s*null,[\s\S]*panelRevealVisibilityHandler:\s*null,[\s\S]*panelRevealPendingCallback:\s*null,/,
+        '算法护航面板首次 reveal timer 缺少可清理句柄、visibility handler 或 pending callback'
     );
     assert.match(
         uiSource,
-        /clearPanelRevealTimer:\s*\(\) => \{[\s\S]*if \(UI\.panelRevealTimerId === null\) return;[\s\S]*clearTimeout\(UI\.panelRevealTimerId\);[\s\S]*UI\.panelRevealTimerId = null;[\s\S]*\},/,
-        '算法护航面板 reveal timer 应支持显式 clear 并归零'
+        /clearPanelRevealTimer:\s*\(\) => \{[\s\S]*if \(UI\.panelRevealTimerId !== null\) \{[\s\S]*clearTimeout\(UI\.panelRevealTimerId\);[\s\S]*UI\.panelRevealTimerId = null;[\s\S]*\}[\s\S]*UI\.clearPanelRevealVisibilityHandler\(\);[\s\S]*UI\.panelRevealPendingCallback = null;[\s\S]*\},/,
+        '算法护航面板 reveal timer 应支持显式 clear、归零并释放 visibility/pending 状态'
     );
     assert.match(
         uiSource,
-        /schedulePanelReveal:\s*\(callback\) => \{[\s\S]*UI\.clearPanelRevealTimer\(\);[\s\S]*if \(typeof callback !== 'function'\) return;[\s\S]*UI\.panelRevealTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.panelRevealTimerId = null;[\s\S]*const panel = document\.getElementById\(CONFIG\.UI_ID\);[\s\S]*if \(!panel\) return;[\s\S]*callback\(panel\);[\s\S]*\},\s*100\);[\s\S]*\},/,
-        '算法护航面板首次 reveal 应统一调度，并在回调触发前校验 panel 仍存在'
+        /clearPanelRevealVisibilityHandler:\s*\(\) => \{[\s\S]*document\.removeEventListener\('visibilitychange', UI\.panelRevealVisibilityHandler\);[\s\S]*UI\.panelRevealVisibilityHandler = null;[\s\S]*\},/,
+        '算法护航面板 reveal 应支持释放 visibilitychange handler'
+    );
+    assert.match(
+        uiSource,
+        /bindPanelRevealVisibilityHandler:\s*\(\) => \{[\s\S]*if \(typeof UI\.panelRevealVisibilityHandler === 'function'\) return;[\s\S]*if \(UI\.isDocumentHidden\(\)\) \{[\s\S]*clearTimeout\(UI\.panelRevealTimerId\);[\s\S]*UI\.panelRevealTimerId = null;[\s\S]*return;[\s\S]*const pendingCallback = UI\.panelRevealPendingCallback;[\s\S]*UI\.schedulePanelReveal\(pendingCallback\);[\s\S]*document\.addEventListener\('visibilitychange', UI\.panelRevealVisibilityHandler\);/,
+        '算法护航面板 reveal 应在隐藏时取消 timer，恢复可见后继续同一个 pending callback'
+    );
+    assert.match(
+        uiSource,
+        /schedulePanelReveal:\s*\(callback\) => \{[\s\S]*UI\.clearPanelRevealTimer\(\);[\s\S]*if \(typeof callback !== 'function'\) return;[\s\S]*UI\.panelRevealPendingCallback = callback;[\s\S]*UI\.bindPanelRevealVisibilityHandler\(\);[\s\S]*if \(UI\.isDocumentHidden\(\)\) return;[\s\S]*UI\.panelRevealTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.panelRevealTimerId = null;[\s\S]*if \(UI\.isDocumentHidden\(\)\) return;[\s\S]*const pendingCallback = UI\.panelRevealPendingCallback;[\s\S]*UI\.clearPanelRevealVisibilityHandler\(\);[\s\S]*UI\.panelRevealPendingCallback = null;[\s\S]*const panel = document\.getElementById\(CONFIG\.UI_ID\);[\s\S]*if \(!panel\) return;[\s\S]*if \(typeof pendingCallback === 'function'\) pendingCallback\(panel\);[\s\S]*\},\s*100\);[\s\S]*\},/,
+        '算法护航面板首次 reveal 应隐藏页暂停，可见页按 100ms 统一调度，并在回调触发前校验 panel 仍存在'
     );
     assert.match(
         uiSource,
@@ -189,6 +294,53 @@ test('算法护航首次创建 reveal timer 会复用并在关闭时释放', () 
         /setTimeout\(\(\) => \{[\s\S]*revealOptimizerPanel\(document\.getElementById\(CONFIG\.UI_ID\)\);[\s\S]*\}, 100\);/,
         '公开入口不应继续保留无句柄首次 reveal timeout'
     );
+});
+
+test('算法护航首次 reveal timer 在隐藏页暂停并恢复可见后补排', () => {
+    const hiddenHarness = createPanelRevealHarness('hidden');
+    const hiddenCalls = [];
+    hiddenHarness.UI.schedulePanelReveal((panel) => hiddenCalls.push(panel));
+    assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 100ms reveal timeout');
+    assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页应保留 visibilitychange 恢复监听');
+    assert.equal(typeof hiddenHarness.UI.panelRevealPendingCallback, 'function', '隐藏页应保留 pending callback');
+
+    hiddenHarness.setVisibilityState('visible');
+    assert.deepEqual(hiddenHarness.getTimerDelays(), [100], '恢复可见后应按原 100ms 节奏补排 reveal timeout');
+    assert.equal(hiddenHarness.listenerCount(), 1, '补排 timeout 等待期间应继续监听转隐藏');
+    assert.equal(hiddenHarness.tickNextTimer(), true, '应能触发补排 reveal timeout');
+    assert.deepEqual(hiddenCalls, [hiddenHarness.panel], '补排 timeout 触发后应执行原 pending callback');
+    assert.equal(hiddenHarness.listenerCount(), 0, '执行完成后应释放 visibilitychange');
+    assert.equal(hiddenHarness.UI.panelRevealPendingCallback, null, '执行完成后应释放 pending callback');
+
+    const visibleHarness = createPanelRevealHarness('visible');
+    const visibleCalls = [];
+    visibleHarness.UI.schedulePanelReveal((panel) => visibleCalls.push(panel));
+    assert.deepEqual(visibleHarness.getTimerDelays(), [100], '可见页应保留原 100ms reveal timeout');
+    assert.equal(visibleHarness.listenerCount(), 1, '可见页等待 reveal 时应监听 visibilitychange');
+    visibleHarness.setVisibilityState('hidden');
+    assert.equal(visibleHarness.timers.size, 0, '可见页转隐藏时应取消已排 reveal timeout');
+    assert.deepEqual(visibleCalls, [], '转隐藏时不应执行 reveal callback');
+    assert.equal(typeof visibleHarness.UI.panelRevealPendingCallback, 'function', '转隐藏时应保留 pending callback');
+    visibleHarness.setVisibilityState('visible');
+    assert.deepEqual(visibleHarness.getTimerDelays(), [100], '再次恢复可见后应重新排原 100ms reveal timeout');
+    assert.equal(visibleHarness.tickNextTimer(), true, '再次恢复后的 reveal timeout 应可触发');
+    assert.deepEqual(visibleCalls, [visibleHarness.panel], '再次恢复后应执行原 pending callback');
+    assert.equal(visibleHarness.listenerCount(), 0, '执行完成后应释放 visibilitychange');
+
+    const missingPanelHarness = createPanelRevealHarness('visible', { panel: null });
+    const missingPanelCalls = [];
+    missingPanelHarness.UI.schedulePanelReveal((panel) => missingPanelCalls.push(panel));
+    assert.equal(missingPanelHarness.tickNextTimer(), true, '缺少 panel 时仍应消费 reveal timeout');
+    assert.deepEqual(missingPanelCalls, [], '缺少 panel 时不应执行 reveal callback');
+    assert.equal(missingPanelHarness.listenerCount(), 0, '缺少 panel 分支也应释放 visibilitychange');
+    assert.equal(missingPanelHarness.UI.panelRevealPendingCallback, null, '缺少 panel 分支也应释放 pending callback');
+
+    const clearHarness = createPanelRevealHarness('hidden');
+    clearHarness.UI.schedulePanelReveal(() => {});
+    clearHarness.UI.clearPanelRevealTimer();
+    assert.equal(clearHarness.timers.size, 0, '显式清理后不应残留 reveal timeout');
+    assert.equal(clearHarness.listenerCount(), 0, '显式清理后不应残留 visibilitychange');
+    assert.equal(clearHarness.UI.panelRevealPendingCallback, null, '显式清理后不应残留 pending callback');
 });
 
 test('算法护航手动关键词偏好外部点击监听只在菜单打开期间绑定', () => {
