@@ -2055,6 +2055,7 @@
     const State = {
         config: loadConfig(),
         riskAlertLastUrl: '',
+        riskAlertTimer: 0,
         save() {
             safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(this.config));
         }
@@ -2069,19 +2070,36 @@
         return RISK_CHALLENGE_URL_RE.test(href) || RISK_CHALLENGE_STEP_RE.test(href);
     };
 
+    const clearRiskChallengeAlertTimer = () => {
+        if (!State.riskAlertTimer) return;
+        clearTimeout(State.riskAlertTimer);
+        State.riskAlertTimer = 0;
+    };
+
+    const scheduleRiskChallengeAlert = (href = '') => {
+        clearRiskChallengeAlertTimer();
+        State.riskAlertTimer = setTimeout(() => {
+            State.riskAlertTimer = 0;
+            const currentHref = String(window.location.href || '').trim();
+            if (currentHref !== href) return;
+            if (State.riskAlertLastUrl !== href) return;
+            if (!isRiskChallengePage(currentHref)) return;
+            try {
+                alert('检测到阿里妈妈风控页，请先手动完成人机验证（滑块/短信/扫码）后再继续操作。');
+            } catch { }
+        }, 0);
+    };
+
     const notifyRiskChallengeIfNeeded = (url = '') => {
         const href = String(url || window.location.href || '').trim();
         if (!isRiskChallengePage(href)) {
             State.riskAlertLastUrl = '';
+            clearRiskChallengeAlertTimer();
             return false;
         }
         if (State.riskAlertLastUrl === href) return true;
         State.riskAlertLastUrl = href;
         Logger.warn('⚠️ 检测到阿里妈妈风控页，请手动完成人机验证后继续');
-        setTimeout(() => {
-            try {
-                alert('检测到阿里妈妈风控页，请先手动完成人机验证（滑块/短信/扫码）后再继续操作。');
-            } catch { }
-        }, 0);
+        scheduleRiskChallengeAlert(href);
         return true;
     };

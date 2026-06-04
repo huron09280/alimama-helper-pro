@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十一子项
+
+## 需求规格
+- 目标：在组建计划打开任务 timer/rAF 收口后，继续优化主助手风控页提醒 0ms alert timer，避免 `notifyRiskChallengeIfNeeded()` 直接排无句柄 `setTimeout(..., 0)`，快速路由离开风控页或切换到新风控 URL 时旧 timer 仍持有提醒闭包并弹出过期提示。
+- 根因判断：`src/main-assistant/bootstrap.js` 中 `notifyRiskChallengeIfNeeded()` 仅用 `riskAlertLastUrl` 去重，但 alert 延迟任务没有句柄；非风控 URL 分支只清空 lastUrl，无法取消 pending alert。
+- 范围：仅覆盖主助手风控页提醒 timer 生命周期和静态回归；不改风控识别正则、history hook、预算页早退、真实创建/复制/提交、授权、护航接口或 10rpm 限速。
+- 热修 vs 结构性修复取舍：把风控提醒 timer 纳入 `State` 生命周期，新增 `riskAlertTimer`、清理 helper 与调度 helper；离开非风控 URL 或切换新风控 URL 时释放旧 pending alert，触发时先归零并复核当前 URL 仍匹配。
+- 成功标准：静态测试证明风控提醒 timer 有句柄、可取消、触发后归零，非风控分支会清理 pending alert，旧无句柄 `setTimeout(() => alert(...), 0)` 不再存在；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不访问风控页、不主动触发 alert、不点击组建计划、立即投放、新建、立即下单、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和插件弹窗状态。
+
+## 执行计划（可核对）
+- [x] 复核第三十子项提交后工作区状态，确认本子项只处理风控页提醒 timer。
+- [x] 在 `State` 中新增风控提醒 timer 句柄，并实现清理与调度 helper。
+- [x] 将 `notifyRiskChallengeIfNeeded()` 改为通过 helper 调度 alert，离开非风控 URL 时释放 pending alert。
+- [x] 补充/更新目标测试，锁定风控提醒不再累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `5d99e39 优化组建计划打开任务计时器`，工作区干净。
+- 定位结论：风控 alert timer 只用于本地 UI 提醒，不属于服务端请求或写链路；收口后可减少快速路由变化时旧 href/State/alert 闭包滞留。
+- 实现摘要：`src/main-assistant/bootstrap.js` 在 `State` 中新增 `riskAlertTimer`，并新增 `clearRiskChallengeAlertTimer()` 与 `scheduleRiskChallengeAlert(href)`；每次调度前取消旧 pending timer，触发后先归零，再复核当前 URL、`riskAlertLastUrl` 和风控页识别仍一致。
+- 行为摘要：`notifyRiskChallengeIfNeeded()` 离开非风控 URL 时同步释放 pending alert；进入风控页时仍保持原提示文案和异步 alert 节奏，但旧 URL 的 pending alert 不会在路由切走后继续弹出。
+- 测试摘要：`tests/keyword-create-repair-cleanup-id-extract.test.mjs` 新增有界 `sliceSource()` 断言，锁定 `riskAlertTimer`、清理 helper、调度 helper、非风控分支清理、触发前 URL 复核和旧裸 `setTimeout(() => alert(...), 0)` 禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-create-repair-cleanup-id-extract.test.mjs` 通过。
+- 源码切片说明：`src/main-assistant/bootstrap.js` 属于构建切片，不是独立 JS 文件；单文件 `node --check src/main-assistant/bootstrap.js` 会因切片边界报 `Unexpected end of input`，官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-create-repair-cleanup-id-extract.test.mjs` 通过，5 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-create-repair-cleanup-id-extract.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/budget-frontend-limit-bypass.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，33 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，612 项中 610 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`pluginKeywordModalExists:false`、`pluginKeywordModalOpen:false`、`pluginCopyOverviewPopup:false`、`pluginCopySuccessPopup:false`、`pluginBatchPlusMenuOpen:false`、`pluginOptimizerPanel:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:8`；可见插件元素仅有悬浮入口 `#am-helper-icon`。未访问风控页，未触发 alert，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue。
+- Diff 自审：改动集中在主助手风控页提醒 timer 生命周期、对应静态测试、任务记录和构建产物；未改风控识别正则、history hook、预算页早退、真实创建/复制/提交、授权、护航接口或 10rpm 限速。
+
+## 结果复盘
+- 第十一轮第三十一子项结果：主助手风控页提醒从“进入风控 URL 后排队无句柄 0ms alert timeout”优化为“`State.riskAlertTimer` 持有 pending alert，重复调度或离开非风控 URL 会取消旧 timer，触发时归零并复核当前 URL 仍为同一个风控页”。
+- 取舍结论：保留原本只提醒一次同一风控 URL 的语义和 alert 文案，不新增第二套风控识别逻辑；只收口短生命周期 timer，避免快速路由切走后旧 href/State/alert 闭包继续滞留或弹出过期提示。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行任何服务端写动作或业务提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十子项
 
 ## 需求规格
