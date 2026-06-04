@@ -14,6 +14,8 @@
         tokenStatusVisibilityHandlerBound: false,
         tokenStatusLastRefreshAt: 0,
         logOverflowTimerId: null,
+        logOverflowVisibilityHandler: null,
+        logOverflowPendingWrapper: null,
         panelRevealTimerId: null,
         panelRevealVisibilityHandler: null,
         panelRevealPendingCallback: null,
@@ -90,19 +92,59 @@
             UI.unbindTokenStatusVisibilityHandler();
         },
 
-        clearLogOverflowTimer: () => {
+        clearLogOverflowDelayTimer: () => {
             if (UI.logOverflowTimerId === null) return;
             clearTimeout(UI.logOverflowTimerId);
             UI.logOverflowTimerId = null;
         },
 
+        clearLogOverflowVisibilityHandler: () => {
+            if (typeof UI.logOverflowVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', UI.logOverflowVisibilityHandler);
+            }
+            UI.logOverflowVisibilityHandler = null;
+        },
+
+        clearLogOverflowTimer: () => {
+            UI.clearLogOverflowDelayTimer();
+            UI.clearLogOverflowVisibilityHandler();
+            UI.logOverflowPendingWrapper = null;
+        },
+
+        bindLogOverflowVisibilityHandler: () => {
+            if (typeof UI.logOverflowVisibilityHandler === 'function') return;
+            UI.logOverflowVisibilityHandler = () => {
+                const wrapper = UI.logOverflowPendingWrapper;
+                if (!wrapper || wrapper.nodeType !== 1 || !wrapper.isConnected || wrapper.dataset.expanded !== 'true') {
+                    UI.clearLogOverflowTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) {
+                    UI.clearLogOverflowDelayTimer();
+                    return;
+                }
+                UI.scheduleLogOverflowAuto(wrapper);
+            };
+            document.addEventListener('visibilitychange', UI.logOverflowVisibilityHandler);
+        },
+
         scheduleLogOverflowAuto: (wrapper = null) => {
             UI.clearLogOverflowTimer();
             if (!wrapper || wrapper.nodeType !== 1) return;
+            UI.logOverflowPendingWrapper = wrapper;
+            UI.bindLogOverflowVisibilityHandler();
+            if (UI.isDocumentHidden()) return;
             UI.logOverflowTimerId = setTimeout(() => {
                 UI.logOverflowTimerId = null;
-                if (!wrapper.isConnected || wrapper.dataset.expanded !== 'true') return;
-                wrapper.style.overflow = 'auto';
+                const pendingWrapper = UI.logOverflowPendingWrapper;
+                if (!pendingWrapper || pendingWrapper.nodeType !== 1 || !pendingWrapper.isConnected || pendingWrapper.dataset.expanded !== 'true') {
+                    UI.clearLogOverflowTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) return;
+                UI.clearLogOverflowVisibilityHandler();
+                UI.logOverflowPendingWrapper = null;
+                pendingWrapper.style.overflow = 'auto';
             }, 300);
         },
 

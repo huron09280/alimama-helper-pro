@@ -102,6 +102,88 @@ globalThis.__UI = UI;`).runInContext(context);
     };
 }
 
+function createLogOverflowHarness(initialVisibilityState = 'visible', options = {}) {
+    let visibilityState = String(initialVisibilityState || 'visible');
+    let nextTimerId = 1;
+    const timers = new Map();
+    const listeners = new Map();
+    const wrapper = options.wrapper === null
+        ? null
+        : {
+            nodeType: 1,
+            isConnected: options.isConnected !== false,
+            dataset: { expanded: options.expanded === false ? '' : 'true' },
+            style: { overflow: 'hidden' }
+        };
+    const addListener = (type, handler) => {
+        if (typeof handler !== 'function') return;
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(handler);
+    };
+    const removeListener = (type, handler) => {
+        listeners.get(type)?.delete(handler);
+    };
+    const logOverflowSource = sliceSource(
+        uiSource,
+        'clearLogOverflowDelayTimer: () => {',
+        'clearPanelRevealTimer: () => {'
+    );
+    const context = createContext({
+        document: {
+            get visibilityState() {
+                return visibilityState;
+            },
+            addEventListener: addListener,
+            removeEventListener: removeListener
+        },
+        setTimeout(handler, delay = 0) {
+            const timerId = nextTimerId;
+            nextTimerId += 1;
+            if (typeof handler === 'function') {
+                timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+            }
+            return timerId;
+        },
+        clearTimeout(timerId) {
+            timers.delete(Number(timerId));
+        }
+    });
+    new Script(`const UI = {
+logOverflowTimerId: null,
+logOverflowVisibilityHandler: null,
+logOverflowPendingWrapper: null,
+isDocumentHidden: () => document.visibilityState === 'hidden',
+${logOverflowSource}
+};
+globalThis.__UI = UI;`).runInContext(context);
+    return {
+        context,
+        wrapper,
+        timers,
+        listenerCount(type = 'visibilitychange') {
+            return listeners.get(type)?.size || 0;
+        },
+        getTimerDelays() {
+            return Array.from(timers.values()).map(timer => timer.delay);
+        },
+        setVisibilityState(nextState) {
+            visibilityState = String(nextState || 'visible');
+            const handlers = Array.from(listeners.get('visibilitychange') || []);
+            handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+        },
+        tickNextTimer() {
+            const [timerId, timer] = Array.from(timers.entries())[0] || [];
+            if (!timer) return false;
+            timers.delete(timerId);
+            timer.handler();
+            return true;
+        },
+        get UI() {
+            return context.__UI;
+        }
+    };
+}
+
 test('TokenManager 会从 hook history 回填 dynamicToken/loginPointId/csrf', () => {
     assert.match(
         tokenSource,
@@ -185,18 +267,33 @@ test('算法护航关闭后会释放 token 状态轮询，再次展示时恢复'
 test('算法护航日志展开 overflow 延迟 timer 会在返回或关闭时释放', () => {
     assert.match(
         uiSource,
-        /logOverflowTimerId:\s*null,/,
-        '日志 overflow 延迟 timer 缺少可清理句柄'
+        /logOverflowTimerId:\s*null,\s*\n\s*logOverflowVisibilityHandler:\s*null,\s*\n\s*logOverflowPendingWrapper:\s*null,/,
+        '日志 overflow 延迟 timer 缺少可清理句柄、visibility handler 或 pending wrapper'
     );
     assert.match(
         uiSource,
-        /clearLogOverflowTimer:\s*\(\) => \{[\s\S]*if \(UI\.logOverflowTimerId === null\) return;[\s\S]*clearTimeout\(UI\.logOverflowTimerId\);[\s\S]*UI\.logOverflowTimerId = null;[\s\S]*\},/,
-        '日志 overflow timer 应支持显式 clear 并归零'
+        /clearLogOverflowDelayTimer:\s*\(\) => \{[\s\S]*if \(UI\.logOverflowTimerId === null\) return;[\s\S]*clearTimeout\(UI\.logOverflowTimerId\);[\s\S]*UI\.logOverflowTimerId = null;[\s\S]*\},/,
+        '日志 overflow delay timer 应支持显式 clear 并归零'
     );
     assert.match(
         uiSource,
-        /scheduleLogOverflowAuto:\s*\(wrapper = null\) => \{[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*if \(!wrapper \|\| wrapper\.nodeType !== 1\) return;[\s\S]*UI\.logOverflowTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.logOverflowTimerId = null;[\s\S]*if \(!wrapper\.isConnected \|\| wrapper\.dataset\.expanded !== 'true'\) return;[\s\S]*wrapper\.style\.overflow = 'auto';[\s\S]*\},\s*300\);[\s\S]*\},/,
-        '日志 overflow timer 应统一调度，并在回调触发前校验 wrapper 仍连接且保持展开'
+        /clearLogOverflowVisibilityHandler:\s*\(\) => \{[\s\S]*document\.removeEventListener\('visibilitychange', UI\.logOverflowVisibilityHandler\);[\s\S]*UI\.logOverflowVisibilityHandler = null;[\s\S]*\},/,
+        '日志 overflow 应支持释放 visibilitychange handler'
+    );
+    assert.match(
+        uiSource,
+        /clearLogOverflowTimer:\s*\(\) => \{[\s\S]*UI\.clearLogOverflowDelayTimer\(\);[\s\S]*UI\.clearLogOverflowVisibilityHandler\(\);[\s\S]*UI\.logOverflowPendingWrapper = null;[\s\S]*\},/,
+        '日志 overflow timer 应支持统一释放 timer、listener 和 pending wrapper'
+    );
+    assert.match(
+        uiSource,
+        /bindLogOverflowVisibilityHandler:\s*\(\) => \{[\s\S]*if \(typeof UI\.logOverflowVisibilityHandler === 'function'\) return;[\s\S]*UI\.logOverflowVisibilityHandler = \(\) => \{[\s\S]*const wrapper = UI\.logOverflowPendingWrapper;[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*if \(UI\.isDocumentHidden\(\)\) \{[\s\S]*UI\.clearLogOverflowDelayTimer\(\);[\s\S]*return;[\s\S]*UI\.scheduleLogOverflowAuto\(wrapper\);[\s\S]*document\.addEventListener\('visibilitychange', UI\.logOverflowVisibilityHandler\);/,
+        '日志 overflow 应在隐藏时取消 delay timer，恢复可见后继续同一个 pending wrapper'
+    );
+    assert.match(
+        uiSource,
+        /scheduleLogOverflowAuto:\s*\(wrapper = null\) => \{[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*if \(!wrapper \|\| wrapper\.nodeType !== 1\) return;[\s\S]*UI\.logOverflowPendingWrapper = wrapper;[\s\S]*UI\.bindLogOverflowVisibilityHandler\(\);[\s\S]*if \(UI\.isDocumentHidden\(\)\) return;[\s\S]*UI\.logOverflowTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.logOverflowTimerId = null;[\s\S]*const pendingWrapper = UI\.logOverflowPendingWrapper;[\s\S]*if \(!pendingWrapper \|\| pendingWrapper\.nodeType !== 1 \|\| !pendingWrapper\.isConnected \|\| pendingWrapper\.dataset\.expanded !== 'true'\) \{[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*return;[\s\S]*\}[\s\S]*if \(UI\.isDocumentHidden\(\)\) return;[\s\S]*UI\.clearLogOverflowVisibilityHandler\(\);[\s\S]*UI\.logOverflowPendingWrapper = null;[\s\S]*pendingWrapper\.style\.overflow = 'auto';[\s\S]*\},\s*300\);[\s\S]*\},/,
+        '日志 overflow timer 应隐藏页暂停、可见页按 300ms 调度，并在回调触发前校验 wrapper 仍连接且保持展开'
     );
     assert.match(
         uiSource,
@@ -218,6 +315,63 @@ test('算法护航日志展开 overflow 延迟 timer 会在返回或关闭时释
         /setTimeout\(\(\) => wrapper\.style\.overflow = 'auto', 300\);/,
         '不应继续使用匿名 overflow 延迟 timer'
     );
+    assert.doesNotMatch(
+        sliceSource(uiSource, 'scheduleLogOverflowAuto: (wrapper = null) => {', 'clearPanelRevealTimer: () => {'),
+        /Core\.run|API\.request|TokenManager\.refresh|openV3|createPlans|runCreateRepair|appendKeywords|submit|budget/i,
+        '日志 overflow timer 不应触发护航执行、请求、token 刷新、创建/提交或预算链路'
+    );
+});
+
+test('算法护航日志 overflow timer 在隐藏页暂停并恢复可见后补排', () => {
+    const hiddenHarness = createLogOverflowHarness('hidden');
+    hiddenHarness.UI.scheduleLogOverflowAuto(hiddenHarness.wrapper);
+    assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 300ms overflow timeout');
+    assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页应保留 visibilitychange 恢复监听');
+    assert.equal(hiddenHarness.UI.logOverflowPendingWrapper, hiddenHarness.wrapper, '隐藏页应保留 pending wrapper');
+    assert.equal(hiddenHarness.wrapper.style.overflow, 'hidden', '隐藏页不应立即开放 overflow');
+
+    hiddenHarness.setVisibilityState('visible');
+    assert.deepEqual(hiddenHarness.getTimerDelays(), [300], '恢复可见后应按原 300ms 节奏补排 overflow timeout');
+    assert.equal(hiddenHarness.listenerCount(), 1, '补排 timeout 等待期间应继续监听转隐藏');
+    assert.equal(hiddenHarness.tickNextTimer(), true, '应能触发补排 overflow timeout');
+    assert.equal(hiddenHarness.wrapper.style.overflow, 'auto', '补排 timeout 触发后应开放日志滚动');
+    assert.equal(hiddenHarness.listenerCount(), 0, '执行完成后应释放 visibilitychange');
+    assert.equal(hiddenHarness.UI.logOverflowPendingWrapper, null, '执行完成后应释放 pending wrapper');
+
+    const visibleHarness = createLogOverflowHarness('visible');
+    visibleHarness.UI.scheduleLogOverflowAuto(visibleHarness.wrapper);
+    assert.deepEqual(visibleHarness.getTimerDelays(), [300], '可见页应保留原 300ms overflow timeout');
+    assert.equal(visibleHarness.listenerCount(), 1, '可见页等待 overflow 时应监听 visibilitychange');
+    visibleHarness.setVisibilityState('hidden');
+    assert.equal(visibleHarness.timers.size, 0, '可见页转隐藏时应取消已排 overflow timeout');
+    assert.equal(visibleHarness.wrapper.style.overflow, 'hidden', '转隐藏时不应提前开放 overflow');
+    assert.equal(visibleHarness.UI.logOverflowPendingWrapper, visibleHarness.wrapper, '转隐藏时应保留 pending wrapper');
+    visibleHarness.setVisibilityState('visible');
+    assert.deepEqual(visibleHarness.getTimerDelays(), [300], '再次恢复可见后应重新排原 300ms overflow timeout');
+    assert.equal(visibleHarness.tickNextTimer(), true, '再次恢复后的 overflow timeout 应可触发');
+    assert.equal(visibleHarness.wrapper.style.overflow, 'auto', '再次恢复后应开放日志滚动');
+    assert.equal(visibleHarness.listenerCount(), 0, '执行完成后应释放 visibilitychange');
+
+    const collapsedHarness = createLogOverflowHarness('visible', { expanded: false });
+    collapsedHarness.UI.scheduleLogOverflowAuto(collapsedHarness.wrapper);
+    assert.equal(collapsedHarness.tickNextTimer(), true, '折叠 wrapper 分支仍应消费 overflow timeout');
+    assert.equal(collapsedHarness.wrapper.style.overflow, 'hidden', '折叠 wrapper 不应开放 overflow');
+    assert.equal(collapsedHarness.listenerCount(), 0, '折叠 wrapper 分支应释放 visibilitychange');
+    assert.equal(collapsedHarness.UI.logOverflowPendingWrapper, null, '折叠 wrapper 分支应释放 pending wrapper');
+
+    const disconnectedHarness = createLogOverflowHarness('visible', { isConnected: false });
+    disconnectedHarness.UI.scheduleLogOverflowAuto(disconnectedHarness.wrapper);
+    assert.equal(disconnectedHarness.tickNextTimer(), true, '断开连接 wrapper 分支仍应消费 overflow timeout');
+    assert.equal(disconnectedHarness.wrapper.style.overflow, 'hidden', '断开连接 wrapper 不应开放 overflow');
+    assert.equal(disconnectedHarness.listenerCount(), 0, '断开连接 wrapper 分支应释放 visibilitychange');
+    assert.equal(disconnectedHarness.UI.logOverflowPendingWrapper, null, '断开连接 wrapper 分支应释放 pending wrapper');
+
+    const clearHarness = createLogOverflowHarness('hidden');
+    clearHarness.UI.scheduleLogOverflowAuto(clearHarness.wrapper);
+    clearHarness.UI.clearLogOverflowTimer();
+    assert.equal(clearHarness.timers.size, 0, '显式清理后不应残留 overflow timeout');
+    assert.equal(clearHarness.listenerCount(), 0, '显式清理后不应残留 visibilitychange');
+    assert.equal(clearHarness.UI.logOverflowPendingWrapper, null, '显式清理后不应残留 pending wrapper');
 });
 
 test('算法护航面板高亮提示 timer 会复用并在关闭时释放', () => {
