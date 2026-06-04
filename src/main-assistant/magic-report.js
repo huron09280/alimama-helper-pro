@@ -3186,6 +3186,44 @@
             return baseResult.scopeResolutionPromise;
         },
 
+        buildCrowdInsightPeriodResult(baseResult, { periodDays, metricType, requestPath = '', unsupportedReason = '' } = {}) {
+            const panelQueryConf = baseResult?.panelQueryConf && typeof baseResult.panelQueryConf === 'object'
+                ? baseResult.panelQueryConf
+                : {};
+            return {
+                periodDays: Number(periodDays),
+                metricType: this.normalizeCrowdMetricType(metricType),
+                groupMap: baseResult?.groupMap && typeof baseResult.groupMap === 'object'
+                    ? baseResult.groupMap
+                    : {},
+                rawMeta: {
+                    prompt: baseResult?.prompt || '',
+                    itemId: baseResult?.itemId || '',
+                    requestPath: String(requestPath || baseResult?.requestPath || ''),
+                    title: panelQueryConf?.title || '',
+                    queryExecutePlan: panelQueryConf?.queryExecutePlan || '',
+                    timeMode: panelQueryConf?.timeMode || '',
+                    unsupportedReason: String(unsupportedReason || baseResult?.unsupportedReason || '').trim()
+                }
+            };
+        },
+
+        applyCrowdInsightBackgroundScopeResult({ campaignId, runId, result } = {}) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return false;
+            if (Number(runId) !== Number(this.crowdMatrixRunId)) return false;
+            if (this.crowdMatrixLoadedCampaignId && this.crowdMatrixLoadedCampaignId !== id) return false;
+            if (!(this.crowdMatrixResultMap instanceof Map)) return false;
+            const key = this.buildCrowdMatrixResultKey(result?.metricType, result?.periodDays);
+            if (!key || !this.crowdMatrixResultMap.has(key)) return false;
+            const mergedResults = this.upsertCrowdMatrixResults([result]);
+            const dataset = this.buildMatrixDataset(mergedResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+            this.crowdMatrixDataset = dataset;
+            this.crowdMatrixLoadedCampaignId = id;
+            this.renderCrowdMatrixCharts(dataset, { progressivePeriod: result.periodDays });
+            return true;
+        },
+
         async queryCrowdInsight({ campaignId, metricType, periodDays }) {
             const id = String(campaignId || '').trim();
             const metric = this.normalizeCrowdMetricType(metricType);
@@ -3385,43 +3423,42 @@
 
             const baseResult = await context.basePromiseMap.get(metric);
             if (days === 7) {
+                const sevenDayResult = this.buildCrowdInsightPeriodResult(baseResult, {
+                    periodDays: days,
+                    metricType: metric
+                });
+                const runId = this.crowdMatrixRunId;
                 this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric })
+                    .then((resolvedBaseResult) => {
+                        const enrichedResult = this.buildCrowdInsightPeriodResult(resolvedBaseResult || baseResult, {
+                            periodDays: days,
+                            metricType: metric
+                        });
+                        sevenDayResult.groupMap = enrichedResult.groupMap;
+                        sevenDayResult.rawMeta = enrichedResult.rawMeta;
+                        this.applyCrowdInsightBackgroundScopeResult({
+                            campaignId: id,
+                            runId,
+                            result: sevenDayResult
+                        });
+                    })
                     .catch((err) => {
                         Logger.warn(`🔮 省份/城市维度后台补齐失败：${err?.message || '未知错误'}`);
                     });
-                return {
-                    periodDays: days,
-                    metricType: metric,
-                    groupMap: baseResult.groupMap,
-                    rawMeta: {
-                        prompt: baseResult.prompt,
-                        itemId: baseResult.itemId || '',
-                        requestPath: baseResult.requestPath,
-                        title: baseResult.panelQueryConf?.title || '',
-                        queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
-                        timeMode: baseResult.panelQueryConf?.timeMode || '',
-                        unsupportedReason: baseResult.unsupportedReason || ''
-                    }
-                };
+                return sevenDayResult;
             }
 
             await this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric });
 
             if (baseResult.unsupportedReason) {
-                return {
-                    periodDays: days,
-                    metricType: metric,
-                    groupMap: {},
-                    rawMeta: {
-                        prompt: baseResult.prompt,
-                        itemId: baseResult.itemId || '',
-                        requestPath: baseResult.requestPath,
-                        title: '',
-                        queryExecutePlan: '',
-                        timeMode: '',
+                return this.buildCrowdInsightPeriodResult(
+                    { ...baseResult, groupMap: {}, panelQueryConf: null },
+                    {
+                        periodDays: days,
+                        metricType: metric,
                         unsupportedReason: baseResult.unsupportedReason
                     }
-                };
+                );
             }
 
             const scopeResultMap = baseResult.scopeResultMap && typeof baseResult.scopeResultMap === 'object'

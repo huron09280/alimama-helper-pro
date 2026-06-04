@@ -1,3 +1,86 @@
+# TODO - 2026-06-04 人群对比看板过去7天省份城市数据缺失修复
+
+## 需求规格
+- 目标：修复人群对比看板在“过去7天”时间范围下省份与城市维度数据缺失的问题，并在浏览器真实页面验证省份、城市数据正常展示。
+- 根因判断：过去 7 天分支为保留首屏速度，会先返回 base 首查结果；省份/城市额外维度虽然在后台继续补齐，但旧代码没有把补齐后的 `groupMap/rawMeta` 回写当前结果对象，也没有校验当前看板后重新合并 `crowdMatrixResultMap` 与重绘，导致 7 天列最终停留在缺省份/城市的 base 结果。
+- 范围：仅覆盖人群对比看板的过去7天省份/城市取数、解析和展示缺失；不改创建/复制/预算/投放/导出/护航执行/授权/服务器并发限制等无关链路。
+- 热修 vs 结构性修复取舍：先找到省份/城市缺失的单一事实源和不变量，再在该事实源修复；若问题来自参数或响应合同漂移，统一修正构造/解析函数并补测试，不新增平行取数实现或静默 fallback。
+- 成功标准：源码修复后，目标测试覆盖过去7天省份与城市维度不缺失；相关语法/测试/构建检查通过；Chrome DevTools MCP 在真实 `one.alimama.com` 页面完成只读或安全交互验收，证明过去7天省份与城市数据可见且无新增控制台/网络异常。
+- 安全边界：浏览器验证不点击会真实创建、投放、提交、删除或扣费的入口；如需打开人群对比看板，只做查询和页面筛选类只读操作。
+
+## 执行计划（可核对）
+- [x] 定位人群对比看板源码、测试和相关 API 参数/响应解析链路。
+- [x] 复现或用静态/单测证据确认过去7天省份与城市缺失的根因。
+- [x] 实现最小结构性修复，优先修正事实源而非 UI 兜底。
+- [x] 补充或更新目标测试，覆盖过去7天省份与城市维度数据。
+- [x] 运行目标测试、相关回归、语法/构建检查和空白检查。
+- [x] 使用 Chrome DevTools MCP 在真实页面验证过去7天省份/城市显示正常，并记录控制台/网络结果。
+- [x] 做 diff 自审，写入验证记录与结果复盘。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`：本次浏览器验收必须使用 `mcp__chrome_devtools.*`，真实页面验证不能用 Browser/CDP/shell 结果替代；跨层弹层/真实页面类问题要验证可操作和可见状态，不只看 DOM 结构。
+- 计划校验：本次只修复人群对比看板过去7天省份/城市缺失，不扩大到其它时间范围、其它维度或写操作链路；若定位发现共享解析函数影响其它维度，会同步补覆盖测试并记录风险。
+- 定位摘要：`queryCrowdInsight()` 的 7 天特殊分支会立即返回 base 结果，后台 `ensureCrowdInsightExtraScopeResults()` 完成后旧实现只记录失败日志，没有触发当前看板 resultMap/dataset 更新；其它周期会 await 省份/城市补齐，所以缺失集中在过去 7 天。
+- 实现摘要：新增 `buildCrowdInsightPeriodResult()` 统一构造周期结果，新增 `applyCrowdInsightBackgroundScopeResult()` 用 `campaignId/runId/resultKey` 守卫后台补齐结果，只允许更新当前看板已有结果项，并在补齐后重建 dataset、写回 `crowdMatrixDataset`、重绘 7 天列。
+- 7 天链路摘要：7 天仍先返回基础结果，不阻塞首屏；后台省份/城市完成后回写同一个 `sevenDayResult.groupMap/rawMeta`，再安全触发当前看板重绘。非 7 天周期仍等待省份/城市补齐后返回完整 8 维度。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 增加对 `buildCrowdInsightPeriodResult()`、`applyCrowdInsightBackgroundScopeResult()`、7 天后台回写和当前看板重绘守卫的静态断言；按用户“不要模拟缓存”修正，删除模拟缓存验收思路。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 目标测试：`node --test tests/magic-report-crowd-matrix.test.mjs` 通过，66 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，54 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 扩展刷新：只使用 `mcp__chrome_devtools.*`，在 `chrome://extensions/` 点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload`，切回 `https://one.alimama.com/index.html#!/manage/search` 并刷新；运行态为 extension、版本 `7.05`、授权 `authorized:true`、无风险验证。
+- Chrome MCP 真实看板验收：打开万能查数的人群对比看板，真实计划上下文为 `计划名：E7pro_自定义`、`计划ID：69514602419`、商品 `757440599385`，状态显示 `人群对比看板已加载完成（4列周期 × 8行维度）`。
+- Chrome MCP DOM 证据：真实 DOM 中 `#am-crowd-matrix-grid` 共 45 个单元格，周期列为过去3天/过去7天/过去30天/过去90天，8 行维度包含省份和城市；省份 × 过去7天单元格非空态，`labelCount:27`，前序标签和值为 `广东 19.41%`、`浙江 12.62%`、`江苏 9.96%`、`山东 6.55%`、`上海 5.65%`、`福建 5.12%`；城市 × 过去7天单元格非空态，`labelCount:90`，前序标签和值为 `上海 5.73%`、`广州 4.83%`、`深圳 4.28%`、`成都 3.65%`、`重庆 3.41%`、`杭州 3.39%`。
+- Chrome MCP 网络证据：DevTools Network 真实请求中可见 `POST https://ai.alimama.com/ai/report/dataQuery.json` 200，以及多条 `POST https://ai.alimama.com/ai/report/panelDataQuery.json` 200；未使用模拟缓存、mock API 或构造的 `crowdMatrixResultMap` 作为验收依据。
+- Chrome MCP 控制台/网络：控制台只见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 与 `ScriptProcessorNode` deprecated warning，未见新增插件运行失败；危险写请求关键词 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 过滤命中 0。
+- 截图证据：`tasks/crowd-matrix-7day-real-browser.png` 保存首屏看板；`tasks/crowd-matrix-7day-province-city.png` 保存滚动到省份/城市行后的真实浏览器截图，能看到过去7天省份/城市柱状图。
+- Diff 自审：`src/main-assistant/magic-report.js` 只新增周期结果构造和后台省份/城市补齐回写重绘守卫；`tests/magic-report-crowd-matrix.test.mjs` 只补对应断言；未改创建、复制、预算、投放、导出、护航、授权或服务端并发链路。工作区另有本任务开始前已存在的 `src/optimizer/keyword-plan-api/*` 与 `tests/keyword-wizard-entry-regression.test.mjs` 等无关脏改，未回退。
+
+## 结果复盘
+- 本次修复把“过去 7 天首屏快速返回”和“省份/城市后台补齐”之间缺失的状态回写闭环补上：后台结果只有在 run、计划 ID、结果 key 都仍匹配当前看板时才写回并重绘，避免串计划或覆盖新一轮请求。
+- 取舍结论：没有在 UI 层补假数据，也没有模拟缓存；保留 7 天首屏快速返回策略，问题在真实数据源补齐后更新当前事实源解决。非 7 天周期保持原有等待完整维度的语义。
+- 验收结论：目标测试、语法、构建检查、空白检查和 Chrome DevTools MCP 真实页面验收均通过；真实 one.alimama 页面上过去 7 天省份与城市数据已正常显示，未触发任何业务写入口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十二子项
+
+## 需求规格
+- 目标：在万能查数 iframe 清理 retry 收口后，继续优化组建计划向导中两个短延迟请求 timer，避免页面隐藏时仍触发自动推荐关键词加载和场景创建合同同步。
+- 根因判断：`src/optimizer/keyword-plan-api/request-builder-preview.js` 的 `scheduleAutoKeywordLoad()` 和 `scheduleSceneCreateContractSync()` 已有可取消 timer 与向导关闭清理，但 timer 触发前只复核 `wizardState.visible`；当向导打开后标签页隐藏，延迟到期仍可能发起推荐词接口或场景接口捕获请求，增加后台请求与闭包持有。
+- 范围：仅覆盖自动推荐关键词 timer 与场景合同同步 timer 的隐藏页暂停、恢复可见续跑、visibility handler 生命周期和关闭/重排清理；不改推荐词请求参数、场景合同捕获参数、创建/复制/提交、批量并发、授权、护航、预算或 10rpm 服务端限速策略。
+- 热修 vs 结构性修复取舍：保留现有 token/key/pending map、延迟值、缓存命中、向导可见性校验和请求函数；新增统一 `visibilitychange` resume helper，使隐藏页不启动请求，可见后继续同一 pending 链，不新增第二套推荐词或场景同步实现。
+- 成功标准：静态测试证明 `wizardState` 登记两个 visibility handler，存在隐藏态判定、统一 visibility resume/clear helper，自动推荐关键词和场景同步在调度前与 timer 触发后都会复核隐藏态，隐藏页只登记可见恢复 callback，不发请求；关闭向导或重排 timer 时释放 timeout 与 visibility handler；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不触发推荐词或场景同步接口、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十一子项提交后工作区状态，确认本子项只处理向导短延迟请求 timer。
+- [x] 在向导状态与 helper 中加入隐藏态判定、visibility resume/clear 生命周期。
+- [x] 将自动推荐关键词 timer 改为隐藏页暂停、恢复可见后继续同一 pending 链。
+- [x] 将场景合同同步 timer 改为隐藏页暂停、恢复可见后继续同一 pending 链。
+- [x] 更新向导目标测试，锁定隐藏页不触发推荐词/场景同步请求且关闭时释放 visibility handler。
+- [ ] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [ ] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `48763e6 优化万能查数清理轮询`，工作区干净。
+- 定位结论：主面板 alert/reveal 与万能查数状态 auto-hide 都是一次性纯 UI timer，收益较小；向导自动推荐词和场景合同同步是短延迟后可能发请求的 timer，隐藏页暂停能减少后台请求，更符合 10rpm 边界。
+- 实现摘要：`wizardState` 新增 `autoKeywordLoadVisibilityHandler` 和 `sceneSyncVisibilityHandler`，并在 `intro.js` 集中提供隐藏态判定、visibility resume 调度和统一解绑 helper。
+- 自动推荐词摘要：`scheduleAutoKeywordLoad()` 保留原 token/key/pending map，隐藏页只登记可见恢复 callback，timer 触发后若页面已隐藏也暂停，恢复可见后继续同一 pending 链再复核策略与弹窗可见状态。
+- 场景同步摘要：`scheduleSceneCreateContractSync()` 保留原缓存、token、inFlight、请求 payload 和捕获参数，隐藏页不启动 `captureSceneCreateInterfaces()`，恢复可见后继续同一同步链。
+- 清理摘要：自动推荐词和场景同步的 clear helper 同时释放 timeout 与 visibility handler，向导关闭、详情隐藏或重排 timer 时不会遗留隐藏页恢复监听。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 增加 visibility helper、状态字段、clear helper 和两个调度函数的静态回归断言。
+
+## 验证记录
+- 待执行。
+
+## 结果复盘
+- 待补充。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十一子项
 
 ## 需求规格

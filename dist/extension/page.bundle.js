@@ -12859,6 +12859,44 @@ if (typeof globalThis !== 'undefined') {
             return baseResult.scopeResolutionPromise;
         },
 
+        buildCrowdInsightPeriodResult(baseResult, { periodDays, metricType, requestPath = '', unsupportedReason = '' } = {}) {
+            const panelQueryConf = baseResult?.panelQueryConf && typeof baseResult.panelQueryConf === 'object'
+                ? baseResult.panelQueryConf
+                : {};
+            return {
+                periodDays: Number(periodDays),
+                metricType: this.normalizeCrowdMetricType(metricType),
+                groupMap: baseResult?.groupMap && typeof baseResult.groupMap === 'object'
+                    ? baseResult.groupMap
+                    : {},
+                rawMeta: {
+                    prompt: baseResult?.prompt || '',
+                    itemId: baseResult?.itemId || '',
+                    requestPath: String(requestPath || baseResult?.requestPath || ''),
+                    title: panelQueryConf?.title || '',
+                    queryExecutePlan: panelQueryConf?.queryExecutePlan || '',
+                    timeMode: panelQueryConf?.timeMode || '',
+                    unsupportedReason: String(unsupportedReason || baseResult?.unsupportedReason || '').trim()
+                }
+            };
+        },
+
+        applyCrowdInsightBackgroundScopeResult({ campaignId, runId, result } = {}) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return false;
+            if (Number(runId) !== Number(this.crowdMatrixRunId)) return false;
+            if (this.crowdMatrixLoadedCampaignId && this.crowdMatrixLoadedCampaignId !== id) return false;
+            if (!(this.crowdMatrixResultMap instanceof Map)) return false;
+            const key = this.buildCrowdMatrixResultKey(result?.metricType, result?.periodDays);
+            if (!key || !this.crowdMatrixResultMap.has(key)) return false;
+            const mergedResults = this.upsertCrowdMatrixResults([result]);
+            const dataset = this.buildMatrixDataset(mergedResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+            this.crowdMatrixDataset = dataset;
+            this.crowdMatrixLoadedCampaignId = id;
+            this.renderCrowdMatrixCharts(dataset, { progressivePeriod: result.periodDays });
+            return true;
+        },
+
         async queryCrowdInsight({ campaignId, metricType, periodDays }) {
             const id = String(campaignId || '').trim();
             const metric = this.normalizeCrowdMetricType(metricType);
@@ -13058,43 +13096,42 @@ if (typeof globalThis !== 'undefined') {
 
             const baseResult = await context.basePromiseMap.get(metric);
             if (days === 7) {
+                const sevenDayResult = this.buildCrowdInsightPeriodResult(baseResult, {
+                    periodDays: days,
+                    metricType: metric
+                });
+                const runId = this.crowdMatrixRunId;
                 this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric })
+                    .then((resolvedBaseResult) => {
+                        const enrichedResult = this.buildCrowdInsightPeriodResult(resolvedBaseResult || baseResult, {
+                            periodDays: days,
+                            metricType: metric
+                        });
+                        sevenDayResult.groupMap = enrichedResult.groupMap;
+                        sevenDayResult.rawMeta = enrichedResult.rawMeta;
+                        this.applyCrowdInsightBackgroundScopeResult({
+                            campaignId: id,
+                            runId,
+                            result: sevenDayResult
+                        });
+                    })
                     .catch((err) => {
                         Logger.warn(`🔮 省份/城市维度后台补齐失败：${err?.message || '未知错误'}`);
                     });
-                return {
-                    periodDays: days,
-                    metricType: metric,
-                    groupMap: baseResult.groupMap,
-                    rawMeta: {
-                        prompt: baseResult.prompt,
-                        itemId: baseResult.itemId || '',
-                        requestPath: baseResult.requestPath,
-                        title: baseResult.panelQueryConf?.title || '',
-                        queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
-                        timeMode: baseResult.panelQueryConf?.timeMode || '',
-                        unsupportedReason: baseResult.unsupportedReason || ''
-                    }
-                };
+                return sevenDayResult;
             }
 
             await this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric });
 
             if (baseResult.unsupportedReason) {
-                return {
-                    periodDays: days,
-                    metricType: metric,
-                    groupMap: {},
-                    rawMeta: {
-                        prompt: baseResult.prompt,
-                        itemId: baseResult.itemId || '',
-                        requestPath: baseResult.requestPath,
-                        title: '',
-                        queryExecutePlan: '',
-                        timeMode: '',
+                return this.buildCrowdInsightPeriodResult(
+                    { ...baseResult, groupMap: {}, panelQueryConf: null },
+                    {
+                        periodDays: days,
+                        metricType: metric,
                         unsupportedReason: baseResult.unsupportedReason
                     }
-                };
+                );
             }
 
             const scopeResultMap = baseResult.scopeResultMap && typeof baseResult.scopeResultMap === 'object'
@@ -25172,9 +25209,11 @@ if (typeof globalThis !== 'undefined') {
             sceneSyncTimer: 0,
             sceneSyncInFlight: false,
             sceneSyncPendingToken: '',
+            sceneSyncVisibilityHandler: null,
             autoKeywordLoadTimer: 0,
             autoKeywordLoadKey: '',
             autoKeywordLoadToken: '',
+            autoKeywordLoadVisibilityHandler: null,
             autoKeywordLoadMap: {},
             repairRunToken: 0,
             repairRunning: false,
@@ -25201,11 +25240,40 @@ if (typeof globalThis !== 'undefined') {
         };
 
         const isPlainObject = (value) => Object.prototype.toString.call(value) === '[object Object]';
+        const isWizardDocumentHidden = () => {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        };
+        const clearWizardVisibilityResumeHandler = (handlerKey = '') => {
+            const normalizedKey = String(handlerKey || '').trim();
+            if (!normalizedKey) return;
+            const handler = wizardState[normalizedKey];
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            wizardState[normalizedKey] = null;
+        };
+        const scheduleWizardVisibilityResume = (handlerKey = '', callback = null) => {
+            const normalizedKey = String(handlerKey || '').trim();
+            if (!normalizedKey || typeof callback !== 'function') return;
+            clearWizardVisibilityResumeHandler(normalizedKey);
+            const handler = () => {
+                if (isWizardDocumentHidden()) return;
+                clearWizardVisibilityResumeHandler(normalizedKey);
+                callback();
+            };
+            wizardState[normalizedKey] = handler;
+            document.addEventListener('visibilitychange', handler);
+        };
         const clearWizardAutoKeywordLoadTimer = (options = {}) => {
             if (wizardState.autoKeywordLoadTimer) {
                 clearTimeout(wizardState.autoKeywordLoadTimer);
                 wizardState.autoKeywordLoadTimer = 0;
             }
+            clearWizardVisibilityResumeHandler('autoKeywordLoadVisibilityHandler');
             const pendingKey = String(wizardState.autoKeywordLoadKey || '').trim();
             wizardState.autoKeywordLoadKey = '';
             wizardState.autoKeywordLoadToken = '';
@@ -61767,34 +61835,47 @@ if (typeof globalThis !== 'undefined') {
                 const token = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 wizardState.autoKeywordLoadKey = normalizedKey;
                 wizardState.autoKeywordLoadToken = token;
-                wizardState.autoKeywordLoadTimer = window.setTimeout(async () => {
-                    wizardState.autoKeywordLoadTimer = 0;
-                    if (wizardState.autoKeywordLoadToken !== token) return;
-                    if (wizardState.autoKeywordLoadKey !== normalizedKey) return;
-                    const latestStrategy = getStrategyById(normalizedStrategyId);
-                    if (
-                        !latestStrategy
-                        || wizardState.editingStrategyId !== normalizedStrategyId
-                        || !wizardState.detailVisible
-                        || wizardState.visible !== true
-                    ) {
-                        delete wizardState.autoKeywordLoadMap[normalizedKey];
-                        wizardState.autoKeywordLoadKey = '';
-                        wizardState.autoKeywordLoadToken = '';
+                const normalizedDelayMs = Math.max(0, toNumber(delayMs, 240));
+                const scheduleAutoKeywordLoadTask = (nextDelayMs = normalizedDelayMs) => {
+                    if (isWizardDocumentHidden()) {
+                        scheduleWizardVisibilityResume('autoKeywordLoadVisibilityHandler', () => scheduleAutoKeywordLoadTask(0));
                         return;
                     }
-                    const loadOk = await loadRecommendedKeywords({ triggerSource: 'auto_fill' });
-                    if (wizardState.autoKeywordLoadToken !== token) return;
-                    if (!loadOk) {
-                        delete wizardState.autoKeywordLoadMap[normalizedKey];
+                    clearWizardVisibilityResumeHandler('autoKeywordLoadVisibilityHandler');
+                    wizardState.autoKeywordLoadTimer = window.setTimeout(async () => {
+                        wizardState.autoKeywordLoadTimer = 0;
+                        if (wizardState.autoKeywordLoadToken !== token) return;
+                        if (wizardState.autoKeywordLoadKey !== normalizedKey) return;
+                        if (isWizardDocumentHidden()) {
+                            scheduleWizardVisibilityResume('autoKeywordLoadVisibilityHandler', () => scheduleAutoKeywordLoadTask(0));
+                            return;
+                        }
+                        const latestStrategy = getStrategyById(normalizedStrategyId);
+                        if (
+                            !latestStrategy
+                            || wizardState.editingStrategyId !== normalizedStrategyId
+                            || !wizardState.detailVisible
+                            || wizardState.visible !== true
+                        ) {
+                            delete wizardState.autoKeywordLoadMap[normalizedKey];
+                            wizardState.autoKeywordLoadKey = '';
+                            wizardState.autoKeywordLoadToken = '';
+                            return;
+                        }
+                        const loadOk = await loadRecommendedKeywords({ triggerSource: 'auto_fill' });
+                        if (wizardState.autoKeywordLoadToken !== token) return;
+                        if (!loadOk) {
+                            delete wizardState.autoKeywordLoadMap[normalizedKey];
+                            wizardState.autoKeywordLoadKey = '';
+                            wizardState.autoKeywordLoadToken = '';
+                            return;
+                        }
+                        wizardState.autoKeywordLoadMap[normalizedKey] = 'done';
                         wizardState.autoKeywordLoadKey = '';
                         wizardState.autoKeywordLoadToken = '';
-                        return;
-                    }
-                    wizardState.autoKeywordLoadMap[normalizedKey] = 'done';
-                    wizardState.autoKeywordLoadKey = '';
-                    wizardState.autoKeywordLoadToken = '';
-                }, delayMs);
+                    }, Math.max(0, toNumber(nextDelayMs, 0)));
+                };
+                scheduleAutoKeywordLoadTask(normalizedDelayMs);
             };
 
             const maybeAutoLoadManualKeywords = (strategy = null, options = {}) => {
@@ -61915,6 +61996,7 @@ if (typeof globalThis !== 'undefined') {
                     clearTimeout(wizardState.sceneSyncTimer);
                     wizardState.sceneSyncTimer = 0;
                 }
+                clearWizardVisibilityResumeHandler('sceneSyncVisibilityHandler');
                 if (options.clearPendingToken === false) return;
                 wizardState.sceneSyncPendingToken = '';
             };
@@ -61931,63 +62013,75 @@ if (typeof globalThis !== 'undefined') {
                 const delayMs = Math.max(180, toNumber(options.delayMs, 420));
                 const token = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 wizardState.sceneSyncPendingToken = token;
-                wizardState.sceneSyncTimer = window.setTimeout(async () => {
-                    wizardState.sceneSyncTimer = 0;
-                    if (wizardState.sceneSyncPendingToken !== token) return;
-                    if (wizardState.visible !== true) {
-                        wizardState.sceneSyncPendingToken = '';
+                const scheduleSceneSyncTask = (nextDelayMs = delayMs) => {
+                    if (isWizardDocumentHidden()) {
+                        scheduleWizardVisibilityResume('sceneSyncVisibilityHandler', () => scheduleSceneSyncTask(0));
                         return;
                     }
-                    if (wizardState.sceneSyncInFlight) {
-                        wizardState.sceneSyncPendingToken = '';
-                        return;
-                    }
-                    wizardState.sceneSyncInFlight = true;
-                    const itemId = resolveSceneSyncItemId();
-                    appendWizardLog(`场景接口同步：${targetScene}（itemId=${itemId}）`);
-                    try {
-                        const capture = await captureSceneCreateInterfaces(targetScene, {
-                            itemId,
-                            passMode: 'interface',
-                            captureInterfaces: true,
-                            fallbackPolicy: 'none',
-                            batchRetry: 0,
-                            maxRetries: 1,
-                            timeoutMs: Math.max(18000, toNumber(options.timeoutMs, 35000)),
-                            requestTimeout: Math.max(10000, toNumber(options.requestTimeout, 22000)),
-                            dayAverageBudget: Math.max(50, toNumber(options.dayAverageBudget, 100))
-                        });
-                        if (wizardState.sceneSyncPendingToken !== token || wizardState.visible !== true) return;
-                        const row = isPlainObject(capture?.row) ? capture.row : {};
-                        const createInterfaces = Array.isArray(row?.capture?.createInterfaces)
-                            ? row.capture.createInterfaces
-                            : [];
-                        if (createInterfaces.length) {
-                            const goalLabel = normalizeGoalLabel(row?.requestPreview?.marketingGoal || '');
-                            const rememberedContract = rememberSceneCreateInterfaces(
-                                targetScene,
-                                goalLabel,
-                                createInterfaces,
-                                { source: 'scene_switch_sync' }
-                            );
-                            appendWizardLog(
-                                `场景接口已同步：${targetScene} 接口=${rememberedContract?.endpoint || row.submitEndpoint || '-'} 请求字段数=${toNumber(rememberedContract?.requestKeys?.length, 0)}`,
-                                'success'
-                            );
-                        } else {
-                            appendWizardLog(`场景接口同步未捕获到创建请求：${targetScene}${row?.error ? `（${row.error}）` : ''}`, 'error');
+                    clearWizardVisibilityResumeHandler('sceneSyncVisibilityHandler');
+                    wizardState.sceneSyncTimer = window.setTimeout(async () => {
+                        wizardState.sceneSyncTimer = 0;
+                        if (wizardState.sceneSyncPendingToken !== token) return;
+                        if (isWizardDocumentHidden()) {
+                            scheduleWizardVisibilityResume('sceneSyncVisibilityHandler', () => scheduleSceneSyncTask(0));
+                            return;
                         }
-                    } catch (err) {
-                        if (wizardState.sceneSyncPendingToken === token && wizardState.visible === true) {
-                            appendWizardLog(`场景接口同步失败：${targetScene} -> ${err?.message || err}`, 'error');
-                        }
-                    } finally {
-                        wizardState.sceneSyncInFlight = false;
-                        if (wizardState.sceneSyncPendingToken === token) {
+                        if (wizardState.visible !== true) {
                             wizardState.sceneSyncPendingToken = '';
+                            return;
                         }
-                    }
-                }, delayMs);
+                        if (wizardState.sceneSyncInFlight) {
+                            wizardState.sceneSyncPendingToken = '';
+                            return;
+                        }
+                        wizardState.sceneSyncInFlight = true;
+                        const itemId = resolveSceneSyncItemId();
+                        appendWizardLog(`场景接口同步：${targetScene}（itemId=${itemId}）`);
+                        try {
+                            const capture = await captureSceneCreateInterfaces(targetScene, {
+                                itemId,
+                                passMode: 'interface',
+                                captureInterfaces: true,
+                                fallbackPolicy: 'none',
+                                batchRetry: 0,
+                                maxRetries: 1,
+                                timeoutMs: Math.max(18000, toNumber(options.timeoutMs, 35000)),
+                                requestTimeout: Math.max(10000, toNumber(options.requestTimeout, 22000)),
+                                dayAverageBudget: Math.max(50, toNumber(options.dayAverageBudget, 100))
+                            });
+                            if (wizardState.sceneSyncPendingToken !== token || wizardState.visible !== true) return;
+                            const row = isPlainObject(capture?.row) ? capture.row : {};
+                            const createInterfaces = Array.isArray(row?.capture?.createInterfaces)
+                                ? row.capture.createInterfaces
+                                : [];
+                            if (createInterfaces.length) {
+                                const goalLabel = normalizeGoalLabel(row?.requestPreview?.marketingGoal || '');
+                                const rememberedContract = rememberSceneCreateInterfaces(
+                                    targetScene,
+                                    goalLabel,
+                                    createInterfaces,
+                                    { source: 'scene_switch_sync' }
+                                );
+                                appendWizardLog(
+                                    `场景接口已同步：${targetScene} 接口=${rememberedContract?.endpoint || row.submitEndpoint || '-'} 请求字段数=${toNumber(rememberedContract?.requestKeys?.length, 0)}`,
+                                    'success'
+                                );
+                            } else {
+                                appendWizardLog(`场景接口同步未捕获到创建请求：${targetScene}${row?.error ? `（${row.error}）` : ''}`, 'error');
+                            }
+                        } catch (err) {
+                            if (wizardState.sceneSyncPendingToken === token && wizardState.visible === true) {
+                                appendWizardLog(`场景接口同步失败：${targetScene} -> ${err?.message || err}`, 'error');
+                            }
+                        } finally {
+                            wizardState.sceneSyncInFlight = false;
+                            if (wizardState.sceneSyncPendingToken === token) {
+                                wizardState.sceneSyncPendingToken = '';
+                            }
+                        }
+                    }, Math.max(0, toNumber(nextDelayMs, 0)));
+                };
+                scheduleSceneSyncTask(delayMs);
             };
             const buildSceneSyncDefaultItem = () => normalizeItem({
                 materialId: SCENE_SYNC_DEFAULT_ITEM_ID,
