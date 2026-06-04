@@ -1,3 +1,57 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十八子项
+
+## 需求规格
+- 目标：在算法护航日志 overflow timer 收口后，继续优化算法护航面板重复唤起高亮的 `panelHighlightTimerId`，避免页面隐藏时仍保留 500ms timeout 去把面板 `boxShadow` 恢复为默认阴影。
+- 根因判断：`src/optimizer/ui.js` 的 `flashPanelHighlight(panel)` 在算法护航面板已打开时再次触发入口，会立即设置强高亮阴影，再排 `setTimeout(..., 500)` 恢复默认阴影。该 timer 只服务可见 UI 反馈；若高亮后页面转入后台，继续保留 timeout 没有业务价值，还会保留 panel 引用并在隐藏页唤醒写 DOM。
+- 范围：仅覆盖算法护航面板高亮反馈 timer、pending panel 和 visibility listener 生命周期；不改高亮样式、面板打开/关闭/最大化/居中交互、算法护航执行、`Core.run()`、token 刷新、openV3、预算、创建/复制/提交、下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留可见页原 500ms 高亮反馈；隐藏页不排 timeout，恢复可见后按原 500ms 补排复位；可见页等待复位期间转 hidden 时取消已排 timeout 并保留 pending panel，恢复 visible 后重新按 500ms 调度；关闭面板沿用 `clearPanelHighlightTimer()` 统一释放 timer、listener 和 pending 引用。
+- 成功标准：静态与行为测试证明 `panelHighlightTimerId` 有统一 delay timer 清理、visibility handler、pending panel 和完整 clear helper；隐藏页高亮不排 timeout；恢复 visible 后按 500ms 补排；visible->hidden 会取消已排 timeout 且不提前复位阴影；timer 触发前校验 panel 仍连接；关闭面板释放所有状态；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击算法护航执行按钮、不打开结果浮层、不调用 `__ALIMAMA_OPTIMIZER_TOGGLE__`、不触发 `Core.run()`、openV3/护航执行、token 主动请求、预算、创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十七子项提交后工作区状态，确认本子项只处理算法护航面板高亮视觉 timer。
+- [x] 复核 UI/图标规范，确认本轮不改算法护航视觉、图标和交互结构。
+- [x] 定位 `panelHighlightTimerId`、`flashPanelHighlight()`、`clearPanelHighlightTimer()` 与现有 optimizer 测试覆盖，校验不改变业务语义的实现边界。
+- [x] 读取只读子代理复核结论，确认本候选或调整为更低风险候选。
+- [x] 为面板高亮复位增加 delay timer helper、pending panel、visibility handler 和隐藏态判定复用。
+- [x] 将高亮复位调度改为可见页保留 500ms，隐藏页暂停并恢复 visible 后按 500ms 补排。
+- [x] 更新 optimizer 目标测试，锁定隐藏页不排 timeout、visible->hidden 取消 timer、恢复可见补排、timer 触发释放 listener/pending、失效 panel 不写阴影和 close 清理状态。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `5c7a0f6 优化护航日志展开轮询`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：`panelHighlightTimerId` 只在算法护航面板已经打开、再次唤起时做 500ms boxShadow 视觉提示，触发点为公开入口中的两处 `UI.flashPanelHighlight?.(panel)`。它不参与面板创建、护航执行、请求、token、openV3、创建/复制/提交、下载或服务端 10rpm，比复制焦点恢复、批量成功刷新、下载 cleanup 等候选更窄。
+- 计划校验：本子项只降低隐藏标签页中高亮反馈复位的后台唤醒；可见页仍保持原 500ms 后恢复默认阴影，关闭面板仍统一清理。若实现需要触碰 `__ALIMAMA_OPTIMIZER_TOGGLE__` 逻辑、`Core.run()`、token 刷新、openV3、请求并发、创建/复制/提交或下载链路，先回到本计划更新后再继续。
+- 只读子代理复核：确认 `flashPanelHighlight(panel)` / `panelHighlightTimerId` 是当前最佳低风险候选；它只控制已打开面板再次唤起时的蓝色阴影反馈，不触碰请求、并发、创建/复制/提交、预算、openV3、下载启动或服务端限流。子代理建议跳过主面板 auto-hide、批量刷新和复制焦点恢复，因为这些候选交互或业务边界更大。
+- 实现摘要：`UI` 新增 `panelHighlightVisibilityHandler` 和 `panelHighlightPendingPanel`，并抽出 `clearPanelHighlightDelayTimer()`、`clearPanelHighlightVisibilityHandler()`、`bindPanelHighlightVisibilityHandler()`、`schedulePanelHighlightReset()`；原 `clearPanelHighlightTimer()` 升级为统一释放 delay timer、visibility listener 和 pending panel 的完整 cleanup helper。
+- 调度摘要：`flashPanelHighlight(panel)` 仍立即写入原高亮阴影 `0 0 20px rgba(24,144,255,0.8)`；可见页仍按原 `500ms` 恢复默认阴影；隐藏页只保留 pending panel 和 visibility listener，不排 timeout；可见页等待期间转 hidden 会取消已排 timeout 且不提前恢复阴影；恢复 visible 后重新按 `500ms` 调度。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增 fake document/timer 行为 harness，覆盖隐藏页暂停、恢复可见补排、visible->hidden 取消 timer、timer 触发释放 listener/pending、断开 panel 不写默认阴影、显式 clear 释放状态，并静态断言高亮复位 timer 不触发护航执行、请求、token 刷新、创建/提交或预算链路。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，12 项测试全绿；新增 “算法护航面板高亮 timer 在隐藏页暂停并恢复可见后补排” 行为断言。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 产物语法：`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，94 项测试全绿。
+- 静态定位：`rg -n "panelHighlightTimerId|panelHighlightVisibilityHandler|panelHighlightPendingPanel|clearPanelHighlightDelayTimer|clearPanelHighlightVisibilityHandler|bindPanelHighlightVisibilityHandler|schedulePanelHighlightReset|flashPanelHighlight" src/optimizer/ui.js tests/optimizer-token-capture-history.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 已进入产物。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { stdio:'inherit', timeout:60000 }) ..."` 通过，631 项中 629 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`licenseAuthorized:true`、`licenseReason:"authorized"`、`licenseSource:"extension_cache_bootstrap"`、`planApiBridgeHost:true`、`planApiReady:true`、`keywordApiReady:true`、`optimizerToggleReady:true`、`hookManagerReady:true`、`helperIcon:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4079385`，包含 `panelHighlightTimerId`、`panelHighlightVisibilityHandler`、`panelHighlightPendingPanel`、`clearPanelHighlightDelayTimer`、`clearPanelHighlightVisibilityHandler`、`bindPanelHighlightVisibilityHandler`、`schedulePanelHighlightReset`、`flashPanelHighlight` 和 `document.addEventListener('visibilitychange', UI.panelHighlightVisibilityHandler)`。
+- Chrome MCP 弹窗/危险请求：`helperPanelVisible:true` 为进入页面后已有主助手壳体状态；`optimizerPanelVisible:false`、`resultOverlayVisible:false`、`batchPlusMenuVisible:false`、`batchConfirmPopupVisible:false`、`copyOverviewPopupVisible:false`、`copySuccessPopupVisible:false`、`reportCapturePanelVisible:false`、`magicReportVisible:false`、`licenseOverlayVisible:false`；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords|submit|budget` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器`、主线程卡顿监听启动；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败。网络清单可见 `chrome-extension://.../page.bundle.js` 读取 200；未打开算法护航面板、未打开结果浮层、未点击立即扫描、未触发 `Core.run()`、openV3、创建/复制/提交/下载或任何业务写入口。
+- Diff 自审：`git diff --stat` 包含 `src/optimizer/ui.js`、`tests/optimizer-token-capture-history.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增算法护航面板高亮复位 timer 的隐藏页暂停、恢复 visible 补排和 listener/pending 生命周期管理，不改高亮样式、面板打开/关闭/最大化/居中交互、算法护航执行、`Core.run()`、token 刷新、openV3、预算、创建/复制/提交、下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十八子项结果：算法护航面板重复唤起高亮从“已打开面板再次唤起后总是排 500ms timeout 恢复默认阴影”优化为“隐藏页高亮或等待期间转 hidden 时暂停并释放已排 timeout，保留 pending panel，恢复 visible 后按原 500ms 节奏补排；关闭面板统一释放 timer/listener/pending”。
+- 取舍结论：本轮继续选择纯 UI 视觉 timer，而暂不改主面板 auto-hide、批量刷新、复制焦点恢复或下载 cleanup 等更靠近交互/业务边界的候选；可见页仍保留原 500ms 高亮反馈和默认阴影复位节奏，不改变用户可见交互。
+- 效果结论：在用户已经打开算法护航面板、再次唤起后立即切到后台的场景中，插件不再保留该 500ms boxShadow reset timeout 等待隐藏页唤醒，且不会丢失恢复可见后的阴影复位动作。浏览器验收未打开算法护航面板、未触发 `Core.run()`、openV3、创建/复制/提交/下载或任何真实写动作，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十七子项
 
 ## 需求规格

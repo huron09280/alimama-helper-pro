@@ -20,6 +20,8 @@
         panelRevealVisibilityHandler: null,
         panelRevealPendingCallback: null,
         panelHighlightTimerId: null,
+        panelHighlightVisibilityHandler: null,
+        panelHighlightPendingPanel: null,
 
         refreshTokenStatusIndicator: () => {
             const now = Date.now();
@@ -202,21 +204,70 @@
             }, 100);
         },
 
-        clearPanelHighlightTimer: () => {
+        clearPanelHighlightDelayTimer: () => {
             if (UI.panelHighlightTimerId === null) return;
             clearTimeout(UI.panelHighlightTimerId);
             UI.panelHighlightTimerId = null;
+        },
+
+        clearPanelHighlightVisibilityHandler: () => {
+            if (typeof UI.panelHighlightVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', UI.panelHighlightVisibilityHandler);
+            }
+            UI.panelHighlightVisibilityHandler = null;
+        },
+
+        clearPanelHighlightTimer: () => {
+            UI.clearPanelHighlightDelayTimer();
+            UI.clearPanelHighlightVisibilityHandler();
+            UI.panelHighlightPendingPanel = null;
+        },
+
+        bindPanelHighlightVisibilityHandler: () => {
+            if (typeof UI.panelHighlightVisibilityHandler === 'function') return;
+            UI.panelHighlightVisibilityHandler = () => {
+                const panel = UI.panelHighlightPendingPanel;
+                if (!panel || panel.nodeType !== 1 || !panel.isConnected) {
+                    UI.clearPanelHighlightTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) {
+                    UI.clearPanelHighlightDelayTimer();
+                    return;
+                }
+                UI.schedulePanelHighlightReset(panel);
+            };
+            document.addEventListener('visibilitychange', UI.panelHighlightVisibilityHandler);
+        },
+
+        schedulePanelHighlightReset: (panel = null) => {
+            UI.clearPanelHighlightDelayTimer();
+            if (!panel || panel.nodeType !== 1) {
+                UI.clearPanelHighlightTimer();
+                return;
+            }
+            UI.panelHighlightPendingPanel = panel;
+            UI.bindPanelHighlightVisibilityHandler();
+            if (UI.isDocumentHidden()) return;
+            UI.panelHighlightTimerId = setTimeout(() => {
+                UI.panelHighlightTimerId = null;
+                const pendingPanel = UI.panelHighlightPendingPanel;
+                if (!pendingPanel || pendingPanel.nodeType !== 1 || !pendingPanel.isConnected) {
+                    UI.clearPanelHighlightTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) return;
+                UI.clearPanelHighlightVisibilityHandler();
+                UI.panelHighlightPendingPanel = null;
+                pendingPanel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+            }, 500);
         },
 
         flashPanelHighlight: (panel = null) => {
             UI.clearPanelHighlightTimer();
             if (!panel || panel.nodeType !== 1) return;
             panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-            UI.panelHighlightTimerId = setTimeout(() => {
-                UI.panelHighlightTimerId = null;
-                if (!panel.isConnected) return;
-                panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
-            }, 500);
+            UI.schedulePanelHighlightReset(panel);
         },
 
         bindManualKeywordOutsideHandler: () => {

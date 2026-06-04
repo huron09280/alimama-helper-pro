@@ -184,6 +184,87 @@ globalThis.__UI = UI;`).runInContext(context);
     };
 }
 
+function createPanelHighlightHarness(initialVisibilityState = 'visible', options = {}) {
+    let visibilityState = String(initialVisibilityState || 'visible');
+    let nextTimerId = 1;
+    const timers = new Map();
+    const listeners = new Map();
+    const panel = options.panel === null
+        ? null
+        : {
+            nodeType: 1,
+            isConnected: options.isConnected !== false,
+            style: { boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }
+        };
+    const addListener = (type, handler) => {
+        if (typeof handler !== 'function') return;
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(handler);
+    };
+    const removeListener = (type, handler) => {
+        listeners.get(type)?.delete(handler);
+    };
+    const panelHighlightSource = sliceSource(
+        uiSource,
+        'clearPanelHighlightDelayTimer: () => {',
+        'bindManualKeywordOutsideHandler: () => {'
+    );
+    const context = createContext({
+        document: {
+            get visibilityState() {
+                return visibilityState;
+            },
+            addEventListener: addListener,
+            removeEventListener: removeListener
+        },
+        setTimeout(handler, delay = 0) {
+            const timerId = nextTimerId;
+            nextTimerId += 1;
+            if (typeof handler === 'function') {
+                timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+            }
+            return timerId;
+        },
+        clearTimeout(timerId) {
+            timers.delete(Number(timerId));
+        }
+    });
+    new Script(`const UI = {
+panelHighlightTimerId: null,
+panelHighlightVisibilityHandler: null,
+panelHighlightPendingPanel: null,
+isDocumentHidden: () => document.visibilityState === 'hidden',
+${panelHighlightSource}
+};
+globalThis.__UI = UI;`).runInContext(context);
+    return {
+        context,
+        panel,
+        timers,
+        listenerCount(type = 'visibilitychange') {
+            return listeners.get(type)?.size || 0;
+        },
+        getTimerDelays() {
+            return Array.from(timers.values()).map(timer => timer.delay);
+        },
+        setVisibilityState(nextState) {
+            visibilityState = String(nextState || 'visible');
+            const handlers = Array.from(listeners.get('visibilitychange') || []);
+            handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+        },
+        tickNextTimer() {
+            const [timerId, timer] = Array.from(timers.entries())[0] || [];
+            if (!timer) return false;
+            timers.delete(timerId);
+            timer.handler();
+            return true;
+        },
+        get UI() {
+            return context.__UI;
+        }
+    };
+}
+
 test('TokenManager 会从 hook history 回填 dynamicToken/loginPointId/csrf', () => {
     assert.match(
         tokenSource,
@@ -377,18 +458,38 @@ test('算法护航日志 overflow timer 在隐藏页暂停并恢复可见后补�
 test('算法护航面板高亮提示 timer 会复用并在关闭时释放', () => {
     assert.match(
         uiSource,
-        /panelHighlightTimerId:\s*null,/,
-        '算法护航面板高亮 timer 缺少可清理句柄'
+        /panelHighlightTimerId:\s*null,\s*\n\s*panelHighlightVisibilityHandler:\s*null,\s*\n\s*panelHighlightPendingPanel:\s*null,/,
+        '算法护航面板高亮 timer 缺少可清理句柄、visibility handler 或 pending panel'
     );
     assert.match(
         uiSource,
-        /clearPanelHighlightTimer:\s*\(\) => \{[\s\S]*if \(UI\.panelHighlightTimerId === null\) return;[\s\S]*clearTimeout\(UI\.panelHighlightTimerId\);[\s\S]*UI\.panelHighlightTimerId = null;[\s\S]*\},/,
-        '算法护航面板高亮 timer 应支持显式 clear 并归零'
+        /clearPanelHighlightDelayTimer:\s*\(\) => \{[\s\S]*if \(UI\.panelHighlightTimerId === null\) return;[\s\S]*clearTimeout\(UI\.panelHighlightTimerId\);[\s\S]*UI\.panelHighlightTimerId = null;[\s\S]*\},/,
+        '算法护航面板高亮 delay timer 应支持显式 clear 并归零'
     );
     assert.match(
         uiSource,
-        /flashPanelHighlight:\s*\(panel = null\) => \{[\s\S]*UI\.clearPanelHighlightTimer\(\);[\s\S]*if \(!panel \|\| panel\.nodeType !== 1\) return;[\s\S]*panel\.style\.boxShadow = '0 0 20px rgba\(24,144,255,0\.8\)';[\s\S]*UI\.panelHighlightTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.panelHighlightTimerId = null;[\s\S]*if \(!panel\.isConnected\) return;[\s\S]*panel\.style\.boxShadow = '0 4px 16px rgba\(0,0,0,0\.15\)';[\s\S]*\},\s*500\);[\s\S]*\},/,
-        '算法护航面板高亮应统一调度，并在回调触发前校验 panel 仍连接'
+        /clearPanelHighlightVisibilityHandler:\s*\(\) => \{[\s\S]*document\.removeEventListener\('visibilitychange', UI\.panelHighlightVisibilityHandler\);[\s\S]*UI\.panelHighlightVisibilityHandler = null;[\s\S]*\},/,
+        '算法护航面板高亮应支持释放 visibilitychange handler'
+    );
+    assert.match(
+        uiSource,
+        /clearPanelHighlightTimer:\s*\(\) => \{[\s\S]*UI\.clearPanelHighlightDelayTimer\(\);[\s\S]*UI\.clearPanelHighlightVisibilityHandler\(\);[\s\S]*UI\.panelHighlightPendingPanel = null;[\s\S]*\},/,
+        '算法护航面板高亮应支持统一释放 timer、listener 和 pending panel'
+    );
+    assert.match(
+        uiSource,
+        /bindPanelHighlightVisibilityHandler:\s*\(\) => \{[\s\S]*if \(typeof UI\.panelHighlightVisibilityHandler === 'function'\) return;[\s\S]*UI\.panelHighlightVisibilityHandler = \(\) => \{[\s\S]*const panel = UI\.panelHighlightPendingPanel;[\s\S]*UI\.clearPanelHighlightTimer\(\);[\s\S]*if \(UI\.isDocumentHidden\(\)\) \{[\s\S]*UI\.clearPanelHighlightDelayTimer\(\);[\s\S]*return;[\s\S]*UI\.schedulePanelHighlightReset\(panel\);[\s\S]*document\.addEventListener\('visibilitychange', UI\.panelHighlightVisibilityHandler\);/,
+        '算法护航面板高亮应在隐藏时取消 delay timer，恢复可见后继续同一个 pending panel'
+    );
+    assert.match(
+        uiSource,
+        /schedulePanelHighlightReset:\s*\(panel = null\) => \{[\s\S]*UI\.clearPanelHighlightDelayTimer\(\);[\s\S]*if \(!panel \|\| panel\.nodeType !== 1\) \{[\s\S]*UI\.clearPanelHighlightTimer\(\);[\s\S]*return;[\s\S]*\}[\s\S]*UI\.panelHighlightPendingPanel = panel;[\s\S]*UI\.bindPanelHighlightVisibilityHandler\(\);[\s\S]*if \(UI\.isDocumentHidden\(\)\) return;[\s\S]*UI\.panelHighlightTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.panelHighlightTimerId = null;[\s\S]*const pendingPanel = UI\.panelHighlightPendingPanel;[\s\S]*if \(!pendingPanel \|\| pendingPanel\.nodeType !== 1 \|\| !pendingPanel\.isConnected\) \{[\s\S]*UI\.clearPanelHighlightTimer\(\);[\s\S]*return;[\s\S]*\}[\s\S]*if \(UI\.isDocumentHidden\(\)\) return;[\s\S]*UI\.clearPanelHighlightVisibilityHandler\(\);[\s\S]*UI\.panelHighlightPendingPanel = null;[\s\S]*pendingPanel\.style\.boxShadow = '0 4px 16px rgba\(0,0,0,0\.15\)';[\s\S]*\},\s*500\);[\s\S]*\},/,
+        '算法护航面板高亮复位应隐藏页暂停、可见页按 500ms 调度，并在回调触发前校验 panel 仍连接'
+    );
+    assert.match(
+        uiSource,
+        /flashPanelHighlight:\s*\(panel = null\) => \{[\s\S]*UI\.clearPanelHighlightTimer\(\);[\s\S]*if \(!panel \|\| panel\.nodeType !== 1\) return;[\s\S]*panel\.style\.boxShadow = '0 0 20px rgba\(24,144,255,0\.8\)';[\s\S]*UI\.schedulePanelHighlightReset\(panel\);[\s\S]*\},/,
+        '算法护航面板高亮入口应保持原高亮样式，并将复位交给统一 helper'
     );
     assert.match(
         uiSource,
@@ -405,6 +506,56 @@ test('算法护航面板高亮提示 timer 会复用并在关闭时释放', () =
         /setTimeout\(\(\) => \{[\s\S]*panel\.style\.boxShadow = '0 4px 16px rgba\(0,0,0,0\.15\)';[\s\S]*\}, 500\);/,
         '公开入口不应继续保留无句柄 boxShadow reset timeout'
     );
+    assert.doesNotMatch(
+        sliceSource(uiSource, 'schedulePanelHighlightReset: (panel = null) => {', 'bindManualKeywordOutsideHandler: () => {'),
+        /Core\.run|API\.request|TokenManager\.refresh|openV3|createPlans|runCreateRepair|appendKeywords|submit|budget/i,
+        '面板高亮 timer 不应触发护航执行、请求、token 刷新、创建/提交或预算链路'
+    );
+});
+
+test('算法护航面板高亮 timer 在隐藏页暂停并恢复可见后补排', () => {
+    const hiddenHarness = createPanelHighlightHarness('hidden');
+    hiddenHarness.UI.flashPanelHighlight(hiddenHarness.panel);
+    assert.equal(hiddenHarness.panel.style.boxShadow, '0 0 20px rgba(24,144,255,0.8)', '隐藏页仍应立即写入当前高亮反馈');
+    assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 500ms 高亮复位 timeout');
+    assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页应保留 visibilitychange 恢复监听');
+    assert.equal(hiddenHarness.UI.panelHighlightPendingPanel, hiddenHarness.panel, '隐藏页应保留 pending panel');
+
+    hiddenHarness.setVisibilityState('visible');
+    assert.deepEqual(hiddenHarness.getTimerDelays(), [500], '恢复可见后应按原 500ms 节奏补排高亮复位 timeout');
+    assert.equal(hiddenHarness.listenerCount(), 1, '补排 timeout 等待期间应继续监听转隐藏');
+    assert.equal(hiddenHarness.tickNextTimer(), true, '应能触发补排高亮复位 timeout');
+    assert.equal(hiddenHarness.panel.style.boxShadow, '0 4px 16px rgba(0,0,0,0.15)', '补排 timeout 触发后应恢复默认阴影');
+    assert.equal(hiddenHarness.listenerCount(), 0, '执行完成后应释放 visibilitychange');
+    assert.equal(hiddenHarness.UI.panelHighlightPendingPanel, null, '执行完成后应释放 pending panel');
+
+    const visibleHarness = createPanelHighlightHarness('visible');
+    visibleHarness.UI.flashPanelHighlight(visibleHarness.panel);
+    assert.deepEqual(visibleHarness.getTimerDelays(), [500], '可见页应保留原 500ms 高亮复位 timeout');
+    assert.equal(visibleHarness.listenerCount(), 1, '可见页等待复位时应监听 visibilitychange');
+    visibleHarness.setVisibilityState('hidden');
+    assert.equal(visibleHarness.timers.size, 0, '可见页转隐藏时应取消已排高亮复位 timeout');
+    assert.equal(visibleHarness.panel.style.boxShadow, '0 0 20px rgba(24,144,255,0.8)', '转隐藏时不应提前恢复默认阴影');
+    assert.equal(visibleHarness.UI.panelHighlightPendingPanel, visibleHarness.panel, '转隐藏时应保留 pending panel');
+    visibleHarness.setVisibilityState('visible');
+    assert.deepEqual(visibleHarness.getTimerDelays(), [500], '再次恢复可见后应重新排原 500ms 高亮复位 timeout');
+    assert.equal(visibleHarness.tickNextTimer(), true, '再次恢复后的高亮复位 timeout 应可触发');
+    assert.equal(visibleHarness.panel.style.boxShadow, '0 4px 16px rgba(0,0,0,0.15)', '再次恢复后应恢复默认阴影');
+    assert.equal(visibleHarness.listenerCount(), 0, '执行完成后应释放 visibilitychange');
+
+    const disconnectedHarness = createPanelHighlightHarness('visible', { isConnected: false });
+    disconnectedHarness.UI.flashPanelHighlight(disconnectedHarness.panel);
+    assert.equal(disconnectedHarness.tickNextTimer(), true, '断开连接 panel 分支仍应消费高亮复位 timeout');
+    assert.equal(disconnectedHarness.panel.style.boxShadow, '0 0 20px rgba(24,144,255,0.8)', '断开连接 panel 不应写默认阴影');
+    assert.equal(disconnectedHarness.listenerCount(), 0, '断开连接 panel 分支应释放 visibilitychange');
+    assert.equal(disconnectedHarness.UI.panelHighlightPendingPanel, null, '断开连接 panel 分支应释放 pending panel');
+
+    const clearHarness = createPanelHighlightHarness('hidden');
+    clearHarness.UI.flashPanelHighlight(clearHarness.panel);
+    clearHarness.UI.clearPanelHighlightTimer();
+    assert.equal(clearHarness.timers.size, 0, '显式清理后不应残留高亮 timeout');
+    assert.equal(clearHarness.listenerCount(), 0, '显式清理后不应残留 visibilitychange');
+    assert.equal(clearHarness.UI.panelHighlightPendingPanel, null, '显式清理后不应残留 pending panel');
 });
 
 test('算法护航首次创建 reveal timer 会复用并在关闭时释放', () => {
