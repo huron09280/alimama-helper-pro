@@ -1,3 +1,56 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十三子项
+
+## 需求规格
+- 目标：在状态条 auto-hide timer 收口后，继续优化万能查数快捷话术按钮的 `quickPromptResetTimer`，避免页面隐藏时仍保留 1200ms timeout 去复位按钮临时 active/`aria-pressed` 状态。
+- 根因判断：`src/main-assistant/magic-report.js` 的快捷话术点击 handler 会在按钮点击后立刻设置 `active` 和 `aria-pressed="true"`，再排 `setTimeout(..., 1200)` 恢复视觉按下态。该 timer 只服务按钮短暂反馈；若用户点击后立即切到后台，仍可能在隐藏页唤醒并写入按钮 class/aria。
+- 范围：仅覆盖快捷话术按钮临时 active/`aria-pressed` 复位 timer 的隐藏页暂停、恢复可见后补排、timer/visibility listener/pending button 生命周期；不改快捷话术文案、按钮 DOM/样式、`resolvePromptText()`、iframe 加载、只填充、自动提交、DMP/万能查数取数、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留点击后立即给当前按钮 active/pressed 的反馈，保留可见页原 1200ms 复位节奏；新增 pending button 与 visibility handler。隐藏页不排 1200ms timeout；已排 timer 在转 hidden 时取消并保留 pending；恢复 visible 后重新按原 delay 补排；再次点击和运行态清理统一释放旧 timer、pending 和 visibility listener。
+- 成功标准：静态与行为测试证明 MagicReport 声明快捷话术 reset visibility handler、pending button 和 pending delay；存在统一 timer/visibility/pending 清理 helper；隐藏页点击不排 timeout、恢复可见后按 1200ms 补排；可见页原 1200ms 调度保留；visible->hidden 会取消已排 timeout 且不立即复位；新点击会清理旧 pending，避免旧按钮复位影响新按钮；`clearMagicRuntimeCaches()` 不残留 timer/listener/pending；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击万能查数入口、不打开万能查数弹窗、不点击快捷话术、不触发自动提交或查询、不调用 openV3/护航执行/预算/创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十二子项提交后工作区状态，确认本子项只处理快捷话术按钮临时反馈 reset timer。
+- [x] 复核 UI/图标规范，确认本轮不改万能查数视觉、图标和交互结构。
+- [x] 定位快捷话术点击 handler、`quickPromptResetTimer` 与现有快捷话术测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为快捷话术 reset timer 增加 visibility handler、pending button/delay、统一释放 helper 和隐藏态判定复用。
+- [x] 将快捷话术 reset 调度改为隐藏页暂停、恢复可见后按原 1200ms 继续执行。
+- [x] 更新 magic-report 目标测试，锁定隐藏页不排 timeout、恢复可见补排、visible->hidden 取消 timer、新点击清理旧 pending、可见页原 1200ms 调度保留和 runtime cleanup 清理 pending。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `6226148 优化人群看板状态条隐藏轮询`，tracked 工作区干净；本子项不依赖任何临时取证文件。
+- 定位结论：授权续租、请求超时、预算探测、创建/复制/提交、openV3、护航执行、DMP/万能查数取数和服务端限速都带业务或安全语义，不适合作为“不改变业务逻辑”的下一步。快捷话术 reset timer 只在按钮点击后短暂维持 active/pressed 视觉反馈，隐藏页执行只会带来额外唤醒，适合作为低风险优化点。
+- 计划校验：本子项只降低隐藏标签页中快捷话术按钮临时反馈复位的后台唤醒；可见页仍保持原 1200ms 视觉反馈，按钮点击后的话术解析、只填充、自动提交和 iframe 加载行为不变。若实现需要触碰 `resolvePromptText()`、`runQuickPrompt()`、iframe 查询、DMP 取数或创建提交链路，先回到本计划更新后再继续。
+- 只读子代理复核：确认本轮只把快捷话术按钮临时 `active`/`aria-pressed` reset 从裸 `setTimeout` 收口到统一 helper；未看到影响 `resolvePromptText()`、`runQuickPrompt()`、iframe、DMP、创建/提交等业务链路的改动；建议补充的隐藏页、可见恢复、新点击和 cleanup 断言已落到目标测试。
+- 实现摘要：`MagicReport` 新增 `quickPromptResetVisibilityHandler`、`quickPromptResetPendingButton`、`quickPromptResetPendingDelayMs`，并抽出 `resetQuickPromptButtonPressedState()`、`clearQuickPromptResetTimer()`、`clearQuickPromptResetVisibilityHandler()`、`clearQuickPromptResetState()`、`bindQuickPromptResetVisibilityHandler()`、`scheduleQuickPromptButtonReset()`。快捷话术点击 handler 仍先设置当前按钮 `active`/`aria-pressed="true"`，再进入原 `resolvePromptText()` 与后续分支，只把复位 timeout 改为统一 helper。
+- 调度摘要：可见页保留原 1200ms 临时按下反馈；隐藏页只登记 pending button/delay 与 visibility listener，不排 1200ms timeout；等待期间转 hidden 会取消已排 timeout 并保留 pending；恢复 visible 后按原 1200ms 重新补排；再次点击和 `clearMagicRuntimeCaches()` 统一释放 timer、visibility listener、pending button 和 pending delay。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 新增 fake runtime 行为测试，覆盖 hidden reset 不排 timeout、hidden->visible 补排、visible->hidden 取消、新点击替换 pending、可见页 1200ms 调度保留、runtime cleanup 不残留；`tests/magic-report-panel-resilience.test.mjs` 同步锁定关闭释放声明与 cleanup 合同。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs`、`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-crowd-matrix.test.mjs` 通过，70 项测试全绿；新增 “万能查数快捷话术按钮 reset timer 在隐藏页暂停并恢复可见后补排” 行为断言。
+- 面板清理回归：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，15 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，126 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { stdio:'inherit', timeout:60000 }) ..."` 通过，626 项中 624 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "quickPromptResetTimer|quickPromptResetVisibilityHandler|quickPromptResetPendingButton|quickPromptResetPendingDelayMs|clearQuickPromptResetState|scheduleQuickPromptButtonReset|scheduleQuickPromptButtonReset\\(btn, 1200\\)|if \\(this\\.isMagicReportDocumentHidden\\(\\)\\) return;" src/main-assistant/magic-report.js tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 与隐藏页调度已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`hookManager:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4069755`，包含 `quickPromptResetTimer`、`quickPromptResetVisibilityHandler`、`quickPromptResetPendingButton`、`quickPromptResetPendingDelayMs`、`clearQuickPromptResetTimer`、`clearQuickPromptResetVisibilityHandler`、`clearQuickPromptResetState`、`bindQuickPromptResetVisibilityHandler`、`scheduleQuickPromptButtonReset`、`this.scheduleQuickPromptButtonReset(btn, 1200)` 和 `if (this.isMagicReportDocumentHidden()) return;`。
+- Chrome MCP 弹窗/危险请求：`helperIcon` 存在且可见；`helperPanel` 存在但不可见；`magicReport/crowdMatrixState/keywordModal/keywordOverlay/scenePopup/optimizerPanel/licenseOverlay` 均不存在或不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器` 和主线程卡顿监听启动；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue、页面自身日志，以及读取 4MB bundle 触发的拦截器跳过解析 debug，未见新增插件运行失败。fetch/XHR 清单 47 条，主要为登录路由初始化、菜单、消息、AI context、官方资源和 `chrome-extension://.../page.bundle.js` 读取，可见请求均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs`、`tests/magic-report-panel-resilience.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增快捷话术 reset timer 的隐藏页暂停、可见恢复、pending button/delay 和 listener 生命周期，不改快捷话术文案、按钮 DOM/样式、`resolvePromptText()`、iframe 加载、只填充、自动提交、DMP/万能查数取数、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十三子项结果：万能查数快捷话术按钮临时按下反馈从“点击后总是排 1200ms timeout，隐藏页也可能唤醒并复位按钮 class/aria”优化为“隐藏页不排 1200ms timeout，只保留 pending button/delay 与 visibility listener；恢复可见后再按原 1200ms 节奏补排”。
+- 取舍结论：保留点击后立即高亮当前按钮、可见页原 1200ms 复位和后续 `resolvePromptText()`/`runQuickPrompt()`/只填充/自动提交/iframe 加载语义；新增 pending button 只管理按钮临时视觉反馈生命周期，不改变话术内容、查询提交、DMP/万能查数取数、创建/复制/提交/预算/护航/下载或任何服务端请求策略。
+- 效果结论：在用户点击快捷话术后立刻切到后台的场景中，插件不再保留快捷话术 reset timeout 等待隐藏页唤醒，降低后台 timer 唤醒成本。浏览器验收未打开万能查数弹窗、未点击快捷话术、未触发任何业务查询或写动作，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十二子项
 
 ## 需求规格

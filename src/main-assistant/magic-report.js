@@ -40,6 +40,9 @@
         popupCleanupHandlers: [],
         popupLifecycleToken: 0,
         quickPromptResetTimer: 0,
+        quickPromptResetVisibilityHandler: null,
+        quickPromptResetPendingButton: null,
+        quickPromptResetPendingDelayMs: 0,
         quickPromptRetryTimer: 0,
         quickPromptRetryVisibilityHandler: null,
         quickPromptRetryPendingCallback: null,
@@ -6802,6 +6805,70 @@
             this.quickPromptRetryTimer = 0;
         },
 
+        resetQuickPromptButtonPressedState(button = null) {
+            if (!(button instanceof HTMLElement) || !button.isConnected) return;
+            button.classList.remove('active');
+            button.setAttribute('aria-pressed', 'false');
+        },
+
+        clearQuickPromptResetTimer() {
+            if (!this.quickPromptResetTimer) return;
+            clearTimeout(this.quickPromptResetTimer);
+            this.quickPromptResetTimer = 0;
+        },
+
+        clearQuickPromptResetVisibilityHandler() {
+            const handler = this.quickPromptResetVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.quickPromptResetVisibilityHandler = null;
+        },
+
+        clearQuickPromptResetState() {
+            this.clearQuickPromptResetTimer();
+            this.clearQuickPromptResetVisibilityHandler();
+            this.quickPromptResetPendingButton = null;
+            this.quickPromptResetPendingDelayMs = 0;
+        },
+
+        bindQuickPromptResetVisibilityHandler() {
+            if (typeof this.quickPromptResetVisibilityHandler === 'function') return;
+            this.quickPromptResetVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearQuickPromptResetTimer();
+                    return;
+                }
+                const pendingButton = this.quickPromptResetPendingButton;
+                const pendingDelayMs = this.quickPromptResetPendingDelayMs;
+                if (pendingButton instanceof HTMLElement) {
+                    this.scheduleQuickPromptButtonReset(pendingButton, pendingDelayMs);
+                } else {
+                    this.clearQuickPromptResetState();
+                }
+            };
+            document.addEventListener('visibilitychange', this.quickPromptResetVisibilityHandler);
+        },
+
+        scheduleQuickPromptButtonReset(button = null, delayMs = 1200) {
+            this.clearQuickPromptResetState();
+            if (!(button instanceof HTMLElement) || !button.isConnected) return;
+            const normalizedDelayMs = Math.max(0, Number(delayMs) || 1200);
+            this.quickPromptResetPendingButton = button;
+            this.quickPromptResetPendingDelayMs = normalizedDelayMs;
+            this.bindQuickPromptResetVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) return;
+            this.quickPromptResetTimer = setTimeout(() => {
+                this.quickPromptResetTimer = 0;
+                if (this.isMagicReportDocumentHidden()) return;
+                const pendingButton = this.quickPromptResetPendingButton;
+                this.resetQuickPromptButtonPressedState(pendingButton);
+                this.clearQuickPromptResetVisibilityHandler();
+                this.quickPromptResetPendingButton = null;
+                this.quickPromptResetPendingDelayMs = 0;
+            }, normalizedDelayMs);
+        },
+
         clearQuickPromptRetryVisibilityHandler() {
             const handler = this.quickPromptRetryVisibilityHandler;
             if (typeof handler === 'function') {
@@ -6888,10 +6955,7 @@
             this.crowdCampaignItemOptionsMap = new Map();
             this.crowdCampaignSelectedItemIdMap = new Map();
             this.crowdCampaignManualItemSelectionMap = new Map();
-            if (this.quickPromptResetTimer) {
-                clearTimeout(this.quickPromptResetTimer);
-                this.quickPromptResetTimer = 0;
-            }
+            this.clearQuickPromptResetState();
             this.clearQuickPromptRetryState();
             this.clearIframeCleanupRetryTimer();
             this.clearIframeCleanupVisibilityHandler();
@@ -8693,15 +8757,7 @@
                         if (node instanceof HTMLElement) node.setAttribute('aria-pressed', 'false');
                     });
                     if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'true');
-                    if (this.quickPromptResetTimer) {
-                        clearTimeout(this.quickPromptResetTimer);
-                    }
-                    this.quickPromptResetTimer = setTimeout(() => {
-                        this.quickPromptResetTimer = 0;
-                        if (!btn.isConnected) return;
-                        btn.classList.remove('active');
-                        if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'false');
-                    }, 1200);
+                    this.scheduleQuickPromptButtonReset(btn, 1200);
 
                     const promptToken = this.popupLifecycleToken;
                     const promptText = await this.resolvePromptText(promptItem);
