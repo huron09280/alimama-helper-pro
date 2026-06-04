@@ -5779,6 +5779,9 @@ if (typeof globalThis !== 'undefined') {
             scrollChainGuardBound: false,
             panelOutsideClickHandler: null,
             panelOutsideClickHandlerBound: false,
+            panelAutoHideTimer: null,
+            panelAutoHideVisibilityHandler: null,
+            panelAutoHidePendingContext: null,
             panelIconRevealTimer: null,
             panelIconRevealVisibilityHandler: null,
             panelIconRevealPendingIcon: null,
@@ -5796,6 +5799,75 @@ if (typeof globalThis !== 'undefined') {
             this.createElements();
             this.bindEvents();
             this.updateState();
+        },
+
+        isPanelAutoHideDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearPanelAutoHideTimer() {
+            if (this.runtime.panelAutoHideTimer) {
+                clearTimeout(this.runtime.panelAutoHideTimer);
+                this.runtime.panelAutoHideTimer = null;
+            }
+        },
+
+        clearPanelAutoHideVisibilityHandler() {
+            const handler = this.runtime.panelAutoHideVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.panelAutoHideVisibilityHandler = null;
+        },
+
+        clearPanelAutoHideState() {
+            this.clearPanelAutoHideTimer();
+            this.clearPanelAutoHideVisibilityHandler();
+            this.runtime.panelAutoHidePendingContext = null;
+        },
+
+        bindPanelAutoHideVisibilityHandler() {
+            if (typeof this.runtime.panelAutoHideVisibilityHandler === 'function') return;
+            this.runtime.panelAutoHideVisibilityHandler = () => {
+                if (this.isPanelAutoHideDocumentHidden()) {
+                    this.finishPanelAutoHide();
+                }
+            };
+            document.addEventListener('visibilitychange', this.runtime.panelAutoHideVisibilityHandler);
+        },
+
+        finishPanelAutoHide() {
+            const context = this.runtime.panelAutoHidePendingContext;
+            this.clearPanelAutoHideState();
+            const panel = context?.panel;
+            const icon = context?.icon;
+            const closePanel = context?.closePanel;
+            if (!(panel instanceof HTMLElement) || !(icon instanceof HTMLElement) || typeof closePanel !== 'function') return;
+            if (!State.config.panelOpen) return;
+            if (!this.isPanelAutoHideDocumentHidden() && (panel.matches(':hover') || icon.matches(':hover'))) return;
+            closePanel(false);
+        },
+
+        schedulePanelAutoHide(context = {}, delay = 180) {
+            this.clearPanelAutoHideState();
+            const panel = context?.panel;
+            const icon = context?.icon;
+            const closePanel = context?.closePanel;
+            if (!(panel instanceof HTMLElement) || !(icon instanceof HTMLElement) || typeof closePanel !== 'function') return;
+            this.runtime.panelAutoHidePendingContext = { panel, icon, closePanel };
+            this.bindPanelAutoHideVisibilityHandler();
+            if (this.isPanelAutoHideDocumentHidden()) {
+                this.finishPanelAutoHide();
+                return;
+            }
+            this.runtime.panelAutoHideTimer = setTimeout(() => {
+                this.runtime.panelAutoHideTimer = null;
+                this.finishPanelAutoHide();
+            }, Math.max(0, Number(delay) || 0));
         },
 
         clearPanelIconRevealTimer() {
@@ -7925,17 +7997,10 @@ if (typeof globalThis !== 'undefined') {
             const closeBtn = panel.querySelector('.am-close-btn');
             const resizer = panel.querySelector('.am-resizer-left');
             let hoverOpenBlockedUntil = 0;
-            let autoHideTimer = null;
-
-            const clearAutoHideTimer = () => {
-                if (!autoHideTimer) return;
-                clearTimeout(autoHideTimer);
-                autoHideTimer = null;
-            };
 
             // 展开/收起动画
             const openPanel = (force = false) => {
-                clearAutoHideTimer();
+                this.clearPanelAutoHideState();
                 this.clearPanelIconRevealTimer();
                 if (!force && Date.now() < hoverOpenBlockedUntil) return;
                 if (State.config.panelOpen) {
@@ -7948,7 +8013,7 @@ if (typeof globalThis !== 'undefined') {
                 this.bindPanelOutsideClickHandler(panel, icon, closePanel);
             };
             const closePanel = (blockHoverOpen = false) => {
-                clearAutoHideTimer();
+                this.clearPanelAutoHideState();
                 this.unbindPanelOutsideClickHandler();
                 if (blockHoverOpen) hoverOpenBlockedUntil = Date.now() + 800;
                 if (!State.config.panelOpen) return;
@@ -7957,13 +8022,7 @@ if (typeof globalThis !== 'undefined') {
                 this.updateState();
             };
             const scheduleAutoHide = (delay = 180) => {
-                clearAutoHideTimer();
-                autoHideTimer = setTimeout(() => {
-                    autoHideTimer = null;
-                    if (!State.config.panelOpen) return;
-                    if (panel.matches(':hover') || icon.matches(':hover')) return;
-                    closePanel(false);
-                }, delay);
+                this.schedulePanelAutoHide({ panel, icon, closePanel }, delay);
             };
             if (State.config.panelOpen) {
                 this.bindPanelOutsideClickHandler(panel, icon, closePanel);
@@ -7972,7 +8031,7 @@ if (typeof globalThis !== 'undefined') {
             icon.onclick = () => openPanel(true);
             // 鼠标移入悬浮球时自动展开
             icon.onmouseenter = () => openPanel(false);
-            panel.onmouseenter = clearAutoHideTimer;
+            panel.onmouseenter = () => this.clearPanelAutoHideState();
             panel.onmouseleave = () => scheduleAutoHide();
             closeBtn.onclick = (e) => {
                 e.stopPropagation();

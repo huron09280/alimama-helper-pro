@@ -1,3 +1,52 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十子项
+
+## 需求规格
+- 目标：在人群矩阵柱状条动画批处理后，继续优化主助手面板鼠标离开后的 `autoHideTimer`，避免页面隐藏时仍保留 180ms timeout 去关闭主面板并写入 `panelOpen=false`。
+- 根因判断：`src/main-assistant/ui.js` 的 `bindEvents()` 内部 `scheduleAutoHide()` 在 `panel.onmouseleave` 后总是排 `setTimeout(..., 180)`，timer 回调再判断面板/悬浮球 hover 状态并调用 `closePanel(false)`。该 timer 只服务可见页 hover 宽容窗口；如果鼠标离开后页面立刻进入 hidden，继续保留 timeout 会持有 panel、icon、closePanel 闭包并在隐藏页唤醒写 DOM/配置。
+- 范围：仅覆盖主助手面板 hover auto-hide timer、visibilitychange handler、pending panel/icon/close 回调引用和关闭时清理；不改主面板按钮、辅助开关、日志、工具打开、算法护航、万能查数、组建计划、计划并发、创建/复制/提交、预算、下载、openV3、请求并发或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留可见页原 180ms hover 宽容窗口和 hover 中不关闭的判断；隐藏页不保留视觉缓冲，鼠标已经离开面板时直接执行既有 `closePanel(false)` 最终状态并释放 timer/listener/pending 引用。显式打开、关闭按钮、工具按钮最小化仍走原有 `openPanel()` / `closePanel()` 语义。
+- 成功标准：静态与行为测试证明 UI runtime 有 `panelAutoHideTimer`、`panelAutoHideVisibilityHandler`、`panelAutoHidePendingContext`；`clearPanelAutoHideState()` 能统一取消 timeout、解绑 visibility listener 并释放 pending 引用；可见页仍排 180ms 并在 hover 时保持打开；隐藏页 schedule 不排 timeout 且立即关闭；visible->hidden 会取消已排 timeout 并关闭；打开/显式关闭面板会清理 pending auto-hide；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击主面板任何业务工具按钮、不触发 `Core.run()`、万能查数查询、算法护航、组建计划、计划并发、openV3、预算、创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认、extension bundle 命中确认和可见 UI 只读状态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十九子项提交后工作区状态，确认本子项从干净工作区开始。
+- [x] 复核 UI/图标规范，确认本轮不改主助手视觉、图标和交互结构。
+- [x] 定位剩余 timer/rAF 候选，排除请求超时、创建/复制/提交、下载 cleanup、openV3、预算和服务端 10rpm 相关链路。
+- [x] 选定主助手 hover auto-hide 180ms timer，确认其只服务鼠标离开后的面板收起视觉缓冲。
+- [x] 为主助手 auto-hide 增加 runtime 状态、统一 clear/helper、隐藏页判定和 visibilitychange 处理。
+- [x] 将 `scheduleAutoHide()` 改为可见页保留 180ms，隐藏页或等待期间转 hidden 时立即执行既有关闭并释放引用。
+- [x] 更新主面板目标测试，锁定可见页原行为、隐藏页不排 timeout、visible->hidden 取消 timer、hover 中不关闭和 open/close 清理状态。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c349956 优化人群矩阵柱状动画调度`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：下载 cleanup 0ms 靠近 Blob URL 下载启动时序，计划列表刷新和复制焦点恢复靠近批量成功/复制确认链路，openV3/预算/请求超时属于业务或服务端边界，不适合作为本轮无业务语义优化点。主面板 `autoHideTimer` 只在鼠标离开面板后收起主助手，适合继续收口隐藏页 timer。
+- 计划校验：本轮只降低隐藏标签页中主面板 hover auto-hide 的后台唤醒和闭包保留；可见页仍保留 180ms hover 宽容窗口，面板/悬浮球仍被 hover 时不关闭。若实现需要触碰工具按钮 click、辅助开关、`Core.run()`、万能查数、算法护航、组建计划、计划并发、创建/复制/提交、预算、下载、openV3 或请求链路，先回到本计划更新后再继续。
+- 实现摘要：`UI.runtime` 新增 `panelAutoHideTimer`、`panelAutoHideVisibilityHandler`、`panelAutoHidePendingContext`，并抽出 `isPanelAutoHideDocumentHidden()`、`clearPanelAutoHideState()`、`bindPanelAutoHideVisibilityHandler()`、`finishPanelAutoHide()`、`schedulePanelAutoHide()` 等 helper。`openPanel()` / `closePanel()` 统一清理 pending auto-hide，`scheduleAutoHide()` 只负责把 panel/icon/closePanel 上下文交给统一调度。
+- 调度摘要：可见页仍保留原 180ms 鼠标离开缓冲，timeout 触发时继续先判断面板/悬浮球 hover，hover 中保持打开；隐藏页 schedule 不再排 180ms timeout，直接复用既有 `closePanel(false)` 并释放 pending 引用；可见页等待期间转 hidden 会取消已排 timeout、解绑 visibility listener 并关闭面板。Chrome MCP 首次运行态验收暴露过 `panel.onmouseenter = clearAutoHideTimer` 残留导致的 `ReferenceError`，已改为 `panel.onmouseenter = () => this.clearPanelAutoHideState()`，并用静态测试锁住不再出现旧局部 timer 名称。
+
+## 验证记录
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --check tests/magic-report-panel-resilience.test.mjs`：通过。
+- `npm run build`：通过，已同步 `阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- `node --test tests/magic-report-panel-resilience.test.mjs`：16 项通过；新增行为测试覆盖可见页 180ms、hover 不关闭、隐藏页即时关闭、visible->hidden 取消 timer 与 pending 引用释放。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- 静态核查：`rg "clearAutoHideTimer|autoHideTimer" src/main-assistant/ui.js 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js` 无命中；测试文件仅保留反回归正则。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs`，57 项通过。
+- `node --check dist/extension/page.bundle.js`：通过。
+- 全量回归：`node -e "const { spawnSync } = require('node:child_process'); const result = spawnSync('npm', ['test'], { stdio: 'inherit', timeout: 60000 }); if (result.error) { console.error(result.error.message); process.exit(1); } process.exit(result.status ?? 1);"`，633 项合计，631 项通过，2 项因可选 `agent-cluster/index.mjs` 缺失跳过，0 失败。
+- Chrome DevTools MCP 只读验收：在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 重载 unpacked extension，版本 `7.06`、路径 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，状态显示 `Reloaded`；刷新真实 `one.alimama.com` 页面后确认 page ready、页面可见、标题 `登录页_万相台无界版`，userscript/extension 版本 `7.06`、build `2026-02-18 04:00`、patch `adzone-default-sync-v5`，授权来自 `extension_cache_bootstrap`，`planApiReady`、`keywordApiReady`、`optimizerToggleReady`、`hookManagerReady` 均为 true。
+- Chrome DevTools MCP bundle 验收：`chrome-extension://.../page.bundle.js` 返回 200，长度 `4084121`；bundle 含 `panelAutoHideTimer`、`panelAutoHideVisibilityHandler`、`panelAutoHidePendingContext`、`schedulePanelAutoHide()`、`finishPanelAutoHide()` 和 `panel.onmouseenter = () => this.clearPanelAutoHideState();`；不含旧 `let autoHideTimer`、`clearAutoHideTimer`、`autoHideTimer = setTimeout`。
+- Chrome DevTools MCP 运行态验收：页面刷新后主助手悬浮球和面板节点存在，面板默认隐藏；万能查数、人群矩阵、算法护航、结果 overlay、批量菜单、复制弹窗、下载捕获、授权 overlay 等关键弹层均未打开；控制台无 `clearAutoHideTimer`、无 `[AM Helper] main bootstrap failed`，仅有页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 和 deprecated issue 噪声；Network 中扩展 bundle 200，危险写/创建/提交/预算/下载启动类请求计数为 `0`。
+- Diff 自审：改动仅覆盖 `src/main-assistant/ui.js`、`tests/magic-report-panel-resilience.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只替换主助手 hover auto-hide 局部 timer 生命周期，不改工具按钮 click、辅助开关、`Core.run()`、万能查数、算法护航、组建计划、计划并发、创建/复制/提交、预算、下载、openV3、请求并发或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第六十子项结果：主助手面板 hover auto-hide 从“鼠标离开后总是排 180ms timeout，隐藏页也可能持有 panel/icon/closePanel 闭包并唤醒关闭”优化为“可见页保留 180ms 原缓冲，隐藏页即时复用既有关闭并释放 timer/listener/pending 引用”。
+- 效果结论：用户鼠标离开主面板后立刻切到后台的场景中，插件不再保留这条 180ms auto-hide timeout 等待隐藏页唤醒；可见页交互保持原样，hover 中不关闭，显式打开/关闭会清理 pending 状态。
+- 边界结论：本轮没有触碰请求并发、创建/复制/提交、openV3、预算、下载启动或服务端 10rpm 逻辑；Chrome MCP 验收未点击任何真实业务工具或写入口，危险写请求计数 `0`。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十九子项
 
 ## 需求规格

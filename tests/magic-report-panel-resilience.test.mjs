@@ -26,6 +26,120 @@ function sliceBetween(block, startText, endText) {
   return block.slice(start, end);
 }
 
+function createPanelAutoHideHarness(initialVisibilityState = 'visible') {
+  let visibilityState = String(initialVisibilityState || 'visible');
+  let nextTimerId = 1;
+  const timers = new Map();
+  const listeners = new Map();
+  class FakeHTMLElement {
+    constructor() {
+      this.hover = false;
+    }
+
+    matches(selector) {
+      return selector === ':hover' ? this.hover : false;
+    }
+  }
+  const addListener = (type, handler) => {
+    if (typeof handler !== 'function') return;
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeListener = (type, handler) => {
+    listeners.get(type)?.delete(handler);
+  };
+  const uiBlock = getUiBlock();
+  const methodSource = sliceBetween(
+    uiBlock,
+    'isPanelAutoHideDocumentHidden()',
+    'clearPanelIconRevealTimer()'
+  );
+  const context = createContext({
+    HTMLElement: FakeHTMLElement,
+    State: {
+      config: {
+        panelOpen: true
+      },
+      saveCount: 0,
+      save() {
+        this.saveCount += 1;
+      }
+    },
+    document: {
+      get visibilityState() {
+        return visibilityState;
+      },
+      addEventListener: addListener,
+      removeEventListener: removeListener
+    },
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') {
+        timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      }
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(Number(timerId));
+    }
+  });
+  new Script(`const UI = {
+runtime: {
+  panelAutoHideTimer: null,
+  panelAutoHideVisibilityHandler: null,
+  panelAutoHidePendingContext: null
+},
+${methodSource}
+};
+globalThis.__UI = UI;
+globalThis.__State = State;`).runInContext(context);
+  const closeCalls = [];
+  const panel = new FakeHTMLElement();
+  const icon = new FakeHTMLElement();
+  const closePanel = (blockHoverOpen = false) => {
+    closeCalls.push(blockHoverOpen);
+    context.__UI.clearPanelAutoHideState();
+    context.__State.config.panelOpen = false;
+    context.__State.save();
+  };
+  return {
+    context,
+    timers,
+    closeCalls,
+    panel,
+    icon,
+    FakeHTMLElement,
+    listenerCount(type = 'visibilitychange') {
+      return listeners.get(type)?.size || 0;
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map(timer => timer.delay);
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    schedule(delay = 180) {
+      context.__UI.schedulePanelAutoHide({ panel, icon, closePanel }, delay);
+    },
+    get UI() {
+      return context.__UI;
+    },
+    get State() {
+      return context.__State;
+    }
+  };
+}
+
 function createPanelIconRevealHarness(initialVisibilityState = 'visible') {
   let visibilityState = String(initialVisibilityState || 'visible');
   let nextTimerId = 1;
@@ -259,8 +373,33 @@ test('UI 主面板外部点击监听和悬浮球显示 timer 按面板开关释�
   const block = getUiBlock();
   assert.match(
     block,
-    /runtime:\s*\{[\s\S]*panelOutsideClickHandler:\s*null,[\s\S]*panelOutsideClickHandlerBound:\s*false,[\s\S]*panelIconRevealTimer:\s*null,[\s\S]*panelIconRevealVisibilityHandler:\s*null,[\s\S]*panelIconRevealPendingIcon:\s*null/,
-    'UI runtime 缺少主面板外部点击监听、悬浮球 timer、visibility handler 或 pending icon 状态'
+    /runtime:\s*\{[\s\S]*panelOutsideClickHandler:\s*null,[\s\S]*panelOutsideClickHandlerBound:\s*false,[\s\S]*panelAutoHideTimer:\s*null,[\s\S]*panelAutoHideVisibilityHandler:\s*null,[\s\S]*panelAutoHidePendingContext:\s*null,[\s\S]*panelIconRevealTimer:\s*null,[\s\S]*panelIconRevealVisibilityHandler:\s*null,[\s\S]*panelIconRevealPendingIcon:\s*null/,
+    'UI runtime 缺少主面板外部点击监听、auto-hide 状态、悬浮球 timer、visibility handler 或 pending icon 状态'
+  );
+  assert.match(
+    block,
+    /isPanelAutoHideDocumentHidden\(\)\s*\{[\s\S]*return document\.visibilityState === 'hidden';[\s\S]*\}/,
+    '主面板 auto-hide 缺少隐藏页判定'
+  );
+  assert.match(
+    block,
+    /clearPanelAutoHideState\(\)\s*\{[\s\S]*this\.clearPanelAutoHideTimer\(\);[\s\S]*this\.clearPanelAutoHideVisibilityHandler\(\);[\s\S]*this\.runtime\.panelAutoHidePendingContext = null;/,
+    '主面板 auto-hide 应支持统一清理 timer、visibility handler 和 pending context'
+  );
+  assert.match(
+    block,
+    /bindPanelAutoHideVisibilityHandler\(\)\s*\{[\s\S]*if \(typeof this\.runtime\.panelAutoHideVisibilityHandler === 'function'\) return;[\s\S]*if \(this\.isPanelAutoHideDocumentHidden\(\)\) \{[\s\S]*this\.finishPanelAutoHide\(\);[\s\S]*document\.addEventListener\('visibilitychange', this\.runtime\.panelAutoHideVisibilityHandler\);/,
+    '主面板 auto-hide 应在页面转 hidden 时完成关闭并释放 timer'
+  );
+  assert.match(
+    block,
+    /finishPanelAutoHide\(\)\s*\{[\s\S]*const context = this\.runtime\.panelAutoHidePendingContext;[\s\S]*this\.clearPanelAutoHideState\(\);[\s\S]*if \(!State\.config\.panelOpen\) return;[\s\S]*if \(!this\.isPanelAutoHideDocumentHidden\(\) && \(panel\.matches\(':hover'\) \|\| icon\.matches\(':hover'\)\)\) return;[\s\S]*closePanel\(false\);/,
+    '主面板 auto-hide 触发时应释放 pending 状态、保持 hover 中不关闭，并复用既有 closePanel(false)'
+  );
+  assert.match(
+    block,
+    /schedulePanelAutoHide\(context = \{\}, delay = 180\)\s*\{[\s\S]*this\.clearPanelAutoHideState\(\);[\s\S]*this\.runtime\.panelAutoHidePendingContext = \{ panel, icon, closePanel \};[\s\S]*this\.bindPanelAutoHideVisibilityHandler\(\);[\s\S]*if \(this\.isPanelAutoHideDocumentHidden\(\)\) \{[\s\S]*this\.finishPanelAutoHide\(\);[\s\S]*return;[\s\S]*this\.runtime\.panelAutoHideTimer = setTimeout\(\(\) => \{[\s\S]*this\.runtime\.panelAutoHideTimer = null;[\s\S]*this\.finishPanelAutoHide\(\);[\s\S]*\}, Math\.max\(0, Number\(delay\) \|\| 0\)\);/,
+    '主面板 auto-hide 应在可见页保留 delay，在隐藏页即时完成关闭'
   );
   assert.match(
     block,
@@ -299,13 +438,23 @@ test('UI 主面板外部点击监听和悬浮球显示 timer 按面板开关释�
   );
   assert.match(
     block,
-    /const openPanel = \(force = false\) => \{[\s\S]*this\.clearPanelIconRevealTimer\(\);[\s\S]*this\.updateState\(\);[\s\S]*this\.bindPanelOutsideClickHandler\(panel, icon, closePanel\);/,
-    '打开主面板时应绑定外部点击监听并清理 reveal timer'
+    /const openPanel = \(force = false\) => \{[\s\S]*this\.clearPanelAutoHideState\(\);[\s\S]*this\.clearPanelIconRevealTimer\(\);[\s\S]*this\.updateState\(\);[\s\S]*this\.bindPanelOutsideClickHandler\(panel, icon, closePanel\);/,
+    '打开主面板时应绑定外部点击监听并清理 auto-hide/reveal timer'
   );
   assert.match(
     block,
-    /const closePanel = \(blockHoverOpen = false\) => \{[\s\S]*clearAutoHideTimer\(\);[\s\S]*this\.unbindPanelOutsideClickHandler\(\);[\s\S]*State\.config\.panelOpen = false;[\s\S]*this\.updateState\(\);/,
-    '关闭主面板时应解绑外部点击监听'
+    /const closePanel = \(blockHoverOpen = false\) => \{[\s\S]*this\.clearPanelAutoHideState\(\);[\s\S]*this\.unbindPanelOutsideClickHandler\(\);[\s\S]*State\.config\.panelOpen = false;[\s\S]*this\.updateState\(\);/,
+    '关闭主面板时应解绑外部点击监听并释放 auto-hide 状态'
+  );
+  assert.match(
+    block,
+    /const scheduleAutoHide = \(delay = 180\) => \{[\s\S]*this\.schedulePanelAutoHide\(\{ panel, icon, closePanel \}, delay\);[\s\S]*\};/,
+    '主面板鼠标离开应复用统一 auto-hide helper'
+  );
+  assert.match(
+    block,
+    /panel\.onmouseenter = \(\) => this\.clearPanelAutoHideState\(\);/,
+    '主面板鼠标重新进入时应通过统一 helper 取消 pending auto-hide'
   );
   assert.match(
     block,
@@ -322,6 +471,50 @@ test('UI 主面板外部点击监听和悬浮球显示 timer 按面板开关释�
     /setTimeout\(\(\) => \{ icon\.style\.display = 'flex'; \}, 300\);/,
     '悬浮球显示不应继续使用无句柄 setTimeout'
   );
+  assert.doesNotMatch(
+    block,
+    /let autoHideTimer = null|clearAutoHideTimer\b|autoHideTimer = setTimeout/,
+    '主面板 auto-hide 不应继续使用 bindEvents 局部 timer'
+  );
+});
+
+test('UI 主面板 auto-hide timer 在隐藏页即时关闭并释放 pending 引用', () => {
+  const visibleHarness = createPanelAutoHideHarness('visible');
+  visibleHarness.schedule();
+  assert.deepEqual(visibleHarness.getTimerDelays(), [180], '可见页应保留原 180ms auto-hide timeout');
+  assert.equal(visibleHarness.listenerCount(), 1, '等待 auto-hide 时应监听 visibilitychange');
+  assert.equal(visibleHarness.State.config.panelOpen, true, 'timeout 触发前主面板应保持打开');
+  assert.equal(visibleHarness.tickNextTimer(), true, '应能触发 auto-hide timeout');
+  assert.deepEqual(visibleHarness.closeCalls, [false], 'timeout 触发应复用 closePanel(false)');
+  assert.equal(visibleHarness.State.config.panelOpen, false, 'auto-hide timeout 触发后应关闭主面板');
+  assert.equal(visibleHarness.listenerCount(), 0, '关闭后应释放 visibilitychange');
+  assert.equal(visibleHarness.UI.runtime.panelAutoHidePendingContext, null, '关闭后应释放 pending context');
+
+  const hoverHarness = createPanelAutoHideHarness('visible');
+  hoverHarness.panel.hover = true;
+  hoverHarness.schedule();
+  assert.equal(hoverHarness.tickNextTimer(), true, 'hover 场景应消费 auto-hide timeout');
+  assert.deepEqual(hoverHarness.closeCalls, [], '面板仍 hover 时不应关闭');
+  assert.equal(hoverHarness.State.config.panelOpen, true, '面板仍 hover 时应保持打开');
+  assert.equal(hoverHarness.listenerCount(), 0, 'hover 分支也应释放 visibilitychange');
+  assert.equal(hoverHarness.UI.runtime.panelAutoHidePendingContext, null, 'hover 分支也应释放 pending context');
+
+  const hiddenHarness = createPanelAutoHideHarness('hidden');
+  hiddenHarness.schedule();
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 180ms auto-hide timeout');
+  assert.deepEqual(hiddenHarness.closeCalls, [false], '隐藏页 schedule 应立即复用 closePanel(false)');
+  assert.equal(hiddenHarness.State.config.panelOpen, false, '隐藏页 schedule 后应直接关闭主面板');
+  assert.equal(hiddenHarness.listenerCount(), 0, '隐藏页即时关闭后不应残留 visibilitychange');
+  assert.equal(hiddenHarness.UI.runtime.panelAutoHidePendingContext, null, '隐藏页即时关闭后不应残留 pending context');
+
+  const transitionHarness = createPanelAutoHideHarness('visible');
+  transitionHarness.schedule();
+  assert.equal(transitionHarness.timers.size, 1, '转隐藏前应存在 pending auto-hide timeout');
+  transitionHarness.setVisibilityState('hidden');
+  assert.equal(transitionHarness.timers.size, 0, '可见页转隐藏时应取消 pending auto-hide timeout');
+  assert.deepEqual(transitionHarness.closeCalls, [false], '转隐藏时应立即复用 closePanel(false)');
+  assert.equal(transitionHarness.State.config.panelOpen, false, '转隐藏后应直接关闭主面板');
+  assert.equal(transitionHarness.listenerCount(), 0, '转隐藏关闭后应释放 visibilitychange');
 });
 
 test('UI 悬浮球 reveal timer 在隐藏页暂停并恢复可见后补排', () => {
