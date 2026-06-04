@@ -23981,6 +23981,17 @@ if (typeof globalThis !== 'undefined') {
         const CORE_RUN_DEBOUNCE_MS = 1000;
         const CORE_PAUSE_RECHECK_MS = 350;
         let timer;
+        let pendingHiddenCoreRun = false;
+        const isDocumentHidden = () => document.visibilityState === 'hidden';
+        const clearScheduledCoreRun = () => {
+            if (!timer) return;
+            clearTimeout(timer);
+            timer = null;
+        };
+        const markHiddenCoreRunPending = () => {
+            pendingHiddenCoreRun = true;
+            clearScheduledCoreRun();
+        };
         const runCore = () => {
             if (shouldPauseInjectionForPopup()) return false;
             Core.run();
@@ -23989,16 +24000,38 @@ if (typeof globalThis !== 'undefined') {
             return true;
         };
         const scheduleRunCore = (delay = CORE_RUN_DEBOUNCE_MS) => {
+            if (isDocumentHidden()) {
+                markHiddenCoreRunPending();
+                return;
+            }
             if (timer) return;
             timer = setTimeout(() => {
                 timer = null;
+                if (isDocumentHidden()) {
+                    markHiddenCoreRunPending();
+                    return;
+                }
                 if (!runCore()) {
                     scheduleRunCore(CORE_PAUSE_RECHECK_MS);
                 }
             }, Math.max(0, Number(delay) || 0));
         };
+        const handleVisibilityChange = () => {
+            if (isDocumentHidden()) {
+                markHiddenCoreRunPending();
+                return;
+            }
+            if (!pendingHiddenCoreRun) return;
+            pendingHiddenCoreRun = false;
+            scheduleRunCore(0);
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
         const observer = new MutationObserver((records) => {
             if (shouldIgnoreMainAssistantMutations(records)) return;
+            if (isDocumentHidden()) {
+                markHiddenCoreRunPending();
+                return;
+            }
             scheduleRunCore(CORE_RUN_DEBOUNCE_MS);
         });
 

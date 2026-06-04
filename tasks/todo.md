@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十四子项
+
+## 需求规格
+- 目标：在场景接口同步 timer 收口后，继续优化主助手全页 `MutationObserver` 的隐藏标签页行为，避免 one.alimama 页面隐藏后仍因 SSE、性能日志、表格复用或页面自变更持续排 `scheduleRunCore()` debounce timer，并重复执行 `Core.run()`、`CampaignIdQuickEntry.run()`、`PotentialPlanDailyExporter.run()` DOM 扫描。
+- 根因判断：`src/main-assistant/main.js` 的 observer 已过滤插件自有 mutation，但对 `document.visibilityState === 'hidden'` 没有守卫；隐藏标签页里每次非插件页面 mutation 仍会排 1000ms timer，timer 触发后继续扫描页面 DOM。
+- 范围：仅覆盖主助手 observer 调度层的隐藏页暂停与恢复可见补跑；不改 observer 监听范围、插件 mutation 过滤、`Core.run()`、计划快捷入口、潜力词导出、授权、组建计划、真实创建/复制/提交或 10rpm 服务端限速。
+- 热修 vs 结构性修复取舍：在 `main()` 内把“页面隐藏时不排核心扫描 timer，恢复可见后补跑一次”的不变量放进 `scheduleRunCore()` 与 `visibilitychange` 处理，而不是改各业务模块内部扫描逻辑；保留可见页原 1000ms debounce 和弹窗暂停重试语义。
+- 成功标准：静态测试证明主助手有 `isDocumentHidden()`、隐藏时会清理 pending core timer 并记录 `pendingHiddenCoreRun`、observer 隐藏态只置 pending 不排扫描、`visibilitychange` 恢复可见后补跑一次、可见页仍保留原 observer 调度；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不打开组建计划向导、不触发潜力词导出、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态、插件弹窗状态和可见页正常注入。
+
+## 执行计划（可核对）
+- [x] 复核第三十三子项提交后工作区状态，确认本子项只处理主助手隐藏页 observer 调度。
+- [x] 在 `main()` 内新增可见性守卫与 pending hidden core run 状态。
+- [x] 将 `scheduleRunCore()` 与 observer 回调改为隐藏态不排扫描 timer，恢复可见后补跑一次。
+- [x] 补充/更新目标测试，锁定隐藏页不会继续累积 core 扫描 timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ae50f6c 优化场景同步计时器`，工作区干净。
+- 定位结论：主助手 observer 过滤了插件自触发 DOM 变化，但对隐藏标签页没有暂停；one.alimama 页面自身 SSE/性能/表格刷新仍可能触发 debounce timer 和 DOM 扫描。
+- 取舍结论：不改全局 observer 监听字段和业务扫描函数，避免漏掉可见页 SPA 表格复用；只在调度层加隐藏态暂停，并在标签页重新可见时一次性补扫。
+- 实现摘要：`main()` 新增 `pendingHiddenCoreRun`、`isDocumentHidden()`、`clearScheduledCoreRun()` 与 `markHiddenCoreRunPending()`；`scheduleRunCore()` 调度前和 timer 触发后都复核隐藏态，隐藏时清理 pending timer 并只记录待补跑。
+- 生命周期摘要：`visibilitychange` 进入隐藏时清理已排 core scan timer，恢复可见且存在 pending hidden run 时执行一次 `scheduleRunCore(0)`；MutationObserver 保留插件自有 mutation 过滤，并在隐藏态只置 pending，不继续排 1000ms 扫描。
+- 测试摘要：`tests/logger-api.test.mjs` 新增主助手隐藏标签页回归，锁定隐藏态状态字段、timer 清理 helper、调度前后隐藏态复核、恢复可见补跑和 observer 隐藏态守卫。
+
+## 验证记录
+- 测试语法：`node --check tests/logger-api.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/logger-api.test.mjs` 通过，21 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/logger-api.test.mjs tests/budget-frontend-limit-bypass.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，55 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、`helperPanel.visible:false`、`keywordModal.visible:false`、`scenePopup.visible:false`、`itemPicker.visible:false`、`copyOverviewPopup.visible:false`、`copySuccessPopup.visible:false`、`batchPlusMenu.visible:false`、`batchConfirmPopup.visible:false`、`optimizerPanel.visible:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`batchPlusHostExpanded:false`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 102 条，主要为页面初始化、报表、AI/SSE/context 和曝光追踪，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/main.js`、`tests/logger-api.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增隐藏页 core scan 调度生命周期守卫，测试 diff 只新增对应静态回归；未改 observer 监听范围、业务扫描函数、授权、组建计划、真实创建/复制/提交或服务端请求链路。
+
+## 结果复盘
+- 第十一轮第三十四子项结果：主助手全页 observer 从“隐藏标签页仍可被页面自身 mutation 持续唤醒并排 core scan timer”优化为“隐藏态清理 pending timer 并只记录一次待补跑，恢复可见后补扫一次”，减少隐藏页里 DOM 扫描 timer 与 `Core.run()` / `CampaignIdQuickEntry.run()` / `PotentialPlanDailyExporter.run()` 的无效执行机会。
+- 取舍结论：保留可见页原 1000ms debounce、弹窗暂停 350ms recheck、插件 mutation 过滤和 SPA 表格复用监听范围；没有引入第二套 observer 或业务模块内部开关，隐藏页行为集中在调度层表达。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收和 diff 自审均通过；未执行任何服务端写动作或业务提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十三子项
 
 ## 需求规格

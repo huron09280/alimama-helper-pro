@@ -375,6 +375,37 @@ test('主助手 DOM 观察会过滤插件自有变更，避免自触发全页扫
   assert.match(entrypointBlock, /new MutationObserver\(\(records\) => \{[\s\S]*?if \(shouldIgnoreMainAssistantMutations\(records\)\) return;[\s\S]*?scheduleRunCore\(CORE_RUN_DEBOUNCE_MS\);/, 'MutationObserver 应跳过插件自有变更并保留页面变更调度');
 });
 
+test('主助手隐藏标签页暂停核心扫描并在恢复可见后补跑', () => {
+  const entrypointBlock = getMainEntrypointBlock();
+  assert.match(entrypointBlock, /let pendingHiddenCoreRun = false;/, '主助手缺少隐藏页待补跑状态');
+  assert.match(entrypointBlock, /const isDocumentHidden = \(\) => document\.visibilityState === 'hidden';/, '主助手缺少 document.visibilityState 隐藏态判定');
+  assert.match(
+    entrypointBlock,
+    /const clearScheduledCoreRun = \(\) => \{[\s\S]*?if \(!timer\) return;[\s\S]*?clearTimeout\(timer\);[\s\S]*?timer = null;[\s\S]*?\};/,
+    '主助手隐藏页应能释放 pending core scan timer'
+  );
+  assert.match(
+    entrypointBlock,
+    /const markHiddenCoreRunPending = \(\) => \{[\s\S]*?pendingHiddenCoreRun = true;[\s\S]*?clearScheduledCoreRun\(\);[\s\S]*?\};/,
+    '隐藏页 mutation 应只记录待补跑并清理扫描 timer'
+  );
+  assert.match(
+    entrypointBlock,
+    /const scheduleRunCore = \(delay = CORE_RUN_DEBOUNCE_MS\) => \{[\s\S]*?if \(isDocumentHidden\(\)\) \{[\s\S]*?markHiddenCoreRunPending\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?timer = setTimeout\(\(\) => \{[\s\S]*?if \(isDocumentHidden\(\)\) \{[\s\S]*?markHiddenCoreRunPending\(\);[\s\S]*?return;[\s\S]*?\}/,
+    'scheduleRunCore 调度前后都应复核隐藏态'
+  );
+  assert.match(
+    entrypointBlock,
+    /const handleVisibilityChange = \(\) => \{[\s\S]*?if \(isDocumentHidden\(\)\) \{[\s\S]*?markHiddenCoreRunPending\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?if \(!pendingHiddenCoreRun\) return;[\s\S]*?pendingHiddenCoreRun = false;[\s\S]*?scheduleRunCore\(0\);[\s\S]*?\};[\s\S]*?document\.addEventListener\('visibilitychange', handleVisibilityChange\);/,
+    '恢复可见时应补跑一次 core scan'
+  );
+  assert.match(
+    entrypointBlock,
+    /new MutationObserver\(\(records\) => \{[\s\S]*?if \(shouldIgnoreMainAssistantMutations\(records\)\) return;[\s\S]*?if \(isDocumentHidden\(\)\) \{[\s\S]*?markHiddenCoreRunPending\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?scheduleRunCore\(CORE_RUN_DEBOUNCE_MS\);/,
+    'MutationObserver 隐藏态不应继续排 core scan timer'
+  );
+});
+
 test('主助手 mutation 过滤只忽略插件 surface，不跳过原生页面变化', () => {
   const { shouldIgnoreMainAssistantMutations, registerExpectedMainAssistantClassMutation } = createMutationHelpersForTest();
   const nativeCell = new FakeElement({ className: 'next-table-cell' });
