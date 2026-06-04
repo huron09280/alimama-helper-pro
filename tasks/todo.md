@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十一子项
+
+## 需求规格
+- 目标：在主助手工具按钮重试 timer 释放后，继续收口算法护航执行结果浮层的关闭过渡 timer，避免关闭按钮、遮罩点击和 Escape 在 240ms 淡出期间重复触发时排队多个无句柄 `setTimeout`，旧闭包重复持有 overlay 与焦点元素。
+- 根因判断：`src/optimizer/ui.js` 的 `renderResults()` 中 `closeResultOverlay()` 每次调用都会移除 keydown 监听、设置淡出样式并启动 `setTimeout(() => { overlay.remove(); restoreFocus(); }, 240)`；关闭期间没有 closing 状态或 timer 句柄，快速重复点击可能创建多个关闭 timer。
+- 范围：仅覆盖算法护航结果浮层关闭过渡 timer 和对应静态测试；不改结果表格 DOM、成功/失败展示、按钮样式、执行流程、openV3、TokenManager、手动设置、真实护航执行或任何写接口合同。
+- 热修 vs 结构性修复取舍：采用 `resultOverlayClosing` + `resultOverlayCloseTimerId` 的局部生命周期；首次关闭后后续关闭请求直接返回，timer 触发后归零并恢复焦点，不新增全局 UI 状态。
+- 成功标准：静态测试证明结果浮层关闭有 closing guard 和 timer 句柄，重复关闭不会再次排队 timeout，timer 触发后归零并移除 overlay/恢复焦点；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击护航执行、创建、复制、预算提交、删除、上下线、投放或生成计划；浏览器验收只允许观察结果浮层关闭状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十子项提交后工作区状态，确认本子项继续处理短生命周期 UI timer。
+- [x] 定位算法护航结果浮层关闭过渡 timer，确认问题局限在同一浮层关闭期间重复触发。
+- [x] 实现结果浮层关闭 guard 和 close timer 句柄归零。
+- [x] 补充/更新目标测试，锁定重复关闭不会累积无句柄过渡 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `498297a 优化 Chrome 工具按钮重试计时器释放`，工作区干净。
+- 定位结论：结果浮层打开前已移除旧 overlay，旧弹窗重建不是问题；真正可收口的是同一 overlay 淡出期间多入口重复关闭导致的多个无句柄 240ms timer。
+- 方案判断：更优雅的方案是把关闭生命周期限定在 `renderResults()` 局部闭包内，用 closing 状态表达“关闭已受理”，用 timer 句柄表达“淡出移除待执行”，避免新增跨弹窗事实源。
+- 实现摘要：`src/optimizer/ui.js` 在结果浮层关闭闭包内新增 `resultOverlayClosing` 和 `resultOverlayCloseTimerId`；首次关闭后进入 closing 状态，后续关闭请求直接返回，240ms 过渡 timer 触发后归零并移除 overlay/恢复焦点。
+- 测试摘要：`tests/optimizer-escort-new-flow-fallback.test.mjs` 扩展结果浮层测试，锁定 closing guard、close timer 句柄、timer 触发后归零，以及禁止回退到旧无句柄过渡 `setTimeout`。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 测试语法：`node --check tests/optimizer-escort-new-flow-fallback.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过，39 项测试全绿；新增断言覆盖结果浮层 closing guard、close timer 句柄、timer 触发后归零和旧无句柄过渡 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，71 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，607 项中 605 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在算法护航结果浮层关闭过渡 timer 生命周期、对应静态测试、任务记录和构建产物；未改结果表格 DOM、成功/失败展示、按钮样式、执行流程、openV3、TokenManager、手动设置、真实护航执行或任何写接口合同。
+
+## 结果复盘
+- 第十一轮第二十一子项结果：算法护航结果浮层关闭从“每次关闭入口都会排队一个无句柄 240ms timeout”优化为“首次关闭进入 closing 状态，后续关闭入口直接返回，淡出 timer 触发后归零并移除 overlay/恢复焦点”。
+- 取舍结论：保留 240ms 淡出过渡、Escape/遮罩/按钮三种关闭入口和焦点恢复行为；只补齐关闭期间的短生命周期 timer 管理，没有新增全局 UI 状态。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十子项
 
 ## 需求规格

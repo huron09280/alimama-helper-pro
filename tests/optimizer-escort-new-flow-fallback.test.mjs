@@ -363,6 +363,21 @@ test('算法护航结果浮层具备 dialog 语义与键盘关闭能力', () => 
     );
     assert.match(
         uiSource,
+        /let resultOverlayClosing = false;\s*\n\s*let resultOverlayCloseTimerId = null;/,
+        '结果浮层关闭过渡缺少 closing guard 或 timer 句柄'
+    );
+    assert.match(
+        uiSource,
+        /const closeResultOverlay = \(\) => \{[\s\S]*if \(resultOverlayClosing\) return;[\s\S]*resultOverlayClosing = true;[\s\S]*document\.removeEventListener\('keydown', handleResultKeydown, true\);[\s\S]*resultOverlayCloseTimerId = setTimeout\(\(\) => \{[\s\S]*resultOverlayCloseTimerId = null;[\s\S]*overlay\.remove\(\);[\s\S]*restoreFocus\(\);[\s\S]*\}, 240\);/,
+        '结果浮层关闭应只受理一次，并通过可归零 timer 执行淡出移除'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /overlay\.style\.transition = 'opacity 0\.24s ease';\s*\n\s*setTimeout\(\(\) => \{/,
+        '结果浮层关闭不应继续使用无句柄过渡 setTimeout'
+    );
+    assert.match(
+        uiSource,
         /#\$\{CONFIG\.UI_ID\}-result-close:focus-visible[\s\S]*outline:2px solid rgba\(42,91,255,\.45\);/,
         '结果浮层关闭按钮缺少键盘焦点态'
     );

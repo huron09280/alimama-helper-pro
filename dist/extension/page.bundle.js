@@ -69982,11 +69982,16 @@ if (typeof globalThis !== 'undefined') {
                     previousActiveElement.focus({ preventScroll: true });
                 }
             };
+            let resultOverlayClosing = false;
+            let resultOverlayCloseTimerId = null;
             const closeResultOverlay = () => {
+                if (resultOverlayClosing) return;
+                resultOverlayClosing = true;
                 document.removeEventListener('keydown', handleResultKeydown, true);
                 overlay.style.opacity = '0';
                 overlay.style.transition = 'opacity 0.24s ease';
-                setTimeout(() => {
+                resultOverlayCloseTimerId = setTimeout(() => {
+                    resultOverlayCloseTimerId = null;
                     overlay.remove();
                     restoreFocus();
                 }, 240);
