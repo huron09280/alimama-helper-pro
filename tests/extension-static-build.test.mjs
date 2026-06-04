@@ -10,13 +10,24 @@ const backgroundSource = outputs.extensionFiles['background.js'];
 const pageBundle = outputs.extensionFiles['page.bundle.js'];
 const wizardStyleCss = outputs.extensionFiles['wizard-style.css'];
 
-function createContentScriptHarness(initialUrl) {
+function createContentScriptHarness(initialUrl, options = {}) {
   const appendedScripts = [];
   const timers = new Map();
   const listeners = new Map();
   const nodesById = new Map();
   let currentUrl = new URL(initialUrl);
   let nextTimerId = 1;
+  let visibilityState = String(options.visibilityState || 'visible');
+  const addListener = (type, handler) => {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push(handler);
+  };
+  const removeListener = (type, handler) => {
+    if (!listeners.has(type)) return;
+    const nextHandlers = listeners.get(type).filter((item) => item !== handler);
+    if (nextHandlers.length) listeners.set(type, nextHandlers);
+    else listeners.delete(type);
+  };
   const updateLocation = (nextUrl) => {
     currentUrl = new URL(nextUrl, currentUrl.href);
     windowRef.location.href = currentUrl.href;
@@ -61,10 +72,15 @@ function createContentScriptHarness(initialUrl) {
     head: mountNode,
     documentElement: mountNode,
     body: mountNode,
+    get visibilityState() {
+      return visibilityState;
+    },
     getElementById(id) {
       return nodesById.get(id) || null;
     },
-    createElement: makeElement
+    createElement: makeElement,
+    addEventListener: addListener,
+    removeEventListener: removeListener
   };
   const windowRef = {
     location: {
@@ -82,16 +98,8 @@ function createContentScriptHarness(initialUrl) {
       }
     },
     postMessage() { },
-    addEventListener(type, handler) {
-      if (!listeners.has(type)) listeners.set(type, []);
-      listeners.get(type).push(handler);
-    },
-    removeEventListener(type, handler) {
-      if (!listeners.has(type)) return;
-      const nextHandlers = listeners.get(type).filter((item) => item !== handler);
-      if (nextHandlers.length) listeners.set(type, nextHandlers);
-      else listeners.delete(type);
-    },
+    addEventListener: addListener,
+    removeEventListener: removeListener,
     setTimeout(handler, delay = 0) {
       const timerId = nextTimerId;
       nextTimerId += 1;
@@ -132,6 +140,11 @@ function createContentScriptHarness(initialUrl) {
         timers.delete(timerId);
         timer.handler();
       });
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach((handler) => handler({ type: 'visibilitychange' }));
     },
     getTimerDelays() {
       return Array.from(timers.values()).map((timer) => timer.delay);
@@ -184,7 +197,14 @@ test('extension content script 负责注入 page bundle', () => {
   assert.match(contentSource, /return false;\s*\};[\s\S]*const renderInjectionError/, '非业务匹配页默认不应注入完整 page bundle');
   assert.match(contentSource, /const URL_POLL_INITIAL_INTERVAL_MS = 600;/, '未注入页应使用轻量 URL 快查兜底捕获主世界 SPA 路由变化');
   assert.match(contentSource, /const URL_POLL_MAX_INTERVAL_MS = 4800;/, '未注入页长期停留时应退避 URL 轮询频率');
+  assert.match(contentSource, /let pendingHiddenUrlPoll = false;/, '未注入页 URL 轮询缺少隐藏页 pending 状态');
+  assert.match(contentSource, /const isDocumentHidden = \(\) => document\.visibilityState === 'hidden';/, '未注入页 URL 轮询缺少隐藏态判定');
+  assert.match(contentSource, /const markHiddenUrlPollPending = \(\) => \{[\s\S]*pendingHiddenUrlPoll = true;[\s\S]*clearInjectionCheckTimer\(\);[\s\S]*clearUrlPollTimer\(\);[\s\S]*\};/, '隐藏页应清理注入检查和 URL poll timer');
+  assert.match(contentSource, /function handleDeferredInjectionVisibilityChange\(\) \{[\s\S]*if \(isDocumentHidden\(\)\) \{[\s\S]*markHiddenUrlPollPending\(\);[\s\S]*return;[\s\S]*\}[\s\S]*if \(!pendingHiddenUrlPoll\) return;[\s\S]*pendingHiddenUrlPoll = false;[\s\S]*scheduleInjectionCheck\(\);[\s\S]*startUrlPolling\(\);[\s\S]*\}/, '恢复可见时应补一次注入检查并恢复 URL polling');
+  assert.match(contentSource, /document\.addEventListener\('visibilitychange', handleDeferredInjectionVisibilityChange\);[\s\S]*startUrlPolling\(\);/, '延迟注入监听启动时应监听 visibilitychange');
+  assert.match(contentSource, /document\.removeEventListener\('visibilitychange', handleDeferredInjectionVisibilityChange\);[\s\S]*deferredInjectionWatchActive = false;[\s\S]*pendingHiddenUrlPoll = false;/, '延迟注入监听停止时应移除 visibilitychange 并清理 pending 状态');
   assert.match(contentSource, /window\.setTimeout\(\(\) => \{[\s\S]*urlPollDelayMs = Math\.min\(URL_POLL_MAX_INTERVAL_MS,[\s\S]*urlPollDelayMs \* 2[\s\S]*scheduleNextUrlPoll\(\);[\s\S]*\}, urlPollDelayMs\);/, '未注入页 URL 轮询应使用可退避 timeout 循环');
+  assert.match(contentSource, /const scheduleNextUrlPoll = \(\) => \{[\s\S]*if \(isDocumentHidden\(\)\) \{[\s\S]*markHiddenUrlPollPending\(\);[\s\S]*return;[\s\S]*\}[\s\S]*urlPollTimer = window\.setTimeout\(\(\) => \{[\s\S]*if \(isDocumentHidden\(\)\) \{[\s\S]*markHiddenUrlPollPending\(\);[\s\S]*return;[\s\S]*\}/, 'URL polling 调度前和触发后都应复核隐藏态');
   assert.match(contentSource, /window\.addEventListener\('hashchange', scheduleInjectionCheck\);[\s\S]*window\.addEventListener\('popstate', scheduleInjectionCheck\);[\s\S]*startUrlPolling\(\);/, '未注入页面应监听 URL 变化以便后续进入业务页时恢复注入');
   assert.match(contentSource, /window\.removeEventListener\('hashchange', scheduleInjectionCheck\);[\s\S]*window\.removeEventListener\('popstate', scheduleInjectionCheck\);/, 'page bundle 注入成功后应释放延迟注入 URL 监听');
   assert.doesNotMatch(contentSource, /setInterval\(\(\) => \{[\s\S]*lastObservedUrl/, '未注入页不应继续保留固定 600ms interval URL 轮询');
@@ -218,6 +238,7 @@ test('extension content script 只在业务页面注入完整 page bundle', () =
   assert.equal(mysellerHome.appendedScripts.length, 0, 'myseller 普通工作台不应注入完整 page bundle');
   assert.ok(mysellerHome.listeners.has('hashchange'), '未注入页应监听 hashchange 以恢复注入');
   assert.ok(mysellerHome.listeners.has('popstate'), '未注入页应监听 popstate 以恢复注入');
+  assert.ok(mysellerHome.listeners.has('visibilitychange'), '未注入页应监听 visibilitychange 以暂停隐藏页轮询');
   assert.equal(mysellerHome.timers.size, 1, '未注入页应启动轻量 URL 轮询兜底');
   assert.deepEqual(mysellerHome.getTimerDelays(), [600], '未注入页初始 URL 轮询应保持快速捕获');
   mysellerHome.tickTimers();
@@ -238,6 +259,7 @@ test('extension content script 只在业务页面注入完整 page bundle', () =
   assert.equal(mysellerHome.timers.size, 0, 'page bundle 成功注入后应停止 URL 轮询');
   assert.ok(!mysellerHome.listeners.has('hashchange'), 'page bundle 成功注入后应移除 hashchange 监听');
   assert.ok(!mysellerHome.listeners.has('popstate'), 'page bundle 成功注入后应移除 popstate 监听');
+  assert.ok(!mysellerHome.listeners.has('visibilitychange'), 'page bundle 成功注入后应移除 visibilitychange 监听');
   mysellerHome.window.history.replaceState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant?from=codex');
   mysellerHome.window.history.pushState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant#dailyBudget');
   mysellerHome.tickTimers();
@@ -245,6 +267,19 @@ test('extension content script 只在业务页面注入完整 page bundle', () =
 
   const smartAssistant = createContentScriptHarness('https://myseller.taobao.com/home.htm/crm-workbench/smartassistant');
   assert.equal(smartAssistant.appendedScripts.length, 1, 'SmartAssistant 预算页应允许注入预算补丁运行时');
+
+  const hiddenMyseller = createContentScriptHarness('https://myseller.taobao.com/home.htm/QnworkbenchHome/', { visibilityState: 'hidden' });
+  assert.equal(hiddenMyseller.appendedScripts.length, 0, '隐藏 myseller 普通页不应立即注入完整 page bundle');
+  assert.equal(hiddenMyseller.timers.size, 0, '隐藏 myseller 普通页不应保留 URL poll timer');
+  assert.ok(hiddenMyseller.listeners.has('visibilitychange'), '隐藏 myseller 普通页应保留恢复可见监听');
+  hiddenMyseller.window.history.pushState(null, '', 'https://myseller.taobao.com/home.htm/crm-workbench/smartassistant');
+  assert.equal(hiddenMyseller.appendedScripts.length, 0, '隐藏页跳转 SmartAssistant 前不应在后台注入 page bundle');
+  hiddenMyseller.setVisibilityState('visible');
+  assert.deepEqual(hiddenMyseller.getTimerDelays().sort((a, b) => a - b), [80, 600], '恢复可见后应补注入检查并恢复快速 URL 轮询');
+  hiddenMyseller.tickTimers();
+  assert.equal(hiddenMyseller.appendedScripts.length, 1, '隐藏页恢复可见后应能注入 SmartAssistant page bundle');
+  assert.equal(hiddenMyseller.timers.size, 0, '隐藏页恢复注入成功后应停止所有延迟注入 timer');
+  assert.ok(!hiddenMyseller.listeners.has('visibilitychange'), '隐藏页恢复注入成功后应移除 visibilitychange 监听');
 
   const broadAlimama = createContentScriptHarness('https://pub.alimama.com/');
   assert.equal(broadAlimama.appendedScripts.length, 0, '宽泛 alimama 子域默认不应注入 4.4MB page bundle');

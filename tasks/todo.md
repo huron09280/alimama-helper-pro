@@ -1,3 +1,47 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十五子项
+
+## 需求规格
+- 目标：在主助手隐藏页 core scan 收口后，继续优化 extension content 在未注入 myseller 普通页上的延迟注入 URL 轮询，避免隐藏标签页里仍保留 `urlPollTimer` 退避循环，用于等待后续进入 SmartAssistant 预算页。
+- 根因判断：`src/entries/extension-content.js` 已把固定 interval 改成 600ms->4800ms 退避 timeout，且保留 hashchange/popstate 监听；但 `document.visibilityState === 'hidden'` 时仍会继续排 URL poll timer。未注入页如果长期在后台停留，content script 会持续持有 URL 轮询闭包和延迟注入状态。
+- 范围：仅覆盖 extension content 延迟注入监听的隐藏页暂停与恢复可见补查；不替换 URL polling 为 history hook，不改 one.alimama 立即注入、不改 myseller SmartAssistant 注入资格、不改授权 bridge、不改 page bundle 或业务请求链路。
+- 热修 vs 结构性修复取舍：在延迟注入调度层表达“不在隐藏页轮询，恢复可见后执行一次注入检查并恢复退避轮询”的不变量；保留现有隔离世界 URL polling 作为主世界 SPA 跳转兜底，避免重走不可靠 history hook。
+- 成功标准：静态测试证明 content script 有隐藏态判定、`pendingHiddenUrlPoll` 状态、隐藏时清理 `injectionCheckTimer` 与 `urlPollTimer`、`visibilitychange` 恢复可见后执行 `scheduleInjectionCheck()` 与 `startUrlPolling()`、注入成功后移除 visibility 监听；运行 harness 证明隐藏 myseller 普通页初始不排 URL poll timer，恢复可见并已跳转 SmartAssistant 后能注入 page bundle。
+- 安全边界：本子项不访问组建计划向导、不触发预算提交、不触发复制/创建/导出/护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，不使用 Browser 插件、原生 CDP、shell Chrome 或 macOS open。
+
+## 执行计划（可核对）
+- [x] 复核第三十四子项提交后工作区状态，确认本子项只处理 extension content 延迟注入 URL 轮询。
+- [x] 在 `extension-content.js` 增加隐藏态 URL poll pending 状态、清理 helper 和 visibilitychange 处理。
+- [x] 将 `scheduleInjectionCheck()` 与 `scheduleNextUrlPoll()` 改为隐藏态不排 timer，恢复可见后补一次注入检查并恢复 URL polling。
+- [x] 更新 `tests/extension-static-build.test.mjs` 静态断言和 harness 行为测试，锁定隐藏页不保留 URL poll timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ba375f7 优化隐藏页核心扫描`，工作区干净。
+- 定位结论：完整 page bundle 不会注入 myseller 普通工作台，但 content script 会保持延迟注入监听，用于后续路由进入 SmartAssistant 预算页；这里的 URL poll 是正确兜底，但隐藏标签页没必要持续调度。
+- 取舍结论：不删除 URL polling、不恢复 history monkey patch、不扩大注入域名；只在隐藏页暂停退避 timeout，并在恢复可见时做一次补查。
+- 实现摘要：`src/entries/extension-content.js` 新增 `pendingHiddenUrlPoll`、`isDocumentHidden()`、`markHiddenUrlPollPending()` 和 `handleDeferredInjectionVisibilityChange()`；隐藏态会清理 `injectionCheckTimer` 与 `urlPollTimer`，恢复可见后执行 `scheduleInjectionCheck()` 与 `startUrlPolling()`。
+- 生命周期摘要：`scheduleInjectionCheck()` 和 `scheduleNextUrlPoll()` 调度前复核隐藏态，URL poll timer 触发后也复核隐藏态；延迟注入监听启动时绑定 `document.visibilitychange`，page bundle 注入成功或停止监听时移除该监听并清理 pending 状态。
+- 测试摘要：`tests/extension-static-build.test.mjs` 的 content harness 支持模拟 `document.visibilityState`，新增隐藏 myseller 普通页初始不排 URL poll timer、隐藏跳转 SmartAssistant 不后台注入、恢复可见后补查并成功注入的回归。
+
+## 验证记录
+- 源码语法：`node --check src/entries/extension-content.js` 通过。
+- 测试语法：`node --check tests/extension-static-build.test.mjs` 通过。
+- 目标测试：`node --test tests/extension-static-build.test.mjs` 通过，11 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/content.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/keyword-plan-api-bridge-security.test.mjs` 通过，39 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`hasResourceBaseUrl:true`、`hasOptimizerToggle:true`、`hasKeywordOpenBridgeReady:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、`helperPanel.visible:false`、`keywordModal.visible:false`、`keywordOverlay.visible:false`、`scenePopup.visible:false`、`itemPicker.visible:false`、`copyOverviewPopup.visible:false`、`copySuccessPopup.visible:false`、`batchPlusMenu.visible:false`、`batchConfirmPopup.visible:false`、`optimizerPanel.visible:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 100 条，主要为页面初始化、报表、AI/SSE/context 和曝光追踪，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- Diff 自审：`git diff --stat` 仅包含 `src/entries/extension-content.js`、`tests/extension-static-build.test.mjs`、`tasks/todo.md` 和生成产物 `dist/extension/content.js`；源码 diff 只新增延迟注入 URL polling 隐藏页生命周期守卫，测试 diff 只扩展 harness 与对应回归；未改 one.alimama 立即注入、myseller SmartAssistant 注入资格、授权 bridge、page bundle、业务请求链路或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十五子项结果：extension content 在 myseller 普通页上的延迟注入兜底从“隐藏标签页仍保持 URL poll 退避 timeout”优化为“隐藏态清理注入检查与 URL poll timer，只记录 pending，恢复可见后补一次注入检查并恢复 URL polling”。
+- 取舍结论：保留 URL polling 作为隔离世界捕获主世界 SPA 跳转的兜底，不新增 history hook 或第二套注入逻辑；只减少后台隐藏标签页的无效轮询调度，并保证隐藏页路由到 SmartAssistant 后恢复可见仍能注入。
+- 验证结论：静态测试、harness 行为测试、构建、相关回归、全量回归、Chrome MCP 只读验收和 diff 自审均通过；未执行任何服务端写动作或业务提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十四子项
 
 ## 需求规格

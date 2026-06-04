@@ -207,7 +207,9 @@
     let urlPollTimer = 0;
     let urlPollDelayMs = URL_POLL_INITIAL_INTERVAL_MS;
     let deferredInjectionWatchActive = false;
+    let pendingHiddenUrlPoll = false;
     let lastObservedUrl = String(window.location?.href || '');
+    const isDocumentHidden = () => document.visibilityState === 'hidden';
     const resetUrlPollDelay = () => {
         urlPollDelayMs = URL_POLL_INITIAL_INTERVAL_MS;
     };
@@ -221,14 +223,34 @@
         window.clearTimeout(urlPollTimer);
         urlPollTimer = 0;
     };
+    const markHiddenUrlPollPending = () => {
+        pendingHiddenUrlPoll = true;
+        clearInjectionCheckTimer();
+        clearUrlPollTimer();
+    };
     let stopDeferredInjectionWatch = () => {
         clearInjectionCheckTimer();
         clearUrlPollTimer();
     };
+    function handleDeferredInjectionVisibilityChange() {
+        if (!deferredInjectionWatchActive) return;
+        if (isDocumentHidden()) {
+            markHiddenUrlPollPending();
+            return;
+        }
+        if (!pendingHiddenUrlPoll) return;
+        pendingHiddenUrlPoll = false;
+        scheduleInjectionCheck();
+        startUrlPolling();
+    }
     const scheduleInjectionCheck = () => {
         resetUrlPollDelay();
         if (pageBundleInjected || document.getElementById(SCRIPT_ID)) {
             stopDeferredInjectionWatch();
+            return;
+        }
+        if (isDocumentHidden()) {
+            markHiddenUrlPollPending();
             return;
         }
         if (injectionCheckTimer) return;
@@ -243,12 +265,22 @@
         if (!deferredInjectionWatchActive) return;
         window.removeEventListener('hashchange', scheduleInjectionCheck);
         window.removeEventListener('popstate', scheduleInjectionCheck);
+        document.removeEventListener('visibilitychange', handleDeferredInjectionVisibilityChange);
         deferredInjectionWatchActive = false;
+        pendingHiddenUrlPoll = false;
     };
     const scheduleNextUrlPoll = () => {
         if (urlPollTimer || pageBundleInjected || document.getElementById(SCRIPT_ID)) return;
+        if (isDocumentHidden()) {
+            markHiddenUrlPollPending();
+            return;
+        }
         urlPollTimer = window.setTimeout(() => {
             urlPollTimer = 0;
+            if (isDocumentHidden()) {
+                markHiddenUrlPollPending();
+                return;
+            }
             const currentUrl = String(window.location?.href || '');
             if (currentUrl !== lastObservedUrl) {
                 lastObservedUrl = currentUrl;
@@ -270,6 +302,7 @@
     if (!tryInjectPageBundle() && shouldWatchForDeferredInjection()) {
         window.addEventListener('hashchange', scheduleInjectionCheck);
         window.addEventListener('popstate', scheduleInjectionCheck);
+        document.addEventListener('visibilitychange', handleDeferredInjectionVisibilityChange);
         deferredInjectionWatchActive = true;
         startUrlPolling();
     }
