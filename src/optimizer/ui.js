@@ -9,7 +9,9 @@
         manualKeywordOutsideHandlerBound: false,
         manualEscortExpandHandler: null,
         manualEscortMainSwitchGuardHandler: null,
-        tokenStatusIntervalId: null,
+        tokenStatusTimerId: null,
+        tokenStatusMonitorActive: false,
+        tokenStatusVisibilityHandlerBound: false,
         tokenStatusLastRefreshAt: 0,
         logOverflowTimerId: null,
         panelRevealTimerId: null,
@@ -31,18 +33,59 @@
             }
         },
 
-        startTokenStatusMonitor: () => {
-            if (UI.tokenStatusIntervalId !== null) return;
+        isDocumentHidden: () => document.visibilityState === 'hidden',
+
+        clearTokenStatusTimer: () => {
+            if (UI.tokenStatusTimerId === null) return;
+            clearTimeout(UI.tokenStatusTimerId);
+            UI.tokenStatusTimerId = null;
+        },
+
+        bindTokenStatusVisibilityHandler: () => {
+            if (UI.tokenStatusVisibilityHandlerBound) return;
+            document.addEventListener('visibilitychange', UI.handleTokenStatusVisibilityChange);
+            UI.tokenStatusVisibilityHandlerBound = true;
+        },
+
+        unbindTokenStatusVisibilityHandler: () => {
+            if (!UI.tokenStatusVisibilityHandlerBound) return;
+            document.removeEventListener('visibilitychange', UI.handleTokenStatusVisibilityChange);
+            UI.tokenStatusVisibilityHandlerBound = false;
+        },
+
+        scheduleTokenStatusRefresh: () => {
+            if (!UI.tokenStatusMonitorActive) return;
+            UI.clearTokenStatusTimer();
+            if (UI.isDocumentHidden()) return;
             UI.refreshTokenStatusIndicator();
-            UI.tokenStatusIntervalId = setInterval(() => {
-                UI.refreshTokenStatusIndicator();
+            UI.tokenStatusTimerId = setTimeout(() => {
+                UI.tokenStatusTimerId = null;
+                if (!UI.tokenStatusMonitorActive || UI.isDocumentHidden()) return;
+                UI.scheduleTokenStatusRefresh();
             }, 1000);
         },
 
+        handleTokenStatusVisibilityChange: () => {
+            if (!UI.tokenStatusMonitorActive) return;
+            if (UI.isDocumentHidden()) {
+                UI.clearTokenStatusTimer();
+                return;
+            }
+            UI.scheduleTokenStatusRefresh();
+        },
+
+        startTokenStatusMonitor: () => {
+            if (UI.tokenStatusMonitorActive) return;
+            UI.tokenStatusMonitorActive = true;
+            UI.bindTokenStatusVisibilityHandler();
+            UI.scheduleTokenStatusRefresh();
+        },
+
         stopTokenStatusMonitor: () => {
-            if (UI.tokenStatusIntervalId === null) return;
-            clearInterval(UI.tokenStatusIntervalId);
-            UI.tokenStatusIntervalId = null;
+            if (!UI.tokenStatusMonitorActive && UI.tokenStatusTimerId === null && !UI.tokenStatusVisibilityHandlerBound) return;
+            UI.tokenStatusMonitorActive = false;
+            UI.clearTokenStatusTimer();
+            UI.unbindTokenStatusVisibilityHandler();
         },
 
         clearLogOverflowTimer: () => {

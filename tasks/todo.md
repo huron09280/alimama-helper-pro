@@ -1,3 +1,49 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十七子项
+
+## 需求规格
+- 目标：在预算破限扫描循环收口后，继续优化算法护航面板打开状态下的 token 状态轮询，避免 `UI.startTokenStatusMonitor()` 启动的 1 秒 interval 在标签页隐藏时仍刷新 token 指示灯，并在缺 token 时按 2.5 秒节流持续触发 `TokenManager.refresh()`。
+- 根因判断：`src/optimizer/ui.js` 的 token 状态监控具备打开/关闭生命周期，但当前只在面板关闭时释放 interval；若用户打开算法护航面板后切到其它标签页，隐藏页仍会保留 1 秒轮询 timer 和 UI/TokenManager 闭包。
+- 范围：仅覆盖算法护航面板 token 状态监控的隐藏页暂停与恢复可见补刷；不改 token 捕获、hook history、授权、算法护航执行、计划创建/复制、预算、报表、接口并发或 10rpm 服务端策略。
+- 热修 vs 结构性修复取舍：把固定 interval 改为可取消的递归 timeout，并引入 monitor active 状态与 visibilitychange 生命周期；隐藏态清理 pending timer，恢复可见后立即刷新一次并恢复 1 秒可见页轮询，关闭面板时释放 timer 与 visibility listener。
+- 成功标准：静态测试证明 token 状态监控不再使用固定 `setInterval`，存在 `tokenStatusTimerId`、`tokenStatusMonitorActive`、隐藏态判定、清理 helper、递归 timeout 调度、visibilitychange 隐藏释放/可见恢复、关闭面板释放 timer 与 listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开算法护航执行流程、不点击组建计划、立即投放、新建、复制、批量+、预算提交、潜力词导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认。
+
+## 执行计划（可核对）
+- [x] 复核第三十六子项提交后工作区状态，确认本子项只处理算法护航 token 状态轮询。
+- [x] 将 token 状态固定 interval 改为可取消递归 timeout。
+- [x] 在 token 状态监控中加入隐藏态暂停、恢复可见补刷和 visibility listener 生命周期。
+- [x] 更新目标测试，锁定隐藏页不保留 token 轮询 timer 且关闭时释放 listener。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `cfb56aa 优化预算扫描循环`，工作区干净。
+- 定位结论：算法护航面板关闭会停止 token 状态监控，但面板打开后切到隐藏标签页时，1 秒 interval 仍会刷新 UI 状态；缺 token 时还会触发 `TokenManager.refresh()`，虽然有 2.5 秒节流，但隐藏页无必要持续唤醒。
+- 取舍结论：不改 token 捕获与刷新语义，不降低可见页 token 状态反馈；只把轮询生命周期从“面板打开即常驻”收口成“面板打开且页面可见才排 timer”。
+- 实现摘要：`src/optimizer/ui.js` 新增 `tokenStatusTimerId`、`tokenStatusMonitorActive`、`tokenStatusVisibilityHandlerBound`、隐藏态判定、timer 清理 helper、visibility listener 绑定/解绑 helper；`startTokenStatusMonitor()` 只标记 active 并通过 `scheduleTokenStatusRefresh()` 调度可见页 timeout。
+- 可见性摘要：隐藏标签页时 `handleTokenStatusVisibilityChange()` 会释放 token 状态 timer；恢复可见后立即刷新 token 指示灯并恢复 1 秒 timeout 循环，timer 回调触发前也复核 active 与隐藏态。
+- 生命周期摘要：关闭算法护航面板仍调用 `UI.stopTokenStatusMonitor()`，现在会同时关闭 active 状态、清理 pending timeout 并解绑 `document.visibilitychange`，避免面板关闭或页面隐藏后遗留轮询闭包。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 更新静态断言，锁定 token 状态监控从固定 interval 改为可取消 timeout 循环，并覆盖隐藏态暂停、恢复可见补刷和关闭清理 listener。
+
+## 验证记录
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，9 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，55 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:9`。未打开算法护航执行流程，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 104 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光追踪，末尾 1 条页面曝光 trace 为 pending，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/optimizer/ui.js`、`tests/optimizer-token-capture-history.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 token 状态监控隐藏页生命周期守卫、可取消 timeout 和关闭清理，测试 diff 只锁定对应静态回归；未改 token 捕获、Hook 管理、授权、算法护航执行、计划创建/复制、预算、报表接口或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十七子项结果：算法护航 token 状态监控从“面板打开后固定 1 秒 interval 常驻”优化为“面板 active 且页面可见时才排递归 timeout，隐藏态释放 timer，恢复可见后补刷并恢复循环”，减少隐藏标签页中 UI 刷新与缺 token 时 `TokenManager.refresh()` 的无效唤醒机会。
+- 取舍结论：保留可见页 token 指示灯即时刷新、缺 token 的 2.5 秒节流刷新、面板关闭释放逻辑和公开入口行为；没有触碰 token 捕获、Hook 管理、授权、算法护航执行、计划创建/复制、预算或服务端 10rpm 策略。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收均通过；未执行任何业务写动作或护航执行，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十六子项
 
 ## 需求规格
