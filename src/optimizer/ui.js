@@ -2242,16 +2242,46 @@
             };
             let resultOverlayClosing = false;
             let resultOverlayCloseTimerId = null;
+            let resultOverlayCloseVisibilityHandler = null;
+            const clearResultOverlayCloseTimer = () => {
+                if (resultOverlayCloseTimerId === null) return;
+                clearTimeout(resultOverlayCloseTimerId);
+                resultOverlayCloseTimerId = null;
+            };
+            const clearResultOverlayCloseVisibilityHandler = () => {
+                if (typeof resultOverlayCloseVisibilityHandler === 'function') {
+                    document.removeEventListener('visibilitychange', resultOverlayCloseVisibilityHandler);
+                }
+                resultOverlayCloseVisibilityHandler = null;
+            };
+            const finishResultOverlayClose = () => {
+                clearResultOverlayCloseTimer();
+                clearResultOverlayCloseVisibilityHandler();
+                document.removeEventListener('keydown', handleResultKeydown, true);
+                overlay.remove();
+                restoreFocus();
+            };
+            const bindResultOverlayCloseVisibilityHandler = () => {
+                if (typeof resultOverlayCloseVisibilityHandler === 'function') return;
+                resultOverlayCloseVisibilityHandler = () => {
+                    if (!UI.isDocumentHidden()) return;
+                    finishResultOverlayClose();
+                };
+                document.addEventListener('visibilitychange', resultOverlayCloseVisibilityHandler);
+            };
             const closeResultOverlay = () => {
                 if (resultOverlayClosing) return;
                 resultOverlayClosing = true;
                 document.removeEventListener('keydown', handleResultKeydown, true);
                 overlay.style.opacity = '0';
                 overlay.style.transition = 'opacity 0.24s ease';
+                if (UI.isDocumentHidden()) {
+                    finishResultOverlayClose();
+                    return;
+                }
+                bindResultOverlayCloseVisibilityHandler();
                 resultOverlayCloseTimerId = setTimeout(() => {
-                    resultOverlayCloseTimerId = null;
-                    overlay.remove();
-                    restoreFocus();
+                    finishResultOverlayClose();
                 }, 240);
             };
             const handleResultKeydown = (event) => {

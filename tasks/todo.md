@@ -1,3 +1,55 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十四子项
+
+## 需求规格
+- 目标：在快捷话术 reset timer 收口后，继续优化算法护航结果浮层关闭过渡的 `resultOverlayCloseTimerId`，避免页面隐藏时仍保留 240ms timeout 去等待淡出后移除 overlay 和恢复焦点。
+- 根因判断：`src/optimizer/ui.js` 的 `closeResultOverlay()` 在用户点击关闭、按 ESC 或点击遮罩后，会设置 overlay 透明度并排 `setTimeout(..., 240)` 执行 `overlay.remove()` 与 `restoreFocus()`。该 timer 只服务结果浮层关闭动效收尾；若用户关闭后立即切到后台，隐藏页仍可能唤醒执行 DOM 移除和焦点恢复。
+- 范围：仅覆盖算法护航结果浮层关闭过渡 timer 的隐藏页即时收尾、timer 清理、关闭幂等和 keydown listener 生命周期；不改结果浮层内容、表格、状态统计、关闭按钮视觉、算法护航执行、openV3、预算、创建/复制/提交/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留可见页 240ms 淡出动效与焦点恢复；关闭动作已由用户触发后，隐藏页不需要等待动画，因此隐藏时直接完成 overlay 移除和焦点恢复，避免后台 timer 唤醒，也避免恢复可见后透明遮罩短暂拦截页面。
+- 成功标准：静态与行为测试证明结果浮层关闭有统一 finish/clear helper；可见页关闭仍按 240ms 调度并只受理一次；关闭后转 hidden 会取消已排 timeout 并立即移除 overlay/恢复焦点；隐藏页关闭不排 timeout；关闭完成后释放 keydown 和 visibility handler；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击算法护航按钮、不打开算法护航结果浮层、不触发 `__ALIMAMA_OPTIMIZER_TOGGLE__`、不调用 openV3/护航执行/预算/创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十三子项提交后工作区状态，确认本子项只处理结果浮层关闭过渡 timer。
+- [x] 复核 UI/图标规范，确认本轮不改算法护航结果浮层视觉、图标和交互结构。
+- [x] 定位 `closeResultOverlay()`、`resultOverlayCloseTimerId` 与现有结果浮层测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为结果浮层关闭增加统一 finish/clear helper、visibility handler 和隐藏态判定复用。
+- [x] 将结果浮层关闭调度改为可见页保留 240ms 淡出，隐藏页即时完成关闭收尾。
+- [x] 更新 optimizer UI 目标测试，锁定隐藏页不排 close timeout、visible->hidden 取消 timer 并收尾、可见页原 240ms 调度保留、重复关闭幂等和 listener 清理。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `7826447 优化快捷话术按钮复位轮询`，tracked 工作区干净；本子项不依赖任何临时取证文件。
+- 定位结论：`resultOverlayCloseTimerId` 只在结果浮层关闭后等待 240ms 淡出再移除 DOM 和恢复焦点；结果数据已渲染，关闭动作已触发，隐藏页等待动画没有业务价值。openV3、护航执行、预算、创建/复制/提交、下载和服务端限速都带业务或安全语义，不纳入本轮。
+- 计划校验：本子项只降低隐藏标签页中结果浮层关闭收尾的后台唤醒；可见页仍保持原 240ms 淡出与焦点恢复，关闭按钮/ESC/遮罩关闭入口不变。若实现需要触碰护航执行结果生成、openV3 请求或 10rpm 限速链路，先回到本计划更新后再继续。
+- 只读子代理复核：确认 `resultOverlayCloseTimerId` 是纯 UI 关闭动画收尾，不耦合 `API.request`、`Core`、`State.runAbortController`、预算、创建/提交、openV3 或护航执行；建议隐藏页立即完成关闭并补充 timer/listener 清理测试，本轮已落地。
+- 实现摘要：`renderResults()` 的结果浮层关闭闭包新增 `resultOverlayCloseVisibilityHandler`，并抽出 `clearResultOverlayCloseTimer()`、`clearResultOverlayCloseVisibilityHandler()`、`finishResultOverlayClose()`、`bindResultOverlayCloseVisibilityHandler()`。关闭开始仍先设置透明度和 0.24s transition，同时立即释放 keydown listener。
+- 调度摘要：可见页保留原 240ms 淡出后移除 overlay 和恢复焦点；隐藏页关闭直接执行 `finishResultOverlayClose()`，不排 240ms timeout；可见页等待淡出期间若页面转 hidden，会取消已排 timeout、移除 overlay、恢复焦点并释放 visibility listener；重复点击关闭、ESC 和遮罩点击仍只受理一次。
+- 测试摘要：`tests/optimizer-escort-new-flow-fallback.test.mjs` 新增 fake DOM/VM 行为 harness，直接执行真实 `renderResults()` 切片，覆盖隐藏页即时关闭、可见页原 240ms 调度、重复关闭幂等、timer 触发清理和 visible->hidden 取消 timer 后即时收尾。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 测试语法：`node --check tests/optimizer-escort-new-flow-fallback.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过，41 项测试全绿；新增 “算法护航结果浮层关闭 timer 在隐藏页即时收尾并释放监听” 行为断言。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 空白检查：`git diff --check` 通过。
+- 静态定位：`rg -n "resultOverlayCloseTimerId|resultOverlayCloseVisibilityHandler|clearResultOverlayCloseTimer|clearResultOverlayCloseVisibilityHandler|finishResultOverlayClose|bindResultOverlayCloseVisibilityHandler|UI\\.isDocumentHidden\\(\\)|resultOverlayCloseTimerId = setTimeout" src/optimizer/ui.js tests/optimizer-escort-new-flow-fallback.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 与隐藏页分支已进入产物。
+- 相关回归：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs tests/optimizer-token-capture-history.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，92 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { stdio:'inherit', timeout:60000 }) ..."` 通过，627 项中 625 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordApiReady:true`、`hookManager:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4071307`，包含 `resultOverlayCloseTimerId`、`resultOverlayCloseVisibilityHandler`、`clearResultOverlayCloseTimer`、`clearResultOverlayCloseVisibilityHandler`、`finishResultOverlayClose`、`bindResultOverlayCloseVisibilityHandler`、`if (UI.isDocumentHidden())` 和 `finishResultOverlayClose();`。
+- Chrome MCP 弹窗/危险请求：`helperIcon` 存在；`helperPanelVisible:false`、`optimizerPanelVisible:false`、`resultOverlayVisible:false`、`magicReportVisible:false`、`licenseOverlayVisible:false`；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器` 和主线程卡顿监听启动；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 和页面自身日志，未见新增插件运行失败。网络清单可见扩展 `page.bundle.js` 读取 200，one.alimama 登录路由初始化、菜单、消息和 AI context 等只读/初始化请求为 200；未触发算法护航、结果浮层、openV3、创建/复制/提交/下载或写入口。
+- Diff 自审：`git diff --stat` 包含 `src/optimizer/ui.js`、`tests/optimizer-escort-new-flow-fallback.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增结果浮层关闭 timer 的隐藏页即时收尾、可见转隐藏取消 timer 和 listener 生命周期管理，不改结果内容、关闭按钮视觉、算法护航执行、openV3、预算、创建/复制/提交/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十四子项结果：算法护航结果浮层关闭从“关闭后总是排 240ms timeout 等待淡出再移除 overlay/恢复焦点”优化为“隐藏页关闭或关闭后转隐藏时立即完成关闭收尾并释放 listener；可见页仍按原 240ms 淡出”。
+- 取舍结论：关闭动作已由用户确认触发，隐藏页没有动画可见价值，因此即时移除透明 overlay 比暂停等待更直接；这同时避免恢复可见后透明遮罩短暂拦截页面。可见页动效、焦点恢复、关闭按钮/ESC/遮罩关闭入口保持原语义。
+- 效果结论：在用户关闭算法护航结果浮层后立刻切到后台的场景中，插件不再保留结果浮层关闭 timeout 等待隐藏页唤醒，降低后台 timer 唤醒成本。浏览器验收未打开算法护航面板或结果浮层、未触发 `__ALIMAMA_OPTIMIZER_TOGGLE__`、未调用 openV3/护航执行/创建/复制/提交/下载或任何真实写动作，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十三子项
 
 ## 需求规格
