@@ -1,3 +1,50 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十五子项
+
+## 需求规格
+- 目标：在 native runtime list cache cleanup timer 收口后，继续优化主面板工具按钮的打开重试 timer，避免标签页隐藏时 `optimizerOpenRetryTimer` / `keywordPlanOpenRetryTimer` 到期后仍尝试打开算法护航或组建计划，并可能弹出失败提示。
+- 根因判断：`src/main-assistant/ui.js` 中算法护航与组建计划按钮在目标 API 尚未初始化时会排 1000ms / 800ms 重试；当前 timer 只具备显式清理和单句柄复用，不区分页可见状态。若用户点击后立刻切到其它标签页，隐藏页仍会唤醒执行 callback，进入打开模块、兜底弹窗或 alert 分支。
+- 范围：仅覆盖主面板 `scheduleOptimizerOpenRetry()` 与 `scheduleKeywordPlanOpenRetry()` 的隐藏页暂停、恢复可见续跑、timer/visibility listener 生命周期和按钮再次点击时旧 pending 清理；不改按钮文案、Logger、真实打开算法护航/组建计划逻辑、openWizard、bridge、推荐词、场景同步、创建/复制/提交、授权、护航执行、预算或 10rpm 服务端限速策略。
+- 热修 vs 结构性修复取舍：保留两个按钮各自独立的单 timer 事实源，新增按按钮维度的 pending callback 与 visibility handler。隐藏页不执行 callback，不打开模块，不弹 alert；恢复可见后执行同一个 pending callback，按钮再次点击或成功进入立即路径时释放旧 timer/handler，避免重复执行。
+- 成功标准：静态测试证明 UI runtime 登记两个打开重试 timer、两个 visibility handler 和两个 pending callback；存在隐藏态判定、按按钮维度的 visibility handler 清理 helper；调度前清理旧 timer/handler/pending，隐藏页只绑定恢复监听，恢复可见后只执行一次原 callback；按钮点击前仍清理旧重试；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击主面板按钮、不打开算法护航、不打开组建计划向导、不调用 openWizard、不触发创建、复制、提交、修复、追加关键词、推荐词、场景同步、预算、护航执行、导出或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十四子项提交后工作区状态，确认本子项只处理主面板工具打开重试 timer。
+- [x] 为主面板工具打开重试增加隐藏态判定、pending callback 和 visibility resume 生命周期。
+- [x] 将算法护航打开重试改为隐藏页暂停、恢复可见后执行同一 pending callback。
+- [x] 将组建计划打开重试改为隐藏页暂停、恢复可见后执行同一 pending callback。
+- [x] 更新 UI timer 目标测试，锁定隐藏页不排打开重试 timeout、恢复可见后只执行一次、再次点击释放旧 pending。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `2697439 优化原生运行态缓存清理轮询`，tracked 工作区干净；另有 `tasks/dmp-*` 未跟踪取证文件存在，本子项不读取、不覆盖、不纳入提交。
+- 定位结论：剩余纯动画、焦点恢复、0ms 下载清理等 timer 对后台唤醒收益较低；主面板工具打开重试 timer 会进入模块打开或 alert 分支，更适合作为下一处高价值隐藏页暂停优化。
+- 计划校验：本子项只降低隐藏页点击后等待初始化期间的后台重试唤醒，不改变工具按钮的点击语义、成功打开路径或失败提示内容；若实现需要扩大到算法护航/组建计划内部逻辑，先回到本计划更新后再继续。
+- 实现摘要：`UI.runtime` 为算法护航和组建计划各新增 visibility handler 与 pending callback；调度打开重试时先登记 pending callback 和 `visibilitychange`，隐藏页不排 timeout，等待期间转隐藏会取消已排 timeout，恢复可见后执行同一 pending callback 并释放监听。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 已扩展 UI 工具按钮打开重试断言，锁定隐藏态判定、按按钮维度释放 visibility handler、隐藏时取消 timer、恢复可见执行同一 pending callback，以及可见页 timer 触发后只执行一次。
+
+## 验证记录
+- 测试语法：`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/magic-report-panel-resilience.test.mjs'], { timeout: 60000 }) ..."` 通过，13 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/magic-report-panel-resilience.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，54 项测试全绿。
+- 静态定位：`rg -n "optimizerOpenRetryVisibilityHandler|optimizerOpenRetryPendingCallback|keywordPlanOpenRetryVisibilityHandler|keywordPlanOpenRetryPendingCallback|isToolOpenRetryDocumentHidden|bindOptimizerOpenRetryVisibilityHandler|bindKeywordPlanOpenRetryVisibilityHandler" src/main-assistant/ui.js tests/magic-report-panel-resilience.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页打开重试调度已进入产物。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，618 项中 616 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`；切回 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `线索推广_万相台无界版`。
+- Chrome MCP 运行态：只读探针返回 `GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordOpenBridgeReady:"1"`。
+- Chrome MCP 弹窗/危险请求：助手图标存在且可见，`helperPanel` 存在但不可见；`magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动` 与 `[EscortAPI] Token Hook 已接入统一管理器`；其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 和页面自身 Magix 日志，未见新增插件运行失败。fetch/XHR 清单 89 条，主要为页面初始化、报表、AI/context、消息、素材、优惠券和曝光 trace，可见请求除 `px.effirst.com` 既有隧道失败外均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/ui.js`、`tests/magic-report-panel-resilience.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增主面板算法护航/组建计划打开重试 timer 的隐藏页暂停、可见恢复和 pending callback 生命周期，不改按钮文案、Logger、真实打开逻辑、openWizard、bridge、推荐词、场景同步、创建/复制/提交、授权、护航执行、预算或 10rpm 服务端限速策略。
+
+## 结果复盘
+- 第十一轮第四十五子项结果：主面板工具按钮打开重试从“API 未初始化时直接排 1000ms/800ms timeout，到期后在隐藏页也执行打开/失败提示逻辑”优化为“调度时登记 pending callback 与 visibility 监听，隐藏页不排或取消 timeout，恢复可见后执行同一 pending callback 并释放监听”。
+- 取舍结论：保留算法护航和组建计划两个按钮独立的单 timer 事实源；新增 pending callback 只管理同一次用户点击后的延迟重试，不改变立即成功打开路径或失败提示内容。隐藏页不会打开模块或弹 alert，降低后台唤醒与意外 UI 副作用。
+- 验证结论：目标测试、构建、项目语法、构建检查、相关回归、全量回归、静态定位、Chrome MCP 只读验收、危险请求过滤、空白检查和 diff 自审均通过；未点击主面板工具按钮，未打开算法护航或组建计划向导，未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十四子项
 
 ## 需求规格

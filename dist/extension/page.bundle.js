@@ -5781,7 +5781,11 @@ if (typeof globalThis !== 'undefined') {
             panelOutsideClickHandlerBound: false,
             panelIconRevealTimer: null,
             optimizerOpenRetryTimer: null,
-            keywordPlanOpenRetryTimer: null
+            optimizerOpenRetryVisibilityHandler: null,
+            optimizerOpenRetryPendingCallback: null,
+            keywordPlanOpenRetryTimer: null,
+            keywordPlanOpenRetryVisibilityHandler: null,
+            keywordPlanOpenRetryPendingCallback: null
         },
 
         init() {
@@ -5809,33 +5813,111 @@ if (typeof globalThis !== 'undefined') {
             }, 300);
         },
 
+        isToolOpenRetryDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearOptimizerOpenRetryVisibilityHandler() {
+            const handler = this.runtime.optimizerOpenRetryVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.optimizerOpenRetryVisibilityHandler = null;
+            this.runtime.optimizerOpenRetryPendingCallback = null;
+        },
+
+        bindOptimizerOpenRetryVisibilityHandler() {
+            if (typeof this.runtime.optimizerOpenRetryVisibilityHandler === 'function') return;
+            this.runtime.optimizerOpenRetryVisibilityHandler = () => {
+                if (this.isToolOpenRetryDocumentHidden()) {
+                    if (this.runtime.optimizerOpenRetryTimer) {
+                        clearTimeout(this.runtime.optimizerOpenRetryTimer);
+                        this.runtime.optimizerOpenRetryTimer = null;
+                    }
+                    return;
+                }
+                const pendingCallback = this.runtime.optimizerOpenRetryPendingCallback;
+                this.clearOptimizerOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            };
+            document.addEventListener('visibilitychange', this.runtime.optimizerOpenRetryVisibilityHandler);
+        },
+
         clearOptimizerOpenRetryTimer() {
-            if (!this.runtime.optimizerOpenRetryTimer) return;
-            clearTimeout(this.runtime.optimizerOpenRetryTimer);
-            this.runtime.optimizerOpenRetryTimer = null;
+            if (this.runtime.optimizerOpenRetryTimer) {
+                clearTimeout(this.runtime.optimizerOpenRetryTimer);
+                this.runtime.optimizerOpenRetryTimer = null;
+            }
+            this.clearOptimizerOpenRetryVisibilityHandler();
         },
 
         scheduleOptimizerOpenRetry(callback) {
             this.clearOptimizerOpenRetryTimer();
             if (typeof callback !== 'function') return;
+            this.runtime.optimizerOpenRetryPendingCallback = callback;
+            this.bindOptimizerOpenRetryVisibilityHandler();
+            if (this.isToolOpenRetryDocumentHidden()) {
+                return;
+            }
             this.runtime.optimizerOpenRetryTimer = setTimeout(() => {
                 this.runtime.optimizerOpenRetryTimer = null;
-                callback();
+                const pendingCallback = this.runtime.optimizerOpenRetryPendingCallback;
+                this.clearOptimizerOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
             }, 1000);
         },
 
+        clearKeywordPlanOpenRetryVisibilityHandler() {
+            const handler = this.runtime.keywordPlanOpenRetryVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.keywordPlanOpenRetryVisibilityHandler = null;
+            this.runtime.keywordPlanOpenRetryPendingCallback = null;
+        },
+
+        bindKeywordPlanOpenRetryVisibilityHandler() {
+            if (typeof this.runtime.keywordPlanOpenRetryVisibilityHandler === 'function') return;
+            this.runtime.keywordPlanOpenRetryVisibilityHandler = () => {
+                if (this.isToolOpenRetryDocumentHidden()) {
+                    if (this.runtime.keywordPlanOpenRetryTimer) {
+                        clearTimeout(this.runtime.keywordPlanOpenRetryTimer);
+                        this.runtime.keywordPlanOpenRetryTimer = null;
+                    }
+                    return;
+                }
+                const pendingCallback = this.runtime.keywordPlanOpenRetryPendingCallback;
+                this.clearKeywordPlanOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            };
+            document.addEventListener('visibilitychange', this.runtime.keywordPlanOpenRetryVisibilityHandler);
+        },
+
         clearKeywordPlanOpenRetryTimer() {
-            if (!this.runtime.keywordPlanOpenRetryTimer) return;
-            clearTimeout(this.runtime.keywordPlanOpenRetryTimer);
-            this.runtime.keywordPlanOpenRetryTimer = null;
+            if (this.runtime.keywordPlanOpenRetryTimer) {
+                clearTimeout(this.runtime.keywordPlanOpenRetryTimer);
+                this.runtime.keywordPlanOpenRetryTimer = null;
+            }
+            this.clearKeywordPlanOpenRetryVisibilityHandler();
         },
 
         scheduleKeywordPlanOpenRetry(callback) {
             this.clearKeywordPlanOpenRetryTimer();
             if (typeof callback !== 'function') return;
+            this.runtime.keywordPlanOpenRetryPendingCallback = callback;
+            this.bindKeywordPlanOpenRetryVisibilityHandler();
+            if (this.isToolOpenRetryDocumentHidden()) {
+                return;
+            }
             this.runtime.keywordPlanOpenRetryTimer = setTimeout(() => {
                 this.runtime.keywordPlanOpenRetryTimer = null;
-                callback();
+                const pendingCallback = this.runtime.keywordPlanOpenRetryPendingCallback;
+                this.clearKeywordPlanOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
             }, 800);
         },
 

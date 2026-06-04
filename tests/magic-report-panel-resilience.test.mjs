@@ -168,28 +168,53 @@ test('UI 工具按钮打开重试 timer 会按按钮维度复用并释放', () =
   const block = getUiBlock();
   assert.match(
     block,
-    /runtime:\s*\{[\s\S]*optimizerOpenRetryTimer:\s*null,[\s\S]*keywordPlanOpenRetryTimer:\s*null/,
-    'UI runtime 缺少工具按钮打开重试 timer 状态'
+    /runtime:\s*\{[\s\S]*optimizerOpenRetryTimer:\s*null,[\s\S]*optimizerOpenRetryVisibilityHandler:\s*null,[\s\S]*optimizerOpenRetryPendingCallback:\s*null,[\s\S]*keywordPlanOpenRetryTimer:\s*null,[\s\S]*keywordPlanOpenRetryVisibilityHandler:\s*null,[\s\S]*keywordPlanOpenRetryPendingCallback:\s*null/,
+    'UI runtime 缺少工具按钮打开重试 timer、pending callback 或 visibility handler 状态'
   );
   assert.match(
     block,
-    /clearOptimizerOpenRetryTimer\(\)\s*\{[\s\S]*clearTimeout\(this\.runtime\.optimizerOpenRetryTimer\);[\s\S]*this\.runtime\.optimizerOpenRetryTimer = null;/,
-    '算法护航打开重试 timer 应支持显式清理并归零'
+    /isToolOpenRetryDocumentHidden\(\)\s*\{[\s\S]*return document\.visibilityState === 'hidden';[\s\S]*\}/,
+    '工具按钮打开重试缺少隐藏页判定'
   );
   assert.match(
     block,
-    /scheduleOptimizerOpenRetry\(callback\)\s*\{[\s\S]*this\.clearOptimizerOpenRetryTimer\(\);[\s\S]*this\.runtime\.optimizerOpenRetryTimer = setTimeout\(\(\) => \{[\s\S]*this\.runtime\.optimizerOpenRetryTimer = null;[\s\S]*callback\(\);[\s\S]*\}, 1000\);/,
-    '算法护航打开重试应通过单一 timer 句柄调度并在触发后归零'
+    /clearOptimizerOpenRetryVisibilityHandler\(\)\s*\{[\s\S]*document\.removeEventListener\('visibilitychange', handler\);[\s\S]*this\.runtime\.optimizerOpenRetryVisibilityHandler = null;[\s\S]*this\.runtime\.optimizerOpenRetryPendingCallback = null;/,
+    '算法护航打开重试应支持释放 visibility handler 与 pending callback'
   );
   assert.match(
     block,
-    /clearKeywordPlanOpenRetryTimer\(\)\s*\{[\s\S]*clearTimeout\(this\.runtime\.keywordPlanOpenRetryTimer\);[\s\S]*this\.runtime\.keywordPlanOpenRetryTimer = null;/,
-    '组建计划打开重试 timer 应支持显式清理并归零'
+    /bindOptimizerOpenRetryVisibilityHandler\(\)\s*\{[\s\S]*if \(typeof this\.runtime\.optimizerOpenRetryVisibilityHandler === 'function'\) return;[\s\S]*if \(this\.isToolOpenRetryDocumentHidden\(\)\) \{[\s\S]*clearTimeout\(this\.runtime\.optimizerOpenRetryTimer\);[\s\S]*this\.runtime\.optimizerOpenRetryTimer = null;[\s\S]*return;[\s\S]*\}[\s\S]*const pendingCallback = this\.runtime\.optimizerOpenRetryPendingCallback;[\s\S]*this\.clearOptimizerOpenRetryVisibilityHandler\(\);[\s\S]*if \(typeof pendingCallback === 'function'\) pendingCallback\(\);[\s\S]*document\.addEventListener\('visibilitychange', this\.runtime\.optimizerOpenRetryVisibilityHandler\);[\s\S]*\}/,
+    '算法护航打开重试应在隐藏时取消 timer，恢复可见后执行同一 pending callback 并释放监听'
   );
   assert.match(
     block,
-    /scheduleKeywordPlanOpenRetry\(callback\)\s*\{[\s\S]*this\.clearKeywordPlanOpenRetryTimer\(\);[\s\S]*this\.runtime\.keywordPlanOpenRetryTimer = setTimeout\(\(\) => \{[\s\S]*this\.runtime\.keywordPlanOpenRetryTimer = null;[\s\S]*callback\(\);[\s\S]*\}, 800\);/,
-    '组建计划打开重试应通过单一 timer 句柄调度并在触发后归零'
+    /clearOptimizerOpenRetryTimer\(\)\s*\{[\s\S]*if \(this\.runtime\.optimizerOpenRetryTimer\) \{[\s\S]*clearTimeout\(this\.runtime\.optimizerOpenRetryTimer\);[\s\S]*this\.runtime\.optimizerOpenRetryTimer = null;[\s\S]*\}[\s\S]*this\.clearOptimizerOpenRetryVisibilityHandler\(\);/,
+    '算法护航打开重试 timer 应支持显式清理并同步释放 pending visibility 状态'
+  );
+  assert.match(
+    block,
+    /scheduleOptimizerOpenRetry\(callback\)\s*\{[\s\S]*this\.clearOptimizerOpenRetryTimer\(\);[\s\S]*this\.runtime\.optimizerOpenRetryPendingCallback = callback;[\s\S]*this\.bindOptimizerOpenRetryVisibilityHandler\(\);[\s\S]*if \(this\.isToolOpenRetryDocumentHidden\(\)\) \{[\s\S]*return;[\s\S]*\}[\s\S]*this\.runtime\.optimizerOpenRetryTimer = setTimeout\(\(\) => \{[\s\S]*this\.runtime\.optimizerOpenRetryTimer = null;[\s\S]*const pendingCallback = this\.runtime\.optimizerOpenRetryPendingCallback;[\s\S]*this\.clearOptimizerOpenRetryVisibilityHandler\(\);[\s\S]*if \(typeof pendingCallback === 'function'\) pendingCallback\(\);[\s\S]*\}, 1000\);/,
+    '算法护航打开重试应通过单一 timer 调度，可见页触发后只执行一次 pending callback'
+  );
+  assert.match(
+    block,
+    /clearKeywordPlanOpenRetryVisibilityHandler\(\)\s*\{[\s\S]*document\.removeEventListener\('visibilitychange', handler\);[\s\S]*this\.runtime\.keywordPlanOpenRetryVisibilityHandler = null;[\s\S]*this\.runtime\.keywordPlanOpenRetryPendingCallback = null;/,
+    '组建计划打开重试应支持释放 visibility handler 与 pending callback'
+  );
+  assert.match(
+    block,
+    /bindKeywordPlanOpenRetryVisibilityHandler\(\)\s*\{[\s\S]*if \(typeof this\.runtime\.keywordPlanOpenRetryVisibilityHandler === 'function'\) return;[\s\S]*if \(this\.isToolOpenRetryDocumentHidden\(\)\) \{[\s\S]*clearTimeout\(this\.runtime\.keywordPlanOpenRetryTimer\);[\s\S]*this\.runtime\.keywordPlanOpenRetryTimer = null;[\s\S]*return;[\s\S]*\}[\s\S]*const pendingCallback = this\.runtime\.keywordPlanOpenRetryPendingCallback;[\s\S]*this\.clearKeywordPlanOpenRetryVisibilityHandler\(\);[\s\S]*if \(typeof pendingCallback === 'function'\) pendingCallback\(\);[\s\S]*document\.addEventListener\('visibilitychange', this\.runtime\.keywordPlanOpenRetryVisibilityHandler\);[\s\S]*\}/,
+    '组建计划打开重试应在隐藏时取消 timer，恢复可见后执行同一 pending callback 并释放监听'
+  );
+  assert.match(
+    block,
+    /clearKeywordPlanOpenRetryTimer\(\)\s*\{[\s\S]*if \(this\.runtime\.keywordPlanOpenRetryTimer\) \{[\s\S]*clearTimeout\(this\.runtime\.keywordPlanOpenRetryTimer\);[\s\S]*this\.runtime\.keywordPlanOpenRetryTimer = null;[\s\S]*\}[\s\S]*this\.clearKeywordPlanOpenRetryVisibilityHandler\(\);/,
+    '组建计划打开重试 timer 应支持显式清理并同步释放 pending visibility 状态'
+  );
+  assert.match(
+    block,
+    /scheduleKeywordPlanOpenRetry\(callback\)\s*\{[\s\S]*this\.clearKeywordPlanOpenRetryTimer\(\);[\s\S]*this\.runtime\.keywordPlanOpenRetryPendingCallback = callback;[\s\S]*this\.bindKeywordPlanOpenRetryVisibilityHandler\(\);[\s\S]*if \(this\.isToolOpenRetryDocumentHidden\(\)\) \{[\s\S]*return;[\s\S]*\}[\s\S]*this\.runtime\.keywordPlanOpenRetryTimer = setTimeout\(\(\) => \{[\s\S]*this\.runtime\.keywordPlanOpenRetryTimer = null;[\s\S]*const pendingCallback = this\.runtime\.keywordPlanOpenRetryPendingCallback;[\s\S]*this\.clearKeywordPlanOpenRetryVisibilityHandler\(\);[\s\S]*if \(typeof pendingCallback === 'function'\) pendingCallback\(\);[\s\S]*\}, 800\);/,
+    '组建计划打开重试应通过单一 timer 调度，可见页触发后只执行一次 pending callback'
   );
   assert.match(
     block,
