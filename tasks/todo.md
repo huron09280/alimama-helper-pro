@@ -1,3 +1,54 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十一子项
+
+## 需求规格
+- 目标：在主助手面板 hover auto-hide 收口后，继续优化主助手 Logger 的 UI flush 调度，避免页面隐藏时仍为日志面板 DOM 刷新保留 `requestAnimationFrame(() => this.flush())`。
+- 根因判断：`src/main-assistant/logger.js` 的 `Logger.log()` 会同步写 console 并把日志放入 `buffer`，随后 `scheduleFlush()` 直接排 rAF 刷新日志 DOM。该 rAF 只服务主面板日志区域的可见 UI 批量渲染；隐藏页中继续保留 frame 会持有 Logger/DOM 刷新闭包，且没有必要在用户不可见时写日志面板 DOM。
+- 范围：仅覆盖主助手 Logger 的日志面板 DOM flush timer/frame、visibilitychange handler、pending buffer 状态和显式清理；不改日志文案、日志级别、console 输出、buffer 数据结构、主面板按钮、万能查数、算法护航、组建计划、请求并发、创建/复制/提交、预算、下载、openV3 或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留 `Logger.log()` 同步 console 输出和 buffer 追加语义；可见页仍用 rAF 批量刷新 DOM，无 rAF 时用 16ms timeout fallback。隐藏页不排 UI flush frame，只登记 pending 和 visibility handler；可见后再按原批量刷新语义补刷，等待期间若 visible->hidden 则取消已排 frame。
+- 成功标准：静态与行为测试证明 Logger 有隐藏页判定、flush frame 清理、visibility handler 和 pending 标记；隐藏页 log 不排 rAF/timeout，buffer 保留；恢复可见后只补排一个 flush frame；可见页等待期间转 hidden 会取消 pending frame；实际 flush 后释放 handler/pending 状态；旧 `requestAnimationFrame(() => this.flush())` 直排不再存在；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击主面板任何业务工具按钮、不触发 `Core.run()`、万能查数查询、算法护航、组建计划、计划并发、openV3、预算、创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认、extension bundle 命中确认和可见 UI 只读状态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第六十子项提交后工作区状态，确认本子项从干净工作区开始。
+- [x] 回顾 `tasks/lessons.md` 的 Chrome MCP 与按项中文提交规则。
+- [x] 复核 UI/图标规范，确认本轮不改主助手视觉、图标和交互结构。
+- [x] 定位剩余 timer/rAF 候选，排除请求超时、创建/复制/提交、下载 cleanup、openV3、预算和服务端 10rpm 相关链路。
+- [x] 选定主助手 Logger flush rAF，确认其只服务日志面板 DOM 批量刷新。
+- [x] 为 Logger flush 增加隐藏页判定、frame 清理、visibilitychange 处理和 pending 状态。
+- [x] 将 `scheduleFlush()` 改为可见页保留 rAF/fallback，隐藏页暂停，visible->hidden 取消待执行 frame。
+- [x] 更新 Logger 目标测试，锁定隐藏页不排 frame、恢复可见补刷、visible->hidden 取消和旧直排 rAF 移除。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `91017d0 优化主面板悬停收起轮询`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：DMP 按钮 ensure 已有隐藏页暂停，万能查数 quick prompt/status/iframe cleanup 已有 visibility 处理，下载 cleanup 与创建/复制焦点恢复靠近业务收尾链路，预算/openV3/请求超时属于明确排除边界。主助手 Logger flush 只影响日志面板 DOM 批量渲染，隐藏页暂停不会改变日志内容和业务执行。
+- 计划校验：本轮只降低隐藏标签页中日志面板 UI flush 的后台 frame/timeout 保留；console 日志、buffer 追加、日志清空、日志滚动和日志行裁剪语义保持不变。若实现需要触碰请求、创建/复制/提交、预算、下载、openV3 或服务端 10rpm 链路，先回到本计划更新后再继续。
+- 实现摘要：`Logger` 新增 `timerCancel`、`flushVisibilityHandler`、`flushPending`，并抽出 `isDocumentHidden()`、`clearFlushTimer()`、`clearFlushVisibilityHandler()`、`bindFlushVisibilityHandler()`。`Logger.log()` 仍同步输出 console 并追加 buffer，只把日志面板 DOM flush 的调度从直接 rAF 改为统一 helper 管理。
+- 调度摘要：可见页继续用 `requestAnimationFrame(runFlush)` 批量刷新日志 DOM；rAF/cancel 不成对可用时使用可取消的 `setTimeout(runFlush, 16)` fallback。隐藏页只保留 buffer 与 pending 标记，不排 frame/timeout；等待 flush 期间转 hidden 会取消已排 frame/timeout，恢复 visible 后再补排一次 flush。实际 flush 完成后释放 visibility handler 和 pending 状态。
+
+## 验证记录
+- `node --check src/main-assistant/logger.js`：通过。
+- `node --check tests/logger-api.test.mjs`：通过。
+- `npm run build`：通过，已同步 `阿里妈妈多合一助手.js`、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js`。
+- `node --test tests/logger-api.test.mjs`：22 项通过；新增 “主助手 Logger flush 在隐藏页暂停并恢复可见后补刷”，覆盖隐藏页不排 rAF/timeout、buffer 保留、恢复可见补刷、visible->hidden 取消 rAF、fallback timeout 取消与补排。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js`：通过。
+- 相关回归：`node --test tests/logger-api.test.mjs tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs`，58 项通过。
+- 静态核查：`rg -n "requestAnimationFrame\\(\\(\\) => this\\.flush\\(\\)\\)|flushVisibilityHandler|flushPending|clearFlushTimer|timerCancel" src/main-assistant/logger.js 阿里妈妈多合一助手.js dist/packages/alimama-helper-pro.user.js dist/extension/page.bundle.js tests/logger-api.test.mjs`，源码、根 userscript、发布包、extension bundle 和测试均包含新状态/helper；旧 `requestAnimationFrame(() => this.flush())` 无命中。
+- 全量回归：`node -e "const { spawnSync } = require('node:child_process'); const result = spawnSync('npm', ['test'], { stdio: 'inherit', timeout: 60000 }); if (result.error) { console.error(result.error.message); process.exit(1); } process.exit(result.status ?? 1);"`，634 项合计，632 项通过，2 项因可选 `agent-cluster/index.mjs` 缺失跳过，0 失败。
+- Chrome DevTools MCP 只读验收：在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 `Reload`，版本 `7.06`、路径 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，页面提示 `Reloaded`。
+- Chrome DevTools MCP 运行态验收：刷新真实 `one.alimama.com` 登录页后，页面标题 `登录页_万相台无界版`，`document.readyState=complete`，主助手悬浮球和面板节点存在且面板默认隐藏；万能查数、人群矩阵、算法护航、结果 overlay、批量菜单、复制弹窗、下载捕获、授权 overlay 均未打开；`planApiReady`、`keywordApiReady`、`optimizerToggleReady`、`hookManagerReady` 均为 true。
+- Chrome DevTools MCP bundle 验收：只读 fetch `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 返回 200，长度 `4086717`；bundle 含 `timerCancel`、`flushVisibilityHandler`、`flushPending`、`clearFlushTimer()`、`clearFlushVisibilityHandler()`、`bindFlushVisibilityHandler()`、`requestAnimationFrame(runFlush)`、`setTimeout(runFlush, 16)`，且不含旧 `requestAnimationFrame(() => this.flush())`。
+- Chrome DevTools MCP console/network 验收：当前导航 console 有 `[AM] 🚀 阿里助手 Pro v7.06 已启动`、Token Hook、主线程卡顿监听；无新的 `clearAutoHideTimer`、无 `[AM Helper] main bootstrap failed`，其余为页面既有 `ERR_TUNNEL_CONNECTION_FAILED`、deprecated issue 和只读读取大 bundle 触发的跳过解析 debug。Performance resource 过滤本次刷新后 `/solution/addList`、`/solution/copy`、`/campaign/budget/batchUpdate`、`/campaign/updatePart`、`/campaign/delete`、`/campaign/status`、`/campaign/add`、`/campaign/create`、`/openV3`、`/download` 危险请求计数 `0`。
+- Diff 自审：改动仅覆盖 `src/main-assistant/logger.js`、`tests/logger-api.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只修改日志面板 DOM flush 调度生命周期，不改日志文案、日志级别、console 输出、buffer 数据结构、主面板工具入口、万能查数、算法护航、组建计划、请求并发、创建/复制/提交、预算、下载、openV3 或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第六十一子项结果：主助手 Logger flush 从“每次日志追加后可见性无关地排 `requestAnimationFrame(() => this.flush())` 写日志面板 DOM”优化为“可见页继续 rAF/fallback 批量刷 DOM，隐藏页只保留 buffer/pending，恢复可见后再补刷”。
+- 效果结论：页面隐藏期间产生日志时，插件不再为日志面板 UI flush 保留 rAF 或 16ms fallback timeout，也不会持有即将写 DOM 的 frame 闭包；可见页日志渲染、日志滚动、日志清空、日志行裁剪和 console 输出语义保持不变。
+- 边界结论：本轮没有触碰请求并发、创建/复制/提交、openV3、预算、下载启动或服务端 10rpm 逻辑；Chrome MCP 验收未点击任何真实业务工具或写入口，危险写请求计数 `0`。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十子项
 
 ## 需求规格

@@ -109,6 +109,181 @@ function createHookManagerForTest() {
   return context.__manager;
 }
 
+function createLoggerFlushHarness(initialVisibilityState = 'visible', options = {}) {
+  let visibilityState = String(initialVisibilityState || 'visible');
+  let nextFrameId = 1;
+  let nextTimerId = 1000;
+  const frames = new Map();
+  const timers = new Map();
+  const listeners = new Map();
+
+  class FakeNode {
+    constructor(tagName = '') {
+      this.tagName = String(tagName || '').toUpperCase();
+      this.children = [];
+      this.parentNode = null;
+      this.dataset = {};
+      this.style = {};
+      this.className = '';
+      this.textContent = '';
+      this.scrollHeight = 0;
+      this.scrollTop = 0;
+      this.clientHeight = 100;
+    }
+
+    appendChild(child) {
+      if (child instanceof FakeFragment) {
+        child.children.slice().forEach(node => this.appendChild(node));
+        child.children = [];
+        return child;
+      }
+      if (child && typeof child === 'object') {
+        child.parentNode = this;
+      }
+      this.children.push(child);
+      this.scrollHeight = this.children.length * 12;
+      return child;
+    }
+
+    get childElementCount() {
+      return this.children.filter(child => child instanceof FakeNode && !(child instanceof FakeTextNode)).length;
+    }
+
+    get firstChild() {
+      return this.children[0] || null;
+    }
+
+    remove() {
+      if (!this.parentNode) return;
+      const index = this.parentNode.children.indexOf(this);
+      if (index >= 0) this.parentNode.children.splice(index, 1);
+      this.parentNode = null;
+    }
+
+    getElementsByClassName(className) {
+      const result = [];
+      const visit = (node) => {
+        if (!(node instanceof FakeNode)) return;
+        if (String(node.className || '').split(/\s+/).includes(className)) {
+          result.push(node);
+        }
+        node.children.forEach(visit);
+      };
+      this.children.forEach(visit);
+      return result;
+    }
+
+    set innerHTML(value) {
+      this.children = [];
+      this.textContent = String(value || '');
+    }
+  }
+
+  class FakeFragment extends FakeNode {}
+  class FakeTextNode extends FakeNode {
+    constructor(text) {
+      super('#text');
+      this.textContent = String(text || '');
+    }
+  }
+
+  const addListener = (type, handler) => {
+    if (typeof handler !== 'function') return;
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeListener = (type, handler) => {
+    listeners.get(type)?.delete(handler);
+  };
+  const context = createContext({
+    console: { log() {} },
+    Date,
+    JSON,
+    String,
+    Number,
+    State: {
+      config: {
+        logExpanded: false
+      }
+    },
+    document: {
+      get visibilityState() {
+        return visibilityState;
+      },
+      addEventListener: addListener,
+      removeEventListener: removeListener,
+      createDocumentFragment() {
+        return new FakeFragment();
+      },
+      createElement(tagName) {
+        return new FakeNode(tagName);
+      },
+      createTextNode(text) {
+        return new FakeTextNode(text);
+      }
+    },
+    requestAnimationFrame: options.noRaf
+      ? undefined
+      : (handler) => {
+          const frameId = nextFrameId;
+          nextFrameId += 1;
+          frames.set(frameId, handler);
+          return frameId;
+        },
+    cancelAnimationFrame: options.noRaf
+      ? undefined
+      : (frameId) => {
+          frames.delete(frameId);
+        },
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(Number(timerId));
+    }
+  });
+  new Script(`${getMainLoggerBlock()}\nglobalThis.__Logger = Logger;`).runInContext(context);
+  const el = new FakeNode('div');
+  context.__Logger.el = el;
+  return {
+    context,
+    frames,
+    timers,
+    el,
+    listenerCount(type = 'visibilitychange') {
+      return listeners.get(type)?.size || 0;
+    },
+    log(message = '测试日志') {
+      context.__Logger.log(message);
+    },
+    tickNextFrame() {
+      const [frameId, handler] = Array.from(frames.entries())[0] || [];
+      if (!handler) return false;
+      frames.delete(frameId);
+      handler();
+      return true;
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+    },
+    get Logger() {
+      return context.__Logger;
+    }
+  };
+}
+
 test('主助手 Logger 暴露 log/info/warn/error 方法', () => {
   const loggerBlock = getMainLoggerBlock();
   for (const method of ['log', 'info', 'warn', 'error']) {
@@ -124,9 +299,81 @@ test('主助手 Logger.flush 在早退分支会重置 timer，避免日志刷新
   const loggerBlock = getMainLoggerBlock();
   assert.match(
     loggerBlock,
-    /flush\(\)\s*\{[\s\S]*if\s*\(!this\.el\s*\|\|\s*this\.buffer\.length\s*===\s*0\)\s*\{[\s\S]*this\.timer\s*=\s*null;[\s\S]*return;[\s\S]*\}/,
+    /flush\(\)\s*\{[\s\S]*this\.timer\s*=\s*null;[\s\S]*this\.timerCancel\s*=\s*null;[\s\S]*if\s*\(!this\.el\s*\|\|\s*this\.buffer\.length\s*===\s*0\)\s*\{[\s\S]*this\.flushPending\s*=\s*this\.buffer\.length\s*>\s*0;[\s\S]*return;[\s\S]*\}/,
     'flush 早退分支未重置 timer，可能导致后续日志不再刷新'
   );
+});
+
+test('主助手 Logger flush 在隐藏页暂停并恢复可见后补刷', () => {
+  const loggerBlock = getMainLoggerBlock();
+  assert.match(
+    loggerBlock,
+    /timerCancel:\s*null,[\s\S]*flushVisibilityHandler:\s*null,[\s\S]*flushPending:\s*false/,
+    'Logger 缺少 flush frame 取消、visibility handler 或 pending 状态'
+  );
+  assert.match(
+    loggerBlock,
+    /isDocumentHidden\(\)\s*\{[\s\S]*return document\.visibilityState === 'hidden';[\s\S]*\}/,
+    'Logger 缺少隐藏页判定'
+  );
+  assert.match(
+    loggerBlock,
+    /clearFlushTimer\(\)\s*\{[\s\S]*if \(this\.timer === null\) return;[\s\S]*this\.timerCancel\(this\.timer\);[\s\S]*this\.timer = null;[\s\S]*this\.timerCancel = null;/,
+    'Logger 应能取消 pending flush frame 或 fallback timeout'
+  );
+  assert.match(
+    loggerBlock,
+    /bindFlushVisibilityHandler\(\)\s*\{[\s\S]*if \(typeof this\.flushVisibilityHandler === 'function'\) return;[\s\S]*if \(this\.isDocumentHidden\(\)\) \{[\s\S]*this\.clearFlushTimer\(\);[\s\S]*this\.flushPending = this\.buffer\.length > 0;[\s\S]*if \(this\.flushPending \|\| this\.buffer\.length > 0\) \{[\s\S]*this\.scheduleFlush\(\);/,
+    'Logger visibilitychange 应在转 hidden 时取消 frame，在恢复 visible 后补刷'
+  );
+  assert.match(
+    loggerBlock,
+    /scheduleFlush\(\)\s*\{[\s\S]*this\.flushPending = this\.buffer\.length > 0;[\s\S]*this\.bindFlushVisibilityHandler\(\);[\s\S]*if \(this\.isDocumentHidden\(\)\) return;[\s\S]*requestAnimationFrame\(runFlush\)[\s\S]*setTimeout\(runFlush,\s*16\);/,
+    'Logger scheduleFlush 应隐藏页暂停、可见页使用 rAF 或 fallback timeout'
+  );
+  assert.doesNotMatch(
+    loggerBlock,
+    /requestAnimationFrame\(\(\) => this\.flush\(\)\)/,
+    'Logger 不应继续直接排不可见性管理的 flush rAF'
+  );
+
+  const hiddenHarness = createLoggerFlushHarness('hidden');
+  hiddenHarness.log('后台日志');
+  assert.equal(hiddenHarness.frames.size, 0, '隐藏页不应排 requestAnimationFrame');
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 fallback timeout');
+  assert.equal(hiddenHarness.Logger.buffer.length, 1, '隐藏页日志应保留在 buffer 中');
+  assert.equal(hiddenHarness.Logger.flushPending, true, '隐藏页应记录 pending flush');
+  assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页 pending flush 应保留 visibilitychange listener');
+  hiddenHarness.setVisibilityState('visible');
+  assert.equal(hiddenHarness.frames.size, 1, '恢复可见后应补排一个 flush rAF');
+  assert.equal(hiddenHarness.tickNextFrame(), true, '应能触发补排 flush rAF');
+  assert.equal(hiddenHarness.Logger.buffer.length, 0, '补刷后应清空 buffer');
+  assert.equal(hiddenHarness.el.childElementCount, 2, '补刷后应渲染日期标题和日志行');
+  assert.equal(hiddenHarness.Logger.flushPending, false, '补刷后应释放 pending 标记');
+  assert.equal(hiddenHarness.listenerCount(), 0, '补刷后应释放 visibilitychange listener');
+
+  const transitionHarness = createLoggerFlushHarness('visible');
+  transitionHarness.log('前台日志');
+  assert.equal(transitionHarness.frames.size, 1, '可见页应排一个 flush rAF');
+  transitionHarness.setVisibilityState('hidden');
+  assert.equal(transitionHarness.frames.size, 0, '等待 flush 时转 hidden 应取消 rAF');
+  assert.equal(transitionHarness.Logger.buffer.length, 1, '取消 rAF 后 buffer 应保留');
+  assert.equal(transitionHarness.Logger.flushPending, true, '取消 rAF 后应保留 pending');
+  transitionHarness.setVisibilityState('visible');
+  assert.equal(transitionHarness.frames.size, 1, '再次可见后应重新补排 flush rAF');
+  assert.equal(transitionHarness.tickNextFrame(), true, '重新补排的 rAF 应可执行');
+  assert.equal(transitionHarness.Logger.buffer.length, 0, '重新可见补刷后应清空 buffer');
+
+  const timeoutHarness = createLoggerFlushHarness('visible', { noRaf: true });
+  timeoutHarness.log('fallback 日志');
+  assert.equal(timeoutHarness.frames.size, 0, '无 rAF 环境不应排 frame');
+  assert.equal(timeoutHarness.timers.size, 1, '无 rAF 环境应排单个 16ms timeout');
+  timeoutHarness.setVisibilityState('hidden');
+  assert.equal(timeoutHarness.timers.size, 0, 'fallback timeout 等待期间转 hidden 应取消 timeout');
+  timeoutHarness.setVisibilityState('visible');
+  assert.equal(timeoutHarness.timers.size, 1, 'fallback 恢复可见后应补排 timeout');
+  assert.equal(timeoutHarness.tickNextTimer(), true, 'fallback timeout 应可执行 flush');
+  assert.equal(timeoutHarness.Logger.buffer.length, 0, 'fallback flush 后应清空 buffer');
 });
 
 test('主助手 Logger 的 info/warn/error 支持透传额外参数', () => {
