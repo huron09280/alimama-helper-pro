@@ -1,3 +1,48 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十三子项
+
+## 需求规格
+- 目标：在隐藏页向导请求 timer 收口后，继续优化 extension 内部完整 page API bridge 的结果缓存清理 timer，避免标签页隐藏时 `bridgeCacheCleanupTimer` 仍按 90 秒 TTL 唤醒清理短期响应缓存。
+- 根因判断：`src/optimizer/bridge.js` 的 `installPageApiBridgeHost()` 会为 `resolvedPayloadCache` 安排 TTL 清理 timeout；该缓存只用于同一 `callId` 的短期响应去重，但当前调度不区分页可见状态。标签页隐藏后，过期清理 timer 仍会唤醒页面执行 Map 扫描和重排下一次清理。
+- 范围：仅覆盖 bridge result cache cleanup 的隐藏页暂停、恢复可见补清理、timer/visibility listener 生命周期和下一次 bridge 请求时的惰性清理；不改 API bridge 方法白名单、`callId` 去重、响应派发、客户端超时、创建/复制/提交/修复/追加关键词、授权、护航、预算或 10rpm 服务端限速策略。
+- 热修 vs 结构性修复取舍：保留单一 `resolvedPayloadCache` 事实源和 90 秒 TTL；新增 `clearBridgeCacheCleanupTimer()`、隐藏态判定和 visibility resume helper。隐藏页不排 cleanup timeout，不主动删除未过期响应缓存，避免重复 `callId` 在短窗口内被重新执行；恢复可见或下一次请求时继续按 TTL 清理。
+- 成功标准：静态测试证明 bridge result cache 保持 90 秒 TTL、单一 Map、主动清理 helper、隐藏页不排 timeout、恢复可见会补清理并释放 visibility handler、已有 timer 在隐藏时取消、写入缓存后仍安排清理；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不调用完整 page API、不触发创建/复制/提交/修复/追加关键词、推荐词、场景合同同步、预算、护航或导出；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十二子项提交后工作区状态，确认本子项只处理 bridge result cache cleanup timer。
+- [x] 为完整 page API bridge 增加隐藏态判定、cleanup timer 清理 helper 和 visibility resume 生命周期。
+- [x] 将 bridge result cache cleanup 调度改为隐藏页暂停、恢复可见后补清理，同步保证下一次请求仍会惰性清理过期缓存。
+- [x] 更新 bridge 安全目标测试，锁定隐藏页不排 cleanup timer、恢复可见补清理和 listener 释放。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `f3cc599 升级版本并优化隐藏页向导请求`，tracked 工作区干净；另有 `tasks/dmp-*` 未跟踪取证文件存在，本子项不读取、不覆盖、不纳入提交。
+- 定位结论：`nativeRuntimeCacheCleanupTimer` 若在隐藏页主动清理缓存，恢复可见后可能增加 native runtime 重新拉取；`bridgeCacheCleanupTimer` 只负责短期响应缓存 TTL 清理，更适合先收口后台唤醒。
+- 实现摘要：`installPageApiBridgeHost()` 新增 `bridgeCacheCleanupVisibilityHandler`、`isBridgeDocumentHidden()`、`clearBridgeCacheCleanupTimer()`、`releaseBridgeCacheCleanupVisibilityHandlerIfIdle()` 与 `bindBridgeCacheCleanupVisibilityHandler()`，保留单一 `resolvedPayloadCache` 与 90 秒 TTL。
+- 调度摘要：`scheduleBridgeCacheCleanup()` 仍先执行惰性 `cleanupBridgeCache()`；有缓存且页面可见时才排 timeout，页面隐藏时只保留一次 `visibilitychange` 恢复监听，恢复可见后继续按 TTL 清理。
+- 测试摘要：`tests/keyword-plan-api-bridge-security.test.mjs` 扩展 bridge result cache 断言，锁定隐藏页恢复监听、timer 清理 helper、空闲释放 listener 和可见页主动 timeout 清理。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-plan-api-bridge-security.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/keyword-plan-api-bridge-security.test.mjs'], { timeout: 60000 }) ..."` 通过，8 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/keyword-plan-api-bridge-security.test.mjs`、`tests/keyword-wizard-entry-regression.test.mjs`、`tests/campaign-copy-current-plan-quick-entry.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，73 项测试全绿。
+- 静态定位：`rg -n "bridgeCacheCleanupVisibilityHandler|isBridgeDocumentHidden|clearBridgeCacheCleanupTimer|releaseBridgeCacheCleanupVisibilityHandlerIfIdle|bindBridgeCacheCleanupVisibilityHandler" src/optimizer/bridge.js tests/keyword-plan-api-bridge-security.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页 cleanup 调度已进入产物。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，618 项中 616 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`；切回 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 并刷新，只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`runtime.mode:"extension"`、`runtime.version:"7.06"`、`runtime.hasResourceBaseUrl:true`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`shopId:"[present]"`、`shopName:"[present]"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordOpenBridgeReady:"1"`、`helperIcon.exists:true`、`helperIcon.visible:true`、`helperPanel.exists:true`、`helperPanel.visible:false`。
+- Chrome MCP 弹窗/危险请求：只读状态中 `helperPanel/magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均未可见，`dangerousResourceMatchCount:0`；未打开组建计划向导，未调用完整 page API，未触发创建、复制、提交、修复、追加关键词、推荐词、场景合同同步、预算、护航或导出。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动` 与 `[EscortAPI] Token Hook 已接入统一管理器`；其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 和页面自身 Magix 日志，未见新增插件运行失败。fetch/XHR 清单 89 条，主要为页面初始化、报表、AI/context、消息、素材、优惠券和曝光 trace，可见请求除 `px.effirst.com` 既有隧道失败外均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/optimizer/bridge.js`、`tests/keyword-plan-api-bridge-security.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增完整 page API bridge result cache cleanup 的隐藏页暂停、可见恢复和 listener 生命周期，不改 bridge 方法白名单、`callId` 去重、响应派发、客户端超时、创建/复制/提交/修复/追加关键词、授权、护航、预算或 10rpm 服务端限速策略。
+
+## 结果复盘
+- 第十一轮第四十三子项结果：完整 page API bridge result cache 从“写入响应后总是按 TTL 排一个清理 timeout”优化为“可见页才排 timeout，隐藏页只保留一次恢复监听，恢复可见或下一次请求时继续惰性清理过期响应缓存”。
+- 取舍结论：保留 90 秒 TTL 和单一 `resolvedPayloadCache` 事实源，不在隐藏页主动清空未过期缓存，避免短期重复 `callId` 被重新执行；本次只减少隐藏页后台 timer 唤醒，不改变任何业务 API 调用语义。
+- 验证结论：目标测试、构建、项目语法、构建检查、相关回归、全量回归、静态定位、Chrome MCP 只读验收、危险请求过滤、空白检查和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 DMP 商品洞察页复用人群对比看板
 
 ## 需求规格

@@ -63,6 +63,19 @@ test('完整 page API bridge result cache 会主动按 TTL 释放', () => {
     assert.match(block, /const BRIDGE_RESULT_CACHE_TTL_MS = 90 \* 1000;/, 'bridge result cache TTL 应保持 90 秒');
     assert.match(block, /const resolvedPayloadCache = new Map\(\);/, 'bridge result cache 应保持单一 Map 事实源');
     assert.match(block, /let bridgeCacheCleanupTimer = 0;/, 'bridge result cache 缺少主动清理 timer');
+    assert.match(block, /let bridgeCacheCleanupVisibilityHandler = null;/, 'bridge result cache 缺少隐藏页恢复监听状态');
+    assert.match(block, /const isBridgeDocumentHidden = \(\) => \{[\s\S]*return document\.visibilityState === 'hidden';[\s\S]*\};/, 'bridge result cache 缺少隐藏态判定');
+    assert.match(block, /const clearBridgeCacheCleanupTimer = \(\) => \{[\s\S]*clearTimeout\(bridgeCacheCleanupTimer\);[\s\S]*bridgeCacheCleanupTimer = 0;[\s\S]*\};/, 'bridge result cache 缺少 cleanup timer 清理 helper');
+    assert.match(
+        block,
+        /const releaseBridgeCacheCleanupVisibilityHandlerIfIdle = \(\) => \{[\s\S]*if \(bridgeCacheCleanupTimer \|\| resolvedPayloadCache\.size > 0\) return;[\s\S]*document\.removeEventListener\('visibilitychange', bridgeCacheCleanupVisibilityHandler\);[\s\S]*bridgeCacheCleanupVisibilityHandler = null;[\s\S]*\};/,
+        'bridge result cache 应在无 timer 且无缓存时释放 visibilitychange 监听'
+    );
+    assert.match(
+        block,
+        /const bindBridgeCacheCleanupVisibilityHandler = \(\) => \{[\s\S]*if \(typeof bridgeCacheCleanupVisibilityHandler === 'function'\) return;[\s\S]*if \(isBridgeDocumentHidden\(\)\) \{[\s\S]*clearBridgeCacheCleanupTimer\(\);[\s\S]*return;[\s\S]*\}[\s\S]*scheduleBridgeCacheCleanup\(\);[\s\S]*document\.addEventListener\('visibilitychange', bridgeCacheCleanupVisibilityHandler\);[\s\S]*\};/,
+        'bridge result cache 应通过 visibilitychange 在隐藏时取消 timer、恢复可见后补清理'
+    );
     assert.match(
         block,
         /const cleanupBridgeCache = \(\) => \{[\s\S]*let nextDelayMs = Infinity;[\s\S]*resolvedPayloadCache\.forEach\(\(cached, callId\) => \{[\s\S]*const ts = Number\(cached\?\.ts\);[\s\S]*resolvedPayloadCache\.delete\(callId\);[\s\S]*nextDelayMs = Math\.min\(nextDelayMs, Math\.max\(0, BRIDGE_RESULT_CACHE_TTL_MS - \(now - ts\)\)\);[\s\S]*return Number\.isFinite\(nextDelayMs\) \? nextDelayMs : null;/,
@@ -70,8 +83,8 @@ test('完整 page API bridge result cache 会主动按 TTL 释放', () => {
     );
     assert.match(
         block,
-        /const scheduleBridgeCacheCleanup = \(\) => \{[\s\S]*if \(bridgeCacheCleanupTimer\) return;[\s\S]*const nextDelayMs = cleanupBridgeCache\(\);[\s\S]*bridgeCacheCleanupTimer = window\.setTimeout\(\(\) => \{[\s\S]*bridgeCacheCleanupTimer = 0;[\s\S]*cleanupBridgeCache\(\);[\s\S]*scheduleBridgeCacheCleanup\(\);[\s\S]*\}, Math\.max\(1, Math\.ceil\(nextDelayMs\) \+ 1\)\);[\s\S]*\};/,
-        'bridge result cache 应通过一个可重入 timeout 主动释放，并在仍有缓存时继续调度'
+        /const scheduleBridgeCacheCleanup = \(\) => \{[\s\S]*if \(bridgeCacheCleanupTimer\) return;[\s\S]*const nextDelayMs = cleanupBridgeCache\(\);[\s\S]*releaseBridgeCacheCleanupVisibilityHandlerIfIdle\(\);[\s\S]*bindBridgeCacheCleanupVisibilityHandler\(\);[\s\S]*if \(isBridgeDocumentHidden\(\)\) return;[\s\S]*bridgeCacheCleanupTimer = window\.setTimeout\(\(\) => \{[\s\S]*bridgeCacheCleanupTimer = 0;[\s\S]*cleanupBridgeCache\(\);[\s\S]*scheduleBridgeCacheCleanup\(\);[\s\S]*\}, Math\.max\(1, Math\.ceil\(nextDelayMs\) \+ 1\)\);[\s\S]*\};/,
+        'bridge result cache 应在可见页通过一个可重入 timeout 主动释放，并在隐藏页只保留恢复监听'
     );
     assert.match(
         block,

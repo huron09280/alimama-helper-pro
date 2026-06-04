@@ -74035,6 +74035,37 @@ if (typeof globalThis !== 'undefined') {
         const inFlightCallIds = new Set();
         const resolvedPayloadCache = new Map();
         let bridgeCacheCleanupTimer = 0;
+        let bridgeCacheCleanupVisibilityHandler = null;
+        const isBridgeDocumentHidden = () => {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        };
+        const clearBridgeCacheCleanupTimer = () => {
+            if (!bridgeCacheCleanupTimer) return;
+            clearTimeout(bridgeCacheCleanupTimer);
+            bridgeCacheCleanupTimer = 0;
+        };
+        const releaseBridgeCacheCleanupVisibilityHandlerIfIdle = () => {
+            if (bridgeCacheCleanupTimer || resolvedPayloadCache.size > 0) return;
+            if (typeof bridgeCacheCleanupVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', bridgeCacheCleanupVisibilityHandler);
+            }
+            bridgeCacheCleanupVisibilityHandler = null;
+        };
+        const bindBridgeCacheCleanupVisibilityHandler = () => {
+            if (typeof bridgeCacheCleanupVisibilityHandler === 'function') return;
+            bridgeCacheCleanupVisibilityHandler = () => {
+                if (isBridgeDocumentHidden()) {
+                    clearBridgeCacheCleanupTimer();
+                    return;
+                }
+                scheduleBridgeCacheCleanup();
+            };
+            document.addEventListener('visibilitychange', bridgeCacheCleanupVisibilityHandler);
+        };
         const cleanupBridgeCache = () => {
             const now = Date.now();
             let nextDelayMs = Infinity;
@@ -74051,7 +74082,12 @@ if (typeof globalThis !== 'undefined') {
         const scheduleBridgeCacheCleanup = () => {
             if (bridgeCacheCleanupTimer) return;
             const nextDelayMs = cleanupBridgeCache();
-            if (!Number.isFinite(nextDelayMs)) return;
+            if (!Number.isFinite(nextDelayMs)) {
+                releaseBridgeCacheCleanupVisibilityHandlerIfIdle();
+                return;
+            }
+            bindBridgeCacheCleanupVisibilityHandler();
+            if (isBridgeDocumentHidden()) return;
             bridgeCacheCleanupTimer = window.setTimeout(() => {
                 bridgeCacheCleanupTimer = 0;
                 cleanupBridgeCache();
