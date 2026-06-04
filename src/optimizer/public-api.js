@@ -53,13 +53,13 @@
             const panel = document.getElementById(CONFIG.UI_ID);
             if (!panel) {
                 UI.create();
-                setTimeout(() => {
+                UI.schedulePanelReveal?.((createdPanel) => {
                     try {
-                        revealOptimizerPanel(document.getElementById(CONFIG.UI_ID));
+                        revealOptimizerPanel(createdPanel);
                     } catch (err) {
                         Logger.error('算法护航面板展示失败', err);
                     }
-                }, 100);
+                });
                 return true;
             }
             if (panel.style.opacity === '0' || panel.style.opacity === '') {

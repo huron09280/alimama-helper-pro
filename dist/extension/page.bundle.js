@@ -67927,6 +67927,7 @@ if (typeof globalThis !== 'undefined') {
         tokenStatusIntervalId: null,
         tokenStatusLastRefreshAt: 0,
         logOverflowTimerId: null,
+        panelRevealTimerId: null,
         panelHighlightTimerId: null,
 
         refreshTokenStatusIndicator: () => {
@@ -67973,6 +67974,23 @@ if (typeof globalThis !== 'undefined') {
                 if (!wrapper.isConnected || wrapper.dataset.expanded !== 'true') return;
                 wrapper.style.overflow = 'auto';
             }, 300);
+        },
+
+        clearPanelRevealTimer: () => {
+            if (UI.panelRevealTimerId === null) return;
+            clearTimeout(UI.panelRevealTimerId);
+            UI.panelRevealTimerId = null;
+        },
+
+        schedulePanelReveal: (callback) => {
+            UI.clearPanelRevealTimer();
+            if (typeof callback !== 'function') return;
+            UI.panelRevealTimerId = setTimeout(() => {
+                UI.panelRevealTimerId = null;
+                const panel = document.getElementById(CONFIG.UI_ID);
+                if (!panel) return;
+                callback(panel);
+            }, 100);
         },
 
         clearPanelHighlightTimer: () => {
@@ -70400,6 +70418,7 @@ if (typeof globalThis !== 'undefined') {
                 panel.style.pointerEvents = 'none';
                 UI.stopTokenStatusMonitor();
                 UI.clearLogOverflowTimer();
+                UI.clearPanelRevealTimer();
                 UI.clearPanelHighlightTimer();
                 UI.closeManualKeywordPreferenceMenu();
             };
@@ -72190,13 +72209,13 @@ if (typeof globalThis !== 'undefined') {
             const panel = document.getElementById(CONFIG.UI_ID);
             if (!panel) {
                 UI.create();
-                setTimeout(() => {
+                UI.schedulePanelReveal?.((createdPanel) => {
                     try {
-                        revealOptimizerPanel(document.getElementById(CONFIG.UI_ID));
+                        revealOptimizerPanel(createdPanel);
                     } catch (err) {
                         Logger.error('算法护航面板展示失败', err);
                     }
-                }, 100);
+                });
                 return true;
             }
             if (panel.style.opacity === '0' || panel.style.opacity === '') {

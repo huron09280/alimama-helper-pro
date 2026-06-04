@@ -12,6 +12,7 @@
         tokenStatusIntervalId: null,
         tokenStatusLastRefreshAt: 0,
         logOverflowTimerId: null,
+        panelRevealTimerId: null,
         panelHighlightTimerId: null,
 
         refreshTokenStatusIndicator: () => {
@@ -58,6 +59,23 @@
                 if (!wrapper.isConnected || wrapper.dataset.expanded !== 'true') return;
                 wrapper.style.overflow = 'auto';
             }, 300);
+        },
+
+        clearPanelRevealTimer: () => {
+            if (UI.panelRevealTimerId === null) return;
+            clearTimeout(UI.panelRevealTimerId);
+            UI.panelRevealTimerId = null;
+        },
+
+        schedulePanelReveal: (callback) => {
+            UI.clearPanelRevealTimer();
+            if (typeof callback !== 'function') return;
+            UI.panelRevealTimerId = setTimeout(() => {
+                UI.panelRevealTimerId = null;
+                const panel = document.getElementById(CONFIG.UI_ID);
+                if (!panel) return;
+                callback(panel);
+            }, 100);
         },
 
         clearPanelHighlightTimer: () => {
@@ -2485,6 +2503,7 @@
                 panel.style.pointerEvents = 'none';
                 UI.stopTokenStatusMonitor();
                 UI.clearLogOverflowTimer();
+                UI.clearPanelRevealTimer();
                 UI.clearPanelHighlightTimer();
                 UI.closeManualKeywordPreferenceMenu();
             };

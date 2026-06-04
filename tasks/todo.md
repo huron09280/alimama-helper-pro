@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十四子项
+
+## 需求规格
+- 目标：在算法护航 API 请求 10rpm 限速后，继续收口算法护航公开入口首次创建面板后的延迟 reveal timer，避免 `__ALIMAMA_OPTIMIZER_TOGGLE__` 在面板不存在时排队无句柄 `setTimeout(..., 100)`，关闭面板或重复触发后旧 timer 仍持有闭包并可能重新展示已关闭面板。
+- 根因判断：`src/optimizer/public-api.js` 中面板不存在分支 `UI.create()` 后直接启动 100ms timeout 调 `revealOptimizerPanel()`；该 timer 没有保存句柄，`src/optimizer/ui.js` 的关闭路径也无法取消 pending reveal。
+- 范围：仅覆盖算法护航面板首次 reveal timer 生命周期和静态回归；不改授权门禁、toggle 返回值、面板创建 DOM、Token 状态轮询、日志 overflow、高亮提示、手动设置、执行流程、open/openV3 请求合同或 10rpm API 限速。
+- 热修 vs 结构性修复取舍：把 reveal timer 归入 `UI` 面板生命周期，新增 `panelRevealTimerId`、`clearPanelRevealTimer()`、`schedulePanelReveal(callback)`；公开入口只通过 helper 调度，关闭面板时取消 pending reveal。
+- 成功标准：静态测试证明首次 reveal timer 有句柄、可清理、重复调度先取消旧 timer、timer 触发后归零且回调仅在面板仍存在时执行；公开入口不再保留无句柄 `setTimeout(..., 100)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击“立即扫描并优化”、不触发 open/openV3、创建、复制、预算提交、删除、上下线或投放；浏览器验收只允许打开/关闭算法护航面板并观察 DOM/控制台。
+
+## 执行计划（可核对）
+- [x] 复核第二十三子项提交后工作区状态，确认本子项只处理公开入口首次 reveal timer。
+- [x] 在 `UI` 面板生命周期中实现 reveal timer 句柄、清理和调度 helper。
+- [x] 将 `__ALIMAMA_OPTIMIZER_TOGGLE__` 首次创建后的 100ms reveal 改为调用 helper，并在关闭面板时取消 pending reveal。
+- [x] 补充/更新目标测试，锁定首次 reveal timer 不再无句柄排队。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `96f2212 优化算法护航请求限速`，工作区干净。
+- 定位结论：剩余候选中，公开入口首次创建面板后的 100ms reveal timer 有明确面板关闭边界，不属于长期事实源，也不涉及服务端请求；适合作为本轮低风险 UI 生命周期优化点。
+- 实现摘要：`src/optimizer/ui.js` 新增 `panelRevealTimerId`、`clearPanelRevealTimer()` 与 `schedulePanelReveal(callback)`；首次 reveal 触发前会归零句柄并重新读取面板，面板不存在则直接返回；关闭面板时同步释放 pending reveal 与 highlight timer。
+- 入口摘要：`src/optimizer/public-api.js` 的首次创建分支不再启动无句柄 100ms timeout，改为通过 `UI.schedulePanelReveal?.((createdPanel) => revealOptimizerPanel(createdPanel))` 调度。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增静态回归，锁定 reveal timer 句柄、清理 helper、统一调度、触发前 panel 校验、关闭释放和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，9 项测试全绿；新增断言覆盖首次 reveal timer 生命周期。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，74 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 调用 `window.__ALIMAMA_OPTIMIZER_TOGGLE__()` 仅打开面板观察 DOM；未点击“立即扫描并优化”。首次创建后立即状态为 `opacity:"0"`、`pointerEvents:"none"`，160ms 后 reveal 为 `opacity:"1"`、`pointerEvents:"auto"`；关闭控件 `#alimama-escort-helper-ui-close` 存在，触发关闭 60ms 和 240ms 后均保持 `opacity:"0"`、`pointerEvents:"none"`，未被 pending reveal 重新展示。
+- Diff 自审：改动集中在算法护航面板首次 reveal timer 生命周期、公开入口复用 helper、对应静态测试、任务记录和构建产物；未改授权门禁、toggle 返回值、Token 状态轮询、日志 overflow、高亮提示、手动设置、执行流程、open/openV3 请求合同或 10rpm API 限速。
+
+## 结果复盘
+- 第十一轮第二十四子项结果：算法护航首次创建面板后的 reveal 从“公开入口排队无句柄 100ms timeout”优化为“UI 面板生命周期统一调度，重复调度先取消旧 timer，关闭面板会释放 pending reveal，timer 触发前校验 panel 仍存在”。
+- 取舍结论：保留原 100ms reveal 延迟、toggle 返回值和面板显示动画；只收口短生命周期 timer，不新增第二套面板状态，也不触碰服务端请求或真实投放链路。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十三子项
 
 ## 需求规格

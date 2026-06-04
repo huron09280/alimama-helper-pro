@@ -128,6 +128,39 @@ test('算法护航面板高亮提示 timer 会复用并在关闭时释放', () =
     );
 });
 
+test('算法护航首次创建 reveal timer 会复用并在关闭时释放', () => {
+    assert.match(
+        uiSource,
+        /panelRevealTimerId:\s*null,/,
+        '算法护航面板首次 reveal timer 缺少可清理句柄'
+    );
+    assert.match(
+        uiSource,
+        /clearPanelRevealTimer:\s*\(\) => \{[\s\S]*if \(UI\.panelRevealTimerId === null\) return;[\s\S]*clearTimeout\(UI\.panelRevealTimerId\);[\s\S]*UI\.panelRevealTimerId = null;[\s\S]*\},/,
+        '算法护航面板 reveal timer 应支持显式 clear 并归零'
+    );
+    assert.match(
+        uiSource,
+        /schedulePanelReveal:\s*\(callback\) => \{[\s\S]*UI\.clearPanelRevealTimer\(\);[\s\S]*if \(typeof callback !== 'function'\) return;[\s\S]*UI\.panelRevealTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.panelRevealTimerId = null;[\s\S]*const panel = document\.getElementById\(CONFIG\.UI_ID\);[\s\S]*if \(!panel\) return;[\s\S]*callback\(panel\);[\s\S]*\},\s*100\);[\s\S]*\},/,
+        '算法护航面板首次 reveal 应统一调度，并在回调触发前校验 panel 仍存在'
+    );
+    assert.match(
+        uiSource,
+        /document\.getElementById\(`\$\{CONFIG\.UI_ID\}-close`\)\.onclick = \(\) => \{[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*UI\.clearPanelRevealTimer\(\);[\s\S]*UI\.clearPanelHighlightTimer\(\);/,
+        '关闭算法护航面板时应释放 pending reveal timer'
+    );
+    assert.match(
+        optimizerPublicApiSource,
+        /UI\.schedulePanelReveal\?\.\(\(createdPanel\) => \{[\s\S]*revealOptimizerPanel\(createdPanel\);[\s\S]*\}\);/,
+        '公开入口首次创建面板后应通过 UI helper 调度 reveal'
+    );
+    assert.doesNotMatch(
+        optimizerPublicApiSource,
+        /setTimeout\(\(\) => \{[\s\S]*revealOptimizerPanel\(document\.getElementById\(CONFIG\.UI_ID\)\);[\s\S]*\}, 100\);/,
+        '公开入口不应继续保留无句柄首次 reveal timeout'
+    );
+});
+
 test('算法护航手动关键词偏好外部点击监听只在菜单打开期间绑定', () => {
     assert.match(
         uiSource,
