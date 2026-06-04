@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const pageBundle = readFileSync(new URL('../dist/extension/page.bundle.js', import.meta.url), 'utf8');
+const shopNameBackfillStart = pageBundle.indexOf('const buildShopNameBackfillKey');
+const shopNameBackfillEnd = pageBundle.indexOf('const createError', Math.max(0, shopNameBackfillStart));
+const shopNameBackfillBlock = shopNameBackfillStart >= 0 && shopNameBackfillEnd > shopNameBackfillStart
+  ? pageBundle.slice(shopNameBackfillStart, shopNameBackfillEnd)
+  : pageBundle;
 
 test('授权模块补齐 shopId 多来源识别与缓存兜底', () => {
   assert.match(pageBundle, /const AUTH_BASE_URL = "https:\/\/am-licee-server-mpbzozflkj\.cn-hangzhou\.fcapp\.run";/, '授权服务地址未切换到阿里云可用地址');
@@ -36,10 +41,20 @@ test('授权模块补齐 shopId 多来源识别与缓存兜底', () => {
   assert.match(pageBundle, /else if \(!shopInfo\.shopId && cacheShopId\) \{[\s\S]*license_cache_fallback/, '缺少 cache shopId 兜底分支');
   assert.match(pageBundle, /const scheduleShopNameBackfill = \(context = \{\}\) => \{/, '缺少店铺名异步回填任务');
   assert.match(pageBundle, /const SHOP_NAME_BACKFILL_ATTEMPTS_DEFAULT = 8;/, '缺少店铺名回填重试默认配置');
-  assert.match(pageBundle, /const shopNameBackfillTimers = new Map\(\);/, '店铺名回填缺少活动 timer 注册表');
-  assert.match(pageBundle, /const buildShopNameBackfillKey = \(shopId = '', source = ''\) => \{[\s\S]*return `\$\{normalizeShopId\(shopId\)\}::\$\{String\(source \|\| 'shop_name_backfill'\)\}`;[\s\S]*\};/, '店铺名回填缺少 shopId/source 稳定 key');
-  assert.match(pageBundle, /const scheduleShopNameBackfillTimer = \(timerKey = '', callback = null, delayMs = 0\) => \{[\s\S]*if \(shopNameBackfillTimers\.get\(timerKey\) !== timerId\) return;[\s\S]*shopNameBackfillTimers\.delete\(timerKey\);[\s\S]*callback\(\);[\s\S]*shopNameBackfillTimers\.set\(timerKey, timerId\);[\s\S]*\};/, '店铺名回填 timer 触发后应清理 key 并通过注册表登记');
-  assert.match(pageBundle, /const timerKey = buildShopNameBackfillKey\(shopId, source\);[\s\S]*if \(shopNameBackfillTimers\.has\(timerKey\)\) return;/, '同一 shopId/source 回填链运行中不应重复调度');
+  assert.match(pageBundle, /const shopNameBackfillTimers = new Map\(\);\s*\n\s*const shopNameBackfillPendingTasks = new Map\(\);\s*\n\s*let shopNameBackfillVisibilityHandlerInstalled = false;/, '店铺名回填缺少活动 timer/pending 注册表或 visibility 生命周期状态');
+  assert.match(shopNameBackfillBlock, /const buildShopNameBackfillKey = \(shopId = '', source = ''\) => \{[\s\S]*return `\$\{normalizeShopId\(shopId\)\}::\$\{String\(source \|\| 'shop_name_backfill'\)\}`;[\s\S]*\};/, '店铺名回填缺少 shopId/source 稳定 key');
+  assert.match(shopNameBackfillBlock, /const isShopNameBackfillDocumentHidden = \(\) => document\.visibilityState === 'hidden';/, '店铺名回填缺少隐藏态判定');
+  assert.match(shopNameBackfillBlock, /const clearShopNameBackfillTimer = \(timerKey = ''\) => \{[\s\S]*const record = shopNameBackfillTimers\.get\(timerKey\);[\s\S]*if \(record\?\.timerId\) clearTimeout\(record\.timerId\);[\s\S]*shopNameBackfillTimers\.delete\(timerKey\);[\s\S]*\};/, '店铺名回填缺少统一 timer 清理 helper');
+  assert.match(shopNameBackfillBlock, /const pauseShopNameBackfillTimers = \(\) => \{[\s\S]*Array\.from\(shopNameBackfillTimers\.entries\(\)\)[\s\S]*clearShopNameBackfillTimer\(timerKey\);[\s\S]*shopNameBackfillPendingTasks\.set\(timerKey, \{[\s\S]*callback: record\.callback,[\s\S]*dueAt:/, '隐藏页应把活动店铺名回填 timer 转为 pending 任务');
+  assert.match(shopNameBackfillBlock, /const resumeShopNameBackfillPendingTasks = \(\) => \{[\s\S]*shopNameBackfillPendingTasks\.clear\(\);[\s\S]*const delayMs = Math\.max\(0, \(Number\(record\.dueAt \|\| 0\) \|\| 0\) - toNow\(\)\);[\s\S]*scheduleShopNameBackfillTimer\(timerKey, record\.callback, delayMs\);/, '恢复可见后应按剩余延迟重新调度 pending 回填任务');
+  assert.match(shopNameBackfillBlock, /const handleShopNameBackfillVisibilityChange = \(\) => \{[\s\S]*if \(isShopNameBackfillDocumentHidden\(\)\) \{[\s\S]*pauseShopNameBackfillTimers\(\);[\s\S]*return;[\s\S]*\}[\s\S]*resumeShopNameBackfillPendingTasks\(\);[\s\S]*\};/, '店铺名回填 visibilitychange 缺少隐藏暂停和可见恢复');
+  assert.match(shopNameBackfillBlock, /document\.addEventListener\('visibilitychange', handleShopNameBackfillVisibilityChange\);[\s\S]*shopNameBackfillVisibilityHandlerInstalled = true;/, '店铺名回填应在有任务时绑定 visibilitychange');
+  assert.match(shopNameBackfillBlock, /document\.removeEventListener\('visibilitychange', handleShopNameBackfillVisibilityChange\);[\s\S]*shopNameBackfillVisibilityHandlerInstalled = false;/, '店铺名回填无任务后应释放 visibilitychange');
+  assert.match(shopNameBackfillBlock, /const scheduleShopNameBackfillTimer = \(timerKey = '', callback = null, delayMs = 0\) => \{/, '缺少店铺名回填 timer 调度 helper');
+  assert.match(shopNameBackfillBlock, /const normalizedDelayMs = Math\.max\(0, Number\(delayMs\) \|\| 0\);[\s\S]*const dueAt = toNow\(\) \+ normalizedDelayMs;[\s\S]*ensureShopNameBackfillVisibilityHandler\(\);[\s\S]*clearShopNameBackfillTimer\(timerKey\);[\s\S]*shopNameBackfillPendingTasks\.delete\(timerKey\);/, '店铺名回填调度应计算 dueAt 并清理旧 timer/pending');
+  assert.match(shopNameBackfillBlock, /if \(isShopNameBackfillDocumentHidden\(\)\) \{[\s\S]*shopNameBackfillPendingTasks\.set\(timerKey, \{ callback, dueAt \}\);[\s\S]*return;[\s\S]*\}/, '隐藏页不应继续排店铺名回填 timer');
+  assert.match(shopNameBackfillBlock, /const record = \{[\s\S]*timerId: 0,[\s\S]*callback,[\s\S]*dueAt[\s\S]*\};[\s\S]*record\.timerId = setTimeout\(\(\) => \{[\s\S]*if \(shopNameBackfillTimers\.get\(timerKey\) !== record\) return;[\s\S]*shopNameBackfillTimers\.delete\(timerKey\);[\s\S]*callback\(\);[\s\S]*removeShopNameBackfillVisibilityHandlerIfIdle\(\);[\s\S]*\}, normalizedDelayMs\);[\s\S]*shopNameBackfillTimers\.set\(timerKey, record\);/, '店铺名回填 timer 应登记记录对象，触发后清理 key 并释放空闲 listener');
+  assert.match(shopNameBackfillBlock, /const timerKey = buildShopNameBackfillKey\(shopId, source\);[\s\S]*if \(shopNameBackfillTimers\.has\(timerKey\) \|\| shopNameBackfillPendingTasks\.has\(timerKey\)\) return;/, '同一 shopId/source 回填链运行中或隐藏 pending 时不应重复调度');
   assert.match(pageBundle, /const fallbackName = resolveLooseShopNameCandidate\(shopId\);/, '店铺名异步回填未使用 shopId 定向兜底');
   assert.match(pageBundle, /if \(!state\.authorized \|\| document\.getElementById\(OVERLAY_ID\)\) \{\s*renderOverlay\(\);\s*\}/, '店铺名回填后未刷新锁定遮罩');
   assert.match(pageBundle, /const nextDelay = Math\.min\(maxDelayMs, baseDelayMs \* attempt\);[\s\S]*scheduleShopNameBackfillTimer\(timerKey, run, nextDelay\);/, '店铺名回填重试应沿同一 timer key 调度');

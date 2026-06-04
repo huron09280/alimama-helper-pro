@@ -199,6 +199,8 @@
     const SHOP_NAME_BACKFILL_BASE_DELAY_MS = 320;
     const SHOP_NAME_BACKFILL_MAX_DELAY_MS = 2200;
     const shopNameBackfillTimers = new Map();
+    const shopNameBackfillPendingTasks = new Map();
+    let shopNameBackfillVisibilityHandlerInstalled = false;
 
     const normalizeShopId = (value) => {
         const raw = value === null || value === undefined ? '' : String(value).trim();
@@ -1121,14 +1123,91 @@
         return `${normalizeShopId(shopId)}::${String(source || 'shop_name_backfill')}`;
     };
 
+    const isShopNameBackfillDocumentHidden = () => document.visibilityState === 'hidden';
+
+    const hasShopNameBackfillTasks = () => {
+        return shopNameBackfillTimers.size > 0 || shopNameBackfillPendingTasks.size > 0;
+    };
+
+    const removeShopNameBackfillVisibilityHandlerIfIdle = () => {
+        if (!shopNameBackfillVisibilityHandlerInstalled || hasShopNameBackfillTasks()) return;
+        document.removeEventListener('visibilitychange', handleShopNameBackfillVisibilityChange);
+        shopNameBackfillVisibilityHandlerInstalled = false;
+    };
+
+    const ensureShopNameBackfillVisibilityHandler = () => {
+        if (shopNameBackfillVisibilityHandlerInstalled) return;
+        document.addEventListener('visibilitychange', handleShopNameBackfillVisibilityChange);
+        shopNameBackfillVisibilityHandlerInstalled = true;
+    };
+
+    const clearShopNameBackfillTimer = (timerKey = '') => {
+        const record = shopNameBackfillTimers.get(timerKey);
+        if (record?.timerId) clearTimeout(record.timerId);
+        shopNameBackfillTimers.delete(timerKey);
+    };
+
+    const pauseShopNameBackfillTimers = () => {
+        const entries = Array.from(shopNameBackfillTimers.entries());
+        entries.forEach(([timerKey, record]) => {
+            clearShopNameBackfillTimer(timerKey);
+            if (typeof record?.callback !== 'function') return;
+            shopNameBackfillPendingTasks.set(timerKey, {
+                callback: record.callback,
+                dueAt: Number(record.dueAt || 0) || toNow()
+            });
+        });
+    };
+
+    const resumeShopNameBackfillPendingTasks = () => {
+        if (!shopNameBackfillPendingTasks.size) {
+            removeShopNameBackfillVisibilityHandlerIfIdle();
+            return;
+        }
+        const entries = Array.from(shopNameBackfillPendingTasks.entries());
+        shopNameBackfillPendingTasks.clear();
+        entries.forEach(([timerKey, record]) => {
+            if (typeof record?.callback !== 'function') return;
+            const delayMs = Math.max(0, (Number(record.dueAt || 0) || 0) - toNow());
+            scheduleShopNameBackfillTimer(timerKey, record.callback, delayMs);
+        });
+        removeShopNameBackfillVisibilityHandlerIfIdle();
+    };
+
+    const handleShopNameBackfillVisibilityChange = () => {
+        if (isShopNameBackfillDocumentHidden()) {
+            pauseShopNameBackfillTimers();
+            return;
+        }
+        resumeShopNameBackfillPendingTasks();
+    };
+
     const scheduleShopNameBackfillTimer = (timerKey = '', callback = null, delayMs = 0) => {
         if (!timerKey || typeof callback !== 'function') return;
-        const timerId = setTimeout(() => {
-            if (shopNameBackfillTimers.get(timerKey) !== timerId) return;
+        const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
+        const dueAt = toNow() + normalizedDelayMs;
+        ensureShopNameBackfillVisibilityHandler();
+        clearShopNameBackfillTimer(timerKey);
+        shopNameBackfillPendingTasks.delete(timerKey);
+        if (isShopNameBackfillDocumentHidden()) {
+            shopNameBackfillPendingTasks.set(timerKey, { callback, dueAt });
+            return;
+        }
+        const record = {
+            timerId: 0,
+            callback,
+            dueAt
+        };
+        record.timerId = setTimeout(() => {
+            if (shopNameBackfillTimers.get(timerKey) !== record) return;
             shopNameBackfillTimers.delete(timerKey);
-            callback();
-        }, Math.max(0, Number(delayMs) || 0));
-        shopNameBackfillTimers.set(timerKey, timerId);
+            try {
+                callback();
+            } finally {
+                removeShopNameBackfillVisibilityHandlerIfIdle();
+            }
+        }, normalizedDelayMs);
+        shopNameBackfillTimers.set(timerKey, record);
     };
 
     const scheduleShopNameBackfill = (context = {}) => {
@@ -1158,7 +1237,7 @@
         if (!shopId) return;
         if (!force && normalizeShopName(context.shopName || '')) return;
         const timerKey = buildShopNameBackfillKey(shopId, source);
-        if (shopNameBackfillTimers.has(timerKey)) return;
+        if (shopNameBackfillTimers.has(timerKey) || shopNameBackfillPendingTasks.has(timerKey)) return;
 
         let attempt = 0;
         const run = () => {

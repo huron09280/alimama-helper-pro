@@ -1,3 +1,50 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十子项
+
+## 需求规格
+- 目标：在主助手启动兜底轮询收口后，继续优化 extension 授权守卫的店铺名异步回填重试，避免隐藏标签页里仍保留 `shopNameBackfillTimers` 退避 timer 并反复从 DOM 文本中解析店铺名。
+- 根因判断：`src/entries/extension-license-guard.js` 的店铺名回填已有 timer 注册表和 shopId/source 去重，但当前只按延迟继续排 `setTimeout`；当页面隐藏且店铺名暂不可解析时，回填链仍会持有 timer 闭包并在后台醒来做 DOM/缓存扫描。
+- 范围：仅覆盖店铺名回填 timer 的隐藏页暂停、恢复可见补跑、活动 timer/pending 去重和 visibility listener 生命周期；不改 shopId 识别、授权验证请求、租约续期、policy token、锁定遮罩、服务端地址、并发策略或 10rpm 服务端限制。
+- 热修 vs 结构性修复取舍：保留现有回填次数、退避间隔和 shopId/source key；把 timer value 从裸 id 提升为包含 callback/dueAt 的记录，使隐藏态可取消 timer 并保存 pending 任务，恢复可见后按剩余延迟继续同一回填链，不新增第二套店铺名解析逻辑。
+- 成功标准：静态测试证明存在 `shopNameBackfillPendingTasks`、隐藏态判定、活动 timer 记录、统一清理 helper、`visibilitychange` 隐藏时把活动 timer 转 pending、恢复可见后重新调度 pending、同一 shopId/source 同时检查 timer 与 pending 去重、无任务后释放 visibility listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不改变授权服务请求时机与参数，不触发任何创建/复制/预算/导出/护航执行入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第三十九子项提交后工作区状态，确认本子项只处理授权守卫店铺名回填 timer。
+- [x] 为店铺名回填加入 pending 任务表、隐藏态判定、timer 记录和统一清理 helper。
+- [x] 将隐藏页活动 timer 转为 pending，恢复可见后按剩余延迟补跑并在无任务时解绑 visibility listener。
+- [x] 更新授权守卫目标测试，锁定 pending 去重、隐藏态暂停、恢复调度和 listener 生命周期。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `2d093b1 优化主助手启动兜底`，工作区干净。
+- 定位结论：`setInterval` 已从 `src/` 清空，下一处可优化后台唤醒是授权守卫中店铺名回填的短周期退避 `setTimeout` 链；它只依赖本页 DOM/缓存，不需要隐藏页持续重试。
+- 取舍结论：不碰授权验证、租约续期和服务端请求；只让店铺名回填在页面可见时运行，隐藏时保存 pending，避免后台 DOM 扫描和 timer 唤醒。
+- 实现摘要：`shopNameBackfillTimers` 的值从裸 timer id 升级为 `{ timerId, callback, dueAt }` 记录，并新增 `shopNameBackfillPendingTasks`；`scheduleShopNameBackfillTimer()` 调度前统一清理旧 timer/pending，隐藏页只保存 pending，不再排 timeout。
+- 可见性摘要：新增 `handleShopNameBackfillVisibilityChange()`；页面隐藏时把活动 timer 取消并转存 pending，恢复可见后按 `dueAt - now` 剩余延迟重新调度，同一 shopId/source 同时检查 timer 与 pending 去重。
+- 生命周期摘要：店铺名回填有活动 timer 或 pending 时才绑定 `document.visibilitychange`，任务全部完成后通过 `removeShopNameBackfillVisibilityHandlerIfIdle()` 解绑，避免常驻 listener。
+- 测试摘要：`tests/extension-license-shopid-guard.test.mjs` 增加 `shopNameBackfillBlock` 小片段断言，覆盖 pending 表、隐藏态暂停、恢复调度和 listener 释放；首次目标测试因新增大 bundle 全局正则回溯过重超时，已改成小片段断言并用 60 秒硬超时重跑通过。
+
+## 验证记录
+- 源码语法：`node --check src/entries/extension-license-guard.js` 通过。
+- 测试语法：`node --check tests/extension-license-shopid-guard.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`；根 userscript 和 packages 产物无内容变化。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/extension-license-shopid-guard.test.mjs'], { timeout: 60000 }) ..."` 通过，3 项测试全绿。开发中首次直接运行目标测试因新增全局大正则超过合理时间被中止，随后将断言限定到 `shopNameBackfillBlock` 并用 60 秒硬超时验证通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/extension-license-shopid-guard.test.mjs`、`tests/extension-license-cache-policy-token.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/logger-api.test.mjs`，52 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "shopNameBackfillPendingTasks|isShopNameBackfillDocumentHidden|handleShopNameBackfillVisibilityChange|shopNameBackfillTimers\\.has\\(timerKey\\)" src/entries/extension-license-guard.js tests/extension-license-shopid-guard.test.mjs` 命中源码和目标测试，确认 pending、隐藏态、visibility handler 与 pending 去重均已落地。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`shopName:"[present]"`、`optimizerToggleReady:true`、`helperIcon.exists:true`、`helperIcon.visible:true`、`helperPanel.exists:true`、`helperPanel.visible:false`、`helperStyleIds:["am-helper-pro-v26-style"]`、`visibleAmHelperTags:141`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:10`；插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台只见页面既有 deprecated issue 和 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误，未见新增插件运行失败；fetch/XHR 清单 99 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/entries/extension-license-guard.js`、`tests/extension-license-shopid-guard.test.mjs`、`tasks/todo.md` 和生成产物 `dist/extension/page.bundle.js`；源码 diff 只新增店铺名回填隐藏页 pending 调度和 listener 生命周期，测试 diff 只锁定对应静态回归；未改 shopId 识别、授权验证请求、租约续期、policy token、锁定遮罩、服务端地址、并发策略或 10rpm 服务端限制。
+
+## 结果复盘
+- 第十一轮第四十子项结果：授权守卫店铺名回填从“按退避 timeout 在隐藏页继续醒来解析 DOM/缓存”优化为“隐藏页取消活动 timer 并保存 pending，恢复可见后按剩余延迟继续同一回填链”，减少后台标签页短周期唤醒。
+- 取舍结论：回填仍保留原有次数、延迟、shopId/source key、店铺名解析逻辑和遮罩刷新语义；只改变调度生命周期，不改变授权服务请求、租约续期、policy token 验签、服务端并发或 10rpm 策略。
+- 验证结论：源码/测试语法、构建、目标测试、项目语法、构建检查、相关回归、全量回归、Chrome MCP 只读验收、危险请求过滤和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十九子项
 
 ## 需求规格
