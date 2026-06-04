@@ -18,6 +18,13 @@ function getUiBlock() {
   return source.slice(start, end);
 }
 
+function sliceBetween(block, startText, endText) {
+  const start = block.indexOf(startText);
+  const end = block.indexOf(endText, start + startText.length);
+  assert.ok(start > -1 && end > start, `无法定位代码片段：${startText}`);
+  return block.slice(start, end);
+}
+
 test('MagicReport.createPopup 会清理失联弹窗引用与旧 DOM 节点', () => {
   const block = getMagicReportBlock();
   assert.match(
@@ -38,12 +45,57 @@ test('MagicReport.toggle 关闭时会释放弹窗资源，展示前会校验 pop
 
 test('MagicReport 关闭释放会清理 iframe、DOM、全局监听、timer 和可重建缓存', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /popupCleanupHandlers:\s*\[\],[\s\S]*popupLifecycleToken:\s*0,[\s\S]*quickPromptResetTimer:\s*0,[\s\S]*quickPromptRetryTimer:\s*0,[\s\S]*iframeCleanupRetryTimer:\s*0,[\s\S]*iframeCleanupVisibilityHandler:\s*null,[\s\S]*magicPromptDraft:\s*''/, 'MagicReport 未声明关闭生命周期所需状态');
+  assert.match(block, /popupCleanupHandlers:\s*\[\],[\s\S]*popupLifecycleToken:\s*0,[\s\S]*quickPromptResetTimer:\s*0,[\s\S]*quickPromptRetryTimer:\s*0,[\s\S]*quickPromptRetryVisibilityHandler:\s*null,[\s\S]*quickPromptRetryPendingCallback:\s*null,[\s\S]*iframeCleanupRetryTimer:\s*0,[\s\S]*iframeCleanupVisibilityHandler:\s*null,[\s\S]*magicPromptDraft:\s*''/, 'MagicReport 未声明关闭生命周期所需状态');
   assert.match(block, /releasePopupResources\(\)\s*\{[\s\S]*this\.captureMagicPromptDraft\(\);[\s\S]*this\.popupLifecycleToken \+= 1;[\s\S]*this\.hideCrowdMatrixHoverTip\(\);[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(false\);[\s\S]*this\.runPopupCleanupHandlers\(\);[\s\S]*this\.clearMagicRuntimeCaches\(\);/, 'releasePopupResources 未统一收敛浮层、监听和缓存清理');
   assert.match(block, /if \(this\.iframe instanceof HTMLIFrameElement\) \{[\s\S]*this\.iframe\.onload = null;[\s\S]*this\.iframe\.onerror = null;[\s\S]*this\.iframe\.src = 'about:blank';[\s\S]*\}/, 'releasePopupResources 未释放 iframe 子文档');
   assert.match(block, /const popup = this\.popup instanceof HTMLElement[\s\S]*document\.getElementById\('am-magic-report-popup'\);[\s\S]*if \(popup instanceof HTMLElement\) popup\.remove\(\);[\s\S]*document\.getElementById\('am-magic-report-popup-style'\);[\s\S]*if \(style instanceof HTMLElement\) style\.remove\(\);/, 'releasePopupResources 未卸载 popup DOM 或样式节点');
-  assert.match(block, /if \(this\.quickPromptResetTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptResetTimer\);[\s\S]*if \(this\.quickPromptRetryTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptRetryTimer\);[\s\S]*this\.clearIframeCleanupRetryTimer\(\);[\s\S]*this\.clearIframeCleanupVisibilityHandler\(\);/, 'clearMagicRuntimeCaches 未清理关闭后的待执行 timer 和 visibility handler');
+  assert.match(block, /if \(this\.quickPromptResetTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptResetTimer\);[\s\S]*this\.clearQuickPromptRetryState\(\);[\s\S]*this\.clearIframeCleanupRetryTimer\(\);[\s\S]*this\.clearIframeCleanupVisibilityHandler\(\);/, 'clearMagicRuntimeCaches 未清理关闭后的待执行 timer 和 visibility handler');
   assert.doesNotMatch(block.match(/releasePopupResources\(\)\s*\{[\s\S]*?\n\s*\},\n\s*\n\s*createPopup\(/)?.[0] || '', /lastCampaignId\s*=\s*''|lastCampaignName\s*=\s*''/, '关闭释放不应清空最近计划上下文');
+});
+
+test('MagicReport 快捷查询 retry 在隐藏页暂停并保持原重试合同', () => {
+  const block = getMagicReportBlock();
+  const clearTimerBlock = sliceBetween(block, 'clearQuickPromptRetryTimer()', 'clearQuickPromptRetryVisibilityHandler()');
+  const clearVisibilityBlock = sliceBetween(block, 'clearQuickPromptRetryVisibilityHandler()', 'clearQuickPromptRetryState()');
+  const clearStateBlock = sliceBetween(block, 'clearQuickPromptRetryState()', 'bindQuickPromptRetryVisibilityHandler()');
+  const visibilityBlock = sliceBetween(block, 'bindQuickPromptRetryVisibilityHandler()', 'scheduleQuickPromptRetry(callback, delayMs = 500)');
+  const scheduleBlock = sliceBetween(block, 'scheduleQuickPromptRetry(callback, delayMs = 500)', 'scheduleIframeCleanupRetry(callback, delayMs = 120)');
+  const runBlock = sliceBetween(block, 'runQuickPrompt(promptText)', 'buildPromptByCampaignId(campaignId, promptType =');
+  assert.match(
+    clearTimerBlock,
+    /if \(!this\.quickPromptRetryTimer\) return;[\s\S]*clearTimeout\(this\.quickPromptRetryTimer\);[\s\S]*this\.quickPromptRetryTimer = 0;/,
+    'quick prompt retry timer 缺少统一清理 helper'
+  );
+  assert.match(
+    clearVisibilityBlock,
+    /const handler = this\.quickPromptRetryVisibilityHandler;[\s\S]*document\.removeEventListener\('visibilitychange', handler\);[\s\S]*this\.quickPromptRetryVisibilityHandler = null;[\s\S]*this\.quickPromptRetryPendingCallback = null;/,
+    'quick prompt retry visibility handler 缺少统一解绑和 pending 清理'
+  );
+  assert.match(
+    clearStateBlock,
+    /this\.clearQuickPromptRetryTimer\(\);[\s\S]*this\.clearQuickPromptRetryVisibilityHandler\(\);/,
+    'quick prompt retry 应有统一状态清理 helper'
+  );
+  assert.match(
+    visibilityBlock,
+    /if \(typeof this\.quickPromptRetryVisibilityHandler === 'function'\) return;[\s\S]*this\.quickPromptRetryVisibilityHandler = \(\) => \{[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.clearQuickPromptRetryTimer\(\);[\s\S]*return;[\s\S]*\}[\s\S]*const pendingCallback = this\.quickPromptRetryPendingCallback;[\s\S]*this\.clearQuickPromptRetryVisibilityHandler\(\);[\s\S]*if \(typeof pendingCallback === 'function'\) pendingCallback\(\);[\s\S]*\};[\s\S]*document\.addEventListener\('visibilitychange', this\.quickPromptRetryVisibilityHandler\);/,
+    'quick prompt retry 应在隐藏时取消 timer，恢复可见后执行同一 pending callback 并释放监听'
+  );
+  assert.match(
+    scheduleBlock,
+    /this\.clearQuickPromptRetryState\(\);[\s\S]*if \(typeof callback !== 'function'\) return;[\s\S]*const normalizedDelayMs = Math\.max\(0, Number\(delayMs\) \|\| 0\);[\s\S]*this\.quickPromptRetryPendingCallback = callback;[\s\S]*this\.bindQuickPromptRetryVisibilityHandler\(\);[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*return;[\s\S]*\}[\s\S]*this\.quickPromptRetryTimer = setTimeout\(\(\) => \{[\s\S]*this\.quickPromptRetryTimer = 0;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) return;[\s\S]*const pendingCallback = this\.quickPromptRetryPendingCallback;[\s\S]*this\.clearQuickPromptRetryVisibilityHandler\(\);[\s\S]*if \(typeof pendingCallback === 'function'\) pendingCallback\(\);[\s\S]*\}, normalizedDelayMs\);/,
+    'quick prompt retry 应隐藏页暂停，可见页才排 timeout，触发后只执行一次 pending callback'
+  );
+  assert.match(
+    runBlock,
+    /const maxRetries = 16;[\s\S]*const promptToken = this\.popupLifecycleToken;[\s\S]*this\.clearQuickPromptRetryState\(\);[\s\S]*const tryRun = \(retriesLeft\) => \{[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.scheduleQuickPromptRetry\(\(\) => tryRun\(retriesLeft\), 500\);[\s\S]*return;[\s\S]*\}[\s\S]*const result = this\.trySubmitPrompt\(promptText\);[\s\S]*if \(retriesLeft <= 0\) \{[\s\S]*this\.tryFallbackSubmitPrompt\(promptText\)\.then\(\(fallbackOk\) => \{[\s\S]*this\.scheduleQuickPromptRetry\(\(\) => tryRun\(retriesLeft - 1\), 500\);[\s\S]*\};[\s\S]*tryRun\(maxRetries\);/,
+    'runQuickPrompt 应隐藏页暂停同一 retries，可见页仍保留 16 次/500ms 重试和原 fallback'
+  );
+  assert.doesNotMatch(
+    runBlock,
+    /this\.quickPromptRetryTimer = setTimeout\(\(\) => \{[\s\S]*tryRun\(retriesLeft - 1\);[\s\S]*\}, 500\);/,
+    'quick prompt retry 不应绕过统一 helper 直接排裸 setTimeout'
+  );
 });
 
 test('MagicReport iframe 清理 retry 在隐藏页暂停并随弹窗释放', () => {

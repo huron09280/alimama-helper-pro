@@ -9803,6 +9803,8 @@ if (typeof globalThis !== 'undefined') {
         popupLifecycleToken: 0,
         quickPromptResetTimer: 0,
         quickPromptRetryTimer: 0,
+        quickPromptRetryVisibilityHandler: null,
+        quickPromptRetryPendingCallback: null,
         iframeCleanupRetryTimer: 0,
         iframeCleanupVisibilityHandler: null,
         magicPromptDraft: '',
@@ -11058,12 +11060,13 @@ if (typeof globalThis !== 'undefined') {
         runQuickPrompt(promptText) {
             const maxRetries = 16;
             const promptToken = this.popupLifecycleToken;
-            if (this.quickPromptRetryTimer) {
-                clearTimeout(this.quickPromptRetryTimer);
-                this.quickPromptRetryTimer = 0;
-            }
+            this.clearQuickPromptRetryState();
             const tryRun = (retriesLeft) => {
                 if (promptToken !== this.popupLifecycleToken || !(this.popup instanceof HTMLElement) || !this.popup.isConnected) return;
+                if (this.isMagicReportDocumentHidden()) {
+                    this.scheduleQuickPromptRetry(() => tryRun(retriesLeft), 500);
+                    return;
+                }
                 const result = this.trySubmitPrompt(promptText);
                 if (result.ok) {
                     if (result.uncertain) {
@@ -11085,10 +11088,7 @@ if (typeof globalThis !== 'undefined') {
                     });
                     return;
                 }
-                this.quickPromptRetryTimer = setTimeout(() => {
-                    this.quickPromptRetryTimer = 0;
-                    tryRun(retriesLeft - 1);
-                }, 500);
+                this.scheduleQuickPromptRetry(() => tryRun(retriesLeft - 1), 500);
             };
             tryRun(maxRetries);
         },
@@ -16465,6 +16465,58 @@ if (typeof globalThis !== 'undefined') {
             this.iframeCleanupVisibilityHandler = null;
         },
 
+        clearQuickPromptRetryTimer() {
+            if (!this.quickPromptRetryTimer) return;
+            clearTimeout(this.quickPromptRetryTimer);
+            this.quickPromptRetryTimer = 0;
+        },
+
+        clearQuickPromptRetryVisibilityHandler() {
+            const handler = this.quickPromptRetryVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.quickPromptRetryVisibilityHandler = null;
+            this.quickPromptRetryPendingCallback = null;
+        },
+
+        clearQuickPromptRetryState() {
+            this.clearQuickPromptRetryTimer();
+            this.clearQuickPromptRetryVisibilityHandler();
+        },
+
+        bindQuickPromptRetryVisibilityHandler() {
+            if (typeof this.quickPromptRetryVisibilityHandler === 'function') return;
+            this.quickPromptRetryVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearQuickPromptRetryTimer();
+                    return;
+                }
+                const pendingCallback = this.quickPromptRetryPendingCallback;
+                this.clearQuickPromptRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            };
+            document.addEventListener('visibilitychange', this.quickPromptRetryVisibilityHandler);
+        },
+
+        scheduleQuickPromptRetry(callback, delayMs = 500) {
+            this.clearQuickPromptRetryState();
+            if (typeof callback !== 'function') return;
+            const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
+            this.quickPromptRetryPendingCallback = callback;
+            this.bindQuickPromptRetryVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) {
+                return;
+            }
+            this.quickPromptRetryTimer = setTimeout(() => {
+                this.quickPromptRetryTimer = 0;
+                if (this.isMagicReportDocumentHidden()) return;
+                const pendingCallback = this.quickPromptRetryPendingCallback;
+                this.clearQuickPromptRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            }, normalizedDelayMs);
+        },
+
         scheduleIframeCleanupRetry(callback, delayMs = 120) {
             this.clearIframeCleanupRetryTimer();
             if (typeof callback !== 'function') return;
@@ -16510,10 +16562,7 @@ if (typeof globalThis !== 'undefined') {
                 clearTimeout(this.quickPromptResetTimer);
                 this.quickPromptResetTimer = 0;
             }
-            if (this.quickPromptRetryTimer) {
-                clearTimeout(this.quickPromptRetryTimer);
-                this.quickPromptRetryTimer = 0;
-            }
+            this.clearQuickPromptRetryState();
             this.clearIframeCleanupRetryTimer();
             this.clearIframeCleanupVisibilityHandler();
         },

@@ -1,3 +1,53 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十六子项
+
+## 需求规格
+- 目标：在主面板工具打开重试 timer 收口后，继续优化万能查数快捷查询 `quickPromptRetryTimer`，避免标签页隐藏时仍按 500ms 间隔尝试提交查询，并在重试耗尽后进入原生兜底提交路径。
+- 根因判断：`src/main-assistant/magic-report.js` 的 `runQuickPrompt()` 会立即尝试一次 iframe 查询，失败后最多排 16 次 500ms retry，最终调用 `tryFallbackSubmitPrompt()`。当前 retry timer 只按弹窗生命周期清理，不区分页可见状态；如果用户触发快捷查询后切到其它标签页，隐藏页仍可能持续唤醒并推进查询/兜底链路。
+- 范围：仅覆盖快捷查询 retry 的隐藏页暂停、恢复可见续跑、timer/visibility listener/pending callback 生命周期和弹窗关闭清理；不改 prompt 文案、计划 ID 识别、`trySubmitPrompt()`、`tryFallbackSubmitPrompt()`、16 次重试、500ms 间隔、日志提示、原生打开提交、万能查数 iframe、DMP、人群看板、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留 `runQuickPrompt()` 作为快捷查询唯一调度入口，新增同一入口下的 pending callback 与 visibility handler。隐藏页不执行查询提交 callback，不消耗重试次数，也不进入 fallback；恢复可见后执行同一 pending callback，一次执行后释放监听。弹窗关闭、重开或下一次快捷查询会统一清理旧 timer/handler/pending。
+- 成功标准：静态测试证明 MagicReport 声明 quick prompt retry visibility handler 与 pending callback；存在统一清理 helper、调度 helper和隐藏页判定复用；`runQuickPrompt()` 在隐藏页暂停当前 retries，在可见页仍按 500ms/16 次重试并最终保留原 fallback；关闭弹窗会清理 timer、visibility handler 和 pending callback；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击万能查数快捷查询、不打开查询 iframe 交互、不触发原生查数、不调用报表查询、创建、复制、提交、预算、护航、导出、下载或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十五子项提交后工作区状态，确认本子项只处理快捷查询 retry timer。
+- [x] 定位 `runQuickPrompt()`、弹窗释放和现有隐藏页调度 helper，校验不改变业务语义的实现边界。
+- [x] 为 quick prompt retry 增加 visibility handler、pending callback、统一清理 helper 和调度 helper。
+- [x] 将 `runQuickPrompt()` 的重试调度改为隐藏页暂停、恢复可见后继续同一 retries。
+- [x] 更新 MagicReport 目标测试，锁定隐藏页不执行查询 callback、不消耗重试次数、关闭弹窗释放 pending 状态和原 retry/fallback 语义保留。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `9ef34a6 优化主面板工具打开重试轮询`，tracked 工作区干净；本子项不依赖 DMP 取证临时文件，也不纳入本次提交。
+- 定位结论：`quickPromptRetryTimer` 比纯动画、自动隐藏或复制按钮状态复位 timer 更值得优先优化，因为它在重试耗尽后会进入 `tryFallbackSubmitPrompt()` 原生兜底提交路径；本轮只让隐藏页暂停推进，不改提交能力本身。
+- 计划校验：本子项只降低隐藏标签页后台唤醒与非预期查询推进；可见页用户触发快捷查询时，仍保留立即尝试、最多 16 次 500ms retry、失败后 fallback 和原日志提示。若实现需要触碰 MagicPromptDriver、iframe 加载、原生提交或报表接口，先回到本计划更新后再继续。
+- 实现摘要：`MagicReport` 新增 `quickPromptRetryVisibilityHandler` 与 `quickPromptRetryPendingCallback`，并新增 `clearQuickPromptRetryState()`、`bindQuickPromptRetryVisibilityHandler()`、`scheduleQuickPromptRetry()` 等 helper，统一管理快捷查询 retry timer、visibility listener 和 pending callback。
+- 调度摘要：`runQuickPrompt()` 进入 `trySubmitPrompt()` 前先检查页面是否隐藏；隐藏页只登记同一个 `retriesLeft` 的 pending callback，不执行 iframe 查询、不扣重试次数、不进入 fallback。可见页仍按 500ms 调度下一次 retry，恢复可见后执行同一 pending callback 一次并释放监听。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 新增局部切片断言，覆盖 quick prompt retry 状态声明、统一清理、隐藏页暂停、恢复可见执行 pending callback、关闭弹窗释放 pending 状态，以及保留 `maxRetries = 16`、500ms 间隔和原 fallback 合同。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，14 项测试全绿；新增“快捷查询 retry 在隐藏页暂停并保持原重试合同”断言经局部切片优化后耗时约 2ms，未引入慢测试。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/magic-report-panel-resilience.test.mjs`、`tests/magic-report-crowd-matrix.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，122 项测试全绿。
+- 静态定位：`rg -n "quickPromptRetryVisibilityHandler|quickPromptRetryPendingCallback|scheduleQuickPromptRetry|clearQuickPromptRetryState|clearQuickPromptRetryVisibilityHandler" src/main-assistant/magic-report.js tests/magic-report-panel-resilience.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页快捷查询 retry 调度已进入产物。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，619 项中 617 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`；切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`。
+- Chrome MCP 运行态：只读探针返回 `GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"bootstrap_preflight"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordOpenBridgeReady:"1"`。
+- Chrome MCP 产物确认：在页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4052454`，包含 `quickPromptRetryVisibilityHandler`、`quickPromptRetryPendingCallback`、`scheduleQuickPromptRetry(callback, delayMs = 500)`、`this.scheduleQuickPromptRetry(() => tryRun(retriesLeft), 500)` 和 `this.scheduleQuickPromptRetry(() => tryRun(retriesLeft - 1), 500)`。
+- Chrome MCP 弹窗/危险请求：助手图标存在且可见，`helperPanel` 存在但不可见；`magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器` 和主线程卡顿监听启动；其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 和页面自身日志，未见新增插件运行失败。fetch/XHR 清单 47 条，主要为登录路由初始化、菜单、消息、AI context 和 `chrome-extension://.../page.bundle.js` 读取，可见请求均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/magic-report.js`、`tests/magic-report-panel-resilience.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增万能查数快捷查询 retry timer 的隐藏页暂停、可见恢复和 pending callback 生命周期，不改 prompt 文案、计划 ID 识别、`trySubmitPrompt()`、`tryFallbackSubmitPrompt()`、16 次重试、500ms 间隔、日志提示、原生打开提交、万能查数 iframe、DMP、人群看板、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第四十六子项结果：万能查数快捷查询从“触发后在隐藏页仍按 500ms retry 最多 16 次，并可能在耗尽后进入原生兜底提交”优化为“隐藏页暂停当前 retry，不执行查询提交、不消耗重试次数、不进入 fallback；恢复可见后继续同一个 pending callback 并释放监听”。
+- 取舍结论：保留 `runQuickPrompt()` 单一入口、16 次重试、500ms 间隔、原日志提示和 `tryFallbackSubmitPrompt()` 兜底策略；新增 pending callback 只管理同一次快捷查询的延迟重试。下一次快捷查询、弹窗关闭或资源释放都会清理旧 timer/handler/pending，避免恢复可见后提交旧话术。
+- 效果结论：在用户点了快捷查询后切到后台的场景中，隐藏页不再周期性唤醒 iframe 查询，也不会在后台推进到原生兜底提交流程；减少后台 timer 唤醒和非预期查询推进。浏览器验收未点击快捷查询、未打开万能查数交互、未触发任何业务写动作或服务端提交，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十五子项
 
 ## 需求规格
