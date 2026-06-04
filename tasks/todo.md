@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十八子项
+
+## 需求规格
+- 目标：在复制前一览窗详情准备 timer 收口后，继续优化潜力词计划日维度 CSV 下载后的对象 URL 清理 timer，避免 `downloadCsv()` 每次下载后排队无句柄 `setTimeout(..., 0)`，重复导出或离开目标页时旧 timer 仍持有下载链接 DOM 与 blob URL。
+- 根因判断：`src/main-assistant/potential-plan-daily-exporter.js` 中 `downloadCsv()` 直接在点击下载链接后启动 0ms timeout 执行 `URL.revokeObjectURL(link.href)` 和 `link.remove()`；该 timer 没有保存句柄，`removeButtons()` / 非目标页 `run()` 生命周期也无法取消 pending 清理。
+- 范围：仅覆盖潜力词 CSV 下载链接与 object URL 清理 timer 生命周期和静态回归；不改潜力词查询接口、导出数据组包、日期范围、按钮 DOM 文案、click 委托、真实下载触发行为、算法护航请求或 10rpm API 限速。
+- 热修 vs 结构性修复取舍：把下载清理 timer 归入 `PotentialPlanDailyExporter` 对象生命周期，新增 `downloadCleanupTimer`、清理 helper 与调度 helper；重复调度先释放旧 pending 清理，timer 触发后归零并清理当次 link/url，离开目标页时也释放 pending 清理。
+- 成功标准：静态测试证明下载清理 timer 有句柄、可清理、重复调度先取消旧 timer、触发后归零并 revoke object URL/remove link，`downloadCsv()` 不再直接保留无句柄 `setTimeout(() => URL.revokeObjectURL(...), 0)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击潜力词导出按钮、不触发潜力词报表查询或浏览器下载、不点击复制、批量+、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认潜力词导出入口/页面状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十七子项提交后工作区状态，确认本子项只处理潜力词 CSV 下载清理 timer。
+- [x] 在 `PotentialPlanDailyExporter` 生命周期中实现下载清理 timer 句柄、清理和调度 helper。
+- [x] 将 `downloadCsv()` 改为调用 helper，保持原点击下载、0ms 异步清理和 object URL revoke 行为。
+- [x] 补充/更新目标测试，锁定潜力词下载清理不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `034a856 优化 Chrome 复制预览准备计时器`；只读 `git status --short` 没有实际变更行，但有 macOS 临时缓存写入警告。
+- 定位结论：`downloadCsv()` 的 0ms object URL 清理 timer 是短生命周期浏览器资源释放任务，不涉及服务端请求；收口后可减少重复导出或离开目标页时旧 link/blob URL 闭包滞留。
+- 实现摘要：`src/main-assistant/potential-plan-daily-exporter.js` 新增 `downloadCleanupTimer`、`downloadCleanupLink`、`cleanupDownloadLink()`、`clearDownloadCleanupTimer()` 和 `scheduleDownloadCleanup(link)`；重复调度会先取消旧 timer 并释放旧 link/blob URL，timer 触发后归零再清理当次链接。
+- 行为摘要：`downloadCsv()` 保留创建 Blob、object URL、隐藏链接、触发 `link.click()` 和 0ms 异步清理节奏；只把无句柄 timeout 改成可取消生命周期任务，`removeButtons()` 会同步释放 pending 下载清理。
+- 测试摘要：`tests/potential-plan-daily-exporter.test.mjs` 新增潜力词 CSV 下载清理回归，锁定 timer 状态字段、清理 helper、调度 helper、离开目标页清理和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/potential-plan-daily-exporter.js` 通过。
+- 测试语法：`node --check tests/potential-plan-daily-exporter.test.mjs` 通过。
+- 目标测试：`node --test tests/potential-plan-daily-exporter.test.mjs` 通过，5 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/potential-plan-daily-exporter.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，25 项测试全绿。
+- 空白检查：`git diff --check` 通过；只读沙箱下仍有 macOS xcrun 临时缓存写入警告，未报告 diff 空白错误。
+- 全量回归：`npm test` 通过，611 项中 609 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 真实标签，`navigate_page` 刷新当前关键词推广管理页；`evaluate_script` 只读返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`isPotentialPage:false`、`potentialExportButtonCount:0`、`copyButtonCount:0`、`batchPlusButtonCount:1`、`hasPotentialDownloadingButton:false`、`hasPotentialDownloadLink:false`、`hasCopyOverviewPopup:false`、`hasCopySuccessPopup:false`、`hasBatchPlusMenuOpen:false`。未跳转潜力词页，未点击潜力词导出、复制、批量+、计划上下线、护航执行或任何真实写入口；控制台仅见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误。
+- Diff 自审：改动集中在潜力词 CSV 下载 object URL 清理 timer 生命周期、对应静态测试、任务记录和构建产物；未改潜力词查询接口、导出数据组包、日期范围、按钮 DOM 文案、click 委托、真实下载触发行为、算法护航请求或 10rpm API 限速。
+
+## 结果复盘
+- 第十一轮第二十八子项结果：潜力词 CSV 下载后的 object URL 清理从“每次下载后排队无句柄 0ms timeout”优化为“`PotentialPlanDailyExporter` 统一持有 `downloadCleanupTimer` 和 `downloadCleanupLink`，重复调度先取消旧 timer 并释放旧 link/blob URL，触发后归零再清理当次链接”。
+- 取舍结论：保留原点击下载和 0ms 异步释放节奏，不改变任何报表查询、CSV 组包或真实下载触发语义；只收口短生命周期 DOM/blob URL 资源，离开非目标页时也能释放 pending 清理。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行潜力词导出或任何服务端写动作，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十七子项
 
 ## 需求规格

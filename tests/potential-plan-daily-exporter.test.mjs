@@ -47,6 +47,19 @@ test('潜力词导出 click 委托只在目标页绑定，离开目标页释放'
     assert.match(source, /run\(\)\s*\{[\s\S]*if \(!this\.isTargetPage\(\)\) \{[\s\S]*this\.removeButtons\(\);[\s\S]*this\.unbindExportClickHandler\(\);[\s\S]*return;[\s\S]*\}[\s\S]*this\.bindExportClickHandler\(\);[\s\S]*this\.ensureButton\(\);/, 'run 应在目标页绑定 click 委托，在非目标页解绑并移除按钮');
 });
 
+test('潜力词 CSV 下载链接清理 timer 可取消并释放对象 URL', () => {
+    const source = getPotentialSource();
+    const downloadBlock = source.match(/downloadCsv\(content, filename\)\s*\{[\s\S]*?\n\s*\},\n\s*\n\s*cleanupDownloadLink\(/)?.[0] || '';
+
+    assert.match(source, /initialized:\s*false,[\s\S]*running:\s*false,[\s\S]*downloadCleanupTimer:\s*null,[\s\S]*downloadCleanupLink:\s*null,/, '潜力词导出缺少下载清理 timer 生命周期状态');
+    assert.match(source, /cleanupDownloadLink\(link\)\s*\{[\s\S]*if \(!\(link instanceof HTMLAnchorElement\)\) return;[\s\S]*const href = String\(link\.href \|\| ''\);[\s\S]*if \(href\) URL\.revokeObjectURL\(href\);[\s\S]*link\.remove\(\);[\s\S]*\}/, '下载清理应统一 revoke object URL 并移除链接');
+    assert.match(source, /clearDownloadCleanupTimer\(\)\s*\{[\s\S]*if \(this\.downloadCleanupTimer\) \{[\s\S]*clearTimeout\(this\.downloadCleanupTimer\);[\s\S]*this\.downloadCleanupTimer = null;[\s\S]*const pendingLink = this\.downloadCleanupLink;[\s\S]*this\.downloadCleanupLink = null;[\s\S]*this\.cleanupDownloadLink\(pendingLink\);[\s\S]*\}/, '下载清理 timer 应可取消并释放 pending 链接');
+    assert.match(source, /scheduleDownloadCleanup\(link\)\s*\{[\s\S]*this\.clearDownloadCleanupTimer\(\);[\s\S]*if \(!\(link instanceof HTMLAnchorElement\)\) return;[\s\S]*this\.downloadCleanupLink = link;[\s\S]*this\.downloadCleanupTimer = setTimeout\(\(\) => \{[\s\S]*this\.downloadCleanupTimer = null;[\s\S]*const pendingLink = this\.downloadCleanupLink;[\s\S]*this\.downloadCleanupLink = null;[\s\S]*this\.cleanupDownloadLink\(pendingLink\);[\s\S]*\}, 0\);[\s\S]*\}/, '下载清理应通过可取消 helper 调度并在触发后归零');
+    assert.match(source, /removeButtons\(\)\s*\{[\s\S]*this\.clearDownloadCleanupTimer\(\);[\s\S]*document\.querySelectorAll\(this\.WRAP_SELECTOR\)/, '离开潜力词目标页时应释放 pending 下载清理');
+    assert.match(downloadBlock, /this\.scheduleDownloadCleanup\(link\);/, 'downloadCsv 应委托下载清理调度 helper');
+    assert.doesNotMatch(downloadBlock, /setTimeout\(\(\) => \{[\s\S]*URL\.revokeObjectURL\(link\.href\);[\s\S]*link\.remove\(\);[\s\S]*\}, 0\);/, 'downloadCsv 不应继续排无句柄 object URL 清理 timeout');
+});
+
 test('潜力词导出入口样式收敛到统一浅玻璃 token', () => {
     const block = getPotentialStyleBlock();
 

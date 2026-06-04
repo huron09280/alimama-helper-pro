@@ -22533,6 +22533,8 @@ if (typeof globalThis !== 'undefined') {
     const PotentialPlanDailyExporter = {
         initialized: false,
         running: false,
+        downloadCleanupTimer: null,
+        downloadCleanupLink: null,
         exportClickHandler: null,
         exportClickHandlerBound: false,
         TARGET_DAYS: 30,
@@ -22898,6 +22900,7 @@ if (typeof globalThis !== 'undefined') {
         },
 
         removeButtons() {
+            this.clearDownloadCleanupTimer();
             document.querySelectorAll(this.WRAP_SELECTOR).forEach((node) => node.remove());
             document.querySelectorAll(this.BUTTON_SELECTOR).forEach((node) => node.remove());
             document.querySelectorAll(this.DAYS_INPUT_SELECTOR).forEach((node) => node.remove());
@@ -23644,9 +23647,35 @@ if (typeof globalThis !== 'undefined') {
             link.style.display = 'none';
             document.body.appendChild(link);
             link.click();
-            setTimeout(() => {
-                URL.revokeObjectURL(link.href);
-                link.remove();
+            this.scheduleDownloadCleanup(link);
+        },
+
+        cleanupDownloadLink(link) {
+            if (!(link instanceof HTMLAnchorElement)) return;
+            const href = String(link.href || '');
+            if (href) URL.revokeObjectURL(href);
+            link.remove();
+        },
+
+        clearDownloadCleanupTimer() {
+            if (this.downloadCleanupTimer) {
+                clearTimeout(this.downloadCleanupTimer);
+                this.downloadCleanupTimer = null;
+            }
+            const pendingLink = this.downloadCleanupLink;
+            this.downloadCleanupLink = null;
+            this.cleanupDownloadLink(pendingLink);
+        },
+
+        scheduleDownloadCleanup(link) {
+            this.clearDownloadCleanupTimer();
+            if (!(link instanceof HTMLAnchorElement)) return;
+            this.downloadCleanupLink = link;
+            this.downloadCleanupTimer = setTimeout(() => {
+                this.downloadCleanupTimer = null;
+                const pendingLink = this.downloadCleanupLink;
+                this.downloadCleanupLink = null;
+                this.cleanupDownloadLink(pendingLink);
             }, 0);
         },
 
