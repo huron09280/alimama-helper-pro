@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
 
@@ -16,6 +17,13 @@ function getRenderSceneDynamicConfigBlock() {
   const end = source.indexOf('const collectManualKeywordRowsFromPanel = (panel) => (', start);
   assert.ok(start > -1 && end > start, '无法定位 renderSceneDynamicConfig 代码块');
   return source.slice(start, end);
+}
+
+function sliceSource(text, startText, endText) {
+  const start = text.indexOf(startText);
+  const end = text.indexOf(endText, start + startText.length);
+  assert.ok(start > -1 && end > start, `无法定位代码片段：${startText}`);
+  return text.slice(start, end);
 }
 
 function getResolveSceneSettingOverridesBlock() {
@@ -44,6 +52,128 @@ function extractBraceBlock(text, anchorIndex, label = '代码块') {
     }
   }
   assert.fail(`无法定位${label}结束位置`);
+}
+
+function createAiMaxTypewriterHarness(initialVisibilityState = 'visible') {
+  let visibilityState = String(initialVisibilityState || 'visible');
+  let nextTimerId = 1;
+  const timers = new Map();
+  const listeners = new Map();
+  class FakeHTMLElement {
+    constructor(attrs = {}) {
+      this.dataset = {};
+      this.textContent = String(attrs.textContent || '');
+      this.isConnected = attrs.isConnected !== false;
+      this.children = Array.isArray(attrs.children) ? attrs.children : [];
+      this.attributes = new Map();
+      Object.entries(attrs.attributes || {}).forEach(([key, value]) => {
+        this.attributes.set(key, String(value));
+      });
+    }
+
+    getAttribute(name) {
+      return this.attributes.get(name) || '';
+    }
+
+    matches(selector) {
+      if (selector === '[data-ai-max-step-detail="1"].hidden') {
+        return this.getAttribute('data-ai-max-step-detail') === '1' && /\bhidden\b/.test(this.getAttribute('class'));
+      }
+      return false;
+    }
+
+    querySelectorAll(selector) {
+      if (selector !== '[data-ai-max-typewriter-text]') return [];
+      return this.children.filter(child => child instanceof FakeHTMLElement && child.getAttribute('data-ai-max-typewriter-text'));
+    }
+  }
+  const addListener = (type, handler) => {
+    if (typeof handler !== 'function') return;
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeListener = (type, handler) => {
+    listeners.get(type)?.delete(handler);
+  };
+  const documentRef = {
+    get visibilityState() {
+      return visibilityState;
+    },
+    addEventListener: addListener,
+    removeEventListener: removeListener
+  };
+  const windowRef = {
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') {
+        timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      }
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(Number(timerId));
+    }
+  };
+  const dynamicBlock = getRenderSceneDynamicConfigBlock();
+  const helperSource = sliceSource(
+    dynamicBlock,
+    'const ensureAiMaxTypewriterTimers = () => {',
+    'const unbindAiMaxDetailDelegatedHandlers = () => {'
+  );
+  const context = createContext({
+    document: documentRef,
+    window: windowRef,
+    HTMLElement: FakeHTMLElement,
+    Map,
+    Set,
+    Array,
+    Number,
+    String,
+    normalizeSceneSettingValue: (value = '') => String(value || '').replace(/\s+/g, ' ').trim(),
+    wizardState: {
+      aiMaxTypewriterTimers: new Map(),
+      aiMaxTypewriterCleanupRegistered: false,
+      aiMaxTypewriterVisibilityHandler: null,
+      cleanupHandlers: []
+    }
+  });
+  new Script(`${helperSource}
+globalThis.__runAiMaxTypewriter = runAiMaxTypewriter;
+globalThis.__cleanupAiMaxTypewriterTimers = cleanupAiMaxTypewriterTimers;
+globalThis.__wizardState = wizardState;`).runInContext(context);
+  return {
+    context,
+    timers,
+    FakeHTMLElement,
+    listenerCount(type = 'visibilitychange') {
+      return listeners.get(type)?.size || 0;
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map(timer => timer.delay);
+    },
+    get wizardState() {
+      return context.__wizardState;
+    },
+    run(panel) {
+      context.__runAiMaxTypewriter(panel);
+    },
+    cleanup() {
+      context.__cleanupAiMaxTypewriterTimers();
+    }
+  };
 }
 
 function getKeywordCustomBidModeBranches() {
@@ -454,8 +584,38 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
-    /const cleanupAiMaxTypewriterTimers = \(\) => \{[\s\S]*window\.clearTimeout\(record\.timerId\);[\s\S]*delete record\.target\.dataset\[record\.datasetKey\];[\s\S]*wizardState\.aiMaxTypewriterTimers\.clear\(\);/,
-    'AI点睛逐字动效 timeout 必须支持向导关闭时统一释放'
+    /aiMaxTypewriterTimers:\s*new Map\(\),[\s\S]*aiMaxTypewriterCleanupRegistered:\s*false,[\s\S]*aiMaxTypewriterVisibilityHandler:\s*null,/,
+    'AI点睛逐字动效缺少 timer、cleanup 和 visibility 状态声明'
+  );
+  assert.match(
+    source,
+    /const clearAiMaxTypewriterVisibilityHandler = \(\) => \{[\s\S]*document\.removeEventListener\('visibilitychange', handler\);[\s\S]*wizardState\.aiMaxTypewriterVisibilityHandler = null;/,
+    'AI点睛逐字动效缺少 visibilitychange 监听释放 helper'
+  );
+  assert.match(
+    source,
+    /const finishAiMaxTypewriterPendingTargets = \(\) => \{[\s\S]*const finishedTargets = new Set\(\);[\s\S]*finishAiMaxTypewriterTarget\(target, fullText\);[\s\S]*finishedTargets\.add\(target\);/,
+    'AI点睛逐字动效隐藏页收口应按目标去重并填完全文本'
+  );
+  assert.match(
+    source,
+    /const clearAiMaxTypewriterTimerRecords = \(\) => \{[\s\S]*window\.clearTimeout\(record\.timerId\);[\s\S]*delete record\.target\.dataset\[record\.datasetKey\];[\s\S]*wizardState\.aiMaxTypewriterTimers\.clear\(\);/,
+    'AI点睛逐字动效 timeout 必须支持统一释放 timer 记录'
+  );
+  assert.match(
+    source,
+    /const flushAiMaxTypewriterTimersForHiddenPage = \(\) => \{[\s\S]*finishAiMaxTypewriterPendingTargets\(\);[\s\S]*clearAiMaxTypewriterTimerRecords\(\);[\s\S]*clearAiMaxTypewriterVisibilityHandler\(\);/,
+    'AI点睛逐字动效隐藏页收口必须同时完成文本、清 timer 和释放 visibility handler'
+  );
+  assert.match(
+    source,
+    /const bindAiMaxTypewriterVisibilityHandler = \(\) => \{[\s\S]*if \(typeof wizardState\.aiMaxTypewriterVisibilityHandler === 'function'\) return;[\s\S]*if \(!isAiMaxTypewriterHidden\(\)\) return;[\s\S]*flushAiMaxTypewriterTimersForHiddenPage\(\);[\s\S]*document\.addEventListener\('visibilitychange', wizardState\.aiMaxTypewriterVisibilityHandler\);/,
+    'AI点睛逐字动效应通过 visibilitychange 在转隐藏时立即收口'
+  );
+  assert.match(
+    source,
+    /const cleanupAiMaxTypewriterTimers = \(\) => \{[\s\S]*clearAiMaxTypewriterTimerRecords\(\);[\s\S]*clearAiMaxTypewriterVisibilityHandler\(\);[\s\S]*wizardState\.aiMaxTypewriterCleanupRegistered = false;/,
+    'AI点睛逐字动效 cleanup 必须清 timer、释放 visibility handler 并重置注册状态'
   );
   assert.match(
     source,
@@ -464,12 +624,17 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
-    /const delayTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', delayTimer\);[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', delayTimer, target, 'aiMaxTypeDelayTimer'\);/,
+    /const trackAiMaxTypewriterTimer = \(type = '', timerId = 0, target = null, datasetKey = '', fullText = ''\) => \{[\s\S]*const record = \{ type, timerId: id, target, datasetKey, fullText \};[\s\S]*bindAiMaxTypewriterVisibilityHandler\(\);[\s\S]*registerAiMaxTypewriterCleanup\(\);/,
+    'AI点睛逐字动效 timer 记录必须保存 fullText 并绑定 visibility handler'
+  );
+  assert.match(
+    source,
+    /const delayTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', delayTimer\);[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', delayTimer, target, 'aiMaxTypeDelayTimer', fullText\);/,
     'AI点睛逐字动效 delay timeout 必须登记到 wizardState timer 表'
   );
   assert.match(
     source,
-    /const stepTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', stepTimer\);[\s\S]*if \(cursor < fullText\.length\) \{[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', stepTimer, target, 'aiMaxTypeTimer'\);/,
+    /const stepTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', stepTimer\);[\s\S]*if \(cursor < fullText\.length\) \{[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', stepTimer, target, 'aiMaxTypeTimer', fullText\);/,
     'AI点睛逐字动效 step timeout 必须逐步登记并在完成后释放'
   );
   assert.match(
@@ -532,6 +697,57 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
     /class="am-wxt-ai-max-demand-summary"[\s\S]{0,500}data-scene-popup-trigger-proxy="\$\{Utils\.escapeHtml\(popupTrigger\)\}"/,
     'AI点睛“5个需求”仍复用完整设置弹窗，而不是原生小浮层'
   );
+});
+
+test('AI点睛逐字动效隐藏页切换会立即完成文本并释放 timer', () => {
+  const hiddenHarness = createAiMaxTypewriterHarness('hidden');
+  const hiddenTarget = new hiddenHarness.FakeHTMLElement({
+    attributes: { 'data-ai-max-typewriter-text': '隐藏页直接完成' }
+  });
+  const hiddenPanel = new hiddenHarness.FakeHTMLElement({ children: [hiddenTarget] });
+  hiddenHarness.run(hiddenPanel);
+  assert.equal(hiddenTarget.textContent, '隐藏页直接完成', '隐藏页启动时应直接填完文本');
+  assert.equal(hiddenTarget.dataset.aiMaxTyped, '1', '隐藏页启动时应标记完成');
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页启动不应排逐字动效 timeout');
+  assert.equal(hiddenHarness.listenerCount(), 0, '隐藏页启动不应绑定 visibilitychange');
+
+  const visibleHarness = createAiMaxTypewriterHarness('visible');
+  const visibleTarget = new visibleHarness.FakeHTMLElement({
+    attributes: { 'data-ai-max-typewriter-text': '可见页转隐藏完成' }
+  });
+  const visiblePanel = new visibleHarness.FakeHTMLElement({ children: [visibleTarget] });
+  visibleHarness.run(visiblePanel);
+  assert.deepEqual(visibleHarness.getTimerDelays(), [0], '可见页第一个目标应先排 0ms delay timeout');
+  assert.equal(visibleHarness.listenerCount(), 1, '可见页排 timer 后应绑定 visibilitychange');
+  assert.equal(visibleHarness.wizardState.cleanupHandlers.length, 1, '可见页排 timer 后应注册向导 cleanup');
+  assert.equal(visibleTarget.textContent, '', '可见页启动后应进入逐字展示初始态');
+
+  visibleHarness.setVisibilityState('hidden');
+  assert.equal(visibleHarness.timers.size, 0, '转隐藏时应立即清理 pending timeout');
+  assert.equal(visibleTarget.textContent, '可见页转隐藏完成', '转隐藏时应立即填完全文本');
+  assert.equal(visibleTarget.dataset.aiMaxTyped, '1', '转隐藏完成后应保留完成标记');
+  assert.equal(visibleTarget.dataset.aiMaxTypeDelayTimer, undefined, '转隐藏完成后应清理 delay timer 标记');
+  assert.equal(visibleTarget.dataset.aiMaxTypeTimer, undefined, '转隐藏完成后应清理 step timer 标记');
+  assert.equal(visibleHarness.listenerCount(), 0, '转隐藏收口后应解绑 visibilitychange');
+  assert.equal(visibleHarness.wizardState.aiMaxTypewriterCleanupRegistered, true, '隐藏页收口不应重复/提前取消向导 cleanup 注册');
+
+  visibleHarness.cleanup();
+  assert.equal(visibleHarness.wizardState.aiMaxTypewriterCleanupRegistered, false, '关闭向导 cleanup 后应重置注册状态');
+  assert.equal(visibleHarness.listenerCount(), 0, '关闭向导 cleanup 后不应残留 visibilitychange');
+
+  const stepHarness = createAiMaxTypewriterHarness('visible');
+  const stepTarget = new stepHarness.FakeHTMLElement({
+    attributes: { 'data-ai-max-typewriter-text': 'AB' }
+  });
+  const stepPanel = new stepHarness.FakeHTMLElement({ children: [stepTarget] });
+  stepHarness.run(stepPanel);
+  assert.equal(stepHarness.tickNextTimer(), true, '应触发 delay timer');
+  assert.deepEqual(stepHarness.getTimerDelays(), [14], 'delay 后应按 14ms 排 step timer');
+  assert.equal(stepTarget.dataset.aiMaxTypeDelayTimer, undefined, 'delay timer 触发后应释放 delay 标记');
+  stepHarness.setVisibilityState('hidden');
+  assert.equal(stepHarness.timers.size, 0, 'step timer pending 时转隐藏应清理 timer');
+  assert.equal(stepTarget.textContent, 'AB', 'step timer pending 时转隐藏应填完全文本');
+  assert.equal(stepHarness.listenerCount(), 0, 'step timer pending 时转隐藏应释放 listener');
 });
 
 test('关键词自定义推广编辑计划不依赖未定义 runtime 变量', () => {

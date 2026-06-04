@@ -1,3 +1,53 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十八子项
+
+## 需求规格
+- 目标：在 DMP 入口按钮 ensure timer 收口后，继续优化关键词向导 AI 点睛详情逐字动效 timer，避免可见页已排出的 `aiMaxTypewriterTimers` 在标签页切到隐藏后仍等待 14ms step timer 或 0-420ms delay timer 到期才释放。
+- 根因判断：`src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 的 `runAiMaxTypewriter()` 在启动时已判断隐藏页并直接填完文本，但可见页启动后会为每个目标登记 delay/step timeout。若用户在动效执行过程中切到后台，现有逻辑只有 timer 到期后才发现 `document.visibilityState === 'hidden'` 并结束文本；后台仍保留短间隔 timer 句柄，增加隐藏页唤醒。
+- 范围：仅覆盖 AI 点睛详情逐字展示动效的隐藏页暂停/收口、timer/visibility listener/cleanup 生命周期；不改 AI 点睛文案、5 步详情结构、需求弹层、动态设置渲染、商品/关键词/人群数据、推荐词、场景同步、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留逐字动效在可见页的原视觉行为和 14ms/0-420ms 节奏；新增统一的 typewriter visibility handler。隐藏页启动时仍直接填完文本；动效执行中转隐藏时立即清理全部登记的 timeout 并把当前 typewriter 目标填成完整文本，释放 visibility handler 和 timer 表，避免后台继续唤醒。
+- 成功标准：静态与行为测试证明 wizardState 登记 AI 点睛 typewriter visibility handler；存在统一 timer 清理、目标完成、visibility 绑定/释放和隐藏页收口 helper；隐藏页启动不排 timeout；可见页启动仍保留 delay/step timeout；动效执行中转隐藏会清掉 pending timeout、完成目标文本并释放 listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不点击 AI 点睛按钮、不打开需求弹层、不调用推荐词、场景同步、创建、复制、提交、修复、追加关键词、预算、护航、导出或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十七子项提交后工作区状态，确认本子项只处理 AI 点睛详情逐字动效 timer。
+- [x] 复核 UI/图标规范，确认本轮不改 AI 点睛视觉、文案、图标和交互结构。
+- [x] 定位 `runAiMaxTypewriter()`、`cleanupAiMaxTypewriterTimers()` 与现有 AI 点睛测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为 AI 点睛 typewriter 增加 visibility handler、统一隐藏页收口 helper 和 listener 空闲释放。
+- [x] 将逐字动效执行中转隐藏改为立即完成文本并清理 pending timeout。
+- [x] 更新 AI 点睛目标测试，锁定隐藏页不排 timeout、转隐藏释放 timer/listener、可见页原 delay/step 调度保留和 cleanupHandlers 仍能关闭清理。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `b9ab0a3 优化DMP入口按钮重试轮询`，tracked 工作区干净；本子项不依赖 DMP 取证临时文件，也不纳入本次提交。
+- 定位结论：授权、bridge/cache、native runtime cache、主面板工具打开、快捷查询和 DMP 入口按钮等后台 timer 已完成隐藏页收口；AI 点睛 typewriter 是剩余低风险纯展示 timer，执行中转隐藏仍可能保留短间隔 timeout。相比 `riskAlertTimer`、提交/护航/预算链路或真实数据请求，本点更适合继续做“不改变业务逻辑”的后台唤醒优化。
+- 计划校验：本子项只降低隐藏标签页中的动效 timer 唤醒；可见页仍保持逐字动效、展开详情、需求选择弹层和所有业务数据/请求逻辑。若实现需要触碰 AI 点睛文案、需求弹层、动态设置字段或创建提交链路，先回到本计划更新后再继续。
+- 实现摘要：`wizardState` 新增 `aiMaxTypewriterVisibilityHandler`，并把 AI 点睛逐字动效 timeout 记录扩展为携带 `target`、`datasetKey` 与完整文本；新增 visibility 绑定/释放、pending 目标完成、timer 记录清理和隐藏页统一 flush helper。
+- 调度摘要：隐藏页启动仍直接填完文本且不排 timeout；可见页保留原 0-420ms delay 与 14ms step 节奏。若动效执行过程中页面切到 hidden，visibility handler 会立即完成所有 pending 目标、清理 delay/step timeout 与 dataset timer 标记，并释放 listener。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 新增 `node:vm` fake runtime 行为测试，覆盖隐藏页启动、可见页启动、visible->hidden、delay->step 后转隐藏和向导 cleanup 生命周期；静态断言同步锁定 helper、状态声明和构建产物关键调用。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 通过。
+- 测试语法：`node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，13 项测试全绿；新增 “AI点睛逐字动效隐藏页切换会立即完成文本并释放 timer” 行为断言，使用 fake `document.visibilityState`、fake timer 和 fake `visibilitychange`，不触发真实浏览器或业务请求。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/keyword-custom-native-parity-ui.test.mjs`、`tests/keyword-wizard-entry-regression.test.mjs`、`tests/keyword-custom-preview-submit-parity.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，68 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，622 项中 620 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 空白检查：`git diff --check` 通过。
+- 静态定位：`rg -n "aiMaxTypewriterVisibilityHandler|flushAiMaxTypewriterTimersForHiddenPage|finishAiMaxTypewriterPendingTargets|trackAiMaxTypewriterTimer\\('timeout', stepTimer, target, 'aiMaxTypeTimer', fullText\\)|trackAiMaxTypewriterTimer\\('timeout', delayTimer, target, 'aiMaxTypeDelayTimer', fullText\\)" src/optimizer/keyword-plan-api tests/keyword-custom-native-parity-ui.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页收口逻辑已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`hookManager:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4057228`，包含 `aiMaxTypewriterVisibilityHandler`、`flushAiMaxTypewriterTimersForHiddenPage`、`finishAiMaxTypewriterPendingTargets`、`trackAiMaxTypewriterTimer('timeout', stepTimer, target, 'aiMaxTypeTimer', fullText)` 和 `trackAiMaxTypewriterTimer('timeout', delayTimer, target, 'aiMaxTypeDelayTimer', fullText)`。
+- Chrome MCP 弹窗/危险请求：`helperPanel` 存在但不可见；`magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不存在或不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Diff 自审：`git diff --stat` 包含 `src/optimizer/keyword-plan-api/intro.js`、`src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js`、`tests/keyword-custom-native-parity-ui.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 AI 点睛逐字动效 timer 的 hidden flush、visibility handler 和 cleanup 生命周期，不改 AI 点睛文案、5 步详情结构、需求弹层、动态设置渲染、商品/关键词/人群数据、推荐词、场景同步、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第四十八子项结果：AI 点睛详情逐字动效从“可见页已排 delay/step timeout 后，切到隐藏页仍等待 timeout 到期才释放”优化为“转隐藏时立即完成 pending 文本、清理登记的 timeout 与 dataset 标记，并释放 visibility listener”。
+- 取舍结论：保留可见页原逐字动效节奏与视觉行为，隐藏页启动仍直接完成文本；新增的 visibility handler 只服务于纯展示动效的生命周期，不进入推荐、场景同步、创建、复制、提交、预算、护航或下载链路，也不触碰服务端 10rpm 策略。
+- 效果结论：在用户展开 AI 点睛详情动效后立刻切到后台的场景中，插件不再保留短间隔逐字 timeout 等待唤醒，降低隐藏页后台 timer 保留和唤醒成本。浏览器验收未打开组建计划向导、未点击 AI 点睛、未打开需求弹层、未触发任何业务写动作或服务端提交，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十七子项
 
 ## 需求规格

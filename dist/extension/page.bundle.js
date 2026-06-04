@@ -26948,6 +26948,9 @@ if (typeof globalThis !== 'undefined') {
             manualKeywordPanelCollapsed: true,
             keywordMetricMap: {},
             keywordAiMaxGenerationMap: {},
+            aiMaxTypewriterTimers: new Map(),
+            aiMaxTypewriterCleanupRegistered: false,
+            aiMaxTypewriterVisibilityHandler: null,
             crowdCustomDefaultItemPending: null,
             styleReadyPromise: null,
             styleCleanupHandlers: [],
@@ -52022,7 +52025,25 @@ if (typeof globalThis !== 'undefined') {
                     target.dataset.aiMaxTyped = '1';
                     target.textContent = fullText;
                 };
-                const cleanupAiMaxTypewriterTimers = () => {
+                const clearAiMaxTypewriterVisibilityHandler = () => {
+                    const handler = wizardState.aiMaxTypewriterVisibilityHandler;
+                    if (typeof handler === 'function') {
+                        document.removeEventListener('visibilitychange', handler);
+                    }
+                    wizardState.aiMaxTypewriterVisibilityHandler = null;
+                };
+                const finishAiMaxTypewriterPendingTargets = () => {
+                    if (!(wizardState.aiMaxTypewriterTimers instanceof Map)) return;
+                    const finishedTargets = new Set();
+                    Array.from(wizardState.aiMaxTypewriterTimers.values()).forEach((record) => {
+                        const target = record?.target;
+                        if (!(target instanceof HTMLElement) || finishedTargets.has(target)) return;
+                        const fullText = String(record.fullText || target.getAttribute('data-ai-max-typewriter-text') || target.textContent || '');
+                        finishAiMaxTypewriterTarget(target, fullText);
+                        finishedTargets.add(target);
+                    });
+                };
+                const clearAiMaxTypewriterTimerRecords = () => {
                     if (!(wizardState.aiMaxTypewriterTimers instanceof Map)) return;
                     Array.from(wizardState.aiMaxTypewriterTimers.values()).forEach((record) => {
                         if (!record || !Number.isFinite(Number(record.timerId))) return;
@@ -52032,6 +52053,28 @@ if (typeof globalThis !== 'undefined') {
                         }
                     });
                     wizardState.aiMaxTypewriterTimers.clear();
+                };
+                const releaseAiMaxTypewriterVisibilityHandlerIfIdle = () => {
+                    const timers = ensureAiMaxTypewriterTimers();
+                    if (timers.size > 0) return;
+                    clearAiMaxTypewriterVisibilityHandler();
+                };
+                const flushAiMaxTypewriterTimersForHiddenPage = () => {
+                    finishAiMaxTypewriterPendingTargets();
+                    clearAiMaxTypewriterTimerRecords();
+                    clearAiMaxTypewriterVisibilityHandler();
+                };
+                const bindAiMaxTypewriterVisibilityHandler = () => {
+                    if (typeof wizardState.aiMaxTypewriterVisibilityHandler === 'function') return;
+                    wizardState.aiMaxTypewriterVisibilityHandler = () => {
+                        if (!isAiMaxTypewriterHidden()) return;
+                        flushAiMaxTypewriterTimersForHiddenPage();
+                    };
+                    document.addEventListener('visibilitychange', wizardState.aiMaxTypewriterVisibilityHandler);
+                };
+                const cleanupAiMaxTypewriterTimers = () => {
+                    clearAiMaxTypewriterTimerRecords();
+                    clearAiMaxTypewriterVisibilityHandler();
                     wizardState.aiMaxTypewriterCleanupRegistered = false;
                 };
                 const registerAiMaxTypewriterCleanup = () => {
@@ -52042,16 +52085,17 @@ if (typeof globalThis !== 'undefined') {
                     wizardState.cleanupHandlers.push(cleanupAiMaxTypewriterTimers);
                     wizardState.aiMaxTypewriterCleanupRegistered = true;
                 };
-                const trackAiMaxTypewriterTimer = (type = '', timerId = 0, target = null, datasetKey = '') => {
+                const trackAiMaxTypewriterTimer = (type = '', timerId = 0, target = null, datasetKey = '', fullText = '') => {
                     const id = Number(timerId);
                     if (!Number.isFinite(id)) return null;
                     const timers = ensureAiMaxTypewriterTimers();
                     const key = buildAiMaxTypewriterTimerKey(type, id);
-                    const record = { type, timerId: id, target, datasetKey };
+                    const record = { type, timerId: id, target, datasetKey, fullText };
                     timers.set(key, record);
                     if (target instanceof HTMLElement && datasetKey) {
                         target.dataset[datasetKey] = String(id);
                     }
+                    bindAiMaxTypewriterVisibilityHandler();
                     registerAiMaxTypewriterCleanup();
                     return record;
                 };
@@ -52066,6 +52110,7 @@ if (typeof globalThis !== 'undefined') {
                         delete record.target.dataset[record.datasetKey];
                     }
                     timers.delete(key);
+                    releaseAiMaxTypewriterVisibilityHandlerIfIdle();
                 };
                 const runAiMaxTypewriter = (panel = null) => {
                     if (!(panel instanceof HTMLElement)) return;
@@ -52103,7 +52148,7 @@ if (typeof globalThis !== 'undefined') {
                                     scheduleNextAiMaxTypewriterStep();
                                 }
                             }, 14);
-                            trackAiMaxTypewriterTimer('timeout', stepTimer, target, 'aiMaxTypeTimer');
+                            trackAiMaxTypewriterTimer('timeout', stepTimer, target, 'aiMaxTypeTimer', fullText);
                         };
                         const startDelay = Math.min(targetIndex * 90, 420);
                         const delayTimer = window.setTimeout(() => {
@@ -52114,7 +52159,7 @@ if (typeof globalThis !== 'undefined') {
                             }
                             scheduleNextAiMaxTypewriterStep();
                         }, startDelay);
-                        trackAiMaxTypewriterTimer('timeout', delayTimer, target, 'aiMaxTypeDelayTimer');
+                        trackAiMaxTypewriterTimer('timeout', delayTimer, target, 'aiMaxTypeDelayTimer', fullText);
                     });
                 };
 
