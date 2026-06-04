@@ -16597,6 +16597,7 @@ if (typeof globalThis !== 'undefined') {
         batchPlusMenuEl: null,
         batchPlusMenuCloseTimer: null,
         campaignListRefreshTimer: null,
+        copyFocusRestoreTimer: null,
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -16960,6 +16961,20 @@ if (typeof globalThis !== 'undefined') {
                 this.refreshCampaignListOnlyNow(options).catch((err) => {
                     Logger.log(`⚠️ ${options?.reason || '批量操作'}已完成，但自动刷新计划列表失败：${err?.message || err}`, true);
                 });
+            }, delay);
+        },
+
+        clearCopyFocusRestoreTimer() {
+            if (!this.copyFocusRestoreTimer) return;
+            window.clearTimeout(this.copyFocusRestoreTimer);
+            this.copyFocusRestoreTimer = null;
+        },
+
+        scheduleCopyFocusRestore(target = null, attempt = 0, delay = 0) {
+            this.clearCopyFocusRestoreTimer();
+            this.copyFocusRestoreTimer = window.setTimeout(() => {
+                this.copyFocusRestoreTimer = null;
+                this.runCopyFocusRestore(target, attempt);
             }, delay);
         },
 
@@ -18992,33 +19007,27 @@ if (typeof globalThis !== 'undefined') {
             }) || null;
         },
 
-        restoreFocusWhenReady(target = null, attempt = 0) {
+        runCopyFocusRestore(target = null, attempt = 0) {
             const element = this.resolveCopyFocusTargetElement(target, true);
-            if (!element) {
-                if (attempt < 6) {
-                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
-                }
+            if (!element || ('disabled' in element && element.disabled)) {
+                if (attempt < 6) this.scheduleCopyFocusRestore(target, attempt + 1, 50);
                 return;
             }
-            if ('disabled' in element && element.disabled) {
-                if (attempt < 6) {
-                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
+            requestAnimationFrame(() => {
+                const readyElement = this.resolveCopyFocusTargetElement(target, false)
+                    || this.resolveCopyFocusTargetElement(target, true);
+                if (!readyElement) return;
+                if (!readyElement.isConnected || typeof readyElement.focus !== 'function') return;
+                if ('disabled' in readyElement && readyElement.disabled) {
+                    if (attempt < 6) this.scheduleCopyFocusRestore(target, attempt + 1, 50);
+                    return;
                 }
-                return;
-            }
-            window.setTimeout(() => {
-                requestAnimationFrame(() => {
-                    const readyElement = this.resolveCopyFocusTargetElement(target, false)
-                        || this.resolveCopyFocusTargetElement(target, true);
-                    if (!readyElement) return;
-                    if (!readyElement.isConnected || typeof readyElement.focus !== 'function') return;
-                    if ('disabled' in readyElement && readyElement.disabled) {
-                        if (attempt < 6) this.restoreFocusWhenReady(target, attempt + 1);
-                        return;
-                    }
-                    readyElement.focus({ preventScroll: true });
-                });
-            }, 0);
+                readyElement.focus({ preventScroll: true });
+            });
+        },
+
+        restoreFocusWhenReady(target = null, attempt = 0) {
+            this.scheduleCopyFocusRestore(target, attempt, 0);
         },
 
         showCopySuccessDialogAndRefresh(result = {}, context = {}) {

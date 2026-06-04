@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十六子项
+
+## 需求规格
+- 目标：在批量+成功列表刷新 timer 收口后，继续优化复制计划弹窗关闭后的焦点恢复 timer，避免 `restoreFocusWhenReady()` 在触发按钮暂不可用时连续排队无句柄 50ms retry 和 0ms focus timeout，旧 timer 持有 focus target、context 和按钮 DOM。
+- 根因判断：`src/main-assistant/campaign-id-quick-entry.js` 中 `restoreFocusWhenReady(target, attempt)` 直接使用三处 `window.setTimeout`；重复关闭复制成功弹窗或复制前一览窗时，旧焦点恢复任务不会被取消，也无法证明 pending timer 已归零。
+- 范围：仅覆盖复制链路关闭/取消后的焦点恢复 timer 生命周期和静态回归；不改复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把焦点恢复 timer 归入 `CampaignIdQuickEntry` 对象生命周期，新增 `copyFocusRestoreTimer`、`clearCopyFocusRestoreTimer()` 和 `scheduleCopyFocusRestore(target, attempt, delay)`；每次恢复前先取消旧 timer，触发后归零，继续复用原有最多 6 次重试和 `requestAnimationFrame` 聚焦。
+- 成功标准：静态测试证明焦点恢复 timer 有句柄、可清理、重复恢复先取消旧 timer、timer 触发后归零，`restoreFocusWhenReady()` 不再直接保留无句柄 `window.setTimeout`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击复制、确认搜索、批量+、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认复制按钮/批量入口运行态存在，不触发复制链路。
+
+## 执行计划（可核对）
+- [x] 复核第二十五子项提交后工作区状态，确认本子项只处理复制弹窗关闭后的焦点恢复 timer。
+- [x] 在 `CampaignIdQuickEntry` 生命周期中实现焦点恢复 timer 句柄、清理和调度 helper。
+- [x] 将 `restoreFocusWhenReady()` 的 50ms retry 和 0ms focus defer 改为调用 helper，保持原最多 6 次重试、禁用按钮等待和 rAF 聚焦行为。
+- [x] 补充/更新目标测试，锁定复制焦点恢复不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `363ce19 优化 Chrome 批量刷新计时器释放`，工作区干净。
+- 定位结论：`restoreFocusWhenReady()` 的 50ms retry 和 0ms focus timeout 只服务复制弹窗关闭后的焦点恢复，是明确短生命周期 UI 任务；收口后可以减少重复关闭/弹窗替换时旧 target 闭包滞留。
+- 实现摘要：`src/main-assistant/campaign-id-quick-entry.js` 新增 `copyFocusRestoreTimer`、`clearCopyFocusRestoreTimer()` 和 `scheduleCopyFocusRestore(target, attempt, delay)`；`restoreFocusWhenReady()` 只委托调度 helper，timer 触发后归零并调用 `runCopyFocusRestore()`。
+- 行为摘要：保留原最多 6 次重试、50ms 等待禁用按钮恢复、`requestAnimationFrame` 后聚焦和 `{ preventScroll: true }`；只把无句柄 timeout 改为可取消的单 pending 焦点恢复任务。
+- 测试摘要：`tests/campaign-copy-current-plan-quick-entry.test.mjs` 扩展复制成功弹窗回归，锁定焦点恢复 timer 句柄、清理 helper、调度 helper、执行入口和旧无句柄 50ms retry 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过。
+- 测试语法：`node --check tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过。
+- 目标测试：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过，14 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，51 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 只读检查运行态；返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`copyButtonCount:7`、`batchPlusButtonCount:1`、`hasCopySuccessPopup:false`、`hasCopyOverviewPopup:false`、`hasBatchPlusMenuOpen:false`，样例复制按钮包含 `campaignId`、`copyMode:"inherit"`、`disabled:false`、`isConnected:true`。未点击复制、确认搜索、批量+、计划上下线、护航执行或任何真实写入口。
+- Diff 自审：改动集中在复制弹窗关闭后的焦点恢复 timer 生命周期、对应静态测试、任务记录和构建产物；未改复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第二十六子项结果：复制弹窗关闭后的焦点恢复从“多处分支直接排队无句柄 50ms retry/0ms focus timeout”优化为“`CampaignIdQuickEntry` 统一持有 `copyFocusRestoreTimer`，重复恢复先取消旧 timer，触发后归零并进入单一执行函数”。
+- 取舍结论：保留原焦点恢复语义和等待节奏，没有新增第二套焦点目标事实源；只减少重复关闭或按钮暂不可用时旧 target/context/DOM 闭包被延迟持有的窗口。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实复制或护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十五子项
 
 ## 需求规格
