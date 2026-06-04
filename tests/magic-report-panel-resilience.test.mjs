@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
 
@@ -23,6 +24,98 @@ function sliceBetween(block, startText, endText) {
   const end = block.indexOf(endText, start + startText.length);
   assert.ok(start > -1 && end > start, `无法定位代码片段：${startText}`);
   return block.slice(start, end);
+}
+
+function createPanelIconRevealHarness(initialVisibilityState = 'visible') {
+  let visibilityState = String(initialVisibilityState || 'visible');
+  let nextTimerId = 1;
+  const timers = new Map();
+  const listeners = new Map();
+  class FakeHTMLElement {
+    constructor() {
+      this.isConnected = true;
+      this.style = {};
+    }
+  }
+  const addListener = (type, handler) => {
+    if (typeof handler !== 'function') return;
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeListener = (type, handler) => {
+    listeners.get(type)?.delete(handler);
+  };
+  const uiBlock = getUiBlock();
+  const methodSource = sliceBetween(
+    uiBlock,
+    'clearPanelIconRevealTimer()',
+    'isToolOpenRetryDocumentHidden()'
+  );
+  const context = createContext({
+    HTMLElement: FakeHTMLElement,
+    State: {
+      config: {
+        panelOpen: false
+      }
+    },
+    document: {
+      get visibilityState() {
+        return visibilityState;
+      },
+      addEventListener: addListener,
+      removeEventListener: removeListener
+    },
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') {
+        timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      }
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(Number(timerId));
+    }
+  });
+  new Script(`const UI = {
+runtime: {
+  panelIconRevealTimer: null,
+  panelIconRevealVisibilityHandler: null,
+  panelIconRevealPendingIcon: null
+},
+${methodSource}
+};
+globalThis.__UI = UI;
+globalThis.__State = State;`).runInContext(context);
+  return {
+    context,
+    timers,
+    FakeHTMLElement,
+    listenerCount(type = 'visibilitychange') {
+      return listeners.get(type)?.size || 0;
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map(timer => timer.delay);
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    get UI() {
+      return context.__UI;
+    },
+    get State() {
+      return context.__State;
+    }
+  };
 }
 
 test('MagicReport.createPopup 会清理失联弹窗引用与旧 DOM 节点', () => {
@@ -166,18 +259,33 @@ test('UI 主面板外部点击监听和悬浮球显示 timer 按面板开关释�
   const block = getUiBlock();
   assert.match(
     block,
-    /runtime:\s*\{[\s\S]*panelOutsideClickHandler:\s*null,[\s\S]*panelOutsideClickHandlerBound:\s*false,[\s\S]*panelIconRevealTimer:\s*null/,
-    'UI runtime 缺少主面板外部点击监听或悬浮球 timer 状态'
+    /runtime:\s*\{[\s\S]*panelOutsideClickHandler:\s*null,[\s\S]*panelOutsideClickHandlerBound:\s*false,[\s\S]*panelIconRevealTimer:\s*null,[\s\S]*panelIconRevealVisibilityHandler:\s*null,[\s\S]*panelIconRevealPendingIcon:\s*null/,
+    'UI runtime 缺少主面板外部点击监听、悬浮球 timer、visibility handler 或 pending icon 状态'
   );
   assert.match(
     block,
-    /clearPanelIconRevealTimer\(\)\s*\{[\s\S]*clearTimeout\(this\.runtime\.panelIconRevealTimer\);[\s\S]*this\.runtime\.panelIconRevealTimer = null;/,
-    '悬浮球 reveal timer 应支持显式清理并归零'
+    /clearPanelIconRevealTimer\(\)\s*\{[\s\S]*clearTimeout\(this\.runtime\.panelIconRevealTimer\);[\s\S]*this\.runtime\.panelIconRevealTimer = null;[\s\S]*this\.clearPanelIconRevealVisibilityHandler\(\);[\s\S]*this\.runtime\.panelIconRevealPendingIcon = null;/,
+    '悬浮球 reveal timer 应支持显式清理 timer、visibility handler 和 pending icon'
   );
   assert.match(
     block,
-    /schedulePanelIconReveal\(icon\)\s*\{[\s\S]*this\.clearPanelIconRevealTimer\(\);[\s\S]*this\.runtime\.panelIconRevealTimer = setTimeout\(\(\) => \{[\s\S]*this\.runtime\.panelIconRevealTimer = null;[\s\S]*if \(State\.config\.panelOpen\) return;[\s\S]*if \(!icon\.isConnected\) return;[\s\S]*icon\.style\.display = 'flex';[\s\S]*\}, 300\);/,
-    '悬浮球 reveal timer 触发前应校验面板仍关闭且 icon 仍连接'
+    /isPanelIconRevealDocumentHidden\(\)\s*\{[\s\S]*return document\.visibilityState === 'hidden';[\s\S]*\}/,
+    '悬浮球 reveal 缺少隐藏页判定'
+  );
+  assert.match(
+    block,
+    /clearPanelIconRevealVisibilityHandler\(\)\s*\{[\s\S]*document\.removeEventListener\('visibilitychange', handler\);[\s\S]*this\.runtime\.panelIconRevealVisibilityHandler = null;/,
+    '悬浮球 reveal 应支持释放 visibilitychange handler'
+  );
+  assert.match(
+    block,
+    /bindPanelIconRevealVisibilityHandler\(\)\s*\{[\s\S]*if \(typeof this\.runtime\.panelIconRevealVisibilityHandler === 'function'\) return;[\s\S]*if \(this\.isPanelIconRevealDocumentHidden\(\)\) \{[\s\S]*clearTimeout\(this\.runtime\.panelIconRevealTimer\);[\s\S]*this\.runtime\.panelIconRevealTimer = null;[\s\S]*return;[\s\S]*const pendingIcon = this\.runtime\.panelIconRevealPendingIcon;[\s\S]*this\.schedulePanelIconReveal\(pendingIcon\);[\s\S]*document\.addEventListener\('visibilitychange', this\.runtime\.panelIconRevealVisibilityHandler\);/,
+    '悬浮球 reveal 应在隐藏时取消 timer，恢复可见后继续同一个 pending icon'
+  );
+  assert.match(
+    block,
+    /schedulePanelIconReveal\(icon\)\s*\{[\s\S]*this\.clearPanelIconRevealTimer\(\);[\s\S]*this\.runtime\.panelIconRevealPendingIcon = icon;[\s\S]*this\.bindPanelIconRevealVisibilityHandler\(\);[\s\S]*if \(this\.isPanelIconRevealDocumentHidden\(\)\) return;[\s\S]*this\.runtime\.panelIconRevealTimer = setTimeout\(\(\) => \{[\s\S]*this\.runtime\.panelIconRevealTimer = null;[\s\S]*if \(this\.isPanelIconRevealDocumentHidden\(\)\) return;[\s\S]*const pendingIcon = this\.runtime\.panelIconRevealPendingIcon;[\s\S]*this\.clearPanelIconRevealVisibilityHandler\(\);[\s\S]*this\.runtime\.panelIconRevealPendingIcon = null;[\s\S]*if \(State\.config\.panelOpen\) return;[\s\S]*if \(!revealIcon\.isConnected\) return;[\s\S]*revealIcon\.style\.display = 'flex';[\s\S]*\}, 300\);/,
+    '悬浮球 reveal timer 应隐藏页暂停，可见页触发前校验面板仍关闭且 icon 仍连接'
   );
   assert.match(
     block,
@@ -214,6 +322,47 @@ test('UI 主面板外部点击监听和悬浮球显示 timer 按面板开关释�
     /setTimeout\(\(\) => \{ icon\.style\.display = 'flex'; \}, 300\);/,
     '悬浮球显示不应继续使用无句柄 setTimeout'
   );
+});
+
+test('UI 悬浮球 reveal timer 在隐藏页暂停并恢复可见后补排', () => {
+  const hiddenHarness = createPanelIconRevealHarness('hidden');
+  const hiddenIcon = new hiddenHarness.FakeHTMLElement();
+  hiddenHarness.UI.schedulePanelIconReveal(hiddenIcon);
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 300ms reveal timeout');
+  assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页应保留 visibilitychange 恢复监听');
+  assert.equal(hiddenHarness.UI.runtime.panelIconRevealPendingIcon, hiddenIcon, '隐藏页应保留 pending icon');
+
+  hiddenHarness.setVisibilityState('visible');
+  assert.deepEqual(hiddenHarness.getTimerDelays(), [300], '恢复可见后应按原 300ms 节奏补排 reveal timeout');
+  assert.equal(hiddenHarness.listenerCount(), 1, '补排 timeout 等待期间应继续监听转隐藏');
+  assert.equal(hiddenHarness.tickNextTimer(), true, '应能触发补排 reveal timeout');
+  assert.equal(hiddenIcon.style.display, 'flex', '补排 timeout 触发后应显示悬浮球');
+  assert.equal(hiddenHarness.listenerCount(), 0, '显示完成后应释放 visibilitychange');
+  assert.equal(hiddenHarness.UI.runtime.panelIconRevealPendingIcon, null, '显示完成后应释放 pending icon');
+
+  const visibleHarness = createPanelIconRevealHarness('visible');
+  const visibleIcon = new visibleHarness.FakeHTMLElement();
+  visibleHarness.UI.schedulePanelIconReveal(visibleIcon);
+  assert.deepEqual(visibleHarness.getTimerDelays(), [300], '可见页应保留原 300ms reveal timeout');
+  assert.equal(visibleHarness.listenerCount(), 1, '可见页等待 reveal 时应监听 visibilitychange');
+  visibleHarness.setVisibilityState('hidden');
+  assert.equal(visibleHarness.timers.size, 0, '可见页转隐藏时应取消已排 reveal timeout');
+  assert.equal(visibleIcon.style.display, undefined, '转隐藏时不应显示悬浮球');
+  assert.equal(visibleHarness.UI.runtime.panelIconRevealPendingIcon, visibleIcon, '转隐藏时应保留 pending icon');
+  visibleHarness.setVisibilityState('visible');
+  assert.deepEqual(visibleHarness.getTimerDelays(), [300], '再次恢复可见后应重新排原 300ms reveal timeout');
+  visibleHarness.State.config.panelOpen = true;
+  assert.equal(visibleHarness.tickNextTimer(), true, '面板已打开时仍应消费 reveal timeout');
+  assert.equal(visibleIcon.style.display, undefined, '面板已打开时不应显示悬浮球');
+  assert.equal(visibleHarness.listenerCount(), 0, '面板打开分支消费后应释放 visibilitychange');
+
+  const clearHarness = createPanelIconRevealHarness('hidden');
+  const clearIcon = new clearHarness.FakeHTMLElement();
+  clearHarness.UI.schedulePanelIconReveal(clearIcon);
+  clearHarness.UI.clearPanelIconRevealTimer();
+  assert.equal(clearHarness.timers.size, 0, '显式清理后不应残留 reveal timeout');
+  assert.equal(clearHarness.listenerCount(), 0, '显式清理后不应残留 visibilitychange');
+  assert.equal(clearHarness.UI.runtime.panelIconRevealPendingIcon, null, '显式清理后不应残留 pending icon');
 });
 
 test('UI 工具按钮打开重试 timer 会按按钮维度复用并释放', () => {

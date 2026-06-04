@@ -8,6 +8,8 @@
             panelOutsideClickHandler: null,
             panelOutsideClickHandlerBound: false,
             panelIconRevealTimer: null,
+            panelIconRevealVisibilityHandler: null,
+            panelIconRevealPendingIcon: null,
             optimizerOpenRetryTimer: null,
             optimizerOpenRetryVisibilityHandler: null,
             optimizerOpenRetryPendingCallback: null,
@@ -25,19 +27,66 @@
         },
 
         clearPanelIconRevealTimer() {
-            if (!this.runtime.panelIconRevealTimer) return;
-            clearTimeout(this.runtime.panelIconRevealTimer);
-            this.runtime.panelIconRevealTimer = null;
+            if (this.runtime.panelIconRevealTimer) {
+                clearTimeout(this.runtime.panelIconRevealTimer);
+                this.runtime.panelIconRevealTimer = null;
+            }
+            this.clearPanelIconRevealVisibilityHandler();
+            this.runtime.panelIconRevealPendingIcon = null;
+        },
+
+        isPanelIconRevealDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearPanelIconRevealVisibilityHandler() {
+            const handler = this.runtime.panelIconRevealVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.panelIconRevealVisibilityHandler = null;
+        },
+
+        bindPanelIconRevealVisibilityHandler() {
+            if (typeof this.runtime.panelIconRevealVisibilityHandler === 'function') return;
+            this.runtime.panelIconRevealVisibilityHandler = () => {
+                if (this.isPanelIconRevealDocumentHidden()) {
+                    if (this.runtime.panelIconRevealTimer) {
+                        clearTimeout(this.runtime.panelIconRevealTimer);
+                        this.runtime.panelIconRevealTimer = null;
+                    }
+                    return;
+                }
+                const pendingIcon = this.runtime.panelIconRevealPendingIcon;
+                if (pendingIcon instanceof HTMLElement) {
+                    this.schedulePanelIconReveal(pendingIcon);
+                } else {
+                    this.clearPanelIconRevealTimer();
+                }
+            };
+            document.addEventListener('visibilitychange', this.runtime.panelIconRevealVisibilityHandler);
         },
 
         schedulePanelIconReveal(icon) {
             this.clearPanelIconRevealTimer();
             if (!(icon instanceof HTMLElement)) return;
+            this.runtime.panelIconRevealPendingIcon = icon;
+            this.bindPanelIconRevealVisibilityHandler();
+            if (this.isPanelIconRevealDocumentHidden()) return;
             this.runtime.panelIconRevealTimer = setTimeout(() => {
                 this.runtime.panelIconRevealTimer = null;
+                if (this.isPanelIconRevealDocumentHidden()) return;
+                const pendingIcon = this.runtime.panelIconRevealPendingIcon;
+                this.clearPanelIconRevealVisibilityHandler();
+                this.runtime.panelIconRevealPendingIcon = null;
                 if (State.config.panelOpen) return;
-                if (!icon.isConnected) return;
-                icon.style.display = 'flex';
+                const revealIcon = pendingIcon instanceof HTMLElement ? pendingIcon : icon;
+                if (!revealIcon.isConnected) return;
+                revealIcon.style.display = 'flex';
             }, 300);
         },
 

@@ -1,3 +1,53 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十九子项
+
+## 需求规格
+- 目标：在 AI 点睛逐字动效 timer 收口后，继续优化主助手悬浮球关闭面板后的 `panelIconRevealTimer`，避免标签页隐藏时仍排 300ms timeout 去恢复悬浮球显示。
+- 根因判断：`src/main-assistant/ui.js` 的 `schedulePanelIconReveal(icon)` 在 `updateState()` 进入面板关闭态时直接排 300ms timeout；如果用户关闭面板后立刻切到后台，隐藏页仍会唤醒执行悬浮球显示逻辑。该 timer 只服务 UI 展示，不涉及业务数据或请求链路。
+- 范围：仅覆盖主助手悬浮球 reveal timer 的隐藏页暂停、恢复可见后按原 300ms 节奏显示、timer/visibility listener/pending icon 生命周期；不改悬浮球 DOM、样式、动效、hover/open/close 交互、主面板工具按钮、万能查数、组建计划、算法护航、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留 `schedulePanelIconReveal()` 作为悬浮球显示延迟的唯一入口，新增 pending icon 与 visibility handler。隐藏页不排 300ms timeout；已排 timer 在页面转 hidden 时取消并保留 pending；恢复 visible 后重新排同一个 300ms reveal timer。打开面板、重新调度或无效 icon 会统一清理 timer、pending 和 listener。
+- 成功标准：静态与行为测试证明 UI runtime 声明悬浮球 reveal visibility handler 与 pending icon；存在统一 timer 清理、visibility 释放和隐藏页判定；隐藏页 schedule 不排 timeout、恢复可见后按 300ms 显示；可见页原 300ms 调度保留；visible->hidden 会取消已排 timeout；打开面板会清理 pending 状态；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击主面板工具按钮、不打开万能查数/算法护航/组建计划、不调用 openWizard、不触发推荐词、场景同步、创建、复制、提交、修复、追加关键词、预算、护航、导出或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十八子项提交后工作区状态，确认本子项只处理主助手悬浮球 reveal timer。
+- [x] 复核 UI/图标规范，确认本轮不改悬浮球视觉、图标和交互结构。
+- [x] 定位 `schedulePanelIconReveal()`、`clearPanelIconRevealTimer()` 与现有主面板 resilience 测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为悬浮球 reveal 增加 visibility handler、pending icon、统一释放 helper 和隐藏态判定。
+- [x] 将关闭态悬浮球 reveal 改为隐藏页暂停、恢复可见后按原 300ms 继续显示。
+- [x] 更新主面板目标测试，锁定隐藏页不排 timeout、恢复可见补排、visible->hidden 取消 timer、可见页原 300ms 调度保留和打开面板清理 pending。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `79630e2 优化AI点睛逐字动效轮询`，tracked 工作区干净；本子项不依赖任何临时取证文件。
+- 定位结论：剩余 `riskAlertTimer`、提交/护航/预算链路、请求超时与 sleep 类 timer 都与业务安全或网络合同相关，不适合作为“不改变业务逻辑”的下一步。主助手悬浮球 reveal timer 是纯 UI 展示延迟，隐藏页执行只会带来额外唤醒，适合作为低风险优化点。
+- 计划校验：本子项只降低隐藏标签页中关闭面板后的 300ms 展示唤醒；可见页仍保持原延迟显示、hover 展开、点击展开和关闭面板行为。若实现需要触碰主面板工具按钮或业务入口，先回到本计划更新后再继续。
+- 实现摘要：`UI.runtime` 新增 `panelIconRevealVisibilityHandler` 与 `panelIconRevealPendingIcon`，并新增 `isPanelIconRevealDocumentHidden()`、`clearPanelIconRevealVisibilityHandler()`、`bindPanelIconRevealVisibilityHandler()`；`clearPanelIconRevealTimer()` 统一释放 timer、listener 和 pending icon。
+- 调度摘要：`schedulePanelIconReveal(icon)` 仍是唯一入口。可见页保留原 300ms reveal timeout；隐藏页只登记 pending icon 和 visibility listener，不排 timeout；已排 timeout 等待期间转 hidden 会取消 timer，恢复 visible 后重新按原 300ms 节奏补排；timer 触发前仍检查页面隐藏、面板打开和 icon 连接状态。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 新增 `node:vm` fake runtime 行为测试，覆盖 hidden schedule、hidden->visible 补排、visible->hidden 取消、再次 visible 补排、panelOpen 时不显示、显式 cleanup 不残留 timer/listener/pending；静态断言同步锁定状态字段和 helper。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/ui.js` 通过。
+- 测试语法：`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，15 项测试全绿；新增 “UI 悬浮球 reveal timer 在隐藏页暂停并恢复可见后补排” 行为断言。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/magic-report-panel-resilience.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，56 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，623 项中 621 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 空白检查：`git diff --check` 通过。
+- 静态定位：`rg -n "panelIconRevealVisibilityHandler|panelIconRevealPendingIcon|isPanelIconRevealDocumentHidden|clearPanelIconRevealVisibilityHandler|bindPanelIconRevealVisibilityHandler|schedulePanelIconReveal\\(icon\\)" src/main-assistant/ui.js tests/magic-report-panel-resilience.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页悬浮球 reveal 调度已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`hookManager:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4059526`，包含 `panelIconRevealVisibilityHandler`、`panelIconRevealPendingIcon`、`isPanelIconRevealDocumentHidden`、`clearPanelIconRevealVisibilityHandler`、`bindPanelIconRevealVisibilityHandler`、`schedulePanelIconReveal(icon)` 和 `if (this.isPanelIconRevealDocumentHidden()) return;`。
+- Chrome MCP 弹窗/危险请求：`helperIcon` 存在且可见；`helperPanel` 存在但不可见；`magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不存在或不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/ui.js`、`tests/magic-report-panel-resilience.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增主助手悬浮球 reveal timer 的隐藏页暂停、可见恢复和 pending icon 生命周期，不改悬浮球 DOM、样式、动效、hover/open/close 交互、主面板工具按钮、万能查数、组建计划、算法护航、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第四十九子项结果：主助手关闭面板后的悬浮球显示从“无论页面是否隐藏都排 300ms timeout”优化为“隐藏页不排 timeout，只保留 pending icon 与 visibility listener；恢复可见后再按原 300ms 节奏补排”。
+- 取舍结论：保留可见页原 300ms 延迟和触发前的 `panelOpen`/`isConnected` 校验；新增 pending icon 只管理悬浮球展示生命周期，不改变主面板打开、关闭、hover、点击、工具按钮或任何业务入口行为。
+- 效果结论：在用户关闭主面板后立刻切到后台的场景中，插件不再保留悬浮球 reveal timeout 等待隐藏页唤醒，降低后台 timer 唤醒成本。浏览器验收未点击悬浮球、未打开主面板、未打开万能查数/算法护航/组建计划，未触发任何业务写动作或服务端提交，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十八子项
 
 ## 需求规格
