@@ -439,13 +439,23 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
-    /const runAiMaxTypewriter = \(panel = null\) =>[\s\S]*data-ai-max-typewriter-text[\s\S]*window\.setInterval[\s\S]*target\.textContent = fullText\.slice/,
-    'AI点睛展开详情缺少原生式打字展示逻辑'
+    /const runAiMaxTypewriter = \(panel = null\) =>[\s\S]*data-ai-max-typewriter-text[\s\S]*const scheduleNextAiMaxTypewriterStep = \(\) => \{[\s\S]*window\.setTimeout\(\(\) => \{[\s\S]*target\.textContent = fullText\.slice/,
+    'AI点睛展开详情缺少可取消 timeout 逐字展示逻辑'
+  );
+  assert.doesNotMatch(
+    source,
+    /runAiMaxTypewriter[\s\S]*window\.setInterval/,
+    'AI点睛逐字动效不应再使用固定 interval'
+  );
+  assert.doesNotMatch(
+    source,
+    /cleanupAiMaxTypewriterTimers[\s\S]*window\.clearInterval/,
+    'AI点睛逐字动效 cleanup 不应再保留 interval 清理分支'
   );
   assert.match(
     source,
-    /const cleanupAiMaxTypewriterTimers = \(\) => \{[\s\S]*window\.clearTimeout\(record\.timerId\);[\s\S]*window\.clearInterval\(record\.timerId\);[\s\S]*wizardState\.aiMaxTypewriterTimers\.clear\(\);/,
-    'AI点睛逐字动效 timer 必须支持向导关闭时统一释放'
+    /const cleanupAiMaxTypewriterTimers = \(\) => \{[\s\S]*window\.clearTimeout\(record\.timerId\);[\s\S]*delete record\.target\.dataset\[record\.datasetKey\];[\s\S]*wizardState\.aiMaxTypewriterTimers\.clear\(\);/,
+    'AI点睛逐字动效 timeout 必须支持向导关闭时统一释放'
   );
   assert.match(
     source,
@@ -454,8 +464,18 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
-    /const delayTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', delayTimer\);[\s\S]*const timer = window\.setInterval\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('interval', timer\);[\s\S]*trackAiMaxTypewriterTimer\('interval', timer, target, 'aiMaxTypeTimer'\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', delayTimer, target, 'aiMaxTypeDelayTimer'\);/,
-    'AI点睛逐字动效 delay timeout 与 interval 必须登记到 wizardState timer 表'
+    /const delayTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', delayTimer\);[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', delayTimer, target, 'aiMaxTypeDelayTimer'\);/,
+    'AI点睛逐字动效 delay timeout 必须登记到 wizardState timer 表'
+  );
+  assert.match(
+    source,
+    /const stepTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', stepTimer\);[\s\S]*if \(cursor < fullText\.length\) \{[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', stepTimer, target, 'aiMaxTypeTimer'\);/,
+    'AI点睛逐字动效 step timeout 必须逐步登记并在完成后释放'
+  );
+  assert.match(
+    source,
+    /const isAiMaxTypewriterHidden = \(\) => document\.visibilityState === 'hidden';[\s\S]*const shouldFinishImmediately = \(\) => isAiMaxTypewriterHidden\(\) \|\| target\.isConnected === false;[\s\S]*if \(shouldFinishImmediately\(\)\) \{[\s\S]*finishAiMaxTypewriterTarget\(target, fullText\);/,
+    'AI点睛逐字动效必须在隐藏页或目标断开时直接完成文本并释放 timer'
   );
   assert.match(
     source,

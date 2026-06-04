@@ -279,15 +279,17 @@
                     return wizardState.aiMaxTypewriterTimers;
                 };
                 const buildAiMaxTypewriterTimerKey = (type = '', timerId = 0) => `${String(type || '').trim()}:${Number(timerId)}`;
+                const isAiMaxTypewriterHidden = () => document.visibilityState === 'hidden';
+                const finishAiMaxTypewriterTarget = (target = null, fullText = '') => {
+                    if (!(target instanceof HTMLElement)) return;
+                    target.dataset.aiMaxTyped = '1';
+                    target.textContent = fullText;
+                };
                 const cleanupAiMaxTypewriterTimers = () => {
                     if (!(wizardState.aiMaxTypewriterTimers instanceof Map)) return;
                     Array.from(wizardState.aiMaxTypewriterTimers.values()).forEach((record) => {
                         if (!record || !Number.isFinite(Number(record.timerId))) return;
-                        if (record.type === 'timeout') {
-                            window.clearTimeout(record.timerId);
-                        } else {
-                            window.clearInterval(record.timerId);
-                        }
+                        window.clearTimeout(record.timerId);
                         if (record.target instanceof HTMLElement && record.datasetKey) {
                             delete record.target.dataset[record.datasetKey];
                         }
@@ -322,11 +324,7 @@
                     const timers = ensureAiMaxTypewriterTimers();
                     const key = buildAiMaxTypewriterTimerKey(type, id);
                     const record = timers.get(key);
-                    if (type === 'timeout') {
-                        window.clearTimeout(id);
-                    } else {
-                        window.clearInterval(id);
-                    }
+                    window.clearTimeout(id);
                     if (record?.target instanceof HTMLElement && record.datasetKey) {
                         delete record.target.dataset[record.datasetKey];
                     }
@@ -342,25 +340,42 @@
                         if (!fullText) return;
                         if (target.dataset.aiMaxTyped === '1' && target.textContent === fullText) return;
                         if (target.dataset.aiMaxTypeTimer) {
-                            releaseAiMaxTypewriterTimer('interval', target.dataset.aiMaxTypeTimer);
+                            releaseAiMaxTypewriterTimer('timeout', target.dataset.aiMaxTypeTimer);
                         }
                         if (target.dataset.aiMaxTypeDelayTimer) {
                             releaseAiMaxTypewriterTimer('timeout', target.dataset.aiMaxTypeDelayTimer);
                         }
+                        if (isAiMaxTypewriterHidden()) {
+                            finishAiMaxTypewriterTarget(target, fullText);
+                            return;
+                        }
                         target.dataset.aiMaxTyped = '1';
                         target.textContent = '';
                         let cursor = 0;
+                        const shouldFinishImmediately = () => isAiMaxTypewriterHidden() || target.isConnected === false;
+                        const scheduleNextAiMaxTypewriterStep = () => {
+                            const stepTimer = window.setTimeout(() => {
+                                releaseAiMaxTypewriterTimer('timeout', stepTimer);
+                                if (shouldFinishImmediately()) {
+                                    finishAiMaxTypewriterTarget(target, fullText);
+                                    return;
+                                }
+                                cursor += 1;
+                                target.textContent = fullText.slice(0, cursor);
+                                if (cursor < fullText.length) {
+                                    scheduleNextAiMaxTypewriterStep();
+                                }
+                            }, 14);
+                            trackAiMaxTypewriterTimer('timeout', stepTimer, target, 'aiMaxTypeTimer');
+                        };
                         const startDelay = Math.min(targetIndex * 90, 420);
                         const delayTimer = window.setTimeout(() => {
                             releaseAiMaxTypewriterTimer('timeout', delayTimer);
-                            const timer = window.setInterval(() => {
-                                cursor += 1;
-                                target.textContent = fullText.slice(0, cursor);
-                                if (cursor >= fullText.length) {
-                                    releaseAiMaxTypewriterTimer('interval', timer);
-                                }
-                            }, 14);
-                            trackAiMaxTypewriterTimer('interval', timer, target, 'aiMaxTypeTimer');
+                            if (shouldFinishImmediately()) {
+                                finishAiMaxTypewriterTarget(target, fullText);
+                                return;
+                            }
+                            scheduleNextAiMaxTypewriterStep();
                         }, startDelay);
                         trackAiMaxTypewriterTimer('timeout', delayTimer, target, 'aiMaxTypeDelayTimer');
                     });

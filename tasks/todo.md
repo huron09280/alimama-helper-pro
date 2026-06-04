@@ -1,3 +1,48 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十八子项
+
+## 需求规格
+- 目标：在算法护航 token 轮询收口后，继续优化组建计划向导 AI 点睛区域的逐字动画 timer，避免 `runAiMaxTypewriter()` 用 14ms `setInterval` 在标签页隐藏后继续逐字更新 DOM。
+- 根因判断：`src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 已集中登记 AI 点睛逐字动效 timer 并能在向导 cleanup 时释放，但逐字阶段使用固定 interval；若动画开始后页面转入隐藏态，浏览器仍需要保留 interval 闭包和周期唤醒，直到文本逐字跑完或向导关闭。
+- 范围：仅覆盖 AI 点睛逐字动画调度和隐藏页释放策略；不改 AI 点睛文案、场景配置、详情展开逻辑、向导打开/关闭语义、计划创建/复制、接口请求、授权、算法护航执行或 10rpm 服务端策略。
+- 热修 vs 结构性修复取舍：把逐字阶段从固定 interval 改为可取消的递归 timeout，并在 delay 与 step 回调处统一表达“隐藏页或目标断开时直接完成文本并释放 timer”的不变量；不新增 visibility listener 和恢复动画队列，避免为纯展示动画引入长期监听。
+- 成功标准：静态测试证明 AI 点睛逐字动画不再使用 `setInterval`/`clearInterval`，delay 与 step 均通过 `setTimeout` 登记到 `wizardState.aiMaxTypewriterTimers`，存在隐藏态判定、隐藏/断开时完成文本、逐字完成后释放 step timer、向导 cleanup 统一清理所有 timeout；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不触发 AI 点睛接口、不点击组建计划、立即投放、新建、复制、批量+、预算提交、潜力词导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第三十七子项提交后工作区状态，确认本子项只处理 AI 点睛逐字动画 timer。
+- [x] 将逐字阶段固定 `setInterval` 改为可取消递归 `setTimeout`。
+- [x] 在 delay 和 step 回调中加入隐藏页/目标断开时直接完成文本并释放 timer 的生命周期守卫。
+- [x] 更新目标测试，锁定不再使用 interval、cleanup 统一释放 timeout、隐藏态完成文本并释放 step timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `10b6c3c 优化护航令牌轮询`，工作区干净。
+- 定位结论：AI 点睛逐字动效的 timer 已有统一登记表和 cleanup handler，优化点集中在逐字阶段的固定 interval 与隐藏页无效 DOM 更新。
+- 取舍结论：逐字动画是展示增强，不值得为隐藏页保持动画进度；隐藏或目标断开时直接补全全文，可以减少后台唤醒并保持用户返回时看到完整内容。
+- 实现摘要：`runAiMaxTypewriter()` 保留 delay timeout，但逐字阶段改为 `scheduleNextAiMaxTypewriterStep()` 单步 timeout 递归；每个 delay/step timer 均登记到 `wizardState.aiMaxTypewriterTimers`，触发后立即释放自身记录。
+- 隐藏态摘要：新增 `isAiMaxTypewriterHidden()` 与 `finishAiMaxTypewriterTarget()`；动画开始前、delay 触发后、step 触发后都会复核隐藏态和 `target.isConnected`，命中时直接写入完整文本并结束。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 更新 AI 点睛静态断言，禁止逐字动效再使用 interval，并锁定 timeout cleanup、step 登记和隐藏态完成文本。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。构建前首次运行目标测试曾因生成产物仍是旧 interval 代码失败；同步构建后重跑通过。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，42 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。通过 Chrome MCP 重新打开 `chrome://extensions/`，点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`keywordOpenBridgeReady:true`、`optimizerToggleReady:true`、`planBuild:"2026-02-18 04:00"`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"bootstrap_preflight"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`helperIcon.exists:true`、`helperIcon.visible:true`、`am-helper-panel.exists:true`、`am-helper-panel.visible:false`、`helperStyleExists:true`、`visibleAmHelperTags:123`、`batchPlusWraps:1`、`copyButtons:1`；插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`、`aiMaxTypewriterTargets:0`。未打开组建计划向导，未触发 AI 点睛接口，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 111 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200 或页面 trace pending；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js`、`tests/keyword-custom-native-parity-ui.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只把 AI 点睛逐字阶段 interval 改为可取消 timeout 递归并加入隐藏/断开完成文本守卫，测试 diff 只锁定对应静态回归；未改 AI 点睛文案、场景配置、详情展开逻辑、向导打开/关闭语义、计划创建/复制、接口请求、授权、算法护航执行或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十八子项结果：AI 点睛逐字动效从“delay 后固定 14ms interval 更新 DOM”优化为“delay 与逐字 step 都用可取消 timeout 登记，step 触发后释放自身并按需递归”，减少运行中的 timer 常驻和 cleanup 分支复杂度。
+- 隐藏页取舍：纯展示动画在隐藏页或目标 DOM 断开时直接补全全文并结束，不新增长期 visibility listener；用户返回时看到完整文本，后台不继续逐字 tick。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十七子项
 
 ## 需求规格
