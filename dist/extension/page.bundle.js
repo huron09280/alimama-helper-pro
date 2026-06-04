@@ -26723,7 +26723,8 @@ if (typeof globalThis !== 'undefined') {
             nativeAdzoneTs: 0,
             nativeAdzoneBizCode: '',
             nativeAdzonePending: null,
-            nativeRuntimeCacheCleanupTimer: 0
+            nativeRuntimeCacheCleanupTimer: 0,
+            nativeRuntimeCacheCleanupVisibilityHandler: null
         };
         const componentConfigCache = {
             data: null,
@@ -34436,6 +34437,42 @@ if (typeof globalThis !== 'undefined') {
             runtimeCache[slot.tsKey] = 0;
             if (slot.bizCodeKey) runtimeCache[slot.bizCodeKey] = '';
         };
+        const hasNativeRuntimeListCache = () => NATIVE_RUNTIME_LIST_CACHE_SLOTS.some(slot => {
+            const value = runtimeCache[slot.valueKey];
+            const ts = toNumber(runtimeCache[slot.tsKey], 0);
+            return Array.isArray(value) && value.length && ts;
+        });
+        const isNativeRuntimeCacheDocumentHidden = () => {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        };
+        const clearNativeRuntimeListCacheCleanupTimer = () => {
+            if (!runtimeCache.nativeRuntimeCacheCleanupTimer) return;
+            window.clearTimeout(runtimeCache.nativeRuntimeCacheCleanupTimer);
+            runtimeCache.nativeRuntimeCacheCleanupTimer = 0;
+        };
+        const releaseNativeRuntimeListCacheCleanupVisibilityHandlerIfIdle = () => {
+            if (runtimeCache.nativeRuntimeCacheCleanupTimer || hasNativeRuntimeListCache()) return;
+            const handler = runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler = null;
+        };
+        const bindNativeRuntimeListCacheCleanupVisibilityHandler = () => {
+            if (typeof runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler === 'function') return;
+            runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler = () => {
+                if (isNativeRuntimeCacheDocumentHidden()) {
+                    clearNativeRuntimeListCacheCleanupTimer();
+                    return;
+                }
+                scheduleNativeRuntimeListCacheCleanup();
+            };
+            document.addEventListener('visibilitychange', runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler);
+        };
         const cleanupNativeRuntimeListCaches = () => {
             const now = Date.now();
             let nextDelayMs = 0;
@@ -34463,12 +34500,17 @@ if (typeof globalThis !== 'undefined') {
         const scheduleNativeRuntimeListCacheCleanup = () => {
             if (runtimeCache.nativeRuntimeCacheCleanupTimer) return;
             const nextDelayMs = cleanupNativeRuntimeListCaches();
-            if (!nextDelayMs) return;
+            if (!nextDelayMs) {
+                releaseNativeRuntimeListCacheCleanupVisibilityHandlerIfIdle();
+                return;
+            }
+            bindNativeRuntimeListCacheCleanupVisibilityHandler();
+            if (isNativeRuntimeCacheDocumentHidden()) return;
             runtimeCache.nativeRuntimeCacheCleanupTimer = window.setTimeout(() => {
                 runtimeCache.nativeRuntimeCacheCleanupTimer = 0;
                 cleanupNativeRuntimeListCaches();
                 scheduleNativeRuntimeListCacheCleanup();
-            }, nextDelayMs);
+            }, Math.max(1, Math.ceil(nextDelayMs) + 1));
         };
         const getCrowdUniqueKey = (item = {}, fallback = '') => {
             const label = isPlainObject(item?.crowd?.label) ? item.crowd.label : {};

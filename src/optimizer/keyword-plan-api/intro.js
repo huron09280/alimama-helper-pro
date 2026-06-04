@@ -94,7 +94,8 @@
             nativeAdzoneTs: 0,
             nativeAdzoneBizCode: '',
             nativeAdzonePending: null,
-            nativeRuntimeCacheCleanupTimer: 0
+            nativeRuntimeCacheCleanupTimer: 0,
+            nativeRuntimeCacheCleanupVisibilityHandler: null
         };
         const componentConfigCache = {
             data: null,

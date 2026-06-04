@@ -1,3 +1,50 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十四子项
+
+## 需求规格
+- 目标：在完整 page API bridge 缓存清理 timer 收口后，继续优化关键词向导 native runtime list cache 的主动清理 timer，避免标签页隐藏时 `nativeRuntimeCacheCleanupTimer` 仍按 8 秒 TTL 唤醒扫描并清理 VFrame 运行态列表缓存。
+- 根因判断：`src/optimizer/keyword-plan-api/search-and-draft.js` 的原生人群、原生出价目标和原生资源位列表缓存共享 8 秒 TTL 与单一 cleanup timer；缓存写入后当前调度不区分页可见状态。标签页隐藏后，清理 timer 仍会唤醒页面扫描三类缓存槽并重排下一次清理。
+- 范围：仅覆盖 native runtime list cache cleanup 的隐藏页暂停、恢复可见补清理、timer/visibility listener 生命周期和下一次 cache 写入/命中前的惰性清理；不改 VFrame 读取、列表解析、bizCode 匹配、8 秒 fresh cache 命中判断、创建/复制/提交/修复/追加关键词、推荐词、场景合同同步、授权、护航、预算或 10rpm 服务端限速策略。
+- 热修 vs 结构性修复取舍：保留 `runtimeCache` 作为单一事实源，保留三类缓存槽和 8 秒 TTL。隐藏页不主动清空未过期缓存，只取消 cleanup timeout 并保留一次 `visibilitychange` 恢复监听；恢复可见或下一次调度时按时间戳 TTL 清理过期项。缓存读取仍以 `now - ts < TTL` 为唯一 fresh 命中条件，避免隐藏页暂停清理导致过期缓存被返回。
+- 成功标准：静态测试证明 runtimeCache 登记 visibility handler，存在隐藏态判定、cleanup timer 清理 helper、空闲 listener 释放、隐藏页不排 timeout、恢复可见补清理、已有 timeout 在隐藏时取消，且三类 cache 写入后仍调度清理、fresh cache 仍由 8 秒 TTL 控制；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不触发 VFrame 读取入口、不调用推荐词、场景同步、创建、复制、提交、修复、追加关键词、预算、护航、导出或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十三子项提交后工作区状态，确认本子项只处理 native runtime list cache cleanup timer。
+- [x] 为 native runtime list cache 增加隐藏态判定、cleanup timer 清理 helper 和 visibility resume 生命周期。
+- [x] 将 native runtime list cache cleanup 调度改为隐藏页暂停、恢复可见后按 TTL 补清理，保持缓存读取 TTL 语义不变。
+- [x] 更新 native runtime cache 目标测试，锁定隐藏页不排 cleanup timer、恢复可见补清理、listener 释放和三类缓存写入调度。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `9e4f650 优化桥接缓存清理轮询`，tracked 工作区干净；另有 `tasks/dmp-*` 未跟踪取证文件存在，本子项不读取、不覆盖、不纳入提交。
+- 定位结论：`nativeRuntimeCacheCleanupTimer` 负责三类 8 秒 native runtime list cache 的主动 TTL 清理；隐藏页若直接清空缓存会增加恢复后重新读取 VFrame/潜在接口链路的概率，因此本轮选择暂停 cleanup timeout 而不是隐藏时主动清空缓存。
+- 计划校验：本子项只降低隐藏页后台 timer 唤醒，不改变 cache fresh 判断、VFrame 读取顺序、列表评分、bizCode 匹配或任何业务请求参数；若实现需要扩大范围，先回到本计划更新后再继续。
+- 实现摘要：`runtimeCache` 新增 `nativeRuntimeCacheCleanupVisibilityHandler`，`search-and-draft.js` 新增隐藏态判定、cleanup timer 清理 helper、空闲释放 helper 和 visibility resume helper；隐藏时取消已有 cleanup timeout，恢复可见后只执行 TTL 清理/重排。
+- 缓存语义摘要：三类缓存读取处仍以 `now - ts < 8s TTL` 作为 fresh 命中条件；隐藏页暂停只影响主动清理 timer，不延长缓存有效期，也不触发 VFrame 读取或服务端请求。
+- 测试摘要：`tests/keyword-native-runtime-cache.test.mjs` 已锁定 visibility handler 状态、隐藏页不排 timeout、恢复可见补清理、listener 空闲释放、三类缓存写入后继续调度清理和 8 秒 TTL fresh 判断。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-native-runtime-cache.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/keyword-native-runtime-cache.test.mjs'], { timeout: 60000 }) ..."` 通过，3 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/keyword-native-runtime-cache.test.mjs`、`tests/keyword-wizard-entry-regression.test.mjs`、`tests/keyword-plan-api-bridge-security.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，62 项测试全绿。
+- 静态定位：`rg -n "nativeRuntimeCacheCleanupVisibilityHandler|isNativeRuntimeCacheDocumentHidden|clearNativeRuntimeListCacheCleanupTimer|releaseNativeRuntimeListCacheCleanupVisibilityHandlerIfIdle|bindNativeRuntimeListCacheCleanupVisibilityHandler" src/optimizer/keyword-plan-api tests/keyword-native-runtime-cache.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页 cleanup 调度已进入产物。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，618 项中 616 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`；切回 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `线索推广_万相台无界版`。
+- Chrome MCP 运行态：只读探针返回 `GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordOpenBridgeReady:"1"`。
+- Chrome MCP 弹窗/危险请求：助手图标存在且可见，`helperPanel` 存在但不可见；`magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动` 与 `[EscortAPI] Token Hook 已接入统一管理器`；其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 和页面自身 Magix 日志，未见新增插件运行失败。fetch/XHR 清单 89 条，主要为页面初始化、报表、AI/context、消息、素材、优惠券和曝光 trace，可见请求除 `px.effirst.com` 既有隧道失败外均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/optimizer/keyword-plan-api/intro.js`、`src/optimizer/keyword-plan-api/search-and-draft.js`、`tests/keyword-native-runtime-cache.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 native runtime list cache cleanup 的隐藏页暂停、可见恢复和 listener 生命周期，不改缓存 8 秒 fresh 命中判断、VFrame 读取、列表解析、bizCode 匹配、创建/复制/提交/修复/追加关键词、推荐词、场景合同同步、授权、护航、预算或 10rpm 服务端限速策略。
+
+## 结果复盘
+- 第十一轮第四十四子项结果：关键词向导 native runtime list cache 从“写入三类运行态列表缓存后总是按 8 秒 TTL 排一个清理 timeout”优化为“可见页才排 cleanup timeout，隐藏页只保留一次恢复监听，恢复可见或下一次调度时按 TTL 补清理过期列表”。
+- 取舍结论：保留 `runtimeCache` 单一事实源、三类缓存槽和 8 秒 TTL；隐藏页不主动清空未过期缓存，也不触发 VFrame 读取或服务端请求。缓存读取仍由 `now - ts < TTL` 控制，所以暂停主动清理不会延长缓存有效期。
+- 验证结论：目标测试、构建、项目语法、构建检查、相关回归、全量回归、静态定位、Chrome MCP 只读验收、危险请求过滤、空白检查和 diff 自审均通过；未打开组建计划向导，未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十三子项
 
 ## 需求规格

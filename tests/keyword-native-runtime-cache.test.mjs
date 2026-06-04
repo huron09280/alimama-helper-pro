@@ -12,6 +12,11 @@ test('关键词向导 native runtime list cache 使用单一主动清理计时�
         'runtimeCache 缺少 native runtime list cache 清理 timer 句柄'
     );
     assert.match(
+        introSource,
+        /nativeRuntimeCacheCleanupVisibilityHandler:\s*null/,
+        'runtimeCache 缺少 native runtime list cache 隐藏页恢复监听状态'
+    );
+    assert.match(
         searchSource,
         /const NATIVE_RUNTIME_CACHE_TTL_MS = 8 \* 1000;[\s\S]*const NATIVE_CROWD_CACHE_TTL_MS = NATIVE_RUNTIME_CACHE_TTL_MS;[\s\S]*const CROWD_NATIVE_RUNTIME_CACHE_TTL_MS = NATIVE_RUNTIME_CACHE_TTL_MS;/,
         '三类 native runtime list cache 应复用同一个 8 秒 TTL'
@@ -36,8 +41,28 @@ test('native runtime list cache 到期后清空 value/ts/bizCode 并重排下一
     );
     assert.match(
         searchSource,
-        /const scheduleNativeRuntimeListCacheCleanup = \(\) => \{[\s\S]*if \(runtimeCache\.nativeRuntimeCacheCleanupTimer\) return;[\s\S]*runtimeCache\.nativeRuntimeCacheCleanupTimer = window\.setTimeout\(\(\) => \{[\s\S]*runtimeCache\.nativeRuntimeCacheCleanupTimer = 0;[\s\S]*cleanupNativeRuntimeListCaches\(\);[\s\S]*scheduleNativeRuntimeListCacheCleanup\(\);[\s\S]*\}, nextDelayMs\);/,
-        '调度器必须保持单一 timer，并在触发后按剩余缓存重排'
+        /const isNativeRuntimeCacheDocumentHidden = \(\) => \{[\s\S]*return document\.visibilityState === 'hidden';[\s\S]*\};/,
+        'native runtime list cache 缺少隐藏态判定'
+    );
+    assert.match(
+        searchSource,
+        /const clearNativeRuntimeListCacheCleanupTimer = \(\) => \{[\s\S]*window\.clearTimeout\(runtimeCache\.nativeRuntimeCacheCleanupTimer\);[\s\S]*runtimeCache\.nativeRuntimeCacheCleanupTimer = 0;[\s\S]*\};/,
+        'native runtime list cache 缺少 cleanup timer 清理 helper'
+    );
+    assert.match(
+        searchSource,
+        /const releaseNativeRuntimeListCacheCleanupVisibilityHandlerIfIdle = \(\) => \{[\s\S]*if \(runtimeCache\.nativeRuntimeCacheCleanupTimer \|\| hasNativeRuntimeListCache\(\)\) return;[\s\S]*document\.removeEventListener\('visibilitychange', handler\);[\s\S]*runtimeCache\.nativeRuntimeCacheCleanupVisibilityHandler = null;[\s\S]*\};/,
+        'native runtime list cache 应在无 timer 且无缓存时释放 visibilitychange 监听'
+    );
+    assert.match(
+        searchSource,
+        /const bindNativeRuntimeListCacheCleanupVisibilityHandler = \(\) => \{[\s\S]*if \(typeof runtimeCache\.nativeRuntimeCacheCleanupVisibilityHandler === 'function'\) return;[\s\S]*if \(isNativeRuntimeCacheDocumentHidden\(\)\) \{[\s\S]*clearNativeRuntimeListCacheCleanupTimer\(\);[\s\S]*return;[\s\S]*\}[\s\S]*scheduleNativeRuntimeListCacheCleanup\(\);[\s\S]*document\.addEventListener\('visibilitychange', runtimeCache\.nativeRuntimeCacheCleanupVisibilityHandler\);[\s\S]*\};/,
+        'native runtime list cache 应通过 visibilitychange 在隐藏时取消 timer、恢复可见后补清理'
+    );
+    assert.match(
+        searchSource,
+        /const scheduleNativeRuntimeListCacheCleanup = \(\) => \{[\s\S]*if \(runtimeCache\.nativeRuntimeCacheCleanupTimer\) return;[\s\S]*const nextDelayMs = cleanupNativeRuntimeListCaches\(\);[\s\S]*releaseNativeRuntimeListCacheCleanupVisibilityHandlerIfIdle\(\);[\s\S]*bindNativeRuntimeListCacheCleanupVisibilityHandler\(\);[\s\S]*if \(isNativeRuntimeCacheDocumentHidden\(\)\) return;[\s\S]*runtimeCache\.nativeRuntimeCacheCleanupTimer = window\.setTimeout\(\(\) => \{[\s\S]*runtimeCache\.nativeRuntimeCacheCleanupTimer = 0;[\s\S]*cleanupNativeRuntimeListCaches\(\);[\s\S]*scheduleNativeRuntimeListCacheCleanup\(\);[\s\S]*\}, Math\.max\(1, Math\.ceil\(nextDelayMs\) \+ 1\)\);/,
+        '调度器必须保持单一 timer，并在隐藏页只保留恢复监听'
     );
 });
 
