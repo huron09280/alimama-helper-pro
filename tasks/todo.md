@@ -1,3 +1,58 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十九子项
+
+## 需求规格
+- 目标：在算法护航面板高亮 timer 收口后，继续优化万能查数人群矩阵柱状条动画，把每根柱子单独 `requestAnimationFrame(applyHeight)` / `setTimeout(applyHeight, 16)` 收敛为一次批量帧，降低大矩阵重绘时的后台任务和闭包保留。
+- 根因判断：`src/main-assistant/magic-report.js` 的 `createCrowdMatrixCell()` 在 `animate: true` 时会为每个 `span.am-crowd-matrix-bar-fill` 单独创建 `applyHeight` 并排一帧。省份/城市、多周期、多指标组合下柱子数量会放大，切换指标/周期/排序时可能一次重绘排出大量独立 rAF 或 fallback timeout。
+- 范围：仅覆盖人群矩阵柱状条高度/透明度动画调度、pending fill 队列、frame/timeout 取消和弹窗释放清理；不改人群矩阵取数、数据集构建、排序、指标/周期显隐、tooltip、状态条、DMP 人群、请求并发、预算、创建/复制/提交、下载、openV3 或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留动画的初始 `height:0%`、`opacity:0.38` 和下一帧恢复目标高度/`opacity:1` 的可见效果；只把 N 个 per-bar 调度改为统一队列和单个 rAF（无 rAF 时单个 16ms timeout）。每次重绘先取消旧 pending 动画并清空旧队列，弹窗释放也统一清理，避免旧 DOM fill 被闭包保留。
+- 成功标准：静态与行为测试证明存在 `crowdMatrixBarAnimationFrame`、取消函数和 pending 队列；`createCrowdMatrixCell()` 不再直接调用 per-bar `requestAnimationFrame(applyHeight)` 或 `setTimeout(applyHeight, 16)`；动画 fill 统一进入队列并最多排一个 frame；frame 触发后批量写入所有仍连接 fill 的高度/透明度并释放状态；`renderCrowdMatrixCharts()` 重绘和 `clearMagicRuntimeCaches()`/弹窗释放会取消 pending frame；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击万能查数快捷话术、不发起人群矩阵查询、不触发 DMP 请求、不调用 `Core.run()`、openV3/护航执行、token 主动请求、预算、创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认、extension bundle 命中确认和可见 UI 只读状态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十八子项提交后工作区状态，确认本子项不依赖临时取证文件。
+- [x] 复核 UI/图标规范，确认本轮不改万能查数视觉、图标和交互结构。
+- [x] 定位剩余 timer/rAF 候选，并先评估主助手 auto-hide；收到只读子代理复核后，按更高收益候选重新规划为人群矩阵柱状条动画批处理。
+- [x] 读取只读子代理复核结论，确认 per-bar rAF 是纯 UI 动画且比单个 hover timer 更值得优化。
+- [x] 为人群矩阵柱状条动画增加 pending 队列、统一 frame/timeout 调度和取消 helper。
+- [x] 将 `createCrowdMatrixCell()` 的 per-bar 调度改为入队，重绘与释放时取消旧 pending 动画。
+- [x] 更新人群矩阵目标测试，锁定单帧批量调度、fallback 单 timeout、重绘/释放清理、断开 fill 不写入和不触发业务链路。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `60a9322 优化护航面板高亮轮询`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：主助手 `autoHideTimer` 虽然也是纯 UI timer，但一次只排 1 个 180ms timeout，且会写 `panelOpen` 配置，收益和交互边界都不如人群矩阵柱状条动画。只读子代理指出 `createCrowdMatrixCell()` 在大矩阵下会按柱子数量排 N 个 rAF/fallback timeout，因此本轮按“更高收益、更接近最佳优化”改选该候选。
+- 计划校验：本子项只降低人群矩阵重绘时柱状条动画调度数量；可见效果仍保持下一帧从 0%/0.38 过渡到目标高度/1，不改变数据、排序、tooltip 或用户控制项。若实现需要触碰取数请求、并发、DMP 查询、`Core.run()`、预算、创建/复制/提交、下载或 openV3 链路，先回到本计划更新后再继续。
+- 实现摘要：`MagicReport` 新增 `crowdMatrixBarAnimationFrame`、`crowdMatrixBarAnimationCancel`、`crowdMatrixBarAnimationQueue`，并抽出 `clearCrowdMatrixBarAnimation()`、`scheduleCrowdMatrixBarAnimation()`、`queueCrowdMatrixBarAnimation(fill, height)`。柱状条创建仍先写 `height:0%`、`opacity:0.38`，只把恢复目标高度和透明度的动作改为进入统一队列。
+- 调度摘要：多个柱状条在同一次重绘中最多排一个 `requestAnimationFrame(applyQueuedBars)`；无 rAF 时最多排一个 `setTimeout(applyQueuedBars, 16)` fallback。批处理触发时只写仍连接的 `HTMLElement` fill，并在结束后释放 frame/cancel/queue 状态。
+- 清理摘要：`renderCrowdMatrixCharts()` 在清空 `matrixGridEl.innerHTML` 前先调用 `clearCrowdMatrixBarAnimation()`，`clearMagicRuntimeCaches()` 也统一清理 pending 柱状条动画，避免旧 DOM fill 被未触发帧闭包保留。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 新增人群矩阵柱状动画 harness，覆盖单帧批量调度、fallback 单 timeout、断开 fill 跳过写入、重绘释放和 `clearMagicRuntimeCaches()` 取消 pending frame；静态断言同步锁定 per-bar `requestAnimationFrame(applyHeight)` / `setTimeout(applyHeight, 16)` 已移除。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-crowd-matrix.test.mjs` 通过，71 项测试全绿；新增第 62 项 “人群矩阵柱状条动画使用单帧批量调度并随重绘释放”。
+- 产物语法：`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，127 项测试全绿。
+- 静态定位：`rg` 确认 `crowdMatrixBarAnimationFrame`、`crowdMatrixBarAnimationCancel`、`crowdMatrixBarAnimationQueue`、`clearCrowdMatrixBarAnimation`、`scheduleCrowdMatrixBarAnimation`、`queueCrowdMatrixBarAnimation` 已进入源码、目标测试、根 userscript、extension bundle 和发布包；同时确认旧的 per-bar `requestAnimationFrame(applyHeight)`、`setTimeout(applyHeight, 16)` 已不存在。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`node -e "const { spawnSync } = require('node:child_process'); const result = spawnSync('npm', ['test'], { stdio: 'inherit', timeout: 60000 }); if (result.error) { console.error(result.error.message); process.exit(1); } process.exit(result.status ?? 1);"` 通过，632 项中 630 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`licenseAuthorized:true`、`licenseReason:"authorized"`、`licenseSource:"extension_cache_bootstrap"`、`planApiReady:true`、`keywordApiReady:true`、`optimizerToggleReady:true`、`hookManagerReady:true`、`helperIcon:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4081512`，包含 `crowdMatrixBarAnimationFrame`、`crowdMatrixBarAnimationCancel`、`crowdMatrixBarAnimationQueue`、`clearCrowdMatrixBarAnimation`、`scheduleCrowdMatrixBarAnimation`、`queueCrowdMatrixBarAnimation`、`requestAnimationFrame(applyQueuedBars)`、`setTimeout(applyQueuedBars, 16)`、`this.queueCrowdMatrixBarAnimation(fill, barHeight)` 和 `this.clearCrowdMatrixBarAnimation();`；确认不包含旧的 `requestAnimationFrame(applyHeight)`、`setTimeout(applyHeight, 16)`。
+- Chrome MCP 弹窗/危险请求：`helperPanelVisible:false`、`magicReportVisible:false`、`crowdMatrixGridVisible:false`、`optimizerPanelVisible:false`、`resultOverlayVisible:false`、`batchPlusMenuVisible:false`、`batchConfirmPopupVisible:false`、`copyOverviewPopupVisible:false`、`copySuccessPopupVisible:false`、`reportCapturePanelVisible:false`、`licenseOverlayVisible:false`；performance resource 过滤危险写入口命中 0。
+- Chrome MCP 控制台/网络：可见插件启动日志；页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 和 deprecated issue 噪声未见新增插件运行失败；`chrome-extension://.../page.bundle.js` 读取 200。未打开万能查数或人群矩阵，未点击快捷话术，未触发人群查询、DMP 请求、`Core.run()`、openV3、预算、创建/复制/提交、下载或任何真实写动作。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增人群矩阵柱状条动画队列、单帧批处理和重绘/释放清理点，不改取数、数据集、排序、指标显隐、tooltip、DMP 人群、请求并发、预算、创建/复制/提交、下载、openV3 或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十九子项结果：人群矩阵柱状条动画从“每根柱子各自排一个 `requestAnimationFrame(applyHeight)` 或 fallback `setTimeout(applyHeight, 16)`”优化为“同一次重绘的所有柱状条进入统一队列，最多排一个 rAF；无 rAF 时最多排一个 16ms timeout”。
+- 效果结论：大矩阵重绘时的动画调度从 N 个帧任务/timeout 和 N 组闭包保留收敛到 1 个批量调度；动画初始态和下一帧过渡效果保持不变，仍从 `height:0%`、`opacity:0.38` 过渡到目标高度和 `opacity:1`。
+- 清理结论：重绘前和运行态释放时会取消 pending frame/timeout 并清空队列，旧 DOM fill 不再因为未触发动画帧继续被闭包保留；断开 DOM 的 fill 在批处理触发时也会被跳过。
+- 边界结论：本轮只触达人群矩阵 UI 动画调度和测试，不改数据集构建、排序、指标/周期显隐、tooltip、DMP 人群、取数请求、并发、预算、创建/复制/提交、下载、openV3 或服务端 10rpm 策略。Chrome 验收全程只用 Chrome MCP，危险写入口资源计数为 0。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十八子项
 
 ## 需求规格

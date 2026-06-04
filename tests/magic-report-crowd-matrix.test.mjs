@@ -212,6 +212,7 @@ function createCrowdMatrixStateHideHarness(initialVisibilityState = 'visible') {
     crowdCampaignSelectedItemIdMap: new Map(),
     crowdCampaignManualItemSelectionMap: new Map(),
     quickPromptResetTimer: 0,
+    clearCrowdMatrixBarAnimation() {},
     clearQuickPromptResetState() {},
     clearQuickPromptRetryState() {},
     clearIframeCleanupRetryTimer() {},
@@ -231,6 +232,94 @@ function createCrowdMatrixStateHideHarness(initialVisibilityState = 'visible') {
       visibilityState = String(nextState || 'visible');
       const handlers = Array.from(listeners.get('visibilitychange') || []);
       handlers.forEach((handler) => handler({ type: 'visibilitychange' }));
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map((timer) => timer.delay);
+    }
+  };
+}
+
+function createCrowdMatrixBarAnimationHarness(options = {}) {
+  let nextFrameId = 1;
+  let nextTimerId = 1;
+  const frames = new Map();
+  const timers = new Map();
+  class FakeHTMLElement {
+    constructor() {
+      this.isConnected = true;
+      this.style = {};
+    }
+  }
+  const context = createContext({
+    HTMLElement: FakeHTMLElement,
+    requestAnimationFrame: options.noRaf
+      ? undefined
+      : (handler) => {
+          const frameId = nextFrameId;
+          nextFrameId += 1;
+          if (typeof handler === 'function') frames.set(frameId, handler);
+          return frameId;
+        },
+    cancelAnimationFrame: options.noRaf
+      ? undefined
+      : (frameId) => {
+          frames.delete(Number(frameId));
+        },
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') {
+        timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      }
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(Number(timerId));
+    }
+  });
+  const methodSource = [
+    getMagicReportMethodSlice('clearCrowdMatrixBarAnimation', 'scheduleCrowdMatrixBarAnimation'),
+    getMagicReportMethodSlice('scheduleCrowdMatrixBarAnimation', 'queueCrowdMatrixBarAnimation'),
+    getMagicReportMethodSlice('queueCrowdMatrixBarAnimation', 'ensureCrowdMatrixHoverTip'),
+    getMagicReportMethodSlice('clearMagicRuntimeCaches', 'releasePopupResources')
+  ].join('\n');
+  const runtime = new Script(`({
+    crowdMatrixBarAnimationFrame: 0,
+    crowdMatrixBarAnimationCancel: null,
+    crowdMatrixBarAnimationQueue: [],
+    crowdMatrixRunId: 0,
+    crowdMatrixLoading: false,
+    crowdMatrixProgress: 0,
+    clearCrowdMatrixStateHideState() {},
+    clearQuickPromptResetState() {},
+    clearQuickPromptRetryState() {},
+    clearIframeCleanupRetryTimer() {},
+    clearIframeCleanupVisibilityHandler() {},
+    clearDmpCrowdMatrixButtonTimer() {},
+    clearDmpCrowdMatrixButtonVisibilityHandler() {},
+    ${methodSource}
+  })`).runInContext(context);
+  return {
+    runtime,
+    frames,
+    timers,
+    FakeHTMLElement,
+    createFill() {
+      return new FakeHTMLElement();
+    },
+    tickNextFrame() {
+      const [frameId, handler] = Array.from(frames.entries())[0] || [];
+      if (typeof handler !== 'function') return false;
+      frames.delete(frameId);
+      handler();
+      return true;
     },
     tickNextTimer() {
       const [timerId, timer] = Array.from(timers.entries())[0] || [];
@@ -337,6 +426,7 @@ function createQuickPromptResetHarness(initialVisibilityState = 'visible') {
     quickPromptResetPendingButton: null,
     quickPromptResetPendingDelayMs: 0,
     clearCrowdMatrixStateHideState() {},
+    clearCrowdMatrixBarAnimation() {},
     clearQuickPromptRetryState() {},
     clearIframeCleanupRetryTimer() {},
     clearIframeCleanupVisibilityHandler() {},
@@ -396,6 +486,9 @@ test('MagicReport 包含人群看板核心方法与辅助方法', () => {
     'toggleCrowdRatioVisibility',
     'toggleCrowdInsightsVisibility',
     'syncCrowdAuxiliaryVisibilityByMetricCount',
+    'clearCrowdMatrixBarAnimation',
+    'scheduleCrowdMatrixBarAnimation',
+    'queueCrowdMatrixBarAnimation',
     'clearCrowdMatrixHoverBars',
     'getCrowdMatrixLinkedBars',
     'buildCrowdMatrixHoverMetricIndex',
@@ -1469,6 +1562,7 @@ test('单元格柱高按该单元格最高值自适应缩放，避免整体过�
 
 test('切换显示与隐藏会触发重绘动画', () => {
   const block = getMagicReportBlock();
+  const cellBlock = getMagicReportMethodSlice('createCrowdMatrixCell', 'renderCrowdMatrixCharts');
   assert.match(block, /this\.renderCrowdMatrixCharts\(this\.crowdMatrixDataset,\s*\{\s*animate:\s*true\s*\}\);/, '显示隐藏切换未触发带动画重绘');
   assert.match(block, /chart\.style\.setProperty\('--am-crowd-metric-visible-count', String\(visibleMetricCount\)\);/, '切换后未写入可见系列数量，柱宽无法自适应');
   assert.match(block, /width:\s*clamp\(\s*8px,\s*calc\(\(100% - \(var\(--am-crowd-visible-metrics\) - 1\) \* var\(--am-crowd-bar-gap\)\) \/ var\(--am-crowd-visible-metrics\)\),\s*36px\s*\);/, '柱宽未按可见系列数量做自适应公式');
@@ -1480,8 +1574,79 @@ test('切换显示与隐藏会触发重绘动画', () => {
   assert.match(block, /am-crowd-matrix-grid\.am-hide-insights \.am-crowd-matrix-chart[\s\S]*min-height:\s*clamp\(136px,\s*17vh,\s*208px\);/, '隐藏提示后未压缩图表区高度');
   assert.match(block, /am-crowd-matrix-insights[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/, '提示区未改为单列逐行显示');
   assert.match(block, /am-crowd-matrix-insight-item[\s\S]*justify-content:\s*flex-start;[\s\S]*text-align:\s*left;/, '提示文案未改为左对齐逐行阅读');
-  assert.match(block, /if \(animateBars\) \{[\s\S]*fill\.style\.height = '0%';[\s\S]*fill\.style\.opacity = '0\.38';/, '柱状图切换动画初始状态缺失');
-  assert.match(block, /requestAnimationFrame\(applyHeight\)/, '柱状图切换动画缺少 requestAnimationFrame 过渡');
+  assert.match(cellBlock, /if \(animateBars\) \{[\s\S]*fill\.style\.height = '0%';[\s\S]*fill\.style\.opacity = '0\.38';[\s\S]*this\.queueCrowdMatrixBarAnimation\(fill,\s*barHeight\);/, '柱状图切换动画应保持初始状态，并通过统一队列调度高度恢复');
+  assert.doesNotMatch(cellBlock, /requestAnimationFrame\(applyHeight\)|setTimeout\(applyHeight,\s*16\)/, '柱状图切换动画不应继续为每根柱子单独排 rAF 或 fallback timeout');
+});
+
+test('人群矩阵柱状条动画使用单帧批量调度并随重绘释放', () => {
+  const block = getMagicReportBlock();
+  assert.match(
+    block,
+    /crowdMatrixBarAnimationFrame:\s*0,[\s\S]*crowdMatrixBarAnimationCancel:\s*null,[\s\S]*crowdMatrixBarAnimationQueue:\s*\[\],/,
+    '柱状条动画缺少 frame、cancel 或 pending queue 状态'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearCrowdMatrixBarAnimation', 'scheduleCrowdMatrixBarAnimation'),
+    /if \(this\.crowdMatrixBarAnimationFrame\) \{[\s\S]*cancelFrame\(this\.crowdMatrixBarAnimationFrame\);[\s\S]*this\.crowdMatrixBarAnimationFrame = 0;[\s\S]*this\.crowdMatrixBarAnimationCancel = null;[\s\S]*this\.crowdMatrixBarAnimationQueue = \[\];/,
+    '柱状条动画应支持统一取消 frame/timeout 并释放队列'
+  );
+  assert.match(
+    getMagicReportMethodSlice('scheduleCrowdMatrixBarAnimation', 'queueCrowdMatrixBarAnimation'),
+    /if \(this\.crowdMatrixBarAnimationFrame\) return;[\s\S]*const applyQueuedBars = \(\) => \{[\s\S]*this\.crowdMatrixBarAnimationFrame = 0;[\s\S]*this\.crowdMatrixBarAnimationCancel = null;[\s\S]*this\.crowdMatrixBarAnimationQueue\.splice\(0\)[\s\S]*if \(!\(fill instanceof HTMLElement\) \|\| !fill\.isConnected\) return;[\s\S]*fill\.style\.height = entry\.height;[\s\S]*fill\.style\.opacity = '1';[\s\S]*requestAnimationFrame\(applyQueuedBars\)[\s\S]*setTimeout\(applyQueuedBars,\s*16\);/,
+    '柱状条动画应最多排一个 rAF/fallback timeout，并批量写入仍连接的 fill'
+  );
+  assert.match(
+    getMagicReportMethodSlice('queueCrowdMatrixBarAnimation', 'ensureCrowdMatrixHoverTip'),
+    /if \(!\(fill instanceof HTMLElement\)\) return;[\s\S]*this\.crowdMatrixBarAnimationQueue\.push\(\{[\s\S]*fill,[\s\S]*height: String\(height \|\| '0%'\)[\s\S]*\}\);[\s\S]*this\.scheduleCrowdMatrixBarAnimation\(\);/,
+    '柱状条动画入队应记录 fill/height 并复用统一调度'
+  );
+  assert.match(
+    getMagicReportMethodSlice('renderCrowdMatrixCharts', 'snapshotPopupLayout'),
+    /this\.hideCrowdMatrixHoverTip\(\);[\s\S]*this\.clearCrowdMatrixBarAnimation\(\);[\s\S]*this\.matrixGridEl\.innerHTML = '';/,
+    '人群矩阵重绘前应取消旧柱状条 pending 动画，避免旧 DOM 被 frame 保留'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearMagicRuntimeCaches', 'releasePopupResources'),
+    /this\.clearCrowdMatrixStateHideState\(\);[\s\S]*this\.clearCrowdMatrixBarAnimation\(\);/,
+    '释放 MagicReport 运行态时应清理柱状条 pending 动画'
+  );
+
+  const harness = createCrowdMatrixBarAnimationHarness();
+  const fillA = harness.createFill();
+  const fillB = harness.createFill();
+  const fillDisconnected = harness.createFill();
+  fillDisconnected.isConnected = false;
+  harness.runtime.queueCrowdMatrixBarAnimation(fillA, '52%');
+  harness.runtime.queueCrowdMatrixBarAnimation(fillB, '87%');
+  harness.runtime.queueCrowdMatrixBarAnimation(fillDisconnected, '99%');
+  assert.equal(harness.frames.size, 1, '多根柱子应合并为一个 requestAnimationFrame');
+  assert.equal(harness.timers.size, 0, '有 rAF 时不应排 fallback timeout');
+  assert.equal(harness.runtime.crowdMatrixBarAnimationQueue.length, 3, '触发前应保留所有 pending fill');
+  assert.equal(harness.tickNextFrame(), true, '应能触发批量柱状条动画帧');
+  assert.equal(fillA.style.height, '52%', '批量帧应写入第一根柱子高度');
+  assert.equal(fillA.style.opacity, '1', '批量帧应恢复第一根柱子透明度');
+  assert.equal(fillB.style.height, '87%', '批量帧应写入第二根柱子高度');
+  assert.equal(fillDisconnected.style.height, undefined, '断开连接的旧柱子不应再被写入');
+  assert.equal(harness.runtime.crowdMatrixBarAnimationFrame, 0, '批量帧触发后应归零 frame 句柄');
+  assert.equal(harness.runtime.crowdMatrixBarAnimationQueue.length, 0, '批量帧触发后应释放队列');
+
+  const fallbackHarness = createCrowdMatrixBarAnimationHarness({ noRaf: true });
+  const fallbackFill = fallbackHarness.createFill();
+  fallbackHarness.runtime.queueCrowdMatrixBarAnimation(fallbackFill, '44%');
+  fallbackHarness.runtime.queueCrowdMatrixBarAnimation(fallbackHarness.createFill(), '66%');
+  assert.deepEqual(fallbackHarness.getTimerDelays(), [16], '无 rAF 时多根柱子也只应排一个 16ms fallback timeout');
+  assert.equal(fallbackHarness.tickNextTimer(), true, '应能触发 fallback 批量动画 timeout');
+  assert.equal(fallbackFill.style.height, '44%', 'fallback timeout 应批量写入柱子高度');
+  assert.equal(fallbackHarness.runtime.crowdMatrixBarAnimationQueue.length, 0, 'fallback 触发后应释放队列');
+
+  const clearHarness = createCrowdMatrixBarAnimationHarness();
+  const clearFill = clearHarness.createFill();
+  clearHarness.runtime.queueCrowdMatrixBarAnimation(clearFill, '33%');
+  assert.equal(clearHarness.frames.size, 1, '清理前应存在 pending frame');
+  clearHarness.runtime.clearMagicRuntimeCaches();
+  assert.equal(clearHarness.frames.size, 0, '运行态清理应取消 pending frame');
+  assert.equal(clearHarness.runtime.crowdMatrixBarAnimationQueue.length, 0, '运行态清理应释放 pending 队列');
+  assert.equal(clearFill.style.height, undefined, '被取消的 pending frame 不应写旧柱子 DOM');
 });
 
 test('全部失败时展示统一失败态并提供重试入口', () => {

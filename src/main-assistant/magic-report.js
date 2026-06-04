@@ -58,6 +58,9 @@
         crowdMatrixStateHideTimer: null,
         crowdMatrixStateHideVisibilityHandler: null,
         crowdMatrixStateHidePendingDelayMs: null,
+        crowdMatrixBarAnimationFrame: 0,
+        crowdMatrixBarAnimationCancel: null,
+        crowdMatrixBarAnimationQueue: [],
         crowdMatrixLoadedCampaignId: '',
         crowdMatrixDataset: null,
         crowdMatrixResultMap: null,
@@ -4961,6 +4964,54 @@
             }
         },
 
+        clearCrowdMatrixBarAnimation() {
+            if (this.crowdMatrixBarAnimationFrame) {
+                const cancelFrame = typeof this.crowdMatrixBarAnimationCancel === 'function'
+                    ? this.crowdMatrixBarAnimationCancel
+                    : (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout);
+                cancelFrame(this.crowdMatrixBarAnimationFrame);
+            }
+            this.crowdMatrixBarAnimationFrame = 0;
+            this.crowdMatrixBarAnimationCancel = null;
+            this.crowdMatrixBarAnimationQueue = [];
+        },
+
+        scheduleCrowdMatrixBarAnimation() {
+            if (this.crowdMatrixBarAnimationFrame) return;
+            const applyQueuedBars = () => {
+                this.crowdMatrixBarAnimationFrame = 0;
+                this.crowdMatrixBarAnimationCancel = null;
+                const queue = Array.isArray(this.crowdMatrixBarAnimationQueue)
+                    ? this.crowdMatrixBarAnimationQueue.splice(0)
+                    : [];
+                queue.forEach((entry) => {
+                    const fill = entry?.fill;
+                    if (!(fill instanceof HTMLElement) || !fill.isConnected) return;
+                    fill.style.height = entry.height;
+                    fill.style.opacity = '1';
+                });
+            };
+            if (typeof requestAnimationFrame === 'function') {
+                this.crowdMatrixBarAnimationCancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
+                this.crowdMatrixBarAnimationFrame = requestAnimationFrame(applyQueuedBars);
+                return;
+            }
+            this.crowdMatrixBarAnimationCancel = clearTimeout;
+            this.crowdMatrixBarAnimationFrame = setTimeout(applyQueuedBars, 16);
+        },
+
+        queueCrowdMatrixBarAnimation(fill, height = '0%') {
+            if (!(fill instanceof HTMLElement)) return;
+            if (!Array.isArray(this.crowdMatrixBarAnimationQueue)) {
+                this.crowdMatrixBarAnimationQueue = [];
+            }
+            this.crowdMatrixBarAnimationQueue.push({
+                fill,
+                height: String(height || '0%')
+            });
+            this.scheduleCrowdMatrixBarAnimation();
+        },
+
         ensureCrowdMatrixHoverTip() {
             if (this.matrixHoverTipEl instanceof HTMLElement && this.matrixHoverTipEl.isConnected) {
                 return this.matrixHoverTipEl;
@@ -6137,15 +6188,7 @@
                     if (animateBars) {
                         fill.style.height = '0%';
                         fill.style.opacity = '0.38';
-                        const applyHeight = () => {
-                            fill.style.height = barHeight;
-                            fill.style.opacity = '1';
-                        };
-                        if (typeof requestAnimationFrame === 'function') {
-                            requestAnimationFrame(applyHeight);
-                        } else {
-                            setTimeout(applyHeight, 16);
-                        }
+                        this.queueCrowdMatrixBarAnimation(fill, barHeight);
                     } else {
                         fill.style.height = barHeight;
                     }
@@ -6207,6 +6250,7 @@
         renderCrowdMatrixCharts(dataset, options = {}) {
             if (!(this.matrixGridEl instanceof HTMLElement)) return;
             this.hideCrowdMatrixHoverTip();
+            this.clearCrowdMatrixBarAnimation();
             this.matrixGridEl.innerHTML = '';
             this.matrixHoverMetricIndex = null;
             if (!dataset || typeof dataset !== 'object') return;
@@ -6941,6 +6985,7 @@
             this.crowdMatrixLoading = false;
             this.crowdMatrixProgress = 0;
             this.clearCrowdMatrixStateHideState();
+            this.clearCrowdMatrixBarAnimation();
             this.crowdMatrixLoadedCampaignId = '';
             this.crowdMatrixDataset = null;
             this.crowdMatrixResultMap = null;
