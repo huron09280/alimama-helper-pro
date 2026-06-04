@@ -41,6 +41,7 @@
         quickPromptResetTimer: 0,
         quickPromptRetryTimer: 0,
         iframeCleanupRetryTimer: 0,
+        iframeCleanupVisibilityHandler: null,
         magicPromptDraft: '',
         lastCampaignId: '',
         lastCampaignName: '',
@@ -5393,6 +5394,47 @@
             });
         },
 
+        isMagicReportDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearIframeCleanupRetryTimer() {
+            if (!this.iframeCleanupRetryTimer) return;
+            clearTimeout(this.iframeCleanupRetryTimer);
+            this.iframeCleanupRetryTimer = 0;
+        },
+
+        clearIframeCleanupVisibilityHandler() {
+            if (!this.iframeCleanupVisibilityHandler) return;
+            document.removeEventListener('visibilitychange', this.iframeCleanupVisibilityHandler);
+            this.iframeCleanupVisibilityHandler = null;
+        },
+
+        scheduleIframeCleanupRetry(callback, delayMs = 120) {
+            this.clearIframeCleanupRetryTimer();
+            if (typeof callback !== 'function') return;
+            const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
+            if (this.isMagicReportDocumentHidden()) {
+                this.clearIframeCleanupVisibilityHandler();
+                this.iframeCleanupVisibilityHandler = () => {
+                    if (this.isMagicReportDocumentHidden()) return;
+                    this.clearIframeCleanupVisibilityHandler();
+                    callback();
+                };
+                document.addEventListener('visibilitychange', this.iframeCleanupVisibilityHandler);
+                return;
+            }
+            this.clearIframeCleanupVisibilityHandler();
+            this.iframeCleanupRetryTimer = setTimeout(() => {
+                this.iframeCleanupRetryTimer = 0;
+                callback();
+            }, normalizedDelayMs);
+        },
+
         clearMagicRuntimeCaches() {
             this.crowdMatrixRunId += 1;
             this.crowdMatrixLoading = false;
@@ -5421,10 +5463,8 @@
                 clearTimeout(this.quickPromptRetryTimer);
                 this.quickPromptRetryTimer = 0;
             }
-            if (this.iframeCleanupRetryTimer) {
-                clearTimeout(this.iframeCleanupRetryTimer);
-                this.iframeCleanupRetryTimer = 0;
-            }
+            this.clearIframeCleanupRetryTimer();
+            this.clearIframeCleanupVisibilityHandler();
         },
 
         releasePopupResources() {
@@ -6719,6 +6759,8 @@
 
                 const revealIframe = () => {
                     if (popupToken !== this.popupLifecycleToken || !(this.iframe instanceof HTMLIFrameElement)) return;
+                    this.clearIframeCleanupRetryTimer();
+                    this.clearIframeCleanupVisibilityHandler();
                     if (loading) loading.style.display = 'none';
                     this.iframe.style.opacity = '1';
                     this.restoreMagicPromptDraft();
@@ -6735,6 +6777,10 @@
                     const retryInterval = 120;
                     const tryCleanup = (retries = 0) => {
                         if (popupToken !== this.popupLifecycleToken) return;
+                        if (this.isMagicReportDocumentHidden()) {
+                            this.scheduleIframeCleanupRetry(() => tryCleanup(retries), retryInterval);
+                            return;
+                        }
                         try {
                             const target = iframeDoc.getElementById('universalBP_common_layout_main_content');
                             if (target) {
@@ -6755,10 +6801,7 @@
                             return;
                         }
 
-                        this.iframeCleanupRetryTimer = setTimeout(() => {
-                            this.iframeCleanupRetryTimer = 0;
-                            tryCleanup(retries + 1);
-                        }, retryInterval);
+                        this.scheduleIframeCleanupRetry(() => tryCleanup(retries + 1), retryInterval);
                     };
 
                     tryCleanup();

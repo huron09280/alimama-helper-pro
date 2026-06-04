@@ -38,12 +38,51 @@ test('MagicReport.toggle 关闭时会释放弹窗资源，展示前会校验 pop
 
 test('MagicReport 关闭释放会清理 iframe、DOM、全局监听、timer 和可重建缓存', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /popupCleanupHandlers:\s*\[\],[\s\S]*popupLifecycleToken:\s*0,[\s\S]*quickPromptResetTimer:\s*0,[\s\S]*quickPromptRetryTimer:\s*0,[\s\S]*iframeCleanupRetryTimer:\s*0,[\s\S]*magicPromptDraft:\s*''/, 'MagicReport 未声明关闭生命周期所需状态');
+  assert.match(block, /popupCleanupHandlers:\s*\[\],[\s\S]*popupLifecycleToken:\s*0,[\s\S]*quickPromptResetTimer:\s*0,[\s\S]*quickPromptRetryTimer:\s*0,[\s\S]*iframeCleanupRetryTimer:\s*0,[\s\S]*iframeCleanupVisibilityHandler:\s*null,[\s\S]*magicPromptDraft:\s*''/, 'MagicReport 未声明关闭生命周期所需状态');
   assert.match(block, /releasePopupResources\(\)\s*\{[\s\S]*this\.captureMagicPromptDraft\(\);[\s\S]*this\.popupLifecycleToken \+= 1;[\s\S]*this\.hideCrowdMatrixHoverTip\(\);[\s\S]*this\.setCrowdCampaignItemDropdownOpen\(false\);[\s\S]*this\.runPopupCleanupHandlers\(\);[\s\S]*this\.clearMagicRuntimeCaches\(\);/, 'releasePopupResources 未统一收敛浮层、监听和缓存清理');
   assert.match(block, /if \(this\.iframe instanceof HTMLIFrameElement\) \{[\s\S]*this\.iframe\.onload = null;[\s\S]*this\.iframe\.onerror = null;[\s\S]*this\.iframe\.src = 'about:blank';[\s\S]*\}/, 'releasePopupResources 未释放 iframe 子文档');
   assert.match(block, /const popup = this\.popup instanceof HTMLElement[\s\S]*document\.getElementById\('am-magic-report-popup'\);[\s\S]*if \(popup instanceof HTMLElement\) popup\.remove\(\);[\s\S]*document\.getElementById\('am-magic-report-popup-style'\);[\s\S]*if \(style instanceof HTMLElement\) style\.remove\(\);/, 'releasePopupResources 未卸载 popup DOM 或样式节点');
-  assert.match(block, /if \(this\.quickPromptResetTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptResetTimer\);[\s\S]*if \(this\.quickPromptRetryTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptRetryTimer\);[\s\S]*if \(this\.iframeCleanupRetryTimer\) \{[\s\S]*clearTimeout\(this\.iframeCleanupRetryTimer\);/, 'clearMagicRuntimeCaches 未清理关闭后的待执行 timer');
+  assert.match(block, /if \(this\.quickPromptResetTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptResetTimer\);[\s\S]*if \(this\.quickPromptRetryTimer\) \{[\s\S]*clearTimeout\(this\.quickPromptRetryTimer\);[\s\S]*this\.clearIframeCleanupRetryTimer\(\);[\s\S]*this\.clearIframeCleanupVisibilityHandler\(\);/, 'clearMagicRuntimeCaches 未清理关闭后的待执行 timer 和 visibility handler');
   assert.doesNotMatch(block.match(/releasePopupResources\(\)\s*\{[\s\S]*?\n\s*\},\n\s*\n\s*createPopup\(/)?.[0] || '', /lastCampaignId\s*=\s*''|lastCampaignName\s*=\s*''/, '关闭释放不应清空最近计划上下文');
+});
+
+test('MagicReport iframe 清理 retry 在隐藏页暂停并随弹窗释放', () => {
+  const block = getMagicReportBlock();
+  assert.match(
+    block,
+    /isMagicReportDocumentHidden\(\)\s*\{[\s\S]*return document\.visibilityState === 'hidden';[\s\S]*\}/,
+    'MagicReport 缺少隐藏页判定'
+  );
+  assert.match(
+    block,
+    /clearIframeCleanupRetryTimer\(\)\s*\{[\s\S]*if \(!this\.iframeCleanupRetryTimer\) return;[\s\S]*clearTimeout\(this\.iframeCleanupRetryTimer\);[\s\S]*this\.iframeCleanupRetryTimer = 0;[\s\S]*\}/,
+    'iframe cleanup retry timer 缺少统一清理 helper'
+  );
+  assert.match(
+    block,
+    /clearIframeCleanupVisibilityHandler\(\)\s*\{[\s\S]*if \(!this\.iframeCleanupVisibilityHandler\) return;[\s\S]*document\.removeEventListener\('visibilitychange', this\.iframeCleanupVisibilityHandler\);[\s\S]*this\.iframeCleanupVisibilityHandler = null;[\s\S]*\}/,
+    'iframe cleanup visibility handler 缺少统一解绑 helper'
+  );
+  assert.match(
+    block,
+    /scheduleIframeCleanupRetry\(callback, delayMs = 120\)\s*\{[\s\S]*this\.clearIframeCleanupRetryTimer\(\);[\s\S]*if \(typeof callback !== 'function'\) return;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.clearIframeCleanupVisibilityHandler\(\);[\s\S]*this\.iframeCleanupVisibilityHandler = \(\) => \{[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) return;[\s\S]*this\.clearIframeCleanupVisibilityHandler\(\);[\s\S]*callback\(\);[\s\S]*\};[\s\S]*document\.addEventListener\('visibilitychange', this\.iframeCleanupVisibilityHandler\);[\s\S]*return;[\s\S]*this\.clearIframeCleanupVisibilityHandler\(\);[\s\S]*this\.iframeCleanupRetryTimer = setTimeout\(\(\) => \{[\s\S]*this\.iframeCleanupRetryTimer = 0;[\s\S]*callback\(\);[\s\S]*\}, normalizedDelayMs\);[\s\S]*\}/,
+    'iframe cleanup retry 应在隐藏页暂停，恢复可见后继续 callback，可见页才排 timeout'
+  );
+  assert.match(
+    block,
+    /const tryCleanup = \(retries = 0\) => \{[\s\S]*if \(popupToken !== this\.popupLifecycleToken\) return;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.scheduleIframeCleanupRetry\(\(\) => tryCleanup\(retries\), retryInterval\);[\s\S]*return;[\s\S]*\}[\s\S]*const target = iframeDoc\.getElementById\('universalBP_common_layout_main_content'\);/,
+    'iframe cleanup retry 触发前应在隐藏页暂停并保留当前 retries'
+  );
+  assert.match(
+    block,
+    /this\.scheduleIframeCleanupRetry\(\(\) => tryCleanup\(retries \+ 1\), retryInterval\);/,
+    'iframe cleanup 未通过统一 helper 调度下一次 retry'
+  );
+  assert.doesNotMatch(
+    block,
+    /this\.iframeCleanupRetryTimer = setTimeout\(\(\) => \{[\s\S]*tryCleanup\(retries \+ 1\);[\s\S]*\}, retryInterval\);/,
+    'iframe cleanup 不应绕过 helper 直接排 120ms retry timer'
+  );
 });
 
 test('MagicReport document 级监听和拖拽监听会登记到 popup cleanup', () => {

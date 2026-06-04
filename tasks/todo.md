@@ -1,3 +1,48 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十一子项
+
+## 需求规格
+- 目标：在 extension 授权守卫店铺名回填收口后，继续优化万能查数弹窗 iframe 首屏清理 retry，避免 `iframe.onload` 后用于等待 `#universalBP_common_layout_main_content` 的 120ms retry timer 在标签页隐藏时继续唤醒并访问 iframe DOM。
+- 根因判断：`src/main-assistant/magic-report.js` 已用 `iframeCleanupRetryTimer` 在弹窗关闭时统一释放，但清理目标未出现时会最多 20 次按 120ms `setTimeout` 重试；若用户打开万能查数后切到其它标签页，隐藏页仍会保留短周期 timer 闭包和 iframe 文档引用。
+- 范围：仅覆盖万能查数 iframe 清理 retry 的隐藏页暂停、恢复可见继续、timer/visibility listener 统一清理；不改 iframe URL、快捷话术提交、原生查数、AI 报表请求、人群看板请求并发、创建/复制/预算/护航或 10rpm 服务端边界。
+- 热修 vs 结构性修复取舍：保留既有 20 次、120ms、找到目标后清理再显示、失败后显示 iframe 的语义；把 retry 调度收敛到可取消 helper，并用 `visibilitychange` 只在隐藏 pending 时绑定一次，不新增第二套 iframe 清理逻辑。
+- 成功标准：静态测试证明存在 `iframeCleanupVisibilityHandler`、隐藏态判定、清理 retry timer helper、visibility handler 清理 helper、隐藏页不排 120ms retry timer、恢复可见后继续同一 `tryCleanup(retries)`、弹窗释放时同时清理 timer 和 visibility listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开万能查数弹窗、不点击快捷话术、不触发原生查数或 AI 报表请求，不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十子项提交后工作区状态，确认本子项只处理 MagicReport iframe 清理 retry 生命周期。
+- [x] 为 MagicReport 增加 iframe cleanup visibility handler、隐藏态判定和统一清理 helper。
+- [x] 将 iframe 清理 retry 调度改为隐藏页暂停、恢复可见继续同一清理链，弹窗释放时解绑 listener。
+- [x] 更新 MagicReport 目标测试，锁定 timer/visibility 生命周期和隐藏页不继续排 retry timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `73ad034 优化店铺名回填轮询`，工作区干净。
+- 定位结论：`optimizer/bridge` 清理 timer 贴近受控复制/创建桥，`native runtime` 8 秒缓存隐藏即清可能增加返回后的重新请求；本子项选择 MagicReport iframe 清理 retry，属于弹窗展示清理且可按弹窗生命周期安全收口。
+- 实现摘要：新增 `iframeCleanupVisibilityHandler`、`isMagicReportDocumentHidden()`、`clearIframeCleanupRetryTimer()`、`clearIframeCleanupVisibilityHandler()` 和 `scheduleIframeCleanupRetry()`；隐藏页只绑定一次 `visibilitychange` pending，不排 120ms timeout。
+- 清理摘要：`revealIframe()` 与 `clearMagicRuntimeCaches()` 会同时释放 retry timer 和 visibility handler，弹窗关闭、重建或 iframe 显示后不遗留隐藏页 listener。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 增加 iframe cleanup retry 生命周期断言，锁定隐藏态暂停、恢复可见继续同一 callback、弹窗释放解绑和禁止直接排 retry timeout。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/magic-report-panel-resilience.test.mjs'], { timeout: 60000 }) ..."` 通过，13 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/magic-report-panel-resilience.test.mjs`、`tests/magic-report-crowd-matrix.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，119 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，616 项中 614 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "iframeCleanupVisibilityHandler|isMagicReportDocumentHidden|scheduleIframeCleanupRetry|clearIframeCleanupVisibilityHandler|tryCleanup\\(retries\\)|tryCleanup\\(retries \\+ 1\\)" src/main-assistant/magic-report.js tests/magic-report-panel-resilience.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页 pending 调度已进入产物。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/magic-report.js`、`tests/magic-report-panel-resilience.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 MagicReport iframe cleanup retry 的隐藏页暂停/恢复与统一清理，不改 iframe URL、快捷话术提交、原生查数、AI 报表请求、人群看板请求并发、创建/复制/预算/护航或 10rpm 服务端边界。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`shopId:"[present]"`、`shopName:"[present]"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordOpenBridgeReady:true`、`helperIcon.exists:true`、`helperIcon.visible:true`、`helperPanel.exists:true`、`helperPanel.visible:false`、`magicPopup.exists:false`、`magicPopup.visible:false`、`magicPopup.iframeExists:false`、`helperStyleIds:["am-helper-pro-v26-style"]`、`visibleAmHelperTags:143`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:9`；插件弹窗 `helperPanel/magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`。未打开万能查数弹窗，未点击快捷话术、组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台只见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 102 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 关键词过滤返回 `matchedCount:0`。
+
+## 结果复盘
+- 第十一轮第四十一子项结果：万能查数 iframe 首屏清理从“目标节点未出现时固定 120ms retry，最多 20 次”优化为“可见页才排 retry timeout，隐藏页只保留一次 visibility pending，恢复可见后继续同一 `tryCleanup(retries)` 链”，减少隐藏标签页中短周期 iframe DOM 探测和闭包持有。
+- 取舍结论：保留原有 iframe 懒加载、20 次/120ms、找到核心内容区后清理再显示、失败后显示 iframe 和草稿恢复语义；未改快捷话术提交、AI 报表/人群看板请求、创建/复制/预算/护航链路，也未增加任何服务端请求或改变 10rpm 边界。
+- 验证结论：源码/测试语法、构建、目标测试、项目语法、构建检查、相关回归、全量回归、静态定位、Chrome MCP 只读验收、危险请求过滤和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十子项
 
 ## 需求规格
