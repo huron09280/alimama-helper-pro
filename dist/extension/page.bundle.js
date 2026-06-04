@@ -5659,7 +5659,9 @@ if (typeof globalThis !== 'undefined') {
             scrollChainGuardBound: false,
             panelOutsideClickHandler: null,
             panelOutsideClickHandlerBound: false,
-            panelIconRevealTimer: null
+            panelIconRevealTimer: null,
+            optimizerOpenRetryTimer: null,
+            keywordPlanOpenRetryTimer: null
         },
 
         init() {
@@ -5685,6 +5687,36 @@ if (typeof globalThis !== 'undefined') {
                 if (!icon.isConnected) return;
                 icon.style.display = 'flex';
             }, 300);
+        },
+
+        clearOptimizerOpenRetryTimer() {
+            if (!this.runtime.optimizerOpenRetryTimer) return;
+            clearTimeout(this.runtime.optimizerOpenRetryTimer);
+            this.runtime.optimizerOpenRetryTimer = null;
+        },
+
+        scheduleOptimizerOpenRetry(callback) {
+            this.clearOptimizerOpenRetryTimer();
+            if (typeof callback !== 'function') return;
+            this.runtime.optimizerOpenRetryTimer = setTimeout(() => {
+                this.runtime.optimizerOpenRetryTimer = null;
+                callback();
+            }, 1000);
+        },
+
+        clearKeywordPlanOpenRetryTimer() {
+            if (!this.runtime.keywordPlanOpenRetryTimer) return;
+            clearTimeout(this.runtime.keywordPlanOpenRetryTimer);
+            this.runtime.keywordPlanOpenRetryTimer = null;
+        },
+
+        scheduleKeywordPlanOpenRetry(callback) {
+            this.clearKeywordPlanOpenRetryTimer();
+            if (typeof callback !== 'function') return;
+            this.runtime.keywordPlanOpenRetryTimer = setTimeout(() => {
+                this.runtime.keywordPlanOpenRetryTimer = null;
+                callback();
+            }, 800);
         },
 
         bindPanelOutsideClickHandler(panel, icon, closePanel) {
@@ -7743,6 +7775,7 @@ if (typeof globalThis !== 'undefined') {
             const optBtn = document.getElementById('am-trigger-optimizer');
             if (optBtn) {
                 optBtn.onclick = () => {
+                    this.clearOptimizerOpenRetryTimer();
                     // [ADD] 点击护航时自动最小化主面板
                     closePanel(false);
 
@@ -7760,11 +7793,11 @@ if (typeof globalThis !== 'undefined') {
                         toggleOptimizerPanel();
                     } else {
                         Logger.log('⚠️ 算法护航模块初始化中...', true);
-                        setTimeout(() => {
+                        this.scheduleOptimizerOpenRetry(() => {
                             if (!toggleOptimizerPanel()) {
                                 alert('算法护航模块无法加载，请刷新页面重试');
                             }
-                        }, 1000);
+                        });
                     }
                 };
             }
@@ -7803,12 +7836,13 @@ if (typeof globalThis !== 'undefined') {
                 };
 
                 keywordPlanBtn.onclick = () => {
+                    this.clearKeywordPlanOpenRetryTimer();
                     const api = resolveKeywordPlanApi();
                     if (openKeywordPlanWizard(api)) return;
                     if (openExistingKeywordOverlay()) return;
 
                     Logger.log('⚠️ 关键词建计划模块初始化中...', true);
-                    setTimeout(() => {
+                    this.scheduleKeywordPlanOpenRetry(() => {
                         const retryApi = resolveKeywordPlanApi();
                         if (openKeywordPlanWizard(retryApi)) {
                             return;
@@ -7818,7 +7852,7 @@ if (typeof globalThis !== 'undefined') {
                         } else {
                             alert('组建计划模块不可用，请刷新页面重试');
                         }
-                    }, 800);
+                    });
                 };
             }
 

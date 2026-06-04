@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十子项
+
+## 需求规格
+- 目标：在主助手启动兜底 timer 释放后，继续收口主助手工具按钮的模块打开重试 timer，避免“算法护航/组建计划模块初始化中...”状态下连续点击排队多个无句柄 `setTimeout`，旧回调在模块已打开或弹窗已存在后仍继续持有闭包并可能重复 alert。
+- 根因判断：`src/main-assistant/ui.js` 中算法护航按钮和组建计划按钮在模块暂不可用时分别启动 1000ms/800ms 延迟重试；当前 timer 没有保存句柄，也不会在下一次点击、成功打开或已有弹窗打开时取消。
+- 范围：仅覆盖主助手工具按钮的算法护航/组建计划打开重试 timer 生命周期和对应静态测试；不改按钮 DOM、主面板开关、万能查数、辅助显示、预算破限、计划并发、关键词建计划 API、算法护航 toggle、真实创建/复制/预算提交或投放接口合同。
+- 热修 vs 结构性修复取舍：采用“runtime 双 timer 句柄 + clear/schedule helper”的生命周期，把每个工具按钮的延迟重试保持为最多一个；不改变 1000ms/800ms 重试延迟，不新增第二套模块可用性判断。
+- 成功标准：静态测试证明 `optimizerOpenRetryTimer` 与 `keywordPlanOpenRetryTimer` 存在，点击前/成功路径会清理旧 timer，延迟回调触发后归零，重复点击不会累积无句柄 timeout；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放、生成计划或护航执行；浏览器验收只允许观察工具按钮打开/重试状态。
+
+## 执行计划（可核对）
+- [x] 复核第十九子项提交后工作区状态，确认本子项继续处理主助手 UI timer 生命周期。
+- [x] 扫描剩余监听/timer 候选，排除路由、桥接、缓存清理等持续事实源，选择工具按钮打开重试 timer 作为本轮优化点。
+- [x] 实现算法护航/组建计划打开重试 timer 的句柄、清理和调度 helper。
+- [x] 补充/更新目标测试，锁定重复点击不会累积无句柄打开重试 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `0d314e8 优化 Chrome 主助手启动轮询释放`，工作区干净。
+- 定位结论：主助手 MutationObserver、URL 监听、桥接监听和缓存清理 timer 是运行态事实源或已有空缓存停止机制，不作为本轮优化点；工具按钮打开重试 timer 是用户点击期短生命周期资源，更适合继续收口。
+- 方案判断：给算法护航与组建计划各自保留一个 pending retry timer，下一次点击或成功打开前先取消旧 timer；timer 触发后先归零，再执行原有重试逻辑，保持现有失败提示语义。
+- 实现摘要：`src/main-assistant/ui.js` 新增 `optimizerOpenRetryTimer`、`keywordPlanOpenRetryTimer` 与对应 clear/schedule helper；算法护航和组建计划按钮点击前会先清理旧 pending retry，模块不可用时只保留最新一次延迟重试。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 新增静态回归，锁定双 timer 状态、helper 归零、点击前清理旧 timer、延迟回调触发后归零，以及禁止回退到旧无句柄 `setTimeout`。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/ui.js` 通过。
+- 测试语法：`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，12 项测试全绿；新增断言覆盖工具按钮打开重试双 timer 句柄、clear/schedule helper、点击前清理旧 timer、触发后归零和旧无句柄 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，52 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，607 项中 605 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在主助手工具按钮打开重试 timer 生命周期、对应静态测试、任务记录和构建产物；未改按钮 DOM、主面板开关、万能查数、辅助显示、预算破限、计划并发、关键词建计划 API、算法护航 toggle、真实创建/复制/预算提交或投放接口合同。
+
+## 结果复盘
+- 第十一轮第二十子项结果：主助手工具按钮的模块打开重试从“连续点击可排队多个无句柄 timeout”优化为“算法护航与组建计划各自最多保留一个 pending retry timer，下一次点击先取消旧 timer，timer 触发后立即归零”。
+- 取舍结论：保留原有 1000ms/800ms 重试延迟、模块可用性判断和失败提示；只补齐点击期短生命周期 timer 管理，没有新增第二套模块加载状态。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十九子项
 
 ## 需求规格
