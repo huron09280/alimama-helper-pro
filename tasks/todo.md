@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十八子项
+
+## 需求规格
+- 目标：在算法护航日志展开 timer 释放后，继续收口主助手面板的外部点击关闭监听和悬浮球延迟显示 timer，避免主面板关闭后仍常驻只服务打开态的匿名 `document.click` 闭包，以及多次折叠时累积无句柄 `setTimeout(() => icon.style.display = 'flex', 300)`。
+- 根因判断：`src/main-assistant/ui.js` 中外部点击关闭逻辑在 `bindEvents()` 初始化时用匿名 `document.addEventListener('click', ...)` 常驻；该监听只有 `State.config.panelOpen` 为真时才有意义，且无法在重复初始化或关闭状态下解绑。`updateState()` 关闭面板时的 icon reveal timeout 没有句柄，面板快速开合或旧 DOM 被重建时仍会短时持有旧 icon。
+- 范围：仅覆盖 `src/main-assistant/ui.js` 主助手面板开关生命周期和对应静态测试；不改万能查数、算法护航、组建计划、辅助显示开关、自动闭窗、排序重置、日志触发、预算破限、计划并发或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“runtime 句柄 + bind/unbind helper + schedule/clear helper”的生命周期，把外部点击监听按面板打开期绑定、关闭期释放；不新增第二套面板状态，不改变 hover 自动打开、点击最小化和 300ms 悬浮球显示节奏。
+- 成功标准：静态测试证明 `panelOutsideClickHandler` 具备绑定状态，`openPanel()` 打开后绑定外部点击监听，`closePanel()`/`updateState()` 关闭路径解绑，`updateState()` 用可取消 helper 调度悬浮球显示并在打开态清理 timer；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许打开/关闭主助手面板和只读观察监听/timer 状态。
+
+## 执行计划（可核对）
+- [x] 复核第十七子项提交后工作区状态，确认本子项只处理主助手面板开关生命周期。
+- [x] 扫描剩余监听/timer 候选，排除已能在空缓存后停止的 bridge cache cleanup timer。
+- [x] 实现主面板外部点击监听按打开期绑定、关闭期释放，并替换匿名常驻监听。
+- [x] 实现悬浮球 reveal timer 句柄、清理和状态校验。
+- [x] 补充/更新目标测试，锁定面板关闭会释放外部点击监听和 reveal timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `d7c8539 优化 Chrome 护航日志展开计时器释放`，工作区干净。
+- 定位结论：`src/optimizer/bridge.js` 的 bridge cache cleanup timer 在缓存为空后会停止重排，不作为本轮优化点；主助手面板的外部点击关闭监听和 icon reveal timeout 更符合“关闭后释放只服务打开态资源”的优化标准。
+- 方案判断：把主助手面板的开关期资源收回 `UI.runtime`，打开时绑定外部 click handler，关闭时解绑；悬浮球显示延迟用单一 timer 句柄并在打开态/重排前取消，timer 触发前校验 icon 仍连接且面板仍关闭。
+- 实现摘要：`src/main-assistant/ui.js` 新增 `panelOutsideClickHandler`、`panelOutsideClickHandlerBound`、`panelIconRevealTimer` 和配套 bind/unbind、schedule/clear helper；`openPanel()` 打开后绑定外部点击监听，`closePanel()` 与 `updateState()` 关闭态解绑，悬浮球显示改为可取消 timer。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 新增静态回归，覆盖主面板外部点击监听状态、绑定/解绑 helper、打开/关闭调用点、icon reveal timer 状态校验，以及禁止回退到匿名常驻 click 和无句柄 timeout。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/ui.js` 与 `node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，11 项测试全绿；新增断言覆盖主面板外部点击监听 bind/unbind、悬浮球 reveal timer schedule/clear、打开/关闭状态调用点和匿名常驻监听禁用。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，51 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，605 项中 603 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在主助手面板外部点击监听和悬浮球 reveal timer 生命周期、对应静态测试、任务记录和构建产物；未改万能查数、算法护航、组建计划、辅助显示开关、自动闭窗、排序重置、日志触发、预算破限、计划并发或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十八子项结果：主助手面板从“初始化时常驻匿名外部点击关闭监听 + 关闭态无句柄 reveal timeout”优化为“打开期绑定外部 click handler，关闭/状态折叠时解绑；悬浮球显示延迟由单一 timer 句柄调度，打开态或重排前可取消，触发前校验面板仍关闭且 icon 仍连接”。
+- 取舍结论：保留 hover 自动打开、点击关闭、点击算法护航时最小化和 300ms 悬浮球显示节奏；只补齐开关期资源生命周期，没有新增第二套主面板状态，也没有触碰业务工具按钮和写接口。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十七子项
 
 ## 需求规格

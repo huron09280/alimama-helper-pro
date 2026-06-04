@@ -4,7 +4,10 @@
     const UI = {
         runtime: {
             assistExpanded: false,
-            scrollChainGuardBound: false
+            scrollChainGuardBound: false,
+            panelOutsideClickHandler: null,
+            panelOutsideClickHandlerBound: false,
+            panelIconRevealTimer: null
         },
 
         init() {
@@ -13,6 +16,46 @@
             this.createElements();
             this.bindEvents();
             this.updateState();
+        },
+
+        clearPanelIconRevealTimer() {
+            if (!this.runtime.panelIconRevealTimer) return;
+            clearTimeout(this.runtime.panelIconRevealTimer);
+            this.runtime.panelIconRevealTimer = null;
+        },
+
+        schedulePanelIconReveal(icon) {
+            this.clearPanelIconRevealTimer();
+            if (!(icon instanceof HTMLElement)) return;
+            this.runtime.panelIconRevealTimer = setTimeout(() => {
+                this.runtime.panelIconRevealTimer = null;
+                if (State.config.panelOpen) return;
+                if (!icon.isConnected) return;
+                icon.style.display = 'flex';
+            }, 300);
+        },
+
+        bindPanelOutsideClickHandler(panel, icon, closePanel) {
+            this.unbindPanelOutsideClickHandler();
+            if (!(panel instanceof HTMLElement) || !(icon instanceof HTMLElement) || typeof closePanel !== 'function') return;
+            this.runtime.panelOutsideClickHandler = (event) => {
+                const target = event.target;
+                if (!(target instanceof Node)) return;
+                if (State.config.panelOpen && !panel.contains(target) && !icon.contains(target)) {
+                    closePanel(false);
+                }
+            };
+            document.addEventListener('click', this.runtime.panelOutsideClickHandler);
+            this.runtime.panelOutsideClickHandlerBound = true;
+        },
+
+        unbindPanelOutsideClickHandler() {
+            if (!this.runtime.panelOutsideClickHandlerBound) return;
+            if (typeof this.runtime.panelOutsideClickHandler === 'function') {
+                document.removeEventListener('click', this.runtime.panelOutsideClickHandler);
+            }
+            this.runtime.panelOutsideClickHandler = null;
+            this.runtime.panelOutsideClickHandlerBound = false;
         },
 
         bindPluginScrollChainGuard() {
@@ -1958,14 +2001,20 @@
             // 展开/收起动画
             const openPanel = (force = false) => {
                 clearAutoHideTimer();
+                this.clearPanelIconRevealTimer();
                 if (!force && Date.now() < hoverOpenBlockedUntil) return;
-                if (State.config.panelOpen) return;
+                if (State.config.panelOpen) {
+                    this.bindPanelOutsideClickHandler(panel, icon, closePanel);
+                    return;
+                }
                 State.config.panelOpen = true;
                 State.save();
                 this.updateState();
+                this.bindPanelOutsideClickHandler(panel, icon, closePanel);
             };
             const closePanel = (blockHoverOpen = false) => {
                 clearAutoHideTimer();
+                this.unbindPanelOutsideClickHandler();
                 if (blockHoverOpen) hoverOpenBlockedUntil = Date.now() + 800;
                 if (!State.config.panelOpen) return;
                 State.config.panelOpen = false;
@@ -1981,6 +2030,9 @@
                     closePanel(false);
                 }, delay);
             };
+            if (State.config.panelOpen) {
+                this.bindPanelOutsideClickHandler(panel, icon, closePanel);
+            }
 
             icon.onclick = () => openPanel(true);
             // 鼠标移入悬浮球时自动展开
@@ -1991,13 +2043,6 @@
                 e.stopPropagation();
                 closePanel(true);
             };
-
-            // 点击面板外部自动最小化
-            document.addEventListener('click', (e) => {
-                if (State.config.panelOpen && !panel.contains(e.target) && !icon.contains(e.target)) {
-                    closePanel(false);
-                }
-            });
 
             // 功能按钮
             // 功能开关 (Settings)
@@ -2047,9 +2092,7 @@
             if (optBtn) {
                 optBtn.onclick = () => {
                     // [ADD] 点击护航时自动最小化主面板
-                    State.config.panelOpen = false;
-                    State.save();
-                    this.updateState();
+                    closePanel(false);
 
                     const toggleOptimizerPanel = () => {
                         try {
@@ -2195,11 +2238,13 @@
 
             // 面板显示/隐藏动画
             if (panelOpen) {
+                this.clearPanelIconRevealTimer();
                 panel.classList.remove('hidden');
                 icon.style.display = 'none';
             } else {
+                this.unbindPanelOutsideClickHandler();
                 panel.classList.add('hidden');
-                setTimeout(() => { icon.style.display = 'flex'; }, 300);
+                this.schedulePanelIconReveal(icon);
             }
 
             // 功能开关状态
