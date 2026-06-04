@@ -2458,7 +2458,7 @@
                                 <input id="${CONFIG.UI_ID}-prompt" type="text" placeholder="例: 深度拿量" />
                             </label>
                             <label class="am-escort-field">
-                                <span class="am-escort-field-label">同时执行</span>
+                                <span class="am-escort-field-label">任务并发</span>
                                 <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" />
                                 <span class="am-escort-field-unit">个计划</span>
                             </label>

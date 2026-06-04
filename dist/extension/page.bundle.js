@@ -24488,6 +24488,60 @@ if (typeof globalThis !== 'undefined') {
     };
     // ==================== API 请求模块 ====================
     const API = {
+        REQUEST_RATE_LIMIT_RPM: 10,
+        REQUEST_RATE_LIMIT_INTERVAL_MS: 6000,
+        rateLimitNextAt: 0,
+        rateLimitQueue: Promise.resolve(),
+
+        createAbortError: () => {
+            const err = new Error('请求已取消');
+            err.name = 'AbortError';
+            return err;
+        },
+
+        delayWithAbort: (ms, signal) => new Promise((resolve, reject) => {
+            if (signal?.aborted) {
+                reject(API.createAbortError());
+                return;
+            }
+            let timerId = null;
+            const cleanup = () => {
+                if (timerId !== null) {
+                    clearTimeout(timerId);
+                    timerId = null;
+                }
+                if (signal && typeof signal.removeEventListener === 'function') {
+                    signal.removeEventListener('abort', handleAbort);
+                }
+            };
+            const handleAbort = () => {
+                cleanup();
+                reject(API.createAbortError());
+            };
+            timerId = setTimeout(() => {
+                cleanup();
+                resolve();
+            }, Math.max(0, Number(ms) || 0));
+            if (signal && typeof signal.addEventListener === 'function') {
+                signal.addEventListener('abort', handleAbort, { once: true });
+            }
+        }),
+
+        waitForRateLimitSlot: async (signal) => {
+            const slot = API.rateLimitQueue.catch(() => null).then(async () => {
+                if (signal?.aborted) throw API.createAbortError();
+                const waitMs = Math.max(0, API.rateLimitNextAt - Date.now());
+                if (waitMs > 0) {
+                    Logger.info(`⏱️ 护航请求限速中，${Math.ceil(waitMs / 1000)}秒后继续（10rpm）`);
+                    await API.delayWithAbort(waitMs, signal);
+                }
+                if (signal?.aborted) throw API.createAbortError();
+                API.rateLimitNextAt = Date.now() + API.REQUEST_RATE_LIMIT_INTERVAL_MS;
+            });
+            API.rateLimitQueue = slot.catch(() => null);
+            await slot;
+        },
+
         /**
          * 单次请求（使用原生 fetch API）
          * NOTE: 由于 GM_xmlhttpRequest 在某些油猴管理器中存在跨域问题，
@@ -24641,6 +24695,7 @@ if (typeof globalThis !== 'undefined') {
 
             for (let attempt = 1; attempt <= totalAttempts; attempt++) {
                 try {
+                    await API.waitForRateLimitSlot(signal);
                     const result = await API._singleRequest(url, data, timeout, signal);
                     Logger.info(`✓ 请求成功 (第${attempt}次)`);
                     return result;
@@ -70318,7 +70373,7 @@ if (typeof globalThis !== 'undefined') {
                                 <input id="${CONFIG.UI_ID}-prompt" type="text" placeholder="例: 深度拿量" />
                             </label>
                             <label class="am-escort-field">
-                                <span class="am-escort-field-label">同时执行</span>
+                                <span class="am-escort-field-label">任务并发</span>
                                 <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" />
                                 <span class="am-escort-field-unit">个计划</span>
                             </label>
@@ -71660,7 +71715,7 @@ if (typeof globalThis !== 'undefined') {
 
             const total = campaigns.length;
             const concurrency = userConfig.concurrency || 3;
-            UI.updateStatus(`识别到 ${total} 个计划，开始并发处理 (并发数: ${concurrency})...`, '#1890ff');
+            UI.updateStatus(`识别到 ${total} 个计划，开始按 10rpm 限速处理 (任务并发数: ${concurrency})...`, '#1890ff');
 
             // 创建任务函数数组
             const taskFns = campaigns.map(([id, name], i) => async () => {
@@ -71669,7 +71724,7 @@ if (typeof globalThis !== 'undefined') {
                 return { ...res, id, name };
             });
 
-            // 并发执行（使用用户设置的并发数）
+            // 任务并发保持可配置；具体服务端请求由 API 层统一按 10rpm 限速。
             const results = await Utils.concurrentLimit(taskFns, concurrency);
 
             // 统计结果

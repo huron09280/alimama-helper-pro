@@ -1,3 +1,47 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十三子项
+
+## 需求规格
+- 目标：按用户补充的“服务器只帮并发 10rpm”约束，继续优化算法护航执行侧的请求调度，避免当前 `concurrentLimit` 同时启动多个计划后在服务端请求层形成瞬时并发、失败重试和长时间挂起闭包。
+- 根因判断：`src/optimizer/core.js` 只按 `userConfig.concurrency` 限制计划任务并发，`src/optimizer/api.js` 的每次 `API.request()` 会立即发起 `_singleRequest()`，缺少全局 10 rpm 请求启动节流；当多个计划并发执行且每个计划包含多次读取/提交时，会超过服务器实际承载节奏。
+- 范围：仅覆盖算法护航 `API.request()` 的全局请求启动限速、执行提示文案和静态回归；不改 open/openV3 请求合同、Token 读取、手动设置参数、计划扫描、成功/失败统计、取消按钮、结果浮层、真实写接口字段或主助手计划并发功能。
+- 热修 vs 结构性修复取舍：采用 API 层单一节流队列表达“所有护航服务端请求最多 10 rpm”的不变量，而不是在每个调用点散落 delay；计划任务并发保持现有配置，但请求进入队列后按 6000ms 最小间隔启动，重试也重新经过同一限速入口。
+- 成功标准：静态测试证明存在 `REQUEST_RATE_LIMIT_RPM: 10`、`REQUEST_RATE_LIMIT_INTERVAL_MS: 6000`、`API.waitForRateLimitSlot()` 和 `API.request()` 每次尝试前的限速调用；执行状态文案明确 10 rpm 限速；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，且不触发真实护航提交。
+- 安全边界：本子项不点击“立即扫描并优化”、不触发 open/openV3、创建、复制、预算提交、删除、上下线或投放；浏览器验收只允许观察面板文案和运行态状态，不做服务端请求压力测试。
+
+## 执行计划（可核对）
+- [x] 复核第二十二子项提交后工作区状态，并确认本子项改为处理 10 rpm 服务端请求约束。
+- [x] 在 API 层实现全局 10 rpm 请求启动限速，确保并发任务和重试都复用同一队列。
+- [x] 更新算法护航执行提示文案，避免 UI 只表达“并发数”而漏掉 10 rpm 限速。
+- [x] 补充/更新目标测试，锁定请求限速不被回退为纯并发调度。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `8015322 优化 Chrome 护航面板高亮计时器`；只读状态下 `git status --short` 无变更行，但有 macOS 临时缓存写入警告。
+- 子代理尝试失败：本地 subagent 返回 `auth_unavailable: 502 Bad Gateway`，本子项由主线程继续定位。
+- 定位结论：比剩余 UI 短 timer 更关键的是用户补充的 10 rpm 服务端约束；当前算法护航只限制计划任务并发，没有限制 API 请求启动速率，多个计划执行时仍可能造成服务端请求突刺。
+- 实现摘要：`src/optimizer/api.js` 新增 10 rpm 固定请求槽、串行限速队列、可取消等待和 AbortError 透传；`API.request()` 每次尝试前先 `await API.waitForRateLimitSlot(signal)`，重试也不能绕过请求槽。
+- 文案摘要：`src/optimizer/core.js` 执行状态改为“开始按 10rpm 限速处理 (任务并发数: N)”，并补充任务并发与 API 请求限速的边界注释；`src/optimizer/ui.js` 把输入标签从“同时执行”改为“任务并发”，降低误解为服务端并发的风险。
+- 测试摘要：`tests/optimizer-escort-new-flow-fallback.test.mjs` 新增静态回归，锁定 10rpm/6000ms、限速队列、每次 API 尝试前获取请求槽、执行提示和面板文案。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/api.js`、`node --check src/optimizer/core.js`、`node --check src/optimizer/ui.js` 均通过。
+- 测试语法：`node --check tests/optimizer-escort-new-flow-fallback.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过，40 项测试全绿；新增断言覆盖 10rpm 请求事实源、6000ms 间隔、串行限速队列、每次 API 尝试前获取请求槽、任务并发/请求限速文案边界。
+- 构建同步：首次 `npm run build` 在只读沙箱下因写入 `阿里妈妈多合一助手.js` 被拒绝；提升权限后 `npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，73 项测试全绿。
+- 空白检查：`git diff --check` 通过；只读阶段有 xcrun 临时缓存警告，未报告 diff 空白错误。
+- 全量回归：`npm test` 通过，609 项中 607 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面；`navigate_page` 刷新后 `evaluate_script` 只读确认 `window.__ALIMAMA_OPTIMIZER_TOGGLE__` 与 `window.__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__` 存在；调用 toggle 仅打开面板观察 DOM，未点击运行按钮，返回 `toggleResult: true`、`hasPanel: true`、标签为 `["诊断话术","任务并发"]`、按钮文案为 `立即扫描并优化`。`list_console_messages` 仅见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和业务配置依赖 warn，未触发护航提交。
+- Diff 自审：改动集中在算法护航 API 请求限速、执行状态文案、面板标签、目标测试、任务记录和构建产物；未改 open/openV3 请求合同、Token 读取、手动设置参数、计划扫描、成功/失败统计、取消按钮、结果浮层、真实写接口字段或主助手计划并发功能。
+
+## 结果复盘
+- 第十一轮第二十三子项结果：算法护航从“只限制计划任务并发，API 请求会随并发任务立即启动”优化为“所有 `API.request()` 尝试先进入全局 10 rpm 请求槽，最小启动间隔 6000ms，重试同样经过限速队列”。
+- 取舍结论：保留用户可配任务并发，避免把计划处理能力直接降成单任务；真正的服务端压力入口在 API 层统一收口，减少并发计划导致的请求突刺、失败重试和等待闭包堆积。取消运行时，限速等待会透传 AbortError，不会继续占用后续请求队列。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实护航请求，避免突破安全边界和 10 rpm 服务端约束。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十二子项
 
 ## 需求规格
