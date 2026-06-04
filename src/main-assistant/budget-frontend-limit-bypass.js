@@ -90,6 +90,14 @@
                 let magixPending = null;
                 let scanTimer = null;
                 let smartAssistantScanTimer = null;
+                let scanLoopTimer = null;
+
+                const isDocumentHidden = () => document.visibilityState === 'hidden';
+                const clearScanLoopTimer = () => {
+                    if (!scanLoopTimer) return;
+                    clearTimeout(scanLoopTimer);
+                    scanLoopTimer = null;
+                };
 
                 const canPatch = (view) => {
                     if (!view || typeof view !== 'object') return false;
@@ -1001,8 +1009,10 @@
 
                 const scheduleSmartAssistantPatch = () => {
                     if (smartAssistantScanTimer) return;
+                    if (isDocumentHidden()) return;
                     smartAssistantScanTimer = setTimeout(() => {
                         smartAssistantScanTimer = null;
+                        if (isDocumentHidden()) return;
                         if (window.__AM_BUDGET_FRONTEND_UNLOCK__ && isSmartAssistantBudgetPage()) {
                             patchSmartAssistantBudgetValidation();
                         } else if (!window.__AM_BUDGET_FRONTEND_UNLOCK__) {
@@ -1085,10 +1095,43 @@
 
                 const scheduleApply = () => {
                     if (scanTimer) return;
+                    if (isDocumentHidden()) return;
                     scanTimer = setTimeout(() => {
                         scanTimer = null;
+                        if (isDocumentHidden()) return;
                         apply();
                     }, 120);
+                };
+
+                const scheduleScanLoop = () => {
+                    if (scanLoopTimer) return;
+                    if (!window.__AM_BUDGET_FRONTEND_UNLOCK__) return;
+                    if (isDocumentHidden()) return;
+                    scanLoopTimer = setTimeout(() => {
+                        scanLoopTimer = null;
+                        if (!window.__AM_BUDGET_FRONTEND_UNLOCK__) return;
+                        if (isDocumentHidden()) return;
+                        scheduleApply();
+                        scheduleScanLoop();
+                    }, 600);
+                };
+
+                const handleBudgetVisibilityChange = () => {
+                    if (!window.__AM_BUDGET_FRONTEND_UNLOCK__) return;
+                    if (isDocumentHidden()) {
+                        if (scanTimer) {
+                            clearTimeout(scanTimer);
+                            scanTimer = null;
+                        }
+                        if (smartAssistantScanTimer) {
+                            clearTimeout(smartAssistantScanTimer);
+                            smartAssistantScanTimer = null;
+                        }
+                        clearScanLoopTimer();
+                        return;
+                    }
+                    scheduleApply();
+                    scheduleScanLoop();
                 };
 
                 const startObserver = () => {
@@ -1120,6 +1163,7 @@
                         clearTimeout(smartAssistantScanTimer);
                         smartAssistantScanTimer = null;
                     }
+                    clearScanLoopTimer();
                     restoreAll();
                     restoreSmartAssistantPatches();
                     restoreBudgetSubmitPayloadPatch();
@@ -1127,6 +1171,7 @@
                         try { cleanup(); } catch { }
                     });
                     window.removeEventListener('hashchange', scheduleApply, true);
+                    document.removeEventListener('visibilitychange', handleBudgetVisibilityChange);
                     window.__AM_BUDGET_FRONTEND_UNLOCK_REFRESH__ = null;
                     window.__AM_BUDGET_SMART_ASSISTANT_DEBUG__ = null;
                     window.__AM_BUDGET_FRONTEND_UNLOCK_PATCHER_INSTALLED__ = false;
@@ -1138,11 +1183,10 @@
                 installBudgetSubmitPayloadPatch();
                 window.addEventListener('hashchange', scheduleApply, true);
                 cleanupHandlers.push(() => window.removeEventListener('hashchange', scheduleApply, true));
+                document.addEventListener('visibilitychange', handleBudgetVisibilityChange);
+                cleanupHandlers.push(() => document.removeEventListener('visibilitychange', handleBudgetVisibilityChange));
                 startObserver();
-                const intervalId = setInterval(() => {
-                    if (window.__AM_BUDGET_FRONTEND_UNLOCK__) scheduleApply();
-                }, 600);
-                cleanupHandlers.push(() => clearInterval(intervalId));
+                scheduleScanLoop();
                 if (window.__AM_BUDGET_FRONTEND_UNLOCK__) {
                     scheduleSmartAssistantPatch();
                 }

@@ -1,3 +1,49 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十六子项
+
+## 需求规格
+- 目标：在 extension content 隐藏页 URL poll 收口后，继续优化预算破限页面补丁开启后的 600ms 扫描循环，避免 `setInterval(() => scheduleApply(), 600)` 在标签页隐藏时仍持续唤醒，用于扫描预算弹窗、恢复 hook 和 SmartAssistant React 校验补丁。
+- 根因判断：`src/main-assistant/budget-frontend-limit-bypass.js` 的页面级 patcher 已按需安装并能在关闭时释放 observer/timer，但开启后使用固定 `setInterval` 周期触发 `scheduleApply()`；即使 `document.visibilityState === 'hidden'`，interval 仍会保留常驻唤醒和闭包引用。
+- 范围：仅覆盖预算破限页面级扫描循环的隐藏页暂停与恢复可见补扫；不改预算下限判断、服务端最低预算解析、fetch/XHR 提交 payload 同步、SmartAssistant 校验补丁语义、开关默认状态或任何真实预算提交链路。
+- 热修 vs 结构性修复取舍：把固定 interval 替换为可取消的递归 timeout 扫描循环，并在 `scheduleApply()`、SmartAssistant patch timer 和 visibilitychange 处共同表达“隐藏页不排扫描，恢复可见补扫一次并恢复循环”的不变量；不在业务校验函数内部加分散开关。
+- 成功标准：静态测试证明不再使用固定 600ms interval；存在 `scanLoopTimer`、清理 helper、隐藏态判定、`scheduleScanLoop()` 可取消循环、`visibilitychange` 隐藏时释放扫描 timer、恢复可见后 `scheduleApply()` 并重启循环；关闭预算破限时释放 scan/apply/smart timers、observer 和 visibility listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开预算弹窗、不点击批量预算、不提交预算、不访问 SmartAssistant 真实预算编辑动作、不触发组建计划、复制、创建、导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认。
+
+## 执行计划（可核对）
+- [x] 复核第三十五子项提交后工作区状态，确认本子项只处理预算破限页面补丁扫描循环。
+- [x] 将固定 600ms `setInterval` 改为可取消的递归 timeout 扫描循环。
+- [x] 在 `scheduleApply()`、`scheduleSmartAssistantPatch()` 和 visibilitychange 中加入隐藏态暂停与恢复可见补扫。
+- [x] 更新预算破限目标测试，锁定隐藏页不再保留固定 interval 且关闭时释放 visibility 监听。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `a1892bd 优化隐藏页注入轮询`，工作区干净。
+- 定位结论：预算破限补丁默认不安装页面级扫描，但用户开启后会挂 observer、hashchange 和 600ms interval；关闭能清理，但隐藏标签页期间仍会持续唤醒。
+- 取舍结论：不改变预算破限能力本身，只把扫描驱动从固定 interval 收口成可暂停/可恢复的生命周期调度。
+- 实现摘要：`src/main-assistant/budget-frontend-limit-bypass.js` 新增 `scanLoopTimer`、`isDocumentHidden()`、`clearScanLoopTimer()` 和 `scheduleScanLoop()`；固定 600ms interval 被替换成单次 timeout 递归调度，调度前和触发后都会复核启用状态与隐藏态。
+- 可见性摘要：`scheduleApply()` 与 `scheduleSmartAssistantPatch()` 在隐藏标签页不再排扫描 timer；`visibilitychange` 进入隐藏时释放 apply、SmartAssistant patch 和 scan loop timer，恢复可见后补一次 `scheduleApply()` 并重启扫描循环。
+- 生命周期摘要：预算破限关闭路径同步清理 scan loop timer 并移除 `document.visibilitychange` 监听，cleanup handlers 也覆盖 visibility listener，避免关闭后遗留循环和监听引用。
+- 测试摘要：`tests/budget-frontend-limit-bypass.test.mjs` 更新静态回归，锁定 scan loop 可取消、隐藏态暂停/恢复、关闭清理 listener，以及不再出现 `setInterval(() => scheduleApply(), 600)`。
+
+## 验证记录
+- 测试语法：`node --check tests/budget-frontend-limit-bypass.test.mjs` 通过。
+- 源码语法：`node --check src/main-assistant/budget-frontend-limit-bypass.js` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/budget-frontend-limit-bypass.test.mjs` 通过，14 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/budget-frontend-limit-bypass.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/logger-api.test.mjs` 通过，55 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:9`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 96 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光追踪，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/budget-frontend-limit-bypass.js`、`tests/budget-frontend-limit-bypass.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增预算破限扫描循环隐藏页生命周期守卫、可取消 scan loop 和关闭清理，测试 diff 只锁定对应静态回归；未改预算校验、提交 payload 同步、服务端最低预算解析、开关默认值、SmartAssistant 校验补丁语义或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十六子项结果：预算破限页面级 patcher 从“开启后固定 600ms interval 常驻扫描”优化为“可取消递归 timeout 扫描循环，隐藏态释放扫描 timer，恢复可见后补扫并重启循环”，减少隐藏标签页中预算弹窗扫描、hook 恢复和 SmartAssistant 校验 patch 的无效唤醒机会。
+- 取舍结论：保留预算破限默认关闭、预算校验与提交 payload 同步、服务端最低预算解析、SmartAssistant 补丁语义和关闭清理能力；只收口扫描调度生命周期，没有新增第二套预算逻辑或服务端请求路径。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收均通过；未执行任何业务写动作或预算提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十五子项
 
 ## 需求规格
