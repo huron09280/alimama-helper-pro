@@ -125,6 +125,8 @@
             detailVisible: false,
             workbenchPage: 'home',
             previewLogLines: [],
+            openTaskTimers: new Set(),
+            openTaskFrames: new Set(),
             sceneSyncTimer: 0,
             sceneSyncInFlight: false,
             sceneSyncPendingToken: '',

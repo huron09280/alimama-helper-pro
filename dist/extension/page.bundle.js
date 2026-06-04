@@ -24924,6 +24924,8 @@ if (typeof globalThis !== 'undefined') {
             detailVisible: false,
             workbenchPage: 'home',
             previewLogLines: [],
+            openTaskTimers: new Set(),
+            openTaskFrames: new Set(),
             sceneSyncTimer: 0,
             sceneSyncInFlight: false,
             sceneSyncPendingToken: '',
@@ -61981,6 +61983,7 @@ if (typeof globalThis !== 'undefined') {
                 overlay.classList.remove('open');
                 wizardState.visible = false;
                 wizardState.openToken = toNumber(wizardState.openToken, 0) + 1;
+                clearWizardOpenTaskSchedule();
                 removeWizardDomAfterClose();
             };
             wizardState.els.closeBtn.onclick = closeWizardOverlay;
@@ -63516,7 +63519,33 @@ if (typeof globalThis !== 'undefined') {
             setRepairStatusText('场景=- 用例=0/0 通过=0 修复=0 失败=0 删除=0 停止=0');
             wizardState.mounted = true;
         };
+        const ensureWizardOpenTaskSchedules = () => {
+            if (!(wizardState.openTaskTimers instanceof Set)) {
+                wizardState.openTaskTimers = new Set();
+            }
+            if (!(wizardState.openTaskFrames instanceof Set)) {
+                wizardState.openTaskFrames = new Set();
+            }
+            return {
+                timers: wizardState.openTaskTimers,
+                frames: wizardState.openTaskFrames
+            };
+        };
+
+        const clearWizardOpenTaskSchedule = () => {
+            const { timers, frames } = ensureWizardOpenTaskSchedules();
+            timers.forEach((timerId) => clearTimeout(timerId));
+            timers.clear();
+            frames.forEach((frameId) => {
+                if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+                    window.cancelAnimationFrame(frameId);
+                }
+            });
+            frames.clear();
+        };
+
         const scheduleWizardOpenTask = (openToken = 0, task = null) => {
+            const { timers, frames } = ensureWizardOpenTaskSchedules();
             const runTask = () => {
                 if (openToken !== wizardState.openToken) return;
                 if (wizardState.visible !== true) return;
@@ -63525,14 +63554,29 @@ if (typeof globalThis !== 'undefined') {
                 }
             };
             const scheduleAfterPaint = () => {
+                if (openToken !== wizardState.openToken) return;
+                if (wizardState.visible !== true) return;
                 if (typeof setTimeout === 'function') {
-                    setTimeout(runTask, 0);
+                    const timerId = setTimeout(() => {
+                        timers.delete(timerId);
+                        runTask();
+                    }, 0);
+                    timers.add(timerId);
                     return;
                 }
                 runTask();
             };
             if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-                window.requestAnimationFrame(scheduleAfterPaint);
+                let frameId = 0;
+                let frameFired = false;
+                frameId = window.requestAnimationFrame(() => {
+                    frameFired = true;
+                    frames.delete(frameId);
+                    scheduleAfterPaint();
+                });
+                if (!frameFired && frameId !== undefined && frameId !== null) {
+                    frames.add(frameId);
+                }
                 return;
             }
             scheduleAfterPaint();
@@ -63582,6 +63626,7 @@ if (typeof globalThis !== 'undefined') {
             wizardState.openToken = (toNumber(wizardState.openToken, 0) + 1);
             const openToken = wizardState.openToken;
             const isStaleOpen = () => openToken !== wizardState.openToken;
+            clearWizardOpenTaskSchedule();
 
             const storedDraft = KeywordPlanWizardStore.readSessionDraft() || {};
             if (typeof KeywordPlanRuntime.prepareWizardStateForOpen === 'function') {

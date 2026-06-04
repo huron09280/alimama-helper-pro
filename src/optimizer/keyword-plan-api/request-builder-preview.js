@@ -1803,6 +1803,7 @@
                 overlay.classList.remove('open');
                 wizardState.visible = false;
                 wizardState.openToken = toNumber(wizardState.openToken, 0) + 1;
+                clearWizardOpenTaskSchedule();
                 removeWizardDomAfterClose();
             };
             wizardState.els.closeBtn.onclick = closeWizardOverlay;

@@ -95,9 +95,34 @@ test('optimizer 默认安装内部桥但不恢复完整 page API 全局暴露', 
 
 test('组建计划打开路径不在点击同步任务里构建预览', () => {
   assert.match(
+    wizardIntroSource,
+    /openTaskTimers:\s*new Set\(\),[\s\S]*openTaskFrames:\s*new Set\(\),/,
+    'wizardState 应登记打开后延迟任务的 timer/raf 注册表'
+  );
+  assert.match(
     wizardOpenSource,
-    /const scheduleWizardOpenTask = \(openToken = 0, task = null\) => \{[\s\S]*?if \(openToken !== wizardState\.openToken\) return;[\s\S]*?if \(wizardState\.visible !== true\) return;[\s\S]*?setTimeout\(runTask, 0\)[\s\S]*?window\.requestAnimationFrame\(scheduleAfterPaint\)/,
-    'openWizard 应把预览刷新延后到 overlay 打开后的下一帧，避免点击同步任务里做重预览'
+    /const ensureWizardOpenTaskSchedules = \(\) => \{[\s\S]*wizardState\.openTaskTimers instanceof Set[\s\S]*wizardState\.openTaskFrames instanceof Set[\s\S]*return \{[\s\S]*timers: wizardState\.openTaskTimers,[\s\S]*frames: wizardState\.openTaskFrames[\s\S]*\};[\s\S]*\};/,
+    '打开任务调度应规范化 timer/raf 注册表'
+  );
+  assert.match(
+    wizardOpenSource,
+    /const clearWizardOpenTaskSchedule = \(\) => \{[\s\S]*timers\.forEach\(\(timerId\) => clearTimeout\(timerId\)\);[\s\S]*timers\.clear\(\);[\s\S]*frames\.forEach\(\(frameId\) => \{[\s\S]*window\.cancelAnimationFrame\(frameId\);[\s\S]*\}\);[\s\S]*frames\.clear\(\);[\s\S]*\};/,
+    '打开任务调度应能统一释放 pending timeout 与 rAF'
+  );
+  assert.match(
+    wizardOpenSource,
+    /const scheduleWizardOpenTask = \(openToken = 0, task = null\) => \{[\s\S]*const \{ timers, frames \} = ensureWizardOpenTaskSchedules\(\);[\s\S]*if \(openToken !== wizardState\.openToken\) return;[\s\S]*if \(wizardState\.visible !== true\) return;[\s\S]*const timerId = setTimeout\(\(\) => \{[\s\S]*timers\.delete\(timerId\);[\s\S]*runTask\(\);[\s\S]*\}, 0\);[\s\S]*timers\.add\(timerId\);[\s\S]*let frameId = 0;[\s\S]*let frameFired = false;[\s\S]*frameId = window\.requestAnimationFrame\(\(\) => \{[\s\S]*frameFired = true;[\s\S]*frames\.delete\(frameId\);[\s\S]*scheduleAfterPaint\(\);[\s\S]*if \(!frameFired && frameId !== undefined && frameId !== null\) \{[\s\S]*frames\.add\(frameId\);/,
+    'openWizard 应把预览刷新延后到 overlay 打开后的下一帧，并登记可取消的 timeout/rAF；同步 rAF shim 不应留下 frame 句柄'
+  );
+  assert.doesNotMatch(
+    wizardOpenSource,
+    /setTimeout\(runTask, 0\)|window\.requestAnimationFrame\(scheduleAfterPaint\)/,
+    '打开后任务不应继续使用无句柄 timeout 或 rAF'
+  );
+  assert.match(
+    wizardOpenSource,
+    /wizardState\.openToken = \(toNumber\(wizardState\.openToken, 0\) \+ 1\);[\s\S]*const openToken = wizardState\.openToken;[\s\S]*clearWizardOpenTaskSchedule\(\);/,
+    '每次重新打开向导时应先释放上一轮 pending 打开任务'
   );
   assert.match(
     wizardOpenSource,
@@ -134,7 +159,7 @@ test('组建计划关闭后卸载隐藏 DOM 并清理全局监听', () => {
   );
   assert.match(
     requestBuilderPreviewSource,
-    /const closeWizardOverlay = \(\) => \{[\s\S]*?commitDraftState\(\);[\s\S]*?setRunModeMenuOpen\(false\);[\s\S]*?wizardState\.openToken = toNumber\(wizardState\.openToken, 0\) \+ 1;[\s\S]*?removeWizardDomAfterClose\(\);[\s\S]*?\};/,
+    /const closeWizardOverlay = \(\) => \{[\s\S]*?commitDraftState\(\);[\s\S]*?setRunModeMenuOpen\(false\);[\s\S]*?wizardState\.openToken = toNumber\(wizardState\.openToken, 0\) \+ 1;[\s\S]*?clearWizardOpenTaskSchedule\(\);[\s\S]*?removeWizardDomAfterClose\(\);[\s\S]*?\};/,
     '关闭路径应先保存草稿和关闭浮层状态，再失效异步 open 任务并卸载 DOM'
   );
   assert.match(

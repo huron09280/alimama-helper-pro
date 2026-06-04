@@ -1,4 +1,30 @@
+        const ensureWizardOpenTaskSchedules = () => {
+            if (!(wizardState.openTaskTimers instanceof Set)) {
+                wizardState.openTaskTimers = new Set();
+            }
+            if (!(wizardState.openTaskFrames instanceof Set)) {
+                wizardState.openTaskFrames = new Set();
+            }
+            return {
+                timers: wizardState.openTaskTimers,
+                frames: wizardState.openTaskFrames
+            };
+        };
+
+        const clearWizardOpenTaskSchedule = () => {
+            const { timers, frames } = ensureWizardOpenTaskSchedules();
+            timers.forEach((timerId) => clearTimeout(timerId));
+            timers.clear();
+            frames.forEach((frameId) => {
+                if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+                    window.cancelAnimationFrame(frameId);
+                }
+            });
+            frames.clear();
+        };
+
         const scheduleWizardOpenTask = (openToken = 0, task = null) => {
+            const { timers, frames } = ensureWizardOpenTaskSchedules();
             const runTask = () => {
                 if (openToken !== wizardState.openToken) return;
                 if (wizardState.visible !== true) return;
@@ -7,14 +33,29 @@
                 }
             };
             const scheduleAfterPaint = () => {
+                if (openToken !== wizardState.openToken) return;
+                if (wizardState.visible !== true) return;
                 if (typeof setTimeout === 'function') {
-                    setTimeout(runTask, 0);
+                    const timerId = setTimeout(() => {
+                        timers.delete(timerId);
+                        runTask();
+                    }, 0);
+                    timers.add(timerId);
                     return;
                 }
                 runTask();
             };
             if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-                window.requestAnimationFrame(scheduleAfterPaint);
+                let frameId = 0;
+                let frameFired = false;
+                frameId = window.requestAnimationFrame(() => {
+                    frameFired = true;
+                    frames.delete(frameId);
+                    scheduleAfterPaint();
+                });
+                if (!frameFired && frameId !== undefined && frameId !== null) {
+                    frames.add(frameId);
+                }
                 return;
             }
             scheduleAfterPaint();
@@ -64,6 +105,7 @@
             wizardState.openToken = (toNumber(wizardState.openToken, 0) + 1);
             const openToken = wizardState.openToken;
             const isStaleOpen = () => openToken !== wizardState.openToken;
+            clearWizardOpenTaskSchedule();
 
             const storedDraft = KeywordPlanWizardStore.readSessionDraft() || {};
             if (typeof KeywordPlanRuntime.prepareWizardStateForOpen === 'function') {

@@ -1,3 +1,47 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十子项
+
+## 需求规格
+- 目标：在 extension 授权启动静默校验 timer 收口后，继续优化组建计划向导打开后的延迟任务调度，避免 `scheduleWizardOpenTask()` 通过 rAF 后再排队无句柄 `setTimeout(runTask, 0)`，重复打开/关闭向导时旧 timer 持有任务闭包、openToken 和向导状态引用。
+- 根因判断：`src/optimizer/keyword-plan-api/wizard-open-and-create.js` 中 `scheduleWizardOpenTask()` 虽然在 `runTask()` 内检查 `wizardState.openToken` 与 `wizardState.visible`，但 rAF 和 0ms timeout 都没有句柄；关闭向导或再次打开时无法主动取消 pending 打开任务。
+- 范围：仅覆盖组建计划打开后的前端延迟任务调度生命周期和静态回归；不改打开向导 DOM、样式加载、预览刷新语义、候选加载、运行时默认值读取、场景配置扫描、商品默认值、真实创建/复制/提交接口或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把打开任务 timer/raf 归入 `wizardState` 生命周期，新增 `openTaskTimers`、`openTaskFrames`、`ensureWizardOpenTaskSchedules()` 与 `clearWizardOpenTaskSchedule()`；同一轮打开允许预览刷新和后台初始化等多个任务并存，新一轮打开或关闭向导时统一释放上一轮 pending 打开任务。
+- 成功标准：静态测试证明打开任务调度有 timer/raf 注册表、可清理、新一轮打开和关闭向导会释放 pending 任务，timer/raf 触发后从注册表移除，旧无句柄 `setTimeout(runTask, 0)` / 裸 `window.requestAnimationFrame(scheduleAfterPaint)` 不再存在；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击组建计划入口、不打开向导、不触发候选加载、运行时默认值读取、创建计划、复制计划、批量+、潜力词导出、预算提交、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和弹窗未打开。
+
+## 执行计划（可核对）
+- [x] 复核第二十九子项提交后工作区状态，确认本子项只处理组建计划打开任务调度。
+- [x] 在 `wizardState` 生命周期中新增打开任务 timer/raf 注册表与清理 helper。
+- [x] 将 `scheduleWizardOpenTask()` 改为统一可取消调度，保持原 rAF 后 0ms 执行和 token/visible 守卫。
+- [x] 在关闭向导路径释放 pending 打开任务，并补充/更新目标测试锁定无句柄 timeout 不回退。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `76f7e08 优化授权启动校验计时器`，工作区干净。
+- 定位结论：`scheduleWizardOpenTask()` 的延迟任务只服务组建计划向导打开后的前端初始化与预览刷新，不属于服务端提交路径；收口后可减少重复打开/关闭时旧 task/openToken/wizardState 闭包滞留。
+- 设计修正：初版单槽 timer 会错误取消同一轮打开中的另一个合法任务；最终采用 `Set` 注册表，允许同一 openToken 下多个前端打开任务并存，只在新一轮打开或关闭时批量释放。
+- 实现摘要：`wizardState` 新增 `openTaskTimers` 和 `openTaskFrames`；`scheduleWizardOpenTask()` 会登记 rAF 与 0ms timeout，触发后从注册表移除；`openWizard()` 新开一轮和 `closeWizardOverlay()` 关闭时调用 `clearWizardOpenTaskSchedule()` 释放旧 pending 任务。
+- 自审修正：rAF 分支额外记录 `frameFired`，避免同步 rAF shim 在回调已执行后才把 frame id 加入注册表。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 更新打开路径回归，锁定 timer/raf 注册表、清理 helper、新开/关闭释放、同步 rAF shim 不残留 frame id，以及旧无句柄 `setTimeout(runTask, 0)` / 裸 rAF 禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 源码切片说明：`src/optimizer/keyword-plan-api/intro.js`、`request-builder-preview.js` 属于构建切片，不是独立 JS 文件，单文件 `node --check` 不适用；官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 目标测试：`node --test tests/keyword-wizard-entry-regression.test.mjs` 通过，8 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，28 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，612 项中 610 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 真实标签，`navigate_page` 刷新当前关键词推广管理页；`evaluate_script` 只读返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`runtimeMode:"extension"`、`source:"extension_cache_bootstrap"`、`scriptVersion:"7.05"`、`hasLicenseOverlay:false`、`hasFullKeywordApiGlobal:false`、`pluginKeywordModalExists:false`、`pluginKeywordModalOpen:false`、`pluginScenePopup:false`、`pluginItemPicker:false`、`pluginCopyOverviewPopup:false`、`pluginCopySuccessPopup:false`、`pluginBatchPlusMenuOpen:false`、`pluginOptimizerPanel:false`、`batchPlusButtonCount:1`、`visibleCopyButtonCount:4`；页面本身自动露出了原生 AI 点睛/新建相关行动面板（`nativeCreateActionCount:4`），未进行任何点击或关闭。未点击组建计划、立即投放、新建关键词推广、立即下单、复制、批量+、潜力词导出、护航执行或任何真实写入口；非 preserved 控制台包含页面既有 `ERR_TUNNEL_CONNECTION_FAILED`、组件依赖 warning、Canvas2D warning、deprecated issue，以及一条栈位于原生 `tracker/baxiaCommon/talk` 链路的 `Uncaught (in promise)`。
+- Diff 自审：改动集中在组建计划向导打开任务 timer/rAF 生命周期、对应静态测试、任务记录和构建产物；未改打开向导 DOM、样式加载、预览刷新语义、候选加载、运行时默认值读取、场景配置扫描、商品默认值、真实创建/复制/提交接口或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第三十子项结果：组建计划向导打开后的延迟任务从“rAF 后继续排队无句柄 0ms timeout”优化为“`wizardState` 统一持有 `openTaskFrames` 与 `openTaskTimers`，触发后移出注册表，新一轮打开或关闭向导时批量释放上一轮 pending 任务”。
+- 取舍结论：采用 `Set` 注册表而不是单槽 timer，避免同一轮打开里预览刷新和后台初始化任务互相取消；同时保留原首帧后 0ms 执行、openToken 守卫和 visible 守卫，并处理同步 rAF shim 的测试环境边界。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行组建计划、复制、批量+、护航或任何真实写动作，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十九子项
 
 ## 需求规格
