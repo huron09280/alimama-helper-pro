@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十二子项
+
+## 需求规格
+- 目标：在算法护航结果浮层关闭 timer 释放后，继续收口算法护航面板已打开时的高亮闪烁 timer，避免重复点击公开入口时排队多个无句柄 `setTimeout(() => panel.style.boxShadow = ..., 500)`，旧闭包继续持有面板节点并在关闭后回写样式。
+- 根因判断：`src/optimizer/public-api.js` 中 `revealOptimizerPanel()` 的已打开分支和 `__ALIMAMA_OPTIMIZER_TOGGLE__` 的已显示分支各自直接写 boxShadow 并启动 500ms timeout；没有统一 helper、没有句柄、关闭面板时也无法取消 pending highlight timer。
+- 范围：仅覆盖算法护航面板高亮提示 timer 生命周期和对应静态测试；不改面板创建、授权门禁、toggle 返回值、Token 轮询、日志 overflow、手动设置、结果浮层、真实护航执行或任何写接口合同。
+- 热修 vs 结构性修复取舍：采用 `UI.panelHighlightTimerId` + `UI.flashPanelHighlight(panel)` 的单一 helper，重复触发先取消旧 timer，timer 触发前校验 panel 仍连接；关闭面板时清理 pending highlight timer。
+- 成功标准：静态测试证明高亮 timer 有句柄和清理 helper，公开入口两处高亮都走 `UI.flashPanelHighlight(panel)`，关闭面板会清理 pending timer，不再保留两处无句柄 500ms timeout；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击护航执行、创建、复制、预算提交、删除、上下线、投放或生成计划；浏览器验收只允许观察算法护航面板打开/关闭和高亮状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十一子项提交后工作区状态，确认本子项继续处理短生命周期 UI timer。
+- [x] 定位算法护航公开入口面板高亮 timeout，确认问题局限在已打开面板的提示闪烁。
+- [x] 实现 `UI.panelHighlightTimerId`、清理 helper 和统一高亮 helper，并在关闭面板时释放。
+- [x] 补充/更新目标测试，锁定公开入口高亮不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `d4dd3f7 优化 Chrome 护航结果浮层关闭计时器`，工作区干净。
+- 定位结论：`public-api` 中两个 500ms boxShadow reset timeout 是同一视觉提示逻辑的重复实现，且只服务“面板已打开时提醒用户”的短生命周期，不应在重复触发或关闭面板后保留旧 timer。
+- 方案判断：把高亮提示生命周期放回 `UI` 对象，公开入口只调用 helper；关闭面板时统一清理，与 token/status/log overflow 等面板级资源释放保持一致。
+- 实现摘要：`src/optimizer/ui.js` 新增 `panelHighlightTimerId`、`clearPanelHighlightTimer()` 与 `flashPanelHighlight(panel)`；`src/optimizer/public-api.js` 两处已打开面板高亮改为调用 `UI.flashPanelHighlight?.(panel)`，关闭面板时清理 pending highlight timer。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增静态回归，锁定高亮 timer 句柄、清理 helper、统一调度 helper、关闭面板清理，以及公开入口两处高亮不再使用无句柄 timeout。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过；`src/optimizer/public-api.js` 是构建片段，单独 `node --check src/optimizer/public-api.js` 会因外层 IIFE 收口报 `Unexpected token '}'`，实际语法通过生成后的根 userscript 检查。
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，8 项测试全绿；新增断言覆盖面板高亮 timer 句柄、清理 helper、统一调度 helper、关闭面板清理和公开入口旧无句柄 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，72 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，608 项中 606 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在算法护航面板高亮提示 timer 生命周期、公开入口复用 helper、对应静态测试、任务记录和构建产物；未改面板创建、授权门禁、toggle 返回值、Token 轮询、日志 overflow、手动设置、结果浮层、真实护航执行或任何写接口合同。
+
+## 结果复盘
+- 第十一轮第二十二子项结果：算法护航面板高亮从“两处公开入口各自排队无句柄 500ms boxShadow reset timeout”优化为“统一 `UI.flashPanelHighlight(panel)` 调度，重复触发先取消旧 timer，timer 触发后归零并校验面板仍连接”。
+- 取舍结论：保留原高亮色、500ms 视觉节奏、面板显示/隐藏逻辑和授权门禁；只补齐面板级提示 timer 生命周期，关闭面板时同步释放 pending highlight timer。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十一子项
 
 ## 需求规格

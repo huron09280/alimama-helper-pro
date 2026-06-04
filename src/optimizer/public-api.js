@@ -43,12 +43,7 @@
             panel.style.transform = 'scale(1)';
             panel.style.pointerEvents = 'auto';
         } else {
-            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-            setTimeout(() => {
-                try {
-                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
-                } catch { }
-            }, 500);
+            UI.flashPanelHighlight?.(panel);
         }
     };
 
@@ -71,12 +66,7 @@
                 revealOptimizerPanel(panel);
                 return true;
             }
-            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-            setTimeout(() => {
-                try {
-                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
-                } catch { }
-            }, 500);
+            UI.flashPanelHighlight?.(panel);
             return true;
         } catch (err) {
             Logger.error('算法护航面板切换失败', err);

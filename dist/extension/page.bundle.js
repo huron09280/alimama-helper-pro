@@ -67872,6 +67872,7 @@ if (typeof globalThis !== 'undefined') {
         tokenStatusIntervalId: null,
         tokenStatusLastRefreshAt: 0,
         logOverflowTimerId: null,
+        panelHighlightTimerId: null,
 
         refreshTokenStatusIndicator: () => {
             const now = Date.now();
@@ -67917,6 +67918,23 @@ if (typeof globalThis !== 'undefined') {
                 if (!wrapper.isConnected || wrapper.dataset.expanded !== 'true') return;
                 wrapper.style.overflow = 'auto';
             }, 300);
+        },
+
+        clearPanelHighlightTimer: () => {
+            if (UI.panelHighlightTimerId === null) return;
+            clearTimeout(UI.panelHighlightTimerId);
+            UI.panelHighlightTimerId = null;
+        },
+
+        flashPanelHighlight: (panel = null) => {
+            UI.clearPanelHighlightTimer();
+            if (!panel || panel.nodeType !== 1) return;
+            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
+            UI.panelHighlightTimerId = setTimeout(() => {
+                UI.panelHighlightTimerId = null;
+                if (!panel.isConnected) return;
+                panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+            }, 500);
         },
 
         bindManualKeywordOutsideHandler: () => {
@@ -70327,6 +70345,7 @@ if (typeof globalThis !== 'undefined') {
                 panel.style.pointerEvents = 'none';
                 UI.stopTokenStatusMonitor();
                 UI.clearLogOverflowTimer();
+                UI.clearPanelHighlightTimer();
                 UI.closeManualKeywordPreferenceMenu();
             };
 
@@ -72106,12 +72125,7 @@ if (typeof globalThis !== 'undefined') {
             panel.style.transform = 'scale(1)';
             panel.style.pointerEvents = 'auto';
         } else {
-            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-            setTimeout(() => {
-                try {
-                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
-                } catch { }
-            }, 500);
+            UI.flashPanelHighlight?.(panel);
         }
     };
 
@@ -72134,12 +72148,7 @@ if (typeof globalThis !== 'undefined') {
                 revealOptimizerPanel(panel);
                 return true;
             }
-            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-            setTimeout(() => {
-                try {
-                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
-                } catch { }
-            }, 500);
+            UI.flashPanelHighlight?.(panel);
             return true;
         } catch (err) {
             Logger.error('算法护航面板切换失败', err);

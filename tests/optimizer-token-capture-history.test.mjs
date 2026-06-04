@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const tokenSource = readFileSync(new URL('../src/optimizer/token-manager.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/optimizer/ui.js', import.meta.url), 'utf8');
 const mainBootstrapSource = readFileSync(new URL('../src/main-assistant/bootstrap.js', import.meta.url), 'utf8');
+const optimizerPublicApiSource = readFileSync(new URL('../src/optimizer/public-api.js', import.meta.url), 'utf8');
 
 test('TokenManager 会从 hook history 回填 dynamicToken/loginPointId/csrf', () => {
     assert.match(
@@ -91,6 +92,39 @@ test('算法护航日志展开 overflow 延迟 timer 会在返回或关闭时释
         uiSource,
         /setTimeout\(\(\) => wrapper\.style\.overflow = 'auto', 300\);/,
         '不应继续使用匿名 overflow 延迟 timer'
+    );
+});
+
+test('算法护航面板高亮提示 timer 会复用并在关闭时释放', () => {
+    assert.match(
+        uiSource,
+        /panelHighlightTimerId:\s*null,/,
+        '算法护航面板高亮 timer 缺少可清理句柄'
+    );
+    assert.match(
+        uiSource,
+        /clearPanelHighlightTimer:\s*\(\) => \{[\s\S]*if \(UI\.panelHighlightTimerId === null\) return;[\s\S]*clearTimeout\(UI\.panelHighlightTimerId\);[\s\S]*UI\.panelHighlightTimerId = null;[\s\S]*\},/,
+        '算法护航面板高亮 timer 应支持显式 clear 并归零'
+    );
+    assert.match(
+        uiSource,
+        /flashPanelHighlight:\s*\(panel = null\) => \{[\s\S]*UI\.clearPanelHighlightTimer\(\);[\s\S]*if \(!panel \|\| panel\.nodeType !== 1\) return;[\s\S]*panel\.style\.boxShadow = '0 0 20px rgba\(24,144,255,0\.8\)';[\s\S]*UI\.panelHighlightTimerId = setTimeout\(\(\) => \{[\s\S]*UI\.panelHighlightTimerId = null;[\s\S]*if \(!panel\.isConnected\) return;[\s\S]*panel\.style\.boxShadow = '0 4px 16px rgba\(0,0,0,0\.15\)';[\s\S]*\},\s*500\);[\s\S]*\},/,
+        '算法护航面板高亮应统一调度，并在回调触发前校验 panel 仍连接'
+    );
+    assert.match(
+        uiSource,
+        /document\.getElementById\(`\$\{CONFIG\.UI_ID\}-close`\)\.onclick = \(\) => \{[\s\S]*UI\.clearLogOverflowTimer\(\);[\s\S]*UI\.clearPanelHighlightTimer\(\);[\s\S]*UI\.closeManualKeywordPreferenceMenu\(\);/,
+        '关闭算法护航面板时应释放高亮 timer'
+    );
+    assert.equal(
+        (optimizerPublicApiSource.match(/UI\.flashPanelHighlight\?\.\(panel\);/g) || []).length,
+        2,
+        '公开入口两处已打开面板高亮都应走统一 helper'
+    );
+    assert.doesNotMatch(
+        optimizerPublicApiSource,
+        /setTimeout\(\(\) => \{[\s\S]*panel\.style\.boxShadow = '0 4px 16px rgba\(0,0,0,0\.15\)';[\s\S]*\}, 500\);/,
+        '公开入口不应继续保留无句柄 boxShadow reset timeout'
     );
 });
 
