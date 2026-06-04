@@ -61670,6 +61670,15 @@ if (typeof globalThis !== 'undefined') {
                 return SCENE_SYNC_DEFAULT_ITEM_ID;
             };
 
+            const clearWizardSceneSyncTimer = (options = {}) => {
+                if (wizardState.sceneSyncTimer) {
+                    clearTimeout(wizardState.sceneSyncTimer);
+                    wizardState.sceneSyncTimer = 0;
+                }
+                if (options.clearPendingToken === false) return;
+                wizardState.sceneSyncPendingToken = '';
+            };
+
             const scheduleSceneCreateContractSync = (sceneName, options = {}) => {
                 const targetScene = String(sceneName || '').trim();
                 if (!SCENE_OPTIONS.includes(targetScene)) return;
@@ -61678,16 +61687,21 @@ if (typeof globalThis !== 'undefined') {
                     const cached = getCachedSceneCreateContract(targetScene, '');
                     if (cached) return;
                 }
-                if (wizardState.sceneSyncTimer) {
-                    clearTimeout(wizardState.sceneSyncTimer);
-                    wizardState.sceneSyncTimer = 0;
-                }
+                clearWizardSceneSyncTimer();
                 const delayMs = Math.max(180, toNumber(options.delayMs, 420));
                 const token = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 wizardState.sceneSyncPendingToken = token;
                 wizardState.sceneSyncTimer = window.setTimeout(async () => {
+                    wizardState.sceneSyncTimer = 0;
                     if (wizardState.sceneSyncPendingToken !== token) return;
-                    if (wizardState.sceneSyncInFlight) return;
+                    if (wizardState.visible !== true) {
+                        wizardState.sceneSyncPendingToken = '';
+                        return;
+                    }
+                    if (wizardState.sceneSyncInFlight) {
+                        wizardState.sceneSyncPendingToken = '';
+                        return;
+                    }
                     wizardState.sceneSyncInFlight = true;
                     const itemId = resolveSceneSyncItemId();
                     appendWizardLog(`场景接口同步：${targetScene}（itemId=${itemId}）`);
@@ -61703,6 +61717,7 @@ if (typeof globalThis !== 'undefined') {
                             requestTimeout: Math.max(10000, toNumber(options.requestTimeout, 22000)),
                             dayAverageBudget: Math.max(50, toNumber(options.dayAverageBudget, 100))
                         });
+                        if (wizardState.sceneSyncPendingToken !== token || wizardState.visible !== true) return;
                         const row = isPlainObject(capture?.row) ? capture.row : {};
                         const createInterfaces = Array.isArray(row?.capture?.createInterfaces)
                             ? row.capture.createInterfaces
@@ -61723,9 +61738,14 @@ if (typeof globalThis !== 'undefined') {
                             appendWizardLog(`场景接口同步未捕获到创建请求：${targetScene}${row?.error ? `（${row.error}）` : ''}`, 'error');
                         }
                     } catch (err) {
-                        appendWizardLog(`场景接口同步失败：${targetScene} -> ${err?.message || err}`, 'error');
+                        if (wizardState.sceneSyncPendingToken === token && wizardState.visible === true) {
+                            appendWizardLog(`场景接口同步失败：${targetScene} -> ${err?.message || err}`, 'error');
+                        }
                     } finally {
                         wizardState.sceneSyncInFlight = false;
+                        if (wizardState.sceneSyncPendingToken === token) {
+                            wizardState.sceneSyncPendingToken = '';
+                        }
                     }
                 }, delayMs);
             };
@@ -62052,6 +62072,7 @@ if (typeof globalThis !== 'undefined') {
                 wizardState.visible = false;
                 wizardState.openToken = toNumber(wizardState.openToken, 0) + 1;
                 clearWizardOpenTaskSchedule();
+                clearWizardSceneSyncTimer();
                 removeWizardDomAfterClose();
             };
             wizardState.els.closeBtn.onclick = closeWizardOverlay;

@@ -261,6 +261,52 @@ test('自动推荐关键词延迟加载 timer 纳入向导生命周期', () => {
   );
 });
 
+test('场景接口同步 timer 纳入向导关闭生命周期', () => {
+  const stateBlock = sliceSource(wizardIntroSource, 'const wizardState = {', 'const log = {');
+  const clearBlock = sliceSource(requestBuilderPreviewSource, 'const clearWizardSceneSyncTimer = (options = {}) => {', 'const scheduleSceneCreateContractSync =');
+  const scheduleBlock = sliceSource(requestBuilderPreviewSource, 'const scheduleSceneCreateContractSync = (sceneName, options = {}) => {', 'const buildSceneSyncDefaultItem =');
+  const closeBlock = sliceSource(requestBuilderPreviewSource, 'const closeWizardOverlay = () => {', 'wizardState.els.closeBtn.onclick = closeWizardOverlay;');
+
+  assert.ok(
+    stateBlock.includes('sceneSyncTimer: 0,')
+      && stateBlock.includes('sceneSyncInFlight: false,')
+      && stateBlock.includes("sceneSyncPendingToken: '',"),
+    'wizardState 应登记场景接口同步 timer/inFlight/token 状态'
+  );
+  assert.ok(
+    clearBlock.includes('clearTimeout(wizardState.sceneSyncTimer);')
+      && clearBlock.includes('wizardState.sceneSyncTimer = 0;')
+      && clearBlock.includes("wizardState.sceneSyncPendingToken = '';"),
+    '场景接口同步 timer 应提供统一清理 helper，并重置 pending token'
+  );
+  assert.ok(
+    scheduleBlock.includes('clearWizardSceneSyncTimer();')
+      && scheduleBlock.includes('wizardState.sceneSyncPendingToken = token;')
+      && scheduleBlock.includes('wizardState.sceneSyncTimer = window.setTimeout(async () => {')
+      && scheduleBlock.includes('wizardState.sceneSyncTimer = 0;')
+      && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken !== token) return;')
+      && scheduleBlock.includes('if (wizardState.visible !== true) {')
+      && scheduleBlock.includes("wizardState.sceneSyncPendingToken = '';")
+      && scheduleBlock.includes('if (wizardState.sceneSyncInFlight) {')
+      && scheduleBlock.includes('const capture = await captureSceneCreateInterfaces(targetScene, {')
+      && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken !== token || wizardState.visible !== true) return;')
+      && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken === token && wizardState.visible === true) {')
+      && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken === token) {'),
+    '场景接口同步应通过可取消 helper 调度，触发前后复核 token 和主弹窗可见状态'
+  );
+  assert.equal(
+    scheduleBlock.includes('if (wizardState.sceneSyncTimer) {'),
+    false,
+    'scheduleSceneCreateContractSync 不应继续内联手写 timer 清理逻辑'
+  );
+  assert.ok(
+    closeBlock.includes('clearWizardOpenTaskSchedule();')
+      && closeBlock.includes('clearWizardSceneSyncTimer();')
+      && closeBlock.includes('removeWizardDomAfterClose();'),
+    '关闭主弹窗应释放 pending scene sync timer 后再卸载 DOM'
+  );
+});
+
 test('组建计划默认打开不渲染隐藏编辑页动态配置', () => {
   assert.match(
     batchEditPopupSource,

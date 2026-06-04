@@ -1,3 +1,49 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十三子项
+
+## 需求规格
+- 目标：在自动推荐关键词 timer 收口后，继续优化组建计划场景切换后的场景接口同步 timer，避免 `scheduleSceneCreateContractSync()` 只在重排新任务时清理旧 `sceneSyncTimer`，关闭向导或隐藏详情后旧 pending timer 仍持有 scene/options/item/defaults 闭包，并在延迟后进入 `captureSceneCreateInterfaces()` 场景接口捕获链路。
+- 根因判断：`src/optimizer/keyword-plan-api/request-builder-preview.js` 中 `sceneSyncTimer` 有句柄但没有统一清理 helper；timer 触发时不归零、不复核 `wizardState.visible`，`closeWizardOverlay()` 也没有释放 pending scene sync。
+- 范围：仅覆盖场景接口同步 timer 的前端延迟调度生命周期和静态回归；不改 `captureSceneCreateInterfaces()`、场景配置扫描、场景合同缓存、推荐关键词/推荐人群、商品候选、真实创建/复制/提交或 10rpm 服务端限速。
+- 热修 vs 结构性修复取舍：新增 `clearWizardSceneSyncTimer()` 统一释放 pending scene sync timer，并重置 `sceneSyncPendingToken`；`scheduleSceneCreateContractSync()` 调度前复用 helper，触发时先归零并复核 token、主弹窗可见和未关闭，再进入捕获链路；关闭主弹窗时同步释放 pending timer。
+- 成功标准：静态测试证明 scene sync timer 有统一清理 helper、调度前会释放旧 pending timer、timer 触发后归零、触发前复核 `wizardState.visible === true` 和 token、关闭向导会释放 pending scene sync，旧内联 `if (wizardState.sceneSyncTimer) clearTimeout...` 不再留在调度函数内；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不打开组建计划向导、不切换场景、不触发场景接口同步、不调用 `captureSceneCreateInterfaces()`、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和插件弹窗状态。
+
+## 执行计划（可核对）
+- [x] 复核第三十二子项提交后工作区状态，确认本子项只处理场景接口同步 timer。
+- [x] 实现 `clearWizardSceneSyncTimer()`，统一清理 `sceneSyncTimer` 与 pending token。
+- [x] 将 `scheduleSceneCreateContractSync()` 改为通过 helper 调度，触发前复核 token 和主弹窗可见状态。
+- [x] 在主弹窗关闭路径释放 pending scene sync timer。
+- [x] 补充/更新目标测试，锁定场景接口同步 timer 不会在关闭后继续触发。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c931fda 优化自动推荐关键词计时器`，工作区干净。
+- 定位结论：场景接口同步 timer 是前端延迟调度，但触发后会进入接口捕获/同步链路；收口后可减少关闭/切换后旧闭包滞留，并避免过期 pending timer 在关闭向导后继续启动捕获请求。
+- 现状证据：`scheduleSceneCreateContractSync()` 目前只在新调度时手写清理旧 timer，timer 回调内直接进入 `captureSceneCreateInterfaces()`，没有在关闭向导时取消 pending，也没有在触发时清空 `sceneSyncTimer`。
+- 实现摘要：`src/optimizer/keyword-plan-api/request-builder-preview.js` 新增 `clearWizardSceneSyncTimer()`；调度前统一释放旧 pending timer，timer 触发后先归零，再按 token、`wizardState.visible === true` 和 `sceneSyncInFlight` 复核后才进入 `captureSceneCreateInterfaces()`。
+- 生命周期摘要：`closeWizardOverlay()` 在释放打开任务后同步调用 `clearWizardSceneSyncTimer()`，关闭主弹窗时会清除 pending scene sync timer 和 pending token；异步捕获返回后也会再次复核 token/visible，避免关闭或切换后的结果写回。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 新增场景接口同步 timer 回归，锁定状态字段、清理 helper、可取消调度、触发后归零、token/visible/inFlight 守卫、关闭向导清理，以及调度函数内旧内联 timer 清理禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 源码切片说明：`src/optimizer/keyword-plan-api/request-builder-preview.js` 属于构建切片，不是独立 JS 文件；官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 目标测试：`node --test tests/keyword-wizard-entry-regression.test.mjs` 通过，10 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-recommend-console.test.mjs tests/keyword-plan-api-slim.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，43 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，614 项中 612 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`keywordOverlayExists:false`、`keywordOverlayOpen:false`、`keywordModalExists:false`、`keywordModalVisible:false`、`scenePopupExists:false`、`scenePopupVisible:false`、`amWxtVisibleRootCount:0`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`helperIcon.visible:true`、`helperPanel.visible:false`、`copyOverviewPopup.exists:false`、`copySuccessPopup.exists:false`、`batchPlusMenu.exists:false`、`batchConfirmPopup.exists:false`、`optimizerPanel.exists:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`batchPlusHostExpanded:false`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`。未打开组建计划，未切换场景，未触发场景接口同步，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue；fetch/XHR 清单 107 条，主要为页面初始化、报表查询、AI/SSE 上下文和页面曝光追踪，除 `px.effirst.com` 既有隧道失败外均为 200；`performance.getEntriesByType('resource')` 对 `scene|create|contract|capture|adzone|crowd|campaign/create|adgroup/create|batchCreate` 关键词过滤返回 `matchedCount:0`。
+- Diff 自审：`git diff --stat` 仅包含 `request-builder-preview.js`、`tests/keyword-wizard-entry-regression.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 scene sync timer 清理 helper、调度前后 token/visible/inFlight 守卫和关闭释放；测试 diff 只新增场景接口同步 timer 生命周期静态回归；`git diff --check` 通过。
+
+## 结果复盘
+- 第十一轮第三十三子项结果：组建计划场景接口同步从“切换场景后排一个只在下一次调度时才清理的 pending timeout”优化为“`clearWizardSceneSyncTimer()` 统一持有和释放 pending timer/token，关闭主弹窗时主动取消，触发和异步返回阶段都复核 token 与主弹窗可见状态”。
+- 取舍结论：保留原 240ms 延迟、场景合同缓存和 `captureSceneCreateInterfaces()` 语义，不新增第二套接口捕获逻辑；只收口前端延迟调度生命周期，减少关闭/切换后旧 scene/options/defaults 闭包滞留和过期 timer 误入捕获链路的机会，符合 10rpm 边界。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收均通过；未打开组建计划或触发场景捕获/业务写动作，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十二子项
 
 ## 需求规格
