@@ -18750,6 +18750,7 @@ if (typeof globalThis !== 'undefined') {
         copyPlanNameCacheLimit: 120,
         batchPlusMenuEl: null,
         batchPlusMenuCloseTimer: null,
+        batchPlusMenuCloseVisibilityHandler: null,
         campaignListRefreshTimer: null,
         copyFocusRestoreTimer: null,
         concurrentLogPopup: null,
@@ -19060,7 +19061,7 @@ if (typeof globalThis !== 'undefined') {
         },
 
         closeBatchPlusMenu() {
-            this.cancelBatchPlusMenuClose();
+            this.clearBatchPlusMenuCloseState();
             const menu = this.getConnectedBatchPlusMenu();
             if (menu) menu.remove();
             this.batchPlusMenuEl = null;
@@ -19087,16 +19088,54 @@ if (typeof globalThis !== 'undefined') {
             return null;
         },
 
-        cancelBatchPlusMenuClose() {
+        isBatchPlusMenuCloseDocumentHidden() {
+            return document.visibilityState === 'hidden';
+        },
+
+        clearBatchPlusMenuCloseTimer() {
             if (!this.batchPlusMenuCloseTimer) return;
             window.clearTimeout(this.batchPlusMenuCloseTimer);
             this.batchPlusMenuCloseTimer = null;
         },
 
+        clearBatchPlusMenuCloseVisibilityHandler() {
+            if (!this.batchPlusMenuCloseVisibilityHandler) return;
+            document.removeEventListener('visibilitychange', this.batchPlusMenuCloseVisibilityHandler);
+            this.batchPlusMenuCloseVisibilityHandler = null;
+        },
+
+        clearBatchPlusMenuCloseState() {
+            this.clearBatchPlusMenuCloseTimer();
+            this.clearBatchPlusMenuCloseVisibilityHandler();
+        },
+
+        bindBatchPlusMenuCloseVisibilityHandler() {
+            if (typeof this.batchPlusMenuCloseVisibilityHandler === 'function') return;
+            this.batchPlusMenuCloseVisibilityHandler = () => {
+                if (!this.isBatchPlusMenuCloseDocumentHidden()) return;
+                this.closeBatchPlusMenu();
+            };
+            document.addEventListener('visibilitychange', this.batchPlusMenuCloseVisibilityHandler);
+        },
+
+        cancelBatchPlusMenuClose() {
+            this.clearBatchPlusMenuCloseState();
+        },
+
         scheduleBatchPlusMenuClose(delay = 160) {
-            this.cancelBatchPlusMenuClose();
+            this.clearBatchPlusMenuCloseState();
+            if (this.isBatchPlusMenuCloseDocumentHidden()) {
+                this.closeBatchPlusMenu();
+                return;
+            }
+            this.bindBatchPlusMenuCloseVisibilityHandler();
             this.batchPlusMenuCloseTimer = window.setTimeout(() => {
                 this.batchPlusMenuCloseTimer = null;
+                this.clearBatchPlusMenuCloseVisibilityHandler();
+                if (this.isBatchPlusMenuCloseDocumentHidden()) {
+                    this.closeBatchPlusMenu();
+                    return;
+                }
                 this.closeBatchPlusMenu();
             }, delay);
         },

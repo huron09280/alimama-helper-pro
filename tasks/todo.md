@@ -1,3 +1,57 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十六子项
+
+## 需求规格
+- 目标：在下载复制反馈 timer 收口后，继续优化批量+菜单 hover 关闭的 `batchPlusMenuCloseTimer`，避免页面隐藏时仍保留 160ms timeout 去移除菜单和清理 aria/open 状态。
+- 根因判断：`src/main-assistant/campaign-id-quick-entry.js` 的批量+菜单在鼠标离开触发器/菜单后调用 `scheduleBatchPlusMenuClose()`，排 `setTimeout(..., 160)` 再执行 `closeBatchPlusMenu()`。该 timer 只服务 hover 宽容窗口；若页面转入后台，继续等待 160ms 没有业务价值，还会保留菜单/触发器相关 DOM 状态并在隐藏页唤醒做 DOM 清理。
+- 范围：仅覆盖批量+菜单 hover 关闭 timer 的隐藏页即时关闭、timer 清理和 visibility listener 生命周期；不改菜单项 click、`runBatchPlusAction()`、批量开启/暂停/删除/人群动作、二次确认弹窗、计划列表刷新、复制/创建/提交、预算、算法护航、下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留可见页原 160ms hover 宽容窗口；关闭动作已由鼠标离开触发后，隐藏页无需保留菜单，因此隐藏或等待期间转 hidden 时直接执行 `closeBatchPlusMenu()` 完成 DOM/aria 清理并释放 timer/listener。
+- 成功标准：静态与行为测试证明 `batchPlusMenuCloseTimer` 有统一 clear/bind/schedule helper；可见页仍按 160ms 调度关闭；隐藏页调度不排 timeout 并立即关闭菜单；visible->hidden 会取消已排 timeout 并关闭菜单；取消/显式关闭会释放 timer/listener；timer 回调只关闭菜单，不触发 `runBatchPlusAction()`、列表刷新或任何业务请求链路；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击批量+菜单项、不触发批量开启/暂停/删除/人群动作、不打开确认弹窗、不勾选计划、不触发创建/复制/提交/预算/护航/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十五子项提交后工作区状态，确认本子项只处理批量+菜单 hover 关闭 timer。
+- [x] 复核 UI/图标规范，确认本轮不改批量+菜单视觉、图标和交互结构。
+- [x] 定位 `batchPlusMenuCloseTimer`、`closeBatchPlusMenu()`、`scheduleBatchPlusMenuClose()` 与现有批量+测试覆盖，校验不改变业务语义的实现边界。
+- [x] 读取只读子代理复核结论，确认该 timer 只服务菜单 hover 关闭视觉收尾，不触达 `runBatchPlusAction()` 或并发/创建/复制/提交链路。
+- [x] 为批量+菜单关闭增加统一 clear helper、visibility handler 和隐藏态判定。
+- [x] 将菜单关闭调度改为可见页保留 160ms，隐藏页或转 hidden 即时关闭并释放监听。
+- [x] 更新批量+目标测试，锁定隐藏页不排 timeout、visible->hidden 取消 timer、可见页原 160ms 调度保留、取消/关闭清理 listener 和不触发业务动作。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `2e6cf3e 优化下载复制反馈轮询`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：批量+菜单关闭 timer 只在 hover 离开后延迟调用 `closeBatchPlusMenu()`，清理菜单 DOM、`is-open`、`aria-expanded` 和 `aria-controls`。菜单项 click 路径会先记录回焦目标、显式关闭菜单，再调用 `runBatchPlusAction()`，不依赖 hover 关闭 timer。
+- 只读子代理复核：确认 `batchPlusMenuCloseTimer` 不触达并发执行、创建/复制/提交、列表刷新、预算/护航/openV3/下载或服务端 10rpm；建议保持可见页 160ms hover 宽容窗口，隐藏页直接清理/关闭菜单并归零 timer。
+- 计划校验：本子项只降低隐藏标签页中批量+菜单关闭收尾的后台唤醒；若实现需要触碰 `runBatchPlusAction()`、批量接口、确认弹窗、列表刷新、复制/创建/提交或 10rpm 链路，先回到本计划更新后再继续。
+- 实现摘要：`CampaignIdQuickEntry` 新增 `batchPlusMenuCloseVisibilityHandler`，并抽出 `isBatchPlusMenuCloseDocumentHidden()`、`clearBatchPlusMenuCloseTimer()`、`clearBatchPlusMenuCloseVisibilityHandler()`、`clearBatchPlusMenuCloseState()`、`bindBatchPlusMenuCloseVisibilityHandler()`。`closeBatchPlusMenu()` 和 `cancelBatchPlusMenuClose()` 统一释放 timer 与 visibility listener。
+- 调度摘要：可见页保留原 `160ms` hover 关闭延迟；隐藏页调度时立即执行 `closeBatchPlusMenu()`，不排 timeout；可见页等待关闭期间转 hidden 会通过 `visibilitychange` 立即关闭菜单并释放监听；timer 回调仍只关闭菜单，不调用任何批量业务动作。
+- 测试摘要：`tests/campaign-batch-plus-quick-entry.test.mjs` 新增 fake DOM/VM 行为 harness，覆盖隐藏页即时关闭、可见页原 160ms 调度、visible->hidden 取消 timer 并关闭、cancel 不移除菜单但释放 timer/listener、显式 close 清理状态，以及静态锁定 `scheduleBatchPlusMenuClose()` 不触发业务/刷新/提交链路。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过。
+- 测试语法：`node --check tests/campaign-batch-plus-quick-entry.test.mjs` 通过。
+- 目标测试：`node --test tests/campaign-batch-plus-quick-entry.test.mjs` 通过，10 项测试全绿；新增 “批量+ 菜单 hover 关闭 timer 在隐藏页即时收尾且不触发业务动作” 行为断言。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 产物语法：`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，51 项测试全绿。
+- 静态定位：`rg -n "batchPlusMenuCloseVisibilityHandler|isBatchPlusMenuCloseDocumentHidden|clearBatchPlusMenuCloseTimer|clearBatchPlusMenuCloseVisibilityHandler|clearBatchPlusMenuCloseState|bindBatchPlusMenuCloseVisibilityHandler|scheduleBatchPlusMenuClose" src/main-assistant/campaign-id-quick-entry.js tests/campaign-batch-plus-quick-entry.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 已进入产物。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { stdio:'inherit', timeout:60000 }) ..."` 通过，629 项中 627 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`__AM_WXT_PLAN_API_BRIDGE_HOST__:true`、`__AM_WXT_PLAN_API__` 可用、`keywordApiReady:true`、`hookManager:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4075277`，包含 `batchPlusMenuCloseVisibilityHandler`、`isBatchPlusMenuCloseDocumentHidden`、`clearBatchPlusMenuCloseTimer`、`clearBatchPlusMenuCloseVisibilityHandler`、`clearBatchPlusMenuCloseState`、`bindBatchPlusMenuCloseVisibilityHandler`、`scheduleBatchPlusMenuClose` 和 `document.addEventListener('visibilitychange', this.batchPlusMenuCloseVisibilityHandler)`。
+- Chrome MCP 弹窗/危险请求：`helperIcon:true`；`helperPanelVisible:false`、`batchPlusMenuVisible:false`、`batchConfirmPopupVisible:false`、`copyOverviewPopupVisible:false`、`copySuccessPopupVisible:false`、`optimizerPanelVisible:false`、`reportCapturePanelVisible:false`、`magicReportVisible:false`、`licenseOverlayVisible:false`；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器`、主线程卡顿监听启动，以及读取 4MB bundle 触发的拦截器跳过解析 debug；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源/埋点错误和 deprecated issue，未见新增插件运行失败。网络清单可见 `chrome-extension://.../page.bundle.js` 读取 200，官方登录/菜单/消息/AI context 等只读/初始化请求为 200；未打开批量+菜单、未点击菜单项、未触发确认弹窗、未勾选计划、未触发任何业务写入口。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/campaign-id-quick-entry.js`、`tests/campaign-batch-plus-quick-entry.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增批量+菜单 hover close timer 的隐藏页即时关闭、可见转 hidden 取消 timer 和 listener 生命周期，不改菜单项 click、`runBatchPlusAction()`、批量开启/暂停/删除/人群动作、二次确认弹窗、计划列表刷新、复制/创建/提交、预算、算法护航、下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十六子项结果：批量+菜单 hover 关闭从“鼠标离开后总是排 160ms timeout 再关闭菜单”优化为“隐藏页或等待期间转 hidden 时立即关闭菜单并释放 timer/listener；可见页仍保留原 160ms hover 宽容窗口”。
+- 取舍结论：关闭动作仍只做菜单 DOM、`is-open`、`aria-expanded`、`aria-controls` 清理；菜单项 click 路径、回焦目标记录、`runBatchPlusAction()` 和各批量业务链路完全不变。隐藏页即时关闭比暂停后恢复补排更合适，因为鼠标离开已明确表达关闭意图，恢复可见后保留悬空菜单反而增加状态滞留。
+- 效果结论：用户鼠标移出批量+菜单后若立即切到后台，插件不再保留该 160ms 关闭 timeout 等待隐藏页唤醒；转 hidden 时同步释放 visibility listener 和菜单 DOM/触发器状态。浏览器验收未打开批量+菜单、未触发确认弹窗、未执行任何批量/创建/复制/提交/预算/护航/下载动作，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十五子项
 
 ## 需求规格

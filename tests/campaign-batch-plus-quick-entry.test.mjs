@@ -1,11 +1,162 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 
 const read = (relativePath) => readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
 const quickEntry = read('src/main-assistant/campaign-id-quick-entry.js');
 const quickEntryStyle = read('src/main-assistant/ui.js');
+
+function getQuickEntryMethodSlice(methodName, nextMethodName) {
+    const start = quickEntry.search(new RegExp(`\\n\\s*${methodName}\\(`));
+    assert.ok(start > -1, `无法定位 ${methodName} 代码块`);
+    const rest = quickEntry.slice(start);
+    if (!nextMethodName) return rest;
+    const end = rest.search(new RegExp(`\\n\\s*${nextMethodName}\\(`));
+    assert.ok(end > 0, `无法定位 ${methodName} 的结束位置`);
+    return rest.slice(0, end);
+}
+
+function createBatchPlusMenuCloseHarness(initialVisibilityState = 'visible') {
+    let visibilityState = String(initialVisibilityState || 'visible');
+    let nextTimerId = 1;
+    const timers = new Map();
+    const listeners = new Map();
+
+    class FakeHTMLElement {
+        constructor(id = '') {
+            this.isConnected = true;
+            this.removed = false;
+            this.children = [];
+            this.parentElement = null;
+            this.dataset = {};
+            this.attributes = new Map();
+            this.classListValues = new Set();
+            this.classList = {
+                add: (...names) => names.forEach((name) => this.classListValues.add(String(name))),
+                remove: (...names) => names.forEach((name) => this.classListValues.delete(String(name))),
+                contains: (name) => this.classListValues.has(String(name))
+            };
+            if (id) this.setAttribute('id', id);
+        }
+
+        setAttribute(name, value) {
+            this.attributes.set(String(name), String(value));
+        }
+
+        getAttribute(name) {
+            return this.attributes.get(String(name)) || '';
+        }
+
+        removeAttribute(name) {
+            this.attributes.delete(String(name));
+        }
+
+        remove() {
+            this.isConnected = false;
+            this.removed = true;
+        }
+
+        contains(node) {
+            if (node === this) return true;
+            return this.children.some((child) => child?.contains?.(node));
+        }
+    }
+
+    const menu = new FakeHTMLElement('am-campaign-batch-plus-menu');
+    const trigger = new FakeHTMLElement();
+    trigger.classList.add('is-open');
+    trigger.setAttribute('data-am-campaign-batch-plus', '1');
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.setAttribute('aria-controls', 'am-campaign-batch-plus-menu');
+
+    const addListener = (type, handler) => {
+        if (typeof handler !== 'function') return;
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(handler);
+    };
+    const removeListener = (type, handler) => {
+        listeners.get(type)?.delete(handler);
+    };
+    const documentRef = {
+        get visibilityState() {
+            return visibilityState;
+        },
+        addEventListener: addListener,
+        removeEventListener: removeListener,
+        getElementById(id) {
+            return id === 'am-campaign-batch-plus-menu' && menu.isConnected ? menu : null;
+        },
+        querySelectorAll(selector) {
+            if (String(selector) !== '[data-am-campaign-batch-plus="1"].is-open') return [];
+            return trigger.classList.contains('is-open') ? [trigger] : [];
+        }
+    };
+    const windowRef = {
+        setTimeout(handler, delay = 0) {
+            const timerId = nextTimerId;
+            nextTimerId += 1;
+            if (typeof handler === 'function') {
+                timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+            }
+            return timerId;
+        },
+        clearTimeout(timerId) {
+            timers.delete(timerId);
+        }
+    };
+    const context = createContext({
+        document: documentRef,
+        window: windowRef,
+        HTMLElement: FakeHTMLElement,
+        Node: FakeHTMLElement
+    });
+    const methodSource = [
+        getQuickEntryMethodSlice('closeBatchPlusMenu', 'getConnectedBatchPlusMenu'),
+        getQuickEntryMethodSlice('getConnectedBatchPlusMenu', 'isBatchPlusMenuCloseDocumentHidden'),
+        getQuickEntryMethodSlice('isBatchPlusMenuCloseDocumentHidden', 'clearBatchPlusMenuCloseTimer'),
+        getQuickEntryMethodSlice('clearBatchPlusMenuCloseTimer', 'clearBatchPlusMenuCloseVisibilityHandler'),
+        getQuickEntryMethodSlice('clearBatchPlusMenuCloseVisibilityHandler', 'clearBatchPlusMenuCloseState'),
+        getQuickEntryMethodSlice('clearBatchPlusMenuCloseState', 'bindBatchPlusMenuCloseVisibilityHandler'),
+        getQuickEntryMethodSlice('bindBatchPlusMenuCloseVisibilityHandler', 'cancelBatchPlusMenuClose'),
+        getQuickEntryMethodSlice('cancelBatchPlusMenuClose', 'scheduleBatchPlusMenuClose'),
+        getQuickEntryMethodSlice('scheduleBatchPlusMenuClose', 'clearCampaignListRefreshTimer')
+    ].join('\n');
+    const runtime = new Script(`({
+        batchPlusMenuEl: menu,
+        batchPlusMenuCloseTimer: null,
+        batchPlusMenuCloseVisibilityHandler: null,
+        ${methodSource}
+    })`).runInContext(createContext({
+        ...context,
+        menu
+    }));
+
+    return {
+        runtime,
+        menu,
+        trigger,
+        timers,
+        getTimerDelays() {
+            return Array.from(timers.values()).map((timer) => timer.delay);
+        },
+        listenerCount(type = 'visibilitychange') {
+            return listeners.get(type)?.size || 0;
+        },
+        setVisibilityState(nextState) {
+            visibilityState = String(nextState || 'visible');
+            Array.from(listeners.get('visibilitychange') || []).forEach((handler) => handler({ type: 'visibilitychange' }));
+        },
+        tickTimers() {
+            Array.from(timers.entries()).forEach(([timerId, timer]) => {
+                if (!timers.has(timerId)) return;
+                timers.delete(timerId);
+                timer.handler();
+            });
+        }
+    };
+}
 
 test('批量+ 克隆批量计划设置结构并挂载到右侧', () => {
     assert.doesNotMatch(quickEntry, /BATCH_PLUS_ICON_SVG|BATCH_PLUS_CHEVRON_SVG|am-campaign-batch-plus-btn/, '批量+不得再使用自定义图标按钮');
@@ -52,6 +203,85 @@ test('批量+ 菜单覆盖批量计划设置缺失的首批能力', () => {
     assert.match(quickEntry, /const batchPlusBtn = target\.closest\('\[data-am-campaign-batch-plus="1"\]'\)/, '缺少批量+按钮点击入口');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu\s*\{[\s\S]*?min-width:\s*120px;[\s\S]*?box-shadow:/, '批量+菜单应按原生 popmenu 尺寸渲染');
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item\.is-danger/, '批量删除菜单项应有危险态样式');
+});
+
+test('批量+ 菜单 hover 关闭 timer 在隐藏页即时收尾且不触发业务动作', () => {
+    assert.match(quickEntry, /batchPlusMenuCloseVisibilityHandler:\s*null,/, '批量+菜单关闭缺少 visibility handler 状态');
+    assert.match(
+        quickEntry,
+        /closeBatchPlusMenu\(\)\s*\{[\s\S]*?this\.clearBatchPlusMenuCloseState\(\);[\s\S]*?menu\.remove\(\)[\s\S]*?btn\.removeAttribute\('aria-controls'\)/,
+        '批量+菜单显式关闭应统一释放 timer/listener 并清理 aria 状态'
+    );
+    assert.match(
+        quickEntry,
+        /isBatchPlusMenuCloseDocumentHidden\(\)\s*\{[\s\S]*?return document\.visibilityState === 'hidden';[\s\S]*?\}/,
+        '批量+菜单关闭缺少隐藏页判定 helper'
+    );
+    assert.match(
+        quickEntry,
+        /clearBatchPlusMenuCloseTimer\(\)\s*\{[\s\S]*?window\.clearTimeout\(this\.batchPlusMenuCloseTimer\);[\s\S]*?this\.batchPlusMenuCloseTimer = null;[\s\S]*?\}/,
+        '批量+菜单关闭 timer 应支持显式清理'
+    );
+    assert.match(
+        quickEntry,
+        /clearBatchPlusMenuCloseVisibilityHandler\(\)\s*\{[\s\S]*?document\.removeEventListener\('visibilitychange',\s*this\.batchPlusMenuCloseVisibilityHandler\);[\s\S]*?this\.batchPlusMenuCloseVisibilityHandler = null;[\s\S]*?\}/,
+        '批量+菜单关闭应支持释放 visibilitychange handler'
+    );
+    assert.match(
+        quickEntry,
+        /bindBatchPlusMenuCloseVisibilityHandler\(\)\s*\{[\s\S]*?if \(typeof this\.batchPlusMenuCloseVisibilityHandler === 'function'\) return;[\s\S]*?if \(!this\.isBatchPlusMenuCloseDocumentHidden\(\)\) return;[\s\S]*?this\.closeBatchPlusMenu\(\);[\s\S]*?document\.addEventListener\('visibilitychange',\s*this\.batchPlusMenuCloseVisibilityHandler\);[\s\S]*?\}/,
+        '批量+菜单关闭应在转 hidden 时立即关闭菜单'
+    );
+    const scheduleBlock = getQuickEntryMethodSlice('scheduleBatchPlusMenuClose', 'clearCampaignListRefreshTimer');
+    assert.match(
+        scheduleBlock,
+        /this\.clearBatchPlusMenuCloseState\(\);[\s\S]*?if \(this\.isBatchPlusMenuCloseDocumentHidden\(\)\) \{[\s\S]*?this\.closeBatchPlusMenu\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?this\.bindBatchPlusMenuCloseVisibilityHandler\(\);[\s\S]*?this\.batchPlusMenuCloseTimer = window\.setTimeout\(\(\) => \{[\s\S]*?this\.batchPlusMenuCloseTimer = null;[\s\S]*?this\.clearBatchPlusMenuCloseVisibilityHandler\(\);[\s\S]*?this\.closeBatchPlusMenu\(\);[\s\S]*?\}, delay\);/,
+        '批量+菜单关闭调度应保留可见页 delay，并在隐藏页即时关闭'
+    );
+    assert.doesNotMatch(
+        scheduleBlock,
+        /runBatchPlusAction|refreshCampaignListOnly|runBatchUpdateCampaignStatus|runBatchDeleteCampaigns|runDisplayBatchCrowdAction|runLeadBatchShieldCrowd|runCopyCurrentPlanFlow|runConcurrentStartFlow|openV3|solution\/addList|solution\/copy|campaign\/create|campaign\/delete|budget\/batchUpdate|updatePart/,
+        '批量+菜单 hover 关闭 timer 不得触发批量业务、刷新、复制创建提交或预算/护航链路'
+    );
+
+    const hiddenHarness = createBatchPlusMenuCloseHarness('hidden');
+    hiddenHarness.runtime.scheduleBatchPlusMenuClose();
+    assert.equal(hiddenHarness.timers.size, 0, '隐藏页调度不应排 160ms timeout');
+    assert.equal(hiddenHarness.listenerCount(), 0, '隐藏页即时关闭后不应残留 visibilitychange');
+    assert.equal(hiddenHarness.menu.isConnected, false, '隐藏页调度应立即移除菜单');
+    assert.equal(hiddenHarness.trigger.classList.contains('is-open'), false, '隐藏页调度应清理触发器 open 状态');
+    assert.equal(hiddenHarness.trigger.getAttribute('aria-expanded'), 'false', '隐藏页调度应收回 aria-expanded');
+    assert.equal(hiddenHarness.trigger.getAttribute('aria-controls'), '', '隐藏页调度应清理 aria-controls');
+
+    const visibleHarness = createBatchPlusMenuCloseHarness('visible');
+    visibleHarness.runtime.scheduleBatchPlusMenuClose();
+    assert.deepEqual(visibleHarness.getTimerDelays(), [160], '可见页应保留原 160ms hover 关闭延迟');
+    assert.equal(visibleHarness.listenerCount(), 1, '可见页等待关闭时应监听转 hidden');
+    assert.equal(visibleHarness.menu.isConnected, true, '可见页 timer 触发前菜单应仍存在');
+    visibleHarness.tickTimers();
+    assert.equal(visibleHarness.menu.isConnected, false, '可见页 timer 触发后应关闭菜单');
+    assert.equal(visibleHarness.listenerCount(), 0, '可见页 timer 完成后应释放 visibilitychange');
+
+    const switchHarness = createBatchPlusMenuCloseHarness('visible');
+    switchHarness.runtime.scheduleBatchPlusMenuClose();
+    switchHarness.setVisibilityState('hidden');
+    assert.equal(switchHarness.timers.size, 0, '转 hidden 应取消已排关闭 timer');
+    assert.equal(switchHarness.listenerCount(), 0, '转 hidden 收尾后应释放 visibilitychange');
+    assert.equal(switchHarness.menu.isConnected, false, '转 hidden 应立即关闭菜单');
+
+    const cancelHarness = createBatchPlusMenuCloseHarness('visible');
+    cancelHarness.runtime.scheduleBatchPlusMenuClose();
+    cancelHarness.runtime.cancelBatchPlusMenuClose();
+    assert.equal(cancelHarness.timers.size, 0, '取消 hover 关闭应清理 timer');
+    assert.equal(cancelHarness.listenerCount(), 0, '取消 hover 关闭应清理 visibilitychange');
+    assert.equal(cancelHarness.menu.isConnected, true, '取消 hover 关闭不应移除菜单');
+
+    const closeHarness = createBatchPlusMenuCloseHarness('visible');
+    closeHarness.runtime.scheduleBatchPlusMenuClose();
+    closeHarness.runtime.closeBatchPlusMenu();
+    assert.equal(closeHarness.timers.size, 0, '显式关闭菜单应清理 timer');
+    assert.equal(closeHarness.listenerCount(), 0, '显式关闭菜单应清理 visibilitychange');
+    assert.equal(closeHarness.menu.isConnected, false, '显式关闭菜单应移除菜单');
 });
 
 test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
