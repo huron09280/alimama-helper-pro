@@ -10,6 +10,9 @@
         ],
         hooksRegistered: false,
         copyResetTimer: 0,
+        copyResetVisibilityHandler: null,
+        copyResetButton: null,
+        copyResetStatus: null,
         exitModeClickHandler: null,
         exitModeClickHandlerBound: false,
         maxParseBytes: 1024 * 1024,
@@ -71,16 +74,78 @@
         },
 
         removePanel() {
-            if (this.copyResetTimer) {
-                clearTimeout(this.copyResetTimer);
-                this.copyResetTimer = 0;
-            }
+            this.clearCopyResetState({ reset: false });
             this.unbindExitModeClickHandler();
             if (this.panel instanceof HTMLElement) {
                 this.panel.onkeydown = null;
                 this.panel.remove();
             }
             this.panel = null;
+        },
+
+        isCopyResetDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch { }
+            return false;
+        },
+
+        resetCopyFeedback(button = this.copyResetButton, status = this.copyResetStatus) {
+            if (button instanceof HTMLElement) button.textContent = '复制';
+            if (status instanceof HTMLElement) status.textContent = '链接已捕获，可复制或直连下载';
+        },
+
+        clearCopyResetTimer() {
+            if (!this.copyResetTimer) return;
+            clearTimeout(this.copyResetTimer);
+            this.copyResetTimer = 0;
+        },
+
+        clearCopyResetVisibilityHandler() {
+            const handler = this.copyResetVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.copyResetVisibilityHandler = null;
+        },
+
+        clearCopyResetState(options = {}) {
+            const shouldReset = options.reset !== false;
+            this.clearCopyResetTimer();
+            this.clearCopyResetVisibilityHandler();
+            if (shouldReset) this.resetCopyFeedback();
+            this.copyResetButton = null;
+            this.copyResetStatus = null;
+        },
+
+        bindCopyResetVisibilityHandler() {
+            if (typeof this.copyResetVisibilityHandler === 'function') return;
+            this.copyResetVisibilityHandler = () => {
+                if (!this.isCopyResetDocumentHidden()) return;
+                this.clearCopyResetState();
+            };
+            document.addEventListener('visibilitychange', this.copyResetVisibilityHandler);
+        },
+
+        scheduleCopyFeedbackReset(button, status, delay = 1500) {
+            this.clearCopyResetState({ reset: false });
+            if (!(button instanceof HTMLElement) || !(status instanceof HTMLElement)) return;
+            this.copyResetButton = button;
+            this.copyResetStatus = status;
+            if (this.isCopyResetDocumentHidden()) {
+                this.resetCopyFeedback(button, status);
+                this.copyResetButton = null;
+                this.copyResetStatus = null;
+                return;
+            }
+            this.bindCopyResetVisibilityHandler();
+            this.copyResetTimer = setTimeout(() => {
+                this.copyResetTimer = 0;
+                this.resetCopyFeedback(button, status);
+                this.clearCopyResetVisibilityHandler();
+                this.copyResetButton = null;
+                this.copyResetStatus = null;
+            }, delay);
         },
 
         bindExitModeClickHandler() {
@@ -209,6 +274,7 @@
 
             Logger.log(`📂 捕获报表: ${source} `, true);
 
+            this.clearCopyResetState({ reset: false });
             panel.textContent = '';
             panel.setAttribute('aria-hidden', 'false');
             panel.setAttribute('aria-labelledby', 'am-report-capture-title');
@@ -282,16 +348,9 @@
 
             copyBtn.onclick = function () {
                 GM_setClipboard(safeUrl);
-                this.innerText = '已复制';
+                this.textContent = '已复制';
                 status.textContent = '下载链接已复制';
-                if (Interceptor.copyResetTimer) {
-                    clearTimeout(Interceptor.copyResetTimer);
-                }
-                Interceptor.copyResetTimer = setTimeout(() => {
-                    Interceptor.copyResetTimer = 0;
-                    this.innerText = '复制';
-                    status.textContent = '链接已捕获，可复制或直连下载';
-                }, 1500);
+                Interceptor.scheduleCopyFeedbackReset(this, status, 1500);
             };
             closeBtn.onclick = () => {
                 panel.setAttribute('aria-hidden', 'true');

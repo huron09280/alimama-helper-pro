@@ -1,3 +1,57 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十五子项
+
+## 需求规格
+- 目标：在结果浮层关闭 timer 收口后，继续优化下载捕获面板复制反馈的 `copyResetTimer`，避免页面隐藏时仍保留 1500ms timeout 去复位“已复制/下载链接已复制”的临时状态。
+- 根因判断：`src/main-assistant/interceptor.js` 的下载捕获面板点击“复制”后，会调用 `GM_setClipboard(safeUrl)`，立即把按钮与 live status 改为复制成功，再排 `setTimeout(..., 1500)` 恢复为默认文案。该 timer 只服务可见反馈；若复制后页面切到后台，隐藏页继续等待 1500ms 没有业务价值，还会保留按钮/status 闭包并唤醒写 DOM。
+- 范围：仅覆盖下载捕获面板复制反馈 reset timer 的隐藏页即时复位、timer 清理、visibility listener 生命周期和 panel 卸载释放；不改下载 URL 捕获/过滤/递归解析、Hook 注册、禁用域名、下载链接、剪贴板写入、退出模式监听、创建/复制/提交/预算/护航/下载请求或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留可见页原 1500ms 成功反馈；复制写入剪贴板后，隐藏页无需保留视觉反馈，因此隐藏时直接恢复按钮/status 默认文案并释放 timer/listener/DOM 引用。面板关闭仍统一取消 timer，不额外触发下载或业务请求。
+- 成功标准：静态与行为测试证明 `copyResetTimer` 有统一 clear/schedule helper；可见页复制仍按 1500ms 调度并复位；隐藏页复制不排 timeout 并即时复位；visible->hidden 会取消已排 timeout 并即时复位；再次复制会清理旧 timer；`removePanel()` 会释放 timer、visibility handler 和 pending DOM 引用；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击真实下载捕获面板、不触发剪贴板写入、不打开下载链接、不触发下载捕获解析或业务写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十四子项提交后工作区状态，确认本子项只处理下载捕获复制反馈 reset timer。
+- [x] 复核 UI/图标规范，确认本轮不改下载捕获面板视觉、图标和交互结构。
+- [x] 定位 `copyResetTimer`、`removePanel()` 和现有下载捕获测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为复制反馈 reset 增加统一 clear/schedule helper、pending DOM 引用、visibility handler 和隐藏态判定。
+- [x] 将复制反馈调度改为可见页保留 1500ms，隐藏页或转 hidden 即时复位并释放引用。
+- [x] 更新下载捕获目标测试，锁定隐藏页不排 timeout、visible->hidden 取消 timer、可见页原 1500ms 调度保留、再次复制清理旧 timer 和 removePanel 清理 pending。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `531d8e0 优化结果浮层关闭轮询`，tracked 工作区干净；本子项不依赖任何临时取证文件。
+- 候选取舍：主面板 hover auto-hide 会影响 `State.config.panelOpen` 持久化时机，高级弹窗 0ms click suppress 影响点击抑制语义，AI 点睛打字机和多个 runtime cache cleanup 已有隐藏页处理。`copyResetTimer` 只管理下载捕获面板按钮/status 的临时成功反馈，不参与 URL 捕获、Hook、解析、下载请求或任何写接口，适合作为本轮低风险优化点。
+- 计划校验：本子项只降低隐藏标签页中复制反馈复位的后台唤醒；可见页仍保持原 1500ms 成功反馈，`GM_setClipboard(safeUrl)` 调用、直连下载链接、捕获解析、退出模式监听和面板关闭行为不变。若实现需要触碰下载 URL 识别、Hook 注册、请求解析或下载链接行为，先回到本计划更新后再继续。
+- 只读子代理复核：子代理推荐下一轮候选为 `CampaignIdQuickEntry.batchPlusMenuCloseTimer`，确认其只做批量+ 菜单 hover 关闭收尾，不触达 `runBatchPlusAction` 或并发/创建/复制/提交链路。本轮在子代理返回前已进入下载捕获复制反馈实现，且边界同样是纯 UI timer；为避免半途切换造成未完成差异，先完成并提交本子项，下一轮优先评估批量+ 菜单候选。
+- 实现摘要：`Interceptor` 新增 `copyResetVisibilityHandler`、`copyResetButton`、`copyResetStatus`，并抽出 `isCopyResetDocumentHidden()`、`resetCopyFeedback()`、`clearCopyResetTimer()`、`clearCopyResetVisibilityHandler()`、`clearCopyResetState()`、`bindCopyResetVisibilityHandler()`、`scheduleCopyFeedbackReset()`。复制按钮点击仍先执行 `GM_setClipboard(safeUrl)`，再把按钮/status 改成复制成功，只把复位逻辑交给统一 helper。
+- 调度摘要：可见页保留原 1500ms 成功反馈；隐藏页复制写入剪贴板后立即恢复按钮/status 默认文案，不排 1500ms timeout；可见页等待复位期间若页面转 hidden，会取消已排 timeout、立即复位并释放 visibility listener 与 DOM 引用；再次复制和 `removePanel()` 统一释放旧 timer/listener/pending。
+- 测试摘要：`tests/download-link-depth-guard.test.mjs` 新增 fake DOM/VM 行为 harness，直接执行构建后 Interceptor 代码，覆盖隐藏页复制即时复位、可见页原 1500ms 调度、重复复制幂等、visible->hidden 取消 timer 并复位、面板卸载释放 timer/listener/DOM 引用；静态断言同步锁定统一 helper 合同。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/interceptor.js` 通过。
+- 测试语法：`node --check tests/download-link-depth-guard.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 产物语法：`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js` 通过。
+- 目标测试：`node --test tests/download-link-depth-guard.test.mjs` 通过，7 项测试全绿；新增 “下载捕获复制反馈 reset timer 在隐藏页即时复位并释放监听” 行为断言。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 静态定位：`rg -n "copyResetTimer|copyResetVisibilityHandler|copyResetButton|copyResetStatus|clearCopyResetState|scheduleCopyFeedbackReset|isCopyResetDocumentHidden|下载链接已复制|链接已捕获，可复制或直连下载" src/main-assistant/interceptor.js tests/download-link-depth-guard.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 与隐藏页分支已进入产物。
+- 相关回归：`node --test tests/download-link-depth-guard.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，48 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { stdio:'inherit', timeout:60000 }) ..."` 通过，628 项中 626 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordApiReady:true`、`hookManager:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4073668`，包含 `copyResetTimer`、`copyResetVisibilityHandler`、`copyResetButton`、`copyResetStatus`、`isCopyResetDocumentHidden`、`resetCopyFeedback`、`clearCopyResetTimer`、`clearCopyResetVisibilityHandler`、`clearCopyResetState`、`bindCopyResetVisibilityHandler`、`scheduleCopyFeedbackReset` 和 `Interceptor.scheduleCopyFeedbackReset(this, status, 1500)`。
+- Chrome MCP 弹窗/危险请求：`helperIcon:true`；`helperPanel:false`、`reportCapturePanel:false`、`optimizerPanel:false`、`resultOverlay:false`、`magicReport:false`、`licenseOverlay:false`；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示主线程卡顿监听启动、`[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器`；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 和页面自身日志，未见新增插件运行失败。网络清单可见扩展 `page.bundle.js` 读取 200，one.alimama 登录路由初始化、菜单、消息和 AI context 等只读/初始化请求为 200；未打开下载捕获面板、未触发剪贴板、未打开下载链接、未触发下载捕获解析或任何业务写入口。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/interceptor.js`、`tests/download-link-depth-guard.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增下载捕获复制反馈 timer 的隐藏页即时复位、可见转隐藏取消 timer 和 listener/DOM 引用释放，不改下载 URL 捕获/过滤/递归解析、Hook 注册、禁用域名、下载链接、剪贴板写入、退出模式监听、创建/复制/提交/预算/护航/下载请求或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十五子项结果：下载捕获面板复制反馈从“复制后总是排 1500ms timeout 等待复位按钮/status”优化为“隐藏页复制或等待期间转 hidden 时立即恢复默认文案并释放 timer/listener/DOM 引用；可见页仍按原 1500ms 成功反馈”。
+- 取舍结论：`GM_setClipboard(safeUrl)` 仍在点击时立即执行，直连下载链接、捕获解析、面板可访问语义和退出模式监听不变；新增 helper 只管理按钮/status 临时视觉反馈生命周期，不改变下载捕获或任何业务请求行为。
+- 效果结论：在用户点击下载捕获面板“复制”后立刻切到后台的场景中，插件不再保留复制反馈 reset timeout 等待隐藏页唤醒，降低后台 timer 唤醒成本，并减少按钮/status DOM 闭包保留时间。浏览器验收未打开下载捕获面板、未触发剪贴板、未打开下载链接、未触发任何业务查询或写动作，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+- 下一轮候选：优先评估子代理推荐的 `CampaignIdQuickEntry.batchPlusMenuCloseTimer`，它只控制批量+ 菜单 hover 关闭收尾；实现前需再次确认不触达 `runBatchPlusAction`、并发执行、创建/复制/提交、列表刷新或 10rpm 相关链路。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十四子项
 
 ## 需求规格
