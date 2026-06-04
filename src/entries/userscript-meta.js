@@ -8,6 +8,7 @@
 // @match        *://*.alimama.com/*
 // @match        https://one.alimama.com/*
 // @match        https://myseller.taobao.com/*
+// @match        https://dmp.taobao.com/*
 // @grant        GM_setClipboard
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -16,4 +17,5 @@
 // @connect      *.alimama.com
 // @connect      one.alimama.com
 // @connect      myseller.taobao.com
+// @connect      dmp.taobao.com
 // ==/UserScript==

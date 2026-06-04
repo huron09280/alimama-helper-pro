@@ -14,6 +14,21 @@
         return isAmSmartAssistantBudgetPage();
     };
 
+    const isDmpItemInsightCrowdPage = () => {
+        try {
+            const url = new URL(window.location.href);
+            if (String(url.hostname || '').toLowerCase() !== 'dmp.taobao.com') return false;
+            const hash = String(url.hash || '');
+            if (!/\/items\/item-insight/i.test(hash)) return false;
+            const queryText = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+            const params = new URLSearchParams(queryText);
+            const analysisTab = String(params.get('analysisTab') || '').trim();
+            return analysisTab === 'crowd-insight';
+        } catch {
+            return false;
+        }
+    };
+
     const AM_PLUGIN_MUTATION_SELECTOR = [
         '#am-helper-icon',
         '#am-helper-panel',
@@ -110,6 +125,11 @@
 
     function main() {
         installAssistDisplayDiagnostics();
+        if (isDmpItemInsightCrowdPage()) {
+            MagicReport.initDmpCrowdMatrixEntry();
+            Logger.log(`🚀 阿里助手 Pro v${CURRENT_VERSION} 已启动：DMP 单品人群看板入口`);
+            return;
+        }
         UI.init();
         BudgetFrontendLimitBypass.init();
         if (isSmartAssistantBudgetOnlyPage()) {

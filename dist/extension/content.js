@@ -22,6 +22,7 @@
         hostname === 'myseller.taobao.com'
         || hostname.endsWith('.myseller.taobao.com')
     );
+    const isDmpHost = (hostname = '') => hostname === 'dmp.taobao.com';
     const isSmartAssistantBudgetPage = (url = null) => {
         if (!url) return false;
         const pathname = String(url.pathname || '').toLowerCase();
@@ -36,6 +37,7 @@
         if (!url) return false;
         const hostname = normalizeHostname(url.hostname);
         if (hostname === 'one.alimama.com') return true;
+        if (isDmpHost(hostname)) return true;
         if (isMysellerHost(hostname)) return isSmartAssistantBudgetPage(url);
         return false;
     };

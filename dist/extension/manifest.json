@@ -30,7 +30,8 @@
                 "*://alimama.com/*",
                 "*://*.alimama.com/*",
                 "https://one.alimama.com/*",
-                "https://myseller.taobao.com/*"
+                "https://myseller.taobao.com/*",
+                "https://dmp.taobao.com/*"
             ],
             "js": [
                 "content.js"
@@ -48,7 +49,8 @@
                 "*://alimama.com/*",
                 "*://*.alimama.com/*",
                 "https://one.alimama.com/*",
-                "https://myseller.taobao.com/*"
+                "https://myseller.taobao.com/*",
+                "https://dmp.taobao.com/*"
             ]
         }
     ]

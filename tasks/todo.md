@@ -1,3 +1,94 @@
+# TODO - 2026-06-04 DMP 商品洞察页复用人群对比看板
+
+## 需求规格
+- 目标：在 `https://dmp.taobao.com/index_new.html#!/items/item-insight?...analysisTab=crowd-insight&itemId=757440599385&cycle=30` 页面“切换分析单品”后新增一个插件按钮，点击弹出与现有“人群对比看板”同框架、同交互的窗口，用当前 DMP 商品洞察页“自定义画像标签”弹窗中的全部画像标签作为每一行类别，并按可抓取统计周期展示不同时间人群差异。
+- 页面事实源：优先读取目标 DMP 页面的真实 DOM、路由参数、页面请求和响应；现有万能查数人群对比看板只复用 UI 框架、图表展示、周期/人群显隐、tooltip 和状态交互，不把 one.alimama 计划查数接口的模拟或缓存结果当成当前页面数据。
+- 范围：新增 `dmp.taobao.com` 最小注入边界；在商品洞察人群页插入只读入口；抽取页面“添加人群属性”可选人群属性和统计周期；把可得数据适配到人群看板网格展示。暂不改创建/复制/预算/投放/导出/护航/万能查数 iframe 等无关链路。
+- 根因/结构判断：当前插件未覆盖 `dmp.taobao.com`，现有人群看板绑定计划 ID 与 AI 报表接口；本任务应抽出可复用渲染/数据适配层或在现有 MagicReport 内增加 DMP item-insight 入口，避免复制第二套图表 UI。
+- 安全边界：浏览器验证只做页面读取、打开弹窗、筛选/周期类只读操作；不点击真实创建、投放、提交、删除、扣费、导出或下载入口。若目标页面登录/权限/风控阻塞，必须记录 Chrome MCP 阻塞原因，不能用非 MCP 结果冒充验收。
+- UI 规范：按 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md` 落地；按钮复用共享 `renderAmIcon()` 和 `am-` 前缀类名，弹窗复用人群对比看板浅玻璃工作台与数据网格。
+- 成功标准：源码和构建产物同步；目标测试/语法/构建检查通过；Chrome DevTools MCP 在真实 DMP 页面证明按钮位于“切换分析单品”后、弹窗可打开、分析人群/对比人群可以用“先渠道、再行为”的级联下拉切换、识别到自定义标签弹窗中的全部画像标签和周期、图表使用当前页面数据渲染，且无新增插件错误或危险写请求。
+
+## 执行计划（可核对）
+- [x] 用 Chrome MCP 只读打开目标 DMP 页面，采集“切换分析单品”“添加人群属性”、统计周期、页面请求/响应和当前可用数据结构。
+- [x] 定位现有人群对比看板的 UI/数据构造边界，确定最小复用方案和影响文件。
+- [x] 将 userscript/extension 注入边界最小扩展到 `dmp.taobao.com`，并补静态测试。
+- [x] 实现 DMP 商品洞察页入口按钮、弹窗打开/关闭、运行态刷新和页面路由守卫。
+- [x] 实现 DMP“自定义画像标签”/统计周期发现与当前页面数据适配，复用现有人群看板展示方式。
+- [x] 将 DMP 分析人群/对比人群选择保留为原人群显隐按钮形态，在按钮内提供“渠道 -> 行为”定制下拉，并在切换后重拉真实页面数据。
+- [x] 将 DMP 行维度从已勾选自定义标签扩展为自定义标签弹窗中的全部画像标签。
+- [x] 补充或更新静态/合同测试，覆盖注入边界、按钮插入、DMP 数据适配和看板渲染复用。
+- [x] 运行目标测试、语法检查、构建同步/检查、空白检查和必要回归。
+- [x] 通过 Chrome DevTools MCP 在真实 DMP 页面完成最终验收并记录 DOM、网络、控制台与截图证据。
+- [x] 做 diff 自审，补充验证记录与结果复盘。
+- [x] 修正 DMP 入口按钮高度和圆角，使其与原生“切换分析单品”按钮对齐。
+- [x] 修正 DMP 分析/对比人群下拉浮层锚点，使下位弹窗左边对齐整颗“分析人群/对比人群”按钮。
+- [x] 修正 DMP 弹窗头部标题、商品上下文信息条和矩阵 0% 可见标签显示。
+- [x] 更新静态测试与构建产物，并重新运行目标测试、语法/构建检查、空白检查。
+- [x] 通过 Chrome DevTools MCP 在真实 DMP 页面复验按钮高度/圆角、下拉左对齐、商品 ID 左对齐、0% 隐藏和标题文案。
+- [x] 核查 DMP `特征兴趣` 行真实接口占比语义，避免把多选覆盖率误读为互斥 100% 分布。
+- [x] 将 DMP 商品信息条改为商品名右侧紧跟 `商品ID：*` 的单行紧凑布局。
+- [x] 将 DMP 对比人群默认值改为 `全部渠道-成交`，并保护用户手动选择不被默认值覆盖。
+- [x] 优化柱状图 hover tooltip 的多指标文字布局，避免长人群名称和数值列叠加。
+- [x] 更新静态测试、构建产物，并用 Chrome DevTools MCP 复验默认对比人群、特征兴趣提示、商品 ID 布局和 tooltip 重叠。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`：人群看板取数缺陷不得用模拟缓存验收；用户指定 Chrome MCP 时，浏览器验收只能使用 `mcp__chrome_devtools.*`。
+- 已读取 UI/图标规范：本轮入口按钮和弹窗必须复用共享图标、`am-` 类名、浅玻璃高密度数据看板风格，不能新增独立主题或 emoji 图标。
+- 初步定位：现有“人群对比看板”集中在 `src/main-assistant/magic-report.js`；当前 userscript 和 extension 尚未覆盖 `dmp.taobao.com`，需要最小扩展注入边界后才能在目标页落按钮。
+- 工作区说明：本轮开始前已有 `src/optimizer/keyword-plan-api/intro.js`、`src/optimizer/keyword-plan-api/request-builder-preview.js`、`tests/keyword-wizard-entry-regression.test.mjs` 脏改；本任务不回退、不覆盖、不格式化这些无关改动。
+- Chrome MCP 采集结论：目标页当前无插件注入；“切换分析单品”是可定位按钮；当前分析人群为 `全部渠道-商详浏览`、对比人群为 `关键词推广-曝光`，当前行为统计周期为 `1天`，覆盖规模分别为 `2,494` 与 `18,620`。
+- DMP 可选人群属性：`api_2/goods/insight/portrait/channel?type=3` 返回渠道-行为组合，包含全部渠道、关键词推广、精准人群推广、货品运营、店铺运营、内容营销、消费者运营、活动场景、全站推广、多目标直投；行为包括曝光、点击、收藏加购、成交，内容营销额外含观看。
+- DMP 周期结论：单品人群画像 `INSIGHT_PERIODS` 为 `1天/7天/30天`；下方聚落洞察独立统计周期为 `7天/30天`。本轮看板适配单品人群画像的 `1/7/30` 周期。
+- 取数方案：优先复用当前页 Magix VFrame 官方方法，按 viewPath 定位 `crowd/insight` 与 `perspective-tags`，调用 `getCrowd()` 与 `fetch([{ name: 'api_analysis_tag_$id_post', isJson: true }])` 拉取 1/7/30 天真实分析/对比画像分布；不使用模拟 `crowdMatrixResultMap`。
+- 用户修正：看板每一行类别必须来自页面“自定义画像标签”里可分析的人群标签；首屏可见画像维度只能作为页面状态参考，不能替代自定义画像标签集合。
+- 实现摘要：已扩展 userscript、extension content、manifest web_accessible 和 background sender 白名单到 `dmp.taobao.com`；DMP 路由只启动 `MagicReport.initDmpCrowdMatrixEntry()`，避免 one.alimama 计划/投放模块在 DMP 页面启动。
+- 看板适配摘要：DMP 弹窗复用现有人群对比看板 DOM/CSS/tooltip/图例/状态/网格；打开时临时将周期切为 `1/7/30`、指标切为 `analysis/compare`、行维度切为 `perspective-tags.config[customTagKey]` 的自定义画像标签，关闭时还原原看板配置。
+- 数据适配摘要：DMP 数据通过页面官方 `window.app.vframe.constructor.all()` 定位 VFrame，使用 `getCrowd()` 取当前分析/对比人群对象，再用 `api_analysis_tag_$id_post` 查询每个自定义画像标签分布；`rate` 作为图表百分比，`optionNum` 作为 tooltip 原始值。
+- 测试摘要：已更新 `tests/extension-static-build.test.mjs` 和 `tests/magic-report-crowd-matrix.test.mjs`，覆盖 DMP 注入、button 标记、官方 VFrame 取数、自定义画像标签行维度、1/7/30 周期和 DMP ratio 透传。
+- Chrome MCP 中间失败定位：DMP 弹窗首次可打开但加载失败；页面 Network 显示 `api_2/analysis/tag/213510` 请求异常。只读比对官方成功请求后确认两个差异：Magix registry 真实 View 位于 VFrame 的 `$v` 字段；自定义画像标签 POST 需要 body 为 `{ version:"2.0", selectTagOptionSet, needUnknown:false, ext:{} }`，不能直接把 `getCrowd()` 返回对象作为根 body，也不能把模型名插值成 `api_analysis_tag_213510_post`。
+- 修复摘要：`queryDmpCrowdTagDistribution()` 保留官方模型名 `api_analysis_tag_$id_post` 与 `pathParams:[tagId]`，分析/对比人群分别用 `buildDmpTagAnalysisParams()` 包装 `getCrowd()` 返回的画像条件后提交；静态测试同步锁定 `$v` 真实 View 和官方 body 形状。
+- 数据单位修正：Chrome MCP 成功加载后发现 DMP 接口 `rate` 为小数占比（如 `0.329` 表示 `32.9%`），而矩阵内部格式化函数使用百分比单位；已将 DMP `rate <= 1` 的值乘以 100 后进入矩阵，避免真实占比展示低 100 倍。
+- 用户新增修正：分析人群和对比人群需要改成更方便的级联下拉，先选渠道再选行为；行维度需要点击/读取“自定义标签”弹窗，把弹窗中的全部画像标签补充到看板行类别，不能只展示已勾选标签。
+- 用户二次修正：分析/对比人群不能被原生 `select` 替换，必须保留看板原来的隐藏/显示按钮形态，在按钮内部加定制下拉选择。
+- 用户三次修正：DMP 看板顶部“标签全集”可以全部删掉；人群下拉窗口当前没有置顶，会被其它层挡住无法选择；`月均消费频次` 行空白且数据误落在 `月均消费金额`，必须按真实标签 ID 修复频次/金额映射。
+- 最终实现摘要：DMP 分析/对比人群仍渲染为 `am-crowd-matrix-legend-toggle am-dmp-crowd-metric-button` 系列按钮，主按钮点击继续控制显隐，按钮内 `chevron-down` 触发区打开“渠道 -> 行为”双列定制下拉；选择行为后更新当前 DMP 运行态人群并重拉 `portrait/crowd` 与 `analysis/tag/*` 数据。
+- 自定义标签修正摘要：DMP 行维度优先读取官方自定义画像标签运行态/分类标签集合，最终真实页展示 15 个标签；新增 DMP 专用 `normalizeDmpTagName()`，避免旧人群维度归一化把 `月均消费频次` 误映射成 `月均消费金额`。
+- 追加修正计划：移除 DMP 模式下的“标签全集”芯片区；将 DMP 人群级联下拉改为 `document.body` 顶层浮层并跟随按钮定位；修正 `月均消费频次/月均消费金额` 标签 ID 与数据解析，补测试后重新构建并用 Chrome MCP 做命中/选择/数据验收。
+- 用户四次/五次/六次修正：DMP 下位弹窗要左对齐整颗“分析人群/对比人群”按钮，而不是内部箭头；`商品ID：*` 要靠左对齐商品名称并去掉中间过长空白；可见数据为 `0%` 时不显示 `0%`；DMP 模式标题改为“达摩盘单品分析”；新增入口“人群对比看板”按钮高度和圆角要对齐原生“切换分析单品”按钮。
+- 本轮修正计划：入口按钮高度和圆角从原生可交互控件读取并同步；DMP 下拉 portal 定位改用 `.am-dmp-crowd-metric-button` 整体 rect；DMP 商品信息条改成左侧紧凑上下文块；柱状占比标签仅在 ratio 大于 0 时渲染文本；标题文案按 DMP 模式条件切换。
+- 用户七次/八次修正：`特征兴趣` 行占比合计看起来不像 100%，需要核查是否为数据/计算问题；`商品ID：*` 需要接在商品名称右边，不能另起一行或留大空白。
+- 特征兴趣初步取证：Chrome MCP Network 中 `POST /api_2/analysis/tag/125020` 返回 `tagType:"CHECKBOX"`，38 个兴趣项 `rate` 合计约 `747.06%`，如 `吃货 60.63%`、`家庭主妇 51.20%`、`数码达人 47.87%`；该标签为多选兴趣覆盖率，同一用户可命中多个兴趣，合计不应强制归一到 100%。本轮修正应保留 DMP 原始 `rate`，并在行头提示“多选”。
+- 用户九次修正：DMP 看板对比人群默认必须为 `全部渠道-成交`；鼠标移动到柱子后的 tooltip 文案有叠加，需要优化。
+- 默认对比人群修正摘要：新增 `findDmpDefaultCompareProperty()` 与 `applyDmpDefaultCompareProperty()`，在 `api_goods_insight_portrait_channel_get` 可选渠道/行为全集加载后匹配 `全部渠道 + 成交` 并写入 `channelBehaviorListCompare`；用户通过下拉手动选择对比人群时设置 `dmpComparePropertyManuallySelected`，后续刷新不再覆盖手动选择。
+- Tooltip 修正摘要：柱状 hover 提示改为动态 `inline-grid` 网格列，使用 `minmax(..., max-content)`、`min-width:0`、长人群名称换行、列头顶部对齐和等宽数字，避免“分析/对比人群”长标题与占比/数值列互相压住。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- extension 入口语法：`node --check src/entries/extension-content.js && node --check src/entries/extension-background.js` 通过。
+- 说明：`src/main-assistant/main.js` 是拼接分段源码，直接 `node --check` 会因文件末尾 IIFE 闭合报 `Unexpected token '}'`，不作为独立语法证据；后续以项目 `check:syntax` 和构建产物检查验证整体语法。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs && node --check tests/extension-static-build.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、packages 和 extension 产物。
+- 目标测试：`node --test tests/extension-static-build.test.mjs tests/magic-report-crowd-matrix.test.mjs` 通过，78 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 扩展刷新：只使用 `mcp__chrome_devtools.*`，在 `chrome://extensions/` 重载 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk` 后，切回 `https://dmp.taobao.com/index_new.html?...#!/items/item-insight?...analysisTab=crowd-insight&itemId=757440599385&cycle=30` 并刷新目标页；运行态日志显示 `阿里助手 Pro v7.05 已启动：DMP 单品人群看板入口`。
+- Chrome MCP 入口验收：真实页面按钮顺序为 `标杆商品池管理 -> 切换分析单品 -> 人群对比看板`，证据文件 `tasks/dmp-final-dom-validation.json` 中 `entryPlacement.appearsAfterSwitch:true`；点击“人群对比看板”后弹窗 class 为 `is-dmp-crowd-mode`。
+- Chrome MCP 按钮/下拉验收：分析/对比人群均为 `am-crowd-matrix-legend-toggle am-dmp-crowd-metric-button`，保留 `data-crowd-metric`、`aria-pressed`、`aria-haspopup=listbox` 和按钮内 `data-dmp-crowd-dropdown-trigger`，无 `.am-dmp-crowd-selector-select` 或原生 `select`。主按钮点击只切换对比人群显隐；按钮内箭头触发区打开定制下拉。
+- Chrome MCP 级联选择验收：打开对比人群按钮内下拉后，渠道列包含 `全部渠道、关键词推广、精准人群推广、货品运营、店铺运营、内容营销、消费者运营、活动场景、全站推广、多目标直投`；选择 `全部渠道` 后行为列为 `商详浏览、收藏加购、成交`；再选择 `收藏加购` 后按钮文案更新为 `对比人群：全部渠道-收藏加购`，下拉关闭并重绘数据。
+- Chrome MCP 置顶/命中验收：DMP 人群下拉现在挂在 `document.body` 顶层，class 为 `am-dmp-crowd-dropdown-portal is-open`，computed style 为 `position:fixed`、`z-index:2147483605`、`pointer-events:auto`；`document.elementFromPoint()` 在 `全部渠道` 和 `收藏加购` 选项中心均命中 `.am-dmp-crowd-dropdown-option`，随后使用 Chrome MCP `click` 实际点选 `全部渠道 -> 收藏加购` 成功。
+- Chrome MCP 数据验收：真实看板周期为 `1天/7天/30天`，行维度 15 个，包含 `城市等级、消费能力等级、人生阶段、月均消费频次、月均消费金额、淘气值活跃度、用户职业、特征兴趣、用户年龄、用户性别、大快消策略人群（新）、消费电子策略人群、大快消策略人群（老）、天猫国际人生阶段、大服饰策略人群`。切换后 tooltip 中 `对比人群：全部渠道-收藏加购` 命中 417 条，其中 274 条非 0 数据样本，如 `12.89%（173）`、`30.92%（415）`。
+- Chrome MCP 标签/频次修正验收：证据文件 `tasks/dmp-final-dom-validation.json` 显示 `tagFullSetTextFound:false`，顶部“标签全集”装饰区已删除；`月均消费频次` 行存在并含 `低于5次、5至10次、10至15次、15至20次、20次以上`，非 0 数据如 `20次以上 39.57%/45.42%`，且 `hasAmountLabels:false`；`月均消费金额` 行存在并含 `低于400元、消费400至1000元、消费1000至3000元、消费3000至6000元、消费6000元以上`，非 0 数据如 `消费1000至3000元 29.21%/32.8%`，且 `hasFrequencyLabels:false`。
+- Chrome MCP 最新默认值/tooltip 复验：刷新 DMP 页面后重新点击 `人群对比看板`，加载完成后 `compareText:"对比人群：全部渠道-成交"`，`analysisText:"分析人群：全部渠道-商详浏览"`，状态为 `DMP 人群对比看板已加载完成（3列周期 × 15行自定义画像标签）`；商品名与 `商品ID：757440599385` 单行相邻，真实间距 `productGap:6`，CSS 变量 `--am-dmp-item-id-width:117px`。
+- Chrome MCP 最新 tooltip 重叠审计：真实 hover 触发柱状 tooltip 后，tooltip 文本包含 `对比人群：全部渠道-成交` 与 `分析人群：全部渠道-商详浏览` 多指标列；读取 tooltip 内 25 个文本单元 `getBoundingClientRect()` 后 `overlapCount:0`，可见 `0%` 标签数量 `visibleZeroTextCount:0`，危险写请求过滤 `dangerousRequestCount:0`。
+- Chrome MCP 网络/控制台：Network 面板可见 `GET /api_2/goods/insight/portrait/channel type=3`、`GET /api_2/category/tags tagGroupIds=6851`、`POST /api_2/goods/insight/portrait/crowd` 和多组 `POST /api_2/analysis/tag/*` 返回 200；控制台只见页面既有 WebSocket 失败、`ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated/form-field issue 与插件启动日志，未见新增插件运行失败；危险写请求关键词过滤命中 0。
+
+## 结果复盘
+- DMP 商品洞察页已复用人群对比看板框架，并把数据事实源切到当前页面官方运行态：渠道/行为、人群覆盖、画像标签分布和周期均来自 DMP 页面接口/VFrame，而不是 one.alimama 万能查数缓存或模拟数据。
+- 用户多轮修正均已收口：行类别来自“自定义画像标签”全集；分析/对比人群仍是原系列显隐按钮，按钮内附着定制级联下拉，不再使用原生 select；顶部“标签全集”展示已删；下拉已改成顶层 portal 并通过命中测试；`月均消费频次` 与 `月均消费金额` 数据已按真实标签拆开；`特征兴趣` 以多选覆盖率展示；对比人群默认 `全部渠道-成交`；商品 ID 紧跟商品名右侧；柱状 tooltip 通过真实矩形重叠审计。
+- 验收结论：本地目标测试、语法、构建检查、空白检查和 Chrome DevTools MCP 真实 DMP 页面验收均通过；未触发创建、投放、提交、删除、导出、下载或其它业务写入口。
+
 # TODO - 2026-06-04 人群对比看板过去7天省份城市数据缺失修复
 
 ## 需求规格

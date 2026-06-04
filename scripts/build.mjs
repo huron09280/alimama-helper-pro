@@ -381,7 +381,8 @@ export const renderExtensionManifest = (version) => {
                     '*://alimama.com/*',
                     '*://*.alimama.com/*',
                     'https://one.alimama.com/*',
-                    'https://myseller.taobao.com/*'
+                    'https://myseller.taobao.com/*',
+                    'https://dmp.taobao.com/*'
                 ],
                 js: ['content.js'],
                 run_at: 'document_start'
@@ -394,7 +395,8 @@ export const renderExtensionManifest = (version) => {
                     '*://alimama.com/*',
                     '*://*.alimama.com/*',
                     'https://one.alimama.com/*',
-                    'https://myseller.taobao.com/*'
+                    'https://myseller.taobao.com/*',
+                    'https://dmp.taobao.com/*'
                 ]
             }
         ]

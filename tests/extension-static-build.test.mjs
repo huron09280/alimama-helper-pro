@@ -173,10 +173,12 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
   assert.deepEqual(manifest.content_scripts[0].js, ['content.js']);
   assert.ok(manifest.content_scripts[0].matches.includes('*://*.alimama.com/*'), '缺少阿里妈妈子域匹配');
   assert.ok(manifest.content_scripts[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com 匹配');
+  assert.ok(manifest.content_scripts[0].matches.includes('https://dmp.taobao.com/*'), '缺少 dmp.taobao.com 匹配');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('page.bundle.js'), '缺少 page bundle 暴露');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('wizard-style.css'), '缺少组建计划外置样式暴露');
   assert.ok(!manifest.web_accessible_resources[0].resources.includes('keyword-plan-api.bundle.js'), '不应暴露点击时加载的 keyword-plan-api lazy bundle');
   assert.ok(manifest.web_accessible_resources[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com web_accessible 匹配');
+  assert.ok(manifest.web_accessible_resources[0].matches.includes('https://dmp.taobao.com/*'), '缺少 dmp.taobao.com web_accessible 匹配');
 });
 
 test('extension manifest 使用 Chrome 规范版本并保留展示版本', () => {
@@ -192,6 +194,8 @@ test('extension content script 负责注入 page bundle', () => {
   assert.match(contentSource, /const shouldInjectPageBundle = \(\) => \{/, 'content script 缺少 page bundle 注入资格守卫');
   assert.match(contentSource, /let pageBundleInjected = false;/, 'content script 缺少已注入状态位，路由变化可能重复注入 page bundle');
   assert.match(contentSource, /if \(hostname === 'one\.alimama\.com'\) return true;/, 'one.alimama.com 必须继续注入完整 page bundle');
+  assert.match(contentSource, /const isDmpHost = \(hostname = ''\) => hostname === 'dmp\.taobao\.com';/, 'content script 缺少 DMP host 判断');
+  assert.match(contentSource, /if \(isDmpHost\(hostname\)\) return true;/, 'dmp.taobao.com 应直接注入 page bundle');
   assert.match(contentSource, /if \(isMysellerHost\(hostname\)\) return isSmartAssistantBudgetPage\(url\);/, 'myseller.taobao.com 只应允许 SmartAssistant 预算页注入');
   assert.match(contentSource, /const shouldWatchForDeferredInjection = \(\) => \{[\s\S]*return isMysellerHost\(normalizeHostname\(url\.hostname\)\);[\s\S]*\};/, '只有 myseller 普通页需要保留延迟注入监听');
   assert.match(contentSource, /return false;\s*\};[\s\S]*const renderInjectionError/, '非业务匹配页默认不应注入完整 page bundle');
@@ -233,6 +237,11 @@ test('extension content script 只在业务页面注入完整 page bundle', () =
   const one = createContentScriptHarness('https://one.alimama.com/index.html#!/manage/display');
   assert.equal(one.appendedScripts.length, 1, 'one.alimama.com 应继续注入完整 page bundle');
   assert.match(one.appendedScripts[0].src, /page\.bundle\.js$/, 'one.alimama.com 注入的脚本应为 page.bundle.js');
+
+  const dmpItemInsight = createContentScriptHarness('https://dmp.taobao.com/index_new.html#!/items/item-insight?analysisTab=crowd-insight&itemId=757440599385');
+  assert.equal(dmpItemInsight.appendedScripts.length, 1, 'DMP 单品洞察页应直接注入完整 page bundle');
+  assert.match(dmpItemInsight.appendedScripts[0].src, /page\.bundle\.js$/, 'DMP 注入脚本应为 page.bundle.js');
+  assert.equal(dmpItemInsight.timers.size, 0, 'DMP 直接注入后不应保留延迟注入 timer');
 
   const mysellerHome = createContentScriptHarness('https://myseller.taobao.com/home.htm/QnworkbenchHome/');
   assert.equal(mysellerHome.appendedScripts.length, 0, 'myseller 普通工作台不应注入完整 page bundle');
@@ -295,7 +304,7 @@ test('extension build output 包含授权 background 桥', () => {
   assert.match(backgroundSource, /if \(!isAllowedSenderUrl\(sender\?\.url \|\| ''\)\) \{/, 'background 未校验 sender.url');
   assert.match(
     backgroundSource,
-    /return hostname === 'alimama\.com'[\s\S]*hostname === 'myseller\.taobao\.com'[\s\S]*hostname\.endsWith\('\.myseller\.taobao\.com'\)[\s\S]*hostname\.endsWith\('\.alimama\.com'\);/,
+    /return hostname === 'alimama\.com'[\s\S]*hostname === 'myseller\.taobao\.com'[\s\S]*hostname === 'dmp\.taobao\.com'[\s\S]*hostname\.endsWith\('\.myseller\.taobao\.com'\)[\s\S]*hostname\.endsWith\('\.alimama\.com'\);/,
     'background 未限制阿里妈妈来源'
   );
   assert.match(backgroundSource, /response = await fetch\(VERIFY_ENDPOINT, \{/, 'background 未请求固定授权地址');
