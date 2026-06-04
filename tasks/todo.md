@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十九子项
+
+## 需求规格
+- 目标：在潜力词 CSV 下载清理 timer 收口后，继续优化 extension 授权守卫启动期静默校验 timer，避免缓存命中与预检分支各自排队无句柄 `setTimeout(..., 0)`，重复初始化或运行态切换时旧 timer 持有授权上下文闭包。
+- 根因判断：`src/entries/extension-license-guard.js` 在 extension 模式启动时，缓存命中分支直接 `setTimeout(() => triggerOnDemandVerify('extension_cache_bootstrap'), 0)`，未命中分支直接 `setTimeout(() => LicenseGuard.assertAuthorized(...), 0)`；两处 timer 无统一句柄，无法取消 pending 启动静默校验。
+- 范围：仅覆盖 extension 启动期静默校验 0ms timer 生命周期和静态回归；不改授权服务地址、policy token 验签、缓存恢复、按需校验、授权遮罩、shopId 解析、续租逻辑、background 桥、userscript 启动预热或任何真实授权请求合同。
+- 热修 vs 结构性修复取舍：新增 `extensionBootstrapVerifyTimer`、`clearExtensionBootstrapVerifyTimer()` 与 `scheduleExtensionBootstrapVerify(callback)`，把“extension bootstrap 仅允许一个 pending 静默校验任务”的不变量放在授权守卫内部，而不是在两个启动分支保留裸 timer。
+- 成功标准：静态测试证明 extension 启动静默校验 timer 有句柄、可取消、重复调度先取消旧 timer、触发后归零，缓存命中和预检分支都复用 helper，旧无句柄 `setTimeout(...extension_cache_bootstrap...)` / `setTimeout(...bootstrap_preflight...)` 不再存在；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不触发授权刷新按钮、不主动调用授权接口、不点击插件业务入口、不点击复制、批量+、潜力词导出、预算提交、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认运行态授权对象/页面状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十八子项提交后工作区状态，确认本子项只处理 extension bootstrap 静默校验 timer。
+- [x] 在 `extension-license-guard.js` 中新增启动静默校验 timer 句柄、清理和调度 helper。
+- [x] 将缓存命中与 bootstrap 预检两个 0ms 分支改为复用 helper，保持原异步校验语义和参数。
+- [x] 补充/更新目标测试，锁定 extension 启动静默校验不再累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `1cd2963 优化潜力词下载清理计时器`；只读 `git status --short` 没有实际变更行，但有 macOS 临时缓存写入警告。
+- 定位结论：extension 授权守卫启动期两个 0ms timer 只用于延后静默校验，不属于业务提交或服务端并发执行路径；收口后可减少启动重复注入时旧授权上下文闭包滞留。
+- 实现摘要：`src/entries/extension-license-guard.js` 新增 `extensionBootstrapVerifyTimer`、`clearExtensionBootstrapVerifyTimer()` 与 `scheduleExtensionBootstrapVerify(callback)`；调度前会取消旧 pending timer，触发时先归零再执行原回调。
+- 行为摘要：extension 模式缓存命中仍异步触发 `triggerOnDemandVerify('extension_cache_bootstrap')`，缓存未命中仍异步执行原 `LicenseGuard.assertAuthorized({ source:'bootstrap_preflight', ... silentTransientFailure:true })`；userscript 模式启动预热保持同步调用不变。
+- 测试摘要：`tests/extension-license-cache-policy-token.test.mjs` 新增启动静默校验 timer 回归，锁定 timer 句柄、清理 helper、调度 helper、两处分支复用 helper 和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/entries/extension-license-guard.js` 通过。
+- 测试语法：`node --check tests/extension-license-cache-policy-token.test.mjs` 通过。
+- 目标测试：`node --test tests/extension-license-cache-policy-token.test.mjs` 通过，8 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，31 项测试全绿。
+- 空白检查：`git diff --check` 通过；只读沙箱下仍有 macOS xcrun 临时缓存写入警告，未报告 diff 空白错误。
+- 全量回归：`npm test` 通过，612 项中 610 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 真实标签，`navigate_page` 刷新当前关键词推广管理页；`evaluate_script` 只读返回 `readyState:"complete"`、`hasLicenseGuard:true`、`licenseState.authorized:true`、`licenseState.reason:"authorized"`、`licenseState.source:"extension_cache_bootstrap"`、`licenseState.runtimeMode:"extension"`、`licenseState.scriptVersion:"7.05"`、`hasLicenseOverlay:false`、`hasOptimizerToggle:true`、`batchPlusButtonCount:1`、`copyButtonCount:0`、`potentialExportButtonCount:0`、`hasCopyOverviewPopup:false`、`hasCopySuccessPopup:false`、`hasBatchPlusMenuOpen:false`、`hasOptimizerPanel:false`。未手动调用 `assertAuthorized` / `triggerOnDemandVerify`，未点击授权、复制、批量+、潜力词导出、护航执行或任何真实写入口；控制台仅见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误。
+- Diff 自审：改动集中在 extension 授权守卫启动静默校验 timer 生命周期、对应静态测试、任务记录和构建产物；未改授权服务地址、policy token 验签、缓存恢复、按需校验、授权遮罩、shopId 解析、续租逻辑、background 桥、userscript 启动预热或真实授权请求合同。
+
+## 结果复盘
+- 第十一轮第二十九子项结果：extension 授权守卫启动期静默校验从“缓存命中/预检两个分支各自排无句柄 0ms timeout”优化为“`extensionBootstrapVerifyTimer` 统一持有 pending 启动校验任务，重复调度先取消旧 timer，触发后归零再执行原回调”。
+- 取舍结论：保留 extension 模式启动时的异步缓存复核与预检校验语义，userscript 模式预热不变；没有新增第二套授权事实源，也不改变任何授权请求参数，只收口启动期短生命周期 timer。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行插件业务动作或真实写入口，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十八子项
 
 ## 需求规格

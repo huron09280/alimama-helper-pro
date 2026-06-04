@@ -581,6 +581,7 @@ if (typeof globalThis !== 'undefined') {
     let onDemandVerifyInstalled = false;
     let onDemandVerifyInFlight = false;
     let onDemandVerifyLastSuccessAt = 0;
+    let extensionBootstrapVerifyTimer = 0;
 
     const LEASE_RENEW_DEFAULT_LEAD_MS = 60 * 1000;
     const LEASE_RENEW_MIN_LEAD_MS = 15 * 1000;
@@ -618,6 +619,21 @@ if (typeof globalThis !== 'undefined') {
             }
         });
         guardGlobal[STATE_KEY] = snapshot;
+    };
+
+    const clearExtensionBootstrapVerifyTimer = () => {
+        if (!extensionBootstrapVerifyTimer) return;
+        clearTimeout(extensionBootstrapVerifyTimer);
+        extensionBootstrapVerifyTimer = 0;
+    };
+
+    const scheduleExtensionBootstrapVerify = (callback = null) => {
+        clearExtensionBootstrapVerifyTimer();
+        if (typeof callback !== 'function') return;
+        extensionBootstrapVerifyTimer = setTimeout(() => {
+            extensionBootstrapVerifyTimer = 0;
+            callback();
+        }, 0);
     };
 
     const updateState = (patch = {}) => {
@@ -2790,11 +2806,11 @@ if (typeof globalThis !== 'undefined') {
         const hydratedFromCache = hydrateCurrentLeaseFromCache('extension_cache_bootstrap');
         installOnDemandVerifyHooks();
         if (hydratedFromCache) {
-            setTimeout(() => {
+            scheduleExtensionBootstrapVerify(() => {
                 triggerOnDemandVerify('extension_cache_bootstrap');
-            }, 0);
+            });
         } else {
-            setTimeout(() => {
+            scheduleExtensionBootstrapVerify(() => {
                 LicenseGuard.assertAuthorized({
                     source: 'bootstrap_preflight',
                     shopIdRetryAttempts: 2,
@@ -2802,7 +2818,7 @@ if (typeof globalThis !== 'undefined') {
                     shopIdRetryMaxDelayMs: 620,
                     silentTransientFailure: true
                 }).catch(() => { });
-            }, 0);
+            });
         }
     } else {
         // userscript 模式保持启动预热校验。

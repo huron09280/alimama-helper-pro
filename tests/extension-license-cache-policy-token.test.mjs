@@ -71,6 +71,15 @@ test('extension 模式从有效缓存恢复授权并静默续租', () => {
     assert.match(source, /if \(options\?\.silentTransientFailure && isTransientVerifyErrorCode\(code\)\) \{[\s\S]*reason: 'license_refresh_deferred'[\s\S]*throw createError\(code, msg, err\?\.detail \|\| null\);[\s\S]*\}\s*lock\(code, msg, source\);/s, '启动静默校验遇到瞬时失败不应直接弹锁定遮罩');
 });
 
+test('extension 启动静默校验 timer 通过可取消 helper 调度', () => {
+    assert.match(source, /let extensionBootstrapVerifyTimer = 0;/, '缺少 extension 启动静默校验 timer 句柄');
+    assert.match(source, /const clearExtensionBootstrapVerifyTimer = \(\) => \{[\s\S]*if \(!extensionBootstrapVerifyTimer\) return;[\s\S]*clearTimeout\(extensionBootstrapVerifyTimer\);[\s\S]*extensionBootstrapVerifyTimer = 0;[\s\S]*\};/, 'extension 启动静默校验 timer 应可取消并归零');
+    assert.match(source, /const scheduleExtensionBootstrapVerify = \(callback = null\) => \{[\s\S]*clearExtensionBootstrapVerifyTimer\(\);[\s\S]*if \(typeof callback !== 'function'\) return;[\s\S]*extensionBootstrapVerifyTimer = setTimeout\(\(\) => \{[\s\S]*extensionBootstrapVerifyTimer = 0;[\s\S]*callback\(\);[\s\S]*\}, 0\);[\s\S]*\};/, 'extension 启动静默校验应通过统一 helper 调度并在触发后归零');
+    assert.match(source, /if \(hydratedFromCache\) \{[\s\S]*scheduleExtensionBootstrapVerify\(\(\) => \{[\s\S]*triggerOnDemandVerify\('extension_cache_bootstrap'\);[\s\S]*\}\);[\s\S]*\} else \{[\s\S]*scheduleExtensionBootstrapVerify\(\(\) => \{[\s\S]*LicenseGuard\.assertAuthorized\(\{[\s\S]*source: 'bootstrap_preflight'[\s\S]*silentTransientFailure: true[\s\S]*\}\)\.catch\(\(\) => \{ \}\);[\s\S]*\}\);[\s\S]*\}/, '缓存命中与预检分支都应复用启动静默校验 helper');
+    assert.doesNotMatch(source, /setTimeout\(\(\) => \{\s*triggerOnDemandVerify\('extension_cache_bootstrap'\);\s*\}, 0\);/, '缓存命中分支不应继续排无句柄静默校验 timeout');
+    assert.doesNotMatch(source, /setTimeout\(\(\) => \{\s*LicenseGuard\.assertAuthorized\(\{[\s\S]*source: 'bootstrap_preflight'[\s\S]*\}\)\.catch\(\(\) => \{ \}\);\s*\}, 0\);/, 'bootstrap 预检分支不应继续排无句柄静默校验 timeout');
+});
+
 test('授权锁定遮罩使用统一 UI 语义并避免 HTML 拼接展示状态', () => {
     assert.match(source, /root\.setAttribute\('role', 'dialog'\);/, '授权遮罩缺少 dialog 语义');
     assert.match(source, /root\.setAttribute\('aria-modal', 'true'\);/, '授权遮罩缺少 aria-modal');
