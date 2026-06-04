@@ -55,6 +55,31 @@ test('完整 page API bridge host 也校验方法白名单', () => {
     );
 });
 
+test('完整 page API bridge result cache 会主动按 TTL 释放', () => {
+    const start = source.indexOf('const installPageApiBridgeHost = () => {');
+    const end = source.indexOf('const injectPageApiBridgeClient = () => {', start);
+    assert.ok(start > -1 && end > start, '无法定位完整 page API bridge host');
+    const block = source.slice(start, end);
+    assert.match(block, /const BRIDGE_RESULT_CACHE_TTL_MS = 90 \* 1000;/, 'bridge result cache TTL 应保持 90 秒');
+    assert.match(block, /const resolvedPayloadCache = new Map\(\);/, 'bridge result cache 应保持单一 Map 事实源');
+    assert.match(block, /let bridgeCacheCleanupTimer = 0;/, 'bridge result cache 缺少主动清理 timer');
+    assert.match(
+        block,
+        /const cleanupBridgeCache = \(\) => \{[\s\S]*let nextDelayMs = Infinity;[\s\S]*resolvedPayloadCache\.forEach\(\(cached, callId\) => \{[\s\S]*const ts = Number\(cached\?\.ts\);[\s\S]*resolvedPayloadCache\.delete\(callId\);[\s\S]*nextDelayMs = Math\.min\(nextDelayMs, Math\.max\(0, BRIDGE_RESULT_CACHE_TTL_MS - \(now - ts\)\)\);[\s\S]*return Number\.isFinite\(nextDelayMs\) \? nextDelayMs : null;/,
+        'cleanupBridgeCache 应删除过期结果，并返回下一条结果的清理时间'
+    );
+    assert.match(
+        block,
+        /const scheduleBridgeCacheCleanup = \(\) => \{[\s\S]*if \(bridgeCacheCleanupTimer\) return;[\s\S]*const nextDelayMs = cleanupBridgeCache\(\);[\s\S]*bridgeCacheCleanupTimer = window\.setTimeout\(\(\) => \{[\s\S]*bridgeCacheCleanupTimer = 0;[\s\S]*cleanupBridgeCache\(\);[\s\S]*scheduleBridgeCacheCleanup\(\);[\s\S]*\}, Math\.max\(1, Math\.ceil\(nextDelayMs\) \+ 1\)\);[\s\S]*\};/,
+        'bridge result cache 应通过一个可重入 timeout 主动释放，并在仍有缓存时继续调度'
+    );
+    assert.match(
+        block,
+        /resolvedPayloadCache\.set\(callId,\s*\{[\s\S]*ts: Date\.now\(\),[\s\S]*payload[\s\S]*\}\);[\s\S]*scheduleBridgeCacheCleanup\(\);[\s\S]*dispatchBridgeResponse\(payload\);/,
+        'bridge result cache 写入后应立即安排主动 TTL 清理'
+    );
+});
+
 test('向导 API 覆盖检查将 page API 视为可选调试面', () => {
     assert.match(source, /const pageApiExposed = \(typeof window !== 'undefined' && isPlainObject\(window\.__AM_WXT_KEYWORD_API__\)\);/, '缺少 pageApiExposed 标记');
     assert.match(source, /const missingInPage = pageApiExposed[\s\S]*?: \[\];/s, '缺少 page API 可选时的空缺省处理');

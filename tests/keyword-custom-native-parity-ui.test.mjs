@@ -439,8 +439,43 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
-    /const runAiMaxTypewriter = \(panel = null\) =>[\s\S]*data-ai-max-typewriter-text[\s\S]*window\.setInterval[\s\S]*target\.textContent = fullText\.slice/,
-    'AI点睛展开详情缺少原生式打字展示逻辑'
+    /const runAiMaxTypewriter = \(panel = null\) =>[\s\S]*data-ai-max-typewriter-text[\s\S]*const scheduleNextAiMaxTypewriterStep = \(\) => \{[\s\S]*window\.setTimeout\(\(\) => \{[\s\S]*target\.textContent = fullText\.slice/,
+    'AI点睛展开详情缺少可取消 timeout 逐字展示逻辑'
+  );
+  assert.doesNotMatch(
+    source,
+    /runAiMaxTypewriter[\s\S]*window\.setInterval/,
+    'AI点睛逐字动效不应再使用固定 interval'
+  );
+  assert.doesNotMatch(
+    source,
+    /cleanupAiMaxTypewriterTimers[\s\S]*window\.clearInterval/,
+    'AI点睛逐字动效 cleanup 不应再保留 interval 清理分支'
+  );
+  assert.match(
+    source,
+    /const cleanupAiMaxTypewriterTimers = \(\) => \{[\s\S]*window\.clearTimeout\(record\.timerId\);[\s\S]*delete record\.target\.dataset\[record\.datasetKey\];[\s\S]*wizardState\.aiMaxTypewriterTimers\.clear\(\);/,
+    'AI点睛逐字动效 timeout 必须支持向导关闭时统一释放'
+  );
+  assert.match(
+    source,
+    /wizardState\.cleanupHandlers = Array\.isArray\(wizardState\.cleanupHandlers\)[\s\S]*wizardState\.cleanupHandlers\.push\(cleanupAiMaxTypewriterTimers\);[\s\S]*wizardState\.aiMaxTypewriterCleanupRegistered = true;/,
+    'AI点睛逐字动效 timer cleanup 必须注册进向导 cleanupHandlers'
+  );
+  assert.match(
+    source,
+    /const delayTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', delayTimer\);[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', delayTimer, target, 'aiMaxTypeDelayTimer'\);/,
+    'AI点睛逐字动效 delay timeout 必须登记到 wizardState timer 表'
+  );
+  assert.match(
+    source,
+    /const stepTimer = window\.setTimeout\(\(\) => \{[\s\S]*releaseAiMaxTypewriterTimer\('timeout', stepTimer\);[\s\S]*if \(cursor < fullText\.length\) \{[\s\S]*scheduleNextAiMaxTypewriterStep\(\);[\s\S]*trackAiMaxTypewriterTimer\('timeout', stepTimer, target, 'aiMaxTypeTimer'\);/,
+    'AI点睛逐字动效 step timeout 必须逐步登记并在完成后释放'
+  );
+  assert.match(
+    source,
+    /const isAiMaxTypewriterHidden = \(\) => document\.visibilityState === 'hidden';[\s\S]*const shouldFinishImmediately = \(\) => isAiMaxTypewriterHidden\(\) \|\| target\.isConnected === false;[\s\S]*if \(shouldFinishImmediately\(\)\) \{[\s\S]*finishAiMaxTypewriterTarget\(target, fullText\);/,
+    'AI点睛逐字动效必须在隐藏页或目标断开时直接完成文本并释放 timer'
   );
   assert.match(
     source,
@@ -451,6 +486,36 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
     source,
     /data-ai-max-demand-next="1"[\s\S]*data-ai-max-demand-list="1"[\s\S]*(scrollBy|scrollTo)/,
     'AI点睛需求卡片右侧箭头缺少滚动切换逻辑'
+  );
+  assert.match(
+    source,
+    /if \(wizardState\.aiMaxDemandPopoverBindTimer\) \{[\s\S]*window\.clearTimeout\(wizardState\.aiMaxDemandPopoverBindTimer\);[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*if \(wizardState\.aiMaxDemandPopoverListenersBound\) \{[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*document\.removeEventListener\('keydown', wizardState\.aiMaxDemandPopoverEscClose, true\);[\s\S]*wizardState\.aiMaxDemandPopoverListenersBound = false;/,
+    'AI点睛需求弹层关闭时必须取消延迟监听绑定并释放已绑定 document 监听'
+  );
+  assert.match(
+    source,
+    /wizardState\.aiMaxDemandPopoverBindTimer = window\.setTimeout\(\(\) => \{[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*document\.addEventListener\('keydown', wizardState\.aiMaxDemandPopoverEscClose, true\);[\s\S]*wizardState\.aiMaxDemandPopoverListenersBound = true;/,
+    'AI点睛需求弹层延迟绑定 timer 必须保存句柄并标记监听绑定状态'
+  );
+  assert.match(
+    source,
+    /const unbindAiMaxDetailDelegatedHandlers = \(\) => \{[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDetailToggleClickHandler\);[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxStepToggleClickHandler\);[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDemandNextClickHandler\);[\s\S]*wizardState\.aiMaxDetailDelegatedBound = false;/,
+    'AI点睛详情区 document click 委托关闭向导时必须释放'
+  );
+  assert.match(
+    source,
+    /wizardState\.aiMaxDetailToggleClickHandler = \(event\) => \{[\s\S]*wizardState\.aiMaxStepToggleClickHandler = \(event\) => \{[\s\S]*wizardState\.aiMaxDemandNextClickHandler = \(event\) => \{[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxDetailToggleClickHandler\);[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxStepToggleClickHandler\);[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxDemandNextClickHandler\);/,
+    'AI点睛详情区 document click 委托必须使用可解绑的命名 handler'
+  );
+  assert.match(
+    source,
+    /wizardState\.cleanupHandlers = Array\.isArray\(wizardState\.cleanupHandlers\)[\s\S]*wizardState\.cleanupHandlers\.push\(unbindAiMaxDetailDelegatedHandlers\);[\s\S]*wizardState\.aiMaxDetailDelegatedCleanupRegistered = true;/,
+    'AI点睛详情区 document click 委托解绑函数必须注册进向导 cleanupHandlers'
+  );
+  assert.doesNotMatch(
+    source,
+    /aiMaxDetailDelegatedBound[\s\S]{0,180}document\.addEventListener\('click', \(event\) => \{/,
+    'AI点睛详情区不能继续注册匿名 document click 委托'
   );
   assert.match(
     source,

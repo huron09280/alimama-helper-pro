@@ -93,7 +93,8 @@
             nativeAdzoneList: null,
             nativeAdzoneTs: 0,
             nativeAdzoneBizCode: '',
-            nativeAdzonePending: null
+            nativeAdzonePending: null,
+            nativeRuntimeCacheCleanupTimer: 0
         };
         const componentConfigCache = {
             data: null,
@@ -124,9 +125,17 @@
             detailVisible: false,
             workbenchPage: 'home',
             previewLogLines: [],
+            openTaskTimers: new Set(),
+            openTaskFrames: new Set(),
             sceneSyncTimer: 0,
             sceneSyncInFlight: false,
             sceneSyncPendingToken: '',
+            sceneSyncVisibilityHandler: null,
+            autoKeywordLoadTimer: 0,
+            autoKeywordLoadKey: '',
+            autoKeywordLoadToken: '',
+            autoKeywordLoadVisibilityHandler: null,
+            autoKeywordLoadMap: {},
             repairRunToken: 0,
             repairRunning: false,
             repairStopRequested: false,
@@ -136,6 +145,12 @@
             keywordMetricMap: {},
             keywordAiMaxGenerationMap: {},
             crowdCustomDefaultItemPending: null,
+            styleReadyPromise: null,
+            styleCleanupHandlers: [],
+            closeItemPicker: null,
+            closeScenePopup: null,
+            closeKeywordAiMaxDemandPopover: null,
+            cleanupHandlers: [],
             els: {}
         };
 
@@ -146,6 +161,52 @@
         };
 
         const isPlainObject = (value) => Object.prototype.toString.call(value) === '[object Object]';
+        const isWizardDocumentHidden = () => {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        };
+        const clearWizardVisibilityResumeHandler = (handlerKey = '') => {
+            const normalizedKey = String(handlerKey || '').trim();
+            if (!normalizedKey) return;
+            const handler = wizardState[normalizedKey];
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            wizardState[normalizedKey] = null;
+        };
+        const scheduleWizardVisibilityResume = (handlerKey = '', callback = null) => {
+            const normalizedKey = String(handlerKey || '').trim();
+            if (!normalizedKey || typeof callback !== 'function') return;
+            clearWizardVisibilityResumeHandler(normalizedKey);
+            const handler = () => {
+                if (isWizardDocumentHidden()) return;
+                clearWizardVisibilityResumeHandler(normalizedKey);
+                callback();
+            };
+            wizardState[normalizedKey] = handler;
+            document.addEventListener('visibilitychange', handler);
+        };
+        const clearWizardAutoKeywordLoadTimer = (options = {}) => {
+            if (wizardState.autoKeywordLoadTimer) {
+                clearTimeout(wizardState.autoKeywordLoadTimer);
+                wizardState.autoKeywordLoadTimer = 0;
+            }
+            clearWizardVisibilityResumeHandler('autoKeywordLoadVisibilityHandler');
+            const pendingKey = String(wizardState.autoKeywordLoadKey || '').trim();
+            wizardState.autoKeywordLoadKey = '';
+            wizardState.autoKeywordLoadToken = '';
+            if (options.clearPendingMap === false) return;
+            if (
+                pendingKey
+                && isPlainObject(wizardState.autoKeywordLoadMap)
+                && wizardState.autoKeywordLoadMap[pendingKey] === 'pending'
+            ) {
+                delete wizardState.autoKeywordLoadMap[pendingKey];
+            }
+        };
         const deepClone = (value) => value === undefined ? value : JSON.parse(JSON.stringify(value));
         const toNumber = (value, fallback = 0) => {
             const num = Number(value);

@@ -1,5 +1,59 @@
     // ==================== API 请求模块 ====================
     const API = {
+        REQUEST_RATE_LIMIT_RPM: 10,
+        REQUEST_RATE_LIMIT_INTERVAL_MS: 6000,
+        rateLimitNextAt: 0,
+        rateLimitQueue: Promise.resolve(),
+
+        createAbortError: () => {
+            const err = new Error('请求已取消');
+            err.name = 'AbortError';
+            return err;
+        },
+
+        delayWithAbort: (ms, signal) => new Promise((resolve, reject) => {
+            if (signal?.aborted) {
+                reject(API.createAbortError());
+                return;
+            }
+            let timerId = null;
+            const cleanup = () => {
+                if (timerId !== null) {
+                    clearTimeout(timerId);
+                    timerId = null;
+                }
+                if (signal && typeof signal.removeEventListener === 'function') {
+                    signal.removeEventListener('abort', handleAbort);
+                }
+            };
+            const handleAbort = () => {
+                cleanup();
+                reject(API.createAbortError());
+            };
+            timerId = setTimeout(() => {
+                cleanup();
+                resolve();
+            }, Math.max(0, Number(ms) || 0));
+            if (signal && typeof signal.addEventListener === 'function') {
+                signal.addEventListener('abort', handleAbort, { once: true });
+            }
+        }),
+
+        waitForRateLimitSlot: async (signal) => {
+            const slot = API.rateLimitQueue.catch(() => null).then(async () => {
+                if (signal?.aborted) throw API.createAbortError();
+                const waitMs = Math.max(0, API.rateLimitNextAt - Date.now());
+                if (waitMs > 0) {
+                    Logger.info(`⏱️ 护航请求限速中，${Math.ceil(waitMs / 1000)}秒后继续（10rpm）`);
+                    await API.delayWithAbort(waitMs, signal);
+                }
+                if (signal?.aborted) throw API.createAbortError();
+                API.rateLimitNextAt = Date.now() + API.REQUEST_RATE_LIMIT_INTERVAL_MS;
+            });
+            API.rateLimitQueue = slot.catch(() => null);
+            await slot;
+        },
+
         /**
          * 单次请求（使用原生 fetch API）
          * NOTE: 由于 GM_xmlhttpRequest 在某些油猴管理器中存在跨域问题，
@@ -153,6 +207,7 @@
 
             for (let attempt = 1; attempt <= totalAttempts; attempt++) {
                 try {
+                    await API.waitForRateLimitSlot(signal);
                     const result = await API._singleRequest(url, data, timeout, signal);
                     Logger.info(`✓ 请求成功 (第${attempt}次)`);
                     return result;

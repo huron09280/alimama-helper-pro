@@ -1,3 +1,2298 @@
+# TODO - 2026-06-04 DMP 商品洞察页复用人群对比看板
+
+## 需求规格
+- 目标：在 `https://dmp.taobao.com/index_new.html#!/items/item-insight?...analysisTab=crowd-insight&itemId=757440599385&cycle=30` 页面“切换分析单品”后新增一个插件按钮，点击弹出与现有“人群对比看板”同框架、同交互的窗口，用当前 DMP 商品洞察页“自定义画像标签”弹窗中的全部画像标签作为每一行类别，并按可抓取统计周期展示不同时间人群差异。
+- 页面事实源：优先读取目标 DMP 页面的真实 DOM、路由参数、页面请求和响应；现有万能查数人群对比看板只复用 UI 框架、图表展示、周期/人群显隐、tooltip 和状态交互，不把 one.alimama 计划查数接口的模拟或缓存结果当成当前页面数据。
+- 范围：新增 `dmp.taobao.com` 最小注入边界；在商品洞察人群页插入只读入口；抽取页面“添加人群属性”可选人群属性和统计周期；把可得数据适配到人群看板网格展示。暂不改创建/复制/预算/投放/导出/护航/万能查数 iframe 等无关链路。
+- 根因/结构判断：当前插件未覆盖 `dmp.taobao.com`，现有人群看板绑定计划 ID 与 AI 报表接口；本任务应抽出可复用渲染/数据适配层或在现有 MagicReport 内增加 DMP item-insight 入口，避免复制第二套图表 UI。
+- 安全边界：浏览器验证只做页面读取、打开弹窗、筛选/周期类只读操作；不点击真实创建、投放、提交、删除、扣费、导出或下载入口。若目标页面登录/权限/风控阻塞，必须记录 Chrome MCP 阻塞原因，不能用非 MCP 结果冒充验收。
+- UI 规范：按 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md` 落地；按钮复用共享 `renderAmIcon()` 和 `am-` 前缀类名，弹窗复用人群对比看板浅玻璃工作台与数据网格。
+- 成功标准：源码和构建产物同步；目标测试/语法/构建检查通过；Chrome DevTools MCP 在真实 DMP 页面证明按钮位于“切换分析单品”后、弹窗可打开、分析人群/对比人群可以用“先渠道、再行为”的级联下拉切换、识别到自定义标签弹窗中的全部画像标签和周期、图表使用当前页面数据渲染，且无新增插件错误或危险写请求。
+
+## 执行计划（可核对）
+- [x] 用 Chrome MCP 只读打开目标 DMP 页面，采集“切换分析单品”“添加人群属性”、统计周期、页面请求/响应和当前可用数据结构。
+- [x] 定位现有人群对比看板的 UI/数据构造边界，确定最小复用方案和影响文件。
+- [x] 将 userscript/extension 注入边界最小扩展到 `dmp.taobao.com`，并补静态测试。
+- [x] 实现 DMP 商品洞察页入口按钮、弹窗打开/关闭、运行态刷新和页面路由守卫。
+- [x] 实现 DMP“自定义画像标签”/统计周期发现与当前页面数据适配，复用现有人群看板展示方式。
+- [x] 将 DMP 分析人群/对比人群选择保留为原人群显隐按钮形态，在按钮内提供“渠道 -> 行为”定制下拉，并在切换后重拉真实页面数据。
+- [x] 将 DMP 行维度从已勾选自定义标签扩展为自定义标签弹窗中的全部画像标签。
+- [x] 补充或更新静态/合同测试，覆盖注入边界、按钮插入、DMP 数据适配和看板渲染复用。
+- [x] 运行目标测试、语法检查、构建同步/检查、空白检查和必要回归。
+- [x] 通过 Chrome DevTools MCP 在真实 DMP 页面完成最终验收并记录 DOM、网络、控制台与截图证据。
+- [x] 做 diff 自审，补充验证记录与结果复盘。
+- [x] 修正 DMP 入口按钮高度和圆角，使其与原生“切换分析单品”按钮对齐。
+- [x] 修正 DMP 分析/对比人群下拉浮层锚点，使下位弹窗左边对齐整颗“分析人群/对比人群”按钮。
+- [x] 修正 DMP 弹窗头部标题、商品上下文信息条和矩阵 0% 可见标签显示。
+- [x] 更新静态测试与构建产物，并重新运行目标测试、语法/构建检查、空白检查。
+- [x] 通过 Chrome DevTools MCP 在真实 DMP 页面复验按钮高度/圆角、下拉左对齐、商品 ID 左对齐、0% 隐藏和标题文案。
+- [x] 核查 DMP `特征兴趣` 行真实接口占比语义，避免把多选覆盖率误读为互斥 100% 分布。
+- [x] 将 DMP 商品信息条改为商品名右侧紧跟 `商品ID：*` 的单行紧凑布局。
+- [x] 将 DMP 对比人群默认值改为 `全部渠道-成交`，并保护用户手动选择不被默认值覆盖。
+- [x] 优化柱状图 hover tooltip 的多指标文字布局，避免长人群名称和数值列叠加。
+- [x] 更新静态测试、构建产物，并用 Chrome DevTools MCP 复验默认对比人群、特征兴趣提示、商品 ID 布局和 tooltip 重叠。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`：人群看板取数缺陷不得用模拟缓存验收；用户指定 Chrome MCP 时，浏览器验收只能使用 `mcp__chrome_devtools.*`。
+- 已读取 UI/图标规范：本轮入口按钮和弹窗必须复用共享图标、`am-` 类名、浅玻璃高密度数据看板风格，不能新增独立主题或 emoji 图标。
+- 初步定位：现有“人群对比看板”集中在 `src/main-assistant/magic-report.js`；当前 userscript 和 extension 尚未覆盖 `dmp.taobao.com`，需要最小扩展注入边界后才能在目标页落按钮。
+- 工作区说明：本轮开始前已有 `src/optimizer/keyword-plan-api/intro.js`、`src/optimizer/keyword-plan-api/request-builder-preview.js`、`tests/keyword-wizard-entry-regression.test.mjs` 脏改；本任务不回退、不覆盖、不格式化这些无关改动。
+- Chrome MCP 采集结论：目标页当前无插件注入；“切换分析单品”是可定位按钮；当前分析人群为 `全部渠道-商详浏览`、对比人群为 `关键词推广-曝光`，当前行为统计周期为 `1天`，覆盖规模分别为 `2,494` 与 `18,620`。
+- DMP 可选人群属性：`api_2/goods/insight/portrait/channel?type=3` 返回渠道-行为组合，包含全部渠道、关键词推广、精准人群推广、货品运营、店铺运营、内容营销、消费者运营、活动场景、全站推广、多目标直投；行为包括曝光、点击、收藏加购、成交，内容营销额外含观看。
+- DMP 周期结论：单品人群画像 `INSIGHT_PERIODS` 为 `1天/7天/30天`；下方聚落洞察独立统计周期为 `7天/30天`。本轮看板适配单品人群画像的 `1/7/30` 周期。
+- 取数方案：优先复用当前页 Magix VFrame 官方方法，按 viewPath 定位 `crowd/insight` 与 `perspective-tags`，调用 `getCrowd()` 与 `fetch([{ name: 'api_analysis_tag_$id_post', isJson: true }])` 拉取 1/7/30 天真实分析/对比画像分布；不使用模拟 `crowdMatrixResultMap`。
+- 用户修正：看板每一行类别必须来自页面“自定义画像标签”里可分析的人群标签；首屏可见画像维度只能作为页面状态参考，不能替代自定义画像标签集合。
+- 实现摘要：已扩展 userscript、extension content、manifest web_accessible 和 background sender 白名单到 `dmp.taobao.com`；DMP 路由只启动 `MagicReport.initDmpCrowdMatrixEntry()`，避免 one.alimama 计划/投放模块在 DMP 页面启动。
+- 看板适配摘要：DMP 弹窗复用现有人群对比看板 DOM/CSS/tooltip/图例/状态/网格；打开时临时将周期切为 `1/7/30`、指标切为 `analysis/compare`、行维度切为 `perspective-tags.config[customTagKey]` 的自定义画像标签，关闭时还原原看板配置。
+- 数据适配摘要：DMP 数据通过页面官方 `window.app.vframe.constructor.all()` 定位 VFrame，使用 `getCrowd()` 取当前分析/对比人群对象，再用 `api_analysis_tag_$id_post` 查询每个自定义画像标签分布；`rate` 作为图表百分比，`optionNum` 作为 tooltip 原始值。
+- 测试摘要：已更新 `tests/extension-static-build.test.mjs` 和 `tests/magic-report-crowd-matrix.test.mjs`，覆盖 DMP 注入、button 标记、官方 VFrame 取数、自定义画像标签行维度、1/7/30 周期和 DMP ratio 透传。
+- Chrome MCP 中间失败定位：DMP 弹窗首次可打开但加载失败；页面 Network 显示 `api_2/analysis/tag/213510` 请求异常。只读比对官方成功请求后确认两个差异：Magix registry 真实 View 位于 VFrame 的 `$v` 字段；自定义画像标签 POST 需要 body 为 `{ version:"2.0", selectTagOptionSet, needUnknown:false, ext:{} }`，不能直接把 `getCrowd()` 返回对象作为根 body，也不能把模型名插值成 `api_analysis_tag_213510_post`。
+- 修复摘要：`queryDmpCrowdTagDistribution()` 保留官方模型名 `api_analysis_tag_$id_post` 与 `pathParams:[tagId]`，分析/对比人群分别用 `buildDmpTagAnalysisParams()` 包装 `getCrowd()` 返回的画像条件后提交；静态测试同步锁定 `$v` 真实 View 和官方 body 形状。
+- 数据单位修正：Chrome MCP 成功加载后发现 DMP 接口 `rate` 为小数占比（如 `0.329` 表示 `32.9%`），而矩阵内部格式化函数使用百分比单位；已将 DMP `rate <= 1` 的值乘以 100 后进入矩阵，避免真实占比展示低 100 倍。
+- 用户新增修正：分析人群和对比人群需要改成更方便的级联下拉，先选渠道再选行为；行维度需要点击/读取“自定义标签”弹窗，把弹窗中的全部画像标签补充到看板行类别，不能只展示已勾选标签。
+- 用户二次修正：分析/对比人群不能被原生 `select` 替换，必须保留看板原来的隐藏/显示按钮形态，在按钮内部加定制下拉选择。
+- 用户三次修正：DMP 看板顶部“标签全集”可以全部删掉；人群下拉窗口当前没有置顶，会被其它层挡住无法选择；`月均消费频次` 行空白且数据误落在 `月均消费金额`，必须按真实标签 ID 修复频次/金额映射。
+- 最终实现摘要：DMP 分析/对比人群仍渲染为 `am-crowd-matrix-legend-toggle am-dmp-crowd-metric-button` 系列按钮，主按钮点击继续控制显隐，按钮内 `chevron-down` 触发区打开“渠道 -> 行为”双列定制下拉；选择行为后更新当前 DMP 运行态人群并重拉 `portrait/crowd` 与 `analysis/tag/*` 数据。
+- 自定义标签修正摘要：DMP 行维度优先读取官方自定义画像标签运行态/分类标签集合，最终真实页展示 15 个标签；新增 DMP 专用 `normalizeDmpTagName()`，避免旧人群维度归一化把 `月均消费频次` 误映射成 `月均消费金额`。
+- 追加修正计划：移除 DMP 模式下的“标签全集”芯片区；将 DMP 人群级联下拉改为 `document.body` 顶层浮层并跟随按钮定位；修正 `月均消费频次/月均消费金额` 标签 ID 与数据解析，补测试后重新构建并用 Chrome MCP 做命中/选择/数据验收。
+- 用户四次/五次/六次修正：DMP 下位弹窗要左对齐整颗“分析人群/对比人群”按钮，而不是内部箭头；`商品ID：*` 要靠左对齐商品名称并去掉中间过长空白；可见数据为 `0%` 时不显示 `0%`；DMP 模式标题改为“达摩盘单品分析”；新增入口“人群对比看板”按钮高度和圆角要对齐原生“切换分析单品”按钮。
+- 本轮修正计划：入口按钮高度和圆角从原生可交互控件读取并同步；DMP 下拉 portal 定位改用 `.am-dmp-crowd-metric-button` 整体 rect；DMP 商品信息条改成左侧紧凑上下文块；柱状占比标签仅在 ratio 大于 0 时渲染文本；标题文案按 DMP 模式条件切换。
+- 用户七次/八次修正：`特征兴趣` 行占比合计看起来不像 100%，需要核查是否为数据/计算问题；`商品ID：*` 需要接在商品名称右边，不能另起一行或留大空白。
+- 特征兴趣初步取证：Chrome MCP Network 中 `POST /api_2/analysis/tag/125020` 返回 `tagType:"CHECKBOX"`，38 个兴趣项 `rate` 合计约 `747.06%`，如 `吃货 60.63%`、`家庭主妇 51.20%`、`数码达人 47.87%`；该标签为多选兴趣覆盖率，同一用户可命中多个兴趣，合计不应强制归一到 100%。本轮修正应保留 DMP 原始 `rate`，并在行头提示“多选”。
+- 用户九次修正：DMP 看板对比人群默认必须为 `全部渠道-成交`；鼠标移动到柱子后的 tooltip 文案有叠加，需要优化。
+- 默认对比人群修正摘要：新增 `findDmpDefaultCompareProperty()` 与 `applyDmpDefaultCompareProperty()`，在 `api_goods_insight_portrait_channel_get` 可选渠道/行为全集加载后匹配 `全部渠道 + 成交` 并写入 `channelBehaviorListCompare`；用户通过下拉手动选择对比人群时设置 `dmpComparePropertyManuallySelected`，后续刷新不再覆盖手动选择。
+- Tooltip 修正摘要：柱状 hover 提示改为动态 `inline-grid` 网格列，使用 `minmax(..., max-content)`、`min-width:0`、长人群名称换行、列头顶部对齐和等宽数字，避免“分析/对比人群”长标题与占比/数值列互相压住。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- extension 入口语法：`node --check src/entries/extension-content.js && node --check src/entries/extension-background.js` 通过。
+- 说明：`src/main-assistant/main.js` 是拼接分段源码，直接 `node --check` 会因文件末尾 IIFE 闭合报 `Unexpected token '}'`，不作为独立语法证据；后续以项目 `check:syntax` 和构建产物检查验证整体语法。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs && node --check tests/extension-static-build.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、packages 和 extension 产物。
+- 目标测试：`node --test tests/extension-static-build.test.mjs tests/magic-report-crowd-matrix.test.mjs` 通过，78 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 扩展刷新：只使用 `mcp__chrome_devtools.*`，在 `chrome://extensions/` 重载 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk` 后，切回 `https://dmp.taobao.com/index_new.html?...#!/items/item-insight?...analysisTab=crowd-insight&itemId=757440599385&cycle=30` 并刷新目标页；运行态日志显示 `阿里助手 Pro v7.05 已启动：DMP 单品人群看板入口`。
+- Chrome MCP 入口验收：真实页面按钮顺序为 `标杆商品池管理 -> 切换分析单品 -> 人群对比看板`，证据文件 `tasks/dmp-final-dom-validation.json` 中 `entryPlacement.appearsAfterSwitch:true`；点击“人群对比看板”后弹窗 class 为 `is-dmp-crowd-mode`。
+- Chrome MCP 按钮/下拉验收：分析/对比人群均为 `am-crowd-matrix-legend-toggle am-dmp-crowd-metric-button`，保留 `data-crowd-metric`、`aria-pressed`、`aria-haspopup=listbox` 和按钮内 `data-dmp-crowd-dropdown-trigger`，无 `.am-dmp-crowd-selector-select` 或原生 `select`。主按钮点击只切换对比人群显隐；按钮内箭头触发区打开定制下拉。
+- Chrome MCP 级联选择验收：打开对比人群按钮内下拉后，渠道列包含 `全部渠道、关键词推广、精准人群推广、货品运营、店铺运营、内容营销、消费者运营、活动场景、全站推广、多目标直投`；选择 `全部渠道` 后行为列为 `商详浏览、收藏加购、成交`；再选择 `收藏加购` 后按钮文案更新为 `对比人群：全部渠道-收藏加购`，下拉关闭并重绘数据。
+- Chrome MCP 置顶/命中验收：DMP 人群下拉现在挂在 `document.body` 顶层，class 为 `am-dmp-crowd-dropdown-portal is-open`，computed style 为 `position:fixed`、`z-index:2147483605`、`pointer-events:auto`；`document.elementFromPoint()` 在 `全部渠道` 和 `收藏加购` 选项中心均命中 `.am-dmp-crowd-dropdown-option`，随后使用 Chrome MCP `click` 实际点选 `全部渠道 -> 收藏加购` 成功。
+- Chrome MCP 数据验收：真实看板周期为 `1天/7天/30天`，行维度 15 个，包含 `城市等级、消费能力等级、人生阶段、月均消费频次、月均消费金额、淘气值活跃度、用户职业、特征兴趣、用户年龄、用户性别、大快消策略人群（新）、消费电子策略人群、大快消策略人群（老）、天猫国际人生阶段、大服饰策略人群`。切换后 tooltip 中 `对比人群：全部渠道-收藏加购` 命中 417 条，其中 274 条非 0 数据样本，如 `12.89%（173）`、`30.92%（415）`。
+- Chrome MCP 标签/频次修正验收：证据文件 `tasks/dmp-final-dom-validation.json` 显示 `tagFullSetTextFound:false`，顶部“标签全集”装饰区已删除；`月均消费频次` 行存在并含 `低于5次、5至10次、10至15次、15至20次、20次以上`，非 0 数据如 `20次以上 39.57%/45.42%`，且 `hasAmountLabels:false`；`月均消费金额` 行存在并含 `低于400元、消费400至1000元、消费1000至3000元、消费3000至6000元、消费6000元以上`，非 0 数据如 `消费1000至3000元 29.21%/32.8%`，且 `hasFrequencyLabels:false`。
+- Chrome MCP 最新默认值/tooltip 复验：刷新 DMP 页面后重新点击 `人群对比看板`，加载完成后 `compareText:"对比人群：全部渠道-成交"`，`analysisText:"分析人群：全部渠道-商详浏览"`，状态为 `DMP 人群对比看板已加载完成（3列周期 × 15行自定义画像标签）`；商品名与 `商品ID：757440599385` 单行相邻，真实间距 `productGap:6`，CSS 变量 `--am-dmp-item-id-width:117px`。
+- Chrome MCP 最新 tooltip 重叠审计：真实 hover 触发柱状 tooltip 后，tooltip 文本包含 `对比人群：全部渠道-成交` 与 `分析人群：全部渠道-商详浏览` 多指标列；读取 tooltip 内 25 个文本单元 `getBoundingClientRect()` 后 `overlapCount:0`，可见 `0%` 标签数量 `visibleZeroTextCount:0`，危险写请求过滤 `dangerousRequestCount:0`。
+- Chrome MCP 网络/控制台：Network 面板可见 `GET /api_2/goods/insight/portrait/channel type=3`、`GET /api_2/category/tags tagGroupIds=6851`、`POST /api_2/goods/insight/portrait/crowd` 和多组 `POST /api_2/analysis/tag/*` 返回 200；控制台只见页面既有 WebSocket 失败、`ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated/form-field issue 与插件启动日志，未见新增插件运行失败；危险写请求关键词过滤命中 0。
+
+## 结果复盘
+- DMP 商品洞察页已复用人群对比看板框架，并把数据事实源切到当前页面官方运行态：渠道/行为、人群覆盖、画像标签分布和周期均来自 DMP 页面接口/VFrame，而不是 one.alimama 万能查数缓存或模拟数据。
+- 用户多轮修正均已收口：行类别来自“自定义画像标签”全集；分析/对比人群仍是原系列显隐按钮，按钮内附着定制级联下拉，不再使用原生 select；顶部“标签全集”展示已删；下拉已改成顶层 portal 并通过命中测试；`月均消费频次` 与 `月均消费金额` 数据已按真实标签拆开；`特征兴趣` 以多选覆盖率展示；对比人群默认 `全部渠道-成交`；商品 ID 紧跟商品名右侧；柱状 tooltip 通过真实矩形重叠审计。
+- 验收结论：本地目标测试、语法、构建检查、空白检查和 Chrome DevTools MCP 真实 DMP 页面验收均通过；未触发创建、投放、提交、删除、导出、下载或其它业务写入口。
+
+# TODO - 2026-06-04 人群对比看板过去7天省份城市数据缺失修复
+
+## 需求规格
+- 目标：修复人群对比看板在“过去7天”时间范围下省份与城市维度数据缺失的问题，并在浏览器真实页面验证省份、城市数据正常展示。
+- 根因判断：过去 7 天分支为保留首屏速度，会先返回 base 首查结果；省份/城市额外维度虽然在后台继续补齐，但旧代码没有把补齐后的 `groupMap/rawMeta` 回写当前结果对象，也没有校验当前看板后重新合并 `crowdMatrixResultMap` 与重绘，导致 7 天列最终停留在缺省份/城市的 base 结果。
+- 范围：仅覆盖人群对比看板的过去7天省份/城市取数、解析和展示缺失；不改创建/复制/预算/投放/导出/护航执行/授权/服务器并发限制等无关链路。
+- 热修 vs 结构性修复取舍：先找到省份/城市缺失的单一事实源和不变量，再在该事实源修复；若问题来自参数或响应合同漂移，统一修正构造/解析函数并补测试，不新增平行取数实现或静默 fallback。
+- 成功标准：源码修复后，目标测试覆盖过去7天省份与城市维度不缺失；相关语法/测试/构建检查通过；Chrome DevTools MCP 在真实 `one.alimama.com` 页面完成只读或安全交互验收，证明过去7天省份与城市数据可见且无新增控制台/网络异常。
+- 安全边界：浏览器验证不点击会真实创建、投放、提交、删除或扣费的入口；如需打开人群对比看板，只做查询和页面筛选类只读操作。
+
+## 执行计划（可核对）
+- [x] 定位人群对比看板源码、测试和相关 API 参数/响应解析链路。
+- [x] 复现或用静态/单测证据确认过去7天省份与城市缺失的根因。
+- [x] 实现最小结构性修复，优先修正事实源而非 UI 兜底。
+- [x] 补充或更新目标测试，覆盖过去7天省份与城市维度数据。
+- [x] 运行目标测试、相关回归、语法/构建检查和空白检查。
+- [x] 使用 Chrome DevTools MCP 在真实页面验证过去7天省份/城市显示正常，并记录控制台/网络结果。
+- [x] 做 diff 自审，写入验证记录与结果复盘。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`：本次浏览器验收必须使用 `mcp__chrome_devtools.*`，真实页面验证不能用 Browser/CDP/shell 结果替代；跨层弹层/真实页面类问题要验证可操作和可见状态，不只看 DOM 结构。
+- 计划校验：本次只修复人群对比看板过去7天省份/城市缺失，不扩大到其它时间范围、其它维度或写操作链路；若定位发现共享解析函数影响其它维度，会同步补覆盖测试并记录风险。
+- 定位摘要：`queryCrowdInsight()` 的 7 天特殊分支会立即返回 base 结果，后台 `ensureCrowdInsightExtraScopeResults()` 完成后旧实现只记录失败日志，没有触发当前看板 resultMap/dataset 更新；其它周期会 await 省份/城市补齐，所以缺失集中在过去 7 天。
+- 实现摘要：新增 `buildCrowdInsightPeriodResult()` 统一构造周期结果，新增 `applyCrowdInsightBackgroundScopeResult()` 用 `campaignId/runId/resultKey` 守卫后台补齐结果，只允许更新当前看板已有结果项，并在补齐后重建 dataset、写回 `crowdMatrixDataset`、重绘 7 天列。
+- 7 天链路摘要：7 天仍先返回基础结果，不阻塞首屏；后台省份/城市完成后回写同一个 `sevenDayResult.groupMap/rawMeta`，再安全触发当前看板重绘。非 7 天周期仍等待省份/城市补齐后返回完整 8 维度。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 增加对 `buildCrowdInsightPeriodResult()`、`applyCrowdInsightBackgroundScopeResult()`、7 天后台回写和当前看板重绘守卫的静态断言；按用户“不要模拟缓存”修正，删除模拟缓存验收思路。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 目标测试：`node --test tests/magic-report-crowd-matrix.test.mjs` 通过，66 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，54 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 扩展刷新：只使用 `mcp__chrome_devtools.*`，在 `chrome://extensions/` 点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload`，切回 `https://one.alimama.com/index.html#!/manage/search` 并刷新；运行态为 extension、版本 `7.05`、授权 `authorized:true`、无风险验证。
+- Chrome MCP 真实看板验收：打开万能查数的人群对比看板，真实计划上下文为 `计划名：E7pro_自定义`、`计划ID：69514602419`、商品 `757440599385`，状态显示 `人群对比看板已加载完成（4列周期 × 8行维度）`。
+- Chrome MCP DOM 证据：真实 DOM 中 `#am-crowd-matrix-grid` 共 45 个单元格，周期列为过去3天/过去7天/过去30天/过去90天，8 行维度包含省份和城市；省份 × 过去7天单元格非空态，`labelCount:27`，前序标签和值为 `广东 19.41%`、`浙江 12.62%`、`江苏 9.96%`、`山东 6.55%`、`上海 5.65%`、`福建 5.12%`；城市 × 过去7天单元格非空态，`labelCount:90`，前序标签和值为 `上海 5.73%`、`广州 4.83%`、`深圳 4.28%`、`成都 3.65%`、`重庆 3.41%`、`杭州 3.39%`。
+- Chrome MCP 网络证据：DevTools Network 真实请求中可见 `POST https://ai.alimama.com/ai/report/dataQuery.json` 200，以及多条 `POST https://ai.alimama.com/ai/report/panelDataQuery.json` 200；未使用模拟缓存、mock API 或构造的 `crowdMatrixResultMap` 作为验收依据。
+- Chrome MCP 控制台/网络：控制台只见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 与 `ScriptProcessorNode` deprecated warning，未见新增插件运行失败；危险写请求关键词 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 过滤命中 0。
+- 截图证据：`tasks/crowd-matrix-7day-real-browser.png` 保存首屏看板；`tasks/crowd-matrix-7day-province-city.png` 保存滚动到省份/城市行后的真实浏览器截图，能看到过去7天省份/城市柱状图。
+- Diff 自审：`src/main-assistant/magic-report.js` 只新增周期结果构造和后台省份/城市补齐回写重绘守卫；`tests/magic-report-crowd-matrix.test.mjs` 只补对应断言；未改创建、复制、预算、投放、导出、护航、授权或服务端并发链路。工作区另有本任务开始前已存在的 `src/optimizer/keyword-plan-api/*` 与 `tests/keyword-wizard-entry-regression.test.mjs` 等无关脏改，未回退。
+
+## 结果复盘
+- 本次修复把“过去 7 天首屏快速返回”和“省份/城市后台补齐”之间缺失的状态回写闭环补上：后台结果只有在 run、计划 ID、结果 key 都仍匹配当前看板时才写回并重绘，避免串计划或覆盖新一轮请求。
+- 取舍结论：没有在 UI 层补假数据，也没有模拟缓存；保留 7 天首屏快速返回策略，问题在真实数据源补齐后更新当前事实源解决。非 7 天周期保持原有等待完整维度的语义。
+- 验收结论：目标测试、语法、构建检查、空白检查和 Chrome DevTools MCP 真实页面验收均通过；真实 one.alimama 页面上过去 7 天省份与城市数据已正常显示，未触发任何业务写入口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十二子项
+
+## 需求规格
+- 目标：在万能查数 iframe 清理 retry 收口后，继续优化组建计划向导中两个短延迟请求 timer，避免页面隐藏时仍触发自动推荐关键词加载和场景创建合同同步。
+- 根因判断：`src/optimizer/keyword-plan-api/request-builder-preview.js` 的 `scheduleAutoKeywordLoad()` 和 `scheduleSceneCreateContractSync()` 已有可取消 timer 与向导关闭清理，但 timer 触发前只复核 `wizardState.visible`；当向导打开后标签页隐藏，延迟到期仍可能发起推荐词接口或场景接口捕获请求，增加后台请求与闭包持有。
+- 范围：仅覆盖自动推荐关键词 timer 与场景合同同步 timer 的隐藏页暂停、恢复可见续跑、visibility handler 生命周期和关闭/重排清理；不改推荐词请求参数、场景合同捕获参数、创建/复制/提交、批量并发、授权、护航、预算或 10rpm 服务端限速策略。
+- 热修 vs 结构性修复取舍：保留现有 token/key/pending map、延迟值、缓存命中、向导可见性校验和请求函数；新增统一 `visibilitychange` resume helper，使隐藏页不启动请求，可见后继续同一 pending 链，不新增第二套推荐词或场景同步实现。
+- 成功标准：静态测试证明 `wizardState` 登记两个 visibility handler，存在隐藏态判定、统一 visibility resume/clear helper，自动推荐关键词和场景同步在调度前与 timer 触发后都会复核隐藏态，隐藏页只登记可见恢复 callback，不发请求；关闭向导或重排 timer 时释放 timeout 与 visibility handler；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不触发推荐词或场景同步接口、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十一子项提交后工作区状态，确认本子项只处理向导短延迟请求 timer。
+- [x] 在向导状态与 helper 中加入隐藏态判定、visibility resume/clear 生命周期。
+- [x] 将自动推荐关键词 timer 改为隐藏页暂停、恢复可见后继续同一 pending 链。
+- [x] 将场景合同同步 timer 改为隐藏页暂停、恢复可见后继续同一 pending 链。
+- [x] 更新向导目标测试，锁定隐藏页不触发推荐词/场景同步请求且关闭时释放 visibility handler。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `48763e6 优化万能查数清理轮询`，工作区干净。
+- 定位结论：主面板 alert/reveal 与万能查数状态 auto-hide 都是一次性纯 UI timer，收益较小；向导自动推荐词和场景合同同步是短延迟后可能发请求的 timer，隐藏页暂停能减少后台请求，更符合 10rpm 边界。
+- 实现摘要：`wizardState` 新增 `autoKeywordLoadVisibilityHandler` 和 `sceneSyncVisibilityHandler`，并在 `intro.js` 集中提供隐藏态判定、visibility resume 调度和统一解绑 helper。
+- 自动推荐词摘要：`scheduleAutoKeywordLoad()` 保留原 token/key/pending map，隐藏页只登记可见恢复 callback，timer 触发后若页面已隐藏也暂停，恢复可见后继续同一 pending 链再复核策略与弹窗可见状态。
+- 场景同步摘要：`scheduleSceneCreateContractSync()` 保留原缓存、token、inFlight、请求 payload 和捕获参数，隐藏页不启动 `captureSceneCreateInterfaces()`，恢复可见后继续同一同步链。
+- 清理摘要：自动推荐词和场景同步的 clear helper 同时释放 timeout 与 visibility handler，向导关闭、详情隐藏或重排 timer 时不会遗留隐藏页恢复监听。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 增加 visibility helper、状态字段、clear helper 和两个调度函数的静态回归断言。
+
+## 验证记录
+- 源码片段说明：`src/optimizer/keyword-plan-api/intro.js` 与 `src/optimizer/keyword-plan-api/request-builder-preview.js` 是拼接分段源码，直接 `node --check` 会因外层 IIFE/闭包不完整分别报 `Unexpected end of input` / `Unexpected token '}'`，不作为独立语法证据；本子项以目标测试、`npm run check:syntax` 和构建产物检查验证整体语法。
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/keyword-wizard-entry-regression.test.mjs'], { timeout: 60000 }) ..."` 通过，10 项测试全绿。
+- 构建同步：`npm run build` 通过，生成产物与当前源码同步。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 版本同步修复：`node --test tests/build-output-sync.test.mjs tests/extension-static-build.test.mjs tests/keyword-wizard-entry-regression.test.mjs` 通过，26 项测试全绿；同步覆盖 `CLAUDE.md`、README、授权管理页示例、新人教程、mockup HTML、extension manifest 规范版本和展示版本。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，618 项中 616 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "autoKeywordLoadVisibilityHandler|sceneSyncVisibilityHandler|isWizardDocumentHidden|scheduleWizardVisibilityResume|scheduleAutoKeywordLoadTask|scheduleSceneSyncTask" src/optimizer/keyword-plan-api tests/keyword-wizard-entry-regression.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页 pending 调度已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后版本显示为 `7.06`；切回 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 并刷新，只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`runtime.mode:"extension"`、`runtime.version:"7.06"`、`runtime.hasResourceBaseUrl:true`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`shopId:"[present]"`、`shopName:"[present]"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`。
+- Chrome MCP 弹窗/危险请求：只读状态中 `helperPanel/magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均未可见，`dangerousResourceMatchCount:0`；未打开组建计划向导，未触发推荐词、场景合同同步、创建、复制、提交、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`；其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue、`ScriptProcessorNode` deprecated warning 和页面自身 Magix 日志，未见新增插件运行失败。fetch/XHR 清单 92 条，主要为页面初始化、报表、AI/context、消息、素材、优惠券和曝光 trace，可见请求除 `px.effirst.com` 既有隧道失败外均为 200。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 包含本子项源码/测试、`tasks/todo.md`、版本事实源、README/CLAUDE/文档示例、mockup 版本展示和构建产物；源码功能 diff 只新增向导自动推荐词/场景同步短延迟请求 timer 的隐藏页暂停、可见恢复和 visibility handler 清理，不改请求 payload、创建/复制/提交、批量并发、授权、护航、预算或 10rpm 服务端限速策略。
+
+## 结果复盘
+- 第十一轮第四十二子项结果：组建计划向导自动推荐关键词和场景合同同步从“短延迟 timer 到期后只复核向导可见状态，再可能进入推荐词/场景捕获请求链路”优化为“页面隐藏时只保留一次 visibility pending，恢复可见后继续同一 token/key/pending 链，且 timer 触发后再次复核隐藏态”。
+- 取舍结论：保留原 token/key/pending map、延迟值、缓存命中、场景同步 inFlight、请求函数和 payload；新增的统一 `scheduleWizardVisibilityResume()` 只管理同一向导状态里的恢复监听，未新增第二套推荐词或场景合同同步实现。
+- 验证结论：目标测试、构建、项目语法、构建检查、版本同步回归、全量回归、静态定位、Chrome MCP 只读验收、危险请求过滤、空白检查和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+- 版本更新结果：本轮按用户要求将 userscript/extension 展示版本升级到 `7.06`，同步 README、CLAUDE、授权管理页示例、新人教程、mockup 版本展示、manifest `version/version_name`、根 userscript、packages 和 extension bundle。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十一子项
+
+## 需求规格
+- 目标：在 extension 授权守卫店铺名回填收口后，继续优化万能查数弹窗 iframe 首屏清理 retry，避免 `iframe.onload` 后用于等待 `#universalBP_common_layout_main_content` 的 120ms retry timer 在标签页隐藏时继续唤醒并访问 iframe DOM。
+- 根因判断：`src/main-assistant/magic-report.js` 已用 `iframeCleanupRetryTimer` 在弹窗关闭时统一释放，但清理目标未出现时会最多 20 次按 120ms `setTimeout` 重试；若用户打开万能查数后切到其它标签页，隐藏页仍会保留短周期 timer 闭包和 iframe 文档引用。
+- 范围：仅覆盖万能查数 iframe 清理 retry 的隐藏页暂停、恢复可见继续、timer/visibility listener 统一清理；不改 iframe URL、快捷话术提交、原生查数、AI 报表请求、人群看板请求并发、创建/复制/预算/护航或 10rpm 服务端边界。
+- 热修 vs 结构性修复取舍：保留既有 20 次、120ms、找到目标后清理再显示、失败后显示 iframe 的语义；把 retry 调度收敛到可取消 helper，并用 `visibilitychange` 只在隐藏 pending 时绑定一次，不新增第二套 iframe 清理逻辑。
+- 成功标准：静态测试证明存在 `iframeCleanupVisibilityHandler`、隐藏态判定、清理 retry timer helper、visibility handler 清理 helper、隐藏页不排 120ms retry timer、恢复可见后继续同一 `tryCleanup(retries)`、弹窗释放时同时清理 timer 和 visibility listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开万能查数弹窗、不点击快捷话术、不触发原生查数或 AI 报表请求，不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十子项提交后工作区状态，确认本子项只处理 MagicReport iframe 清理 retry 生命周期。
+- [x] 为 MagicReport 增加 iframe cleanup visibility handler、隐藏态判定和统一清理 helper。
+- [x] 将 iframe 清理 retry 调度改为隐藏页暂停、恢复可见继续同一清理链，弹窗释放时解绑 listener。
+- [x] 更新 MagicReport 目标测试，锁定 timer/visibility 生命周期和隐藏页不继续排 retry timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `73ad034 优化店铺名回填轮询`，工作区干净。
+- 定位结论：`optimizer/bridge` 清理 timer 贴近受控复制/创建桥，`native runtime` 8 秒缓存隐藏即清可能增加返回后的重新请求；本子项选择 MagicReport iframe 清理 retry，属于弹窗展示清理且可按弹窗生命周期安全收口。
+- 实现摘要：新增 `iframeCleanupVisibilityHandler`、`isMagicReportDocumentHidden()`、`clearIframeCleanupRetryTimer()`、`clearIframeCleanupVisibilityHandler()` 和 `scheduleIframeCleanupRetry()`；隐藏页只绑定一次 `visibilitychange` pending，不排 120ms timeout。
+- 清理摘要：`revealIframe()` 与 `clearMagicRuntimeCaches()` 会同时释放 retry timer 和 visibility handler，弹窗关闭、重建或 iframe 显示后不遗留隐藏页 listener。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 增加 iframe cleanup retry 生命周期断言，锁定隐藏态暂停、恢复可见继续同一 callback、弹窗释放解绑和禁止直接排 retry timeout。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/magic-report-panel-resilience.test.mjs'], { timeout: 60000 }) ..."` 通过，13 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/magic-report-panel-resilience.test.mjs`、`tests/magic-report-crowd-matrix.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，119 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，616 项中 614 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "iframeCleanupVisibilityHandler|isMagicReportDocumentHidden|scheduleIframeCleanupRetry|clearIframeCleanupVisibilityHandler|tryCleanup\\(retries\\)|tryCleanup\\(retries \\+ 1\\)" src/main-assistant/magic-report.js tests/magic-report-panel-resilience.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页 pending 调度已进入产物。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/magic-report.js`、`tests/magic-report-panel-resilience.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 MagicReport iframe cleanup retry 的隐藏页暂停/恢复与统一清理，不改 iframe URL、快捷话术提交、原生查数、AI 报表请求、人群看板请求并发、创建/复制/预算/护航或 10rpm 服务端边界。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`shopId:"[present]"`、`shopName:"[present]"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordOpenBridgeReady:true`、`helperIcon.exists:true`、`helperIcon.visible:true`、`helperPanel.exists:true`、`helperPanel.visible:false`、`magicPopup.exists:false`、`magicPopup.visible:false`、`magicPopup.iframeExists:false`、`helperStyleIds:["am-helper-pro-v26-style"]`、`visibleAmHelperTags:143`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:9`；插件弹窗 `helperPanel/magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`。未打开万能查数弹窗，未点击快捷话术、组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台只见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 102 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 关键词过滤返回 `matchedCount:0`。
+
+## 结果复盘
+- 第十一轮第四十一子项结果：万能查数 iframe 首屏清理从“目标节点未出现时固定 120ms retry，最多 20 次”优化为“可见页才排 retry timeout，隐藏页只保留一次 visibility pending，恢复可见后继续同一 `tryCleanup(retries)` 链”，减少隐藏标签页中短周期 iframe DOM 探测和闭包持有。
+- 取舍结论：保留原有 iframe 懒加载、20 次/120ms、找到核心内容区后清理再显示、失败后显示 iframe 和草稿恢复语义；未改快捷话术提交、AI 报表/人群看板请求、创建/复制/预算/护航链路，也未增加任何服务端请求或改变 10rpm 边界。
+- 验证结论：源码/测试语法、构建、目标测试、项目语法、构建检查、相关回归、全量回归、静态定位、Chrome MCP 只读验收、危险请求过滤和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十子项
+
+## 需求规格
+- 目标：在主助手启动兜底轮询收口后，继续优化 extension 授权守卫的店铺名异步回填重试，避免隐藏标签页里仍保留 `shopNameBackfillTimers` 退避 timer 并反复从 DOM 文本中解析店铺名。
+- 根因判断：`src/entries/extension-license-guard.js` 的店铺名回填已有 timer 注册表和 shopId/source 去重，但当前只按延迟继续排 `setTimeout`；当页面隐藏且店铺名暂不可解析时，回填链仍会持有 timer 闭包并在后台醒来做 DOM/缓存扫描。
+- 范围：仅覆盖店铺名回填 timer 的隐藏页暂停、恢复可见补跑、活动 timer/pending 去重和 visibility listener 生命周期；不改 shopId 识别、授权验证请求、租约续期、policy token、锁定遮罩、服务端地址、并发策略或 10rpm 服务端限制。
+- 热修 vs 结构性修复取舍：保留现有回填次数、退避间隔和 shopId/source key；把 timer value 从裸 id 提升为包含 callback/dueAt 的记录，使隐藏态可取消 timer 并保存 pending 任务，恢复可见后按剩余延迟继续同一回填链，不新增第二套店铺名解析逻辑。
+- 成功标准：静态测试证明存在 `shopNameBackfillPendingTasks`、隐藏态判定、活动 timer 记录、统一清理 helper、`visibilitychange` 隐藏时把活动 timer 转 pending、恢复可见后重新调度 pending、同一 shopId/source 同时检查 timer 与 pending 去重、无任务后释放 visibility listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不改变授权服务请求时机与参数，不触发任何创建/复制/预算/导出/护航执行入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第三十九子项提交后工作区状态，确认本子项只处理授权守卫店铺名回填 timer。
+- [x] 为店铺名回填加入 pending 任务表、隐藏态判定、timer 记录和统一清理 helper。
+- [x] 将隐藏页活动 timer 转为 pending，恢复可见后按剩余延迟补跑并在无任务时解绑 visibility listener。
+- [x] 更新授权守卫目标测试，锁定 pending 去重、隐藏态暂停、恢复调度和 listener 生命周期。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `2d093b1 优化主助手启动兜底`，工作区干净。
+- 定位结论：`setInterval` 已从 `src/` 清空，下一处可优化后台唤醒是授权守卫中店铺名回填的短周期退避 `setTimeout` 链；它只依赖本页 DOM/缓存，不需要隐藏页持续重试。
+- 取舍结论：不碰授权验证、租约续期和服务端请求；只让店铺名回填在页面可见时运行，隐藏时保存 pending，避免后台 DOM 扫描和 timer 唤醒。
+- 实现摘要：`shopNameBackfillTimers` 的值从裸 timer id 升级为 `{ timerId, callback, dueAt }` 记录，并新增 `shopNameBackfillPendingTasks`；`scheduleShopNameBackfillTimer()` 调度前统一清理旧 timer/pending，隐藏页只保存 pending，不再排 timeout。
+- 可见性摘要：新增 `handleShopNameBackfillVisibilityChange()`；页面隐藏时把活动 timer 取消并转存 pending，恢复可见后按 `dueAt - now` 剩余延迟重新调度，同一 shopId/source 同时检查 timer 与 pending 去重。
+- 生命周期摘要：店铺名回填有活动 timer 或 pending 时才绑定 `document.visibilitychange`，任务全部完成后通过 `removeShopNameBackfillVisibilityHandlerIfIdle()` 解绑，避免常驻 listener。
+- 测试摘要：`tests/extension-license-shopid-guard.test.mjs` 增加 `shopNameBackfillBlock` 小片段断言，覆盖 pending 表、隐藏态暂停、恢复调度和 listener 释放；首次目标测试因新增大 bundle 全局正则回溯过重超时，已改成小片段断言并用 60 秒硬超时重跑通过。
+
+## 验证记录
+- 源码语法：`node --check src/entries/extension-license-guard.js` 通过。
+- 测试语法：`node --check tests/extension-license-shopid-guard.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`；根 userscript 和 packages 产物无内容变化。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/extension-license-shopid-guard.test.mjs'], { timeout: 60000 }) ..."` 通过，3 项测试全绿。开发中首次直接运行目标测试因新增全局大正则超过合理时间被中止，随后将断言限定到 `shopNameBackfillBlock` 并用 60 秒硬超时验证通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/extension-license-shopid-guard.test.mjs`、`tests/extension-license-cache-policy-token.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/logger-api.test.mjs`，52 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "shopNameBackfillPendingTasks|isShopNameBackfillDocumentHidden|handleShopNameBackfillVisibilityChange|shopNameBackfillTimers\\.has\\(timerKey\\)" src/entries/extension-license-guard.js tests/extension-license-shopid-guard.test.mjs` 命中源码和目标测试，确认 pending、隐藏态、visibility handler 与 pending 去重均已落地。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`shopName:"[present]"`、`optimizerToggleReady:true`、`helperIcon.exists:true`、`helperIcon.visible:true`、`helperPanel.exists:true`、`helperPanel.visible:false`、`helperStyleIds:["am-helper-pro-v26-style"]`、`visibleAmHelperTags:141`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:10`；插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台只见页面既有 deprecated issue 和 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误，未见新增插件运行失败；fetch/XHR 清单 99 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/entries/extension-license-guard.js`、`tests/extension-license-shopid-guard.test.mjs`、`tasks/todo.md` 和生成产物 `dist/extension/page.bundle.js`；源码 diff 只新增店铺名回填隐藏页 pending 调度和 listener 生命周期，测试 diff 只锁定对应静态回归；未改 shopId 识别、授权验证请求、租约续期、policy token、锁定遮罩、服务端地址、并发策略或 10rpm 服务端限制。
+
+## 结果复盘
+- 第十一轮第四十子项结果：授权守卫店铺名回填从“按退避 timeout 在隐藏页继续醒来解析 DOM/缓存”优化为“隐藏页取消活动 timer 并保存 pending，恢复可见后按剩余延迟继续同一回填链”，减少后台标签页短周期唤醒。
+- 取舍结论：回填仍保留原有次数、延迟、shopId/source key、店铺名解析逻辑和遮罩刷新语义；只改变调度生命周期，不改变授权服务请求、租约续期、policy token 验签、服务端并发或 10rpm 策略。
+- 验证结论：源码/测试语法、构建、目标测试、项目语法、构建检查、相关回归、全量回归、Chrome MCP 只读验收、危险请求过滤和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十九子项
+
+## 需求规格
+- 目标：在 AI 点睛逐字动画收口后，继续优化主助手启动兜底轮询，避免 `src/main-assistant/main.js` 在 `document.readyState !== 'loading'` 但 `document.body` 尚未出现的极少数场景下保留 16ms `setInterval` 重试。
+- 根因判断：当前启动逻辑已能在成功或 10 秒后同时清理 interval/timeout，但兜底路径仍是固定 16ms interval；若页面结构异常或 body 延迟挂载，启动前会产生高频唤醒，且需要双 timer 句柄共同维护。
+- 范围：仅覆盖主助手 bootstrap 兜底重试调度；不改 `main()` 内的核心扫描、MutationObserver、授权、extension 注入、算法护航、组建计划、复制、预算、报表、接口并发或 10rpm 服务端策略。
+- 热修 vs 结构性修复取舍：把固定 interval + timeout 双句柄改为单一可取消递归 timeout，使用 10 秒 deadline 和 16ms -> 250ms 退避；DOMContentLoaded 后若 body 仍不可用，再进入同一兜底调度，保证启动语义集中在一个 helper。
+- 成功标准：静态测试证明主助手启动兜底不再使用 `setInterval`/`clearInterval`，存在 `bootstrapRetryTimerId`、deadline、delay 退避、`clearBootstrapRetryTimer()`、`scheduleBootstrapRetry()`、成功启动立即清理、超出 deadline 清理、DOMContentLoaded 后失败进入兜底；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不改变任何业务按钮和请求路径，不点击组建计划、立即投放、新建、复制、批量+、预算提交、潜力词导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第三十八子项提交后工作区状态，确认本子项只处理主助手 bootstrap 兜底重试。
+- [x] 将 16ms 固定 `setInterval` 改为单一递归 `setTimeout` 调度。
+- [x] 为启动兜底加入 10 秒 deadline、16ms 到 250ms 退避和统一清理 helper。
+- [x] 更新目标测试，锁定不再使用 interval、成功/超时清理和 DOMContentLoaded 后兜底调度。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ab88367 优化点睛打字动画`，工作区干净。
+- 定位结论：源码中剩余明确固定 interval 集中在主助手启动兜底路径；这是启动阶段异常路径，不涉及服务器请求和真实业务写操作。
+- 取舍结论：保留立即 `bootstrapMain()` 与 loading 阶段 DOMContentLoaded 优先策略，只把 body 缺失时的高频兜底改为 deadline 约束的 timeout 退避，减少极端页面状态下的无效唤醒。
+- 实现摘要：`bootstrapRetryIntervalId`/`bootstrapRetryTimeoutId` 双句柄被替换为 `bootstrapRetryTimerId`、`bootstrapRetryDeadlineAt` 和 `bootstrapRetryDelayMs`；`scheduleBootstrapRetry()` 只保留一个 pending timeout，触发后先尝试 `bootstrapMain()`，未成功再按退避重新排下一次。
+- 清理摘要：`clearBootstrapRetryTimer()` 统一释放 pending timeout、清空 deadline 并重置退避；`bootstrapMain()` 成功后立即调用清理 helper，10 秒 deadline 到达时也通过同一 helper 停止重试。
+- DOMContentLoaded 摘要：loading 阶段继续优先等待 DOMContentLoaded；若事件触发后 `document.body` 仍不可用，会进入同一递归 timeout 兜底，避免一次性 listener 后丢失启动机会。
+- 测试摘要：`tests/optimizer-entry-error-handling.test.mjs` 更新启动兜底断言，锁定 timeout 退避、deadline、DOMContentLoaded 后兜底和不再出现 interval 句柄/清理分支。
+
+## 验证记录
+- 测试语法：`node --check tests/optimizer-entry-error-handling.test.mjs` 通过。
+- 源码语法说明：`src/main-assistant/main.js` 是 userscript 构建段，不能作为独立 JS 文件直接 `node --check`；本子项通过 `npm run check:syntax` 校验生成后的根 userscript 语法。
+- 目标测试：`node --test tests/optimizer-entry-error-handling.test.mjs` 通过，5 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-entry-error-handling.test.mjs tests/logger-api.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，46 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Interval 清理检查：`rg -n "setInterval|clearInterval" src tests/optimizer-entry-error-handling.test.mjs` 只命中目标测试里的负向断言，`src/` 无剩余 `setInterval`/`clearInterval`。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在已重载的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"bootstrap_preflight"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`optimizerToggleReady:true`、`helperIcon.exists:true`、`helperIcon.visible:true`、`helperPanel.exists:true`、`helperPanel.visible:false`、`visibleAmHelperTags:141`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:10`；插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`。补充只读探测确认样式 `#am-helper-pro-v26-style` 存在，相关全局键包含 `__ALIMAMA_OPTIMIZER_TOGGLE__`、`__AM_LICENSE_STATE__`、`__AM_PLATFORM_RUNTIME__`、`__AM_WXT_PLAN_API_BRIDGE_HOST__`、`__AM_WXT_PLAN_BUILD__`、`__AM_WXT_PLAN_PATCH__`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台只见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 107 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/main.js`、`tests/optimizer-entry-error-handling.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只把启动兜底 interval/timeout 双句柄改为可取消递归 timeout、deadline 与 16ms 到 250ms 退避，测试 diff 只锁定对应静态回归；未改 `main()` 内核心扫描、MutationObserver、授权、extension 注入、算法护航、组建计划、复制、预算、报表、接口并发或 10rpm 服务端策略。
+
+## 结果复盘
+- 第十一轮第三十九子项结果：主助手 bootstrap 兜底从“body 缺失时固定 16ms interval + 10 秒 timeout 双 timer”优化为“单一递归 timeout，16ms 起步、最大 250ms 退避、10 秒 deadline”，减少异常页面结构下的高频启动唤醒和 timer 句柄复杂度。
+- DOMContentLoaded 取舍：保留 loading 阶段优先等待 DOMContentLoaded；若 DOMContentLoaded 后 `document.body` 仍不可用，进入同一兜底调度，避免旧路径一次 listener 后丢失启动机会。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收、危险请求过滤和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十八子项
+
+## 需求规格
+- 目标：在算法护航 token 轮询收口后，继续优化组建计划向导 AI 点睛区域的逐字动画 timer，避免 `runAiMaxTypewriter()` 用 14ms `setInterval` 在标签页隐藏后继续逐字更新 DOM。
+- 根因判断：`src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 已集中登记 AI 点睛逐字动效 timer 并能在向导 cleanup 时释放，但逐字阶段使用固定 interval；若动画开始后页面转入隐藏态，浏览器仍需要保留 interval 闭包和周期唤醒，直到文本逐字跑完或向导关闭。
+- 范围：仅覆盖 AI 点睛逐字动画调度和隐藏页释放策略；不改 AI 点睛文案、场景配置、详情展开逻辑、向导打开/关闭语义、计划创建/复制、接口请求、授权、算法护航执行或 10rpm 服务端策略。
+- 热修 vs 结构性修复取舍：把逐字阶段从固定 interval 改为可取消的递归 timeout，并在 delay 与 step 回调处统一表达“隐藏页或目标断开时直接完成文本并释放 timer”的不变量；不新增 visibility listener 和恢复动画队列，避免为纯展示动画引入长期监听。
+- 成功标准：静态测试证明 AI 点睛逐字动画不再使用 `setInterval`/`clearInterval`，delay 与 step 均通过 `setTimeout` 登记到 `wizardState.aiMaxTypewriterTimers`，存在隐藏态判定、隐藏/断开时完成文本、逐字完成后释放 step timer、向导 cleanup 统一清理所有 timeout；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不触发 AI 点睛接口、不点击组建计划、立即投放、新建、复制、批量+、预算提交、潜力词导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第三十七子项提交后工作区状态，确认本子项只处理 AI 点睛逐字动画 timer。
+- [x] 将逐字阶段固定 `setInterval` 改为可取消递归 `setTimeout`。
+- [x] 在 delay 和 step 回调中加入隐藏页/目标断开时直接完成文本并释放 timer 的生命周期守卫。
+- [x] 更新目标测试，锁定不再使用 interval、cleanup 统一释放 timeout、隐藏态完成文本并释放 step timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `10b6c3c 优化护航令牌轮询`，工作区干净。
+- 定位结论：AI 点睛逐字动效的 timer 已有统一登记表和 cleanup handler，优化点集中在逐字阶段的固定 interval 与隐藏页无效 DOM 更新。
+- 取舍结论：逐字动画是展示增强，不值得为隐藏页保持动画进度；隐藏或目标断开时直接补全全文，可以减少后台唤醒并保持用户返回时看到完整内容。
+- 实现摘要：`runAiMaxTypewriter()` 保留 delay timeout，但逐字阶段改为 `scheduleNextAiMaxTypewriterStep()` 单步 timeout 递归；每个 delay/step timer 均登记到 `wizardState.aiMaxTypewriterTimers`，触发后立即释放自身记录。
+- 隐藏态摘要：新增 `isAiMaxTypewriterHidden()` 与 `finishAiMaxTypewriterTarget()`；动画开始前、delay 触发后、step 触发后都会复核隐藏态和 `target.isConnected`，命中时直接写入完整文本并结束。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 更新 AI 点睛静态断言，禁止逐字动效再使用 interval，并锁定 timeout cleanup、step 登记和隐藏态完成文本。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。构建前首次运行目标测试曾因生成产物仍是旧 interval 代码失败；同步构建后重跑通过。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，42 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。通过 Chrome MCP 重新打开 `chrome://extensions/`，点击 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`keywordOpenBridgeReady:true`、`optimizerToggleReady:true`、`planBuild:"2026-02-18 04:00"`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"bootstrap_preflight"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`helperIcon.exists:true`、`helperIcon.visible:true`、`am-helper-panel.exists:true`、`am-helper-panel.visible:false`、`helperStyleExists:true`、`visibleAmHelperTags:123`、`batchPlusWraps:1`、`copyButtons:1`；插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`，`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`、`aiMaxTypewriterTargets:0`。未打开组建计划向导，未触发 AI 点睛接口，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 111 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光 trace，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200 或页面 trace pending；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js`、`tests/keyword-custom-native-parity-ui.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只把 AI 点睛逐字阶段 interval 改为可取消 timeout 递归并加入隐藏/断开完成文本守卫，测试 diff 只锁定对应静态回归；未改 AI 点睛文案、场景配置、详情展开逻辑、向导打开/关闭语义、计划创建/复制、接口请求、授权、算法护航执行或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十八子项结果：AI 点睛逐字动效从“delay 后固定 14ms interval 更新 DOM”优化为“delay 与逐字 step 都用可取消 timeout 登记，step 触发后释放自身并按需递归”，减少运行中的 timer 常驻和 cleanup 分支复杂度。
+- 隐藏页取舍：纯展示动画在隐藏页或目标 DOM 断开时直接补全全文并结束，不新增长期 visibility listener；用户返回时看到完整文本，后台不继续逐字 tick。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十七子项
+
+## 需求规格
+- 目标：在预算破限扫描循环收口后，继续优化算法护航面板打开状态下的 token 状态轮询，避免 `UI.startTokenStatusMonitor()` 启动的 1 秒 interval 在标签页隐藏时仍刷新 token 指示灯，并在缺 token 时按 2.5 秒节流持续触发 `TokenManager.refresh()`。
+- 根因判断：`src/optimizer/ui.js` 的 token 状态监控具备打开/关闭生命周期，但当前只在面板关闭时释放 interval；若用户打开算法护航面板后切到其它标签页，隐藏页仍会保留 1 秒轮询 timer 和 UI/TokenManager 闭包。
+- 范围：仅覆盖算法护航面板 token 状态监控的隐藏页暂停与恢复可见补刷；不改 token 捕获、hook history、授权、算法护航执行、计划创建/复制、预算、报表、接口并发或 10rpm 服务端策略。
+- 热修 vs 结构性修复取舍：把固定 interval 改为可取消的递归 timeout，并引入 monitor active 状态与 visibilitychange 生命周期；隐藏态清理 pending timer，恢复可见后立即刷新一次并恢复 1 秒可见页轮询，关闭面板时释放 timer 与 visibility listener。
+- 成功标准：静态测试证明 token 状态监控不再使用固定 `setInterval`，存在 `tokenStatusTimerId`、`tokenStatusMonitorActive`、隐藏态判定、清理 helper、递归 timeout 调度、visibilitychange 隐藏释放/可见恢复、关闭面板释放 timer 与 listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开算法护航执行流程、不点击组建计划、立即投放、新建、复制、批量+、预算提交、潜力词导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认。
+
+## 执行计划（可核对）
+- [x] 复核第三十六子项提交后工作区状态，确认本子项只处理算法护航 token 状态轮询。
+- [x] 将 token 状态固定 interval 改为可取消递归 timeout。
+- [x] 在 token 状态监控中加入隐藏态暂停、恢复可见补刷和 visibility listener 生命周期。
+- [x] 更新目标测试，锁定隐藏页不保留 token 轮询 timer 且关闭时释放 listener。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `cfb56aa 优化预算扫描循环`，工作区干净。
+- 定位结论：算法护航面板关闭会停止 token 状态监控，但面板打开后切到隐藏标签页时，1 秒 interval 仍会刷新 UI 状态；缺 token 时还会触发 `TokenManager.refresh()`，虽然有 2.5 秒节流，但隐藏页无必要持续唤醒。
+- 取舍结论：不改 token 捕获与刷新语义，不降低可见页 token 状态反馈；只把轮询生命周期从“面板打开即常驻”收口成“面板打开且页面可见才排 timer”。
+- 实现摘要：`src/optimizer/ui.js` 新增 `tokenStatusTimerId`、`tokenStatusMonitorActive`、`tokenStatusVisibilityHandlerBound`、隐藏态判定、timer 清理 helper、visibility listener 绑定/解绑 helper；`startTokenStatusMonitor()` 只标记 active 并通过 `scheduleTokenStatusRefresh()` 调度可见页 timeout。
+- 可见性摘要：隐藏标签页时 `handleTokenStatusVisibilityChange()` 会释放 token 状态 timer；恢复可见后立即刷新 token 指示灯并恢复 1 秒 timeout 循环，timer 回调触发前也复核 active 与隐藏态。
+- 生命周期摘要：关闭算法护航面板仍调用 `UI.stopTokenStatusMonitor()`，现在会同时关闭 active 状态、清理 pending timeout 并解绑 `document.visibilitychange`，避免面板关闭或页面隐藏后遗留轮询闭包。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 更新静态断言，锁定 token 状态监控从固定 interval 改为可取消 timeout 循环，并覆盖隐藏态暂停、恢复可见补刷和关闭清理 listener。
+
+## 验证记录
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，9 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，55 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:9`。未打开算法护航执行流程，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 104 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光追踪，末尾 1 条页面曝光 trace 为 pending，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/optimizer/ui.js`、`tests/optimizer-token-capture-history.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 token 状态监控隐藏页生命周期守卫、可取消 timeout 和关闭清理，测试 diff 只锁定对应静态回归；未改 token 捕获、Hook 管理、授权、算法护航执行、计划创建/复制、预算、报表接口或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十七子项结果：算法护航 token 状态监控从“面板打开后固定 1 秒 interval 常驻”优化为“面板 active 且页面可见时才排递归 timeout，隐藏态释放 timer，恢复可见后补刷并恢复循环”，减少隐藏标签页中 UI 刷新与缺 token 时 `TokenManager.refresh()` 的无效唤醒机会。
+- 取舍结论：保留可见页 token 指示灯即时刷新、缺 token 的 2.5 秒节流刷新、面板关闭释放逻辑和公开入口行为；没有触碰 token 捕获、Hook 管理、授权、算法护航执行、计划创建/复制、预算或服务端 10rpm 策略。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收均通过；未执行任何业务写动作或护航执行，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十六子项
+
+## 需求规格
+- 目标：在 extension content 隐藏页 URL poll 收口后，继续优化预算破限页面补丁开启后的 600ms 扫描循环，避免 `setInterval(() => scheduleApply(), 600)` 在标签页隐藏时仍持续唤醒，用于扫描预算弹窗、恢复 hook 和 SmartAssistant React 校验补丁。
+- 根因判断：`src/main-assistant/budget-frontend-limit-bypass.js` 的页面级 patcher 已按需安装并能在关闭时释放 observer/timer，但开启后使用固定 `setInterval` 周期触发 `scheduleApply()`；即使 `document.visibilityState === 'hidden'`，interval 仍会保留常驻唤醒和闭包引用。
+- 范围：仅覆盖预算破限页面级扫描循环的隐藏页暂停与恢复可见补扫；不改预算下限判断、服务端最低预算解析、fetch/XHR 提交 payload 同步、SmartAssistant 校验补丁语义、开关默认状态或任何真实预算提交链路。
+- 热修 vs 结构性修复取舍：把固定 interval 替换为可取消的递归 timeout 扫描循环，并在 `scheduleApply()`、SmartAssistant patch timer 和 visibilitychange 处共同表达“隐藏页不排扫描，恢复可见补扫一次并恢复循环”的不变量；不在业务校验函数内部加分散开关。
+- 成功标准：静态测试证明不再使用固定 600ms interval；存在 `scanLoopTimer`、清理 helper、隐藏态判定、`scheduleScanLoop()` 可取消循环、`visibilitychange` 隐藏时释放扫描 timer、恢复可见后 `scheduleApply()` 并重启循环；关闭预算破限时释放 scan/apply/smart timers、observer 和 visibility listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开预算弹窗、不点击批量预算、不提交预算、不访问 SmartAssistant 真实预算编辑动作、不触发组建计划、复制、创建、导出、护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认。
+
+## 执行计划（可核对）
+- [x] 复核第三十五子项提交后工作区状态，确认本子项只处理预算破限页面补丁扫描循环。
+- [x] 将固定 600ms `setInterval` 改为可取消的递归 timeout 扫描循环。
+- [x] 在 `scheduleApply()`、`scheduleSmartAssistantPatch()` 和 visibilitychange 中加入隐藏态暂停与恢复可见补扫。
+- [x] 更新预算破限目标测试，锁定隐藏页不再保留固定 interval 且关闭时释放 visibility 监听。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `a1892bd 优化隐藏页注入轮询`，工作区干净。
+- 定位结论：预算破限补丁默认不安装页面级扫描，但用户开启后会挂 observer、hashchange 和 600ms interval；关闭能清理，但隐藏标签页期间仍会持续唤醒。
+- 取舍结论：不改变预算破限能力本身，只把扫描驱动从固定 interval 收口成可暂停/可恢复的生命周期调度。
+- 实现摘要：`src/main-assistant/budget-frontend-limit-bypass.js` 新增 `scanLoopTimer`、`isDocumentHidden()`、`clearScanLoopTimer()` 和 `scheduleScanLoop()`；固定 600ms interval 被替换成单次 timeout 递归调度，调度前和触发后都会复核启用状态与隐藏态。
+- 可见性摘要：`scheduleApply()` 与 `scheduleSmartAssistantPatch()` 在隐藏标签页不再排扫描 timer；`visibilitychange` 进入隐藏时释放 apply、SmartAssistant patch 和 scan loop timer，恢复可见后补一次 `scheduleApply()` 并重启扫描循环。
+- 生命周期摘要：预算破限关闭路径同步清理 scan loop timer 并移除 `document.visibilitychange` 监听，cleanup handlers 也覆盖 visibility listener，避免关闭后遗留循环和监听引用。
+- 测试摘要：`tests/budget-frontend-limit-bypass.test.mjs` 更新静态回归，锁定 scan loop 可取消、隐藏态暂停/恢复、关闭清理 listener，以及不再出现 `setInterval(() => scheduleApply(), 600)`。
+
+## 验证记录
+- 测试语法：`node --check tests/budget-frontend-limit-bypass.test.mjs` 通过。
+- 源码语法：`node --check src/main-assistant/budget-frontend-limit-bypass.js` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/budget-frontend-limit-bypass.test.mjs` 通过，14 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/budget-frontend-limit-bypass.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/logger-api.test.mjs` 通过，55 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`platformRuntime.hasResourceBaseUrl:true`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、插件弹窗 `helperPanel/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel` 均为 `false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:9`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 96 条，主要为页面初始化、报表、AI/SSE/context、消息和曝光追踪，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/budget-frontend-limit-bypass.js`、`tests/budget-frontend-limit-bypass.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增预算破限扫描循环隐藏页生命周期守卫、可取消 scan loop 和关闭清理，测试 diff 只锁定对应静态回归；未改预算校验、提交 payload 同步、服务端最低预算解析、开关默认值、SmartAssistant 校验补丁语义或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十六子项结果：预算破限页面级 patcher 从“开启后固定 600ms interval 常驻扫描”优化为“可取消递归 timeout 扫描循环，隐藏态释放扫描 timer，恢复可见后补扫并重启循环”，减少隐藏标签页中预算弹窗扫描、hook 恢复和 SmartAssistant 校验 patch 的无效唤醒机会。
+- 取舍结论：保留预算破限默认关闭、预算校验与提交 payload 同步、服务端最低预算解析、SmartAssistant 补丁语义和关闭清理能力；只收口扫描调度生命周期，没有新增第二套预算逻辑或服务端请求路径。
+- 验证结论：目标测试、构建、语法/构建检查、相关回归、全量回归、Chrome MCP 只读验收均通过；未执行任何业务写动作或预算提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十五子项
+
+## 需求规格
+- 目标：在主助手隐藏页 core scan 收口后，继续优化 extension content 在未注入 myseller 普通页上的延迟注入 URL 轮询，避免隐藏标签页里仍保留 `urlPollTimer` 退避循环，用于等待后续进入 SmartAssistant 预算页。
+- 根因判断：`src/entries/extension-content.js` 已把固定 interval 改成 600ms->4800ms 退避 timeout，且保留 hashchange/popstate 监听；但 `document.visibilityState === 'hidden'` 时仍会继续排 URL poll timer。未注入页如果长期在后台停留，content script 会持续持有 URL 轮询闭包和延迟注入状态。
+- 范围：仅覆盖 extension content 延迟注入监听的隐藏页暂停与恢复可见补查；不替换 URL polling 为 history hook，不改 one.alimama 立即注入、不改 myseller SmartAssistant 注入资格、不改授权 bridge、不改 page bundle 或业务请求链路。
+- 热修 vs 结构性修复取舍：在延迟注入调度层表达“不在隐藏页轮询，恢复可见后执行一次注入检查并恢复退避轮询”的不变量；保留现有隔离世界 URL polling 作为主世界 SPA 跳转兜底，避免重走不可靠 history hook。
+- 成功标准：静态测试证明 content script 有隐藏态判定、`pendingHiddenUrlPoll` 状态、隐藏时清理 `injectionCheckTimer` 与 `urlPollTimer`、`visibilitychange` 恢复可见后执行 `scheduleInjectionCheck()` 与 `startUrlPolling()`、注入成功后移除 visibility 监听；运行 harness 证明隐藏 myseller 普通页初始不排 URL poll timer，恢复可见并已跳转 SmartAssistant 后能注入 page bundle。
+- 安全边界：本子项不访问组建计划向导、不触发预算提交、不触发复制/创建/导出/护航执行或任何真实写入口；Chrome MCP 验收只做扩展重载和 one.alimama 只读运行态确认，不使用 Browser 插件、原生 CDP、shell Chrome 或 macOS open。
+
+## 执行计划（可核对）
+- [x] 复核第三十四子项提交后工作区状态，确认本子项只处理 extension content 延迟注入 URL 轮询。
+- [x] 在 `extension-content.js` 增加隐藏态 URL poll pending 状态、清理 helper 和 visibilitychange 处理。
+- [x] 将 `scheduleInjectionCheck()` 与 `scheduleNextUrlPoll()` 改为隐藏态不排 timer，恢复可见后补一次注入检查并恢复 URL polling。
+- [x] 更新 `tests/extension-static-build.test.mjs` 静态断言和 harness 行为测试，锁定隐藏页不保留 URL poll timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ba375f7 优化隐藏页核心扫描`，工作区干净。
+- 定位结论：完整 page bundle 不会注入 myseller 普通工作台，但 content script 会保持延迟注入监听，用于后续路由进入 SmartAssistant 预算页；这里的 URL poll 是正确兜底，但隐藏标签页没必要持续调度。
+- 取舍结论：不删除 URL polling、不恢复 history monkey patch、不扩大注入域名；只在隐藏页暂停退避 timeout，并在恢复可见时做一次补查。
+- 实现摘要：`src/entries/extension-content.js` 新增 `pendingHiddenUrlPoll`、`isDocumentHidden()`、`markHiddenUrlPollPending()` 和 `handleDeferredInjectionVisibilityChange()`；隐藏态会清理 `injectionCheckTimer` 与 `urlPollTimer`，恢复可见后执行 `scheduleInjectionCheck()` 与 `startUrlPolling()`。
+- 生命周期摘要：`scheduleInjectionCheck()` 和 `scheduleNextUrlPoll()` 调度前复核隐藏态，URL poll timer 触发后也复核隐藏态；延迟注入监听启动时绑定 `document.visibilitychange`，page bundle 注入成功或停止监听时移除该监听并清理 pending 状态。
+- 测试摘要：`tests/extension-static-build.test.mjs` 的 content harness 支持模拟 `document.visibilityState`，新增隐藏 myseller 普通页初始不排 URL poll timer、隐藏跳转 SmartAssistant 不后台注入、恢复可见后补查并成功注入的回归。
+
+## 验证记录
+- 源码语法：`node --check src/entries/extension-content.js` 通过。
+- 测试语法：`node --check tests/extension-static-build.test.mjs` 通过。
+- 目标测试：`node --test tests/extension-static-build.test.mjs` 通过，11 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/content.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/keyword-plan-api-bridge-security.test.mjs` 通过，39 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`platformRuntime.mode:"extension"`、`platformRuntime.version:"7.05"`、`hasResourceBaseUrl:true`、`hasOptimizerToggle:true`、`hasKeywordOpenBridgeReady:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、`helperPanel.visible:false`、`keywordModal.visible:false`、`keywordOverlay.visible:false`、`scenePopup.visible:false`、`itemPicker.visible:false`、`copyOverviewPopup.visible:false`、`copySuccessPopup.visible:false`、`batchPlusMenu.visible:false`、`batchConfirmPopup.visible:false`、`optimizerPanel.visible:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 100 条，主要为页面初始化、报表、AI/SSE/context 和曝光追踪，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200；`performance.getEntriesByType('resource')` 对 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate` 关键词过滤返回 `matchedCount:0`。
+- Diff 自审：`git diff --stat` 仅包含 `src/entries/extension-content.js`、`tests/extension-static-build.test.mjs`、`tasks/todo.md` 和生成产物 `dist/extension/content.js`；源码 diff 只新增延迟注入 URL polling 隐藏页生命周期守卫，测试 diff 只扩展 harness 与对应回归；未改 one.alimama 立即注入、myseller SmartAssistant 注入资格、授权 bridge、page bundle、业务请求链路或 10rpm 相关逻辑。
+
+## 结果复盘
+- 第十一轮第三十五子项结果：extension content 在 myseller 普通页上的延迟注入兜底从“隐藏标签页仍保持 URL poll 退避 timeout”优化为“隐藏态清理注入检查与 URL poll timer，只记录 pending，恢复可见后补一次注入检查并恢复 URL polling”。
+- 取舍结论：保留 URL polling 作为隔离世界捕获主世界 SPA 跳转的兜底，不新增 history hook 或第二套注入逻辑；只减少后台隐藏标签页的无效轮询调度，并保证隐藏页路由到 SmartAssistant 后恢复可见仍能注入。
+- 验证结论：静态测试、harness 行为测试、构建、相关回归、全量回归、Chrome MCP 只读验收和 diff 自审均通过；未执行任何服务端写动作或业务提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十四子项
+
+## 需求规格
+- 目标：在场景接口同步 timer 收口后，继续优化主助手全页 `MutationObserver` 的隐藏标签页行为，避免 one.alimama 页面隐藏后仍因 SSE、性能日志、表格复用或页面自变更持续排 `scheduleRunCore()` debounce timer，并重复执行 `Core.run()`、`CampaignIdQuickEntry.run()`、`PotentialPlanDailyExporter.run()` DOM 扫描。
+- 根因判断：`src/main-assistant/main.js` 的 observer 已过滤插件自有 mutation，但对 `document.visibilityState === 'hidden'` 没有守卫；隐藏标签页里每次非插件页面 mutation 仍会排 1000ms timer，timer 触发后继续扫描页面 DOM。
+- 范围：仅覆盖主助手 observer 调度层的隐藏页暂停与恢复可见补跑；不改 observer 监听范围、插件 mutation 过滤、`Core.run()`、计划快捷入口、潜力词导出、授权、组建计划、真实创建/复制/提交或 10rpm 服务端限速。
+- 热修 vs 结构性修复取舍：在 `main()` 内把“页面隐藏时不排核心扫描 timer，恢复可见后补跑一次”的不变量放进 `scheduleRunCore()` 与 `visibilitychange` 处理，而不是改各业务模块内部扫描逻辑；保留可见页原 1000ms debounce 和弹窗暂停重试语义。
+- 成功标准：静态测试证明主助手有 `isDocumentHidden()`、隐藏时会清理 pending core timer 并记录 `pendingHiddenCoreRun`、observer 隐藏态只置 pending 不排扫描、`visibilitychange` 恢复可见后补跑一次、可见页仍保留原 observer 调度；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不打开组建计划向导、不触发潜力词导出、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态、插件弹窗状态和可见页正常注入。
+
+## 执行计划（可核对）
+- [x] 复核第三十三子项提交后工作区状态，确认本子项只处理主助手隐藏页 observer 调度。
+- [x] 在 `main()` 内新增可见性守卫与 pending hidden core run 状态。
+- [x] 将 `scheduleRunCore()` 与 observer 回调改为隐藏态不排扫描 timer，恢复可见后补跑一次。
+- [x] 补充/更新目标测试，锁定隐藏页不会继续累积 core 扫描 timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ae50f6c 优化场景同步计时器`，工作区干净。
+- 定位结论：主助手 observer 过滤了插件自触发 DOM 变化，但对隐藏标签页没有暂停；one.alimama 页面自身 SSE/性能/表格刷新仍可能触发 debounce timer 和 DOM 扫描。
+- 取舍结论：不改全局 observer 监听字段和业务扫描函数，避免漏掉可见页 SPA 表格复用；只在调度层加隐藏态暂停，并在标签页重新可见时一次性补扫。
+- 实现摘要：`main()` 新增 `pendingHiddenCoreRun`、`isDocumentHidden()`、`clearScheduledCoreRun()` 与 `markHiddenCoreRunPending()`；`scheduleRunCore()` 调度前和 timer 触发后都复核隐藏态，隐藏时清理 pending timer 并只记录待补跑。
+- 生命周期摘要：`visibilitychange` 进入隐藏时清理已排 core scan timer，恢复可见且存在 pending hidden run 时执行一次 `scheduleRunCore(0)`；MutationObserver 保留插件自有 mutation 过滤，并在隐藏态只置 pending，不继续排 1000ms 扫描。
+- 测试摘要：`tests/logger-api.test.mjs` 新增主助手隐藏标签页回归，锁定隐藏态状态字段、timer 清理 helper、调度前后隐藏态复核、恢复可见补跑和 observer 隐藏态守卫。
+
+## 验证记录
+- 测试语法：`node --check tests/logger-api.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/logger-api.test.mjs` 通过，21 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/logger-api.test.mjs tests/budget-frontend-limit-bypass.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，55 项测试全绿。
+- 全量回归：`npm test` 通过，615 项中 613 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`helperIcon.visible:true`、`helperPanel.visible:false`、`keywordModal.visible:false`、`scenePopup.visible:false`、`itemPicker.visible:false`、`copyOverviewPopup.visible:false`、`copySuccessPopup.visible:false`、`batchPlusMenu.visible:false`、`batchConfirmPopup.visible:false`、`optimizerPanel.visible:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`batchPlusHostExpanded:false`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`。未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue，未见新增插件运行失败；fetch/XHR 清单 102 条，主要为页面初始化、报表、AI/SSE/context 和曝光追踪，除 `px.effirst.com` 既有隧道失败外其余可见请求为 200。
+- Diff 自审：`git diff --stat` 仅包含 `src/main-assistant/main.js`、`tests/logger-api.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增隐藏页 core scan 调度生命周期守卫，测试 diff 只新增对应静态回归；未改 observer 监听范围、业务扫描函数、授权、组建计划、真实创建/复制/提交或服务端请求链路。
+
+## 结果复盘
+- 第十一轮第三十四子项结果：主助手全页 observer 从“隐藏标签页仍可被页面自身 mutation 持续唤醒并排 core scan timer”优化为“隐藏态清理 pending timer 并只记录一次待补跑，恢复可见后补扫一次”，减少隐藏页里 DOM 扫描 timer 与 `Core.run()` / `CampaignIdQuickEntry.run()` / `PotentialPlanDailyExporter.run()` 的无效执行机会。
+- 取舍结论：保留可见页原 1000ms debounce、弹窗暂停 350ms recheck、插件 mutation 过滤和 SPA 表格复用监听范围；没有引入第二套 observer 或业务模块内部开关，隐藏页行为集中在调度层表达。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收和 diff 自审均通过；未执行任何服务端写动作或业务提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十三子项
+
+## 需求规格
+- 目标：在自动推荐关键词 timer 收口后，继续优化组建计划场景切换后的场景接口同步 timer，避免 `scheduleSceneCreateContractSync()` 只在重排新任务时清理旧 `sceneSyncTimer`，关闭向导或隐藏详情后旧 pending timer 仍持有 scene/options/item/defaults 闭包，并在延迟后进入 `captureSceneCreateInterfaces()` 场景接口捕获链路。
+- 根因判断：`src/optimizer/keyword-plan-api/request-builder-preview.js` 中 `sceneSyncTimer` 有句柄但没有统一清理 helper；timer 触发时不归零、不复核 `wizardState.visible`，`closeWizardOverlay()` 也没有释放 pending scene sync。
+- 范围：仅覆盖场景接口同步 timer 的前端延迟调度生命周期和静态回归；不改 `captureSceneCreateInterfaces()`、场景配置扫描、场景合同缓存、推荐关键词/推荐人群、商品候选、真实创建/复制/提交或 10rpm 服务端限速。
+- 热修 vs 结构性修复取舍：新增 `clearWizardSceneSyncTimer()` 统一释放 pending scene sync timer，并重置 `sceneSyncPendingToken`；`scheduleSceneCreateContractSync()` 调度前复用 helper，触发时先归零并复核 token、主弹窗可见和未关闭，再进入捕获链路；关闭主弹窗时同步释放 pending timer。
+- 成功标准：静态测试证明 scene sync timer 有统一清理 helper、调度前会释放旧 pending timer、timer 触发后归零、触发前复核 `wizardState.visible === true` 和 token、关闭向导会释放 pending scene sync，旧内联 `if (wizardState.sceneSyncTimer) clearTimeout...` 不再留在调度函数内；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不打开组建计划向导、不切换场景、不触发场景接口同步、不调用 `captureSceneCreateInterfaces()`、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和插件弹窗状态。
+
+## 执行计划（可核对）
+- [x] 复核第三十二子项提交后工作区状态，确认本子项只处理场景接口同步 timer。
+- [x] 实现 `clearWizardSceneSyncTimer()`，统一清理 `sceneSyncTimer` 与 pending token。
+- [x] 将 `scheduleSceneCreateContractSync()` 改为通过 helper 调度，触发前复核 token 和主弹窗可见状态。
+- [x] 在主弹窗关闭路径释放 pending scene sync timer。
+- [x] 补充/更新目标测试，锁定场景接口同步 timer 不会在关闭后继续触发。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c931fda 优化自动推荐关键词计时器`，工作区干净。
+- 定位结论：场景接口同步 timer 是前端延迟调度，但触发后会进入接口捕获/同步链路；收口后可减少关闭/切换后旧闭包滞留，并避免过期 pending timer 在关闭向导后继续启动捕获请求。
+- 现状证据：`scheduleSceneCreateContractSync()` 目前只在新调度时手写清理旧 timer，timer 回调内直接进入 `captureSceneCreateInterfaces()`，没有在关闭向导时取消 pending，也没有在触发时清空 `sceneSyncTimer`。
+- 实现摘要：`src/optimizer/keyword-plan-api/request-builder-preview.js` 新增 `clearWizardSceneSyncTimer()`；调度前统一释放旧 pending timer，timer 触发后先归零，再按 token、`wizardState.visible === true` 和 `sceneSyncInFlight` 复核后才进入 `captureSceneCreateInterfaces()`。
+- 生命周期摘要：`closeWizardOverlay()` 在释放打开任务后同步调用 `clearWizardSceneSyncTimer()`，关闭主弹窗时会清除 pending scene sync timer 和 pending token；异步捕获返回后也会再次复核 token/visible，避免关闭或切换后的结果写回。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 新增场景接口同步 timer 回归，锁定状态字段、清理 helper、可取消调度、触发后归零、token/visible/inFlight 守卫、关闭向导清理，以及调度函数内旧内联 timer 清理禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 源码切片说明：`src/optimizer/keyword-plan-api/request-builder-preview.js` 属于构建切片，不是独立 JS 文件；官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 目标测试：`node --test tests/keyword-wizard-entry-regression.test.mjs` 通过，10 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-recommend-console.test.mjs tests/keyword-plan-api-slim.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，43 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，614 项中 612 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`keywordOverlayExists:false`、`keywordOverlayOpen:false`、`keywordModalExists:false`、`keywordModalVisible:false`、`scenePopupExists:false`、`scenePopupVisible:false`、`amWxtVisibleRootCount:0`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`helperIcon.visible:true`、`helperPanel.visible:false`、`copyOverviewPopup.exists:false`、`copySuccessPopup.exists:false`、`batchPlusMenu.exists:false`、`batchConfirmPopup.exists:false`、`optimizerPanel.exists:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`batchPlusHostExpanded:false`、`potentialExportButtonCount:0`、`nativeCreateActionCount:4`。未打开组建计划，未切换场景，未触发场景接口同步，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue；fetch/XHR 清单 107 条，主要为页面初始化、报表查询、AI/SSE 上下文和页面曝光追踪，除 `px.effirst.com` 既有隧道失败外均为 200；`performance.getEntriesByType('resource')` 对 `scene|create|contract|capture|adzone|crowd|campaign/create|adgroup/create|batchCreate` 关键词过滤返回 `matchedCount:0`。
+- Diff 自审：`git diff --stat` 仅包含 `request-builder-preview.js`、`tests/keyword-wizard-entry-regression.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 scene sync timer 清理 helper、调度前后 token/visible/inFlight 守卫和关闭释放；测试 diff 只新增场景接口同步 timer 生命周期静态回归；`git diff --check` 通过。
+
+## 结果复盘
+- 第十一轮第三十三子项结果：组建计划场景接口同步从“切换场景后排一个只在下一次调度时才清理的 pending timeout”优化为“`clearWizardSceneSyncTimer()` 统一持有和释放 pending timer/token，关闭主弹窗时主动取消，触发和异步返回阶段都复核 token 与主弹窗可见状态”。
+- 取舍结论：保留原 240ms 延迟、场景合同缓存和 `captureSceneCreateInterfaces()` 语义，不新增第二套接口捕获逻辑；只收口前端延迟调度生命周期，减少关闭/切换后旧 scene/options/defaults 闭包滞留和过期 timer 误入捕获链路的机会，符合 10rpm 边界。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收均通过；未打开组建计划或触发场景捕获/业务写动作，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十二子项
+
+## 需求规格
+- 目标：在风控页提醒 timer 收口后，继续优化组建计划详情页“手动关键词为空时自动加载推荐关键词”的延迟 timer，避免 `maybeAutoLoadManualKeywords()` 直接排裸 `window.setTimeout(async () => ..., delayMs)`；关闭向导、隐藏详情面板或切换到其他策略时，旧 timer 会继续持有 strategy、autoLoadKey、addedItems、manualInput 和推荐关键词加载闭包，并可能在延迟后进入推荐关键词请求链路。
+- 根因判断：`src/optimizer/keyword-plan-api/request-builder-preview.js` 只用 `autoKeywordLoadMap` 标记 pending/done，未保存 timer 句柄；`setDetailVisible(false)` 和 `closeWizardOverlay()` 不能主动取消 pending 自动推荐关键词任务。
+- 范围：仅覆盖自动加载推荐关键词的前端延迟调度生命周期和静态回归；不改推荐关键词接口、关键词合并逻辑、手动关键词输入、策略表单、真实创建/复制/提交、场景接口同步、商品候选加载或 10rpm 服务端限速。
+- 热修 vs 结构性修复取舍：把自动推荐关键词 timer 纳入 `wizardState` 生命周期，在 `intro.js` 初始化 `autoKeywordLoadTimer`/key/token 和通用清理 helper；调度前释放旧 pending timer，timer 触发后先归零并校验 token、key、当前策略、详情可见和主弹窗可见，隐藏详情或关闭主弹窗时同步释放。
+- 成功标准：静态测试证明 auto keyword load timer 有句柄、可取消、取消时清理 pending map、触发后归零，详情隐藏/主弹窗关闭会释放 pending 自动推荐关键词任务，`maybeAutoLoadManualKeywords()` 不再直接使用裸 `window.setTimeout(async () => ...)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不打开组建计划向导、不触发推荐关键词加载、不调用推荐关键词接口、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和插件弹窗状态。
+
+## 执行计划（可核对）
+- [x] 复核第三十一子项提交后工作区状态，确认本子项只处理自动推荐关键词延迟 timer。
+- [x] 在 `wizardState` 中新增自动推荐关键词 timer/key/token，并实现可复用清理 helper。
+- [x] 将 `maybeAutoLoadManualKeywords()` 改为通过可取消 helper 调度，触发前复核当前策略和可见状态。
+- [x] 在详情隐藏和主弹窗关闭路径释放 pending 自动推荐关键词 timer。
+- [x] 补充/更新目标测试，锁定自动推荐关键词不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `83d5db1 优化风控提醒计时器`，工作区干净。
+- 定位结论：自动推荐关键词 timer 是前端延迟调度，但触发后会进入推荐关键词请求链路；收口后既减少关闭/切换时旧闭包滞留，也减少过期 timer 误入请求链路的机会，符合“服务器只帮并发10rpm”边界。
+- 构建顺序结论：`request-builder-preview.js` 位于 `batch-edit-popup.js` 之后，详情隐藏路径在后者中；清理 helper 需要放在更早的 `intro.js`，保证后续片段都可调用。
+- 实现摘要：`src/optimizer/keyword-plan-api/intro.js` 新增 `autoKeywordLoadTimer`、`autoKeywordLoadKey`、`autoKeywordLoadToken`、`autoKeywordLoadMap` 和 `clearWizardAutoKeywordLoadTimer()`；`request-builder-preview.js` 新增 `scheduleAutoKeywordLoad()`，调度前释放旧 pending timer，触发前复核 token/key、当前策略、详情可见和主弹窗可见。
+- 生命周期摘要：`setDetailVisible(false)` 会释放 pending 自动推荐关键词 timer；主弹窗关闭路径继续调用 `setDetailVisible(false)`，因此关闭向导时也会释放该 timer，并保留原 `clearWizardOpenTaskSchedule()`。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 新增有界 `sliceSource()` 和自动推荐关键词 timer 回归，锁定状态字段、清理 helper、详情隐藏清理、可取消调度、触发前可见状态校验，以及旧裸 `window.setTimeout(async () => ...)` 禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 源码切片说明：`src/optimizer/keyword-plan-api/intro.js`、`request-builder-preview.js`、`wizard-scene-config/batch-edit-popup.js` 属于构建切片，不是独立 JS 文件；官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 目标测试：`node --test tests/keyword-wizard-entry-regression.test.mjs` 通过，9 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-recommend-console.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，38 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，613 项中 611 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`keywordOverlayExists:false`、`keywordOverlayOpen:false`、`keywordModalExists:false`、`keywordModalVisible:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`pluginCopyOverviewPopup:false`、`pluginCopySuccessPopup:false`、`pluginBatchPlusMenuOpen:false`、`pluginOptimizerPanel:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:8`；可见插件元素仅有悬浮入口 `#am-helper-icon`。未打开组建计划，未触发推荐关键词加载或相关请求，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue。
+- Diff 自审：改动集中在组建计划自动推荐关键词延迟 timer 生命周期、对应静态测试、任务记录和构建产物；未改推荐关键词接口、关键词合并逻辑、手动关键词输入、策略表单、真实创建/复制/提交、场景接口同步、商品候选加载或 10rpm 服务端限速。
+
+## 结果复盘
+- 第十一轮第三十二子项结果：组建计划详情页自动推荐关键词从“检测到手动关键词为空后直接排裸 async timeout”优化为“`wizardState` 持有 pending timer/key/token，重复调度、详情隐藏或主弹窗关闭时释放，触发前复核当前策略和可见状态，再进入推荐关键词加载链路”。
+- 取舍结论：保留原 pending/done 去重、延迟时长和推荐关键词加载/合并语义，不新增第二套推荐接口逻辑；只收口前端延迟调度生命周期，减少关闭/切换后旧闭包滞留和过期 timer 误入请求链路。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未打开组建计划或触发推荐关键词请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十一子项
+
+## 需求规格
+- 目标：在组建计划打开任务 timer/rAF 收口后，继续优化主助手风控页提醒 0ms alert timer，避免 `notifyRiskChallengeIfNeeded()` 直接排无句柄 `setTimeout(..., 0)`，快速路由离开风控页或切换到新风控 URL 时旧 timer 仍持有提醒闭包并弹出过期提示。
+- 根因判断：`src/main-assistant/bootstrap.js` 中 `notifyRiskChallengeIfNeeded()` 仅用 `riskAlertLastUrl` 去重，但 alert 延迟任务没有句柄；非风控 URL 分支只清空 lastUrl，无法取消 pending alert。
+- 范围：仅覆盖主助手风控页提醒 timer 生命周期和静态回归；不改风控识别正则、history hook、预算页早退、真实创建/复制/提交、授权、护航接口或 10rpm 限速。
+- 热修 vs 结构性修复取舍：把风控提醒 timer 纳入 `State` 生命周期，新增 `riskAlertTimer`、清理 helper 与调度 helper；离开非风控 URL 或切换新风控 URL 时释放旧 pending alert，触发时先归零并复核当前 URL 仍匹配。
+- 成功标准：静态测试证明风控提醒 timer 有句柄、可取消、触发后归零，非风控分支会清理 pending alert，旧无句柄 `setTimeout(() => alert(...), 0)` 不再存在；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不访问风控页、不主动触发 alert、不点击组建计划、立即投放、新建、立即下单、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和插件弹窗状态。
+
+## 执行计划（可核对）
+- [x] 复核第三十子项提交后工作区状态，确认本子项只处理风控页提醒 timer。
+- [x] 在 `State` 中新增风控提醒 timer 句柄，并实现清理与调度 helper。
+- [x] 将 `notifyRiskChallengeIfNeeded()` 改为通过 helper 调度 alert，离开非风控 URL 时释放 pending alert。
+- [x] 补充/更新目标测试，锁定风控提醒不再累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `5d99e39 优化组建计划打开任务计时器`，工作区干净。
+- 定位结论：风控 alert timer 只用于本地 UI 提醒，不属于服务端请求或写链路；收口后可减少快速路由变化时旧 href/State/alert 闭包滞留。
+- 实现摘要：`src/main-assistant/bootstrap.js` 在 `State` 中新增 `riskAlertTimer`，并新增 `clearRiskChallengeAlertTimer()` 与 `scheduleRiskChallengeAlert(href)`；每次调度前取消旧 pending timer，触发后先归零，再复核当前 URL、`riskAlertLastUrl` 和风控页识别仍一致。
+- 行为摘要：`notifyRiskChallengeIfNeeded()` 离开非风控 URL 时同步释放 pending alert；进入风控页时仍保持原提示文案和异步 alert 节奏，但旧 URL 的 pending alert 不会在路由切走后继续弹出。
+- 测试摘要：`tests/keyword-create-repair-cleanup-id-extract.test.mjs` 新增有界 `sliceSource()` 断言，锁定 `riskAlertTimer`、清理 helper、调度 helper、非风控分支清理、触发前 URL 复核和旧裸 `setTimeout(() => alert(...), 0)` 禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-create-repair-cleanup-id-extract.test.mjs` 通过。
+- 源码切片说明：`src/main-assistant/bootstrap.js` 属于构建切片，不是独立 JS 文件；单文件 `node --check src/main-assistant/bootstrap.js` 会因切片边界报 `Unexpected end of input`，官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-create-repair-cleanup-id-extract.test.mjs` 通过，5 项测试全绿。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-create-repair-cleanup-id-extract.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/budget-frontend-limit-bypass.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，33 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，612 项中 610 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`pluginKeywordModalExists:false`、`pluginKeywordModalOpen:false`、`pluginCopyOverviewPopup:false`、`pluginCopySuccessPopup:false`、`pluginBatchPlusMenuOpen:false`、`pluginOptimizerPanel:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:8`；可见插件元素仅有悬浮入口 `#am-helper-icon`。未访问风控页，未触发 alert，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue。
+- Diff 自审：改动集中在主助手风控页提醒 timer 生命周期、对应静态测试、任务记录和构建产物；未改风控识别正则、history hook、预算页早退、真实创建/复制/提交、授权、护航接口或 10rpm 限速。
+
+## 结果复盘
+- 第十一轮第三十一子项结果：主助手风控页提醒从“进入风控 URL 后排队无句柄 0ms alert timeout”优化为“`State.riskAlertTimer` 持有 pending alert，重复调度或离开非风控 URL 会取消旧 timer，触发时归零并复核当前 URL 仍为同一个风控页”。
+- 取舍结论：保留原本只提醒一次同一风控 URL 的语义和 alert 文案，不新增第二套风控识别逻辑；只收口短生命周期 timer，避免快速路由切走后旧 href/State/alert 闭包继续滞留或弹出过期提示。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行任何服务端写动作或业务提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十子项
+
+## 需求规格
+- 目标：在 extension 授权启动静默校验 timer 收口后，继续优化组建计划向导打开后的延迟任务调度，避免 `scheduleWizardOpenTask()` 通过 rAF 后再排队无句柄 `setTimeout(runTask, 0)`，重复打开/关闭向导时旧 timer 持有任务闭包、openToken 和向导状态引用。
+- 根因判断：`src/optimizer/keyword-plan-api/wizard-open-and-create.js` 中 `scheduleWizardOpenTask()` 虽然在 `runTask()` 内检查 `wizardState.openToken` 与 `wizardState.visible`，但 rAF 和 0ms timeout 都没有句柄；关闭向导或再次打开时无法主动取消 pending 打开任务。
+- 范围：仅覆盖组建计划打开后的前端延迟任务调度生命周期和静态回归；不改打开向导 DOM、样式加载、预览刷新语义、候选加载、运行时默认值读取、场景配置扫描、商品默认值、真实创建/复制/提交接口或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把打开任务 timer/raf 归入 `wizardState` 生命周期，新增 `openTaskTimers`、`openTaskFrames`、`ensureWizardOpenTaskSchedules()` 与 `clearWizardOpenTaskSchedule()`；同一轮打开允许预览刷新和后台初始化等多个任务并存，新一轮打开或关闭向导时统一释放上一轮 pending 打开任务。
+- 成功标准：静态测试证明打开任务调度有 timer/raf 注册表、可清理、新一轮打开和关闭向导会释放 pending 任务，timer/raf 触发后从注册表移除，旧无句柄 `setTimeout(runTask, 0)` / 裸 `window.requestAnimationFrame(scheduleAfterPaint)` 不再存在；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击组建计划入口、不打开向导、不触发候选加载、运行时默认值读取、创建计划、复制计划、批量+、潜力词导出、预算提交、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和弹窗未打开。
+
+## 执行计划（可核对）
+- [x] 复核第二十九子项提交后工作区状态，确认本子项只处理组建计划打开任务调度。
+- [x] 在 `wizardState` 生命周期中新增打开任务 timer/raf 注册表与清理 helper。
+- [x] 将 `scheduleWizardOpenTask()` 改为统一可取消调度，保持原 rAF 后 0ms 执行和 token/visible 守卫。
+- [x] 在关闭向导路径释放 pending 打开任务，并补充/更新目标测试锁定无句柄 timeout 不回退。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `76f7e08 优化授权启动校验计时器`，工作区干净。
+- 定位结论：`scheduleWizardOpenTask()` 的延迟任务只服务组建计划向导打开后的前端初始化与预览刷新，不属于服务端提交路径；收口后可减少重复打开/关闭时旧 task/openToken/wizardState 闭包滞留。
+- 设计修正：初版单槽 timer 会错误取消同一轮打开中的另一个合法任务；最终采用 `Set` 注册表，允许同一 openToken 下多个前端打开任务并存，只在新一轮打开或关闭时批量释放。
+- 实现摘要：`wizardState` 新增 `openTaskTimers` 和 `openTaskFrames`；`scheduleWizardOpenTask()` 会登记 rAF 与 0ms timeout，触发后从注册表移除；`openWizard()` 新开一轮和 `closeWizardOverlay()` 关闭时调用 `clearWizardOpenTaskSchedule()` 释放旧 pending 任务。
+- 自审修正：rAF 分支额外记录 `frameFired`，避免同步 rAF shim 在回调已执行后才把 frame id 加入注册表。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 更新打开路径回归，锁定 timer/raf 注册表、清理 helper、新开/关闭释放、同步 rAF shim 不残留 frame id，以及旧无句柄 `setTimeout(runTask, 0)` / 裸 rAF 禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 源码切片说明：`src/optimizer/keyword-plan-api/intro.js`、`request-builder-preview.js` 属于构建切片，不是独立 JS 文件，单文件 `node --check` 不适用；官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 目标测试：`node --test tests/keyword-wizard-entry-regression.test.mjs` 通过，8 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，28 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，612 项中 610 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 真实标签，`navigate_page` 刷新当前关键词推广管理页；`evaluate_script` 只读返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`runtimeMode:"extension"`、`source:"extension_cache_bootstrap"`、`scriptVersion:"7.05"`、`hasLicenseOverlay:false`、`hasFullKeywordApiGlobal:false`、`pluginKeywordModalExists:false`、`pluginKeywordModalOpen:false`、`pluginScenePopup:false`、`pluginItemPicker:false`、`pluginCopyOverviewPopup:false`、`pluginCopySuccessPopup:false`、`pluginBatchPlusMenuOpen:false`、`pluginOptimizerPanel:false`、`batchPlusButtonCount:1`、`visibleCopyButtonCount:4`；页面本身自动露出了原生 AI 点睛/新建相关行动面板（`nativeCreateActionCount:4`），未进行任何点击或关闭。未点击组建计划、立即投放、新建关键词推广、立即下单、复制、批量+、潜力词导出、护航执行或任何真实写入口；非 preserved 控制台包含页面既有 `ERR_TUNNEL_CONNECTION_FAILED`、组件依赖 warning、Canvas2D warning、deprecated issue，以及一条栈位于原生 `tracker/baxiaCommon/talk` 链路的 `Uncaught (in promise)`。
+- Diff 自审：改动集中在组建计划向导打开任务 timer/rAF 生命周期、对应静态测试、任务记录和构建产物；未改打开向导 DOM、样式加载、预览刷新语义、候选加载、运行时默认值读取、场景配置扫描、商品默认值、真实创建/复制/提交接口或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第三十子项结果：组建计划向导打开后的延迟任务从“rAF 后继续排队无句柄 0ms timeout”优化为“`wizardState` 统一持有 `openTaskFrames` 与 `openTaskTimers`，触发后移出注册表，新一轮打开或关闭向导时批量释放上一轮 pending 任务”。
+- 取舍结论：采用 `Set` 注册表而不是单槽 timer，避免同一轮打开里预览刷新和后台初始化任务互相取消；同时保留原首帧后 0ms 执行、openToken 守卫和 visible 守卫，并处理同步 rAF shim 的测试环境边界。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行组建计划、复制、批量+、护航或任何真实写动作，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十九子项
+
+## 需求规格
+- 目标：在潜力词 CSV 下载清理 timer 收口后，继续优化 extension 授权守卫启动期静默校验 timer，避免缓存命中与预检分支各自排队无句柄 `setTimeout(..., 0)`，重复初始化或运行态切换时旧 timer 持有授权上下文闭包。
+- 根因判断：`src/entries/extension-license-guard.js` 在 extension 模式启动时，缓存命中分支直接 `setTimeout(() => triggerOnDemandVerify('extension_cache_bootstrap'), 0)`，未命中分支直接 `setTimeout(() => LicenseGuard.assertAuthorized(...), 0)`；两处 timer 无统一句柄，无法取消 pending 启动静默校验。
+- 范围：仅覆盖 extension 启动期静默校验 0ms timer 生命周期和静态回归；不改授权服务地址、policy token 验签、缓存恢复、按需校验、授权遮罩、shopId 解析、续租逻辑、background 桥、userscript 启动预热或任何真实授权请求合同。
+- 热修 vs 结构性修复取舍：新增 `extensionBootstrapVerifyTimer`、`clearExtensionBootstrapVerifyTimer()` 与 `scheduleExtensionBootstrapVerify(callback)`，把“extension bootstrap 仅允许一个 pending 静默校验任务”的不变量放在授权守卫内部，而不是在两个启动分支保留裸 timer。
+- 成功标准：静态测试证明 extension 启动静默校验 timer 有句柄、可取消、重复调度先取消旧 timer、触发后归零，缓存命中和预检分支都复用 helper，旧无句柄 `setTimeout(...extension_cache_bootstrap...)` / `setTimeout(...bootstrap_preflight...)` 不再存在；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不触发授权刷新按钮、不主动调用授权接口、不点击插件业务入口、不点击复制、批量+、潜力词导出、预算提交、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认运行态授权对象/页面状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十八子项提交后工作区状态，确认本子项只处理 extension bootstrap 静默校验 timer。
+- [x] 在 `extension-license-guard.js` 中新增启动静默校验 timer 句柄、清理和调度 helper。
+- [x] 将缓存命中与 bootstrap 预检两个 0ms 分支改为复用 helper，保持原异步校验语义和参数。
+- [x] 补充/更新目标测试，锁定 extension 启动静默校验不再累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `1cd2963 优化潜力词下载清理计时器`；只读 `git status --short` 没有实际变更行，但有 macOS 临时缓存写入警告。
+- 定位结论：extension 授权守卫启动期两个 0ms timer 只用于延后静默校验，不属于业务提交或服务端并发执行路径；收口后可减少启动重复注入时旧授权上下文闭包滞留。
+- 实现摘要：`src/entries/extension-license-guard.js` 新增 `extensionBootstrapVerifyTimer`、`clearExtensionBootstrapVerifyTimer()` 与 `scheduleExtensionBootstrapVerify(callback)`；调度前会取消旧 pending timer，触发时先归零再执行原回调。
+- 行为摘要：extension 模式缓存命中仍异步触发 `triggerOnDemandVerify('extension_cache_bootstrap')`，缓存未命中仍异步执行原 `LicenseGuard.assertAuthorized({ source:'bootstrap_preflight', ... silentTransientFailure:true })`；userscript 模式启动预热保持同步调用不变。
+- 测试摘要：`tests/extension-license-cache-policy-token.test.mjs` 新增启动静默校验 timer 回归，锁定 timer 句柄、清理 helper、调度 helper、两处分支复用 helper 和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/entries/extension-license-guard.js` 通过。
+- 测试语法：`node --check tests/extension-license-cache-policy-token.test.mjs` 通过。
+- 目标测试：`node --test tests/extension-license-cache-policy-token.test.mjs` 通过，8 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，31 项测试全绿。
+- 空白检查：`git diff --check` 通过；只读沙箱下仍有 macOS xcrun 临时缓存写入警告，未报告 diff 空白错误。
+- 全量回归：`npm test` 通过，612 项中 610 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 真实标签，`navigate_page` 刷新当前关键词推广管理页；`evaluate_script` 只读返回 `readyState:"complete"`、`hasLicenseGuard:true`、`licenseState.authorized:true`、`licenseState.reason:"authorized"`、`licenseState.source:"extension_cache_bootstrap"`、`licenseState.runtimeMode:"extension"`、`licenseState.scriptVersion:"7.05"`、`hasLicenseOverlay:false`、`hasOptimizerToggle:true`、`batchPlusButtonCount:1`、`copyButtonCount:0`、`potentialExportButtonCount:0`、`hasCopyOverviewPopup:false`、`hasCopySuccessPopup:false`、`hasBatchPlusMenuOpen:false`、`hasOptimizerPanel:false`。未手动调用 `assertAuthorized` / `triggerOnDemandVerify`，未点击授权、复制、批量+、潜力词导出、护航执行或任何真实写入口；控制台仅见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误。
+- Diff 自审：改动集中在 extension 授权守卫启动静默校验 timer 生命周期、对应静态测试、任务记录和构建产物；未改授权服务地址、policy token 验签、缓存恢复、按需校验、授权遮罩、shopId 解析、续租逻辑、background 桥、userscript 启动预热或真实授权请求合同。
+
+## 结果复盘
+- 第十一轮第二十九子项结果：extension 授权守卫启动期静默校验从“缓存命中/预检两个分支各自排无句柄 0ms timeout”优化为“`extensionBootstrapVerifyTimer` 统一持有 pending 启动校验任务，重复调度先取消旧 timer，触发后归零再执行原回调”。
+- 取舍结论：保留 extension 模式启动时的异步缓存复核与预检校验语义，userscript 模式预热不变；没有新增第二套授权事实源，也不改变任何授权请求参数，只收口启动期短生命周期 timer。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行插件业务动作或真实写入口，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十八子项
+
+## 需求规格
+- 目标：在复制前一览窗详情准备 timer 收口后，继续优化潜力词计划日维度 CSV 下载后的对象 URL 清理 timer，避免 `downloadCsv()` 每次下载后排队无句柄 `setTimeout(..., 0)`，重复导出或离开目标页时旧 timer 仍持有下载链接 DOM 与 blob URL。
+- 根因判断：`src/main-assistant/potential-plan-daily-exporter.js` 中 `downloadCsv()` 直接在点击下载链接后启动 0ms timeout 执行 `URL.revokeObjectURL(link.href)` 和 `link.remove()`；该 timer 没有保存句柄，`removeButtons()` / 非目标页 `run()` 生命周期也无法取消 pending 清理。
+- 范围：仅覆盖潜力词 CSV 下载链接与 object URL 清理 timer 生命周期和静态回归；不改潜力词查询接口、导出数据组包、日期范围、按钮 DOM 文案、click 委托、真实下载触发行为、算法护航请求或 10rpm API 限速。
+- 热修 vs 结构性修复取舍：把下载清理 timer 归入 `PotentialPlanDailyExporter` 对象生命周期，新增 `downloadCleanupTimer`、清理 helper 与调度 helper；重复调度先释放旧 pending 清理，timer 触发后归零并清理当次 link/url，离开目标页时也释放 pending 清理。
+- 成功标准：静态测试证明下载清理 timer 有句柄、可清理、重复调度先取消旧 timer、触发后归零并 revoke object URL/remove link，`downloadCsv()` 不再直接保留无句柄 `setTimeout(() => URL.revokeObjectURL(...), 0)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击潜力词导出按钮、不触发潜力词报表查询或浏览器下载、不点击复制、批量+、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认潜力词导出入口/页面状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十七子项提交后工作区状态，确认本子项只处理潜力词 CSV 下载清理 timer。
+- [x] 在 `PotentialPlanDailyExporter` 生命周期中实现下载清理 timer 句柄、清理和调度 helper。
+- [x] 将 `downloadCsv()` 改为调用 helper，保持原点击下载、0ms 异步清理和 object URL revoke 行为。
+- [x] 补充/更新目标测试，锁定潜力词下载清理不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `034a856 优化 Chrome 复制预览准备计时器`；只读 `git status --short` 没有实际变更行，但有 macOS 临时缓存写入警告。
+- 定位结论：`downloadCsv()` 的 0ms object URL 清理 timer 是短生命周期浏览器资源释放任务，不涉及服务端请求；收口后可减少重复导出或离开目标页时旧 link/blob URL 闭包滞留。
+- 实现摘要：`src/main-assistant/potential-plan-daily-exporter.js` 新增 `downloadCleanupTimer`、`downloadCleanupLink`、`cleanupDownloadLink()`、`clearDownloadCleanupTimer()` 和 `scheduleDownloadCleanup(link)`；重复调度会先取消旧 timer 并释放旧 link/blob URL，timer 触发后归零再清理当次链接。
+- 行为摘要：`downloadCsv()` 保留创建 Blob、object URL、隐藏链接、触发 `link.click()` 和 0ms 异步清理节奏；只把无句柄 timeout 改成可取消生命周期任务，`removeButtons()` 会同步释放 pending 下载清理。
+- 测试摘要：`tests/potential-plan-daily-exporter.test.mjs` 新增潜力词 CSV 下载清理回归，锁定 timer 状态字段、清理 helper、调度 helper、离开目标页清理和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/potential-plan-daily-exporter.js` 通过。
+- 测试语法：`node --check tests/potential-plan-daily-exporter.test.mjs` 通过。
+- 目标测试：`node --test tests/potential-plan-daily-exporter.test.mjs` 通过，5 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/potential-plan-daily-exporter.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，25 项测试全绿。
+- 空白检查：`git diff --check` 通过；只读沙箱下仍有 macOS xcrun 临时缓存写入警告，未报告 diff 空白错误。
+- 全量回归：`npm test` 通过，611 项中 609 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 真实标签，`navigate_page` 刷新当前关键词推广管理页；`evaluate_script` 只读返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`isPotentialPage:false`、`potentialExportButtonCount:0`、`copyButtonCount:0`、`batchPlusButtonCount:1`、`hasPotentialDownloadingButton:false`、`hasPotentialDownloadLink:false`、`hasCopyOverviewPopup:false`、`hasCopySuccessPopup:false`、`hasBatchPlusMenuOpen:false`。未跳转潜力词页，未点击潜力词导出、复制、批量+、计划上下线、护航执行或任何真实写入口；控制台仅见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误。
+- Diff 自审：改动集中在潜力词 CSV 下载 object URL 清理 timer 生命周期、对应静态测试、任务记录和构建产物；未改潜力词查询接口、导出数据组包、日期范围、按钮 DOM 文案、click 委托、真实下载触发行为、算法护航请求或 10rpm API 限速。
+
+## 结果复盘
+- 第十一轮第二十八子项结果：潜力词 CSV 下载后的 object URL 清理从“每次下载后排队无句柄 0ms timeout”优化为“`PotentialPlanDailyExporter` 统一持有 `downloadCleanupTimer` 和 `downloadCleanupLink`，重复调度先取消旧 timer 并释放旧 link/blob URL，触发后归零再清理当次链接”。
+- 取舍结论：保留原点击下载和 0ms 异步释放节奏，不改变任何报表查询、CSV 组包或真实下载触发语义；只收口短生命周期 DOM/blob URL 资源，离开非目标页时也能释放 pending 清理。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行潜力词导出或任何服务端写动作，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十七子项
+
+## 需求规格
+- 目标：在复制焦点恢复 timer 收口后，继续优化复制前一览窗打开后的源计划详情准备 timer，避免 `openCopyPlanOverviewDialog()` 每次弹窗首帧后排队无句柄 `setTimeout(startPrepareContext, 0)`，弹窗被取消、关闭或替换后旧 timer 仍持有 popup、activeContext 和 prepareContext 闭包。
+- 根因判断：`src/main-assistant/campaign-id-quick-entry.js` 中 `schedulePrepareContext()` 直接使用 `setTimeout(startPrepareContext, 0)`；虽然 `startPrepareContext()` 内部会检查 `popup.isConnected`，但无句柄 timer 在触发前无法取消，也无法证明弹窗关闭时 pending prepare 已释放。
+- 范围：仅覆盖复制前一览窗异步读取详情启动 timer 生命周期和静态回归；不改 prepareContext 读取逻辑、复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把 prepare timer 限定在单个一览窗闭包内，新增局部 `prepareContextTimerId` 与 `clearPrepareContextTimer()`；关闭/取消/提交成功先释放 pending timer，调度时先取消旧 timer，触发后归零再进入原 `startPrepareContext()`。
+- 成功标准：静态测试证明复制前一览窗 prepare timer 有局部句柄、可清理、关闭路径会释放、timer 触发后归零，`schedulePrepareContext()` 不再直接保留无句柄 `setTimeout(startPrepareContext, 0)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击复制、确认生成、确认搜索、批量+、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认复制按钮/批量入口运行态存在，不打开复制一览窗。
+
+## 执行计划（可核对）
+- [x] 复核第二十六子项提交后工作区状态，确认本子项只处理复制前一览窗 prepare 启动 timer。
+- [x] 在 `openCopyPlanOverviewDialog()` 闭包中实现 prepare timer 句柄和清理 helper。
+- [x] 将 `schedulePrepareContext()` 改为可取消调度，并在取消/关闭/提交成功路径释放 pending timer。
+- [x] 补充/更新目标测试，锁定复制前一览窗不会累积无句柄 prepare timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `aae74f6 优化 Chrome 复制焦点恢复计时器`，工作区干净。
+- 定位结论：`schedulePrepareContext()` 的 0ms timeout 只用于复制前一览窗首帧后启动详情读取，是明确短生命周期弹窗任务；收口后可减少弹窗取消或替换时旧 popup/context 闭包滞留。
+- 实现摘要：`src/main-assistant/campaign-id-quick-entry.js` 在 `openCopyPlanOverviewDialog()` 闭包内新增 `prepareContextTimerId` 和 `clearPrepareContextTimer()`；调度时先清旧 timer，触发后归零再执行 `startPrepareContext()`。
+- 行为摘要：保留首帧后启动详情读取、`popup.isConnected` 保护、读取完成后重渲染预览行、提交前校验和取消恢复焦点逻辑；取消/关闭/提交成功前会释放 pending prepare timer。
+- 测试摘要：`tests/campaign-copy-current-plan-quick-entry.test.mjs` 扩展复制前一览窗回归，锁定局部 timer 句柄、清理 helper、关闭/提交清理、触发归零和旧无句柄 `setTimeout(startPrepareContext, 0)` 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过。
+- 测试语法：`node --check tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过。
+- 目标测试：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过，14 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，51 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 只读检查运行态；返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`copyButtonCount:7`、`batchPlusButtonCount:1`、`hasCopyOverviewPopup:false`、`hasCopySuccessPopup:false`、`hasBatchPlusMenuOpen:false`，样例复制按钮包含 `campaignId`、`copyMode:"inherit"`、`disabled:false`、`isConnected:true`。未点击复制、确认生成、确认搜索、批量+、计划上下线、护航执行或任何真实写入口。
+- Diff 自审：改动集中在复制前一览窗异步读取详情启动 timer 生命周期、对应静态测试、任务记录和构建产物；未改 prepareContext 读取逻辑、复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第二十七子项结果：复制前一览窗详情读取启动从“首帧后排队无句柄 `setTimeout(startPrepareContext, 0)`”优化为“单弹窗闭包内持有 `prepareContextTimerId`，重复调度先取消旧 timer，关闭/取消/提交成功前释放，触发后归零”。
+- 取舍结论：timer 句柄保持在一览窗局部闭包内，不新增全局弹窗状态；保留原异步读取详情、预览行重渲染和只在确认后提交的安全语义。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实复制、详情读取或护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十六子项
+
+## 需求规格
+- 目标：在批量+成功列表刷新 timer 收口后，继续优化复制计划弹窗关闭后的焦点恢复 timer，避免 `restoreFocusWhenReady()` 在触发按钮暂不可用时连续排队无句柄 50ms retry 和 0ms focus timeout，旧 timer 持有 focus target、context 和按钮 DOM。
+- 根因判断：`src/main-assistant/campaign-id-quick-entry.js` 中 `restoreFocusWhenReady(target, attempt)` 直接使用三处 `window.setTimeout`；重复关闭复制成功弹窗或复制前一览窗时，旧焦点恢复任务不会被取消，也无法证明 pending timer 已归零。
+- 范围：仅覆盖复制链路关闭/取消后的焦点恢复 timer 生命周期和静态回归；不改复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把焦点恢复 timer 归入 `CampaignIdQuickEntry` 对象生命周期，新增 `copyFocusRestoreTimer`、`clearCopyFocusRestoreTimer()` 和 `scheduleCopyFocusRestore(target, attempt, delay)`；每次恢复前先取消旧 timer，触发后归零，继续复用原有最多 6 次重试和 `requestAnimationFrame` 聚焦。
+- 成功标准：静态测试证明焦点恢复 timer 有句柄、可清理、重复恢复先取消旧 timer、timer 触发后归零，`restoreFocusWhenReady()` 不再直接保留无句柄 `window.setTimeout`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击复制、确认搜索、批量+、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认复制按钮/批量入口运行态存在，不触发复制链路。
+
+## 执行计划（可核对）
+- [x] 复核第二十五子项提交后工作区状态，确认本子项只处理复制弹窗关闭后的焦点恢复 timer。
+- [x] 在 `CampaignIdQuickEntry` 生命周期中实现焦点恢复 timer 句柄、清理和调度 helper。
+- [x] 将 `restoreFocusWhenReady()` 的 50ms retry 和 0ms focus defer 改为调用 helper，保持原最多 6 次重试、禁用按钮等待和 rAF 聚焦行为。
+- [x] 补充/更新目标测试，锁定复制焦点恢复不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `363ce19 优化 Chrome 批量刷新计时器释放`，工作区干净。
+- 定位结论：`restoreFocusWhenReady()` 的 50ms retry 和 0ms focus timeout 只服务复制弹窗关闭后的焦点恢复，是明确短生命周期 UI 任务；收口后可以减少重复关闭/弹窗替换时旧 target 闭包滞留。
+- 实现摘要：`src/main-assistant/campaign-id-quick-entry.js` 新增 `copyFocusRestoreTimer`、`clearCopyFocusRestoreTimer()` 和 `scheduleCopyFocusRestore(target, attempt, delay)`；`restoreFocusWhenReady()` 只委托调度 helper，timer 触发后归零并调用 `runCopyFocusRestore()`。
+- 行为摘要：保留原最多 6 次重试、50ms 等待禁用按钮恢复、`requestAnimationFrame` 后聚焦和 `{ preventScroll: true }`；只把无句柄 timeout 改为可取消的单 pending 焦点恢复任务。
+- 测试摘要：`tests/campaign-copy-current-plan-quick-entry.test.mjs` 扩展复制成功弹窗回归，锁定焦点恢复 timer 句柄、清理 helper、调度 helper、执行入口和旧无句柄 50ms retry 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过。
+- 测试语法：`node --check tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过。
+- 目标测试：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过，14 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，51 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 只读检查运行态；返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`copyButtonCount:7`、`batchPlusButtonCount:1`、`hasCopySuccessPopup:false`、`hasCopyOverviewPopup:false`、`hasBatchPlusMenuOpen:false`，样例复制按钮包含 `campaignId`、`copyMode:"inherit"`、`disabled:false`、`isConnected:true`。未点击复制、确认搜索、批量+、计划上下线、护航执行或任何真实写入口。
+- Diff 自审：改动集中在复制弹窗关闭后的焦点恢复 timer 生命周期、对应静态测试、任务记录和构建产物；未改复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第二十六子项结果：复制弹窗关闭后的焦点恢复从“多处分支直接排队无句柄 50ms retry/0ms focus timeout”优化为“`CampaignIdQuickEntry` 统一持有 `copyFocusRestoreTimer`，重复恢复先取消旧 timer，触发后归零并进入单一执行函数”。
+- 取舍结论：保留原焦点恢复语义和等待节奏，没有新增第二套焦点目标事实源；只减少重复关闭或按钮暂不可用时旧 target/context/DOM 闭包被延迟持有的窗口。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实复制或护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十五子项
+
+## 需求规格
+- 目标：在算法护航首次 reveal timer 收口后，继续优化主助手批量+成功后的计划列表局部刷新 timer，避免 `refreshCampaignListOnly()` 每次成功收尾都排队无句柄 `window.setTimeout(..., delay)`，重复批量动作或后续状态变化时旧 timer 继续持有 options、reason 和刷新闭包。
+- 根因判断：`src/main-assistant/campaign-id-quick-entry.js` 中 `refreshCampaignListOnly(options)` 直接启动延迟刷新，但没有保存句柄；重复调用不会取消旧刷新任务，也无法在同一生命周期内确认 pending 刷新是否已释放。
+- 范围：仅覆盖批量+成功后的延迟局部刷新 timer 生命周期和静态回归；不改官方 VFrame render 优先级、搜索框回车兜底、复制/删除/人群编辑接口、并发开启、真实写入合同或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把刷新收尾 timer 放进 `CampaignIdQuickEntry` 对象生命周期，新增 `campaignListRefreshTimer`、`clearCampaignListRefreshTimer()` 和 `scheduleCampaignListRefresh(options)`；重复调度先取消旧 timer，timer 触发后归零再执行原有局部刷新。
+- 成功标准：静态测试证明刷新 timer 有句柄、可清理、重复调度先取消旧 timer、触发后归零，`refreshCampaignListOnly()` 不再直接保留无句柄 `window.setTimeout`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击批量删除、复制、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认主助手/批量+入口运行态存在，不触发成功刷新路径。
+
+## 执行计划（可核对）
+- [x] 复核第二十四子项提交后工作区状态，确认本子项只处理批量+成功后的延迟列表刷新 timer。
+- [x] 在 `CampaignIdQuickEntry` 生命周期中实现局部刷新 timer 句柄、清理和调度 helper。
+- [x] 将 `refreshCampaignListOnly()` 改为调用 helper，保持原默认 600ms 延迟、VFrame render 优先和搜索兜底行为。
+- [x] 补充/更新目标测试，锁定成功收尾不会累积无句柄刷新 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `bed367d 优化 Chrome 护航面板首次展示计时器`，工作区干净。
+- 定位结论：剩余候选中，`refreshCampaignListOnly()` 的延迟局部刷新 timer 属于短生命周期成功收尾任务，不是长期事实源，也不触发真实写请求；适合作为本轮低风险内存持有优化点。
+- 实现摘要：`src/main-assistant/campaign-id-quick-entry.js` 新增 `campaignListRefreshTimer`、`clearCampaignListRefreshTimer()` 和 `scheduleCampaignListRefresh(options)`；重复成功收尾会先取消旧 timer，timer 触发后归零并执行原有 `refreshCampaignListOnlyNow(options)`。
+- 行为摘要：`refreshCampaignListOnly(options)` 改为只委托调度 helper，保留默认 600ms 延迟、官方 VFrame `render/asyncRenderData` 优先、搜索框回车兜底和失败日志文案。
+- 测试摘要：`tests/campaign-batch-plus-quick-entry.test.mjs` 扩展“批量+成功后复用原生计划列表刷新”回归，锁定 timer 句柄、清理 helper、调度 helper、触发归零和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过。
+- 测试语法：`node --check tests/campaign-batch-plus-quick-entry.test.mjs` 通过。
+- 目标测试：`node --test tests/campaign-batch-plus-quick-entry.test.mjs` 通过，9 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，37 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 只读检查运行态；返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`batchPlusButtonCount:1`、`quickButtonCount:7`、`copyButtonCount:7`、`hasBatchPlusMenuOpen:false`，样例批量+按钮 `title:"批量+"` 且 `isConnected:true`。未打开批量+菜单，未点击批量删除/复制/预算/人群/上下线/护航执行入口。
+- Diff 自审：改动集中在批量+成功后的延迟计划列表刷新 timer 生命周期、对应静态测试、任务记录和构建产物；未改官方 VFrame render 优先级、搜索框回车兜底、复制/删除/人群编辑接口、并发开启、真实写入合同或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第二十五子项结果：批量+成功后的列表刷新从“每次成功收尾都排队一个无句柄延迟 timeout”优化为“`CampaignIdQuickEntry` 统一持有刷新 timer，重复调度先取消旧 timer，触发后立即归零再执行局部刷新”。
+- 取舍结论：保留原局部刷新路径和 600ms 延迟，不新增第二套刷新事实源，也不触碰任何真实写接口；只减少重复收尾时旧 options/闭包被延迟持有的窗口。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实批量+动作或护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十四子项
+
+## 需求规格
+- 目标：在算法护航 API 请求 10rpm 限速后，继续收口算法护航公开入口首次创建面板后的延迟 reveal timer，避免 `__ALIMAMA_OPTIMIZER_TOGGLE__` 在面板不存在时排队无句柄 `setTimeout(..., 100)`，关闭面板或重复触发后旧 timer 仍持有闭包并可能重新展示已关闭面板。
+- 根因判断：`src/optimizer/public-api.js` 中面板不存在分支 `UI.create()` 后直接启动 100ms timeout 调 `revealOptimizerPanel()`；该 timer 没有保存句柄，`src/optimizer/ui.js` 的关闭路径也无法取消 pending reveal。
+- 范围：仅覆盖算法护航面板首次 reveal timer 生命周期和静态回归；不改授权门禁、toggle 返回值、面板创建 DOM、Token 状态轮询、日志 overflow、高亮提示、手动设置、执行流程、open/openV3 请求合同或 10rpm API 限速。
+- 热修 vs 结构性修复取舍：把 reveal timer 归入 `UI` 面板生命周期，新增 `panelRevealTimerId`、`clearPanelRevealTimer()`、`schedulePanelReveal(callback)`；公开入口只通过 helper 调度，关闭面板时取消 pending reveal。
+- 成功标准：静态测试证明首次 reveal timer 有句柄、可清理、重复调度先取消旧 timer、timer 触发后归零且回调仅在面板仍存在时执行；公开入口不再保留无句柄 `setTimeout(..., 100)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击“立即扫描并优化”、不触发 open/openV3、创建、复制、预算提交、删除、上下线或投放；浏览器验收只允许打开/关闭算法护航面板并观察 DOM/控制台。
+
+## 执行计划（可核对）
+- [x] 复核第二十三子项提交后工作区状态，确认本子项只处理公开入口首次 reveal timer。
+- [x] 在 `UI` 面板生命周期中实现 reveal timer 句柄、清理和调度 helper。
+- [x] 将 `__ALIMAMA_OPTIMIZER_TOGGLE__` 首次创建后的 100ms reveal 改为调用 helper，并在关闭面板时取消 pending reveal。
+- [x] 补充/更新目标测试，锁定首次 reveal timer 不再无句柄排队。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `96f2212 优化算法护航请求限速`，工作区干净。
+- 定位结论：剩余候选中，公开入口首次创建面板后的 100ms reveal timer 有明确面板关闭边界，不属于长期事实源，也不涉及服务端请求；适合作为本轮低风险 UI 生命周期优化点。
+- 实现摘要：`src/optimizer/ui.js` 新增 `panelRevealTimerId`、`clearPanelRevealTimer()` 与 `schedulePanelReveal(callback)`；首次 reveal 触发前会归零句柄并重新读取面板，面板不存在则直接返回；关闭面板时同步释放 pending reveal 与 highlight timer。
+- 入口摘要：`src/optimizer/public-api.js` 的首次创建分支不再启动无句柄 100ms timeout，改为通过 `UI.schedulePanelReveal?.((createdPanel) => revealOptimizerPanel(createdPanel))` 调度。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增静态回归，锁定 reveal timer 句柄、清理 helper、统一调度、触发前 panel 校验、关闭释放和旧无句柄 timeout 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，9 项测试全绿；新增断言覆盖首次 reveal timer 生命周期。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，74 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 调用 `window.__ALIMAMA_OPTIMIZER_TOGGLE__()` 仅打开面板观察 DOM；未点击“立即扫描并优化”。首次创建后立即状态为 `opacity:"0"`、`pointerEvents:"none"`，160ms 后 reveal 为 `opacity:"1"`、`pointerEvents:"auto"`；关闭控件 `#alimama-escort-helper-ui-close` 存在，触发关闭 60ms 和 240ms 后均保持 `opacity:"0"`、`pointerEvents:"none"`，未被 pending reveal 重新展示。
+- Diff 自审：改动集中在算法护航面板首次 reveal timer 生命周期、公开入口复用 helper、对应静态测试、任务记录和构建产物；未改授权门禁、toggle 返回值、Token 状态轮询、日志 overflow、高亮提示、手动设置、执行流程、open/openV3 请求合同或 10rpm API 限速。
+
+## 结果复盘
+- 第十一轮第二十四子项结果：算法护航首次创建面板后的 reveal 从“公开入口排队无句柄 100ms timeout”优化为“UI 面板生命周期统一调度，重复调度先取消旧 timer，关闭面板会释放 pending reveal，timer 触发前校验 panel 仍存在”。
+- 取舍结论：保留原 100ms reveal 延迟、toggle 返回值和面板显示动画；只收口短生命周期 timer，不新增第二套面板状态，也不触碰服务端请求或真实投放链路。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十三子项
+
+## 需求规格
+- 目标：按用户补充的“服务器只帮并发 10rpm”约束，继续优化算法护航执行侧的请求调度，避免当前 `concurrentLimit` 同时启动多个计划后在服务端请求层形成瞬时并发、失败重试和长时间挂起闭包。
+- 根因判断：`src/optimizer/core.js` 只按 `userConfig.concurrency` 限制计划任务并发，`src/optimizer/api.js` 的每次 `API.request()` 会立即发起 `_singleRequest()`，缺少全局 10 rpm 请求启动节流；当多个计划并发执行且每个计划包含多次读取/提交时，会超过服务器实际承载节奏。
+- 范围：仅覆盖算法护航 `API.request()` 的全局请求启动限速、执行提示文案和静态回归；不改 open/openV3 请求合同、Token 读取、手动设置参数、计划扫描、成功/失败统计、取消按钮、结果浮层、真实写接口字段或主助手计划并发功能。
+- 热修 vs 结构性修复取舍：采用 API 层单一节流队列表达“所有护航服务端请求最多 10 rpm”的不变量，而不是在每个调用点散落 delay；计划任务并发保持现有配置，但请求进入队列后按 6000ms 最小间隔启动，重试也重新经过同一限速入口。
+- 成功标准：静态测试证明存在 `REQUEST_RATE_LIMIT_RPM: 10`、`REQUEST_RATE_LIMIT_INTERVAL_MS: 6000`、`API.waitForRateLimitSlot()` 和 `API.request()` 每次尝试前的限速调用；执行状态文案明确 10 rpm 限速；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，且不触发真实护航提交。
+- 安全边界：本子项不点击“立即扫描并优化”、不触发 open/openV3、创建、复制、预算提交、删除、上下线或投放；浏览器验收只允许观察面板文案和运行态状态，不做服务端请求压力测试。
+
+## 执行计划（可核对）
+- [x] 复核第二十二子项提交后工作区状态，并确认本子项改为处理 10 rpm 服务端请求约束。
+- [x] 在 API 层实现全局 10 rpm 请求启动限速，确保并发任务和重试都复用同一队列。
+- [x] 更新算法护航执行提示文案，避免 UI 只表达“并发数”而漏掉 10 rpm 限速。
+- [x] 补充/更新目标测试，锁定请求限速不被回退为纯并发调度。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `8015322 优化 Chrome 护航面板高亮计时器`；只读状态下 `git status --short` 无变更行，但有 macOS 临时缓存写入警告。
+- 子代理尝试失败：本地 subagent 返回 `auth_unavailable: 502 Bad Gateway`，本子项由主线程继续定位。
+- 定位结论：比剩余 UI 短 timer 更关键的是用户补充的 10 rpm 服务端约束；当前算法护航只限制计划任务并发，没有限制 API 请求启动速率，多个计划执行时仍可能造成服务端请求突刺。
+- 实现摘要：`src/optimizer/api.js` 新增 10 rpm 固定请求槽、串行限速队列、可取消等待和 AbortError 透传；`API.request()` 每次尝试前先 `await API.waitForRateLimitSlot(signal)`，重试也不能绕过请求槽。
+- 文案摘要：`src/optimizer/core.js` 执行状态改为“开始按 10rpm 限速处理 (任务并发数: N)”，并补充任务并发与 API 请求限速的边界注释；`src/optimizer/ui.js` 把输入标签从“同时执行”改为“任务并发”，降低误解为服务端并发的风险。
+- 测试摘要：`tests/optimizer-escort-new-flow-fallback.test.mjs` 新增静态回归，锁定 10rpm/6000ms、限速队列、每次 API 尝试前获取请求槽、执行提示和面板文案。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/api.js`、`node --check src/optimizer/core.js`、`node --check src/optimizer/ui.js` 均通过。
+- 测试语法：`node --check tests/optimizer-escort-new-flow-fallback.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过，40 项测试全绿；新增断言覆盖 10rpm 请求事实源、6000ms 间隔、串行限速队列、每次 API 尝试前获取请求槽、任务并发/请求限速文案边界。
+- 构建同步：首次 `npm run build` 在只读沙箱下因写入 `阿里妈妈多合一助手.js` 被拒绝；提升权限后 `npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，73 项测试全绿。
+- 空白检查：`git diff --check` 通过；只读阶段有 xcrun 临时缓存警告，未报告 diff 空白错误。
+- 全量回归：`npm test` 通过，609 项中 607 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面；`navigate_page` 刷新后 `evaluate_script` 只读确认 `window.__ALIMAMA_OPTIMIZER_TOGGLE__` 与 `window.__ALIMAMA_OPTIMIZER_RUN_CAMPAIGN__` 存在；调用 toggle 仅打开面板观察 DOM，未点击运行按钮，返回 `toggleResult: true`、`hasPanel: true`、标签为 `["诊断话术","任务并发"]`、按钮文案为 `立即扫描并优化`。`list_console_messages` 仅见页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和业务配置依赖 warn，未触发护航提交。
+- Diff 自审：改动集中在算法护航 API 请求限速、执行状态文案、面板标签、目标测试、任务记录和构建产物；未改 open/openV3 请求合同、Token 读取、手动设置参数、计划扫描、成功/失败统计、取消按钮、结果浮层、真实写接口字段或主助手计划并发功能。
+
+## 结果复盘
+- 第十一轮第二十三子项结果：算法护航从“只限制计划任务并发，API 请求会随并发任务立即启动”优化为“所有 `API.request()` 尝试先进入全局 10 rpm 请求槽，最小启动间隔 6000ms，重试同样经过限速队列”。
+- 取舍结论：保留用户可配任务并发，避免把计划处理能力直接降成单任务；真正的服务端压力入口在 API 层统一收口，减少并发计划导致的请求突刺、失败重试和等待闭包堆积。取消运行时，限速等待会透传 AbortError，不会继续占用后续请求队列。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实护航请求，避免突破安全边界和 10 rpm 服务端约束。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十二子项
+
+## 需求规格
+- 目标：在算法护航结果浮层关闭 timer 释放后，继续收口算法护航面板已打开时的高亮闪烁 timer，避免重复点击公开入口时排队多个无句柄 `setTimeout(() => panel.style.boxShadow = ..., 500)`，旧闭包继续持有面板节点并在关闭后回写样式。
+- 根因判断：`src/optimizer/public-api.js` 中 `revealOptimizerPanel()` 的已打开分支和 `__ALIMAMA_OPTIMIZER_TOGGLE__` 的已显示分支各自直接写 boxShadow 并启动 500ms timeout；没有统一 helper、没有句柄、关闭面板时也无法取消 pending highlight timer。
+- 范围：仅覆盖算法护航面板高亮提示 timer 生命周期和对应静态测试；不改面板创建、授权门禁、toggle 返回值、Token 轮询、日志 overflow、手动设置、结果浮层、真实护航执行或任何写接口合同。
+- 热修 vs 结构性修复取舍：采用 `UI.panelHighlightTimerId` + `UI.flashPanelHighlight(panel)` 的单一 helper，重复触发先取消旧 timer，timer 触发前校验 panel 仍连接；关闭面板时清理 pending highlight timer。
+- 成功标准：静态测试证明高亮 timer 有句柄和清理 helper，公开入口两处高亮都走 `UI.flashPanelHighlight(panel)`，关闭面板会清理 pending timer，不再保留两处无句柄 500ms timeout；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击护航执行、创建、复制、预算提交、删除、上下线、投放或生成计划；浏览器验收只允许观察算法护航面板打开/关闭和高亮状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十一子项提交后工作区状态，确认本子项继续处理短生命周期 UI timer。
+- [x] 定位算法护航公开入口面板高亮 timeout，确认问题局限在已打开面板的提示闪烁。
+- [x] 实现 `UI.panelHighlightTimerId`、清理 helper 和统一高亮 helper，并在关闭面板时释放。
+- [x] 补充/更新目标测试，锁定公开入口高亮不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `d4dd3f7 优化 Chrome 护航结果浮层关闭计时器`，工作区干净。
+- 定位结论：`public-api` 中两个 500ms boxShadow reset timeout 是同一视觉提示逻辑的重复实现，且只服务“面板已打开时提醒用户”的短生命周期，不应在重复触发或关闭面板后保留旧 timer。
+- 方案判断：把高亮提示生命周期放回 `UI` 对象，公开入口只调用 helper；关闭面板时统一清理，与 token/status/log overflow 等面板级资源释放保持一致。
+- 实现摘要：`src/optimizer/ui.js` 新增 `panelHighlightTimerId`、`clearPanelHighlightTimer()` 与 `flashPanelHighlight(panel)`；`src/optimizer/public-api.js` 两处已打开面板高亮改为调用 `UI.flashPanelHighlight?.(panel)`，关闭面板时清理 pending highlight timer。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增静态回归，锁定高亮 timer 句柄、清理 helper、统一调度 helper、关闭面板清理，以及公开入口两处高亮不再使用无句柄 timeout。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过；`src/optimizer/public-api.js` 是构建片段，单独 `node --check src/optimizer/public-api.js` 会因外层 IIFE 收口报 `Unexpected token '}'`，实际语法通过生成后的根 userscript 检查。
+- 测试语法：`node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，8 项测试全绿；新增断言覆盖面板高亮 timer 句柄、清理 helper、统一调度 helper、关闭面板清理和公开入口旧无句柄 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/optimizer-escort-new-flow-fallback.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，72 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，608 项中 606 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在算法护航面板高亮提示 timer 生命周期、公开入口复用 helper、对应静态测试、任务记录和构建产物；未改面板创建、授权门禁、toggle 返回值、Token 轮询、日志 overflow、手动设置、结果浮层、真实护航执行或任何写接口合同。
+
+## 结果复盘
+- 第十一轮第二十二子项结果：算法护航面板高亮从“两处公开入口各自排队无句柄 500ms boxShadow reset timeout”优化为“统一 `UI.flashPanelHighlight(panel)` 调度，重复触发先取消旧 timer，timer 触发后归零并校验面板仍连接”。
+- 取舍结论：保留原高亮色、500ms 视觉节奏、面板显示/隐藏逻辑和授权门禁；只补齐面板级提示 timer 生命周期，关闭面板时同步释放 pending highlight timer。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十一子项
+
+## 需求规格
+- 目标：在主助手工具按钮重试 timer 释放后，继续收口算法护航执行结果浮层的关闭过渡 timer，避免关闭按钮、遮罩点击和 Escape 在 240ms 淡出期间重复触发时排队多个无句柄 `setTimeout`，旧闭包重复持有 overlay 与焦点元素。
+- 根因判断：`src/optimizer/ui.js` 的 `renderResults()` 中 `closeResultOverlay()` 每次调用都会移除 keydown 监听、设置淡出样式并启动 `setTimeout(() => { overlay.remove(); restoreFocus(); }, 240)`；关闭期间没有 closing 状态或 timer 句柄，快速重复点击可能创建多个关闭 timer。
+- 范围：仅覆盖算法护航结果浮层关闭过渡 timer 和对应静态测试；不改结果表格 DOM、成功/失败展示、按钮样式、执行流程、openV3、TokenManager、手动设置、真实护航执行或任何写接口合同。
+- 热修 vs 结构性修复取舍：采用 `resultOverlayClosing` + `resultOverlayCloseTimerId` 的局部生命周期；首次关闭后后续关闭请求直接返回，timer 触发后归零并恢复焦点，不新增全局 UI 状态。
+- 成功标准：静态测试证明结果浮层关闭有 closing guard 和 timer 句柄，重复关闭不会再次排队 timeout，timer 触发后归零并移除 overlay/恢复焦点；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击护航执行、创建、复制、预算提交、删除、上下线、投放或生成计划；浏览器验收只允许观察结果浮层关闭状态。
+
+## 执行计划（可核对）
+- [x] 复核第二十子项提交后工作区状态，确认本子项继续处理短生命周期 UI timer。
+- [x] 定位算法护航结果浮层关闭过渡 timer，确认问题局限在同一浮层关闭期间重复触发。
+- [x] 实现结果浮层关闭 guard 和 close timer 句柄归零。
+- [x] 补充/更新目标测试，锁定重复关闭不会累积无句柄过渡 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `498297a 优化 Chrome 工具按钮重试计时器释放`，工作区干净。
+- 定位结论：结果浮层打开前已移除旧 overlay，旧弹窗重建不是问题；真正可收口的是同一 overlay 淡出期间多入口重复关闭导致的多个无句柄 240ms timer。
+- 方案判断：更优雅的方案是把关闭生命周期限定在 `renderResults()` 局部闭包内，用 closing 状态表达“关闭已受理”，用 timer 句柄表达“淡出移除待执行”，避免新增跨弹窗事实源。
+- 实现摘要：`src/optimizer/ui.js` 在结果浮层关闭闭包内新增 `resultOverlayClosing` 和 `resultOverlayCloseTimerId`；首次关闭后进入 closing 状态，后续关闭请求直接返回，240ms 过渡 timer 触发后归零并移除 overlay/恢复焦点。
+- 测试摘要：`tests/optimizer-escort-new-flow-fallback.test.mjs` 扩展结果浮层测试，锁定 closing guard、close timer 句柄、timer 触发后归零，以及禁止回退到旧无句柄过渡 `setTimeout`。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 通过。
+- 测试语法：`node --check tests/optimizer-escort-new-flow-fallback.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs` 通过，39 项测试全绿；新增断言覆盖结果浮层 closing guard、close timer 句柄、timer 触发后归零和旧无句柄过渡 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-escort-new-flow-fallback.test.mjs tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，71 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，607 项中 605 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在算法护航结果浮层关闭过渡 timer 生命周期、对应静态测试、任务记录和构建产物；未改结果表格 DOM、成功/失败展示、按钮样式、执行流程、openV3、TokenManager、手动设置、真实护航执行或任何写接口合同。
+
+## 结果复盘
+- 第十一轮第二十一子项结果：算法护航结果浮层关闭从“每次关闭入口都会排队一个无句柄 240ms timeout”优化为“首次关闭进入 closing 状态，后续关闭入口直接返回，淡出 timer 触发后归零并移除 overlay/恢复焦点”。
+- 取舍结论：保留 240ms 淡出过渡、Escape/遮罩/按钮三种关闭入口和焦点恢复行为；只补齐关闭期间的短生命周期 timer 管理，没有新增全局 UI 状态。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十子项
+
+## 需求规格
+- 目标：在主助手启动兜底 timer 释放后，继续收口主助手工具按钮的模块打开重试 timer，避免“算法护航/组建计划模块初始化中...”状态下连续点击排队多个无句柄 `setTimeout`，旧回调在模块已打开或弹窗已存在后仍继续持有闭包并可能重复 alert。
+- 根因判断：`src/main-assistant/ui.js` 中算法护航按钮和组建计划按钮在模块暂不可用时分别启动 1000ms/800ms 延迟重试；当前 timer 没有保存句柄，也不会在下一次点击、成功打开或已有弹窗打开时取消。
+- 范围：仅覆盖主助手工具按钮的算法护航/组建计划打开重试 timer 生命周期和对应静态测试；不改按钮 DOM、主面板开关、万能查数、辅助显示、预算破限、计划并发、关键词建计划 API、算法护航 toggle、真实创建/复制/预算提交或投放接口合同。
+- 热修 vs 结构性修复取舍：采用“runtime 双 timer 句柄 + clear/schedule helper”的生命周期，把每个工具按钮的延迟重试保持为最多一个；不改变 1000ms/800ms 重试延迟，不新增第二套模块可用性判断。
+- 成功标准：静态测试证明 `optimizerOpenRetryTimer` 与 `keywordPlanOpenRetryTimer` 存在，点击前/成功路径会清理旧 timer，延迟回调触发后归零，重复点击不会累积无句柄 timeout；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放、生成计划或护航执行；浏览器验收只允许观察工具按钮打开/重试状态。
+
+## 执行计划（可核对）
+- [x] 复核第十九子项提交后工作区状态，确认本子项继续处理主助手 UI timer 生命周期。
+- [x] 扫描剩余监听/timer 候选，排除路由、桥接、缓存清理等持续事实源，选择工具按钮打开重试 timer 作为本轮优化点。
+- [x] 实现算法护航/组建计划打开重试 timer 的句柄、清理和调度 helper。
+- [x] 补充/更新目标测试，锁定重复点击不会累积无句柄打开重试 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `0d314e8 优化 Chrome 主助手启动轮询释放`，工作区干净。
+- 定位结论：主助手 MutationObserver、URL 监听、桥接监听和缓存清理 timer 是运行态事实源或已有空缓存停止机制，不作为本轮优化点；工具按钮打开重试 timer 是用户点击期短生命周期资源，更适合继续收口。
+- 方案判断：给算法护航与组建计划各自保留一个 pending retry timer，下一次点击或成功打开前先取消旧 timer；timer 触发后先归零，再执行原有重试逻辑，保持现有失败提示语义。
+- 实现摘要：`src/main-assistant/ui.js` 新增 `optimizerOpenRetryTimer`、`keywordPlanOpenRetryTimer` 与对应 clear/schedule helper；算法护航和组建计划按钮点击前会先清理旧 pending retry，模块不可用时只保留最新一次延迟重试。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 新增静态回归，锁定双 timer 状态、helper 归零、点击前清理旧 timer、延迟回调触发后归零，以及禁止回退到旧无句柄 `setTimeout`。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/ui.js` 通过。
+- 测试语法：`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，12 项测试全绿；新增断言覆盖工具按钮打开重试双 timer 句柄、clear/schedule helper、点击前清理旧 timer、触发后归零和旧无句柄 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，52 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，607 项中 605 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在主助手工具按钮打开重试 timer 生命周期、对应静态测试、任务记录和构建产物；未改按钮 DOM、主面板开关、万能查数、辅助显示、预算破限、计划并发、关键词建计划 API、算法护航 toggle、真实创建/复制/预算提交或投放接口合同。
+
+## 结果复盘
+- 第十一轮第二十子项结果：主助手工具按钮的模块打开重试从“连续点击可排队多个无句柄 timeout”优化为“算法护航与组建计划各自最多保留一个 pending retry timer，下一次点击先取消旧 timer，timer 触发后立即归零”。
+- 取舍结论：保留原有 1000ms/800ms 重试延迟、模块可用性判断和失败提示；只补齐点击期短生命周期 timer 管理，没有新增第二套模块加载状态。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十九子项
+
+## 需求规格
+- 目标：在主面板开关监听释放后，继续收口主助手启动兜底轮询的 timer 生命周期，避免 `document.body` 延迟出现时，`setInterval` 成功启动后已清理但 10 秒兜底 `setTimeout(() => clearInterval(timer), 10000)` 仍保留闭包。
+- 根因判断：`src/main-assistant/main.js` 在 `document.readyState !== 'loading'` 且 `document.body` 暂不可用时启动 16ms interval 轮询；轮询成功后只 `clearInterval(timer)`，未清理 10 秒 timeout，timeout 会继续持有 `timer/bootstrapMain` 等闭包直到自然触发。
+- 范围：仅覆盖主助手 bootstrap fallback interval/timeout 生命周期和对应静态测试；不改 `main()` 初始化顺序、SmartAssistant 预算页早退、MutationObserver、URL 变更监听、`Core.run()` 调度、辅助显示、万能查数、算法护航、组建计划或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“两个启动兜底 timer 句柄 + 单一 `clearBootstrapRetryTimers()`”的生命周期；不改变 16ms 轮询间隔、不改变 10 秒兜底上限、不新增第二套启动状态。
+- 成功标准：静态测试证明 fallback interval 和 fallback timeout 都有句柄，成功 bootstrap 会调用 `clearBootstrapRetryTimers()`，超时兜底也通过同一 helper 释放两类 timer；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新/观察主助手启动状态和 timer 释放。
+
+## 执行计划（可核对）
+- [x] 复核第十八子项提交后工作区状态，确认本子项只处理主助手启动兜底 timer 生命周期。
+- [x] 扫描启动层 MutationObserver/URL 变更/兜底轮询，确认 MutationObserver 是页面动态注入事实源，不关闭；选择 bootstrap fallback timer 作为本轮优化点。
+- [x] 实现 `bootstrapRetryIntervalId`、`bootstrapRetryTimeoutId` 和统一清理 helper。
+- [x] 补充/更新目标测试，锁定启动成功和超时都会释放 interval 与 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `47c01db 优化 Chrome 主面板开关监听释放`，工作区干净。
+- 定位结论：主助手 MutationObserver 和 URL 监听是 SPA 表格复用/路由变更的持续事实源，不能为了释放资源而关闭；启动兜底轮询的 10 秒 timeout 在成功后继续保留是明确可收口的短生命周期资源。
+- 方案判断：用单一 `clearBootstrapRetryTimers()` 表达启动兜底资源不变量：无论轮询成功还是兜底超时，都同时释放 interval 和 timeout，避免旧闭包继续挂到 10 秒。
+- 实现摘要：`src/main-assistant/main.js` 新增 `bootstrapRetryIntervalId`、`bootstrapRetryTimeoutId` 和 `clearBootstrapRetryTimers()`；`bootstrapMain()` 成功进入启动态后立即清理兜底 timer，10 秒超时也通过同一 helper 清理。
+- 测试摘要：`tests/optimizer-entry-error-handling.test.mjs` 新增静态回归，锁定启动兜底双句柄、统一清理 helper、成功启动调用点、超时清理调用点，以及禁止回退到旧的无句柄 timeout。
+
+## 验证记录
+- 源码段语法：`node --check src/main-assistant/main.js` 不适用于该文件，因为它是构建段并以外层 IIFE 结束括号收尾；实际语法通过 `npm run check:syntax` 检查生成后的根 userscript。
+- 测试语法：`node --check tests/optimizer-entry-error-handling.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/optimizer-entry-error-handling.test.mjs` 通过，5 项测试全绿；新增断言覆盖启动兜底 interval/timeout 双句柄、统一清理 helper、成功启动清理、超时清理和旧无句柄 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-entry-error-handling.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，45 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，606 项中 604 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在主助手 bootstrap fallback timer 生命周期、对应静态测试、任务记录和构建产物；未改 `main()` 初始化顺序、SmartAssistant 预算页早退、MutationObserver、URL 变更监听、`Core.run()` 调度、辅助显示、万能查数、算法护航、组建计划或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十九子项结果：主助手启动兜底从“interval 成功后只清 interval，10 秒 timeout 继续持有旧闭包”优化为“启动成功和兜底超时都经由 `clearBootstrapRetryTimers()` 同时释放 interval 与 timeout，并把两个句柄归零”。
+- 取舍结论：保留 16ms 轮询节奏和 10 秒兜底上限；MutationObserver 与 URL 监听仍是 SPA 页面动态注入事实源，本轮没有为了表面释放资源而破坏运行态重注入能力。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十八子项
+
+## 需求规格
+- 目标：在算法护航日志展开 timer 释放后，继续收口主助手面板的外部点击关闭监听和悬浮球延迟显示 timer，避免主面板关闭后仍常驻只服务打开态的匿名 `document.click` 闭包，以及多次折叠时累积无句柄 `setTimeout(() => icon.style.display = 'flex', 300)`。
+- 根因判断：`src/main-assistant/ui.js` 中外部点击关闭逻辑在 `bindEvents()` 初始化时用匿名 `document.addEventListener('click', ...)` 常驻；该监听只有 `State.config.panelOpen` 为真时才有意义，且无法在重复初始化或关闭状态下解绑。`updateState()` 关闭面板时的 icon reveal timeout 没有句柄，面板快速开合或旧 DOM 被重建时仍会短时持有旧 icon。
+- 范围：仅覆盖 `src/main-assistant/ui.js` 主助手面板开关生命周期和对应静态测试；不改万能查数、算法护航、组建计划、辅助显示开关、自动闭窗、排序重置、日志触发、预算破限、计划并发或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“runtime 句柄 + bind/unbind helper + schedule/clear helper”的生命周期，把外部点击监听按面板打开期绑定、关闭期释放；不新增第二套面板状态，不改变 hover 自动打开、点击最小化和 300ms 悬浮球显示节奏。
+- 成功标准：静态测试证明 `panelOutsideClickHandler` 具备绑定状态，`openPanel()` 打开后绑定外部点击监听，`closePanel()`/`updateState()` 关闭路径解绑，`updateState()` 用可取消 helper 调度悬浮球显示并在打开态清理 timer；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许打开/关闭主助手面板和只读观察监听/timer 状态。
+
+## 执行计划（可核对）
+- [x] 复核第十七子项提交后工作区状态，确认本子项只处理主助手面板开关生命周期。
+- [x] 扫描剩余监听/timer 候选，排除已能在空缓存后停止的 bridge cache cleanup timer。
+- [x] 实现主面板外部点击监听按打开期绑定、关闭期释放，并替换匿名常驻监听。
+- [x] 实现悬浮球 reveal timer 句柄、清理和状态校验。
+- [x] 补充/更新目标测试，锁定面板关闭会释放外部点击监听和 reveal timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `d7c8539 优化 Chrome 护航日志展开计时器释放`，工作区干净。
+- 定位结论：`src/optimizer/bridge.js` 的 bridge cache cleanup timer 在缓存为空后会停止重排，不作为本轮优化点；主助手面板的外部点击关闭监听和 icon reveal timeout 更符合“关闭后释放只服务打开态资源”的优化标准。
+- 方案判断：把主助手面板的开关期资源收回 `UI.runtime`，打开时绑定外部 click handler，关闭时解绑；悬浮球显示延迟用单一 timer 句柄并在打开态/重排前取消，timer 触发前校验 icon 仍连接且面板仍关闭。
+- 实现摘要：`src/main-assistant/ui.js` 新增 `panelOutsideClickHandler`、`panelOutsideClickHandlerBound`、`panelIconRevealTimer` 和配套 bind/unbind、schedule/clear helper；`openPanel()` 打开后绑定外部点击监听，`closePanel()` 与 `updateState()` 关闭态解绑，悬浮球显示改为可取消 timer。
+- 测试摘要：`tests/magic-report-panel-resilience.test.mjs` 新增静态回归，覆盖主面板外部点击监听状态、绑定/解绑 helper、打开/关闭调用点、icon reveal timer 状态校验，以及禁止回退到匿名常驻 click 和无句柄 timeout。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/ui.js` 与 `node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，11 项测试全绿；新增断言覆盖主面板外部点击监听 bind/unbind、悬浮球 reveal timer schedule/clear、打开/关闭状态调用点和匿名常驻监听禁用。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，51 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，605 项中 603 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在主助手面板外部点击监听和悬浮球 reveal timer 生命周期、对应静态测试、任务记录和构建产物；未改万能查数、算法护航、组建计划、辅助显示开关、自动闭窗、排序重置、日志触发、预算破限、计划并发或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十八子项结果：主助手面板从“初始化时常驻匿名外部点击关闭监听 + 关闭态无句柄 reveal timeout”优化为“打开期绑定外部 click handler，关闭/状态折叠时解绑；悬浮球显示延迟由单一 timer 句柄调度，打开态或重排前可取消，触发前校验面板仍关闭且 icon 仍连接”。
+- 取舍结论：保留 hover 自动打开、点击关闭、点击算法护航时最小化和 300ms 悬浮球显示节奏；只补齐开关期资源生命周期，没有新增第二套主面板状态，也没有触碰业务工具按钮和写接口。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十七子项
+
+## 需求规格
+- 目标：在一键起量拖拽监听释放后，继续收口算法护航面板日志展开动画的 overflow 延迟 timer，避免返回空闲态或关闭面板后，`setTimeout(() => wrapper.style.overflow = 'auto', 300)` 仍短时持有旧日志 DOM。
+- 根因判断：`src/optimizer/ui.js` 中最大化按钮和“立即扫描并优化”都会用匿名 `setTimeout` 延后把日志 wrapper overflow 改为 `auto`；该 timer 没有句柄，`restoreIdlePanelView()` 和面板关闭路径无法取消，可能在 wrapper 已折叠、面板关闭或 DOM 重建后继续执行。
+- 范围：仅覆盖 `src/optimizer/ui.js` 中算法护航日志 wrapper overflow 延迟 timer 生命周期和对应静态测试；不改算法护航 token 捕获、openV3 提交、手动设置字段映射、关键词偏好菜单、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“单一 timer 句柄 + schedule/clear helper + 状态校验后再写 overflow”的生命周期；不新增第二套面板状态，不改变 300ms 动画节奏，不用宽泛兜底隐藏执行异常。
+- 成功标准：静态测试证明 overflow timer 有 `logOverflowTimerId` 句柄，展开日志时通过 `scheduleLogOverflowAuto()` 调度，返回空闲态和关闭面板时通过 `clearLogOverflowTimer()` 释放，timer 触发前会校验 wrapper 仍连接且保持 expanded；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、护航执行、创建、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭算法护航面板和只读观察日志 wrapper/timer 状态。
+
+## 执行计划（可核对）
+- [x] 复核第十六子项提交后工作区状态，确认本子项只处理算法护航日志 overflow timer 生命周期。
+- [x] 定位匿名 overflow delay timer、返回空闲态和面板关闭路径。
+- [x] 实现 `logOverflowTimerId`、调度/清理 helper，并替换两处匿名 `setTimeout`。
+- [x] 补充/更新目标测试，锁定返回/关闭面板会释放 overflow timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c567366 优化 Chrome 一键起量拖拽监听释放`，工作区干净。
+- 定位结论：日志展开动画的 overflow timer 只有视觉延迟作用，不应在面板返回空闲态或关闭后继续保留旧 wrapper 闭包。
+- 方案判断：把 timer 生命周期放回 `UI` 对象内表达，展开时统一调度、状态切换时统一取消；timer 触发时再校验 DOM 连接和 expanded 状态，避免旧 DOM 被延迟回写。
+- 实现摘要：`src/optimizer/ui.js` 新增 `logOverflowTimerId`、`clearLogOverflowTimer()` 和 `scheduleLogOverflowAuto()`；最大化展开和执行展开都改走统一调度，关闭面板、返回空闲态和最大化折回默认尺寸时释放未触发 timer。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 新增静态回归，锁定 overflow timer 句柄、清理 helper、状态校验、关闭/返回清理，以及两处展开入口不再使用匿名 timer。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/ui.js` 与 `node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，7 项测试全绿；新增断言覆盖日志 overflow timer 句柄、调度、清理、DOM 状态校验、关闭/返回清理和两处展开入口统一调度。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-manual-escort-settings.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，27 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，604 项中 602 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在算法护航日志展开 overflow timer 生命周期、对应静态测试、任务记录和构建产物；未改算法护航 token 捕获、openV3 提交、手动设置字段映射、关键词偏好菜单、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十七子项结果：算法护航日志展开从“两处匿名 `setTimeout` 延迟改 overflow”优化为“单一 `logOverflowTimerId` 句柄统一调度，关闭面板、返回空闲态和最大化折回默认尺寸时清理”。timer 触发时会再次确认 wrapper 仍连接且保持 expanded，避免旧 DOM 被延迟回写。
+- 取舍结论：保留 300ms 动画节奏和日志展开视觉行为，只补齐 timer 生命周期；没有新增第二套面板状态，也没有触碰护航执行、手动设置提交或 token 逻辑。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十六子项
+
+## 需求规格
+- 目标：在 AI 点睛需求弹层延迟监听释放后，继续收口关键词向导高级设置里“一键起量时段”拖拽的 window 级 pointer 监听，避免弹层在拖拽中关闭时仍保留 `pointerup/pointercancel` 监听和 suppress reset timer。
+- 根因判断：`render-scene-dynamic-advanced-popup.js` 中 `quickLiftTimeRangeEl` 拖拽开始时绑定 `window.addEventListener('pointerup'/'pointercancel', stopQuickLiftDrag, true)`，正常 pointer 结束会释放；但 `openScenePopupDialog()` 关闭只调用 `mask._amWxtCleanup()`，当前一键起量拖拽没有把这些 window 监听和 `setTimeout(...quickLiftSuppressNextClick=false...)` 纳入弹层 cleanup。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-advanced-popup.js` 中一键起量时段拖拽监听和 suppress reset timer 生命周期，以及对应静态测试；不改高级设置弹层 DOM、投放地域/资源位/时段保存、AI Max、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“弹层内 cleanup 注册器 + 拖拽 cleanup 函数”的生命周期，把 quick lift 拖拽资源接回现有 `mask._amWxtCleanup()`；不新增第二套时段状态，不改变拖拽选择语义，不用兜底隐藏保存异常。
+- 成功标准：静态测试证明 quick lift 拖拽 window `pointerup/pointercancel` 监听会在弹层 cleanup 中释放，suppress reset timer 会保存句柄并在 cleanup 中 clear，现有 time grid `mouseup` cleanup 仍保留；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和高级设置弹层、只读观察监听绑定状态。
+
+## 执行计划（可核对）
+- [x] 复核第十五子项提交后工作区状态，确认本子项只处理高级设置一键起量拖拽生命周期。
+- [x] 定位 quick lift pointer 监听、suppress reset timer 和 `mask._amWxtCleanup()` 关闭路径。
+- [x] 实现弹层 cleanup 注册器，将 quick lift 拖拽监听/timer 和 time grid mouseup 统一接入关闭 cleanup。
+- [x] 补充/更新目标测试，锁定拖拽中关闭弹层会释放 window pointer 监听和 suppress reset timer。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `aca0043 优化 Chrome AI点睛需求弹层监听释放`，工作区干净。
+- 定位结论：一键起量时段拖拽已经在正常 pointer 结束路径释放 window 监听，但关闭弹层不等同于 pointer 结束；如果弹层在拖拽期间关闭，window 监听和下一 tick suppress reset timer 不会被现有关闭 cleanup 统一处理。
+- 方案判断：最小且更优雅的实现是在高级设置弹层 onMounted 内建立 cleanup 注册器，所有弹层级外部资源都通过同一个 `mask._amWxtCleanup()` 释放；time grid 既有 mouseup cleanup 也迁移到同一注册器，避免后续覆盖。
+- 实现摘要：`render-scene-dynamic-advanced-popup.js` 在高级设置弹层 onMounted 内新增 `advancedPopupCleanupHandlers` 和 `addAdvancedPopupCleanup()`；quick lift 拖拽新增 `cleanupQuickLiftDrag()` 与 `quickLiftSuppressResetTimer` 句柄，弹层关闭时释放 window `pointerup/pointercancel` 监听、清理 reset timer 并重置 suppress 状态；time grid `mouseup` 清理改为注册进同一 cleanup。
+- 测试摘要：`tests/keyword-custom-preview-submit-parity.test.mjs` 增加静态回归，覆盖高级设置弹层统一 cleanup 注册器、quick lift 拖拽关闭时释放 window pointer 监听、保存并清理 suppress reset timer，以及原一键起量拖拽选择断言仍保留。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-advanced-popup.js` 与 `node --check tests/keyword-custom-preview-submit-parity.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-preview-submit-parity.test.mjs` 通过，4 项测试全绿；新增断言覆盖 quick lift 拖拽 window pointer 监听、suppress reset timer 和弹层 cleanup 注册。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-preview-submit-parity.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-home-strategy-batch-actions.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，58 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；按 Chrome DevTools Ready 的工具暴露分支，`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在高级设置一键起量时段拖拽监听/timer 生命周期、对应静态测试和构建产物；未改高级设置弹层 DOM、投放地域/资源位/时段保存、AI Max、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十六子项结果：关键词向导高级设置的一键起量时段拖拽从“正常 pointer 结束才释放 window pointer 监听”优化为“正常结束和弹层关闭都会释放 window `pointerup/pointercancel` 监听，并清理 suppress reset timer”。拖拽中关闭弹层不再保留只服务已销毁弹层的 window 监听闭包。
+- 取舍结论：保留拖拽连续选择/取消、一键起量时间序列化和保存合同；只把弹层级外部资源接回现有 `mask._amWxtCleanup()`，没有新增第二套时间选择状态。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十五子项
+
+## 需求规格
+- 目标：在 AI 点睛打字动画 timer 释放后，继续收口 AI 点睛需求弹层的延迟监听绑定 timer，避免弹层刚打开又关闭时，下一 tick 的 `setTimeout` 仍尝试绑定只服务已关闭弹层的 document click/keydown 监听。
+- 根因判断：`openKeywordAiMaxDemandPopover()` 当前用 `setTimeout(..., 0)` 延后绑定外部 click 与 Escape 监听，但 timer 句柄没有保存；`closeKeywordAiMaxDemandPopover()` 只移除已绑定监听，无法取消尚未触发的延迟绑定任务。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 中 AI Max 需求弹层延迟绑定 timer 和 document click/keydown 绑定状态；不改弹层 DOM、全选/取消/确定交互、AI Max 文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“保存 bind timer 句柄 + close 时清理 + 监听绑定状态位”的生命周期；不新增第二套弹层状态，不改变延迟绑定用于避开当前点击的语义，不用兜底隐藏保存异常。
+- 成功标准：静态测试证明延迟 bind timer 保存到 `wizardState.aiMaxDemandPopoverBindTimer`，关闭弹层时 clearTimeout 并归零，timer 触发后再绑定 document 监听并标记 `aiMaxDemandPopoverListenersBound`，关闭时按状态移除监听；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和 AI Max 需求弹层、只读观察监听绑定状态。
+
+## 执行计划（可核对）
+- [x] 复核第十四子项提交后工作区状态，确认本子项只处理 AI Max 需求弹层延迟绑定生命周期。
+- [x] 定位 `openKeywordAiMaxDemandPopover()` 的延迟监听绑定和 `closeKeywordAiMaxDemandPopover()` 清理路径。
+- [x] 实现 bind timer 句柄保存、关闭取消、触发后归零和监听绑定状态清理。
+- [x] 补充/更新目标测试，锁定需求弹层延迟监听绑定不再游离于关闭路径之外。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `9be6e02 优化 Chrome AI点睛打字动画释放`，工作区干净。
+- 定位结论：AI Max 需求弹层的 document click/keydown 监听是按弹层展示期间绑定的，但延迟绑定的 `setTimeout` 本身未纳入关闭路径；极短时间打开后关闭时仍会保留一次无效延迟回调。
+- 方案判断：保留现有延迟绑定来避开触发点击，只补齐 timer 句柄与绑定状态；关闭弹层统一取消未触发 timer 和已绑定监听，不改变弹层确认保存合同。
+- 实现摘要：`closeKeywordAiMaxDemandPopover()` 现在会清理 `wizardState.aiMaxDemandPopoverBindTimer`，按 `aiMaxDemandPopoverListenersBound` 释放 document click/keydown 监听；延迟回调触发后归零 timer 句柄并标记监听已绑定。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 增加静态回归，覆盖关闭时 clearTimeout/归零、按绑定状态 remove document 监听、延迟回调保存 timer 句柄并标记 listeners bound。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 与 `node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿；新增断言覆盖 AI Max 需求弹层延迟 bind timer 保存、关闭取消、document 监听绑定状态和关闭解绑。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，40 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；按 Chrome DevTools Ready 的工具暴露分支，`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在 AI Max 需求弹层延迟绑定 timer 与 document 监听绑定状态、对应静态测试和构建产物；未改弹层 DOM、全选/取消/确定交互、AI Max 文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十五子项结果：AI 点睛需求弹层从“延迟绑定 document click/keydown 的 setTimeout 无法取消”优化为“延迟 bind timer 可取消，已绑定监听按状态释放”。弹层刚打开又关闭时，不再留下下一 tick 的无效绑定回调。
+- 取舍结论：保留延迟绑定避开当前触发点击的既有语义，只补齐关闭路径；没有新增第二套弹层状态，也没有改变需求选择、确认保存或场景重渲染合同。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十四子项
+
+## 需求规格
+- 目标：在 AI 点睛详情 document click 委托释放后，继续收口 AI 点睛详情打字动画 timer 生命周期，避免刚展开详情后关闭关键词向导时，延迟启动的 `setTimeout` 或正在运行的 `setInterval` 短时持有已脱离 DOM 的详情节点。
+- 根因判断：`runAiMaxTypewriter()` 当前只把 interval id 写入 `target.dataset.aiMaxTypeTimer`，且仅在同一 target 再次打字或文本写完时清理；启动前的 delay timer 没有保存，向导关闭的 `cleanupHandlers` 也不会统一清理这些动画 timer。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 中 AI Max typewriter `setTimeout/setInterval` 生命周期和对应静态测试；不改 AI Max 文案、展开交互、详情 DOM、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“timer 句柄集中登记到 `wizardState` + 单一 cleanup 函数注册进向导 cleanupHandlers”的生命周期；不新增第二套展开状态，不改变原打字动画节奏，不用隐藏 fallback 掩盖动画异常。
+- 成功标准：静态测试证明 delay timer 与 interval timer 都登记到 `wizardState.aiMaxTypewriterTimers`，关闭向导时会 clear timeout/interval 并清空集合/DOM dataset；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和只读观察 timer/DOM 状态。
+
+## 执行计划（可核对）
+- [x] 复核第十三子项提交后工作区状态，确认本子项只处理 AI Max typewriter timer 生命周期。
+- [x] 定位 `runAiMaxTypewriter()` 的 delay timeout、interval 和向导关闭 cleanupHandlers 清理路径。
+- [x] 实现 AI Max typewriter timer 登记、完成释放和关闭向导统一清理。
+- [x] 补充/更新目标测试，锁定 delay/interval 不再游离于向导 cleanupHandlers 之外。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c5d71ff 优化 Chrome AI点睛详情监听释放`，工作区干净。
+- 定位结论：AI Max typewriter 只清理同一元素上一次 interval，未保存启动前 `setTimeout`，关闭向导时无法通过现有 cleanupHandlers 释放已安排但尚未启动的动画任务。
+- 方案判断：更优雅的实现是把动画 timer 作为向导运行态资源登记到 `wizardState`，由本模块的 cleanup 函数在向导关闭时统一释放；动画完成后主动从集合移除，避免长期持有无效句柄。
+- 实现摘要：`render-scene-dynamic-grid.js` 新增 `aiMaxTypewriterTimers` Map、timer track/release/cleanup helpers；delay timeout 与 interval 都保存到 `wizardState`，动画完成或重新启动时主动释放，向导关闭时由 cleanupHandlers 统一清理。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 增加静态回归，覆盖 timeout/interval 统一释放、cleanupHandlers 注册、delay 和 interval 都登记到 `wizardState` timer 表。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 与 `node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿；新增断言覆盖 AI Max typewriter timeout/interval 注册、释放和向导 cleanupHandlers 清理。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，40 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；按 Chrome DevTools Ready 的工具暴露分支，`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在 AI Max typewriter timer 生命周期、对应静态测试和构建产物；未改 AI Max 文案、展开交互、详情 DOM、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十四子项结果：AI 点睛详情打字动画从“delay timeout 不可见、interval 只挂在 DOM dataset 上自清理”优化为“timeout/interval 都登记到向导运行态，动画完成、重启或向导关闭时统一释放”。关闭向导后，不再短时保留只服务已脱离 DOM 详情节点的动画 timer 闭包。
+- 取舍结论：保留原 startDelay、14ms interval 和逐字展示节奏，只补齐运行态资源生命周期；没有新增第二套展开状态，也没有触碰 AI Max 表单、矩阵物化或提交链路。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十三子项
+
+## 需求规格
+- 目标：在关键词偏好下拉外部点击监听收口后，继续释放关键词向导矩阵 AI 点睛详情区的 document 级 click 委托，避免向导关闭后仍长期保留只服务 AI Max 展开/步骤/需求翻页按钮的 3 条全局点击闭包。
+- 根因判断：`renderSceneDynamicConfig()` 里用 `wizardState.aiMaxDetailDelegatedBound` 防重复注册，但当前 3 个 `document.addEventListener('click', anonymous)` 没有命名 handler，也没有加入 `wizardState.cleanupHandlers`；关闭向导时 `removeWizardDomAfterClose()` 会清理 overlay 和 cleanupHandlers，但无法释放这些匿名 document 监听。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 中 AI Max 详情/步骤/需求箭头的 document click 委托生命周期和对应静态测试；不改 AI Max 展示文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“命名 handler + 单一解绑函数 + 注册进向导 cleanupHandlers”的生命周期；不新增第二套 AI Max 状态，不改变已有 `aiMaxDetailDelegatedBound` 防重复语义，不用隐藏 fallback 掩盖事件异常。
+- 成功标准：静态测试证明 3 个 AI Max document click 委托不再匿名常驻，绑定时保存到 `wizardState`，解绑函数会移除 3 个 click handler 并重置状态，且解绑函数进入 `wizardState.cleanupHandlers`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击生成计划、立即投放、复制、预算提交、删除、上下线或真实执行入口；浏览器验收只允许打开/关闭向导和只读观察 document click 监听绑定/释放。
+
+## 执行计划（可核对）
+- [x] 复核第十二子项提交后工作区状态，确认本子项只处理 AI Max 详情委托生命周期。
+- [x] 定位 AI Max 详情区 3 条 document click 委托和向导关闭 cleanupHandlers 清理路径。
+- [x] 实现命名 handler、统一解绑函数，并把解绑函数注册进 `wizardState.cleanupHandlers`。
+- [x] 补充/更新目标测试，锁定关闭向导会释放 AI Max 详情 document click 委托。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `362b40c 优化 Chrome 关键词偏好监听生命周期`，工作区干净。
+- 定位结论：AI Max 详情/步骤/需求翻页按钮使用 3 条 document 级委托，并通过 `wizardState.aiMaxDetailDelegatedBound` 保证单运行态只注册一次；但这些委托是匿名函数，向导关闭时无法通过现有 `cleanupHandlers` 释放。
+- 方案判断：更优雅的实现是在同一模块内表达生命周期不变量：AI Max 委托绑定时保存 handler 引用，关闭向导时由现有 cleanupHandlers 统一调用解绑；不额外引入轮询、observer 或第二状态源。
+- 实现摘要：`render-scene-dynamic-grid.js` 新增 AI Max 详情委托的 bind/unbind/cleanup 注册函数，把详情展开、步骤展开和需求翻页 3 个 document click handler 命名保存到 `wizardState`；向导 cleanupHandlers 执行时会统一 remove 3 条 handler 并重置绑定状态。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 增加静态回归，覆盖 3 个 handler 引用、3 次 document click 绑定、统一解绑函数、cleanupHandlers 注册，以及禁止继续在 `aiMaxDetailDelegatedBound` 分支内注册匿名 document click 委托。
+
+## 验证记录
+- 源码语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 与 `node --check tests/keyword-custom-native-parity-ui.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，12 项测试全绿；新增断言覆盖 AI Max 详情 3 条 document click 委托保存 handler 引用、绑定、解绑和向导关闭 cleanup 注册。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 相关回归：`node --test tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，40 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；恢复后当前工具列表仍未暴露 `mcp__chrome_devtools.*`，`tool_search` 查询 `mcp__chrome_devtools Chrome DevTools list_pages evaluate_script` 与 `chrome control browser tab devtools` 均返回 0 个可用工具，因此真实页只读验收未完成。
+- Diff 自审：改动集中在 AI Max 详情 document click 委托生命周期、对应静态测试和构建产物；未改 AI Max 展示文案、矩阵维度、生成计划、创建/复制/预算提交、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十三子项结果：关键词向导矩阵 AI 点睛详情区从“向导首次渲染后常驻 3 条匿名 document click 委托”优化为“绑定时保存 handler 引用，并在向导关闭 cleanupHandlers 中统一释放”。关闭向导后，不再长期保留只服务 AI Max 详情展开、步骤展开和需求翻页按钮的全局监听闭包。
+- 取舍结论：复用现有 `wizardState.aiMaxDetailDelegatedBound` 和向导 cleanupHandlers 作为唯一生命周期事实源；没有新增第二套 AI Max 展开状态，也没有改变矩阵物化、AI Max 表单、原生接口生成或提交链路。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十二子项
+
+## 需求规格
+- 目标：在店铺名回填重试链单例化后，继续收口算法护航手动设置里“关键词偏好”下拉菜单的外部点击监听，避免算法护航面板初始化后长期保留只服务打开菜单的 `document mousedown` 委托。
+- 根因判断：`UI.bindManualKeywordControls()` 当前在绑定控件时立即注册 `document.addEventListener('mousedown', UI.manualKeywordOutsideHandler, true)`；但该 handler 只有在 `#am-optimizer-manual-keyword-preference-menu` 打开时才需要识别外部点击并关闭菜单，菜单关闭或面板关闭后不应继续常驻。
+- 范围：仅覆盖 `src/optimizer/ui.js` 中手动关键词偏好菜单外部点击监听的绑定/解绑生命周期和对应测试；不改算法护航 token 轮询、openV3 提交、手动设置字段映射、关键词偏好枚举、授权、policy token、shopId 或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“菜单打开时绑定，菜单关闭/面板关闭时解绑”的单一生命周期；不新增第二套下拉状态，不改变 `data-open`/`aria-expanded` 事实源，不用宽泛兜底隐藏交互异常。
+- 成功标准：静态测试证明 `bindManualKeywordControls()` 不再冷态常驻绑定 `document mousedown`，打开偏好菜单时绑定外部点击 handler，`closeManualKeywordPreferenceMenu()` 和算法护航面板关闭路径都会解绑；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读连接/DOM/全局状态观察，最多打开/关闭无写入面板和下拉。
+
+## 执行计划（可核对）
+- [x] 复核第十一子项提交后工作区状态，确认本子项只处理算法护航手动关键词偏好外部点击监听。
+- [x] 定位 `bindManualKeywordControls()`、`closeManualKeywordPreferenceMenu()` 和算法护航面板关闭路径，确认监听只服务打开菜单。
+- [x] 实现外部点击监听按菜单打开绑定、关闭菜单/关闭面板释放。
+- [x] 补充/更新目标测试，锁定不再初始化常驻绑定、打开绑定、关闭解绑。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `e2505b7 优化 Chrome 店铺名回填重试链`，工作区干净。
+- 定位结论：关键词偏好菜单用 `data-open`/`aria-expanded` 表示打开状态；外部点击监听只有菜单打开时才有收益，当前却在 `bindManualKeywordControls()` 初始化时常驻 document。
+- 方案判断：新增 `bindManualKeywordOutsideHandler()` / `unbindManualKeywordOutsideHandler()`，`closeManualKeywordPreferenceMenu()` 统一解绑；触发器打开菜单后绑定，选择选项或再次点击关闭时沿原关闭函数释放；算法护航面板关闭时再做兜底解绑。
+- 实现摘要：`src/optimizer/ui.js` 新增 `manualKeywordOutsideHandlerBound` 和外部点击监听 bind/unbind helpers；`bindManualKeywordControls()` 只准备 handler，不再直接注册 document 监听；打开关键词偏好菜单后按需绑定，关闭菜单或关闭算法护航面板时释放。
+- 测试摘要：`tests/optimizer-token-capture-history.test.mjs` 增加静态回归，覆盖绑定状态、打开绑定、关闭解绑、面板关闭兜底释放，以及禁止 `bindManualKeywordControls()` 初始化阶段常驻 `document mousedown`。
+
+## 验证记录
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs` 通过，6 项测试全绿；新增断言覆盖关键词偏好外部点击监听绑定状态、打开菜单按需绑定、关闭菜单解绑、面板关闭兜底解绑，以及禁止 `bindManualKeywordControls()` 初始化阶段常驻 `document mousedown`。
+- 源码语法：`node --check src/optimizer/ui.js` 与 `node --check tests/optimizer-token-capture-history.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/optimizer-token-capture-history.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-manual-escort-settings.test.mjs` 通过，26 项测试全绿。
+- 全量回归：`npm test` 通过，603 项中 601 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 真实页验证：仅使用 `mcp__chrome_devtools.*`。`list_pages` 连接成功；在 `https://one.alimama.com/...#!/manage/hky?...` 真实页面只读验证插件运行态已注入、授权有效、算法护航面板 `#alimama-escort-helper-ui` 可打开。通过临时监听探针观察 `document.addEventListener/removeEventListener` 后已恢复原函数：展开手动设置不产生 `mousedown` 绑定；打开关键词偏好菜单产生 1 次 capture `mousedown` add；外部 `mousedown` 后菜单 `data-open=false`、`aria-expanded=false` 且产生 remove；再次打开后关闭算法护航面板同样产生 remove，菜单关闭且面板 `pointer-events:none`。未点击执行、创建、复制、预算提交、删除、上下线或投放入口。
+- Diff 自审：改动集中在算法护航手动关键词偏好菜单外部点击监听生命周期、对应静态测试和构建产物；未改 token 轮询、openV3 提交、手动设置字段映射、关键词偏好枚举、授权、policy token、shopId 或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十二子项结果：算法护航手动设置的关键词偏好菜单从“面板初始化后常驻 document capture `mousedown` 委托”优化为“菜单打开期间绑定，菜单关闭、外部点击和算法护航面板关闭时释放”。面板可见但菜单未打开时，不再长期保留只服务下拉关闭的全局监听闭包。
+- 取舍结论：保留 `data-open` 与 `aria-expanded` 作为菜单状态事实源，只增加绑定状态防重；没有新增第二套菜单状态，也没有改变手动设置持久化和 openV3 提交合同。
+- 验证结论：静态测试、构建、相关回归、全量回归与 Chrome MCP 真实页只读验收均通过。本子项已完成，可进入下一轮继续寻找更小粒度的 Chrome 内存占用优化点。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第十一子项
+
+## 需求规格
+- 目标：在授权锁定遮罩 style 节点生命周期收口后，继续优化 extension 授权 guard 的店铺名异步回填重试链，避免同一 `shopId/source` 在授权校验、租约刷新或失败锁定路径中重复启动多条 `setTimeout` 链。
+- 根因判断：`scheduleShopNameBackfill()` 当前只创建局部 `attempt/run` 闭包并直接 `setTimeout`，没有保存 timer 句柄；若相同 `shopId/source` 在店名仍为空时被多次调度，会叠加多条回填重试链，页面闲置时保留重复闭包。
+- 范围：仅覆盖 `src/entries/extension-license-guard.js` 中店铺名回填 timer 的单例生命周期和对应测试；不改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥、遮罩展示字段或业务入口。
+- 热修 vs 结构性修复取舍：采用“按 `shopId/source` 生成稳定 key，同 key 回填链运行中不重复调度，命中或耗尽后释放句柄”的单一生命周期；不新增第二事实源，不吞店名解析错误以外的授权错误，不改变已有重试次数和延迟配置。
+- 成功标准：静态测试证明存在 `shopNameBackfillTimers` 单一注册表、同 key 重复调用直接复用/跳过、timer 执行后清理 key、后续重试仍沿同 key 调度；授权链路和 after_lock 二次回填调用仍保留；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读连接/DOM/全局状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第十子项提交后工作区状态，确认本子项只处理店铺名回填 timer 生命周期。
+- [x] 定位 `scheduleShopNameBackfill()` 调用点和现有测试约束，确认同 `shopId/source` 重复调度风险。
+- [x] 实现按 `shopId/source` 单例化的回填 timer 注册/释放，不改变授权判定。
+- [x] 补充/更新目标测试，锁定重复调度不会叠加 timer、命中或耗尽后释放 key、调用点不退化。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `5b2eee4 优化 Chrome 授权遮罩样式释放`，工作区干净。
+- 已回顾 `tasks/lessons.md`，本轮遵守 L97：Chrome 真实页验收只使用 Chrome MCP，不用 CDP、Browser 插件或其它浏览器通道替代。
+- 定位结论：`scheduleShopNameBackfill()` 在授权主路径和 `after_lock` 路径均可能被调用；函数内部没有全局 timer 句柄或 key，店名为空时重复调用会创建独立闭包和重试 timeout。
+- 计划校验：更优雅的实现是把生命周期放回 `scheduleShopNameBackfill()` 所属模块内，以 `shopId + source` 表达单例不变量；不把回填绑定到授权成功/失败状态，也不触碰未授权阻断和续租安全边界。
+- 子代理只读审计确认：同一 `shopId/source` 重复调用存在叠加多条 `setTimeout` 重试链风险；最小不变量是同一时刻最多一条店铺名回填链，且 shopName 回填只能补展示/cache，不能成为授权通过条件。
+- 实现摘要：`src/entries/extension-license-guard.js` 新增 `shopNameBackfillTimers`、`buildShopNameBackfillKey()` 和 `scheduleShopNameBackfillTimer()`；同 key 回填链运行中直接跳过重复调度，timer 触发时释放 key，未命中且未耗尽时沿同 key 重新登记下一次重试。
+- 测试摘要：`tests/extension-license-shopid-guard.test.mjs` 增加静态断言，覆盖 timer 注册表、`shopId/source` 稳定 key、同 key 去重、timer 触发清理、重试复用 key，以及禁止回填链绕过注册表直接 `setTimeout(run, ...)`。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`。
+- 源码语法：`node --check src/entries/extension-license-guard.js` 与 `node --check tests/extension-license-shopid-guard.test.mjs` 通过。
+- 目标测试：`node --test tests/extension-license-shopid-guard.test.mjs tests/extension-license-cache-policy-token.test.mjs` 通过，10 项测试全绿。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/extension-license-shopid-guard.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，30 项测试全绿。
+- 全量回归：`npm test` 通过，602 项中 600 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：`mcp__chrome_devtools.list_pages` 失败于 `Could not connect to Chrome. Check if Chrome is running and remote debugging is enabled by going to chrome://inspect/#remote-debugging. Cause: Failed to fetch browser webSocket URL from http://127.0.0.1:9222/json/version: HTTP Not Found`；恢复脚本 `bash scripts/recover-chrome-devtools-mcp.sh` 失败于 `Chrome DevTools 端口 9222 未就绪`。按 L97 和用户“只用chrome mcp”，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在店铺名回填 timer 单例注册表、授权静态测试和构建产物；未改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥、遮罩字段或业务入口。
+
+## 结果复盘
+- 第十一轮第十一子项结果：店铺名异步回填从“每次调用独立创建一条 `setTimeout` 重试链”优化为“按 `shopId/source` 同一时刻最多一条活动回填链”。授权校验、租约刷新或锁定后二次回填在店名为空时重复触发，不再叠加保留重复闭包和 timer。
+- 取舍结论：同 key 运行中选择跳过重复调度而非清掉重建，保持首条链的既有重试节奏；不同 `source` 或不同 `shopId` 仍可独立运行，避免把 after_lock 补偿和常规回填混成全局单例。
+- 验证缺口：Chrome MCP 当前端点不健康，真实页只读观察未完成；后续继续优化仍只用 Chrome MCP 尝试，不用其它通道冒充验收。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第十子项
+
+## 需求规格
+- 目标：在关键词向导 native runtime list cache 主动释放后，继续收口授权锁定遮罩的专用 style 节点生命周期，避免授权恢复、等待态或遮罩移除后仍残留 `#am-license-lock-style`。
+- 根因判断：`renderOverlayStyle()` 只服务 `#am-license-lock-overlay`，但 `removeOverlay()` 当前只删除遮罩 DOM，不删除对应 style；`unlock()` 和 `updatePendingAuthorizationState()` 会调用 `removeOverlay()`，因此遮罩移除后 CSS 节点可能长期滞留页面。
+- 范围：仅覆盖 `src/entries/extension-license-guard.js` 中授权锁定遮罩 DOM/style 的绑定关系和对应测试；不改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥或业务入口。
+- 热修 vs 结构性修复取舍：采用“遮罩移除时同步移除专用 style，下一次锁定时由 `renderOverlayStyle()` 按需重建”的单一生命周期；不新增状态位，不把安全监听改成弹窗期间绑定，不吞授权错误。
+- 成功标准：静态测试证明 `removeOverlay()` 同时删除 overlay/style，`unlock()` 和等待态会走统一移除路径，`renderOverlay()` 仍先调用 `renderOverlayStyle()` 支持再次锁定重建；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读连接/DOM 观察。
+
+## 执行计划（可核对）
+- [x] 复核第九子项提交后工作区状态，确认本子项只处理授权遮罩 style 生命周期。
+- [x] 实现 `removeOverlay()` 同步移除 `OVERLAY_STYLE_ID`，保留 `renderOverlay()` 按需重建。
+- [x] 补充/更新目标测试，锁定遮罩 style 不在关闭后残留且授权安全监听不被改动。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `4fe7feb 优化 Chrome 关键词向导缓存释放`，工作区干净。
+- 子代理只读审计确认：授权按需校验 `pointerdown`/`keydown` 监听承担未授权阻断和有效租约刷新，不适合为省内存改为弹窗期间绑定；授权锁定遮罩 style 节点随 `removeOverlay()` 删除是低风险候选。
+- 方案判断：只改 `removeOverlay()` 的 DOM 回收边界，让遮罩节点和遮罩专用 style 同生命周期；不改 `lock()`、`unlock()`、`installOnDemandVerifyHooks()` 或任何授权判定。
+- 实现摘要：`src/entries/extension-license-guard.js` 中 `removeOverlay()` 现在同时删除 `OVERLAY_ID` 和 `OVERLAY_STYLE_ID`；再次授权失败时 `renderOverlay()` 仍先调用 `renderOverlayStyle()` 按需重建样式。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs` 通过，10 项测试全绿；新增断言覆盖 `removeOverlay()` 同步删除 overlay/style、等待态和授权恢复走统一回收路径，以及再次锁定前按需重建 style。
+- 源码语法：`node --check src/entries/extension-license-guard.js` 与 `node --check tests/extension-license-cache-policy-token.test.mjs` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，30 项测试全绿。
+- 全量回归：`npm test` 通过，602 项中 600 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在授权遮罩 style 节点生命周期、对应静态测试和构建产物；未改授权按需校验监听、租约续租、policy token 验签、shopId 解析、未授权阻断、background 桥或业务入口。
+
+## 结果复盘
+- 第十一轮第十子项结果：授权锁定遮罩从“关闭后只删除 overlay DOM，专用 style 节点可能残留”优化为“关闭/授权恢复/等待态统一释放 overlay 和 style，下次锁定再按需重建”。页面授权恢复后不再长期保留只服务锁定遮罩的 CSS 节点。
+- 取舍结论：这是小范围 DOM 生命周期收口；保留未授权阻断与租约刷新监听常驻，不为节省一个 style 节点触碰授权安全边界。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读观察未完成；后续继续优化仍只尝试 Chrome MCP，不用其它通道冒充验收。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第九子项
+
+## 需求规格
+- 目标：在下载捕获退出模式 click 委托生命周期收口后，继续优化关键词向导运行态候选列表缓存，避免原生人群、出价目标、资源位候选列表在 8 秒 TTL 到期后无后续读取时仍滞留在 `runtimeCache`。
+- 根因判断：`resolveNativeCrowdListFromVframes()`、`resolveNativeCrowdCustomBidTargetOptionsFromVframes()`、`resolveNativeAdzoneListFromVframes()` 已有 8 秒 freshness 判断，但只在下一次读取时被动判过期；用户关闭向导或页面闲置后，最后一次从 VFrame 深拷贝出的列表会继续被运行时对象持有。
+- 范围：仅覆盖 `src/optimizer/keyword-plan-api` 内三类 native runtime list cache 的主动 TTL 释放和对应测试；不改原生 VFrame 抽取评分、bizCode 匹配、请求 payload、候选列表归一化、创建/复制/提交链路、授权、policy token、shopId 或 bridge 白名单，不手改生成产物。
+- 热修 vs 结构性修复取舍：采用“写入缓存时安排单一 cleanup timer，TTL 到期释放已过期列表，仍未过期则重排下一次清理”的生命周期；不新增第二事实源，不缩短已有 8 秒命中窗口，不吞掉候选解析异常。
+- 成功标准：静态测试证明三类列表写入后会调度 cleanup，过期后清空 value/ts/bizCode，fresh cache 仍按原 TTL 命中；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/全局变量/监听器探针和可见状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第八子项提交后工作区状态，确认本子项只处理关键词向导 native runtime list cache。
+- [x] 排除授权按需校验监听作为本轮对象，避免触碰未授权阻断安全边界。
+- [x] 设计并实现 native runtime list cache 的单一主动 TTL cleanup timer。
+- [x] 补充/更新目标测试，锁定写入调度、过期释放、fresh cache 命中窗口不变。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `f793628 优化 Chrome 下载捕获退出监听生命周期`，工作区干净。
+- Chrome MCP 预检：`mcp__chrome_devtools.list_pages` 仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本轮不使用 CDP、Browser 插件或其它浏览器通道替代验收。
+- 候选排除：`src/entries/extension-license-guard.js` 的 `pointerdown`/`keydown` 按需校验监听虽然冷态常驻，但承担未授权同步阻断与有效租约活跃刷新，属于授权安全边界，本轮不为省内存改动。
+- 定位结论：关键词向导从原生 VFrame 抽取的人群列表、出价目标选项、资源位列表各有 8 秒 TTL，但最后一次写入后没有主动释放路径；适合用单一 timer 做 TTL 到期清理。
+- 子代理审计结论：授权按需校验监听不建议改为弹窗期间绑定；授权遮罩 style 节点在 `removeOverlay()` 后残留是后续低风险小候选，但本子项优先处理体量更大的 native runtime list cache。
+- 实现摘要：`runtimeCache` 新增 `nativeRuntimeCacheCleanupTimer`；`search-and-draft.js` 新增三槽位 `NATIVE_RUNTIME_LIST_CACHE_SLOTS`、`cleanupNativeRuntimeListCaches()` 和 `scheduleNativeRuntimeListCacheCleanup()`，三类列表写入后共用一个 timeout 按最近到期时间主动释放。
+- 自审修正：测试断言首次未覆盖 `Math.max(0, ageMs)` 的时间回拨语义，已修正测试；清理器与原 fresh cache 判断保持一致，系统时间短暂回拨时不提前误删。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-native-runtime-cache.test.mjs` 通过，3 项测试全绿；断言覆盖单一 cleanup timer、三类缓存槽位、过期后清空 value/ts/bizCode、timer 触发后重排，以及三类写入后调度清理且保持 8 秒 fresh cache 命中窗口。
+- 源码语法：`node --check src/optimizer/keyword-plan-api/search-and-draft.js` 与 `node --check tests/keyword-native-runtime-cache.test.mjs` 通过。`src/optimizer/keyword-plan-api/intro.js` 是构建拼接片段，独立 `node --check` 不适用；完整语法以根 userscript 为准。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/keyword-native-runtime-cache.test.mjs tests/keyword-custom-native-parity-ui.test.mjs tests/keyword-plan-api-slim.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，39 项测试全绿。
+- 全量回归：`npm test` 通过，601 项中 599 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在关键词向导 native runtime list cache 主动 TTL 释放、对应测试和构建产物；未改原生 VFrame 抽取评分、bizCode 匹配、候选归一化、创建/复制/提交链路、授权、policy token、shopId 或 bridge 白名单。
+
+## 结果复盘
+- 第十一轮第九子项结果：关键词向导三类原生运行态候选列表从“8 秒 TTL 只在下一次读取时被动判断”优化为“写入后安排单一 timer，TTL 到期主动释放最后一次深拷贝列表”。用户关闭向导或页面闲置后，原生人群、出价目标和资源位候选不会在 TTL 过后继续被 `runtimeCache` 持有。
+- 取舍结论：保留原 8 秒 fresh cache 命中窗口和 bizCode 匹配语义；只增加到期释放机制，不改变候选抽取、排序、提交 payload 或安全边界。
+- 后续候选：授权锁定遮罩 style 节点随 `removeOverlay()` 删除、店铺名回填 timer 单例化，可作为下一轮更小粒度优化；Chrome MCP 当前会话仍连接阻塞，真实页只读探针待 MCP 恢复后补做。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第八子项
+
+## 需求规格
+- 目标：在潜力词导出 click 委托按目标页释放后，继续收口下载捕获模块中只服务可见面板的 document click 监听，避免未捕获报表时长期保留“退出模式关闭面板”的无用委托闭包。
+- 根因判断：`Interceptor.registerHooks()` 的 fetch/XHR hook 需要常驻以捕获下载链接，但其中 document click 监听只用于捕获面板显示后识别原生“退出模式”并移除面板；冷态无面板时不需要这条监听。
+- 范围：仅覆盖 `src/main-assistant/interceptor.js` 中退出模式 click 监听的绑定/解绑生命周期和对应测试；不改下载 URL 判定、fetch/XHR hook、响应解析深度、面板 DOM、复制按钮、下载链接或安全过滤逻辑，不手改生成产物。
+- 热修 vs 结构性修复取舍：采用“下载捕获面板显示时绑定，面板移除时解绑”的单一生命周期；不新增第二套捕获入口，不弱化 hook manager，不吞掉下载解析异常。
+- 成功标准：静态测试证明退出模式 click 监听不在 `registerHooks()` 冷态常驻绑定，而是在 `show()`/面板展示时绑定、`removePanel()` 时解绑；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击下载、导出、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/监听器探针和可见状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第七子项提交后工作区状态，确认本子项只处理下载捕获退出模式 click 委托。
+- [x] 设计并实现 `bindExitModeClickHandler` / `unbindExitModeClickHandler`，让面板展示时绑定、移除时释放。
+- [x] 补充/更新目标测试，锁定 `registerHooks()` 不再常驻绑定退出模式 click，面板展示绑定，移除解绑。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `ccc0226 优化 Chrome 潜力词导出点击委托生命周期`，工作区干净。
+- 定位结论：下载捕获的 fetch/XHR hook 是功能必要常驻；但 `registerHooks()` 中的 document click 只负责“退出模式”时关闭已显示的下载捕获面板，面板未显示时无收益。
+- 方案判断：保留 hook 注册位置和下载捕获逻辑不变；新增命名退出模式 click handler 与绑定状态，`show()` 成功展示面板后绑定，`removePanel()` 统一解绑。
+- 实现摘要：`src/main-assistant/interceptor.js` 新增 `exitModeClickHandler` 与 `exitModeClickHandlerBound`，把退出模式判断从 `registerHooks()` 冷态常驻监听迁移到 `bindExitModeClickHandler()`；`show()` 在面板可用后绑定，`removePanel()` 调用 `unbindExitModeClickHandler()` 释放。
+- 自审修正：重复 URL 且面板已显示的 `show()` 早退路径也需要确保退出模式监听已绑定，因此将绑定放在重复 URL 早退判断之前。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/download-link-depth-guard.test.mjs` 通过，6 项测试全绿；新增断言覆盖退出模式 click 监听不在 `registerHooks()` 冷态常驻绑定、面板展示时绑定、`removePanel()` 解绑，以及重复 URL 早退前仍确保监听已绑定。
+- 源码语法：`node --check src/main-assistant/interceptor.js` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/download-link-depth-guard.test.mjs tests/optimizer-token-capture-history.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，31 项测试全绿。
+- 全量回归：`npm test` 通过，598 项中 596 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在下载捕获面板退出模式 click 委托生命周期、对应静态测试和构建产物；未改下载 URL 判定、fetch/XHR hook、响应解析深度、面板 DOM、复制按钮、下载链接或安全过滤逻辑。
+
+## 结果复盘
+- 第十一轮第八子项结果：下载捕获模块从“注册 fetch/XHR hook 时同时常驻 document click 监听退出模式”优化为“捕获面板展示期间绑定退出模式 click，面板移除时释放”。冷态未捕获报表时少保留一条 document 级委托闭包。
+- 取舍结论：fetch/XHR hook 仍按原逻辑常驻，保证下载链接捕获能力不变；只移动可见面板辅助关闭监听的生命周期，不改变下载解析、复制和关闭交互。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读探针未完成；后续继续优化仍只尝试 Chrome MCP，不用其它通道冒充验收。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第七子项
+
+## 需求规格
+- 目标：在主助手面板拖拽监听生命周期收口后，继续处理默认常驻 document 级事件委托，优先收口只服务潜力词报表页的 `PotentialPlanDailyExporter` click 监听，避免非潜力词页面长期保留无用委托闭包。
+- 根因判断：`PotentialPlanDailyExporter.init()` 当前在主助手启动时即注册 `document.addEventListener('click', ..., true)`，但潜力词日维度 CSV 导出按钮只在 `#/report/bidword/index?mainTab=potential` 目标页渲染；非目标页只需要移除按钮，不需要常驻点击委托。
+- 范围：仅覆盖 `src/main-assistant/potential-plan-daily-exporter.js` 的 click 委托绑定/解绑生命周期和对应测试；不改潜力词 API、导出 CSV 字段、计划/单元查询、授权上下文、真实请求 payload 或下载逻辑，不手改生成产物。
+- 热修 vs 结构性修复取舍：采用“初始化只建状态，目标页 run 时绑定，离开目标页解绑”的生命周期不变量；不用第二套点击入口，不隐藏导出异常，不改变按钮 DOM 结构和输入阻止冒泡语义。
+- 成功标准：静态测试证明初始化不再常驻绑定 document click，目标页 `run()` 会绑定导出 click，非目标页 `run()` 会解绑并移除按钮；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不点击导出按钮，不触发潜力词 API 查询、创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/监听器探针和 URL/页面状态观察。
+
+## 执行计划（可核对）
+- [x] 复核第六子项提交后工作区状态，确认本子项只处理潜力词导出 click 委托。
+- [x] 设计并实现 `bindExportClickHandler` / `unbindExportClickHandler`，让目标页绑定、非目标页释放。
+- [x] 补充/更新目标测试，锁定初始化不常驻绑定、目标页绑定、离开目标页解绑。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `bb0de58 优化 Chrome 主面板拖拽监听生命周期`，工作区干净。
+- 定位结论：`PotentialPlanDailyExporter` 只在潜力词报表页渲染导出按钮，但 `init()` 在所有主助手页面提前注册 document click 委托；这是插件自有、非目标页无收益的默认常驻监听。
+- 方案判断：保留 `initialized` 作为模块初始化防重；新增一个命名 click handler 和绑定状态，`run()` 命中目标页时绑定并确保按钮，非目标页先移除按钮再解绑。
+- 实现摘要：`src/main-assistant/potential-plan-daily-exporter.js` 新增 `exportClickHandler` 与 `exportClickHandlerBound`，`init()` 只创建命名 handler；`run()` 在目标页调用 `bindExportClickHandler()`，非目标页调用 `removeButtons()` 后再 `unbindExportClickHandler()`。
+- 自审修正：首次实现后发现文件顶部缩进被误加一层，已修正源文件缩进并重新执行构建同步和验证，最终 diff 仅保留生命周期改动。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/potential-plan-daily-exporter.test.mjs` 通过，4 项测试全绿；新增断言覆盖 `init()` 不常驻注册 document click、目标页按需绑定、非目标页解绑并移除按钮。
+- 源码语法：`node --check src/main-assistant/potential-plan-daily-exporter.js` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/potential-plan-daily-exporter.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/magic-report-panel-resilience.test.mjs` 通过，34 项测试全绿。
+- 全量回归：`npm test` 通过，597 项中 595 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在潜力词导出 click 委托生命周期、对应静态测试和构建产物；未改潜力词 API、CSV 字段、计划/单元查询、授权上下文、真实请求 payload 或下载逻辑。
+
+## 结果复盘
+- 第十一轮第七子项结果：潜力词日维度 CSV 导出入口从“主助手启动后所有页面常驻 document click 委托”优化为“仅潜力词目标页绑定，离开目标页解绑并移除按钮”。非潜力词报表页、计划列表页和其它主助手页面不再保留这条无收益委托闭包。
+- 取舍结论：保留按钮 DOM、输入阻止冒泡和导出异常日志语义；只移动 click 委托生命周期，不改变真实导出链路和请求合同。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读探针未完成；后续继续优化前仍只尝试 Chrome MCP，不用其它通道冒充验收。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第六子项
+
+## 需求规格
+- 目标：在 bridge 结果缓存主动 TTL 释放后，继续审计插件自有全局监听器生命周期，优先收口默认常驻、关闭后残留或页面闲置仍持续持有闭包/DOM 的 `mousemove`、`mouseup`、`resize`、`scroll`、拖拽和弹层定位监听。
+- 根因判断：前几轮已收口 timer、cache、observer 和默认关闭 DOM；剩余低风险候选主要来自全局事件监听器是否按功能开关、浮层显示状态或拖拽状态释放。此类资源常持有窗口/面板/按钮闭包，容易在关闭面板后形成不必要 retained graph。
+- 范围：仅覆盖 `src/` 中插件自有 UI/浮层/拖拽相关 listener 生命周期和对应测试；不改创建、复制、预算提交、护航执行、授权、policy token、shopId、bridge 白名单或真实写接口合同，不手改生成产物。
+- 热修 vs 结构性修复取舍：优先在监听器所属模块内表达“显示/拖拽/开启时绑定，隐藏/关闭/结束时解绑”的单一生命周期，不新增第二事实源，不用宽泛 try/catch 静默吞错，不为了省监听牺牲真实页面必要同步。
+- 成功标准：若发现明确低风险热点，完成最小侵入修复并补充静态或行为测试，证明监听器默认不常驻或关闭后释放；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`，不可用则按 L97 记录阻塞。
+- 安全边界：本子项不触发真实创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新、只读 DOM/全局变量/监听器探针和打开/关闭无写入面板。
+
+## 执行计划（可核对）
+- [x] 复核当前工作区和第十一轮第五子项提交状态，确认不重复已完成 cache/timer/observer 优化。
+- [x] 并行审计全局鼠标、滚动/resize、拖拽与弹层定位监听，筛选证据明确、收益可验证、低风险的落点。
+- [x] 设计更优雅的生命周期边界，确认是否可通过“按需绑定 + 关闭释放”解决，而不是新增兜底或第二套状态。
+- [x] 实现最小改动并补充/更新目标测试，必要时同步构建产物。
+- [x] 运行目标测试、构建检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 已确认 `tasks/todo.md` 顶部第十一轮第五子项完成记录显示 bridge result cache 主动释放已提交，当前工作区 `git status --short` 干净。
+- 本子项先做监听器生命周期证据审计；只有找到明确插件自有低风险热点才改代码，避免无证据继续叠加过滤补丁。
+- 检索过程记录：首次 `rg` 使用 backreference 导致默认正则不支持，已改用简单模式继续，不影响定位结论。
+- 当前定位结论：`MagicReport` 弹窗 document click/Escape、拖拽、resize、dropdown scroll/resize 已有 `addPopupCleanup` 和测试约束；关键词向导 run mode resize/scroll 也挂在 `wizardState.cleanupHandlers`。明确低风险热点收敛到 `src/main-assistant/ui.js` 主助手面板宽度拖拽：初始化时匿名绑定 document 级 `mousemove`/`mouseup`，即使用户从不拖拽也常驻两个闭包。
+- 方案判断：把主助手面板 resizer 改为拖拽开始时绑定 document 级监听，拖拽结束立即解绑；不改变面板尺寸计算、按钮状态、自动闭窗或页面点击监听。
+- 子代理记录：已尝试派发两个只读 explorer 分别审计拖拽/鼠标监听与 resize/scroll/弹层定位监听，均因 `429 Too Many Requests` 超过重试限制失败；本轮不继续重试，主线程基于本地 `rg` 与源码阅读推进。
+- 实现摘要：`src/main-assistant/ui.js` 新增 `handlePanelResizeMove` 与 `handlePanelResizeEnd` 命名 handler，`resizer.onmousedown` 中按需绑定 document 级 `mousemove/mouseup`，`mouseup` 后立即移除；`tests/magic-report-panel-resilience.test.mjs` 增加静态回归，禁止初始化时常驻匿名 mousemove 监听。
+
+## 验证记录
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs` 通过，10 项测试全绿；新增断言覆盖主助手面板宽度拖拽监听只在 `mousedown` 后绑定，并在 `mouseup` 后释放，同时禁止初始化时常驻匿名 `mousemove` 监听。
+- 源码语法：`node --check src/main-assistant/ui.js` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 项目语法：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/magic-report-panel-resilience.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-entry-error-handling.test.mjs` 通过，34 项测试全绿。
+- 全量回归：`npm test` 通过，596 项中 594 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。随后按 Chrome DevTools Ready 流程运行 `bash scripts/recover-chrome-devtools-mcp.sh`，恢复脚本完成后再次仅用 `mcp__chrome_devtools.list_pages` 重试，仍为同一 `DevToolsActivePort` 错误。按 L97，本子项未用 CDP、Browser 插件或其它浏览器通道替代验收。
+- Diff 自审：改动集中在主助手面板 resizer 生命周期、对应静态测试和构建产物；未改自动闭窗 click 监听、MagicReport 弹窗清理、关键词向导 cleanup、授权、bridge、安全白名单或任何写请求链路。
+
+## 结果复盘
+- 第十一轮第六子项结果：主助手面板宽度拖拽从“UI 初始化后常驻 document 级匿名 `mousemove`/`mouseup` 监听”优化为“拖拽开始时绑定，拖拽结束立即解绑”。默认不拖拽或页面长时间闲置时，少保留两个 document 级监听闭包及其面板引用链。
+- 取舍结论：这是小而明确的生命周期收口，和算法护航面板 resizer 的按需绑定模式一致；不改变尺寸计算、不影响面板显示/隐藏、不触碰真实提交、安全和业务合同。
+- 验证缺口：Chrome MCP 当前会话仍连接阻塞，真实页只读探针未完成；后续继续优化前仍优先尝试恢复 MCP，但不得用其它浏览器通道冒充验收。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第五子项
+
+## 需求规格
+- 目标：在普通 `myseller` userscript 入口守卫后，继续收口源码审计中剩余的 bridge 结果缓存生命周期，避免无后续请求时最后一批大结果只能依赖下一次请求被动清理。
+- 根因判断：bridge host 的 result cache 若只在读写路径顺手 prune，长时间无新请求时可能继续保留最后一次大 payload；这是插件自有常驻对象边界，适合做主动 TTL 释放。
+- 范围：仅覆盖 `src/optimizer/bridge.js` 内 bridge 结果缓存的 TTL/主动释放机制和对应测试；不改 bridge 白名单、安全来源校验、计划创建/复制/修复业务合同，不改授权、policy token、shopId 或真实写接口。
+- 方案原则：用单一 cache 元数据和一个可重入 cleanup timer 表达生命周期；不新增第二套结果事实源，不吞错，不延长已有 TTL，不改变成功/失败响应结构。
+- 成功标准：补充静态/行为测试证明结果写入后会安排 cleanup、cleanup 到期会删除过期大结果、读取仍会刷新或遵守既有 TTL 语义；通过目标测试、构建同步/检查、语法/空白检查、必要回归。Chrome MCP 真实页只读验证必须使用 `mcp__chrome_devtools.*`；若 MCP 仍不可用，明确记录阻塞，不使用 CDP/其它浏览器替代。
+- 安全边界：本子项不触发真实创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许 Chrome MCP 只读探针。
+
+## 执行计划（可核对）
+- [x] 定位 bridge result cache 当前数据结构、TTL、读写和 prune 路径。
+- [x] 设计主动释放机制，确保一个 timer 覆盖最近过期时间并可重复调度/取消。
+- [x] 实现最小改动并补充目标测试。
+- [x] 运行目标测试、构建检查、语法/空白检查和必要回归。
+- [x] 仅用 Chrome MCP 尝试真实页只读验证；若 MCP 仍不可用，记录阻塞。
+- [x] 结果复盘、diff 自审并中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `e9f70d3 优化 Chrome myseller userscript 入口守卫`，工作区干净。
+- Chrome MCP 当前仍失败于 `mcp__chrome_devtools.list_pages` 的 `Could not find DevToolsActivePort...`；按 L97，本子项不会使用原生 CDP 或其它浏览器通道替代。
+- 定位结论：`installPageApiBridgeHost()` 内的 `resolvedPayloadCache` 只有在 `processBridgeRequest()` 入口调用 `cleanupBridgeCache()`，以及写入后等待下一次请求时才会清理；若最后一次请求返回大 payload 后长期无新请求，结果会在 Map 中继续保留。
+- 实现摘要：`src/optimizer/bridge.js` 为 bridge result cache 增加单一 `bridgeCacheCleanupTimer`，写入结果后调度最近过期时间；timer 触发后清理过期结果，并在仍有缓存时继续按最近过期项重排下一次清理。
+- Diff 自审：未改变 `API_BRIDGE_METHOD_SET` 白名单、请求来源处理、响应 payload 结构或任何创建/复制/修复业务方法；只给已有 `resolvedPayloadCache` 增加主动 TTL 生命周期。
+
+## 验证记录
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标/相关回归：`node --test tests/keyword-plan-api-bridge-security.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，42 项测试全绿；新增断言覆盖 cache TTL、单一 Map 事实源、主动 cleanup timer、过期删除、重排下一次 cleanup、写入后立即调度。
+- 构建检查：`npm run build:check` 通过。
+- 语法检查：`npm run check:syntax` 通过。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，595 项中 593 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按 L97 与用户“只用chrome mcp”要求，本子项未用 CDP 或其它浏览器通道替代。
+
+## 结果复盘
+- 第十一轮第五子项结果：bridge host 的 `resolvedPayloadCache` 从“只在下一次请求时被动清理过期结果”改为“结果写入后按 TTL 主动释放，长期无后续请求也会释放最后一批 payload”。这收口了 extension/page bridge 中一个插件自有 Map 的常驻边界。
+- 取舍结论：保留 90 秒 TTL 与重复 callId 命中语义，不新增第二事实源，不延长缓存时间，不改变 bridge 白名单或业务调用合同；收益主要体现在复制/创建等大结果返回后页面闲置的内存上界。
+- 验证缺口：Chrome MCP 当前会话连接阻塞，真实页只读观察未完成；后续继续优化前仍优先恢复 MCP。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第四子项
+
+## 需求规格
+- 目标：在 extension content 已避免普通 `myseller.taobao.com` 工作台注入完整 page bundle 后，继续收口 userscript 直装场景的入口守卫，避免 `myseller.taobao.com/home.htm/QnworkbenchHome/` 等非 SmartAssistant 预算页启动完整主助手、算法护航和关键词 runtime。
+- 根因判断：userscript 元信息为了支持 SmartAssistant 预算破限包含 `myseller.taobao.com` 匹配，但入口只对 SmartAssistant 预算页做轻量分支，缺少普通 `myseller` 非目标页的早退分支；直装 userscript 或构建产物在普通工作台仍可能启动完整运行时。
+- 范围：只修改 `src/` 的 userscript 入口守卫和必要测试/构建产物；保留 `one.alimama.com` 完整启动、`myseller` SmartAssistant 预算页轻量预算补丁、授权与桥接安全边界，不改创建、复制、预算提交、护航执行、policy token、shopId 或业务请求合同。
+- 热修 vs 结构性修复：采用入口不变量修复：`one.alimama.com` 才启动完整运行时，`myseller` 仅 SmartAssistant 预算页进入轻量预算分支，其它 `myseller` 直接安静退出；不在各模块内部叠加分散禁用条件。
+- 成功标准：目标静态测试覆盖普通 `myseller` 非目标页早退、SmartAssistant 预算页仍保留轻量初始化、`one.alimama.com` 仍完整启动；通过目标测试、构建同步/检查、语法检查、`git diff --check`、必要回归和可用 Chrome/调试端口验证。
+- 安全边界：真实页验证只做刷新、只读 DOM/全局变量/资源/控制台探针，不点击预算提交、创建、复制、删除、上下线、投放或护航执行入口。
+
+## 执行计划（可核对）
+- [x] 复核 userscript 入口、meta 匹配和现有 SmartAssistant 预算页分支，确认守卫落点唯一。
+- [x] 实现普通 `myseller` 非目标页早退，确保 SmartAssistant 预算页仍只启动 UI 与预算补丁。
+- [x] 补充/更新目标测试并同步构建产物。
+- [x] 运行目标测试、构建检查、语法/空白检查、必要回归和可用真实页/调试端口验证。
+- [x] 记录验证结果、结果复盘，完成 diff 自审并按本轮规则中文提交。
+
+## 高层操作摘要
+- 已确认第十一轮第三子项最新提交为 `8be0b0e 优化 Chrome myseller 延迟注入轮询`，当前工作区干净；本子项承接其“userscript 普通 myseller 前置守卫”后续判断。
+- 计划先在主入口表达域名/页面不变量，避免在主助手、算法护航、关键词模块里分别加第二套禁用逻辑。
+- 复核结论：userscript/runtime 拼接为 `script-preamble -> main-assistant IIFE -> optimizer IIFE`；若只在 `main()` 内早退，关键词和算法 runtime 仍会解析执行，因此需要在两个 IIFE 顶部表达入口不变量。
+- 实现摘要：`src/shared/script-preamble.js` 新增统一 URL/host/SmartAssistant 判定；`src/main-assistant/bootstrap.js` 在普通 `myseller` 非 SmartAssistant 页直接早退；`src/optimizer/bootstrap.js` 在所有 `myseller` 页早退，SmartAssistant 预算页只保留主助手里的 UI 与预算补丁。
+- 测试摘要：`tests/budget-frontend-limit-bypass.test.mjs` 增加 VM harness，在缺少 `document/GM_getValue` 的普通 `myseller` 工作台环境执行完整 userscript，证明 guard 位于完整运行时依赖之前；同时用静态契约锁定主助手与 optimizer IIFE 顶部早退位置。
+- Diff 自审：生成产物仅来自 `npm run build` 同步，源码改动集中在共享入口判定与两个 IIFE 顶部早退；未引入第二套业务提交逻辑、隐藏 fallback、授权降级或写请求链路变更。
+
+## 验证记录
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js`、`dist/packages/alimama-helper-pro.meta.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/budget-frontend-limit-bypass.test.mjs` 通过，14 项测试全绿；新增断言覆盖普通 `myseller` 非目标页完整 userscript 早退、未安装 hook manager、未暴露算法护航入口，以及 SmartAssistant 判定复用共享 helper。
+- 语法检查：`npm run check:syntax` 通过；`node --check src/shared/script-preamble.js` 与 `node --check tests/budget-frontend-limit-bypass.test.mjs` 通过。`src/main-assistant/bootstrap.js`、`src/main-assistant/main.js`、`src/optimizer/bootstrap.js` 是构建拼接切片，独立 `node --check` 不适用，完整语法以根 userscript 为准。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/budget-frontend-limit-bypass.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-entry-error-handling.test.mjs` 通过，38 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，594 项中 592 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：仅调用 `mcp__chrome_devtools.list_pages`，仍失败于 `Could not connect to Chrome. Check if Chrome is running. Cause: Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。按用户修正“只用chrome mcp”，本子项不采用原生 CDP 或其它浏览器工具替代验收；真实页只读探针待 Chrome MCP 恢复后补做。
+
+## 结果复盘
+- 第十一轮第四子项结果：userscript 直装普通 `myseller.taobao.com/home.htm/QnworkbenchHome/` 等非 SmartAssistant 预算页时，主助手 IIFE 在访问完整运行时依赖前早退，optimizer/关键词 IIFE 在所有 `myseller` 页早退；SmartAssistant 预算页仍保留主助手轻量 UI 与预算破限补丁，不启动算法护航和关键词 runtime。
+- 取舍结论：把域名/页面不变量放在共享 preamble 与两个 IIFE 顶部，避免在主助手、算法护航、关键词模块内部分散添加禁用条件；不改变 `one.alimama.com` 完整启动，不触碰创建、复制、预算提交、护航执行、授权、policy token 或 shopId 合同。
+- 验证缺口：Chrome MCP 当前会话连接阻塞，本子项已用 VM harness、构建同步和全量回归证明源码边界；真实页面 Chrome MCP 只读验证未完成，后续继续优化前优先恢复 MCP。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第三子项
+
+## 需求规格
+- 目标：在已提交算法护航 token 轮询生命周期后，继续审计剩余插件自有低风险 Chrome 内存热点，优先处理 `myseller.taobao.com` 延迟注入 URL 轮询、bridge 结果缓存 TTL 被动释放、拖拽期全局监听这三类候选中证据最明确的一项，继续逼近当前最佳。
+- 范围：只覆盖默认冷态/非目标页/关闭后残留的插件自有 timer、listener、cache 生命周期；不改真实创建、复制、预算、护航提交、授权、policy token、shopId 或业务请求合同，不直接手改生成产物。
+- 成功标准：若发现明确低风险热点，完成最小侵入修复并补充目标测试，通过目标测试、构建同步/检查、`npm run check:syntax`、`git diff --check`、必要回归和可用的 Chrome 真实页/调试端口验证；若候选均缺少低风险收益，记录排除证据并转入更大架构拆分评估。
+- 安全边界：Chrome 验证只做刷新、只读 DOM/heap/timer/listener/resource 探针和非写入入口开关；不点击并发执行、复制确认、预算提交、删除、上下线、立即投放或护航执行。
+
+## 执行计划（可核对）
+- [x] 复核当前工作区、Chrome 调试端口和上一轮候选，不重复已提交项。
+- [x] 并行审计 `myseller` 延迟注入轮询、bridge result cache、拖拽期全局监听，确定低风险高确定性落地点。
+- [x] 设计更优雅的生命周期边界：优先释放/停止已有资源，避免新增第二事实源或隐藏失败。
+- [x] 实现最小改动并补充/更新测试，必要时同步构建产物。
+- [x] 运行目标测试、构建检查、语法/空白检查、必要回归和可用 Chrome 验证。
+- [x] 记录验证结果、结果复盘和中文 commit。
+
+## 高层操作摘要
+- 已确认上一子项最新提交为 `21fadaf 优化 Chrome 护航 token 轮询生命周期`，继续处理剩余小热点；本轮先聚焦源码中已经被任务记录点名的低风险候选，不直接进入 keyword 主入口拆包，避免重犯 L43。
+- Chrome DevTools Ready 预检：`curl http://127.0.0.1:9222/json/version` 已返回有效 `webSocketDebuggerUrl`，9222 端口有 Chrome 监听；当前会话还需确认 Chrome MCP 工具是否暴露。
+- 已派出两个只读子代理分别审计 bridge result cache 与 `myseller.taobao.com` 延迟注入轮询；主线程同步做计划、源码定位和后续实现决策。
+- 子代理结论：extension 普通 `myseller` 页的 600ms URL 轮询是低风险小热点，成功注入后还残留 `hashchange/popstate` 监听；userscript 普通 `myseller` 页完整 runtime 启动和 bridge result cache 是后续更大候选，需独立提交。
+- 本子项实现：`src/entries/extension-content.js` 将固定 600ms `setInterval` URL 轮询改为 `setTimeout` 退避循环，URL 不变时从 600ms 逐步退避到 4800ms；URL 变化时恢复 600ms 快查并安排 80ms 注入检查；成功注入 page bundle 后同时清理 URL timer、注入检查 timer 和 `hashchange/popstate` 监听。
+
+## 验证记录
+- 目标测试：`node --test tests/extension-static-build.test.mjs` 通过，11 项测试全绿；新增/更新断言覆盖普通 `myseller` 页初始 600ms 快查、未变化时 1200/2400/4800ms 退避、达到上限不再增长、跳转 SmartAssistant 后恢复快查、成功注入后停止 URL timer 并移除 `hashchange/popstate` 监听。
+- 源码语法：`node --check src/entries/extension-content.js` 通过。
+- 构建同步：`npm run build` 已同步 `dist/extension/content.js`；`npm run build:check` 通过。
+- 构建/相关回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿；`node --test tests/budget-frontend-limit-bypass.test.mjs tests/download-link-depth-guard.test.mjs` 通过，17 项测试全绿。
+- 项目级语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，592 项中 590 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome DevTools Ready：`curl http://127.0.0.1:9222/json/version` 返回有效 `webSocketDebuggerUrl`，但 `mcp__chrome_devtools.list_pages` 仍报 `Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`。本子项真实页 MCP 复测受会话绑定阻塞，未做写入口操作；以 VM harness、构建产物一致性和全量回归闭环。
+
+## 结果复盘
+- 第十一轮第三子项结果：extension 普通 `myseller.taobao.com` 工作台从“长期固定 600ms URL 轮询 + 成功注入后保留 URL 监听”优化为“初始快查、空闲退避、成功注入后释放全部延迟注入资源”。长期停留普通工作台时插件自有唤醒频率降到 4800ms 上限，进入 SmartAssistant 后仍能恢复注入。
+- 取舍结论：不包装页面主世界 history、不改变 `one.alimama.com` 完整注入、不改变 SmartAssistant 预算页注入条件、不触碰授权桥或业务请求合同；只收窄 extension content 的延迟注入 watcher 生命周期。
+- 后续判断：子代理确认 userscript 全量匹配普通 `myseller` 页仍会启动完整 runtime，且 bridge host 结果 cache 会在无后续请求时长期保留最后大 payload。下一步优先处理 userscript 普通 `myseller` 前置守卫或 bridge cache 主动释放，继续按项独立提交。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮第二子项
+
+## 需求规格
+- 目标：在已提交计划身份缓存上限后，继续收口源码审计发现的算法护航面板关闭后 1s token 轮询常驻问题，避免用户关闭算法护航浮层后仍保留插件自有定时器。
+- 范围：只覆盖 `src/optimizer/ui.js` 中算法护航 token 状态指示灯轮询的启动/停止生命周期，以及 `src/optimizer/public-api.js` 中公开入口重新显示面板时的轮询恢复；不改 token 解析、hook history、授权守卫、执行前 `TokenManager.refresh()`、护航提交接口或 UI 视觉。
+- 成功标准：关闭算法护航面板时清理 token 轮询；再次通过公开入口展示面板时恢复 token 状态刷新；相关静态测试覆盖“有 interval id、有 close 清理、有 reveal 恢复”，并通过目标测试、构建检查、语法检查、空白检查和必要回归。
+- 安全边界：本子项不触发真实算法护航执行、不提交护航接口；Chrome MCP 当前会话绑定异常，先用源码契约和本地测试闭环，后续恢复 MCP 后补真实页观察。
+
+## 执行计划（可核对）
+- [x] 定位 `UI.create()` 里 token interval、关闭按钮和公开入口展示逻辑。
+- [x] 设计更优雅的生命周期：轮询函数可重入启动、可重复停止，关闭后释放，再显示恢复。
+- [x] 实现最小改动并补充/更新测试，确保执行前 token refresh 保持不变。
+- [x] 运行目标测试、构建检查、语法/空白检查和必要回归。
+- [x] 记录验证结果与中文 commit。
+
+## 高层操作摘要
+- 已提交第十一轮第一子项 `83c64e9 优化 Chrome 计划身份缓存上限`，当前工作区干净；继续处理源码审计中优先级最高的算法护航 token 轮询生命周期。
+- 已将 `UI.create()` 内部匿名 `setInterval` 收敛为 `refreshTokenStatusIndicator()`、`startTokenStatusMonitor()` 和 `stopTokenStatusMonitor()` 三个生命周期方法；关闭按钮释放 interval，公开入口重新展示时恢复。
+- 自审修正：刷新函数在调用 `TokenManager.refresh()` 后重新读取 token 状态再更新指示灯，避免同步刷新成功后颜色延迟到下一轮。
+
+## 验证记录
+- 目标测试：`node --test tests/optimizer-token-capture-history.test.mjs tests/optimizer-entry-error-handling.test.mjs` 通过，9 项测试全绿；新增/更新断言覆盖 token 状态轮询可启动、可停止、关闭面板释放 interval、公开入口展示时恢复轮询，以及创建面板时只做一次状态刷新。
+- 源码片段检查：`node --check src/optimizer/ui.js` 通过；`src/optimizer/public-api.js` 是构建拼接片段，独立 `node --check` 会因文件尾部外层 IIFE 结束符报 `Unexpected token '}'`，真实语法检查以构建后的根 userscript 为准。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 项目级语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 构建静态回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/optimizer-escort-keyword-compat.test.mjs` 通过，23 项测试全绿。
+- 全量回归：`npm test` 通过，592 项中 590 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome 真实页复测：本子项未执行真实护航或提交；当前 Chrome DevTools MCP 仍受会话绑定问题影响，先以源码生命周期契约、构建产物一致性和本地回归闭环，后续 MCP 恢复后补观察关闭面板后的 interval 释放。
+
+## 结果复盘
+- 第十一轮第二子项结果：算法护航 token 状态轮询从“创建面板后永久 1s `setInterval`”改为“公开入口展示时启动、关闭面板时清理、再次展示时恢复”。这消除了用户关闭算法护航浮层后的插件自有定时器常驻。
+- 取舍结论：没有改 token 捕获、hook history、授权守卫、执行前 `TokenManager.refresh()` 或护航提交链路；仅把原匿名轮询拆成一个可复用刷新函数和一组显式启动/停止生命周期方法。`RUN_CAMPAIGN` 后台入口仍会创建 UI 容器承载日志，但不强行保持可见面板轮询，符合本项“关闭后释放”的目标。
+- 自审结论：同步刷新 token 后重新读取状态再更新指示灯，避免旧行为退化为颜色延迟；interval id 使用显式 `null` 判定，避免浏览器返回特殊 id 时出现生命周期误判。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十一轮
+
+## 需求规格
+- 目标：在第十轮已收口主助手插件自触发扫描后，继续用 Chrome 运行态、heap snapshot retained-size 和源码证据判断是否还有插件自有、低风险、高收益的内存优化点，尽量逼近“当前最佳”。
+- 范围：覆盖默认 `one.alimama.com` 列表页冷态和只读打开/关闭路径中的插件 DOM、observer/timer/listener、Map/cache、全局对象、iframe、样式节点、构建体积和 retained-size；不改创建/复制/预算/并发开启/授权/token/shopId 安全边界，不触发真实提交/投放/删除/扣费接口，不直接编辑生成产物。
+- 成功标准：若发现明确插件自有低风险热点，采用最小侵入方案落地，补充目标测试，并通过目标测试、相关回归、`npm run check:syntax`、`npm run build:check`、`git diff --check`、全量或必要回归和 Chrome DevTools MCP 复测；若证据显示剩余热点主要是必要主 bundle、页面原生运行时或高风险架构拆分，则记录排除证据、最佳判断和下一阶段建议。
+- 判断口径：优先处理打开/关闭后残留、重复绑定、默认关闭仍常驻、无上限缓存、可释放大结果、可按需挂载资源；不接受隐藏异常、削弱安全校验、吞掉原生页面变化、把大包解析转移到首次点击路径，或在没有 heap/运行态证据时继续叠加宽泛补丁。
+- 安全边界：Chrome 验证只刷新、读取 DOM/heap/resources、安装只读探针、打开/关闭已验证只读窗口；不点击并发执行、复制确认、预算提交、批量上下线/删除、立即投放、批量创建等写入口。
+
+## 执行计划（可核对）
+- [x] 确认第十轮提交后工作区干净，采集当前 extension bundle、DOM、hook history、request history、timer/listener 和 heap snapshot 基线。
+- [x] 使用只读子代理并行审计剩余源码候选：常驻缓存/定时器/observer/全局对象，以及构建体积与入口拆分风险。
+- [x] 解析 heap snapshot 与运行态探针，区分插件自有热点、页面原生热点和必要主 bundle 成本。
+- [x] 方案判断：若有明确低风险热点则实施最小侵入优化；若只剩高风险架构拆分或页面原生成本，则记录不继续补丁的证据。
+- [x] 验证闭环：运行目标测试、相关回归、`npm run check:syntax`、`npm run build:check`、`git diff --check`，必要时跑 `npm test`；Chrome DevTools MCP 复测前后差异或记录未改排除证据。
+- [x] 结果归档与提交：补充高层操作摘要、验证记录、结果复盘；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已完成并提交第十轮 `e218f67 优化 Chrome 主助手自触发扫描`；本轮不再继续加宽泛 MutationObserver 过滤，先进入 retained-size/运行态证据审计。
+- 本轮优先确认剩余内存是否来自插件自有可释放对象，还是来自页面原生 Magix 运行时、必要 `page.bundle.js` 主代码字符串，或需要更大架构拆分的 optimizer/keyword 主入口。
+- Chrome DevTools MCP 当前会话绑定异常：调用 `mcp__chrome_devtools.evaluate_script` 失败于 `Could not find DevToolsActivePort for chrome at /Users/liangchao/Library/Application Support/Google/Chrome/DevToolsActivePort`；项目恢复脚本也提示 `Chrome DevTools 端口 9222 未就绪`。手动启动 9222 后 `curl http://127.0.0.1:9222/json/version` 已返回健康 `webSocketDebuggerUrl`，但 MCP 仍固定找默认 profile，因此本子项先用本地 heap/源码/构建证据闭环，真实页 MCP 复测待会话绑定恢复后补做。
+- 构建/heap 子代理结论：`dist/extension/page.bundle.js` 约 `4,000,325` bytes，gzip 约 `635KB`，其中 `keyword-plan-api` 约占首包 64%；`tmp/chrome-memory-round8-cold.heapsnapshot` 中 self-size 主要是 `string 67.93MB`、`native 37.50MB`、`code 16.25MB`，最大字符串来自页面 Magix JSON、页面 CSS 和页面混淆函数；插件关键词命中 self-size 很小，未出现新的 100MB 级插件自有热点。
+- 源码审计子代理给出小热点优先级：算法护航关闭后 1s token 轮询、`myseller.taobao.com` 非目标页 600ms URL 轮询、bridge 结果 cache 最后一条 TTL 内未主动释放、主助手 resize 监听拖拽期绑定；主线程本子项先处理同样明确且更局部的无上限 Map/Set 缓存，后续按上述优先级继续逐项收口。
+- 本子项实现：`PlanIdentityUtils.campaignItemIdCache/campaignItemCandidatesCache`、`CampaignIdQuickEntry.campaignItemIdCache` 和 `copyPlanNameCache` 都增加容量上限与最近使用顺序刷新；计划商品映射默认保留最近 240 个 campaign，已复制计划名默认保留最近 120 个，避免长时间浏览/复制后插件自有 Map/Set 无界增长。
+
+## 验证记录
+- Chrome DevTools Ready 预检：`lsof -iTCP:9222 -sTCP:LISTEN` 显示端口曾被 Chrome 监听但 `/json/version` 连接失败；`bash scripts/recover-chrome-devtools-mcp.sh` 失败；直接 `open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-codex-debug about:blank` 后 `/json/version` 健康，但 MCP 仍绑定默认 profile 失败，真实页 MCP 复测未完成。
+- Heap 辅助证据：本地解析 `tmp/chrome-memory-round8-cold.heapsnapshot`，节点约 `1,737,963`；top self-size 仍是页面原生 `ExternalStringData`、Magix JSON、页面 CSS 和页面函数代码，插件命中没有新的大 self-size 热点。
+- Bundle 辅助证据：`dist/extension/page.bundle.js` 约 `3.8MB`，当前低风险收益主要来自生命周期/缓存边界；不进入 keyword 主入口点击时拆包，避免重犯 L43。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/campaign-concurrent-start-quick-entry.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs tests/magic-report-crowd-matrix.test.mjs` 通过，87 项测试全绿；新增断言覆盖本地商品映射缓存、共享商品候选缓存和已复制计划名缓存均有上限，且写入/读取会刷新最近使用顺序。
+- 相关回归：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/logger-api.test.mjs` 通过，40 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，591 项中 589 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+
+## 结果复盘
+- 第十一轮当前子项结果：计划 ID/商品 ID 共享缓存、行级本地缓存和复制计划名缓存从“随浏览/复制长期无上限增长”改为“按最近使用保留有限条目”。这属于小收益但明确的插件自有常驻内存边界收口，不影响创建/复制/预算/并发开启/授权/token/shopId 安全链路。
+- 提交记录：本子项已准备以中文提交信息 `优化 Chrome 计划身份缓存上限` 独立收口。
+- 取舍结论：heap 证据不支持继续为了大数字做宽泛补丁，缓存裁剪的收益主要体现在长时间浏览后的上界可控。240/120 的默认值远高于当前列表页常见 20-30 行规模，能保留近期上下文，同时避免跨店/跨页面长跑积累。
+- 后续判断：本项提交后继续按源码子代理优先级审计算法护航 token 轮询、bridge result cache TTL 主动释放、主助手 resize 拖拽期监听和 myseller content 轮询；若仍无大 retained-size 插件热点，下一阶段应转入 extension enabled/disabled 对照和更大架构拆分评估，而不是继续无证据叠加过滤。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第十轮
+
+## 需求规格
+- 目标：在第九轮计划并发隐藏按钮收口后，继续基于当前 Chrome 运行态和源码证据审计主助手全页 `MutationObserver`、辅助显示标签、日志 DOM、计划快捷入口、潜力词导出和 hook history，寻找剩余插件自有低风险 Chrome 冷态内存/扫描优化点，继续逼近“当前最佳”。
+- 范围：只覆盖默认列表页冷态和普通浏览期间的插件自有 DOM、observer 回调、timer/listener、缓存和扫描调度；不改创建/复制/预算/并发开启/授权/token/shopId 安全边界，不改变真实提交链路，不直接编辑生成产物。
+- 成功标准：若发现明确插件自有低风险热点，采用最小侵入方案落地并通过目标测试、语法检查、构建检查、`git diff --check`、全量或相关回归和 Chrome DevTools MCP 复测；若证据显示剩余热点属于必要主 bundle、页面原生运行时或高风险架构拆分，记录排除证据和下一阶段建议。
+- 判断口径：优先处理插件自身 DOM/日志/标签导致的自触发扫描、默认关闭功能残留、关闭后残留、重复绑定、无上限缓存、可过滤的 observer 噪声；不接受隐藏异常、削弱安全校验、减少用户可见必要状态，或把重解析成本挪到点击路径。
+- 安全边界：Chrome 验证只刷新、读取 DOM/heap/资源/控制台、用只读探针或切换无写入配置开关；不触发创建、复制、预算提交、删除、上下线、并发开启或扣费接口。
+
+## 执行计划（可核对）
+- [x] 采集第九轮提交后的 Chrome 冷态运行态：helper 节点、quick/concurrent/copy/batch 节点、requestHistory、observer 触发来源和主助手扫描相关指标。
+- [x] 静态定位 `main()` 的 MutationObserver、`Core.run()` 辅助显示标签、`Logger.log()`、`CampaignIdQuickEntry.run()` 和 `PotentialPlanDailyExporter.run()` 常驻路径。
+- [x] 方案判断：若插件自身 DOM/日志/标签更新会反复唤醒全页扫描，则设计 observer 噪声过滤；若剩余扫描均为必要页面变化，则记录排除。
+- [x] 实现最小侵入优化并补充目标测试，避免影响辅助显示刷新、计划 ID 快捷入口、复制按钮、批量+、潜力词导出和主面板日志。
+- [x] 验证闭环：运行目标测试、相关回归、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome DevTools MCP 复测前后差异。
+- [x] 结果归档与提交：写入验证记录、结果复盘和对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已完成并提交第九轮 `543bc4e 优化 Chrome 计划并发冷态按钮占用`，工作区干净；第十轮继续审计，不把第九轮小 DOM 收口当作终点。
+- 本轮优先看主助手全页 `MutationObserver` 是否被插件自身 DOM（`.am-helper-tag`、`.am-campaign-search-btn`、主面板日志、弹窗/面板）反复触发，从而造成不必要的 `Core.run()` / `CampaignIdQuickEntry.run()` / `PotentialPlanDailyExporter.run()` 调度。
+- 初始实现只过滤插件 surface 内部变更；Chrome mutation record 复测显示仍有 `CampaignIdQuickEntry.attachHoverHost()` 给原生 `TR/SPAN` 写入 `am-campaign-hover-host` 时触发主助手 1000ms 重扫，因此继续收窄这一处自触发。
+- 最终方案：主助手 observer 对插件根节点、辅助标签、快捷按钮、批量+ 等插件 surface 内部变更直接忽略；对写在原生宿主上的 `am-campaign-hover-host` 不做宽泛 `am-*` 差分忽略，而是由插件写入前调用 `registerExpectedMainAssistantClassMutation()` 登记一次，observer 只消费这一次预期 class mutation。
+- 取舍：不启用 `attributeOldValue`，避免为全页 `class/style/aria` 变化复制旧值；原生节点后续 `class/style/aria/mx-view`、文本和 childList 变化仍会触发 `Core.run()`、快捷入口和潜力词导出的正常重扫。
+
+## 验证记录
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/logger-api.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs` 通过，28 项测试全绿；新增执行型 mutation helper 测试覆盖插件面板属性、插件标签文本/样式、插件节点 childList 可忽略，原生节点 `class/style/aria/text/childList` 必须触发，且登记的 `am-campaign-hover-host` 只消费一次。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/magic-report-panel-resilience.test.mjs tests/magic-report-crowd-matrix.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，107 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，590 项中 588 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome DevTools MCP 运行态刷新确认：真实页 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 已刷新到新 extension bundle；`page.bundle.js` 长度 `3903898`，包含 `AM_EXPECTED_PLUGIN_CLASS_MUTATIONS`、`registerExpectedMainAssistantClassMutation`、`registerExpectedMainAssistantClassMutation(host, 'am-campaign-hover-host')` 和 `shouldIgnoreMainAssistantMutations`，且不包含 `attributeOldValue: true` 或 `getClassMutationDelta`。
+- Chrome DevTools MCP DOM 基线：刷新后 `helperNodes=308`、`helperTags=136`、`quickButtons=26`、`concurrentButtons=0`、`hoverHosts=26`、`batchPlus=1`。
+- Chrome DevTools MCP mutation 复测：带调用栈和 mutation record 摘要的只读探针显示，`scheduleRunCoreCountByPhase={"idle":1,"native":1}`，`plugin` 阶段没有 `scheduleRunCore` 调度；`plugin` 阶段只看到测试插入的 `.am-helper-tag` 和插件按钮/批量+自身 class/childList 变化，均未触发主助手重扫。`native` 阶段插入原生 probe 会触发一次 `scheduleRunCore`，证明页面原生变更仍可重扫。
+- Chrome DevTools MCP 背景噪声说明：`idle` 阶段仍有页面原生轮播/样式/mx-view mutation 触发一次主助手调度，这是阿里妈妈页面自身变化，不属于插件自触发；本轮不吞掉该类原生变化，避免影响 SPA 表格复用和原生按钮状态同步。
+- Chrome 安全边界：真实页面只刷新、读取 DOM/资源、安装内存内只读探针和插入/移除测试 span；未点击并发执行、复制、预算、删除、上下线或提交按钮。探针 `dangerousAdded=[]`，未新增 `/solution/addList|copy`、`/campaign/budget/batchUpdate`、`campaign/delete|updatePart`、`adgroup`、`creative` 等写接口资源。
+- Chrome 控制台限制：当前可用 `chrome_devtools` 工具只暴露 `evaluate_script`/`take_heapsnapshot`，未提供历史 console 读取；本轮用调用栈探针、resource 增量和本地回归替代确认，未观察到页面脚本执行异常。
+
+## 结果复盘
+- 第十轮结果：主助手全页 `MutationObserver` 从“任何插件自身 DOM 更新也会触发 1000ms 后串行跑 `Core.run()` / `CampaignIdQuickEntry.run()` / `PotentialPlanDailyExporter.run()`”优化为“插件 surface 内部变更与登记过的一次性插件 class 写入不再触发重扫，原生页面变化仍触发重扫”。
+- 对比结论：真实页最终探针中，插件阶段 `scheduleRunCore` 从初始复测可见的自触发降为 0；原生 probe 仍触发 1 次调度，说明优化没有把页面真实变更吞掉。
+- 优雅性判断：相比使用 `attributeOldValue` 做全页 class diff，本轮最终方案用 WeakMap 记录插件自己即将写入的原生宿主 class，既避免 oldValue 内存复制，也避免把未来页面原生 `am-*` 或混合 class 状态误忽略。
+- 后续判断：第十轮后，默认关闭 DOM、关闭释放、预算补丁生命周期、万能查数 iframe 释放、下载捕获面板按需挂载和主助手插件自触发扫描均已完成一轮收口。继续逼近“最佳”应进入更高成本的 retained-size 审计或业务入口拆 bundle 评估，不建议在没有新 heap 证据时继续叠加宽泛 observer/filter 补丁。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第九轮
+
+## 需求规格
+- 目标：在第八轮预算破限冷态生命周期收口后，继续基于当前 Chrome 运行态和源码证据审计主助手常驻扫描、辅助显示标签、计划并发入口、潜力词导出入口和主面板日志，寻找剩余插件自有低风险内存优化点，继续逼近“当前最佳”。
+- 范围：只覆盖冷态或普通列表页常驻的插件自有 observer/timer/listener、DOM 标签、缓存、日志、主助手扫描节流和辅助显示渲染；不改创建/复制/预算/授权/token/shopId 安全边界，不改变真实提交链路，不直接编辑生成产物。
+- 成功标准：若发现插件自有低风险热点，采用最小侵入方案落地并通过目标测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 复测；若证据显示剩余项属于必要主 bundle、页面原生运行时或需要高风险架构拆分，记录排除证据和下一阶段建议。
+- 判断口径：优先处理默认关闭功能仍常驻、重复扫描、可按配置禁用的 DOM 更新、无上限日志/缓存、关闭后残留；不接受隐藏异常、削弱安全校验、减少用户可见必要状态，或把重解析成本挪到点击路径。
+- 安全边界：Chrome 验证只刷新、读取 DOM/heap/资源/控制台、切换无写入配置开关或做内存内只读探针；不触发创建、复制、预算提交、删除、投放、扣费接口。
+
+## 执行计划（可核对）
+- [x] 采集第八轮提交后的 Chrome 冷态运行态：DOM、helper 节点、requestHistory、预算补丁、主助手扫描相关指标。
+- [x] 静态定位主助手 `Core.run()`、辅助显示标签、计划并发入口、潜力词导出、日志和 observer/timer 常驻路径。
+- [x] 方案判断：若存在默认关闭或配置关闭仍常驻的低风险项则实现；若主要是必要扫描或页面原生则记录排除。
+- [x] 实现最小侵入优化并补充目标测试，避免影响辅助显示、计划并发、潜力词导出和主面板交互。
+- [x] 验证闭环：运行目标测试、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome DevTools MCP 复测前后差异。
+- [x] 结果归档与提交：写入验证记录、结果复盘和对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已完成并提交第八轮 `eb168f7 优化 Chrome 预算破限冷态内存占用`；第九轮继续审计，不把预算补丁收口当作终点。
+- 本轮优先看主助手扫描与配置开关生命周期，尤其是默认关闭的 `showConcurrentStartButton`、非潜力词页的潜力词导出、辅助显示标签渲染和主面板日志是否仍有冷态常驻或重复扫描。
+- 静态定位结论：`main()` 的全页 `MutationObserver` 会串行触发 `Core.run()`、`CampaignIdQuickEntry.run()`、`PotentialPlanDailyExporter.run()`；其中潜力词导出在非目标页先判 hash 并移除按钮，预算破限第八轮已按需安装，剩余低风险热点是默认关闭的 `showConcurrentStartButton=false` 仍由 `enhanceTextNodes()` / `enhanceLinkNodes()` 为每个计划 ID 创建并发按钮，再用 `display:none` 隐藏。
+- 方案判断：采用“关闭不创建 DOM，开启按已有快捷查数按钮补建，关闭时移除”的生命周期修复。它只收窄并发入口的冷态 DOM 常驻，不改并发开启请求、复制、预算、授权、token、shopId 或真实提交链路。
+- 只读子代理复核结论与主线程一致：UI 开关旧逻辑依赖“并发按钮已存在”，因此关闭时移除后，开启必须从 `.am-campaign-search-btn[data-am-campaign-quick="1"]` 补建，并透传 `campaignId/bizCode/itemId`；另外运行中按钮不能被开关关闭直接拆掉。
+- 实现摘要：`enhanceTextNodes()` / `enhanceLinkNodes()` 仅在 `showConcurrentStartButton=true` 时创建并发按钮；`syncConcurrentButtonsVisibility()` 关闭时移除空闲并发按钮，开启时调用 `ensureConcurrentButtonsForQuickEntries()` 从既有 quick 按钮补建；运行中按钮保留到流程结束，`setConcurrentButtonRunning(..., false)` 会在开关仍关闭时清理。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过；`node --check 阿里妈妈多合一助手.js` 通过。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/campaign-concurrent-start-quick-entry.test.mjs` 通过，8 项测试全绿；新增断言覆盖默认关闭不保留隐藏并发 DOM、开启按 quick 按钮补建、文本/链接注入受开关控制、运行中按钮结束后按开关清理。首次运行该测试失败于构建产物未同步，执行 `npm run build` 后复测通过。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/magic-report-panel-resilience.test.mjs tests/magic-report-crowd-matrix.test.mjs` 通过，87 项测试全绿；复制、万能查数和人群看板相关静态回归未受影响。
+- 构建静态测试：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- 全量回归：`npm test` 通过，588 项中 586 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome DevTools MCP 冷态复测：真实页 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 中，`showConcurrentStartButton` 按钮 `aria-pressed=false`，`quickCount=26`、`concurrentCount=0`、`hiddenConcurrentCount=0`、`runningConcurrentCount=0`、`copyCount=3`、`batchPlusCount=1`、`helperNodes=302`。
+- Chrome DevTools MCP 开关往返：点击“计划并发”打开后 `quickCount=26`、`concurrentCount=26`、`hiddenConcurrentCount=0`，第一个 quick 后紧跟 concurrent，首个并发按钮透传 `campaignId=77783773024`、`bizCode=onebpSite`、`itemId=973306665230`，`display=inline-flex`、`disabled=false`、`title/aria-label=并发开启关联计划：77783773024`；再关闭后 `concurrentCount=0`、`hiddenConcurrentCount=0`。
+- Chrome 安全边界：本轮真实页面只刷新、读取 DOM/配置、点击“计划并发”开关打开再关闭；未点击任何并发执行、复制、预算、删除、上下线或提交按钮。开关往返探针 `dangerousWriteLikeEntriesAdded=[]`，未新增 `/campaign/budget/batchUpdate.json`、`/solution/addList|copy`、`campaign/delete|updatePart` 等写接口资源。
+- Chrome 控制台/网络：控制台只见页面既有 `Deprecated feature used`、`net::ERR_TUNNEL_CONNECTION_FAILED` 外部资源失败和页面 SSE/trace 日志；未见本轮并发按钮生命周期改动新增插件异常。网络列表主要为页面既有只读/报表/trace 请求，本轮开关往返无写接口增量。
+
+## 结果复盘
+- 第九轮结果：`计划并发`默认关闭时从“每个计划 ID 都创建一个隐藏并发按钮”优化为“冷态不创建并发按钮，开启时按需补建，关闭时释放空闲并发按钮”。真实页面当前列表冷态减少 26 个隐藏并发按钮，开启后仍能即时补建 26 个，关闭后回到 0。
+- 取舍结论：该项收益小而明确，属于配置关闭功能的 DOM 生命周期收口；它不改变并发开启请求链路，也不把重业务逻辑移到点击路径。运行中按钮采用保守策略，避免用户执行期间关闭开关导致 disabled/title/focus 恢复链路失效。
+- 后续判断：第九轮后，默认关闭功能的明显冷态隐藏 DOM 又收口一处。剩余主助手扫描和辅助显示 `Core.run()` 属于当前可见表格功能的必要扫描；继续优化应优先做更细粒度的 MutationObserver 变更过滤或主 bundle 拆分评估，收益/风险高于本轮小生命周期补丁。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第八轮
+
+## 需求规格
+- 目标：在已完成请求历史、非业务页注入、外置 CSS、组建计划生命周期、下载捕获面板和万能查数关闭释放后，继续用当前 Chrome 运行态和 heap/DOM 证据判断是否还有低风险高收益内存优化点，尽量逼近“当前最佳”。
+- 范围：覆盖 Chrome extension/page 运行态的冷态常驻对象、observer/timer/listener、DOM/样式节点、缓存、授权守卫、主助手扫描、hook manager、optimizer/keyword 入口状态；不改创建/复制/预算/授权/token/shopId 安全边界，不点击真实创建、提交、投放、删除或扣费入口，不直接编辑生成产物。
+- 成功标准：若发现插件自有低风险热点，落地最小侵入优化并通过目标测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 复测；若证据显示剩余热点主要来自页面原生运行时、必要主 bundle 或需要高风险架构拆分，记录证据和“不继续补丁”的原因，并给出下一阶段架构建议。
+- 判断口径：优先处理打开/关闭后残留、重复绑定、冷态不必要 DOM、无上限缓存、可取消 timer/observer、可按需挂载的插件自有面板；不接受把成本转移到点击同步路径、隐藏异常、增加第二事实源、降低安全检查或用空提交冒充优化。
+- 安全边界：Chrome 只做刷新、打开/关闭已验证只读入口、DOM/heap/性能/网络/控制台采集和内存内探针；网络检查排除创建/复制/预算/删除/投放类写接口。
+
+## 执行计划（可核对）
+- [x] 回顾第七轮提交后的源码、任务记录和运行态，确认本轮不重复已完成项。
+- [x] 用 Chrome DevTools MCP 采集当前 `one.alimama.com` 冷态 DOM/样式/iframe/observer/listener/cache/heap 指标。
+- [x] 静态交叉定位剩余候选：主助手扫描、授权守卫、hook manager、潜力词导出、并发日志/复制弹窗、optimizer/keyword 入口、缓存和 timer。
+- [x] 方案判断：若有插件自有低风险热点则实现；若只剩页面原生或高风险架构拆分则记录证据并不改。
+- [x] 验证闭环：运行目标测试、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome 复测或记录无法改的排除证据。
+- [x] 结果归档与提交：写入验证记录、结果复盘和前后对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已开始第八轮，当前工作区干净，上一轮最新提交为 `c6b016b 优化 Chrome 万能查数关闭内存占用`。
+- 本轮先做证据审计，不把第七轮“剩余可能高风险”当作最终结论；若能找到插件自有低风险项继续优化，否则用 Chrome/heap 证据说明当前低风险项已基本收口。
+- Chrome 冷态证据：当前 `one.alimama.com` extension 运行态 `requestHistory.length=97`、`traceCount=0`、`captureNodes=0`、`magicNodes=1`、`helperNodes=287`、`usedJSHeapSize≈165.9MB`；heap snapshot `tmp/chrome-memory-round8-cold.heapsnapshot` 的大 self-size 仍主要是页面字符串/native/code，插件命中对象没有新的大 self-size 热点。
+- 静态交叉定位后，本轮低风险候选收敛为 `BudgetFrontendLimitBypass`：默认配置 `unlockBudgetFrontendLimit=false` 时仍会安装页面级预算 patcher、body `MutationObserver`、`hashchange` 监听和 600ms interval；这属于插件自有冷态生命周期过宽，不涉及创建/复制/预算提交安全边界本身。
+- 方案判断：采用“按需安装 + 关闭统一释放”的结构性修复。冷态只同步开关状态，不安装重页面 patcher；用户打开预算破限时再安装 Magix/SmartAssistant/提交 payload patch；关闭时恢复 patched views、SmartAssistant targets、fetch/XHR wrapper，并清理 observer/timer/listener。
+- 子代理静态复核尝试因 `429 Too Many Requests` 失败，本轮不重试，主线程基于 Chrome/heap/源码证据继续推进。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/budget-frontend-limit-bypass.js` 通过。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/budget-frontend-limit-bypass.test.mjs tests/logger-api.test.mjs` 通过，30 项测试全绿；新增断言覆盖预算破限默认关闭不安装页面级扫描补丁、开启才按需安装、关闭时执行 cleanup、恢复 fetch/XHR wrapper、释放 600ms interval。
+- 构建静态测试：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- Chrome DevTools MCP 新构建冷态复测：刷新真实 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 后，当前 extension `page.bundle.js` 包含 `2026-06-03-budget-lazy-install-v1`、`ensurePagePatcher()`、`__AM_BUDGET_FRONTEND_UNLOCK_DISABLE__` 和 `restoreBudgetSubmitPayloadPatch()`；`BudgetFrontendLimitBypass.init()` 代码块不再包含 `MutationObserver`、`hashchange` 或 `installPagePatcher`。
+- Chrome 冷态预算补丁状态：默认配置 `unlockBudgetFrontendLimit=false` 时，`patcherInstalled=false`、`patcherVersion=""`、`hasRefresh=false`、`hasDisable=false`、`hasSmartAssistantDebug=false`、`fetchPatchVersion=""`、`xhrOpenPatchVersion=""`、`xhrSendPatchVersion=""`；`usedJSHeapSize≈146.9MB`，后续最终冷态约 `134.6MB`。
+- Chrome 开关往返验证：点击“预算破限”打开后，`patcherVersion=2026-06-03-budget-lazy-install-v1`、`hasRefresh/hasDisable/hasSmartAssistantDebug=true`、fetch/XHR open/send 均带 patch version；再点击关闭后全部回到空值或 `false`，`unlockFlag=false`，按钮 `aria-pressed=false`。
+- Chrome 资源释放探针：预算开关往返期间页面内探针记录 `intervalAdds=1/intervalClears=1`、`hashAdd=1/hashRemove=2`、`mutationCreated=1/mutationObserve=1/mutationDisconnect=1`，证明页面级 interval/listener/observer 关闭后释放。`hashRemove=2` 来自显式 remove 与 cleanupHandlers 双保险，结果无残留。
+- Chrome 最终冷态：`totalNodesApprox=6079`、`helperNodes=291`、`captureNodes=0`、`magicNodes=1`、`keywordNodes=10`、`requestHistory.length=98`、`traceCount=0`、`fetchHandlers=2`，预算补丁全局与 fetch/XHR wrapper 均不存在。
+- Chrome 安全边界：本轮真实页面只刷新、点击助手面板里的预算破限开关并立刻关回；未打开预算弹窗、未触发真实预算提交。性能资源探针 `dangerousWriteLikeEntries=[]`，开关往返 `dangerousWriteLikeEntriesAdded=[]`，未触发 `/campaign/budget/batchUpdate.json`、`/solution/addList|copy`、删除/上下线/保存类写接口。
+- Chrome 控制台：仅见页面既有 `Deprecated feature used` 和外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED`，未见本轮预算生命周期改动新增插件异常。
+
+## 结果复盘
+- 第八轮结果：预算破限从“默认关闭也在冷态安装页面级补丁、body observer、hashchange 监听和 600ms interval，并保留 fetch/XHR wrapper”优化为“冷态不安装重补丁；用户开启时按需安装；关闭时统一恢复 Magix/SmartAssistant patch、fetch/XHR wrapper 并清理 observer/timer/listener”。
+- 对比结论：本项收益小于前几轮大 DOM/iframe/CSS 优化，但它消除了一个默认关闭功能的常驻页面扫描和 wrapper 链路，生命周期更符合功能开关语义，且不降低预算服务端硬下限重提、可见输入同步或安全边界。
+- 后续判断：第八轮后，Chrome 冷态中请求历史、下载捕获、万能查数、组建计划 overlay/style、预算破限重补丁均已收口。剩余明显内存主要来自页面原生 Magix/React/AI 模块、必要 extension 主 bundle、主助手辅助显示扫描和授权/bridge 基础能力；继续逼近“最佳”需要更大结构切分或按业务入口拆 bundle，风险和验证成本高于本轮生命周期补丁，应先用 retained-size 对主 bundle/主助手扫描做下一轮证据审计。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第七轮
+
+## 需求规格
+- 目标：验证并优化万能查数/人群看板关闭后的 Chrome 内存占用，重点确认关闭后是否仍保留 iframe 子文档、popup DOM、样式节点、图表 DOM、下拉/hover 浮层和人群看板数据缓存。
+- 范围：只覆盖 `src/main-assistant/magic-report.js` 的关闭生命周期和必要测试/构建产物；不改查数接口合同、不改 AI 查询逻辑、不降低授权/token/shopId/预算/创建/复制安全边界，不触发真实创建、提交、投放、删除或扣费入口。
+- 成功标准：若 Chrome 实测证明关闭后有插件自有可释放重资源，采用最小侵入方案释放，并通过相关测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 打开/关闭复测；若证据显示关闭后无重残留或释放会明显破坏用户热缓存/重开体验，记录证据并不改。
+- 取舍原则：优先释放 iframe/src、popup DOM、hover/dropdown 浮层和大结果缓存；保留用户配置与必要入口状态。不得把万能查数 iframe 或看板大初始化挪到点击同步卡顿路径之外的新风险点。
+- 安全边界：Chrome 验证只打开/关闭万能查数窗口、读取 DOM/heap/资源/控制台状态，允许只读模拟和 UI 打开；不在 iframe 内提交查询，不触发真实业务写接口。
+
+## 执行计划（可核对）
+- [x] 回顾 `magic-report.js` 当前创建、打开、关闭、样式注入、iframe 加载和数据缓存逻辑。
+- [x] 用 Chrome DevTools MCP 采集万能查数打开前、打开后、关闭后和延迟后的 DOM/iframe/style/cache/heap 指标。
+- [x] 判断可改点：若关闭后仍保留 iframe/popup/data，设计一个统一关闭释放出口；若只是必要热缓存，记录不改理由。
+- [x] 实现最小侵入释放逻辑，补充测试覆盖关闭卸载和重开可恢复。
+- [x] 运行目标单测、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并 Chrome 复测前后对比。
+- [x] 写入验证记录、结果复盘和前后对比；有实质改动时中文 commit。
+
+## 高层操作摘要
+- 已根据第六轮子代理静态复核进入万能查数候选验证；该候选预期收益高于下载捕获面板，但风险也更高，因为可能影响 iframe 热缓存和看板重开状态。
+- 源码回顾结论：`toggle(false)` 旧路径只隐藏弹窗并保留 iframe、popup DOM、样式节点、人群矩阵图表 DOM 和缓存；创建弹窗时还有 window/document 级 resize、scroll、drag、快捷话术 timer、iframe onload/onerror 等闭包链路。更优雅的实现是把关闭统一收敛到 `releasePopupResources()`，由它清理监听、timer、iframe、DOM 和可重建缓存，而不是在各个按钮分散补丁。
+- 实现摘要：`toggle(false)` 已改为调用 `releasePopupResources()`，关闭时释放 iframe 子文档、popup/style DOM、hover tip、body portal 下拉、resize/scroll/document click/Escape/drag 监听、iframe 清理轮询 timer 和快捷查询 timer；重开时重新 mount，并通过 `magicPromptDraft` 尽量恢复查询输入，保留 `lastCampaignId/lastCampaignName` 等上下文。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过；`node --check tests/magic-report-panel-resilience.test.mjs` 通过。
+- 构建同步：`npm run build` 已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`；`npm run build:check` 通过。
+- 目标测试：`node --test tests/magic-report-panel-resilience.test.mjs tests/magic-report-crowd-matrix.test.mjs tests/logger-api.test.mjs` 通过，91 项测试全绿；新增断言覆盖 `toggle(false) -> releasePopupResources()`、iframe/about:blank 释放、popup/style DOM 卸载、document click/Escape 与 drag/resize/scroll cleanup、timer 清理、查询草稿保存/恢复、且不清空 `lastCampaignId/lastCampaignName`。
+- 构建静态测试：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，20 项测试全绿。
+- 全局语法/空白：`npm run check:syntax` 通过；`git diff --check` 通过。
+- Chrome DevTools MCP 运行态确认：刷新真实 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 后，当前 extension `page.bundle.js` 来自 `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/`，包含 `releasePopupResources()`、`toggle` 释放分支、document cleanup、`magicPromptDraft` 和 `quickPromptRetryTimer`。
+- Chrome 冷态对比：刷新后新运行态冷态 `popup.exists=false`、`iframe.exists=false`、`styleExists=false`、`magicNodes=0`、`helperNodes=354`、`usedJSHeapSize≈120.8MB`。刷新前旧隐藏残留曾为 `popup.exists=true/display:none/childCount=127`、`iframe.src=https://one.alimama.com/index.html#!/report/ai-report`、`styleExists=true`、`magicNodes=128`。
+- Chrome 打开态：点击主面板“万能查数”后默认人群看板打开，`popup.exists=true/display:flex/childCount=127`、`styleExists=true`、`dropdown.exists=true`、`magicNodes=128`；切到“万能查数”页签后 iframe 创建并设置 `src=https://one.alimama.com/index.html#!/report/ai-report`，未提交查询。
+- Chrome 关闭态：点击 `#am-magic-close` 后 220ms，`popup.exists=false`、`iframe.exists=false`、`styleExists=false`、`dropdown.exists=false`、`hoverTipExists=false`、`magicNodes=0`、`helperNodes=354`；延迟 1.72s 后指标仍保持释放。
+- Chrome 监听闭环：打开/关闭过程中页面探针记录 `window:resize add=2/remove=2`、`document:scroll add=1/remove=1`、`document:click add=1/remove=1`、`document:keydown add=1/remove=1`、`document:mousemove add=1/remove=1`、`document:mouseup add=1/remove=1`，关闭后无本轮新增全局监听不平衡。
+- Chrome 安全边界：本轮真实页面只打开/切换/关闭万能查数窗口；性能资源探针确认 `dangerousWriteLikeEntries=[]`，未触发 `/solution/addList|copy`、预算 batchUpdate、campaign 删除/上下线、adgroup/creative 写接口。网络列表仅页面自身只读/报表/trace 请求；控制台只有既有外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED`。
+
+## 结果复盘
+- 第七轮结果：万能查数/人群看板关闭路径从“隐藏弹窗并长期保留 iframe、popup/style DOM、图表 DOM、下拉 DOM、监听和运行缓存”改为“关闭即统一释放，重开重新挂载”。真实页面复测中，打开态 `magicNodes=128`，关闭 220ms 后回到 `magicNodes=0`，iframe 与样式节点均不存在。
+- 取舍结论：释放 iframe 会牺牲完整 iframe 热缓存，但这是本轮明确要优化的 Chrome 内存热点；为降低体验损耗，保留最近计划上下文，并用 `magicPromptDraft` 保存/恢复查询输入。人群看板数据缓存关闭后清空，下次打开按当前计划重新加载，避免大结果长期常驻。
+- 后续判断：本轮解决了第六轮指出的更高收益候选。剩余 Chrome 内存主要来自页面原生 Magix/报表运行时、extension 主 bundle 和打开态必要 DOM；继续优化需要更大模块拆分或更细 retained-size 审计，不建议在没有新 heap 证据时继续叠加补丁。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第六轮
+
+## 需求规格
+- 目标：在前 5 轮已完成请求历史、非业务页注入、外置组建计划 CSS、关闭卸载 DOM、样式/子浮层生命周期清理后，继续用 retained-size 与运行态证据确认是否还有低风险高收益内存优化点，并在有明确插件自有热点时完成第六轮优化。
+- 范围：只覆盖 Chrome extension 运行态、`one.alimama.com` 页面插件常驻对象、全局监听、定时器、Observer、DOM/样式节点、缓存和构建产物；不改创建/复制/预算/授权/token/shopId 等安全边界，不点击真实创建、提交、投放、删除或扣费入口，不直接编辑生成产物。
+- 成功标准：若发现插件自有低风险热点，必须落地最小侵入优化，记录前后指标并通过相关测试、语法检查、构建检查、`git diff --check` 和 Chrome DevTools MCP 复测；若 retained-size 证据显示剩余热点主要是必要运行时或页面原生，必须记录排除证据，不做高风险结构切分。
+- 根因判断口径：优先处理“打开/关闭后残留”“重复绑定/重复启动”“无上限缓存”“可清空的大 DOM/大数组/大字符串”“非目标页误注入”；不接受把首包成本挪到点击路径、隐藏异常、增加第二事实源或牺牲已验证功能。
+- 计划校验：开发前先确认是否有比新增补丁更优雅的释放/收窄生命周期方式；若候选需要拆分核心业务模块或改变运行态合同，先记录风险并停止，不强行推进。
+
+## 执行计划（可核对）
+- [x] 回顾当前源码、提交和第五轮后的运行态证据，确认第六轮不重复已完成项。
+- [x] 用 Chrome DevTools MCP 采集当前页面插件运行态、DOM/样式节点、全局对象、hook history、performance memory 和 heap snapshot。
+- [x] 静态交叉定位可能的残留源：全局监听、interval/timeout、Observer、Map/cache、body 级浮层、样式注入和 extension content script。
+- [x] 方案判断：基于 retained-size/运行态证据选择一项低风险优化；若没有明确热点，记录“当前最佳”证据。
+- [x] 实现与测试：只改必要源码，补充或更新覆盖测试，不改变安全边界或点击路径解析成本。
+- [x] 验证闭环：运行目标单测、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并用 Chrome DevTools MCP 做前后复测。
+- [x] 结果归档与提交：写入高层操作摘要、验证记录、结果复盘和前后对比；有实质改动时用中文提交信息 commit。
+
+## 高层操作摘要
+- 已启动第六轮，目标不是重复前五轮结论，而是基于 retained-size 和当前运行态判断是否还存在插件自有、低风险、高收益的常驻内存热点。
+- 已回顾 `tasks/lessons.md`，本轮重点遵守 L96（按项记录/中文提交）和 L43（不能把大包首次解析转移到点击路径）。
+- 第六轮冷态/heap 证据：`tmp/chrome-memory-round6-cold.heapsnapshot` 显示大 self-size 主要来自页面 Magix 业务 JSON 和页面代码字符串；冷态插件侧无组建计划 overlay/style/promise 残留，请求历史 `traceCount: 0`，唯一 body 级插件浮层是隐藏的空 `#am-report-capture-panel`。
+- 只读子代理复核：前五轮之外更高收益候选是万能查数关闭后的 iframe/popup/data 释放；低风险冷态项是下载捕获面板生命周期。第六轮先提交下载捕获面板按需挂载与关闭卸载，后续继续验证万能查数候选。
+- 第六轮实现：`Interceptor.init()` 不再冷态创建下载捕获面板；`show()` 命中真实下载 URL 时才 `createPanel()`；关闭按钮和退出模式分支统一走 `removePanel()` 卸载 DOM、清空 `this.panel`，并取消复制按钮的恢复定时器，避免关闭后短暂保留已卸载节点引用。
+
+## 验证记录
+- Chrome DevTools MCP 冷态基线：当前 `one.alimama.com` 管理页在第五轮后无组建计划残留，但冷态存在隐藏空面板 `bodyFloating: [{ id: "am-report-capture-panel", childCount: 0, display: "none" }]`；`hook.historyLength: 100`、`requestHistoryLimit: 1200`、`traceCount: 0`。
+- Heap 辅助证据：`tmp/chrome-memory-round6-cold.heapsnapshot` 约 `170MB`，解析后 `string` self-size 最大；插件关键词命中的大对象前列主要是页面 `magix-ports` JSON 和页面函数代码字符串，未发现新的插件自有大 retained 字符串或组建计划 DOM 残留。
+- Chrome DevTools MCP 组建计划回归：按当前 `callId` bridge 合同打开组建计划成功，打开态 `overlayDescendantCount: 626`、`modalDescendantCount: 624`、`stylePromise: true`；关闭 150ms 后 `overlay.exists: false`、`keywordNodes: 0`、只剩主样式 `style#am-helper-pro-v26-style`，第五轮生命周期清理仍稳定。
+- 本地验证：`node --test tests/download-link-depth-guard.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/keyword-wizard-entry-regression.test.mjs` 通过，51 项测试全绿。
+- 本地验证：`npm run check:syntax` 通过，根 userscript 语法检查无错误。
+- 本地验证：`npm run build:check` 通过，根 userscript、`dist/packages/` 和 `dist/extension/` 与源码同步。
+- 本地验证：`git diff --check` 通过，无空白错误。
+- Chrome DevTools MCP 新构建冷态复测：刷新同一 `one.alimama.com` 页面后，当前 extension `page.bundle.js` 包含 `hasLazyPanelShow: true`、`hasRemovePanel: true`、`hasColdCreatePanel: false`；冷态 `capturePanel.exists: false`、`bodyFloating: []`、`overlay.exists: false`、`stylePromise: false`、`hook.historyLength: 98`、`traceCount: 0`。
+- Chrome DevTools MCP 下载捕获模拟复测：通过内存内调用 `__AM_HOOK_MANAGER__.fetchHandlers` 模拟下载 URL，未发起真实下载/业务请求；触发前 `panelExists: false`，触发后面板 `display: "block"`、`ariaHidden: "false"`、`childCount: 21`、`lastUrl` 为模拟 xlsx 链接；点击关闭后 `afterClose.exists: false`，1.7s 后 `afterTimer.panelExists: false`，`historyAdded: 0`。
+- Chrome 网络边界：下载捕获模拟新增网络条目仅为页面自身 `https://gm.mmstat.com/aes.1.1` beacon 2 条；未触发创建、提交、投放、删除、扣费或真实下载请求。
+
+## 结果复盘
+- 第六轮当前子项结果：下载捕获面板从“插件冷态即在 body 常驻一个隐藏空 DOM，命中下载后关闭仅隐藏并保留 21 个子节点”优化为“冷态不创建，命中下载才创建，关闭后直接卸载并清空引用，复制恢复定时器同步取消”。
+- 对比结论：本项收益小于前几轮大 DOM/CSS/request history 优化，但风险低、生命周期更准确，避免无下载场景常驻 `#am-report-capture-panel`，也避免捕获后关闭态长期保留面板子树。
+- 后续判断：子代理和静态证据均指向万能查数关闭后 iframe/popup/data 缓存可能是下一项更高收益候选；本提交后继续用 Chrome DevTools MCP 做打开/关闭实测，再决定是否进入第七轮或作为第六轮后续子项优化。
+
+# TODO - 2026-06-03 插件浏览器内存占用继续优化第五轮
+
+## 需求规格
+- 目标：在已完成 4 轮 Chrome 内存优化后，继续用当前运行态证据寻找剩余可优化热点，优先处理低风险、高收益、不会把成本转移到用户点击路径的常驻内存问题。
+- 范围：只覆盖插件在 Chrome 页面中的常驻对象、运行态 DOM、缓存、观察器、定时器、注入资源和构建产物；不改无关业务逻辑，不降低授权、token、shopId、创建/复制/预算等安全边界，不直接编辑构建产物。
+- 成功标准：完成第五轮可验证优化或用证据证明当前已无低风险高收益项；若有实质代码优化，必须记录前后指标、运行测试、Chrome DevTools MCP 复测，并用中文提交信息 commit；若没有可改项，也必须记录排除证据。
+- 安全边界：Chrome 验证只做打开、刷新、只读探针、内存/DOM/资源采集和弹窗打开关闭；不点击创建、投放、提交、删除、扣费类入口。涉及服务器请求时控制在 10rpm 内，本轮优先使用页面内静态探针和扩展资源读取，避免业务接口。
+- 计划校验：本轮不使用子代理；每次偏离候选方向前先更新计划。先问“有没有更优雅的实现方式”：优先释放或避免常驻对象，其次收窄生命周期；不接受隐藏错误、宽泛 fallback 或重复事实源。
+
+## 执行计划（可核对）
+- [x] 复核当前源码与运行态：确认第 4 轮提交后的 Chrome 页面、扩展资源、hook manager、DOM、observer/timer/cache 状态。
+- [x] 定位第五轮热点：用 Chrome DevTools MCP 采集页面内插件节点、全局对象、资源、heap/DOM 指标，并结合 `rg` 静态定位剩余常驻大对象。
+- [x] 方案判断：若热点来自可释放 DOM、缓存、observer、timer 或一次性大对象，设计最小侵入优化；若主要来自必要业务运行时或页面原生，记录不继续改的证据。
+- [x] 实现与测试：落地一项低风险优化，补充或更新相关测试，避免点击路径同步解析大包。
+- [x] 验证闭环：运行相关单测、`npm run check:syntax`、`npm run build:check`、`git diff --check`，并用 Chrome DevTools MCP 做前后复测。
+- [x] 结果归档与提交：写入本节高层操作摘要、验证记录、结果复盘和前后对比；用中文提交信息 commit。
+
+## 高层操作摘要
+- 已根据用户“继续优化，优化到最佳”的目标重启第五轮；不会把前四轮“当前最佳”当作终点。
+- 已确认用户约束继续生效：使用 Chrome DevTools MCP，不使用子代理；每完成一项优化或本轮收口前，先记录结果与对比并中文 commit；服务器请求按 10rpm 控制。
+- 第五轮运行态热点：第 4 轮已卸载组建计划 overlay DOM，但打开过组建计划后 `link#am-wxt-keyword-style`、`style#am-wxt-keyword-critical-style`、`window.__AM_WXT_WIZARD_STYLE_READY_PROMISE__` 仍可能常驻；若商品选择弹窗、场景配置弹窗或 AI 需求 popover 打开时关闭主窗口，body 级子浮层也缺少统一关闭出口。
+- 第五轮方案：把组建计划关闭路径升级为完整生命周期出口。关闭时先通过登记的关闭函数恢复/关闭商品选择、场景配置、批量编辑和 AI 需求 popover，再执行 window 监听清理、外置/内联样式清理、overlay 卸载和元素引用清空。
+- 第五轮实现：`wizardState` 新增 `styleCleanupHandlers` 与 body 级子浮层关闭句柄；extension 外置样式 loader 在关闭时取消加载超时、移除 `wizard-style.css` link、移除 critical style、清理 style-ready Promise；userscript 内联样式也登记关闭清理；AI popover 延迟注册监听前会确认节点仍连接，避免快关后反向挂监听。
+
+## 验证记录
+- 本地验证：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，28 项测试全绿。
+- 本地验证：`npm run check:syntax` 通过，根 userscript 语法检查无错误。
+- 本地验证：`npm run build:check` 通过，根 userscript、`dist/packages/` 和 `dist/extension/` 与源码同步。
+- 本地验证：`git diff --check` 通过，无空白错误。
+- Chrome DevTools MCP 冷态基线：刷新 `https://one.alimama.com/index.html#!/manage/onesite?...orderField=charge&orderBy=desc` 后，`styleLinkBeforeOpen: false`、`criticalStyleBeforeOpen: false`、`stylePromiseBeforeOpen: false`、`overlayBeforeOpen: false`；当前扩展资源 `page.bundle.js` 包含 `styleCleanupHandlers`、`closeItemPicker`、`closeScenePopup`、`if (!popover.isConnected) return;` 和 `delete window[readyPromiseKey]`。
+- Chrome DevTools MCP 快开快关复测：打开组建计划 80ms 时 `styleLink` 存在、critical style 存在、`stylePromise: true`、overlay 子节点 `609`；关闭 80ms 后 `styleLink: null`、`criticalStyle: null`、`stylePromise: false`、`overlay: null`、`scenePopup/itemPicker/popover: false`、`helperNodes: 281`、`keywordNodes: 0`；关闭后 1880ms 指标保持释放。
+- Chrome DevTools MCP 样式加载完成路径复测：样式加载完成时 `styleLink.loaded: "1"`、`criticalStyle.loaded: "1"`、`overlay.open: true`、overlay 子节点 `626`、`helperNodes: 739`；关闭 120ms 后 `styleLink: null`、`criticalStyle: null`、`stylePromise: false`、`overlay: null`、`scenePopup/itemPicker/popover: false`、`helperNodes: 281`、`keywordNodes: 0`；关闭 620ms 后仍保持释放。
+- Chrome 网络边界：组建计划 open bridge 验证未点击创建、提交、投放、删除或扣费入口；样式加载完成路径新增的非扩展网络为页面自身 `https://gm.mmstat.com/aes.1.1` beacon 2 条，无组建计划创建/提交类业务接口。
+
+## 结果复盘
+- 第五轮结果：关闭组建计划后的残留资源从“打开后可能保留 `wizard-style.css` link / critical style / style Promise，且 body 级子浮层缺少主关闭统一出口”优化为关闭后 `styleLink=null`、`criticalStyle=null`、`stylePromise=false`、`overlay=null`、`scenePopup=false`、`itemPicker=false`、`popover=false`。
+- 对比结论：第四轮解决的是大型 overlay DOM 常驻；第五轮继续收紧完整生命周期，解决外置样式资源、critical style、style Promise 和 body 级子浮层的残留。收益重点不是减少首包体积，而是避免“打开过一次组建计划”后在 Chrome 页面长期保留样式节点、Promise 和子浮层监听。
+- 轮次判断：当前已完成 5 轮低风险优化。剩余明显内存来自必要的 `page.bundle.js` 主运行时与页面原生模块；继续优化需要更大架构切分或按业务入口拆模块，风险会高于本轮生命周期清理，后续应先做 heap retained-size 审计再决定是否进入第六轮。
+
+# TODO - 2026-06-03 插件浏览器内存占用优化
+
+## 需求规格
+- 目标：优化当前插件在 Chrome 浏览器中的内存占用，找出主要内存来源，给出“需要几轮优化到当前最佳”的预估，并完成至少第一轮可验证的最佳优化方案。
+- 范围：优先覆盖 `src/` 中会注入 `one.alimama.com` 的常驻入口、主助手、optimizer 运行时、extension/page bridge、缓存/观察器/定时器/iframe/大对象生命周期；不改无关业务逻辑，不直接编辑构建产物。
+- 成功标准：形成 Chrome 内存热点证据与分轮方案；完成低风险结构优化；每次优化都记录基线、改动、复测结果和前后对比；相关单测、语法检查、构建检查通过；在真实或可复现 Chrome 运行态记录优化前后或静态替代证据，说明剩余瓶颈与下一轮收益；每完成一项优化或本轮对话收口前，先用中文提交信息 commit 再继续。
+- 安全边界：真实页面验证只做打开、刷新、观察、只读入口和内存采集；不点击创建、投放、提交、删除、扣费类入口。若必须操作 Chrome/系统 UI，只做只读测量或另行确认风险。
+- 计划校验：本轮先追根因，优先减少常驻内存、重复注入、未释放 DOM/observer/cache 与点击路径大包解析；不会为了数字好看隐藏错误、删除必要安全校验或牺牲已验证功能。
+
+## 执行计划（可核对）
+- [x] 规划与基线：读取历史教训、源码结构、构建脚本和当前任务相关入口，建立 `tasks/memory-optimization-notes-2026-06-03.md` 记录剖析证据。
+- [x] 静态定位：统计构建产物/源码模块体积、入口依赖、常驻全局、observer/interval/cache/iframe/DOM 热点，判断首轮最高收益点。
+- [x] 运行态测量：用 Chrome/DevTools 在真实或本地可复现页面采集插件注入后的内存、DOM 节点、JS heap、长生命周期对象和控制台异常。
+- [x] 方案设计：明确预计优化轮次、每轮目标、收益/风险/验证方式，并暂停自问是否有更优雅实现。
+- [x] 第一轮实现：按证据做最小侵入结构优化，补充必要测试或探针，避免把成本转移到点击路径。
+- [x] 验证闭环：运行相关单测、`npm run check:syntax`、`npm run build:check`，并做 Chrome 运行态复测或说明替代证据。
+- [x] 结果对比：每次优化写清优化前指标、优化后指标、差值、结论和下一轮是否继续。
+- [x] 中文提交：每完成一项优化或本轮对话收口前，检查 diff 后用中文提交信息提交本轮实质改动。
+- [x] 结果归档：更新本节高层操作摘要、验证记录、结果复盘和下一轮建议。
+- [x] 第三轮范围校验：确认只对 extension 构建输出外置 CSS，userscript 继续内联自包含，不调整 keyword-plan-api 主体加载时机。
+- [x] 第三轮实现：生成 `dist/extension/wizard-style.css`，从 extension `page.bundle.js` 中替换 440KB 组建计划样式模板字符串，并在页面运行态可靠定位扩展资源 base URL。
+- [x] 第三轮本地验证：补静态测试覆盖 bundle 缩减、CSS 暴露、userscript 内联保留、CSS 加载兜底和组建计划不懒加载大包；运行单测、语法检查、构建检查。
+- [x] 第三轮 Chrome DevTools MCP 正例烟测：恢复可用 MCP 后确认 `wizard-style.css` 实际加载、组建计划弹窗可见、控制台无新增异常。
+- [x] 第三轮记录与提交：写入前后体积、运行态结果、风险和结论，并用中文提交信息 commit。
+- [x] 第四轮范围校验：基于 Chrome heap snapshot / 页面探针定位 retained size 热点，只处理插件常驻对象；不碰服务器写接口，遵守 `20rpm` 限制。
+- [x] 第四轮方案判断：如果热点来自可释放 DOM、缓存、observer、timer 或一次性初始化对象，设计最小侵入释放方案；如果热点主要来自页面原生或必要运行时，记录“不值得改”的证据。
+- [x] 第四轮实现与验证：只在有明确收益和低风险方案时改代码；补充测试，运行相关单测、语法检查、构建检查，并用 Chrome DevTools MCP 复测前后差异。
+- [x] 第四轮记录与提交：写入指标、前后对比、风险和结论；若有实质优化，用中文提交信息 commit。
+
+## 高层操作摘要
+- 已启动目标型任务，按项目规则先回顾 `tasks/lessons.md`；最相关教训是 L43：性能拆包不能把大包首次解析成本转移到用户点击路径。
+- 已读取 `planning-with-files`、`goal-driven` 和 `computer-use` 技能说明；本轮用持久化任务记录和目标验收推进，Computer Use 仅在需要直接操作本机 UI 且无更专用工具时使用。
+- 用户补充约束已纳入：优化对象明确为 Chrome 浏览器内存；每完成一项优化或本轮对话收口前，需要先做中文 commit 再继续。
+- 用户追加约束已纳入：每次优化结果都必须记录下来并做前后对比。
+- 用户最新约束已纳入：Chrome 验证使用 Chrome DevTools MCP；本轮不使用子代理；涉及服务器请求时按 `20rpm` 限速，第三轮烟测只读取扩展本地资源并通过 open bridge 打开弹窗，不触发业务写请求。
+- 静态基线：`dist/extension/page.bundle.js` 为 4,400,575 bytes，`dist/packages/alimama-helper-pro.user.js` 为 4,305,400 bytes；最大源码切片为建计划样式、万能查数、行级快捷入口和建计划搜索/草稿模块。
+- Chrome 基线：真实页 `https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 中，`requestHistory.length` 已满 `4000`，其中 `3998` 条是 `club.alimama.com/api/b/side/engine/trace/report.json` 高频曝光埋点。
+- 第一轮优化方案已落地：`createHookManager()` 过滤无业务价值 trace 埋点、默认请求历史上限从 `4000` 收敛到 `1200`，并对超大 body 做摘要化截断；保留普通业务 JSON、`URLSearchParams`、`FormData`、`Blob`、`ArrayBuffer` 的可回放表示。
+- 只读子代理复核结论：过滤 trace 埋点不影响 token/shopId/lifecycle/magic-report 的已知事实源；需注意 `1200` 上限会淘汰更早历史，请求体超过 `240000` 字符后只能解析截断前字段。已补行为测试覆盖 trace 过滤、业务请求保留、AI report URLSearchParams body 和上限裁剪。
+- 第一轮已提交：`0bf433d 优化 Chrome 请求历史内存占用`。
+- 第二轮计划：收窄 Chrome extension `page.bundle.js` 注入资格。`one.alimama.com` 继续完整注入；`myseller.taobao.com` 仅 SmartAssistant 预算页允许注入；其它 broad match 页面只保留轻量 content script，不加载 4.4MB page bundle。
+- 第二轮复核修正：MV3 content script 默认隔离世界，不能只靠包装页面 `history.pushState/replaceState` 证明能捕获主世界 SPA 跳转；本轮改为在未注入的 `myseller` 页保留轻量 URL 轮询兜底，进入 SmartAssistant 后注入一次并停止轮询。
+- 第二轮优化已落地：`extension-content` 在 content script 层先判断页面资格，只有 `one.alimama.com` 和 `myseller` SmartAssistant 预算页挂载完整 `page.bundle.js`；普通 `myseller` 页保留 600ms URL 轮询，宽泛 `alimama` 子域不保留轮询。
+- 第二轮自审取舍：没有改 manifest match，避免丢失授权 bridge 和未来同源路由恢复能力；内存收益来自阻止 4.4MB `page.bundle.js` 在非业务页解析和启动，而不是把大包推迟到用户点击路径。
+- 第三轮计划：对 `page.bundle.js` 内最大静态块做 extension 专用外置化。候选为 `src/optimizer/keyword-plan-api/wizard-style-and-state/style.js` 中约 440KB 的组建计划 CSS；userscript 继续内联自包含，extension 通过 web-accessible `wizard-style.css` 加载，目标是减少 page bundle JS 解析/编译和主世界常驻字符串。
+- 第三轮计划校验：不得把 `keyword-plan-api` 主体或 4.4MB 解析成本移动到点击“组建计划”路径；若 CSS 外置导致首次点击 FOUC，需要用 preload 或同步等待 CSS load 解决，并用本地/Chrome 运行态验证。
+- 第三轮早期曾按旧约束使用只读子代理复核；用户最新要求改为“用 Chrome DevTools MCP，不使用子代理”，本轮继续验证与提交未再派发或依赖子代理结果。
+- 第三轮实现已落地：extension 构建从 `style.js` 提取 `wizard-style.css`，manifest 暴露该资源，page bundle 只保留 critical CSS 与外链 loader；`extension-page-compat` 在 page world 暴露 `resourceBaseUrl`；`openWizard()` 等待样式加载结果后再展示 overlay，失败时只展示 critical 外壳错误态。userscript 与根脚本继续内联完整组建计划样式，不依赖 extension 资源。
+- 第四轮启动计划：先用 Chrome DevTools MCP 的 heap snapshot 和页面内探针确认插件 retained size 热点，再判断是否存在比第三轮更优雅的释放点；候选方向包括关闭后仍保留的组建计划大 DOM、插件面板节点、Observer/Interval、请求历史对象和 iframe/弹层生命周期。
+- 第四轮诊断结论：Chrome 探针发现组建计划关闭后仍常驻 `overlayDescendantCount: 631`、`modalDescendantCount: 629`、`keywordNodes: 450`，属于可释放的隐藏 DOM 与元素引用，不是必要运行时状态。
+- 第四轮实现已落地：组建计划关闭时先保存草稿、关闭运行模式菜单、失效异步 open 任务，然后移除 `overlay` 和 body 上的 `runModeMenu`，清空 `wizardState.els`，将 `mounted` 置回 `false` 以便下次重建；同步清理 resize/scroll 全局监听，并重置绑定在旧 `sceneDynamic` 上的手动关键词委托标记。
+
+## 验证记录
+- 本地验证：`node --test tests/logger-api.test.mjs` 通过，18 项测试全绿；新增行为测试直接执行 hook manager 片段，覆盖 trace 过滤、业务请求保留、`URLSearchParams` body 可回放、历史上限裁剪和大 body 截断。
+- 本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，17 项测试全绿。
+- 本地验证：`npm run check:syntax` 通过，根 userscript 语法检查无错误。
+- 本地验证：`npm run build:check` 通过，根 userscript、`dist/packages/` 和 `dist/extension/` 与源码同步。
+- Chrome 真实页基线：刷新前旧运行态 `requestHistoryLimit: 4000`、`historyLength: 4000`、`traceHistoryCount: 3998`；页面 JS heap 为 `usedJSHeapSize: 2601561440`、`totalJSHeapSize: 2718210496`，DOM 节点 `5032`，helper-matched 节点 `316`。
+- Chrome 真实页复测：刷新后新运行态 `requestHistoryLimit: 1200`、`requestHistoryBodyCharLimit: 240000`、`hasSkipFn: true`、`beforeProbeHistoryLength: 76`、`traceHistoryCount: 0`；页面 JS heap 为 `usedJSHeapSize: 89595957`、`totalJSHeapSize: 117022521`，DOM 节点 `4270`，helper-matched 节点 `156`。
+- Chrome 探针验证：手动调用 `recordRequest()` 写入 trace report 后历史长度保持 `76`；写入普通业务 JSON 探针后历史长度变为 `77`，`URLSearchParams` body 保留为 `dynamicToken=probe_token&loginPointId=probe_lp&csrfID=probe_csrf`，随后已移除探针业务记录。
+- Chrome 控制台检查：仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复失败，未见本次插件请求历史优化新增错误。
+- 第二轮本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，17 项测试全绿；覆盖 one 主业务页继续注入、普通 myseller 不注入、SmartAssistant 直接注入、普通 myseller 经 URL 轮询进入 SmartAssistant 后注入一次、宽泛 alimama 子域不注入也不保留 myseller 专用轮询。
+- 第二轮本地验证：`npm run check:syntax` 通过；`npm run build:check` 通过；`git diff --check` 通过。
+- 第二轮 Chrome 运行态准备：已在 `chrome://extensions/` 重载当前启用的 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk`，路径为 `/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/dist/extension`；旧 worktree `313b` 对应扩展为禁用状态。
+- 第二轮 Chrome 负例复测：`https://myseller.taobao.com/home.htm/QnworkbenchHome/` 普通工作台打开 1.5s 后，`hasToggle: false`、`hasPlatformRuntime: false`、`hasHookManager: false`、`pageBundleEntries: []`；JS heap `usedJSHeapSize: 79658927`、`totalJSHeapSize: 106309623`、DOM 节点 `3651`。
+- 第二轮 Chrome 延迟注入复测：同一普通 `myseller` 页面用同文档 `history.pushState` 进入 `https://myseller.taobao.com/home.htm/crm-workbench/smartassistant` 后等待 1.3s，`hasToggle: true`、`hasPlatformRuntime: true`、`platformRuntime.mode: "extension"`、`hasHookManager: true`，证明轻量 URL 轮询可恢复注入。
+- 第二轮 Chrome 直接 SmartAssistant 复测：直接打开 `https://myseller.taobao.com/home.htm/crm-workbench/smartassistant` 后，`hasToggle: true`、`hasPlatformRuntime: true`、`platformRuntime.mode: "extension"`、`hasHookManager: true`；JS heap `usedJSHeapSize: 74031888`、`totalJSHeapSize: 77616448`。
+- 第二轮 Chrome 主业务正例复测：`https://one.alimama.com/index.html#!/manage/display?offset=0&searchKey=campaignNameLike&searchValue=e7` 中 `hasToggle: true`、`hasPlatformRuntime: true`、`hasHookManager: true`、`requestHistoryLimit: 1200`，未误伤主助手、hook manager 和第一轮请求历史上限。
+- 第二轮 Chrome 宽泛子域负例复测：`https://pub.alimama.com/` 中 `hasToggle: false`、`hasPlatformRuntime: false`、`hasHookManager: false`、`pageBundleEntries: []`；JS heap `usedJSHeapSize: 20216987`、`totalJSHeapSize: 21453363`。
+- 第三轮本地验证：`node --test tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/keyword-wizard-entry-regression.test.mjs` 通过，27 项测试全绿；覆盖 `wizard-style.css` web-accessible 暴露、extension 外链 loader、critical style、样式加载 Promise/超时/失败兜底、打开向导前等待样式结果、userscript 内联自包含、segment 清单、构建产物同步和组建计划打开路径不做点击同步重任务。
+- 第三轮本地验证：`npm run check:syntax` 通过；`npm run build:check` 通过；`git diff --check` 通过。
+- 第三轮体积对比（以前一轮提交 `59405c8` 为基线）：`dist/extension/page.bundle.js` raw `4,404,170 -> 3,973,021` bytes，减少 `431,149` bytes（约 `9.79%`）；gzip `671,659 -> 637,854` bytes，减少 `33,805` bytes（约 `5.03%`）；行数 `80,711 -> 71,076`，减少 `9,635` 行。新增 `dist/extension/wizard-style.css` raw `289,478` bytes、gzip `31,638` bytes、`9,765` 行。
+- 第三轮总体资源对比：extension 的 `page.bundle.js + wizard-style.css` raw `4,404,170 -> 4,262,499` bytes，合计仍减少 `141,671` bytes；gzip `671,659 -> 669,492` bytes，合计减少 `2,167` bytes。收益重点不是总下载体积，而是减少 document_start JS 解析/编译和主世界常驻的大 CSS 模板字符串。
+- 第三轮 userscript 对比：`dist/packages/alimama-helper-pro.user.js` raw `4,308,995 -> 4,310,802` bytes，gzip `652,576 -> 653,014` bytes；增加来自共享的样式加载契约/打开时序代码，userscript 仍保持内联自包含，没有外置 CSS 依赖。
+- 第三轮 Chrome DevTools MCP 连接状态：`list_pages` 已恢复可用，选择原浏览器 `https://one.alimama.com/...` 页面后可执行 `evaluate_script`。第一次在旧运行态打开向导时只看到 48 字节隐藏占位 `style#am-wxt-keyword-style`，未插入外置 CSS；随后对当前页面执行 ignore-cache reload，确认浏览器已读取第三轮新 extension 资源。
+- 第三轮 Chrome 资源正例：页面运行态 `window.__AM_PLATFORM_RUNTIME__.mode === "extension"`、`version: "7.05"`、`resourceBaseUrl: "chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/"`；从页面 fetch `page.bundle.js` 得到 `hasExternalLoader: true`、`hasCriticalStyle: true`、`hasLegacyCleanup: true`，fetch `wizard-style.css` 得到 `length: 289478`、包含 `#am-wxt-keyword-overlay`、`.am-wxt-workbench-tabs` 和 `.am-wxt-home-summary`。
+- 第三轮 Chrome open bridge 烟测：通过 `__AM_WXT_KEYWORD_OPEN_BRIDGE_REQ__` 打开组建计划，不点击创建、提交、删除、投放或扣费入口；结果 `bridgeResult.ok: true`，`link#am-wxt-keyword-style.href` 为 `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/wizard-style.css`，`data-am-helper-external-style="1"`、`data-am-helper-full-style-loaded="1"`，旧隐藏 inline style 已清理，`critical` 样式 `loaded: "1"`、无失败标记。
+- 第三轮 Chrome 可见性烟测：弹窗打开时 overlay `display: "flex"`、`zIndex: "1000006"`、无 `styleLoadFailed`；modal 可见尺寸约 `1320x821`，标题为 `关键词推广批量建计划 API 向导`。采样后已移除 overlay `open` 类关闭弹窗。
+- 第三轮 Chrome 请求与控制台：open bridge 烟测前后 `fetchResourcesAdded: 0`、`newFetchEntries: []`，符合 `20rpm` 限速和只读边界；控制台仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复 18 次，未见本次外置 CSS 优化新增插件错误。
+- 第四轮本地诊断：已保存 `tmp/chrome-memory-round4-before.heapsnapshot` 与 `tmp/chrome-memory-round4-after.heapsnapshot`，`tmp/` 在 `.gitignore` 内，不纳入提交；heap 文件用于辅助判断，最终指标以页面 DOM 探针和 Chrome 运行态为准。
+- 第四轮本地验证：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，28 项测试全绿；新增测试覆盖关闭后卸载隐藏 DOM、清理全局监听、重置手动关键词委托标记，以及组建计划不在点击同步路径构建预览。
+- 第四轮本地验证：`npm run check:syntax` 通过；`npm run build:check` 通过；`git diff --check` 通过。
+- 第四轮 Chrome DevTools MCP 运行态：硬刷新当前 `one.alimama.com` 登录路由后，页面运行态 `window.__AM_PLATFORM_RUNTIME__.mode === "extension"`、`version: "7.05"`、`resourceBaseUrl: "chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/"`；从当前扩展资源读取的 `page.bundle.js` 包含 `removeWizardDomAfterClose`、`cleanupHandlers`、`wizardState.manualKeywordDelegatedBound = false`、`currentEls.overlay.remove()` 和 `wizardState.mounted = false`。
+- 第四轮 Chrome 对比：打开组建计划前 `totalNodesApprox: 461`、`helperNodes: 46`、`keywordNodes: 0`、无 overlay/modal；第一次打开后 `totalNodesApprox: 1095`、`helperNodes: 532`、`keywordNodes: 450`、`overlayDescendantCount: 631`、`modalDescendantCount: 629`；第一次关闭后回到 `totalNodesApprox: 463`、`helperNodes: 48`、`keywordNodes: 2`、overlay/modal 均不存在。
+- 第四轮 Chrome 重开验证：第二次打开后再次得到 `overlayDescendantCount: 631`、`modalDescendantCount: 629`，说明可重建；第二次关闭后仍回到 `totalNodesApprox: 463`、`helperNodes: 48`、`keywordNodes: 2`，overlay/modal 均不存在。
+- 第四轮 Chrome 请求与控制台：打开/关闭/重开/关闭全程 `fetchResourcesAdded: 0`，不触发业务接口，符合 `20rpm` 限制和只读边界；控制台仅见外部资源 `net::ERR_TUNNEL_CONNECTION_FAILED` 重复，未见本轮关闭卸载逻辑新增插件错误。
+
+## 结果复盘
+- 第一轮结果：常驻请求历史从满载 `4000` 条降到 `76` 条，减少 `3924` 条；trace 埋点保留从 `3998` 条降到 `0` 条，减少 `100%`；默认上限从 `4000` 降到 `1200`，并增加单条 body `240000` 字符上限。
+- 对比结论：本轮解决的是插件长期保留高频无业务埋点 URL 和请求对象的问题，不改变 fetch/XHR hook、授权、预算、创建、复制、查数、生命周期合同等业务链路；收益明确且风险低。
+- 第二轮结果：普通 `myseller` 工作台从会进入完整 extension runtime（旧运行态曾测得 `hasPlatformRuntime: true`、`hasHookManager: true`、JS heap `82716091/112302731`）变为不进入完整 runtime（新运行态 `hasPlatformRuntime: false`、`hasHookManager: false`、JS heap `79658927/106309623`）；宽泛 `pub.alimama.com` 同样不进入完整 runtime。按构建产物体积，非业务页每次加载避免解析和启动 `dist/extension/page.bundle.js` 的 4.4MB 原始脚本。
+- 第二轮对比结论：本轮解决的是 extension manifest broad match 带来的非业务页常驻大运行时问题；主业务页 `one.alimama.com` 和 SmartAssistant 预算页仍能完整注入，且普通 `myseller` SPA 跳转 SmartAssistant 可通过 600ms 轻量 URL 轮询恢复注入一次。
+- 第三轮结果：extension 首包 JS 减少 `431,149` bytes raw / `33,805` bytes gzip，并把组建计划完整 CSS 从 JS 模板字符串改为 `wizard-style.css`；没有把 `keyword-plan-api` 主体改成点击时懒加载，遵守 L43；userscript 仍自包含。
+- 第三轮对比结论：本轮解决的是 extension document_start 阶段解析/编译超大 CSS 模板字符串和主世界常驻字符串的问题。因为 CSS 被外置，extension 总资源 gzip 只小幅下降，但 JS 首包明显变小，属于对 Chrome 主线程解析和 JS heap 更直接的优化。
+- 第四轮结果：组建计划关闭后的常驻隐藏 DOM 从 `overlayDescendantCount: 631 / modalDescendantCount: 629 / keywordNodes: 450` 降到 overlay/modal 不存在、`keywordNodes: 2`；重复打开关闭后指标稳定，未新增 fetch/xhr。
+- 第四轮对比结论：本轮解决的是用户只关闭弹窗后仍长期保留大型组建计划 DOM、元素引用和窗口级监听的问题；草稿通过 `commitDraftState()` 保留，下次打开重新 mount，避免把大 DOM 常驻在 Chrome 页面里。
+- 轮次预估：本次内存优化达到当前最佳需要 `4` 轮，已完成并分别提交。继续深入仍可做 heap retained-size 细查，但当前低风险高收益项已经覆盖：请求历史、非业务页注入、首包超大 CSS 字符串、关闭后隐藏 DOM。
+- 剩余风险：第四轮复测在 `one.alimama.com` 登录路由完成，证明插件运行态和组建计划 DOM 生命周期有效；未在已登录管理列表页再次打开完整业务数据流，后续若要验证创建/选品草稿恢复，需要在真实业务页只读打开后补一轮交互烟测，仍不得点击创建/提交/投放类入口。
+
 # TODO - 2026-06-01 预算破限 199 元修改失败修复
 
 ## 需求规格

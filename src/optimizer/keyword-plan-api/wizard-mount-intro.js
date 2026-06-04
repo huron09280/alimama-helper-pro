@@ -1,6 +1,12 @@
         const mountWizard = () => {
             if (wizardState.mounted) return;
-            ensureWizardStyle();
+            const styleReady = ensureWizardStyle();
+            wizardState.styleReadyPromise = styleReady && typeof styleReady.then === 'function'
+                ? styleReady.catch((err) => ({
+                    ok: false,
+                    reason: err?.message || String(err || 'wizard_style_ready_failed')
+                }))
+                : Promise.resolve({ ok: true, source: 'inline' });
 
             const overlay = document.createElement('div');
             overlay.id = 'am-wxt-keyword-overlay';
@@ -955,6 +961,9 @@
                 const closePicker = (confirmed = false) => {
                     if (closed) return;
                     closed = true;
+                    if (wizardState.closeItemPicker === closePicker) {
+                        wizardState.closeItemPicker = null;
+                    }
                     document.removeEventListener('keydown', handleEsc, true);
                     if (!confirmed) {
                         wizardState.addedItems = initialAddedItemsSnapshot.map(item => deepClone(item));
@@ -977,6 +986,7 @@
                 };
 
                 document.addEventListener('keydown', handleEsc, true);
+                wizardState.closeItemPicker = closePicker;
                 const closeBtn = mask.querySelector('[data-am-wxt-item-picker-close="1"]');
                 const cancelBtn = mask.querySelector('[data-am-wxt-item-picker-cancel="1"]');
                 const confirmBtn = mask.querySelector('[data-am-wxt-item-picker-confirm="1"]');

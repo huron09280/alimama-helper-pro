@@ -23,6 +23,7 @@
             if (protocol !== 'https:' && protocol !== 'http:') return false;
             return hostname === 'alimama.com'
                 || hostname === 'myseller.taobao.com'
+                || hostname === 'dmp.taobao.com'
                 || hostname.endsWith('.myseller.taobao.com')
                 || hostname.endsWith('.alimama.com');
         } catch {

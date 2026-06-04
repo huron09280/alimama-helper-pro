@@ -272,6 +272,64 @@
                     button.classList.toggle('is-expanded', expanded);
                     setAiMaxToggleButtonContent(button, expanded);
                 };
+                const ensureAiMaxTypewriterTimers = () => {
+                    wizardState.aiMaxTypewriterTimers = wizardState.aiMaxTypewriterTimers instanceof Map
+                        ? wizardState.aiMaxTypewriterTimers
+                        : new Map();
+                    return wizardState.aiMaxTypewriterTimers;
+                };
+                const buildAiMaxTypewriterTimerKey = (type = '', timerId = 0) => `${String(type || '').trim()}:${Number(timerId)}`;
+                const isAiMaxTypewriterHidden = () => document.visibilityState === 'hidden';
+                const finishAiMaxTypewriterTarget = (target = null, fullText = '') => {
+                    if (!(target instanceof HTMLElement)) return;
+                    target.dataset.aiMaxTyped = '1';
+                    target.textContent = fullText;
+                };
+                const cleanupAiMaxTypewriterTimers = () => {
+                    if (!(wizardState.aiMaxTypewriterTimers instanceof Map)) return;
+                    Array.from(wizardState.aiMaxTypewriterTimers.values()).forEach((record) => {
+                        if (!record || !Number.isFinite(Number(record.timerId))) return;
+                        window.clearTimeout(record.timerId);
+                        if (record.target instanceof HTMLElement && record.datasetKey) {
+                            delete record.target.dataset[record.datasetKey];
+                        }
+                    });
+                    wizardState.aiMaxTypewriterTimers.clear();
+                    wizardState.aiMaxTypewriterCleanupRegistered = false;
+                };
+                const registerAiMaxTypewriterCleanup = () => {
+                    wizardState.cleanupHandlers = Array.isArray(wizardState.cleanupHandlers)
+                        ? wizardState.cleanupHandlers
+                        : [];
+                    if (wizardState.aiMaxTypewriterCleanupRegistered) return;
+                    wizardState.cleanupHandlers.push(cleanupAiMaxTypewriterTimers);
+                    wizardState.aiMaxTypewriterCleanupRegistered = true;
+                };
+                const trackAiMaxTypewriterTimer = (type = '', timerId = 0, target = null, datasetKey = '') => {
+                    const id = Number(timerId);
+                    if (!Number.isFinite(id)) return null;
+                    const timers = ensureAiMaxTypewriterTimers();
+                    const key = buildAiMaxTypewriterTimerKey(type, id);
+                    const record = { type, timerId: id, target, datasetKey };
+                    timers.set(key, record);
+                    if (target instanceof HTMLElement && datasetKey) {
+                        target.dataset[datasetKey] = String(id);
+                    }
+                    registerAiMaxTypewriterCleanup();
+                    return record;
+                };
+                const releaseAiMaxTypewriterTimer = (type = '', timerId = 0) => {
+                    const id = Number(timerId);
+                    if (!Number.isFinite(id)) return;
+                    const timers = ensureAiMaxTypewriterTimers();
+                    const key = buildAiMaxTypewriterTimerKey(type, id);
+                    const record = timers.get(key);
+                    window.clearTimeout(id);
+                    if (record?.target instanceof HTMLElement && record.datasetKey) {
+                        delete record.target.dataset[record.datasetKey];
+                    }
+                    timers.delete(key);
+                };
                 const runAiMaxTypewriter = (panel = null) => {
                     if (!(panel instanceof HTMLElement)) return;
                     const targets = Array.from(panel.querySelectorAll('[data-ai-max-typewriter-text]'))
@@ -282,30 +340,78 @@
                         if (!fullText) return;
                         if (target.dataset.aiMaxTyped === '1' && target.textContent === fullText) return;
                         if (target.dataset.aiMaxTypeTimer) {
-                            clearInterval(Number(target.dataset.aiMaxTypeTimer));
-                            delete target.dataset.aiMaxTypeTimer;
+                            releaseAiMaxTypewriterTimer('timeout', target.dataset.aiMaxTypeTimer);
+                        }
+                        if (target.dataset.aiMaxTypeDelayTimer) {
+                            releaseAiMaxTypewriterTimer('timeout', target.dataset.aiMaxTypeDelayTimer);
+                        }
+                        if (isAiMaxTypewriterHidden()) {
+                            finishAiMaxTypewriterTarget(target, fullText);
+                            return;
                         }
                         target.dataset.aiMaxTyped = '1';
                         target.textContent = '';
                         let cursor = 0;
-                        const startDelay = Math.min(targetIndex * 90, 420);
-                        window.setTimeout(() => {
-                            const timer = window.setInterval(() => {
+                        const shouldFinishImmediately = () => isAiMaxTypewriterHidden() || target.isConnected === false;
+                        const scheduleNextAiMaxTypewriterStep = () => {
+                            const stepTimer = window.setTimeout(() => {
+                                releaseAiMaxTypewriterTimer('timeout', stepTimer);
+                                if (shouldFinishImmediately()) {
+                                    finishAiMaxTypewriterTarget(target, fullText);
+                                    return;
+                                }
                                 cursor += 1;
                                 target.textContent = fullText.slice(0, cursor);
-                                if (cursor >= fullText.length) {
-                                    clearInterval(timer);
-                                    delete target.dataset.aiMaxTypeTimer;
+                                if (cursor < fullText.length) {
+                                    scheduleNextAiMaxTypewriterStep();
                                 }
                             }, 14);
-                            target.dataset.aiMaxTypeTimer = String(timer);
+                            trackAiMaxTypewriterTimer('timeout', stepTimer, target, 'aiMaxTypeTimer');
+                        };
+                        const startDelay = Math.min(targetIndex * 90, 420);
+                        const delayTimer = window.setTimeout(() => {
+                            releaseAiMaxTypewriterTimer('timeout', delayTimer);
+                            if (shouldFinishImmediately()) {
+                                finishAiMaxTypewriterTarget(target, fullText);
+                                return;
+                            }
+                            scheduleNextAiMaxTypewriterStep();
                         }, startDelay);
+                        trackAiMaxTypewriterTimer('timeout', delayTimer, target, 'aiMaxTypeDelayTimer');
                     });
                 };
 
-                if (!(wizardState.aiMaxDetailDelegatedBound)) {
-                    wizardState.aiMaxDetailDelegatedBound = true;
-                    document.addEventListener('click', (event) => {
+                const unbindAiMaxDetailDelegatedHandlers = () => {
+                    if (!wizardState.aiMaxDetailDelegatedBound) return;
+                    if (typeof wizardState.aiMaxDetailToggleClickHandler === 'function') {
+                        document.removeEventListener('click', wizardState.aiMaxDetailToggleClickHandler);
+                    }
+                    if (typeof wizardState.aiMaxStepToggleClickHandler === 'function') {
+                        document.removeEventListener('click', wizardState.aiMaxStepToggleClickHandler);
+                    }
+                    if (typeof wizardState.aiMaxDemandNextClickHandler === 'function') {
+                        document.removeEventListener('click', wizardState.aiMaxDemandNextClickHandler);
+                    }
+                    wizardState.aiMaxDetailToggleClickHandler = null;
+                    wizardState.aiMaxStepToggleClickHandler = null;
+                    wizardState.aiMaxDemandNextClickHandler = null;
+                    wizardState.aiMaxDetailDelegatedBound = false;
+                    wizardState.aiMaxDetailDelegatedCleanupRegistered = false;
+                };
+                const registerAiMaxDetailDelegatedCleanup = () => {
+                    wizardState.cleanupHandlers = Array.isArray(wizardState.cleanupHandlers)
+                        ? wizardState.cleanupHandlers
+                        : [];
+                    if (wizardState.aiMaxDetailDelegatedCleanupRegistered) return;
+                    wizardState.cleanupHandlers.push(unbindAiMaxDetailDelegatedHandlers);
+                    wizardState.aiMaxDetailDelegatedCleanupRegistered = true;
+                };
+                const bindAiMaxDetailDelegatedHandlers = () => {
+                    if (wizardState.aiMaxDetailDelegatedBound) {
+                        registerAiMaxDetailDelegatedCleanup();
+                        return;
+                    }
+                    wizardState.aiMaxDetailToggleClickHandler = (event) => {
                         const target = event.target instanceof Element
                             ? event.target.closest('button[data-ai-max-detail-toggle="1"]')
                             : null;
@@ -321,8 +427,8 @@
                         });
                         syncAiMaxDetailButtonLabel(target);
                         if (!expanded) runAiMaxTypewriter(panel);
-                    });
-                    document.addEventListener('click', (event) => {
+                    };
+                    wizardState.aiMaxStepToggleClickHandler = (event) => {
                         const target = event.target instanceof Element
                             ? event.target.closest('button[data-ai-max-step-toggle="1"]')
                             : null;
@@ -336,8 +442,8 @@
                         setAiMaxToggleButtonContent(target, !expanded);
                         target.classList.toggle('is-expanded', !expanded);
                         if (!expanded) runAiMaxTypewriter(step);
-                    });
-                    document.addEventListener('click', (event) => {
+                    };
+                    wizardState.aiMaxDemandNextClickHandler = (event) => {
                         const target = event.target instanceof Element
                             ? event.target.closest('button[data-ai-max-demand-next="1"]')
                             : null;
@@ -354,8 +460,14 @@
                         } else {
                             list.scrollBy({ left: step, behavior: 'smooth' });
                         }
-                    });
-                }
+                    };
+                    document.addEventListener('click', wizardState.aiMaxDetailToggleClickHandler);
+                    document.addEventListener('click', wizardState.aiMaxStepToggleClickHandler);
+                    document.addEventListener('click', wizardState.aiMaxDemandNextClickHandler);
+                    wizardState.aiMaxDetailDelegatedBound = true;
+                    registerAiMaxDetailDelegatedCleanup();
+                };
+                bindAiMaxDetailDelegatedHandlers();
 
                 const aiMaxDetailToggleButtons = wizardState.els.sceneDynamic.querySelectorAll('[data-ai-max-detail-toggle="1"]');
                 aiMaxDetailToggleButtons.forEach(button => {
@@ -642,10 +754,20 @@
                     }
                 };
                 const closeKeywordAiMaxDemandPopover = () => {
+                    if (wizardState.closeKeywordAiMaxDemandPopover === closeKeywordAiMaxDemandPopover) {
+                        wizardState.closeKeywordAiMaxDemandPopover = null;
+                    }
                     const existing = document.getElementById('am-wxt-ai-max-demand-popover');
                     if (existing) existing.remove();
-                    document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
-                    document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    if (wizardState.aiMaxDemandPopoverBindTimer) {
+                        window.clearTimeout(wizardState.aiMaxDemandPopoverBindTimer);
+                        wizardState.aiMaxDemandPopoverBindTimer = 0;
+                    }
+                    if (wizardState.aiMaxDemandPopoverListenersBound) {
+                        document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                        document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                        wizardState.aiMaxDemandPopoverListenersBound = false;
+                    }
                     wizardState.aiMaxDemandPopoverOutsideClick = null;
                     wizardState.aiMaxDemandPopoverEscClose = null;
                 };
@@ -811,9 +933,15 @@
                         event.preventDefault();
                         closeKeywordAiMaxDemandPopover();
                     };
-                    setTimeout(() => {
+                    wizardState.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;
+                    wizardState.aiMaxDemandPopoverBindTimer = window.setTimeout(() => {
+                        wizardState.aiMaxDemandPopoverBindTimer = 0;
+                        if (!popover.isConnected) return;
+                        if (typeof wizardState.aiMaxDemandPopoverOutsideClick !== 'function') return;
+                        if (typeof wizardState.aiMaxDemandPopoverEscClose !== 'function') return;
                         document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
                         document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                        wizardState.aiMaxDemandPopoverListenersBound = true;
                     }, 0);
                     syncPopoverState();
                 };
@@ -833,7 +961,17 @@
                 } = {}) => (
                     new Promise((resolve) => {
                         const previousMask = document.getElementById('am-wxt-scene-popup-mask');
-                        if (previousMask) previousMask.remove();
+                        if (previousMask) {
+                            if (typeof wizardState.closeScenePopup === 'function') {
+                                try {
+                                    wizardState.closeScenePopup(null);
+                                } catch {
+                                    previousMask.remove();
+                                }
+                            } else {
+                                previousMask.remove();
+                            }
+                        }
                         const mask = document.createElement('div');
                         mask.id = 'am-wxt-scene-popup-mask';
                         mask.className = 'am-wxt-scene-popup-mask';
@@ -923,6 +1061,9 @@
                             }
                         };
                         const close = (payload = null) => {
+                            if (wizardState.closeScenePopup === close) {
+                                wizardState.closeScenePopup = null;
+                            }
                             document.removeEventListener('keydown', handlePopupKeydown, true);
                             if (typeof mask._amWxtCleanup === 'function') {
                                 try {
@@ -955,6 +1096,7 @@
                                 }
                             };
                         }
+                        wizardState.closeScenePopup = close;
                         document.body.appendChild(mask);
                         focusDefaultTarget();
                         if (typeof onMounted === 'function') {

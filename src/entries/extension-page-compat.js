@@ -1,6 +1,14 @@
 (() => {
     const SCRIPT_VERSION = __AM_EXTENSION_VERSION__;
     const STORAGE_KEY = '__AM_EXTENSION_GM_STORE__';
+    const EXTENSION_RESOURCE_BASE_URL = (() => {
+        try {
+            const scriptUrl = document.currentScript?.src || '';
+            return scriptUrl ? new URL('.', scriptUrl).href : '';
+        } catch {
+            return '';
+        }
+    })();
 
     const readStore = () => {
         try {
@@ -101,9 +109,11 @@
         window.unsafeWindow = window;
     }
 
+    window.__AM_EXTENSION_RESOURCE_BASE_URL__ = EXTENSION_RESOURCE_BASE_URL;
     window.__AM_PLATFORM_RUNTIME__ = {
         mode: 'extension',
         version: SCRIPT_VERSION,
-        storage: 'localStorage'
+        storage: 'localStorage',
+        resourceBaseUrl: EXTENSION_RESOURCE_BASE_URL
     };
 })();

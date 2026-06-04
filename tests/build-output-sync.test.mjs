@@ -26,6 +26,13 @@ test('所有文本构建产物与 src 生成结果保持同步', () => {
   });
 });
 
+test('userscript 继续内联组建计划样式并保持自包含', () => {
+  assert.match(outputs.userscriptSource, /style\.textContent = `\s*#am-wxt-keyword-overlay \{/, 'userscript 应继续内联组建计划样式');
+  assert.match(outputs.userscriptSource, /#am-wxt-keyword-modal \.am-wxt-home-summary \{/, 'userscript 内联样式缺少组建计划首页摘要');
+  assert.doesNotMatch(outputs.userscriptSource, /new URL\('wizard-style\.css'/, 'userscript 不应依赖 extension 外置 CSS');
+  assert.doesNotMatch(outputs.userscriptSource, /__AM_EXTENSION_RESOURCE_BASE_URL__/, 'userscript 不应依赖 extension 资源 base URL');
+});
+
 test('userscript meta 产物包含自动更新地址', () => {
   assert.match(outputs.metaSource, /@updateURL\s+https:\/\/github\.com\/huron09280\/alimama-helper-pro\/releases\/latest\/download\/alimama-helper-pro\.meta\.js/);
   assert.match(outputs.metaSource, /@downloadURL\s+https:\/\/github\.com\/huron09280\/alimama-helper-pro\/releases\/latest\/download\/alimama-helper-pro\.user\.js/);

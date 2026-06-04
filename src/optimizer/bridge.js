@@ -109,13 +109,29 @@
         const BRIDGE_RESULT_CACHE_TTL_MS = 90 * 1000;
         const inFlightCallIds = new Set();
         const resolvedPayloadCache = new Map();
+        let bridgeCacheCleanupTimer = 0;
         const cleanupBridgeCache = () => {
             const now = Date.now();
+            let nextDelayMs = Infinity;
             resolvedPayloadCache.forEach((cached, callId) => {
-                if (!cached || !Number.isFinite(cached.ts) || now - cached.ts > BRIDGE_RESULT_CACHE_TTL_MS) {
+                const ts = Number(cached?.ts);
+                if (!Number.isFinite(ts) || now - ts > BRIDGE_RESULT_CACHE_TTL_MS) {
                     resolvedPayloadCache.delete(callId);
+                    return;
                 }
+                nextDelayMs = Math.min(nextDelayMs, Math.max(0, BRIDGE_RESULT_CACHE_TTL_MS - (now - ts)));
             });
+            return Number.isFinite(nextDelayMs) ? nextDelayMs : null;
+        };
+        const scheduleBridgeCacheCleanup = () => {
+            if (bridgeCacheCleanupTimer) return;
+            const nextDelayMs = cleanupBridgeCache();
+            if (!Number.isFinite(nextDelayMs)) return;
+            bridgeCacheCleanupTimer = window.setTimeout(() => {
+                bridgeCacheCleanupTimer = 0;
+                cleanupBridgeCache();
+                scheduleBridgeCacheCleanup();
+            }, Math.max(1, Math.ceil(nextDelayMs) + 1));
         };
         const extractBridgeDetail = (raw) => {
             if (!raw || typeof raw !== 'object') return null;
@@ -183,6 +199,7 @@
                 ts: Date.now(),
                 payload
             });
+            scheduleBridgeCacheCleanup();
             dispatchBridgeResponse(payload);
         };
         const handleBridgeRequestEvent = (event) => {

@@ -1087,7 +1087,7 @@
 
             const total = campaigns.length;
             const concurrency = userConfig.concurrency || 3;
-            UI.updateStatus(`识别到 ${total} 个计划，开始并发处理 (并发数: ${concurrency})...`, '#1890ff');
+            UI.updateStatus(`识别到 ${total} 个计划，开始按 10rpm 限速处理 (任务并发数: ${concurrency})...`, '#1890ff');
 
             // 创建任务函数数组
             const taskFns = campaigns.map(([id, name], i) => async () => {
@@ -1096,7 +1096,7 @@
                 return { ...res, id, name };
             });
 
-            // 并发执行（使用用户设置的并发数）
+            // 任务并发保持可配置；具体服务端请求由 API 层统一按 10rpm 限速。
             const results = await Utils.concurrentLimit(taskFns, concurrency);
 
             // 统计结果

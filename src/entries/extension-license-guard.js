@@ -58,6 +58,7 @@
     let onDemandVerifyInstalled = false;
     let onDemandVerifyInFlight = false;
     let onDemandVerifyLastSuccessAt = 0;
+    let extensionBootstrapVerifyTimer = 0;
 
     const LEASE_RENEW_DEFAULT_LEAD_MS = 60 * 1000;
     const LEASE_RENEW_MIN_LEAD_MS = 15 * 1000;
@@ -95,6 +96,21 @@
             }
         });
         guardGlobal[STATE_KEY] = snapshot;
+    };
+
+    const clearExtensionBootstrapVerifyTimer = () => {
+        if (!extensionBootstrapVerifyTimer) return;
+        clearTimeout(extensionBootstrapVerifyTimer);
+        extensionBootstrapVerifyTimer = 0;
+    };
+
+    const scheduleExtensionBootstrapVerify = (callback = null) => {
+        clearExtensionBootstrapVerifyTimer();
+        if (typeof callback !== 'function') return;
+        extensionBootstrapVerifyTimer = setTimeout(() => {
+            extensionBootstrapVerifyTimer = 0;
+            callback();
+        }, 0);
     };
 
     const updateState = (patch = {}) => {
@@ -182,6 +198,9 @@
     const SHOP_NAME_BACKFILL_ATTEMPTS_DEFAULT = 8;
     const SHOP_NAME_BACKFILL_BASE_DELAY_MS = 320;
     const SHOP_NAME_BACKFILL_MAX_DELAY_MS = 2200;
+    const shopNameBackfillTimers = new Map();
+    const shopNameBackfillPendingTasks = new Map();
+    let shopNameBackfillVisibilityHandlerInstalled = false;
 
     const normalizeShopId = (value) => {
         const raw = value === null || value === undefined ? '' : String(value).trim();
@@ -1100,6 +1119,97 @@
         } catch { }
     };
 
+    const buildShopNameBackfillKey = (shopId = '', source = '') => {
+        return `${normalizeShopId(shopId)}::${String(source || 'shop_name_backfill')}`;
+    };
+
+    const isShopNameBackfillDocumentHidden = () => document.visibilityState === 'hidden';
+
+    const hasShopNameBackfillTasks = () => {
+        return shopNameBackfillTimers.size > 0 || shopNameBackfillPendingTasks.size > 0;
+    };
+
+    const removeShopNameBackfillVisibilityHandlerIfIdle = () => {
+        if (!shopNameBackfillVisibilityHandlerInstalled || hasShopNameBackfillTasks()) return;
+        document.removeEventListener('visibilitychange', handleShopNameBackfillVisibilityChange);
+        shopNameBackfillVisibilityHandlerInstalled = false;
+    };
+
+    const ensureShopNameBackfillVisibilityHandler = () => {
+        if (shopNameBackfillVisibilityHandlerInstalled) return;
+        document.addEventListener('visibilitychange', handleShopNameBackfillVisibilityChange);
+        shopNameBackfillVisibilityHandlerInstalled = true;
+    };
+
+    const clearShopNameBackfillTimer = (timerKey = '') => {
+        const record = shopNameBackfillTimers.get(timerKey);
+        if (record?.timerId) clearTimeout(record.timerId);
+        shopNameBackfillTimers.delete(timerKey);
+    };
+
+    const pauseShopNameBackfillTimers = () => {
+        const entries = Array.from(shopNameBackfillTimers.entries());
+        entries.forEach(([timerKey, record]) => {
+            clearShopNameBackfillTimer(timerKey);
+            if (typeof record?.callback !== 'function') return;
+            shopNameBackfillPendingTasks.set(timerKey, {
+                callback: record.callback,
+                dueAt: Number(record.dueAt || 0) || toNow()
+            });
+        });
+    };
+
+    const resumeShopNameBackfillPendingTasks = () => {
+        if (!shopNameBackfillPendingTasks.size) {
+            removeShopNameBackfillVisibilityHandlerIfIdle();
+            return;
+        }
+        const entries = Array.from(shopNameBackfillPendingTasks.entries());
+        shopNameBackfillPendingTasks.clear();
+        entries.forEach(([timerKey, record]) => {
+            if (typeof record?.callback !== 'function') return;
+            const delayMs = Math.max(0, (Number(record.dueAt || 0) || 0) - toNow());
+            scheduleShopNameBackfillTimer(timerKey, record.callback, delayMs);
+        });
+        removeShopNameBackfillVisibilityHandlerIfIdle();
+    };
+
+    const handleShopNameBackfillVisibilityChange = () => {
+        if (isShopNameBackfillDocumentHidden()) {
+            pauseShopNameBackfillTimers();
+            return;
+        }
+        resumeShopNameBackfillPendingTasks();
+    };
+
+    const scheduleShopNameBackfillTimer = (timerKey = '', callback = null, delayMs = 0) => {
+        if (!timerKey || typeof callback !== 'function') return;
+        const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
+        const dueAt = toNow() + normalizedDelayMs;
+        ensureShopNameBackfillVisibilityHandler();
+        clearShopNameBackfillTimer(timerKey);
+        shopNameBackfillPendingTasks.delete(timerKey);
+        if (isShopNameBackfillDocumentHidden()) {
+            shopNameBackfillPendingTasks.set(timerKey, { callback, dueAt });
+            return;
+        }
+        const record = {
+            timerId: 0,
+            callback,
+            dueAt
+        };
+        record.timerId = setTimeout(() => {
+            if (shopNameBackfillTimers.get(timerKey) !== record) return;
+            shopNameBackfillTimers.delete(timerKey);
+            try {
+                callback();
+            } finally {
+                removeShopNameBackfillVisibilityHandlerIfIdle();
+            }
+        }, normalizedDelayMs);
+        shopNameBackfillTimers.set(timerKey, record);
+    };
+
     const scheduleShopNameBackfill = (context = {}) => {
         const shopId = normalizeShopId(context.shopId || '');
         const source = String(context.source || 'shop_name_backfill');
@@ -1126,6 +1236,8 @@
         );
         if (!shopId) return;
         if (!force && normalizeShopName(context.shopName || '')) return;
+        const timerKey = buildShopNameBackfillKey(shopId, source);
+        if (shopNameBackfillTimers.has(timerKey) || shopNameBackfillPendingTasks.has(timerKey)) return;
 
         let attempt = 0;
         const run = () => {
@@ -1157,10 +1269,10 @@
             if (resolved) return;
             if (attempt >= maxAttempts) return;
             const nextDelay = Math.min(maxDelayMs, baseDelayMs * attempt);
-            setTimeout(run, nextDelay);
+            scheduleShopNameBackfillTimer(timerKey, run, nextDelay);
         };
 
-        setTimeout(run, initialDelayMs);
+        scheduleShopNameBackfillTimer(timerKey, run, initialDelayMs);
     };
 
     const createError = (code, message, detail = null) => {
@@ -1701,6 +1813,8 @@
     const removeOverlay = () => {
         const node = document.getElementById(OVERLAY_ID);
         if (node) node.remove();
+        const styleNode = document.getElementById(OVERLAY_STYLE_ID);
+        if (styleNode) styleNode.remove();
     };
 
     const renderOverlay = () => {
@@ -2248,11 +2362,11 @@
         const hydratedFromCache = hydrateCurrentLeaseFromCache('extension_cache_bootstrap');
         installOnDemandVerifyHooks();
         if (hydratedFromCache) {
-            setTimeout(() => {
+            scheduleExtensionBootstrapVerify(() => {
                 triggerOnDemandVerify('extension_cache_bootstrap');
-            }, 0);
+            });
         } else {
-            setTimeout(() => {
+            scheduleExtensionBootstrapVerify(() => {
                 LicenseGuard.assertAuthorized({
                     source: 'bootstrap_preflight',
                     shopIdRetryAttempts: 2,
@@ -2260,7 +2374,7 @@
                     shopIdRetryMaxDelayMs: 620,
                     silentTransientFailure: true
                 }).catch(() => { });
-            }, 0);
+            });
         }
     } else {
         // userscript 模式保持启动预热校验。

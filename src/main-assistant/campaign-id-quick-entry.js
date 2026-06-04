@@ -3,8 +3,11 @@
         runningCampaignIds: new Set(),
         runningCopyKeys: new Set(),
         copyPlanNameCache: new Set(),
+        copyPlanNameCacheLimit: 120,
         batchPlusMenuEl: null,
         batchPlusMenuCloseTimer: null,
+        campaignListRefreshTimer: null,
+        copyFocusRestoreTimer: null,
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -12,6 +15,7 @@
         concurrentLogFocusBackEl: null,
         concurrentLogKeydownHandler: null,
         campaignItemIdCache: new Map(),
+        campaignItemCacheLimit: 240,
         IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
         DEFAULT_BIZ_CODE: 'onebpSearch',
@@ -350,6 +354,37 @@
             this.batchPlusMenuCloseTimer = window.setTimeout(() => {
                 this.batchPlusMenuCloseTimer = null;
                 this.closeBatchPlusMenu();
+            }, delay);
+        },
+
+        clearCampaignListRefreshTimer() {
+            if (!this.campaignListRefreshTimer) return;
+            window.clearTimeout(this.campaignListRefreshTimer);
+            this.campaignListRefreshTimer = null;
+        },
+
+        scheduleCampaignListRefresh(options = {}) {
+            this.clearCampaignListRefreshTimer();
+            const delay = Number.isFinite(Number(options?.delay)) ? Number(options.delay) : 600;
+            this.campaignListRefreshTimer = window.setTimeout(() => {
+                this.campaignListRefreshTimer = null;
+                this.refreshCampaignListOnlyNow(options).catch((err) => {
+                    Logger.log(`⚠️ ${options?.reason || '批量操作'}已完成，但自动刷新计划列表失败：${err?.message || err}`, true);
+                });
+            }, delay);
+        },
+
+        clearCopyFocusRestoreTimer() {
+            if (!this.copyFocusRestoreTimer) return;
+            window.clearTimeout(this.copyFocusRestoreTimer);
+            this.copyFocusRestoreTimer = null;
+        },
+
+        scheduleCopyFocusRestore(target = null, attempt = 0, delay = 0) {
+            this.clearCopyFocusRestoreTimer();
+            this.copyFocusRestoreTimer = window.setTimeout(() => {
+                this.copyFocusRestoreTimer = null;
+                this.runCopyFocusRestore(target, attempt);
             }, delay);
         },
 
@@ -1423,12 +1458,7 @@
         },
 
         refreshCampaignListOnly(options = {}) {
-            const delay = Number.isFinite(Number(options?.delay)) ? Number(options.delay) : 600;
-            window.setTimeout(() => {
-                this.refreshCampaignListOnlyNow(options).catch((err) => {
-                    Logger.log(`⚠️ ${options?.reason || '批量操作'}已完成，但自动刷新计划列表失败：${err?.message || err}`, true);
-                });
-            }, delay);
+            this.scheduleCampaignListRefresh(options);
         },
 
         openDisplayBlackCrowdEditorModal({ campaignId, campaignName = '', crowdList = [], targetIds = [], oldCrowdMap = {}, authContext = {} } = {}) {
@@ -2089,8 +2119,20 @@
 
         rememberCopiedPlanNames(planNames = []) {
             this.normalizePlanNameList(planNames).forEach((name) => {
+                if (this.copyPlanNameCache.has(name)) this.copyPlanNameCache.delete(name);
                 this.copyPlanNameCache.add(name);
             });
+            this.trimCopiedPlanNameCache();
+        },
+
+        trimCopiedPlanNameCache() {
+            const limit = Math.max(20, Number(this.copyPlanNameCacheLimit) || 120);
+            if (!(this.copyPlanNameCache instanceof Set)) return;
+            while (this.copyPlanNameCache.size > limit) {
+                const oldestName = this.copyPlanNameCache.values().next().value;
+                if (!oldestName) break;
+                this.copyPlanNameCache.delete(oldestName);
+            }
         },
 
         normalizeCampaignIdList(value) {
@@ -2375,33 +2417,27 @@
             }) || null;
         },
 
-        restoreFocusWhenReady(target = null, attempt = 0) {
+        runCopyFocusRestore(target = null, attempt = 0) {
             const element = this.resolveCopyFocusTargetElement(target, true);
-            if (!element) {
-                if (attempt < 6) {
-                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
-                }
+            if (!element || ('disabled' in element && element.disabled)) {
+                if (attempt < 6) this.scheduleCopyFocusRestore(target, attempt + 1, 50);
                 return;
             }
-            if ('disabled' in element && element.disabled) {
-                if (attempt < 6) {
-                    window.setTimeout(() => this.restoreFocusWhenReady(target, attempt + 1), 50);
+            requestAnimationFrame(() => {
+                const readyElement = this.resolveCopyFocusTargetElement(target, false)
+                    || this.resolveCopyFocusTargetElement(target, true);
+                if (!readyElement) return;
+                if (!readyElement.isConnected || typeof readyElement.focus !== 'function') return;
+                if ('disabled' in readyElement && readyElement.disabled) {
+                    if (attempt < 6) this.scheduleCopyFocusRestore(target, attempt + 1, 50);
+                    return;
                 }
-                return;
-            }
-            window.setTimeout(() => {
-                requestAnimationFrame(() => {
-                    const readyElement = this.resolveCopyFocusTargetElement(target, false)
-                        || this.resolveCopyFocusTargetElement(target, true);
-                    if (!readyElement) return;
-                    if (!readyElement.isConnected || typeof readyElement.focus !== 'function') return;
-                    if ('disabled' in readyElement && readyElement.disabled) {
-                        if (attempt < 6) this.restoreFocusWhenReady(target, attempt + 1);
-                        return;
-                    }
-                    readyElement.focus({ preventScroll: true });
-                });
-            }, 0);
+                readyElement.focus({ preventScroll: true });
+            });
+        },
+
+        restoreFocusWhenReady(target = null, attempt = 0) {
+            this.scheduleCopyFocusRestore(target, attempt, 0);
         },
 
         showCopySuccessDialogAndRefresh(result = {}, context = {}) {
@@ -2759,20 +2795,56 @@
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
-            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.rememberLocalCampaignItemId(normalizedCampaignId, normalizedItemId);
             PlanIdentityUtils.rememberCampaignItemId(normalizedCampaignId, normalizedItemId);
         },
 
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            const localCached = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const localCached = this.normalizeItemId(this.touchLocalCampaignItemId(normalizedCampaignId) || '');
             if (localCached) return localCached;
             const sharedCached = PlanIdentityUtils.getCampaignItemId(normalizedCampaignId);
             if (sharedCached) {
-                this.campaignItemIdCache.set(normalizedCampaignId, sharedCached);
+                this.rememberLocalCampaignItemId(normalizedCampaignId, sharedCached);
             }
             return sharedCached;
+        },
+
+        rememberLocalCampaignItemId(campaignId, itemId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedItemId = this.normalizeItemId(itemId);
+            if (!normalizedCampaignId || !normalizedItemId) return;
+            if (this.campaignItemIdCache.has(normalizedCampaignId)) {
+                this.campaignItemIdCache.delete(normalizedCampaignId);
+            }
+            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.trimLocalCampaignItemIdCache(normalizedCampaignId);
+        },
+
+        touchLocalCampaignItemId(campaignId) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            if (!normalizedCampaignId || !this.campaignItemIdCache.has(normalizedCampaignId)) return '';
+            const itemId = this.campaignItemIdCache.get(normalizedCampaignId);
+            this.campaignItemIdCache.delete(normalizedCampaignId);
+            this.campaignItemIdCache.set(normalizedCampaignId, itemId);
+            this.trimLocalCampaignItemIdCache(normalizedCampaignId);
+            return itemId;
+        },
+
+        trimLocalCampaignItemIdCache(protectedCampaignId = '') {
+            const limit = Math.max(24, Number(this.campaignItemCacheLimit) || 240);
+            const normalizedProtectedId = this.normalizeCampaignId(protectedCampaignId);
+            if (!(this.campaignItemIdCache instanceof Map)) return;
+            for (const key of this.campaignItemIdCache.keys()) {
+                if (this.campaignItemIdCache.size <= limit) break;
+                if (normalizedProtectedId && key === normalizedProtectedId) continue;
+                this.campaignItemIdCache.delete(key);
+            }
+            for (const key of this.campaignItemIdCache.keys()) {
+                if (this.campaignItemIdCache.size <= limit) break;
+                this.campaignItemIdCache.delete(key);
+            }
         },
 
         parseItemIdFromRaw(raw) {
@@ -4589,6 +4661,7 @@
                     : this.buildCopyOverviewRows(context);
                 let activeContext = context;
                 let contextReady = context.preparing !== true;
+                let prepareContextTimerId = 0;
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-copy-overview-popup';
                 popup.setAttribute('role', 'dialog');
@@ -4675,7 +4748,13 @@
                 const restoreFocus = () => {
                     this.restoreFocusWhenReady(focusBackTarget);
                 };
+                const clearPrepareContextTimer = () => {
+                    if (!prepareContextTimerId) return;
+                    clearTimeout(prepareContextTimerId);
+                    prepareContextTimerId = 0;
+                };
                 const removePopup = () => {
+                    clearPrepareContextTimer();
                     popup.remove();
                     restoreFocus();
                 };
@@ -4767,6 +4846,7 @@
                     try {
                         setRunning(true);
                         setStatus('生成中：正在提交复制请求，请勿重复操作。', 'running');
+                        clearPrepareContextTimer();
                         const result = await submitCallback(editedRows, activeContext);
                         setStatus('生成成功，正在打开成功确认。', 'success');
                         popup.remove();
@@ -4794,7 +4874,11 @@
                 };
                 const schedulePrepareContext = () => {
                     if (typeof setTimeout === 'function') {
-                        setTimeout(startPrepareContext, 0);
+                        clearPrepareContextTimer();
+                        prepareContextTimerId = setTimeout(() => {
+                            prepareContextTimerId = 0;
+                            startPrepareContext();
+                        }, 0);
                         return;
                     }
                     startPrepareContext();
@@ -4952,6 +5036,9 @@
                 const titleBak = btn.dataset.amTitleBak;
                 btn.title = titleBak || `并发开启关联计划：${id}`;
                 delete btn.dataset.amTitleBak;
+                if (!this.isConcurrentStartEnabled()) {
+                    btn.remove();
+                }
             });
         },
 
@@ -5210,9 +5297,15 @@
                 || anchorEl;
             if (!(host instanceof HTMLElement)) return null;
             if (host === document.body || host === document.documentElement) return null;
-            host.classList.add('am-campaign-hover-host');
+            if (!host.classList.contains('am-campaign-hover-host')) {
+                registerExpectedMainAssistantClassMutation(host, 'am-campaign-hover-host');
+                host.classList.add('am-campaign-hover-host');
+            }
             if (rowHost instanceof HTMLElement && compactHost instanceof HTMLElement && compactHost !== rowHost) {
-                compactHost.classList.add('am-campaign-hover-host');
+                if (!compactHost.classList.contains('am-campaign-hover-host')) {
+                    registerExpectedMainAssistantClassMutation(compactHost, 'am-campaign-hover-host');
+                    compactHost.classList.add('am-campaign-hover-host');
+                }
             }
             return host;
         },
@@ -5223,9 +5316,45 @@
 
         syncConcurrentButtonsVisibility() {
             const enabled = this.isConcurrentStartEnabled();
+            if (!enabled) {
+                document.querySelectorAll('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]').forEach((btn) => {
+                    if (!(btn instanceof HTMLElement)) return;
+                    if (btn.classList.contains('is-running') || btn.disabled) return;
+                    btn.remove();
+                });
+                return;
+            }
+            this.ensureConcurrentButtonsForQuickEntries();
             document.querySelectorAll('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]').forEach((btn) => {
                 if (!(btn instanceof HTMLElement)) return;
-                btn.style.display = enabled ? '' : 'none';
+                btn.style.display = '';
+            });
+        },
+
+        ensureConcurrentButtonsForQuickEntries() {
+            if (!this.isConcurrentStartEnabled()) return;
+            document.querySelectorAll('.am-campaign-search-btn[data-am-campaign-quick="1"]').forEach((quickBtn) => {
+                if (!(quickBtn instanceof HTMLElement) || !quickBtn.isConnected) return;
+                const campaignId = this.normalizeCampaignId(quickBtn.getAttribute('data-campaign-id') || quickBtn.dataset?.campaignId || '');
+                if (!campaignId) return;
+                let pointer = quickBtn.nextElementSibling;
+                let anchor = quickBtn;
+                for (let i = 0; i < 10 && pointer; i++) {
+                    if (!pointer.matches?.('.am-campaign-search-btn')) break;
+                    if (
+                        pointer.matches?.('.am-campaign-search-btn[data-am-campaign-concurrent-start="1"]')
+                        && pointer.getAttribute('data-campaign-id') === campaignId
+                    ) {
+                        return;
+                    }
+                    pointer = pointer.nextElementSibling;
+                }
+                const concurrentBtn = this.createButton(campaignId, {
+                    mode: 'concurrent',
+                    bizCode: quickBtn.getAttribute('data-biz-code') || quickBtn.dataset?.bizCode || '',
+                    itemId: quickBtn.getAttribute('data-item-id') || quickBtn.dataset?.itemId || ''
+                });
+                if (concurrentBtn) anchor.insertAdjacentElement('afterend', concurrentBtn);
             });
         },
 
@@ -5720,12 +5849,14 @@
                             itemId: contextItemId
                         });
                         if (quickBtn) frag.appendChild(quickBtn);
-                        const concurrentBtn = this.createButton(campaignId, {
-                            mode: 'concurrent',
-                            bizCode: contextBizCode,
-                            itemId: contextItemId
-                        });
-                        if (concurrentBtn) frag.appendChild(concurrentBtn);
+                        if (this.isConcurrentStartEnabled()) {
+                            const concurrentBtn = this.createButton(campaignId, {
+                                mode: 'concurrent',
+                                bizCode: contextBizCode,
+                                itemId: contextItemId
+                            });
+                            if (concurrentBtn) frag.appendChild(concurrentBtn);
+                        }
                         hasMatch = true;
                     } else {
                         frag.appendChild(document.createTextNode(fullText));
@@ -5799,7 +5930,7 @@
                         anchor = createdQuick;
                     }
                 }
-                if (!concurrentBtn) {
+                if (this.isConcurrentStartEnabled() && !concurrentBtn) {
                     const createdConcurrent = this.createButton(id, { mode: 'concurrent', bizCode, itemId });
                     if (createdConcurrent) {
                         anchor.insertAdjacentElement('afterend', createdConcurrent);

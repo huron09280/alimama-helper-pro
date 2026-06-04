@@ -5,7 +5,47 @@
     const LICENSE_VERIFY_REQUEST_TYPE = 'verify-request';
     const LICENSE_VERIFY_RESPONSE_TYPE = 'verify-response';
     const LICENSE_VERIFY_MESSAGE_TYPE = 'AM_LICENSE_VERIFY_REQUEST';
+    const INJECTION_CHECK_DELAY_MS = 80;
+    const URL_POLL_INITIAL_INTERVAL_MS = 600;
+    const URL_POLL_MAX_INTERVAL_MS = 4800;
     if (document.getElementById(SCRIPT_ID)) return;
+
+    const normalizeHostname = (value = '') => String(value || '').trim().toLowerCase();
+    const resolveCurrentUrl = () => {
+        try {
+            return new URL(String(window.location?.href || ''));
+        } catch {
+            return null;
+        }
+    };
+    const isMysellerHost = (hostname = '') => (
+        hostname === 'myseller.taobao.com'
+        || hostname.endsWith('.myseller.taobao.com')
+    );
+    const isDmpHost = (hostname = '') => hostname === 'dmp.taobao.com';
+    const isSmartAssistantBudgetPage = (url = null) => {
+        if (!url) return false;
+        const pathname = String(url.pathname || '').toLowerCase();
+        const hash = String(url.hash || '').toLowerCase();
+        return (
+            pathname.includes('/home.htm')
+            && (/crm-workbench\/smartassistant/i.test(pathname) || /crm-workbench\/smartassistant/i.test(hash))
+        );
+    };
+    const shouldInjectPageBundle = () => {
+        const url = resolveCurrentUrl();
+        if (!url) return false;
+        const hostname = normalizeHostname(url.hostname);
+        if (hostname === 'one.alimama.com') return true;
+        if (isDmpHost(hostname)) return true;
+        if (isMysellerHost(hostname)) return isSmartAssistantBudgetPage(url);
+        return false;
+    };
+    const shouldWatchForDeferredInjection = () => {
+        const url = resolveCurrentUrl();
+        if (!url) return false;
+        return isMysellerHost(normalizeHostname(url.hostname));
+    };
 
     const renderInjectionError = (message = '') => {
         if (document.getElementById(ERROR_ID)) return;
@@ -41,10 +81,7 @@
     };
 
     const mountNode = document.head || document.documentElement || document.body;
-    if (!mountNode) {
-        renderInjectionError();
-        return;
-    }
+    let pageBundleInjected = false;
 
     const postBridgeMessage = (payload = {}) => {
         const targetOrigin = String(window.location?.origin || '').trim() || '*';
@@ -129,25 +166,146 @@
         forwardLicenseVerifyRequest(requestId, payload);
     });
 
-    const script = document.createElement('script');
-    script.id = SCRIPT_ID;
-    script.type = 'text/javascript';
-    try {
-        script.src = chrome.runtime.getURL('page.bundle.js');
-    } catch {
-        renderInjectionError('阿里妈妈助手加载失败：扩展资源地址不可用。');
-        return;
-    }
-    script.dataset.amHelperSource = 'extension';
-    script.dataset.amHelperInjectedAt = String(Date.now());
-    script.onload = () => script.remove();
-    script.onerror = () => {
-        script.remove();
-        renderInjectionError();
+    const injectPageBundle = () => {
+        if (pageBundleInjected || document.getElementById(SCRIPT_ID)) return true;
+        const nextMountNode = document.head || document.documentElement || document.body || mountNode;
+        if (!nextMountNode) {
+            renderInjectionError();
+            return false;
+        }
+
+        const script = document.createElement('script');
+        script.id = SCRIPT_ID;
+        script.type = 'text/javascript';
+        try {
+            script.src = chrome.runtime.getURL('page.bundle.js');
+        } catch {
+            renderInjectionError('阿里妈妈助手加载失败：扩展资源地址不可用。');
+            return false;
+        }
+        script.dataset.amHelperSource = 'extension';
+        script.dataset.amHelperInjectedAt = String(Date.now());
+        script.onload = () => script.remove();
+        script.onerror = () => {
+            script.remove();
+            renderInjectionError();
+        };
+        try {
+            nextMountNode.appendChild(script);
+            pageBundleInjected = true;
+            return true;
+        } catch {
+            renderInjectionError();
+            return false;
+        }
     };
-    try {
-        mountNode.appendChild(script);
-    } catch {
-        renderInjectionError();
+
+    const tryInjectPageBundle = () => {
+        if (!shouldInjectPageBundle()) return false;
+        return injectPageBundle();
+    };
+
+    let injectionCheckTimer = 0;
+    let urlPollTimer = 0;
+    let urlPollDelayMs = URL_POLL_INITIAL_INTERVAL_MS;
+    let deferredInjectionWatchActive = false;
+    let pendingHiddenUrlPoll = false;
+    let lastObservedUrl = String(window.location?.href || '');
+    const isDocumentHidden = () => document.visibilityState === 'hidden';
+    const resetUrlPollDelay = () => {
+        urlPollDelayMs = URL_POLL_INITIAL_INTERVAL_MS;
+    };
+    const clearInjectionCheckTimer = () => {
+        if (!injectionCheckTimer) return;
+        window.clearTimeout(injectionCheckTimer);
+        injectionCheckTimer = 0;
+    };
+    const clearUrlPollTimer = () => {
+        if (!urlPollTimer) return;
+        window.clearTimeout(urlPollTimer);
+        urlPollTimer = 0;
+    };
+    const markHiddenUrlPollPending = () => {
+        pendingHiddenUrlPoll = true;
+        clearInjectionCheckTimer();
+        clearUrlPollTimer();
+    };
+    let stopDeferredInjectionWatch = () => {
+        clearInjectionCheckTimer();
+        clearUrlPollTimer();
+    };
+    function handleDeferredInjectionVisibilityChange() {
+        if (!deferredInjectionWatchActive) return;
+        if (isDocumentHidden()) {
+            markHiddenUrlPollPending();
+            return;
+        }
+        if (!pendingHiddenUrlPoll) return;
+        pendingHiddenUrlPoll = false;
+        scheduleInjectionCheck();
+        startUrlPolling();
+    }
+    const scheduleInjectionCheck = () => {
+        resetUrlPollDelay();
+        if (pageBundleInjected || document.getElementById(SCRIPT_ID)) {
+            stopDeferredInjectionWatch();
+            return;
+        }
+        if (isDocumentHidden()) {
+            markHiddenUrlPollPending();
+            return;
+        }
+        if (injectionCheckTimer) return;
+        injectionCheckTimer = window.setTimeout(() => {
+            injectionCheckTimer = 0;
+            if (tryInjectPageBundle()) stopDeferredInjectionWatch();
+        }, INJECTION_CHECK_DELAY_MS);
+    };
+    stopDeferredInjectionWatch = () => {
+        clearInjectionCheckTimer();
+        clearUrlPollTimer();
+        if (!deferredInjectionWatchActive) return;
+        window.removeEventListener('hashchange', scheduleInjectionCheck);
+        window.removeEventListener('popstate', scheduleInjectionCheck);
+        document.removeEventListener('visibilitychange', handleDeferredInjectionVisibilityChange);
+        deferredInjectionWatchActive = false;
+        pendingHiddenUrlPoll = false;
+    };
+    const scheduleNextUrlPoll = () => {
+        if (urlPollTimer || pageBundleInjected || document.getElementById(SCRIPT_ID)) return;
+        if (isDocumentHidden()) {
+            markHiddenUrlPollPending();
+            return;
+        }
+        urlPollTimer = window.setTimeout(() => {
+            urlPollTimer = 0;
+            if (isDocumentHidden()) {
+                markHiddenUrlPollPending();
+                return;
+            }
+            const currentUrl = String(window.location?.href || '');
+            if (currentUrl !== lastObservedUrl) {
+                lastObservedUrl = currentUrl;
+                scheduleInjectionCheck();
+            } else {
+                urlPollDelayMs = Math.min(URL_POLL_MAX_INTERVAL_MS, Math.max(URL_POLL_INITIAL_INTERVAL_MS, urlPollDelayMs * 2));
+            }
+            if (!pageBundleInjected && !document.getElementById(SCRIPT_ID)) {
+                scheduleNextUrlPoll();
+            }
+        }, urlPollDelayMs);
+    };
+    const startUrlPolling = () => {
+        if (urlPollTimer) return;
+        resetUrlPollDelay();
+        scheduleNextUrlPoll();
+    };
+
+    if (!tryInjectPageBundle() && shouldWatchForDeferredInjection()) {
+        window.addEventListener('hashchange', scheduleInjectionCheck);
+        window.addEventListener('popstate', scheduleInjectionCheck);
+        document.addEventListener('visibilitychange', handleDeferredInjectionVisibilityChange);
+        deferredInjectionWatchActive = true;
+        startUrlPolling();
     }
 })();

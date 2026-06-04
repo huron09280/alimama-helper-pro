@@ -76,6 +76,9 @@ test('复制按钮复刻组建计划的数量调节操作', () => {
     assert.match(quickEntry, /normalizeCopyBatchCount\(value\)[\s\S]*?Math\.min\(99,\s*Math\.max\(1,/, '复制数量应限制在 1-99');
     assert.match(quickEntry, /countBadge\.setAttribute\('data-am-campaign-copy-count-badge',\s*String\(count\)\)/, '复制数量徽标 data 值应同步更新');
     assert.match(quickEntry, /copyPlanNameCache:\s*new Set\(\)/, '缺少已复制计划名缓存，重复复制可能命名冲突');
+    assert.match(quickEntry, /copyPlanNameCacheLimit:\s*120/, '已复制计划名缓存缺少容量上限');
+    assert.match(quickEntry, /rememberCopiedPlanNames\(planNames = \[\]\)[\s\S]*?this\.copyPlanNameCache\.delete\(name\)[\s\S]*?this\.copyPlanNameCache\.add\(name\)[\s\S]*?this\.trimCopiedPlanNameCache\(\);/, '已复制计划名写入应刷新最近顺序并裁剪缓存');
+    assert.match(quickEntry, /trimCopiedPlanNameCache\(\)[\s\S]*?Math\.max\(20,\s*Number\(this\.copyPlanNameCacheLimit\) \|\| 120\)[\s\S]*?this\.copyPlanNameCache\.delete\(oldestName\);/, '已复制计划名缓存应按上限删除最旧项');
     const copyButtonRule = extractCssRule(quickEntryStyle, '.am-campaign-copy-btn');
     const copyBadgeRule = extractCssRule(quickEntryStyle, '.am-campaign-copy-btn .am-wxt-copy-multi');
     assert.match(quickEntry, /renderAmIcon\('plus',\s*\{\s*size:\s*12,\s*strokeWidth:\s*2\.6\s*\}\)/, '复制数量 + 图标应按用户要求渲染为 12px');
@@ -139,7 +142,12 @@ test('复制成功后弹窗说明明细并确认页内搜索', () => {
     assert.match(quickEntryStyle, /#am-campaign-copy-success-popup \.am-copy-success-confirm,[\s\S]*?#am-campaign-copy-success-popup \.am-copy-success-cancel\s*\{[\s\S]*?min-width:\s*64px;[\s\S]*?height:\s*32px;[\s\S]*?border-radius:\s*500px;[\s\S]*?font-size:\s*12px;/, '复制成功弹窗按钮应保持紧凑胶囊尺寸');
     assert.match(quickEntry, /createCopyFocusTarget\(context = \{\},\s*fallbackElement = null\)[\s\S]*?campaignId[\s\S]*?context\.campaignId[\s\S]*?context\.sourceCampaignId[\s\S]*?data-campaign-id[\s\S]*?mode[\s\S]*?data-am-campaign-copy/, '复制弹窗焦点目标应保存 campaignId 与复制模式，支持运行态重定位');
     assert.match(quickEntry, /resolveCopyFocusTargetElement\(target = null,\s*allowDisabled = true\)[\s\S]*?data-am-campaign-copy="\$\{mode\}"\]\[data-campaign-id="\$\{id\}"\][\s\S]*?isElementVisible\(candidate\)[\s\S]*?allowDisabled[\s\S]*?candidate\.disabled/, '焦点恢复应能按当前可见复制按钮重新定位，并跳过未就绪禁用按钮');
-    assert.match(quickEntry, /restoreFocusWhenReady\(target = null,\s*attempt = 0\)[\s\S]*?this\.resolveCopyFocusTargetElement\(target,\s*true\)[\s\S]*?window\.setTimeout\(\(\) => this\.restoreFocusWhenReady\(target,\s*attempt \+ 1\),\s*50\)[\s\S]*?readyElement\.focus\(\{ preventScroll: true \}\)/, '焦点恢复应等待触发按钮解除禁用后再执行');
+    assert.match(quickEntry, /copyFocusRestoreTimer:\s*null,/, '复制焦点恢复 timer 缺少可清理句柄');
+    assert.match(quickEntry, /clearCopyFocusRestoreTimer\(\)\s*\{[\s\S]*?if \(!this\.copyFocusRestoreTimer\) return;[\s\S]*?window\.clearTimeout\(this\.copyFocusRestoreTimer\);[\s\S]*?this\.copyFocusRestoreTimer = null;[\s\S]*?\}/, '复制焦点恢复 timer 应支持显式清理并归零');
+    assert.match(quickEntry, /scheduleCopyFocusRestore\(target = null,\s*attempt = 0,\s*delay = 0\)\s*\{[\s\S]*?this\.clearCopyFocusRestoreTimer\(\);[\s\S]*?this\.copyFocusRestoreTimer = window\.setTimeout\(\(\) => \{[\s\S]*?this\.copyFocusRestoreTimer = null;[\s\S]*?this\.runCopyFocusRestore\(target,\s*attempt\);[\s\S]*?\},\s*delay\);[\s\S]*?\}/, '复制焦点恢复应通过可取消 helper 调度');
+    assert.match(quickEntry, /runCopyFocusRestore\(target = null,\s*attempt = 0\)[\s\S]*?this\.resolveCopyFocusTargetElement\(target,\s*true\)[\s\S]*?if \(!element \|\| \('disabled' in element && element\.disabled\)\) \{[\s\S]*?if \(attempt < 6\) this\.scheduleCopyFocusRestore\(target,\s*attempt \+ 1,\s*50\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?readyElement\.focus\(\{ preventScroll: true \}\)/, '焦点恢复应等待触发按钮解除禁用后再执行并保留 rAF 聚焦');
+    assert.match(quickEntry, /restoreFocusWhenReady\(target = null,\s*attempt = 0\)\s*\{\s*this\.scheduleCopyFocusRestore\(target,\s*attempt,\s*0\);\s*\}/, 'restoreFocusWhenReady 应只委托焦点恢复调度 helper');
+    assert.doesNotMatch(quickEntry, /window\.setTimeout\(\(\) => this\.restoreFocusWhenReady\(target,\s*attempt \+ 1\),\s*50\)/, '复制焦点恢复不应继续排无句柄 50ms retry timeout');
     assert.match(quickEntry, /const focusBackTarget = this\.createCopyFocusTarget\(context,\s*previousActiveElement\);[\s\S]*?const restoreFocus = \(\) => \{[\s\S]*?this\.restoreFocusWhenReady\(focusBackTarget\);[\s\S]*?popup\.addEventListener\('keydown'[\s\S]*?event\.key !== 'Escape'/, '复制成功弹窗应支持 Esc 关闭并优先恢复到触发按钮');
     assert.match(quickEntry, /const createdCampaignIds = this\.resolveCopiedCampaignIds\(result\);[\s\S]*?if \(!createdCampaignIds\.length && successCount <= 0\) \{[\s\S]*?创建接口未返回成功的新计划/, '无成功新计划时不应进入成功弹窗刷新链路');
 });
@@ -186,7 +194,13 @@ test('复制提交前先展示可编辑一览窗并在确认后显示生成中',
     assert.match(quickEntry, /data-am-copy-overview-status role="status" aria-live="polite">\$\{contextReady \? '确认后才会提交创建请求。' : '已打开预览，正在读取源计划详情\.\.\.'\}/, '一览窗应先显示读取态并使用 live status 语义');
     assert.match(quickEntry, /setStatus\('生成中：正在提交复制请求，请勿重复操作。',\s*'running'\);/, '确认提交后应显示生成中状态');
     assert.match(quickEntry, /validateCopyOverviewRows\(editedRows\)/, '确认提交前应校验编辑行');
+    assert.match(quickEntry, /let prepareContextTimerId = 0;/, '复制前一览窗详情准备 timer 缺少局部句柄');
+    assert.match(quickEntry, /const clearPrepareContextTimer = \(\) => \{[\s\S]*?if \(!prepareContextTimerId\) return;[\s\S]*?clearTimeout\(prepareContextTimerId\);[\s\S]*?prepareContextTimerId = 0;[\s\S]*?\};/, '复制前一览窗详情准备 timer 应支持显式清理并归零');
+    assert.match(quickEntry, /const removePopup = \(\) => \{[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?popup\.remove\(\);[\s\S]*?restoreFocus\(\);[\s\S]*?\};/, '复制前一览窗关闭时应释放 pending 详情准备 timer');
+    assert.match(quickEntry, /setStatus\('生成中：正在提交复制请求，请勿重复操作。',\s*'running'\);[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?const result = await submitCallback\(editedRows,\s*activeContext\);/, '复制前一览窗提交前应释放 pending 详情准备 timer');
     assert.match(quickEntry, /const startPrepareContext = \(\) => \{[\s\S]*?options\.prepareContext[\s\S]*?renderCopyOverviewRows\(popup,\s*activeContext\)[\s\S]*?setReadyState\(true,\s*'源计划详情已读取完成，确认后才会提交创建请求。'\)/, '一览窗打开后应异步补齐真实预览行并切回待确认');
+    assert.match(quickEntry, /const schedulePrepareContext = \(\) => \{[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?prepareContextTimerId = setTimeout\(\(\) => \{[\s\S]*?prepareContextTimerId = 0;[\s\S]*?startPrepareContext\(\);[\s\S]*?\},\s*0\);[\s\S]*?\};/, '复制前一览窗详情准备应通过可取消 timeout 调度并在触发后归零');
+    assert.doesNotMatch(quickEntry, /setTimeout\(startPrepareContext,\s*0\);/, '复制前一览窗不应继续排无句柄详情准备 timeout');
     assert.match(quickEntry, /requestAnimationFrame\(\(\) => \{[\s\S]*?schedulePrepareContext\(\);[\s\S]*?\}\);/, '源计划详情读取应延后到弹窗首帧之后启动');
     assert.match(quickEntry, /if \(!contextReady\) \{[\s\S]*?setStatus\('源计划详情仍在读取中，请稍候。',\s*'running'\);[\s\S]*?return;[\s\S]*?\}/, '详情未读完时确认按钮不能提交');
     const overviewPopupRule = extractCssRule(quickEntryStyle, '#am-campaign-copy-overview-popup');

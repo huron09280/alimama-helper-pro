@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const coreSource = readFileSync(new URL('../src/optimizer/core.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/optimizer/ui.js', import.meta.url), 'utf8');
 const bootstrapSource = readFileSync(new URL('../src/optimizer/bootstrap.js', import.meta.url), 'utf8');
+const apiSource = readFileSync(new URL('../src/optimizer/api.js', import.meta.url), 'utf8');
 const latestSettingPreviewSource = uiSource.slice(
     uiSource.indexOf('renderLatestEscortSettingPreview: () => {'),
     uiSource.indexOf('// 渲染护航方案表格（到卡片）')
@@ -51,6 +52,54 @@ test('openV3 成功后卡片状态更新为护航中', () => {
         coreSource,
         /card\.setStatus\(submitResult\.success \? '护航中' : '失败',\s*submitResult\.success \? 'success' : 'error'\)/,
         'openV3 成功后未更新为护航中状态'
+    );
+});
+
+test('算法护航 API 请求按服务器 10rpm 统一限速', () => {
+    assert.match(
+        apiSource,
+        /REQUEST_RATE_LIMIT_RPM:\s*10,/,
+        'API 层缺少 10rpm 请求限速事实源'
+    );
+    assert.match(
+        apiSource,
+        /REQUEST_RATE_LIMIT_INTERVAL_MS:\s*6000,/,
+        'API 层应把 10rpm 固化为 6000ms 请求启动间隔'
+    );
+    assert.match(
+        apiSource,
+        /rateLimitQueue:\s*Promise\.resolve\(\),/,
+        'API 层缺少串行限速队列，仍可能并发抢占请求启动槽'
+    );
+    assert.match(
+        apiSource,
+        /waitForRateLimitSlot:\s*async \(signal\) => \{[\s\S]*API\.rateLimitQueue\.catch\(\(\) => null\)\.then\(async \(\) => \{[\s\S]*const waitMs = Math\.max\(0,\s*API\.rateLimitNextAt - Date\.now\(\)\);[\s\S]*API\.delayWithAbort\(waitMs,\s*signal\);[\s\S]*API\.rateLimitNextAt = Date\.now\(\) \+ API\.REQUEST_RATE_LIMIT_INTERVAL_MS;[\s\S]*\},/,
+        'API 层限速队列未按 nextAt 串行等待并刷新下一个请求槽'
+    );
+    assert.match(
+        apiSource,
+        /for \(let attempt = 1; attempt <= totalAttempts; attempt\+\+\) \{[\s\S]*await API\.waitForRateLimitSlot\(signal\);[\s\S]*const result = await API\._singleRequest\(url,\s*data,\s*timeout,\s*signal\);/,
+        'API.request 每次尝试前都必须先获取 10rpm 请求槽，重试也不能绕过限速'
+    );
+    assert.match(
+        coreSource,
+        /开始按 10rpm 限速处理 \(任务并发数: \$\{concurrency\}\)/,
+        '算法护航执行提示未明确 10rpm 限速，容易误导为纯并发执行'
+    );
+    assert.match(
+        coreSource,
+        /任务并发保持可配置；具体服务端请求由 API 层统一按 10rpm 限速。/,
+        'Core.run 缺少任务并发与请求限速的边界说明'
+    );
+    assert.match(
+        uiSource,
+        /<span class="am-escort-field-label">任务并发<\/span>[\s\S]*<input id="\$\{CONFIG\.UI_ID\}-concurrency" type="number" min="1" max="10" \/>/,
+        '算法护航面板并发输入文案未从“同时执行”收敛为任务并发'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /<span class="am-escort-field-label">同时执行<\/span>/,
+        '算法护航面板仍保留容易误解为服务端并发的旧文案'
     );
 });
 
@@ -360,6 +409,21 @@ test('算法护航结果浮层具备 dialog 语义与键盘关闭能力', () => 
         uiSource,
         /document\.addEventListener\('keydown',\s*handleResultKeydown,\s*true\);[\s\S]*document\.removeEventListener\('keydown',\s*handleResultKeydown,\s*true\);|document\.removeEventListener\('keydown',\s*handleResultKeydown,\s*true\);[\s\S]*document\.addEventListener\('keydown',\s*handleResultKeydown,\s*true\);/,
         '结果浮层未成对绑定/解绑 keydown 监听'
+    );
+    assert.match(
+        uiSource,
+        /let resultOverlayClosing = false;\s*\n\s*let resultOverlayCloseTimerId = null;/,
+        '结果浮层关闭过渡缺少 closing guard 或 timer 句柄'
+    );
+    assert.match(
+        uiSource,
+        /const closeResultOverlay = \(\) => \{[\s\S]*if \(resultOverlayClosing\) return;[\s\S]*resultOverlayClosing = true;[\s\S]*document\.removeEventListener\('keydown', handleResultKeydown, true\);[\s\S]*resultOverlayCloseTimerId = setTimeout\(\(\) => \{[\s\S]*resultOverlayCloseTimerId = null;[\s\S]*overlay\.remove\(\);[\s\S]*restoreFocus\(\);[\s\S]*\}, 240\);/,
+        '结果浮层关闭应只受理一次，并通过可归零 timer 执行淡出移除'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /overlay\.style\.transition = 'opacity 0\.24s ease';\s*\n\s*setTimeout\(\(\) => \{/,
+        '结果浮层关闭不应继续使用无句柄过渡 setTimeout'
     );
     assert.match(
         uiSource,

@@ -159,7 +159,11 @@ test('批量+ 成功后复用原生计划列表刷新而不整页 reload', () =>
     assert.match(quickEntry, /refreshCampaignListVframe\(bizCode = ''\)[\s\S]*?const methods = \['render',\s*'asyncRenderData'\][\s\S]*?vf\.invoke\(method,\s*\[\]\)/, '局部刷新应优先复用官方列表 render 以重新拉取 findPage 列表');
     assert.match(quickEntry, /triggerCampaignListSearchRefresh\(\)[\s\S]*?findCopySuccessPlanNameSearchInput\(\)[\s\S]*?dispatchCopySuccessSearchEnter\(input\)/, '局部刷新应可触发原生列表搜索框回车刷新');
     assert.match(quickEntry, /refreshCampaignListOnlyNow\(\{ bizCode = '',\s*reason = '批量操作' \} = \{\}\)[\s\S]*?refreshCampaignListVframe\(targetBizCode\)[\s\S]*?vframeTriggered \? false : this\.triggerCampaignListSearchRefresh\(\)/, '成功收尾应优先刷新列表 VFrame，找不到时再回车触发搜索刷新');
-    assert.match(quickEntry, /refreshCampaignListOnly\(options = \{\}\)[\s\S]*?window\.setTimeout\(\(\) => \{[\s\S]*?refreshCampaignListOnlyNow\(options\)/, '成功收尾应延迟触发局部列表刷新');
+    assert.match(quickEntry, /campaignListRefreshTimer:\s*null,/, '批量+成功收尾刷新 timer 缺少可清理句柄');
+    assert.match(quickEntry, /clearCampaignListRefreshTimer\(\)\s*\{[\s\S]*?if \(!this\.campaignListRefreshTimer\) return;[\s\S]*?window\.clearTimeout\(this\.campaignListRefreshTimer\);[\s\S]*?this\.campaignListRefreshTimer = null;[\s\S]*?\}/, '批量+成功收尾刷新 timer 应支持显式清理并归零');
+    assert.match(quickEntry, /scheduleCampaignListRefresh\(options = \{\}\)\s*\{[\s\S]*?this\.clearCampaignListRefreshTimer\(\);[\s\S]*?const delay = Number\.isFinite\(Number\(options\?\.delay\)\) \? Number\(options\.delay\) : 600;[\s\S]*?this\.campaignListRefreshTimer = window\.setTimeout\(\(\) => \{[\s\S]*?this\.campaignListRefreshTimer = null;[\s\S]*?this\.refreshCampaignListOnlyNow\(options\)\.catch/, '成功收尾应复用可取消的延迟刷新调度');
+    assert.match(quickEntry, /refreshCampaignListOnly\(options = \{\}\)\s*\{\s*this\.scheduleCampaignListRefresh\(options\);\s*\}/, 'refreshCampaignListOnly 应只委托刷新调度 helper');
+    assert.doesNotMatch(quickEntry, /refreshCampaignListOnly\(options = \{\}\)\s*\{[\s\S]*?window\.setTimeout\(\(\) => \{[\s\S]*?refreshCampaignListOnlyNow\(options\)/, '成功收尾不应继续排无句柄延迟刷新 timeout');
     assert.doesNotMatch(quickEntry, /window\.location\.reload\(\)/, '批量+ 成功收尾不得再整页刷新');
 });
 

@@ -9770,4 +9770,8 @@
                 }
             `;
             document.head.appendChild(style);
+            wizardState.styleCleanupHandlers = Array.isArray(wizardState.styleCleanupHandlers) ? wizardState.styleCleanupHandlers : [];
+            wizardState.styleCleanupHandlers.push(() => {
+                if (style.parentNode) style.parentNode.removeChild(style);
+            });
         };

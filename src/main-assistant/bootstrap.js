@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    if (shouldSkipAmMainAssistantRuntime()) return;
+
     // 全局版本管理
     const CURRENT_VERSION = typeof globalThis !== 'undefined' && typeof globalThis.__AM_GET_SCRIPT_VERSION__ === 'function'
         ? globalThis.__AM_GET_SCRIPT_VERSION__()
@@ -63,28 +65,96 @@
             xhrSendHandlers: [],
             xhrLoadHandlers: [],
             requestHistory: [],
-            requestHistoryLimit: 4000,
+            requestHistoryLimit: 1200,
+            requestHistoryBodyCharLimit: 240000,
+
+            normalizeRequestHistoryUrl(rawUrl) {
+                if (!rawUrl) return '';
+                try {
+                    return new URL(String(rawUrl), window.location.origin).toString();
+                } catch {
+                    return String(rawUrl || '').trim();
+                }
+            },
+
+            shouldSkipRequestHistory(normalizedUrl = '') {
+                if (!normalizedUrl) return true;
+                try {
+                    const parsed = new URL(String(normalizedUrl), window.location.origin);
+                    const hostname = parsed.hostname.toLowerCase();
+                    const pathname = parsed.pathname.toLowerCase();
+                    return (
+                        hostname === 'club.alimama.com'
+                        && pathname === '/api/b/side/engine/trace/report.json'
+                    );
+                } catch { }
+                return /club\.alimama\.com\/api\/b\/side\/engine\/trace\/report\.json/i.test(String(normalizedUrl || ''));
+            },
+
+            capRequestHistoryText(value = '') {
+                const text = String(value ?? '');
+                const maxLengthRaw = Number(this.requestHistoryBodyCharLimit);
+                const maxLength = Math.max(12000, Number.isFinite(maxLengthRaw) ? maxLengthRaw : 240000);
+                if (text.length <= maxLength) return text;
+                return `${text.slice(0, maxLength)}...[AM_TRUNCATED:${text.length}]`;
+            },
+
+            normalizeRequestHistoryBody(body = null) {
+                if (body === null || body === undefined) return null;
+                if (typeof body === 'string') return this.capRequestHistoryText(body);
+                try {
+                    if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+                        return this.capRequestHistoryText(body.toString());
+                    }
+                } catch { }
+                try {
+                    if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                        const params = new URLSearchParams();
+                        body.forEach((value, key) => {
+                            if (typeof value === 'string') {
+                                params.append(key, value);
+                                return;
+                            }
+                            const filename = typeof value?.name === 'string' ? value.name : 'blob';
+                            const size = Number.isFinite(value?.size) ? value.size : 0;
+                            params.append(key, `[File:${filename}:${size}]`);
+                        });
+                        return this.capRequestHistoryText(params.toString());
+                    }
+                } catch { }
+                try {
+                    if (typeof Blob !== 'undefined' && body instanceof Blob) {
+                        return `[Blob:${Number.isFinite(body.size) ? body.size : 0}]`;
+                    }
+                } catch { }
+                try {
+                    if (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer) {
+                        return `[ArrayBuffer:${body.byteLength || 0}]`;
+                    }
+                    if (typeof ArrayBuffer !== 'undefined' && typeof ArrayBuffer.isView === 'function' && ArrayBuffer.isView(body)) {
+                        const name = body?.constructor?.name || 'TypedArray';
+                        return `[${name}:${body.byteLength || 0}]`;
+                    }
+                } catch { }
+                return this.capRequestHistoryText(String(body));
+            },
 
             recordRequest(entry = {}) {
                 const rawUrl = entry?.url;
                 if (!rawUrl) return;
-                let normalizedUrl = '';
-                try {
-                    normalizedUrl = new URL(String(rawUrl), window.location.origin).toString();
-                } catch {
-                    normalizedUrl = String(rawUrl || '').trim();
-                }
+                const normalizedUrl = this.normalizeRequestHistoryUrl(rawUrl);
+                if (this.shouldSkipRequestHistory(normalizedUrl)) return;
                 if (!normalizedUrl) return;
                 const method = String(entry?.method || 'GET').trim().toUpperCase() || 'GET';
                 this.requestHistory.push({
                     ts: Date.now(),
                     method,
                     url: normalizedUrl,
-                    body: entry?.body ?? null,
+                    body: this.normalizeRequestHistoryBody(entry?.body ?? null),
                     source: String(entry?.source || '').trim()
                 });
                 const maxSizeRaw = Number(this.requestHistoryLimit);
-                const maxSize = Math.max(500, Number.isFinite(maxSizeRaw) ? maxSizeRaw : 4000);
+                const maxSize = Math.max(300, Number.isFinite(maxSizeRaw) ? maxSizeRaw : 1200);
                 if (this.requestHistory.length > maxSize) {
                     this.requestHistory.splice(0, this.requestHistory.length - maxSize);
                 }
@@ -96,7 +166,7 @@
                 const since = Math.max(0, Number.isFinite(sinceRaw) ? sinceRaw : 0);
                 const limitRaw = Number(options.limit);
                 const fallbackLimitRaw = Number(this.requestHistoryLimit);
-                const fallbackLimit = Number.isFinite(fallbackLimitRaw) ? fallbackLimitRaw : 4000;
+                const fallbackLimit = Number.isFinite(fallbackLimitRaw) ? fallbackLimitRaw : 1200;
                 const limit = Math.max(1, Math.min(20000, Number.isFinite(limitRaw) ? limitRaw : fallbackLimit));
                 let list = Array.isArray(this.requestHistory) ? this.requestHistory.slice() : [];
                 if (since > 0) {
@@ -340,6 +410,7 @@
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
         campaignItemIdCache: new Map(),
         campaignItemCandidatesCache: new Map(),
+        campaignItemCacheLimit: 240,
 
         normalizeCampaignId(rawId) {
             const id = String(rawId || '').trim();
@@ -381,11 +452,46 @@
             return `${y}-${m}-${d}`;
         },
 
+        trimCampaignItemCaches(protectedCampaignId = '') {
+            const limit = Math.max(24, Number(this.campaignItemCacheLimit) || 240);
+            const normalizedProtectedId = this.normalizeCampaignId(protectedCampaignId);
+            const trim = (cache) => {
+                if (!(cache instanceof Map)) return;
+                for (const key of cache.keys()) {
+                    if (cache.size <= limit) break;
+                    if (normalizedProtectedId && key === normalizedProtectedId) continue;
+                    cache.delete(key);
+                }
+                for (const key of cache.keys()) {
+                    if (cache.size <= limit) break;
+                    cache.delete(key);
+                }
+            };
+            trim(this.campaignItemIdCache);
+            trim(this.campaignItemCandidatesCache);
+        },
+
+        rememberRecentMapEntry(cache, key, value, limitKey = key) {
+            if (!(cache instanceof Map) || !key) return;
+            if (cache.has(key)) cache.delete(key);
+            cache.set(key, value);
+            this.trimCampaignItemCaches(limitKey);
+        },
+
+        touchRecentMapEntry(cache, key) {
+            if (!(cache instanceof Map) || !key || !cache.has(key)) return undefined;
+            const value = cache.get(key);
+            cache.delete(key);
+            cache.set(key, value);
+            this.trimCampaignItemCaches(key);
+            return value;
+        },
+
         rememberCampaignItemId(campaignId, itemId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             const normalizedItemId = this.normalizeItemId(itemId);
             if (!normalizedCampaignId || !normalizedItemId) return;
-            this.campaignItemIdCache.set(normalizedCampaignId, normalizedItemId);
+            this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, normalizedItemId);
             this.rememberCampaignItemIdCandidates(normalizedCampaignId, [normalizedItemId], {
                 prepend: true,
                 maxCount: 24
@@ -395,12 +501,12 @@
         getCampaignItemId(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return '';
-            const direct = this.normalizeItemId(this.campaignItemIdCache.get(normalizedCampaignId) || '');
+            const direct = this.normalizeItemId(this.touchRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId) || '');
             if (direct) return direct;
             const candidates = this.getCampaignItemIdCandidates(normalizedCampaignId);
             const firstCandidate = this.normalizeItemId(candidates[0] || '');
             if (firstCandidate) {
-                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+                this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, firstCandidate);
             }
             return firstCandidate;
         },
@@ -425,10 +531,10 @@
                 deduped.push(normalized);
                 if (deduped.length >= maxCount) break;
             }
-            this.campaignItemCandidatesCache.set(normalizedCampaignId, deduped);
+            this.rememberRecentMapEntry(this.campaignItemCandidatesCache, normalizedCampaignId, deduped);
             const firstCandidate = this.normalizeItemId(deduped[0] || '');
             if (firstCandidate) {
-                this.campaignItemIdCache.set(normalizedCampaignId, firstCandidate);
+                this.rememberRecentMapEntry(this.campaignItemIdCache, normalizedCampaignId, firstCandidate);
             }
             return deduped;
         },
@@ -436,9 +542,7 @@
         getCampaignItemIdCandidates(campaignId) {
             const normalizedCampaignId = this.normalizeCampaignId(campaignId);
             if (!normalizedCampaignId) return [];
-            const rawList = this.campaignItemCandidatesCache instanceof Map
-                ? this.campaignItemCandidatesCache.get(normalizedCampaignId)
-                : [];
+            const rawList = this.touchRecentMapEntry(this.campaignItemCandidatesCache, normalizedCampaignId) || [];
             return this.collectItemIdCandidatesFromSources(rawList, 24);
         },
 
@@ -1951,6 +2055,7 @@
     const State = {
         config: loadConfig(),
         riskAlertLastUrl: '',
+        riskAlertTimer: 0,
         save() {
             safeStorageSetItem(CONSTANTS.STORAGE_KEY, JSON.stringify(this.config));
         }
@@ -1965,19 +2070,36 @@
         return RISK_CHALLENGE_URL_RE.test(href) || RISK_CHALLENGE_STEP_RE.test(href);
     };
 
+    const clearRiskChallengeAlertTimer = () => {
+        if (!State.riskAlertTimer) return;
+        clearTimeout(State.riskAlertTimer);
+        State.riskAlertTimer = 0;
+    };
+
+    const scheduleRiskChallengeAlert = (href = '') => {
+        clearRiskChallengeAlertTimer();
+        State.riskAlertTimer = setTimeout(() => {
+            State.riskAlertTimer = 0;
+            const currentHref = String(window.location.href || '').trim();
+            if (currentHref !== href) return;
+            if (State.riskAlertLastUrl !== href) return;
+            if (!isRiskChallengePage(currentHref)) return;
+            try {
+                alert('检测到阿里妈妈风控页，请先手动完成人机验证（滑块/短信/扫码）后再继续操作。');
+            } catch { }
+        }, 0);
+    };
+
     const notifyRiskChallengeIfNeeded = (url = '') => {
         const href = String(url || window.location.href || '').trim();
         if (!isRiskChallengePage(href)) {
             State.riskAlertLastUrl = '';
+            clearRiskChallengeAlertTimer();
             return false;
         }
         if (State.riskAlertLastUrl === href) return true;
         State.riskAlertLastUrl = href;
         Logger.warn('⚠️ 检测到阿里妈妈风控页，请手动完成人机验证后继续');
-        setTimeout(() => {
-            try {
-                alert('检测到阿里妈妈风控页，请先手动完成人机验证（滑块/短信/扫码）后再继续操作。');
-            } catch { }
-        }, 0);
+        scheduleRiskChallengeAlert(href);
         return true;
     };

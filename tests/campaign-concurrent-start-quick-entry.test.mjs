@@ -33,6 +33,17 @@ test('计划ID快捷入口包含并发开启按钮与样式标识', () => {
     assert.match(source, /\.am-campaign-concurrent-start-btn/, '缺少并发开启按钮样式类');
 });
 
+test('计划并发默认关闭时不保留隐藏按钮 DOM', () => {
+    const block = getCampaignQuickEntryBlock();
+    assert.match(block, /isConcurrentStartEnabled\(\)\s*\{[\s\S]*?State\.config\.showConcurrentStartButton/, '并发入口应受配置开关控制');
+    assert.match(block, /syncConcurrentButtonsVisibility\(\)\s*\{[\s\S]*?if \(!enabled\) \{[\s\S]*?data-am-campaign-concurrent-start="1"[\s\S]*?btn\.classList\.contains\('is-running'\) \|\| btn\.disabled[\s\S]*?btn\.remove\(\);[\s\S]*?return;[\s\S]*?this\.ensureConcurrentButtonsForQuickEntries\(\);/, '关闭计划并发时应移除空闲并发按钮，开启时再按需补建');
+    assert.match(block, /setConcurrentButtonRunning\(campaignId,\s*running\)[\s\S]*?if \(!this\.isConcurrentStartEnabled\(\)\) \{[\s\S]*?btn\.remove\(\);[\s\S]*?\}/, '运行中并发按钮应在执行结束后按当前开关清理');
+    assert.match(block, /ensureConcurrentButtonsForQuickEntries\(\)\s*\{[\s\S]*?data-am-campaign-quick="1"[\s\S]*?this\.createButton\(campaignId,\s*\{[\s\S]*?mode:\s*'concurrent'[\s\S]*?anchor\.insertAdjacentElement\('afterend',\s*concurrentBtn\);/, '开启计划并发时应从已有快捷查数按钮补建并发按钮');
+    assert.match(block, /if \(this\.isConcurrentStartEnabled\(\)\) \{[\s\S]*?mode:\s*'concurrent'[\s\S]*?frag\.appendChild\(concurrentBtn\);[\s\S]*?\}/, '文本计划 ID 注入不应在关闭时创建并发按钮');
+    assert.match(block, /if \(this\.isConcurrentStartEnabled\(\) && !concurrentBtn\) \{[\s\S]*?mode:\s*'concurrent'[\s\S]*?insertAdjacentElement\('afterend',\s*createdConcurrent\);/, '链接计划 ID 注入不应在关闭时创建并发按钮');
+    assert.doesNotMatch(block, /style\.display\s*=\s*enabled\s*\?\s*''\s*:\s*'none'/, '计划并发关闭不应再通过 display:none 保留隐藏按钮');
+});
+
 test('计划ID快捷入口图标按钮保留热区和线性 SVG 样式', () => {
     assert.match(source, /'campaign-query':\s*\{[\s\S]*?<circle cx="10" cy="10" r="5"><\/circle>[\s\S]*?<path d="M14 14l5 5"><\/path>[\s\S]*?'campaign-concurrent-start':/, '缺少简约查询图标定义');
     assert.match(source, /'campaign-concurrent-start':\s*\{[\s\S]*?<path d="M8 6l10 6-10 6V6z"><\/path>/, '缺少简约启动图标定义');
@@ -58,6 +69,10 @@ test('并发开启流程包含全量暂停与原在投并发重试', () => {
     assert.match(block, /queryCampaignDetail\(/, '缺少计划详情兜底反查逻辑');
     assert.match(block, /queryAdgroupDetail\(/, '缺少单元详情兜底反查逻辑');
     assert.match(block, /campaignItemIdCache:\s*new Map\(\)/, '缺少计划与商品映射缓存');
+    assert.match(block, /campaignItemCacheLimit:\s*240/, '计划与商品映射缓存缺少容量上限');
+    assert.match(block, /rememberLocalCampaignItemId\(campaignId,\s*itemId\)[\s\S]*?this\.campaignItemIdCache\.set\(normalizedCampaignId,\s*normalizedItemId\);[\s\S]*?this\.trimLocalCampaignItemIdCache\(normalizedCampaignId\);/, '本地商品映射写入后应裁剪缓存');
+    assert.match(block, /touchLocalCampaignItemId\(campaignId\)[\s\S]*?this\.campaignItemIdCache\.delete\(normalizedCampaignId\);[\s\S]*?this\.campaignItemIdCache\.set\(normalizedCampaignId,\s*itemId\);/, '读取商品映射应刷新最近使用顺序');
+    assert.match(block, /trimLocalCampaignItemIdCache\(protectedCampaignId = ''\)[\s\S]*?Math\.max\(24,\s*Number\(this\.campaignItemCacheLimit\) \|\| 240\)[\s\S]*?this\.campaignItemIdCache\.delete\(key\);/, '本地商品映射缓存应按上限删除最旧项');
     assert.match(block, /collectSiteCustomTargetBuckets\(/, '缺少全站与自定义计划分桶逻辑');
     assert.match(block, /shouldRunSiteCustomBreakthrough\(/, '缺少全站与自定义同开突破触发逻辑');
     assert.match(block, /runSiteCustomBreakthroughStrategy\(/, '缺少全站与自定义同开突破执行逻辑');
