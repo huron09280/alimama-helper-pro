@@ -21251,6 +21251,7 @@ if (typeof globalThis !== 'undefined') {
                     : this.buildCopyOverviewRows(context);
                 let activeContext = context;
                 let contextReady = context.preparing !== true;
+                let prepareContextTimerId = 0;
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-copy-overview-popup';
                 popup.setAttribute('role', 'dialog');
@@ -21337,7 +21338,13 @@ if (typeof globalThis !== 'undefined') {
                 const restoreFocus = () => {
                     this.restoreFocusWhenReady(focusBackTarget);
                 };
+                const clearPrepareContextTimer = () => {
+                    if (!prepareContextTimerId) return;
+                    clearTimeout(prepareContextTimerId);
+                    prepareContextTimerId = 0;
+                };
                 const removePopup = () => {
+                    clearPrepareContextTimer();
                     popup.remove();
                     restoreFocus();
                 };
@@ -21429,6 +21436,7 @@ if (typeof globalThis !== 'undefined') {
                     try {
                         setRunning(true);
                         setStatus('生成中：正在提交复制请求，请勿重复操作。', 'running');
+                        clearPrepareContextTimer();
                         const result = await submitCallback(editedRows, activeContext);
                         setStatus('生成成功，正在打开成功确认。', 'success');
                         popup.remove();
@@ -21456,7 +21464,11 @@ if (typeof globalThis !== 'undefined') {
                 };
                 const schedulePrepareContext = () => {
                     if (typeof setTimeout === 'function') {
-                        setTimeout(startPrepareContext, 0);
+                        clearPrepareContextTimer();
+                        prepareContextTimerId = setTimeout(() => {
+                            prepareContextTimerId = 0;
+                            startPrepareContext();
+                        }, 0);
                         return;
                     }
                     startPrepareContext();

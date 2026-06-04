@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十七子项
+
+## 需求规格
+- 目标：在复制焦点恢复 timer 收口后，继续优化复制前一览窗打开后的源计划详情准备 timer，避免 `openCopyPlanOverviewDialog()` 每次弹窗首帧后排队无句柄 `setTimeout(startPrepareContext, 0)`，弹窗被取消、关闭或替换后旧 timer 仍持有 popup、activeContext 和 prepareContext 闭包。
+- 根因判断：`src/main-assistant/campaign-id-quick-entry.js` 中 `schedulePrepareContext()` 直接使用 `setTimeout(startPrepareContext, 0)`；虽然 `startPrepareContext()` 内部会检查 `popup.isConnected`，但无句柄 timer 在触发前无法取消，也无法证明弹窗关闭时 pending prepare 已释放。
+- 范围：仅覆盖复制前一览窗异步读取详情启动 timer 生命周期和静态回归；不改 prepareContext 读取逻辑、复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+- 热修 vs 结构性修复取舍：把 prepare timer 限定在单个一览窗闭包内，新增局部 `prepareContextTimerId` 与 `clearPrepareContextTimer()`；关闭/取消/提交成功先释放 pending timer，调度时先取消旧 timer，触发后归零再进入原 `startPrepareContext()`。
+- 成功标准：静态测试证明复制前一览窗 prepare timer 有局部句柄、可清理、关闭路径会释放、timer 触发后归零，`schedulePrepareContext()` 不再直接保留无句柄 `setTimeout(startPrepareContext, 0)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击复制、确认生成、确认搜索、批量+、预算提交、人群同步、计划上下线、护航执行或任何真实写入口；浏览器验收只允许只读确认复制按钮/批量入口运行态存在，不打开复制一览窗。
+
+## 执行计划（可核对）
+- [x] 复核第二十六子项提交后工作区状态，确认本子项只处理复制前一览窗 prepare 启动 timer。
+- [x] 在 `openCopyPlanOverviewDialog()` 闭包中实现 prepare timer 句柄和清理 helper。
+- [x] 将 `schedulePrepareContext()` 改为可取消调度，并在取消/关闭/提交成功路径释放 pending timer。
+- [x] 补充/更新目标测试，锁定复制前一览窗不会累积无句柄 prepare timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `aae74f6 优化 Chrome 复制焦点恢复计时器`，工作区干净。
+- 定位结论：`schedulePrepareContext()` 的 0ms timeout 只用于复制前一览窗首帧后启动详情读取，是明确短生命周期弹窗任务；收口后可减少弹窗取消或替换时旧 popup/context 闭包滞留。
+- 实现摘要：`src/main-assistant/campaign-id-quick-entry.js` 在 `openCopyPlanOverviewDialog()` 闭包内新增 `prepareContextTimerId` 和 `clearPrepareContextTimer()`；调度时先清旧 timer，触发后归零再执行 `startPrepareContext()`。
+- 行为摘要：保留首帧后启动详情读取、`popup.isConnected` 保护、读取完成后重渲染预览行、提交前校验和取消恢复焦点逻辑；取消/关闭/提交成功前会释放 pending prepare timer。
+- 测试摘要：`tests/campaign-copy-current-plan-quick-entry.test.mjs` 扩展复制前一览窗回归，锁定局部 timer 句柄、清理 helper、关闭/提交清理、触发归零和旧无句柄 `setTimeout(startPrepareContext, 0)` 禁用。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/campaign-id-quick-entry.js` 通过。
+- 测试语法：`node --check tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过。
+- 目标测试：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs` 通过，14 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-concurrent-start-quick-entry.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，51 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，610 项中 608 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。`list_pages` 连接到 one.alimama.com 页面，`navigate_page` 刷新后用 `evaluate_script` 只读检查运行态；返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`copyButtonCount:7`、`batchPlusButtonCount:1`、`hasCopyOverviewPopup:false`、`hasCopySuccessPopup:false`、`hasBatchPlusMenuOpen:false`，样例复制按钮包含 `campaignId`、`copyMode:"inherit"`、`disabled:false`、`isConnected:true`。未点击复制、确认生成、确认搜索、批量+、计划上下线、护航执行或任何真实写入口。
+- Diff 自审：改动集中在复制前一览窗异步读取详情启动 timer 生命周期、对应静态测试、任务记录和构建产物；未改 prepareContext 读取逻辑、复制提交、复制成功搜索、批量+、计划并发、真实创建/复制接口、弹窗 DOM 文案或 10rpm 护航 API 限速。
+
+## 结果复盘
+- 第十一轮第二十七子项结果：复制前一览窗详情读取启动从“首帧后排队无句柄 `setTimeout(startPrepareContext, 0)`”优化为“单弹窗闭包内持有 `prepareContextTimerId`，重复调度先取消旧 timer，关闭/取消/提交成功前释放，触发后归零”。
+- 取舍结论：timer 句柄保持在一览窗局部闭包内，不新增全局弹窗状态；保留原异步读取详情、预览行重渲染和只在确认后提交的安全语义。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未执行真实复制、详情读取或护航请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第二十六子项
 
 ## 需求规格

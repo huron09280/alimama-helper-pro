@@ -194,7 +194,13 @@ test('复制提交前先展示可编辑一览窗并在确认后显示生成中',
     assert.match(quickEntry, /data-am-copy-overview-status role="status" aria-live="polite">\$\{contextReady \? '确认后才会提交创建请求。' : '已打开预览，正在读取源计划详情\.\.\.'\}/, '一览窗应先显示读取态并使用 live status 语义');
     assert.match(quickEntry, /setStatus\('生成中：正在提交复制请求，请勿重复操作。',\s*'running'\);/, '确认提交后应显示生成中状态');
     assert.match(quickEntry, /validateCopyOverviewRows\(editedRows\)/, '确认提交前应校验编辑行');
+    assert.match(quickEntry, /let prepareContextTimerId = 0;/, '复制前一览窗详情准备 timer 缺少局部句柄');
+    assert.match(quickEntry, /const clearPrepareContextTimer = \(\) => \{[\s\S]*?if \(!prepareContextTimerId\) return;[\s\S]*?clearTimeout\(prepareContextTimerId\);[\s\S]*?prepareContextTimerId = 0;[\s\S]*?\};/, '复制前一览窗详情准备 timer 应支持显式清理并归零');
+    assert.match(quickEntry, /const removePopup = \(\) => \{[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?popup\.remove\(\);[\s\S]*?restoreFocus\(\);[\s\S]*?\};/, '复制前一览窗关闭时应释放 pending 详情准备 timer');
+    assert.match(quickEntry, /setStatus\('生成中：正在提交复制请求，请勿重复操作。',\s*'running'\);[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?const result = await submitCallback\(editedRows,\s*activeContext\);/, '复制前一览窗提交前应释放 pending 详情准备 timer');
     assert.match(quickEntry, /const startPrepareContext = \(\) => \{[\s\S]*?options\.prepareContext[\s\S]*?renderCopyOverviewRows\(popup,\s*activeContext\)[\s\S]*?setReadyState\(true,\s*'源计划详情已读取完成，确认后才会提交创建请求。'\)/, '一览窗打开后应异步补齐真实预览行并切回待确认');
+    assert.match(quickEntry, /const schedulePrepareContext = \(\) => \{[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?prepareContextTimerId = setTimeout\(\(\) => \{[\s\S]*?prepareContextTimerId = 0;[\s\S]*?startPrepareContext\(\);[\s\S]*?\},\s*0\);[\s\S]*?\};/, '复制前一览窗详情准备应通过可取消 timeout 调度并在触发后归零');
+    assert.doesNotMatch(quickEntry, /setTimeout\(startPrepareContext,\s*0\);/, '复制前一览窗不应继续排无句柄详情准备 timeout');
     assert.match(quickEntry, /requestAnimationFrame\(\(\) => \{[\s\S]*?schedulePrepareContext\(\);[\s\S]*?\}\);/, '源计划详情读取应延后到弹窗首帧之后启动');
     assert.match(quickEntry, /if \(!contextReady\) \{[\s\S]*?setStatus\('源计划详情仍在读取中，请稍候。',\s*'running'\);[\s\S]*?return;[\s\S]*?\}/, '详情未读完时确认按钮不能提交');
     const overviewPopupRule = extractCssRule(quickEntryStyle, '#am-campaign-copy-overview-popup');
