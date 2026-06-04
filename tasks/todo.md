@@ -1,3 +1,55 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十七子项
+
+## 需求规格
+- 目标：在万能查数快捷查询 retry timer 收口后，继续优化 DMP 商品洞察页“人群对比看板”入口按钮的 DOM 重试 timer，避免标签页隐藏时 `dmpCrowdMatrixButtonTimer` 仍因页面 MutationObserver 持续排 120ms/500ms timeout 重试插入按钮。
+- 根因判断：`src/main-assistant/magic-report.js` 的 `initDmpCrowdMatrixEntry()` 会先立即确保入口按钮，再排一次 500ms 补偿重试；后续 DMP 页面 DOM 变化通过 MutationObserver 排 120ms 重试。当前 `scheduleDmpCrowdMatrixButtonEnsure()` 只清理旧 timer，不区分页可见状态。隐藏页里官方页面仍可能发生 DOM 变更，导致插件反复排 timer 并执行入口按钮查找/尺寸同步。
+- 范围：仅覆盖 DMP 入口按钮 ensure timer 的隐藏页暂停、恢复可见补执行、timer/visibility listener/pending 生命周期；不改 DMP 按钮 DOM、文案、图标、样式、高度/圆角对齐、点击打开、DMP 下拉、DMP 取数、人群看板渲染、万能查数、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留 `ensureDmpCrowdMatrixButton()` 作为入口按钮唯一事实源，保留 MutationObserver 与现有 120ms/500ms 可见页调度；新增 pending 标记和 visibility handler。隐藏页不排按钮 ensure timeout，不执行按钮查找/插入/尺寸同步；恢复可见后补执行一次同一个 pending ensure 并释放监听。
+- 成功标准：静态与行为测试证明 MagicReport 声明 DMP 入口按钮 visibility handler 与 pending 状态；存在统一 timer 清理、visibility 释放和调度 helper；隐藏页 schedule 不排 timeout、恢复可见后执行 `ensureDmpCrowdMatrixButton()` 并释放监听；可见页仍保留 120ms/500ms 调度和 MutationObserver 触发；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击 DMP“人群对比看板”入口、不打开 DMP 看板弹窗、不调用 DMP 画像接口、不触发 one.alimama/DMP 创建、复制、提交、预算、护航、导出、下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第四十六子项提交后工作区状态，确认本子项只处理 DMP 入口按钮 ensure timer。
+- [x] 复核 UI/图标规范，确认本轮不改 DMP 入口视觉和交互。
+- [x] 定位 `scheduleDmpCrowdMatrixButtonEnsure()`、`initDmpCrowdMatrixEntry()` 与现有 DMP 测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为 DMP 入口按钮 ensure 增加 visibility handler、pending 状态、统一清理 helper 和调度 helper。
+- [x] 将 DMP 入口按钮 ensure timer 改为隐藏页暂停、恢复可见后补执行一次。
+- [x] 更新 MagicReport/DMP 目标测试，锁定隐藏页不排 timeout、恢复可见补执行、可见页 120ms/500ms 调度保留和 MutationObserver 仍走调度 helper。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `5743df9 优化万能查数快捷查询重试轮询`，tracked 工作区干净；本子项不依赖 DMP 取证临时文件，也不纳入本次提交。
+- 定位结论：预算扫描、主助手核心扫描、extension URL polling、bridge/cache cleanup、关键词向导自动推荐/场景同步、Token 状态轮询等核心路径已经有隐藏页暂停；剩余 `riskAlertTimer` 是 0ms 风控提醒，收益低且 alert 语义敏感。DMP 入口按钮 ensure timer 仍会在隐藏页响应 DOM 变更重试插入口，且只涉及 DOM 查找/同步，适合作为下一处低风险优化。
+- 计划校验：本子项只降低隐藏标签页后台 timer 唤醒；可见页仍立即确保 DMP 入口按钮，仍保留 500ms 初始补偿、MutationObserver 后 120ms 补偿和原点击打开逻辑。若实现需要触碰 DMP 取数、弹窗渲染或按钮视觉，先回到本计划更新后再继续。
+- 实现摘要：`MagicReport` 新增 `dmpCrowdMatrixButtonVisibilityHandler` 与 `dmpCrowdMatrixButtonEnsurePending`，并抽出 `clearDmpCrowdMatrixButtonTimer()`、`clearDmpCrowdMatrixButtonVisibilityHandler()` 和 `bindDmpCrowdMatrixButtonVisibilityHandler()`，让 DMP 入口按钮 ensure timer、可见性监听和 pending 状态由同一调度入口管理。
+- 调度摘要：`scheduleDmpCrowdMatrixButtonEnsure()` 调度前先清理旧 timer 并登记 pending；隐藏页不排 timeout，只等待 `visibilitychange`。已排 timer 到期时若页面转隐藏，会保留 pending 并停止执行 DOM ensure；恢复可见后补执行一次 `ensureDmpCrowdMatrixButton()` 并释放监听。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 新增 DMP 入口按钮 timer 生命周期静态断言和 fake `document`/fake timer 行为测试，锁定状态声明、统一清理、隐藏页重复 schedule 不排 timeout 且不重复绑定、恢复可见只消费一次 pending、可见页 timer 触发前转隐藏会取消 timer、可见页执行 ensure、初始化 500ms 补偿和 MutationObserver 120ms 调度合同。
+- 交叉校验摘要：只读子代理审查本轮 diff 后未发现业务语义风险、资源释放漏洞或产物同步问题；指出测试偏静态的 P3 缺口，已补执行型生命周期测试并重新跑目标/相关/全量回归。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-crowd-matrix.test.mjs` 通过，69 项测试全绿；新增 “DMP 入口按钮 ensure timer 在隐藏页暂停并恢复可见补执行” 静态断言和 “DMP 入口按钮 ensure 调度实际释放 timer 与 visibility pending” 行为断言，行为测试使用 `node:vm`、fake `document.visibilityState`、fake timer 和 fake `visibilitychange`，不触发真实浏览器或业务请求。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node -e "... spawnSync(process.execPath, ['--test', ...tests], { timeout: 60000 }) ..."` 覆盖 `tests/magic-report-crowd-matrix.test.mjs`、`tests/magic-report-panel-resilience.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，124 项测试全绿。
+- 静态定位：`rg -n "dmpCrowdMatrixButtonVisibilityHandler|dmpCrowdMatrixButtonEnsurePending|clearDmpCrowdMatrixButtonTimer|clearDmpCrowdMatrixButtonVisibilityHandler|bindDmpCrowdMatrixButtonVisibilityHandler|scheduleDmpCrowdMatrixButtonEnsure\\(delayMs = 120\\)" src/main-assistant/magic-report.js tests/magic-report-crowd-matrix.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页 DMP 入口按钮 ensure 调度已进入产物。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，621 项中 619 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 空白检查：`git diff --check` 通过。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`keywordOpenBridgeReady:"1"`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4054450`，包含 `dmpCrowdMatrixButtonVisibilityHandler`、`dmpCrowdMatrixButtonEnsurePending`、`clearDmpCrowdMatrixButtonTimer()`、`clearDmpCrowdMatrixButtonVisibilityHandler()`、`bindDmpCrowdMatrixButtonVisibilityHandler()`、`scheduleDmpCrowdMatrixButtonEnsure(delayMs = 120)` 和隐藏页 `return` 分支。
+- Chrome MCP 弹窗/危险请求：`helperPanel` 存在但不可见；`magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不存在或不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器` 和主线程卡顿监听启动；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue 和页面自身日志，未见新增插件运行失败。fetch/XHR 清单 47 条，主要为登录路由初始化、菜单、消息、AI context 和 `chrome-extension://.../page.bundle.js` 读取，可见请求均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 DMP 入口按钮 ensure timer 的隐藏页暂停、可见恢复和 pending 生命周期，测试 diff 只增加静态/行为生命周期断言，不改 DMP 按钮 DOM、文案、图标、样式、高度/圆角对齐、点击打开、DMP 下拉、DMP 取数、人群看板渲染、万能查数、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第四十七子项结果：DMP 商品洞察页“人群对比看板”入口按钮从“初始化和 DOM 变化时在隐藏页也排 120ms/500ms ensure timeout，并执行按钮查找/尺寸同步”优化为“隐藏页只登记 pending ensure 和 visibility 监听，不排 timeout；恢复可见后补执行一次同一个 `ensureDmpCrowdMatrixButton()` 并释放监听”。
+- 取舍结论：保留 `ensureDmpCrowdMatrixButton()` 单一事实源、可见页立即 ensure、500ms 初始补偿、MutationObserver 120ms 补偿和原点击打开逻辑。新增 pending 状态只管理入口按钮 DOM ensure 的后台暂停，不改变 DMP 数据读取、人群看板渲染或任何业务请求合同；针对交叉校验提出的测试覆盖缺口，已用 fake runtime 证明重复隐藏页调度、visible->hidden 竞态和恢复可见只执行一次的生命周期。
+- 效果结论：在用户把 DMP 商品洞察页切到后台、官方页面仍发生 DOM 变化的场景中，插件不再持续排短间隔入口按钮 ensure timeout，降低隐藏页后台唤醒和 DOM 查询/同步成本。浏览器验收未点击 DMP 入口、未打开 DMP 看板、未调用 DMP 画像接口，未触发任何业务写动作或服务端提交，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第四十六子项
 
 ## 需求规格

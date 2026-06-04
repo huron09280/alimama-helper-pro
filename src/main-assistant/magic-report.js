@@ -63,6 +63,8 @@
         dmpCrowdMatrixActive: false,
         dmpCrowdMatrixButtonObserver: null,
         dmpCrowdMatrixButtonTimer: 0,
+        dmpCrowdMatrixButtonVisibilityHandler: null,
+        dmpCrowdMatrixButtonEnsurePending: false,
         dmpCrowdMatrixContext: null,
         dmpCrowdMatrixAvailableProperties: [],
         dmpCrowdMatrixTagGroups: [],
@@ -1559,21 +1561,62 @@
             return true;
         },
 
+        clearDmpCrowdMatrixButtonTimer() {
+            if (!this.dmpCrowdMatrixButtonTimer) return;
+            clearTimeout(this.dmpCrowdMatrixButtonTimer);
+            this.dmpCrowdMatrixButtonTimer = 0;
+        },
+
+        clearDmpCrowdMatrixButtonVisibilityHandler() {
+            const handler = this.dmpCrowdMatrixButtonVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.dmpCrowdMatrixButtonVisibilityHandler = null;
+        },
+
+        bindDmpCrowdMatrixButtonVisibilityHandler() {
+            if (typeof this.dmpCrowdMatrixButtonVisibilityHandler === 'function') return;
+            this.dmpCrowdMatrixButtonVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearDmpCrowdMatrixButtonTimer();
+                    return;
+                }
+                const shouldEnsure = this.dmpCrowdMatrixButtonEnsurePending === true;
+                this.dmpCrowdMatrixButtonEnsurePending = false;
+                this.clearDmpCrowdMatrixButtonVisibilityHandler();
+                if (shouldEnsure) this.ensureDmpCrowdMatrixButton();
+            };
+            document.addEventListener('visibilitychange', this.dmpCrowdMatrixButtonVisibilityHandler);
+        },
+
         scheduleDmpCrowdMatrixButtonEnsure(delayMs = 120) {
-            if (this.dmpCrowdMatrixButtonTimer) {
-                clearTimeout(this.dmpCrowdMatrixButtonTimer);
-                this.dmpCrowdMatrixButtonTimer = 0;
+            this.clearDmpCrowdMatrixButtonTimer();
+            this.dmpCrowdMatrixButtonEnsurePending = true;
+            this.bindDmpCrowdMatrixButtonVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) {
+                return;
             }
             this.dmpCrowdMatrixButtonTimer = setTimeout(() => {
                 this.dmpCrowdMatrixButtonTimer = 0;
+                if (this.isMagicReportDocumentHidden()) {
+                    this.dmpCrowdMatrixButtonEnsurePending = true;
+                    return;
+                }
+                this.dmpCrowdMatrixButtonEnsurePending = false;
+                this.clearDmpCrowdMatrixButtonVisibilityHandler();
                 this.ensureDmpCrowdMatrixButton();
             }, Math.max(0, Number(delayMs) || 0));
         },
 
         initDmpCrowdMatrixEntry() {
             if (!this.isDmpItemInsightCrowdPage()) return;
-            this.ensureDmpCrowdMatrixButton();
-            this.scheduleDmpCrowdMatrixButtonEnsure(500);
+            if (this.isMagicReportDocumentHidden()) {
+                this.scheduleDmpCrowdMatrixButtonEnsure(500);
+            } else {
+                this.ensureDmpCrowdMatrixButton();
+                this.scheduleDmpCrowdMatrixButtonEnsure(500);
+            }
             if (!this.dmpCrowdMatrixButtonObserver) {
                 this.dmpCrowdMatrixButtonObserver = new MutationObserver(() => {
                     this.scheduleDmpCrowdMatrixButtonEnsure(120);
