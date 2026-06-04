@@ -130,6 +130,10 @@
             sceneSyncTimer: 0,
             sceneSyncInFlight: false,
             sceneSyncPendingToken: '',
+            autoKeywordLoadTimer: 0,
+            autoKeywordLoadKey: '',
+            autoKeywordLoadToken: '',
+            autoKeywordLoadMap: {},
             repairRunToken: 0,
             repairRunning: false,
             repairStopRequested: false,
@@ -155,6 +159,23 @@
         };
 
         const isPlainObject = (value) => Object.prototype.toString.call(value) === '[object Object]';
+        const clearWizardAutoKeywordLoadTimer = (options = {}) => {
+            if (wizardState.autoKeywordLoadTimer) {
+                clearTimeout(wizardState.autoKeywordLoadTimer);
+                wizardState.autoKeywordLoadTimer = 0;
+            }
+            const pendingKey = String(wizardState.autoKeywordLoadKey || '').trim();
+            wizardState.autoKeywordLoadKey = '';
+            wizardState.autoKeywordLoadToken = '';
+            if (options.clearPendingMap === false) return;
+            if (
+                pendingKey
+                && isPlainObject(wizardState.autoKeywordLoadMap)
+                && wizardState.autoKeywordLoadMap[pendingKey] === 'pending'
+            ) {
+                delete wizardState.autoKeywordLoadMap[pendingKey];
+            }
+        };
         const deepClone = (value) => value === undefined ? value : JSON.parse(JSON.stringify(value));
         const toNumber = (value, fallback = 0) => {
             const num = Number(value);

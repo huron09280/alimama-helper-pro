@@ -1,3 +1,48 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十二子项
+
+## 需求规格
+- 目标：在风控页提醒 timer 收口后，继续优化组建计划详情页“手动关键词为空时自动加载推荐关键词”的延迟 timer，避免 `maybeAutoLoadManualKeywords()` 直接排裸 `window.setTimeout(async () => ..., delayMs)`；关闭向导、隐藏详情面板或切换到其他策略时，旧 timer 会继续持有 strategy、autoLoadKey、addedItems、manualInput 和推荐关键词加载闭包，并可能在延迟后进入推荐关键词请求链路。
+- 根因判断：`src/optimizer/keyword-plan-api/request-builder-preview.js` 只用 `autoKeywordLoadMap` 标记 pending/done，未保存 timer 句柄；`setDetailVisible(false)` 和 `closeWizardOverlay()` 不能主动取消 pending 自动推荐关键词任务。
+- 范围：仅覆盖自动加载推荐关键词的前端延迟调度生命周期和静态回归；不改推荐关键词接口、关键词合并逻辑、手动关键词输入、策略表单、真实创建/复制/提交、场景接口同步、商品候选加载或 10rpm 服务端限速。
+- 热修 vs 结构性修复取舍：把自动推荐关键词 timer 纳入 `wizardState` 生命周期，在 `intro.js` 初始化 `autoKeywordLoadTimer`/key/token 和通用清理 helper；调度前释放旧 pending timer，timer 触发后先归零并校验 token、key、当前策略、详情可见和主弹窗可见，隐藏详情或关闭主弹窗时同步释放。
+- 成功标准：静态测试证明 auto keyword load timer 有句柄、可取消、取消时清理 pending map、触发后归零，详情隐藏/主弹窗关闭会释放 pending 自动推荐关键词任务，`maybeAutoLoadManualKeywords()` 不再直接使用裸 `window.setTimeout(async () => ...)`；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不打开组建计划向导、不触发推荐关键词加载、不调用推荐关键词接口、不点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；浏览器验收只允许只读确认页面运行态和插件弹窗状态。
+
+## 执行计划（可核对）
+- [x] 复核第三十一子项提交后工作区状态，确认本子项只处理自动推荐关键词延迟 timer。
+- [x] 在 `wizardState` 中新增自动推荐关键词 timer/key/token，并实现可复用清理 helper。
+- [x] 将 `maybeAutoLoadManualKeywords()` 改为通过可取消 helper 调度，触发前复核当前策略和可见状态。
+- [x] 在详情隐藏和主弹窗关闭路径释放 pending 自动推荐关键词 timer。
+- [x] 补充/更新目标测试，锁定自动推荐关键词不会累积无句柄 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `83d5db1 优化风控提醒计时器`，工作区干净。
+- 定位结论：自动推荐关键词 timer 是前端延迟调度，但触发后会进入推荐关键词请求链路；收口后既减少关闭/切换时旧闭包滞留，也减少过期 timer 误入请求链路的机会，符合“服务器只帮并发10rpm”边界。
+- 构建顺序结论：`request-builder-preview.js` 位于 `batch-edit-popup.js` 之后，详情隐藏路径在后者中；清理 helper 需要放在更早的 `intro.js`，保证后续片段都可调用。
+- 实现摘要：`src/optimizer/keyword-plan-api/intro.js` 新增 `autoKeywordLoadTimer`、`autoKeywordLoadKey`、`autoKeywordLoadToken`、`autoKeywordLoadMap` 和 `clearWizardAutoKeywordLoadTimer()`；`request-builder-preview.js` 新增 `scheduleAutoKeywordLoad()`，调度前释放旧 pending timer，触发前复核 token/key、当前策略、详情可见和主弹窗可见。
+- 生命周期摘要：`setDetailVisible(false)` 会释放 pending 自动推荐关键词 timer；主弹窗关闭路径继续调用 `setDetailVisible(false)`，因此关闭向导时也会释放该 timer，并保留原 `clearWizardOpenTaskSchedule()`。
+- 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 新增有界 `sliceSource()` 和自动推荐关键词 timer 回归，锁定状态字段、清理 helper、详情隐藏清理、可取消调度、触发前可见状态校验，以及旧裸 `window.setTimeout(async () => ...)` 禁用。
+
+## 验证记录
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 源码切片说明：`src/optimizer/keyword-plan-api/intro.js`、`request-builder-preview.js`、`wizard-scene-config/batch-edit-popup.js` 属于构建切片，不是独立 JS 文件；官方语法门禁以构建后 userscript 的 `npm run check:syntax` 为准。
+- 目标测试：`node --test tests/keyword-wizard-entry-regression.test.mjs` 通过，9 项测试全绿。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/keyword-wizard-entry-regression.test.mjs tests/keyword-edit-strategy-settings.test.mjs tests/keyword-recommend-console.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs` 通过，38 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，613 项中 611 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/` 点击启用的 unpacked 扩展 `egaeghgcogbdikndhlmmmolelbfffnjk` 的 `Reload` 后，切回 one.alimama 关键词推广管理页并刷新；只读 `evaluate_script` 返回 `readyState:"complete"`、`hasOptimizerToggle:true`、`__AM_LICENSE_STATE__.authorized:true`、`reason:"authorized"`、`source:"extension_cache_bootstrap"`、`runtimeMode:"extension"`、`scriptVersion:"7.05"`、`shopId:"[present]"`、`hasLicenseOverlay:false`、`keywordOverlayExists:false`、`keywordOverlayOpen:false`、`keywordModalExists:false`、`keywordModalVisible:false`、`isRiskChallengeUrl:false`、`riskChallengeTextVisible:false`、`pluginCopyOverviewPopup:false`、`pluginCopySuccessPopup:false`、`pluginBatchPlusMenuOpen:false`、`pluginOptimizerPanel:false`、`visibleCopyButtonCount:1`、`batchPlusButtonCount:1`、`potentialExportButtonCount:0`、`nativeCreateActionCount:8`；可见插件元素仅有悬浮入口 `#am-helper-icon`。未打开组建计划，未触发推荐关键词加载或相关请求，未点击组建计划、立即投放、新建、复制、批量+、潜力词导出、护航执行或任何真实写入口；非 preserved 控制台包含插件启动日志、页面 SSE/性能日志、页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误和 deprecated issue。
+- Diff 自审：改动集中在组建计划自动推荐关键词延迟 timer 生命周期、对应静态测试、任务记录和构建产物；未改推荐关键词接口、关键词合并逻辑、手动关键词输入、策略表单、真实创建/复制/提交、场景接口同步、商品候选加载或 10rpm 服务端限速。
+
+## 结果复盘
+- 第十一轮第三十二子项结果：组建计划详情页自动推荐关键词从“检测到手动关键词为空后直接排裸 async timeout”优化为“`wizardState` 持有 pending timer/key/token，重复调度、详情隐藏或主弹窗关闭时释放，触发前复核当前策略和可见状态，再进入推荐关键词加载链路”。
+- 取舍结论：保留原 pending/done 去重、延迟时长和推荐关键词加载/合并语义，不新增第二套推荐接口逻辑；只收口前端延迟调度生命周期，减少关闭/切换后旧闭包滞留和过期 timer 误入请求链路。
+- 验证结论：静态测试、构建、相关回归、全量回归、Chrome MCP 只读验收与 diff 自审均通过；未打开组建计划或触发推荐关键词请求，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第三十一子项
 
 ## 需求规格

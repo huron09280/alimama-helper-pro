@@ -1297,6 +1297,44 @@
                 }
             };
 
+            const scheduleAutoKeywordLoad = ({ autoLoadKey = '', strategyId = '', delayMs = 240 } = {}) => {
+                const normalizedKey = String(autoLoadKey || '').trim();
+                const normalizedStrategyId = String(strategyId || '').trim();
+                if (!normalizedKey || !normalizedStrategyId) return;
+                clearWizardAutoKeywordLoadTimer();
+                const token = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                wizardState.autoKeywordLoadKey = normalizedKey;
+                wizardState.autoKeywordLoadToken = token;
+                wizardState.autoKeywordLoadTimer = window.setTimeout(async () => {
+                    wizardState.autoKeywordLoadTimer = 0;
+                    if (wizardState.autoKeywordLoadToken !== token) return;
+                    if (wizardState.autoKeywordLoadKey !== normalizedKey) return;
+                    const latestStrategy = getStrategyById(normalizedStrategyId);
+                    if (
+                        !latestStrategy
+                        || wizardState.editingStrategyId !== normalizedStrategyId
+                        || !wizardState.detailVisible
+                        || wizardState.visible !== true
+                    ) {
+                        delete wizardState.autoKeywordLoadMap[normalizedKey];
+                        wizardState.autoKeywordLoadKey = '';
+                        wizardState.autoKeywordLoadToken = '';
+                        return;
+                    }
+                    const loadOk = await loadRecommendedKeywords({ triggerSource: 'auto_fill' });
+                    if (wizardState.autoKeywordLoadToken !== token) return;
+                    if (!loadOk) {
+                        delete wizardState.autoKeywordLoadMap[normalizedKey];
+                        wizardState.autoKeywordLoadKey = '';
+                        wizardState.autoKeywordLoadToken = '';
+                        return;
+                    }
+                    wizardState.autoKeywordLoadMap[normalizedKey] = 'done';
+                    wizardState.autoKeywordLoadKey = '';
+                    wizardState.autoKeywordLoadToken = '';
+                }, delayMs);
+            };
+
             const maybeAutoLoadManualKeywords = (strategy = null, options = {}) => {
                 const targetStrategy = strategy || getStrategyById(wizardState.editingStrategyId);
                 if (!isPlainObject(targetStrategy)) return;
@@ -1315,19 +1353,7 @@
                 wizardState.autoKeywordLoadMap[autoLoadKey] = 'pending';
                 appendWizardLog('检测到手动关键词为空，自动加载推荐关键词...');
                 const delayMs = Math.max(120, toNumber(options.delayMs, 240));
-                window.setTimeout(async () => {
-                    const latestStrategy = getStrategyById(strategyId);
-                    if (!latestStrategy || wizardState.editingStrategyId !== strategyId || !wizardState.detailVisible) {
-                        delete wizardState.autoKeywordLoadMap[autoLoadKey];
-                        return;
-                    }
-                    const loadOk = await loadRecommendedKeywords({ triggerSource: 'auto_fill' });
-                    if (!loadOk) {
-                        delete wizardState.autoKeywordLoadMap[autoLoadKey];
-                        return;
-                    }
-                    wizardState.autoKeywordLoadMap[autoLoadKey] = 'done';
-                }, delayMs);
+                scheduleAutoKeywordLoad({ autoLoadKey, strategyId, delayMs });
             };
 
             const loadRecommendedCrowds = async () => {

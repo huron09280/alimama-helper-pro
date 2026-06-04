@@ -16,6 +16,14 @@ const batchEditPopupSource = readFileSync(new URL('../src/optimizer/keyword-plan
 const manualKeywordsAndDetailSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/manual-keywords-and-detail.js', import.meta.url), 'utf8');
 const itemSelectionSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/item-selection.js', import.meta.url), 'utf8');
 
+const sliceSource = (source, startNeedle, endNeedle) => {
+  const start = source.indexOf(startNeedle);
+  assert.notEqual(start, -1, `缺少源码片段起点：${startNeedle}`);
+  const end = source.indexOf(endNeedle, start);
+  assert.notEqual(end, -1, `缺少源码片段终点：${endNeedle}`);
+  return source.slice(start, end);
+};
+
 test('场景动态渲染的时间解析 helper 可被前置货品全站配置安全调用', () => {
   assert.match(
     gridSource,
@@ -186,6 +194,70 @@ test('组建计划关闭后卸载隐藏 DOM 并清理全局监听', () => {
     manualKeywordsAndDetailSource,
     /if \(previousMask\) \{[\s\S]*?wizardState\.closeScenePopup\(null\);[\s\S]*?\}[\s\S]*?const close = \(payload = null\) => \{[\s\S]*?wizardState\.closeScenePopup = null;[\s\S]*?document\.removeEventListener\('keydown', handleEscClose, true\);[\s\S]*?\};[\s\S]*?wizardState\.closeScenePopup = close;/,
     '批量编辑弹窗应复用同一关闭句柄，避免关闭主弹窗后遗留 body 级遮罩'
+  );
+});
+
+test('自动推荐关键词延迟加载 timer 纳入向导生命周期', () => {
+  const stateBlock = sliceSource(wizardIntroSource, 'const wizardState = {', 'const log = {');
+  const clearBlock = sliceSource(wizardIntroSource, 'const clearWizardAutoKeywordLoadTimer = (options = {}) => {', 'const deepClone =');
+  const setDetailVisibleBlock = sliceSource(batchEditPopupSource, 'const setDetailVisible = (visible) => {', 'const showStrategyDetail =');
+  const scheduleBlock = sliceSource(requestBuilderPreviewSource, 'const scheduleAutoKeywordLoad = ({', 'const maybeAutoLoadManualKeywords =');
+  const maybeBlock = sliceSource(requestBuilderPreviewSource, 'const maybeAutoLoadManualKeywords = (strategy = null, options = {}) => {', 'const loadRecommendedCrowds = async () => {');
+  const closeBlock = sliceSource(requestBuilderPreviewSource, 'const closeWizardOverlay = () => {', 'wizardState.els.closeBtn.onclick = closeWizardOverlay;');
+
+  assert.ok(
+    stateBlock.includes('autoKeywordLoadTimer: 0,')
+      && stateBlock.includes("autoKeywordLoadKey: '',")
+      && stateBlock.includes("autoKeywordLoadToken: '',")
+      && stateBlock.includes('autoKeywordLoadMap: {},'),
+    'wizardState 应登记自动推荐关键词的 timer/key/token/map 生命周期状态'
+  );
+  assert.ok(
+    clearBlock.includes('clearTimeout(wizardState.autoKeywordLoadTimer);')
+      && clearBlock.includes('wizardState.autoKeywordLoadTimer = 0;')
+      && clearBlock.includes("const pendingKey = String(wizardState.autoKeywordLoadKey || '').trim();")
+      && clearBlock.includes("wizardState.autoKeywordLoadKey = '';")
+      && clearBlock.includes("wizardState.autoKeywordLoadToken = '';")
+      && clearBlock.includes("wizardState.autoKeywordLoadMap[pendingKey] === 'pending'")
+      && clearBlock.includes('delete wizardState.autoKeywordLoadMap[pendingKey];'),
+    '自动推荐关键词 timer 应提供可复用清理 helper，并在取消 pending 任务时清理 map'
+  );
+  assert.ok(
+    setDetailVisibleBlock.includes('if (!wizardState.detailVisible) {')
+      && setDetailVisibleBlock.includes('clearWizardAutoKeywordLoadTimer();'),
+    '隐藏策略详情时应释放 pending 自动推荐关键词 timer'
+  );
+  assert.ok(
+    closeBlock.includes('setDetailVisible(false);')
+      && closeBlock.includes('clearWizardOpenTaskSchedule();'),
+    '关闭主弹窗时应通过详情隐藏路径释放自动推荐关键词 timer，并继续释放打开任务'
+  );
+  assert.ok(
+    scheduleBlock.includes('clearWizardAutoKeywordLoadTimer();')
+      && scheduleBlock.includes('wizardState.autoKeywordLoadKey = normalizedKey;')
+      && scheduleBlock.includes('wizardState.autoKeywordLoadToken = token;')
+      && scheduleBlock.includes('wizardState.autoKeywordLoadTimer = window.setTimeout(async () => {')
+      && scheduleBlock.includes('wizardState.autoKeywordLoadTimer = 0;')
+      && scheduleBlock.includes('if (wizardState.autoKeywordLoadToken !== token) return;')
+      && scheduleBlock.includes('if (wizardState.autoKeywordLoadKey !== normalizedKey) return;')
+      && scheduleBlock.includes('wizardState.editingStrategyId !== normalizedStrategyId')
+      && scheduleBlock.includes('|| !wizardState.detailVisible')
+      && scheduleBlock.includes('|| wizardState.visible !== true')
+      && scheduleBlock.includes("loadRecommendedKeywords({ triggerSource: 'auto_fill' })")
+      && scheduleBlock.includes("wizardState.autoKeywordLoadMap[normalizedKey] = 'done';")
+      && scheduleBlock.includes("wizardState.autoKeywordLoadKey = '';")
+      && scheduleBlock.includes("wizardState.autoKeywordLoadToken = '';"),
+    '自动推荐关键词应通过可取消 helper 调度，触发前复核 token/key/策略和可见状态'
+  );
+  assert.ok(
+    maybeBlock.includes("wizardState.autoKeywordLoadMap[autoLoadKey] = 'pending';")
+      && maybeBlock.includes('scheduleAutoKeywordLoad({ autoLoadKey, strategyId, delayMs });'),
+    'maybeAutoLoadManualKeywords 应只登记 pending 并交给可取消调度 helper'
+  );
+  assert.equal(
+    maybeBlock.includes('window.setTimeout(async () => {'),
+    false,
+    'maybeAutoLoadManualKeywords 不应继续直接排裸 async timeout'
   );
 });
 
