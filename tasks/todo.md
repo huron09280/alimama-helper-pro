@@ -154,8 +154,8 @@
 - [x] 将自动推荐关键词 timer 改为隐藏页暂停、恢复可见后继续同一 pending 链。
 - [x] 将场景合同同步 timer 改为隐藏页暂停、恢复可见后继续同一 pending 链。
 - [x] 更新向导目标测试，锁定隐藏页不触发推荐词/场景同步请求且关闭时释放 visibility handler。
-- [ ] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
-- [ ] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
 
 ## 高层操作摘要
 - 当前最新提交为 `48763e6 优化万能查数清理轮询`，工作区干净。
@@ -167,10 +167,26 @@
 - 测试摘要：`tests/keyword-wizard-entry-regression.test.mjs` 增加 visibility helper、状态字段、clear helper 和两个调度函数的静态回归断言。
 
 ## 验证记录
-- 待执行。
+- 源码片段说明：`src/optimizer/keyword-plan-api/intro.js` 与 `src/optimizer/keyword-plan-api/request-builder-preview.js` 是拼接分段源码，直接 `node --check` 会因外层 IIFE/闭包不完整分别报 `Unexpected end of input` / `Unexpected token '}'`，不作为独立语法证据；本子项以目标测试、`npm run check:syntax` 和构建产物检查验证整体语法。
+- 测试语法：`node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 目标测试：`node -e "... spawnSync(process.execPath, ['--test', 'tests/keyword-wizard-entry-regression.test.mjs'], { timeout: 60000 }) ..."` 通过，10 项测试全绿。
+- 构建同步：`npm run build` 通过，生成产物与当前源码同步。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 版本同步修复：`node --test tests/build-output-sync.test.mjs tests/extension-static-build.test.mjs tests/keyword-wizard-entry-regression.test.mjs` 通过，26 项测试全绿；同步覆盖 `CLAUDE.md`、README、授权管理页示例、新人教程、mockup HTML、extension manifest 规范版本和展示版本。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { timeout: 60000 }) ..."` 通过，618 项中 616 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "autoKeywordLoadVisibilityHandler|sceneSyncVisibilityHandler|isWizardDocumentHidden|scheduleWizardVisibilityResume|scheduleAutoKeywordLoadTask|scheduleSceneSyncTask" src/optimizer/keyword-plan-api tests/keyword-wizard-entry-regression.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js` 命中源码、目标测试、根 userscript 和 extension bundle，确认新 helper 与隐藏页 pending 调度已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后版本显示为 `7.06`；切回 `https://one.alimama.com/index.html#!/manage/hky?orderField=charge&orderBy=desc` 并刷新，只读 `evaluate_script` 返回 `readyState:"complete"`、`visibilityState:"visible"`、`runtime.mode:"extension"`、`runtime.version:"7.06"`、`runtime.hasResourceBaseUrl:true`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`shopId:"[present]"`、`shopName:"[present]"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`。
+- Chrome MCP 弹窗/危险请求：只读状态中 `helperPanel/magicReport/keywordModal/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均未可见，`dangerousResourceMatchCount:0`；未打开组建计划向导，未触发推荐词、场景合同同步、创建、复制、提交、批量+、潜力词导出、预算提交、护航执行或任何真实写入口。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`；其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue、`ScriptProcessorNode` deprecated warning 和页面自身 Magix 日志，未见新增插件运行失败。fetch/XHR 清单 92 条，主要为页面初始化、报表、AI/context、消息、素材、优惠券和曝光 trace，可见请求除 `px.effirst.com` 既有隧道失败外均为 200。
+- 空白检查：`git diff --check` 通过。
+- Diff 自审：`git diff --stat` 包含本子项源码/测试、`tasks/todo.md`、版本事实源、README/CLAUDE/文档示例、mockup 版本展示和构建产物；源码功能 diff 只新增向导自动推荐词/场景同步短延迟请求 timer 的隐藏页暂停、可见恢复和 visibility handler 清理，不改请求 payload、创建/复制/提交、批量并发、授权、护航、预算或 10rpm 服务端限速策略。
 
 ## 结果复盘
-- 待补充。
+- 第十一轮第四十二子项结果：组建计划向导自动推荐关键词和场景合同同步从“短延迟 timer 到期后只复核向导可见状态，再可能进入推荐词/场景捕获请求链路”优化为“页面隐藏时只保留一次 visibility pending，恢复可见后继续同一 token/key/pending 链，且 timer 触发后再次复核隐藏态”。
+- 取舍结论：保留原 token/key/pending map、延迟值、缓存命中、场景同步 inFlight、请求函数和 payload；新增的统一 `scheduleWizardVisibilityResume()` 只管理同一向导状态里的恢复监听，未新增第二套推荐词或场景合同同步实现。
+- 验证结论：目标测试、构建、项目语法、构建检查、版本同步回归、全量回归、静态定位、Chrome MCP 只读验收、危险请求过滤、空白检查和 diff 自审均通过；未执行任何业务写动作或服务端提交，符合用户“只用chrome mcp”和“服务器只帮并发10rpm”边界。
+- 版本更新结果：本轮按用户要求将 userscript/extension 展示版本升级到 `7.06`，同步 README、CLAUDE、授权管理页示例、新人教程、mockup 版本展示、manifest `version/version_name`、根 userscript、packages 和 extension bundle。
 
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第四十一子项
 

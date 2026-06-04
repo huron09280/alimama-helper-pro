@@ -199,6 +199,7 @@ test('组建计划关闭后卸载隐藏 DOM 并清理全局监听', () => {
 
 test('自动推荐关键词延迟加载 timer 纳入向导生命周期', () => {
   const stateBlock = sliceSource(wizardIntroSource, 'const wizardState = {', 'const log = {');
+  const visibilityHelperBlock = sliceSource(wizardIntroSource, 'const isWizardDocumentHidden = () => {', 'const clearWizardAutoKeywordLoadTimer = (options = {}) => {');
   const clearBlock = sliceSource(wizardIntroSource, 'const clearWizardAutoKeywordLoadTimer = (options = {}) => {', 'const deepClone =');
   const setDetailVisibleBlock = sliceSource(batchEditPopupSource, 'const setDetailVisible = (visible) => {', 'const showStrategyDetail =');
   const scheduleBlock = sliceSource(requestBuilderPreviewSource, 'const scheduleAutoKeywordLoad = ({', 'const maybeAutoLoadManualKeywords =');
@@ -209,18 +210,29 @@ test('自动推荐关键词延迟加载 timer 纳入向导生命周期', () => {
     stateBlock.includes('autoKeywordLoadTimer: 0,')
       && stateBlock.includes("autoKeywordLoadKey: '',")
       && stateBlock.includes("autoKeywordLoadToken: '',")
+      && stateBlock.includes('autoKeywordLoadVisibilityHandler: null,')
       && stateBlock.includes('autoKeywordLoadMap: {},'),
-    'wizardState 应登记自动推荐关键词的 timer/key/token/map 生命周期状态'
+    'wizardState 应登记自动推荐关键词的 timer/key/token/visibility/map 生命周期状态'
+  );
+  assert.ok(
+    visibilityHelperBlock.includes("return document.visibilityState === 'hidden';")
+      && visibilityHelperBlock.includes("const clearWizardVisibilityResumeHandler = (handlerKey = '') => {")
+      && visibilityHelperBlock.includes("document.removeEventListener('visibilitychange', handler);")
+      && visibilityHelperBlock.includes("const scheduleWizardVisibilityResume = (handlerKey = '', callback = null) => {")
+      && visibilityHelperBlock.includes('if (isWizardDocumentHidden()) return;')
+      && visibilityHelperBlock.includes("document.addEventListener('visibilitychange', handler);"),
+    '向导应提供统一 visibility resume helper，隐藏页只登记可见恢复回调'
   );
   assert.ok(
     clearBlock.includes('clearTimeout(wizardState.autoKeywordLoadTimer);')
       && clearBlock.includes('wizardState.autoKeywordLoadTimer = 0;')
+      && clearBlock.includes("clearWizardVisibilityResumeHandler('autoKeywordLoadVisibilityHandler');")
       && clearBlock.includes("const pendingKey = String(wizardState.autoKeywordLoadKey || '').trim();")
       && clearBlock.includes("wizardState.autoKeywordLoadKey = '';")
       && clearBlock.includes("wizardState.autoKeywordLoadToken = '';")
       && clearBlock.includes("wizardState.autoKeywordLoadMap[pendingKey] === 'pending'")
       && clearBlock.includes('delete wizardState.autoKeywordLoadMap[pendingKey];'),
-    '自动推荐关键词 timer 应提供可复用清理 helper，并在取消 pending 任务时清理 map'
+    '自动推荐关键词 timer 应提供可复用清理 helper，并在取消 pending 任务时清理 map 与 visibility handler'
   );
   assert.ok(
     setDetailVisibleBlock.includes('if (!wizardState.detailVisible) {')
@@ -236,6 +248,10 @@ test('自动推荐关键词延迟加载 timer 纳入向导生命周期', () => {
     scheduleBlock.includes('clearWizardAutoKeywordLoadTimer();')
       && scheduleBlock.includes('wizardState.autoKeywordLoadKey = normalizedKey;')
       && scheduleBlock.includes('wizardState.autoKeywordLoadToken = token;')
+      && scheduleBlock.includes('const scheduleAutoKeywordLoadTask = (nextDelayMs = normalizedDelayMs) => {')
+      && scheduleBlock.includes('if (isWizardDocumentHidden()) {')
+      && scheduleBlock.includes("scheduleWizardVisibilityResume('autoKeywordLoadVisibilityHandler', () => scheduleAutoKeywordLoadTask(0));")
+      && scheduleBlock.includes("clearWizardVisibilityResumeHandler('autoKeywordLoadVisibilityHandler');")
       && scheduleBlock.includes('wizardState.autoKeywordLoadTimer = window.setTimeout(async () => {')
       && scheduleBlock.includes('wizardState.autoKeywordLoadTimer = 0;')
       && scheduleBlock.includes('if (wizardState.autoKeywordLoadToken !== token) return;')
@@ -246,8 +262,9 @@ test('自动推荐关键词延迟加载 timer 纳入向导生命周期', () => {
       && scheduleBlock.includes("loadRecommendedKeywords({ triggerSource: 'auto_fill' })")
       && scheduleBlock.includes("wizardState.autoKeywordLoadMap[normalizedKey] = 'done';")
       && scheduleBlock.includes("wizardState.autoKeywordLoadKey = '';")
-      && scheduleBlock.includes("wizardState.autoKeywordLoadToken = '';"),
-    '自动推荐关键词应通过可取消 helper 调度，触发前复核 token/key/策略和可见状态'
+      && scheduleBlock.includes("wizardState.autoKeywordLoadToken = '';")
+      && scheduleBlock.includes('Math.max(0, toNumber(nextDelayMs, 0))'),
+    '自动推荐关键词应通过可取消 helper 调度，触发前复核隐藏态、token/key/策略和可见状态'
   );
   assert.ok(
     maybeBlock.includes("wizardState.autoKeywordLoadMap[autoLoadKey] = 'pending';")
@@ -270,18 +287,24 @@ test('场景接口同步 timer 纳入向导关闭生命周期', () => {
   assert.ok(
     stateBlock.includes('sceneSyncTimer: 0,')
       && stateBlock.includes('sceneSyncInFlight: false,')
-      && stateBlock.includes("sceneSyncPendingToken: '',"),
-    'wizardState 应登记场景接口同步 timer/inFlight/token 状态'
+      && stateBlock.includes("sceneSyncPendingToken: '',")
+      && stateBlock.includes('sceneSyncVisibilityHandler: null,'),
+    'wizardState 应登记场景接口同步 timer/inFlight/token/visibility 状态'
   );
   assert.ok(
     clearBlock.includes('clearTimeout(wizardState.sceneSyncTimer);')
       && clearBlock.includes('wizardState.sceneSyncTimer = 0;')
+      && clearBlock.includes("clearWizardVisibilityResumeHandler('sceneSyncVisibilityHandler');")
       && clearBlock.includes("wizardState.sceneSyncPendingToken = '';"),
-    '场景接口同步 timer 应提供统一清理 helper，并重置 pending token'
+    '场景接口同步 timer 应提供统一清理 helper，并重置 pending token 与 visibility handler'
   );
   assert.ok(
     scheduleBlock.includes('clearWizardSceneSyncTimer();')
       && scheduleBlock.includes('wizardState.sceneSyncPendingToken = token;')
+      && scheduleBlock.includes('const scheduleSceneSyncTask = (nextDelayMs = delayMs) => {')
+      && scheduleBlock.includes('if (isWizardDocumentHidden()) {')
+      && scheduleBlock.includes("scheduleWizardVisibilityResume('sceneSyncVisibilityHandler', () => scheduleSceneSyncTask(0));")
+      && scheduleBlock.includes("clearWizardVisibilityResumeHandler('sceneSyncVisibilityHandler');")
       && scheduleBlock.includes('wizardState.sceneSyncTimer = window.setTimeout(async () => {')
       && scheduleBlock.includes('wizardState.sceneSyncTimer = 0;')
       && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken !== token) return;')
@@ -291,8 +314,9 @@ test('场景接口同步 timer 纳入向导关闭生命周期', () => {
       && scheduleBlock.includes('const capture = await captureSceneCreateInterfaces(targetScene, {')
       && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken !== token || wizardState.visible !== true) return;')
       && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken === token && wizardState.visible === true) {')
-      && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken === token) {'),
-    '场景接口同步应通过可取消 helper 调度，触发前后复核 token 和主弹窗可见状态'
+      && scheduleBlock.includes('if (wizardState.sceneSyncPendingToken === token) {')
+      && scheduleBlock.includes('Math.max(0, toNumber(nextDelayMs, 0))'),
+    '场景接口同步应通过可取消 helper 调度，触发前后复核隐藏态、token 和主弹窗可见状态'
   );
   assert.equal(
     scheduleBlock.includes('if (wizardState.sceneSyncTimer) {'),

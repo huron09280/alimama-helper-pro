@@ -1305,34 +1305,47 @@
                 const token = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 wizardState.autoKeywordLoadKey = normalizedKey;
                 wizardState.autoKeywordLoadToken = token;
-                wizardState.autoKeywordLoadTimer = window.setTimeout(async () => {
-                    wizardState.autoKeywordLoadTimer = 0;
-                    if (wizardState.autoKeywordLoadToken !== token) return;
-                    if (wizardState.autoKeywordLoadKey !== normalizedKey) return;
-                    const latestStrategy = getStrategyById(normalizedStrategyId);
-                    if (
-                        !latestStrategy
-                        || wizardState.editingStrategyId !== normalizedStrategyId
-                        || !wizardState.detailVisible
-                        || wizardState.visible !== true
-                    ) {
-                        delete wizardState.autoKeywordLoadMap[normalizedKey];
-                        wizardState.autoKeywordLoadKey = '';
-                        wizardState.autoKeywordLoadToken = '';
+                const normalizedDelayMs = Math.max(0, toNumber(delayMs, 240));
+                const scheduleAutoKeywordLoadTask = (nextDelayMs = normalizedDelayMs) => {
+                    if (isWizardDocumentHidden()) {
+                        scheduleWizardVisibilityResume('autoKeywordLoadVisibilityHandler', () => scheduleAutoKeywordLoadTask(0));
                         return;
                     }
-                    const loadOk = await loadRecommendedKeywords({ triggerSource: 'auto_fill' });
-                    if (wizardState.autoKeywordLoadToken !== token) return;
-                    if (!loadOk) {
-                        delete wizardState.autoKeywordLoadMap[normalizedKey];
+                    clearWizardVisibilityResumeHandler('autoKeywordLoadVisibilityHandler');
+                    wizardState.autoKeywordLoadTimer = window.setTimeout(async () => {
+                        wizardState.autoKeywordLoadTimer = 0;
+                        if (wizardState.autoKeywordLoadToken !== token) return;
+                        if (wizardState.autoKeywordLoadKey !== normalizedKey) return;
+                        if (isWizardDocumentHidden()) {
+                            scheduleWizardVisibilityResume('autoKeywordLoadVisibilityHandler', () => scheduleAutoKeywordLoadTask(0));
+                            return;
+                        }
+                        const latestStrategy = getStrategyById(normalizedStrategyId);
+                        if (
+                            !latestStrategy
+                            || wizardState.editingStrategyId !== normalizedStrategyId
+                            || !wizardState.detailVisible
+                            || wizardState.visible !== true
+                        ) {
+                            delete wizardState.autoKeywordLoadMap[normalizedKey];
+                            wizardState.autoKeywordLoadKey = '';
+                            wizardState.autoKeywordLoadToken = '';
+                            return;
+                        }
+                        const loadOk = await loadRecommendedKeywords({ triggerSource: 'auto_fill' });
+                        if (wizardState.autoKeywordLoadToken !== token) return;
+                        if (!loadOk) {
+                            delete wizardState.autoKeywordLoadMap[normalizedKey];
+                            wizardState.autoKeywordLoadKey = '';
+                            wizardState.autoKeywordLoadToken = '';
+                            return;
+                        }
+                        wizardState.autoKeywordLoadMap[normalizedKey] = 'done';
                         wizardState.autoKeywordLoadKey = '';
                         wizardState.autoKeywordLoadToken = '';
-                        return;
-                    }
-                    wizardState.autoKeywordLoadMap[normalizedKey] = 'done';
-                    wizardState.autoKeywordLoadKey = '';
-                    wizardState.autoKeywordLoadToken = '';
-                }, delayMs);
+                    }, Math.max(0, toNumber(nextDelayMs, 0)));
+                };
+                scheduleAutoKeywordLoadTask(normalizedDelayMs);
             };
 
             const maybeAutoLoadManualKeywords = (strategy = null, options = {}) => {
@@ -1453,6 +1466,7 @@
                     clearTimeout(wizardState.sceneSyncTimer);
                     wizardState.sceneSyncTimer = 0;
                 }
+                clearWizardVisibilityResumeHandler('sceneSyncVisibilityHandler');
                 if (options.clearPendingToken === false) return;
                 wizardState.sceneSyncPendingToken = '';
             };
@@ -1469,63 +1483,75 @@
                 const delayMs = Math.max(180, toNumber(options.delayMs, 420));
                 const token = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 wizardState.sceneSyncPendingToken = token;
-                wizardState.sceneSyncTimer = window.setTimeout(async () => {
-                    wizardState.sceneSyncTimer = 0;
-                    if (wizardState.sceneSyncPendingToken !== token) return;
-                    if (wizardState.visible !== true) {
-                        wizardState.sceneSyncPendingToken = '';
+                const scheduleSceneSyncTask = (nextDelayMs = delayMs) => {
+                    if (isWizardDocumentHidden()) {
+                        scheduleWizardVisibilityResume('sceneSyncVisibilityHandler', () => scheduleSceneSyncTask(0));
                         return;
                     }
-                    if (wizardState.sceneSyncInFlight) {
-                        wizardState.sceneSyncPendingToken = '';
-                        return;
-                    }
-                    wizardState.sceneSyncInFlight = true;
-                    const itemId = resolveSceneSyncItemId();
-                    appendWizardLog(`场景接口同步：${targetScene}（itemId=${itemId}）`);
-                    try {
-                        const capture = await captureSceneCreateInterfaces(targetScene, {
-                            itemId,
-                            passMode: 'interface',
-                            captureInterfaces: true,
-                            fallbackPolicy: 'none',
-                            batchRetry: 0,
-                            maxRetries: 1,
-                            timeoutMs: Math.max(18000, toNumber(options.timeoutMs, 35000)),
-                            requestTimeout: Math.max(10000, toNumber(options.requestTimeout, 22000)),
-                            dayAverageBudget: Math.max(50, toNumber(options.dayAverageBudget, 100))
-                        });
-                        if (wizardState.sceneSyncPendingToken !== token || wizardState.visible !== true) return;
-                        const row = isPlainObject(capture?.row) ? capture.row : {};
-                        const createInterfaces = Array.isArray(row?.capture?.createInterfaces)
-                            ? row.capture.createInterfaces
-                            : [];
-                        if (createInterfaces.length) {
-                            const goalLabel = normalizeGoalLabel(row?.requestPreview?.marketingGoal || '');
-                            const rememberedContract = rememberSceneCreateInterfaces(
-                                targetScene,
-                                goalLabel,
-                                createInterfaces,
-                                { source: 'scene_switch_sync' }
-                            );
-                            appendWizardLog(
-                                `场景接口已同步：${targetScene} 接口=${rememberedContract?.endpoint || row.submitEndpoint || '-'} 请求字段数=${toNumber(rememberedContract?.requestKeys?.length, 0)}`,
-                                'success'
-                            );
-                        } else {
-                            appendWizardLog(`场景接口同步未捕获到创建请求：${targetScene}${row?.error ? `（${row.error}）` : ''}`, 'error');
+                    clearWizardVisibilityResumeHandler('sceneSyncVisibilityHandler');
+                    wizardState.sceneSyncTimer = window.setTimeout(async () => {
+                        wizardState.sceneSyncTimer = 0;
+                        if (wizardState.sceneSyncPendingToken !== token) return;
+                        if (isWizardDocumentHidden()) {
+                            scheduleWizardVisibilityResume('sceneSyncVisibilityHandler', () => scheduleSceneSyncTask(0));
+                            return;
                         }
-                    } catch (err) {
-                        if (wizardState.sceneSyncPendingToken === token && wizardState.visible === true) {
-                            appendWizardLog(`场景接口同步失败：${targetScene} -> ${err?.message || err}`, 'error');
-                        }
-                    } finally {
-                        wizardState.sceneSyncInFlight = false;
-                        if (wizardState.sceneSyncPendingToken === token) {
+                        if (wizardState.visible !== true) {
                             wizardState.sceneSyncPendingToken = '';
+                            return;
                         }
-                    }
-                }, delayMs);
+                        if (wizardState.sceneSyncInFlight) {
+                            wizardState.sceneSyncPendingToken = '';
+                            return;
+                        }
+                        wizardState.sceneSyncInFlight = true;
+                        const itemId = resolveSceneSyncItemId();
+                        appendWizardLog(`场景接口同步：${targetScene}（itemId=${itemId}）`);
+                        try {
+                            const capture = await captureSceneCreateInterfaces(targetScene, {
+                                itemId,
+                                passMode: 'interface',
+                                captureInterfaces: true,
+                                fallbackPolicy: 'none',
+                                batchRetry: 0,
+                                maxRetries: 1,
+                                timeoutMs: Math.max(18000, toNumber(options.timeoutMs, 35000)),
+                                requestTimeout: Math.max(10000, toNumber(options.requestTimeout, 22000)),
+                                dayAverageBudget: Math.max(50, toNumber(options.dayAverageBudget, 100))
+                            });
+                            if (wizardState.sceneSyncPendingToken !== token || wizardState.visible !== true) return;
+                            const row = isPlainObject(capture?.row) ? capture.row : {};
+                            const createInterfaces = Array.isArray(row?.capture?.createInterfaces)
+                                ? row.capture.createInterfaces
+                                : [];
+                            if (createInterfaces.length) {
+                                const goalLabel = normalizeGoalLabel(row?.requestPreview?.marketingGoal || '');
+                                const rememberedContract = rememberSceneCreateInterfaces(
+                                    targetScene,
+                                    goalLabel,
+                                    createInterfaces,
+                                    { source: 'scene_switch_sync' }
+                                );
+                                appendWizardLog(
+                                    `场景接口已同步：${targetScene} 接口=${rememberedContract?.endpoint || row.submitEndpoint || '-'} 请求字段数=${toNumber(rememberedContract?.requestKeys?.length, 0)}`,
+                                    'success'
+                                );
+                            } else {
+                                appendWizardLog(`场景接口同步未捕获到创建请求：${targetScene}${row?.error ? `（${row.error}）` : ''}`, 'error');
+                            }
+                        } catch (err) {
+                            if (wizardState.sceneSyncPendingToken === token && wizardState.visible === true) {
+                                appendWizardLog(`场景接口同步失败：${targetScene} -> ${err?.message || err}`, 'error');
+                            }
+                        } finally {
+                            wizardState.sceneSyncInFlight = false;
+                            if (wizardState.sceneSyncPendingToken === token) {
+                                wizardState.sceneSyncPendingToken = '';
+                            }
+                        }
+                    }, Math.max(0, toNumber(nextDelayMs, 0)));
+                };
+                scheduleSceneSyncTask(delayMs);
             };
             const buildSceneSyncDefaultItem = () => normalizeItem({
                 materialId: SCENE_SYNC_DEFAULT_ITEM_ID,

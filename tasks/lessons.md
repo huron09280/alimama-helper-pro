@@ -1,5 +1,10 @@
 # Lessons - 2026-05-30
 
+## L107 版本更新必须跑版本同步测试并同步示例文档
+- 触发：用户要求“更新版本”后，首次相关回归失败，暴露 `CLAUDE.md`、授权管理页示例、教程/mockup 展示版本和 extension manifest 测试期望仍停在旧版本。
+- 原因：版本事实源不止 userscript `@version` 和 README；项目测试会校验 Claude 指南、授权文档、教程、mockup HTML、manifest Chrome 规范版本和展示版本。只改源码版本与构建产物会让发布切片不完整。
+- 规则：每次版本升级必须同步 `src/entries/userscript-meta.js`、`src/shared/script-preamble.js`、README、CLAUDE、授权/新人教程示例、mockup HTML 展示版本，并运行 `tests/build-output-sync.test.mjs` 与 `tests/extension-static-build.test.mjs`；extension manifest 测试应按当前 userscript 版本推导规范版本，避免硬编码旧版本。
+
 ## L106 DMP 默认对比人群必须在渠道行为全集加载后应用
 - 触发：用户要求 DMP 人群看板“对比人群”默认改为 `全部渠道-成交`。
 - 原因：DMP 页面初始运行态里对比人群可能仍是官方当前值（如 `关键词推广-曝光`），如果在可选渠道/行为列表加载前只改按钮文案，后续真实取数或刷新会被页面原始值覆盖；但用户手动选择后又不能被默认值反复覆盖。
