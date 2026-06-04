@@ -1,3 +1,56 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十二子项
+
+## 需求规格
+- 目标：在 AI 点睛需求弹层 bind timer 收口后，继续优化万能查数/人群看板状态条的 `crowdMatrixStateHideTimer`，避免页面隐藏时仍保留 800ms/1000ms/1200ms auto-hide timeout 去隐藏状态提示条。
+- 根因判断：`src/main-assistant/magic-report.js` 的 `setCrowdMatrixStatus()` 在 `options.autoHide === true` 时直接排 `setTimeout()` 给状态条添加 `is-hidden`。该 timer 只服务加载完成、排序切换、缓存结果展示等成功/警告提示的视觉消隐；若用户在提示出现后立即切到后台，仍可能在隐藏页唤醒并写入状态条 class。
+- 范围：仅覆盖人群看板/DMP 看板状态提示条 auto-hide timer 的隐藏页暂停、恢复可见后补排、timer/visibility listener/pending delay 生命周期；不改状态文案、进度条、重试按钮、DMP/万能查数取数、iframe 初始化、快捷话术、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留 `setCrowdMatrixStatus()` 作为状态条唯一入口，保留可见页按原 `hideDelayMs` 自动隐藏的交互合同。新增 pending delay 与 visibility handler；隐藏页不排 auto-hide timeout；已排 timer 在转 hidden 时取消并保留 pending；恢复 visible 后重新按原 delay 补排；新的状态更新和运行态清理统一释放 timer、pending 和 visibility listener。
+- 成功标准：静态与行为测试证明 MagicReport 声明状态条 auto-hide visibility handler 与 pending delay；存在统一 timer/visibility/pending 清理 helper；隐藏页 autoHide 不排 timeout、恢复可见后按原 delay 补排；可见页原 delay 调度保留；visible->hidden 会取消已排 timeout 且不立即隐藏；新状态会清理旧 pending，避免旧提示隐藏新提示；`clearMagicRuntimeCaches()` 不残留 timer/listener/pending；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击万能查数入口、不打开人群看板弹窗、不触发 DMP/万能查数查询、不调用 openV3/护航执行/预算/创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十一子项提交后工作区状态，确认本子项只处理状态条 auto-hide 视觉收尾 timer。
+- [x] 复核 UI/图标规范，确认本轮不改万能查数/人群看板视觉、图标和交互结构。
+- [x] 定位 `setCrowdMatrixStatus()`、`clearMagicRuntimeCaches()` 与现有人群看板状态条测试覆盖，校验不改变业务语义的实现边界。
+- [x] 通过只读子代理交叉校验候选，确认 `crowdMatrixStateHideTimer` 比日志 overflow timer 更贴近当前纯 UI auto-hide 唤醒优化点。
+- [x] 为状态条 auto-hide timer 增加 visibility handler、pending delay、统一释放 helper 和隐藏态判定复用。
+- [x] 将状态条 auto-hide 调度改为隐藏页暂停、恢复可见后按原 delay 继续执行。
+- [x] 更新 magic-report 目标测试，锁定隐藏页不排 timeout、恢复可见补排、visible->hidden 取消 timer、新状态清理旧 pending、可见页原 delay 调度保留和 runtime cleanup 清理 pending。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `f211589 优化AI点睛需求弹层监听轮询`，tracked 工作区干净；本子项不依赖任何临时取证文件。
+- 初始候选曾评估算法护航日志 `logOverflowTimerId`，但只读子代理指出 `crowdMatrixStateHideTimer` 是更直接的状态条 auto-hide 纯 UI timer。本轮尚未改源码，因此停止旧候选并更新计划，避免在较弱候选上继续推进。
+- 定位结论：授权续租、请求超时、预算探测、创建/复制/提交、openV3、护航执行、DMP/万能查数取数和服务端限速都带业务或安全语义，不适合作为“不改变业务逻辑”的下一步。人群看板状态条 auto-hide timer 只在成功/警告提示后隐藏状态条，隐藏页执行只会带来额外唤醒，适合作为低风险优化点。
+- 计划校验：本子项只降低隐藏标签页中状态条 auto-hide 的后台唤醒；可见页仍保持默认 1200ms、排序 1000ms、缓存结果 800ms 的原自动隐藏延迟，loading/error/retry 状态仍按调用方不传 `autoHide` 保持可见。若实现需要触碰取数请求、快捷话术、DMP 属性选择、创建提交或 10rpm 链路，先回到本计划更新后再继续。
+- 实现摘要：`MagicReport` 新增 `crowdMatrixStateHideVisibilityHandler` 与 `crowdMatrixStateHidePendingDelayMs`，并抽出 `clearCrowdMatrixStateHideTimer()`、`clearCrowdMatrixStateHideVisibilityHandler()`、`clearCrowdMatrixStateHideState()`、`bindCrowdMatrixStateHideVisibilityHandler()`、`scheduleCrowdMatrixStateAutoHide()`。`setCrowdMatrixStatus()` 继续作为状态条唯一入口，只把内联 auto-hide timeout 改为统一 helper 调度。
+- 调度摘要：可见页保留原 `hideDelayMs` 自动隐藏；隐藏页只登记 pending delay 与 visibility listener，不排 auto-hide timeout；等待期间转 hidden 会取消已排 timeout 并保留 pending；恢复 visible 后按原 delay 重新补排；新状态更新和 `clearMagicRuntimeCaches()` 统一释放 timer、visibility listener 与 pending delay。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 新增 fake runtime 行为测试，覆盖 hidden autoHide 不排 timeout、hidden->visible 补排、visible->hidden 取消、再次 visible 补排、新 loading 状态清理旧 pending、runtime cleanup 不残留，以及静态锁定 helper 与产物合同。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/magic-report-crowd-matrix.test.mjs` 通过，69 项测试全绿；新增 “看板状态条自动隐藏 timer 在隐藏页暂停并恢复可见后补排” 行为断言。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，125 项测试全绿。
+- 全量回归：`node -e "... spawnSync('npm', ['test'], { stdio:'inherit', timeout:60000 }) ..."` 通过，625 项中 623 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "crowdMatrixStateHideTimer|crowdMatrixStateHideVisibilityHandler|crowdMatrixStateHidePendingDelayMs|clearCrowdMatrixStateHideState|scheduleCrowdMatrixStateAutoHide|setCrowdMatrixStatus\\(" src/main-assistant/magic-report.js tests/magic-report-crowd-matrix.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 与隐藏页调度已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`hookManager:true`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4067179`，包含 `crowdMatrixStateHideTimer`、`crowdMatrixStateHideVisibilityHandler`、`crowdMatrixStateHidePendingDelayMs`、`clearCrowdMatrixStateHideTimer`、`clearCrowdMatrixStateHideVisibilityHandler`、`clearCrowdMatrixStateHideState`、`bindCrowdMatrixStateHideVisibilityHandler`、`scheduleCrowdMatrixStateAutoHide`、`if (this.isMagicReportDocumentHidden()) return;` 和 `this.scheduleCrowdMatrixStateAutoHide(delay)`。
+- Chrome MCP 弹窗/危险请求：`helperIcon` 存在且可见；`helperPanel` 存在但不可见；`magicReport/crowdMatrixState/dmpPropertyDropdown/keywordModal/keywordOverlay/scenePopup/optimizerPanel/licenseOverlay` 均不存在或不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器` 和主线程卡顿监听启动；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue、页面自身日志，以及读取 4MB bundle 触发的拦截器跳过解析 debug，未见新增插件运行失败。fetch/XHR 清单 47 条，主要为登录路由初始化、菜单、消息、AI context、官方资源和 `chrome-extension://.../page.bundle.js` 读取，可见请求均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/main-assistant/magic-report.js`、`tests/magic-report-crowd-matrix.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增人群看板状态条 auto-hide timer 的隐藏页暂停、可见恢复、pending delay 和 listener 生命周期，不改状态文案、进度条、重试按钮、DMP/万能查数取数、iframe 初始化、快捷话术、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十二子项结果：人群看板/DMP 看板状态条 auto-hide 从“成功/警告提示出现后总是排 800ms/1000ms/1200ms timeout，隐藏页也可能唤醒并隐藏状态条”优化为“隐藏页不排 auto-hide timeout，只保留 pending delay 与 visibility listener；恢复可见后再按原 delay 补排”。
+- 取舍结论：保留可见页原自动隐藏延迟和 loading/error/retry 常驻语义；新增 pending delay 只管理状态条视觉消隐生命周期，不改变状态文案、进度、重试入口、DMP/万能查数取数、快捷话术、创建/复制/提交/预算/护航/下载或任何服务端请求策略。
+- 效果结论：在用户看到人群看板成功/警告状态后立刻切到后台的场景中，插件不再保留状态条 auto-hide timeout 等待隐藏页唤醒，降低后台 timer 唤醒成本。浏览器验收未点击万能查数入口、未打开人群看板/DMP 弹窗、未触发任何业务查询或写动作，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十一子项
 
 ## 需求规格

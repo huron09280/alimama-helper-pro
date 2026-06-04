@@ -53,6 +53,8 @@
         crowdMatrixLoading: false,
         crowdMatrixProgress: 0,
         crowdMatrixStateHideTimer: null,
+        crowdMatrixStateHideVisibilityHandler: null,
+        crowdMatrixStateHidePendingDelayMs: null,
         crowdMatrixLoadedCampaignId: '',
         crowdMatrixDataset: null,
         crowdMatrixResultMap: null,
@@ -4872,12 +4874,64 @@
             return Number.isInteger(num) ? String(num) : num.toFixed(2).replace(/\.?0+$/, '');
         },
 
+        clearCrowdMatrixStateHideTimer() {
+            if (!this.crowdMatrixStateHideTimer) return;
+            clearTimeout(this.crowdMatrixStateHideTimer);
+            this.crowdMatrixStateHideTimer = null;
+        },
+
+        clearCrowdMatrixStateHideVisibilityHandler() {
+            const handler = this.crowdMatrixStateHideVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.crowdMatrixStateHideVisibilityHandler = null;
+        },
+
+        clearCrowdMatrixStateHideState() {
+            this.clearCrowdMatrixStateHideTimer();
+            this.clearCrowdMatrixStateHideVisibilityHandler();
+            this.crowdMatrixStateHidePendingDelayMs = null;
+        },
+
+        bindCrowdMatrixStateHideVisibilityHandler() {
+            if (typeof this.crowdMatrixStateHideVisibilityHandler === 'function') return;
+            this.crowdMatrixStateHideVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearCrowdMatrixStateHideTimer();
+                    return;
+                }
+                const pendingDelayMs = this.crowdMatrixStateHidePendingDelayMs;
+                if (Number.isFinite(Number(pendingDelayMs))) {
+                    this.scheduleCrowdMatrixStateAutoHide(pendingDelayMs);
+                } else {
+                    this.clearCrowdMatrixStateHideState();
+                }
+            };
+            document.addEventListener('visibilitychange', this.crowdMatrixStateHideVisibilityHandler);
+        },
+
+        scheduleCrowdMatrixStateAutoHide(delayMs = 1200) {
+            this.clearCrowdMatrixStateHideState();
+            if (!(this.matrixStateEl instanceof HTMLElement)) return;
+            const normalizedDelay = Math.max(0, Number(delayMs) || 1200);
+            this.crowdMatrixStateHidePendingDelayMs = normalizedDelay;
+            this.bindCrowdMatrixStateHideVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) return;
+            this.crowdMatrixStateHideTimer = setTimeout(() => {
+                this.crowdMatrixStateHideTimer = null;
+                if (this.isMagicReportDocumentHidden()) return;
+                if (this.matrixStateEl instanceof HTMLElement) {
+                    this.matrixStateEl.classList.add('is-hidden');
+                }
+                this.clearCrowdMatrixStateHideVisibilityHandler();
+                this.crowdMatrixStateHidePendingDelayMs = null;
+            }, normalizedDelay);
+        },
+
         setCrowdMatrixStatus(text, level = 'info', options = {}) {
             if (!(this.matrixStateEl instanceof HTMLElement)) return;
-            if (this.crowdMatrixStateHideTimer) {
-                clearTimeout(this.crowdMatrixStateHideTimer);
-                this.crowdMatrixStateHideTimer = null;
-            }
+            this.clearCrowdMatrixStateHideState();
             const normalizedLevel = ['info', 'success', 'warn', 'error', 'loading'].includes(level) ? level : 'info';
             this.matrixStateEl.className = `am-crowd-matrix-state is-${normalizedLevel}`;
             this.matrixStateEl.classList.remove('is-hidden');
@@ -4900,11 +4954,7 @@
             }
             if (options.autoHide === true) {
                 const delay = Math.max(0, Number(options.hideDelayMs) || 1200);
-                this.crowdMatrixStateHideTimer = setTimeout(() => {
-                    if (!(this.matrixStateEl instanceof HTMLElement)) return;
-                    this.matrixStateEl.classList.add('is-hidden');
-                    this.crowdMatrixStateHideTimer = null;
-                }, delay);
+                this.scheduleCrowdMatrixStateAutoHide(delay);
             }
         },
 
@@ -6823,8 +6873,7 @@
             this.crowdMatrixRunId += 1;
             this.crowdMatrixLoading = false;
             this.crowdMatrixProgress = 0;
-            this.crowdMatrixStateHideTimer && clearTimeout(this.crowdMatrixStateHideTimer);
-            this.crowdMatrixStateHideTimer = null;
+            this.clearCrowdMatrixStateHideState();
             this.crowdMatrixLoadedCampaignId = '';
             this.crowdMatrixDataset = null;
             this.crowdMatrixResultMap = null;

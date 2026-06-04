@@ -109,6 +109,141 @@ function createDmpButtonTimerHarness(initialVisibilityState = 'visible') {
   };
 }
 
+function createCrowdMatrixStateHideHarness(initialVisibilityState = 'visible') {
+  let visibilityState = String(initialVisibilityState || 'visible');
+  let nextTimerId = 1;
+  const timers = new Map();
+  const listeners = new Map();
+  class FakeHTMLElement {
+    constructor() {
+      this.className = '';
+      this.style = {
+        values: new Map(),
+        setProperty: (name, value) => {
+          this.style.values.set(String(name), String(value));
+        }
+      };
+      this.children = [];
+      this.textContent = '';
+      this.classList = {
+        values: new Set(),
+        add: (...names) => {
+          names.forEach((name) => this.classList.values.add(String(name)));
+        },
+        remove: (...names) => {
+          names.forEach((name) => this.classList.values.delete(String(name)));
+        },
+        contains: (name) => this.classList.values.has(String(name))
+      };
+    }
+
+    replaceChildren(...children) {
+      this.children = children;
+    }
+  }
+  const matrixStateEl = new FakeHTMLElement();
+  const matrixRetryBtn = new FakeHTMLElement();
+  const addListener = (type, handler) => {
+    if (typeof handler !== 'function') return;
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeListener = (type, handler) => {
+    listeners.get(type)?.delete(handler);
+  };
+  const documentRef = {
+    get visibilityState() {
+      return visibilityState;
+    },
+    createElement() {
+      return new FakeHTMLElement();
+    },
+    addEventListener: addListener,
+    removeEventListener: removeListener
+  };
+  const context = createContext({
+    document: documentRef,
+    HTMLElement: FakeHTMLElement,
+    matrixStateEl,
+    matrixRetryBtn,
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') {
+        timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      }
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(timerId);
+    }
+  });
+  const methodSource = [
+    getMagicReportMethodSlice('isMagicReportDocumentHidden', 'clearIframeCleanupRetryTimer'),
+    getMagicReportMethodSlice('clearCrowdMatrixStateHideTimer', 'clearCrowdMatrixStateHideVisibilityHandler'),
+    getMagicReportMethodSlice('clearCrowdMatrixStateHideVisibilityHandler', 'clearCrowdMatrixStateHideState'),
+    getMagicReportMethodSlice('clearCrowdMatrixStateHideState', 'bindCrowdMatrixStateHideVisibilityHandler'),
+    getMagicReportMethodSlice('bindCrowdMatrixStateHideVisibilityHandler', 'scheduleCrowdMatrixStateAutoHide'),
+    getMagicReportMethodSlice('scheduleCrowdMatrixStateAutoHide', 'setCrowdMatrixStatus'),
+    getMagicReportMethodSlice('setCrowdMatrixStatus', 'ensureCrowdMatrixHoverTip'),
+    getMagicReportMethodSlice('clearMagicRuntimeCaches', 'releasePopupResources')
+  ].join('\n');
+  const runtime = new Script(`({
+    matrixStateEl,
+    matrixRetryBtn,
+    crowdMatrixProgress: 0,
+    crowdMatrixRunId: 0,
+    crowdMatrixLoading: false,
+    crowdMatrixStateHideTimer: null,
+    crowdMatrixStateHideVisibilityHandler: null,
+    crowdMatrixStateHidePendingDelayMs: null,
+    crowdMatrixLoadedCampaignId: '',
+    crowdMatrixDataset: null,
+    crowdMatrixResultMap: null,
+    crowdMatrixPendingMetricReload: null,
+    crowdMatrixGroupSortModeMap: {},
+    crowdMatrixTaskProgressHandler: null,
+    crowdInsightRunContext: null,
+    crowdAuthParamsCache: null,
+    crowdRequestSlotPromise: null,
+    crowdRequestLastAt: 0,
+    crowdCampaignItemIdMap: new Map(),
+    crowdCampaignItemOptionsMap: new Map(),
+    crowdCampaignSelectedItemIdMap: new Map(),
+    crowdCampaignManualItemSelectionMap: new Map(),
+    quickPromptResetTimer: 0,
+    clearQuickPromptRetryState() {},
+    clearIframeCleanupRetryTimer() {},
+    clearIframeCleanupVisibilityHandler() {},
+    clearDmpCrowdMatrixButtonTimer() {},
+    clearDmpCrowdMatrixButtonVisibilityHandler() {},
+    ${methodSource}
+  })`).runInContext(context);
+  return {
+    runtime,
+    matrixStateEl,
+    timers,
+    listenerCount(type = 'visibilitychange') {
+      return listeners.get(type)?.size || 0;
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach((handler) => handler({ type: 'visibilitychange' }));
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map((timer) => timer.delay);
+    }
+  };
+}
+
 test('MagicReport 声明人群看板固定周期/维度/指标常量', () => {
   const block = getMagicReportBlock();
   assert.match(block, /CROWD_PERIODS:\s*\[\s*3\s*,\s*7\s*,\s*30\s*,\s*90\s*\]/, '缺少 4 周期常量或顺序不符');
@@ -691,10 +826,106 @@ test('看板默认隐藏提示时不生成提示 DOM，打开提示后重绘补�
   assert.match(block, /toggleCrowdInsightsVisibility\(\)\s*\{[\s\S]*this\.crowdInsightsVisibility = !this\.getCrowdInsightsVisible\(\);[\s\S]*if \(this\.crowdMatrixDataset\) \{[\s\S]*this\.renderCrowdMatrixCharts\(this\.crowdMatrixDataset,\s*\{\s*animate:\s*false\s*\}\);[\s\S]*return;[\s\S]*\}/, '显示提示切换后未重绘补齐提示 DOM');
 });
 
-test('看板加载完成后状态条自动隐藏', () => {
+test('看板状态条自动隐藏 timer 在隐藏页暂停并恢复可见后补排', () => {
   const block = getMagicReportBlock();
-  assert.match(block, /if \(options\.autoHide === true\) \{[\s\S]*setTimeout\(\(\) => \{[\s\S]*classList\.add\('is-hidden'\)/, '状态条缺少自动隐藏逻辑');
+  assert.match(
+    block,
+    /crowdMatrixStateHideTimer:\s*null,[\s\S]*crowdMatrixStateHideVisibilityHandler:\s*null,[\s\S]*crowdMatrixStateHidePendingDelayMs:\s*null,/,
+    '状态条 auto-hide 缺少 timer、visibility handler 或 pending delay 状态'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearCrowdMatrixStateHideTimer', 'clearCrowdMatrixStateHideVisibilityHandler'),
+    /if \(!this\.crowdMatrixStateHideTimer\) return;[\s\S]*clearTimeout\(this\.crowdMatrixStateHideTimer\);[\s\S]*this\.crowdMatrixStateHideTimer = null;/,
+    '状态条 auto-hide timer 应支持统一清理并归零'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearCrowdMatrixStateHideVisibilityHandler', 'clearCrowdMatrixStateHideState'),
+    /const handler = this\.crowdMatrixStateHideVisibilityHandler;[\s\S]*document\.removeEventListener\('visibilitychange', handler\);[\s\S]*this\.crowdMatrixStateHideVisibilityHandler = null;/,
+    '状态条 auto-hide 应支持释放 visibilitychange handler'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearCrowdMatrixStateHideState', 'bindCrowdMatrixStateHideVisibilityHandler'),
+    /this\.clearCrowdMatrixStateHideTimer\(\);[\s\S]*this\.clearCrowdMatrixStateHideVisibilityHandler\(\);[\s\S]*this\.crowdMatrixStateHidePendingDelayMs = null;/,
+    '状态条 auto-hide 应统一清理 timer、visibility 和 pending delay'
+  );
+  assert.match(
+    getMagicReportMethodSlice('bindCrowdMatrixStateHideVisibilityHandler', 'scheduleCrowdMatrixStateAutoHide'),
+    /if \(typeof this\.crowdMatrixStateHideVisibilityHandler === 'function'\) return;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.clearCrowdMatrixStateHideTimer\(\);[\s\S]*return;[\s\S]*const pendingDelayMs = this\.crowdMatrixStateHidePendingDelayMs;[\s\S]*this\.scheduleCrowdMatrixStateAutoHide\(pendingDelayMs\);[\s\S]*document\.addEventListener\('visibilitychange', this\.crowdMatrixStateHideVisibilityHandler\);/,
+    '状态条 auto-hide 应在隐藏时取消 timer，恢复可见后继续同一个 pending delay'
+  );
+  assert.match(
+    getMagicReportMethodSlice('scheduleCrowdMatrixStateAutoHide', 'setCrowdMatrixStatus'),
+    /this\.clearCrowdMatrixStateHideState\(\);[\s\S]*if \(!\(this\.matrixStateEl instanceof HTMLElement\)\) return;[\s\S]*const normalizedDelay = Math\.max\(0, Number\(delayMs\) \|\| 1200\);[\s\S]*this\.crowdMatrixStateHidePendingDelayMs = normalizedDelay;[\s\S]*this\.bindCrowdMatrixStateHideVisibilityHandler\(\);[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) return;[\s\S]*this\.crowdMatrixStateHideTimer = setTimeout\(\(\) => \{[\s\S]*this\.crowdMatrixStateHideTimer = null;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) return;[\s\S]*this\.matrixStateEl\.classList\.add\('is-hidden'\);[\s\S]*this\.clearCrowdMatrixStateHideVisibilityHandler\(\);[\s\S]*this\.crowdMatrixStateHidePendingDelayMs = null;[\s\S]*\}, normalizedDelay\);/,
+    '状态条 auto-hide 应隐藏页暂停，可见页按原 delay 调度，并在触发前复核隐藏态'
+  );
+  assert.match(
+    getMagicReportMethodSlice('setCrowdMatrixStatus', 'ensureCrowdMatrixHoverTip'),
+    /this\.clearCrowdMatrixStateHideState\(\);[\s\S]*if \(options\.autoHide === true\) \{[\s\S]*const delay = Math\.max\(0, Number\(options\.hideDelayMs\) \|\| 1200\);[\s\S]*this\.scheduleCrowdMatrixStateAutoHide\(delay\);/,
+    '状态条更新应先清理旧 auto-hide 状态，再通过统一 helper 调度'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearMagicRuntimeCaches', 'releasePopupResources'),
+    /this\.clearCrowdMatrixStateHideState\(\);/,
+    '清理 MagicReport 运行态时必须释放状态条 auto-hide timer、visibility 和 pending'
+  );
   assert.match(block, /setCrowdMatrixStatus\('人群对比看板已加载完成（4列周期 × 8行维度）',\s*'success',\s*\{[\s\S]*autoHide:\s*true/, '加载完成后未开启状态自动隐藏');
+
+  const hiddenHarness = createCrowdMatrixStateHideHarness('hidden');
+  hiddenHarness.runtime.setCrowdMatrixStatus('已展示最近一次加载结果', 'success', {
+    showRetry: false,
+    progress: 100,
+    autoHide: true,
+    hideDelayMs: 800
+  });
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页 autoHide 不应排 timeout');
+  assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页 autoHide 应保留恢复可见监听');
+  assert.equal(hiddenHarness.runtime.crowdMatrixStateHidePendingDelayMs, 800, '隐藏页应保留原 hideDelayMs');
+  assert.equal(hiddenHarness.matrixStateEl.classList.contains('is-hidden'), false, '隐藏页不应立即隐藏状态条');
+
+  hiddenHarness.setVisibilityState('visible');
+  assert.deepEqual(hiddenHarness.getTimerDelays(), [800], '恢复可见后应按原 hideDelayMs 补排');
+  assert.equal(hiddenHarness.matrixStateEl.classList.contains('is-hidden'), false, '补排 timer 触发前不应隐藏状态条');
+  assert.equal(hiddenHarness.tickNextTimer(), true, '应能触发恢复后的 auto-hide timeout');
+  assert.equal(hiddenHarness.matrixStateEl.classList.contains('is-hidden'), true, 'auto-hide timeout 应隐藏状态条');
+  assert.equal(hiddenHarness.listenerCount(), 0, 'auto-hide 完成后应释放 visibilitychange');
+  assert.equal(hiddenHarness.runtime.crowdMatrixStateHidePendingDelayMs, null, 'auto-hide 完成后应释放 pending delay');
+
+  const visibleHarness = createCrowdMatrixStateHideHarness('visible');
+  visibleHarness.runtime.setCrowdMatrixStatus('排序已切换', 'success', {
+    showRetry: false,
+    progress: 100,
+    autoHide: true,
+    hideDelayMs: 1000
+  });
+  assert.deepEqual(visibleHarness.getTimerDelays(), [1000], '可见页应保留原 hideDelayMs 调度');
+  assert.equal(visibleHarness.listenerCount(), 1, '可见页等待 auto-hide 时应监听 visibilitychange');
+  visibleHarness.setVisibilityState('hidden');
+  assert.equal(visibleHarness.timers.size, 0, '可见页转隐藏时应取消已排 auto-hide timeout');
+  assert.equal(visibleHarness.runtime.crowdMatrixStateHidePendingDelayMs, 1000, '转隐藏后应保留 pending delay');
+  assert.equal(visibleHarness.matrixStateEl.classList.contains('is-hidden'), false, '转隐藏不应立即隐藏状态条');
+  visibleHarness.setVisibilityState('visible');
+  assert.deepEqual(visibleHarness.getTimerDelays(), [1000], '再次恢复可见后应重新按原 delay 补排');
+
+  visibleHarness.runtime.setCrowdMatrixStatus('正在加载', 'loading', {
+    showRetry: false,
+    progress: 20
+  });
+  assert.equal(visibleHarness.timers.size, 0, '新状态未 autoHide 时应清理旧 timeout');
+  assert.equal(visibleHarness.listenerCount(), 0, '新状态未 autoHide 时应清理旧 visibilitychange');
+  assert.equal(visibleHarness.runtime.crowdMatrixStateHidePendingDelayMs, null, '新状态未 autoHide 时应清理旧 pending delay');
+  assert.equal(visibleHarness.matrixStateEl.classList.contains('is-hidden'), false, '新 loading 状态应保持可见');
+
+  const cleanupHarness = createCrowdMatrixStateHideHarness('hidden');
+  cleanupHarness.runtime.setCrowdMatrixStatus('已展示缓存结果', 'success', {
+    showRetry: false,
+    progress: 100,
+    autoHide: true,
+    hideDelayMs: 800
+  });
+  cleanupHarness.runtime.clearMagicRuntimeCaches();
+  assert.equal(cleanupHarness.timers.size, 0, '运行态清理后不应残留 auto-hide timeout');
+  assert.equal(cleanupHarness.listenerCount(), 0, '运行态清理后不应残留 visibilitychange');
+  assert.equal(cleanupHarness.runtime.crowdMatrixStateHidePendingDelayMs, null, '运行态清理后不应残留 pending delay');
 });
 
 test('人群维度列宽按文字内容自适应', () => {
