@@ -182,8 +182,8 @@ test('组建计划关闭后卸载隐藏 DOM 并清理全局监听', () => {
   );
   assert.match(
     gridSource,
-    /const closeKeywordAiMaxDemandPopover = \(\) => \{[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover = null;[\s\S]*?document\.removeEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*?\};[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;/,
-    'AI 需求 popover 应登记关闭句柄并清理外部 click/keydown 监听'
+    /const closeKeywordAiMaxDemandPopover = \(\) => \{[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover = null;[\s\S]*?clearKeywordAiMaxDemandPopoverBindTimer\(\);[\s\S]*?unbindKeywordAiMaxDemandPopoverDocumentListeners\(\);[\s\S]*?wizardState\.aiMaxDemandPopoverOutsideClick = null;[\s\S]*?wizardState\.aiMaxDemandPopoverEscClose = null;[\s\S]*?\};[\s\S]*?wizardState\.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;/,
+    'AI 需求 popover 应登记关闭句柄并通过统一 helper 清理 bind timer、visibility 与外部 click/keydown 监听'
   );
   assert.match(
     gridSource,

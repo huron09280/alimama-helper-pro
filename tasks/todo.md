@@ -1,3 +1,56 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十一子项
+
+## 需求规格
+- 目标：在算法护航首次 reveal timer 收口后，继续优化关键词向导 AI 点睛需求弹层的 `aiMaxDemandPopoverBindTimer`，避免页面隐藏时仍排 `setTimeout(0)` 去绑定弹层外点/ESC 监听。
+- 根因判断：`src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 的 `openKeywordAiMaxDemandPopover()` 为避免打开弹层的当前点击立刻触发外点关闭，会用 `setTimeout(0)` 延迟绑定 document click/keydown 监听。当前该 timer 不区分页可见状态；若打开弹层后页面转入隐藏，仍可能在后台唤醒并绑定监听。
+- 范围：仅覆盖 AI 点睛需求弹层外点/ESC 监听的延迟绑定 timer、visibility listener、pending 状态和关闭清理生命周期；不改 AI 点睛需求列表、全选/取消/确定、需求写回、需求弹层 DOM/样式、AI 点睛文案、推荐词、场景同步、商品/关键词/人群数据、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留“可见页延迟一拍绑定外点/ESC，避免当前点击自关闭”的原交互合同；新增 pending bind 与 visibility handler。隐藏页不排 `0ms` timeout；已排 timer 在页面转 hidden 时取消并保留 pending；恢复 visible 后重新按 `setTimeout(0)` 补绑定；关闭弹层统一清理 timer、pending、visibility listener 和已绑定 document listener。
+- 成功标准：静态与行为测试证明 wizardState 声明 AI 点睛需求弹层 bind timer、pending 和 visibility handler；存在统一 timer/visibility 清理、document listener 绑定 helper 和隐藏态调度 helper；隐藏页 schedule 不排 timeout、恢复可见后按 `0ms` 补排；可见页原 `0ms` 延迟绑定保留；visible->hidden 会取消已排 timeout；关闭弹层不残留 pending/timer/listener；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不打开组建计划向导、不点击 AI 点睛需求入口、不打开需求弹层、不触发推荐词、场景同步、创建、复制、提交、修复、追加关键词、预算、护航、导出或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认和 extension bundle 命中确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第五十子项提交后工作区状态，确认本子项只处理 AI 点睛需求弹层延迟绑定 timer。
+- [x] 复核 UI/图标规范，确认本轮不改需求弹层视觉、图标和交互结构。
+- [x] 定位 `openKeywordAiMaxDemandPopover()`、`closeKeywordAiMaxDemandPopover()` 与现有 AI 点睛测试覆盖，校验不改变业务语义的实现边界。
+- [x] 为 AI 点睛需求弹层 bind timer 增加 pending bind、visibility handler、统一释放 helper 和隐藏态判定复用。
+- [x] 将外点/ESC 延迟绑定改为隐藏页暂停、恢复可见后按原 `setTimeout(0)` 继续绑定。
+- [x] 更新 AI 点睛目标测试，锁定隐藏页不排 timeout、恢复可见补排、visible->hidden 取消 timer、可见页原 `0ms` 延迟绑定保留和 close 清理 pending。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `749a713 优化算法护航面板显示轮询`，tracked 工作区干净；本子项不依赖任何临时取证文件。
+- 定位结论：剩余 `riskAlertTimer`、提交间隔、请求超时、授权续租、openV3/护航、预算和创建提交链路都带业务或安全语义，不适合作为“不改变业务逻辑”的下一步。AI 点睛需求弹层 bind timer 是纯 UI 监听绑定延迟，只服务弹层关闭交互，隐藏页执行只会带来额外唤醒，适合作为低风险优化点。
+- 计划校验：本子项只降低隐藏标签页中需求弹层外点/ESC 延迟绑定的后台唤醒；可见页仍保持 `setTimeout(0)` 延迟绑定以避开当前点击，需求选择、确定写回、弹层关闭和渲染刷新行为不变。若实现需要触碰需求数据写回、AI 点睛生成、推荐、场景同步或创建提交链路，先回到本计划更新后再继续。
+- 实现摘要：`wizardState` 新增 `aiMaxDemandPopoverBindTimer`、`aiMaxDemandPopoverBindPending`、`aiMaxDemandPopoverBindVisibilityHandler`、`aiMaxDemandPopoverListenersBound` 与外点/ESC handler 状态；`render-scene-dynamic-grid.js` 抽出 bind timer、visibility handler、document listener 绑定/解绑和调度 helper。
+- 调度摘要：`openKeywordAiMaxDemandPopover()` 仍只在弹层创建后调用统一调度 helper。可见页保留原 `setTimeout(0)` 延迟绑定外点/ESC；隐藏页只登记 pending bind 与 visibility listener，不排 0ms timeout；等待期间转 hidden 会取消已排 timeout 并保留 pending；恢复 visible 后重新按 `0ms` 补排；关闭弹层统一释放 timer、pending、visibility listener、document click/keydown listener 与 handler 引用。
+- 测试摘要：`tests/keyword-custom-native-parity-ui.test.mjs` 新增 fake runtime 行为测试，覆盖 hidden schedule、hidden->visible 补排、visible->hidden 取消、再次 visible 补排、触发前不同步绑定避免当前点击自关闭、trigger/popover 内点击不关闭、ESC/外点关闭和显式 close 不残留；`tests/keyword-wizard-entry-regression.test.mjs` 同步更新关闭卸载回归，锁定新的统一 helper 清理合同。
+- 子代理只读审查：确认 `aiMaxDemandPopoverBindTimer` 只服务 UI 外点/ESC 延迟监听绑定，不读写需求数据、不触发创建/提交/推荐/场景同步；建议重点保留 `setTimeout(0)` 延迟一拍语义、visible->hidden 取消、恢复 visible 补排和 close 清理，本轮测试已覆盖这些点。
+
+## 验证记录
+- 源码切片语法：`node --check src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js` 通过。
+- 测试语法：`node --check tests/keyword-custom-native-parity-ui.test.mjs` 与 `node --check tests/keyword-wizard-entry-regression.test.mjs` 通过。
+- 构建切片说明：`src/optimizer/keyword-plan-api/intro.js` 是构建切片，单独 `node --check` 不能作为语法证据；以构建后的根 userscript 语法检查和 `npm run build:check` 为准。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/keyword-custom-native-parity-ui.test.mjs` 通过，14 项测试全绿；新增 “AI点睛需求弹层外点监听绑定 timer 在隐藏页暂停并恢复可见后补排” 行为断言。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 空白检查：`git diff --check` 通过。
+- 相关回归：`node --test` 覆盖 `tests/keyword-custom-native-parity-ui.test.mjs`、`tests/keyword-wizard-entry-regression.test.mjs`、`tests/build-output-sync.test.mjs`、`tests/build-segments.test.mjs`、`tests/extension-static-build.test.mjs`、`tests/logger-api.test.mjs`，65 项测试全绿。
+- 全量回归：`npm test` 通过，625 项中 623 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- 静态定位：`rg -n "aiMaxDemandPopoverBindTimer|aiMaxDemandPopoverBindPending|aiMaxDemandPopoverBindVisibilityHandler|clearKeywordAiMaxDemandPopoverBindVisibilityHandler|clearKeywordAiMaxDemandPopoverBindTimer|bindKeywordAiMaxDemandPopoverBindVisibilityHandler|scheduleKeywordAiMaxDemandPopoverListenerBind" src/optimizer/keyword-plan-api tests/keyword-custom-native-parity-ui.test.mjs 阿里妈妈多合一助手.js dist/extension/page.bundle.js dist/packages/alimama-helper-pro.user.js` 命中源码、目标测试、根 userscript、extension bundle 和发布包，确认新 helper 与隐藏页调度已进入产物。
+- Chrome MCP 验证：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 确认 unpacked 扩展版本 `7.06`、加载自 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，点击 `Reload` 后出现 `Reloaded`。
+- Chrome MCP 运行态：切回 `https://one.alimama.com/index.html#!/login/index?...` 并刷新，只读状态返回 `readyState:"complete"`、`visibilityState:"visible"`、页面标题 `登录页_万相台无界版`、`GM_info.script.version:"7.06"`、`GM.info.script.version:"7.06"`、`__AM_WXT_PLAN_BUILD__:"2026-02-18 04:00"`、`__AM_WXT_PLAN_PATCH__:"adzone-default-sync-v5"`、`license.authorized:true`、`license.reason:"authorized"`、`license.source:"extension_cache_bootstrap"`、`optimizerToggleReady:true`、`planApiBridgeHost:true`、`hookManager:true`、`keywordOpenBridgeReady:"1"`。
+- Chrome MCP 产物确认：页面内只读 `fetch("chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js", { cache:"no-store" })` 返回 200，bundle 长度 `4064967`，包含 `aiMaxDemandPopoverBindTimer`、`aiMaxDemandPopoverBindPending`、`aiMaxDemandPopoverBindVisibilityHandler`、`clearKeywordAiMaxDemandPopoverBindVisibilityHandler`、`clearKeywordAiMaxDemandPopoverBindTimer`、`bindKeywordAiMaxDemandPopoverBindVisibilityHandler`、`scheduleKeywordAiMaxDemandPopoverListenerBind`、`if (isWizardDocumentHidden()) return;` 和 `scheduleKeywordAiMaxDemandPopoverListenerBind(popover)`。
+- Chrome MCP 弹窗/危险请求：`helperIcon` 存在且可见；`helperPanel` 存在但不可见；`keywordModal/aiMaxDemandPopover/magicReport/keywordOverlay/scenePopup/itemPicker/copyOverviewPopup/copySuccessPopup/batchPlusMenu/batchConfirmPopup/optimizerPanel/licenseOverlay` 均不存在或不可见；performance resource 过滤危险写入口 `campaign/create|adgroup/create|solution/addList|solution/copy|copy.json|batchCreate|budget/batchUpdate|updatePart|delete|export|download|escort/open|openV3|capture|contract|sceneCreate|createPlans|runCreateRepair|appendKeywords` 命中 0。
+- Chrome MCP 控制台/网络：非 preserved 控制台显示 `[AM] 阿里助手 Pro v7.06 已启动`、`[EscortAPI] Token Hook 已接入统一管理器` 和主线程卡顿监听启动；其它主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 资源错误、deprecated issue、页面自身日志，以及读取 4MB bundle 触发的拦截器跳过解析 debug，未见新增插件运行失败。fetch/XHR 清单 47 条，主要为登录路由初始化、菜单、消息、AI context、官方资源和 `chrome-extension://.../page.bundle.js` 读取，可见请求均为 200。
+- Diff 自审：`git diff --stat` 包含 `src/optimizer/keyword-plan-api/intro.js`、`src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js`、`tests/keyword-custom-native-parity-ui.test.mjs`、`tests/keyword-wizard-entry-regression.test.mjs`、`tasks/todo.md` 和构建产物；源码 diff 只新增 AI 点睛需求弹层 bind timer 的隐藏页暂停、可见恢复、pending bind 和 listener 生命周期，不改 AI 点睛需求列表、全选/取消/确定、需求写回、弹层 DOM/样式、推荐词、场景同步、创建/复制/提交/预算/护航/下载或服务端 10rpm 策略。
+
+## 结果复盘
+- 第十一轮第五十一子项结果：AI 点睛需求弹层外点/ESC 监听绑定从“打开弹层后总是排 `setTimeout(0)`，隐藏页也可能唤醒并绑定 document listener”优化为“隐藏页不排 0ms timeout，只保留 pending bind 与 visibility listener；恢复可见后再按原 `setTimeout(0)` 节奏补排”。
+- 取舍结论：保留可见页延迟一拍绑定，避免打开弹层的当前点击被外点监听捕获并自关闭；新增 pending bind 只管理 UI 监听绑定生命周期，不改变需求选择、确定写回、AI 点睛生成、推荐、场景同步、创建/复制/提交/预算/护航/下载或任何服务端请求策略。
+- 效果结论：在用户打开 AI 点睛需求弹层后立刻切到后台的场景中，插件不再保留 0ms bind timeout 等待隐藏页唤醒，降低后台 timer 唤醒成本。浏览器验收未打开组建计划向导、未点击 AI 点睛需求入口、未打开需求弹层，未触发任何业务写动作或服务端提交，符合“只用 Chrome MCP”和“服务器只帮并发 10rpm”边界。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第五十子项
 
 ## 需求规格

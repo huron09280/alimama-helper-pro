@@ -154,6 +154,12 @@
             closeItemPicker: null,
             closeScenePopup: null,
             closeKeywordAiMaxDemandPopover: null,
+            aiMaxDemandPopoverBindTimer: 0,
+            aiMaxDemandPopoverBindPending: false,
+            aiMaxDemandPopoverBindVisibilityHandler: null,
+            aiMaxDemandPopoverListenersBound: false,
+            aiMaxDemandPopoverOutsideClick: null,
+            aiMaxDemandPopoverEscClose: null,
             cleanupHandlers: [],
             els: {}
         };

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Script, createContext } from 'node:vm';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
+const dynamicGridSource = readFileSync(new URL('../src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-grid.js', import.meta.url), 'utf8');
 
 function getKeywordCustomSceneBlock() {
   const start = source.indexOf("if (activeKeywordGoal === '自定义推广') {");
@@ -172,6 +173,150 @@ globalThis.__wizardState = wizardState;`).runInContext(context);
     },
     cleanup() {
       context.__cleanupAiMaxTypewriterTimers();
+    }
+  };
+}
+
+function createAiMaxDemandPopoverBindHarness(initialVisibilityState = 'visible') {
+  let visibilityState = String(initialVisibilityState || 'visible');
+  let nextTimerId = 1;
+  const timers = new Map();
+  const listeners = new Map();
+  class FakeHTMLElement {
+    constructor(id = '') {
+      this.id = String(id || '');
+      this.isConnected = true;
+      this.children = [];
+    }
+
+    contains(target) {
+      return target === this || this.children.includes(target);
+    }
+
+    remove() {
+      this.isConnected = false;
+    }
+  }
+  const popover = new FakeHTMLElement('am-wxt-ai-max-demand-popover');
+  const triggerButton = new FakeHTMLElement('trigger');
+  const outsideNode = new FakeHTMLElement('outside');
+  const addListener = (type, handler) => {
+    if (typeof handler !== 'function') return;
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeListener = (type, handler) => {
+    listeners.get(type)?.delete(handler);
+  };
+  const documentRef = {
+    get visibilityState() {
+      return visibilityState;
+    },
+    addEventListener: addListener,
+    removeEventListener: removeListener,
+    getElementById(id) {
+      if (id !== 'am-wxt-ai-max-demand-popover') return null;
+      return popover.isConnected ? popover : null;
+    }
+  };
+  const windowRef = {
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') {
+        timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      }
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(Number(timerId));
+    }
+  };
+  const helperSource = sliceSource(
+    dynamicGridSource,
+    'const clearKeywordAiMaxDemandPopoverBindVisibilityHandler = () => {',
+    'const openKeywordAiMaxDemandPopover = (triggerButton = null) => {'
+  );
+  const context = createContext({
+    document: documentRef,
+    window: windowRef,
+    HTMLElement: FakeHTMLElement,
+    wizardState: {
+      closeKeywordAiMaxDemandPopover: null,
+      aiMaxDemandPopoverBindTimer: 0,
+      aiMaxDemandPopoverBindPending: false,
+      aiMaxDemandPopoverBindVisibilityHandler: null,
+      aiMaxDemandPopoverListenersBound: false,
+      aiMaxDemandPopoverOutsideClick: null,
+      aiMaxDemandPopoverEscClose: null
+    },
+    isWizardDocumentHidden: () => documentRef.visibilityState === 'hidden'
+  });
+  new Script(`${helperSource}
+globalThis.__closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;
+globalThis.__scheduleKeywordAiMaxDemandPopoverListenerBind = scheduleKeywordAiMaxDemandPopoverListenerBind;
+globalThis.__wizardState = wizardState;`).runInContext(context);
+  const setPopoverHandlers = () => {
+    context.__wizardState.closeKeywordAiMaxDemandPopover = context.__closeKeywordAiMaxDemandPopover;
+    context.__wizardState.aiMaxDemandPopoverOutsideClick = (event) => {
+      const target = event?.target;
+      if (popover.contains(target) || triggerButton.contains(target)) return;
+      context.__closeKeywordAiMaxDemandPopover();
+    };
+    context.__wizardState.aiMaxDemandPopoverEscClose = (event) => {
+      if (event?.key !== 'Escape') return;
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      context.__closeKeywordAiMaxDemandPopover();
+    };
+  };
+  return {
+    context,
+    popover,
+    triggerButton,
+    outsideNode,
+    timers,
+    listenerCount(type = 'visibilitychange') {
+      return listeners.get(type)?.size || 0;
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map(timer => timer.delay);
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    fireDocumentClick(target = outsideNode) {
+      const handlers = Array.from(listeners.get('click') || []);
+      handlers.forEach(handler => handler({ target }));
+    },
+    fireDocumentKeydown(key = 'Escape') {
+      let prevented = false;
+      const handlers = Array.from(listeners.get('keydown') || []);
+      handlers.forEach(handler => handler({
+        key,
+        preventDefault() {
+          prevented = true;
+        }
+      }));
+      return prevented;
+    },
+    schedule() {
+      setPopoverHandlers();
+      context.__scheduleKeywordAiMaxDemandPopoverListenerBind(popover);
+    },
+    close() {
+      context.__closeKeywordAiMaxDemandPopover();
+    },
+    get wizardState() {
+      return context.__wizardState;
     }
   };
 }
@@ -654,13 +799,43 @@ test('AI点睛添加商品后走原生接口生成，不再本地写死解析结
   );
   assert.match(
     source,
-    /if \(wizardState\.aiMaxDemandPopoverBindTimer\) \{[\s\S]*window\.clearTimeout\(wizardState\.aiMaxDemandPopoverBindTimer\);[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*if \(wizardState\.aiMaxDemandPopoverListenersBound\) \{[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*document\.removeEventListener\('keydown', wizardState\.aiMaxDemandPopoverEscClose, true\);[\s\S]*wizardState\.aiMaxDemandPopoverListenersBound = false;/,
-    'AI点睛需求弹层关闭时必须取消延迟监听绑定并释放已绑定 document 监听'
+    /aiMaxDemandPopoverBindTimer:\s*0,[\s\S]*aiMaxDemandPopoverBindPending:\s*false,[\s\S]*aiMaxDemandPopoverBindVisibilityHandler:\s*null,[\s\S]*aiMaxDemandPopoverListenersBound:\s*false,[\s\S]*aiMaxDemandPopoverOutsideClick:\s*null,[\s\S]*aiMaxDemandPopoverEscClose:\s*null,/,
+    'AI点睛需求弹层缺少 bind timer、pending、visibility 和 document listener 生命周期状态声明'
   );
   assert.match(
     source,
-    /wizardState\.aiMaxDemandPopoverBindTimer = window\.setTimeout\(\(\) => \{[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*document\.addEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*document\.addEventListener\('keydown', wizardState\.aiMaxDemandPopoverEscClose, true\);[\s\S]*wizardState\.aiMaxDemandPopoverListenersBound = true;/,
-    'AI点睛需求弹层延迟绑定 timer 必须保存句柄并标记监听绑定状态'
+    /const clearKeywordAiMaxDemandPopoverBindVisibilityHandler = \(\) => \{[\s\S]*document\.removeEventListener\('visibilitychange', wizardState\.aiMaxDemandPopoverBindVisibilityHandler\);[\s\S]*wizardState\.aiMaxDemandPopoverBindVisibilityHandler = null;[\s\S]*\};/,
+    'AI点睛需求弹层 bind 应支持释放 visibilitychange handler'
+  );
+  assert.match(
+    source,
+    /const clearKeywordAiMaxDemandPopoverBindTimer = \(\) => \{[\s\S]*window\.clearTimeout\(wizardState\.aiMaxDemandPopoverBindTimer\);[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*clearKeywordAiMaxDemandPopoverBindVisibilityHandler\(\);[\s\S]*wizardState\.aiMaxDemandPopoverBindPending = false;[\s\S]*\};/,
+    'AI点睛需求弹层 bind timer 应统一清理 timer、visibility 和 pending 状态'
+  );
+  assert.match(
+    source,
+    /const unbindKeywordAiMaxDemandPopoverDocumentListeners = \(\) => \{[\s\S]*document\.removeEventListener\('click', wizardState\.aiMaxDemandPopoverOutsideClick, true\);[\s\S]*document\.removeEventListener\('keydown', wizardState\.aiMaxDemandPopoverEscClose, true\);[\s\S]*wizardState\.aiMaxDemandPopoverListenersBound = false;[\s\S]*\};/,
+    'AI点睛需求弹层关闭时必须释放已绑定 document 监听'
+  );
+  assert.match(
+    source,
+    /const bindKeywordAiMaxDemandPopoverBindVisibilityHandler = \(popover = null\) => \{[\s\S]*if \(typeof wizardState\.aiMaxDemandPopoverBindVisibilityHandler === 'function'\) return;[\s\S]*if \(isWizardDocumentHidden\(\)\) \{[\s\S]*window\.clearTimeout\(wizardState\.aiMaxDemandPopoverBindTimer\);[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*return;[\s\S]*scheduleKeywordAiMaxDemandPopoverListenerBind\(popover\);[\s\S]*document\.addEventListener\('visibilitychange', wizardState\.aiMaxDemandPopoverBindVisibilityHandler\);/,
+    'AI点睛需求弹层 bind 应在隐藏时取消 timer，恢复可见后继续同一个 pending bind'
+  );
+  assert.match(
+    source,
+    /const scheduleKeywordAiMaxDemandPopoverListenerBind = \(popover = null\) => \{[\s\S]*clearKeywordAiMaxDemandPopoverBindTimer\(\);[\s\S]*wizardState\.aiMaxDemandPopoverBindPending = true;[\s\S]*bindKeywordAiMaxDemandPopoverBindVisibilityHandler\(popover\);[\s\S]*if \(isWizardDocumentHidden\(\)\) return;[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = window\.setTimeout\(\(\) => \{[\s\S]*wizardState\.aiMaxDemandPopoverBindTimer = 0;[\s\S]*if \(isWizardDocumentHidden\(\)\) return;[\s\S]*bindKeywordAiMaxDemandPopoverDocumentListeners\(popover\);[\s\S]*clearKeywordAiMaxDemandPopoverBindVisibilityHandler\(\);[\s\S]*wizardState\.aiMaxDemandPopoverBindPending = false;[\s\S]*\}, 0\);[\s\S]*\};/,
+    'AI点睛需求弹层延迟绑定应隐藏页暂停，可见页按 0ms 延迟绑定，并在触发前复核隐藏态'
+  );
+  assert.match(
+    source,
+    /const closeKeywordAiMaxDemandPopover = \(\) => \{[\s\S]*clearKeywordAiMaxDemandPopoverBindTimer\(\);[\s\S]*unbindKeywordAiMaxDemandPopoverDocumentListeners\(\);[\s\S]*wizardState\.aiMaxDemandPopoverOutsideClick = null;[\s\S]*wizardState\.aiMaxDemandPopoverEscClose = null;[\s\S]*\};/,
+    'AI点睛需求弹层关闭时必须清理 bind timer、visibility、pending 和 document listener'
+  );
+  assert.match(
+    source,
+    /wizardState\.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;[\s\S]*scheduleKeywordAiMaxDemandPopoverListenerBind\(popover\);/,
+    'AI点睛需求弹层打开后应通过统一 helper 延迟绑定外点和 ESC 监听'
   );
   assert.match(
     source,
@@ -748,6 +923,63 @@ test('AI点睛逐字动效隐藏页切换会立即完成文本并释放 timer', 
   assert.equal(stepHarness.timers.size, 0, 'step timer pending 时转隐藏应清理 timer');
   assert.equal(stepTarget.textContent, 'AB', 'step timer pending 时转隐藏应填完全文本');
   assert.equal(stepHarness.listenerCount(), 0, 'step timer pending 时转隐藏应释放 listener');
+});
+
+test('AI点睛需求弹层外点监听绑定 timer 在隐藏页暂停并恢复可见后补排', () => {
+  const hiddenHarness = createAiMaxDemandPopoverBindHarness('hidden');
+  hiddenHarness.schedule();
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 0ms 外点监听绑定 timeout');
+  assert.equal(hiddenHarness.listenerCount('visibilitychange'), 1, '隐藏页应保留 visibilitychange 恢复监听');
+  assert.equal(hiddenHarness.listenerCount('click'), 0, '隐藏页不应立即绑定 document click');
+  assert.equal(hiddenHarness.listenerCount('keydown'), 0, '隐藏页不应立即绑定 document keydown');
+  assert.equal(hiddenHarness.wizardState.aiMaxDemandPopoverBindPending, true, '隐藏页应保留 pending bind');
+
+  hiddenHarness.setVisibilityState('visible');
+  assert.deepEqual(hiddenHarness.getTimerDelays(), [0], '恢复可见后应按原 0ms 节奏补排监听绑定');
+  assert.equal(hiddenHarness.listenerCount('click'), 0, '补排 timer 触发前仍不应同步绑定 click，避免当前点击自关闭');
+  assert.equal(hiddenHarness.tickNextTimer(), true, '应能触发恢复后的 0ms bind timeout');
+  assert.equal(hiddenHarness.listenerCount('visibilitychange'), 0, '绑定完成后应释放 visibilitychange');
+  assert.equal(hiddenHarness.listenerCount('click'), 1, '绑定完成后应绑定一次 document click');
+  assert.equal(hiddenHarness.listenerCount('keydown'), 1, '绑定完成后应绑定一次 document keydown');
+  assert.equal(hiddenHarness.wizardState.aiMaxDemandPopoverBindPending, false, '绑定完成后应释放 pending bind');
+
+  hiddenHarness.fireDocumentClick(hiddenHarness.triggerButton);
+  assert.equal(hiddenHarness.popover.isConnected, true, '点击 triggerButton 不应触发外点关闭');
+  hiddenHarness.fireDocumentClick(hiddenHarness.popover);
+  assert.equal(hiddenHarness.popover.isConnected, true, '点击 popover 内部不应触发外点关闭');
+  const prevented = hiddenHarness.fireDocumentKeydown('Escape');
+  assert.equal(prevented, true, 'ESC 关闭时应 preventDefault');
+  assert.equal(hiddenHarness.popover.isConnected, false, 'ESC 应关闭需求弹层');
+  assert.equal(hiddenHarness.listenerCount('click'), 0, '关闭后应释放 document click');
+  assert.equal(hiddenHarness.listenerCount('keydown'), 0, '关闭后应释放 document keydown');
+
+  const visibleHarness = createAiMaxDemandPopoverBindHarness('visible');
+  visibleHarness.schedule();
+  assert.deepEqual(visibleHarness.getTimerDelays(), [0], '可见页应保留原 0ms 延迟绑定 timeout');
+  assert.equal(visibleHarness.listenerCount('visibilitychange'), 1, '可见页等待 bind 时应监听 visibilitychange');
+  assert.equal(visibleHarness.listenerCount('click'), 0, '可见页 timer 触发前不应同步绑定 click');
+  visibleHarness.setVisibilityState('hidden');
+  assert.equal(visibleHarness.timers.size, 0, '可见页转隐藏时应取消已排 bind timeout');
+  assert.equal(visibleHarness.wizardState.aiMaxDemandPopoverBindPending, true, '转隐藏时应保留 pending bind');
+  visibleHarness.setVisibilityState('visible');
+  assert.deepEqual(visibleHarness.getTimerDelays(), [0], '再次恢复可见后应重新排 0ms bind timeout');
+  assert.equal(visibleHarness.tickNextTimer(), true, '再次恢复后的 bind timeout 应可触发');
+  assert.equal(visibleHarness.listenerCount('click'), 1, '再次恢复后应绑定 document click');
+  visibleHarness.fireDocumentClick(visibleHarness.outsideNode);
+  assert.equal(visibleHarness.popover.isConnected, false, '外点点击应关闭需求弹层');
+  assert.equal(visibleHarness.listenerCount('click'), 0, '外点关闭后应释放 document click');
+  assert.equal(visibleHarness.listenerCount('keydown'), 0, '外点关闭后应释放 document keydown');
+
+  const clearHarness = createAiMaxDemandPopoverBindHarness('hidden');
+  clearHarness.schedule();
+  clearHarness.close();
+  assert.equal(clearHarness.timers.size, 0, '显式关闭后不应残留 bind timeout');
+  assert.equal(clearHarness.listenerCount('visibilitychange'), 0, '显式关闭后不应残留 visibilitychange');
+  assert.equal(clearHarness.listenerCount('click'), 0, '显式关闭后不应残留 document click');
+  assert.equal(clearHarness.listenerCount('keydown'), 0, '显式关闭后不应残留 document keydown');
+  assert.equal(clearHarness.wizardState.aiMaxDemandPopoverBindPending, false, '显式关闭后不应残留 pending bind');
+  assert.equal(clearHarness.wizardState.aiMaxDemandPopoverOutsideClick, null, '显式关闭后不应残留 outside click handler');
+  assert.equal(clearHarness.wizardState.aiMaxDemandPopoverEscClose, null, '显式关闭后不应残留 ESC handler');
 });
 
 test('关键词自定义推广编辑计划不依赖未定义 runtime 变量', () => {

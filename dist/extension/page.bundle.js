@@ -27006,6 +27006,12 @@ if (typeof globalThis !== 'undefined') {
             closeItemPicker: null,
             closeScenePopup: null,
             closeKeywordAiMaxDemandPopover: null,
+            aiMaxDemandPopoverBindTimer: 0,
+            aiMaxDemandPopoverBindPending: false,
+            aiMaxDemandPopoverBindVisibilityHandler: null,
+            aiMaxDemandPopoverListenersBound: false,
+            aiMaxDemandPopoverOutsideClick: null,
+            aiMaxDemandPopoverEscClose: null,
             cleanupHandlers: [],
             els: {}
         };
@@ -52584,21 +52590,79 @@ if (typeof globalThis !== 'undefined') {
                         triggerButton.textContent = `已选：${countText}`;
                     }
                 };
+                const clearKeywordAiMaxDemandPopoverBindVisibilityHandler = () => {
+                    if (typeof wizardState.aiMaxDemandPopoverBindVisibilityHandler === 'function') {
+                        document.removeEventListener('visibilitychange', wizardState.aiMaxDemandPopoverBindVisibilityHandler);
+                    }
+                    wizardState.aiMaxDemandPopoverBindVisibilityHandler = null;
+                };
+                const clearKeywordAiMaxDemandPopoverBindTimer = () => {
+                    if (wizardState.aiMaxDemandPopoverBindTimer) {
+                        window.clearTimeout(wizardState.aiMaxDemandPopoverBindTimer);
+                        wizardState.aiMaxDemandPopoverBindTimer = 0;
+                    }
+                    clearKeywordAiMaxDemandPopoverBindVisibilityHandler();
+                    wizardState.aiMaxDemandPopoverBindPending = false;
+                };
+                const unbindKeywordAiMaxDemandPopoverDocumentListeners = () => {
+                    if (wizardState.aiMaxDemandPopoverListenersBound) {
+                        document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                        document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    }
+                    wizardState.aiMaxDemandPopoverListenersBound = false;
+                };
+                const bindKeywordAiMaxDemandPopoverDocumentListeners = (popover = null) => {
+                    if (!(popover instanceof HTMLElement) || !popover.isConnected) return false;
+                    if (typeof wizardState.aiMaxDemandPopoverOutsideClick !== 'function') return false;
+                    if (typeof wizardState.aiMaxDemandPopoverEscClose !== 'function') return false;
+                    if (wizardState.aiMaxDemandPopoverListenersBound) return true;
+                    document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
+                    document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
+                    wizardState.aiMaxDemandPopoverListenersBound = true;
+                    return true;
+                };
+                const bindKeywordAiMaxDemandPopoverBindVisibilityHandler = (popover = null) => {
+                    if (typeof wizardState.aiMaxDemandPopoverBindVisibilityHandler === 'function') return;
+                    wizardState.aiMaxDemandPopoverBindVisibilityHandler = () => {
+                        if (isWizardDocumentHidden()) {
+                            if (wizardState.aiMaxDemandPopoverBindTimer) {
+                                window.clearTimeout(wizardState.aiMaxDemandPopoverBindTimer);
+                                wizardState.aiMaxDemandPopoverBindTimer = 0;
+                            }
+                            return;
+                        }
+                        if (!wizardState.aiMaxDemandPopoverBindPending) {
+                            clearKeywordAiMaxDemandPopoverBindTimer();
+                            return;
+                        }
+                        scheduleKeywordAiMaxDemandPopoverListenerBind(popover);
+                    };
+                    document.addEventListener('visibilitychange', wizardState.aiMaxDemandPopoverBindVisibilityHandler);
+                };
+                const scheduleKeywordAiMaxDemandPopoverListenerBind = (popover = null) => {
+                    clearKeywordAiMaxDemandPopoverBindTimer();
+                    if (!(popover instanceof HTMLElement) || !popover.isConnected) return;
+                    if (typeof wizardState.aiMaxDemandPopoverOutsideClick !== 'function') return;
+                    if (typeof wizardState.aiMaxDemandPopoverEscClose !== 'function') return;
+                    wizardState.aiMaxDemandPopoverBindPending = true;
+                    bindKeywordAiMaxDemandPopoverBindVisibilityHandler(popover);
+                    if (isWizardDocumentHidden()) return;
+                    wizardState.aiMaxDemandPopoverBindTimer = window.setTimeout(() => {
+                        wizardState.aiMaxDemandPopoverBindTimer = 0;
+                        if (isWizardDocumentHidden()) return;
+                        bindKeywordAiMaxDemandPopoverDocumentListeners(popover);
+                        clearKeywordAiMaxDemandPopoverBindVisibilityHandler();
+                        wizardState.aiMaxDemandPopoverBindPending = false;
+                    }, 0);
+                };
                 const closeKeywordAiMaxDemandPopover = () => {
                     if (wizardState.closeKeywordAiMaxDemandPopover === closeKeywordAiMaxDemandPopover) {
                         wizardState.closeKeywordAiMaxDemandPopover = null;
                     }
                     const existing = document.getElementById('am-wxt-ai-max-demand-popover');
                     if (existing) existing.remove();
-                    if (wizardState.aiMaxDemandPopoverBindTimer) {
-                        window.clearTimeout(wizardState.aiMaxDemandPopoverBindTimer);
-                        wizardState.aiMaxDemandPopoverBindTimer = 0;
-                    }
-                    if (wizardState.aiMaxDemandPopoverListenersBound) {
-                        document.removeEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
-                        document.removeEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
-                        wizardState.aiMaxDemandPopoverListenersBound = false;
-                    }
+                    clearKeywordAiMaxDemandPopoverBindTimer();
+                    unbindKeywordAiMaxDemandPopoverDocumentListeners();
                     wizardState.aiMaxDemandPopoverOutsideClick = null;
                     wizardState.aiMaxDemandPopoverEscClose = null;
                 };
@@ -52765,15 +52829,7 @@ if (typeof globalThis !== 'undefined') {
                         closeKeywordAiMaxDemandPopover();
                     };
                     wizardState.closeKeywordAiMaxDemandPopover = closeKeywordAiMaxDemandPopover;
-                    wizardState.aiMaxDemandPopoverBindTimer = window.setTimeout(() => {
-                        wizardState.aiMaxDemandPopoverBindTimer = 0;
-                        if (!popover.isConnected) return;
-                        if (typeof wizardState.aiMaxDemandPopoverOutsideClick !== 'function') return;
-                        if (typeof wizardState.aiMaxDemandPopoverEscClose !== 'function') return;
-                        document.addEventListener('click', wizardState.aiMaxDemandPopoverOutsideClick, true);
-                        document.addEventListener('keydown', wizardState.aiMaxDemandPopoverEscClose, true);
-                        wizardState.aiMaxDemandPopoverListenersBound = true;
-                    }, 0);
+                    scheduleKeywordAiMaxDemandPopoverListenerBind(popover);
                     syncPopoverState();
                 };
                 const openScenePopupDialog = ({
