@@ -73,3 +73,31 @@ test('主助手工具按钮和启动入口会给异常提供反馈', () => {
         '主助手 bootstrap 未捕获 main 初始化异常'
     );
 });
+
+test('主助手启动兜底轮询成功或超时后会同时释放 interval 和 timeout', () => {
+    assert.match(
+        mainAssistantMain,
+        /let bootstrapRetryIntervalId = 0;\s*\n\s*let bootstrapRetryTimeoutId = 0;/,
+        '主助手启动兜底缺少 interval/timeout 双句柄'
+    );
+    assert.match(
+        mainAssistantMain,
+        /const clearBootstrapRetryTimers = \(\) => \{[\s\S]*if \(bootstrapRetryIntervalId\) \{[\s\S]*clearInterval\(bootstrapRetryIntervalId\);[\s\S]*bootstrapRetryIntervalId = 0;[\s\S]*if \(bootstrapRetryTimeoutId\) \{[\s\S]*clearTimeout\(bootstrapRetryTimeoutId\);[\s\S]*bootstrapRetryTimeoutId = 0;/,
+        '启动兜底 timer 应通过同一 helper 同时清理 interval 和 timeout'
+    );
+    assert.match(
+        mainAssistantMain,
+        /hasBootstrapped = true;\s*\n\s*clearBootstrapRetryTimers\(\);\s*\n\s*try \{\s*\n\s*main\(\);/,
+        'bootstrap 成功后应立即释放启动兜底 timer'
+    );
+    assert.match(
+        mainAssistantMain,
+        /bootstrapRetryIntervalId = setInterval\(\(\) => \{[\s\S]*bootstrapMain\(\);[\s\S]*\}, 16\);[\s\S]*bootstrapRetryTimeoutId = setTimeout\(\(\) => \{[\s\S]*clearBootstrapRetryTimers\(\);[\s\S]*\}, 10000\);/,
+        '启动兜底 interval 和 timeout 应保存句柄，超时通过统一 helper 清理'
+    );
+    assert.doesNotMatch(
+        mainAssistantMain,
+        /const timer = setInterval\(\(\) => \{[\s\S]*setTimeout\(\(\) => clearInterval\(timer\), 10000\);/,
+        '启动兜底不应保留成功后仍悬挂的无句柄 timeout'
+    );
+});

@@ -1,3 +1,46 @@
+# TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十九子项
+
+## 需求规格
+- 目标：在主面板开关监听释放后，继续收口主助手启动兜底轮询的 timer 生命周期，避免 `document.body` 延迟出现时，`setInterval` 成功启动后已清理但 10 秒兜底 `setTimeout(() => clearInterval(timer), 10000)` 仍保留闭包。
+- 根因判断：`src/main-assistant/main.js` 在 `document.readyState !== 'loading'` 且 `document.body` 暂不可用时启动 16ms interval 轮询；轮询成功后只 `clearInterval(timer)`，未清理 10 秒 timeout，timeout 会继续持有 `timer/bootstrapMain` 等闭包直到自然触发。
+- 范围：仅覆盖主助手 bootstrap fallback interval/timeout 生命周期和对应静态测试；不改 `main()` 初始化顺序、SmartAssistant 预算页早退、MutationObserver、URL 变更监听、`Core.run()` 调度、辅助显示、万能查数、算法护航、组建计划或真实写接口合同。
+- 热修 vs 结构性修复取舍：采用“两个启动兜底 timer 句柄 + 单一 `clearBootstrapRetryTimers()`”的生命周期；不改变 16ms 轮询间隔、不改变 10 秒兜底上限、不新增第二套启动状态。
+- 成功标准：静态测试证明 fallback interval 和 fallback timeout 都有句柄，成功 bootstrap 会调用 `clearBootstrapRetryTimers()`，超时兜底也通过同一 helper 释放两类 timer；通过目标测试、构建同步/检查、语法/空白检查、必要回归；Chrome MCP 真实页只读验证只使用 `mcp__chrome_devtools.*`。
+- 安全边界：本子项不点击创建、复制、预算提交、删除、上下线、投放或护航执行；浏览器验收只允许刷新/观察主助手启动状态和 timer 释放。
+
+## 执行计划（可核对）
+- [x] 复核第十八子项提交后工作区状态，确认本子项只处理主助手启动兜底 timer 生命周期。
+- [x] 扫描启动层 MutationObserver/URL 变更/兜底轮询，确认 MutationObserver 是页面动态注入事实源，不关闭；选择 bootstrap fallback timer 作为本轮优化点。
+- [x] 实现 `bootstrapRetryIntervalId`、`bootstrapRetryTimeoutId` 和统一清理 helper。
+- [x] 补充/更新目标测试，锁定启动成功和超时都会释放 interval 与 timeout。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证尝试。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `47c01db 优化 Chrome 主面板开关监听释放`，工作区干净。
+- 定位结论：主助手 MutationObserver 和 URL 监听是 SPA 表格复用/路由变更的持续事实源，不能为了释放资源而关闭；启动兜底轮询的 10 秒 timeout 在成功后继续保留是明确可收口的短生命周期资源。
+- 方案判断：用单一 `clearBootstrapRetryTimers()` 表达启动兜底资源不变量：无论轮询成功还是兜底超时，都同时释放 interval 和 timeout，避免旧闭包继续挂到 10 秒。
+- 实现摘要：`src/main-assistant/main.js` 新增 `bootstrapRetryIntervalId`、`bootstrapRetryTimeoutId` 和 `clearBootstrapRetryTimers()`；`bootstrapMain()` 成功进入启动态后立即清理兜底 timer，10 秒超时也通过同一 helper 清理。
+- 测试摘要：`tests/optimizer-entry-error-handling.test.mjs` 新增静态回归，锁定启动兜底双句柄、统一清理 helper、成功启动调用点、超时清理调用点，以及禁止回退到旧的无句柄 timeout。
+
+## 验证记录
+- 源码段语法：`node --check src/main-assistant/main.js` 不适用于该文件，因为它是构建段并以外层 IIFE 结束括号收尾；实际语法通过 `npm run check:syntax` 检查生成后的根 userscript。
+- 测试语法：`node --check tests/optimizer-entry-error-handling.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：`node --test tests/optimizer-entry-error-handling.test.mjs` 通过，5 项测试全绿；新增断言覆盖启动兜底 interval/timeout 双句柄、统一清理 helper、成功启动清理、超时清理和旧无句柄 timeout 禁用。
+- 项目语法：`npm run check:syntax` 通过。
+- 构建检查：`npm run build:check` 通过。
+- 相关回归：`node --test tests/optimizer-entry-error-handling.test.mjs tests/logger-api.test.mjs tests/extension-static-build.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs` 通过，45 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`npm test` 通过，606 项中 604 项通过，2 项因缺少可选 `agent-cluster/index.mjs` 跳过，无失败项。
+- Chrome MCP 验证：按用户“只用chrome mcp”和 L97，本子项未使用 Browser、CDP、node 脚本或系统 Chrome 替代；`tool_search` 查询 `mcp__chrome_devtools list_pages evaluate_script take_snapshot Chrome DevTools` 返回 0 个可用工具，属于 MCP/session binding 缺口，因此真实页只读验收未完成。
+- Diff 自审：改动集中在主助手 bootstrap fallback timer 生命周期、对应静态测试、任务记录和构建产物；未改 `main()` 初始化顺序、SmartAssistant 预算页早退、MutationObserver、URL 变更监听、`Core.run()` 调度、辅助显示、万能查数、算法护航、组建计划或真实写接口合同。
+
+## 结果复盘
+- 第十一轮第十九子项结果：主助手启动兜底从“interval 成功后只清 interval，10 秒 timeout 继续持有旧闭包”优化为“启动成功和兜底超时都经由 `clearBootstrapRetryTimers()` 同时释放 interval 与 timeout，并把两个句柄归零”。
+- 取舍结论：保留 16ms 轮询节奏和 10 秒兜底上限；MutationObserver 与 URL 监听仍是 SPA 页面动态注入事实源，本轮没有为了表面释放资源而破坏运行态重注入能力。
+- 验证结论：静态测试、构建、相关回归、全量回归与 diff 自审均通过；Chrome MCP 工具当前未暴露，真实页只读验收留作工具恢复后的补验缺口。
+
 # TODO - 2026-06-04 插件浏览器内存占用继续优化第十一轮第十八子项
 
 ## 需求规格

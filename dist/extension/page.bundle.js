@@ -23883,6 +23883,18 @@ if (typeof globalThis !== 'undefined') {
     }
 
     let hasBootstrapped = false;
+    let bootstrapRetryIntervalId = 0;
+    let bootstrapRetryTimeoutId = 0;
+    const clearBootstrapRetryTimers = () => {
+        if (bootstrapRetryIntervalId) {
+            clearInterval(bootstrapRetryIntervalId);
+            bootstrapRetryIntervalId = 0;
+        }
+        if (bootstrapRetryTimeoutId) {
+            clearTimeout(bootstrapRetryTimeoutId);
+            bootstrapRetryTimeoutId = 0;
+        }
+    };
     const reportBootstrapError = (err) => {
         try {
             Logger.log(`⚠️ 主助手启动失败：${err?.message || '未知错误'}`, true);
@@ -23895,6 +23907,7 @@ if (typeof globalThis !== 'undefined') {
         if (hasBootstrapped) return;
         if (!document.body) return;
         hasBootstrapped = true;
+        clearBootstrapRetryTimers();
         try {
             main();
         } catch (err) {
@@ -23908,11 +23921,12 @@ if (typeof globalThis !== 'undefined') {
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', bootstrapMain, { once: true });
         } else {
-            const timer = setInterval(() => {
+            bootstrapRetryIntervalId = setInterval(() => {
                 bootstrapMain();
-                if (hasBootstrapped) clearInterval(timer);
             }, 16);
-            setTimeout(() => clearInterval(timer), 10000);
+            bootstrapRetryTimeoutId = setTimeout(() => {
+                clearBootstrapRetryTimers();
+            }, 10000);
         }
     }
 
