@@ -60,6 +60,7 @@
         crowdMatrixStateHidePendingDelayMs: null,
         crowdMatrixBarAnimationFrame: 0,
         crowdMatrixBarAnimationCancel: null,
+        crowdMatrixBarAnimationVisibilityHandler: null,
         crowdMatrixBarAnimationQueue: [],
         crowdMatrixLoadedCampaignId: '',
         crowdMatrixDataset: null,
@@ -4968,7 +4969,7 @@
             }
         },
 
-        clearCrowdMatrixBarAnimation() {
+        clearCrowdMatrixBarAnimationFrame() {
             if (this.crowdMatrixBarAnimationFrame) {
                 const cancelFrame = typeof this.crowdMatrixBarAnimationCancel === 'function'
                     ? this.crowdMatrixBarAnimationCancel
@@ -4977,24 +4978,61 @@
             }
             this.crowdMatrixBarAnimationFrame = 0;
             this.crowdMatrixBarAnimationCancel = null;
+        },
+
+        clearCrowdMatrixBarAnimationVisibilityHandler() {
+            const handler = this.crowdMatrixBarAnimationVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.crowdMatrixBarAnimationVisibilityHandler = null;
+        },
+
+        clearCrowdMatrixBarAnimation() {
+            this.clearCrowdMatrixBarAnimationFrame();
+            this.clearCrowdMatrixBarAnimationVisibilityHandler();
             this.crowdMatrixBarAnimationQueue = [];
         },
 
+        flushCrowdMatrixBarAnimationQueue(options = {}) {
+            const includeDisconnected = options.includeDisconnected === true;
+            const queue = Array.isArray(this.crowdMatrixBarAnimationQueue)
+                ? this.crowdMatrixBarAnimationQueue.splice(0)
+                : [];
+            queue.forEach((entry) => {
+                const fill = entry?.fill;
+                if (!(fill instanceof HTMLElement) || (!includeDisconnected && !fill.isConnected)) return;
+                fill.style.height = entry.height;
+                fill.style.opacity = '1';
+            });
+        },
+
+        bindCrowdMatrixBarAnimationVisibilityHandler() {
+            if (typeof this.crowdMatrixBarAnimationVisibilityHandler === 'function') return;
+            this.crowdMatrixBarAnimationVisibilityHandler = () => {
+                if (!this.isMagicReportDocumentHidden()) return;
+                this.clearCrowdMatrixBarAnimationFrame();
+                this.clearCrowdMatrixBarAnimationVisibilityHandler();
+                this.flushCrowdMatrixBarAnimationQueue();
+            };
+            document.addEventListener('visibilitychange', this.crowdMatrixBarAnimationVisibilityHandler);
+        },
+
         scheduleCrowdMatrixBarAnimation() {
+            if (this.isMagicReportDocumentHidden()) {
+                this.clearCrowdMatrixBarAnimationFrame();
+                this.clearCrowdMatrixBarAnimationVisibilityHandler();
+                this.flushCrowdMatrixBarAnimationQueue({ includeDisconnected: true });
+                return;
+            }
             if (this.crowdMatrixBarAnimationFrame) return;
             const applyQueuedBars = () => {
                 this.crowdMatrixBarAnimationFrame = 0;
                 this.crowdMatrixBarAnimationCancel = null;
-                const queue = Array.isArray(this.crowdMatrixBarAnimationQueue)
-                    ? this.crowdMatrixBarAnimationQueue.splice(0)
-                    : [];
-                queue.forEach((entry) => {
-                    const fill = entry?.fill;
-                    if (!(fill instanceof HTMLElement) || !fill.isConnected) return;
-                    fill.style.height = entry.height;
-                    fill.style.opacity = '1';
-                });
+                this.clearCrowdMatrixBarAnimationVisibilityHandler();
+                this.flushCrowdMatrixBarAnimationQueue();
             };
+            this.bindCrowdMatrixBarAnimationVisibilityHandler();
             if (typeof requestAnimationFrame === 'function') {
                 this.crowdMatrixBarAnimationCancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
                 this.crowdMatrixBarAnimationFrame = requestAnimationFrame(applyQueuedBars);

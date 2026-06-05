@@ -1,3 +1,54 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十三子项
+
+## 需求规格
+- 目标：在 DMP 下拉定位调度收口后，继续优化人群矩阵柱状条动画的隐藏页行为，避免隐藏标签页仍为不可见柱状过渡保留 `requestAnimationFrame(applyQueuedBars)` 或 16ms fallback timeout。
+- 根因判断：上一子项已把人群矩阵柱状动画从每根柱子一个 rAF 收敛为单帧批处理，但 `queueCrowdMatrixBarAnimation()` 在页面隐藏时仍会进入统一调度并排一个 frame/timeout。该调度只服务可见页从 `height:0%`、`opacity:0.38` 过渡到目标柱高；隐藏页无需动画帧，直接落最终样式即可。
+- 范围：仅覆盖 `src/main-assistant/magic-report.js` 的人群矩阵柱状条动画隐藏态分支、pending 队列 flush、visibilitychange 取消和目标测试；不改人群矩阵取数、数据集构建、排序、指标/周期显隐、tooltip、DMP 人群、请求并发、创建/复制/提交、预算、下载、openV3 或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：可见页保留现有单 rAF/fallback 批处理和动画初始态；隐藏页入队时立即写最终高度和透明度，不排任何 frame/timeout；可见页等待动画帧期间若切到 hidden，取消 pending frame/timeout 并一次性写最终样式，释放队列和 visibility 监听。
+- 成功标准：静态与行为测试证明 MagicReport 有柱状动画 visibility handler、队列 flush helper 和隐藏页直落最终样式分支；隐藏页调用 `queueCrowdMatrixBarAnimation()` 不产生 rAF/timeout 且 fill 最终 `height/opacity` 正确；可见页仍最多一个 rAF/fallback；visible->hidden 会取消 pending frame 并 flush 队列；重绘和运行态清理仍取消 pending 动画不写旧 DOM；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击万能查数快捷话术、不发起人群矩阵查询、不触发 DMP 请求、不调用 `Core.run()`、openV3/护航执行、token 主动请求、预算、创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama/DMP 只读运行态确认、extension bundle 命中确认和危险写请求计数，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第六十二子项提交后工作区状态，确认 tracked 工作区干净。
+- [x] 回顾 `tasks/lessons.md` 的 Chrome MCP 与按项中文提交规则。
+- [x] 定位剩余 timer/rAF/observer 候选，并排除请求并发、创建/复制/提交、openV3、预算、下载启动和服务端 10rpm 边界。
+- [x] 选定人群矩阵柱状条隐藏页动画调度，确认其只服务不可见 UI 过渡。
+- [x] 为柱状动画增加队列 flush helper、visibility handler 和隐藏页直落最终样式分支。
+- [x] 更新人群矩阵目标测试，锁定隐藏页不排 frame/timeout、visible->hidden flush 和可见页原批处理不变。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `99afeea 优化DMP下拉定位调度`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：只读子代理给出 DMP 入口 MutationObserver、人群矩阵柱状动画隐藏态、主助手 bootstrap MutationObserver 三个候选。DMP 入口和主助手 bootstrap 都负责插件重挂，真实页面恢复风险更高；人群矩阵柱状动画只影响不可见 UI 过渡，是本轮最低风险纯 UI wakeup 优化。
+- 计划校验：本轮只降低隐藏标签页中人群矩阵柱状条动画的后台 frame/timeout 保留；可见页柱状动画、人群矩阵数据、排序、tooltip、指标/周期控制和 DMP 看板行为保持不变。若实现需要触碰取数请求、并发、预算、创建/复制/提交、下载、openV3 或 10rpm 链路，先回到本计划更新后再继续。
+- UI 规范复核：已读取 `docs/插件UI统一设计规范.md` 和 `docs/图标设计规范.md`；本子项不改视觉、图标、文案或交互结构，仅调整动画调度生命周期。
+- 实现摘要：`MagicReport` 新增 `crowdMatrixBarAnimationVisibilityHandler`、`clearCrowdMatrixBarAnimationFrame()`、`clearCrowdMatrixBarAnimationVisibilityHandler()`、`flushCrowdMatrixBarAnimationQueue()` 和 `bindCrowdMatrixBarAnimationVisibilityHandler()`。可见页仍保留单 rAF/fallback 批量动画；隐藏页调用 `queueCrowdMatrixBarAnimation()` 后直接 flush 最终高度和透明度，不排 frame/timeout。
+- 隐藏态摘要：隐藏页新建柱子时 fill 可能尚未 append 到 DOM，因此 hidden flush 使用 `includeDisconnected: true` 处理新 fill；可见页等待动画期间转 hidden 时取消 pending frame/timeout 并 flush 已连接队列；显式重绘和运行态清理仍只清队列，不写旧 DOM。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 的柱状动画 harness 增加 `document.visibilityState`、`visibilitychange` 监听计数和切换触发；目标用例覆盖可见页单 rAF、fallback 单 timeout、隐藏页不排任务、visible->hidden flush、disconnect 旧 fill 跳过、运行态清理释放 frame/listener/queue。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：首次 `node --test tests/magic-report-crowd-matrix.test.mjs` 在构建前暴露测试读取根 userscript 旧产物；运行 build 并修正 `clearFrame` 静态断言后重跑通过，72 项全绿。
+- 项目检查：`npm run check:syntax`、`npm run build:check`、`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js` 均通过。
+- 静态定位：`rg` 确认 `crowdMatrixBarAnimationVisibilityHandler`、`flushCrowdMatrixBarAnimationQueue`、`clearCrowdMatrixBarAnimationFrame`、`bindCrowdMatrixBarAnimationVisibilityHandler` 和 `includeDisconnected` 已进入源码、目标测试、根 userscript、发布包和 extension bundle；`requestAnimationFrame(applyHeight)` / `setTimeout(applyHeight, 16)` 在源码、根 userscript、发布包、extension bundle 和目标测试中无命中。
+- 相关回归：`node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，130 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`node -e "const { spawnSync } = require('node:child_process'); const result = spawnSync('npm', ['test'], { stdio: 'inherit', timeout: 60000 }); if (result.error) { console.error(result.error.message); process.exit(1); } process.exit(result.status ?? 1);"` 通过，635 项中 633 项通过、2 项因缺少可选 `agent-cluster/index.mjs` 跳过、0 失败。
+- Chrome DevTools MCP 扩展重载：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 `Reload`，页面出现 `Reloaded`；扩展版本 `7.06`，加载路径 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`。
+- Chrome DevTools MCP one.alimama 只读验收：刷新 `https://one.alimama.com/index.html#!/login/index?...` 后，标题 `登录页_万相台无界版`、`readyState:"complete"`、`visibilityState:"visible"`、版本 `7.06`、主助手悬浮球和面板存在且面板隐藏；万能查数、人群矩阵、DMP 下拉 portal、算法护航、结果 overlay、批量菜单、复制弹窗、下载捕获、授权 overlay 均未打开；`planApiReady`、`keywordApiReady`、`optimizerToggleReady`、`hookManagerReady` 均为 true。
+- Chrome DevTools MCP DMP 页面只读验收：刷新 `https://dmp.taobao.com/index_new.html?...analysisTab=crowd-insight...` 后，标题 `达摩盘`、版本 `7.06`、DMP `人群对比看板` 入口存在；插件弹窗、DMP 下拉 portal、人群矩阵、算法护航、复制/批量/下载/授权弹层均未打开；未点击 DMP 看板入口、未打开下拉，也未触发插件查询。
+- Chrome DevTools MCP bundle 验收：one.alimama 与 DMP 页内只读 fetch `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 均返回 200，长度 `4092930`；bundle 含 `crowdMatrixBarAnimationVisibilityHandler`、`flushCrowdMatrixBarAnimationQueue`、`clearCrowdMatrixBarAnimationFrame`、`bindCrowdMatrixBarAnimationVisibilityHandler` 和 `flushCrowdMatrixBarAnimationQueue({ includeDisconnected: true })`；不含旧 `requestAnimationFrame(applyHeight)` / `setTimeout(applyHeight, 16)`。
+- Chrome DevTools MCP console/network 验收：one.alimama 有 `[AM] 🚀 阿里助手 Pro v7.06 已启动`，DMP 页面有 `[AM] 🚀 阿里助手 Pro v7.06 已启动：DMP 单品人群看板入口`；控制台其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED`、mmstat WebSocket 和 deprecated issue 噪声。两页 performance resource 过滤 `/solution/addList`、`/solution/copy`、`/campaign/budget/batchUpdate`、`/campaign/updatePart`、`/campaign/delete`、`/campaign/status`、`/campaign/add`、`/campaign/create`、`/openV3`、`/download`，危险写请求计数均为 `0`。
+
+## 结果复盘
+- 第十一轮第六十三子项结果：人群矩阵柱状条动画在隐藏页从“仍排单个 rAF 或 16ms fallback timeout 等待不可见过渡”优化为“直接写最终柱高和透明度，不创建后台 frame/timeout”。
+- 效果结论：后台标签页中人群矩阵重绘不再为柱状动画保留 `requestAnimationFrame(applyQueuedBars)` 或 16ms fallback timeout；可见页仍保持上一轮的单帧批处理动画，切到隐藏页时会取消 pending frame 并 flush 最终状态。
+- 清理结论：重绘和运行态清理继续取消 pending frame/timeout、释放 visibility listener 并清空队列，旧 DOM fill 不会被清理路径写入；隐藏页新建 fill 即使尚未连接 DOM 也能直接落最终样式。
+- 边界结论：本轮没有触碰人群矩阵取数、数据集构建、排序、tooltip、DMP 人群、请求并发、创建/复制/提交、openV3、预算、下载启动或服务端 10rpm 逻辑；Chrome MCP 验收未点击任何真实业务工具或写入口，危险写请求计数 `0`。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十二子项
 
 ## 需求规格
