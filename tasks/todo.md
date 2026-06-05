@@ -1,3 +1,54 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十二子项
+
+## 需求规格
+- 目标：在主助手 Logger flush 调度收口后，继续优化 DMP 人群属性下拉的二次定位 rAF，避免页面隐藏时仍保留 `requestAnimationFrame(() => this.positionDmpCrowdPropertyDropdownPortal())` 去重算浮层坐标。
+- 根因判断：`src/main-assistant/magic-report.js` 的 `renderDmpCrowdPropertyDropdownPortal()` 在把 DMP 人群属性下拉挂到 `document.body` 后，会先同步定位一次，再裸排一个 rAF 做布局稳定后的二次定位。该 rAF 只服务可见页浮层坐标校正；隐藏页中继续保留 frame 会持有 dropdown/trigger/portal 相关闭包，关闭或重渲染下拉时也没有独立句柄可取消。
+- 范围：仅覆盖 DMP 人群属性下拉 portal 的二次定位 frame/timeout fallback、visibilitychange handler、pending 标记和关闭/释放清理；不改 DMP 人群属性数据、下拉选项、选择行为、看板取数、万能查数、算法护航、组建计划、请求并发、创建/复制/提交、预算、下载、openV3 或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：保留可见页“append 后同步定位 + 下一帧再定位”的可见效果；只把裸 rAF 改为统一 helper 调度。隐藏页不排定位 frame，恢复可见后若下拉仍打开再补定位；关闭下拉、重渲染 portal、释放弹窗资源和清理运行态缓存时统一取消 pending frame/listener。
+- 成功标准：静态与行为测试证明 MagicReport 有 DMP 下拉定位 frame/cancel/visibility/pending 状态；`renderDmpCrowdPropertyDropdownPortal()` 不再直接调用裸 `requestAnimationFrame(() => this.positionDmpCrowdPropertyDropdownPortal())`；隐藏页不排 rAF/timeout，恢复可见后补排一次；visible->hidden 取消待执行 frame；移除 portal 和 `clearMagicRuntimeCaches()` 会释放 frame/listener/pending；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击 DMP 下拉选项、不发起 DMP 看板取数、不触发万能查数查询、算法护航、组建计划、计划并发、openV3、预算、创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama 只读运行态确认、extension bundle 命中确认和可见 UI 只读状态确认，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第六十一子项提交后工作区状态，确认本子项从干净工作区开始。
+- [x] 回顾 `tasks/lessons.md` 的 Chrome MCP 与按项中文提交规则。
+- [x] 定位剩余 timer/rAF 候选，排除主扫描、DMP 按钮 ensure、下载 cleanup、创建/复制焦点恢复、预算、openV3、请求超时和服务端 10rpm 相关链路。
+- [x] 选定 DMP 人群属性下拉二次定位 rAF，确认其只服务 body portal 浮层坐标校正。
+- [x] 为 DMP 下拉二次定位增加 frame/cancel/visibility/pending 状态和统一清理 helper。
+- [x] 将裸 rAF 改为可见页保留二次定位、隐藏页暂停、visible->hidden 取消 pending frame。
+- [x] 更新人群矩阵目标测试，锁定隐藏页不排 frame、恢复可见补定位、visible->hidden 取消、关闭/释放清理和旧裸 rAF 移除。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `c2f9129 优化主助手日志刷新调度`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：`main.js` 核心扫描、DMP 入口按钮 ensure、万能查数状态条/快捷话术/iframe cleanup 已有隐藏页处理；下载 cleanup、创建/复制焦点恢复、预算、openV3、请求超时都靠近业务链路或明确排除边界。DMP 人群属性下拉二次定位只重算浮层坐标，是本轮低风险纯 UI 调度点。
+- 计划校验：本轮只降低隐藏标签页中 DMP 下拉 portal 二次定位的后台 frame/timeout 保留；可见页定位效果、下拉选项、选择行为和看板取数保持不变。若实现需要触碰 DMP 查询、属性选择提交、万能查数、预算、创建/复制/提交、下载、openV3 或 10rpm 链路，先回到本计划更新后再继续。
+- 实现摘要：`MagicReport` 新增 `dmpCrowdPropertyDropdownPositionFrame`、`dmpCrowdPropertyDropdownPositionCancel`、`dmpCrowdPropertyDropdownPositionVisibilityHandler`、`dmpCrowdPropertyDropdownPositionPending`，并抽出 `clearDmpCrowdPropertyDropdownPositionFrame()`、`clearDmpCrowdPropertyDropdownPositionVisibilityHandler()`、`clearDmpCrowdPropertyDropdownPositionState()`、`bindDmpCrowdPropertyDropdownPositionVisibilityHandler()`、`scheduleDmpCrowdPropertyDropdownPositionUpdate()`。
+- 调度摘要：`renderDmpCrowdPropertyDropdownPortal()` 仍在 append 后同步定位一次；原裸 `requestAnimationFrame(() => this.positionDmpCrowdPropertyDropdownPortal())` 改为可取消 helper。可见页继续下一帧二次定位；隐藏页只保留 pending 和 visibility listener，不排 rAF/timeout；等待期间转隐藏会取消 pending frame，恢复 visible 后若 portal 与 metric 仍有效再补定位。
+- 清理摘要：只读子代理复核指出 body portal 清理边界；本轮已把 `clearMagicRuntimeCaches()` 从仅清定位状态升级为清空 DMP 下拉 metric/channel 并调用 `removeDmpCrowdPropertyDropdownPortal()`，确保释放弹窗或运行态重置时移除 body 级下拉 DOM，同时取消 frame/listener/pending。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 新增 DMP 下拉定位 harness 和目标用例，覆盖静态合同、隐藏页不排 frame/timeout、恢复可见补定位、visible->hidden 取消 rAF、fallback timeout、remove portal 清理、运行态清理移除 body portal 和旧裸 rAF 移除。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：首次 `node --test tests/magic-report-crowd-matrix.test.mjs` 暴露旧 harness 缺少 `removeDmpCrowdPropertyDropdownPortal()` stub；补齐后重跑通过，72 项测试全绿，新增 “DMP 人群属性下拉二次定位在隐藏页暂停并随关闭释放”。
+- 项目检查：`npm run check:syntax`、`npm run build:check`、`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js` 均通过。
+- 静态定位：`rg` 确认 `dmpCrowdPropertyDropdownPositionFrame`、`scheduleDmpCrowdPropertyDropdownPositionUpdate`、`removeDmpCrowdPropertyDropdownPortal()` 已进入源码、根 userscript、发布包、extension bundle 和目标测试；旧 `requestAnimationFrame(() => this.positionDmpCrowdPropertyDropdownPortal())` 无命中。
+- 相关回归：`node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，130 项测试全绿。
+- 全量回归：`node -e "const { spawnSync } = require('node:child_process'); const result = spawnSync('npm', ['test'], { stdio: 'inherit', timeout: 60000 }); if (result.error) { console.error(result.error.message); process.exit(1); } process.exit(result.status ?? 1);"` 通过，635 项中 633 项通过、2 项因缺少可选 `agent-cluster/index.mjs` 跳过、0 失败。
+- Chrome DevTools MCP 扩展重载：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 `Reload`，页面出现 `Reloaded`；版本 `7.06`，加载路径 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`。
+- Chrome DevTools MCP one.alimama 只读验收：刷新 `https://one.alimama.com/index.html#!/login/index?...` 后，`readyState:"complete"`、标题 `登录页_万相台无界版`、版本 `7.06`、主助手悬浮球/面板节点存在且面板隐藏；万能查数、人群矩阵、DMP 下拉 portal、算法护航、结果 overlay、批量菜单、复制弹窗、下载捕获、授权 overlay 均未打开；`planApiReady`、`keywordApiReady`、`optimizerToggleReady`、`hookManagerReady` 均为 true。
+- Chrome DevTools MCP DMP 页面只读验收：刷新 `https://dmp.taobao.com/index_new.html?...analysisTab=crowd-insight...` 后，标题 `达摩盘`、版本 `7.06`、DMP 入口存在；插件弹窗、DMP 下拉 portal、人群矩阵、算法护航、复制/批量/下载/授权弹层均未打开；未点击 DMP 下拉选项，也未触发插件 DMP 看板查询。
+- Chrome DevTools MCP bundle 验收：在 one.alimama 与 DMP 页面只读 fetch `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 均返回 200，长度 `4091107`；bundle 含 `dmpCrowdPropertyDropdownPositionFrame`、`dmpCrowdPropertyDropdownPositionCancel`、`dmpCrowdPropertyDropdownPositionVisibilityHandler`、`dmpCrowdPropertyDropdownPositionPending`、`scheduleDmpCrowdPropertyDropdownPositionUpdate`、`clearDmpCrowdPropertyDropdownPositionState`、`requestAnimationFrame(runPositionUpdate)`、`setTimeout(runPositionUpdate, 16)` 和运行态清理 `removeDmpCrowdPropertyDropdownPortal()`；不含旧裸 `requestAnimationFrame(() => this.positionDmpCrowdPropertyDropdownPortal())`。
+- Chrome DevTools MCP console/network 验收：one.alimama 有 `[AM] 🚀 阿里助手 Pro v7.06 已启动`，DMP 页面有 `[AM] 🚀 阿里助手 Pro v7.06 已启动：DMP 单品人群看板入口`；控制台其余主要为页面既有 `ERR_TUNNEL_CONNECTION_FAILED`、mmstat WebSocket 和 deprecated issue 噪声。两页 performance resource 过滤 `/solution/addList`、`/solution/copy`、`/campaign/budget/batchUpdate`、`/campaign/updatePart`、`/campaign/delete`、`/campaign/status`、`/campaign/add`、`/campaign/create`、`/openV3`、`/download`，危险写请求计数均为 `0`。
+
+## 结果复盘
+- 第十一轮第六十二子项结果：DMP 人群属性下拉 portal 的二次定位从“append 后同步定位，再裸排一个不可取消 rAF”优化为“同步定位保留，二次定位统一进入可取消 rAF/fallback 调度”。
+- 效果结论：页面隐藏期间打开或等待 DMP 下拉二次定位时，插件不再保留定位 rAF 或 16ms fallback timeout；恢复可见后若下拉仍有效才补定位。可见页下拉定位效果、下拉选项、选择行为、DMP 看板取数和页面原生请求保持不变。
+- 清理结论：关闭/重渲染 DMP 下拉、释放弹窗资源和清理运行态缓存都会取消 pending frame/listener/pending；运行态清理还会清空 DMP 下拉 metric/channel 并移除 body 级 portal，避免弹窗关闭后残留孤立下拉 DOM。
+- 边界结论：本轮没有触碰请求并发、创建/复制/提交、openV3、预算、下载启动或服务端 10rpm 逻辑；Chrome MCP 验收未点击任何真实业务工具或写入口，危险写请求计数 `0`。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十一子项
 
 ## 需求规格

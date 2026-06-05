@@ -79,6 +79,10 @@
         dmpCrowdPropertyDropdownMetric: '',
         dmpCrowdPropertyDropdownChannelKey: '',
         dmpCrowdPropertyDropdownPortalEl: null,
+        dmpCrowdPropertyDropdownPositionFrame: 0,
+        dmpCrowdPropertyDropdownPositionCancel: null,
+        dmpCrowdPropertyDropdownPositionVisibilityHandler: null,
+        dmpCrowdPropertyDropdownPositionPending: false,
         dmpCrowdMatrixMetricMeta: null,
         dmpCrowdMatrixOriginalConfig: null,
         crowdCampaignItemIdMap: new Map(),
@@ -5715,10 +5719,83 @@
         },
 
         removeDmpCrowdPropertyDropdownPortal() {
+            this.clearDmpCrowdPropertyDropdownPositionState();
             if (this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement) {
                 this.dmpCrowdPropertyDropdownPortalEl.remove();
             }
             this.dmpCrowdPropertyDropdownPortalEl = null;
+        },
+
+        clearDmpCrowdPropertyDropdownPositionFrame() {
+            if (!this.dmpCrowdPropertyDropdownPositionFrame) return;
+            const cancelFrame = typeof this.dmpCrowdPropertyDropdownPositionCancel === 'function'
+                ? this.dmpCrowdPropertyDropdownPositionCancel
+                : clearTimeout;
+            cancelFrame(this.dmpCrowdPropertyDropdownPositionFrame);
+            this.dmpCrowdPropertyDropdownPositionFrame = 0;
+            this.dmpCrowdPropertyDropdownPositionCancel = null;
+        },
+
+        clearDmpCrowdPropertyDropdownPositionVisibilityHandler() {
+            const handler = this.dmpCrowdPropertyDropdownPositionVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.dmpCrowdPropertyDropdownPositionVisibilityHandler = null;
+        },
+
+        clearDmpCrowdPropertyDropdownPositionState() {
+            this.clearDmpCrowdPropertyDropdownPositionFrame();
+            this.clearDmpCrowdPropertyDropdownPositionVisibilityHandler();
+            this.dmpCrowdPropertyDropdownPositionPending = false;
+        },
+
+        bindDmpCrowdPropertyDropdownPositionVisibilityHandler() {
+            if (typeof this.dmpCrowdPropertyDropdownPositionVisibilityHandler === 'function') return;
+            this.dmpCrowdPropertyDropdownPositionVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearDmpCrowdPropertyDropdownPositionFrame();
+                    this.dmpCrowdPropertyDropdownPositionPending = this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement
+                        && !!this.dmpCrowdPropertyDropdownMetric;
+                    return;
+                }
+                if (this.dmpCrowdPropertyDropdownPositionPending) {
+                    this.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+                    return;
+                }
+                this.clearDmpCrowdPropertyDropdownPositionVisibilityHandler();
+            };
+            document.addEventListener('visibilitychange', this.dmpCrowdPropertyDropdownPositionVisibilityHandler);
+        },
+
+        scheduleDmpCrowdPropertyDropdownPositionUpdate() {
+            this.clearDmpCrowdPropertyDropdownPositionFrame();
+            if (!(this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement) || !this.dmpCrowdPropertyDropdownMetric) {
+                this.clearDmpCrowdPropertyDropdownPositionState();
+                return;
+            }
+            this.dmpCrowdPropertyDropdownPositionPending = true;
+            this.bindDmpCrowdPropertyDropdownPositionVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) return;
+            const runPositionUpdate = () => {
+                this.dmpCrowdPropertyDropdownPositionFrame = 0;
+                this.dmpCrowdPropertyDropdownPositionCancel = null;
+                if (this.isMagicReportDocumentHidden()) {
+                    this.dmpCrowdPropertyDropdownPositionPending = this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement
+                        && !!this.dmpCrowdPropertyDropdownMetric;
+                    return;
+                }
+                this.dmpCrowdPropertyDropdownPositionPending = false;
+                this.clearDmpCrowdPropertyDropdownPositionVisibilityHandler();
+                this.positionDmpCrowdPropertyDropdownPortal();
+            };
+            if (typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function') {
+                this.dmpCrowdPropertyDropdownPositionCancel = cancelAnimationFrame;
+                this.dmpCrowdPropertyDropdownPositionFrame = requestAnimationFrame(runPositionUpdate);
+                return;
+            }
+            this.dmpCrowdPropertyDropdownPositionCancel = clearTimeout;
+            this.dmpCrowdPropertyDropdownPositionFrame = setTimeout(runPositionUpdate, 16);
         },
 
         getDmpCrowdDropdownViewModel(metricType) {
@@ -5837,7 +5914,7 @@
             document.body.appendChild(dropdown);
             this.dmpCrowdPropertyDropdownPortalEl = dropdown;
             this.positionDmpCrowdPropertyDropdownPortal();
-            requestAnimationFrame(() => this.positionDmpCrowdPropertyDropdownPortal());
+            this.scheduleDmpCrowdPropertyDropdownPositionUpdate();
         },
 
         renderDmpCrowdMetricButtons(container) {
@@ -6996,6 +7073,9 @@
             this.crowdAuthParamsCache = null;
             this.crowdRequestSlotPromise = null;
             this.crowdRequestLastAt = 0;
+            this.dmpCrowdPropertyDropdownMetric = '';
+            this.dmpCrowdPropertyDropdownChannelKey = '';
+            this.removeDmpCrowdPropertyDropdownPortal();
             this.crowdCampaignItemIdMap = new Map();
             this.crowdCampaignItemOptionsMap = new Map();
             this.crowdCampaignSelectedItemIdMap = new Map();

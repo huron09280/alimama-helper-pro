@@ -109,6 +109,147 @@ function createDmpButtonTimerHarness(initialVisibilityState = 'visible') {
   };
 }
 
+function createDmpDropdownPositionHarness(initialVisibilityState = 'visible', options = {}) {
+  let visibilityState = String(initialVisibilityState || 'visible');
+  let nextFrameId = 1;
+  let nextTimerId = 1;
+  const frames = new Map();
+  const timers = new Map();
+  const listeners = new Map();
+  class FakeHTMLElement {
+    constructor() {
+      this.removed = false;
+    }
+
+    remove() {
+      this.removed = true;
+    }
+  }
+  const addListener = (type, handler) => {
+    if (typeof handler !== 'function') return;
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeListener = (type, handler) => {
+    listeners.get(type)?.delete(handler);
+  };
+  const context = createContext({
+    HTMLElement: FakeHTMLElement,
+    document: {
+      get visibilityState() {
+        return visibilityState;
+      },
+      addEventListener: addListener,
+      removeEventListener: removeListener
+    },
+    requestAnimationFrame: options.noRaf
+      ? undefined
+      : (handler) => {
+          const frameId = nextFrameId;
+          nextFrameId += 1;
+          if (typeof handler === 'function') frames.set(frameId, handler);
+          return frameId;
+        },
+    cancelAnimationFrame: options.noRaf
+      ? undefined
+      : (frameId) => {
+          frames.delete(Number(frameId));
+        },
+    setTimeout(handler, delay = 0) {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      if (typeof handler === 'function') {
+        timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+      }
+      return timerId;
+    },
+    clearTimeout(timerId) {
+      timers.delete(Number(timerId));
+    }
+  });
+  const methodSource = [
+    getMagicReportMethodSlice('removeDmpCrowdPropertyDropdownPortal', 'clearDmpCrowdPropertyDropdownPositionFrame'),
+    getMagicReportMethodSlice('clearDmpCrowdPropertyDropdownPositionFrame', 'clearDmpCrowdPropertyDropdownPositionVisibilityHandler'),
+    getMagicReportMethodSlice('clearDmpCrowdPropertyDropdownPositionVisibilityHandler', 'clearDmpCrowdPropertyDropdownPositionState'),
+    getMagicReportMethodSlice('clearDmpCrowdPropertyDropdownPositionState', 'bindDmpCrowdPropertyDropdownPositionVisibilityHandler'),
+    getMagicReportMethodSlice('bindDmpCrowdPropertyDropdownPositionVisibilityHandler', 'scheduleDmpCrowdPropertyDropdownPositionUpdate'),
+    getMagicReportMethodSlice('scheduleDmpCrowdPropertyDropdownPositionUpdate', 'getDmpCrowdDropdownViewModel'),
+    getMagicReportMethodSlice('clearMagicRuntimeCaches', 'releasePopupResources')
+  ].join('\n');
+  const runtime = new Script(`({
+    dmpCrowdPropertyDropdownMetric: 'click',
+    dmpCrowdPropertyDropdownChannelKey: 'all',
+    dmpCrowdPropertyDropdownPortalEl: new HTMLElement(),
+    dmpCrowdPropertyDropdownPositionFrame: 0,
+    dmpCrowdPropertyDropdownPositionCancel: null,
+    dmpCrowdPropertyDropdownPositionVisibilityHandler: null,
+    dmpCrowdPropertyDropdownPositionPending: false,
+    positionCalls: 0,
+    crowdMatrixRunId: 0,
+    crowdMatrixLoading: false,
+    crowdMatrixProgress: 0,
+    crowdMatrixLoadedCampaignId: '',
+    crowdMatrixDataset: null,
+    crowdMatrixResultMap: null,
+    crowdMatrixPendingMetricReload: null,
+    crowdMatrixGroupSortModeMap: {},
+    crowdMatrixTaskProgressHandler: null,
+    crowdInsightRunContext: null,
+    crowdAuthParamsCache: null,
+    crowdRequestSlotPromise: null,
+    crowdRequestLastAt: 0,
+    crowdCampaignItemIdMap: new Map(),
+    crowdCampaignItemOptionsMap: new Map(),
+    crowdCampaignSelectedItemIdMap: new Map(),
+    crowdCampaignManualItemSelectionMap: new Map(),
+    quickPromptResetTimer: 0,
+    isMagicReportDocumentHidden() {
+      return document.visibilityState === 'hidden';
+    },
+    positionDmpCrowdPropertyDropdownPortal() {
+      this.positionCalls += 1;
+    },
+    clearCrowdMatrixStateHideState() {},
+    clearCrowdMatrixBarAnimation() {},
+    clearQuickPromptResetState() {},
+    clearQuickPromptRetryState() {},
+    clearIframeCleanupRetryTimer() {},
+    clearIframeCleanupVisibilityHandler() {},
+    ${methodSource}
+  })`).runInContext(context);
+  return {
+    runtime,
+    frames,
+    timers,
+    FakeHTMLElement,
+    listenerCount(type = 'visibilitychange') {
+      return listeners.get(type)?.size || 0;
+    },
+    setVisibilityState(nextState) {
+      visibilityState = String(nextState || 'visible');
+      const handlers = Array.from(listeners.get('visibilitychange') || []);
+      handlers.forEach((handler) => handler({ type: 'visibilitychange' }));
+    },
+    tickNextFrame() {
+      const [frameId, handler] = Array.from(frames.entries())[0] || [];
+      if (typeof handler !== 'function') return false;
+      frames.delete(frameId);
+      handler();
+      return true;
+    },
+    tickNextTimer() {
+      const [timerId, timer] = Array.from(timers.entries())[0] || [];
+      if (!timer) return false;
+      timers.delete(timerId);
+      timer.handler();
+      return true;
+    },
+    getTimerDelays() {
+      return Array.from(timers.values()).map((timer) => timer.delay);
+    }
+  };
+}
+
 function createCrowdMatrixStateHideHarness(initialVisibilityState = 'visible') {
   let visibilityState = String(initialVisibilityState || 'visible');
   let nextTimerId = 1;
@@ -217,6 +358,7 @@ function createCrowdMatrixStateHideHarness(initialVisibilityState = 'visible') {
     clearQuickPromptRetryState() {},
     clearIframeCleanupRetryTimer() {},
     clearIframeCleanupVisibilityHandler() {},
+    removeDmpCrowdPropertyDropdownPortal() {},
     clearDmpCrowdMatrixButtonTimer() {},
     clearDmpCrowdMatrixButtonVisibilityHandler() {},
     ${methodSource}
@@ -302,6 +444,7 @@ function createCrowdMatrixBarAnimationHarness(options = {}) {
     clearQuickPromptRetryState() {},
     clearIframeCleanupRetryTimer() {},
     clearIframeCleanupVisibilityHandler() {},
+    removeDmpCrowdPropertyDropdownPortal() {},
     clearDmpCrowdMatrixButtonTimer() {},
     clearDmpCrowdMatrixButtonVisibilityHandler() {},
     ${methodSource}
@@ -430,6 +573,7 @@ function createQuickPromptResetHarness(initialVisibilityState = 'visible') {
     clearQuickPromptRetryState() {},
     clearIframeCleanupRetryTimer() {},
     clearIframeCleanupVisibilityHandler() {},
+    removeDmpCrowdPropertyDropdownPortal() {},
     ${methodSource}
   })`).runInContext(context);
   return {
@@ -1550,6 +1694,123 @@ test('DMP 人群看板复用现有矩阵框架并以自定义画像标签作为�
   assert.match(block, /is-dmp-crowd-mode/, 'DMP 弹窗缺少模式类');
   assert.match(block, /this\.matrixCampaignNameEl\.textContent = `商品：\$\{context\.itemTitle \|\| '未识别'\}`;[\s\S]*this\.matrixCampaignIdEl\.textContent = `商品ID：\$\{context\.itemId \|\| '--'\}`;/, 'DMP 商品名与商品ID未使用左侧上下文信息');
   assert.match(block, /this\.matrixCampaignEl\.style\.setProperty\('--am-dmp-item-id-width', `\$\{width\}px`\);/, 'DMP 商品ID宽度未同步为商品名省略约束');
+});
+
+test('DMP 人群属性下拉二次定位在隐藏页暂停并随关闭释放', () => {
+  const block = getMagicReportBlock();
+  assert.match(
+    block,
+    /dmpCrowdPropertyDropdownPositionFrame:\s*0,[\s\S]*dmpCrowdPropertyDropdownPositionCancel:\s*null,[\s\S]*dmpCrowdPropertyDropdownPositionVisibilityHandler:\s*null,[\s\S]*dmpCrowdPropertyDropdownPositionPending:\s*false,/,
+    'DMP 下拉定位缺少 frame、cancel、visibility handler 或 pending 状态'
+  );
+
+  assert.match(
+    getMagicReportMethodSlice('removeDmpCrowdPropertyDropdownPortal', 'clearDmpCrowdPropertyDropdownPositionFrame'),
+    /this\.clearDmpCrowdPropertyDropdownPositionState\(\);[\s\S]*this\.dmpCrowdPropertyDropdownPortalEl = null;/,
+    '移除 DMP 下拉 portal 前应清理定位 frame/listener/pending 状态'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearDmpCrowdPropertyDropdownPositionFrame', 'clearDmpCrowdPropertyDropdownPositionVisibilityHandler'),
+    /if \(!this\.dmpCrowdPropertyDropdownPositionFrame\) return;[\s\S]*cancelFrame\(this\.dmpCrowdPropertyDropdownPositionFrame\);[\s\S]*this\.dmpCrowdPropertyDropdownPositionFrame = 0;[\s\S]*this\.dmpCrowdPropertyDropdownPositionCancel = null;/,
+    'DMP 下拉定位 frame 清理应取消 rAF/fallback 并释放 cancel 引用'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearDmpCrowdPropertyDropdownPositionVisibilityHandler', 'clearDmpCrowdPropertyDropdownPositionState'),
+    /document\.removeEventListener\('visibilitychange', handler\);[\s\S]*this\.dmpCrowdPropertyDropdownPositionVisibilityHandler = null;/,
+    'DMP 下拉定位 visibility handler 清理应解绑 document 监听'
+  );
+  assert.match(
+    getMagicReportMethodSlice('clearDmpCrowdPropertyDropdownPositionState', 'bindDmpCrowdPropertyDropdownPositionVisibilityHandler'),
+    /this\.clearDmpCrowdPropertyDropdownPositionFrame\(\);[\s\S]*this\.clearDmpCrowdPropertyDropdownPositionVisibilityHandler\(\);[\s\S]*this\.dmpCrowdPropertyDropdownPositionPending = false;/,
+    'DMP 下拉定位完整清理应释放 frame、listener 和 pending'
+  );
+
+  const bindSlice = getMagicReportMethodSlice('bindDmpCrowdPropertyDropdownPositionVisibilityHandler', 'scheduleDmpCrowdPropertyDropdownPositionUpdate');
+  assert.match(bindSlice, /if \(typeof this\.dmpCrowdPropertyDropdownPositionVisibilityHandler === 'function'\) return;/, 'DMP 下拉定位 visibility handler 未避免重复绑定');
+  assert.match(bindSlice, /if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.clearDmpCrowdPropertyDropdownPositionFrame\(\);[\s\S]*this\.dmpCrowdPropertyDropdownPositionPending = this\.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement[\s\S]*&& !!this\.dmpCrowdPropertyDropdownMetric;[\s\S]*return;/, '隐藏页 visibility 事件应取消待执行定位并保留 pending');
+  assert.match(bindSlice, /if \(this\.dmpCrowdPropertyDropdownPositionPending\) \{[\s\S]*this\.scheduleDmpCrowdPropertyDropdownPositionUpdate\(\);[\s\S]*return;[\s\S]*this\.clearDmpCrowdPropertyDropdownPositionVisibilityHandler\(\);/, '恢复可见时应按 pending 补排定位，否则释放监听');
+
+  const scheduleSlice = getMagicReportMethodSlice('scheduleDmpCrowdPropertyDropdownPositionUpdate', 'getDmpCrowdDropdownViewModel');
+  assert.match(scheduleSlice, /this\.clearDmpCrowdPropertyDropdownPositionFrame\(\);[\s\S]*this\.dmpCrowdPropertyDropdownPositionPending = true;[\s\S]*this\.bindDmpCrowdPropertyDropdownPositionVisibilityHandler\(\);[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) return;/, 'DMP 下拉定位调度应先清旧 frame、登记 pending，并在隐藏页不排 frame/timeout');
+  assert.match(scheduleSlice, /const runPositionUpdate = \(\) => \{[\s\S]*this\.dmpCrowdPropertyDropdownPositionFrame = 0;[\s\S]*this\.dmpCrowdPropertyDropdownPositionCancel = null;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.dmpCrowdPropertyDropdownPositionPending = this\.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement[\s\S]*&& !!this\.dmpCrowdPropertyDropdownMetric;[\s\S]*return;[\s\S]*this\.dmpCrowdPropertyDropdownPositionPending = false;[\s\S]*this\.clearDmpCrowdPropertyDropdownPositionVisibilityHandler\(\);[\s\S]*this\.positionDmpCrowdPropertyDropdownPortal\(\);/, 'DMP 下拉定位 frame 到期应按可见性决定暂停或执行定位并释放监听');
+  assert.match(scheduleSlice, /typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function'[\s\S]*this\.dmpCrowdPropertyDropdownPositionCancel = cancelAnimationFrame;[\s\S]*requestAnimationFrame\(runPositionUpdate\)[\s\S]*this\.dmpCrowdPropertyDropdownPositionCancel = clearTimeout;[\s\S]*setTimeout\(runPositionUpdate,\s*16\);/, 'DMP 下拉定位应使用可取消 rAF，并提供 16ms fallback timeout');
+
+  const renderSlice = getMagicReportMethodSlice('renderDmpCrowdPropertyDropdownPortal', 'renderDmpCrowdMetricButtons');
+  assert.match(renderSlice, /this\.positionDmpCrowdPropertyDropdownPortal\(\);[\s\S]*this\.scheduleDmpCrowdPropertyDropdownPositionUpdate\(\);/, 'DMP 下拉 portal 渲染应保留同步定位并改用统一 helper 做二次定位');
+  assert.doesNotMatch(block, /requestAnimationFrame\(\(\) => this\.positionDmpCrowdPropertyDropdownPortal\(\)\)/, 'DMP 下拉不应继续裸排不可取消的二次定位 rAF');
+  assert.match(
+    getMagicReportMethodSlice('clearMagicRuntimeCaches', 'releasePopupResources'),
+    /this\.dmpCrowdPropertyDropdownMetric = '';[\s\S]*this\.dmpCrowdPropertyDropdownChannelKey = '';[\s\S]*this\.removeDmpCrowdPropertyDropdownPortal\(\);/,
+    '释放 MagicReport 运行态时应清空 DMP 下拉选择态并移除 body portal'
+  );
+
+  const visibleHarness = createDmpDropdownPositionHarness('visible');
+  visibleHarness.runtime.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+  assert.equal(visibleHarness.frames.size, 1, '可见页应排一个二次定位 rAF');
+  assert.equal(visibleHarness.timers.size, 0, '有 rAF 时不应排 fallback timeout');
+  assert.equal(visibleHarness.listenerCount(), 1, '可见页等待定位时应绑定 visibilitychange');
+  assert.equal(visibleHarness.runtime.dmpCrowdPropertyDropdownPositionPending, true, '定位执行前应保留 pending');
+  assert.equal(visibleHarness.tickNextFrame(), true, '应能触发二次定位 rAF');
+  assert.equal(visibleHarness.runtime.positionCalls, 1, '可见页 rAF 到期应执行一次二次定位');
+  assert.equal(visibleHarness.runtime.dmpCrowdPropertyDropdownPositionPending, false, '二次定位后应消费 pending');
+  assert.equal(visibleHarness.listenerCount(), 0, '二次定位后应解绑 visibilitychange');
+
+  const hiddenHarness = createDmpDropdownPositionHarness('hidden');
+  hiddenHarness.runtime.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+  assert.equal(hiddenHarness.frames.size, 0, '隐藏页不应排 rAF');
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页不应排 fallback timeout');
+  assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页应保留恢复可见监听');
+  assert.equal(hiddenHarness.runtime.dmpCrowdPropertyDropdownPositionPending, true, '隐藏页应保留 pending 定位');
+  hiddenHarness.setVisibilityState('visible');
+  assert.equal(hiddenHarness.frames.size, 1, '恢复可见后应补排一次 rAF');
+  assert.equal(hiddenHarness.tickNextFrame(), true, '恢复可见后应能触发补排定位');
+  assert.equal(hiddenHarness.runtime.positionCalls, 1, '恢复可见后应执行一次定位');
+  assert.equal(hiddenHarness.listenerCount(), 0, '补定位后应释放 visibilitychange');
+
+  const cancelHarness = createDmpDropdownPositionHarness('visible');
+  cancelHarness.runtime.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+  assert.equal(cancelHarness.frames.size, 1, '转隐藏前应存在 pending rAF');
+  cancelHarness.setVisibilityState('hidden');
+  assert.equal(cancelHarness.frames.size, 0, 'visible->hidden 应取消待执行 rAF');
+  assert.equal(cancelHarness.runtime.dmpCrowdPropertyDropdownPositionPending, true, 'visible->hidden 应保留 pending 定位');
+  cancelHarness.setVisibilityState('visible');
+  assert.equal(cancelHarness.frames.size, 1, '再次可见后应重新补排 rAF');
+  assert.equal(cancelHarness.tickNextFrame(), true, '重新补排的 rAF 应可执行');
+  assert.equal(cancelHarness.runtime.positionCalls, 1, 'visible->hidden->visible 后应只补定位一次');
+
+  const fallbackHarness = createDmpDropdownPositionHarness('visible', { noRaf: true });
+  fallbackHarness.runtime.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+  assert.deepEqual(fallbackHarness.getTimerDelays(), [16], '无 rAF 时应排一个 16ms fallback timeout');
+  fallbackHarness.setVisibilityState('hidden');
+  assert.equal(fallbackHarness.timers.size, 0, 'fallback timeout 在转隐藏时应取消');
+  assert.equal(fallbackHarness.runtime.dmpCrowdPropertyDropdownPositionPending, true, 'fallback 转隐藏后应保留 pending');
+  fallbackHarness.setVisibilityState('visible');
+  assert.deepEqual(fallbackHarness.getTimerDelays(), [16], '恢复可见后应重新排 16ms fallback timeout');
+  assert.equal(fallbackHarness.tickNextTimer(), true, 'fallback timeout 应能触发定位');
+  assert.equal(fallbackHarness.runtime.positionCalls, 1, 'fallback timeout 到期应执行定位');
+  assert.equal(fallbackHarness.listenerCount(), 0, 'fallback 定位后应释放 visibilitychange');
+
+  const removeHarness = createDmpDropdownPositionHarness('visible');
+  const portalEl = removeHarness.runtime.dmpCrowdPropertyDropdownPortalEl;
+  removeHarness.runtime.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+  removeHarness.runtime.removeDmpCrowdPropertyDropdownPortal();
+  assert.equal(removeHarness.frames.size, 0, '移除 portal 应取消 pending rAF');
+  assert.equal(removeHarness.listenerCount(), 0, '移除 portal 应解绑 visibilitychange');
+  assert.equal(removeHarness.runtime.dmpCrowdPropertyDropdownPositionPending, false, '移除 portal 应清掉 pending');
+  assert.equal(removeHarness.runtime.dmpCrowdPropertyDropdownPortalEl, null, '移除 portal 后应置空 portal 引用');
+  assert.equal(portalEl.removed, true, '移除 portal 应调用 DOM remove');
+
+  const clearHarness = createDmpDropdownPositionHarness('visible');
+  const clearPortalEl = clearHarness.runtime.dmpCrowdPropertyDropdownPortalEl;
+  clearHarness.runtime.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+  clearHarness.runtime.clearMagicRuntimeCaches();
+  assert.equal(clearHarness.frames.size, 0, '运行态清理应取消 DMP 下拉 pending rAF');
+  assert.equal(clearHarness.listenerCount(), 0, '运行态清理应解绑 DMP 下拉 visibilitychange');
+  assert.equal(clearHarness.runtime.dmpCrowdPropertyDropdownPositionPending, false, '运行态清理应清掉 DMP 下拉 pending');
+  assert.equal(clearHarness.runtime.dmpCrowdPropertyDropdownMetric, '', '运行态清理应清空 DMP 下拉 metric');
+  assert.equal(clearHarness.runtime.dmpCrowdPropertyDropdownChannelKey, '', '运行态清理应清空 DMP 下拉 channel');
+  assert.equal(clearHarness.runtime.dmpCrowdPropertyDropdownPortalEl, null, '运行态清理应置空 body portal 引用');
+  assert.equal(clearPortalEl.removed, true, '运行态清理应移除 body portal DOM');
 });
 
 test('单元格柱高按该单元格最高值自适应缩放，避免整体过矮', () => {
