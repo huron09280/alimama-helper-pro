@@ -10068,6 +10068,8 @@ if (typeof globalThis !== 'undefined') {
         crowdPeriodLabelMap: null,
         dmpCrowdMatrixActive: false,
         dmpCrowdMatrixButtonObserver: null,
+        dmpCrowdMatrixButtonObserverRoot: null,
+        dmpCrowdMatrixButtonObserverConnected: false,
         dmpCrowdMatrixButtonTimer: 0,
         dmpCrowdMatrixButtonVisibilityHandler: null,
         dmpCrowdMatrixButtonEnsurePending: false,
@@ -11585,16 +11587,69 @@ if (typeof globalThis !== 'undefined') {
             this.dmpCrowdMatrixButtonVisibilityHandler = null;
         },
 
+        ensureDmpCrowdMatrixButtonObserver() {
+            if (this.dmpCrowdMatrixButtonObserver || typeof MutationObserver !== 'function') {
+                return this.dmpCrowdMatrixButtonObserver;
+            }
+            this.dmpCrowdMatrixButtonObserver = new MutationObserver(() => {
+                this.scheduleDmpCrowdMatrixButtonEnsure(120);
+            });
+            return this.dmpCrowdMatrixButtonObserver;
+        },
+
+        disconnectDmpCrowdMatrixButtonObserver() {
+            if (this.dmpCrowdMatrixButtonObserver && this.dmpCrowdMatrixButtonObserverConnected) {
+                this.dmpCrowdMatrixButtonObserver.disconnect();
+            }
+            this.dmpCrowdMatrixButtonObserverRoot = null;
+            this.dmpCrowdMatrixButtonObserverConnected = false;
+        },
+
+        connectDmpCrowdMatrixButtonObserver() {
+            if (this.isMagicReportDocumentHidden()) {
+                this.disconnectDmpCrowdMatrixButtonObserver();
+                this.dmpCrowdMatrixButtonEnsurePending = true;
+                this.bindDmpCrowdMatrixButtonVisibilityHandler();
+                return false;
+            }
+            if (!this.isDmpItemInsightCrowdPage()) {
+                this.disconnectDmpCrowdMatrixButtonObserver();
+                this.dmpCrowdMatrixButtonEnsurePending = false;
+                this.clearDmpCrowdMatrixButtonVisibilityHandler();
+                return false;
+            }
+            const observer = this.ensureDmpCrowdMatrixButtonObserver();
+            const root = document.getElementById('main_app') || document.body || document.documentElement;
+            if (!observer || !root) return false;
+            if (this.dmpCrowdMatrixButtonObserverConnected && this.dmpCrowdMatrixButtonObserverRoot === root) {
+                this.bindDmpCrowdMatrixButtonVisibilityHandler();
+                return true;
+            }
+            this.disconnectDmpCrowdMatrixButtonObserver();
+            observer.observe(root, {
+                childList: true,
+                subtree: true
+            });
+            this.dmpCrowdMatrixButtonObserverRoot = root;
+            this.dmpCrowdMatrixButtonObserverConnected = true;
+            this.bindDmpCrowdMatrixButtonVisibilityHandler();
+            return true;
+        },
+
         bindDmpCrowdMatrixButtonVisibilityHandler() {
             if (typeof this.dmpCrowdMatrixButtonVisibilityHandler === 'function') return;
             this.dmpCrowdMatrixButtonVisibilityHandler = () => {
                 if (this.isMagicReportDocumentHidden()) {
+                    const shouldEnsureOnVisible = this.dmpCrowdMatrixButtonEnsurePending === true
+                        || this.dmpCrowdMatrixButtonObserverConnected === true;
                     this.clearDmpCrowdMatrixButtonTimer();
+                    this.disconnectDmpCrowdMatrixButtonObserver();
+                    this.dmpCrowdMatrixButtonEnsurePending = shouldEnsureOnVisible;
                     return;
                 }
                 const shouldEnsure = this.dmpCrowdMatrixButtonEnsurePending === true;
                 this.dmpCrowdMatrixButtonEnsurePending = false;
-                this.clearDmpCrowdMatrixButtonVisibilityHandler();
+                this.connectDmpCrowdMatrixButtonObserver();
                 if (shouldEnsure) this.ensureDmpCrowdMatrixButton();
             };
             document.addEventListener('visibilitychange', this.dmpCrowdMatrixButtonVisibilityHandler);
@@ -11614,7 +11669,6 @@ if (typeof globalThis !== 'undefined') {
                     return;
                 }
                 this.dmpCrowdMatrixButtonEnsurePending = false;
-                this.clearDmpCrowdMatrixButtonVisibilityHandler();
                 this.ensureDmpCrowdMatrixButton();
             }, Math.max(0, Number(delayMs) || 0));
         },
@@ -11627,18 +11681,7 @@ if (typeof globalThis !== 'undefined') {
                 this.ensureDmpCrowdMatrixButton();
                 this.scheduleDmpCrowdMatrixButtonEnsure(500);
             }
-            if (!this.dmpCrowdMatrixButtonObserver) {
-                this.dmpCrowdMatrixButtonObserver = new MutationObserver(() => {
-                    this.scheduleDmpCrowdMatrixButtonEnsure(120);
-                });
-                const root = document.getElementById('main_app') || document.body || document.documentElement;
-                if (root) {
-                    this.dmpCrowdMatrixButtonObserver.observe(root, {
-                        childList: true,
-                        subtree: true
-                    });
-                }
-            }
+            this.connectDmpCrowdMatrixButtonObserver();
         },
 
         getDmpVframeRegistry() {

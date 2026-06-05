@@ -35,6 +35,39 @@ function createDmpButtonTimerHarness(initialVisibilityState = 'visible') {
   let nextTimerId = 1;
   const timers = new Map();
   const listeners = new Map();
+  const observerInstances = [];
+  let mainAppRoot = { id: 'main_app' };
+  const bodyRoot = { id: 'body' };
+  const documentElementRoot = { id: 'documentElement' };
+  class FakeMutationObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.connected = false;
+      this.root = null;
+      this.options = null;
+      this.observeCalls = 0;
+      this.disconnectCalls = 0;
+      observerInstances.push(this);
+    }
+
+    observe(root, options) {
+      this.connected = true;
+      this.root = root;
+      this.options = options;
+      this.observeCalls += 1;
+    }
+
+    disconnect() {
+      this.connected = false;
+      this.root = null;
+      this.disconnectCalls += 1;
+    }
+
+    trigger() {
+      if (!this.connected || typeof this.callback !== 'function') return;
+      this.callback([{ type: 'childList' }]);
+    }
+  }
   const addListener = (type, handler) => {
     if (typeof handler !== 'function') return;
     if (!listeners.has(type)) listeners.set(type, new Set());
@@ -47,11 +80,21 @@ function createDmpButtonTimerHarness(initialVisibilityState = 'visible') {
     get visibilityState() {
       return visibilityState;
     },
+    get body() {
+      return bodyRoot;
+    },
+    get documentElement() {
+      return documentElementRoot;
+    },
+    getElementById(id) {
+      return id === 'main_app' ? mainAppRoot : null;
+    },
     addEventListener: addListener,
     removeEventListener: removeListener
   };
   const context = createContext({
     document: documentRef,
+    MutationObserver: FakeMutationObserver,
     setTimeout(handler, delay = 0) {
       const timerId = nextTimerId;
       nextTimerId += 1;
@@ -66,17 +109,27 @@ function createDmpButtonTimerHarness(initialVisibilityState = 'visible') {
   });
   const methodSource = [
     getMagicReportMethodSlice('clearDmpCrowdMatrixButtonTimer', 'clearDmpCrowdMatrixButtonVisibilityHandler'),
-    getMagicReportMethodSlice('clearDmpCrowdMatrixButtonVisibilityHandler', 'bindDmpCrowdMatrixButtonVisibilityHandler'),
+    getMagicReportMethodSlice('clearDmpCrowdMatrixButtonVisibilityHandler', 'ensureDmpCrowdMatrixButtonObserver'),
+    getMagicReportMethodSlice('ensureDmpCrowdMatrixButtonObserver', 'disconnectDmpCrowdMatrixButtonObserver'),
+    getMagicReportMethodSlice('disconnectDmpCrowdMatrixButtonObserver', 'connectDmpCrowdMatrixButtonObserver'),
+    getMagicReportMethodSlice('connectDmpCrowdMatrixButtonObserver', 'bindDmpCrowdMatrixButtonVisibilityHandler'),
     getMagicReportMethodSlice('bindDmpCrowdMatrixButtonVisibilityHandler', 'scheduleDmpCrowdMatrixButtonEnsure'),
-    getMagicReportMethodSlice('scheduleDmpCrowdMatrixButtonEnsure', 'initDmpCrowdMatrixEntry')
+    getMagicReportMethodSlice('scheduleDmpCrowdMatrixButtonEnsure', 'initDmpCrowdMatrixEntry'),
+    getMagicReportMethodSlice('initDmpCrowdMatrixEntry', 'getDmpVframeRegistry')
   ].join('\n');
   const runtime = new Script(`({
+    dmpCrowdMatrixButtonObserver: null,
+    dmpCrowdMatrixButtonObserverRoot: null,
+    dmpCrowdMatrixButtonObserverConnected: false,
     dmpCrowdMatrixButtonTimer: 0,
     dmpCrowdMatrixButtonVisibilityHandler: null,
     dmpCrowdMatrixButtonEnsurePending: false,
     ensureCalls: 0,
     isMagicReportDocumentHidden() {
       return document.visibilityState === 'hidden';
+    },
+    isDmpItemInsightCrowdPage() {
+      return true;
     },
     ensureDmpCrowdMatrixButton() {
       this.ensureCalls += 1;
@@ -87,8 +140,15 @@ function createDmpButtonTimerHarness(initialVisibilityState = 'visible') {
   return {
     runtime,
     timers,
+    observerInstances,
+    getObserver() {
+      return observerInstances[0] || null;
+    },
     listenerCount(type = 'visibilitychange') {
       return listeners.get(type)?.size || 0;
+    },
+    setMainAppRoot(root) {
+      mainAppRoot = root || null;
     },
     setVisibilityState(nextState) {
       visibilityState = String(nextState || 'visible');
@@ -1593,6 +1653,9 @@ test('buildMatrixDataset 在单指标内做比例归一化并标记缺失数据'
 
 test('DMP 入口按钮 ensure timer 在隐藏页暂停并恢复可见补执行', () => {
   const block = getMagicReportBlock();
+  assert.match(block, /dmpCrowdMatrixButtonObserver:\s*null,/, 'DMP 入口按钮缺少 observer 状态');
+  assert.match(block, /dmpCrowdMatrixButtonObserverRoot:\s*null,/, 'DMP 入口按钮缺少 observer root 状态');
+  assert.match(block, /dmpCrowdMatrixButtonObserverConnected:\s*false,/, 'DMP 入口按钮缺少 observer 连接状态');
   assert.match(block, /dmpCrowdMatrixButtonTimer:\s*0,/, 'DMP 入口按钮缺少 timer 状态');
   assert.match(block, /dmpCrowdMatrixButtonVisibilityHandler:\s*null,/, 'DMP 入口按钮缺少 visibility handler 状态');
   assert.match(block, /dmpCrowdMatrixButtonEnsurePending:\s*false,/, 'DMP 入口按钮缺少 pending ensure 状态');
@@ -1601,27 +1664,44 @@ test('DMP 入口按钮 ensure timer 在隐藏页暂停并恢复可见补执行',
   assert.match(clearTimerSlice, /if \(!this\.dmpCrowdMatrixButtonTimer\) return;/, 'timer 清理未保持空闲早返回');
   assert.match(clearTimerSlice, /clearTimeout\(this\.dmpCrowdMatrixButtonTimer\);[\s\S]*this\.dmpCrowdMatrixButtonTimer = 0;/, 'timer 清理未统一释放句柄');
 
-  const clearVisibilitySlice = getMagicReportMethodSlice('clearDmpCrowdMatrixButtonVisibilityHandler', 'bindDmpCrowdMatrixButtonVisibilityHandler');
+  const clearVisibilitySlice = getMagicReportMethodSlice('clearDmpCrowdMatrixButtonVisibilityHandler', 'ensureDmpCrowdMatrixButtonObserver');
   assert.match(clearVisibilitySlice, /const handler = this\.dmpCrowdMatrixButtonVisibilityHandler;/, 'visibility 清理未读取当前 handler');
   assert.match(clearVisibilitySlice, /document\.removeEventListener\('visibilitychange', handler\);/, 'visibility 清理未移除 document 监听');
   assert.match(clearVisibilitySlice, /this\.dmpCrowdMatrixButtonVisibilityHandler = null;/, 'visibility 清理未置空 handler');
 
+  const ensureObserverSlice = getMagicReportMethodSlice('ensureDmpCrowdMatrixButtonObserver', 'disconnectDmpCrowdMatrixButtonObserver');
+  assert.match(ensureObserverSlice, /typeof MutationObserver !== 'function'/, 'observer 创建未兼容 MutationObserver 缺失场景');
+  assert.match(ensureObserverSlice, /new MutationObserver\(\(\) => \{[\s\S]*this\.scheduleDmpCrowdMatrixButtonEnsure\(120\);[\s\S]*\}\);/, 'MutationObserver callback 未继续走 120ms 调度 helper');
+
+  const disconnectObserverSlice = getMagicReportMethodSlice('disconnectDmpCrowdMatrixButtonObserver', 'connectDmpCrowdMatrixButtonObserver');
+  assert.match(disconnectObserverSlice, /this\.dmpCrowdMatrixButtonObserver\.disconnect\(\);/, 'observer 断开 helper 未调用 disconnect');
+  assert.match(disconnectObserverSlice, /this\.dmpCrowdMatrixButtonObserverRoot = null;[\s\S]*this\.dmpCrowdMatrixButtonObserverConnected = false;/, 'observer 断开 helper 未释放 root 与连接状态');
+
+  const connectObserverSlice = getMagicReportMethodSlice('connectDmpCrowdMatrixButtonObserver', 'bindDmpCrowdMatrixButtonVisibilityHandler');
+  assert.match(connectObserverSlice, /if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.disconnectDmpCrowdMatrixButtonObserver\(\);[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = true;[\s\S]*this\.bindDmpCrowdMatrixButtonVisibilityHandler\(\);[\s\S]*return false;/, '隐藏页连接 observer 应断开并登记 pending ensure');
+  assert.match(connectObserverSlice, /if \(!this\.isDmpItemInsightCrowdPage\(\)\) \{[\s\S]*this\.disconnectDmpCrowdMatrixButtonObserver\(\);[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = false;[\s\S]*this\.clearDmpCrowdMatrixButtonVisibilityHandler\(\);[\s\S]*return false;/, '非 DMP 商品洞察页不应连接入口 observer');
+  assert.match(connectObserverSlice, /const root = document\.getElementById\('main_app'\) \|\| document\.body \|\| document\.documentElement;/, 'observer 连接未按 main_app/body/documentElement 选择 root');
+  assert.match(connectObserverSlice, /this\.dmpCrowdMatrixButtonObserverConnected && this\.dmpCrowdMatrixButtonObserverRoot === root/, 'observer 连接未避免重复 observe 相同 root');
+  assert.match(connectObserverSlice, /observer\.observe\(root,\s*\{[\s\S]*childList:\s*true,[\s\S]*subtree:\s*true[\s\S]*\}\);/, 'observer 连接未继续观察 childList/subtree');
+  assert.match(connectObserverSlice, /this\.dmpCrowdMatrixButtonObserverRoot = root;[\s\S]*this\.dmpCrowdMatrixButtonObserverConnected = true;[\s\S]*this\.bindDmpCrowdMatrixButtonVisibilityHandler\(\);/, 'observer 连接后未记录 root/connected 并绑定 visibility 生命周期');
+
   const bindVisibilitySlice = getMagicReportMethodSlice('bindDmpCrowdMatrixButtonVisibilityHandler', 'scheduleDmpCrowdMatrixButtonEnsure');
   assert.match(bindVisibilitySlice, /if \(typeof this\.dmpCrowdMatrixButtonVisibilityHandler === 'function'\) return;/, 'visibility 绑定未避免重复监听');
-  assert.match(bindVisibilitySlice, /if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.clearDmpCrowdMatrixButtonTimer\(\);[\s\S]*return;[\s\S]*const shouldEnsure = this\.dmpCrowdMatrixButtonEnsurePending === true;/, '隐藏页 visibility 事件未取消已排 timer 并保留 pending');
-  assert.match(bindVisibilitySlice, /this\.dmpCrowdMatrixButtonEnsurePending = false;[\s\S]*this\.clearDmpCrowdMatrixButtonVisibilityHandler\(\);[\s\S]*if \(shouldEnsure\) this\.ensureDmpCrowdMatrixButton\(\);/, '恢复可见未消费 pending ensure 并释放监听');
+  assert.match(bindVisibilitySlice, /const shouldEnsureOnVisible = this\.dmpCrowdMatrixButtonEnsurePending === true[\s\S]*\|\| this\.dmpCrowdMatrixButtonObserverConnected === true;[\s\S]*this\.clearDmpCrowdMatrixButtonTimer\(\);[\s\S]*this\.disconnectDmpCrowdMatrixButtonObserver\(\);[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = shouldEnsureOnVisible;/, '隐藏页 visibility 事件未取消 timer、断开 observer 并保留必要 pending');
+  assert.match(bindVisibilitySlice, /const shouldEnsure = this\.dmpCrowdMatrixButtonEnsurePending === true;[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = false;[\s\S]*this\.connectDmpCrowdMatrixButtonObserver\(\);[\s\S]*if \(shouldEnsure\) this\.ensureDmpCrowdMatrixButton\(\);/, '恢复可见未重连 observer、消费 pending ensure 并补执行入口恢复');
   assert.match(bindVisibilitySlice, /document\.addEventListener\('visibilitychange', this\.dmpCrowdMatrixButtonVisibilityHandler\);/, 'visibility handler 未绑定到 document');
 
   const scheduleSlice = getMagicReportMethodSlice('scheduleDmpCrowdMatrixButtonEnsure', 'initDmpCrowdMatrixEntry');
   assert.match(scheduleSlice, /scheduleDmpCrowdMatrixButtonEnsure\(delayMs = 120\)/, 'DMP 入口按钮调度默认间隔不应改变');
   assert.match(scheduleSlice, /this\.clearDmpCrowdMatrixButtonTimer\(\);[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = true;[\s\S]*this\.bindDmpCrowdMatrixButtonVisibilityHandler\(\);/, '调度前未统一清理旧 timer、登记 pending 和绑定可见性恢复');
   assert.match(scheduleSlice, /if \(this\.isMagicReportDocumentHidden\(\)\) \{\s*return;\s*\}/, '隐藏页 schedule 仍可能排 timeout');
-  assert.match(scheduleSlice, /this\.dmpCrowdMatrixButtonTimer = setTimeout\(\(\) => \{[\s\S]*this\.dmpCrowdMatrixButtonTimer = 0;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = true;[\s\S]*return;[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = false;[\s\S]*this\.clearDmpCrowdMatrixButtonVisibilityHandler\(\);[\s\S]*this\.ensureDmpCrowdMatrixButton\(\);/, 'timer 到期时未按可见性决定暂停或执行 ensure');
+  assert.match(scheduleSlice, /this\.dmpCrowdMatrixButtonTimer = setTimeout\(\(\) => \{[\s\S]*this\.dmpCrowdMatrixButtonTimer = 0;[\s\S]*if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = true;[\s\S]*return;[\s\S]*this\.dmpCrowdMatrixButtonEnsurePending = false;[\s\S]*this\.ensureDmpCrowdMatrixButton\(\);/, 'timer 到期时未按可见性决定暂停或执行 ensure');
   assert.doesNotMatch(scheduleSlice, /if \(this\.dmpCrowdMatrixButtonTimer\) \{[\s\S]*clearTimeout\(this\.dmpCrowdMatrixButtonTimer\);/, 'schedule 不应保留内联 timer 清理旧实现');
 
   const initSlice = getMagicReportMethodSlice('initDmpCrowdMatrixEntry', 'getDmpVframeRegistry');
   assert.match(initSlice, /if \(this\.isMagicReportDocumentHidden\(\)\) \{[\s\S]*this\.scheduleDmpCrowdMatrixButtonEnsure\(500\);[\s\S]*\} else \{[\s\S]*this\.ensureDmpCrowdMatrixButton\(\);[\s\S]*this\.scheduleDmpCrowdMatrixButtonEnsure\(500\);[\s\S]*\}/, 'DMP 入口初始化未区分隐藏页暂停与可见页立即 ensure');
-  assert.match(initSlice, /new MutationObserver\(\(\) => \{[\s\S]*this\.scheduleDmpCrowdMatrixButtonEnsure\(120\);[\s\S]*\}\);/, 'MutationObserver 未继续走 120ms 调度 helper');
+  assert.match(initSlice, /this\.connectDmpCrowdMatrixButtonObserver\(\);/, 'DMP 入口初始化未通过 observer 连接 helper 管理生命周期');
+  assert.doesNotMatch(initSlice, /new MutationObserver/, 'DMP 入口初始化不应再内联创建常驻 observer');
 });
 
 test('DMP 入口按钮 ensure 调度实际释放 timer 与 visibility pending', () => {
@@ -1635,8 +1715,9 @@ test('DMP 入口按钮 ensure 调度实际释放 timer 与 visibility pending', 
   hiddenHarness.setVisibilityState('visible');
   assert.equal(hiddenHarness.runtime.ensureCalls, 1, '恢复可见应只执行一次 pending ensure');
   assert.equal(hiddenHarness.runtime.dmpCrowdMatrixButtonEnsurePending, false, '恢复可见后应消费 pending ensure');
-  assert.equal(hiddenHarness.runtime.dmpCrowdMatrixButtonVisibilityHandler, null, '恢复可见后应释放 visibility handler');
-  assert.equal(hiddenHarness.listenerCount(), 0, '恢复可见后应解绑 visibilitychange');
+  assert.equal(hiddenHarness.runtime.dmpCrowdMatrixButtonObserverConnected, true, '恢复可见后应连接 observer');
+  assert.equal(hiddenHarness.runtime.dmpCrowdMatrixButtonVisibilityHandler !== null, true, '恢复可见后应保留 observer 生命周期 visibility handler');
+  assert.equal(hiddenHarness.listenerCount(), 1, '恢复可见后应保留 observer 生命周期 visibilitychange');
   hiddenHarness.setVisibilityState('visible');
   assert.equal(hiddenHarness.runtime.ensureCalls, 1, '无 pending 时 visibilitychange 不应重复执行 ensure');
 
@@ -1652,14 +1733,74 @@ test('DMP 入口按钮 ensure 调度实际释放 timer 与 visibility pending', 
 
   visibleHarness.setVisibilityState('visible');
   assert.equal(visibleHarness.runtime.ensureCalls, 1, '恢复可见后应补执行被取消的 ensure');
-  assert.equal(visibleHarness.listenerCount(), 0, '补执行后应释放 visibilitychange 监听');
+  assert.equal(visibleHarness.listenerCount(), 1, '补执行后应保留 observer 生命周期 visibilitychange');
 
   visibleHarness.runtime.scheduleDmpCrowdMatrixButtonEnsure(250);
   visibleHarness.tickTimers();
   assert.equal(visibleHarness.runtime.ensureCalls, 2, '可见页 timer 到期应执行 ensure');
   assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonEnsurePending, false, '可见页 timer 到期后应清掉 pending');
-  assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonVisibilityHandler, null, '可见页 timer 到期后应释放 visibility handler');
-  assert.equal(visibleHarness.listenerCount(), 0, '可见页 timer 到期后应解绑 visibilitychange');
+  assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonVisibilityHandler !== null, true, '可见页 timer 到期后应保留 observer 生命周期 visibility handler');
+  assert.equal(visibleHarness.listenerCount(), 1, '可见页 timer 到期后应保留 visibilitychange');
+});
+
+test('DMP 入口按钮 observer 在隐藏页断开并恢复可见重连', () => {
+  const hiddenHarness = createDmpButtonTimerHarness('hidden');
+  hiddenHarness.runtime.initDmpCrowdMatrixEntry();
+  assert.equal(hiddenHarness.runtime.ensureCalls, 0, '隐藏页初始化不应立即 ensure 入口');
+  assert.equal(hiddenHarness.timers.size, 0, '隐藏页初始化不应排 ensure timeout');
+  assert.equal(hiddenHarness.runtime.dmpCrowdMatrixButtonObserverConnected, false, '隐藏页初始化不应连接 observer');
+  assert.equal(hiddenHarness.listenerCount(), 1, '隐藏页初始化应保留恢复可见监听');
+  assert.equal(hiddenHarness.getObserver(), null, '隐藏页初始化不应创建 MutationObserver 实例');
+
+  hiddenHarness.setVisibilityState('visible');
+  const recoveredObserver = hiddenHarness.getObserver();
+  assert.ok(recoveredObserver, '恢复可见后应创建 observer');
+  assert.equal(recoveredObserver.connected, true, '恢复可见后应连接 observer');
+  assert.equal(recoveredObserver.observeCalls, 1, '恢复可见后应 observe 一次');
+  assert.equal(recoveredObserver.options?.childList, true, 'observer 应继续观察 childList');
+  assert.equal(recoveredObserver.options?.subtree, true, 'observer 应继续观察 subtree');
+  assert.equal(hiddenHarness.runtime.ensureCalls, 1, '恢复可见后应补 ensure 一次');
+  assert.equal(hiddenHarness.runtime.dmpCrowdMatrixButtonEnsurePending, false, '恢复可见后应消费 pending ensure');
+
+  recoveredObserver.trigger();
+  assert.deepEqual(hiddenHarness.getTimerDelays(), [120], '可见页 mutation 应继续走 120ms debounce');
+  hiddenHarness.tickTimers();
+  assert.equal(hiddenHarness.runtime.ensureCalls, 2, '可见页 observer debounce 到期应执行 ensure');
+
+  const visibleHarness = createDmpButtonTimerHarness('visible');
+  visibleHarness.runtime.initDmpCrowdMatrixEntry();
+  const observer = visibleHarness.getObserver();
+  assert.ok(observer, '可见页初始化应创建 observer');
+  assert.equal(observer.connected, true, '可见页初始化应连接 observer');
+  assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonObserverConnected, true, '可见页初始化应记录 observer connected');
+  assert.equal(visibleHarness.runtime.ensureCalls, 1, '可见页初始化应立即 ensure 一次');
+  assert.deepEqual(visibleHarness.getTimerDelays(), [500], '可见页初始化仍应排 500ms 延迟 ensure');
+
+  observer.trigger();
+  assert.deepEqual(visibleHarness.getTimerDelays(), [120], '可见页 mutation 应替换为 120ms debounce');
+  visibleHarness.setVisibilityState('hidden');
+  assert.equal(observer.connected, false, 'visible->hidden 应断开 observer');
+  assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonObserverConnected, false, 'visible->hidden 应清掉 connected 状态');
+  assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonObserverRoot, null, 'visible->hidden 应释放 observer root');
+  assert.equal(visibleHarness.timers.size, 0, 'visible->hidden 应取消 pending ensure timer');
+  assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonEnsurePending, true, 'visible->hidden 应保留恢复可见 ensure');
+
+  observer.trigger();
+  assert.equal(visibleHarness.timers.size, 0, '隐藏期 mutation 不应触发 120ms debounce');
+  assert.equal(visibleHarness.runtime.ensureCalls, 1, '隐藏期 mutation 不应执行 ensure');
+
+  visibleHarness.setVisibilityState('visible');
+  assert.equal(observer.connected, true, 'hidden->visible 应重连 observer');
+  assert.equal(observer.observeCalls, 2, 'hidden->visible 应重新 observe 当前 root');
+  assert.equal(visibleHarness.runtime.ensureCalls, 2, 'hidden->visible 应补 ensure 一次');
+  assert.equal(visibleHarness.runtime.dmpCrowdMatrixButtonEnsurePending, false, 'hidden->visible 后应消费 pending');
+
+  const nextRoot = { id: 'main_app_2' };
+  visibleHarness.setMainAppRoot(nextRoot);
+  visibleHarness.runtime.connectDmpCrowdMatrixButtonObserver();
+  assert.equal(observer.connected, true, 'root 替换后 observer 应保持连接');
+  assert.equal(observer.root, nextRoot, 'root 替换后 observer 应连接新 root');
+  assert.equal(observer.observeCalls, 3, 'root 替换后应重新 observe 新 root');
 });
 
 test('DMP 人群看板复用现有矩阵框架并以自定义画像标签作为行维度', () => {

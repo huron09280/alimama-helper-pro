@@ -1,3 +1,55 @@
+# TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十四子项
+
+## 需求规格
+- 目标：在第六十三子项收口人群矩阵隐藏页柱状动画后，继续优化 DMP 人群对比看板入口按钮的 `MutationObserver` 生命周期，避免 DMP 页面隐藏时仍连接 `#main_app/body` 子树观察器并被隐藏页 DOM 变化唤醒。
+- 根因判断：`initDmpCrowdMatrixEntry()` 里的 DMP 入口按钮观察器只负责在 DMP 商品洞察页 DOM 重渲染后重新插入“人群对比看板”入口；ensure timer 已有隐藏页暂停，但 observer 本身仍常驻连接，隐藏标签页中若官方页面发生 DOM churn，仍会触发 callback 并进入调度 helper。
+- 范围：仅覆盖 `src/main-assistant/magic-report.js` 的 DMP 入口按钮 observer 连接、断开、visibility 恢复和对应测试；不改 DMP 页面识别、入口按钮样式/位置/点击、DMP 人群属性下拉、看板取数、人群矩阵数据、请求并发、创建/复制/提交、openV3、预算、下载启动或服务端 10rpm 策略。
+- 热修 vs 结构性修复取舍：不在 observer callback 上继续叠加 hidden 判断，而是把 observer 根节点、连接状态和 visibility 生命周期统一表达。可见页保持原有 120ms debounce ensure；隐藏页断开 observer 并保留 pending ensure；恢复可见时重连 observer 并补一次入口按钮 ensure，保证 DMP DOM 重渲染后的入口恢复能力不下降。
+- 成功标准：静态与行为测试证明 DMP 入口 observer 有 root/connected 状态和 connect/disconnect helper；hidden 初始化不连接 observer；visible->hidden 会断开 observer、取消 timer 并保留 pending；隐藏期 mutation 不会排 timeout；hidden->visible 会重连 observer 并补 ensure；可见页 mutation 仍走 120ms 调度；通过目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验收。
+- 安全边界：本子项不点击 DMP 看板入口、不打开 DMP 下拉、不发起 DMP 看板取数、不触发万能查数查询、算法护航、组建计划、计划并发、openV3、预算、创建/复制/提交/下载或任何真实写入口；Chrome MCP 验收只做扩展重载、one.alimama/DMP 只读运行态确认、extension bundle 命中确认和危险写请求计数，且只使用 `mcp__chrome_devtools.*`。
+
+## 执行计划（可核对）
+- [x] 复核第六十三子项提交后工作区状态，确认 tracked 工作区干净。
+- [x] 回顾 `tasks/lessons.md` 的 Chrome MCP 与按项中文提交规则。
+- [x] 读取 UI/图标规范，确认本轮不改视觉、图标、文案或交互结构。
+- [x] 定位剩余 observer/timer 候选，排除请求并发、创建/复制/提交、openV3、预算、下载启动和服务端 10rpm 边界。
+- [x] 选定 DMP 入口按钮 `MutationObserver`，确认它只服务入口重挂且低于主助手全局 observer 风险。
+- [x] 为 DMP 入口 observer 增加 root/connected 状态、connect/disconnect helper 和 visibility 恢复逻辑。
+- [x] 更新人群矩阵目标测试，锁定隐藏页不连接 observer、隐藏期 mutation 不排 timer、恢复可见重连并补 ensure、可见页 mutation debounce 不变。
+- [x] 运行目标测试、构建同步/检查、语法/空白检查、必要回归和 Chrome MCP 只读验证。
+- [x] 写入验证记录、结果复盘、diff 自审，并按本轮规则中文提交。
+
+## 高层操作摘要
+- 当前最新提交为 `9021c41 优化人群矩阵隐藏页动画调度`，tracked 工作区干净；本子项不依赖临时取证文件。
+- 候选取舍：主助手全局 `MutationObserver` 负责插件核心重挂和 SPA 恢复，风险高；DMP 入口 observer 只负责“人群对比看板”入口按钮在 DMP DOM 重渲染后恢复，且 ensure timer 已有隐藏页暂停，是本轮更小、更可验证的后台唤醒优化点。
+- 计划校验：本轮只降低 DMP 隐藏页里入口按钮 observer 的后台 callback/调度唤醒；可见页入口插入、120ms debounce、按钮点击打开 DMP 看板和 DMP 数据链路保持不变。若实现需要触碰取数请求、并发、预算、创建/复制/提交、下载、openV3 或 10rpm 链路，先回到本计划更新后再继续。
+- UI 规范复核：已读取 `docs/插件UI统一设计规范.md` 和 `docs/图标设计规范.md`；本子项不改任何 UI 样式、图标或文案，只调整 observer 生命周期。
+- 子代理复核：只读子代理确认剩余候选中主助手全局 observer 与 bootstrap retry 风险更高，DMP 入口 observer 为低-中风险且只影响入口补挂；本轮按该候选执行。
+- 实现摘要：`MagicReport` 为 DMP 入口新增 `dmpCrowdMatrixButtonObserverRoot`、`dmpCrowdMatrixButtonObserverConnected`，并抽出 `ensureDmpCrowdMatrixButtonObserver()`、`disconnectDmpCrowdMatrixButtonObserver()`、`connectDmpCrowdMatrixButtonObserver()`。`initDmpCrowdMatrixEntry()` 不再内联创建常驻 observer，而是统一走连接 helper。
+- 生命周期摘要：可见页连接当前 `#main_app || body || documentElement` 并保留 120ms mutation debounce；隐藏页断开 observer、取消 pending timer，只保留必要 pending ensure；恢复可见时先确认仍是 DMP 商品洞察页，再重连 observer 并补一次入口 ensure；非 DMP 商品洞察页恢复可见时会断开 observer、清 pending 并解绑 visibility listener。
+- 测试摘要：`tests/magic-report-crowd-matrix.test.mjs` 扩展 DMP 入口 harness，加入 fake `MutationObserver`、root 替换、visibility 切换和 mutation 触发能力；新增行为用例覆盖 hidden 初始化不创建 observer、可见页 mutation 仍 120ms debounce、visible->hidden 断开 observer、隐藏期 mutation 不排 timer、hidden->visible 重连补 ensure、SPA root 替换后重新 observe。
+
+## 验证记录
+- 源码语法：`node --check src/main-assistant/magic-report.js` 通过。
+- 测试语法：`node --check tests/magic-report-crowd-matrix.test.mjs` 通过。
+- 构建同步：`npm run build` 通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 目标测试：首次 `node --test tests/magic-report-crowd-matrix.test.mjs` 暴露新增 harness 中跨 `vm` context 对象使用 `assert.deepEqual()` 比较 observer options 会误报；改为字段级断言 `childList/subtree` 后重跑通过，73 项测试全绿。
+- 项目检查：`npm run check:syntax`、`npm run build:check`、`node --check 阿里妈妈多合一助手.js`、`node --check dist/extension/page.bundle.js` 均通过。
+- 静态定位：`rg` 确认 `dmpCrowdMatrixButtonObserverRoot`、`dmpCrowdMatrixButtonObserverConnected`、`ensureDmpCrowdMatrixButtonObserver`、`disconnectDmpCrowdMatrixButtonObserver`、`connectDmpCrowdMatrixButtonObserver` 和非 DMP 页面 guard 已进入源码、目标测试、根 userscript、发布包和 extension bundle；旧的 `if (!this.dmpCrowdMatrixButtonObserver) { ... }` 内联常驻 observer 写法、`this.dmpCrowdMatrixButtonObserver.observe(root` 旧直接观察写法均无命中。
+- 相关回归：`node --test tests/magic-report-crowd-matrix.test.mjs tests/magic-report-panel-resilience.test.mjs tests/build-output-sync.test.mjs tests/build-segments.test.mjs tests/extension-static-build.test.mjs tests/logger-api.test.mjs` 通过，131 项测试全绿。
+- 空白检查：`git diff --check` 通过。
+- 全量回归：`node -e "const { spawnSync } = require('node:child_process'); const result = spawnSync('npm', ['test'], { stdio: 'inherit', timeout: 60000 }); if (result.error) { console.error(result.error.message); process.exit(1); } process.exit(result.status ?? 1);"` 通过，636 项中 634 项通过、2 项因缺少可选 `agent-cluster/index.mjs` 跳过、0 失败。
+- Chrome DevTools MCP 扩展重载：只使用 `mcp__chrome_devtools.*`。在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 `Reload`，页面出现 `Reloaded`；扩展版本 `7.06`，加载路径 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`。
+- Chrome DevTools MCP one.alimama 只读验收：刷新 `https://one.alimama.com/index.html#!/login/index?...` 后，标题 `登录页_万相台无界版`、`readyState:"complete"`、`visibilityState:"visible"`、版本 `7.06`、build `2026-02-18 04:00`、patch `adzone-default-sync-v5`；`planApiReady`、`keywordApiReady`、`optimizerToggleReady`、`hookManagerReady` 均为 true；万能查数、人群矩阵、DMP 下拉 portal、算法护航、结果 overlay、批量菜单、复制弹窗、下载捕获、授权 overlay 均未打开；登录页状态下主助手悬浮球未显示，按实际记录。
+- Chrome DevTools MCP DMP 页面只读验收：刷新 `https://dmp.taobao.com/index_new.html?...analysisTab=crowd-insight...` 后，标题 `达摩盘`、版本 `7.06`、DMP `人群对比看板` 入口存在且可见；插件弹窗、DMP 下拉 portal、人群矩阵、算法护航、复制/批量/下载/授权弹层均未打开；未点击 DMP 看板入口、未打开下拉，也未触发插件查询。
+- Chrome DevTools MCP bundle 验收：one.alimama 与 DMP 页内只读 fetch `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 均返回 200，长度 `4095049`；bundle 含 `dmpCrowdMatrixButtonObserverRoot`、`dmpCrowdMatrixButtonObserverConnected`、`ensureDmpCrowdMatrixButtonObserver`、`disconnectDmpCrowdMatrixButtonObserver`、`connectDmpCrowdMatrixButtonObserver` 和 `if (!this.isDmpItemInsightCrowdPage())`；不含旧 `if (!this.dmpCrowdMatrixButtonObserver) {` 与 `this.dmpCrowdMatrixButtonObserver.observe(root`。
+- Chrome DevTools MCP 危险请求验收：one.alimama 与 DMP 页 performance resource 过滤 `/solution/addList`、`/solution/copy`、`/campaign/budget/batchUpdate`、`/campaign/updatePart`、`/campaign/delete`、`/campaign/status`、`/campaign/add`、`/campaign/create`、`/openV3`、`/download`，危险写请求计数均为 `0`。
+
+## 结果复盘
+- 第十一轮第六十四子项结果：DMP 人群对比看板入口按钮的 `MutationObserver` 从“初始化后常驻观察 `#main_app/body`”优化为“仅可见页连接，隐藏页断开，恢复可见后重连并补一次 ensure”。
+- 效果结论：DMP 标签页隐藏后，官方页面 DOM 变化不再触发该入口 observer callback，也不会继续进入 120ms debounce ensure；恢复可见后仍能补挂入口按钮，并能在 SPA root 替换时重新 observe 当前 root。
+- 边界结论：本轮没有触碰 DMP 看板取数、入口按钮点击、DMP 下拉、万能查数、人群矩阵数据、请求并发、创建/复制/提交、openV3、预算、下载启动或服务端 10rpm 逻辑；Chrome MCP 验收未点击任何真实业务工具或写入口，危险写请求计数 `0`。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十三子项
 
 ## 需求规格
