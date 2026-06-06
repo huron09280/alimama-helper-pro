@@ -26,6 +26,7 @@ dist/extension.pem
 .gstack/
 tmp/
 *.network-request
+tasks/e7-ai-*.json
 test-start-before-body.html
 /AI点睛/
 /投放资源位/
