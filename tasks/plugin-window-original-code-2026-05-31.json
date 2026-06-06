@@ -1,0 +1,138 @@
+{
+  "generatedAt": "2026-05-30T18:59:45.139Z",
+  "source": {
+    "title": "关键词推广_万相台无界版",
+    "url": "https://one.alimama.com/index.html?spm=a21dvs.28490323.cubeComp-3707-74542799-372-.d91d7e666_wxtwj-sy.2b022b44DQpVZw#!/manage/search?spm=a21dvs.28490323.cubeComp-3707-74542799-372-.d91d7e666_wxtwj-sy.2b022b44DQpVZw&bizCode=onebpSearch&orderField=charge&orderBy=desc&offset=0&searchKey=campaignNameLike&searchValue=E7pro",
+    "viewport": {
+      "width": 1800,
+      "height": 978,
+      "dpr": 2
+    }
+  },
+  "styles": [
+    {
+      "id": "am-helper-pro-v26-style",
+      "chars": 81112
+    },
+    {
+      "id": "am-wxt-keyword-style",
+      "chars": 440065
+    },
+    {
+      "id": "am-magic-report-popup-style",
+      "chars": 53819
+    },
+    {
+      "id": "",
+      "chars": 10523
+    },
+    {
+      "id": "",
+      "chars": 12242
+    }
+  ],
+  "windows": [
+    {
+      "key": "helper",
+      "name": "主面板 / 辅助显示 / 日志",
+      "selector": "#am-helper-panel",
+      "exists": true,
+      "rect": {
+        "x": 1492.9244384765625,
+        "y": 120,
+        "width": 281.0755615234375,
+        "height": 235.77056884765625
+      },
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "0.622953",
+      "text": "阿里助手 Pro\nv7.05\n算法护航\n组建计划\n万能查数\n辅助显示\n询单成本\n加购成本\n潜客占比\n花费占比\n预算进度\n预算破限\n花费排序\n计划并发\n运行日志\n清空 展开\n2026/5/31\n[02:54:59]🚀 阿里助手 Pro v7.05 已启动\n[02:55:01]💰 总花费更新: 58.74\n[02:55:01]✅ 更新 13 项数据\n[02:55:03]✅ 更新 15 项数据",
+      "htmlChars": 7028
+    },
+    {
+      "key": "keyword",
+      "name": "组建计划",
+      "selector": "#am-wxt-keyword-overlay",
+      "exists": true,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1794,
+        "height": 978
+      },
+      "display": "flex",
+      "visibility": "visible",
+      "opacity": "1",
+      "text": "关键词推广批量建计划 API 向导\n向导就绪\n首页\n矩阵页\n日志页\n已添加商品\n0 / 30\n已选计划\n4\n预算合计\n400元\n已添加商品 0 / 30\n添加商品\n展开已选\n清空\n请点击上方“添加商品”按钮\n最多可添加 30 个商品\n计划配置\n新建计划\n已选 4 个\n全选\n批量编辑\n清空\n计划名称\n类型\n出价目标\n预算\n操作\n关键词推广_20260531_025230_01\n关键词推广\n搜索卡位\n智能出价\n获取成交量\n目标成本\n元\n预算 100 元\n关键词推广_20260531_025230_02\n关键词推广\n趋势明星\n智能出价\n获取成交量\n目标成本\n元\n预算 100 元\n关键词推广_20260531_025230_03\n关键词推广\n流量金卡\n智能出价\n获取成交量\n目标成本\n元\n预算 100 元\n关键词推广_20260531_025230_04\n关键词推广\n自定义推广\n智能出价\n获取成交量\n目标成本\n元\n预算 100 元\n将提交\n4\n个计划\n预算合计 400元\n提交方式：单条\n生成其他策略\n提交创建\n执行日志\n[02:59:37] 向导已就绪（构建 2026-02-18 04:00），",
+      "htmlChars": 58221
+    },
+    {
+      "key": "magic",
+      "name": "万能查数 / 人群对比看板",
+      "selector": "#am-magic-report-popup",
+      "exists": true,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1794,
+        "height": 978
+      },
+      "display": "flex",
+      "visibility": "visible",
+      "opacity": "1",
+      "text": "万能查数输入您想要了解的数据，小万帮您收集\n万能查数\n人群对比看板\n计划名：关键词推广_万相台无界版\n计划ID：--\n商品ID：\n--\n未识别到当前计划ID，请先进入计划详情页或勾选计划\n点击人群\n加购人群\n成交人群\n商品成交人群\n｜\n过去3天\n过去7天\n过去30天\n过去90天\n｜\n显示占比\n显示提示",
+      "htmlChars": 15401
+    },
+    {
+      "key": "escort",
+      "name": "算法护航",
+      "selector": "#alimama-escort-helper-ui",
+      "exists": true,
+      "rect": {
+        "x": 563.5,
+        "y": 354.75,
+        "width": 667,
+        "height": 268.5
+      },
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "text": "小万护航 v7.05\nAPI版\n使用手动设置提交\n立即扫描并优化\n诊断话术\n同时执行\n个计划\n● Token",
+      "htmlChars": 39942
+    },
+    {
+      "key": "capture",
+      "name": "下载捕获浮层",
+      "selector": "#am-report-capture-panel",
+      "exists": true,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "display": "none",
+      "visibility": "visible",
+      "opacity": "1",
+      "text": "",
+      "htmlChars": 2047
+    },
+    {
+      "key": "copy",
+      "name": "复制计划一览",
+      "selector": "#am-campaign-copy-overview-popup",
+      "exists": true,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1794,
+        "height": 978
+      },
+      "display": "flex",
+      "visibility": "visible",
+      "opacity": "1",
+      "text": "复制计划一览\n读取中\n\n源计划 80404078368 · 关键词推广 · 共 1 个\n\n批量出价\n首价\n尾价\n无可编辑出价\n应用梯度\n批量预算\n类型\n每日预算\n日均预算\n总预算\n冻结预算\n套餐预算\n预算\n应用预算\n#\t计划名称\t计划出价方式\t出价价格\t预算\n1\t\t\n智能出价（促成交）\n\t\t\n每日预算\n日均预算\n总预算\n冻结预算\n套餐预算\n已打开预览，正在读取源计划详情...\n确认生成\n取消",
+      "htmlChars": 7181
+    }
+  ]
+}

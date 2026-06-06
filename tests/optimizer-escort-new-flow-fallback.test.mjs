@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 
 const coreSource = readFileSync(new URL('../src/optimizer/core.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/optimizer/ui.js', import.meta.url), 'utf8');
 const bootstrapSource = readFileSync(new URL('../src/optimizer/bootstrap.js', import.meta.url), 'utf8');
+const apiSource = readFileSync(new URL('../src/optimizer/api.js', import.meta.url), 'utf8');
 const latestSettingPreviewSource = uiSource.slice(
     uiSource.indexOf('renderLatestEscortSettingPreview: () => {'),
     uiSource.indexOf('// 渲染护航方案表格（到卡片）')
@@ -13,6 +15,254 @@ const mainPanelCreateSource = uiSource.slice(
     uiSource.indexOf('create: () => {'),
     uiSource.indexOf('// 创建最小化按钮')
 );
+
+function sliceSource(text, startText, endText) {
+    const start = text.indexOf(startText);
+    const end = text.indexOf(endText, start + startText.length);
+    assert.ok(start > -1 && end > start, `无法定位代码片段：${startText}`);
+    return text.slice(start, end);
+}
+
+function createResultOverlayCloseHarness(initialVisibilityState = 'visible') {
+    let visibilityState = String(initialVisibilityState || 'visible');
+    let nextTimerId = 1;
+    const timers = new Map();
+    const listeners = new Map();
+    class FakeHTMLElement {
+        constructor(tagName = 'div', ownerDocument = null) {
+            this.tagName = String(tagName || 'div').toUpperCase();
+            this.ownerDocument = ownerDocument;
+            this.nodeType = 1;
+            this.isConnected = false;
+            this.parentElement = null;
+            this.children = [];
+            this.attributes = new Map();
+            this.eventListeners = new Map();
+            this.style = {};
+            this.dataset = {};
+            this.tabIndex = 0;
+            this.onclick = null;
+            this.focusCount = 0;
+        }
+
+        get id() {
+            return this.attributes.get('id') || '';
+        }
+
+        set id(value) {
+            this.setAttribute('id', value);
+        }
+
+        setAttribute(name, value) {
+            const key = String(name);
+            const nextValue = String(value);
+            if (key === 'id' && this.ownerDocument) {
+                const oldId = this.attributes.get('id');
+                if (oldId) this.ownerDocument.unregisterElementId(oldId, this);
+                this.ownerDocument.registerElementId(nextValue, this);
+            }
+            this.attributes.set(key, nextValue);
+        }
+
+        getAttribute(name) {
+            return this.attributes.get(String(name)) || null;
+        }
+
+        appendChild(child) {
+            if (!(child instanceof FakeHTMLElement)) return child;
+            if (child.parentElement) {
+                child.parentElement.children = child.parentElement.children.filter(item => item !== child);
+            }
+            this.children.push(child);
+            child.parentElement = this;
+            child.markConnected(this.isConnected);
+            return child;
+        }
+
+        remove() {
+            if (this.parentElement) {
+                this.parentElement.children = this.parentElement.children.filter(item => item !== this);
+            }
+            this.parentElement = null;
+            this.markConnected(false);
+        }
+
+        markConnected(nextConnected) {
+            this.isConnected = nextConnected === true;
+            const id = this.attributes.get('id');
+            if (this.ownerDocument && id) {
+                if (this.isConnected) {
+                    this.ownerDocument.registerElementId(id, this);
+                } else {
+                    this.ownerDocument.unregisterElementId(id, this);
+                }
+            }
+            this.children.forEach(child => child.markConnected(this.isConnected));
+        }
+
+        addEventListener(type, handler) {
+            if (typeof handler !== 'function') return;
+            if (!this.eventListeners.has(type)) this.eventListeners.set(type, new Set());
+            this.eventListeners.get(type).add(handler);
+        }
+
+        removeEventListener(type, handler) {
+            this.eventListeners.get(type)?.delete(handler);
+        }
+
+        dispatchEvent(event = {}) {
+            const type = String(event.type || '');
+            const handlers = Array.from(this.eventListeners.get(type) || []);
+            handlers.forEach(handler => handler(event));
+            if (type === 'click' && typeof this.onclick === 'function') this.onclick(event);
+        }
+
+        click() {
+            this.dispatchEvent({ type: 'click', target: this, preventDefault() {} });
+        }
+
+        focus() {
+            this.focusCount += 1;
+            if (this.ownerDocument) this.ownerDocument.activeElement = this;
+        }
+
+        set innerHTML(value) {
+            this._innerHTML = String(value || '');
+            const closeButtonId = this._innerHTML.match(/<button id="([^"]+-result-close)"/)?.[1];
+            if (closeButtonId) {
+                const button = new FakeHTMLElement('button', this.ownerDocument);
+                button.id = closeButtonId;
+                this.appendChild(button);
+            }
+        }
+
+        get innerHTML() {
+            return this._innerHTML || '';
+        }
+    }
+
+    const elementsById = new Map();
+    const addListener = (type, handler) => {
+        if (typeof handler !== 'function') return;
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(handler);
+    };
+    const removeListener = (type, handler) => {
+        listeners.get(type)?.delete(handler);
+    };
+    const documentRef = {
+        activeElement: null,
+        get visibilityState() {
+            return visibilityState;
+        },
+        createElement(tagName) {
+            return new FakeHTMLElement(tagName, documentRef);
+        },
+        getElementById(id) {
+            return elementsById.get(String(id)) || null;
+        },
+        addEventListener: addListener,
+        removeEventListener: removeListener,
+        registerElementId(id, element) {
+            elementsById.set(String(id), element);
+        },
+        unregisterElementId(id, element) {
+            if (elementsById.get(String(id)) === element) elementsById.delete(String(id));
+        }
+    };
+    documentRef.body = new FakeHTMLElement('body', documentRef);
+    documentRef.body.markConnected(true);
+    const previousFocusEl = new FakeHTMLElement('button', documentRef);
+    previousFocusEl.markConnected(true);
+    documentRef.activeElement = previousFocusEl;
+
+    const renderResultsSource = sliceSource(uiSource, 'renderResults: (successList, failList) => {', '// 创建主界面');
+    const context = createContext({
+        CONFIG: { UI_ID: 'am-optimizer-panel' },
+        Utils: {
+            escapeHtml(value) {
+                return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                })[char]);
+            }
+        },
+        renderAmIcon(name) {
+            return `<svg data-icon="${String(name)}"></svg>`;
+        },
+        document: documentRef,
+        HTMLElement: FakeHTMLElement,
+        setTimeout(handler, delay = 0) {
+            const timerId = nextTimerId;
+            nextTimerId += 1;
+            if (typeof handler === 'function') {
+                timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+            }
+            return timerId;
+        },
+        clearTimeout(timerId) {
+            timers.delete(Number(timerId));
+        }
+    });
+    new Script(`const UI = {
+isDocumentHidden: () => document.visibilityState === 'hidden',
+${renderResultsSource}
+};
+globalThis.__UI = UI;`).runInContext(context);
+    return {
+        context,
+        documentRef,
+        previousFocusEl,
+        timers,
+        renderResults() {
+            context.__UI.renderResults([{ name: '计划A' }], []);
+            return documentRef.getElementById('am-optimizer-panel-result-overlay');
+        },
+        getCloseButton() {
+            return documentRef.getElementById('am-optimizer-panel-result-close');
+        },
+        listenerCount(type) {
+            return listeners.get(type)?.size || 0;
+        },
+        setVisibilityState(nextState) {
+            visibilityState = String(nextState || 'visible');
+            const handlers = Array.from(listeners.get('visibilitychange') || []);
+            handlers.forEach(handler => handler({ type: 'visibilitychange' }));
+        },
+        pressEscape() {
+            const handlers = Array.from(listeners.get('keydown') || []);
+            const event = {
+                type: 'keydown',
+                key: 'Escape',
+                preventDefaultCalled: false,
+                preventDefault() {
+                    this.preventDefaultCalled = true;
+                }
+            };
+            handlers.forEach(handler => handler(event));
+            return event;
+        },
+        clickOverlay() {
+            const overlay = documentRef.getElementById('am-optimizer-panel-result-overlay');
+            if (overlay && typeof overlay.onclick === 'function') {
+                overlay.onclick({ type: 'click', target: overlay });
+            }
+        },
+        tickNextTimer() {
+            const [timerId, timer] = Array.from(timers.entries())[0] || [];
+            if (!timer) return false;
+            timers.delete(timerId);
+            timer.handler();
+            return true;
+        },
+        getTimerDelays() {
+            return Array.from(timers.values()).map(timer => timer.delay);
+        }
+    };
+}
 
 test('无 actionList 时可识别小万护航新链路信号', () => {
     assert.match(
@@ -51,6 +301,54 @@ test('openV3 成功后卡片状态更新为护航中', () => {
         coreSource,
         /card\.setStatus\(submitResult\.success \? '护航中' : '失败',\s*submitResult\.success \? 'success' : 'error'\)/,
         'openV3 成功后未更新为护航中状态'
+    );
+});
+
+test('算法护航 API 请求按服务器 10rpm 统一限速', () => {
+    assert.match(
+        apiSource,
+        /REQUEST_RATE_LIMIT_RPM:\s*10,/,
+        'API 层缺少 10rpm 请求限速事实源'
+    );
+    assert.match(
+        apiSource,
+        /REQUEST_RATE_LIMIT_INTERVAL_MS:\s*6000,/,
+        'API 层应把 10rpm 固化为 6000ms 请求启动间隔'
+    );
+    assert.match(
+        apiSource,
+        /rateLimitQueue:\s*Promise\.resolve\(\),/,
+        'API 层缺少串行限速队列，仍可能并发抢占请求启动槽'
+    );
+    assert.match(
+        apiSource,
+        /waitForRateLimitSlot:\s*async \(signal\) => \{[\s\S]*API\.rateLimitQueue\.catch\(\(\) => null\)\.then\(async \(\) => \{[\s\S]*const waitMs = Math\.max\(0,\s*API\.rateLimitNextAt - Date\.now\(\)\);[\s\S]*API\.delayWithAbort\(waitMs,\s*signal\);[\s\S]*API\.rateLimitNextAt = Date\.now\(\) \+ API\.REQUEST_RATE_LIMIT_INTERVAL_MS;[\s\S]*\},/,
+        'API 层限速队列未按 nextAt 串行等待并刷新下一个请求槽'
+    );
+    assert.match(
+        apiSource,
+        /for \(let attempt = 1; attempt <= totalAttempts; attempt\+\+\) \{[\s\S]*await API\.waitForRateLimitSlot\(signal\);[\s\S]*const result = await API\._singleRequest\(url,\s*data,\s*timeout,\s*signal\);/,
+        'API.request 每次尝试前都必须先获取 10rpm 请求槽，重试也不能绕过限速'
+    );
+    assert.match(
+        coreSource,
+        /开始按 10rpm 限速处理 \(任务并发数: \$\{concurrency\}\)/,
+        '算法护航执行提示未明确 10rpm 限速，容易误导为纯并发执行'
+    );
+    assert.match(
+        coreSource,
+        /任务并发保持可配置；具体服务端请求由 API 层统一按 10rpm 限速。/,
+        'Core.run 缺少任务并发与请求限速的边界说明'
+    );
+    assert.match(
+        uiSource,
+        /<span class="am-escort-field-label">任务并发<\/span>[\s\S]*<input id="\$\{CONFIG\.UI_ID\}-concurrency" type="number" min="1" max="10" \/>/,
+        '算法护航面板并发输入文案未从“同时执行”收敛为任务并发'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /<span class="am-escort-field-label">同时执行<\/span>/,
+        '算法护航面板仍保留容易误解为服务端并发的旧文案'
     );
 });
 
@@ -363,6 +661,41 @@ test('算法护航结果浮层具备 dialog 语义与键盘关闭能力', () => 
     );
     assert.match(
         uiSource,
+        /let resultOverlayClosing = false;\s*\n\s*let resultOverlayCloseTimerId = null;\s*\n\s*let resultOverlayCloseVisibilityHandler = null;/,
+        '结果浮层关闭过渡缺少 closing guard、timer 句柄或 visibility handler'
+    );
+    assert.match(
+        uiSource,
+        /const clearResultOverlayCloseTimer = \(\) => \{[\s\S]*if \(resultOverlayCloseTimerId === null\) return;[\s\S]*clearTimeout\(resultOverlayCloseTimerId\);[\s\S]*resultOverlayCloseTimerId = null;[\s\S]*\};/,
+        '结果浮层关闭过渡 timer 应支持统一清理并归零'
+    );
+    assert.match(
+        uiSource,
+        /const clearResultOverlayCloseVisibilityHandler = \(\) => \{[\s\S]*document\.removeEventListener\('visibilitychange', resultOverlayCloseVisibilityHandler\);[\s\S]*resultOverlayCloseVisibilityHandler = null;[\s\S]*\};/,
+        '结果浮层关闭应支持释放 visibilitychange handler'
+    );
+    assert.match(
+        uiSource,
+        /const finishResultOverlayClose = \(\) => \{[\s\S]*clearResultOverlayCloseTimer\(\);[\s\S]*clearResultOverlayCloseVisibilityHandler\(\);[\s\S]*document\.removeEventListener\('keydown', handleResultKeydown, true\);[\s\S]*overlay\.remove\(\);[\s\S]*restoreFocus\(\);[\s\S]*\};/,
+        '结果浮层关闭应通过统一 finish helper 清理 timer、监听、overlay 和焦点'
+    );
+    assert.match(
+        uiSource,
+        /const bindResultOverlayCloseVisibilityHandler = \(\) => \{[\s\S]*if \(typeof resultOverlayCloseVisibilityHandler === 'function'\) return;[\s\S]*if \(!UI\.isDocumentHidden\(\)\) return;[\s\S]*finishResultOverlayClose\(\);[\s\S]*document\.addEventListener\('visibilitychange', resultOverlayCloseVisibilityHandler\);[\s\S]*\};/,
+        '结果浮层关闭应在转隐藏时立即完成关闭收尾'
+    );
+    assert.match(
+        uiSource,
+        /const closeResultOverlay = \(\) => \{[\s\S]*if \(resultOverlayClosing\) return;[\s\S]*resultOverlayClosing = true;[\s\S]*document\.removeEventListener\('keydown', handleResultKeydown, true\);[\s\S]*overlay\.style\.opacity = '0';[\s\S]*if \(UI\.isDocumentHidden\(\)\) \{[\s\S]*finishResultOverlayClose\(\);[\s\S]*return;[\s\S]*\}[\s\S]*bindResultOverlayCloseVisibilityHandler\(\);[\s\S]*resultOverlayCloseTimerId = setTimeout\(\(\) => \{[\s\S]*finishResultOverlayClose\(\);[\s\S]*\}, 240\);/,
+        '结果浮层关闭应只受理一次；隐藏页即时收尾，可见页保留 240ms 淡出'
+    );
+    assert.doesNotMatch(
+        uiSource,
+        /overlay\.style\.transition = 'opacity 0\.24s ease';\s*\n\s*setTimeout\(\(\) => \{/,
+        '结果浮层关闭不应继续使用无句柄过渡 setTimeout'
+    );
+    assert.match(
+        uiSource,
         /#\$\{CONFIG\.UI_ID\}-result-close:focus-visible[\s\S]*outline:2px solid rgba\(42,91,255,\.45\);/,
         '结果浮层关闭按钮缺少键盘焦点态'
     );
@@ -376,6 +709,46 @@ test('算法护航结果浮层具备 dialog 语义与键盘关闭能力', () => 
         /scale\(1\.05\)/,
         '结果浮层关闭按钮仍使用放大 hover 动效'
     );
+});
+
+test('算法护航结果浮层关闭 timer 在隐藏页即时收尾并释放监听', () => {
+    const hiddenHarness = createResultOverlayCloseHarness('hidden');
+    const hiddenOverlay = hiddenHarness.renderResults();
+    assert.ok(hiddenOverlay?.isConnected, '结果浮层应先被挂载');
+    assert.equal(hiddenHarness.listenerCount('keydown'), 1, '结果浮层打开后应绑定 keydown');
+    hiddenHarness.getCloseButton().click();
+    assert.equal(hiddenHarness.timers.size, 0, '隐藏页关闭不应排 240ms timeout');
+    assert.equal(hiddenOverlay.isConnected, false, '隐藏页关闭应立即移除结果浮层');
+    assert.equal(hiddenHarness.previousFocusEl.focusCount, 1, '隐藏页关闭应恢复焦点');
+    assert.equal(hiddenHarness.listenerCount('keydown'), 0, '隐藏页关闭后应释放 keydown');
+    assert.equal(hiddenHarness.listenerCount('visibilitychange'), 0, '隐藏页关闭后不应残留 visibilitychange');
+
+    const visibleHarness = createResultOverlayCloseHarness('visible');
+    const visibleOverlay = visibleHarness.renderResults();
+    const closeButton = visibleHarness.getCloseButton();
+    closeButton.click();
+    closeButton.click();
+    visibleHarness.pressEscape();
+    visibleHarness.clickOverlay();
+    assert.deepEqual(visibleHarness.getTimerDelays(), [240], '可见页重复关闭只应保留一个 240ms timeout');
+    assert.equal(visibleHarness.listenerCount('keydown'), 0, '关闭开始后应立即释放 keydown');
+    assert.equal(visibleHarness.listenerCount('visibilitychange'), 1, '可见页等待淡出时应监听转隐藏');
+    assert.equal(visibleOverlay.isConnected, true, '可见页 240ms timer 触发前应保留浮层淡出');
+    assert.equal(visibleHarness.tickNextTimer(), true, '应能触发可见页关闭收尾 timeout');
+    assert.equal(visibleOverlay.isConnected, false, '可见页 timeout 后应移除浮层');
+    assert.equal(visibleHarness.previousFocusEl.focusCount, 1, '可见页 timeout 后应恢复焦点');
+    assert.equal(visibleHarness.listenerCount('visibilitychange'), 0, '关闭完成后应释放 visibilitychange');
+    assert.equal(visibleHarness.timers.size, 0, '关闭完成后不应残留 timeout');
+
+    const switchHarness = createResultOverlayCloseHarness('visible');
+    const switchOverlay = switchHarness.renderResults();
+    switchHarness.getCloseButton().click();
+    assert.deepEqual(switchHarness.getTimerDelays(), [240], '转隐藏前应先按原 240ms 调度');
+    switchHarness.setVisibilityState('hidden');
+    assert.equal(switchHarness.timers.size, 0, '转隐藏时应取消已排关闭 timeout');
+    assert.equal(switchOverlay.isConnected, false, '转隐藏时应立即移除浮层');
+    assert.equal(switchHarness.previousFocusEl.focusCount, 1, '转隐藏收尾应恢复焦点');
+    assert.equal(switchHarness.listenerCount('visibilitychange'), 0, '转隐藏收尾后应释放 visibilitychange');
 });
 
 test('escortSettingTable 关键词类方案会显示中文名称与对应详情', () => {

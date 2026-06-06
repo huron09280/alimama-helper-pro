@@ -5,6 +5,7 @@
         popup: null,
         header: null,
         iframe: null,
+        iframeLoadStarted: false,
         quickPromptsEl: null,
         viewTabsEl: null,
         queryPanelEl: null,
@@ -22,6 +23,8 @@
         matrixCampaignItemDropdownEl: null,
         matrixCampaignItemDropdownHomeEl: null,
         matrixCampaignItemDropdownPositionFrame: 0,
+        matrixCampaignItemDropdownPositionCancel: null,
+        magicTitleTextEl: null,
         matrixHoverTipEl: null,
         matrixHoverActiveBar: null,
         matrixHoverActiveBars: [],
@@ -34,6 +37,18 @@
         popupLayoutBeforeMatrix: null,
         popupResizeHandler: null,
         popupDropdownPositionHandler: null,
+        popupCleanupHandlers: [],
+        popupLifecycleToken: 0,
+        quickPromptResetTimer: 0,
+        quickPromptResetVisibilityHandler: null,
+        quickPromptResetPendingButton: null,
+        quickPromptResetPendingDelayMs: 0,
+        quickPromptRetryTimer: 0,
+        quickPromptRetryVisibilityHandler: null,
+        quickPromptRetryPendingCallback: null,
+        iframeCleanupRetryTimer: 0,
+        iframeCleanupVisibilityHandler: null,
+        magicPromptDraft: '',
         lastCampaignId: '',
         lastCampaignName: '',
         activeView: 'matrix',
@@ -41,17 +56,44 @@
         crowdMatrixLoading: false,
         crowdMatrixProgress: 0,
         crowdMatrixStateHideTimer: null,
+        crowdMatrixStateHideVisibilityHandler: null,
+        crowdMatrixStateHidePendingDelayMs: null,
+        crowdMatrixBarAnimationFrame: 0,
+        crowdMatrixBarAnimationCancel: null,
+        crowdMatrixBarAnimationVisibilityHandler: null,
+        crowdMatrixBarAnimationQueue: [],
         crowdMatrixLoadedCampaignId: '',
         crowdMatrixDataset: null,
         crowdMatrixResultMap: null,
         crowdMatrixPendingMetricReload: null,
         crowdMatrixGroupSortModeMap: {},
         crowdMatrixTaskProgressHandler: null,
+        crowdPeriodLabelMap: null,
+        dmpCrowdMatrixActive: false,
+        dmpCrowdMatrixButtonObserver: null,
+        dmpCrowdMatrixButtonObserverRoot: null,
+        dmpCrowdMatrixButtonObserverConnected: false,
+        dmpCrowdMatrixButtonTimer: 0,
+        dmpCrowdMatrixButtonVisibilityHandler: null,
+        dmpCrowdMatrixButtonEnsurePending: false,
+        dmpCrowdMatrixContext: null,
+        dmpCrowdMatrixAvailableProperties: [],
+        dmpCrowdMatrixTagGroups: [],
+        dmpCrowdPropertyDropdownMetric: '',
+        dmpCrowdPropertyDropdownChannelKey: '',
+        dmpCrowdPropertyDropdownPortalEl: null,
+        dmpCrowdPropertyDropdownPositionFrame: 0,
+        dmpCrowdPropertyDropdownPositionCancel: null,
+        dmpCrowdPropertyDropdownPositionVisibilityHandler: null,
+        dmpCrowdPropertyDropdownPositionPending: false,
+        dmpCrowdMatrixMetricMeta: null,
+        dmpCrowdMatrixOriginalConfig: null,
         crowdCampaignItemIdMap: new Map(),
         crowdCampaignItemOptionsMap: new Map(),
         crowdCampaignSelectedItemIdMap: new Map(),
         crowdCampaignManualItemSelectionMap: new Map(),
         crowdInsightRunContext: null,
+        crowdAuthParamsCache: null,
         crowdRequestSlotPromise: null,
         crowdRequestLastAt: 0,
         BASE_URL: 'https://one.alimama.com/index.html#!/report/ai-report',
@@ -61,7 +103,9 @@
         CROWD_EXTRA_DIMENSION_GROUPS: ['省份', '城市'],
         CROWD_GROUP_SORT_PERIOD_PRIORITY: [90, 30, 7, 3],
         CROWD_METRICS: ['click', 'cart', 'deal', 'itemdeal'],
-        CROWD_REQUEST_CONCURRENCY: 2,
+        DMP_CROWD_PERIODS: [1, 7, 30],
+        DMP_CROWD_METRICS: ['analysis', 'compare'],
+        CROWD_REQUEST_CONCURRENCY: 4,
         CROWD_REQUEST_THROTTLE_MS: 340,
         CROWD_REQUEST_JITTER_MS: 180,
         CROWD_REQUEST_MAX_ATTEMPTS: 3,
@@ -156,11 +200,31 @@
 
         buildIframeUrl(forceReload = false) {
             const rawUrl = this.iframe?.getAttribute('src') || this.BASE_URL;
-            const url = new URL(rawUrl, window.location.href);
+            const baseUrl = !rawUrl || rawUrl === 'about:blank'
+                ? this.BASE_URL
+                : rawUrl;
+            const url = new URL(baseUrl, window.location.href);
             if (forceReload) {
                 url.searchParams.set('_am_refresh_ts', String(Date.now()));
             }
             return url.toString();
+        },
+
+        ensureMagicIframeLoaded(forceReload = false) {
+            if (!(this.iframe instanceof HTMLIFrameElement)) return false;
+            const loading = this.popup instanceof HTMLElement
+                ? this.popup.querySelector('#am-magic-loading')
+                : null;
+            const shouldReload = forceReload === true || !this.iframeLoadStarted || !this.iframe.getAttribute('src');
+            if (!shouldReload) return true;
+            if (forceReload === true) {
+                this.captureMagicPromptDraft();
+            }
+            this.iframeLoadStarted = true;
+            if (loading instanceof HTMLElement) loading.style.display = 'flex';
+            this.iframe.style.opacity = '0';
+            this.iframe.src = this.buildIframeUrl(forceReload);
+            return true;
         },
 
         extractCampaignId(rawText) {
@@ -867,11 +931,16 @@
 
         requestCrowdCampaignItemDropdownPositionUpdate() {
             if (this.matrixCampaignItemDropdownPositionFrame) return;
-            const schedule = typeof requestAnimationFrame === 'function'
+            const useRaf = typeof requestAnimationFrame === 'function';
+            const schedule = useRaf
                 ? requestAnimationFrame
                 : (fn) => setTimeout(fn, 16);
+            this.matrixCampaignItemDropdownPositionCancel = useRaf && typeof cancelAnimationFrame === 'function'
+                ? cancelAnimationFrame
+                : clearTimeout;
             this.matrixCampaignItemDropdownPositionFrame = schedule(() => {
                 this.matrixCampaignItemDropdownPositionFrame = 0;
+                this.matrixCampaignItemDropdownPositionCancel = null;
                 this.positionCrowdCampaignItemDropdown();
             });
         },
@@ -1103,6 +1172,10 @@
         },
 
         refreshCrowdMatrixCampaignMeta(campaignId = '') {
+            if (this.isDmpCrowdMatrixMode()) {
+                this.refreshDmpCrowdMatrixCampaignMeta();
+                return;
+            }
             if (!(this.matrixCampaignEl instanceof HTMLElement)) return;
             const id = String(campaignId || this.getCurrentCampaignId() || this.lastCampaignId || '').trim();
             const name = this.getCurrentCampaignName() || this.lastCampaignName || '';
@@ -1178,7 +1251,36 @@
         },
 
         setPromptInputValue(inputEl, promptText) {
-            return MagicPromptDriver.setPromptInputValue(inputEl, promptText);
+            const ok = MagicPromptDriver.setPromptInputValue(inputEl, promptText);
+            if (ok) this.magicPromptDraft = String(promptText || '').trim();
+            return ok;
+        },
+
+        readPromptInputValue(inputEl) {
+            if (!this.isEditablePromptElement(inputEl)) return '';
+            if (inputEl.isContentEditable) {
+                return String(inputEl.textContent || '').trim();
+            }
+            return String(inputEl.value || '').trim();
+        },
+
+        captureMagicPromptDraft() {
+            const iframeDoc = this.getIframeDoc();
+            if (!iframeDoc) return;
+            const inputEl = this.findPromptInput(iframeDoc);
+            if (!inputEl) return;
+            const draft = this.readPromptInputValue(inputEl);
+            this.magicPromptDraft = draft;
+        },
+
+        restoreMagicPromptDraft() {
+            const draft = String(this.magicPromptDraft || '').trim();
+            if (!draft) return false;
+            const iframeDoc = this.getIframeDoc();
+            if (!iframeDoc) return false;
+            const inputEl = this.findPromptInput(iframeDoc);
+            if (!inputEl) return false;
+            return this.setPromptInputValue(inputEl, draft);
         },
 
         triggerClick(el) {
@@ -1190,6 +1292,7 @@
         },
 
         trySubmitPrompt(promptText) {
+            this.ensureMagicIframeLoaded(false);
             const iframeDoc = this.getIframeDoc();
             if (!iframeDoc) return { ok: false, reason: 'iframe-not-ready' };
             return MagicPromptDriver.trySubmitPromptInDocument(iframeDoc, promptText);
@@ -1211,7 +1314,14 @@
 
         runQuickPrompt(promptText) {
             const maxRetries = 16;
+            const promptToken = this.popupLifecycleToken;
+            this.clearQuickPromptRetryState();
             const tryRun = (retriesLeft) => {
+                if (promptToken !== this.popupLifecycleToken || !(this.popup instanceof HTMLElement) || !this.popup.isConnected) return;
+                if (this.isMagicReportDocumentHidden()) {
+                    this.scheduleQuickPromptRetry(() => tryRun(retriesLeft), 500);
+                    return;
+                }
                 const result = this.trySubmitPrompt(promptText);
                 if (result.ok) {
                     if (result.uncertain) {
@@ -1223,6 +1333,7 @@
                 }
                 if (retriesLeft <= 0) {
                     this.tryFallbackSubmitPrompt(promptText).then((fallbackOk) => {
+                        if (promptToken !== this.popupLifecycleToken) return;
                         if (fallbackOk) return;
                         if (result.reason === 'input-not-found' || result.reason === 'iframe-not-ready') {
                             Logger.log('⚠️ 万能查数尚未加载完成，请稍后重试', true);
@@ -1232,7 +1343,7 @@
                     });
                     return;
                 }
-                setTimeout(() => tryRun(retriesLeft - 1), 500);
+                this.scheduleQuickPromptRetry(() => tryRun(retriesLeft - 1), 500);
             };
             tryRun(maxRetries);
         },
@@ -1288,8 +1399,1031 @@
             }
 
             this.toggle(true);
-            this.runQuickPrompt(promptText);
+            const shouldSubmitPrompt = options.autoSubmitPrompt !== false && this.normalizeMagicView(this.activeView || this.getMagicDefaultView()) === 'query';
+            if (shouldSubmitPrompt) {
+                this.runQuickPrompt(promptText);
+            }
             return true;
+        },
+
+        isDmpCrowdMatrixMode() {
+            return this.dmpCrowdMatrixActive === true;
+        },
+
+        refreshMagicReportTitle() {
+            if (!(this.magicTitleTextEl instanceof HTMLElement)) return;
+            this.magicTitleTextEl.textContent = this.isDmpCrowdMatrixMode()
+                ? '达摩盘单品分析'
+                : '万能查数输入您想要了解的数据，小万帮您收集';
+        },
+
+        isDmpItemInsightCrowdPage() {
+            try {
+                const url = new URL(window.location.href);
+                if (String(url.hostname || '').toLowerCase() !== 'dmp.taobao.com') return false;
+                const hash = String(url.hash || '');
+                if (!/\/items\/item-insight/i.test(hash)) return false;
+                const queryText = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+                const params = new URLSearchParams(queryText);
+                return String(params.get('analysisTab') || '').trim() === 'crowd-insight';
+            } catch {
+                return false;
+            }
+        },
+
+        ensureDmpCrowdMatrixEntryStyle() {
+            if (document.getElementById('am-dmp-crowd-matrix-entry-style')) return;
+            const style = document.createElement('style');
+            style.id = 'am-dmp-crowd-matrix-entry-style';
+            style.textContent = `
+                .am-dmp-crowd-matrix-entry {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    height: var(--am-dmp-entry-height, 28px);
+                    min-height: var(--am-dmp-entry-height, 28px);
+                    margin-left: 8px;
+                    padding: 0 11px;
+                    border: 1px solid rgba(42, 91, 255, 0.22);
+                    border-radius: var(--am-dmp-entry-radius, 14px);
+                    background: linear-gradient(135deg, rgba(255,255,255,.94), rgba(236,244,255,.78));
+                    color: #1f4fd7;
+                    font: 600 var(--am-dmp-entry-font-size, 12px)/var(--am-dmp-entry-line-height, 1) var(--am26-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+                    box-shadow: 0 4px 12px rgba(31, 53, 109, 0.08), inset 0 1px 0 rgba(255,255,255,.66);
+                    cursor: pointer;
+                    vertical-align: middle;
+                    white-space: nowrap;
+                    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease;
+                }
+                .am-dmp-crowd-matrix-entry:hover {
+                    border-color: rgba(42, 91, 255, 0.42);
+                    background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(226,239,255,.88));
+                    box-shadow: 0 6px 16px rgba(31, 53, 109, 0.12), inset 0 1px 0 rgba(255,255,255,.74);
+                    transform: translateY(-1px);
+                }
+                .am-dmp-crowd-matrix-entry:focus-visible {
+                    outline: 2px solid rgba(37, 99, 235, 0.45);
+                    outline-offset: 2px;
+                }
+                .am-dmp-crowd-matrix-entry svg {
+                    width: 13px;
+                    height: 13px;
+                    flex: 0 0 13px;
+                }
+            `;
+            (document.head || document.documentElement).appendChild(style);
+        },
+
+        findDmpSwitchItemButton() {
+            const normalizeText = (value = '') => String(value || '').replace(/\s+/g, '').trim();
+            const isVisible = (el) => {
+                if (!(el instanceof HTMLElement)) return false;
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            };
+            const nodes = Array.from(document.querySelectorAll('button, [role="button"], span, a'))
+                .filter(node => node instanceof HTMLElement)
+                .filter(node => normalizeText(node.textContent) === '切换分析单品')
+                .filter(isVisible);
+            const directButton = nodes.find(node => node.matches('button, [role="button"]'));
+            const source = directButton || nodes[0] || null;
+            if (!(source instanceof HTMLElement)) return null;
+            const wrapper = source.closest('.mr10');
+            return wrapper instanceof HTMLElement ? wrapper : source;
+        },
+
+        findDmpSwitchItemButtonControl(anchor) {
+            const normalizeText = (value = '') => String(value || '').replace(/\s+/g, '').trim();
+            const isVisible = (node) => {
+                if (!(node instanceof HTMLElement)) return false;
+                const rect = node.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            };
+            const findNestedControl = (node) => {
+                if (!(node instanceof HTMLElement)) return null;
+                return Array.from(node.querySelectorAll('button, [role="button"], a'))
+                    .find(candidate => candidate instanceof HTMLElement
+                        && normalizeText(candidate.textContent) === '切换分析单品'
+                        && isVisible(candidate)) || null;
+            };
+            const resolveControl = (node) => {
+                if (!(node instanceof HTMLElement)) return null;
+                if (node.matches('button, [role="button"], a')) return node;
+                const nestedControl = findNestedControl(node);
+                if (nestedControl instanceof HTMLElement) return nestedControl;
+                const control = node.closest('button, [role="button"], a');
+                return control instanceof HTMLElement ? control : node;
+            };
+            const source = anchor instanceof HTMLElement ? anchor : this.findDmpSwitchItemButton();
+            if (!(source instanceof HTMLElement)) return null;
+            if (normalizeText(source.textContent) === '切换分析单品' && source.matches('button, [role="button"], span, a')) {
+                return resolveControl(source);
+            }
+            const candidates = Array.from(source.querySelectorAll('button, [role="button"], span, a'))
+                .filter(node => node instanceof HTMLElement)
+                .filter(node => normalizeText(node.textContent) === '切换分析单品')
+                .map(resolveControl)
+                .filter((node, index, list) => node instanceof HTMLElement && list.indexOf(node) === index);
+            const control = candidates.find(node => node.matches('button, [role="button"], a') && isVisible(node))
+                || candidates.find(isVisible);
+            return control || source;
+        },
+
+        syncDmpCrowdMatrixEntrySize(button, anchor) {
+            if (!(button instanceof HTMLElement)) return;
+            const source = this.findDmpSwitchItemButtonControl(anchor);
+            if (!(source instanceof HTMLElement)) return;
+            const rect = source.getBoundingClientRect();
+            const style = window.getComputedStyle(source);
+            const height = Math.round(rect.height || parseFloat(style.height) || 0);
+            if (height > 0) {
+                button.style.setProperty('--am-dmp-entry-height', `${height}px`);
+                button.style.setProperty('--am-dmp-entry-radius', style.borderRadius || `${Math.round(height / 2)}px`);
+            }
+            const fontSize = parseFloat(style.fontSize || '');
+            if (fontSize > 0) {
+                button.style.setProperty('--am-dmp-entry-font-size', `${Math.round(fontSize * 100) / 100}px`);
+            }
+            const lineHeight = String(style.lineHeight || '').trim();
+            if (lineHeight && lineHeight !== 'normal') {
+                button.style.setProperty('--am-dmp-entry-line-height', lineHeight);
+            }
+        },
+
+        ensureDmpCrowdMatrixButton() {
+            if (!this.isDmpItemInsightCrowdPage()) return false;
+            this.ensureDmpCrowdMatrixEntryStyle();
+            const anchor = this.findDmpSwitchItemButton();
+            if (!(anchor instanceof HTMLElement)) return false;
+            let button = document.getElementById('am-dmp-crowd-matrix-entry');
+            if (!(button instanceof HTMLButtonElement)) {
+                button = document.createElement('button');
+                button.type = 'button';
+                button.id = 'am-dmp-crowd-matrix-entry';
+                button.className = 'am-dmp-crowd-matrix-entry';
+                button.dataset.amDmpCrowdMatrixEntry = '1';
+                button.innerHTML = `${renderAmIcon('chart', { size: 13, strokeWidth: 2.1 })}<span>人群对比看板</span>`;
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.openDmpCrowdMatrixPopup();
+                });
+            }
+            if (button.previousElementSibling !== anchor) {
+                anchor.insertAdjacentElement('afterend', button);
+            }
+            this.syncDmpCrowdMatrixEntrySize(button, anchor);
+            return true;
+        },
+
+        clearDmpCrowdMatrixButtonTimer() {
+            if (!this.dmpCrowdMatrixButtonTimer) return;
+            clearTimeout(this.dmpCrowdMatrixButtonTimer);
+            this.dmpCrowdMatrixButtonTimer = 0;
+        },
+
+        clearDmpCrowdMatrixButtonVisibilityHandler() {
+            const handler = this.dmpCrowdMatrixButtonVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.dmpCrowdMatrixButtonVisibilityHandler = null;
+        },
+
+        ensureDmpCrowdMatrixButtonObserver() {
+            if (this.dmpCrowdMatrixButtonObserver || typeof MutationObserver !== 'function') {
+                return this.dmpCrowdMatrixButtonObserver;
+            }
+            this.dmpCrowdMatrixButtonObserver = new MutationObserver(() => {
+                this.scheduleDmpCrowdMatrixButtonEnsure(120);
+            });
+            return this.dmpCrowdMatrixButtonObserver;
+        },
+
+        disconnectDmpCrowdMatrixButtonObserver() {
+            if (this.dmpCrowdMatrixButtonObserver && this.dmpCrowdMatrixButtonObserverConnected) {
+                this.dmpCrowdMatrixButtonObserver.disconnect();
+            }
+            this.dmpCrowdMatrixButtonObserverRoot = null;
+            this.dmpCrowdMatrixButtonObserverConnected = false;
+        },
+
+        connectDmpCrowdMatrixButtonObserver() {
+            if (this.isMagicReportDocumentHidden()) {
+                this.disconnectDmpCrowdMatrixButtonObserver();
+                this.dmpCrowdMatrixButtonEnsurePending = true;
+                this.bindDmpCrowdMatrixButtonVisibilityHandler();
+                return false;
+            }
+            if (!this.isDmpItemInsightCrowdPage()) {
+                this.disconnectDmpCrowdMatrixButtonObserver();
+                this.dmpCrowdMatrixButtonEnsurePending = false;
+                this.clearDmpCrowdMatrixButtonVisibilityHandler();
+                return false;
+            }
+            const observer = this.ensureDmpCrowdMatrixButtonObserver();
+            const root = document.getElementById('main_app') || document.body || document.documentElement;
+            if (!observer || !root) return false;
+            if (this.dmpCrowdMatrixButtonObserverConnected && this.dmpCrowdMatrixButtonObserverRoot === root) {
+                this.bindDmpCrowdMatrixButtonVisibilityHandler();
+                return true;
+            }
+            this.disconnectDmpCrowdMatrixButtonObserver();
+            observer.observe(root, {
+                childList: true,
+                subtree: true
+            });
+            this.dmpCrowdMatrixButtonObserverRoot = root;
+            this.dmpCrowdMatrixButtonObserverConnected = true;
+            this.bindDmpCrowdMatrixButtonVisibilityHandler();
+            return true;
+        },
+
+        bindDmpCrowdMatrixButtonVisibilityHandler() {
+            if (typeof this.dmpCrowdMatrixButtonVisibilityHandler === 'function') return;
+            this.dmpCrowdMatrixButtonVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    const shouldEnsureOnVisible = this.dmpCrowdMatrixButtonEnsurePending === true
+                        || this.dmpCrowdMatrixButtonObserverConnected === true;
+                    this.clearDmpCrowdMatrixButtonTimer();
+                    this.disconnectDmpCrowdMatrixButtonObserver();
+                    this.dmpCrowdMatrixButtonEnsurePending = shouldEnsureOnVisible;
+                    return;
+                }
+                const shouldEnsure = this.dmpCrowdMatrixButtonEnsurePending === true;
+                this.dmpCrowdMatrixButtonEnsurePending = false;
+                this.connectDmpCrowdMatrixButtonObserver();
+                if (shouldEnsure) this.ensureDmpCrowdMatrixButton();
+            };
+            document.addEventListener('visibilitychange', this.dmpCrowdMatrixButtonVisibilityHandler);
+        },
+
+        scheduleDmpCrowdMatrixButtonEnsure(delayMs = 120) {
+            this.clearDmpCrowdMatrixButtonTimer();
+            this.dmpCrowdMatrixButtonEnsurePending = true;
+            this.bindDmpCrowdMatrixButtonVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) {
+                return;
+            }
+            this.dmpCrowdMatrixButtonTimer = setTimeout(() => {
+                this.dmpCrowdMatrixButtonTimer = 0;
+                if (this.isMagicReportDocumentHidden()) {
+                    this.dmpCrowdMatrixButtonEnsurePending = true;
+                    return;
+                }
+                this.dmpCrowdMatrixButtonEnsurePending = false;
+                this.ensureDmpCrowdMatrixButton();
+            }, Math.max(0, Number(delayMs) || 0));
+        },
+
+        initDmpCrowdMatrixEntry() {
+            if (!this.isDmpItemInsightCrowdPage()) return;
+            if (this.isMagicReportDocumentHidden()) {
+                this.scheduleDmpCrowdMatrixButtonEnsure(500);
+            } else {
+                this.ensureDmpCrowdMatrixButton();
+                this.scheduleDmpCrowdMatrixButtonEnsure(500);
+            }
+            this.connectDmpCrowdMatrixButtonObserver();
+        },
+
+        getDmpVframeRegistry() {
+            const ctor = window.app?.vframe?.constructor;
+            if (!ctor || typeof ctor.all !== 'function') return {};
+            const registry = ctor.all();
+            return registry && typeof registry === 'object' ? registry : {};
+        },
+
+        findDmpVframeByPath(pattern) {
+            const matcher = pattern instanceof RegExp ? pattern : new RegExp(String(pattern || ''), 'i');
+            const registry = this.getDmpVframeRegistry();
+            return Object.values(registry).find((vf) => {
+                const view = vf?.$v || null;
+                const viewPath = String(vf?.path || vf?.$j || view?.path || view?.$j || '');
+                return matcher.test(viewPath);
+            }) || null;
+        },
+
+        resolveDmpCrowdRuntime() {
+            const insightVframe = this.findDmpVframeByPath(/item-analysis\/cold-boot\/analysis\/crowd\/insight/i);
+            const perspectiveVframe = this.findDmpVframeByPath(/insight-new\/perspective-tags/i);
+            const insightView = insightVframe?.$v || null;
+            const perspectiveView = perspectiveVframe?.$v || null;
+            if (!insightView || typeof insightView.getCrowd !== 'function') {
+                throw new Error('未找到 DMP 单品人群画像运行态');
+            }
+            if (!perspectiveView || typeof perspectiveView.fetch !== 'function') {
+                throw new Error('未找到 DMP 自定义画像标签运行态');
+            }
+            return { insightVframe, perspectiveVframe, insightView, perspectiveView };
+        },
+
+        readDmpModelData(model) {
+            if (!model) return null;
+            if (typeof model.get === 'function') {
+                const data = model.get('data');
+                if (data != null) return data;
+            }
+            if (model.data != null) return model.data;
+            return model;
+        },
+
+        buildDmpChannelBehaviorOptions(data = {}) {
+            const payload = data && typeof data === 'object' && data.data && typeof data.data === 'object'
+                ? data.data
+                : data;
+            const channelList = Array.isArray(payload?.channelList)
+                ? payload.channelList
+                : (Array.isArray(payload) ? payload : []);
+            const options = [];
+            channelList.forEach((channel) => {
+                if (!channel || typeof channel !== 'object') return;
+                const channelName = String(channel.name || channel.channelName || channel.text || '').trim();
+                const channelValue = channel.value ?? channel.channelValue ?? '';
+                const behaviorList = Array.isArray(channel.behaviorList) ? channel.behaviorList : [];
+                behaviorList.forEach((behavior) => {
+                    if (!behavior || typeof behavior !== 'object') return;
+                    const behaviorName = String(behavior.name || behavior.behaviorName || behavior.text || '').trim();
+                    const behaviorValue = behavior.value ?? behavior.behaviorValue ?? '';
+                    const text = [channelName, behaviorName].filter(Boolean).join('-');
+                    if (!text) return;
+                    options.push({
+                        text,
+                        value: [channelValue, behaviorValue].map(value => String(value ?? '').trim()).join('-'),
+                        channelName,
+                        behaviorName,
+                        channelValue,
+                        behaviorValue,
+                        isDefault: channel.isDefault === true || behavior.isDefault === true,
+                        isDefaultCompare: channel.isDefaultCompare === true || behavior.isDefaultCompare === true
+                    });
+                });
+            });
+            return options;
+        },
+
+        getDmpCrowdPropertyKey(item = {}) {
+            if (!item || typeof item !== 'object') return '';
+            const explicitValue = String(item.value || '').trim();
+            if (explicitValue) return explicitValue;
+            const channelValue = String(item.channelValue ?? '').trim();
+            const behaviorValue = String(item.behaviorValue ?? '').trim();
+            if (channelValue || behaviorValue) return `${channelValue}-${behaviorValue}`;
+            return this.getDmpCrowdPropertyLabel([item]);
+        },
+
+        groupDmpCrowdProperties(properties = []) {
+            const groups = [];
+            const groupMap = new Map();
+            (Array.isArray(properties) ? properties : []).forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const channelName = String(item.channelName || item.name || '').trim();
+                const channelValue = String(item.channelValue ?? '').trim();
+                const channelKey = channelValue || channelName;
+                const behaviorName = String(item.behaviorName || '').trim();
+                const behaviorKey = this.getDmpCrowdPropertyKey(item);
+                if (!channelKey || !behaviorName || !behaviorKey) return;
+                let group = groupMap.get(channelKey);
+                if (!group) {
+                    group = {
+                        channelKey,
+                        channelName: channelName || channelKey,
+                        channelValue,
+                        behaviors: []
+                    };
+                    groupMap.set(channelKey, group);
+                    groups.push(group);
+                }
+                group.behaviors.push({
+                    ...item,
+                    behaviorKey,
+                    behaviorName,
+                    text: String(item.text || `${group.channelName}-${behaviorName}`).trim()
+                });
+            });
+            return groups;
+        },
+
+        findDmpDefaultCompareProperty(properties = []) {
+            const normalize = (value = '') => String(value || '').replace(/\s+/g, '').trim();
+            const list = Array.isArray(properties) ? properties : [];
+            return list.find((item) => {
+                if (!item || typeof item !== 'object') return false;
+                const channelName = normalize(item.channelName || item.name || '');
+                const behaviorName = normalize(item.behaviorName || '');
+                const text = normalize(item.text || this.getDmpCrowdPropertyLabel([item]));
+                return channelName === '全部渠道' && behaviorName === '成交'
+                    || text === '全部渠道-成交';
+            }) || null;
+        },
+
+        applyDmpDefaultCompareProperty(context = {}, properties = []) {
+            if (!context || typeof context !== 'object' || context.dmpComparePropertyManuallySelected) return false;
+            const nextProperty = this.findDmpDefaultCompareProperty(properties);
+            if (!nextProperty) return false;
+            const current = Array.isArray(context.channelBehaviorListCompare)
+                ? context.channelBehaviorListCompare[0]
+                : null;
+            const currentKey = this.getDmpCrowdPropertyKey(current || {});
+            const nextKey = this.getDmpCrowdPropertyKey(nextProperty);
+            if (currentKey && nextKey && currentKey === nextKey) {
+                context.compareLabel = this.getDmpCrowdPropertyLabel(context.channelBehaviorListCompare) || '全部渠道-成交';
+                return false;
+            }
+            context.channelBehaviorListCompare = [{ ...nextProperty }];
+            context.compareLabel = this.getDmpCrowdPropertyLabel(context.channelBehaviorListCompare) || '全部渠道-成交';
+            return true;
+        },
+
+        async queryDmpAvailableCrowdProperties(runtime = null, context = null) {
+            const currentContext = context || this.dmpCrowdMatrixContext || {};
+            const fallback = [
+                ...(Array.isArray(currentContext.channelBehaviorList) ? currentContext.channelBehaviorList : []),
+                ...(Array.isArray(currentContext.channelBehaviorListCompare) ? currentContext.channelBehaviorListCompare : [])
+            ].map(item => ({
+                text: this.getDmpCrowdPropertyLabel([item]),
+                channelName: String(item?.channelName || '').trim(),
+                behaviorName: String(item?.behaviorName || '').trim()
+            })).filter(item => item.text);
+            try {
+                const resolvedRuntime = runtime || this.resolveDmpCrowdRuntime();
+                if (!resolvedRuntime.insightView || typeof resolvedRuntime.insightView.fetch !== 'function') return fallback;
+                const type = String(currentContext.type || '3').trim() || '3';
+                const models = await resolvedRuntime.insightView.fetch.call(resolvedRuntime.insightView, [{
+                    name: 'api_goods_insight_portrait_channel_get',
+                    params: { type }
+                }]);
+                const data = this.readDmpModelData(models?.[0]);
+                const options = this.buildDmpChannelBehaviorOptions(data);
+                return options.length ? options : fallback;
+            } catch (err) {
+                Logger.warn(`🔮 DMP 可选人群属性读取失败：${err?.message || '未知错误'}`);
+                return fallback;
+            }
+        },
+
+        normalizeDmpTagName(tagName = '') {
+            return String(tagName || '').replace(/\s+/g, ' ').trim();
+        },
+
+        normalizeDmpTagList(tags = []) {
+            const result = [];
+            const seen = new Set();
+            (Array.isArray(tags) ? tags : []).forEach((tag) => {
+                if (!tag || typeof tag !== 'object') return;
+                const id = String(tag.id || tag.tagId || tag.tag_id || '').trim();
+                const tagName = this.normalizeDmpTagName(tag.tagName || tag.name || tag.label || tag.text || '');
+                if (!id || !tagName) return;
+                const key = `${id}|${tagName}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                result.push({
+                    ...tag,
+                    id,
+                    tagId: id,
+                    tagName
+                });
+            });
+            return result;
+        },
+
+        normalizeDmpTagGroups(groups = []) {
+            const normalizedGroups = [];
+            const seen = new Set();
+            (Array.isArray(groups) ? groups : []).forEach((group) => {
+                if (!group || typeof group !== 'object') return;
+                const categoryName = String(group.categoryName || group.name || group.text || group.label || '').trim();
+                const tags = this.normalizeDmpTagList(Array.isArray(group.tags) ? group.tags : []);
+                const uniqueTags = tags.filter((tag) => {
+                    const key = `${tag.id}|${tag.tagName}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+                if (!uniqueTags.length) return;
+                normalizedGroups.push({
+                    categoryId: String(group.categoryId || group.id || '').trim(),
+                    categoryName,
+                    tags: uniqueTags.map(tag => ({ ...tag, categoryName }))
+                });
+            });
+            return normalizedGroups;
+        },
+
+        getDmpCustomTagGroupId(context = null) {
+            const source = context || this.dmpCrowdMatrixContext || {};
+            const rawKey = String(source.customTagKey || 'customTags6851').trim();
+            const id = rawKey.match(/\d+/)?.[0] || '';
+            return id || '6851';
+        },
+
+        getDmpCustomPortraitGroupsFromRuntime() {
+            try {
+                const customVframe = this.findDmpVframeByPath(/insight-new\/custom-pers-tags/i);
+                const customState = customVframe?.$v?.updater?.get?.() || {};
+                const groups = this.normalizeDmpTagGroups(customState.groups || []);
+                if (groups.length) return groups;
+            } catch { }
+            return [];
+        },
+
+        async queryDmpCustomPortraitGroups(runtime = null, context = null) {
+            const runtimeGroups = this.getDmpCustomPortraitGroupsFromRuntime();
+            if (runtimeGroups.length) return runtimeGroups;
+            const selectedTags = this.normalizeDmpTagList(context?.tags || []);
+            try {
+                const resolvedRuntime = runtime || this.resolveDmpCrowdRuntime();
+                const perspectiveView = resolvedRuntime?.perspectiveView;
+                if (!perspectiveView || typeof perspectiveView.fetch !== 'function') {
+                    return selectedTags.length ? [{ categoryName: '自定义画像标签', tags: selectedTags }] : [];
+                }
+                const tagGroupIds = this.getDmpCustomTagGroupId(context);
+                const models = await perspectiveView.fetch.call(perspectiveView, [{
+                    name: 'api_category_tags_get',
+                    params: { tagGroupIds }
+                }]);
+                const data = this.readDmpModelData(models?.[0]);
+                const groups = this.normalizeDmpTagGroups(data);
+                if (groups.length) return groups;
+            } catch (err) {
+                Logger.warn(`🔮 DMP 自定义画像标签全集读取失败：${err?.message || '未知错误'}`);
+            }
+            return selectedTags.length ? [{ categoryName: '自定义画像标签', tags: selectedTags }] : [];
+        },
+
+        getDmpCrowdPropertyLabel(list = []) {
+            const items = Array.isArray(list) ? list : [];
+            return items.map((item) => {
+                if (!item || typeof item !== 'object') return '';
+                const text = String(item.text || '').trim();
+                if (text) return text;
+                const channelName = String(item.channelName || item.name || '').trim();
+                const behaviorName = String(item.behaviorName || '').trim();
+                return [channelName, behaviorName].filter(Boolean).join('-');
+            }).filter(Boolean).join('、');
+        },
+
+        getDmpRouteItemId() {
+            try {
+                const url = new URL(window.location.href);
+                const hash = String(url.hash || '');
+                const queryText = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+                const params = new URLSearchParams(queryText);
+                return String(params.get('itemId') || '').trim();
+            } catch {
+                return '';
+            }
+        },
+
+        resolveDmpCrowdMatrixContext() {
+            const runtime = this.resolveDmpCrowdRuntime();
+            const insightState = runtime.insightView?.updater?.get?.() || {};
+            const perspectiveState = runtime.perspectiveView?.updater?.get?.() || {};
+            const customTagKey = String(perspectiveState.customTagKey || insightState.customTagKey || 'customTags6851').trim();
+            const customTags = this.normalizeDmpTagList(
+                perspectiveState.config?.[customTagKey]
+                || insightState.config?.[customTagKey]
+                || perspectiveState.config?.customTags6851
+                || insightState.config?.customTags6851
+                || []
+            );
+            if (!customTags.length) {
+                throw new Error('未读取到“自定义画像标签”可分析标签');
+            }
+            const periodLabels = {};
+            const periods = (Array.isArray(insightState.INSIGHT_PERIODS) ? insightState.INSIGHT_PERIODS : [])
+                .map((item) => {
+                    const text = String(item?.text || item?.label || item?.name || item?.value || '').trim();
+                    const days = Number(String(text || item?.value || '').match(/\d+/)?.[0] || 0);
+                    if (!this.DMP_CROWD_PERIODS.includes(days)) return 0;
+                    periodLabels[days] = text || `${days}天`;
+                    return days;
+                })
+                .filter(Boolean);
+            const finalPeriods = periods.length ? periods : this.DMP_CROWD_PERIODS.slice();
+            finalPeriods.forEach((days) => {
+                if (!periodLabels[days]) periodLabels[days] = `${days}天`;
+            });
+
+            const itemId = String(insightState.itemId || this.getDmpRouteItemId() || '').trim();
+            const subjectId = String(insightState.subject?.id || insightState.subject?.value || itemId || '').trim();
+            const subjectCompareId = String(insightState.subjectCompare?.id || insightState.subjectCompare?.value || itemId || '').trim();
+            const itemTitle = String(
+                insightState.subject?.text
+                || insightState.subject?.name
+                || insightState.subjectOrigin?.text
+                || insightState.overviewData?.title
+                || insightState.overviewData?.itemName
+                || ''
+            ).replace(/\s+/g, ' ').trim();
+            const channelBehaviorList = Array.isArray(insightState.channelBehaviorList) ? insightState.channelBehaviorList.slice() : [];
+            const channelBehaviorListCompare = Array.isArray(insightState.channelBehaviorListCompare) ? insightState.channelBehaviorListCompare.slice() : [];
+            const analysisLabel = this.getDmpCrowdPropertyLabel(channelBehaviorList) || '分析人群';
+            const compareLabel = this.getDmpCrowdPropertyLabel(channelBehaviorListCompare) || '对比人群';
+            return {
+                runtime,
+                itemId,
+                itemTitle,
+                type: String(insightState.type || '3').trim() || '3',
+                typeCompare: String(insightState.typeCompare || insightState.type || '3').trim() || '3',
+                subjectId,
+                subjectCompareId,
+                channelBehaviorList,
+                channelBehaviorListCompare,
+                periodLabels,
+                periods: finalPeriods,
+                tags: customTags,
+                tagGroups: [],
+                customTagKey,
+                analysisLabel,
+                compareLabel,
+                coverage: insightState.coverage,
+                coverageCompare: insightState.coverageCompare
+            };
+        },
+
+        applyDmpCrowdMatrixRuntime(context = {}) {
+            if (!this.dmpCrowdMatrixOriginalConfig) {
+                this.dmpCrowdMatrixOriginalConfig = {
+                    CROWD_PERIODS: this.CROWD_PERIODS.slice(),
+                    CROWD_GROUP_ORDER: this.CROWD_GROUP_ORDER.slice(),
+                    CROWD_EXTRA_DIMENSION_GROUPS: this.CROWD_EXTRA_DIMENSION_GROUPS.slice(),
+                    CROWD_GROUP_SORT_PERIOD_PRIORITY: this.CROWD_GROUP_SORT_PERIOD_PRIORITY.slice(),
+                    CROWD_METRICS: this.CROWD_METRICS.slice(),
+                    crowdMetricVisibility: { ...this.crowdMetricVisibility },
+                    crowdPeriodVisibility: { ...this.crowdPeriodVisibility },
+                    crowdRatioVisibility: this.crowdRatioVisibility,
+                    crowdInsightsVisibility: this.crowdInsightsVisibility,
+                    crowdPeriodLabelMap: this.crowdPeriodLabelMap,
+                    dmpCrowdMatrixMetricMeta: this.dmpCrowdMatrixMetricMeta
+                };
+            }
+            const tags = Array.isArray(context.tags) ? context.tags : [];
+            const periods = Array.isArray(context.periods) && context.periods.length
+                ? context.periods.slice()
+                : this.DMP_CROWD_PERIODS.slice();
+            this.dmpCrowdMatrixActive = true;
+            this.dmpCrowdMatrixContext = context;
+            this.CROWD_PERIODS = periods;
+            this.CROWD_GROUP_ORDER = tags.map(tag => this.normalizeDmpTagName(tag.tagName)).filter(Boolean);
+            this.CROWD_EXTRA_DIMENSION_GROUPS = [];
+            this.CROWD_GROUP_SORT_PERIOD_PRIORITY = periods.slice().reverse();
+            this.CROWD_METRICS = this.DMP_CROWD_METRICS.slice();
+            this.crowdPeriodLabelMap = { ...(context.periodLabels || {}) };
+            this.crowdPeriodVisibility = periods.reduce((map, period) => {
+                map[period] = true;
+                return map;
+            }, {});
+            this.crowdMetricVisibility = { analysis: true, compare: true };
+            this.crowdRatioVisibility = true;
+            this.crowdInsightsVisibility = true;
+            this.dmpCrowdMatrixMetricMeta = {
+                analysis: { seriesLabel: `分析人群：${context.analysisLabel || '当前人群'}` },
+                compare: { seriesLabel: `对比人群：${context.compareLabel || '对比人群'}` }
+            };
+        },
+
+        restoreDmpCrowdMatrixRuntime() {
+            const original = this.dmpCrowdMatrixOriginalConfig;
+            if (original && typeof original === 'object') {
+                this.CROWD_PERIODS = original.CROWD_PERIODS.slice();
+                this.CROWD_GROUP_ORDER = original.CROWD_GROUP_ORDER.slice();
+                this.CROWD_EXTRA_DIMENSION_GROUPS = original.CROWD_EXTRA_DIMENSION_GROUPS.slice();
+                this.CROWD_GROUP_SORT_PERIOD_PRIORITY = original.CROWD_GROUP_SORT_PERIOD_PRIORITY.slice();
+                this.CROWD_METRICS = original.CROWD_METRICS.slice();
+                this.crowdMetricVisibility = { ...original.crowdMetricVisibility };
+                this.crowdPeriodVisibility = { ...original.crowdPeriodVisibility };
+                this.crowdRatioVisibility = original.crowdRatioVisibility;
+                this.crowdInsightsVisibility = original.crowdInsightsVisibility;
+                this.crowdPeriodLabelMap = original.crowdPeriodLabelMap;
+                this.dmpCrowdMatrixMetricMeta = original.dmpCrowdMatrixMetricMeta;
+            }
+            this.dmpCrowdMatrixOriginalConfig = null;
+            this.dmpCrowdMatrixActive = false;
+            this.dmpCrowdMatrixContext = null;
+            this.dmpCrowdMatrixAvailableProperties = [];
+            this.dmpCrowdMatrixTagGroups = [];
+            this.dmpCrowdPropertyDropdownMetric = '';
+            this.dmpCrowdPropertyDropdownChannelKey = '';
+            this.removeDmpCrowdPropertyDropdownPortal();
+        },
+
+        refreshDmpCrowdMatrixCampaignMeta() {
+            const context = this.dmpCrowdMatrixContext || {};
+            if (this.matrixCampaignNameEl instanceof HTMLElement) {
+                this.matrixCampaignNameEl.textContent = `商品：${context.itemTitle || '未识别'}`;
+                this.matrixCampaignNameEl.title = context.itemTitle || '';
+            }
+            if (this.matrixCampaignIdEl instanceof HTMLElement) {
+                this.matrixCampaignIdEl.textContent = `商品ID：${context.itemId || '--'}`;
+                this.matrixCampaignIdEl.title = context.itemId || '';
+            }
+            const syncItemIdWidth = () => {
+                if (!(this.matrixCampaignEl instanceof HTMLElement) || !(this.matrixCampaignIdEl instanceof HTMLElement)) return;
+                const rect = this.matrixCampaignIdEl.getBoundingClientRect();
+                const width = Math.ceil(rect.width || this.matrixCampaignIdEl.scrollWidth || 132);
+                if (width > 0) {
+                    this.matrixCampaignEl.style.setProperty('--am-dmp-item-id-width', `${width}px`);
+                }
+            };
+            syncItemIdWidth();
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(syncItemIdWidth);
+            }
+            if (this.matrixCampaignItemTriggerTextEl instanceof HTMLElement) {
+                this.matrixCampaignItemTriggerTextEl.textContent = 'DMP 自定义画像标签';
+            }
+        },
+
+        isDmpMultiValueGroup(groupName = '') {
+            if (!this.isDmpCrowdMatrixMode()) return false;
+            const normalizedName = this.normalizeDmpTagName(groupName);
+            return normalizedName === '特征兴趣';
+        },
+
+        getDmpMultiValueGroupTitle(groupName = '') {
+            const normalizedName = this.normalizeDmpTagName(groupName);
+            if (normalizedName !== '特征兴趣') return '';
+            return '多选兴趣覆盖率，同一人可命中多个兴趣，合计可能超过100%';
+        },
+
+        toDmpRateNumericValue(rawValue) {
+            const directValue = Number(String(rawValue ?? '').replace(/,/g, '').trim());
+            if (Number.isFinite(directValue)) return directValue;
+            return this.toNumericValue(rawValue);
+        },
+
+        buildDmpGroupMapFromChartData(tag = {}, chartData = []) {
+            const groupName = this.normalizeDmpTagName(tag.tagName || tag.name || '');
+            if (!groupName) return {};
+            const detail = {};
+            (Array.isArray(chartData) ? chartData : []).forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const label = String(item.optionName || item.name || item.label || item.text || item.optionValue || '').trim();
+                if (!label || /^未知$/.test(label)) return;
+                const rateValue = this.toDmpRateNumericValue(item.rate ?? item.ratio ?? item.percent ?? item.value ?? 0);
+                const rate = rateValue > 1 ? rateValue : rateValue * 100;
+                const raw = item.optionNum ?? item.num ?? item.count ?? item.value ?? '';
+                detail[label] = {
+                    value: rate,
+                    ratio: rate,
+                    raw: String(raw ?? '').trim() || String(rate),
+                    tagId: String(item.tagId || tag.id || tag.tagId || ''),
+                    optionId: String(item.optionId || item.optionValue || '')
+                };
+            });
+            return { [groupName]: detail };
+        },
+
+        buildDmpTagAnalysisParams(selectTagOptionSet) {
+            return {
+                version: '2.0',
+                selectTagOptionSet: selectTagOptionSet || {},
+                needUnknown: false,
+                ext: {}
+            };
+        },
+
+        async queryDmpCrowdTagDistribution({ runtime, tag, analysisObj, compareObj }) {
+            const perspectiveView = runtime?.perspectiveView;
+            if (!perspectiveView || typeof perspectiveView.fetch !== 'function') {
+                throw new Error('DMP 自定义画像标签查询运行态不可用');
+            }
+            const tagId = String(tag?.id || tag?.tagId || '').trim();
+            if (!tagId) throw new Error('自定义画像标签 ID 缺失');
+            const models = await perspectiveView.fetch.call(perspectiveView, [
+                {
+                    name: 'api_analysis_tag_$id_post',
+                    pathParams: [tagId],
+                    params: this.buildDmpTagAnalysisParams(analysisObj),
+                    isJson: true
+                },
+                {
+                    name: 'api_analysis_tag_$id_post',
+                    pathParams: [tagId],
+                    params: this.buildDmpTagAnalysisParams(compareObj),
+                    isJson: true
+                }
+            ]);
+            const analysisData = this.readDmpModelData(models?.[0]) || {};
+            const compareData = this.readDmpModelData(models?.[1]) || {};
+            return {
+                analysisChart: Array.isArray(analysisData.chartDataFull) ? analysisData.chartDataFull : [],
+                compareChart: Array.isArray(compareData.chartDataFull) ? compareData.chartDataFull : []
+            };
+        },
+
+        async queryDmpCrowdMatrixPeriod(periodDays) {
+            const context = this.dmpCrowdMatrixContext || this.resolveDmpCrowdMatrixContext();
+            const runtime = context.runtime || this.resolveDmpCrowdRuntime();
+            const period = Number(periodDays);
+            if (!context.periods.includes(period)) throw new Error(`不支持的 DMP 周期: ${periodDays}`);
+            const analysisObj = await runtime.insightView.getCrowd.call(
+                runtime.insightView,
+                context.type,
+                context.subjectId || context.itemId,
+                context.channelBehaviorList,
+                String(period)
+            );
+            const compareObj = await runtime.insightView.getCrowd.call(
+                runtime.insightView,
+                context.typeCompare,
+                context.subjectCompareId || context.itemId,
+                context.channelBehaviorListCompare,
+                String(period)
+            );
+            let analysisGroupMap = {};
+            let compareGroupMap = {};
+            const failedTags = [];
+            for (const tag of context.tags) {
+                try {
+                    const distribution = await this.queryDmpCrowdTagDistribution({
+                        runtime,
+                        tag,
+                        analysisObj,
+                        compareObj
+                    });
+                    analysisGroupMap = this.mergeCrowdGroupMaps(
+                        analysisGroupMap,
+                        this.buildDmpGroupMapFromChartData(tag, distribution.analysisChart)
+                    );
+                    compareGroupMap = this.mergeCrowdGroupMaps(
+                        compareGroupMap,
+                        this.buildDmpGroupMapFromChartData(tag, distribution.compareChart)
+                    );
+                } catch (err) {
+                    const tagName = this.normalizeDmpTagName(tag?.tagName || tag?.name || '');
+                    if (tagName) failedTags.push(tagName);
+                    Logger.warn(`🔮 DMP 自定义画像标签“${tagName || tag?.id || '--'}”读取失败：${err?.message || '未知错误'}`);
+                }
+            }
+            return [
+                {
+                    periodDays: period,
+                    metricType: 'analysis',
+                    groupMap: analysisGroupMap,
+                    rawMeta: {
+                        requestPath: 'api_analysis_tag_$id_post',
+                        tagCount: context.tags.length,
+                        failedTags,
+                        period
+                    }
+                },
+                {
+                    periodDays: period,
+                    metricType: 'compare',
+                    groupMap: compareGroupMap,
+                    rawMeta: {
+                        requestPath: 'api_analysis_tag_$id_post',
+                        tagCount: context.tags.length,
+                        failedTags,
+                        period
+                    }
+                }
+            ];
+        },
+
+        async runDmpCrowdMatrixLoad({ force = false } = {}) {
+            if (this.crowdMatrixLoading) return;
+            const context = force || !this.dmpCrowdMatrixContext
+                ? this.resolveDmpCrowdMatrixContext()
+                : this.dmpCrowdMatrixContext;
+            const runtime = context.runtime || this.resolveDmpCrowdRuntime();
+            context.runtime = runtime;
+            context.availableProperties = await this.queryDmpAvailableCrowdProperties(runtime, context);
+            this.applyDmpDefaultCompareProperty(context, context.availableProperties);
+            context.tagGroups = await this.queryDmpCustomPortraitGroups(runtime, context);
+            const allTags = this.normalizeDmpTagList(
+                (Array.isArray(context.tagGroups) ? context.tagGroups : [])
+                    .flatMap(group => Array.isArray(group?.tags) ? group.tags : [])
+            );
+            if (allTags.length) context.tags = allTags;
+            this.dmpCrowdMatrixAvailableProperties = context.availableProperties;
+            this.dmpCrowdMatrixTagGroups = context.tagGroups;
+            this.applyDmpCrowdMatrixRuntime(context);
+            this.refreshDmpCrowdMatrixCampaignMeta();
+            this.renderCrowdGlobalLegend();
+
+            const runId = ++this.crowdMatrixRunId;
+            this.crowdMatrixLoading = true;
+            this.crowdMatrixProgress = 0;
+            this.crowdMatrixLoadedCampaignId = '';
+            this.crowdMatrixDataset = null;
+            this.crowdMatrixResultMap = null;
+            this.crowdMatrixPendingMetricReload = null;
+            this.crowdMatrixGroupSortModeMap = {};
+            this.setCrowdMatrixStatus(`正在加载 DMP 自定义画像标签（${context.tags.length} 行 × ${context.periods.length} 个周期）...`, 'loading', { showRetry: false, progress: 0 });
+            if (this.matrixGridEl instanceof HTMLElement) this.matrixGridEl.innerHTML = '';
+
+            try {
+                const taskFns = context.periods.map((period) => {
+                    const task = async () => this.queryDmpCrowdMatrixPeriod(period);
+                    task.__amCrowdTaskLabel = this.getCrowdPeriodLabel(period);
+                    return task;
+                });
+                const totalTaskCount = taskFns.length;
+                const revealedPeriodSet = new Set();
+                this.crowdMatrixTaskProgressHandler = (progressInfo) => {
+                    if (runId !== this.crowdMatrixRunId) return;
+                    const done = Math.max(0, Math.min(totalTaskCount, Number(progressInfo?.done) || 0));
+                    const ratio = totalTaskCount > 0 ? (done / totalTaskCount) * 100 : 0;
+                    const status = String(progressInfo?.status || '').trim();
+                    const stepText = status === 'fulfilled' ? '完成' : '失败';
+                    const values = Array.isArray(progressInfo?.value) ? progressInfo.value : [progressInfo?.value].filter(Boolean);
+                    if (values.length) {
+                        const mergedProgressResults = this.upsertCrowdMatrixResults(values);
+                        if (mergedProgressResults.length) {
+                            const progressDataset = this.buildMatrixDataset(mergedProgressResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+                            this.crowdMatrixDataset = progressDataset;
+                            this.crowdMatrixLoadedCampaignId = context.itemId || 'dmp';
+                            const progressPeriod = this.normalizeCrowdPeriod(values[0]?.periodDays);
+                            const shouldProgressiveReveal = !!progressPeriod && !revealedPeriodSet.has(progressPeriod);
+                            this.renderCrowdMatrixCharts(progressDataset, { progressivePeriod: shouldProgressiveReveal ? progressPeriod : 0 });
+                            if (shouldProgressiveReveal) revealedPeriodSet.add(progressPeriod);
+                        }
+                    }
+                    const label = String(progressInfo?.label || '').trim();
+                    this.setCrowdMatrixStatus(`加载中 ${done}/${totalTaskCount} · ${stepText}${label ? ` ${label}` : ''}`, 'loading', { showRetry: false, progress: ratio });
+                };
+                const settled = await this.runTasksWithConcurrency(taskFns, 1);
+                if (runId !== this.crowdMatrixRunId) return;
+                const successResults = [];
+                let failCount = 0;
+                settled.forEach((item) => {
+                    if (item.status === 'fulfilled' && Array.isArray(item.value)) {
+                        successResults.push(...item.value);
+                    } else if (item.status === 'fulfilled' && item.value) {
+                        successResults.push(item.value);
+                    } else {
+                        failCount += 1;
+                    }
+                });
+                if (!successResults.length) {
+                    this.setCrowdMatrixStatus('DMP 人群看板加载失败，请稍后重试', 'error', { showRetry: true, progress: 100 });
+                    return;
+                }
+                const mergedResults = this.upsertCrowdMatrixResults(successResults, { replace: true });
+                const dataset = this.buildMatrixDataset(mergedResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+                this.crowdMatrixDataset = dataset;
+                this.crowdMatrixLoadedCampaignId = context.itemId || 'dmp';
+                this.renderCrowdMatrixCharts(dataset);
+                if (failCount > 0) {
+                    this.setCrowdMatrixStatus(`DMP 人群看板已展示可用结果（失败 ${failCount}/${totalTaskCount} 个周期）`, 'warn', {
+                        showRetry: true,
+                        progress: 100,
+                        autoHide: true
+                    });
+                } else {
+                    this.setCrowdMatrixStatus(`DMP 人群对比看板已加载完成（${context.periods.length}列周期 × ${context.tags.length}行自定义画像标签）`, 'success', {
+                        showRetry: false,
+                        progress: 100,
+                        autoHide: true
+                    });
+                }
+            } catch (err) {
+                if (runId !== this.crowdMatrixRunId) return;
+                this.setCrowdMatrixStatus(`DMP 人群看板加载失败：${err?.message || '未知错误'}`, 'error', { showRetry: true, progress: this.crowdMatrixProgress || 0 });
+            } finally {
+                if (runId === this.crowdMatrixRunId) {
+                    this.crowdMatrixLoading = false;
+                    this.crowdMatrixTaskProgressHandler = null;
+                }
+            }
+        },
+
+        async openDmpCrowdMatrixPopup() {
+            if (!this.isDmpItemInsightCrowdPage()) {
+                Logger.warn('🔮 当前不是 DMP 单品人群洞察页，无法打开 DMP 人群看板');
+                return false;
+            }
+            try {
+                const context = this.resolveDmpCrowdMatrixContext();
+                this.applyDmpCrowdMatrixRuntime(context);
+                this.activeView = 'matrix';
+                if (!(this.popup instanceof HTMLElement) || !this.popup.isConnected) {
+                    this.popup = null;
+                    this.createPopup();
+                }
+                if (this.popup instanceof HTMLElement) {
+                    this.popup.classList.add('is-dmp-crowd-mode');
+                    this.popup.style.display = 'flex';
+                }
+                this.refreshMagicReportTitle();
+                this.switchMagicView('matrix', { skipLoad: true });
+                await this.runDmpCrowdMatrixLoad({ force: true });
+                return true;
+            } catch (err) {
+                Logger.warn(`🔮 DMP 人群看板打开失败：${err?.message || '未知错误'}`);
+                if (this.matrixStateEl instanceof HTMLElement) {
+                    this.setCrowdMatrixStatus(`DMP 人群看板打开失败：${err?.message || '未知错误'}`, 'error', { showRetry: true, progress: 0 });
+                }
+                return false;
+            }
+        },
+
+        closeDmpCrowdMatrixPopup() {
+            this.releasePopupResources();
+            this.restoreDmpCrowdMatrixRuntime();
         },
 
         normalizeCrowdMetricType(metricType) {
@@ -1299,7 +2433,20 @@
 
         getCrowdMetricMeta(metricType) {
             const metric = this.normalizeCrowdMetricType(metricType);
+            const dmpMetricMeta = this.dmpCrowdMatrixMetricMeta && typeof this.dmpCrowdMatrixMetricMeta === 'object'
+                ? this.dmpCrowdMatrixMetricMeta
+                : {};
             const map = {
+                analysis: {
+                    seriesLabel: dmpMetricMeta.analysis?.seriesLabel || '分析人群',
+                    shortLabel: '分析',
+                    color: '#2f54eb'
+                },
+                compare: {
+                    seriesLabel: dmpMetricMeta.compare?.seriesLabel || '对比人群',
+                    shortLabel: '对比',
+                    color: '#fa8c16'
+                },
                 click: {
                     promptKeyword: '点击人群分析',
                     seriesLabel: '点击人群',
@@ -1967,7 +3114,7 @@
         refreshCrowdCampaignItemOptionsInBackground(campaignId, options = {}) {
             const id = PlanIdentityUtils.normalizeCampaignId(campaignId);
             if (!id) return;
-            Promise.resolve()
+            const startRefresh = () => Promise.resolve()
                 .then(() => this.refreshCrowdCampaignItemOptions(id, options))
                 .then(() => {
                     if (this.lastCampaignId === id || this.crowdMatrixLoadedCampaignId === id) {
@@ -1977,6 +3124,16 @@
                 .catch((err) => {
                     Logger.warn(`🔮 商品列表后台识别失败：${err?.message || '未知错误'}`);
                 });
+            if (options?.idle === true) {
+                const scheduleIdle = typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function'
+                    ? window.requestIdleCallback.bind(window)
+                    : (fn) => setTimeout(fn, 600);
+                scheduleIdle(() => {
+                    startRefresh();
+                }, { timeout: 1800 });
+                return;
+            }
+            startRefresh();
         },
 
         getCrowdCampaignItemCandidates(campaignId, preferredItemId = '') {
@@ -2088,6 +3245,8 @@
             if (/城市/.test(name)) return '城市';
             if (/^市$/.test(name)) return '城市';
             if (/消费能力/.test(name)) return '消费能力等级';
+            if (/月均消费频次/.test(name)) return '月均消费频次';
+            if (/月均消费金额/.test(name)) return '月均消费金额';
             if (/月均消费/.test(name)) return '月均消费金额';
             if (/年龄/.test(name)) return '用户年龄';
             if (/性别/.test(name)) return '用户性别';
@@ -2538,7 +3697,10 @@
             }
         },
 
-        resolveCrowdAuthParams() {
+        resolveCrowdAuthParams(options = {}) {
+            if (options?.useCache !== false && this.crowdAuthParamsCache && typeof this.crowdAuthParamsCache === 'object') {
+                return { ...this.crowdAuthParamsCache };
+            }
             const out = {
                 bizCode: 'universalBP',
                 dynamicToken: '',
@@ -2577,6 +3739,9 @@
                     } catch { }
                     if (out.dynamicToken && out.csrfID && out.loginPointId) break;
                 }
+            }
+            if (options?.cache !== false) {
+                this.crowdAuthParamsCache = { ...out };
             }
             return out;
         },
@@ -3092,6 +4257,44 @@
             return baseResult.scopeResolutionPromise;
         },
 
+        buildCrowdInsightPeriodResult(baseResult, { periodDays, metricType, requestPath = '', unsupportedReason = '' } = {}) {
+            const panelQueryConf = baseResult?.panelQueryConf && typeof baseResult.panelQueryConf === 'object'
+                ? baseResult.panelQueryConf
+                : {};
+            return {
+                periodDays: Number(periodDays),
+                metricType: this.normalizeCrowdMetricType(metricType),
+                groupMap: baseResult?.groupMap && typeof baseResult.groupMap === 'object'
+                    ? baseResult.groupMap
+                    : {},
+                rawMeta: {
+                    prompt: baseResult?.prompt || '',
+                    itemId: baseResult?.itemId || '',
+                    requestPath: String(requestPath || baseResult?.requestPath || ''),
+                    title: panelQueryConf?.title || '',
+                    queryExecutePlan: panelQueryConf?.queryExecutePlan || '',
+                    timeMode: panelQueryConf?.timeMode || '',
+                    unsupportedReason: String(unsupportedReason || baseResult?.unsupportedReason || '').trim()
+                }
+            };
+        },
+
+        applyCrowdInsightBackgroundScopeResult({ campaignId, runId, result } = {}) {
+            const id = String(campaignId || '').trim();
+            if (!/^\d{6,}$/.test(id)) return false;
+            if (Number(runId) !== Number(this.crowdMatrixRunId)) return false;
+            if (this.crowdMatrixLoadedCampaignId && this.crowdMatrixLoadedCampaignId !== id) return false;
+            if (!(this.crowdMatrixResultMap instanceof Map)) return false;
+            const key = this.buildCrowdMatrixResultKey(result?.metricType, result?.periodDays);
+            if (!key || !this.crowdMatrixResultMap.has(key)) return false;
+            const mergedResults = this.upsertCrowdMatrixResults([result]);
+            const dataset = this.buildMatrixDataset(mergedResults, { groupSortModeMap: this.crowdMatrixGroupSortModeMap });
+            this.crowdMatrixDataset = dataset;
+            this.crowdMatrixLoadedCampaignId = id;
+            this.renderCrowdMatrixCharts(dataset, { progressivePeriod: result.periodDays });
+            return true;
+        },
+
         async queryCrowdInsight({ campaignId, metricType, periodDays }) {
             const id = String(campaignId || '').trim();
             const metric = this.normalizeCrowdMetricType(metricType);
@@ -3290,39 +4493,43 @@
             }
 
             const baseResult = await context.basePromiseMap.get(metric);
-            await this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric });
             if (days === 7) {
-                return {
+                const sevenDayResult = this.buildCrowdInsightPeriodResult(baseResult, {
                     periodDays: days,
-                    metricType: metric,
-                    groupMap: baseResult.groupMap,
-                    rawMeta: {
-                        prompt: baseResult.prompt,
-                        itemId: baseResult.itemId || '',
-                        requestPath: baseResult.requestPath,
-                        title: baseResult.panelQueryConf?.title || '',
-                        queryExecutePlan: baseResult.panelQueryConf?.queryExecutePlan || '',
-                        timeMode: baseResult.panelQueryConf?.timeMode || '',
-                        unsupportedReason: baseResult.unsupportedReason || ''
-                    }
-                };
+                    metricType: metric
+                });
+                const runId = this.crowdMatrixRunId;
+                this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric })
+                    .then((resolvedBaseResult) => {
+                        const enrichedResult = this.buildCrowdInsightPeriodResult(resolvedBaseResult || baseResult, {
+                            periodDays: days,
+                            metricType: metric
+                        });
+                        sevenDayResult.groupMap = enrichedResult.groupMap;
+                        sevenDayResult.rawMeta = enrichedResult.rawMeta;
+                        this.applyCrowdInsightBackgroundScopeResult({
+                            campaignId: id,
+                            runId,
+                            result: sevenDayResult
+                        });
+                    })
+                    .catch((err) => {
+                        Logger.warn(`🔮 省份/城市维度后台补齐失败：${err?.message || '未知错误'}`);
+                    });
+                return sevenDayResult;
             }
 
+            await this.ensureCrowdInsightExtraScopeResults(baseResult, { campaignId: id, metricType: metric });
+
             if (baseResult.unsupportedReason) {
-                return {
-                    periodDays: days,
-                    metricType: metric,
-                    groupMap: {},
-                    rawMeta: {
-                        prompt: baseResult.prompt,
-                        itemId: baseResult.itemId || '',
-                        requestPath: baseResult.requestPath,
-                        title: '',
-                        queryExecutePlan: '',
-                        timeMode: '',
+                return this.buildCrowdInsightPeriodResult(
+                    { ...baseResult, groupMap: {}, panelQueryConf: null },
+                    {
+                        periodDays: days,
+                        metricType: metric,
                         unsupportedReason: baseResult.unsupportedReason
                     }
-                };
+                );
             }
 
             const scopeResultMap = baseResult.scopeResultMap && typeof baseResult.scopeResultMap === 'object'
@@ -3663,19 +4870,28 @@
                             const current = detail && detail[label] ? detail[label] : null;
                             return this.toNumericValue(current?.value ?? current?.raw ?? 0);
                         });
+                        const ratioValuesFromPayload = labelList.map((label) => {
+                            const current = detail && detail[label] ? detail[label] : null;
+                            return current && current.ratio != null ? this.toNumericValue(current.ratio) : null;
+                        });
                         const rawList = labelList.map((label) => {
                             const current = detail && detail[label] ? detail[label] : null;
                             return current?.raw ?? '';
                         });
                         const sum = rawValues.reduce((acc, value) => acc + this.toNumericValue(value), 0);
-                        const ratioValues = rawValues.map((value) => {
-                            if (sum <= 0) return 0;
-                            return (this.toNumericValue(value) / sum) * 100;
-                        });
+                        const hasPayloadRatio = ratioValuesFromPayload.length > 0 && ratioValuesFromPayload.every(value => value !== null);
+                        const ratioValues = hasPayloadRatio
+                            ? ratioValuesFromPayload.map(value => this.toNumericValue(value))
+                            : rawValues.map((value) => {
+                                if (sum <= 0) return 0;
+                                return (this.toNumericValue(value) / sum) * 100;
+                            });
 
                         nextCell[metric] = ratioValues;
                         nextCell[`${metric}Raw`] = rawList.length ? rawList : rawValues;
-                        nextCell.noData[metric] = !labelList.length || sum <= 0;
+                        nextCell.noData[metric] = !labelList.length || (hasPayloadRatio
+                            ? ratioValues.every(value => this.toNumericValue(value) <= 0)
+                            : sum <= 0);
                     });
                 });
             });
@@ -3712,12 +4928,64 @@
             return Number.isInteger(num) ? String(num) : num.toFixed(2).replace(/\.?0+$/, '');
         },
 
+        clearCrowdMatrixStateHideTimer() {
+            if (!this.crowdMatrixStateHideTimer) return;
+            clearTimeout(this.crowdMatrixStateHideTimer);
+            this.crowdMatrixStateHideTimer = null;
+        },
+
+        clearCrowdMatrixStateHideVisibilityHandler() {
+            const handler = this.crowdMatrixStateHideVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.crowdMatrixStateHideVisibilityHandler = null;
+        },
+
+        clearCrowdMatrixStateHideState() {
+            this.clearCrowdMatrixStateHideTimer();
+            this.clearCrowdMatrixStateHideVisibilityHandler();
+            this.crowdMatrixStateHidePendingDelayMs = null;
+        },
+
+        bindCrowdMatrixStateHideVisibilityHandler() {
+            if (typeof this.crowdMatrixStateHideVisibilityHandler === 'function') return;
+            this.crowdMatrixStateHideVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearCrowdMatrixStateHideTimer();
+                    return;
+                }
+                const pendingDelayMs = this.crowdMatrixStateHidePendingDelayMs;
+                if (Number.isFinite(Number(pendingDelayMs))) {
+                    this.scheduleCrowdMatrixStateAutoHide(pendingDelayMs);
+                } else {
+                    this.clearCrowdMatrixStateHideState();
+                }
+            };
+            document.addEventListener('visibilitychange', this.crowdMatrixStateHideVisibilityHandler);
+        },
+
+        scheduleCrowdMatrixStateAutoHide(delayMs = 1200) {
+            this.clearCrowdMatrixStateHideState();
+            if (!(this.matrixStateEl instanceof HTMLElement)) return;
+            const normalizedDelay = Math.max(0, Number(delayMs) || 1200);
+            this.crowdMatrixStateHidePendingDelayMs = normalizedDelay;
+            this.bindCrowdMatrixStateHideVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) return;
+            this.crowdMatrixStateHideTimer = setTimeout(() => {
+                this.crowdMatrixStateHideTimer = null;
+                if (this.isMagicReportDocumentHidden()) return;
+                if (this.matrixStateEl instanceof HTMLElement) {
+                    this.matrixStateEl.classList.add('is-hidden');
+                }
+                this.clearCrowdMatrixStateHideVisibilityHandler();
+                this.crowdMatrixStateHidePendingDelayMs = null;
+            }, normalizedDelay);
+        },
+
         setCrowdMatrixStatus(text, level = 'info', options = {}) {
             if (!(this.matrixStateEl instanceof HTMLElement)) return;
-            if (this.crowdMatrixStateHideTimer) {
-                clearTimeout(this.crowdMatrixStateHideTimer);
-                this.crowdMatrixStateHideTimer = null;
-            }
+            this.clearCrowdMatrixStateHideState();
             const normalizedLevel = ['info', 'success', 'warn', 'error', 'loading'].includes(level) ? level : 'info';
             this.matrixStateEl.className = `am-crowd-matrix-state is-${normalizedLevel}`;
             this.matrixStateEl.classList.remove('is-hidden');
@@ -3740,12 +5008,93 @@
             }
             if (options.autoHide === true) {
                 const delay = Math.max(0, Number(options.hideDelayMs) || 1200);
-                this.crowdMatrixStateHideTimer = setTimeout(() => {
-                    if (!(this.matrixStateEl instanceof HTMLElement)) return;
-                    this.matrixStateEl.classList.add('is-hidden');
-                    this.crowdMatrixStateHideTimer = null;
-                }, delay);
+                this.scheduleCrowdMatrixStateAutoHide(delay);
             }
+        },
+
+        clearCrowdMatrixBarAnimationFrame() {
+            if (this.crowdMatrixBarAnimationFrame) {
+                const cancelFrame = typeof this.crowdMatrixBarAnimationCancel === 'function'
+                    ? this.crowdMatrixBarAnimationCancel
+                    : (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout);
+                cancelFrame(this.crowdMatrixBarAnimationFrame);
+            }
+            this.crowdMatrixBarAnimationFrame = 0;
+            this.crowdMatrixBarAnimationCancel = null;
+        },
+
+        clearCrowdMatrixBarAnimationVisibilityHandler() {
+            const handler = this.crowdMatrixBarAnimationVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.crowdMatrixBarAnimationVisibilityHandler = null;
+        },
+
+        clearCrowdMatrixBarAnimation() {
+            this.clearCrowdMatrixBarAnimationFrame();
+            this.clearCrowdMatrixBarAnimationVisibilityHandler();
+            this.crowdMatrixBarAnimationQueue = [];
+        },
+
+        flushCrowdMatrixBarAnimationQueue(options = {}) {
+            const includeDisconnected = options.includeDisconnected === true;
+            const queue = Array.isArray(this.crowdMatrixBarAnimationQueue)
+                ? this.crowdMatrixBarAnimationQueue.splice(0)
+                : [];
+            queue.forEach((entry) => {
+                const fill = entry?.fill;
+                if (!(fill instanceof HTMLElement) || (!includeDisconnected && !fill.isConnected)) return;
+                fill.style.height = entry.height;
+                fill.style.opacity = '1';
+            });
+        },
+
+        bindCrowdMatrixBarAnimationVisibilityHandler() {
+            if (typeof this.crowdMatrixBarAnimationVisibilityHandler === 'function') return;
+            this.crowdMatrixBarAnimationVisibilityHandler = () => {
+                if (!this.isMagicReportDocumentHidden()) return;
+                this.clearCrowdMatrixBarAnimationFrame();
+                this.clearCrowdMatrixBarAnimationVisibilityHandler();
+                this.flushCrowdMatrixBarAnimationQueue();
+            };
+            document.addEventListener('visibilitychange', this.crowdMatrixBarAnimationVisibilityHandler);
+        },
+
+        scheduleCrowdMatrixBarAnimation() {
+            if (this.isMagicReportDocumentHidden()) {
+                this.clearCrowdMatrixBarAnimationFrame();
+                this.clearCrowdMatrixBarAnimationVisibilityHandler();
+                this.flushCrowdMatrixBarAnimationQueue({ includeDisconnected: true });
+                return;
+            }
+            if (this.crowdMatrixBarAnimationFrame) return;
+            const applyQueuedBars = () => {
+                this.crowdMatrixBarAnimationFrame = 0;
+                this.crowdMatrixBarAnimationCancel = null;
+                this.clearCrowdMatrixBarAnimationVisibilityHandler();
+                this.flushCrowdMatrixBarAnimationQueue();
+            };
+            this.bindCrowdMatrixBarAnimationVisibilityHandler();
+            if (typeof requestAnimationFrame === 'function') {
+                this.crowdMatrixBarAnimationCancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
+                this.crowdMatrixBarAnimationFrame = requestAnimationFrame(applyQueuedBars);
+                return;
+            }
+            this.crowdMatrixBarAnimationCancel = clearTimeout;
+            this.crowdMatrixBarAnimationFrame = setTimeout(applyQueuedBars, 16);
+        },
+
+        queueCrowdMatrixBarAnimation(fill, height = '0%') {
+            if (!(fill instanceof HTMLElement)) return;
+            if (!Array.isArray(this.crowdMatrixBarAnimationQueue)) {
+                this.crowdMatrixBarAnimationQueue = [];
+            }
+            this.crowdMatrixBarAnimationQueue.push({
+                fill,
+                height: String(height || '0%')
+            });
+            this.scheduleCrowdMatrixBarAnimation();
         },
 
         ensureCrowdMatrixHoverTip() {
@@ -3923,7 +5272,7 @@
                 return String(a.periodKey).localeCompare(String(b.periodKey), 'zh-Hans-CN', { numeric: true });
             });
             const periodLabelMax = items.reduce((maxLen, item) => {
-                const periodLabel = item.period ? `过去${item.period}天` : (String(item.periodKey).trim() || '当前周期');
+                const periodLabel = item.period ? this.getCrowdPeriodLabel(item.period) : (String(item.periodKey).trim() || '当前周期');
                 return Math.max(maxLen, periodLabel.length);
             }, 0);
             const ratioLabelMax = items.reduce((maxLen, item) => {
@@ -3934,11 +5283,11 @@
             }, 0);
             const compareMetricLabels = orderedMetricLabels.slice(1);
             const header = [metricLabel, labelName, compareMetricLabels.length ? `对比人群：${compareMetricLabels.join('、')}` : ''].filter(Boolean).join(' · ');
-            const periodCompareMap = {
-                3: 7,
-                7: 30,
-                30: 90
-            };
+            const periodCompareMap = {};
+            this.CROWD_PERIODS.forEach((period, index) => {
+                const nextPeriod = this.CROWD_PERIODS[index + 1];
+                if (nextPeriod) periodCompareMap[period] = nextPeriod;
+            });
             const periodItemMap = new Map();
             items.forEach((item) => {
                 if (item.period) periodItemMap.set(item.period, item);
@@ -3979,7 +5328,7 @@
             }
             const extraMetrics = orderedMetrics.slice(1);
             const rows = items.map((item) => {
-                const periodLabel = item.period ? `过去${item.period}天` : (String(item.periodKey).trim() || '当前周期');
+                const periodLabel = item.period ? this.getCrowdPeriodLabel(item.period) : (String(item.periodKey).trim() || '当前周期');
                 const ratioLabel = this.formatCrowdHoverPercent(item.ratio).padStart(ratioLabelMax, ' ');
                 let diffLabel = '';
                 const comparePeriod = periodCompareMap[item.period];
@@ -4118,16 +5467,16 @@
                 }, 0);
             });
             const gridTemplateParts = [
-                `${Math.max(6, periodCh)}ch`,
-                `${Math.max(7, ratioCh)}ch`,
-                `${Math.max(1, diffCh)}ch`,
-                `${Math.max(3, countCh)}ch`
+                `minmax(${Math.max(6, periodCh)}ch, max-content)`,
+                `minmax(${Math.max(7, ratioCh)}ch, max-content)`,
+                `minmax(${Math.max(1, diffCh)}ch, max-content)`,
+                `minmax(${Math.max(3, countCh)}ch, max-content)`
             ];
             compareMetricLabels.forEach((_, idx) => {
-                gridTemplateParts.push(`${Math.max(5, compareRatioChList[idx])}ch`);
-                gridTemplateParts.push(`${Math.max(6, compareCountChList[idx])}ch`);
+                gridTemplateParts.push(`minmax(${Math.max(5, compareRatioChList[idx])}ch, max-content)`);
+                gridTemplateParts.push(`minmax(${Math.max(6, compareCountChList[idx])}ch, max-content)`);
             });
-            gridTemplateParts.push('max-content');
+            gridTemplateParts.push('minmax(0, max-content)');
             const tableStyle = `--am-crowd-hover-grid-template:${gridTemplateParts.join(' ')};`;
             const metricHeaderHtml = metricLabels.length
                 ? `
@@ -4266,6 +5615,15 @@
             return this.CROWD_PERIODS.includes(days) ? days : 0;
         },
 
+        getCrowdPeriodLabel(periodDays) {
+            const period = this.normalizeCrowdPeriod(periodDays);
+            if (!period) return '';
+            const labelMap = this.crowdPeriodLabelMap && typeof this.crowdPeriodLabelMap === 'object'
+                ? this.crowdPeriodLabelMap
+                : {};
+            return String(labelMap[period] || '').trim() || `过去${period}天`;
+        },
+
         getCrowdPeriodVisible(periodDays) {
             const period = this.normalizeCrowdPeriod(periodDays);
             if (!period) return true;
@@ -4335,8 +5693,9 @@
                     const visible = this.getCrowdPeriodVisible(period);
                     node.classList.toggle('is-off', !visible);
                     node.setAttribute('aria-pressed', visible ? 'true' : 'false');
-                    node.setAttribute('aria-label', `切换周期：过去${period}天`);
-                    node.title = `过去${period}天${visible ? '（点击隐藏）' : '（点击显示）'}`;
+                    const periodLabel = this.getCrowdPeriodLabel(period);
+                    node.setAttribute('aria-label', `切换周期：${periodLabel}`);
+                    node.title = `${periodLabel}${visible ? '（点击隐藏）' : '（点击显示）'}`;
                 });
                 this.matrixLegendEl.querySelectorAll('[data-crowd-ratio-toggle]').forEach((node) => {
                     if (!(node instanceof HTMLElement)) return;
@@ -4405,26 +5764,342 @@
             scrollerEl.addEventListener('dragstart', (event) => event.preventDefault());
         },
 
+        getDmpMetricSelectedProperty(metricType) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            const context = this.dmpCrowdMatrixContext || {};
+            const list = metric === 'compare'
+                ? context.channelBehaviorListCompare
+                : context.channelBehaviorList;
+            return Array.isArray(list) && list[0] ? list[0] : null;
+        },
+
+        findDmpCrowdPropertyByKey(propertyKey) {
+            const key = String(propertyKey || '').trim();
+            if (!key) return null;
+            const properties = Array.isArray(this.dmpCrowdMatrixAvailableProperties)
+                ? this.dmpCrowdMatrixAvailableProperties
+                : [];
+            return properties.find(item => this.getDmpCrowdPropertyKey(item) === key) || null;
+        },
+
+        setDmpCrowdPropertyDropdown(metricType = '', channelKey = '') {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            this.dmpCrowdPropertyDropdownMetric = metric;
+            this.dmpCrowdPropertyDropdownChannelKey = metric ? String(channelKey || '').trim() : '';
+            this.renderCrowdGlobalLegend();
+        },
+
+        closeDmpCrowdPropertyDropdown() {
+            if (!this.dmpCrowdPropertyDropdownMetric && !this.dmpCrowdPropertyDropdownChannelKey) {
+                this.removeDmpCrowdPropertyDropdownPortal();
+                return;
+            }
+            this.dmpCrowdPropertyDropdownMetric = '';
+            this.dmpCrowdPropertyDropdownChannelKey = '';
+            this.renderCrowdGlobalLegend();
+        },
+
+        removeDmpCrowdPropertyDropdownPortal() {
+            this.clearDmpCrowdPropertyDropdownPositionState();
+            if (this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement) {
+                this.dmpCrowdPropertyDropdownPortalEl.remove();
+            }
+            this.dmpCrowdPropertyDropdownPortalEl = null;
+        },
+
+        clearDmpCrowdPropertyDropdownPositionFrame() {
+            if (!this.dmpCrowdPropertyDropdownPositionFrame) return;
+            const cancelFrame = typeof this.dmpCrowdPropertyDropdownPositionCancel === 'function'
+                ? this.dmpCrowdPropertyDropdownPositionCancel
+                : clearTimeout;
+            cancelFrame(this.dmpCrowdPropertyDropdownPositionFrame);
+            this.dmpCrowdPropertyDropdownPositionFrame = 0;
+            this.dmpCrowdPropertyDropdownPositionCancel = null;
+        },
+
+        clearDmpCrowdPropertyDropdownPositionVisibilityHandler() {
+            const handler = this.dmpCrowdPropertyDropdownPositionVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.dmpCrowdPropertyDropdownPositionVisibilityHandler = null;
+        },
+
+        clearDmpCrowdPropertyDropdownPositionState() {
+            this.clearDmpCrowdPropertyDropdownPositionFrame();
+            this.clearDmpCrowdPropertyDropdownPositionVisibilityHandler();
+            this.dmpCrowdPropertyDropdownPositionPending = false;
+        },
+
+        bindDmpCrowdPropertyDropdownPositionVisibilityHandler() {
+            if (typeof this.dmpCrowdPropertyDropdownPositionVisibilityHandler === 'function') return;
+            this.dmpCrowdPropertyDropdownPositionVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearDmpCrowdPropertyDropdownPositionFrame();
+                    this.dmpCrowdPropertyDropdownPositionPending = this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement
+                        && !!this.dmpCrowdPropertyDropdownMetric;
+                    return;
+                }
+                if (this.dmpCrowdPropertyDropdownPositionPending) {
+                    this.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+                    return;
+                }
+                this.clearDmpCrowdPropertyDropdownPositionVisibilityHandler();
+            };
+            document.addEventListener('visibilitychange', this.dmpCrowdPropertyDropdownPositionVisibilityHandler);
+        },
+
+        scheduleDmpCrowdPropertyDropdownPositionUpdate() {
+            this.clearDmpCrowdPropertyDropdownPositionFrame();
+            if (!(this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement) || !this.dmpCrowdPropertyDropdownMetric) {
+                this.clearDmpCrowdPropertyDropdownPositionState();
+                return;
+            }
+            this.dmpCrowdPropertyDropdownPositionPending = true;
+            this.bindDmpCrowdPropertyDropdownPositionVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) return;
+            const runPositionUpdate = () => {
+                this.dmpCrowdPropertyDropdownPositionFrame = 0;
+                this.dmpCrowdPropertyDropdownPositionCancel = null;
+                if (this.isMagicReportDocumentHidden()) {
+                    this.dmpCrowdPropertyDropdownPositionPending = this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement
+                        && !!this.dmpCrowdPropertyDropdownMetric;
+                    return;
+                }
+                this.dmpCrowdPropertyDropdownPositionPending = false;
+                this.clearDmpCrowdPropertyDropdownPositionVisibilityHandler();
+                this.positionDmpCrowdPropertyDropdownPortal();
+            };
+            if (typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function') {
+                this.dmpCrowdPropertyDropdownPositionCancel = cancelAnimationFrame;
+                this.dmpCrowdPropertyDropdownPositionFrame = requestAnimationFrame(runPositionUpdate);
+                return;
+            }
+            this.dmpCrowdPropertyDropdownPositionCancel = clearTimeout;
+            this.dmpCrowdPropertyDropdownPositionFrame = setTimeout(runPositionUpdate, 16);
+        },
+
+        getDmpCrowdDropdownViewModel(metricType) {
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!metric) return null;
+            const properties = Array.isArray(this.dmpCrowdMatrixAvailableProperties)
+                ? this.dmpCrowdMatrixAvailableProperties
+                : [];
+            const groups = this.groupDmpCrowdProperties(properties);
+            const selected = this.getDmpMetricSelectedProperty(metric);
+            const selectedKey = this.getDmpCrowdPropertyKey(selected || {});
+            const selectedGroup = groups.find(group => group.behaviors.some(item => item.behaviorKey === selectedKey)) || groups[0] || null;
+            const activeChannelKey = this.dmpCrowdPropertyDropdownMetric === metric && this.dmpCrowdPropertyDropdownChannelKey
+                ? this.dmpCrowdPropertyDropdownChannelKey
+                : (selectedGroup?.channelKey || '');
+            const activeGroup = groups.find(group => group.channelKey === activeChannelKey) || selectedGroup || groups[0] || null;
+            return { metric, groups, selectedKey, selectedGroup, activeGroup };
+        },
+
+        buildDmpCrowdDropdownElement(viewModel) {
+            if (!viewModel || !viewModel.metric) return null;
+            const dropdown = document.createElement('div');
+            dropdown.className = 'am-dmp-crowd-dropdown am-dmp-crowd-dropdown-portal is-open';
+            dropdown.dataset.dmpCrowdDropdown = viewModel.metric;
+
+            const channelColumn = document.createElement('div');
+            channelColumn.className = 'am-dmp-crowd-dropdown-column am-dmp-crowd-dropdown-channel';
+            const channelTitle = document.createElement('div');
+            channelTitle.className = 'am-dmp-crowd-dropdown-title';
+            channelTitle.textContent = '渠道';
+            channelColumn.appendChild(channelTitle);
+            viewModel.groups.forEach((group) => {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = 'am-dmp-crowd-dropdown-option';
+                option.classList.toggle('is-active', group.channelKey === viewModel.activeGroup?.channelKey);
+                option.dataset.dmpCrowdMetric = viewModel.metric;
+                option.dataset.dmpCrowdChannel = group.channelKey;
+                option.textContent = group.channelName;
+                channelColumn.appendChild(option);
+            });
+
+            const behaviorColumn = document.createElement('div');
+            behaviorColumn.className = 'am-dmp-crowd-dropdown-column am-dmp-crowd-dropdown-behavior';
+            const behaviorTitle = document.createElement('div');
+            behaviorTitle.className = 'am-dmp-crowd-dropdown-title';
+            behaviorTitle.textContent = '行为';
+            behaviorColumn.appendChild(behaviorTitle);
+            (viewModel.activeGroup?.behaviors || []).forEach((item) => {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = 'am-dmp-crowd-dropdown-option';
+                option.classList.toggle('is-active', item.behaviorKey === viewModel.selectedKey);
+                option.dataset.dmpCrowdMetric = viewModel.metric;
+                option.dataset.dmpCrowdBehavior = item.behaviorKey;
+                option.textContent = item.behaviorName;
+                behaviorColumn.appendChild(option);
+            });
+            dropdown.appendChild(channelColumn);
+            dropdown.appendChild(behaviorColumn);
+            dropdown.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+                const channelOption = target.closest('[data-dmp-crowd-channel]');
+                if (channelOption instanceof HTMLElement) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const metric = String(channelOption.dataset.dmpCrowdMetric || '').trim();
+                    const channelKey = String(channelOption.dataset.dmpCrowdChannel || '').trim();
+                    if (metric && channelKey) this.setDmpCrowdPropertyDropdown(metric, channelKey);
+                    return;
+                }
+                const behaviorOption = target.closest('[data-dmp-crowd-behavior]');
+                if (!(behaviorOption instanceof HTMLElement)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const metric = String(behaviorOption.dataset.dmpCrowdMetric || '').trim();
+                const behaviorKey = String(behaviorOption.dataset.dmpCrowdBehavior || '').trim();
+                if (!metric || !behaviorKey) return;
+                this.dmpCrowdPropertyDropdownMetric = '';
+                this.dmpCrowdPropertyDropdownChannelKey = '';
+                this.handleDmpCrowdPropertySelect(metric, 'behavior', behaviorKey);
+            });
+            return dropdown;
+        },
+
+        positionDmpCrowdPropertyDropdownPortal() {
+            const dropdown = this.dmpCrowdPropertyDropdownPortalEl;
+            if (!(dropdown instanceof HTMLElement) || !(this.matrixLegendEl instanceof HTMLElement)) return;
+            const metric = String(this.dmpCrowdPropertyDropdownMetric || '').trim();
+            const trigger = [...this.matrixLegendEl.querySelectorAll('[data-dmp-crowd-dropdown-trigger]')]
+                .find(el => String(el.dataset.dmpCrowdDropdownTrigger || '').trim() === metric);
+            if (!(trigger instanceof HTMLElement)) return;
+            const anchor = trigger.closest('.am-dmp-crowd-metric-button') || trigger;
+            const rect = anchor.getBoundingClientRect();
+            const gap = 8;
+            const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+            const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+            const maxLeft = Math.max(12, viewportWidth - dropdown.offsetWidth - 12);
+            const left = Math.min(Math.max(12, rect.left), maxLeft);
+            let top = rect.bottom + gap;
+            const dropdownHeight = dropdown.offsetHeight || 300;
+            if (top + dropdownHeight > viewportHeight - 12 && rect.top - dropdownHeight - gap > 12) {
+                top = rect.top - dropdownHeight - gap;
+            }
+            dropdown.style.left = `${Math.round(left)}px`;
+            dropdown.style.top = `${Math.round(Math.max(12, top))}px`;
+        },
+
+        renderDmpCrowdPropertyDropdownPortal() {
+            this.removeDmpCrowdPropertyDropdownPortal();
+            if (!this.isDmpCrowdMatrixMode() || !this.dmpCrowdPropertyDropdownMetric || !document.body) return;
+            const viewModel = this.getDmpCrowdDropdownViewModel(this.dmpCrowdPropertyDropdownMetric);
+            const dropdown = this.buildDmpCrowdDropdownElement(viewModel);
+            if (!(dropdown instanceof HTMLElement)) return;
+            document.body.appendChild(dropdown);
+            this.dmpCrowdPropertyDropdownPortalEl = dropdown;
+            this.positionDmpCrowdPropertyDropdownPortal();
+            this.scheduleDmpCrowdPropertyDropdownPositionUpdate();
+        },
+
+        renderDmpCrowdMetricButtons(container) {
+            if (!(container instanceof HTMLElement)) return;
+            this.DMP_CROWD_METRICS.forEach((metric) => {
+                const meta = this.getCrowdMetricMeta(metric);
+                const isOpen = this.dmpCrowdPropertyDropdownMetric === metric;
+
+                const wrap = document.createElement('div');
+                wrap.className = 'am-dmp-crowd-metric-wrap';
+                wrap.classList.toggle('is-open', isOpen);
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'am-crowd-matrix-legend-toggle am-dmp-crowd-metric-button';
+                btn.dataset.crowdMetric = metric;
+                btn.style.setProperty('--am-crowd-legend-color', meta.color);
+                btn.setAttribute('aria-haspopup', 'listbox');
+                btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                const dot = document.createElement('i');
+                dot.setAttribute('aria-hidden', 'true');
+                const text = document.createElement('span');
+                text.className = 'am-dmp-crowd-metric-text';
+                text.textContent = meta.seriesLabel;
+                const trigger = document.createElement('span');
+                trigger.className = 'am-dmp-crowd-dropdown-trigger';
+                trigger.dataset.dmpCrowdDropdownTrigger = metric;
+                trigger.setAttribute('aria-hidden', 'true');
+                trigger.innerHTML = renderAmIcon('chevron-down', { size: 12, strokeWidth: 2.2 });
+                btn.appendChild(dot);
+                btn.appendChild(text);
+                btn.appendChild(trigger);
+                wrap.appendChild(btn);
+                container.appendChild(wrap);
+            });
+        },
+
+        handleDmpCrowdPropertySelect(metricType, selectType, selectedValue) {
+            if (!this.isDmpCrowdMatrixMode()) return;
+            const metric = this.normalizeCrowdMetricType(metricType);
+            if (!metric) return;
+            const properties = Array.isArray(this.dmpCrowdMatrixAvailableProperties)
+                ? this.dmpCrowdMatrixAvailableProperties
+                : [];
+            const groups = this.groupDmpCrowdProperties(properties);
+            let nextProperty = null;
+            if (selectType === 'channel') {
+                const group = groups.find(item => item.channelKey === String(selectedValue || '').trim());
+                nextProperty = group?.behaviors?.[0] || null;
+            } else {
+                nextProperty = this.findDmpCrowdPropertyByKey(selectedValue);
+            }
+            if (!nextProperty) return;
+
+            const current = this.getDmpMetricSelectedProperty(metric);
+            if (this.getDmpCrowdPropertyKey(current || {}) === this.getDmpCrowdPropertyKey(nextProperty)) return;
+
+            const context = this.dmpCrowdMatrixContext || this.resolveDmpCrowdMatrixContext();
+            if (metric === 'compare') {
+                context.channelBehaviorListCompare = [{ ...nextProperty }];
+                context.compareLabel = this.getDmpCrowdPropertyLabel(context.channelBehaviorListCompare) || '对比人群';
+                context.dmpComparePropertyManuallySelected = true;
+            } else {
+                context.channelBehaviorList = [{ ...nextProperty }];
+                context.analysisLabel = this.getDmpCrowdPropertyLabel(context.channelBehaviorList) || '分析人群';
+            }
+            this.dmpCrowdMatrixContext = context;
+            this.applyDmpCrowdMatrixRuntime(context);
+            this.refreshDmpCrowdMatrixCampaignMeta();
+            this.renderCrowdGlobalLegend();
+            if (this.crowdMatrixLoading) {
+                this.crowdMatrixRunId += 1;
+                this.crowdMatrixLoading = false;
+                this.crowdMatrixTaskProgressHandler = null;
+            }
+            this.setCrowdMatrixStatus(`正在切换${metric === 'compare' ? '对比人群' : '分析人群'}：${this.getDmpCrowdPropertyLabel([nextProperty])}`, 'loading', { showRetry: false, progress: 0 });
+            this.runDmpCrowdMatrixLoad({ force: false });
+        },
+
         renderCrowdGlobalLegend() {
             if (!(this.matrixLegendEl instanceof HTMLElement)) return;
             this.matrixLegendEl.innerHTML = '';
             const metricGroup = document.createElement('div');
             metricGroup.className = 'am-crowd-matrix-legend-group am-crowd-matrix-legend-group-metric';
-            this.CROWD_METRICS.forEach((metric) => {
-                const meta = this.getCrowdMetricMeta(metric);
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'am-crowd-matrix-legend-toggle';
-                btn.dataset.crowdMetric = metric;
-                btn.style.setProperty('--am-crowd-legend-color', meta.color);
-                const dot = document.createElement('i');
-                dot.setAttribute('aria-hidden', 'true');
-                const text = document.createElement('span');
-                text.textContent = meta.seriesLabel;
-                btn.appendChild(dot);
-                btn.appendChild(text);
-                metricGroup.appendChild(btn);
-            });
+            if (this.isDmpCrowdMatrixMode()) {
+                metricGroup.classList.add('am-dmp-crowd-metric-group');
+                this.renderDmpCrowdMetricButtons(metricGroup);
+            } else {
+                this.CROWD_METRICS.forEach((metric) => {
+                    const meta = this.getCrowdMetricMeta(metric);
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'am-crowd-matrix-legend-toggle';
+                    btn.dataset.crowdMetric = metric;
+                    btn.style.setProperty('--am-crowd-legend-color', meta.color);
+                    const dot = document.createElement('i');
+                    dot.setAttribute('aria-hidden', 'true');
+                    const text = document.createElement('span');
+                    text.textContent = meta.seriesLabel;
+                    btn.appendChild(dot);
+                    btn.appendChild(text);
+                    metricGroup.appendChild(btn);
+                });
+            }
             this.matrixLegendEl.appendChild(metricGroup);
 
             const divider = document.createElement('span');
@@ -4444,7 +6119,7 @@
                 const dot = document.createElement('i');
                 dot.setAttribute('aria-hidden', 'true');
                 const text = document.createElement('span');
-                text.textContent = `过去${period}天`;
+                text.textContent = this.getCrowdPeriodLabel(period);
                 btn.appendChild(dot);
                 btn.appendChild(text);
                 periodGroup.appendChild(btn);
@@ -4487,6 +6162,11 @@
 
             this.matrixLegendEl.appendChild(ratioGroup);
             this.applyCrowdMetricVisibility();
+            if (this.isDmpCrowdMatrixMode()) {
+                this.renderDmpCrowdPropertyDropdownPortal();
+            } else {
+                this.removeDmpCrowdPropertyDropdownPortal();
+            }
         },
 
         toggleCrowdMetricVisibility(metricType) {
@@ -4534,13 +6214,12 @@
                 const visibleCount = this.CROWD_PERIODS.filter(days => this.getCrowdPeriodVisible(days)).length;
                 if (visibleCount <= 1) return;
             }
-            this.crowdPeriodVisibility = {
-                3: this.getCrowdPeriodVisible(3),
-                7: this.getCrowdPeriodVisible(7),
-                30: this.getCrowdPeriodVisible(30),
-                90: this.getCrowdPeriodVisible(90),
-                [period]: nextVisible
-            };
+            const nextMap = {};
+            this.CROWD_PERIODS.forEach((days) => {
+                nextMap[days] = this.getCrowdPeriodVisible(days);
+            });
+            nextMap[period] = nextVisible;
+            this.crowdPeriodVisibility = nextMap;
             if (this.crowdMatrixDataset) {
                 this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: true });
                 return;
@@ -4555,6 +6234,10 @@
 
         toggleCrowdInsightsVisibility() {
             this.crowdInsightsVisibility = !this.getCrowdInsightsVisible();
+            if (this.crowdMatrixDataset) {
+                this.renderCrowdMatrixCharts(this.crowdMatrixDataset, { animate: false });
+                return;
+            }
             this.applyCrowdMetricVisibility();
         },
 
@@ -4602,9 +6285,9 @@
 
             const metrics = this.CROWD_METRICS.slice();
             const visibleMetrics = metrics.filter(metric => this.getCrowdMetricVisible(metric));
+            const renderMetrics = visibleMetrics.length ? visibleMetrics : metrics;
             const visibleMetricCount = Math.max(1, visibleMetrics.length);
-            const scaleMetrics = visibleMetrics.length ? visibleMetrics : metrics;
-            const cellMaxRatio = scaleMetrics.reduce((maxValue, metric) => {
+            const cellMaxRatio = renderMetrics.reduce((maxValue, metric) => {
                 const list = Array.isArray(cell?.[metric]) ? cell[metric] : [];
                 const currentMax = list.reduce((innerMax, value) => Math.max(innerMax, this.toNumericValue(value)), 0);
                 return Math.max(maxValue, currentMax);
@@ -4630,7 +6313,7 @@
                 const columns = document.createElement('div');
                 columns.className = 'am-crowd-matrix-bar-columns';
 
-                metrics.forEach((metric) => {
+                renderMetrics.forEach((metric) => {
                     const metricMeta = this.getCrowdMetricMeta(metric);
                     const ratio = this.toNumericValue(cell?.[metric]?.[labelIdx] ?? 0);
                     const rawValue = cell?.[`${metric}Raw`]?.[labelIdx];
@@ -4663,21 +6346,14 @@
                     if (animateBars) {
                         fill.style.height = '0%';
                         fill.style.opacity = '0.38';
-                        const applyHeight = () => {
-                            fill.style.height = barHeight;
-                            fill.style.opacity = '1';
-                        };
-                        if (typeof requestAnimationFrame === 'function') {
-                            requestAnimationFrame(applyHeight);
-                        } else {
-                            setTimeout(applyHeight, 16);
-                        }
+                        this.queueCrowdMatrixBarAnimation(fill, barHeight);
                     } else {
                         fill.style.height = barHeight;
                     }
                     const ratioLabel = document.createElement('span');
                     ratioLabel.className = 'am-crowd-matrix-bar-ratio';
-                    ratioLabel.textContent = this.formatCrowdPercent(ratio);
+                    const ratioText = this.formatCrowdPercent(ratio);
+                    ratioLabel.textContent = ratioText === '0%' ? '' : ratioText;
                     fill.appendChild(ratioLabel);
                     bar.appendChild(fill);
                     columns.appendChild(bar);
@@ -4696,33 +6372,35 @@
                 this.enableCrowdMatrixHorizontalDrag(wrap);
             }
 
-            const insights = document.createElement('div');
-            insights.className = 'am-crowd-matrix-insights';
-            insights.style.setProperty('--am-crowd-metric-count', String(metrics.length));
-            metrics.forEach((metric) => {
-                const metricMeta = this.getCrowdMetricMeta(metric);
-                const values = Array.isArray(cell?.[metric]) ? cell[metric] : [];
-                let topIdx = -1;
-                let topValue = -1;
-                values.forEach((value, idx) => {
-                    const num = this.toNumericValue(value);
-                    if (num > topValue) {
-                        topValue = num;
-                        topIdx = idx;
+            if (this.getCrowdInsightsVisible()) {
+                const insights = document.createElement('div');
+                insights.className = 'am-crowd-matrix-insights';
+                insights.style.setProperty('--am-crowd-metric-count', String(renderMetrics.length));
+                renderMetrics.forEach((metric) => {
+                    const metricMeta = this.getCrowdMetricMeta(metric);
+                    const values = Array.isArray(cell?.[metric]) ? cell[metric] : [];
+                    let topIdx = -1;
+                    let topValue = -1;
+                    values.forEach((value, idx) => {
+                        const num = this.toNumericValue(value);
+                        if (num > topValue) {
+                            topValue = num;
+                            topIdx = idx;
+                        }
+                    });
+                    const insightItem = document.createElement('div');
+                    insightItem.className = 'am-crowd-matrix-insight-item';
+                    insightItem.dataset.metric = metric;
+                    insightItem.style.setProperty('--am-crowd-insight-color', metricMeta.color);
+                    if (topIdx > -1 && topValue > 0 && labels[topIdx]) {
+                        insightItem.textContent = `${metricMeta.seriesLabel}: ${labels[topIdx]} ${this.formatCrowdPercent(topValue)}`;
+                    } else {
+                        insightItem.textContent = `${metricMeta.seriesLabel}: 无数据`;
                     }
+                    insights.appendChild(insightItem);
                 });
-                const insightItem = document.createElement('div');
-                insightItem.className = 'am-crowd-matrix-insight-item';
-                insightItem.dataset.metric = metric;
-                insightItem.style.setProperty('--am-crowd-insight-color', metricMeta.color);
-                if (topIdx > -1 && topValue > 0 && labels[topIdx]) {
-                    insightItem.textContent = `${metricMeta.seriesLabel}: ${labels[topIdx]} ${this.formatCrowdPercent(topValue)}`;
-                } else {
-                    insightItem.textContent = `${metricMeta.seriesLabel}: 无数据`;
-                }
-                insights.appendChild(insightItem);
-            });
-            wrap.appendChild(insights);
+                wrap.appendChild(insights);
+            }
 
             return wrap;
         },
@@ -4730,6 +6408,7 @@
         renderCrowdMatrixCharts(dataset, options = {}) {
             if (!(this.matrixGridEl instanceof HTMLElement)) return;
             this.hideCrowdMatrixHoverTip();
+            this.clearCrowdMatrixBarAnimation();
             this.matrixGridEl.innerHTML = '';
             this.matrixHoverMetricIndex = null;
             if (!dataset || typeof dataset !== 'object') return;
@@ -4753,7 +6432,7 @@
                 const header = document.createElement('div');
                 header.className = 'am-crowd-matrix-cell am-crowd-matrix-header';
                 header.dataset.period = String(period);
-                header.textContent = `过去${period}天`;
+                header.textContent = this.getCrowdPeriodLabel(period);
                 table.appendChild(header);
             });
 
@@ -4762,12 +6441,23 @@
                 rowHeader.className = 'am-crowd-matrix-cell am-crowd-matrix-row-header';
                 const normalizedGroupName = this.normalizeCrowdGroupName(groupName);
                 const enableSortToggle = this.isCrowdExtraDimensionGroup(normalizedGroupName);
+                const isDmpMultiValue = this.isDmpMultiValueGroup(groupName);
+                const title = document.createElement('span');
+                title.className = 'am-crowd-matrix-row-header-label';
+                title.textContent = groupName;
+                rowHeader.appendChild(title);
+                if (isDmpMultiValue) {
+                    rowHeader.classList.add('has-dmp-multi-value');
+                    const badge = document.createElement('span');
+                    badge.className = 'am-crowd-matrix-row-badge';
+                    badge.textContent = '多选';
+                    badge.title = this.getDmpMultiValueGroupTitle(groupName);
+                    badge.setAttribute('aria-label', badge.title);
+                    rowHeader.title = badge.title;
+                    rowHeader.appendChild(badge);
+                }
                 if (enableSortToggle) {
                     rowHeader.classList.add('has-sort-toggle');
-                    const title = document.createElement('span');
-                    title.className = 'am-crowd-matrix-row-header-label';
-                    title.textContent = groupName;
-                    rowHeader.appendChild(title);
                     const sortBtn = document.createElement('button');
                     sortBtn.type = 'button';
                     sortBtn.className = 'am-crowd-matrix-group-sort-toggle';
@@ -4780,8 +6470,6 @@
                         ? `${groupName}：主周期优先（90→30→7→3），点击切回各周期独立排序`
                         : `${groupName}：各周期独立排序，点击切换主周期优先（90→30→7→3）`;
                     rowHeader.appendChild(sortBtn);
-                } else {
-                    rowHeader.textContent = groupName;
                 }
                 table.appendChild(rowHeader);
 
@@ -4865,7 +6553,7 @@
         },
 
         switchMagicView(view, options = {}) {
-            const next = view === 'matrix' ? 'matrix' : 'query';
+            const next = this.isDmpCrowdMatrixMode() ? 'matrix' : (view === 'matrix' ? 'matrix' : 'query');
             this.activeView = next;
             this.refreshCrowdMatrixCampaignMeta();
             if (next !== 'matrix') this.hideCrowdMatrixHoverTip();
@@ -4896,6 +6584,9 @@
             }
             if (this.matrixCampaignEl instanceof HTMLElement) {
                 this.matrixCampaignEl.style.display = next === 'matrix' ? '' : 'none';
+            }
+            if (next === 'query') {
+                this.ensureMagicIframeLoaded(false);
             }
             if (next === 'matrix' && options.skipLoad !== true) {
                 this.ensureCrowdMatrixLoaded(false);
@@ -4997,6 +6688,7 @@
             this.crowdMatrixPendingMetricReload = null;
             this.crowdMatrixGroupSortModeMap = {};
             this.crowdInsightRunContext = null;
+            this.crowdAuthParamsCache = null;
             this.crowdRequestSlotPromise = Promise.resolve();
             this.crowdRequestLastAt = 0;
             this.setCrowdMatrixStatus(`正在加载计划 ${id} 的人群对比看板...`, 'loading', { showRetry: false, progress: 0 });
@@ -5004,10 +6696,11 @@
 
             try {
                 const initialMetrics = this.getCrowdMetricsForInitialLoad();
+                let pendingBackgroundItemRefresh = false;
                 if (initialMetrics.includes('itemdeal')) {
                     await this.refreshCrowdCampaignItemOptions(id, { forceRefresh: forceRefreshItems });
                 } else {
-                    this.refreshCrowdCampaignItemOptionsInBackground(id, { forceRefresh: forceRefreshItems });
+                    pendingBackgroundItemRefresh = true;
                 }
                 this.refreshCrowdMatrixCampaignMeta(id);
                 const taskFns = [];
@@ -5050,6 +6743,10 @@
                 };
                 const settled = await this.runTasksWithConcurrency(taskFns, this.CROWD_REQUEST_CONCURRENCY);
                 if (runId !== this.crowdMatrixRunId) return;
+                if (pendingBackgroundItemRefresh) {
+                    pendingBackgroundItemRefresh = false;
+                    this.refreshCrowdCampaignItemOptionsInBackground(id, { forceRefresh: forceRefreshItems, idle: true });
+                }
 
                 const successResults = [];
                 let failCount = 0;
@@ -5213,6 +6910,10 @@
         },
 
         ensureCrowdMatrixLoaded(forceReload = false) {
+            if (this.isDmpCrowdMatrixMode()) {
+                this.runDmpCrowdMatrixLoad({ force: forceReload });
+                return;
+            }
             if (this.crowdMatrixLoading) return;
             const campaignId = this.getCurrentCampaignId();
             this.refreshCrowdMatrixCampaignMeta(campaignId || this.lastCampaignId);
@@ -5262,9 +6963,277 @@
             Logger.info('🔮 万能查数 iframe 清理完成');
         },
 
+        addPopupCleanup(cleanup) {
+            if (typeof cleanup !== 'function') return;
+            if (!Array.isArray(this.popupCleanupHandlers)) this.popupCleanupHandlers = [];
+            this.popupCleanupHandlers.push(cleanup);
+        },
+
+        runPopupCleanupHandlers() {
+            const handlers = Array.isArray(this.popupCleanupHandlers)
+                ? this.popupCleanupHandlers.slice()
+                : [];
+            this.popupCleanupHandlers = [];
+            handlers.forEach((cleanup) => {
+                try {
+                    cleanup();
+                } catch { }
+            });
+        },
+
+        isMagicReportDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearIframeCleanupRetryTimer() {
+            if (!this.iframeCleanupRetryTimer) return;
+            clearTimeout(this.iframeCleanupRetryTimer);
+            this.iframeCleanupRetryTimer = 0;
+        },
+
+        clearIframeCleanupVisibilityHandler() {
+            if (!this.iframeCleanupVisibilityHandler) return;
+            document.removeEventListener('visibilitychange', this.iframeCleanupVisibilityHandler);
+            this.iframeCleanupVisibilityHandler = null;
+        },
+
+        clearQuickPromptRetryTimer() {
+            if (!this.quickPromptRetryTimer) return;
+            clearTimeout(this.quickPromptRetryTimer);
+            this.quickPromptRetryTimer = 0;
+        },
+
+        resetQuickPromptButtonPressedState(button = null) {
+            if (!(button instanceof HTMLElement) || !button.isConnected) return;
+            button.classList.remove('active');
+            button.setAttribute('aria-pressed', 'false');
+        },
+
+        clearQuickPromptResetTimer() {
+            if (!this.quickPromptResetTimer) return;
+            clearTimeout(this.quickPromptResetTimer);
+            this.quickPromptResetTimer = 0;
+        },
+
+        clearQuickPromptResetVisibilityHandler() {
+            const handler = this.quickPromptResetVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.quickPromptResetVisibilityHandler = null;
+        },
+
+        clearQuickPromptResetState() {
+            this.clearQuickPromptResetTimer();
+            this.clearQuickPromptResetVisibilityHandler();
+            this.quickPromptResetPendingButton = null;
+            this.quickPromptResetPendingDelayMs = 0;
+        },
+
+        bindQuickPromptResetVisibilityHandler() {
+            if (typeof this.quickPromptResetVisibilityHandler === 'function') return;
+            this.quickPromptResetVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearQuickPromptResetTimer();
+                    return;
+                }
+                const pendingButton = this.quickPromptResetPendingButton;
+                const pendingDelayMs = this.quickPromptResetPendingDelayMs;
+                if (pendingButton instanceof HTMLElement) {
+                    this.scheduleQuickPromptButtonReset(pendingButton, pendingDelayMs);
+                } else {
+                    this.clearQuickPromptResetState();
+                }
+            };
+            document.addEventListener('visibilitychange', this.quickPromptResetVisibilityHandler);
+        },
+
+        scheduleQuickPromptButtonReset(button = null, delayMs = 1200) {
+            this.clearQuickPromptResetState();
+            if (!(button instanceof HTMLElement) || !button.isConnected) return;
+            const normalizedDelayMs = Math.max(0, Number(delayMs) || 1200);
+            this.quickPromptResetPendingButton = button;
+            this.quickPromptResetPendingDelayMs = normalizedDelayMs;
+            this.bindQuickPromptResetVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) return;
+            this.quickPromptResetTimer = setTimeout(() => {
+                this.quickPromptResetTimer = 0;
+                if (this.isMagicReportDocumentHidden()) return;
+                const pendingButton = this.quickPromptResetPendingButton;
+                this.resetQuickPromptButtonPressedState(pendingButton);
+                this.clearQuickPromptResetVisibilityHandler();
+                this.quickPromptResetPendingButton = null;
+                this.quickPromptResetPendingDelayMs = 0;
+            }, normalizedDelayMs);
+        },
+
+        clearQuickPromptRetryVisibilityHandler() {
+            const handler = this.quickPromptRetryVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.quickPromptRetryVisibilityHandler = null;
+            this.quickPromptRetryPendingCallback = null;
+        },
+
+        clearQuickPromptRetryState() {
+            this.clearQuickPromptRetryTimer();
+            this.clearQuickPromptRetryVisibilityHandler();
+        },
+
+        bindQuickPromptRetryVisibilityHandler() {
+            if (typeof this.quickPromptRetryVisibilityHandler === 'function') return;
+            this.quickPromptRetryVisibilityHandler = () => {
+                if (this.isMagicReportDocumentHidden()) {
+                    this.clearQuickPromptRetryTimer();
+                    return;
+                }
+                const pendingCallback = this.quickPromptRetryPendingCallback;
+                this.clearQuickPromptRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            };
+            document.addEventListener('visibilitychange', this.quickPromptRetryVisibilityHandler);
+        },
+
+        scheduleQuickPromptRetry(callback, delayMs = 500) {
+            this.clearQuickPromptRetryState();
+            if (typeof callback !== 'function') return;
+            const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
+            this.quickPromptRetryPendingCallback = callback;
+            this.bindQuickPromptRetryVisibilityHandler();
+            if (this.isMagicReportDocumentHidden()) {
+                return;
+            }
+            this.quickPromptRetryTimer = setTimeout(() => {
+                this.quickPromptRetryTimer = 0;
+                if (this.isMagicReportDocumentHidden()) return;
+                const pendingCallback = this.quickPromptRetryPendingCallback;
+                this.clearQuickPromptRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            }, normalizedDelayMs);
+        },
+
+        scheduleIframeCleanupRetry(callback, delayMs = 120) {
+            this.clearIframeCleanupRetryTimer();
+            if (typeof callback !== 'function') return;
+            const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
+            if (this.isMagicReportDocumentHidden()) {
+                this.clearIframeCleanupVisibilityHandler();
+                this.iframeCleanupVisibilityHandler = () => {
+                    if (this.isMagicReportDocumentHidden()) return;
+                    this.clearIframeCleanupVisibilityHandler();
+                    callback();
+                };
+                document.addEventListener('visibilitychange', this.iframeCleanupVisibilityHandler);
+                return;
+            }
+            this.clearIframeCleanupVisibilityHandler();
+            this.iframeCleanupRetryTimer = setTimeout(() => {
+                this.iframeCleanupRetryTimer = 0;
+                callback();
+            }, normalizedDelayMs);
+        },
+
+        clearMagicRuntimeCaches() {
+            this.crowdMatrixRunId += 1;
+            this.crowdMatrixLoading = false;
+            this.crowdMatrixProgress = 0;
+            this.clearCrowdMatrixStateHideState();
+            this.clearCrowdMatrixBarAnimation();
+            this.crowdMatrixLoadedCampaignId = '';
+            this.crowdMatrixDataset = null;
+            this.crowdMatrixResultMap = null;
+            this.crowdMatrixPendingMetricReload = null;
+            this.crowdMatrixGroupSortModeMap = {};
+            this.crowdMatrixTaskProgressHandler = null;
+            this.crowdInsightRunContext = null;
+            this.crowdAuthParamsCache = null;
+            this.crowdRequestSlotPromise = null;
+            this.crowdRequestLastAt = 0;
+            this.dmpCrowdPropertyDropdownMetric = '';
+            this.dmpCrowdPropertyDropdownChannelKey = '';
+            this.removeDmpCrowdPropertyDropdownPortal();
+            this.crowdCampaignItemIdMap = new Map();
+            this.crowdCampaignItemOptionsMap = new Map();
+            this.crowdCampaignSelectedItemIdMap = new Map();
+            this.crowdCampaignManualItemSelectionMap = new Map();
+            this.clearQuickPromptResetState();
+            this.clearQuickPromptRetryState();
+            this.clearIframeCleanupRetryTimer();
+            this.clearIframeCleanupVisibilityHandler();
+        },
+
+        releasePopupResources() {
+            this.captureMagicPromptDraft();
+            this.popupLifecycleToken += 1;
+            this.hideCrowdMatrixHoverTip();
+            this.setCrowdCampaignItemDropdownOpen(false);
+            if (this.matrixCampaignItemDropdownPositionFrame) {
+                const cancelPositionUpdate = typeof this.matrixCampaignItemDropdownPositionCancel === 'function'
+                    ? this.matrixCampaignItemDropdownPositionCancel
+                    : (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout);
+                cancelPositionUpdate(this.matrixCampaignItemDropdownPositionFrame);
+                this.matrixCampaignItemDropdownPositionFrame = 0;
+            }
+            this.matrixCampaignItemDropdownPositionCancel = null;
+            this.runPopupCleanupHandlers();
+            this.clearMagicRuntimeCaches();
+            if (this.iframe instanceof HTMLIFrameElement) {
+                this.iframe.onload = null;
+                this.iframe.onerror = null;
+                try {
+                    this.iframe.src = 'about:blank';
+                } catch { }
+            }
+            if (this.header instanceof HTMLElement) {
+                this.header.onmousedown = null;
+            }
+            const popup = this.popup instanceof HTMLElement
+                ? this.popup
+                : document.getElementById('am-magic-report-popup');
+            if (popup instanceof HTMLElement) popup.remove();
+            const style = document.getElementById('am-magic-report-popup-style');
+            if (style instanceof HTMLElement) style.remove();
+            this.popup = null;
+            this.header = null;
+            this.iframe = null;
+            this.iframeLoadStarted = false;
+            this.magicTitleTextEl = null;
+            this.quickPromptsEl = null;
+            this.viewTabsEl = null;
+            this.queryPanelEl = null;
+            this.matrixPanelEl = null;
+            this.matrixStateEl = null;
+            this.matrixGridEl = null;
+            this.matrixRetryBtn = null;
+            this.matrixLegendEl = null;
+            this.matrixCampaignEl = null;
+            this.matrixCampaignNameEl = null;
+            this.matrixCampaignIdEl = null;
+            this.matrixCampaignItemSelectEl = null;
+            this.matrixCampaignItemTriggerEl = null;
+            this.matrixCampaignItemTriggerTextEl = null;
+            this.matrixCampaignItemDropdownEl = null;
+            this.matrixCampaignItemDropdownHomeEl = null;
+            this.matrixHoverTipEl = null;
+            this.matrixHoverActiveBar = null;
+            this.matrixHoverActiveBars = [];
+            this.matrixHoverMetricIndex = null;
+            this.popupMatrixMaximized = false;
+            this.popupLayoutBeforeMatrix = null;
+            this.popupResizeHandler = null;
+            this.popupDropdownPositionHandler = null;
+        },
+
         createPopup() {
             if (this.popup instanceof HTMLElement && this.popup.isConnected) return;
-            this.popup = null;
+            this.releasePopupResources();
+            this.popupLifecycleToken += 1;
+            const popupToken = this.popupLifecycleToken;
 
             const stalePopup = document.getElementById('am-magic-report-popup');
             if (stalePopup instanceof HTMLElement) stalePopup.remove();
@@ -5273,6 +7242,9 @@
 
             const div = document.createElement('div');
             div.id = 'am-magic-report-popup';
+            if (this.isDmpCrowdMatrixMode()) {
+                div.classList.add('is-dmp-crowd-mode');
+            }
             div.style.cssText = `
                 position: fixed; top: 30px; left: 50%; transform: translateX(-50%);
                 z-index: 1000001; border-radius: 18px;
@@ -5521,6 +7493,183 @@
                     gap: 10px;
                     padding: 10px 12px 12px;
                     overflow: hidden;
+                }
+                #am-magic-report-popup.is-dmp-crowd-mode .am-magic-view-tabs,
+                #am-magic-report-popup.is-dmp-crowd-mode .am-quick-prompts,
+                #am-magic-report-popup.is-dmp-crowd-mode .am-magic-content-query,
+                #am-magic-report-popup.is-dmp-crowd-mode .am-magic-view-default-icon {
+                    display: none !important;
+                }
+                #am-magic-report-popup.is-dmp-crowd-mode .am-magic-view-meta {
+                    gap: 8px;
+                }
+                #am-magic-report-popup.is-dmp-crowd-mode .am-crowd-matrix-campaign {
+                    display: flex;
+                    flex-wrap: nowrap;
+                    justify-content: flex-start;
+                    align-content: center;
+                    align-items: center;
+                    gap: 6px;
+                    flex: 0 1 auto;
+                    min-height: 34px;
+                    max-width: 100%;
+                    border-radius: 999px;
+                    padding: 6px 10px;
+                }
+                #am-magic-report-popup.is-dmp-crowd-mode .am-crowd-matrix-item-select-wrap {
+                    display: none;
+                }
+                #am-magic-report-popup.is-dmp-crowd-mode .am-crowd-matrix-campaign-part {
+                    flex: 0 1 auto;
+                    width: auto;
+                    max-width: 100%;
+                }
+                #am-magic-report-popup.is-dmp-crowd-mode .am-crowd-matrix-campaign-part[data-crowd-campaign-name] {
+                    flex: 0 1 auto;
+                    max-width: max(180px, calc(100% - var(--am-dmp-item-id-width, 132px) - 10px));
+                }
+                #am-magic-report-popup.is-dmp-crowd-mode .am-crowd-matrix-campaign-part[data-crowd-campaign-id] {
+                    flex: 0 0 auto;
+                    width: max-content;
+                    color: #5f6c88;
+                    font-size: 10.5px;
+                }
+                #am-magic-report-popup .am-dmp-crowd-property-group {
+                    max-width: min(760px, 100%);
+                    overflow: hidden;
+                }
+                #am-magic-report-popup .am-dmp-crowd-metric-group {
+                    border-radius: 12px;
+                    padding: 6px 8px;
+                    gap: 8px;
+                }
+                #am-magic-report-popup .am-dmp-crowd-metric-wrap {
+                    position: relative;
+                    display: inline-flex;
+                    min-width: 0;
+                }
+                #am-magic-report-popup .am-dmp-crowd-metric-button {
+                    max-width: 260px;
+                }
+                #am-magic-report-popup .am-dmp-crowd-metric-text {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown-trigger {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 18px;
+                    height: 18px;
+                    margin-right: -6px;
+                    border-left: 1px solid rgba(127, 140, 169, 0.18);
+                    color: #4a5674;
+                    opacity: 0.88;
+                }
+                #am-magic-report-popup .am-dmp-crowd-metric-wrap.is-open .am-dmp-crowd-dropdown-trigger svg {
+                    transform: rotate(180deg);
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown,
+                .am-dmp-crowd-dropdown-portal {
+                    grid-template-columns: minmax(128px, max-content) minmax(108px, max-content);
+                    gap: 8px;
+                    min-width: 286px;
+                    max-width: min(460px, calc(100vw - 48px));
+                    padding: 8px;
+                    border: 1px solid rgba(127, 140, 169, 0.24);
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.98);
+                    box-shadow: 0 18px 40px rgba(31, 53, 109, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+                    backdrop-filter: blur(12px) saturate(1.1);
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown {
+                    position: absolute;
+                    z-index: 20;
+                    top: calc(100% + 8px);
+                    left: 0;
+                    display: none;
+                }
+                .am-dmp-crowd-dropdown-portal {
+                    position: fixed;
+                    z-index: 2147483605;
+                    display: grid;
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown.is-open {
+                    display: grid;
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown-column,
+                .am-dmp-crowd-dropdown-portal .am-dmp-crowd-dropdown-column {
+                    display: grid;
+                    align-content: start;
+                    gap: 4px;
+                    min-width: 0;
+                    max-height: 260px;
+                    overflow: auto;
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown-title,
+                .am-dmp-crowd-dropdown-portal .am-dmp-crowd-dropdown-title {
+                    padding: 4px 7px;
+                    color: #7a849b;
+                    font-size: 11px;
+                    font-weight: 800;
+                    line-height: 1.2;
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown-option,
+                .am-dmp-crowd-dropdown-portal .am-dmp-crowd-dropdown-option {
+                    display: block;
+                    width: 100%;
+                    min-width: 0;
+                    border: 1px solid transparent;
+                    border-radius: 8px;
+                    background: transparent;
+                    color: #1a2a47;
+                    cursor: pointer;
+                    font-size: 12px;
+                    font-weight: 650;
+                    line-height: 1.3;
+                    padding: 7px 9px;
+                    text-align: left;
+                    white-space: nowrap;
+                    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown-option:hover,
+                #am-magic-report-popup .am-dmp-crowd-dropdown-option:focus-visible,
+                .am-dmp-crowd-dropdown-portal .am-dmp-crowd-dropdown-option:hover,
+                .am-dmp-crowd-dropdown-portal .am-dmp-crowd-dropdown-option:focus-visible {
+                    background: rgba(42, 91, 255, 0.08);
+                    border-color: rgba(42, 91, 255, 0.14);
+                    outline: none;
+                }
+                #am-magic-report-popup .am-dmp-crowd-dropdown-option.is-active,
+                .am-dmp-crowd-dropdown-portal .am-dmp-crowd-dropdown-option.is-active {
+                    background: rgba(42, 91, 255, 0.12);
+                    border-color: rgba(42, 91, 255, 0.24);
+                    color: #1f4fd7;
+                }
+                #am-magic-report-popup .am-dmp-crowd-property-title {
+                    color: #4a5674;
+                    font-size: 11px;
+                    font-weight: 700;
+                    white-space: nowrap;
+                }
+                #am-magic-report-popup .am-dmp-crowd-property-chip,
+                #am-magic-report-popup .am-dmp-crowd-property-more {
+                    display: inline-flex;
+                    align-items: center;
+                    max-width: 130px;
+                    min-width: 0;
+                    height: 20px;
+                    padding: 0 7px;
+                    border-radius: 999px;
+                    background: rgba(42, 91, 255, 0.08);
+                    color: #1f4fd7;
+                    font-size: 11px;
+                    font-weight: 700;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
                 }
                 #am-magic-report-popup .am-iframe-loading {
                     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -5940,6 +8089,7 @@
                     font-weight: 700;
                     display: flex;
                     align-items: center;
+                    gap: 6px;
                     background: rgba(255, 255, 255, 0.85);
                     backdrop-filter: blur(8px);
                     position: sticky;
@@ -5955,6 +8105,22 @@
                     min-width: 0;
                     overflow: hidden;
                     text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-magic-report-popup .am-crowd-matrix-row-badge {
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 18px;
+                    padding: 0 6px;
+                    border-radius: 999px;
+                    border: 1px solid rgba(47, 84, 235, 0.16);
+                    background: rgba(47, 84, 235, 0.08);
+                    color: #2f54eb;
+                    font-size: 10px;
+                    font-weight: 700;
+                    line-height: 1;
                     white-space: nowrap;
                 }
                 #am-magic-report-popup .am-crowd-matrix-group-sort-toggle {
@@ -6235,7 +8401,7 @@
                     top: 0;
                     z-index: 40;
                     pointer-events: none;
-                    max-width: min(560px, calc(100vw - 48px));
+                    max-width: min(720px, calc(100vw - 48px));
                     border-radius: 12px;
                     background: linear-gradient(145deg, rgba(248, 252, 255, 0.95) 0%, rgba(238, 246, 255, 0.92) 100%);
                     backdrop-filter: blur(12px);
@@ -6256,7 +8422,8 @@
                     white-space: pre-wrap;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-table {
-                    display: grid;
+                    display: inline-grid;
+                    max-width: 100%;
                     row-gap: 2px;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-row {
@@ -6264,20 +8431,27 @@
                     grid-template-columns: var(--am-crowd-hover-grid-template, 6ch 7ch 1ch 3ch 5ch 6ch max-content);
                     column-gap: 8px;
                     align-items: baseline;
+                    min-width: 0;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-row-metrics {
                     margin-bottom: 4px;
                     padding-bottom: 2px;
                     border-bottom: 1px dashed rgba(31, 53, 109, 0.12);
                     color: #6c7890;
+                    align-items: start;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col {
+                    min-width: 0;
                     white-space: nowrap;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col-metric-label {
                     justify-self: center;
                     text-align: center;
                     font-weight: 700;
+                    max-width: 100%;
+                    white-space: normal;
+                    overflow-wrap: anywhere;
+                    line-height: 1.25;
                 }
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col-ratio,
                 #am-magic-report-popup .am-crowd-matrix-hover-tip-col-diff,
@@ -6367,7 +8541,7 @@
                                 <span mxs="asiYysqLa:_" class="asiYysqLCt">
                                     <img src="https://img.alicdn.com/imgextra/i4/O1CN015N7XhL24rrnhJGD58_!!6000000007445-2-tps-1040-1040.png" alt="万能查数">
                                 </span>
-                                <span class="asiYysqLCj asiYysqLCl font-special asiYysqLCm">万能查数输入您想要了解的数据，小万帮您收集</span>
+                                <span class="asiYysqLCj asiYysqLCl font-special asiYysqLCm" data-am-magic-title-text>万能查数输入您想要了解的数据，小万帮您收集</span>
                             </div>
                         </div>
                         <div class="am-btn-group" aria-label="万能查数窗口操作">
@@ -6415,7 +8589,6 @@
                         <span>正在加载万能查数...</span>
                     </div>
                     <iframe id="am-magic-iframe"
-                        src="${this.buildIframeUrl(false)}"
                         style="width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.3s;"
                         allow="clipboard-write"
                     ></iframe>
@@ -6436,6 +8609,7 @@
             this.popup = div;
             this.header = div.querySelector('.am-magic-header');
             this.iframe = div.querySelector('#am-magic-iframe');
+            this.magicTitleTextEl = div.querySelector('[data-am-magic-title-text]');
             this.quickPromptsEl = div.querySelector('#am-magic-quick-prompts');
             this.viewTabsEl = div.querySelector('#am-magic-view-tabs');
             this.queryPanelEl = div.querySelector('.am-magic-content-query');
@@ -6453,6 +8627,7 @@
             this.matrixCampaignItemDropdownEl = div.querySelector('[data-crowd-item-dropdown]');
             this.matrixCampaignItemDropdownHomeEl = this.matrixCampaignItemSelectEl;
             this.bindCrowdMatrixHoverTipEvents();
+            this.refreshMagicReportTitle();
             this.refreshQuickPromptLabels();
             this.refreshCrowdMatrixCampaignMeta();
             this.renderCrowdGlobalLegend();
@@ -6468,21 +8643,35 @@
                     this.requestCrowdCampaignItemDropdownPositionUpdate();
                 };
                 window.addEventListener('resize', this.popupResizeHandler);
+                const resizeHandler = this.popupResizeHandler;
+                this.addPopupCleanup(() => window.removeEventListener('resize', resizeHandler));
             }
             if (!this.popupDropdownPositionHandler) {
                 this.popupDropdownPositionHandler = () => this.requestCrowdCampaignItemDropdownPositionUpdate();
                 window.addEventListener('resize', this.popupDropdownPositionHandler);
                 document.addEventListener('scroll', this.popupDropdownPositionHandler, true);
+                const dropdownPositionHandler = this.popupDropdownPositionHandler;
+                this.addPopupCleanup(() => {
+                    window.removeEventListener('resize', dropdownPositionHandler);
+                    document.removeEventListener('scroll', dropdownPositionHandler, true);
+                });
             }
 
             // iframe 加载完成后先清理，再显示，避免首屏闪现整页内容
             this.iframe.onload = () => {
+                if (popupToken !== this.popupLifecycleToken || !this.iframeLoadStarted) return;
                 const loading = div.querySelector('#am-magic-loading');
-                this.iframe.style.opacity = '0';
+                if (this.iframe instanceof HTMLIFrameElement) {
+                    this.iframe.style.opacity = '0';
+                }
 
                 const revealIframe = () => {
+                    if (popupToken !== this.popupLifecycleToken || !(this.iframe instanceof HTMLIFrameElement)) return;
+                    this.clearIframeCleanupRetryTimer();
+                    this.clearIframeCleanupVisibilityHandler();
                     if (loading) loading.style.display = 'none';
                     this.iframe.style.opacity = '1';
+                    this.restoreMagicPromptDraft();
                 };
 
                 // 尝试清理（同源才能成功，失败也不影响使用）
@@ -6495,6 +8684,11 @@
                     const maxRetries = 20;
                     const retryInterval = 120;
                     const tryCleanup = (retries = 0) => {
+                        if (popupToken !== this.popupLifecycleToken) return;
+                        if (this.isMagicReportDocumentHidden()) {
+                            this.scheduleIframeCleanupRetry(() => tryCleanup(retries), retryInterval);
+                            return;
+                        }
                         try {
                             const target = iframeDoc.getElementById('universalBP_common_layout_main_content');
                             if (target) {
@@ -6515,7 +8709,7 @@
                             return;
                         }
 
-                        setTimeout(() => tryCleanup(retries + 1), retryInterval);
+                        this.scheduleIframeCleanupRetry(() => tryCleanup(retries + 1), retryInterval);
                     };
 
                     tryCleanup();
@@ -6525,28 +8719,34 @@
                 }
             };
             this.iframe.onerror = () => {
+                if (popupToken !== this.popupLifecycleToken) return;
                 const loading = div.querySelector('#am-magic-loading');
                 if (loading) loading.style.display = 'none';
-                this.iframe.style.opacity = '1';
+                if (this.iframe instanceof HTMLIFrameElement) {
+                    this.iframe.style.opacity = '1';
+                }
                 Logger.warn('⚠️ 万能查数刷新失败，请检查登录状态或网络后重试');
             };
 
             const closeBtn = div.querySelector('#am-magic-close');
             if (closeBtn instanceof HTMLButtonElement) {
-                closeBtn.addEventListener('click', () => this.toggle(false));
+                closeBtn.addEventListener('click', () => {
+                    if (this.isDmpCrowdMatrixMode()) {
+                        this.closeDmpCrowdMatrixPopup();
+                        return;
+                    }
+                    this.toggle(false);
+                });
             }
 
             const refreshBtn = div.querySelector('#am-magic-refresh');
             if (refreshBtn instanceof HTMLButtonElement) {
                 refreshBtn.addEventListener('click', () => {
-                if (this.activeView === 'matrix') {
-                    this.ensureCrowdMatrixLoaded(true);
-                    return;
-                }
-                const loading = div.querySelector('#am-magic-loading');
-                if (loading) loading.style.display = 'flex';
-                this.iframe.style.opacity = '0';
-                this.iframe.src = this.buildIframeUrl(true);
+                    if (this.activeView === 'matrix') {
+                        this.ensureCrowdMatrixLoaded(true);
+                        return;
+                    }
+                    this.ensureMagicIframeLoaded(true);
                 });
             }
 
@@ -6611,10 +8811,53 @@
                         this.toggleCrowdInsightsVisibility();
                         return;
                     }
+                    const dmpDropdownTrigger = target.closest('[data-dmp-crowd-dropdown-trigger]');
+                    if (dmpDropdownTrigger instanceof HTMLElement) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const metric = String(dmpDropdownTrigger.dataset.dmpCrowdDropdownTrigger || '').trim();
+                        if (!metric) return;
+                        if (this.dmpCrowdPropertyDropdownMetric === metric) {
+                            this.setDmpCrowdPropertyDropdown('', '');
+                            return;
+                        }
+                        const selected = this.getDmpMetricSelectedProperty(metric);
+                        const selectedKey = this.getDmpCrowdPropertyKey(selected || {});
+                        const groups = this.groupDmpCrowdProperties(this.dmpCrowdMatrixAvailableProperties);
+                        const selectedGroup = groups.find(group => group.behaviors.some(item => item.behaviorKey === selectedKey)) || groups[0] || null;
+                        this.setDmpCrowdPropertyDropdown(metric, selectedGroup?.channelKey || '');
+                        return;
+                    }
+                    const dmpChannelOption = target.closest('[data-dmp-crowd-channel]');
+                    if (dmpChannelOption instanceof HTMLElement) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const metric = String(dmpChannelOption.dataset.dmpCrowdMetric || '').trim();
+                        const channelKey = String(dmpChannelOption.dataset.dmpCrowdChannel || '').trim();
+                        if (!metric || !channelKey) return;
+                        this.setDmpCrowdPropertyDropdown(metric, channelKey);
+                        return;
+                    }
+                    const dmpBehaviorOption = target.closest('[data-dmp-crowd-behavior]');
+                    if (dmpBehaviorOption instanceof HTMLElement) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const metric = String(dmpBehaviorOption.dataset.dmpCrowdMetric || '').trim();
+                        const behaviorKey = String(dmpBehaviorOption.dataset.dmpCrowdBehavior || '').trim();
+                        if (!metric || !behaviorKey) return;
+                        this.dmpCrowdPropertyDropdownMetric = '';
+                        this.dmpCrowdPropertyDropdownChannelKey = '';
+                        this.handleDmpCrowdPropertySelect(metric, 'behavior', behaviorKey);
+                        return;
+                    }
                     const btn = target.closest('[data-crowd-metric]');
                     if (btn instanceof HTMLElement) {
                         const metric = String(btn.dataset.crowdMetric || '').trim();
                         if (!metric) return;
+                        if (this.isDmpCrowdMatrixMode()) {
+                            this.dmpCrowdPropertyDropdownMetric = '';
+                            this.dmpCrowdPropertyDropdownChannelKey = '';
+                        }
                         this.toggleCrowdMetricVisibility(metric);
                         return;
                     }
@@ -6672,17 +8915,31 @@
                 });
             }
 
-            document.addEventListener('click', (e) => {
+            const handleDocumentClick = (e) => {
                 const target = e.target;
                 if (!(target instanceof Node)) return;
-                if (!(this.matrixCampaignItemSelectEl instanceof HTMLElement)) return;
-                if (this.matrixCampaignItemSelectEl.contains(target)) return;
-                if (this.matrixCampaignItemDropdownEl instanceof HTMLElement && this.matrixCampaignItemDropdownEl.contains(target)) return;
-                this.setCrowdCampaignItemDropdownOpen(false);
-            });
-            document.addEventListener('keydown', (e) => {
+                const inItemSelect = this.matrixCampaignItemSelectEl instanceof HTMLElement && this.matrixCampaignItemSelectEl.contains(target);
+                const inItemDropdown = this.matrixCampaignItemDropdownEl instanceof HTMLElement && this.matrixCampaignItemDropdownEl.contains(target);
+                if (!inItemSelect && !inItemDropdown) {
+                    this.setCrowdCampaignItemDropdownOpen(false);
+                }
+                const inLegend = this.matrixLegendEl instanceof HTMLElement && this.matrixLegendEl.contains(target);
+                const inDmpDropdown = this.dmpCrowdPropertyDropdownPortalEl instanceof HTMLElement
+                    && this.dmpCrowdPropertyDropdownPortalEl.contains(target);
+                if (!inLegend && !inDmpDropdown) {
+                    this.closeDmpCrowdPropertyDropdown();
+                }
+            };
+            const handleDocumentKeydown = (e) => {
                 if (e.key !== 'Escape') return;
                 this.setCrowdCampaignItemDropdownOpen(false);
+                this.closeDmpCrowdPropertyDropdown();
+            };
+            document.addEventListener('click', handleDocumentClick);
+            document.addEventListener('keydown', handleDocumentKeydown);
+            this.addPopupCleanup(() => {
+                document.removeEventListener('click', handleDocumentClick);
+                document.removeEventListener('keydown', handleDocumentKeydown);
             });
 
             // 头部快捷话术
@@ -6706,17 +8963,17 @@
                         if (node instanceof HTMLElement) node.setAttribute('aria-pressed', 'false');
                     });
                     if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'true');
-                    setTimeout(() => {
-                        btn.classList.remove('active');
-                        if (btn instanceof HTMLElement) btn.setAttribute('aria-pressed', 'false');
-                    }, 1200);
+                    this.scheduleQuickPromptButtonReset(btn, 1200);
 
+                    const promptToken = this.popupLifecycleToken;
                     const promptText = await this.resolvePromptText(promptItem);
+                    if (promptToken !== this.popupLifecycleToken || !btn.isConnected) return;
                     if (!promptText) return;
 
                     if (promptItem.autoSubmit) {
                         this.runQuickPrompt(promptText);
                     } else {
+                        this.ensureMagicIframeLoaded(false);
                         // 只填充不提交
                         const iframeDoc = this.getIframeDoc();
                         if (iframeDoc) {
@@ -6763,46 +9020,60 @@
                 document.body.style.userSelect = 'none';
             };
 
-            document.addEventListener('mousemove', (e) => {
+            const handleDragMove = (e) => {
                 if (!isDragging) return;
                 div.style.left = `${initialLeft + e.clientX - startX}px`;
                 div.style.top = `${initialTop + e.clientY - startY}px`;
-            });
+            };
 
-            document.addEventListener('mouseup', () => {
+            const handleDragEnd = () => {
                 if (isDragging) {
                     isDragging = false;
                     div.style.transition = '';
                     document.body.style.userSelect = '';
                 }
+            };
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+            this.addPopupCleanup(() => {
+                document.removeEventListener('mousemove', handleDragMove);
+                document.removeEventListener('mouseup', handleDragEnd);
+                document.body.style.userSelect = '';
             });
         },
 
         toggle(show) {
+            const nextOpen = show === true;
+            if (!nextOpen) {
+                if (this.isDmpCrowdMatrixMode()) {
+                    this.closeDmpCrowdMatrixPopup();
+                    return;
+                }
+                this.releasePopupResources();
+                State.config.magicReportOpen = false;
+                State.save();
+                UI.updateState();
+                return;
+            }
+
             if (!(this.popup instanceof HTMLElement) || !this.popup.isConnected) {
                 this.popup = null;
             }
-            if (this.popup) {
-                this.popup.style.display = show ? 'flex' : 'none';
-            } else if (show) {
+            if (!this.popup) {
                 this.createPopup();
+            }
+            if (this.popup instanceof HTMLElement) {
+                this.popup.classList.remove('is-dmp-crowd-mode');
                 this.popup.style.display = 'flex';
             }
+            this.refreshMagicReportTitle();
+            this.refreshQuickPromptLabels();
+            this.refreshCrowdMatrixCampaignMeta();
+            const defaultView = this.getMagicDefaultView();
+            this.activeView = defaultView;
+            this.switchMagicView(defaultView || 'matrix');
 
-            if (!show) {
-                this.hideCrowdMatrixHoverTip();
-                this.setCrowdCampaignItemDropdownOpen(false);
-            }
-
-            if (show) {
-                this.refreshQuickPromptLabels();
-                this.refreshCrowdMatrixCampaignMeta();
-                const defaultView = this.getMagicDefaultView();
-                this.activeView = defaultView;
-                this.switchMagicView(defaultView || 'matrix');
-            }
-
-            State.config.magicReportOpen = show;
+            State.config.magicReportOpen = true;
             State.save();
             UI.updateState();
         }

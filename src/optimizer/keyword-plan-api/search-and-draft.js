@@ -314,7 +314,9 @@
             if (isPlainObject(input)) {
                 const word = String(input.word || input.keyword || '').trim();
                 if (!word) return null;
+                const original = purgeCreateTransientFields(input);
                 return {
+                    ...original,
                     word,
                     bidPrice: toNumber(input.bidPrice, fallbackBid),
                     matchScope: parseMatchScope(input.matchScope, fallbackMatch),
@@ -637,7 +639,110 @@
             );
         };
 
-        const NATIVE_CROWD_CACHE_TTL_MS = 8 * 1000;
+        const NATIVE_RUNTIME_CACHE_TTL_MS = 8 * 1000;
+        const NATIVE_CROWD_CACHE_TTL_MS = NATIVE_RUNTIME_CACHE_TTL_MS;
+        const CROWD_NATIVE_RUNTIME_CACHE_TTL_MS = NATIVE_RUNTIME_CACHE_TTL_MS;
+        const NATIVE_RUNTIME_LIST_CACHE_SLOTS = [
+            {
+                valueKey: 'nativeCrowdList',
+                tsKey: 'nativeCrowdTs',
+                bizCodeKey: 'nativeCrowdBizCode',
+                ttlMs: NATIVE_CROWD_CACHE_TTL_MS
+            },
+            {
+                valueKey: 'nativeCrowdCustomBidTargetOptions',
+                tsKey: 'nativeCrowdCustomBidTargetTs',
+                bizCodeKey: 'nativeCrowdCustomBidTargetBizCode',
+                ttlMs: CROWD_NATIVE_RUNTIME_CACHE_TTL_MS
+            },
+            {
+                valueKey: 'nativeAdzoneList',
+                tsKey: 'nativeAdzoneTs',
+                bizCodeKey: 'nativeAdzoneBizCode',
+                ttlMs: CROWD_NATIVE_RUNTIME_CACHE_TTL_MS
+            }
+        ];
+        const clearNativeRuntimeListCacheSlot = (slot = {}) => {
+            if (!slot?.valueKey || !slot?.tsKey) return;
+            runtimeCache[slot.valueKey] = null;
+            runtimeCache[slot.tsKey] = 0;
+            if (slot.bizCodeKey) runtimeCache[slot.bizCodeKey] = '';
+        };
+        const hasNativeRuntimeListCache = () => NATIVE_RUNTIME_LIST_CACHE_SLOTS.some(slot => {
+            const value = runtimeCache[slot.valueKey];
+            const ts = toNumber(runtimeCache[slot.tsKey], 0);
+            return Array.isArray(value) && value.length && ts;
+        });
+        const isNativeRuntimeCacheDocumentHidden = () => {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        };
+        const clearNativeRuntimeListCacheCleanupTimer = () => {
+            if (!runtimeCache.nativeRuntimeCacheCleanupTimer) return;
+            window.clearTimeout(runtimeCache.nativeRuntimeCacheCleanupTimer);
+            runtimeCache.nativeRuntimeCacheCleanupTimer = 0;
+        };
+        const releaseNativeRuntimeListCacheCleanupVisibilityHandlerIfIdle = () => {
+            if (runtimeCache.nativeRuntimeCacheCleanupTimer || hasNativeRuntimeListCache()) return;
+            const handler = runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler = null;
+        };
+        const bindNativeRuntimeListCacheCleanupVisibilityHandler = () => {
+            if (typeof runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler === 'function') return;
+            runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler = () => {
+                if (isNativeRuntimeCacheDocumentHidden()) {
+                    clearNativeRuntimeListCacheCleanupTimer();
+                    return;
+                }
+                scheduleNativeRuntimeListCacheCleanup();
+            };
+            document.addEventListener('visibilitychange', runtimeCache.nativeRuntimeCacheCleanupVisibilityHandler);
+        };
+        const cleanupNativeRuntimeListCaches = () => {
+            const now = Date.now();
+            let nextDelayMs = 0;
+            NATIVE_RUNTIME_LIST_CACHE_SLOTS.forEach(slot => {
+                const value = runtimeCache[slot.valueKey];
+                const ts = toNumber(runtimeCache[slot.tsKey], 0);
+                const ttlMs = Math.max(1, toNumber(slot.ttlMs, NATIVE_RUNTIME_CACHE_TTL_MS));
+                const hasCachedList = Array.isArray(value) && value.length;
+                if (!hasCachedList || !ts) {
+                    if (value !== null || runtimeCache[slot.tsKey] || runtimeCache[slot.bizCodeKey]) {
+                        clearNativeRuntimeListCacheSlot(slot);
+                    }
+                    return;
+                }
+                const ageMs = now - ts;
+                if (!Number.isFinite(ageMs) || ageMs >= ttlMs) {
+                    clearNativeRuntimeListCacheSlot(slot);
+                    return;
+                }
+                const delayMs = ttlMs - Math.max(0, ageMs);
+                nextDelayMs = nextDelayMs ? Math.min(nextDelayMs, delayMs) : delayMs;
+            });
+            return nextDelayMs;
+        };
+        const scheduleNativeRuntimeListCacheCleanup = () => {
+            if (runtimeCache.nativeRuntimeCacheCleanupTimer) return;
+            const nextDelayMs = cleanupNativeRuntimeListCaches();
+            if (!nextDelayMs) {
+                releaseNativeRuntimeListCacheCleanupVisibilityHandlerIfIdle();
+                return;
+            }
+            bindNativeRuntimeListCacheCleanupVisibilityHandler();
+            if (isNativeRuntimeCacheDocumentHidden()) return;
+            runtimeCache.nativeRuntimeCacheCleanupTimer = window.setTimeout(() => {
+                runtimeCache.nativeRuntimeCacheCleanupTimer = 0;
+                cleanupNativeRuntimeListCaches();
+                scheduleNativeRuntimeListCacheCleanup();
+            }, Math.max(1, Math.ceil(nextDelayMs) + 1));
+        };
         const getCrowdUniqueKey = (item = {}, fallback = '') => {
             const label = isPlainObject(item?.crowd?.label) ? item.crowd.label : {};
             const labelMxId = (label?.labelId || label?.targetType) ? getCrowdMxId(label) : '';
@@ -865,6 +970,7 @@
                 runtimeCache.nativeCrowdList = deepClone(bestList);
                 runtimeCache.nativeCrowdTs = now;
                 runtimeCache.nativeCrowdBizCode = expectedBizCode;
+                scheduleNativeRuntimeListCacheCleanup();
             }
             return deepClone(bestList);
         };
@@ -889,8 +995,6 @@
             display_click: '增加点击量（最大化拿量）',
             display_shentou: '拉新渗透（竞店重合人群）'
         };
-        const CROWD_NATIVE_RUNTIME_CACHE_TTL_MS = 8 * 1000;
-
         const normalizeCrowdCustomBidTargetOptionCandidate = (option = {}, fallbackIndex = 0) => {
             const source = isPlainObject(option) ? option : { value: option };
             const codeCandidate = normalizeSceneSettingValue(
@@ -1091,6 +1195,7 @@
                 runtimeCache.nativeCrowdCustomBidTargetOptions = deepClone(bestOptions);
                 runtimeCache.nativeCrowdCustomBidTargetTs = now;
                 runtimeCache.nativeCrowdCustomBidTargetBizCode = expectedBizCode;
+                scheduleNativeRuntimeListCacheCleanup();
             }
             return deepClone(bestOptions);
         };
@@ -1278,6 +1383,7 @@
                 runtimeCache.nativeAdzoneList = deepClone(bestList);
                 runtimeCache.nativeAdzoneTs = now;
                 runtimeCache.nativeAdzoneBizCode = expectedBizCode;
+                scheduleNativeRuntimeListCacheCleanup();
             }
             return deepClone(bestList);
         };
@@ -1367,7 +1473,9 @@
             const fallbackBid = toNumber(keywordDefaults.bidPrice, 1);
             const fallbackMatch = parseMatchScope(keywordDefaults.matchScope, DEFAULTS.matchScope);
             const fallbackStatus = toNumber(keywordDefaults.onlineStatus, DEFAULTS.keywordOnlineStatus);
+            const original = isPlainObject(word) ? purgeCreateTransientFields(word) : {};
             return {
+                ...original,
                 word: String(word.word || word.keyword || '').trim(),
                 bidPrice: toNumber(word.bidPrice, fallbackBid),
                 matchScope: parseMatchScope(word.matchScope, fallbackMatch),
@@ -1486,6 +1594,9 @@
             'orderAutoRenewalInfo',
             'orderChargeType',
             'launchTime',
+            'sourceChannel',
+            'channelLocation',
+            'selectedTargetBizCode',
             'aiMaxSwitch',
             'aiMaxInfo',
             'campaignShieldWords',
@@ -1496,7 +1607,13 @@
             'ruleCommand'
         ]);
         // 关键词创建口偶发新增 MCB 相关字段，按关键字兜底透传，避免被白名单裁剪导致服务端参数缺失。
-        const KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE = /(mcb|bidmodel)/i;
+        const KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE = /(mcb|bid_?model)/i;
+        const removeKeywordMcbBidModelFields = (campaign = {}) => {
+            if (!isPlainObject(campaign)) return;
+            Object.keys(campaign).forEach(key => {
+                if (KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE.test(key)) delete campaign[key];
+            });
+        };
         const KEYWORD_WORD_PACKAGE_ERROR_RE = /流量智选词包校验失败/;
 
         const normalizeBidMode = (value, fallback = 'smart') => {
@@ -1555,6 +1672,19 @@
         );
 
         const bidModeToBidType = (bidMode = 'smart') => normalizeBidMode(bidMode) === 'manual' ? 'custom_bid' : 'smart_bid';
+        const normalizeOptionalNumber = (value) => {
+            if (value === undefined || value === null || typeof value === 'boolean') return NaN;
+            if (typeof value === 'string' && !value.trim()) return NaN;
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : NaN;
+        };
+        const resolveOptionalNumberSeed = (...values) => {
+            for (let i = 0; i < values.length; i += 1) {
+                const numeric = normalizeOptionalNumber(values[i]);
+                if (Number.isFinite(numeric)) return numeric;
+            }
+            return NaN;
+        };
 
         const isWordPackageValidationError = (errorText = '') => KEYWORD_WORD_PACKAGE_ERROR_RE.test(String(errorText || ''));
 
@@ -1659,6 +1789,208 @@
                     .filter(item => item && item.word),
                 item => item.word
             ).slice(0, 200);
+        };
+
+        const DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST = [
+            { strategyId: 1, strategyName: '好词优选', onlineStatus: 1, bidPrice: 1 },
+            { strategyId: 2, strategyName: '捡漏', onlineStatus: 1, bidPrice: 1 },
+            { strategyId: 3, strategyName: '类目优选', onlineStatus: 1, bidPrice: 1 }
+        ];
+        const DEFAULT_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST = [
+            {
+                wordPackageId: 0,
+                wordPackageName: '流量智选',
+                wordPackageType: 0,
+                onlineStatus: 1,
+                status: 1,
+                bidPrice: 1,
+                strategyList: DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST
+            }
+        ];
+        const DEFAULT_KEYWORD_SEARCH_ADZONE_LIST = [
+            {
+                adzoneId: '114790550288',
+                status: 'start'
+            }
+        ];
+
+        const normalizeKeywordWordPackageStrategyListForSubmit = (strategyList = [], fallbackStrategyList = [], options = {}) => {
+            const sourceList = Array.isArray(strategyList) && strategyList.length
+                ? strategyList
+                : fallbackStrategyList;
+            const fallbackBidPrice = toNumber(options.fallbackBidPrice, 1);
+            const forceOnlineStatus = options.forceOnlineStatus;
+            return uniqueBy(
+                sourceList
+                    .map((item) => {
+                        if (!isPlainObject(item)) return null;
+                        const strategyId = toNumber(item.strategyId ?? item.id, NaN);
+                        if (!Number.isFinite(strategyId)) return null;
+                        return {
+                            strategyId,
+                            strategyName: String(item.strategyName || item.name || '').trim(),
+                            onlineStatus: forceOnlineStatus !== undefined
+                                ? toNumber(forceOnlineStatus, DEFAULTS.keywordOnlineStatus)
+                                : toNumber(item.onlineStatus, DEFAULTS.keywordOnlineStatus),
+                            bidPrice: toNumber(item.bidPrice ?? item.price ?? item.peerPrice, fallbackBidPrice)
+                        };
+                    })
+                    .filter(Boolean),
+                item => item.strategyId
+            );
+        };
+
+        const normalizeKeywordWordPackageItemForSubmit = (item = {}) => {
+            if (!isPlainObject(item)) return null;
+            const rawPackageId = item.id ?? item.wordPackageId ?? item.packageId;
+            const input = purgeCreateTransientFields(item);
+            if (isPlainObject(input.tag) && !hasOwn(input, 'wordPackageId') && !hasOwn(input, 'wordPackageName') && !hasOwn(input, 'strategyList')) {
+                const packageId = rawPackageId;
+                if (packageId === undefined || packageId === null || packageId === '') return null;
+                return {
+                    id: String(packageId),
+                    tag: deepClone(input.tag)
+                };
+            }
+            const rawName = String(input.wordPackageName || input.packageName || input.name || '').trim();
+            const isTrafficSmartPackage = /流量智选/.test(rawName)
+                || toNumber(input.wordPackageId, NaN) === 0
+                || (toNumber(input.wordPackageType, NaN) === 0 && Array.isArray(input.strategyList));
+            const wordPackageId = isTrafficSmartPackage
+                ? 0
+                : toNumber(input.wordPackageId ?? input.packageId, NaN);
+            if (!Number.isFinite(wordPackageId)) return null;
+            const bidPrice = toNumber(input.bidPrice ?? input.price ?? input.peerPrice, 1);
+            const onlineStatus = hasOwn(input, 'onlineStatus')
+                ? toNumber(input.onlineStatus, DEFAULTS.keywordOnlineStatus)
+                : (isTrafficSmartPackage ? 1 : DEFAULTS.keywordOnlineStatus);
+            const status = hasOwn(input, 'status')
+                ? toNumber(input.status, onlineStatus)
+                : (isTrafficSmartPackage ? onlineStatus : 0);
+            const fallbackStrategyList = isTrafficSmartPackage
+                ? DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST.map(strategy => ({
+                    ...strategy,
+                    onlineStatus
+                }))
+                : [];
+            return {
+                wordPackageId,
+                wordPackageName: rawName || (isTrafficSmartPackage ? '流量智选' : ''),
+                wordPackageType: toNumber(input.wordPackageType, isTrafficSmartPackage ? 0 : 0),
+                onlineStatus,
+                status,
+                bidPrice,
+                strategyList: normalizeKeywordWordPackageStrategyListForSubmit(
+                    input.strategyList,
+                    fallbackStrategyList,
+                    {
+                        fallbackBidPrice: bidPrice
+                    }
+                )
+            };
+        };
+
+        const normalizeKeywordWordPackageListForSubmit = (wordPackageList = []) => {
+            if (!Array.isArray(wordPackageList)) return [];
+            return uniqueBy(
+                wordPackageList
+                    .map(item => normalizeKeywordWordPackageItemForSubmit(item))
+                    .filter(Boolean),
+                item => hasOwn(item, 'wordPackageId')
+                    ? `wordPackageId:${item.wordPackageId}`
+                    : `id:${item.id || ''}`
+            ).slice(0, 100);
+        };
+        const buildDefaultKeywordTrafficSmartWordPackageList = () => normalizeKeywordWordPackageListForSubmit(
+            deepClone(DEFAULT_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST)
+        );
+        const buildDefaultKeywordSearchAdzoneList = () => deepClone(DEFAULT_KEYWORD_SEARCH_ADZONE_LIST);
+        const parseKeywordAiMaxInfoForSubmit = (value) => {
+            if (isPlainObject(value)) return value;
+            const text = String(value || '').trim();
+            if (!text || !text.startsWith('{')) return {};
+            try {
+                const parsed = JSON.parse(text);
+                return isPlainObject(parsed) ? parsed : {};
+            } catch {
+                return {};
+            }
+        };
+        const normalizeKeywordAiMaxShieldWordTextList = (value, limit = 100) => {
+            if (!Array.isArray(value)) return [];
+            return uniqueBy(
+                value
+                    .map((item) => {
+                        if (isPlainObject(item)) {
+                            return String(item.word || item.keyword || item.name || '').trim();
+                        }
+                        return String(item || '').trim();
+                    })
+                    .filter(Boolean),
+                word => word
+            ).slice(0, Math.max(1, toNumber(limit, 100)));
+        };
+        const buildKeywordCampaignShieldWordsFromCenterList = (wordList = []) => (
+            normalizeKeywordAiMaxShieldWordTextList(wordList, 10).map(word => ({
+                word,
+                matchScope: 2
+            }))
+        );
+        const applyKeywordAiMaxShieldWordsForSubmit = (campaign = {}) => {
+            if (!isPlainObject(campaign)) return;
+            const aiMaxInfo = parseKeywordAiMaxInfoForSubmit(campaign.aiMaxInfo);
+            const centerShieldWordList = normalizeKeywordAiMaxShieldWordTextList(
+                aiMaxInfo.centerShieldWordList
+                || aiMaxInfo.shieldCenterWords
+                || aiMaxInfo.centerWordList
+                || [],
+                10
+            );
+            const exactShieldWordList = normalizeKeywordAiMaxShieldWordTextList(
+                aiMaxInfo.exactShieldWordList
+                || aiMaxInfo.shieldWords
+                || aiMaxInfo.exactWordList
+                || [],
+                100
+            );
+            const sourceCenterShieldWordList = centerShieldWordList.length
+                ? centerShieldWordList
+                : normalizeKeywordAiMaxShieldWordTextList(campaign.shieldCenterWords, 10);
+            const sourceExactShieldWordList = exactShieldWordList.length
+                ? exactShieldWordList
+                : normalizeKeywordAiMaxShieldWordTextList(campaign.shieldWords, 100);
+            if (!Array.isArray(campaign.shieldCenterWords) || !campaign.shieldCenterWords.length) {
+                if (sourceCenterShieldWordList.length) campaign.shieldCenterWords = sourceCenterShieldWordList;
+            }
+            if (!Array.isArray(campaign.shieldWords) || !campaign.shieldWords.length) {
+                if (sourceExactShieldWordList.length) campaign.shieldWords = sourceExactShieldWordList;
+            }
+            if (!Array.isArray(campaign.campaignShieldWords) || !campaign.campaignShieldWords.length) {
+                const campaignShieldWords = buildKeywordCampaignShieldWordsFromCenterList(sourceCenterShieldWordList);
+                if (campaignShieldWords.length) campaign.campaignShieldWords = campaignShieldWords;
+            }
+        };
+        const isCopyKeywordAiMaxEnabled = (campaign = {}) => {
+            if (!isPlainObject(campaign)) return false;
+            const aiMaxInfo = parseKeywordAiMaxInfoForSubmit(campaign.aiMaxInfo);
+            return toNumber(campaign.aiMaxSwitch ?? aiMaxInfo.aiMaxSwitch, 0) === 1;
+        };
+        const ensureCopyKeywordDefaultAdzoneList = (campaign = {}, options = {}) => {
+            if (!isPlainObject(campaign)) return;
+            const request = options?.request || {};
+            const plan = isPlainObject(options?.plan) ? options.plan : {};
+            const isCopyCurrentPlan = request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true;
+            if (!isCopyCurrentPlan) return;
+            if (!Array.isArray(campaign.adzoneList) || !campaign.adzoneList.length) {
+                campaign.adzoneList = buildDefaultKeywordSearchAdzoneList();
+            }
+        };
+        const applyCopyKeywordAdvancedSettingsForSubmit = (campaign = {}, options = {}) => {
+            if (!isPlainObject(campaign)) return;
+            if (isCopyKeywordAiMaxEnabled(campaign)) {
+                applyKeywordAiMaxShieldWordsForSubmit(campaign);
+            }
+            ensureCopyKeywordDefaultAdzoneList(campaign, options);
         };
 
         const pruneKeywordCampaignForCustomScene = (campaign = {}, options = {}) => {
@@ -1944,10 +2276,27 @@
                 const keywordBidTargetCode = normalizeKeywordBidTargetCode(
                     out.bidTargetV2 || out.optimizeTarget || ''
                 ) || String(out.bidTargetV2 || out.optimizeTarget || '').trim().toLowerCase();
-                const keywordConvContract = keywordBidTargetCode === 'conv';
-                const keywordFavCartContract = keywordBidTargetCode === 'fav_cart';
-                const keywordClickContract = keywordBidTargetCode === 'click';
+                const keywordMaxAmountCopyContract = isCopyCurrentPlan
+                    && String(out.bidType || input?.bidType || '').trim().toLowerCase() === 'max_amount';
+                const keywordConvContract = !keywordMaxAmountCopyContract && keywordBidTargetCode === 'conv';
+                const keywordFavCartContract = !keywordMaxAmountCopyContract && keywordBidTargetCode === 'fav_cart';
+                const keywordClickContract = !keywordMaxAmountCopyContract && keywordBidTargetCode === 'click';
                 const keywordFavCartMinConstraintValue = 5;
+                if (keywordMaxAmountCopyContract) {
+                    const nativeMaxAmountTarget = keywordBidTargetCode === 'fav_cart' ? 'coll_cart' : keywordBidTargetCode;
+                    out.bidType = 'max_amount';
+                    out.bidTypeV2 = out.bidTypeV2 || 'smart_bid';
+                    if (nativeMaxAmountTarget) {
+                        out.bidTargetV2 = nativeMaxAmountTarget;
+                        out.optimizeTarget = nativeMaxAmountTarget;
+                    }
+                    out.setSingleCostV2 = false;
+                    delete out.singleCostV2;
+                    delete out.constraintType;
+                    delete out.constraintValue;
+                    delete out.subOptimizeTarget;
+                    removeKeywordMcbBidModelFields(out);
+                }
                 if (keywordFavCartContract) {
                     // 原生“增加收藏加购量”使用 coll_cart 合同，若提交 fav_cart 会落库成手动出价。
                     out.bidTargetV2 = 'coll_cart';
@@ -1968,9 +2317,8 @@
                     out.planMcbBidModel = 'coll_cart';
                 } else if (keywordClickContract) {
                     // click 合同不走 mcb 字段，避免服务端按非原生契约降级为手动出价。
-                    delete out.mcbBidModel;
-                    delete out.planMcbBidModel;
-                } else if (resolvedMcbBidModel) {
+                    removeKeywordMcbBidModelFields(out);
+                } else if (!keywordMaxAmountCopyContract && resolvedMcbBidModel) {
                     // 关键词创建口要求显式携带 MCB 出价模型，缺失时会报 INVALID_PARAMETER。
                     out.mcbBidModel = resolvedMcbBidModel;
                     out.planMcbBidModel = resolvedMcbBidModel;
@@ -2030,8 +2378,7 @@
                     }
                     delete out.singleCostV2;
                     // 与原生提交流程对齐：conv 合同不走 mcb 字段，避免触发计划MCB模型校验。
-                    delete out.mcbBidModel;
-                    delete out.planMcbBidModel;
+                    removeKeywordMcbBidModelFields(out);
                 } else {
                     delete out.subOptimizeTarget;
                 }
@@ -2044,10 +2391,9 @@
                 } else {
                     if (keywordFavCartContract) {
                         const favCartSingleCostEnabled = parseKeywordSingleCostEnabled(out.setSingleCostV2);
-                        const favCartConstraintSeed = toNumber(
-                            out.singleCostV2
-                            ?? out.constraintValue,
-                            NaN
+                        const favCartConstraintSeed = resolveOptionalNumberSeed(
+                            out.singleCostV2,
+                            out.constraintValue
                         );
                         const hasFavCartConstraintValue = Number.isFinite(favCartConstraintSeed);
                         if (hasFavCartConstraintValue && favCartConstraintSeed < keywordFavCartMinConstraintValue) {
@@ -2168,6 +2514,7 @@
             if (!Array.isArray(out.crowdList)) out.crowdList = [];
             out.adzoneList = resolveNonEmptyArrayField('adzoneList', Array.isArray(out.adzoneList) ? out.adzoneList : []);
             if (!Array.isArray(out.adzoneList)) out.adzoneList = [];
+            ensureCopyKeywordDefaultAdzoneList(out, { request, plan });
             const resolvedLaunchAreaList = resolveNonEmptyArrayField(
                 'launchAreaStrList',
                 Array.isArray(out.launchAreaStrList) ? out.launchAreaStrList : []
@@ -2217,6 +2564,7 @@
                 delete out.orderChargeType;
                 delete out.launchTime;
             }
+            applyCopyKeywordAdvancedSettingsForSubmit(out, { request, plan });
             return out;
         };
 
@@ -2236,28 +2584,67 @@
             'adgroupLandingPageVO',
             'adgroupLandingPageVOList',
             'smartTeemo',
+            'adgroupOcpc',
             'adRotation',
             'openAutoCreative',
             'openStaticCreative',
             'itemResource',
             'creativeList',
             'creativeInfo',
+            'creativeTemplateType',
+            'creativeTemplateInfos',
+            'clickUrlCreativeTemplateInfos',
+            'blackCreativeStatus',
             'materialList'
         ]);
 
         const pruneKeywordAdgroupForCustomScene = (adgroup = {}, item = null, options = {}) => {
             const input = isPlainObject(adgroup) ? adgroup : {};
+            const request = options?.request || {};
+            const plan = isPlainObject(options?.plan) ? options.plan : {};
+            const isCopyCurrentPlan = request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true;
+            const resolveCopySourceAdgroupListField = (field = '') => {
+                if (!isCopyCurrentPlan || !field) return { explicit: false, list: [] };
+                const candidates = [
+                    plan?.rawOverrides?.adgroup,
+                    request?.common?.rawOverrides?.adgroup,
+                    request?.rawOverrides?.adgroup,
+                    plan?.adgroupOverride,
+                    request?.common?.adgroupOverride
+                ];
+                for (let i = 0; i < candidates.length; i++) {
+                    const candidate = candidates[i];
+                    if (!isPlainObject(candidate) || !hasOwn(candidate, field)) continue;
+                    return {
+                        explicit: true,
+                        list: Array.isArray(candidate[field]) ? deepClone(candidate[field]) : []
+                    };
+                }
+                return { explicit: false, list: [] };
+            };
+            const copySourceCrowdListState = resolveCopySourceAdgroupListField('crowdList');
+            const copySourceRightListState = resolveCopySourceAdgroupListField('rightList');
+            const copySourceCrowdList = copySourceCrowdListState.list;
             const out = {};
             Object.keys(input).forEach((key) => {
                 if (!KEYWORD_CUSTOM_ADGROUP_ALLOW_KEYS.has(key)) return;
                 out[key] = deepClone(input[key]);
             });
-            out.rightList = Array.isArray(input.rightList) ? deepClone(input.rightList) : [];
+            if (isCopyCurrentPlan) {
+                out.crowdList = copySourceCrowdList.length ? deepClone(copySourceCrowdList) : [];
+                out.rightList = copySourceCrowdList.length
+                    ? deepClone(copySourceCrowdList)
+                    : (
+                        copySourceRightListState.explicit
+                            ? deepClone(copySourceRightListState.list)
+                            : []
+                    );
+            } else {
+                out.rightList = Array.isArray(input.rightList) ? deepClone(input.rightList) : [];
+            }
             out.wordList = normalizeKeywordWordListForSubmit(input.wordList || []);
             if (hasOwn(input, 'wordPackageList')) {
-                out.wordPackageList = Array.isArray(input.wordPackageList)
-                    ? deepClone(input.wordPackageList).slice(0, 100)
-                    : [];
+                out.wordPackageList = normalizeKeywordWordPackageListForSubmit(input.wordPackageList);
             }
             if (item && (item.materialId || item.itemId)) {
                 const fallbackMaterialName = `商品${item.itemId || item.materialId || ''}`;
@@ -2396,7 +2783,7 @@
             if (!mergedWordList.length) {
                 mergedWordList = deriveFallbackKeywordListFromItem(item, keywordDefaults);
             }
-            const wordPackageList = Array.isArray(recommendedPackages) ? recommendedPackages.slice(0, 100) : [];
+            const wordPackageList = normalizeKeywordWordPackageListForSubmit(recommendedPackages);
             return {
                 wordList: mergedWordList,
                 wordPackageList,
@@ -4593,7 +4980,7 @@
                     requestOptions
                 });
                 const templateWordPackageList = Array.isArray(baseAdgroup?.wordPackageList)
-                    ? deepClone(baseAdgroup.wordPackageList)
+                    ? normalizeKeywordWordPackageListForSubmit(baseAdgroup.wordPackageList)
                     : [];
                 if (keywordBundle.useWordPackage && !keywordBundle.wordPackageList.length && templateWordPackageList.length) {
                     keywordBundle.wordPackageList = templateWordPackageList.slice(0, 100);
@@ -4649,6 +5036,19 @@
             if (sceneBizCodeHint) {
                 merged.campaign.bizCode = sceneBizCodeHint;
             }
+            const copyKeywordAiMaxNeedsWordPackage = isKeywordScene
+                && sceneCapabilities.enableKeywords
+                && (request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true)
+                && isCopyKeywordAiMaxEnabled(merged.campaign);
+            if (copyKeywordAiMaxNeedsWordPackage) {
+                const normalizedCopyWordPackageList = normalizeKeywordWordPackageListForSubmit(merged.adgroup?.wordPackageList || []);
+                const copyWordPackageList = normalizedCopyWordPackageList.length
+                    ? normalizedCopyWordPackageList
+                    : buildDefaultKeywordTrafficSmartWordPackageList();
+                merged.adgroup.wordPackageList = copyWordPackageList;
+                keywordBundle.wordPackageList = copyWordPackageList;
+                keywordBundle.useWordPackage = true;
+            }
             const hasExplicitCampaignField = (key = '') => {
                 const sourceValues = [
                     request?.[key],
@@ -4692,7 +5092,9 @@
                     templateCampaign: template?.campaign || {}
                 });
                 merged.adgroup = pruneKeywordAdgroupForCustomScene(merged.adgroup, hasItem ? item : null, {
-                    bidMode: planBidMode
+                    bidMode: planBidMode,
+                    request,
+                    plan
                 });
             } else {
                 const expectedSceneBizCode = normalizeSceneBizCode(sceneCapabilities.expectedSceneBizCode || sceneBizCodeHint || request?.bizCode || '');

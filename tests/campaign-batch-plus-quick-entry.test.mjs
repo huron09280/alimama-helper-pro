@@ -1,11 +1,162 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 
 const read = (relativePath) => readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
 const quickEntry = read('src/main-assistant/campaign-id-quick-entry.js');
 const quickEntryStyle = read('src/main-assistant/ui.js');
+
+function getQuickEntryMethodSlice(methodName, nextMethodName) {
+    const start = quickEntry.search(new RegExp(`\\n\\s*${methodName}\\(`));
+    assert.ok(start > -1, `无法定位 ${methodName} 代码块`);
+    const rest = quickEntry.slice(start);
+    if (!nextMethodName) return rest;
+    const end = rest.search(new RegExp(`\\n\\s*${nextMethodName}\\(`));
+    assert.ok(end > 0, `无法定位 ${methodName} 的结束位置`);
+    return rest.slice(0, end);
+}
+
+function createBatchPlusMenuCloseHarness(initialVisibilityState = 'visible') {
+    let visibilityState = String(initialVisibilityState || 'visible');
+    let nextTimerId = 1;
+    const timers = new Map();
+    const listeners = new Map();
+
+    class FakeHTMLElement {
+        constructor(id = '') {
+            this.isConnected = true;
+            this.removed = false;
+            this.children = [];
+            this.parentElement = null;
+            this.dataset = {};
+            this.attributes = new Map();
+            this.classListValues = new Set();
+            this.classList = {
+                add: (...names) => names.forEach((name) => this.classListValues.add(String(name))),
+                remove: (...names) => names.forEach((name) => this.classListValues.delete(String(name))),
+                contains: (name) => this.classListValues.has(String(name))
+            };
+            if (id) this.setAttribute('id', id);
+        }
+
+        setAttribute(name, value) {
+            this.attributes.set(String(name), String(value));
+        }
+
+        getAttribute(name) {
+            return this.attributes.get(String(name)) || '';
+        }
+
+        removeAttribute(name) {
+            this.attributes.delete(String(name));
+        }
+
+        remove() {
+            this.isConnected = false;
+            this.removed = true;
+        }
+
+        contains(node) {
+            if (node === this) return true;
+            return this.children.some((child) => child?.contains?.(node));
+        }
+    }
+
+    const menu = new FakeHTMLElement('am-campaign-batch-plus-menu');
+    const trigger = new FakeHTMLElement();
+    trigger.classList.add('is-open');
+    trigger.setAttribute('data-am-campaign-batch-plus', '1');
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.setAttribute('aria-controls', 'am-campaign-batch-plus-menu');
+
+    const addListener = (type, handler) => {
+        if (typeof handler !== 'function') return;
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(handler);
+    };
+    const removeListener = (type, handler) => {
+        listeners.get(type)?.delete(handler);
+    };
+    const documentRef = {
+        get visibilityState() {
+            return visibilityState;
+        },
+        addEventListener: addListener,
+        removeEventListener: removeListener,
+        getElementById(id) {
+            return id === 'am-campaign-batch-plus-menu' && menu.isConnected ? menu : null;
+        },
+        querySelectorAll(selector) {
+            if (String(selector) !== '[data-am-campaign-batch-plus="1"].is-open') return [];
+            return trigger.classList.contains('is-open') ? [trigger] : [];
+        }
+    };
+    const windowRef = {
+        setTimeout(handler, delay = 0) {
+            const timerId = nextTimerId;
+            nextTimerId += 1;
+            if (typeof handler === 'function') {
+                timers.set(timerId, { handler, delay: Math.max(0, Number(delay) || 0) });
+            }
+            return timerId;
+        },
+        clearTimeout(timerId) {
+            timers.delete(timerId);
+        }
+    };
+    const context = createContext({
+        document: documentRef,
+        window: windowRef,
+        HTMLElement: FakeHTMLElement,
+        Node: FakeHTMLElement
+    });
+    const methodSource = [
+        getQuickEntryMethodSlice('closeBatchPlusMenu', 'getConnectedBatchPlusMenu'),
+        getQuickEntryMethodSlice('getConnectedBatchPlusMenu', 'isBatchPlusMenuCloseDocumentHidden'),
+        getQuickEntryMethodSlice('isBatchPlusMenuCloseDocumentHidden', 'clearBatchPlusMenuCloseTimer'),
+        getQuickEntryMethodSlice('clearBatchPlusMenuCloseTimer', 'clearBatchPlusMenuCloseVisibilityHandler'),
+        getQuickEntryMethodSlice('clearBatchPlusMenuCloseVisibilityHandler', 'clearBatchPlusMenuCloseState'),
+        getQuickEntryMethodSlice('clearBatchPlusMenuCloseState', 'bindBatchPlusMenuCloseVisibilityHandler'),
+        getQuickEntryMethodSlice('bindBatchPlusMenuCloseVisibilityHandler', 'cancelBatchPlusMenuClose'),
+        getQuickEntryMethodSlice('cancelBatchPlusMenuClose', 'scheduleBatchPlusMenuClose'),
+        getQuickEntryMethodSlice('scheduleBatchPlusMenuClose', 'clearCampaignListRefreshTimer')
+    ].join('\n');
+    const runtime = new Script(`({
+        batchPlusMenuEl: menu,
+        batchPlusMenuCloseTimer: null,
+        batchPlusMenuCloseVisibilityHandler: null,
+        ${methodSource}
+    })`).runInContext(createContext({
+        ...context,
+        menu
+    }));
+
+    return {
+        runtime,
+        menu,
+        trigger,
+        timers,
+        getTimerDelays() {
+            return Array.from(timers.values()).map((timer) => timer.delay);
+        },
+        listenerCount(type = 'visibilitychange') {
+            return listeners.get(type)?.size || 0;
+        },
+        setVisibilityState(nextState) {
+            visibilityState = String(nextState || 'visible');
+            Array.from(listeners.get('visibilitychange') || []).forEach((handler) => handler({ type: 'visibilitychange' }));
+        },
+        tickTimers() {
+            Array.from(timers.entries()).forEach(([timerId, timer]) => {
+                if (!timers.has(timerId)) return;
+                timers.delete(timerId);
+                timer.handler();
+            });
+        }
+    };
+}
 
 test('批量+ 克隆批量计划设置结构并挂载到右侧', () => {
     assert.doesNotMatch(quickEntry, /BATCH_PLUS_ICON_SVG|BATCH_PLUS_CHEVRON_SVG|am-campaign-batch-plus-btn/, '批量+不得再使用自定义图标按钮');
@@ -34,12 +185,15 @@ test('批量+ 克隆批量计划设置结构并挂载到右侧', () => {
     assert.match(quickEntryStyle, /\.am-campaign-batch-plus-native\s*\{[\s\S]*?display:\s*inline-block;/, '批量+应保留原生按钮结构并仅加必要外层标识');
 });
 
-test('批量+ 菜单覆盖批量计划设置缺失的首批能力', () => {
+test('批量+ 菜单只保留插件增强能力且不重复原生已有入口', () => {
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量开启'/, '菜单缺少批量开启');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量暂停'/, '菜单缺少批量暂停');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量删除'/, '菜单缺少批量删除');
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量修改计划名称'/, '菜单缺少批量修改计划名称');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量修改屏蔽人群'/, '菜单缺少批量修改屏蔽人群');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量人群设置'/, '菜单缺少批量人群设置');
+    assert.doesNotMatch(quickEntry, /nativeBatchPlanItems|getNativeBatchPlanSettingActionMetas|getNativeBatchPlanSettingActionMeta|runNativeBatchPlanSettingAction/, '批量+ 不应再接入原生已有的批量计划设置入口');
+    assert.doesNotMatch(quickEntry, /label:\s*'批量修改每日预算'|label:\s*'批量修改投放资源位'|label:\s*'批量修改投放地域'|label:\s*'批量修改分时折扣'|label:\s*'批量修改出价'|label:\s*'批量调整计划组'/, '批量+ 菜单不应重复原生已有的批量修改入口');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?className = 'mxgc-popmenu am-campaign-batch-plus-native-menu'[\s\S]*?setAttribute\('role',\s*'menu'\)[\s\S]*?data-am-campaign-batch-plus-action/, '批量+应渲染原生 popmenu 类菜单项');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?menu\.style\.minWidth = `\$\{Math\.max\(120,\s*Math\.round\(rect\.width\)\)\}px`/, '批量+弹层宽度应跟随原生按钮宽度');
     assert.match(quickEntry, /getConnectedBatchPlusMenu\(\)[\s\S]*?storedMenu instanceof HTMLElement && storedMenu\.isConnected[\s\S]*?this\.batchPlusMenuEl = null/, '批量+应清理已脱离 DOM 的旧菜单状态，避免 hover 被误判为已打开');
@@ -54,6 +208,85 @@ test('批量+ 菜单覆盖批量计划设置缺失的首批能力', () => {
     assert.match(quickEntryStyle, /#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item\.is-danger/, '批量删除菜单项应有危险态样式');
 });
 
+test('批量+ 菜单 hover 关闭 timer 在隐藏页即时收尾且不触发业务动作', () => {
+    assert.match(quickEntry, /batchPlusMenuCloseVisibilityHandler:\s*null,/, '批量+菜单关闭缺少 visibility handler 状态');
+    assert.match(
+        quickEntry,
+        /closeBatchPlusMenu\(\)\s*\{[\s\S]*?this\.clearBatchPlusMenuCloseState\(\);[\s\S]*?menu\.remove\(\)[\s\S]*?btn\.removeAttribute\('aria-controls'\)/,
+        '批量+菜单显式关闭应统一释放 timer/listener 并清理 aria 状态'
+    );
+    assert.match(
+        quickEntry,
+        /isBatchPlusMenuCloseDocumentHidden\(\)\s*\{[\s\S]*?return document\.visibilityState === 'hidden';[\s\S]*?\}/,
+        '批量+菜单关闭缺少隐藏页判定 helper'
+    );
+    assert.match(
+        quickEntry,
+        /clearBatchPlusMenuCloseTimer\(\)\s*\{[\s\S]*?window\.clearTimeout\(this\.batchPlusMenuCloseTimer\);[\s\S]*?this\.batchPlusMenuCloseTimer = null;[\s\S]*?\}/,
+        '批量+菜单关闭 timer 应支持显式清理'
+    );
+    assert.match(
+        quickEntry,
+        /clearBatchPlusMenuCloseVisibilityHandler\(\)\s*\{[\s\S]*?document\.removeEventListener\('visibilitychange',\s*this\.batchPlusMenuCloseVisibilityHandler\);[\s\S]*?this\.batchPlusMenuCloseVisibilityHandler = null;[\s\S]*?\}/,
+        '批量+菜单关闭应支持释放 visibilitychange handler'
+    );
+    assert.match(
+        quickEntry,
+        /bindBatchPlusMenuCloseVisibilityHandler\(\)\s*\{[\s\S]*?if \(typeof this\.batchPlusMenuCloseVisibilityHandler === 'function'\) return;[\s\S]*?if \(!this\.isBatchPlusMenuCloseDocumentHidden\(\)\) return;[\s\S]*?this\.closeBatchPlusMenu\(\);[\s\S]*?document\.addEventListener\('visibilitychange',\s*this\.batchPlusMenuCloseVisibilityHandler\);[\s\S]*?\}/,
+        '批量+菜单关闭应在转 hidden 时立即关闭菜单'
+    );
+    const scheduleBlock = getQuickEntryMethodSlice('scheduleBatchPlusMenuClose', 'clearCampaignListRefreshTimer');
+    assert.match(
+        scheduleBlock,
+        /this\.clearBatchPlusMenuCloseState\(\);[\s\S]*?if \(this\.isBatchPlusMenuCloseDocumentHidden\(\)\) \{[\s\S]*?this\.closeBatchPlusMenu\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?this\.bindBatchPlusMenuCloseVisibilityHandler\(\);[\s\S]*?this\.batchPlusMenuCloseTimer = window\.setTimeout\(\(\) => \{[\s\S]*?this\.batchPlusMenuCloseTimer = null;[\s\S]*?this\.clearBatchPlusMenuCloseVisibilityHandler\(\);[\s\S]*?this\.closeBatchPlusMenu\(\);[\s\S]*?\}, delay\);/,
+        '批量+菜单关闭调度应保留可见页 delay，并在隐藏页即时关闭'
+    );
+    assert.doesNotMatch(
+        scheduleBlock,
+        /runBatchPlusAction|refreshCampaignListOnly|runBatchUpdateCampaignStatus|runBatchDeleteCampaigns|runDisplayBatchCrowdAction|runLeadBatchShieldCrowd|runCopyCurrentPlanFlow|runConcurrentStartFlow|openV3|solution\/addList|solution\/copy|campaign\/create|campaign\/delete|budget\/batchUpdate|updatePart/,
+        '批量+菜单 hover 关闭 timer 不得触发批量业务、刷新、复制创建提交或预算/护航链路'
+    );
+
+    const hiddenHarness = createBatchPlusMenuCloseHarness('hidden');
+    hiddenHarness.runtime.scheduleBatchPlusMenuClose();
+    assert.equal(hiddenHarness.timers.size, 0, '隐藏页调度不应排 160ms timeout');
+    assert.equal(hiddenHarness.listenerCount(), 0, '隐藏页即时关闭后不应残留 visibilitychange');
+    assert.equal(hiddenHarness.menu.isConnected, false, '隐藏页调度应立即移除菜单');
+    assert.equal(hiddenHarness.trigger.classList.contains('is-open'), false, '隐藏页调度应清理触发器 open 状态');
+    assert.equal(hiddenHarness.trigger.getAttribute('aria-expanded'), 'false', '隐藏页调度应收回 aria-expanded');
+    assert.equal(hiddenHarness.trigger.getAttribute('aria-controls'), '', '隐藏页调度应清理 aria-controls');
+
+    const visibleHarness = createBatchPlusMenuCloseHarness('visible');
+    visibleHarness.runtime.scheduleBatchPlusMenuClose();
+    assert.deepEqual(visibleHarness.getTimerDelays(), [160], '可见页应保留原 160ms hover 关闭延迟');
+    assert.equal(visibleHarness.listenerCount(), 1, '可见页等待关闭时应监听转 hidden');
+    assert.equal(visibleHarness.menu.isConnected, true, '可见页 timer 触发前菜单应仍存在');
+    visibleHarness.tickTimers();
+    assert.equal(visibleHarness.menu.isConnected, false, '可见页 timer 触发后应关闭菜单');
+    assert.equal(visibleHarness.listenerCount(), 0, '可见页 timer 完成后应释放 visibilitychange');
+
+    const switchHarness = createBatchPlusMenuCloseHarness('visible');
+    switchHarness.runtime.scheduleBatchPlusMenuClose();
+    switchHarness.setVisibilityState('hidden');
+    assert.equal(switchHarness.timers.size, 0, '转 hidden 应取消已排关闭 timer');
+    assert.equal(switchHarness.listenerCount(), 0, '转 hidden 收尾后应释放 visibilitychange');
+    assert.equal(switchHarness.menu.isConnected, false, '转 hidden 应立即关闭菜单');
+
+    const cancelHarness = createBatchPlusMenuCloseHarness('visible');
+    cancelHarness.runtime.scheduleBatchPlusMenuClose();
+    cancelHarness.runtime.cancelBatchPlusMenuClose();
+    assert.equal(cancelHarness.timers.size, 0, '取消 hover 关闭应清理 timer');
+    assert.equal(cancelHarness.listenerCount(), 0, '取消 hover 关闭应清理 visibilitychange');
+    assert.equal(cancelHarness.menu.isConnected, true, '取消 hover 关闭不应移除菜单');
+
+    const closeHarness = createBatchPlusMenuCloseHarness('visible');
+    closeHarness.runtime.scheduleBatchPlusMenuClose();
+    closeHarness.runtime.closeBatchPlusMenu();
+    assert.equal(closeHarness.timers.size, 0, '显式关闭菜单应清理 timer');
+    assert.equal(closeHarness.listenerCount(), 0, '显式关闭菜单应清理 visibilitychange');
+    assert.equal(closeHarness.menu.isConnected, false, '显式关闭菜单应移除菜单');
+});
+
 test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     const menuBlock = quickEntry.slice(
         quickEntry.indexOf('showBatchPlusMenu(triggerEl)'),
@@ -65,6 +298,8 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     );
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'start'[\s\S]*?icon:\s*'layers-play'/, '批量开启菜单项应使用共享图标');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'delete'[\s\S]*?icon:\s*'x-circle'/, '批量删除菜单项应使用危险动作共享图标');
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'rename'[\s\S]*?icon:\s*'edit'[\s\S]*?label:\s*'批量修改计划名称'/, '批量修改计划名称菜单项应使用共享编辑图标');
+    assert.doesNotMatch(quickEntry, /action:\s*'nativeDailyBudget'|action:\s*'nativeLaunchArea'|action:\s*'nativeCampaignGroup'/, '批量+ 不应重复原生预算、地域、计划组等入口');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?am-campaign-batch-plus-item-icon[\s\S]*?renderAmIcon\(item\.icon \|\| 'logo'/, '批量+菜单项应渲染共享 SVG 图标');
     assert.match(menuBlock, /triggerEl\.setAttribute\('aria-controls',\s*'am-campaign-batch-plus-menu'\)/, '批量+菜单打开时触发器应指向菜单 id');
     assert.match(menuBlock, /menu\.setAttribute\('aria-label',\s*'批量\+菜单'\)/, '批量+菜单应提供可访问名称');
@@ -154,12 +389,121 @@ test('批量删除使用原生删除接口且有二次确认', () => {
     assert.doesNotMatch(batchDeleteBlock, /window\.location\.reload\(\)/, '批量删除成功后不得整页刷新');
 });
 
+test('批量修改计划名称复用复制一览窗、提供名称批处理并提交原生 updatePart 合同', () => {
+    const renameBlock = quickEntry.slice(
+        quickEntry.indexOf('async runBatchRenameCampaigns'),
+        quickEntry.indexOf('async runBatchDeleteCampaigns')
+    );
+    const submitRenameBlock = quickEntry.slice(
+        quickEntry.indexOf('async submitBatchRenameCampaignRows'),
+        quickEntry.indexOf('async runBatchRenameCampaigns')
+    );
+    const updateNameBlock = quickEntry.slice(
+        quickEntry.indexOf('async updateCampaignNamesBatchByBiz'),
+        quickEntry.indexOf('async runSiteCustomBreakthroughStrategy')
+    );
+    const rowHtmlBlock = getQuickEntryMethodSlice('buildCopyOverviewRowHtml', 'getCopyOverviewSubtitle');
+    const validateBlock = getQuickEntryMethodSlice('validateCopyOverviewRows', 'getCopyOverviewRowElements');
+    const restoreRenameBlock = getQuickEntryMethodSlice('restoreRenameOriginalNamesToPopup', 'applyRenameActionToPopup');
+    const overviewBlock = quickEntry.slice(
+        quickEntry.indexOf('openCopyPlanOverviewDialog(context = {}, submitCallback, options = {})'),
+        quickEntry.indexOf('async prepareCopyCurrentPlanContext')
+    );
+    const queryByIdBlock = quickEntry.slice(
+        quickEntry.indexOf('async queryCampaignListById'),
+        quickEntry.indexOf('async resolveCopySourcePlan')
+    );
+
+    assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'rename'\)[\s\S]*?runBatchRenameCampaigns\(contexts,\s*normalizedBizCode,\s*triggerEl\)/, '批量+ rename 动作应分发到批量改名流程');
+    assert.match(renameBlock, /openCopyPlanOverviewDialog\(quickContext,[\s\S]*?\{[\s\S]*?mode:\s*'rename'[\s\S]*?prepareContext:\s*async \(\) =>/, '批量改名应复用复制计划一览窗并传入 rename 模式');
+    assert.match(renameBlock, /guessCampaignNameFromContext\(context\)/, '批量改名初始行应先从勾选行上下文猜测计划名');
+    assert.match(renameBlock, /buildBatchRenameRows\(selected,\s*targetBizCode,\s*authContext\)/, '批量改名应异步补齐真实计划名称');
+    assert.match(quickEntry, /resolveBatchRenamePlanName\(context = \{\},[\s\S]*?guessCampaignNameFromContext\(context\)[\s\S]*?queryCampaignListById\(campaignId,\s*bizCode,\s*authContext\)[\s\S]*?queryCampaignDetail\(campaignId,\s*bizCode,\s*authContext\)/, '计划名称补齐应按行 DOM、列表接口、详情接口顺序兜底');
+    assert.match(queryByIdBlock, /campaign\/horizontal\/findPage\.json\?\$\{query\.toString\(\)\}[\s\S]*?searchKey:\s*'campaignId'[\s\S]*?searchValue:\s*id[\s\S]*?campaignIdList:\s*\[id\]/, '计划名称只读补齐应命中 findPage 并带 campaignId 查询条件');
+
+    assert.match(rowHtmlBlock, /const renameMode = mode === 'rename';/, '复制一览窗行渲染应识别 rename 模式');
+    assert.match(rowHtmlBlock, /data-am-copy-field="planName"[\s\S]*?value="\$\{this\.escapeHtml\(row\.planName \|\| ''\)\}"[\s\S]*?data-campaign-id="\$\{this\.escapeHtml\(row\.campaignId \|\| ''\)\}" data-original-plan-name="\$\{this\.escapeHtml\(row\.originalPlanName \|\| row\.planName \|\| ''\)\}"/, 'rename 行应保留 campaignId 和原始名称，属性值必须经过 escapeHtml 转义');
+    assert.match(quickEntry, /escapeHtml\(value\)[\s\S]*?const map = \{ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' \}/, '计划名写入 input value 和 data-original-plan-name 前必须转义单双引号');
+    assert.match(rowHtmlBlock, /<td\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>[\s\S]*?data-am-copy-field="bidModeDisplay"[\s\S]*?<td\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>[\s\S]*?data-am-copy-field="bidPrice"[\s\S]*?<td\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>[\s\S]*?data-am-copy-field="budgetField"/, 'rename 模式应隐藏出价方式、出价价格和预算行内列');
+    assert.match(overviewBlock, /const titleText = renameMode \? '批量修改计划名称' : '复制计划一览';[\s\S]*?const submitButtonText = renameMode \? '确认修改' : '确认生成';/, 'rename 弹窗标题和提交按钮文案应替换为批量改名语义');
+    assert.match(overviewBlock, /popup\.setAttribute\('data-am-copy-dialog-mode',\s*dialogMode\)/, 'rename 弹窗应设置模式属性供 CSS 隐藏列');
+    assert.match(overviewBlock, /<div class="am-copy-overview-bulkbar"\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>/, 'rename 模式应隐藏批量出价和批量预算工具条');
+    assert.match(overviewBlock, /am-copy-overview-renamebar[\s\S]*?data-am-copy-rename="prefix"[\s\S]*?data-am-copy-rename-action="prefix"[\s\S]*?加前缀/, 'rename 模式应提供批量加前缀');
+    assert.match(overviewBlock, /data-am-copy-rename="suffix"[\s\S]*?data-am-copy-rename-action="suffix"[\s\S]*?加后缀/, 'rename 模式应提供批量加后缀');
+    assert.match(overviewBlock, /data-am-copy-rename="find"[\s\S]*?data-am-copy-rename="replace"[\s\S]*?data-am-copy-rename-action="replace"[\s\S]*?替换/, 'rename 模式应提供批量查找替换');
+    assert.match(overviewBlock, /data-am-copy-rename="deleteText"[\s\S]*?data-am-copy-rename-action="deleteText"[\s\S]*?删除文本/, 'rename 模式应提供批量删除指定文本');
+    assert.match(overviewBlock, /data-am-copy-rename="sequenceBase"[\s\S]*?data-am-copy-rename="sequenceStart"[\s\S]*?data-am-copy-rename-action="sequence"[\s\S]*?按序号改名/, 'rename 模式应提供按序号改名');
+    assert.match(overviewBlock, /data-am-copy-rename-action="clean"[\s\S]*?清理名称[\s\S]*?data-am-copy-rename-action="restore"[\s\S]*?恢复原名/, 'rename 模式应提供清理名称和恢复原名');
+    assert.match(overviewBlock, /<th\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>计划出价方式<\/th>[\s\S]*?<th\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>出价价格<\/th>[\s\S]*?<th\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>预算<\/th>/, 'rename 模式应隐藏非计划名称表头');
+    assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup\[data-am-copy-dialog-mode="rename"\] \[data-am-copy-mode-hidden="rename"\]\s*\{[\s\S]*?display:\s*none !important;/, 'rename 模式隐藏列应复用现有复制一览窗样式，不新增视觉系统');
+    assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-renamebar[\s\S]*?align-items:\s*flex-start;[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-renamebar \.am-copy-overview-bulk-group[\s\S]*?flex-wrap:\s*wrap;/, 'rename 工具条应复用复制一览窗工具条并支持换行');
+    assert.match(overviewBlock, /if \(!contextReady\) \{[\s\S]*?setReadyState\(false\);[\s\S]*?\}/, '读取计划名期间应进入未就绪状态');
+    assert.match(overviewBlock, /const setReadyState = \(ready,[\s\S]*?contextReady = !!ready;[\s\S]*?popup\.querySelectorAll\('input, select'\)\.forEach\(\(el\) => \{[\s\S]*?el\.disabled = !contextReady \|\| el\.dataset\.amCopyReadonly === '1';/, '未就绪时应禁用输入，避免异步补齐覆盖用户已编辑内容');
+    assert.match(overviewBlock, /popup\.querySelectorAll\('\[data-am-copy-bulk-action\], \[data-am-copy-rename-action\]'\)\.forEach\(\(el\) => \{[\s\S]*?el\.disabled = !contextReady \|\| el\.dataset\.amCopyReadonly === '1';/, '读取计划名期间应禁用 rename 批处理动作');
+    assert.match(overviewBlock, /const renameActionButtons = Array\.from\(popup\.querySelectorAll\('\[data-am-copy-rename-action\]'\)\)[\s\S]*?button\.addEventListener\('click'[\s\S]*?applyRenameActionToPopup\(popup,\s*button\.dataset\.amCopyRenameAction \|\| ''\)/, 'rename 批处理按钮应统一调用名称批处理 helper');
+    assert.match(overviewBlock, /if \(renameMode\) \{[\s\S]*?removePopup\(\);[\s\S]*?\} else \{[\s\S]*?popup\.remove\(\);[\s\S]*?\}/, 'rename 提交成功后应移除弹窗并恢复焦点');
+
+    assert.match(quickEntry, /getRenamePlanNameInputs\(popup\)[\s\S]*?querySelectorAll\('\[data-am-copy-field="planName"\]'\)[\s\S]*?input instanceof HTMLInputElement && !input\.disabled/, 'rename 批处理应只操作可编辑计划名称输入框');
+    assert.match(quickEntry, /setRenamePlanNameInputValue\(input,\s*value = ''\)[\s\S]*?normalizeBatchRenamePlanName\(value\)[\s\S]*?dispatchEvent\(new Event\('input'[\s\S]*?dispatchEvent\(new Event\('change'/, 'rename 批处理更新名称后应派发 input/change');
+    assert.match(quickEntry, /applyRenamePrefixToPopup\(popup\)[\s\S]*?`\$\{prefix\}\$\{nameInput\.value \|\| ''\}`/, '批量加前缀应写入所有计划名称');
+    assert.match(quickEntry, /applyRenameSuffixToPopup\(popup\)[\s\S]*?`\$\{nameInput\.value \|\| ''\}\$\{suffix\}`/, '批量加后缀应写入所有计划名称');
+    assert.match(quickEntry, /applyRenameReplaceToPopup\(popup\)[\s\S]*?split\(findText\)\.join\(replaceText\)/, '批量替换应按字面文本全量替换');
+    assert.match(quickEntry, /applyRenameDeleteToPopup\(popup\)[\s\S]*?data-am-copy-rename="deleteText"[\s\S]*?applyRenameReplaceToPopup\(popup\)/, '批量删除文本应复用替换为空的逻辑');
+    assert.match(quickEntry, /applyRenameSequenceToPopup\(popup\)[\s\S]*?sequenceBase[\s\S]*?sequenceStart[\s\S]*?padStart\(width,\s*'0'\)[\s\S]*?`\$\{baseName\}\$\{seq\}`/, '按序号改名应按基础名和起始序号生成名称');
+    assert.match(quickEntry, /applyRenameCleanWhitespaceToPopup\(popup\)[\s\S]*?setRenamePlanNameInputValue\(nameInput,\s*nameInput\.value \|\| ''\)/, '清理名称应复用规范化名称写入');
+    assert.match(restoreRenameBlock, /getAttribute\('data-original-plan-name'\)/, '恢复原名应读取 data-original-plan-name');
+    assert.match(restoreRenameBlock, /setRenamePlanNameInputValue\(nameInput,\s*nameInput\.getAttribute\('data-original-plan-name'\) \|\| ''\)/, '恢复原名应写回原计划名输入框');
+    assert.match(quickEntry, /applyRenameActionToPopup\(popup,\s*action = ''\)[\s\S]*?normalizedAction === 'prefix'[\s\S]*?normalizedAction === 'suffix'[\s\S]*?normalizedAction === 'replace'[\s\S]*?normalizedAction === 'deleteText'[\s\S]*?normalizedAction === 'sequence'[\s\S]*?normalizedAction === 'clean'[\s\S]*?normalizedAction === 'restore'/, 'rename 批处理 action 应覆盖前缀、后缀、替换、删除、序号、清理和恢复');
+
+    assert.match(validateBlock, /const renameMode = String\(options\.mode \|\| ''\)\.trim\(\) === 'rename';/, '行校验应识别 rename 模式');
+    assert.match(validateBlock, /return renameMode \? '没有可提交的计划名称' : '没有可提交的复制计划'/, 'rename 无行时应提示没有可提交的计划名称');
+    assert.match(validateBlock, /if \(!String\(row\.planName \|\| ''\)\.trim\(\)\) return `第 \$\{lineNo\} 行计划名称不能为空`;/, 'rename 应拦截空计划名');
+    assert.match(validateBlock, /if \(names\.has\(row\.planName\)\) return `计划名称重复：\$\{row\.planName\}`;/, 'rename 应拦截同次提交内重复名称');
+    assert.match(validateBlock, /if \(!this\.normalizeCampaignId\(row\.campaignId \|\| ''\)\) return `第 \$\{lineNo\} 行计划ID无效`;/, 'rename 应要求每行保留计划 ID');
+    assert.match(validateBlock, /if \(renameMode && changedCount <= 0\) return '没有需要修改的计划名称';/, 'rename 全部未改名时不得提交');
+    assert.match(validateBlock, /if \(renameMode\) \{[\s\S]*?changedCount \+= 1;[\s\S]*?continue;[\s\S]*?\}[\s\S]*?row\.bidPrice/, 'rename 模式应跳过复制用出价和预算校验');
+
+    assert.match(submitRenameBlock, /\.filter\(row => row\.campaignId && row\.planName && row\.planName !== row\.originalPlanName\)/, '批量改名提交前应过滤未改名行');
+    assert.match(submitRenameBlock, /groupCampaignContextsByBizCode\(changedRows,\s*context\.bizCode \|\| this\.DEFAULT_BIZ_CODE\)/, '批量改名应按 bizCode 分组提交');
+    assert.match(submitRenameBlock, /this\.resolveAuthContext\(bizCode \|\| context\.bizCode \|\| this\.DEFAULT_BIZ_CODE\)/, '批量改名每个业务线分组应使用对应 authContext');
+    assert.match(submitRenameBlock, /refreshCampaignListOnly\(\{[\s\S]*?reason:\s*'批量修改计划名称'/, '批量改名成功后应局部刷新计划列表');
+    assert.match(updateNameBlock, /campaign\/updatePart\.json\?\$\{query\.toString\(\)\}/, '批量改名应调用原生 campaign/updatePart.json');
+    assert.match(updateNameBlock, /campaignList:\s*normalizedRows\.map\(row => \(\{[\s\S]*?campaignId:\s*Number\(row\.campaignId\),[\s\S]*?campaignName:\s*row\.campaignName[\s\S]*?\}\)\)/, '批量改名 payload 只应提交 campaignId 和 campaignName');
+    assert.match(updateNameBlock, /bizCode:\s*targetBizCode,[\s\S]*?csrfId:[\s\S]*?strategyRecoverys:\s*\[\],[\s\S]*?loginPointId:[\s\S]*?lrsIdList:\s*\[\]/, '批量改名 payload 应保持 updatePart 状态接口同款基础合同');
+    assert.doesNotMatch(updateNameBlock, /bidPrice|budgetValue|dayBudget|dayAverageBudget|displayStatus/, '批量改名 payload 不应混入出价、预算或状态字段');
+});
+
+test('批量+ 不重复原生已有批量计划设置项', () => {
+    const menuBlock = getQuickEntryMethodSlice('getBatchPlusMenuItems', 'closeBatchPlusMenu');
+    const dispatchBlock = getQuickEntryMethodSlice('async runBatchPlusAction', 'normalizeCampaignId');
+    const nativeLabels = [
+        '批量修改每日预算',
+        '批量修改投放资源位',
+        '批量修改投放地域',
+        '批量修改分时折扣',
+        '批量修改出价',
+        '批量调整计划组'
+    ];
+
+    nativeLabels.forEach((label) => {
+        assert.doesNotMatch(menuBlock, new RegExp(label), `批量+ 菜单不得重复原生入口：${label}`);
+    });
+    assert.doesNotMatch(menuBlock, /nativeBatchPlanItems|getNativeBatchPlanSettingActionMetas/, '批量+ 菜单不得再批量接入原生批量计划设置元数据');
+    assert.doesNotMatch(dispatchBlock, /getNativeBatchPlanSettingActionMeta|runNativeBatchPlanSettingAction/, '批量+ 动作分发不得再委托原生已有批量计划设置项');
+    assert.doesNotMatch(quickEntry, /getNativeBatchPlanSettingActionMetas|getNativeBatchPlanSettingActionMeta|runNativeBatchPlanSettingAction|findNativeBatchPlanSettingHost|triggerNativeBatchPlanSettingMenu|findNativeBatchPlanMenuItem|dispatchNativeMouseClick/, '原生已有批量计划设置委托 helper 应从插件增强路径移除');
+    assert.doesNotMatch(quickEntry, /action:\s*'nativeDailyBudget'|action:\s*'nativeAdzone'|action:\s*'nativeLaunchArea'|action:\s*'nativeLaunchPeriod'|action:\s*'nativeBidPrice'|action:\s*'nativeCampaignGroup'/, '批量+ 不应保留原生已有入口 action');
+});
+
 test('批量+ 成功后复用原生计划列表刷新而不整页 reload', () => {
     assert.match(quickEntry, /findCampaignListVframe\(magixRef = null,\s*bizCode = ''\)[\s\S]*?expectedViewPath = `onebp\/views\/pages\/manage\/\$\{listPath\}\/campaign-list`/, '应按当前业务线定位官方计划列表 VFrame');
     assert.match(quickEntry, /refreshCampaignListVframe\(bizCode = ''\)[\s\S]*?const methods = \['render',\s*'asyncRenderData'\][\s\S]*?vf\.invoke\(method,\s*\[\]\)/, '局部刷新应优先复用官方列表 render 以重新拉取 findPage 列表');
     assert.match(quickEntry, /triggerCampaignListSearchRefresh\(\)[\s\S]*?findCopySuccessPlanNameSearchInput\(\)[\s\S]*?dispatchCopySuccessSearchEnter\(input\)/, '局部刷新应可触发原生列表搜索框回车刷新');
     assert.match(quickEntry, /refreshCampaignListOnlyNow\(\{ bizCode = '',\s*reason = '批量操作' \} = \{\}\)[\s\S]*?refreshCampaignListVframe\(targetBizCode\)[\s\S]*?vframeTriggered \? false : this\.triggerCampaignListSearchRefresh\(\)/, '成功收尾应优先刷新列表 VFrame，找不到时再回车触发搜索刷新');
-    assert.match(quickEntry, /refreshCampaignListOnly\(options = \{\}\)[\s\S]*?window\.setTimeout\(\(\) => \{[\s\S]*?refreshCampaignListOnlyNow\(options\)/, '成功收尾应延迟触发局部列表刷新');
+    assert.match(quickEntry, /campaignListRefreshTimer:\s*null,/, '批量+成功收尾刷新 timer 缺少可清理句柄');
+    assert.match(quickEntry, /clearCampaignListRefreshTimer\(\)\s*\{[\s\S]*?if \(!this\.campaignListRefreshTimer\) return;[\s\S]*?window\.clearTimeout\(this\.campaignListRefreshTimer\);[\s\S]*?this\.campaignListRefreshTimer = null;[\s\S]*?\}/, '批量+成功收尾刷新 timer 应支持显式清理并归零');
+    assert.match(quickEntry, /scheduleCampaignListRefresh\(options = \{\}\)\s*\{[\s\S]*?this\.clearCampaignListRefreshTimer\(\);[\s\S]*?const delay = Number\.isFinite\(Number\(options\?\.delay\)\) \? Number\(options\.delay\) : 600;[\s\S]*?this\.campaignListRefreshTimer = window\.setTimeout\(\(\) => \{[\s\S]*?this\.campaignListRefreshTimer = null;[\s\S]*?this\.refreshCampaignListOnlyNow\(options\)\.catch/, '成功收尾应复用可取消的延迟刷新调度');
+    assert.match(quickEntry, /refreshCampaignListOnly\(options = \{\}\)\s*\{\s*this\.scheduleCampaignListRefresh\(options\);\s*\}/, 'refreshCampaignListOnly 应只委托刷新调度 helper');
+    assert.doesNotMatch(quickEntry, /refreshCampaignListOnly\(options = \{\}\)\s*\{[\s\S]*?window\.setTimeout\(\(\) => \{[\s\S]*?refreshCampaignListOnlyNow\(options\)/, '成功收尾不应继续排无句柄延迟刷新 timeout');
     assert.doesNotMatch(quickEntry, /window\.location\.reload\(\)/, '批量+ 成功收尾不得再整页刷新');
 });
 

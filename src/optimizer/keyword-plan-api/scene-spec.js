@@ -402,6 +402,21 @@
                 return '';
             }
         };
+        const normalizeCapturePathWithQuery = (rawUrl = '') => {
+            try {
+                const url = new URL(String(rawUrl || ''), window.location.origin);
+                const path = String(url.pathname || '').trim();
+                const query = String(url.search || '').trim();
+                return path ? `${path}${query}` : '';
+            } catch {
+                return '';
+            }
+        };
+        const normalizeEndpointPathOnly = (endpoint = '') => {
+            const text = String(endpoint || '').trim();
+            if (!text) return '';
+            return text.split('?')[0].split('#')[0].trim();
+        };
         const listHookManagers = () => {
             const managers = [];
             const pushManager = (manager) => {
@@ -624,7 +639,7 @@
                 sampleBody: item.sampleBody || null
             })).sort((a, b) => b.count - a.count || a.path.localeCompare(b.path));
         };
-        const isGoalCreateSubmitPath = (path = '') => /\/solution\/(?:business\/)?addList\.json$/i.test(String(path || '').trim());
+        const isGoalCreateSubmitPath = (path = '') => /\/solution\/(?:business\/)?addList\.json$/i.test(normalizeEndpointPathOnly(path));
         const pickGoalCreateSubmitContract = (contracts = []) => {
             const list = (Array.isArray(contracts) ? contracts : [])
                 .filter(item => isGoalCreateSubmitPath(item?.path || ''))
@@ -797,9 +812,9 @@
         };
         const resolveGoalCreateEndpoint = (loadContracts = []) => {
             const list = Array.isArray(loadContracts) ? loadContracts : [];
-            const createCandidate = list.find(item => /\/solution\/business\/addList\.json$/i.test(item?.path || ''))
-                || list.find(item => /\/solution\/addList\.json$/i.test(item?.path || ''));
-            return normalizeCapturePath(createCandidate?.path || '') || SCENE_CREATE_ENDPOINT_FALLBACK;
+            const createCandidate = list.find(item => /\/solution\/business\/addList\.json$/i.test(normalizeEndpointPathOnly(item?.path || '')))
+                || list.find(item => /\/solution\/addList\.json$/i.test(normalizeEndpointPathOnly(item?.path || '')));
+            return normalizeCapturePathWithQuery(createCandidate?.path || '') || SCENE_CREATE_ENDPOINT_FALLBACK;
         };
 
         const collectSceneBizCodeHintsFromPage = () => {
@@ -2758,10 +2773,24 @@
 
         const normalizeGoalCreateEndpoint = (path = '') => {
             const raw = String(path || '').trim();
-            const normalized = normalizeCapturePath(raw);
+            const normalized = normalizeCapturePathWithQuery(raw);
             // 空值在 URL 归一化后会变成 "/"，需要视为无效并回退。
             if (!raw || !normalized || normalized === '/') return SCENE_CREATE_ENDPOINT_FALLBACK;
-            if (!/\/solution\/.+addList\.json$/i.test(normalized)) return normalized;
+            const endpointPath = normalizeEndpointPathOnly(normalized);
+            if (!isGoalCreateSubmitPath(endpointPath)) return normalized;
+            if (/\/solution\/addList\.json$/i.test(endpointPath)) {
+                try {
+                    const url = new URL(normalized, window.location.origin);
+                    if (!url.searchParams.get('bizCode')) {
+                        url.searchParams.set('bizCode', 'onebpSearch');
+                    }
+                    return `${url.pathname}${url.search}`;
+                } catch {
+                    return normalized.includes('?')
+                        ? `${normalized}&bizCode=onebpSearch`
+                        : `${normalized}?bizCode=onebpSearch`;
+                }
+            }
             return normalized;
         };
         const normalizeCapturedCreateEndpoint = (path = '') => {

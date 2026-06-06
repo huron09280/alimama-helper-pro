@@ -109,13 +109,65 @@
         const BRIDGE_RESULT_CACHE_TTL_MS = 90 * 1000;
         const inFlightCallIds = new Set();
         const resolvedPayloadCache = new Map();
+        let bridgeCacheCleanupTimer = 0;
+        let bridgeCacheCleanupVisibilityHandler = null;
+        const isBridgeDocumentHidden = () => {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        };
+        const clearBridgeCacheCleanupTimer = () => {
+            if (!bridgeCacheCleanupTimer) return;
+            clearTimeout(bridgeCacheCleanupTimer);
+            bridgeCacheCleanupTimer = 0;
+        };
+        const releaseBridgeCacheCleanupVisibilityHandlerIfIdle = () => {
+            if (bridgeCacheCleanupTimer || resolvedPayloadCache.size > 0) return;
+            if (typeof bridgeCacheCleanupVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', bridgeCacheCleanupVisibilityHandler);
+            }
+            bridgeCacheCleanupVisibilityHandler = null;
+        };
+        const bindBridgeCacheCleanupVisibilityHandler = () => {
+            if (typeof bridgeCacheCleanupVisibilityHandler === 'function') return;
+            bridgeCacheCleanupVisibilityHandler = () => {
+                if (isBridgeDocumentHidden()) {
+                    clearBridgeCacheCleanupTimer();
+                    return;
+                }
+                scheduleBridgeCacheCleanup();
+            };
+            document.addEventListener('visibilitychange', bridgeCacheCleanupVisibilityHandler);
+        };
         const cleanupBridgeCache = () => {
             const now = Date.now();
+            let nextDelayMs = Infinity;
             resolvedPayloadCache.forEach((cached, callId) => {
-                if (!cached || !Number.isFinite(cached.ts) || now - cached.ts > BRIDGE_RESULT_CACHE_TTL_MS) {
+                const ts = Number(cached?.ts);
+                if (!Number.isFinite(ts) || now - ts > BRIDGE_RESULT_CACHE_TTL_MS) {
                     resolvedPayloadCache.delete(callId);
+                    return;
                 }
+                nextDelayMs = Math.min(nextDelayMs, Math.max(0, BRIDGE_RESULT_CACHE_TTL_MS - (now - ts)));
             });
+            return Number.isFinite(nextDelayMs) ? nextDelayMs : null;
+        };
+        const scheduleBridgeCacheCleanup = () => {
+            if (bridgeCacheCleanupTimer) return;
+            const nextDelayMs = cleanupBridgeCache();
+            if (!Number.isFinite(nextDelayMs)) {
+                releaseBridgeCacheCleanupVisibilityHandlerIfIdle();
+                return;
+            }
+            bindBridgeCacheCleanupVisibilityHandler();
+            if (isBridgeDocumentHidden()) return;
+            bridgeCacheCleanupTimer = window.setTimeout(() => {
+                bridgeCacheCleanupTimer = 0;
+                cleanupBridgeCache();
+                scheduleBridgeCacheCleanup();
+            }, Math.max(1, Math.ceil(nextDelayMs) + 1));
         };
         const extractBridgeDetail = (raw) => {
             if (!raw || typeof raw !== 'object') return null;
@@ -183,6 +235,7 @@
                 ts: Date.now(),
                 payload
             });
+            scheduleBridgeCacheCleanup();
             dispatchBridgeResponse(payload);
         };
         const handleBridgeRequestEvent = (event) => {

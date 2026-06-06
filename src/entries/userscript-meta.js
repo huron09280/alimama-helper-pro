@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         阿里妈妈多合一助手 (Pro版)
 // @namespace    http://tampermonkey.net/
-// @version      7.05
+// @version      7.06
 // @description  交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。
 // @author       Gemini & Liangchao
 // @match        *://alimama.com/*
 // @match        *://*.alimama.com/*
 // @match        https://one.alimama.com/*
 // @match        https://myseller.taobao.com/*
+// @match        https://dmp.taobao.com/*
 // @grant        GM_setClipboard
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -16,4 +17,5 @@
 // @connect      *.alimama.com
 // @connect      one.alimama.com
 // @connect      myseller.taobao.com
+// @connect      dmp.taobao.com
 // ==/UserScript==

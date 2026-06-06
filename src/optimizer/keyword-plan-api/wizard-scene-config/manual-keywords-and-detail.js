@@ -670,7 +670,17 @@
             } = {}) => (
                 new Promise((resolve) => {
                     const previousMask = document.getElementById('am-wxt-scene-popup-mask');
-                    if (previousMask) previousMask.remove();
+                    if (previousMask) {
+                        if (typeof wizardState.closeScenePopup === 'function') {
+                            try {
+                                wizardState.closeScenePopup(null);
+                            } catch {
+                                previousMask.remove();
+                            }
+                        } else {
+                            previousMask.remove();
+                        }
+                    }
                     const mask = document.createElement('div');
                     mask.id = 'am-wxt-scene-popup-mask';
                     const normalizedDialogClassName = String(dialogClassName || '').trim();
@@ -707,6 +717,9 @@
                         close(null);
                     };
                     const close = (payload = null) => {
+                        if (wizardState.closeScenePopup === close) {
+                            wizardState.closeScenePopup = null;
+                        }
                         document.removeEventListener('keydown', handleEscClose, true);
                         mask.remove();
                         resolve(payload);
@@ -762,6 +775,7 @@
                             }
                         };
                     }
+                    wizardState.closeScenePopup = close;
                     document.body.appendChild(mask);
                     if (typeof onMounted === 'function') {
                         try {

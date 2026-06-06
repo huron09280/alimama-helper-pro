@@ -5,6 +5,9 @@
         el: null,
         buffer: [],
         timer: null,
+        timerCancel: null,
+        flushVisibilityHandler: null,
+        flushPending: false,
 
         info(msg, ...args) {
             this.log(msg, false, ...args);
@@ -43,13 +46,78 @@
         },
 
         scheduleFlush() {
-            if (this.timer) return;
-            this.timer = requestAnimationFrame(() => this.flush());
+            if (this.timer !== null) return;
+            this.flushPending = this.buffer.length > 0;
+            this.bindFlushVisibilityHandler();
+            if (this.isDocumentHidden()) return;
+            const runFlush = () => {
+                this.timer = null;
+                this.timerCancel = null;
+                if (this.isDocumentHidden()) {
+                    this.flushPending = this.buffer.length > 0;
+                    return;
+                }
+                this.flush();
+            };
+            if (typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function') {
+                this.timerCancel = cancelAnimationFrame;
+                this.timer = requestAnimationFrame(runFlush);
+                return;
+            }
+            this.timerCancel = clearTimeout;
+            this.timer = setTimeout(runFlush, 16);
+        },
+
+        isDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearFlushTimer() {
+            if (this.timer === null) return;
+            if (typeof this.timerCancel === 'function') {
+                this.timerCancel(this.timer);
+            }
+            this.timer = null;
+            this.timerCancel = null;
+        },
+
+        clearFlushVisibilityHandler() {
+            const handler = this.flushVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.flushVisibilityHandler = null;
+        },
+
+        bindFlushVisibilityHandler() {
+            if (typeof this.flushVisibilityHandler === 'function') return;
+            this.flushVisibilityHandler = () => {
+                if (this.isDocumentHidden()) {
+                    this.clearFlushTimer();
+                    this.flushPending = this.buffer.length > 0;
+                    return;
+                }
+                if (this.flushPending || this.buffer.length > 0) {
+                    this.scheduleFlush();
+                    return;
+                }
+                this.clearFlushVisibilityHandler();
+            };
+            document.addEventListener('visibilitychange', this.flushVisibilityHandler);
         },
 
         flush() {
+            this.timer = null;
+            this.timerCancel = null;
             if (!this.el || this.buffer.length === 0) {
-                this.timer = null;
+                this.flushPending = this.buffer.length > 0;
+                if (!this.flushPending || !this.isDocumentHidden()) {
+                    this.clearFlushVisibilityHandler();
+                }
                 return;
             }
 
@@ -98,11 +166,11 @@
             }
 
             this.buffer = [];
-            this.timer = null;
+            this.flushPending = false;
+            this.clearFlushVisibilityHandler();
         },
 
         clear() {
             if (this.el) this.el.innerHTML = '';
         }
     };
-

@@ -227,6 +227,9 @@
 
             const setDetailVisible = (visible) => {
                 wizardState.detailVisible = !!visible;
+                if (!wizardState.detailVisible) {
+                    clearWizardAutoKeywordLoadTimer();
+                }
                 if (wizardState.els.detailConfig) {
                     wizardState.els.detailConfig.classList.toggle('collapsed', !wizardState.detailVisible);
                 }

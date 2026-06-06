@@ -13,6 +13,7 @@ dist/extension/*
 !dist/extension/manifest.json
 !dist/extension/content.js
 !dist/extension/page.bundle.js
+!dist/extension/wizard-style.css
 !dist/extension/icon-16.png
 !dist/extension/icon-32.png
 !dist/extension/icon-48.png
@@ -25,6 +26,7 @@ dist/extension.pem
 .gstack/
 tmp/
 *.network-request
+tasks/e7-ai-*.json
 test-start-before-body.html
 /AI点睛/
 /投放资源位/

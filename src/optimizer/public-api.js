@@ -37,17 +37,13 @@
 
     const revealOptimizerPanel = (panel) => {
         if (!panel) return;
+        UI.startTokenStatusMonitor?.();
         if (panel.style.opacity === '0' || panel.style.opacity === '') {
             panel.style.opacity = '1';
             panel.style.transform = 'scale(1)';
             panel.style.pointerEvents = 'auto';
         } else {
-            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-            setTimeout(() => {
-                try {
-                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
-                } catch { }
-            }, 500);
+            UI.flashPanelHighlight?.(panel);
         }
     };
 
@@ -57,25 +53,20 @@
             const panel = document.getElementById(CONFIG.UI_ID);
             if (!panel) {
                 UI.create();
-                setTimeout(() => {
+                UI.schedulePanelReveal?.((createdPanel) => {
                     try {
-                        revealOptimizerPanel(document.getElementById(CONFIG.UI_ID));
+                        revealOptimizerPanel(createdPanel);
                     } catch (err) {
                         Logger.error('算法护航面板展示失败', err);
                     }
-                }, 100);
+                });
                 return true;
             }
             if (panel.style.opacity === '0' || panel.style.opacity === '') {
                 revealOptimizerPanel(panel);
                 return true;
             }
-            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
-            setTimeout(() => {
-                try {
-                    panel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
-                } catch { }
-            }, 500);
+            UI.flashPanelHighlight?.(panel);
             return true;
         } catch (err) {
             Logger.error('算法护航面板切换失败', err);

@@ -4,6 +4,14 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../阿里妈妈多合一助手.js', import.meta.url), 'utf8');
 
+const sliceSource = (startNeedle, endNeedle) => {
+  const start = source.indexOf(startNeedle);
+  assert.notEqual(start, -1, `缺少源码片段起点：${startNeedle}`);
+  const end = source.indexOf(endNeedle, start);
+  assert.notEqual(end, -1, `缺少源码片段终点：${endNeedle}`);
+  return source.slice(start, end);
+};
+
 test('创建响应支持从 planId/id 回填 campaignId，错误明细不误当成功 ID', () => {
   assert.match(
     source,
@@ -36,15 +44,55 @@ test('runCreateRepairByItem 用统一 ID 提取结果驱动清理记录', () => 
 });
 
 test('风控提醒覆盖 pushState/replaceState 路由切换', () => {
+  const stateBlock = sliceSource('const State = {', 'const RISK_CHALLENGE_URL_RE');
+  const riskAlertBlock = sliceSource('const clearRiskChallengeAlertTimer = () => {', 'const notifyRiskChallengeIfNeeded');
+  const notifyBlock = sliceSource(
+    'const notifyRiskChallengeIfNeeded = (url = \'\') => {',
+    '    // ==========================================\n    // 2. 日志系统'
+  );
+
   assert.match(
     source,
     /hookHistoryMethod\('pushState'\);[\s\S]*hookHistoryMethod\('replaceState'\);/,
     '缺少 pushState/replaceState 风控提醒触发'
   );
-  assert.match(
-    source,
-    /alert\('检测到阿里妈妈风控页，请先手动完成人机验证（滑块\/短信\/扫码）后再继续操作。'\);/,
+  assert.ok(
+    stateBlock.includes("riskAlertLastUrl: '',\n        riskAlertTimer: 0,"),
+    '风控提醒应在 State 中登记 pending alert timer 句柄'
+  );
+  assert.ok(
+    riskAlertBlock.includes('clearTimeout(State.riskAlertTimer);')
+      && riskAlertBlock.includes('State.riskAlertTimer = 0;'),
+    '风控提醒应提供可复用 timer 清理 helper'
+  );
+  assert.ok(
+    riskAlertBlock.includes('clearRiskChallengeAlertTimer();')
+      && riskAlertBlock.includes('State.riskAlertTimer = setTimeout(() => {')
+      && riskAlertBlock.includes('State.riskAlertTimer = 0;')
+      && riskAlertBlock.includes("const currentHref = String(window.location.href || '').trim();")
+      && riskAlertBlock.includes('if (currentHref !== href) return;')
+      && riskAlertBlock.includes('if (State.riskAlertLastUrl !== href) return;')
+      && riskAlertBlock.includes('if (!isRiskChallengePage(currentHref)) return;')
+      && riskAlertBlock.includes("alert('检测到阿里妈妈风控页，请先手动完成人机验证（滑块/短信/扫码）后再继续操作。');"),
+    '风控提醒 alert 应通过可取消 helper 调度，触发前复核当前 URL'
+  );
+  assert.ok(
+    notifyBlock.includes('if (!isRiskChallengePage(href)) {')
+      && notifyBlock.includes("State.riskAlertLastUrl = '';")
+      && notifyBlock.includes('clearRiskChallengeAlertTimer();')
+      && notifyBlock.includes('return false;')
+      && notifyBlock.includes("Logger.warn('⚠️ 检测到阿里妈妈风控页，请手动完成人机验证后继续');")
+      && notifyBlock.includes('scheduleRiskChallengeAlert(href);'),
+    '离开风控页时应释放 pending alert，进入风控页时应复用调度 helper'
+  );
+  assert.ok(
+    riskAlertBlock.includes("alert('检测到阿里妈妈风控页，请先手动完成人机验证（滑块/短信/扫码）后再继续操作。');"),
     '缺少风控页弹窗提醒文案'
+  );
+  assert.equal(
+    notifyBlock.includes('setTimeout(() => {'),
+    false,
+    '风控提醒不应继续在 notifyRiskChallengeIfNeeded 内排无句柄 alert timeout'
   );
 });
 

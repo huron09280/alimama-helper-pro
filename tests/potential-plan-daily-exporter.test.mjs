@@ -36,6 +36,30 @@ test('潜力词导出天数输入具备稳定边界和可访问名称', () => {
     assert.match(source, /normalizeExportDays\(raw\)[\s\S]*if \(days < 1 \|\| days > this\.MAX_EXPORT_DAYS\) return 0;/, '导出天数归一化应限制 1-MAX_EXPORT_DAYS');
 });
 
+test('潜力词导出 click 委托只在目标页绑定，离开目标页释放', () => {
+    const source = getPotentialSource();
+
+    assert.match(source, /initialized:\s*false,[\s\S]*running:\s*false,[\s\S]*exportClickHandler:\s*null,[\s\S]*exportClickHandlerBound:\s*false,/, '潜力词导出缺少 click 委托生命周期状态');
+    assert.match(source, /init\(\)\s*\{[\s\S]*this\.exportClickHandler = \(e\) => \{[\s\S]*const btn = target\.closest\(this\.BUTTON_SELECTOR\);[\s\S]*this\.exportCsv\(btn\)\.catch[\s\S]*\};[\s\S]*this\.initialized = true;/, 'init 应只创建命名 click handler，不应直接常驻绑定 document click');
+    assert.doesNotMatch(source.match(/init\(\)\s*\{[\s\S]*?\n\s*\},\n\s*\n\s*bindExportClickHandler\(/)?.[0] || '', /document\.addEventListener\('click'/, 'init 不应注册 document click 监听');
+    assert.match(source, /bindExportClickHandler\(\)\s*\{[\s\S]*if \(this\.exportClickHandlerBound\) return;[\s\S]*document\.addEventListener\('click', this\.exportClickHandler, true\);[\s\S]*this\.exportClickHandlerBound = true;[\s\S]*\}/, '目标页应按需绑定导出 click 委托');
+    assert.match(source, /unbindExportClickHandler\(\)\s*\{[\s\S]*if \(!this\.exportClickHandlerBound\) return;[\s\S]*document\.removeEventListener\('click', this\.exportClickHandler, true\);[\s\S]*this\.exportClickHandlerBound = false;[\s\S]*\}/, '离开目标页应释放导出 click 委托');
+    assert.match(source, /run\(\)\s*\{[\s\S]*if \(!this\.isTargetPage\(\)\) \{[\s\S]*this\.removeButtons\(\);[\s\S]*this\.unbindExportClickHandler\(\);[\s\S]*return;[\s\S]*\}[\s\S]*this\.bindExportClickHandler\(\);[\s\S]*this\.ensureButton\(\);/, 'run 应在目标页绑定 click 委托，在非目标页解绑并移除按钮');
+});
+
+test('潜力词 CSV 下载链接清理 timer 可取消并释放对象 URL', () => {
+    const source = getPotentialSource();
+    const downloadBlock = source.match(/downloadCsv\(content, filename\)\s*\{[\s\S]*?\n\s*\},\n\s*\n\s*cleanupDownloadLink\(/)?.[0] || '';
+
+    assert.match(source, /initialized:\s*false,[\s\S]*running:\s*false,[\s\S]*downloadCleanupTimer:\s*null,[\s\S]*downloadCleanupLink:\s*null,/, '潜力词导出缺少下载清理 timer 生命周期状态');
+    assert.match(source, /cleanupDownloadLink\(link\)\s*\{[\s\S]*if \(!\(link instanceof HTMLAnchorElement\)\) return;[\s\S]*const href = String\(link\.href \|\| ''\);[\s\S]*if \(href\) URL\.revokeObjectURL\(href\);[\s\S]*link\.remove\(\);[\s\S]*\}/, '下载清理应统一 revoke object URL 并移除链接');
+    assert.match(source, /clearDownloadCleanupTimer\(\)\s*\{[\s\S]*if \(this\.downloadCleanupTimer\) \{[\s\S]*clearTimeout\(this\.downloadCleanupTimer\);[\s\S]*this\.downloadCleanupTimer = null;[\s\S]*const pendingLink = this\.downloadCleanupLink;[\s\S]*this\.downloadCleanupLink = null;[\s\S]*this\.cleanupDownloadLink\(pendingLink\);[\s\S]*\}/, '下载清理 timer 应可取消并释放 pending 链接');
+    assert.match(source, /scheduleDownloadCleanup\(link\)\s*\{[\s\S]*this\.clearDownloadCleanupTimer\(\);[\s\S]*if \(!\(link instanceof HTMLAnchorElement\)\) return;[\s\S]*this\.downloadCleanupLink = link;[\s\S]*this\.downloadCleanupTimer = setTimeout\(\(\) => \{[\s\S]*this\.downloadCleanupTimer = null;[\s\S]*const pendingLink = this\.downloadCleanupLink;[\s\S]*this\.downloadCleanupLink = null;[\s\S]*this\.cleanupDownloadLink\(pendingLink\);[\s\S]*\}, 0\);[\s\S]*\}/, '下载清理应通过可取消 helper 调度并在触发后归零');
+    assert.match(source, /removeButtons\(\)\s*\{[\s\S]*this\.clearDownloadCleanupTimer\(\);[\s\S]*document\.querySelectorAll\(this\.WRAP_SELECTOR\)/, '离开潜力词目标页时应释放 pending 下载清理');
+    assert.match(downloadBlock, /this\.scheduleDownloadCleanup\(link\);/, 'downloadCsv 应委托下载清理调度 helper');
+    assert.doesNotMatch(downloadBlock, /setTimeout\(\(\) => \{[\s\S]*URL\.revokeObjectURL\(link\.href\);[\s\S]*link\.remove\(\);[\s\S]*\}, 0\);/, 'downloadCsv 不应继续排无句柄 object URL 清理 timeout');
+});
+
 test('潜力词导出入口样式收敛到统一浅玻璃 token', () => {
     const block = getPotentialStyleBlock();
 

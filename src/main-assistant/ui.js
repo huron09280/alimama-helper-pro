@@ -4,7 +4,21 @@
     const UI = {
         runtime: {
             assistExpanded: false,
-            scrollChainGuardBound: false
+            scrollChainGuardBound: false,
+            panelOutsideClickHandler: null,
+            panelOutsideClickHandlerBound: false,
+            panelAutoHideTimer: null,
+            panelAutoHideVisibilityHandler: null,
+            panelAutoHidePendingContext: null,
+            panelIconRevealTimer: null,
+            panelIconRevealVisibilityHandler: null,
+            panelIconRevealPendingIcon: null,
+            optimizerOpenRetryTimer: null,
+            optimizerOpenRetryVisibilityHandler: null,
+            optimizerOpenRetryPendingCallback: null,
+            keywordPlanOpenRetryTimer: null,
+            keywordPlanOpenRetryVisibilityHandler: null,
+            keywordPlanOpenRetryPendingCallback: null
         },
 
         init() {
@@ -13,6 +27,270 @@
             this.createElements();
             this.bindEvents();
             this.updateState();
+        },
+
+        isPanelAutoHideDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearPanelAutoHideTimer() {
+            if (this.runtime.panelAutoHideTimer) {
+                clearTimeout(this.runtime.panelAutoHideTimer);
+                this.runtime.panelAutoHideTimer = null;
+            }
+        },
+
+        clearPanelAutoHideVisibilityHandler() {
+            const handler = this.runtime.panelAutoHideVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.panelAutoHideVisibilityHandler = null;
+        },
+
+        clearPanelAutoHideState() {
+            this.clearPanelAutoHideTimer();
+            this.clearPanelAutoHideVisibilityHandler();
+            this.runtime.panelAutoHidePendingContext = null;
+        },
+
+        bindPanelAutoHideVisibilityHandler() {
+            if (typeof this.runtime.panelAutoHideVisibilityHandler === 'function') return;
+            this.runtime.panelAutoHideVisibilityHandler = () => {
+                if (this.isPanelAutoHideDocumentHidden()) {
+                    this.finishPanelAutoHide();
+                }
+            };
+            document.addEventListener('visibilitychange', this.runtime.panelAutoHideVisibilityHandler);
+        },
+
+        finishPanelAutoHide() {
+            const context = this.runtime.panelAutoHidePendingContext;
+            this.clearPanelAutoHideState();
+            const panel = context?.panel;
+            const icon = context?.icon;
+            const closePanel = context?.closePanel;
+            if (!(panel instanceof HTMLElement) || !(icon instanceof HTMLElement) || typeof closePanel !== 'function') return;
+            if (!State.config.panelOpen) return;
+            if (!this.isPanelAutoHideDocumentHidden() && (panel.matches(':hover') || icon.matches(':hover'))) return;
+            closePanel(false);
+        },
+
+        schedulePanelAutoHide(context = {}, delay = 180) {
+            this.clearPanelAutoHideState();
+            const panel = context?.panel;
+            const icon = context?.icon;
+            const closePanel = context?.closePanel;
+            if (!(panel instanceof HTMLElement) || !(icon instanceof HTMLElement) || typeof closePanel !== 'function') return;
+            this.runtime.panelAutoHidePendingContext = { panel, icon, closePanel };
+            this.bindPanelAutoHideVisibilityHandler();
+            if (this.isPanelAutoHideDocumentHidden()) {
+                this.finishPanelAutoHide();
+                return;
+            }
+            this.runtime.panelAutoHideTimer = setTimeout(() => {
+                this.runtime.panelAutoHideTimer = null;
+                this.finishPanelAutoHide();
+            }, Math.max(0, Number(delay) || 0));
+        },
+
+        clearPanelIconRevealTimer() {
+            if (this.runtime.panelIconRevealTimer) {
+                clearTimeout(this.runtime.panelIconRevealTimer);
+                this.runtime.panelIconRevealTimer = null;
+            }
+            this.clearPanelIconRevealVisibilityHandler();
+            this.runtime.panelIconRevealPendingIcon = null;
+        },
+
+        isPanelIconRevealDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearPanelIconRevealVisibilityHandler() {
+            const handler = this.runtime.panelIconRevealVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.panelIconRevealVisibilityHandler = null;
+        },
+
+        bindPanelIconRevealVisibilityHandler() {
+            if (typeof this.runtime.panelIconRevealVisibilityHandler === 'function') return;
+            this.runtime.panelIconRevealVisibilityHandler = () => {
+                if (this.isPanelIconRevealDocumentHidden()) {
+                    if (this.runtime.panelIconRevealTimer) {
+                        clearTimeout(this.runtime.panelIconRevealTimer);
+                        this.runtime.panelIconRevealTimer = null;
+                    }
+                    return;
+                }
+                const pendingIcon = this.runtime.panelIconRevealPendingIcon;
+                if (pendingIcon instanceof HTMLElement) {
+                    this.schedulePanelIconReveal(pendingIcon);
+                } else {
+                    this.clearPanelIconRevealTimer();
+                }
+            };
+            document.addEventListener('visibilitychange', this.runtime.panelIconRevealVisibilityHandler);
+        },
+
+        schedulePanelIconReveal(icon) {
+            this.clearPanelIconRevealTimer();
+            if (!(icon instanceof HTMLElement)) return;
+            this.runtime.panelIconRevealPendingIcon = icon;
+            this.bindPanelIconRevealVisibilityHandler();
+            if (this.isPanelIconRevealDocumentHidden()) return;
+            this.runtime.panelIconRevealTimer = setTimeout(() => {
+                this.runtime.panelIconRevealTimer = null;
+                if (this.isPanelIconRevealDocumentHidden()) return;
+                const pendingIcon = this.runtime.panelIconRevealPendingIcon;
+                this.clearPanelIconRevealVisibilityHandler();
+                this.runtime.panelIconRevealPendingIcon = null;
+                if (State.config.panelOpen) return;
+                const revealIcon = pendingIcon instanceof HTMLElement ? pendingIcon : icon;
+                if (!revealIcon.isConnected) return;
+                revealIcon.style.display = 'flex';
+            }, 300);
+        },
+
+        isToolOpenRetryDocumentHidden() {
+            try {
+                return document.visibilityState === 'hidden';
+            } catch {
+                return false;
+            }
+        },
+
+        clearOptimizerOpenRetryVisibilityHandler() {
+            const handler = this.runtime.optimizerOpenRetryVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.optimizerOpenRetryVisibilityHandler = null;
+            this.runtime.optimizerOpenRetryPendingCallback = null;
+        },
+
+        bindOptimizerOpenRetryVisibilityHandler() {
+            if (typeof this.runtime.optimizerOpenRetryVisibilityHandler === 'function') return;
+            this.runtime.optimizerOpenRetryVisibilityHandler = () => {
+                if (this.isToolOpenRetryDocumentHidden()) {
+                    if (this.runtime.optimizerOpenRetryTimer) {
+                        clearTimeout(this.runtime.optimizerOpenRetryTimer);
+                        this.runtime.optimizerOpenRetryTimer = null;
+                    }
+                    return;
+                }
+                const pendingCallback = this.runtime.optimizerOpenRetryPendingCallback;
+                this.clearOptimizerOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            };
+            document.addEventListener('visibilitychange', this.runtime.optimizerOpenRetryVisibilityHandler);
+        },
+
+        clearOptimizerOpenRetryTimer() {
+            if (this.runtime.optimizerOpenRetryTimer) {
+                clearTimeout(this.runtime.optimizerOpenRetryTimer);
+                this.runtime.optimizerOpenRetryTimer = null;
+            }
+            this.clearOptimizerOpenRetryVisibilityHandler();
+        },
+
+        scheduleOptimizerOpenRetry(callback) {
+            this.clearOptimizerOpenRetryTimer();
+            if (typeof callback !== 'function') return;
+            this.runtime.optimizerOpenRetryPendingCallback = callback;
+            this.bindOptimizerOpenRetryVisibilityHandler();
+            if (this.isToolOpenRetryDocumentHidden()) {
+                return;
+            }
+            this.runtime.optimizerOpenRetryTimer = setTimeout(() => {
+                this.runtime.optimizerOpenRetryTimer = null;
+                const pendingCallback = this.runtime.optimizerOpenRetryPendingCallback;
+                this.clearOptimizerOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            }, 1000);
+        },
+
+        clearKeywordPlanOpenRetryVisibilityHandler() {
+            const handler = this.runtime.keywordPlanOpenRetryVisibilityHandler;
+            if (typeof handler === 'function') {
+                document.removeEventListener('visibilitychange', handler);
+            }
+            this.runtime.keywordPlanOpenRetryVisibilityHandler = null;
+            this.runtime.keywordPlanOpenRetryPendingCallback = null;
+        },
+
+        bindKeywordPlanOpenRetryVisibilityHandler() {
+            if (typeof this.runtime.keywordPlanOpenRetryVisibilityHandler === 'function') return;
+            this.runtime.keywordPlanOpenRetryVisibilityHandler = () => {
+                if (this.isToolOpenRetryDocumentHidden()) {
+                    if (this.runtime.keywordPlanOpenRetryTimer) {
+                        clearTimeout(this.runtime.keywordPlanOpenRetryTimer);
+                        this.runtime.keywordPlanOpenRetryTimer = null;
+                    }
+                    return;
+                }
+                const pendingCallback = this.runtime.keywordPlanOpenRetryPendingCallback;
+                this.clearKeywordPlanOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            };
+            document.addEventListener('visibilitychange', this.runtime.keywordPlanOpenRetryVisibilityHandler);
+        },
+
+        clearKeywordPlanOpenRetryTimer() {
+            if (this.runtime.keywordPlanOpenRetryTimer) {
+                clearTimeout(this.runtime.keywordPlanOpenRetryTimer);
+                this.runtime.keywordPlanOpenRetryTimer = null;
+            }
+            this.clearKeywordPlanOpenRetryVisibilityHandler();
+        },
+
+        scheduleKeywordPlanOpenRetry(callback) {
+            this.clearKeywordPlanOpenRetryTimer();
+            if (typeof callback !== 'function') return;
+            this.runtime.keywordPlanOpenRetryPendingCallback = callback;
+            this.bindKeywordPlanOpenRetryVisibilityHandler();
+            if (this.isToolOpenRetryDocumentHidden()) {
+                return;
+            }
+            this.runtime.keywordPlanOpenRetryTimer = setTimeout(() => {
+                this.runtime.keywordPlanOpenRetryTimer = null;
+                const pendingCallback = this.runtime.keywordPlanOpenRetryPendingCallback;
+                this.clearKeywordPlanOpenRetryVisibilityHandler();
+                if (typeof pendingCallback === 'function') pendingCallback();
+            }, 800);
+        },
+
+        bindPanelOutsideClickHandler(panel, icon, closePanel) {
+            this.unbindPanelOutsideClickHandler();
+            if (!(panel instanceof HTMLElement) || !(icon instanceof HTMLElement) || typeof closePanel !== 'function') return;
+            this.runtime.panelOutsideClickHandler = (event) => {
+                const target = event.target;
+                if (!(target instanceof Node)) return;
+                if (State.config.panelOpen && !panel.contains(target) && !icon.contains(target)) {
+                    closePanel(false);
+                }
+            };
+            document.addEventListener('click', this.runtime.panelOutsideClickHandler);
+            this.runtime.panelOutsideClickHandlerBound = true;
+        },
+
+        unbindPanelOutsideClickHandler() {
+            if (!this.runtime.panelOutsideClickHandlerBound) return;
+            if (typeof this.runtime.panelOutsideClickHandler === 'function') {
+                document.removeEventListener('click', this.runtime.panelOutsideClickHandler);
+            }
+            this.runtime.panelOutsideClickHandler = null;
+            this.runtime.panelOutsideClickHandlerBound = false;
         },
 
         bindPluginScrollChainGuard() {
@@ -418,19 +696,76 @@
                     background: rgba(14, 168, 111, 0.12);
                 }
                 .am-campaign-copy-btn {
+                    position: relative;
                     width: auto;
-                    min-width: 88px;
-                    height: 22px;
-                    gap: 3px;
-                    padding: 2px 4px 2px 6px;
-                    border: 1px solid var(--am26-border);
-                    border-radius: 999px;
-                    background: var(--am26-surface);
-                    color: var(--am26-primary);
-                    box-shadow: 0 4px 12px rgba(31, 53, 109, 0.08);
+                    min-width: 90px;
+                    height: 24px;
+                    min-height: 24px;
+                    gap: 5px;
+                    padding: 0 5px 0 8px;
+                    overflow: hidden;
+                    isolation: isolate;
+                    border: 0;
+                    border-radius: 500px;
+                    background: rgb(255, 255, 255);
+                    color: #333333;
+                    box-shadow: rgba(0, 0, 0, 0.06) 0 4px 8px 0;
                     font-size: 12px;
+                    font-weight: 400;
                     line-height: 1;
                     white-space: nowrap;
+                }
+                .am-campaign-copy-btn::before,
+                .am-campaign-copy-btn::after {
+                    content: '';
+                    position: absolute;
+                    z-index: 0;
+                    width: 48px;
+                    height: 28px;
+                    bottom: -24px;
+                    left: 0;
+                    border-radius: 999px;
+                    opacity: 0.2;
+                    filter: blur(14px);
+                    pointer-events: none;
+                }
+                .am-campaign-copy-btn::before {
+                    background: rgb(51, 51, 255);
+                    animation: am-campaign-copy-shadow-left 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+                }
+                .am-campaign-copy-btn::after {
+                    bottom: -16px;
+                    left: 50%;
+                    background: rgb(153, 51, 255);
+                    animation: am-campaign-copy-shadow-right 0.72s cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+                }
+                @keyframes am-campaign-copy-shadow-left {
+                    0% {
+                        bottom: -24px;
+                        left: 0;
+                    }
+                    50% {
+                        bottom: -16px;
+                        left: 50%;
+                    }
+                    100% {
+                        bottom: -24px;
+                        left: 0;
+                    }
+                }
+                @keyframes am-campaign-copy-shadow-right {
+                    0% {
+                        bottom: -16px;
+                        left: 50%;
+                    }
+                    50% {
+                        bottom: -24px;
+                        left: 0;
+                    }
+                    100% {
+                        bottom: -16px;
+                        left: 50%;
+                    }
                 }
                 .am-campaign-operation-copy-btn {
                     float: left;
@@ -443,40 +778,88 @@
                     pointer-events: auto;
                 }
                 .am-campaign-copy-btn:hover {
-                    color: var(--am26-primary-strong);
-                    background: var(--am26-surface-strong);
-                    border-color: rgba(69, 84, 229, 0.28);
-                    box-shadow: 0 6px 16px rgba(31, 53, 109, 0.12);
+                    color: #333333;
+                    background: rgb(255, 255, 255);
+                    box-shadow: rgba(0, 0, 0, 0.08) 0 5px 10px 0;
+                }
+                .am-campaign-copy-btn:focus-visible {
+                    color: #333333;
+                    background: rgb(255, 255, 255);
+                    box-shadow: 0 0 0 2px rgba(69, 84, 229, 0.18), rgba(0, 0, 0, 0.06) 0 4px 8px 0;
+                }
+                .am-campaign-copy-icon {
+                    position: relative;
+                    z-index: 1;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 14px;
+                    height: 14px;
+                    flex: 0 0 14px;
+                    color: inherit;
+                    background: transparent;
+                    box-shadow: none;
+                    pointer-events: none;
+                }
+                .am-campaign-copy-icon svg {
+                    width: 13px;
+                    height: 13px;
+                    stroke-width: 2.1;
                 }
                 .am-campaign-copy-label {
+                    position: relative;
+                    z-index: 1;
+                    line-height: 18px;
+                    font-weight: 400;
+                    letter-spacing: 0;
+                    color: inherit;
                     pointer-events: none;
                 }
                 .am-campaign-copy-btn .am-wxt-copy-multi {
+                    position: relative;
+                    z-index: 1;
                     display: inline-flex;
                     align-items: center;
+                    justify-content: center;
                     gap: 2px;
-                    margin-left: 2px;
-                    padding: 2px 5px;
-                    border-radius: 10px;
-                    border: 1px solid var(--am26-border);
-                    background: var(--am26-surface-strong);
-                    color: var(--am26-primary);
-                    font-size: 11px;
-                    line-height: 1;
+                    margin-left: 0;
+                    height: 18px;
+                    min-width: 22px;
+                    padding: 0 5px;
+                    border-radius: 999px;
+                    border: 1px solid rgba(218, 222, 235, 0.95);
+                    background: rgba(255, 255, 255, 0.86);
+                    color: #333333;
+                    font-size: 12px;
+                    font-weight: 400;
+                    line-height: 16px;
+                    box-sizing: border-box;
                     user-select: none;
                     pointer-events: auto;
+                    box-shadow: none;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .am-campaign-copy-btn::before,
+                    .am-campaign-copy-btn::after {
+                        animation: none;
+                    }
                 }
                 .am-campaign-copy-btn .am-wxt-copy-multi-icon {
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    opacity: 0.9;
+                    color: inherit;
+                    opacity: 1;
                     pointer-events: none;
                 }
+                .am-campaign-copy-btn .am-wxt-copy-multi-icon svg {
+                    width: 12px;
+                    height: 12px;
+                }
                 .am-campaign-copy-btn .am-wxt-copy-multi-num {
-                    min-width: 12px;
+                    min-width: 7px;
                     text-align: center;
-                    font-weight: 600;
+                    font-weight: 400;
                     pointer-events: none;
                 }
                 .am-campaign-batch-plus-wrap {
@@ -970,6 +1353,15 @@
                     line-height: 28px;
                     white-space: nowrap;
                 }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar {
+                    align-items: flex-start;
+                    gap: 10px 16px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar .am-copy-overview-bulk-group {
+                    flex-wrap: wrap;
+                    row-gap: 6px;
+                    white-space: normal;
+                }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-title {
                     color: var(--am26-text);
                     font-weight: 600;
@@ -996,6 +1388,12 @@
                     font-size: 12px;
                     line-height: 28px;
                     outline: none;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar .am-copy-overview-bulk-input[type="text"] {
+                    width: 112px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar .am-copy-overview-bulk-input[type="number"] {
+                    width: 64px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-select {
                     width: 82px;
@@ -1041,6 +1439,9 @@
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:disabled {
                     cursor: not-allowed;
                     opacity: 0.5;
+                }
+                #am-campaign-copy-overview-popup[data-am-copy-dialog-mode="rename"] [data-am-copy-mode-hidden="rename"] {
+                    display: none !important;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table-wrap {
                     flex: 1;
@@ -1844,25 +2245,24 @@
             const closeBtn = panel.querySelector('.am-close-btn');
             const resizer = panel.querySelector('.am-resizer-left');
             let hoverOpenBlockedUntil = 0;
-            let autoHideTimer = null;
-
-            const clearAutoHideTimer = () => {
-                if (!autoHideTimer) return;
-                clearTimeout(autoHideTimer);
-                autoHideTimer = null;
-            };
 
             // 展开/收起动画
             const openPanel = (force = false) => {
-                clearAutoHideTimer();
+                this.clearPanelAutoHideState();
+                this.clearPanelIconRevealTimer();
                 if (!force && Date.now() < hoverOpenBlockedUntil) return;
-                if (State.config.panelOpen) return;
+                if (State.config.panelOpen) {
+                    this.bindPanelOutsideClickHandler(panel, icon, closePanel);
+                    return;
+                }
                 State.config.panelOpen = true;
                 State.save();
                 this.updateState();
+                this.bindPanelOutsideClickHandler(panel, icon, closePanel);
             };
             const closePanel = (blockHoverOpen = false) => {
-                clearAutoHideTimer();
+                this.clearPanelAutoHideState();
+                this.unbindPanelOutsideClickHandler();
                 if (blockHoverOpen) hoverOpenBlockedUntil = Date.now() + 800;
                 if (!State.config.panelOpen) return;
                 State.config.panelOpen = false;
@@ -1870,31 +2270,21 @@
                 this.updateState();
             };
             const scheduleAutoHide = (delay = 180) => {
-                clearAutoHideTimer();
-                autoHideTimer = setTimeout(() => {
-                    autoHideTimer = null;
-                    if (!State.config.panelOpen) return;
-                    if (panel.matches(':hover') || icon.matches(':hover')) return;
-                    closePanel(false);
-                }, delay);
+                this.schedulePanelAutoHide({ panel, icon, closePanel }, delay);
             };
+            if (State.config.panelOpen) {
+                this.bindPanelOutsideClickHandler(panel, icon, closePanel);
+            }
 
             icon.onclick = () => openPanel(true);
             // 鼠标移入悬浮球时自动展开
             icon.onmouseenter = () => openPanel(false);
-            panel.onmouseenter = clearAutoHideTimer;
+            panel.onmouseenter = () => this.clearPanelAutoHideState();
             panel.onmouseleave = () => scheduleAutoHide();
             closeBtn.onclick = (e) => {
                 e.stopPropagation();
                 closePanel(true);
             };
-
-            // 点击面板外部自动最小化
-            document.addEventListener('click', (e) => {
-                if (State.config.panelOpen && !panel.contains(e.target) && !icon.contains(e.target)) {
-                    closePanel(false);
-                }
-            });
 
             // 功能按钮
             // 功能开关 (Settings)
@@ -1943,10 +2333,9 @@
             const optBtn = document.getElementById('am-trigger-optimizer');
             if (optBtn) {
                 optBtn.onclick = () => {
+                    this.clearOptimizerOpenRetryTimer();
                     // [ADD] 点击护航时自动最小化主面板
-                    State.config.panelOpen = false;
-                    State.save();
-                    this.updateState();
+                    closePanel(false);
 
                     const toggleOptimizerPanel = () => {
                         try {
@@ -1962,11 +2351,11 @@
                         toggleOptimizerPanel();
                     } else {
                         Logger.log('⚠️ 算法护航模块初始化中...', true);
-                        setTimeout(() => {
+                        this.scheduleOptimizerOpenRetry(() => {
                             if (!toggleOptimizerPanel()) {
                                 alert('算法护航模块无法加载，请刷新页面重试');
                             }
-                        }, 1000);
+                        });
                     }
                 };
             }
@@ -2005,12 +2394,13 @@
                 };
 
                 keywordPlanBtn.onclick = () => {
+                    this.clearKeywordPlanOpenRetryTimer();
                     const api = resolveKeywordPlanApi();
                     if (openKeywordPlanWizard(api)) return;
                     if (openExistingKeywordOverlay()) return;
 
                     Logger.log('⚠️ 关键词建计划模块初始化中...', true);
-                    setTimeout(() => {
+                    this.scheduleKeywordPlanOpenRetry(() => {
                         const retryApi = resolveKeywordPlanApi();
                         if (openKeywordPlanWizard(retryApi)) {
                             return;
@@ -2020,7 +2410,7 @@
                         } else {
                             alert('组建计划模块不可用，请刷新页面重试');
                         }
-                    }, 800);
+                    });
                 };
             }
 
@@ -2034,23 +2424,26 @@
 
             // 拖拽调整宽度
             let isResizing = false, startX = 0, startWidth = 0;
+            const handlePanelResizeMove = (e) => {
+                if (!isResizing) return;
+                const newWidth = Math.min(500, Math.max(250, startWidth + startX - e.clientX));
+                panel.style.width = newWidth + 'px';
+            };
+            const handlePanelResizeEnd = () => {
+                isResizing = false;
+                document.body.style.userSelect = '';
+                document.removeEventListener('mousemove', handlePanelResizeMove);
+                document.removeEventListener('mouseup', handlePanelResizeEnd);
+            };
             resizer.onmousedown = (e) => {
                 isResizing = true;
                 startX = e.clientX;
                 startWidth = panel.offsetWidth;
                 document.body.style.userSelect = 'none';
+                document.addEventListener('mousemove', handlePanelResizeMove);
+                document.addEventListener('mouseup', handlePanelResizeEnd);
                 e.preventDefault();
             };
-            document.addEventListener('mousemove', (e) => {
-                if (isResizing) {
-                    const newWidth = Math.min(500, Math.max(250, startWidth + startX - e.clientX));
-                    panel.style.width = newWidth + 'px';
-                }
-            });
-            document.addEventListener('mouseup', () => {
-                isResizing = false;
-                document.body.style.userSelect = '';
-            });
 
             // 交互监听
             document.addEventListener('click', (e) => {
@@ -2089,11 +2482,13 @@
 
             // 面板显示/隐藏动画
             if (panelOpen) {
+                this.clearPanelIconRevealTimer();
                 panel.classList.remove('hidden');
                 icon.style.display = 'none';
             } else {
+                this.unbindPanelOutsideClickHandler();
                 panel.classList.add('hidden');
-                setTimeout(() => { icon.style.display = 'flex'; }, 300);
+                this.schedulePanelIconReveal(icon);
             }
 
             // 功能开关状态

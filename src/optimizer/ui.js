@@ -6,8 +6,284 @@
             td: `padding:4px 6px;border-bottom:1px solid var(--am26-border,rgba(255,255,255,.28));color:var(--am26-text-soft,#505a74);`
         },
         manualKeywordOutsideHandler: null,
+        manualKeywordOutsideHandlerBound: false,
         manualEscortExpandHandler: null,
         manualEscortMainSwitchGuardHandler: null,
+        tokenStatusTimerId: null,
+        tokenStatusMonitorActive: false,
+        tokenStatusVisibilityHandlerBound: false,
+        tokenStatusLastRefreshAt: 0,
+        logOverflowTimerId: null,
+        logOverflowVisibilityHandler: null,
+        logOverflowPendingWrapper: null,
+        panelRevealTimerId: null,
+        panelRevealVisibilityHandler: null,
+        panelRevealPendingCallback: null,
+        panelHighlightTimerId: null,
+        panelHighlightVisibilityHandler: null,
+        panelHighlightPendingPanel: null,
+
+        refreshTokenStatusIndicator: () => {
+            const now = Date.now();
+            const tokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
+            if (!tokenReady && now - UI.tokenStatusLastRefreshAt >= 2500) {
+                UI.tokenStatusLastRefreshAt = now;
+                try {
+                    TokenManager.refresh();
+                } catch { }
+            }
+            const tokenDot = document.getElementById(`${CONFIG.UI_ID}-token`);
+            if (tokenDot) {
+                const nextTokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
+                tokenDot.style.color = nextTokenReady ? 'var(--am26-success,#0ea86f)' : 'var(--am26-danger,#ea4f4f)';
+            }
+        },
+
+        isDocumentHidden: () => document.visibilityState === 'hidden',
+
+        clearTokenStatusTimer: () => {
+            if (UI.tokenStatusTimerId === null) return;
+            clearTimeout(UI.tokenStatusTimerId);
+            UI.tokenStatusTimerId = null;
+        },
+
+        bindTokenStatusVisibilityHandler: () => {
+            if (UI.tokenStatusVisibilityHandlerBound) return;
+            document.addEventListener('visibilitychange', UI.handleTokenStatusVisibilityChange);
+            UI.tokenStatusVisibilityHandlerBound = true;
+        },
+
+        unbindTokenStatusVisibilityHandler: () => {
+            if (!UI.tokenStatusVisibilityHandlerBound) return;
+            document.removeEventListener('visibilitychange', UI.handleTokenStatusVisibilityChange);
+            UI.tokenStatusVisibilityHandlerBound = false;
+        },
+
+        scheduleTokenStatusRefresh: () => {
+            if (!UI.tokenStatusMonitorActive) return;
+            UI.clearTokenStatusTimer();
+            if (UI.isDocumentHidden()) return;
+            UI.refreshTokenStatusIndicator();
+            UI.tokenStatusTimerId = setTimeout(() => {
+                UI.tokenStatusTimerId = null;
+                if (!UI.tokenStatusMonitorActive || UI.isDocumentHidden()) return;
+                UI.scheduleTokenStatusRefresh();
+            }, 1000);
+        },
+
+        handleTokenStatusVisibilityChange: () => {
+            if (!UI.tokenStatusMonitorActive) return;
+            if (UI.isDocumentHidden()) {
+                UI.clearTokenStatusTimer();
+                return;
+            }
+            UI.scheduleTokenStatusRefresh();
+        },
+
+        startTokenStatusMonitor: () => {
+            if (UI.tokenStatusMonitorActive) return;
+            UI.tokenStatusMonitorActive = true;
+            UI.bindTokenStatusVisibilityHandler();
+            UI.scheduleTokenStatusRefresh();
+        },
+
+        stopTokenStatusMonitor: () => {
+            if (!UI.tokenStatusMonitorActive && UI.tokenStatusTimerId === null && !UI.tokenStatusVisibilityHandlerBound) return;
+            UI.tokenStatusMonitorActive = false;
+            UI.clearTokenStatusTimer();
+            UI.unbindTokenStatusVisibilityHandler();
+        },
+
+        clearLogOverflowDelayTimer: () => {
+            if (UI.logOverflowTimerId === null) return;
+            clearTimeout(UI.logOverflowTimerId);
+            UI.logOverflowTimerId = null;
+        },
+
+        clearLogOverflowVisibilityHandler: () => {
+            if (typeof UI.logOverflowVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', UI.logOverflowVisibilityHandler);
+            }
+            UI.logOverflowVisibilityHandler = null;
+        },
+
+        clearLogOverflowTimer: () => {
+            UI.clearLogOverflowDelayTimer();
+            UI.clearLogOverflowVisibilityHandler();
+            UI.logOverflowPendingWrapper = null;
+        },
+
+        bindLogOverflowVisibilityHandler: () => {
+            if (typeof UI.logOverflowVisibilityHandler === 'function') return;
+            UI.logOverflowVisibilityHandler = () => {
+                const wrapper = UI.logOverflowPendingWrapper;
+                if (!wrapper || wrapper.nodeType !== 1 || !wrapper.isConnected || wrapper.dataset.expanded !== 'true') {
+                    UI.clearLogOverflowTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) {
+                    UI.clearLogOverflowDelayTimer();
+                    return;
+                }
+                UI.scheduleLogOverflowAuto(wrapper);
+            };
+            document.addEventListener('visibilitychange', UI.logOverflowVisibilityHandler);
+        },
+
+        scheduleLogOverflowAuto: (wrapper = null) => {
+            UI.clearLogOverflowTimer();
+            if (!wrapper || wrapper.nodeType !== 1) return;
+            UI.logOverflowPendingWrapper = wrapper;
+            UI.bindLogOverflowVisibilityHandler();
+            if (UI.isDocumentHidden()) return;
+            UI.logOverflowTimerId = setTimeout(() => {
+                UI.logOverflowTimerId = null;
+                const pendingWrapper = UI.logOverflowPendingWrapper;
+                if (!pendingWrapper || pendingWrapper.nodeType !== 1 || !pendingWrapper.isConnected || pendingWrapper.dataset.expanded !== 'true') {
+                    UI.clearLogOverflowTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) return;
+                UI.clearLogOverflowVisibilityHandler();
+                UI.logOverflowPendingWrapper = null;
+                pendingWrapper.style.overflow = 'auto';
+            }, 300);
+        },
+
+        clearPanelRevealTimer: () => {
+            if (UI.panelRevealTimerId !== null) {
+                clearTimeout(UI.panelRevealTimerId);
+                UI.panelRevealTimerId = null;
+            }
+            UI.clearPanelRevealVisibilityHandler();
+            UI.panelRevealPendingCallback = null;
+        },
+
+        clearPanelRevealVisibilityHandler: () => {
+            if (typeof UI.panelRevealVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', UI.panelRevealVisibilityHandler);
+            }
+            UI.panelRevealVisibilityHandler = null;
+        },
+
+        bindPanelRevealVisibilityHandler: () => {
+            if (typeof UI.panelRevealVisibilityHandler === 'function') return;
+            UI.panelRevealVisibilityHandler = () => {
+                if (UI.isDocumentHidden()) {
+                    if (UI.panelRevealTimerId !== null) {
+                        clearTimeout(UI.panelRevealTimerId);
+                        UI.panelRevealTimerId = null;
+                    }
+                    return;
+                }
+                const pendingCallback = UI.panelRevealPendingCallback;
+                if (typeof pendingCallback === 'function') {
+                    UI.schedulePanelReveal(pendingCallback);
+                } else {
+                    UI.clearPanelRevealTimer();
+                }
+            };
+            document.addEventListener('visibilitychange', UI.panelRevealVisibilityHandler);
+        },
+
+        schedulePanelReveal: (callback) => {
+            UI.clearPanelRevealTimer();
+            if (typeof callback !== 'function') return;
+            UI.panelRevealPendingCallback = callback;
+            UI.bindPanelRevealVisibilityHandler();
+            if (UI.isDocumentHidden()) return;
+            UI.panelRevealTimerId = setTimeout(() => {
+                UI.panelRevealTimerId = null;
+                if (UI.isDocumentHidden()) return;
+                const pendingCallback = UI.panelRevealPendingCallback;
+                UI.clearPanelRevealVisibilityHandler();
+                UI.panelRevealPendingCallback = null;
+                const panel = document.getElementById(CONFIG.UI_ID);
+                if (!panel) return;
+                if (typeof pendingCallback === 'function') pendingCallback(panel);
+            }, 100);
+        },
+
+        clearPanelHighlightDelayTimer: () => {
+            if (UI.panelHighlightTimerId === null) return;
+            clearTimeout(UI.panelHighlightTimerId);
+            UI.panelHighlightTimerId = null;
+        },
+
+        clearPanelHighlightVisibilityHandler: () => {
+            if (typeof UI.panelHighlightVisibilityHandler === 'function') {
+                document.removeEventListener('visibilitychange', UI.panelHighlightVisibilityHandler);
+            }
+            UI.panelHighlightVisibilityHandler = null;
+        },
+
+        clearPanelHighlightTimer: () => {
+            UI.clearPanelHighlightDelayTimer();
+            UI.clearPanelHighlightVisibilityHandler();
+            UI.panelHighlightPendingPanel = null;
+        },
+
+        bindPanelHighlightVisibilityHandler: () => {
+            if (typeof UI.panelHighlightVisibilityHandler === 'function') return;
+            UI.panelHighlightVisibilityHandler = () => {
+                const panel = UI.panelHighlightPendingPanel;
+                if (!panel || panel.nodeType !== 1 || !panel.isConnected) {
+                    UI.clearPanelHighlightTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) {
+                    UI.clearPanelHighlightDelayTimer();
+                    return;
+                }
+                UI.schedulePanelHighlightReset(panel);
+            };
+            document.addEventListener('visibilitychange', UI.panelHighlightVisibilityHandler);
+        },
+
+        schedulePanelHighlightReset: (panel = null) => {
+            UI.clearPanelHighlightDelayTimer();
+            if (!panel || panel.nodeType !== 1) {
+                UI.clearPanelHighlightTimer();
+                return;
+            }
+            UI.panelHighlightPendingPanel = panel;
+            UI.bindPanelHighlightVisibilityHandler();
+            if (UI.isDocumentHidden()) return;
+            UI.panelHighlightTimerId = setTimeout(() => {
+                UI.panelHighlightTimerId = null;
+                const pendingPanel = UI.panelHighlightPendingPanel;
+                if (!pendingPanel || pendingPanel.nodeType !== 1 || !pendingPanel.isConnected) {
+                    UI.clearPanelHighlightTimer();
+                    return;
+                }
+                if (UI.isDocumentHidden()) return;
+                UI.clearPanelHighlightVisibilityHandler();
+                UI.panelHighlightPendingPanel = null;
+                pendingPanel.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+            }, 500);
+        },
+
+        flashPanelHighlight: (panel = null) => {
+            UI.clearPanelHighlightTimer();
+            if (!panel || panel.nodeType !== 1) return;
+            panel.style.boxShadow = '0 0 20px rgba(24,144,255,0.8)';
+            UI.schedulePanelHighlightReset(panel);
+        },
+
+        bindManualKeywordOutsideHandler: () => {
+            if (UI.manualKeywordOutsideHandlerBound) return;
+            if (typeof UI.manualKeywordOutsideHandler !== 'function') return;
+            document.addEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
+            UI.manualKeywordOutsideHandlerBound = true;
+        },
+
+        unbindManualKeywordOutsideHandler: () => {
+            if (!UI.manualKeywordOutsideHandlerBound) return;
+            if (typeof UI.manualKeywordOutsideHandler === 'function') {
+                document.removeEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
+            }
+            UI.manualKeywordOutsideHandlerBound = false;
+        },
 
         // 全局状态日志（用于非计划相关的消息）
         updateStatus: (text, color = '#aaa') => {
@@ -1258,6 +1534,7 @@
             if (trigger instanceof HTMLButtonElement) {
                 trigger.setAttribute('aria-expanded', 'false');
             }
+            UI.unbindManualKeywordOutsideHandler();
         },
 
         refreshManualKeywordControls: () => {
@@ -1318,6 +1595,7 @@
                         preferenceMenu.style.display = 'block';
                         preferenceMenu.dataset.open = 'true';
                         preferenceTrigger.setAttribute('aria-expanded', 'true');
+                        UI.bindManualKeywordOutsideHandler();
                     }
                 };
 
@@ -1349,9 +1627,7 @@
                 });
             }
 
-            if (UI.manualKeywordOutsideHandler) {
-                document.removeEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
-            }
+            UI.unbindManualKeywordOutsideHandler();
             UI.manualKeywordOutsideHandler = (event) => {
                 if (!(preferenceMenu instanceof HTMLElement) || preferenceMenu.dataset.open !== 'true') return;
                 if (
@@ -1363,7 +1639,6 @@
                 }
                 UI.closeManualKeywordPreferenceMenu();
             };
-            document.addEventListener('mousedown', UI.manualKeywordOutsideHandler, true);
             UI.refreshManualKeywordControls();
         },
 
@@ -2058,13 +2333,48 @@
                     previousActiveElement.focus({ preventScroll: true });
                 }
             };
+            let resultOverlayClosing = false;
+            let resultOverlayCloseTimerId = null;
+            let resultOverlayCloseVisibilityHandler = null;
+            const clearResultOverlayCloseTimer = () => {
+                if (resultOverlayCloseTimerId === null) return;
+                clearTimeout(resultOverlayCloseTimerId);
+                resultOverlayCloseTimerId = null;
+            };
+            const clearResultOverlayCloseVisibilityHandler = () => {
+                if (typeof resultOverlayCloseVisibilityHandler === 'function') {
+                    document.removeEventListener('visibilitychange', resultOverlayCloseVisibilityHandler);
+                }
+                resultOverlayCloseVisibilityHandler = null;
+            };
+            const finishResultOverlayClose = () => {
+                clearResultOverlayCloseTimer();
+                clearResultOverlayCloseVisibilityHandler();
+                document.removeEventListener('keydown', handleResultKeydown, true);
+                overlay.remove();
+                restoreFocus();
+            };
+            const bindResultOverlayCloseVisibilityHandler = () => {
+                if (typeof resultOverlayCloseVisibilityHandler === 'function') return;
+                resultOverlayCloseVisibilityHandler = () => {
+                    if (!UI.isDocumentHidden()) return;
+                    finishResultOverlayClose();
+                };
+                document.addEventListener('visibilitychange', resultOverlayCloseVisibilityHandler);
+            };
             const closeResultOverlay = () => {
+                if (resultOverlayClosing) return;
+                resultOverlayClosing = true;
                 document.removeEventListener('keydown', handleResultKeydown, true);
                 overlay.style.opacity = '0';
                 overlay.style.transition = 'opacity 0.24s ease';
-                setTimeout(() => {
-                    overlay.remove();
-                    restoreFocus();
+                if (UI.isDocumentHidden()) {
+                    finishResultOverlayClose();
+                    return;
+                }
+                bindResultOverlayCloseVisibilityHandler();
+                resultOverlayCloseTimerId = setTimeout(() => {
+                    finishResultOverlayClose();
                 }, 240);
             };
             const handleResultKeydown = (event) => {
@@ -2371,7 +2681,7 @@
                                 <input id="${CONFIG.UI_ID}-prompt" type="text" placeholder="例: 深度拿量" />
                             </label>
                             <label class="am-escort-field">
-                                <span class="am-escort-field-label">同时执行</span>
+                                <span class="am-escort-field-label">任务并发</span>
                                 <input id="${CONFIG.UI_ID}-concurrency" type="number" min="1" max="10" />
                                 <span class="am-escort-field-unit">个计划</span>
                             </label>
@@ -2396,6 +2706,11 @@
                 panel.style.opacity = '0';
                 panel.style.transform = 'scale(0.8)';
                 panel.style.pointerEvents = 'none';
+                UI.stopTokenStatusMonitor();
+                UI.clearLogOverflowTimer();
+                UI.clearPanelRevealTimer();
+                UI.clearPanelHighlightTimer();
+                UI.closeManualKeywordPreferenceMenu();
             };
 
             // 居中按钮事件（切换模式）
@@ -2441,6 +2756,7 @@
                 runBtn.style.background = 'linear-gradient(135deg,var(--am26-primary,#2a5bff),var(--am26-primary-strong,#1d3fcf))';
             };
             const restoreIdlePanelView = ({ clearLog = true } = {}) => {
+                UI.clearLogOverflowTimer();
                 const wrapper = document.getElementById(`${CONFIG.UI_ID}-log-wrapper`);
                 const logEl = document.getElementById(`${CONFIG.UI_ID}-log`);
                 const settingPanel = document.getElementById(`${CONFIG.UI_ID}-latest-setting-panel`);
@@ -2477,6 +2793,7 @@
                 const isMaximized = panel.dataset.maximized === 'true';
 
                 if (isMaximized) {
+                    UI.clearLogOverflowTimer();
                     // 恢复默认尺寸
                     panel.style.top = '20px';
                     panel.style.height = 'auto';
@@ -2498,7 +2815,7 @@
                         wrapper.style.opacity = '1';
                         wrapper.style.marginBottom = '12px';
                         wrapper.style.transform = 'scaleY(1)';
-                        setTimeout(() => wrapper.style.overflow = 'auto', 300);
+                        UI.scheduleLogOverflowAuto(wrapper);
                     }
                     panel.dataset.maximized = 'true';
                 }
@@ -2532,7 +2849,7 @@
                     wrapper.style.opacity = '1';
                     wrapper.style.marginBottom = '12px';
                     wrapper.style.transform = 'scaleY(1)';
-                    setTimeout(() => wrapper.style.overflow = 'auto', 300);
+                    UI.scheduleLogOverflowAuto(wrapper);
                     panel.dataset.maximized = 'true';
                 }
                 setRunButtonMode('back');
@@ -2613,22 +2930,7 @@
             resizerBottom.onmousedown = e => bindResize('height', e);
             resizerCorner.onmousedown = e => bindResize('both', e);
 
-            // Token 状态检测
-            let lastTokenRefreshAt = 0;
-            setInterval(() => {
-                const now = Date.now();
-                const tokenReady = !!(State.tokens.dynamicToken && State.tokens.loginPointId);
-                if (!tokenReady && now - lastTokenRefreshAt >= 2500) {
-                    lastTokenRefreshAt = now;
-                    try {
-                        TokenManager.refresh();
-                    } catch { }
-                }
-                const tokenDot = document.getElementById(`${CONFIG.UI_ID}-token`);
-                if (tokenDot) {
-                    tokenDot.style.color = (State.tokens.dynamicToken && State.tokens.loginPointId) ? 'var(--am26-success,#0ea86f)' : 'var(--am26-danger,#ea4f4f)';
-                }
-            }, 1000);
+            UI.refreshTokenStatusIndicator();
         }
     };
 

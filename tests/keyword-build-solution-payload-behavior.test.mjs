@@ -221,3 +221,106 @@ test('buildSolutionFromPlan: 非关键词场景模板裁剪与 itemIdList 二次
         '缺少非关键词模板 optional keys 裁剪分支'
     );
 });
+
+test('buildSolutionFromPlan: AI点睛当前计划复制在最终 payload 补齐单元流量智选词包', () => {
+    const campaignPruneBlock = source.slice(
+        source.indexOf('const KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS = new Set(['),
+        source.indexOf('const KEYWORD_WORD_PACKAGE_ERROR_RE = /流量智选词包校验失败/;')
+    );
+    assert.ok(campaignPruneBlock.length > 0, '无法定位关键词 campaign 最终裁剪白名单');
+    for (const field of ['sourceChannel', 'channelLocation', 'selectedTargetBizCode']) {
+        assert.match(
+            campaignPruneBlock,
+            new RegExp(`'${field}'`),
+            `最终 payload 白名单缺少官方入口来源字段：${field}`
+        );
+    }
+    assert.doesNotMatch(
+        campaignPruneBlock,
+        /'searchUpgradePxb'/,
+        '最终 payload 不应提交旧复制计划异常标签字段 searchUpgradePxb'
+    );
+    assert.match(
+        source,
+        /const DEFAULT_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST = \[[\s\S]*?wordPackageId:\s*0,[\s\S]*?wordPackageName:\s*'流量智选'[\s\S]*?strategyList:\s*DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST/,
+        '最终组包层缺少默认流量智选词包合同'
+    );
+    assert.match(
+        source,
+        /const isCopyKeywordAiMaxEnabled = \(campaign = \{\}\) => \{[\s\S]*?campaign\.aiMaxSwitch \?\? aiMaxInfo\.aiMaxSwitch[\s\S]*?=== 1;/,
+        '最终组包层未识别 AI点睛开关'
+    );
+    assert.match(
+        source,
+        /const copyKeywordAiMaxNeedsWordPackage = isKeywordScene[\s\S]*?request\?\.__copyCurrentPlan === true \|\| plan\?\.__copyCurrentPlan === true[\s\S]*?isCopyKeywordAiMaxEnabled\(merged\.campaign\);[\s\S]*?if \(copyKeywordAiMaxNeedsWordPackage\) \{/,
+        '最终组包层未在当前计划复制 + AI点睛时进入词包兜底'
+    );
+    assert.match(
+        source,
+        /const normalizedCopyWordPackageList = normalizeKeywordWordPackageListForSubmit\(merged\.adgroup\?\.wordPackageList \|\| \[]\);[\s\S]*?const copyWordPackageList = normalizedCopyWordPackageList\.length[\s\S]*?: buildDefaultKeywordTrafficSmartWordPackageList\(\);[\s\S]*?merged\.adgroup\.wordPackageList = copyWordPackageList;[\s\S]*?keywordBundle\.useWordPackage = true;/,
+        '最终 payload 未把默认流量智选词包写入 adgroup 并同步 useWordPackage'
+    );
+    assert.doesNotMatch(
+        source,
+        /merged\.campaign\.wordPackageList = copyWordPackageList/,
+        '流量智选词包不应写入 campaign'
+    );
+    assert.match(
+        source,
+        /applyOverrides\(merged,\s*request,\s*plan\);[\s\S]*?if \(isKeywordScene\) \{[\s\S]*?merged\.adgroup = pruneKeywordAdgroupForCustomScene\(merged\.adgroup,\s*hasItem \? item : null,[\s\S]*?\);/,
+        '当前计划复制的 rawOverrides 必须在最终 payload 出口再次经过关键词单元裁剪归一'
+    );
+    assert.match(
+        source,
+        /const pruneKeywordAdgroupForCustomScene = \(adgroup = \{\}, item = null, options = \{\}\) => \{[\s\S]*?const input = isPlainObject\(adgroup\) \? adgroup : \{\};[\s\S]*?if \(hasOwn\(input, 'wordPackageList'\)\) \{[\s\S]*?out\.wordPackageList = normalizeKeywordWordPackageListForSubmit\(input\.wordPackageList\);/,
+        '最终关键词单元裁剪必须归一化词包状态与出价，避免详情态词包直接进入 addList'
+    );
+    assert.match(
+        source,
+        /const resolveCopySourceAdgroupListField = \(field = ''\) => \{[\s\S]*?plan\?\.rawOverrides\?\.adgroup,[\s\S]*?request\?\.common\?\.rawOverrides\?\.adgroup,[\s\S]*?const copySourceCrowdListState = resolveCopySourceAdgroupListField\('crowdList'\);[\s\S]*?out\.crowdList = copySourceCrowdList\.length \? deepClone\(copySourceCrowdList\) : \[];[\s\S]*?out\.rightList = copySourceCrowdList\.length[\s\S]*?\? deepClone\(copySourceCrowdList\)[\s\S]*?: \([\s\S]*?copySourceRightListState\.explicit[\s\S]*?\);/,
+        '当前计划复制最终 payload 必须只从 rawOverrides 源字段取人群，并用源 crowdList 覆盖 rightList'
+    );
+    assert.match(
+        source,
+        /merged\.adgroup = pruneKeywordAdgroupForCustomScene\(merged\.adgroup,\s*hasItem \? item : null,\s*\{[\s\S]*?request,[\s\S]*?plan[\s\S]*?\}\);/,
+        '当前计划复制的最终单元裁剪必须传入 request/plan 以识别复制上下文'
+    );
+});
+
+test('buildSolutionFromPlan: 关键词当前计划复制保留高级设置资源位和AI点睛屏蔽词', () => {
+    assert.match(
+        source,
+        /const DEFAULT_KEYWORD_SEARCH_ADZONE_LIST = \[[\s\S]*?adzoneId:\s*'114790550288'[\s\S]*?status:\s*'start'/,
+        '缺少关键词推广默认淘宝搜索资源位合同'
+    );
+    assert.match(
+        source,
+        /const ensureCopyKeywordDefaultAdzoneList = \(campaign = \{\}, options = \{\}\) => \{[\s\S]*?const isCopyCurrentPlan = request\?\.__copyCurrentPlan === true \|\| plan\?\.__copyCurrentPlan === true;[\s\S]*?if \(!isCopyCurrentPlan\) return;[\s\S]*?campaign\.adzoneList = buildDefaultKeywordSearchAdzoneList\(\);[\s\S]*?\};/,
+        '关键词当前计划复制缺少资源位为空时的默认淘宝搜索补齐'
+    );
+    assert.match(
+        source,
+        /const applyKeywordAiMaxShieldWordsForSubmit = \(campaign = \{\}\) => \{[\s\S]*?centerShieldWordList[\s\S]*?const sourceCenterShieldWordList = centerShieldWordList\.length[\s\S]*?normalizeKeywordAiMaxShieldWordTextList\(campaign\.shieldCenterWords[\s\S]*?campaign\.shieldCenterWords = sourceCenterShieldWordList[\s\S]*?campaign\.shieldWords = sourceExactShieldWordList[\s\S]*?campaign\.campaignShieldWords = campaignShieldWords/,
+        'AI点睛屏蔽词未从 aiMaxInfo 物化到服务端顶层字段'
+    );
+    assert.match(
+        source,
+        /const buildKeywordCampaignShieldWordsFromCenterList = \(wordList = \[]\) => \([\s\S]*?word,[\s\S]*?matchScope:\s*2/,
+        '中心词屏蔽未生成 campaignShieldWords 的 matchScope=2 合同'
+    );
+    assert.match(
+        source,
+        /const applyCopyKeywordAdvancedSettingsForSubmit = \(campaign = \{\}, options = \{\}\) => \{[\s\S]*?if \(isCopyKeywordAiMaxEnabled\(campaign\)\) \{[\s\S]*?applyKeywordAiMaxShieldWordsForSubmit\(campaign\);[\s\S]*?ensureCopyKeywordDefaultAdzoneList\(campaign, options\);[\s\S]*?\};/,
+        '关键词复制高级设置未收敛到资源位和 AI点睛屏蔽词统一提交 helper'
+    );
+    assert.match(
+        source,
+        /applyCopyKeywordAdvancedSettingsForSubmit\(out, \{ request, plan \}\);[\s\S]*?return out;/,
+        '最终关键词提交前未应用高级屏蔽词映射和资源位出口补齐'
+    );
+    assert.match(
+        source,
+        /const buildCreatePayload = \(entries = \[]\) => \{[\s\S]*?applyCopyKeywordAdvancedSettingsForSubmit\(solution\.campaign,[\s\S]*?request:\s*mergedRequest[\s\S]*?\);[\s\S]*?solutionList[\s\S]*?\};/,
+        '最终 addList 请求体发出前未二次校正关键词复制高级设置'
+    );
+});
