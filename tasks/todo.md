@@ -1,3 +1,38 @@
+# TODO - 2026-06-06 E7pro_自定义复制流量智选状态回归修复
+
+## 需求规格
+- 用户反馈：复制 `69514602419 / E7pro_自定义` 后，人群/关键词相关设置里的 `流量智选` 被打开了，但原计划没有打开；复制后状态必须与源计划一致。
+- 目标：修复当前计划复制链路中流量智选词包状态被误改为开启的问题。源计划词包顶层 `onlineStatus/status` 和策略 `onlineStatus` 为关闭时，最终复制提交必须保持关闭；只允许补齐新增接口必需的 `bidPrice` 等出价合同，不允许改变开关语义。
+- 对比范围：`adgroup.wordPackageList` 顶层 `onlineStatus/status`、`strategyList[].onlineStatus/bidPrice`、`useWordPackage` 开关、最终 `/solution/addList.json?bizCode=onebpSearch` 的 `solutionList[0].adgroupList[0].wordPackageList`，以及源/目标服务端回读状态。
+- 修复原则：不通过删除词包来掩盖状态差异；不把详情态关闭值强制归一成新增态开启值；AI 点睛源词包缺失时的默认词包兜底只服务 AI 点睛开启且源无显式词包的场景。
+- 安全边界：如需 Chrome 验收，只围绕用户授权的复制链路做最小真实复制/只读回查；不得删除、暂停/开启、修改已有计划或执行无关写操作；请求证据只记录脱敏摘要。
+
+## 执行计划
+- [x] 复查上一轮词包归一化、AI 点睛兜底和真实回读记录，确认流量智选被开启的代码路径。
+- [x] 更新 `tasks/lessons.md`，沉淀“词包新增合同不得改变源开关状态”的规则。
+- [x] 修复 `normalizeKeywordWordPackageListForSubmit()` 和复制上下文 `useWordPackage` 判定，保持源词包状态一致。
+- [x] 更新回归测试，覆盖源流量智选关闭时复制提交仍关闭，同时保留 `bidPrice` 以避免新增接口校验失败。
+- [x] 运行目标测试、构建/同步检查、diff 自审；必要时用 Chrome MCP 真实复制并只读回查源/目标词包状态。
+
+## 高层操作摘要
+- 根因确认：上一轮为了修复 `词包出价不能为空`，在 `normalizeKeywordWordPackageItemForSubmit()` 中只要识别为 `流量智选` 就强制 `onlineStatus:1/status:1`，并强制所有策略 `onlineStatus:1`。这会把源计划关闭态误开，违背复制语义。
+- 正确取舍：词包新增接口需要的是合法新增合同和出价字段，不等于必须开启。源详情态中的旧 `campaignId/adgroupId/id/gmt*` 应清理，缺失的 `bidPrice` 应补齐；但顶层和策略的开关字段必须按源值保留。
+- 修复实现：`normalizeKeywordWordPackageItemForSubmit()` 现在先读取源 `onlineStatus/status`，只有源字段缺失时才使用默认值；流量智选 fallback 策略列表也继承源顶层 `onlineStatus`，不再通过 `forceOnlineStatus:1` 把三条策略强行打开。
+- 人群状态核对：当前计划复制的 `crowdList/rightList` 仍来自源 `rawOverrides.adgroup.crowdList` 深拷贝，最终 `pruneKeywordAdgroupForCustomScene()` 用源 `crowdList` 覆盖 `rightList`，不会逐条改写人群 `status/onlineStatus`。已补测试断言源人群关闭态不会被解析阶段改成开启。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- `node --test --test-name-pattern '关键词人群解析兼容绑定行和直接 crowd 行并过滤源单元' tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，新增断言源人群 `onlineStatus/status=0` 解析后仍为 `0`。
+- `node --test tests/keyword-custom-mode-wordpackage.test.mjs`：通过，21 项全绿；覆盖源流量智选 `status=0`、策略混合开关保留、源流量智选关闭时三条默认策略保持关闭，以及源词包缺失时默认开启兜底仍保留。
+- `node --test tests/keyword-custom-mode-wordpackage.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs`：60 项中 59 项通过；1 项失败来自当前工作区另一个未完成的“批量修改计划名称”改动改变复制一览窗源码结构断言，非本轮流量智选状态修复引入。
+- `git diff --check`：通过。
+- Chrome MCP 只读源计划复核：在真实 `one.alimama.com` 关键词推广页调用 `/wordpackage/findList.json?bizCode=onebpSearch` 读取源 `69514602419 / 69510831221`，返回 1 个 `流量智选`，顶层 `onlineStatus:0/status:0`，三条策略 `onlineStatus:0` 且 `bidPrice:1`；调用 `/crowd/findList.json` 返回 23 个人群，状态直方图 `1/null:23`。本轮未执行真实创建、暂停、删除或修改写操作。
+
+## 结果复盘
+- 本轮回归的根因是把“新增接口字段合同”误当成“必须开启”的业务语义。正确行为是：保留源计划开关，只补新增接口必需的 `bidPrice` 和清理旧 ID。
+- 复制后人群状态一致性分两层保证：词包侧不再强制开启 `流量智选`；人群侧继续使用源 `crowdList` 深拷贝覆盖 `rightList`，并补测试防止解析阶段改写源状态。
+- 当前工作区仍存在另一个未完成的“批量修改计划名称”改动，本轮提交将只暂存流量智选/人群状态一致性相关源码、测试、构建产物和任务记录。
+
 # TODO - 2026-06-06 E7pro_自定义复制关键词缺失排查与修复
 
 ## 需求规格

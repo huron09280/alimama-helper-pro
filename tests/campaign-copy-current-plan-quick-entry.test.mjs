@@ -123,7 +123,7 @@ test('关键词人群解析兼容绑定行和直接 crowd 行并过滤源单元'
                     campaignId: 69514602419,
                     adgroupId: 69510831221,
                     crowdList: [
-                        { campaignId: 69514602419, adgroupId: 69510831221, crowdName: '喜欢店铺新品的访客', labelId: 3000630 },
+                        { campaignId: 69514602419, adgroupId: 69510831221, crowdName: '喜欢店铺新品的访客', labelId: 3000630, onlineStatus: 0, status: 0 },
                         { campaignId: 69514602419, adgroupId: 999999, crowdName: '应过滤的其它单元', labelId: 1 }
                     ]
                 },
@@ -157,6 +157,9 @@ test('关键词人群解析兼容绑定行和直接 crowd 行并过滤源单元'
         out.map(item => item.crowdName || item.crowd?.crowdName).sort(),
         ['喜欢店铺新品的访客', '消费偏好人群：购买力L1', '类目收藏加购未购买'].sort()
     );
+    const closedCrowd = out.find(item => item.crowdName === '喜欢店铺新品的访客');
+    assert.equal(closedCrowd.onlineStatus, 0, '复制源人群 onlineStatus 不应被改成开启');
+    assert.equal(closedCrowd.status, 0, '复制源人群 status 不应被改成开启');
 });
 
 test('复制按钮透传 campaignId/bizCode/itemId 并防重复点击', () => {

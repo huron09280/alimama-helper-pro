@@ -1861,19 +1861,30 @@
                 : toNumber(input.wordPackageId ?? input.packageId, NaN);
             if (!Number.isFinite(wordPackageId)) return null;
             const bidPrice = toNumber(input.bidPrice ?? input.price ?? input.peerPrice, 1);
+            const onlineStatus = hasOwn(input, 'onlineStatus')
+                ? toNumber(input.onlineStatus, DEFAULTS.keywordOnlineStatus)
+                : (isTrafficSmartPackage ? 1 : DEFAULTS.keywordOnlineStatus);
+            const status = hasOwn(input, 'status')
+                ? toNumber(input.status, onlineStatus)
+                : (isTrafficSmartPackage ? onlineStatus : 0);
+            const fallbackStrategyList = isTrafficSmartPackage
+                ? DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST.map(strategy => ({
+                    ...strategy,
+                    onlineStatus
+                }))
+                : [];
             return {
                 wordPackageId,
                 wordPackageName: rawName || (isTrafficSmartPackage ? '流量智选' : ''),
                 wordPackageType: toNumber(input.wordPackageType, isTrafficSmartPackage ? 0 : 0),
-                onlineStatus: isTrafficSmartPackage ? 1 : toNumber(input.onlineStatus, DEFAULTS.keywordOnlineStatus),
-                status: isTrafficSmartPackage ? 1 : toNumber(input.status, 0),
+                onlineStatus,
+                status,
                 bidPrice,
                 strategyList: normalizeKeywordWordPackageStrategyListForSubmit(
                     input.strategyList,
-                    isTrafficSmartPackage ? DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST : [],
+                    fallbackStrategyList,
                     {
-                        fallbackBidPrice: bidPrice,
-                        forceOnlineStatus: isTrafficSmartPackage ? 1 : undefined
+                        fallbackBidPrice: bidPrice
                     }
                 )
             };
