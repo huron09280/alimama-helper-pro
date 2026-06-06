@@ -10,15 +10,17 @@
 - [x] 检查当前分支、远端、`gh` 登录状态和剩余未跟踪文件。
 - [x] 比对当前分支、本地 `main` 和 `origin/main` 的关系，确认非破坏性合并策略。
 - [x] 将本地 `main` 合入当前分支，处理冲突并确认工作区只剩预期未跟踪截图。
-- [ ] 推送当前分支到远端。
-- [ ] 创建指向 `main` 的草稿 PR，并记录 URL。
-- [ ] 复核最终状态、提交范围和未纳入项。
+- [x] 推送当前分支到远端。
+- [x] 创建指向 `main` 的草稿 PR，并记录 URL。
+- [x] 复核最终状态、提交范围和未纳入项。
 
 ## 高层操作摘要
 - 已确认 `gh` 可用且账号 `huron09280` 已登录。
 - 已确认当前分支包含 `origin/main`，但本地 `main` 比 `origin/main` 多 61 个本地提交；当前分支相对本地 `main` 为 `main...HEAD = 1/27`。
 - 为避免直接修改主分支并绕过 PR，本轮采用“本地 `main` 合入当前分支 -> 推送当前分支 -> PR 到 `main`”。
 - 已执行 `git merge main --no-edit`，无冲突，当前分支已包含本地 `main`。
+- 已推送 `codex/ui-guidelines-agent-rules`，并创建草稿 PR #58：`https://github.com/huron09280/alimama-helper-pro/pull/58`。
+- 本地 `main` 是当前分支祖先，主分支 worktree 干净；最终任务记录推送后将用 fast-forward 合并到本地 `main`。
 
 ## 验证记录
 - `gh --version && gh auth status`：通过，账号 `huron09280` 已登录。
@@ -29,9 +31,16 @@
 - 合并后 `git rev-list --left-right --count origin/main...HEAD`：`0 90`，证明当前分支已包含远端 `main`。
 - `git diff --check`：通过。
 - `git status -sb`：仅剩未跟踪 `tasks/e7-custom-copy-button-before.png`，不纳入本次 PR。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `git push -u origin codex/ui-guidelines-agent-rules`：通过。
+- `gh pr create --draft --base main --head codex/ui-guidelines-agent-rules`：通过，PR URL 为 `https://github.com/huron09280/alimama-helper-pro/pull/58`。
+- `gh pr view 58 --json number,title,url,state,isDraft,baseRefName,headRefName`：PR 为 `OPEN`、`isDraft:true`、`baseRefName:"main"`、`headRefName:"codex/ui-guidelines-agent-rules"`。
 
 ## 结果复盘
-- 待记录。
+- 已完成当前分支与本地 `main` 的非冲突合并，且以草稿 PR 方式提交到 GitHub。
+- 本轮未纳入未跟踪截图 `tasks/e7-custom-copy-button-before.png`。
+- 本地 `main` 将在最终记录提交后通过 fast-forward 指向当前分支最新提交，不执行 reset 或覆盖未提交改动。
 
 # TODO - 2026-06-06 复制按钮背景动画改为仅入场播放
 
