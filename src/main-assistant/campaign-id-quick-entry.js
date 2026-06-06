@@ -302,6 +302,12 @@
                     title: `删除选中的${sceneName}计划`
                 },
                 {
+                    action: 'rename',
+                    icon: 'edit',
+                    label: '批量修改计划名称',
+                    title: `批量修改选中的${sceneName}计划名称`
+                },
+                {
                     action: 'shieldCrowd',
                     icon: 'shield-check',
                     label: '批量修改屏蔽人群',
@@ -805,6 +811,191 @@
                 bizCode: fallbackBizCode || selected[0]?.bizCode || this.DEFAULT_BIZ_CODE,
                 reason: meta.label
             });
+        },
+
+        normalizeBatchRenamePlanName(value = '') {
+            return String(value || '').replace(/\s+/g, ' ').trim();
+        },
+
+        guessCampaignNameFromContext(context = {}) {
+            const candidates = [
+                context?.campaignName,
+                context?.name,
+                context?.planName,
+                context?.campaign?.campaignName
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                const name = this.normalizeBatchRenamePlanName(candidates[i]);
+                if (name) return name;
+            }
+            if (context?.rowEl instanceof Element) {
+                const guessed = this.normalizeBatchRenamePlanName(
+                    MagicReport.guessCampaignNameById(context.campaignId, context.rowEl)
+                );
+                if (guessed) return guessed;
+            }
+            return '';
+        },
+
+        async resolveBatchRenamePlanName(context = {}, fallbackBizCode = '', authContext = {}) {
+            const guessed = this.guessCampaignNameFromContext(context);
+            if (guessed) return guessed;
+            const campaignId = this.normalizeCampaignId(context?.campaignId || '');
+            if (!campaignId) return '';
+            const bizCode = this.normalizeBizCode(context?.bizCode || fallbackBizCode || '') || this.DEFAULT_BIZ_CODE;
+            try {
+                const row = await this.queryCampaignListById(campaignId, bizCode, authContext);
+                const listName = this.normalizeBatchRenamePlanName(row?.campaignName || row?.name || '');
+                if (listName) return listName;
+            } catch (err) {
+                Logger.log(`⚠️ 列表查询计划${campaignId}名称失败，继续尝试详情接口：${err?.message || '未知错误'} `, true);
+            }
+            try {
+                const detail = await this.queryCampaignDetail(campaignId, bizCode, authContext);
+                const campaign = this.extractCopyCampaignFromPayload(detail?.response || {}, campaignId);
+                return this.normalizeBatchRenamePlanName(campaign?.campaignName || campaign?.name || '');
+            } catch (err) {
+                Logger.log(`⚠️ 查询计划${campaignId}详情失败，无法补齐计划名称：${err?.message || '未知错误'} `, true);
+                return '';
+            }
+        },
+
+        async buildBatchRenameRows(contexts = [], fallbackBizCode = '', authContext = {}) {
+            const selected = Array.isArray(contexts) ? contexts : [];
+            const rows = [];
+            const seen = new Set();
+            for (let i = 0; i < selected.length; i++) {
+                const context = selected[i] || {};
+                const campaignId = this.normalizeCampaignId(context.campaignId || '');
+                if (!campaignId || seen.has(campaignId)) continue;
+                seen.add(campaignId);
+                const bizCode = this.normalizeBizCode(context.bizCode || fallbackBizCode || '') || this.DEFAULT_BIZ_CODE;
+                const planName = await this.resolveBatchRenamePlanName(context, bizCode, authContext);
+                rows.push({
+                    index: rows.length,
+                    campaignId,
+                    bizCode,
+                    originalPlanName: planName,
+                    planName,
+                    bidModeDisplay: '',
+                    bidPrice: '',
+                    bidPriceEditable: false,
+                    budgetField: 'dayAverageBudget',
+                    budgetValue: ''
+                });
+            }
+            return rows;
+        },
+
+        async submitBatchRenameCampaignRows(context = {}, editedRows = []) {
+            const rows = Array.isArray(editedRows) ? editedRows : [];
+            const changedRows = rows
+                .map((row) => ({
+                    ...row,
+                    campaignId: this.normalizeCampaignId(row?.campaignId || ''),
+                    bizCode: this.normalizeBizCode(row?.bizCode || context.bizCode || '') || context.bizCode || this.DEFAULT_BIZ_CODE,
+                    originalPlanName: this.normalizeBatchRenamePlanName(row?.originalPlanName || ''),
+                    planName: this.normalizeBatchRenamePlanName(row?.planName || '')
+                }))
+                .filter(row => row.campaignId && row.planName && row.planName !== row.originalPlanName);
+            if (!changedRows.length) throw new Error('没有需要修改的计划名称');
+
+            const grouped = this.groupCampaignContextsByBizCode(changedRows, context.bizCode || this.DEFAULT_BIZ_CODE);
+            const jobs = Array.from(grouped.entries()).map(([bizCode, list]) => (
+                this.updateCampaignNamesBatchByBiz(
+                    list,
+                    bizCode,
+                    this.resolveAuthContext(bizCode || context.bizCode || this.DEFAULT_BIZ_CODE)
+                )
+            ));
+            const settled = await Promise.allSettled(jobs);
+            const successCount = settled
+                .filter(item => item.status === 'fulfilled')
+                .reduce((sum, item) => sum + (item.value?.campaignIds?.length || 0), 0);
+            const errors = settled
+                .filter(item => item.status === 'rejected')
+                .map(item => item.reason?.message || '批量修改计划名称失败');
+            if (errors.length) {
+                throw new Error(`批量修改计划名称部分失败：成功 ${successCount} 个，失败 ${errors.length} 组，原因：${errors.join('；')}`);
+            }
+            Logger.log(`✅ 批量修改计划名称完成：${successCount} 个计划`);
+            this.refreshCampaignListOnly({
+                bizCode: context.bizCode || changedRows[0]?.bizCode || this.DEFAULT_BIZ_CODE,
+                reason: '批量修改计划名称'
+            });
+            return {
+                ok: true,
+                successCount,
+                changedRows
+            };
+        },
+
+        async runBatchRenameCampaigns(contexts = [], fallbackBizCode = '', triggerEl = null) {
+            const selected = Array.isArray(contexts) ? contexts : [];
+            if (!selected.length) {
+                Logger.log('⚠️ 请先勾选需要批量修改计划名称的计划', true);
+                return;
+            }
+            const ids = selected.map(item => this.normalizeCampaignId(item?.campaignId || '')).filter(Boolean);
+            if (!ids.length) {
+                Logger.log('⚠️ 未能识别需要批量修改计划名称的计划ID', true);
+                return;
+            }
+            const targetBizCode = this.normalizeBizCode(fallbackBizCode || selected[0]?.bizCode || '') || this.DEFAULT_BIZ_CODE;
+            const authContext = this.resolveAuthContext(targetBizCode);
+            const sceneName = this.getSceneNameByBizCode(targetBizCode) || '当前场景';
+            const quickRows = selected.map((context, index) => {
+                const campaignId = this.normalizeCampaignId(context?.campaignId || '');
+                const planName = this.guessCampaignNameFromContext(context);
+                return {
+                    index,
+                    campaignId,
+                    bizCode: this.normalizeBizCode(context?.bizCode || targetBizCode || '') || targetBizCode,
+                    originalPlanName: planName,
+                    planName,
+                    bidModeDisplay: '',
+                    bidPrice: '',
+                    bidPriceEditable: false,
+                    budgetField: 'dayAverageBudget',
+                    budgetValue: ''
+                };
+            }).filter(row => row.campaignId);
+            const quickContext = {
+                mode: 'rename',
+                label: '批量修改计划名称',
+                bizCode: targetBizCode,
+                sceneName,
+                copyCount: quickRows.length,
+                previewRows: quickRows,
+                triggerEl,
+                authContext,
+                preparing: true
+            };
+            try {
+                await this.openCopyPlanOverviewDialog(quickContext, (editedRows, preparedContext) => (
+                    this.submitBatchRenameCampaignRows(preparedContext, editedRows)
+                ), {
+                    mode: 'rename',
+                    prepareContext: async () => {
+                        const previewRows = await this.buildBatchRenameRows(selected, targetBizCode, authContext);
+                        const missing = previewRows.filter(row => !row.planName).map(row => row.campaignId);
+                        if (missing.length) {
+                            throw new Error(`未能读取以下计划名称：${missing.join('、')}`);
+                        }
+                        return {
+                            ...quickContext,
+                            previewRows,
+                            preparing: false
+                        };
+                    }
+                });
+            } catch (err) {
+                if (err?.cancelled || err?.code === 'rename_preview_cancelled') {
+                    Logger.log('📋 批量修改计划名称已取消');
+                    return;
+                }
+                Logger.log(`⚠️ 批量修改计划名称失败：${err?.message || '未知错误'} `, true);
+            }
         },
 
         async runBatchDeleteCampaigns(contexts = [], fallbackBizCode = '', triggerEl = null) {
@@ -1707,126 +1898,6 @@
             });
         },
 
-        findNativeBatchPlanSettingHost() {
-            return this.getBatchPlanSettingHosts().find((host) => {
-                if (!(host instanceof HTMLElement)) return false;
-                if (host.closest('.am-campaign-batch-plus-wrap, #am-campaign-batch-plus-menu')) return false;
-                if (host.getAttribute('data-am-campaign-batch-plus') === '1') return false;
-                if (host.classList.contains('am-campaign-batch-plus-native')) return false;
-                return this.isElementVisible(host);
-            }) || null;
-        },
-
-        triggerNativeBatchPlanSettingMenu(host) {
-            if (!(host instanceof HTMLElement)) return;
-            const target = host.querySelector('button, [role="button"]') || host;
-            ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
-                target.dispatchEvent(new MouseEvent(type, {
-                    bubbles: type !== 'mouseenter',
-                    cancelable: true,
-                    view: window
-                }));
-            });
-            if (target instanceof HTMLElement) target.click();
-        },
-
-        dispatchNativeMouseClick(target) {
-            if (!(target instanceof HTMLElement)) return;
-            const rect = target.getBoundingClientRect();
-            const clientX = rect.left + (rect.width / 2);
-            const clientY = rect.top + (rect.height / 2);
-            const base = {
-                bubbles: true,
-                cancelable: true,
-                composed: true,
-                view: window,
-                clientX,
-                clientY,
-                button: 0
-            };
-            const createPointerAwareEvent = (type, buttons = 0) => {
-                const eventInit = { ...base, buttons };
-                if (type.startsWith('pointer') && typeof PointerEvent === 'function') {
-                    return new PointerEvent(type, {
-                        ...eventInit,
-                        pointerId: 1,
-                        pointerType: 'mouse',
-                        isPrimary: true
-                    });
-                }
-                return new MouseEvent(type, eventInit);
-            };
-            if (typeof target.focus === 'function') {
-                try {
-                    target.focus({ preventScroll: true });
-                } catch (err) {
-                    target.focus();
-                }
-            }
-            ['pointerover', 'mouseover', 'mousemove'].forEach((type) => {
-                target.dispatchEvent(createPointerAwareEvent(type, 0));
-            });
-            ['pointerdown', 'mousedown'].forEach((type) => {
-                target.dispatchEvent(createPointerAwareEvent(type, 1));
-            });
-            ['pointerup', 'mouseup', 'click'].forEach((type) => {
-                target.dispatchEvent(createPointerAwareEvent(type, 0));
-            });
-        },
-
-        findNativeBatchPlanMenuItem(label = '批量编辑人群') {
-            const needle = String(label || '').replace(/\s+/g, '');
-            if (!needle) return null;
-            const clickableSelector = [
-                '.mx-output-link',
-                'button',
-                'a',
-                '[role="menuitem"]',
-                '[mx-click]',
-                '[mxa]',
-                'li',
-                '.mx-output-link',
-                '.mx-menu-item',
-                '.mxgc-popmenu-item'
-            ].join(',');
-            const selectorGroups = [
-                clickableSelector,
-                '.mx-output-item',
-                'div, span'
-            ];
-            const visited = new Set();
-            const candidates = selectorGroups.flatMap((selector) => {
-                return Array.from(document.querySelectorAll(selector)).filter((el) => {
-                    if (visited.has(el)) return false;
-                    visited.add(el);
-                    return true;
-                });
-            });
-            for (let i = 0; i < candidates.length; i++) {
-                const el = candidates[i];
-                if (!(el instanceof HTMLElement)) continue;
-                if (el.closest('#am-campaign-batch-plus-menu, .am-campaign-batch-plus-wrap')) continue;
-                if (!this.isElementVisible(el)) continue;
-                const text = String(el.innerText || el.textContent || '').replace(/\s+/g, '');
-                if (!text.includes(needle)) continue;
-                const interactiveChild = Array.from(el.querySelectorAll(clickableSelector)).find((child) => {
-                    if (!(child instanceof HTMLElement) || !this.isElementVisible(child)) return false;
-                    if (child.closest('#am-campaign-batch-plus-menu, .am-campaign-batch-plus-wrap')) return false;
-                    return String(child.innerText || child.textContent || '').replace(/\s+/g, '').includes(needle);
-                });
-                if (interactiveChild instanceof HTMLElement) return interactiveChild;
-                const childHasNeedle = Array.from(el.children).some((child) => {
-                    if (!(child instanceof HTMLElement) || !this.isElementVisible(child)) return false;
-                    return String(child.innerText || child.textContent || '').replace(/\s+/g, '').includes(needle);
-                });
-                if (childHasNeedle && !el.matches(clickableSelector)) {
-                    continue;
-                }
-                return el.closest(clickableSelector) || el;
-            }
-            return null;
-        },
-
         isDisplayNativeBatchCrowdDrawerOpen() {
             return Array.from(document.querySelectorAll('body *')).some((el) => {
                 if (!(el instanceof HTMLElement) || !this.isElementVisible(el)) return false;
@@ -2063,6 +2134,10 @@
             }
             if (action === 'delete') {
                 await this.runBatchDeleteCampaigns(contexts, normalizedBizCode, triggerEl);
+                return;
+            }
+            if (action === 'rename') {
+                await this.runBatchRenameCampaigns(contexts, normalizedBizCode, triggerEl);
                 return;
             }
             if (action === 'shieldCrowd' || action === 'crowdSetting') {
@@ -2602,6 +2677,13 @@
             return [];
         },
 
+        findCampaignInListPayload(payload = {}, campaignId = '') {
+            const targetId = this.normalizeCampaignId(campaignId);
+            if (!targetId) return {};
+            return this.extractCampaignListFromPayload(payload)
+                .find(item => this.normalizeCampaignId(item?.campaignId || item?.id || '') === targetId) || {};
+        },
+
         async collectRemoteCampaignPlanNames(bizCode, authContext, sourcePlanName = '') {
             const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
             const query = new URLSearchParams({
@@ -2640,6 +2722,40 @@
                 Logger.log(`⚠️ 查询已有计划名失败，继续使用页面可见名称：${err?.message || '未知错误'} `, true);
                 return [];
             }
+        },
+
+        async queryCampaignListById(campaignId, bizCode, authContext) {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return {};
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/horizontal/findPage.json?${query.toString()}`;
+            const payload = {
+                mx_bizCode: targetBizCode,
+                bizCode: targetBizCode,
+                offset: 0,
+                pageSize: 20,
+                orderField: '',
+                orderBy: '',
+                queryRuleAuto: '1',
+                adgroupRequired: false,
+                adzoneRequired: false,
+                searchKey: 'campaignId',
+                searchValue: id,
+                campaignId: id,
+                campaignIdList: [id],
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询计划名称失败',
+                businessErrorMessage: '查询计划名称失败',
+                allowBusinessError: true
+            });
+            return this.findCampaignInListPayload(json, id);
         },
 
         getSceneNameByBizCode(bizCode) {
@@ -4082,6 +4198,48 @@
             };
         },
 
+        async updateCampaignNamesBatchByBiz(rows = [], bizCode = '', authContext = {}) {
+            const normalizedRows = (Array.isArray(rows) ? rows : [])
+                .map((row) => ({
+                    campaignId: this.normalizeCampaignId(row?.campaignId || ''),
+                    campaignName: String(row?.planName || row?.campaignName || '').replace(/\s+/g, ' ').trim()
+                }))
+                .filter(row => row.campaignId && row.campaignName);
+            if (!normalizedRows.length) {
+                return {
+                    campaignIds: [],
+                    bizCode: this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE,
+                    response: {}
+                };
+            }
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/campaign/updatePart.json?${query.toString()}`;
+            const payload = {
+                bizCode: targetBizCode,
+                campaignList: normalizedRows.map(row => ({
+                    campaignId: Number(row.campaignId),
+                    campaignName: row.campaignName
+                })),
+                csrfId: String(authContext?.csrfId || ''),
+                strategyRecoverys: [],
+                loginPointId: String(authContext?.loginPointId || ''),
+                lrsIdList: []
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '批量修改计划名称失败',
+                businessErrorMessage: '批量修改计划名称失败'
+            });
+            return {
+                campaignIds: normalizedRows.map(row => row.campaignId),
+                bizCode: targetBizCode,
+                response: json
+            };
+        },
+
         async runSiteCustomBreakthroughStrategy(options = {}) {
             const attempt = Number(options?.attempt || 0);
             const resumeTargets = Array.isArray(options?.resumeTargets) ? options.resumeTargets : [];
@@ -4666,6 +4824,8 @@
             const bidPrice = this.resolveCopyBidPriceSeed(source);
             return planNames.map((planName, index) => ({
                 index,
+                campaignId: '',
+                originalPlanName: '',
                 planName,
                 bidModeDisplay,
                 bidPrice,
@@ -4745,20 +4905,27 @@
             });
         },
 
-        buildCopyOverviewRowHtml(rows = []) {
+        buildCopyOverviewRowHtml(rows = [], options = {}) {
+            const mode = String(options.mode || '').trim();
+            const renameMode = mode === 'rename';
             return (Array.isArray(rows) ? rows : []).map((row, index) => `
                     <tr data-am-copy-overview-row="${index}">
                         <td class="am-copy-overview-index">${index + 1}</td>
                         <td>
-                            <input data-am-copy-field="planName" class="am-copy-overview-input am-copy-overview-name" value="${this.escapeHtml(row.planName || '')}" />
+                            <input
+                                data-am-copy-field="planName"
+                                class="am-copy-overview-input am-copy-overview-name"
+                                value="${this.escapeHtml(row.planName || '')}"
+                                ${renameMode ? `data-campaign-id="${this.escapeHtml(row.campaignId || '')}" data-original-plan-name="${this.escapeHtml(row.originalPlanName || row.planName || '')}"` : ''}
+                            />
                         </td>
-                        <td>
+                        <td${renameMode ? ' data-am-copy-mode-hidden="rename"' : ''}>
                             <span data-am-copy-field="bidModeDisplay" class="am-copy-overview-static">${this.escapeHtml(row.bidModeDisplay || '跟随源计划')}</span>
                         </td>
-                        <td>
+                        <td${renameMode ? ' data-am-copy-mode-hidden="rename"' : ''}>
                             <input data-am-copy-field="bidPrice" class="am-copy-overview-input" type="number" min="0.01" step="0.01" value="${this.escapeHtml(row.bidPrice || '')}" ${row.bidPriceEditable === false ? 'disabled data-am-copy-readonly="1" placeholder="无出价"' : ''} />
                         </td>
-                        <td>
+                        <td${renameMode ? ' data-am-copy-mode-hidden="rename"' : ''}>
                             <div class="am-copy-overview-budget-cell">
                                 <select data-am-copy-field="budgetField" class="am-copy-overview-select">${this.buildCopyBudgetFieldOptions(row.budgetField || 'dayAverageBudget')}</select>
                                 <input data-am-copy-field="budgetValue" class="am-copy-overview-input" type="number" min="0.01" step="0.01" value="${this.escapeHtml(row.budgetValue || '')}" />
@@ -4769,18 +4936,23 @@
         },
 
         getCopyOverviewSubtitle(context = {}, rows = []) {
+            if (context.mode === 'rename') {
+                const sceneName = context.sceneName || this.getSceneNameByBizCode(context.bizCode || '') || '当前场景';
+                return `${sceneName} · 已选 ${rows.length} 个计划`;
+            }
             const sourceName = String(context.source?.campaign?.campaignName || context.source?.campaignName || '').trim();
             return `${sourceName || `源计划 ${context.campaignId || ''}`} · ${context.sceneName || ''} · 共 ${rows.length} 个`;
         },
 
         renderCopyOverviewRows(popup, context = {}) {
             if (!(popup instanceof HTMLElement)) return [];
+            const mode = String(context.mode || '').trim();
             const rows = Array.isArray(context.previewRows) && context.previewRows.length
                 ? context.previewRows
                 : this.buildCopyOverviewRows(context);
             const tbody = popup.querySelector('[data-am-copy-overview-tbody]');
             if (tbody instanceof HTMLElement) {
-                tbody.innerHTML = this.buildCopyOverviewRowHtml(rows);
+                tbody.innerHTML = this.buildCopyOverviewRowHtml(rows, { mode });
             }
             const subtitleEl = popup.querySelector('[data-am-copy-overview-subtitle]');
             if (subtitleEl instanceof HTMLElement) {
@@ -4851,6 +5023,8 @@
                 const bidPriceEditable = bidPriceInput instanceof HTMLInputElement && bidPriceInput.dataset.amCopyReadonly !== '1' && !bidPriceInput.disabled;
                 rows.push({
                     index,
+                    campaignId: String(planNameInput?.getAttribute?.('data-campaign-id') || rowEl.getAttribute('data-campaign-id') || '').trim(),
+                    originalPlanName: String(planNameInput?.getAttribute?.('data-original-plan-name') || '').replace(/\s+/g, ' ').trim(),
                     planName: String(planNameInput?.value || '').replace(/\s+/g, ' ').trim(),
                     bidModeDisplay: String(bidModeDisplayEl?.textContent || '').replace(/\s+/g, ' ').trim(),
                     bidPrice: bidPriceEditable ? this.normalizeCopyEditableNumber(bidPriceInput?.value || '') : '',
@@ -4862,18 +5036,26 @@
             return rows;
         },
 
-        validateCopyOverviewRows(rows = []) {
-            if (!Array.isArray(rows) || !rows.length) return '没有可提交的复制计划';
+        validateCopyOverviewRows(rows = [], options = {}) {
+            const renameMode = String(options.mode || '').trim() === 'rename';
+            if (!Array.isArray(rows) || !rows.length) return renameMode ? '没有可提交的计划名称' : '没有可提交的复制计划';
             const names = new Set();
+            let changedCount = 0;
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i] || {};
                 const lineNo = i + 1;
                 if (!String(row.planName || '').trim()) return `第 ${lineNo} 行计划名称不能为空`;
                 if (names.has(row.planName)) return `计划名称重复：${row.planName}`;
                 names.add(row.planName);
+                if (renameMode) {
+                    if (!this.normalizeCampaignId(row.campaignId || '')) return `第 ${lineNo} 行计划ID无效`;
+                    if (String(row.planName || '').trim() !== String(row.originalPlanName || '').trim()) changedCount += 1;
+                    continue;
+                }
                 if (row.bidPrice === '' && String(row.rawBidPrice || '').trim()) return `第 ${lineNo} 行出价价格必须大于 0`;
                 if (row.budgetValue === '' && String(row.rawBudgetValue || '').trim()) return `第 ${lineNo} 行预算必须大于 0`;
             }
+            if (renameMode && changedCount <= 0) return '没有需要修改的计划名称';
             return '';
         },
 
@@ -4954,6 +5136,122 @@
             return { ok: true, message: `已批量设置预算：${this.getCopyBudgetFieldLabel(budgetField)} ${budgetValue}` };
         },
 
+        getRenamePlanNameInputs(popup) {
+            if (!(popup instanceof HTMLElement)) return [];
+            return Array.from(popup.querySelectorAll('[data-am-copy-field="planName"]'))
+                .filter(input => input instanceof HTMLInputElement && !input.disabled);
+        },
+
+        setRenamePlanNameInputValue(input, value = '') {
+            if (!(input instanceof HTMLInputElement)) return;
+            input.value = this.normalizeBatchRenamePlanName(value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+
+        applyRenamePrefixToPopup(popup) {
+            const input = popup?.querySelector('[data-am-copy-rename="prefix"]');
+            const prefix = String(input?.value || '');
+            if (!prefix) return { ok: false, message: '请填写需要增加的前缀' };
+            const inputs = this.getRenamePlanNameInputs(popup);
+            if (!inputs.length) return { ok: false, message: '没有可编辑的计划名称' };
+            inputs.forEach((nameInput) => {
+                this.setRenamePlanNameInputValue(nameInput, `${prefix}${nameInput.value || ''}`);
+            });
+            return { ok: true, message: `已批量增加前缀：${prefix}` };
+        },
+
+        applyRenameSuffixToPopup(popup) {
+            const input = popup?.querySelector('[data-am-copy-rename="suffix"]');
+            const suffix = String(input?.value || '');
+            if (!suffix) return { ok: false, message: '请填写需要增加的后缀' };
+            const inputs = this.getRenamePlanNameInputs(popup);
+            if (!inputs.length) return { ok: false, message: '没有可编辑的计划名称' };
+            inputs.forEach((nameInput) => {
+                this.setRenamePlanNameInputValue(nameInput, `${nameInput.value || ''}${suffix}`);
+            });
+            return { ok: true, message: `已批量增加后缀：${suffix}` };
+        },
+
+        applyRenameReplaceToPopup(popup) {
+            const findInput = popup?.querySelector('[data-am-copy-rename="find"]');
+            const replaceInput = popup?.querySelector('[data-am-copy-rename="replace"]');
+            const findText = String(findInput?.value || '');
+            const replaceText = String(replaceInput?.value || '');
+            if (!findText) return { ok: false, message: '请填写需要查找的文本' };
+            const inputs = this.getRenamePlanNameInputs(popup);
+            if (!inputs.length) return { ok: false, message: '没有可编辑的计划名称' };
+            let changedCount = 0;
+            inputs.forEach((nameInput) => {
+                const nextName = String(nameInput.value || '').split(findText).join(replaceText);
+                if (nextName !== String(nameInput.value || '')) changedCount += 1;
+                this.setRenamePlanNameInputValue(nameInput, nextName);
+            });
+            return changedCount
+                ? { ok: true, message: `已替换 ${changedCount} 个计划名称` }
+                : { ok: false, message: '没有匹配到需要替换的文本' };
+        },
+
+        applyRenameDeleteToPopup(popup) {
+            const input = popup?.querySelector('[data-am-copy-rename="deleteText"]');
+            const deleteText = String(input?.value || '');
+            if (!deleteText) return { ok: false, message: '请填写需要删除的文本' };
+            const findInput = popup?.querySelector('[data-am-copy-rename="find"]');
+            const replaceInput = popup?.querySelector('[data-am-copy-rename="replace"]');
+            if (findInput instanceof HTMLInputElement) findInput.value = deleteText;
+            if (replaceInput instanceof HTMLInputElement) replaceInput.value = '';
+            const result = this.applyRenameReplaceToPopup(popup);
+            return result.ok ? { ok: true, message: `已删除包含“${deleteText}”的文本` } : result;
+        },
+
+        applyRenameSequenceToPopup(popup) {
+            const baseInput = popup?.querySelector('[data-am-copy-rename="sequenceBase"]');
+            const startInput = popup?.querySelector('[data-am-copy-rename="sequenceStart"]');
+            const baseName = this.normalizeBatchRenamePlanName(baseInput?.value || '');
+            const startRaw = String(startInput?.value || '1').trim() || '1';
+            const startNumber = Number.parseInt(startRaw, 10);
+            if (!baseName) return { ok: false, message: '请填写序号命名的基础名称' };
+            if (!Number.isFinite(startNumber)) return { ok: false, message: '请填写有效的起始序号' };
+            const inputs = this.getRenamePlanNameInputs(popup);
+            if (!inputs.length) return { ok: false, message: '没有可编辑的计划名称' };
+            const width = Math.max(startRaw.length, String(startNumber + inputs.length - 1).length);
+            inputs.forEach((nameInput, index) => {
+                const seq = String(startNumber + index).padStart(width, '0');
+                this.setRenamePlanNameInputValue(nameInput, `${baseName}${seq}`);
+            });
+            return { ok: true, message: `已按序号批量改名：${baseName}${String(startNumber).padStart(width, '0')} 起` };
+        },
+
+        applyRenameCleanWhitespaceToPopup(popup) {
+            const inputs = this.getRenamePlanNameInputs(popup);
+            if (!inputs.length) return { ok: false, message: '没有可编辑的计划名称' };
+            inputs.forEach((nameInput) => {
+                this.setRenamePlanNameInputValue(nameInput, nameInput.value || '');
+            });
+            return { ok: true, message: '已清理计划名称空白' };
+        },
+
+        restoreRenameOriginalNamesToPopup(popup) {
+            const inputs = this.getRenamePlanNameInputs(popup);
+            if (!inputs.length) return { ok: false, message: '没有可编辑的计划名称' };
+            inputs.forEach((nameInput) => {
+                this.setRenamePlanNameInputValue(nameInput, nameInput.getAttribute('data-original-plan-name') || '');
+            });
+            return { ok: true, message: '已恢复原计划名称' };
+        },
+
+        applyRenameActionToPopup(popup, action = '') {
+            const normalizedAction = String(action || '').trim();
+            if (normalizedAction === 'prefix') return this.applyRenamePrefixToPopup(popup);
+            if (normalizedAction === 'suffix') return this.applyRenameSuffixToPopup(popup);
+            if (normalizedAction === 'replace') return this.applyRenameReplaceToPopup(popup);
+            if (normalizedAction === 'deleteText') return this.applyRenameDeleteToPopup(popup);
+            if (normalizedAction === 'sequence') return this.applyRenameSequenceToPopup(popup);
+            if (normalizedAction === 'clean') return this.applyRenameCleanWhitespaceToPopup(popup);
+            if (normalizedAction === 'restore') return this.restoreRenameOriginalNamesToPopup(popup);
+            return { ok: false, message: '未识别的计划名称批量操作' };
+        },
+
         openCopyPlanOverviewDialog(context = {}, submitCallback, options = {}) {
             return new Promise((resolve, reject) => {
                 const oldPopup = document.getElementById('am-campaign-copy-overview-popup');
@@ -4962,6 +5260,20 @@
                 const focusBackTarget = this.createCopyFocusTarget(context, previousActiveElement);
                 const titleId = 'am-copy-overview-title';
                 const statusId = 'am-copy-overview-status';
+                const dialogMode = String(options.mode || context.mode || '').trim();
+                const renameMode = dialogMode === 'rename';
+                const titleText = renameMode ? '批量修改计划名称' : '复制计划一览';
+                const iconName = renameMode ? 'edit' : 'campaign-copy';
+                const readyStatusText = renameMode ? '确认后才会提交计划名称修改请求。' : '确认后才会提交创建请求。';
+                const preparingStatusText = renameMode ? '已打开预览，正在读取计划名称...' : '已打开预览，正在读取源计划详情...';
+                const readyAfterPrepareText = renameMode ? '计划名称已读取完成，确认后才会提交修改请求。' : '源计划详情已读取完成，确认后才会提交创建请求。';
+                const stillPreparingText = renameMode ? '计划名称仍在读取中，请稍候。' : '源计划详情仍在读取中，请稍候。';
+                const runningText = renameMode ? '修改中：正在提交计划名称修改请求，请勿重复操作。' : '生成中：正在提交复制请求，请勿重复操作。';
+                const runningButtonText = renameMode ? '修改中...' : '生成中...';
+                const submitButtonText = renameMode ? '确认修改' : '确认生成';
+                const successText = renameMode ? '修改成功，正在刷新计划列表。' : '生成成功，正在打开成功确认。';
+                const cancelledMessage = renameMode ? '已取消批量修改计划名称' : '已取消复制';
+                const cancelledCode = renameMode ? 'rename_preview_cancelled' : 'copy_preview_cancelled';
                 const rows = Array.isArray(context.previewRows) && context.previewRows.length
                     ? context.previewRows
                     : this.buildCopyOverviewRows(context);
@@ -4970,6 +5282,7 @@
                 let prepareContextTimerId = 0;
                 const popup = document.createElement('div');
                 popup.id = 'am-campaign-copy-overview-popup';
+                if (dialogMode) popup.setAttribute('data-am-copy-dialog-mode', dialogMode);
                 popup.setAttribute('role', 'dialog');
                 popup.setAttribute('aria-modal', 'true');
                 popup.setAttribute('aria-labelledby', titleId);
@@ -4978,15 +5291,15 @@
                 const firstRow = rows[0] || {};
                 const lastRow = rows[rows.length - 1] || firstRow;
                 const hasEditableBidPrice = rows.some(row => row?.bidPriceEditable !== false && this.normalizeCopyEditableNumber(row?.bidPrice || ''));
-                const rowHtml = this.buildCopyOverviewRowHtml(rows);
+                const rowHtml = this.buildCopyOverviewRowHtml(rows, { mode: dialogMode });
                 popup.innerHTML = `
                     <section class="am-copy-overview-card">
                         <header class="am-copy-overview-header">
                             <div class="am-copy-overview-heading">
-                                <span class="am-copy-overview-icon">${renderAmIcon('campaign-copy', { size: 18, strokeWidth: 2.1 })}</span>
+                                <span class="am-copy-overview-icon">${renderAmIcon(iconName, { size: 18, strokeWidth: 2.1 })}</span>
                                 <div>
                                     <div class="am-copy-overview-title-row">
-                                        <h3 class="am-copy-overview-title" id="${titleId}">复制计划一览</h3>
+                                        <h3 class="am-copy-overview-title" id="${titleId}">${this.escapeHtml(titleText)}</h3>
                                         <span class="am-copy-overview-state" data-am-copy-overview-state>${contextReady ? '待确认' : '读取中'}</span>
                                     </div>
                                     <p class="am-copy-overview-subtitle" data-am-copy-overview-subtitle>${this.escapeHtml(subtitleText)}</p>
@@ -4994,7 +5307,7 @@
                             </div>
                             <button type="button" class="am-copy-overview-close" aria-label="关闭">${renderAmIcon('close', { size: 14, strokeWidth: 2.4 })}</button>
                         </header>
-                        <div class="am-copy-overview-bulkbar">
+                        <div class="am-copy-overview-bulkbar"${renameMode ? ' data-am-copy-mode-hidden="rename"' : ''}>
                             <div class="am-copy-overview-bulk-group">
                                 <span class="am-copy-overview-bulk-title">批量出价</span>
                                 <label class="am-copy-overview-bulk-field">
@@ -5021,23 +5334,70 @@
                                 <button type="button" data-am-copy-bulk-action="budgetAll" class="am-copy-overview-bulk-btn">应用预算</button>
                             </div>
                         </div>
+                        ${renameMode ? `
+                        <div class="am-copy-overview-bulkbar am-copy-overview-renamebar" data-am-copy-renamebar="1">
+                            <div class="am-copy-overview-bulk-group">
+                                <span class="am-copy-overview-bulk-title">前后缀</span>
+                                <label class="am-copy-overview-bulk-field">
+                                    <span>前缀</span>
+                                    <input data-am-copy-rename="prefix" class="am-copy-overview-bulk-input" type="text" />
+                                </label>
+                                <button type="button" data-am-copy-rename-action="prefix" class="am-copy-overview-bulk-btn">加前缀</button>
+                                <label class="am-copy-overview-bulk-field">
+                                    <span>后缀</span>
+                                    <input data-am-copy-rename="suffix" class="am-copy-overview-bulk-input" type="text" />
+                                </label>
+                                <button type="button" data-am-copy-rename-action="suffix" class="am-copy-overview-bulk-btn">加后缀</button>
+                            </div>
+                            <div class="am-copy-overview-bulk-group">
+                                <span class="am-copy-overview-bulk-title">替换</span>
+                                <label class="am-copy-overview-bulk-field">
+                                    <span>查找</span>
+                                    <input data-am-copy-rename="find" class="am-copy-overview-bulk-input" type="text" />
+                                </label>
+                                <label class="am-copy-overview-bulk-field">
+                                    <span>替换为</span>
+                                    <input data-am-copy-rename="replace" class="am-copy-overview-bulk-input" type="text" />
+                                </label>
+                                <button type="button" data-am-copy-rename-action="replace" class="am-copy-overview-bulk-btn">替换</button>
+                                <label class="am-copy-overview-bulk-field">
+                                    <span>删除</span>
+                                    <input data-am-copy-rename="deleteText" class="am-copy-overview-bulk-input" type="text" />
+                                </label>
+                                <button type="button" data-am-copy-rename-action="deleteText" class="am-copy-overview-bulk-btn">删除文本</button>
+                            </div>
+                            <div class="am-copy-overview-bulk-group">
+                                <span class="am-copy-overview-bulk-title">序号</span>
+                                <label class="am-copy-overview-bulk-field">
+                                    <span>基础名</span>
+                                    <input data-am-copy-rename="sequenceBase" class="am-copy-overview-bulk-input" type="text" />
+                                </label>
+                                <label class="am-copy-overview-bulk-field">
+                                    <span>起始</span>
+                                    <input data-am-copy-rename="sequenceStart" class="am-copy-overview-bulk-input" type="number" min="0" step="1" value="1" />
+                                </label>
+                                <button type="button" data-am-copy-rename-action="sequence" class="am-copy-overview-bulk-btn">按序号改名</button>
+                                <button type="button" data-am-copy-rename-action="clean" class="am-copy-overview-bulk-btn">清理名称</button>
+                                <button type="button" data-am-copy-rename-action="restore" class="am-copy-overview-bulk-btn">恢复原名</button>
+                            </div>
+                        </div>` : ''}
                         <div class="am-copy-overview-table-wrap">
                             <table class="am-copy-overview-table">
                                 <thead>
                                     <tr>
                                         <th>#</th>
                                         <th>计划名称</th>
-                                        <th>计划出价方式</th>
-                                        <th>出价价格</th>
-                                        <th>预算</th>
+                                        <th${renameMode ? ' data-am-copy-mode-hidden="rename"' : ''}>计划出价方式</th>
+                                        <th${renameMode ? ' data-am-copy-mode-hidden="rename"' : ''}>出价价格</th>
+                                        <th${renameMode ? ' data-am-copy-mode-hidden="rename"' : ''}>预算</th>
                                     </tr>
                                 </thead>
                                 <tbody data-am-copy-overview-tbody>${rowHtml}</tbody>
                             </table>
                         </div>
-                        <div class="am-copy-overview-status ${contextReady ? 'is-info' : 'is-running'}" id="${statusId}" data-am-copy-overview-status role="status" aria-live="polite">${contextReady ? '确认后才会提交创建请求。' : '已打开预览，正在读取源计划详情...'}</div>
+                        <div class="am-copy-overview-status ${contextReady ? 'is-info' : 'is-running'}" id="${statusId}" data-am-copy-overview-status role="status" aria-live="polite">${contextReady ? this.escapeHtml(readyStatusText) : this.escapeHtml(preparingStatusText)}</div>
                         <footer class="am-copy-overview-footer">
-                            <button type="button" class="am-copy-overview-submit">确认生成</button>
+                            <button type="button" class="am-copy-overview-submit">${this.escapeHtml(submitButtonText)}</button>
                             <button type="button" class="am-copy-overview-cancel">取消</button>
                         </footer>
                     </section>
@@ -5051,6 +5411,8 @@
                 const bidEndInput = popup.querySelector('[data-am-copy-bulk="bidEnd"]');
                 const bidGradientBtn = popup.querySelector('[data-am-copy-bulk-action="bidGradient"]');
                 const budgetBulkBtn = popup.querySelector('[data-am-copy-bulk-action="budgetAll"]');
+                const renameActionButtons = Array.from(popup.querySelectorAll('[data-am-copy-rename-action]'))
+                    .filter(el => el instanceof HTMLButtonElement);
                 const restoreFocus = () => {
                     this.restoreFocusWhenReady(focusBackTarget);
                 };
@@ -5065,9 +5427,9 @@
                     restoreFocus();
                 };
                 const rejectCancelled = () => {
-                    const err = new Error('已取消复制');
+                    const err = new Error(cancelledMessage);
                     err.cancelled = true;
-                    err.code = 'copy_preview_cancelled';
+                    err.code = cancelledCode;
                     reject(err);
                 };
                 const setStatus = (message, level = 'info') => {
@@ -5085,7 +5447,7 @@
                     if (submitBtn instanceof HTMLButtonElement) {
                         submitBtn.disabled = !contextReady;
                     }
-                    popup.querySelectorAll('[data-am-copy-bulk-action]').forEach((el) => {
+                    popup.querySelectorAll('[data-am-copy-bulk-action], [data-am-copy-rename-action]').forEach((el) => {
                         if ('disabled' in el) el.disabled = !contextReady || el.dataset.amCopyReadonly === '1';
                     });
                     popup.querySelectorAll('input, select').forEach((el) => {
@@ -5100,9 +5462,9 @@
                     });
                     if (submitBtn instanceof HTMLButtonElement) {
                         submitBtn.disabled = !!running;
-                        submitBtn.textContent = running ? '生成中...' : '确认生成';
+                        submitBtn.textContent = running ? runningButtonText : submitButtonText;
                     }
-                    popup.querySelectorAll('[data-am-copy-bulk-action]').forEach((el) => {
+                    popup.querySelectorAll('[data-am-copy-bulk-action], [data-am-copy-rename-action]').forEach((el) => {
                         if ('disabled' in el) el.disabled = !!running || el.dataset.amCopyReadonly === '1';
                     });
                     if (cancelBtn instanceof HTMLButtonElement) cancelBtn.disabled = !!running;
@@ -5130,13 +5492,19 @@
                     const result = this.applyCopyBudgetBulkToPopup(popup);
                     setStatus(result.message, result.ok ? 'info' : 'error');
                 });
+                renameActionButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const result = this.applyRenameActionToPopup(popup, button.dataset.amCopyRenameAction || '');
+                        setStatus(result.message, result.ok ? 'info' : 'error');
+                    });
+                });
                 this.previewCopyBidGradientStep(popup);
                 if (!contextReady) {
                     setReadyState(false);
                 }
                 submitBtn?.addEventListener('click', async () => {
                     if (!contextReady) {
-                        setStatus('源计划详情仍在读取中，请稍候。', 'running');
+                        setStatus(stillPreparingText, 'running');
                         return;
                     }
                     const editedRows = this.readCopyOverviewRowsFromPopup(popup).map((row) => ({
@@ -5144,18 +5512,22 @@
                         rawBidPrice: popup.querySelector(`[data-am-copy-overview-row="${row.index}"] [data-am-copy-field="bidPrice"]`)?.value || '',
                         rawBudgetValue: popup.querySelector(`[data-am-copy-overview-row="${row.index}"] [data-am-copy-field="budgetValue"]`)?.value || ''
                     }));
-                    const error = this.validateCopyOverviewRows(editedRows);
+                    const error = this.validateCopyOverviewRows(editedRows, { mode: dialogMode });
                     if (error) {
                         setStatus(error, 'error');
                         return;
                     }
                     try {
                         setRunning(true);
-                        setStatus('生成中：正在提交复制请求，请勿重复操作。', 'running');
+                        setStatus(runningText, 'running');
                         clearPrepareContextTimer();
                         const result = await submitCallback(editedRows, activeContext);
-                        setStatus('生成成功，正在打开成功确认。', 'success');
-                        popup.remove();
+                        setStatus(successText, 'success');
+                        if (renameMode) {
+                            removePopup();
+                        } else {
+                            popup.remove();
+                        }
                         resolve(result);
                     } catch (err) {
                         setRunning(false);
@@ -5169,7 +5541,7 @@
                         activeContext = preparedContext;
                         activeContext.preparing = false;
                         this.renderCopyOverviewRows(popup, activeContext);
-                        setReadyState(true, '源计划详情已读取完成，确认后才会提交创建请求。');
+                        setReadyState(true, readyAfterPrepareText);
                         })
                         .catch((err) => {
                         contextReady = false;

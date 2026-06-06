@@ -731,11 +731,13 @@
                 }
                 .am-campaign-copy-btn::before {
                     background: rgb(51, 51, 255);
-                    animation: am-campaign-copy-shadow-left 5s linear infinite alternate;
+                    animation: am-campaign-copy-shadow-left 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
                 }
                 .am-campaign-copy-btn::after {
+                    bottom: -16px;
+                    left: 50%;
                     background: rgb(153, 51, 255);
-                    animation: am-campaign-copy-shadow-right 5s linear infinite alternate;
+                    animation: am-campaign-copy-shadow-right 0.72s cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
                 }
                 @keyframes am-campaign-copy-shadow-left {
                     0% {
@@ -1351,6 +1353,15 @@
                     line-height: 28px;
                     white-space: nowrap;
                 }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar {
+                    align-items: flex-start;
+                    gap: 10px 16px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar .am-copy-overview-bulk-group {
+                    flex-wrap: wrap;
+                    row-gap: 6px;
+                    white-space: normal;
+                }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-title {
                     color: var(--am26-text);
                     font-weight: 600;
@@ -1377,6 +1388,12 @@
                     font-size: 12px;
                     line-height: 28px;
                     outline: none;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar .am-copy-overview-bulk-input[type="text"] {
+                    width: 112px;
+                }
+                #am-campaign-copy-overview-popup .am-copy-overview-renamebar .am-copy-overview-bulk-input[type="number"] {
+                    width: 64px;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-select {
                     width: 82px;
@@ -1422,6 +1439,9 @@
                 #am-campaign-copy-overview-popup .am-copy-overview-bulk-btn:disabled {
                     cursor: not-allowed;
                     opacity: 0.5;
+                }
+                #am-campaign-copy-overview-popup[data-am-copy-dialog-mode="rename"] [data-am-copy-mode-hidden="rename"] {
+                    display: none !important;
                 }
                 #am-campaign-copy-overview-popup .am-copy-overview-table-wrap {
                     flex: 1;

@@ -1,3 +1,169 @@
+# TODO - 2026-06-06 复制按钮背景动画改为仅入场播放
+
+## 需求规格
+- 用户要求：计划行 `复制` 按钮的背景动画只在按钮出现时动，默认静止，不要持续循环抢视觉。
+- 目标：保留当前白底胶囊、蓝紫背景光影和同组原生按钮层级；把背景光影从无限循环改成短暂入场动画，动画结束后固定在默认静态位置。
+- 范围：只修改复制按钮背景伪元素动画和相关回归测试；不改变复制按钮文案、图标、数量徽标、复制业务流程或弹窗逻辑。
+- UI 规范：遵守 `docs/插件UI统一设计规范.md` 的轻量动效原则和 L91/L92 行内按钮层级教训。
+- 验证方式：目标测试、语法/构建/同步检查、diff 自审；如 Chrome DevTools MCP 可用，在真实 `one.alimama.com` 计划列表验证按钮出现后动画不再循环。
+
+## 执行计划
+- [x] 回顾 `tasks/lessons.md`、UI/图标规范和现有复制按钮样式，定位持续动画来源。
+- [x] 修改 `.am-campaign-copy-btn::before/::after`，将背景光影动画改为一次性入场播放并设置静态最终位置。
+- [x] 更新 `tests/campaign-copy-current-plan-quick-entry.test.mjs`，锁定复制按钮背景动画不能再使用 `infinite`。
+- [x] 运行相关测试、语法检查、构建/构建同步检查和 `git diff --check`。
+- [x] 记录真实页面或浏览器验证结果，无法验证时说明阻塞原因和替代检查。
+
+## 高层操作摘要
+- 已定位持续动画来源：`src/main-assistant/ui.js` 中 `.am-campaign-copy-btn::before/::after` 使用 `5s linear infinite alternate`，导致复制按钮稳定显示后背景仍持续移动。
+- 已把复制按钮双光影动画改为 `0.72s` 一次性入场动画；右侧光影伪元素显式设置最终静态位置，动画结束后不再移动。
+- 已更新复制按钮回归测试，要求背景动画使用一次性 `both` 播放，并禁止 `.am-campaign-copy-btn::before/::after` 的动画声明包含 `infinite`。
+
+## 验证记录
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --check tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/campaign-batch-plus-quick-entry.test.mjs`：通过，27 项全绿。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 和 `dist/extension`，构建版本 `7.06`。
+- `npm run build:check`：通过。
+- `node --check dist/extension/page.bundle.js && node --check 阿里妈妈多合一助手.js`：通过。
+- `git diff --check`：通过。
+- 构建产物 CSS 复核：`src/main-assistant/ui.js`、根 userscript、`dist/packages/alimama-helper-pro.user.js`、`dist/extension/page.bundle.js` 均已同步为 `animation: am-campaign-copy-shadow-* 0.72s cubic-bezier(0.22, 1, 0.36, 1) ... both`，未再出现 `5s linear infinite alternate`。
+- Chrome DevTools Ready 预检：`lsof -iTCP:9222 -sTCP:LISTEN` 显示 Chrome PID `15131` 正在监听；但 `curl -i http://127.0.0.1:9222/json/version` 返回 `HTTP/1.1 404 Not Found`，`mcp__chrome_devtools.list_pages` 返回 `Failed to fetch browser webSocket URL from http://127.0.0.1:9222/json/version: HTTP Not Found`。
+- Chrome MCP 真实页验证未完成：当前 9222 被普通 Chrome 主进程占用且不是健康 DevTools JSON 端点；为避免影响用户现有浏览器标签，本轮未强行杀掉该进程或冒用其它浏览器工具替代 Chrome DevTools MCP 验收。
+
+## 结果复盘
+- 已完成复制按钮背景动画修正：按钮出现时播放一次短动画，默认稳定状态不再持续移动。
+- 已用源码测试、构建同步和产物 CSS 搜索证明运行态 bundle 不再包含复制按钮背景无限循环动画。
+- 真实 `one.alimama.com` 页面只读验证受 Chrome DevTools MCP 端点 `HTTP 404 Not Found` 阻塞，后续需在不影响用户浏览器的前提下恢复 9222 DevTools JSON 端点后再补一次页面级 computed style 验证。
+
+# TODO - 2026-06-06 批量+批量修改计划名称批处理修正
+
+## 需求规格
+- 用户最新修正：原生 `批量计划设置` 里已有的入口，不需要重复添加到插件 `批量+`；上一轮加入每日预算、资源位、地域、分时、出价、计划组属于方向偏差。
+- 目标：`批量+` 保留插件自有/增强入口，其中 `批量修改计划名称` 要成为真正的名称批处理工具，而不是只做逐行输入框。
+- 批量改名操作范围：批量加前缀、批量加后缀、批量查找替换、批量删除指定文本、按序号改名、清理名称空白、恢复原名，并保留逐行预览和手工微调。
+- 弹窗约束：继续复用 `#am-campaign-copy-overview-popup` 和复制计划一览窗视觉、状态条、Esc 关闭、焦点恢复；rename 模式只显示计划名称列，不显示批量出价、批量预算、出价方式、出价价格、预算列。
+- 提交约束：沿用已验证的 `/campaign/updatePart.json?csrfId=...&bizCode=...` 批量改名合同；只提交发生变化的行，空名、同次重复名、无变更必须拦截。
+- 安全边界：浏览器验收只用 Chrome DevTools MCP；点击 `确认修改` 前必须安装写请求守卫，只记录脱敏 URL/method/payload 摘要，不真实修改计划名；验收结束恢复守卫并确认页面无残留。
+- 工作区边界：当前有上一轮改动、构建产物和任务证据未提交；本轮只修正必要源码、测试、任务记录和构建同步，不回退无关文件。
+
+## 执行计划
+- [x] 回顾 `tasks/lessons.md`、UI/图标规范、当前 `批量+` 菜单和改名弹窗实现，确认偏差来自重复接入原生批量项。
+- [x] 从 `批量+` 移除原生已有的预算、资源位、地域、分时、出价、计划组入口及其菜单委托分发。
+- [x] 在 `批量修改计划名称` 弹窗内增加名称批处理工具条：前缀、后缀、查找替换、删除文本、按序号改名、清理空白、恢复原名。
+- [x] 更新回归测试，锁定不重复原生入口、rename 模式工具条和各批处理动作 helper。
+- [x] 运行目标测试、语法检查、构建、构建同步检查和 `git diff --check`。
+- [ ] 用 Chrome DevTools MCP 重载本工作区 extension，在真实 `one.alimama.com` 计划列表页验证菜单、弹窗、批处理动作和写请求守卫，并记录守卫清理结果。
+
+## 高层操作摘要
+- 已回顾 L120：`批量+` 不重复原生入口，批量改名必须包含前缀、后缀、替换等名称批处理动作。
+- 已确认当前源码仍通过 `getNativeBatchPlanSettingActionMetas()` 把 6 个原生入口加入 `批量+`，测试也在强制要求这些入口存在；本轮会反向修正为不得出现。
+- 已确认现有 `rename` 流程已能复用复制计划一览窗并守卫验证 `/campaign/updatePart.json` payload；本轮在此基础上补名称批处理工具条，不另起弹窗系统。
+- 已从 `getBatchPlusMenuItems()` 和 `runBatchPlusAction()` 移除原生已有批量计划设置入口及其委托 helper；`批量+` 不再展示每日预算、资源位、地域、分时、出价和计划组这些原生已有项。
+- 已在 `rename` 模式的复制一览窗内新增名称批处理工具条，支持前缀、后缀、查找替换、删除文本、按序号改名、清理空白和恢复原名；所有动作只更新计划名称输入框并派发 `input/change`，提交仍复用现有校验和 `updatePart.json` 合同。
+- 已更新 `tests/campaign-batch-plus-quick-entry.test.mjs`：反向锁定原生 6 项不得出现在 `批量+`，并覆盖 rename 工具条、批处理 helper、恢复原名、禁用态和 updatePart payload。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --check tests/campaign-batch-plus-quick-entry.test.mjs`：通过。
+- `node --check src/main-assistant/ui.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，27 项全绿。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 和 `dist/extension`，构建版本 `7.06`。
+- `npm run build:check`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 验证未完成：当前会话多次调用 `mcp__chrome_devtools.list_pages` 返回 `timed out awaiting tools/call after 120s` 或 `Network.enable timed out`；`curl -sS http://127.0.0.1:9222/json/version` 显示浏览器端点健康，`bash scripts/recover-chrome-devtools-mcp.sh` 已执行并确认 MCP 配置指向 `--browser-url=http://127.0.0.1:9222`，但 MCP 工具仍无法列页/选页。用户随后要求“不用重新打开”，因此本轮停止重启/新开 Chrome，未冒用其它浏览器工具替代验收。
+
+## 结果复盘
+- 已完成代码层修正：`批量+` 不再重复原生已有的每日预算、资源位、地域、分时、出价和计划组入口；`批量修改计划名称` 已增加前缀、后缀、替换、删除文本、按序号改名、清理空白和恢复原名。
+- 已完成目标测试、语法、构建、构建同步和 diff 空白检查；真实浏览器 UI 与写请求守卫验证仍待 Chrome DevTools MCP 会话恢复后继续。
+
+# TODO - 2026-06-06 批量+批量修改能力补齐
+
+## 需求规格
+- 用户修正：`批量+` 中“批量修改”的功能不能只增加计划名称，`该有的都需要增加`。
+- 目标：以真实 `one.alimama.com` 原生 `批量计划设置` 菜单为事实源，补齐当前 `批量+` 缺失但应有的计划级批量修改能力；优先覆盖原生已有且可安全复用接口/弹窗的批量修改项。
+- 初始已知现状：`批量+` 已有批量开启、批量暂停、批量删除、批量修改计划名称、批量修改屏蔽人群、批量人群设置；历史 lessons 指出原生批量预算真实接口为 `/campaign/budget/batchUpdate.json`，不能用 `/campaign/updatePart.json` 猜测。
+- 安全边界：浏览器验收仅使用 Chrome DevTools MCP；涉及写请求必须安装守卫，只验证 UI、真实接口命中和脱敏 payload，不真实修改预算、状态、计划名称、人群或其它投放设置。
+- 工作区边界：当前已有上一轮改名功能、构建产物和历史抓包未提交改动；本轮只叠加必要源码、测试、任务记录和构建同步，不回退无关文件。
+
+## 执行计划
+- [x] 回顾项目规则、历史 lessons、现有 `批量+` 实现和 UI/图标规范。
+- [x] 用 Chrome DevTools MCP 在真实计划列表页只读打开原生 `批量计划设置` 菜单，记录原生批量修改项和当前插件缺口。
+- [x] 设计最小补齐方案：优先复用原生弹窗/接口；无法安全确认接口的功能先记录阻塞，不做猜测提交。
+- [x] 实现缺失批量修改项，补齐菜单、原生弹窗委托、选中校验和可访问状态。
+- [x] 更新回归测试，覆盖新增菜单、action 分发、接口合同、校验规则和不会混入无关字段。
+- [x] 运行目标测试、语法/构建/同步检查和 diff 自审。
+- [x] 用 Chrome DevTools MCP 重载本工作区 extension，在真实页面做 UI 和写请求守卫验证，并确认守卫/弹窗清理。
+
+## 高层操作摘要
+- 已按用户修正新增 lesson：补齐 `批量+` 时必须以原生批量修改清单为事实源，不能只补单个临时功能。
+- 已建立调研笔记 [tasks/batch-plus-modify-notes-2026-06-06.md](/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/tasks/batch-plus-modify-notes-2026-06-06.md)，后续记录原生菜单与接口事实。
+- Chrome DevTools MCP 已在真实关键词推广计划列表页只读采集原生 `批量计划设置` 菜单，事实源包含 6 项：`批量修改每日预算`、`批量修改投放资源位`、`批量修改投放地域`、`批量修改分时折扣`、`批量修改出价`、`批量调整计划组`。
+- 方案校验：这些入口均是计划级真实投放设置，接口合同不可按邻近功能猜测；本轮补齐 `批量+` 菜单并委托打开官方原生弹窗/抽屉，提交与校验由官方 UI 承载，不新增第二套预算/出价/地域等写入表单。
+- 已在 `getBatchPlusMenuItems()` 中接入 6 个原生批量计划设置项，并新增 `runNativeBatchPlanSettingAction()`：先校验选中计划，再打开官方 `批量计划设置` 菜单并按原生文案点击对应项；插件不直接提交预算、出价、地域、分时、资源位或计划组写接口。
+- 已更新 `tests/campaign-batch-plus-quick-entry.test.mjs`，锁定 6 个新增菜单项、共享图标、action 分发、官方菜单委托路径，以及委托 helper 中不得出现预算/出价等猜测写接口。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，27 项全绿。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 和 `dist/extension`，构建版本 `7.06`。
+- `npm run build:check`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：已在扩展管理页重载本工作区 `/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`；勾选 1 个计划后打开 `批量+`，菜单实际文案为 `批量开启 / 批量暂停 / 批量删除 / 批量修改计划名称 / 批量修改每日预算 / 批量修改投放资源位 / 批量修改投放地域 / 批量修改分时折扣 / 批量修改出价 / 批量调整计划组 / 批量修改屏蔽人群 / 批量人群设置`，6 个原生批量修改入口全部可见。
+- Chrome DevTools MCP 写请求守卫验证：安装临时 fetch/XHR 守卫后逐项点击新增入口并只打开官方弹窗，不点击确定/保存；`批量修改每日预算`、`批量修改投放资源位`、`批量修改投放地域`、`批量修改分时折扣`、`批量修改出价`、`批量调整计划组` 均能通过 `批量+` 打开官方弹窗/面板。其中资源位和出价弹窗按官方逻辑显示 `1个计划不可修改...查看详情`，计划组入口打开 `添加计划组` 官方弹窗。
+- Chrome DevTools MCP 写请求守卫结果：逐项打开 6 个官方弹窗期间守卫记录始终为 `[]`，没有触发 `/campaign/updatePart.json`、`/campaign/budget/batchUpdate.json` 等写请求，页面无 `CODEX_GUARDED_WRITE_BLOCKED`。
+- Chrome DevTools MCP 收尾清理：已逐项点击官方弹窗 `取消` 或关闭入口，恢复并删除临时守卫，取消计划勾选；最终确认 `guardInstalled:false`、`hasBatchPlusMenu:false`、`hasGuardText:false`、`checkedCount:0`、页面无 6 个官方弹窗残留。
+
+## 结果复盘
+- 已按用户修正补齐 `批量+` 中“批量修改”应有的原生计划级入口：每日预算、投放资源位、投放地域、分时折扣、出价和计划组。
+- 本轮没有为高风险投放设置新增猜测写接口；新增入口只负责委托打开官方原生批量设置弹窗，后续提交、校验和真实接口由官方页面承载。
+- 已通过目标测试、语法检查、构建、构建同步检查、diff 空白检查和 Chrome DevTools MCP 真实页面验收；验收未真实修改任何计划设置。
+
+# TODO - 2026-06-06 批量+批量修改计划名称
+
+## 需求规格
+- 用户要求：在计划列表 `批量+` 菜单中增加 `批量修改计划名称`，复用复制计划的一览弹窗样式与交互，但只保留计划名称编辑列。
+- 目标：对当前勾选计划打开批量改名弹窗，允许逐行编辑计划名称；确认后按业务线批量调用计划名称更新接口，并局部刷新计划列表。
+- 校验规则：至少选中 1 个计划；每行新名称不能为空；同次提交内新名称不能重复；未改名的行不提交；全部未改名时提示 `没有需要修改的计划名称`。
+- 安全边界：浏览器验收采用写请求守卫，只验证 UI、payload 和接口命中，不真实修改后台计划名；验收后必须恢复守卫并确认页面无残留。
+- 工作区边界：当前已有其它任务未提交改动和抓包证据文件，本任务只追加必要源码、测试、构建和任务记录，不回退无关改动。
+
+## 执行计划
+- [x] 复核当前工作区脏改、`批量+` 菜单、复制一览窗和批量状态更新接口。
+- [x] 参数化复制一览窗，支持 `rename` 模式只展示计划名称列并使用 `确认修改` 提交文案。
+- [x] 在 `批量+` 菜单新增 `批量修改计划名称`，接入勾选计划收集、计划名补齐、校验、分组提交和列表局部刷新。
+- [x] 更新回归测试，覆盖菜单、action 分发、rename 弹窗模式、校验和 `/campaign/updatePart.json` 改名 payload。
+- [x] 运行目标测试、语法/构建/同步检查和 diff 自审。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 列表页做写请求守卫验证，并记录守卫清理结果。
+
+## 高层操作摘要
+- 已确认 `批量+` 菜单在 `src/main-assistant/campaign-id-quick-entry.js` 中由 `getBatchPlusMenuItems()` 渲染，点击由 `runBatchPlusAction()` 分发；当前批量开启/暂停已复用 `/campaign/updatePart.json` 和 `refreshCampaignListOnly()`。
+- 已确认复制计划一览窗 `openCopyPlanOverviewDialog()` 具备白色轻玻璃样式、可访问标题/状态区、行内计划名输入、Esc 关闭和焦点恢复；本任务将在该弹窗上增加 `rename` 模式，避免新增第二套 UI。
+- 已新增 `批量修改计划名称` 菜单项和 `runBatchRenameCampaigns()` 流程；改名行先从勾选行 DOM/MagicReport 猜测计划名，再用 `campaign/horizontal/findPage.json` 和 `campaign/get.json` 只读兜底，无法补齐名称时不允许提交空名。
+- 已参数化复制一览窗：`mode:'rename'` 时标题为 `批量修改计划名称`，图标为 `edit`，提交按钮为 `确认修改`，隐藏批量出价、批量预算、出价方式、出价价格和预算列；读取中禁用输入，避免异步补齐覆盖用户编辑。
+- 已新增 `updateCampaignNamesBatchByBiz()`，按 `bizCode` 分组调用 `/campaign/updatePart.json?csrfId=...&bizCode=...`，payload 仅提交 `{ campaignId, campaignName }` 并保留 `bizCode/csrfId/loginPointId/strategyRecoverys/lrsIdList` 基础合同；成功后调用 `refreshCampaignListOnly({ reason:'批量修改计划名称' })`。
+- 已根据只读子代理复审补强：确认 `escapeHtml()` 覆盖单双引号属性转义并加测试锁定；改名成功后通过 `removePopup()` 恢复焦点；多业务线分组提交时按分组重新解析 `authContext`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，26 项全绿；新增覆盖 `批量修改计划名称` 菜单、action 分发、rename 弹窗模式、隐藏列、读取中禁用输入、空名/重复名/无 ID/无变更校验、只提交 changed rows、按业务线分组、`updatePart.json` payload 不混入预算/出价/状态字段。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 和 `dist/extension`，构建版本 `7.06`。
+- `npm run build:check`：通过。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页守卫验证：已重载本工作区 `/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/dist/extension`，刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`；勾选计划 `81179245735` 后打开 `批量+ -> 批量修改计划名称`，弹窗为 `mode:rename`，标题 `批量修改计划名称`，副标题 `关键词推广 · 已选 1 个计划`，可见表头仅 `#`、`计划名称`，批量出价、批量预算、出价方式、出价价格、预算控件均不可见，按钮文案为 `确认修改`，输入原值为 `E7Pro_AI点睛_促加购_手动对比_20260605`。
+- Chrome DevTools MCP 写请求守卫：将名称临时改为 `E7Pro_AI点睛_促加购_手动对比_2026060X` 后点击 `确认修改`，守卫阻断 1 个 `fetch` 写请求，脱敏摘要为 `POST https://one.alimama.com/campaign/updatePart.json?csrfId=<redacted>&bizCode=onebpSearch`，payload key 为 `bizCode/campaignList/csrfId/loginPointId/lrsIdList/strategyRecoverys`，`campaignList` 仅含 `{ campaignId: 81179245735, campaignName: "E7Pro_AI点睛_促加购_手动对比_2026060X" }`，未包含预算、出价或状态字段；请求被守卫阻断，没有真实写入落库。
+- Chrome DevTools MCP 收尾清理：已恢复并删除 fetch/XHR 守卫、刷新页面并关闭弹窗；最终确认 `guardGlobal:false`、复制/改名弹窗不存在、`batchPlusMenu:false`、页面无 `CODEX_GUARDED_WRITE_BLOCKED`、临时名称不可见、原计划名仍可见。
+- Chrome DevTools MCP 交付前只读复核：当前页仍为真实 `one.alimama.com` 计划列表，`guardGlobal:false`、`copyOverview:false`、`batchPlusMenu:false`、`hasGuardText:false`、`hasTempName:false`、`hasOriginalName:true`。
+
+## 结果复盘
+- 已完成 `批量+` 的批量改名入口和提交链路，视觉上复用复制计划一览窗，不新增第二套弹窗或图标系统。
+- 改名提交合同已用 Chrome DevTools MCP 守卫验证为 `/campaign/updatePart.json?bizCode=onebpSearch`，payload 只提交发生变化的计划名，并保留原生 updatePart 基础字段；本次验收没有真实修改任何计划名称。
+- 完成后已通过目标测试、语法检查、构建、构建同步检查、diff 空白检查和真实页面守卫验收。
+
 # TODO - 2026-06-06 E7pro_自定义复制流量智选状态回归修复
 
 ## 需求规格

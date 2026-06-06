@@ -185,12 +185,15 @@ test('批量+ 克隆批量计划设置结构并挂载到右侧', () => {
     assert.match(quickEntryStyle, /\.am-campaign-batch-plus-native\s*\{[\s\S]*?display:\s*inline-block;/, '批量+应保留原生按钮结构并仅加必要外层标识');
 });
 
-test('批量+ 菜单覆盖批量计划设置缺失的首批能力', () => {
+test('批量+ 菜单只保留插件增强能力且不重复原生已有入口', () => {
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量开启'/, '菜单缺少批量开启');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量暂停'/, '菜单缺少批量暂停');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量删除'/, '菜单缺少批量删除');
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量修改计划名称'/, '菜单缺少批量修改计划名称');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量修改屏蔽人群'/, '菜单缺少批量修改屏蔽人群');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量人群设置'/, '菜单缺少批量人群设置');
+    assert.doesNotMatch(quickEntry, /nativeBatchPlanItems|getNativeBatchPlanSettingActionMetas|getNativeBatchPlanSettingActionMeta|runNativeBatchPlanSettingAction/, '批量+ 不应再接入原生已有的批量计划设置入口');
+    assert.doesNotMatch(quickEntry, /label:\s*'批量修改每日预算'|label:\s*'批量修改投放资源位'|label:\s*'批量修改投放地域'|label:\s*'批量修改分时折扣'|label:\s*'批量修改出价'|label:\s*'批量调整计划组'/, '批量+ 菜单不应重复原生已有的批量修改入口');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?className = 'mxgc-popmenu am-campaign-batch-plus-native-menu'[\s\S]*?setAttribute\('role',\s*'menu'\)[\s\S]*?data-am-campaign-batch-plus-action/, '批量+应渲染原生 popmenu 类菜单项');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?menu\.style\.minWidth = `\$\{Math\.max\(120,\s*Math\.round\(rect\.width\)\)\}px`/, '批量+弹层宽度应跟随原生按钮宽度');
     assert.match(quickEntry, /getConnectedBatchPlusMenu\(\)[\s\S]*?storedMenu instanceof HTMLElement && storedMenu\.isConnected[\s\S]*?this\.batchPlusMenuEl = null/, '批量+应清理已脱离 DOM 的旧菜单状态，避免 hover 被误判为已打开');
@@ -295,6 +298,8 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     );
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'start'[\s\S]*?icon:\s*'layers-play'/, '批量开启菜单项应使用共享图标');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'delete'[\s\S]*?icon:\s*'x-circle'/, '批量删除菜单项应使用危险动作共享图标');
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'rename'[\s\S]*?icon:\s*'edit'[\s\S]*?label:\s*'批量修改计划名称'/, '批量修改计划名称菜单项应使用共享编辑图标');
+    assert.doesNotMatch(quickEntry, /action:\s*'nativeDailyBudget'|action:\s*'nativeLaunchArea'|action:\s*'nativeCampaignGroup'/, '批量+ 不应重复原生预算、地域、计划组等入口');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?am-campaign-batch-plus-item-icon[\s\S]*?renderAmIcon\(item\.icon \|\| 'logo'/, '批量+菜单项应渲染共享 SVG 图标');
     assert.match(menuBlock, /triggerEl\.setAttribute\('aria-controls',\s*'am-campaign-batch-plus-menu'\)/, '批量+菜单打开时触发器应指向菜单 id');
     assert.match(menuBlock, /menu\.setAttribute\('aria-label',\s*'批量\+菜单'\)/, '批量+菜单应提供可访问名称');
@@ -382,6 +387,111 @@ test('批量删除使用原生删除接口且有二次确认', () => {
     assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'delete'\)[\s\S]*?runBatchDeleteCampaigns\(contexts,\s*normalizedBizCode,\s*triggerEl\)/, '批量+ delete 动作应接入删除流程');
     assert.match(batchDeleteBlock, /refreshCampaignListOnly\(\{[\s\S]*?reason:\s*'批量删除'/, '批量删除成功后应只刷新计划列表');
     assert.doesNotMatch(batchDeleteBlock, /window\.location\.reload\(\)/, '批量删除成功后不得整页刷新');
+});
+
+test('批量修改计划名称复用复制一览窗、提供名称批处理并提交原生 updatePart 合同', () => {
+    const renameBlock = quickEntry.slice(
+        quickEntry.indexOf('async runBatchRenameCampaigns'),
+        quickEntry.indexOf('async runBatchDeleteCampaigns')
+    );
+    const submitRenameBlock = quickEntry.slice(
+        quickEntry.indexOf('async submitBatchRenameCampaignRows'),
+        quickEntry.indexOf('async runBatchRenameCampaigns')
+    );
+    const updateNameBlock = quickEntry.slice(
+        quickEntry.indexOf('async updateCampaignNamesBatchByBiz'),
+        quickEntry.indexOf('async runSiteCustomBreakthroughStrategy')
+    );
+    const rowHtmlBlock = getQuickEntryMethodSlice('buildCopyOverviewRowHtml', 'getCopyOverviewSubtitle');
+    const validateBlock = getQuickEntryMethodSlice('validateCopyOverviewRows', 'getCopyOverviewRowElements');
+    const restoreRenameBlock = getQuickEntryMethodSlice('restoreRenameOriginalNamesToPopup', 'applyRenameActionToPopup');
+    const overviewBlock = quickEntry.slice(
+        quickEntry.indexOf('openCopyPlanOverviewDialog(context = {}, submitCallback, options = {})'),
+        quickEntry.indexOf('async prepareCopyCurrentPlanContext')
+    );
+    const queryByIdBlock = quickEntry.slice(
+        quickEntry.indexOf('async queryCampaignListById'),
+        quickEntry.indexOf('async resolveCopySourcePlan')
+    );
+
+    assert.match(quickEntry, /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'rename'\)[\s\S]*?runBatchRenameCampaigns\(contexts,\s*normalizedBizCode,\s*triggerEl\)/, '批量+ rename 动作应分发到批量改名流程');
+    assert.match(renameBlock, /openCopyPlanOverviewDialog\(quickContext,[\s\S]*?\{[\s\S]*?mode:\s*'rename'[\s\S]*?prepareContext:\s*async \(\) =>/, '批量改名应复用复制计划一览窗并传入 rename 模式');
+    assert.match(renameBlock, /guessCampaignNameFromContext\(context\)/, '批量改名初始行应先从勾选行上下文猜测计划名');
+    assert.match(renameBlock, /buildBatchRenameRows\(selected,\s*targetBizCode,\s*authContext\)/, '批量改名应异步补齐真实计划名称');
+    assert.match(quickEntry, /resolveBatchRenamePlanName\(context = \{\},[\s\S]*?guessCampaignNameFromContext\(context\)[\s\S]*?queryCampaignListById\(campaignId,\s*bizCode,\s*authContext\)[\s\S]*?queryCampaignDetail\(campaignId,\s*bizCode,\s*authContext\)/, '计划名称补齐应按行 DOM、列表接口、详情接口顺序兜底');
+    assert.match(queryByIdBlock, /campaign\/horizontal\/findPage\.json\?\$\{query\.toString\(\)\}[\s\S]*?searchKey:\s*'campaignId'[\s\S]*?searchValue:\s*id[\s\S]*?campaignIdList:\s*\[id\]/, '计划名称只读补齐应命中 findPage 并带 campaignId 查询条件');
+
+    assert.match(rowHtmlBlock, /const renameMode = mode === 'rename';/, '复制一览窗行渲染应识别 rename 模式');
+    assert.match(rowHtmlBlock, /data-am-copy-field="planName"[\s\S]*?value="\$\{this\.escapeHtml\(row\.planName \|\| ''\)\}"[\s\S]*?data-campaign-id="\$\{this\.escapeHtml\(row\.campaignId \|\| ''\)\}" data-original-plan-name="\$\{this\.escapeHtml\(row\.originalPlanName \|\| row\.planName \|\| ''\)\}"/, 'rename 行应保留 campaignId 和原始名称，属性值必须经过 escapeHtml 转义');
+    assert.match(quickEntry, /escapeHtml\(value\)[\s\S]*?const map = \{ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' \}/, '计划名写入 input value 和 data-original-plan-name 前必须转义单双引号');
+    assert.match(rowHtmlBlock, /<td\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>[\s\S]*?data-am-copy-field="bidModeDisplay"[\s\S]*?<td\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>[\s\S]*?data-am-copy-field="bidPrice"[\s\S]*?<td\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>[\s\S]*?data-am-copy-field="budgetField"/, 'rename 模式应隐藏出价方式、出价价格和预算行内列');
+    assert.match(overviewBlock, /const titleText = renameMode \? '批量修改计划名称' : '复制计划一览';[\s\S]*?const submitButtonText = renameMode \? '确认修改' : '确认生成';/, 'rename 弹窗标题和提交按钮文案应替换为批量改名语义');
+    assert.match(overviewBlock, /popup\.setAttribute\('data-am-copy-dialog-mode',\s*dialogMode\)/, 'rename 弹窗应设置模式属性供 CSS 隐藏列');
+    assert.match(overviewBlock, /<div class="am-copy-overview-bulkbar"\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>/, 'rename 模式应隐藏批量出价和批量预算工具条');
+    assert.match(overviewBlock, /am-copy-overview-renamebar[\s\S]*?data-am-copy-rename="prefix"[\s\S]*?data-am-copy-rename-action="prefix"[\s\S]*?加前缀/, 'rename 模式应提供批量加前缀');
+    assert.match(overviewBlock, /data-am-copy-rename="suffix"[\s\S]*?data-am-copy-rename-action="suffix"[\s\S]*?加后缀/, 'rename 模式应提供批量加后缀');
+    assert.match(overviewBlock, /data-am-copy-rename="find"[\s\S]*?data-am-copy-rename="replace"[\s\S]*?data-am-copy-rename-action="replace"[\s\S]*?替换/, 'rename 模式应提供批量查找替换');
+    assert.match(overviewBlock, /data-am-copy-rename="deleteText"[\s\S]*?data-am-copy-rename-action="deleteText"[\s\S]*?删除文本/, 'rename 模式应提供批量删除指定文本');
+    assert.match(overviewBlock, /data-am-copy-rename="sequenceBase"[\s\S]*?data-am-copy-rename="sequenceStart"[\s\S]*?data-am-copy-rename-action="sequence"[\s\S]*?按序号改名/, 'rename 模式应提供按序号改名');
+    assert.match(overviewBlock, /data-am-copy-rename-action="clean"[\s\S]*?清理名称[\s\S]*?data-am-copy-rename-action="restore"[\s\S]*?恢复原名/, 'rename 模式应提供清理名称和恢复原名');
+    assert.match(overviewBlock, /<th\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>计划出价方式<\/th>[\s\S]*?<th\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>出价价格<\/th>[\s\S]*?<th\$\{renameMode \? ' data-am-copy-mode-hidden="rename"' : ''\}>预算<\/th>/, 'rename 模式应隐藏非计划名称表头');
+    assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup\[data-am-copy-dialog-mode="rename"\] \[data-am-copy-mode-hidden="rename"\]\s*\{[\s\S]*?display:\s*none !important;/, 'rename 模式隐藏列应复用现有复制一览窗样式，不新增视觉系统');
+    assert.match(quickEntryStyle, /#am-campaign-copy-overview-popup \.am-copy-overview-renamebar[\s\S]*?align-items:\s*flex-start;[\s\S]*?#am-campaign-copy-overview-popup \.am-copy-overview-renamebar \.am-copy-overview-bulk-group[\s\S]*?flex-wrap:\s*wrap;/, 'rename 工具条应复用复制一览窗工具条并支持换行');
+    assert.match(overviewBlock, /if \(!contextReady\) \{[\s\S]*?setReadyState\(false\);[\s\S]*?\}/, '读取计划名期间应进入未就绪状态');
+    assert.match(overviewBlock, /const setReadyState = \(ready,[\s\S]*?contextReady = !!ready;[\s\S]*?popup\.querySelectorAll\('input, select'\)\.forEach\(\(el\) => \{[\s\S]*?el\.disabled = !contextReady \|\| el\.dataset\.amCopyReadonly === '1';/, '未就绪时应禁用输入，避免异步补齐覆盖用户已编辑内容');
+    assert.match(overviewBlock, /popup\.querySelectorAll\('\[data-am-copy-bulk-action\], \[data-am-copy-rename-action\]'\)\.forEach\(\(el\) => \{[\s\S]*?el\.disabled = !contextReady \|\| el\.dataset\.amCopyReadonly === '1';/, '读取计划名期间应禁用 rename 批处理动作');
+    assert.match(overviewBlock, /const renameActionButtons = Array\.from\(popup\.querySelectorAll\('\[data-am-copy-rename-action\]'\)\)[\s\S]*?button\.addEventListener\('click'[\s\S]*?applyRenameActionToPopup\(popup,\s*button\.dataset\.amCopyRenameAction \|\| ''\)/, 'rename 批处理按钮应统一调用名称批处理 helper');
+    assert.match(overviewBlock, /if \(renameMode\) \{[\s\S]*?removePopup\(\);[\s\S]*?\} else \{[\s\S]*?popup\.remove\(\);[\s\S]*?\}/, 'rename 提交成功后应移除弹窗并恢复焦点');
+
+    assert.match(quickEntry, /getRenamePlanNameInputs\(popup\)[\s\S]*?querySelectorAll\('\[data-am-copy-field="planName"\]'\)[\s\S]*?input instanceof HTMLInputElement && !input\.disabled/, 'rename 批处理应只操作可编辑计划名称输入框');
+    assert.match(quickEntry, /setRenamePlanNameInputValue\(input,\s*value = ''\)[\s\S]*?normalizeBatchRenamePlanName\(value\)[\s\S]*?dispatchEvent\(new Event\('input'[\s\S]*?dispatchEvent\(new Event\('change'/, 'rename 批处理更新名称后应派发 input/change');
+    assert.match(quickEntry, /applyRenamePrefixToPopup\(popup\)[\s\S]*?`\$\{prefix\}\$\{nameInput\.value \|\| ''\}`/, '批量加前缀应写入所有计划名称');
+    assert.match(quickEntry, /applyRenameSuffixToPopup\(popup\)[\s\S]*?`\$\{nameInput\.value \|\| ''\}\$\{suffix\}`/, '批量加后缀应写入所有计划名称');
+    assert.match(quickEntry, /applyRenameReplaceToPopup\(popup\)[\s\S]*?split\(findText\)\.join\(replaceText\)/, '批量替换应按字面文本全量替换');
+    assert.match(quickEntry, /applyRenameDeleteToPopup\(popup\)[\s\S]*?data-am-copy-rename="deleteText"[\s\S]*?applyRenameReplaceToPopup\(popup\)/, '批量删除文本应复用替换为空的逻辑');
+    assert.match(quickEntry, /applyRenameSequenceToPopup\(popup\)[\s\S]*?sequenceBase[\s\S]*?sequenceStart[\s\S]*?padStart\(width,\s*'0'\)[\s\S]*?`\$\{baseName\}\$\{seq\}`/, '按序号改名应按基础名和起始序号生成名称');
+    assert.match(quickEntry, /applyRenameCleanWhitespaceToPopup\(popup\)[\s\S]*?setRenamePlanNameInputValue\(nameInput,\s*nameInput\.value \|\| ''\)/, '清理名称应复用规范化名称写入');
+    assert.match(restoreRenameBlock, /getAttribute\('data-original-plan-name'\)/, '恢复原名应读取 data-original-plan-name');
+    assert.match(restoreRenameBlock, /setRenamePlanNameInputValue\(nameInput,\s*nameInput\.getAttribute\('data-original-plan-name'\) \|\| ''\)/, '恢复原名应写回原计划名输入框');
+    assert.match(quickEntry, /applyRenameActionToPopup\(popup,\s*action = ''\)[\s\S]*?normalizedAction === 'prefix'[\s\S]*?normalizedAction === 'suffix'[\s\S]*?normalizedAction === 'replace'[\s\S]*?normalizedAction === 'deleteText'[\s\S]*?normalizedAction === 'sequence'[\s\S]*?normalizedAction === 'clean'[\s\S]*?normalizedAction === 'restore'/, 'rename 批处理 action 应覆盖前缀、后缀、替换、删除、序号、清理和恢复');
+
+    assert.match(validateBlock, /const renameMode = String\(options\.mode \|\| ''\)\.trim\(\) === 'rename';/, '行校验应识别 rename 模式');
+    assert.match(validateBlock, /return renameMode \? '没有可提交的计划名称' : '没有可提交的复制计划'/, 'rename 无行时应提示没有可提交的计划名称');
+    assert.match(validateBlock, /if \(!String\(row\.planName \|\| ''\)\.trim\(\)\) return `第 \$\{lineNo\} 行计划名称不能为空`;/, 'rename 应拦截空计划名');
+    assert.match(validateBlock, /if \(names\.has\(row\.planName\)\) return `计划名称重复：\$\{row\.planName\}`;/, 'rename 应拦截同次提交内重复名称');
+    assert.match(validateBlock, /if \(!this\.normalizeCampaignId\(row\.campaignId \|\| ''\)\) return `第 \$\{lineNo\} 行计划ID无效`;/, 'rename 应要求每行保留计划 ID');
+    assert.match(validateBlock, /if \(renameMode && changedCount <= 0\) return '没有需要修改的计划名称';/, 'rename 全部未改名时不得提交');
+    assert.match(validateBlock, /if \(renameMode\) \{[\s\S]*?changedCount \+= 1;[\s\S]*?continue;[\s\S]*?\}[\s\S]*?row\.bidPrice/, 'rename 模式应跳过复制用出价和预算校验');
+
+    assert.match(submitRenameBlock, /\.filter\(row => row\.campaignId && row\.planName && row\.planName !== row\.originalPlanName\)/, '批量改名提交前应过滤未改名行');
+    assert.match(submitRenameBlock, /groupCampaignContextsByBizCode\(changedRows,\s*context\.bizCode \|\| this\.DEFAULT_BIZ_CODE\)/, '批量改名应按 bizCode 分组提交');
+    assert.match(submitRenameBlock, /this\.resolveAuthContext\(bizCode \|\| context\.bizCode \|\| this\.DEFAULT_BIZ_CODE\)/, '批量改名每个业务线分组应使用对应 authContext');
+    assert.match(submitRenameBlock, /refreshCampaignListOnly\(\{[\s\S]*?reason:\s*'批量修改计划名称'/, '批量改名成功后应局部刷新计划列表');
+    assert.match(updateNameBlock, /campaign\/updatePart\.json\?\$\{query\.toString\(\)\}/, '批量改名应调用原生 campaign/updatePart.json');
+    assert.match(updateNameBlock, /campaignList:\s*normalizedRows\.map\(row => \(\{[\s\S]*?campaignId:\s*Number\(row\.campaignId\),[\s\S]*?campaignName:\s*row\.campaignName[\s\S]*?\}\)\)/, '批量改名 payload 只应提交 campaignId 和 campaignName');
+    assert.match(updateNameBlock, /bizCode:\s*targetBizCode,[\s\S]*?csrfId:[\s\S]*?strategyRecoverys:\s*\[\],[\s\S]*?loginPointId:[\s\S]*?lrsIdList:\s*\[\]/, '批量改名 payload 应保持 updatePart 状态接口同款基础合同');
+    assert.doesNotMatch(updateNameBlock, /bidPrice|budgetValue|dayBudget|dayAverageBudget|displayStatus/, '批量改名 payload 不应混入出价、预算或状态字段');
+});
+
+test('批量+ 不重复原生已有批量计划设置项', () => {
+    const menuBlock = getQuickEntryMethodSlice('getBatchPlusMenuItems', 'closeBatchPlusMenu');
+    const dispatchBlock = getQuickEntryMethodSlice('async runBatchPlusAction', 'normalizeCampaignId');
+    const nativeLabels = [
+        '批量修改每日预算',
+        '批量修改投放资源位',
+        '批量修改投放地域',
+        '批量修改分时折扣',
+        '批量修改出价',
+        '批量调整计划组'
+    ];
+
+    nativeLabels.forEach((label) => {
+        assert.doesNotMatch(menuBlock, new RegExp(label), `批量+ 菜单不得重复原生入口：${label}`);
+    });
+    assert.doesNotMatch(menuBlock, /nativeBatchPlanItems|getNativeBatchPlanSettingActionMetas/, '批量+ 菜单不得再批量接入原生批量计划设置元数据');
+    assert.doesNotMatch(dispatchBlock, /getNativeBatchPlanSettingActionMeta|runNativeBatchPlanSettingAction/, '批量+ 动作分发不得再委托原生已有批量计划设置项');
+    assert.doesNotMatch(quickEntry, /getNativeBatchPlanSettingActionMetas|getNativeBatchPlanSettingActionMeta|runNativeBatchPlanSettingAction|findNativeBatchPlanSettingHost|triggerNativeBatchPlanSettingMenu|findNativeBatchPlanMenuItem|dispatchNativeMouseClick/, '原生已有批量计划设置委托 helper 应从插件增强路径移除');
+    assert.doesNotMatch(quickEntry, /action:\s*'nativeDailyBudget'|action:\s*'nativeAdzone'|action:\s*'nativeLaunchArea'|action:\s*'nativeLaunchPeriod'|action:\s*'nativeBidPrice'|action:\s*'nativeCampaignGroup'/, '批量+ 不应保留原生已有入口 action');
 });
 
 test('批量+ 成功后复用原生计划列表刷新而不整页 reload', () => {

@@ -189,7 +189,8 @@ test('复制按钮复刻组建计划的数量调节操作', () => {
     assert.match(quickEntry, /renderAmIcon\('plus',\s*\{\s*size:\s*12,\s*strokeWidth:\s*2\.6\s*\}\)/, '复制数量 + 图标应按用户要求渲染为 12px');
     assert.match(copyButtonRule, /position:\s*relative;[\s\S]*?border:\s*0;[\s\S]*?border-radius:\s*500px;[\s\S]*?background:\s*rgb\(255,\s*255,\s*255\);[\s\S]*?color:\s*#333333;[\s\S]*?box-shadow:\s*rgba\(0,\s*0,\s*0,\s*0\.06\) 0 4px 8px 0;[\s\S]*?font-size:\s*12px;[\s\S]*?font-weight:\s*400;/, '复制按钮应保留光影白底并跟随原生二级按钮字体和圆角');
     assert.match(quickEntryStyle, /\.am-campaign-copy-btn::before,[\s\S]*?\.am-campaign-copy-btn::after\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?z-index:\s*0;[\s\S]*?opacity:\s*0\.2;[\s\S]*?filter:\s*blur\(14px\);[\s\S]*?pointer-events:\s*none;/, '复制按钮应使用伪元素承载 mx_807 光影层');
-    assert.match(quickEntryStyle, /\.am-campaign-copy-btn::before\s*\{[\s\S]*?background:\s*rgb\(51,\s*51,\s*255\);[\s\S]*?animation:\s*am-campaign-copy-shadow-left 5s linear infinite alternate;[\s\S]*?\.am-campaign-copy-btn::after\s*\{[\s\S]*?background:\s*rgb\(153,\s*51,\s*255\);[\s\S]*?animation:\s*am-campaign-copy-shadow-right 5s linear infinite alternate;/, '复制按钮应复刻 mx_807 蓝紫双向动画');
+    assert.match(quickEntryStyle, /\.am-campaign-copy-btn::before\s*\{[\s\S]*?background:\s*rgb\(51,\s*51,\s*255\);[\s\S]*?animation:\s*am-campaign-copy-shadow-left 0\.72s cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\) both;[\s\S]*?\.am-campaign-copy-btn::after\s*\{[\s\S]*?bottom:\s*-16px;[\s\S]*?left:\s*50%;[\s\S]*?background:\s*rgb\(153,\s*51,\s*255\);[\s\S]*?animation:\s*am-campaign-copy-shadow-right 0\.72s cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\) 80ms both;/, '复制按钮背景光影应只在按钮出现时播放一次，结束后保持静态');
+    assert.doesNotMatch(quickEntryStyle, /\.am-campaign-copy-btn::(?:before|after)[\s\S]*?animation:[^;]*\binfinite\b/, '复制按钮背景动画不应默认无限循环');
     assert.match(quickEntryStyle, /@keyframes am-campaign-copy-shadow-left\s*\{[\s\S]*?0%\s*\{[\s\S]*?bottom:\s*-24px;[\s\S]*?left:\s*0;[\s\S]*?50%\s*\{[\s\S]*?bottom:\s*-16px;[\s\S]*?left:\s*50%;[\s\S]*?@keyframes am-campaign-copy-shadow-right\s*\{[\s\S]*?0%\s*\{[\s\S]*?bottom:\s*-16px;[\s\S]*?left:\s*50%;[\s\S]*?50%\s*\{[\s\S]*?bottom:\s*-24px;[\s\S]*?left:\s*0;/, '复制按钮应包含互补位移动画关键帧');
     assert.match(quickEntryStyle, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.am-campaign-copy-btn::before,[\s\S]*?\.am-campaign-copy-btn::after\s*\{[\s\S]*?animation:\s*none;/, '复制按钮光影动画应适配减少动画');
     assert.match(quickEntryStyle, /\.am-campaign-copy-icon\s*\{[\s\S]*?position:\s*relative;[\s\S]*?z-index:\s*1;[\s\S]*?width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?color:\s*inherit;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/, '复制按钮左侧图标应在光影上方且无深色底');
@@ -274,9 +275,10 @@ test('复制成功后弹窗说明明细并确认页内搜索', () => {
 
 test('复制提交前先展示可编辑一览窗并在确认后显示生成中', () => {
     assert.match(quickEntry, /popup\.id = 'am-campaign-copy-overview-popup';[\s\S]*?popup\.setAttribute\('aria-labelledby',\s*titleId\);[\s\S]*?popup\.setAttribute\('aria-describedby',\s*statusId\);/, '复制前一览窗应通过标题和状态区建立可访问名称与描述');
-    assert.match(quickEntry, /class="am-copy-overview-icon">\$\{renderAmIcon\('campaign-copy'[\s\S]*?class="am-copy-overview-title" id="\$\{titleId\}"[\s\S]*?data-am-copy-overview-state>[\s\S]*?class="am-copy-overview-close" aria-label="关闭">\$\{renderAmIcon\('close'/, '复制前一览窗应使用共享 SVG 图标、状态胶囊和 close 图标');
+    assert.match(quickEntry, /const iconName = renameMode \? 'edit' : 'campaign-copy';[\s\S]*?class="am-copy-overview-icon">\$\{renderAmIcon\(iconName/, '复制前一览窗应使用共享 SVG 图标并允许改名模式复用图标槽');
+    assert.match(quickEntry, /class="am-copy-overview-title" id="\$\{titleId\}">\$\{this\.escapeHtml\(titleText\)\}<\/h3>[\s\S]*?data-am-copy-overview-state>[\s\S]*?class="am-copy-overview-close" aria-label="关闭">\$\{renderAmIcon\('close'/, '复制前一览窗应使用状态胶囊和 close 图标');
     for (const label of ['计划名称', '计划出价方式', '出价价格', '预算']) {
-        assert.match(quickEntry, new RegExp(`<th>${label}<\\/th>`), `一览窗缺少 ${label} 列`);
+        assert.match(quickEntry, new RegExp(`<th(?:[^>]*)>${label}<\\/th>`), `一览窗缺少 ${label} 列`);
     }
     for (const field of ['planName', 'bidPrice', 'budgetField', 'budgetValue']) {
         assert.match(quickEntry, new RegExp(`data-am-copy-field="${field}"`), `一览窗缺少可编辑字段 ${field}`);
@@ -311,18 +313,18 @@ test('复制提交前先展示可编辑一览窗并在确认后显示生成中',
     assert.match(quickEntry, /querySelectorAll\(`a\[href\*="campaignId=\$\{campaignId\}"\], a\[href\*="campaignId%3D\$\{campaignId\}"\]`\)/, '固定操作列按钮应通过 campaignId 回到当前计划行提取出价方式');
     assert.match(quickEntry, /campaignLinkCount > 3/, '出价方式提取必须避开包含多计划的整表容器');
     assert.match(quickEntry, /if \(text\.length > 2500\) break;[\s\S]*?if \(text\.length > 1200\)/, '出价方式行文本提取不能扫到整张表导致误取其它计划');
-    assert.match(quickEntry, /data-am-copy-overview-status role="status" aria-live="polite">\$\{contextReady \? '确认后才会提交创建请求。' : '已打开预览，正在读取源计划详情\.\.\.'\}/, '一览窗应先显示读取态并使用 live status 语义');
-    assert.match(quickEntry, /setStatus\('生成中：正在提交复制请求，请勿重复操作。',\s*'running'\);/, '确认提交后应显示生成中状态');
-    assert.match(quickEntry, /validateCopyOverviewRows\(editedRows\)/, '确认提交前应校验编辑行');
+    assert.match(quickEntry, /const readyStatusText = renameMode \? '确认后才会提交计划名称修改请求。' : '确认后才会提交创建请求。';[\s\S]*?data-am-copy-overview-status role="status" aria-live="polite">\$\{contextReady \? this\.escapeHtml\(readyStatusText\) : this\.escapeHtml\(preparingStatusText\)\}/, '一览窗应先显示读取态并使用 live status 语义');
+    assert.match(quickEntry, /setStatus\(runningText,\s*'running'\);/, '确认提交后应显示当前模式的运行中状态');
+    assert.match(quickEntry, /validateCopyOverviewRows\(editedRows,\s*\{ mode:\s*dialogMode \}\)/, '确认提交前应按弹窗模式校验编辑行');
     assert.match(quickEntry, /let prepareContextTimerId = 0;/, '复制前一览窗详情准备 timer 缺少局部句柄');
     assert.match(quickEntry, /const clearPrepareContextTimer = \(\) => \{[\s\S]*?if \(!prepareContextTimerId\) return;[\s\S]*?clearTimeout\(prepareContextTimerId\);[\s\S]*?prepareContextTimerId = 0;[\s\S]*?\};/, '复制前一览窗详情准备 timer 应支持显式清理并归零');
     assert.match(quickEntry, /const removePopup = \(\) => \{[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?popup\.remove\(\);[\s\S]*?restoreFocus\(\);[\s\S]*?\};/, '复制前一览窗关闭时应释放 pending 详情准备 timer');
-    assert.match(quickEntry, /setStatus\('生成中：正在提交复制请求，请勿重复操作。',\s*'running'\);[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?const result = await submitCallback\(editedRows,\s*activeContext\);/, '复制前一览窗提交前应释放 pending 详情准备 timer');
-    assert.match(quickEntry, /const startPrepareContext = \(\) => \{[\s\S]*?options\.prepareContext[\s\S]*?renderCopyOverviewRows\(popup,\s*activeContext\)[\s\S]*?setReadyState\(true,\s*'源计划详情已读取完成，确认后才会提交创建请求。'\)/, '一览窗打开后应异步补齐真实预览行并切回待确认');
+    assert.match(quickEntry, /setStatus\(runningText,\s*'running'\);[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?const result = await submitCallback\(editedRows,\s*activeContext\);/, '复制前一览窗提交前应释放 pending 详情准备 timer');
+    assert.match(quickEntry, /const startPrepareContext = \(\) => \{[\s\S]*?options\.prepareContext[\s\S]*?renderCopyOverviewRows\(popup,\s*activeContext\)[\s\S]*?setReadyState\(true,\s*readyAfterPrepareText\)/, '一览窗打开后应异步补齐真实预览行并切回待确认');
     assert.match(quickEntry, /const schedulePrepareContext = \(\) => \{[\s\S]*?clearPrepareContextTimer\(\);[\s\S]*?prepareContextTimerId = setTimeout\(\(\) => \{[\s\S]*?prepareContextTimerId = 0;[\s\S]*?startPrepareContext\(\);[\s\S]*?\},\s*0\);[\s\S]*?\};/, '复制前一览窗详情准备应通过可取消 timeout 调度并在触发后归零');
     assert.doesNotMatch(quickEntry, /setTimeout\(startPrepareContext,\s*0\);/, '复制前一览窗不应继续排无句柄详情准备 timeout');
     assert.match(quickEntry, /requestAnimationFrame\(\(\) => \{[\s\S]*?schedulePrepareContext\(\);[\s\S]*?\}\);/, '源计划详情读取应延后到弹窗首帧之后启动');
-    assert.match(quickEntry, /if \(!contextReady\) \{[\s\S]*?setStatus\('源计划详情仍在读取中，请稍候。',\s*'running'\);[\s\S]*?return;[\s\S]*?\}/, '详情未读完时确认按钮不能提交');
+    assert.match(quickEntry, /if \(!contextReady\) \{[\s\S]*?setStatus\(stillPreparingText,\s*'running'\);[\s\S]*?return;[\s\S]*?\}/, '详情未读完时确认按钮不能提交');
     const overviewPopupRule = extractCssRule(quickEntryStyle, '#am-campaign-copy-overview-popup');
     const overviewCardRule = extractCssRule(quickEntryStyle, '#am-campaign-copy-overview-popup .am-copy-overview-card');
     assert.match(overviewPopupRule, /position:\s*fixed;/, '复制前一览窗遮罩应固定覆盖页面');
