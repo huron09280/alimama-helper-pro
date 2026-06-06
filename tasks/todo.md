@@ -1,3 +1,65 @@
+# TODO - 2026-06-06 E7pro_自定义复制关键词缺失排查与修复
+
+## 需求规格
+- 用户报告：复制 `E7pro_自定义`（源计划 ID：`69514602419`）时，关键词没有复制过来；用户进一步补充：这个计划里的“全能调价”设置也需要复制，关键词旁边的人群与创意也需要复制；需要继续检查源计划还有哪些字段没有复制，并修复直到浏览器真实复制通过。
+- 目标：以真实 `one.alimama.com` 关键词推广计划详情和最终 `/solution/addList.json?bizCode=onebpSearch` 请求为事实源，确保复制后的新计划保留源计划关键词、全能调价、人群、创意及其它应复制字段。
+- 对比范围：`wordList`、`wordPackageList`、关键词匹配/出价字段、关键词旁边的人群、创意、全能调价/规则设置、商品/单元、预算/出价目标、地域、分时、资源位、屏蔽词、AI点睛/高级设置、状态和服务端详情中当前复制链路支持的字段。
+- 修复原则：先定位根因，再做最小结构性修复；不能用 dry-run、构造 payload 或未提交弹窗替代真实复制验收。
+- 安全边界：用户已授权围绕该计划做真实复制验证；不得删除、暂停/开启、修改已有计划、批量预算或执行无关写操作。请求证据只记录脱敏摘要，不写入 Cookie、请求头、csrf 或店铺敏感信息。
+
+## 执行计划
+- [x] 复核项目规则、历史 lessons、当前任务记录与工作区状态。
+- [x] 并行调查源码复制出口、已有抓包/任务样本和真实源计划详情，列出源计划应复制字段集合，特别覆盖关键词、全能调价、人群、创意。
+- [x] 对比当前复制 payload 或历史复制计划，定位关键词、全能调价、人群、创意及其它字段丢失发生在详情读取、白名单裁剪、组包出口还是提交前校正。
+- [x] 修复关键词、全能调价、人群、创意及其它漏复制字段，并补充目标测试覆盖。
+- [x] 运行目标测试、语法/构建/同步检查和 diff 自审。
+- [x] 修复真实 addList 响应缺少新单元 ID 时的复制后置判定/兜底查找，避免 payload 已带关键词、人群和全能调价但被误报为关键词复制失败。
+- [x] 修复关键词当前计划复制的高级设置 `投放资源位` 最终提交合同，确保自定义计划和 AI 点睛计划的 `/solution/addList.json?bizCode=onebpSearch` 都带默认淘宝搜索资源位或源计划显式资源位。
+- [x] 修复关键词旁边人群的最终提交合同，确保源计划 `crowdList` 不被模板 `rightList` 覆盖，真实新计划人群集合与源计划一致。
+- [x] 用 Chrome MCP 重载扩展，在真实页面复制 `69514602419`，读取最终请求与新计划详情，证明关键词和其它字段复制通过且无测试守卫残留。
+
+## 高层操作摘要
+- 启动本轮已回顾 L86/L89/L97/L109/L111/L112/L113/L114：关键词推广复制必须走受控 addList，完成标准是真实页面确认提交、成功响应、新计划详情对比；Chrome 验收只能用 Chrome MCP。
+- 初始工作区有大量 `tasks/e7-ai-*` 抓包 JSON 未跟踪，先按用户/其它代理已有证据保留，不回退也不覆盖。
+- 用户追加范围后，已把验收标准扩展到：源计划 `69514602419` 的关键词明细、全能调价设置、关键词旁边的人群与创意必须一起复制；不接受只修 `wordList` 的局部闭环。
+- Chrome MCP 只读事实：源计划详情页可见 `全能调价：生效中`、优化目标 `促进收藏加购`、溢价比例 `50%`；关键词表可见 12 个关键词与每行创意质量/状态。
+- Chrome MCP 只读接口事实：`campaign/get.json` 与 `adgroup/get.json` 对源计划不返回 `wordList`，但 `/bidword/findList.json` 返回 12 个关键词；`/wordpackage/findList.json` 返回 1 个流量智选词包；`/crowd/findList.json` 按 `campaignId+adgroupId` 返回 1 个绑定行、内含 23 个关键词旁边人群；`adgroup/get.json` 返回 `adgroup.adgroupOcpc={enableOcpc:true,enableOcpcRatio:true,ocpcMarketingAim:"coll_cart",ocpcRatio:50,ecpcOption:1,...}` 与 `smartCreative:1/smartTeemo.open:false`，这是本轮全能调价与创意事实源。
+- 根因定位：现有复制白名单已覆盖部分字段，但源计划准备阶段只读 `campaign/get`、`adgroup/get` 和 campaign 级 crowd，没有显式读取 `/bidword/findList`，也没有把 adgroup 级 crowd/`adgroupOcpc` 写回复制 source；因此最终 addList 没有可复制的关键词、人群和全能调价对象。
+- 修复实现：`resolveCopySourcePlan()` 在关键词推广下强制读取 `/adgroup/get.json` 完整单元详情，再读取 `/bidword/findList.json`、`/wordpackage/findList.json`、按 `campaignId+adgroupId` 绑定的 `/crowd/findList.json`，分别写回 `adgroup.wordList/wordPackageList/crowdList`；关键词和词包读取失败时中止复制，避免创建半成品。
+- 修复实现：复制白名单和关键词自定义单元裁剪白名单补齐 `adgroupOcpc`、`creativeTemplateType`、`creativeTemplateInfos`、`clickUrlCreativeTemplateInfos`、`blackCreativeStatus`；关键词归一和创建后 `/bidword/add.json` 兜底补词会保留 `bidStrategyInfo/bidUpgradeStrategyInfo` 等源关键词策略字段，同时清理旧计划 ID。
+- 真实提交失败证据：上一轮用真实页面点击 `复制：69514602419` 后，`/solution/addList.json?bizCode=onebpSearch` 创建了空计划 `81278242688 / E7pro_自定义_1`，但 `data.errorDetails` 返回 `词包出价不能为空`，`adgroupResultList[0].adgroupId:null`；只读查询确认该计划只有 campaign、`adgroupCount:0`，因此该结果不能算复制成功。
+- 二次根因定位：失败 payload 中流量智选词包顶层 `onlineStatus/status=0`，策略 `onlineStatus=0` 且缺少策略级 `bidPrice`；官方词包推荐新增合同为顶层 `onlineStatus/status=1`，三条策略全部 `onlineStatus=1` 且带 `bidPrice`。已把复制和最终提交归一化统一到这个合同，避免再次触发 `词包出价不能为空`。
+- 安全清理：已删除临时词包推荐抓包文件 `tasks/tmp-wordpackage-suggest-2167-request.json` 与 `tasks/tmp-wordpackage-suggest-2167.json`，避免保留请求上下文或中间证据噪声。
+- 真实提交新失败点：修正词包合同后再次真实点击 `复制：69514602419` 并确认生成，最新 `/solution/addList.json?bizCode=onebpSearch&csrfId=<redacted>` 返回 HTTP 200、`info.ok:true`、`errorDetails:[]`；最终 payload 已带 `wordListCount=12`、`wordPackageCount=1`、词包顶层和三条策略 `onlineStatus/bidPrice` 正常、`crowdCount=23`、`adgroupOcpc` 与源计划全能调价一致、创意字段 `smartCreative:1/smartTeemo.open:false`。但服务端响应未返回 `campaignResultList/adgroupResultList`，插件后置补词阶段缺少新 `adgroupId`，误报 `新计划创建成功但关键词复制失败：创建接口未返回新单元ID，无法复制关键词`。
+- 三次根因判断：复制主创建请求已经带上关键词、人群、创意和全能调价；当前剩余问题不是组包字段再次丢失，而是创建成功响应不稳定时，后置补词逻辑只依赖响应里的新单元 ID。修复应先按新计划名回查 `campaignId`，再按 `campaignId` 查新 `adgroupId`，并先读取新单元现有关键词；若 addList 已落库关键词则跳过补写，若未落库再走 `/bidword/add.json`，不能直接跳过或把缺 ID 当成功。
+- 用户再次纠正：复制时 `高级设置 -> 投放资源位` 也没有复制，多次导致计划无法正常投放。结合 L114，关键词推广详情接口可能不显式返回资源位，但真实高级设置默认 `淘宝搜索` 应为开启；修复范围从“AI 点睛复制资源位兜底”扩展为“关键词当前计划复制通用资源位兜底”，最终提交前若 `campaign.adzoneList` 为空则补 `{adzoneId:"114790550288",status:"start"}`，源计划显式带出的资源位列表则原样保留。
+- Chrome MCP 真实复制阶段性结果：重载扩展后真实复制源计划 `69514602419 / E7pro_自定义`，新计划 `81322658190 / E7pro_自定义_验收0606` 创建成功；最终 `/solution/addList.json?bizCode=onebpSearch&csrfId=<redacted>` payload 已带 `wordListCount=12`、`wordPackageCount=1`、`crowdCount=23`、`adzoneList:[{adzoneId:"114790550288",status:"start"}]`、源 `adgroupOcpc` 全能调价和创意字段。
+- 真实复制未通过点：只读回读源单元 `69510831221` 与新单元 `81322508455` 后，关键词 12 个集合一致、词包 1 个一致、全能调价核心字段一致、创意一致；但人群数量同为 23，源/目标人群名称交集为 0。根因收敛为源 adgroup 级人群写在 `crowdList`，而最终关键词单元裁剪无条件保留模板 `rightList`，服务端优先按 `rightList` 落库，导致提交了推荐模板人群而不是源计划人群。
+- 最终人群修复：复制 source 的 common rawOverrides 和每条 plan rawOverrides 都把源 `adgroup.crowdList` 同步写入 `adgroup.rightList`；最终 `pruneKeywordAdgroupForCustomScene()` 出口只从 copy rawOverrides 取源人群，并用源 `crowdList` 强制覆盖 `rightList`。这样服务端即使优先读取 `rightList`，也只能落库源计划的人群集合。
+- Chrome MCP 最终真实复制：重载当前工作区 `dist/extension` 后真实复制源计划 `69514602419 / E7pro_自定义`，生成新计划 `81239479171 / E7pro_自定义_验收0606_3`，新单元 `81324670151`。最终 `/solution/addList.json?bizCode=onebpSearch&csrfId=<redacted>` 请求体位于 `solutionList[0].adgroupList[0]`，包含 `wordList=12`、`wordPackageList=1`、`crowdList=23`、`rightList=23` 且两者内容一致，campaign `adzoneList:[{adzoneId:"114790550288",status:"start"}]`，单元 `adgroupOcpc` 为 `enableOcpc:true/enableOcpcRatio:true/ocpcMarketingAim:"coll_cart"/ocpcRatio:50/ecpcOption:1`，创意核心为 `smartCreative:1/smartTeemo.open:false`。
+- Chrome MCP 最终只读回查：源 `69514602419 / 69510831221` 与目标 `81239479171 / 81324670151` 的 `/campaign/get.json`、`/adgroup/get.json`、`/bidword/findList.json`、`/wordpackage/findList.json`、`/crowd/findList.json` 均返回 HTTP 200 且 `apiOk=true`；关键词 12/12 且交集 12、无 missing/extra；流量智选词包 1/1 且交集 1；人群 23/23 且交集 23、无 missing/extra；campaign 状态均 `onlineStatus:1/displayStatus:"start"`，地域 87、分时 7 一致；单元状态均 `onlineStatus:1/displayStatus:"start"`，OCPC 核心和创意核心一致。
+- Chrome MCP 高级设置可见验收：打开新计划 `81239479171 / E7pro_自定义_验收0606_3` 的 `高级设置`，页面显示 `投放资源位 / 投放地域 / 分时折扣`，资源位行显示 `淘宝搜索`、`移动设备（含销量明星）、计算机设备`、状态 `开`。
+- Chrome MCP 收尾清理：已恢复并删除临时 `window.__codexE7CustomCopyCapture`，确认 `window.__codexE7CustomCopyCapture:false`、`window.__codexCopySubmitGuard:false`、页面无 `CODEX_GUARDED_WRITE_BLOCKED`、无 `bizCode未找到`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js && node --check src/optimizer/keyword-plan-api/search-and-draft.js && node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，15 项全绿；新增覆盖关键词/词包/单元人群源接口读取、关键词读取 fail-fast、`adgroupOcpc` 与创意模板字段白名单、创建后补词保留关键词策略字段。
+- `node --test tests/keyword-custom-mode-wordpackage.test.mjs tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，34 项全绿；覆盖流量智选复制词包提交前清理旧 ID、顶层 `status/onlineStatus=1`、策略 `onlineStatus=1`、策略 `bidPrice` 补齐。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：通过，59 项全绿；覆盖 copy rawOverrides 的 `crowdList/rightList` 同步、最终 payload 用源 `crowdList` 覆盖 `rightList`、资源位默认合同、词包新增态归一。
+- `npm run build`：通过，已同步根 userscript、发布包和 extension bundle。
+- `npm run check:syntax`、`npm run build:check`、`node --check dist/extension/page.bundle.js`、`node --check 阿里妈妈多合一助手.js`：均通过。
+- `git diff --check`：通过。
+- `node --test tests/*.test.mjs`：通过，638 项（636 pass，2 skip，0 fail）。
+- Chrome MCP 请求体复核：最终真实复制请求 `E7pro_自定义_验收0606_3` 的 `solutionList[0].adgroupList[0]` 内 `wordList=12`、`wordPackageList=1`、`crowdList=23`、`rightList=23`，`crowdList` 与 `rightList` 序列化内容一致；campaign 带默认淘宝搜索资源位 `adzoneId=114790550288,status=start`；单元带源全能调价核心和创意核心字段。
+- Chrome MCP 服务端回读复核：新计划 `81239479171 / E7pro_自定义_验收0606_3`、新单元 `81324670151` 与源计划 `69514602419 / 69510831221` 对比，关键词 12/12 全量一致，词包 1/1 一致，人群 23/23 全量一致，地域 87/87 一致，分时 7/7 一致，OCPC 核心一致，创意核心一致，计划和单元状态均为开启。
+- Chrome MCP 高级设置 UI 复核：新计划高级设置中 `投放资源位` 下 `淘宝搜索` 显示为 `开`；临时抓包探针和写请求守卫均已清理，页面无 `CODEX_GUARDED_WRITE_BLOCKED` 与 `bizCode未找到`。
+
+## 结果复盘
+- 本轮根因不是单一关键词缺失，而是关键词推广自定义计划的关键投放合同分散在单元详情和独立列表接口：关键词来自 `/bidword/findList.json`，词包来自 `/wordpackage/findList.json`，关键词旁边人群来自按 `campaignId+adgroupId` 的 `/crowd/findList.json`，全能调价和创意核心来自完整 `/adgroup/get.json`。复制链路必须先把这些字段显式读取并写入 source，再在最终 addList 出口统一归一。
+- 资源位问题属于高级设置合同缺失：详情字段为空不能等价为关闭，关键词复制最终提交必须保留默认淘宝搜索资源位，真实验收也必须打开新计划高级设置检查 `投放资源位`。
+- 人群问题的最终根因是双事实源：`crowdList` 已经是源计划人群，但旧 `rightList` 仍可能带模板推荐人群。修复后源 `crowdList` 会同步覆盖 `rightList`，并通过服务端回读比对名称集合，避免只看数量造成假通过。
+- 当前验收结论：已通过目标测试、构建/同步检查、全量 node 测试和 Chrome MCP 真实复制；新计划 `81239479171 / E7pro_自定义_验收0606_3` 保留源计划关键词、流量智选词包、关键词旁边人群、全能调价、创意、地域、分时和投放资源位。
+
 # TODO - 2026-06-06 AI点睛复制高级设置缺失分析与修复
 
 ## 需求规格

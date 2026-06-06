@@ -1247,7 +1247,7 @@
                 if (sceneCapabilities.sceneName === '关键词推广' && mergedRequest?.__copyCurrentPlan === true) {
                     solutionList.forEach((solution) => {
                         if (!isPlainObject(solution?.campaign)) return;
-                        applyCopyKeywordAiMaxAdvancedSettingsForSubmit(solution.campaign, {
+                        applyCopyKeywordAdvancedSettingsForSubmit(solution.campaign, {
                             request: mergedRequest
                         });
                     });

@@ -1,5 +1,20 @@
 # Lessons - 2026-05-30
 
+## L117 关键词旁边人群复制必须锁定 rightList 与集合一致性
+- 触发：复制 `69514602419 / E7pro_自定义` 后，新计划 `81322658190` 的关键词、词包、资源位、全能调价和创意字段都已带上，但只读回读发现源/目标人群同为 23 个、名称集合交集却为 0。
+- 原因：关键词自定义计划的人群读取来自按 `campaignId+adgroupId` 的 `/crowd/findList.json`，源数据写入 `adgroup.crowdList`；但最终提交单元还存在 `rightList`，旧逻辑会保留模板或推荐态 `rightList`。服务端落库可能优先按 `rightList` 识别人群，导致数量看似正确但实际复制成另一批推荐人群。
+- 规则：关键词旁边人群复制必须把源 `adgroup.crowdList` 同步到 `adgroup.rightList`，并在最终 `/solution/addList.json?bizCode=onebpSearch` 出口再次强制两者一致。验收必须比对源/目标人群 ID 或名称集合，不得只看 `crowdCount`。
+
+## L116 关键词复制的投放资源位是通用高级设置合同
+- 触发：用户再次指出 `E7pro_自定义` 复制时 `高级设置 -> 投放资源位` 也没有复制，多次导致计划无法正常投放；此前资源位兜底主要落在 AI 点睛复制路径。
+- 原因：关键词推广自定义计划和 AI 点睛计划都依赖 `campaign.adzoneList` 表达资源位开启状态；详情接口缺省或返回空不代表用户关闭资源位。若只在 AI 点睛分支补默认 `淘宝搜索`，自定义计划仍可能以空 `adzoneList` 提交，创建出不可正常投放的计划。
+- 规则：关键词当前计划复制必须把 `投放资源位` 当作通用高级设置合同处理。最终 `/solution/addList.json?bizCode=onebpSearch` 请求发出前，若源计划没有显式资源位列表，应补官方默认 `{adzoneId:"114790550288",status:"start"}`；若源计划显式带出资源位列表，则原样保留。验收必须核对最终请求体和新计划高级设置，不得只看 AI 点睛或基础投放字段。
+
+## L115 关键词自定义复制必须把单元级合同作为验收核心
+- 触发：用户指出 `E7pro_自定义` 复制时不只关键词缺失，关键词旁边的人群、创意和“全能调价”设置也需要复制；真实复制又暴露流量智选词包按详情态提交会返回 `词包出价不能为空`。
+- 原因：关键词推广自定义计划的关键配置大量挂在 adgroup 侧或独立列表接口里，`campaign/get.json` 和 `adgroup/get.json` 不一定直接带出可提交合同；详情态词包/关键词/人群字段还可能和新增态提交合同不同。如果只复制计划级字段或直接透传详情态字段，会创建出无单元、无关键词或缺少出价合同的半成品。
+- 规则：关键词推广自定义复制必须显式读取并验证 `/bidword/findList.json`、`/wordpackage/findList.json`、按 `campaignId+adgroupId` 的 `/crowd/findList.json` 和完整 `adgroup/get.json`；最终 `/solution/addList.json?bizCode=onebpSearch` 请求必须核对 `wordList`、`wordPackageList` 顶层与策略出价、`adgroup.crowdList`、`adgroupOcpc` 和创意字段。真实成功标准是响应无 `errorDetails` 且新计划有单元、关键词、词包、人群和单元设置，不能只看 campaign 创建成功。
+
 ## L113 复制计划必须覆盖“高级设置”字段而不只看基础投放字段
 - 触发：AI点睛复制计划前几轮只重点核对了 `sourceChannel/searchUpgradePxb/状态/预算/出价/AI点睛/商品`，用户继续指出真正原因是“高级设置里的没有复制过来”。
 - 原因：关键词推广的可投放效果不只由基础字段决定，高级设置还可能包含地域、分时、资源位溢价、屏蔽词、优质计划防停投、创意/资源位/人群等隐藏配置；如果只看 `campaign/get.json` 的顶层字段或复制弹窗摘要，会漏掉高级设置内部差异。

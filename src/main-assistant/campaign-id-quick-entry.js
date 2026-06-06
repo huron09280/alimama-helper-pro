@@ -3039,8 +3039,9 @@
             return { itemId, response: json };
         },
 
-        extractCopyCrowdListFromPayload(payload = {}, expectedCampaignId = '') {
+        extractCopyCrowdListFromPayload(payload = {}, expectedCampaignId = '', expectedAdgroupId = '') {
             const expectedId = this.normalizeCampaignId(expectedCampaignId);
+            const expectedAid = this.normalizeAdgroupId(expectedAdgroupId);
             const data = payload?.data || {};
             const candidates = [
                 data?.list,
@@ -3067,12 +3068,34 @@
             rows.forEach((row) => {
                 if (!this.isPlainRecord(row)) return;
                 const rowCampaignId = this.normalizeCampaignId(row?.campaignId || row?.campaign?.campaignId || '');
+                const rowAdgroupId = this.normalizeAdgroupId(row?.adgroupId || row?.adgroup?.adgroupId || '');
                 if (expectedId && rowCampaignId && rowCampaignId !== expectedId) return;
+                if (expectedAid && rowAdgroupId && rowAdgroupId !== expectedAid) return;
                 if (Array.isArray(row.crowdList)) {
-                    row.crowdList.forEach(item => crowdList.push(item));
+                    row.crowdList.forEach((item) => {
+                        if (!this.isPlainRecord(item)) return;
+                        const itemCampaignId = this.normalizeCampaignId(item?.campaignId || item?.campaign?.campaignId || '');
+                        const itemAdgroupId = this.normalizeAdgroupId(item?.adgroupId || item?.adgroup?.adgroupId || '');
+                        if (expectedId && itemCampaignId && itemCampaignId !== expectedId) return;
+                        if (expectedAid && itemAdgroupId && itemAdgroupId !== expectedAid) return;
+                        crowdList.push(item);
+                    });
                     return;
                 }
                 if (this.isPlainRecord(row.crowd)) {
+                    crowdList.push(row);
+                    return;
+                }
+                const directCrowdKey = String(
+                    row?.mx_crowdId
+                    || row?.crowdId
+                    || row?.labelId
+                    || row?.crowdName
+                    || row?.labelName
+                    || row?.name
+                    || ''
+                ).trim();
+                if (directCrowdKey) {
                     crowdList.push(row);
                 }
             });
@@ -3081,9 +3104,10 @@
                 .map(item => this.cloneCopyData(item));
         },
 
-        async queryCampaignCrowdList(campaignId, bizCode, authContext) {
+        async queryCampaignCrowdList(campaignId, bizCode, authContext, adgroupId = '') {
             const id = this.normalizeCampaignId(campaignId);
             if (!id) return { crowdList: [] };
+            const normalizedAdgroupId = this.normalizeAdgroupId(adgroupId);
             const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
             const query = new URLSearchParams({
                 csrfId: String(authContext?.csrfId || ''),
@@ -3093,7 +3117,8 @@
             const payload = {
                 bizCode: targetBizCode,
                 crowdBindQueryList: [{
-                    campaignId: Number(id)
+                    campaignId: Number(id),
+                    ...(normalizedAdgroupId ? { adgroupId: Number(normalizedAdgroupId) } : {})
                 }],
                 csrfId: String(authContext?.csrfId || ''),
                 loginPointId: String(authContext?.loginPointId || '')
@@ -3103,7 +3128,189 @@
                 businessErrorMessage: '查询计划人群失败'
             });
             return {
-                crowdList: this.extractCopyCrowdListFromPayload(json, id),
+                crowdList: this.extractCopyCrowdListFromPayload(json, id, normalizedAdgroupId),
+                response: json
+            };
+        },
+
+        extractCopyBidwordListFromPayload(payload = {}, expectedCampaignId = '', expectedAdgroupId = '') {
+            const expectedCid = this.normalizeCampaignId(expectedCampaignId);
+            const expectedAid = this.normalizeAdgroupId(expectedAdgroupId);
+            const data = payload?.data || {};
+            const candidates = [
+                data?.list,
+                data?.result,
+                data?.records,
+                data?.wordList,
+                data?.bidwordList,
+                payload?.list,
+                payload?.result,
+                payload?.records,
+                payload?.wordList,
+                payload?.bidwordList
+            ];
+            if (Array.isArray(data?.page?.list)) candidates.push(data.page.list);
+            const rows = [];
+            candidates.forEach((candidate) => {
+                if (Array.isArray(candidate)) {
+                    candidate.forEach(item => rows.push(item));
+                } else if (this.isPlainRecord(candidate)) {
+                    rows.push(candidate);
+                }
+            });
+            const out = [];
+            const seen = new Set();
+            rows.forEach((row) => {
+                if (!this.isPlainRecord(row)) return;
+                const rowCampaignId = this.normalizeCampaignId(row?.campaignId || row?.campaign?.campaignId || '');
+                const rowAdgroupId = this.normalizeAdgroupId(row?.adgroupId || row?.adgroup?.adgroupId || '');
+                if (expectedCid && rowCampaignId && rowCampaignId !== expectedCid) return;
+                if (expectedAid && rowAdgroupId && rowAdgroupId !== expectedAid) return;
+                const word = String(row.word || row.keyword || row.bidword || row.name || '').trim();
+                if (!word || seen.has(word)) return;
+                seen.add(word);
+                const item = { word };
+                [
+                    'bidPrice',
+                    'price',
+                    'matchScope',
+                    'status',
+                    'onlineStatus',
+                    'campaignBidType',
+                    'bidStrategyInfo',
+                    'bidUpgradeStrategyInfo'
+                ].forEach((key) => {
+                    if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+                        item[key] = this.cloneCopyData(row[key]);
+                    }
+                });
+                out.push(item);
+            });
+            return out.slice(0, 200);
+        },
+
+        async queryBidwordList(campaignId, adgroupId, bizCode, authContext) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedAdgroupId = this.normalizeAdgroupId(adgroupId);
+            if (!normalizedCampaignId || !normalizedAdgroupId) return { wordList: [] };
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode,
+                mx_bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/bidword/findList.json?${query.toString()}`;
+            const payload = {
+                mx_bizCode: targetBizCode,
+                bizCode: targetBizCode,
+                offset: 0,
+                pageSize: 200,
+                orderField: '',
+                orderBy: '',
+                queryType: '0',
+                campaignIdList: [normalizedCampaignId],
+                adgroupIdList: [normalizedAdgroupId],
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询关键词明细失败',
+                businessErrorMessage: '查询关键词明细失败'
+            });
+            return {
+                wordList: this.extractCopyBidwordListFromPayload(json, normalizedCampaignId, normalizedAdgroupId),
+                response: json
+            };
+        },
+
+        extractCopyWordPackageListFromPayload(payload = {}, expectedCampaignId = '', expectedAdgroupId = '') {
+            const expectedCid = this.normalizeCampaignId(expectedCampaignId);
+            const expectedAid = this.normalizeAdgroupId(expectedAdgroupId);
+            const data = payload?.data || {};
+            const candidates = [
+                data?.list,
+                data?.result,
+                data?.records,
+                data?.wordPackageList,
+                payload?.list,
+                payload?.result,
+                payload?.records,
+                payload?.wordPackageList
+            ];
+            if (Array.isArray(data?.page?.list)) candidates.push(data.page.list);
+            const rows = [];
+            candidates.forEach((candidate) => {
+                if (Array.isArray(candidate)) {
+                    candidate.forEach(item => rows.push(item));
+                } else if (this.isPlainRecord(candidate)) {
+                    rows.push(candidate);
+                }
+            });
+            const out = [];
+            const seen = new Set();
+            rows.forEach((row) => {
+                if (!this.isPlainRecord(row)) return;
+                const rowCampaignId = this.normalizeCampaignId(row?.campaignId || '');
+                const rowAdgroupId = this.normalizeAdgroupId(row?.adgroupId || '');
+                if (expectedCid && rowCampaignId && rowCampaignId !== expectedCid) return;
+                if (expectedAid && rowAdgroupId && rowAdgroupId !== expectedAid) return;
+                const name = String(row.wordPackageName || row.packageName || row.name || '').trim();
+                const packageId = String(row.wordPackageId ?? row.packageId ?? row.id ?? '').trim();
+                if (!name && !packageId) return;
+                const key = `${packageId || 'name'}:${name || packageId}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                const item = {};
+                [
+                    'wordPackageId',
+                    'packageId',
+                    'id',
+                    'wordPackageName',
+                    'packageName',
+                    'name',
+                    'wordPackageType',
+                    'onlineStatus',
+                    'status',
+                    'bidPrice',
+                    'strategyList',
+                    'tag'
+                ].forEach((field) => {
+                    if (row[field] !== undefined && row[field] !== null && row[field] !== '') {
+                        item[field] = this.cloneCopyData(row[field]);
+                    }
+                });
+                out.push(item);
+            });
+            return out.slice(0, 100);
+        },
+
+        async queryWordPackageList(campaignId, adgroupId, bizCode, authContext) {
+            const normalizedCampaignId = this.normalizeCampaignId(campaignId);
+            const normalizedAdgroupId = this.normalizeAdgroupId(adgroupId);
+            if (!normalizedCampaignId || !normalizedAdgroupId) return { wordPackageList: [] };
+            const targetBizCode = this.normalizeBizCode(bizCode) || authContext?.bizCode || this.DEFAULT_BIZ_CODE;
+            const query = new URLSearchParams({
+                csrfId: String(authContext?.csrfId || ''),
+                bizCode: targetBizCode,
+                mx_bizCode: targetBizCode
+            });
+            const url = `https://one.alimama.com/wordpackage/findList.json?${query.toString()}`;
+            const payload = {
+                mx_bizCode: targetBizCode,
+                bizCode: targetBizCode,
+                offset: 0,
+                pageSize: 200,
+                campaignIdList: [normalizedCampaignId],
+                adgroupIdList: [normalizedAdgroupId],
+                csrfId: String(authContext?.csrfId || ''),
+                loginPointId: String(authContext?.loginPointId || '')
+            };
+            const json = await OneApiTransport.postJson(url, payload, {
+                actionName: '查询关键词词包失败',
+                businessErrorMessage: '查询关键词词包失败'
+            });
+            return {
+                wordPackageList: this.extractCopyWordPackageListFromPayload(json, normalizedCampaignId, normalizedAdgroupId),
                 response: json
             };
         },
@@ -3229,11 +3436,15 @@
             const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
             let adgroup = this.extractCopyAdgroupFromPayload(detail?.response || {}, id);
             let itemId = this.normalizeItemId(detail?.itemId || hintedItemId || '');
-            if ((!this.isPlainRecord(adgroup) || !Object.keys(adgroup).length || !itemId) && adgroupIds.length) {
-                const adgroupDetail = await this.queryAdgroupDetail(id, adgroupIds[0], targetBizCode, authContext);
-                const nextAdgroup = this.extractCopyAdgroupFromPayload(adgroupDetail?.response || {}, id, adgroupIds[0]);
+            const resolvedAdgroupId = this.normalizeAdgroupId(adgroup?.adgroupId || adgroupIds[0] || '');
+            if (resolvedAdgroupId && (targetBizCode === 'onebpSearch' || !this.isPlainRecord(adgroup) || !Object.keys(adgroup).length || !itemId)) {
+                const adgroupDetail = await this.queryAdgroupDetail(id, resolvedAdgroupId, targetBizCode, authContext);
+                const nextAdgroup = this.extractCopyAdgroupFromPayload(adgroupDetail?.response || {}, id, resolvedAdgroupId);
                 if (this.isPlainRecord(nextAdgroup) && Object.keys(nextAdgroup).length) {
-                    adgroup = nextAdgroup;
+                    adgroup = {
+                        ...(this.isPlainRecord(adgroup) ? adgroup : {}),
+                        ...nextAdgroup
+                    };
                 }
                 itemId = itemId || this.normalizeItemId(adgroupDetail?.itemId || '');
             }
@@ -3242,12 +3453,48 @@
             }
             if (targetBizCode === 'onebpSearch') {
                 const aiMaxEnabled = this.isKeywordAiMaxCampaignEnabled(campaign);
+                const currentAdgroupId = this.normalizeAdgroupId(adgroup?.adgroupId || resolvedAdgroupId || '');
+                if (currentAdgroupId) {
+                    try {
+                        const bidwordDetail = await this.queryBidwordList(id, currentAdgroupId, targetBizCode, authContext);
+                        const wordList = Array.isArray(bidwordDetail?.wordList) ? bidwordDetail.wordList : [];
+                        if (wordList.length) {
+                            adgroup.wordList = wordList;
+                            Logger.log(`📋 已读取源计划${id}的关键词 ${wordList.length} 个`);
+                        }
+                    } catch (err) {
+                        throw new Error(`查询关键词明细失败，已取消复制：${err?.message || '未知错误'}`);
+                    }
+                    try {
+                        const wordPackageDetail = await this.queryWordPackageList(id, currentAdgroupId, targetBizCode, authContext);
+                        const wordPackageList = Array.isArray(wordPackageDetail?.wordPackageList) ? wordPackageDetail.wordPackageList : [];
+                        if (wordPackageList.length) {
+                            adgroup.wordPackageList = wordPackageList;
+                            Logger.log(`📋 已读取源计划${id}的关键词词包 ${wordPackageList.length} 个`);
+                        }
+                    } catch (err) {
+                        throw new Error(`查询关键词词包失败，已取消复制：${err?.message || '未知错误'}`);
+                    }
+                }
                 try {
-                    const crowdDetail = await this.queryCampaignCrowdList(id, targetBizCode, authContext);
+                    const crowdDetail = await this.queryCampaignCrowdList(
+                        id,
+                        targetBizCode,
+                        authContext,
+                        aiMaxEnabled ? '' : currentAdgroupId
+                    );
                     const campaignCrowdList = Array.isArray(crowdDetail?.crowdList) ? crowdDetail.crowdList : [];
                     if (campaignCrowdList.length) {
-                        campaign.crowdList = campaignCrowdList;
-                        Logger.log(`📋 已读取源计划${id}的 AI点睛需求人群 ${campaignCrowdList.length} 个`);
+                        if (aiMaxEnabled) {
+                            campaign.crowdList = campaignCrowdList;
+                            Logger.log(`📋 已读取源计划${id}的 AI点睛需求人群 ${campaignCrowdList.length} 个`);
+                        } else if (currentAdgroupId) {
+                            adgroup.crowdList = campaignCrowdList;
+                            Logger.log(`📋 已读取源计划${id}的关键词人群 ${campaignCrowdList.length} 个`);
+                        } else {
+                            campaign.crowdList = campaignCrowdList;
+                            Logger.log(`📋 已读取源计划${id}的人群 ${campaignCrowdList.length} 个`);
+                        }
                     } else if (aiMaxEnabled && this.hasKeywordAiMaxDemandSignal(campaign)) {
                         throw new Error('源计划 AI点睛已生成方案，但未返回需求人群');
                     }
@@ -3255,7 +3502,7 @@
                     if (aiMaxEnabled) {
                         throw new Error(`查询AI点睛需求人群失败，已取消复制：${err?.message || '未知错误'}`);
                     }
-                    Logger.log(`⚠️ 查询计划人群失败，继续复制基础设置：${err?.message || '未知错误'} `, true);
+                    throw new Error(`查询关键词人群失败，已取消复制：${err?.message || '未知错误'}`);
                 }
             }
             const material = this.extractCopyMaterial(campaign, adgroup);
