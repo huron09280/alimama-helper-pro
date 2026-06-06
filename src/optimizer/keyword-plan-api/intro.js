@@ -360,8 +360,10 @@
 
         const buildOneApiUrl = (path, bizCode) => {
             const { csrfId } = ensureTokens();
-            const hasQuery = path.includes('?');
-            return `https://one.alimama.com${path}${hasQuery ? '&' : '?'}csrfId=${encodeURIComponent(csrfId)}&bizCode=${encodeURIComponent(bizCode)}`;
+            const url = new URL(String(path || ''), 'https://one.alimama.com');
+            url.searchParams.set('csrfId', csrfId);
+            url.searchParams.set('bizCode', bizCode);
+            return url.toString();
         };
 
         const isResponseOk = (res) => {

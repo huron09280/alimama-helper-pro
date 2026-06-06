@@ -1240,6 +1240,23 @@
                 submitEndpoint: entry?.meta?.submitEndpoint || '',
                 error: String(entry?.lastError || entry?.meta?.lastError || fallbackError || '服务端未返回 campaignId')
             });
+            const buildCreatePayload = (entries = []) => {
+                const solutionList = (Array.isArray(entries) ? entries : [])
+                    .map(entry => entry?.solution)
+                    .filter(solution => isPlainObject(solution));
+                if (sceneCapabilities.sceneName === '关键词推广' && mergedRequest?.__copyCurrentPlan === true) {
+                    solutionList.forEach((solution) => {
+                        if (!isPlainObject(solution?.campaign)) return;
+                        applyCopyKeywordAiMaxAdvancedSettingsForSubmit(solution.campaign, {
+                            request: mergedRequest
+                        });
+                    });
+                }
+                return {
+                    bizCode: runtime.bizCode,
+                    solutionList
+                };
+            };
             const submitSinglePlanInParallel = async (entry = null, endpoint = '', submitTimes = 1) => {
                 if (!entry || submitTimes <= 1) return null;
                 const singleEndpoint = normalizeGoalCreateEndpoint(endpoint || resolveEntrySubmitEndpoint(entry));
@@ -1247,10 +1264,7 @@
                 for (let i = 0; i < submitTimes; i++) {
                     tasks.push((async () => {
                         try {
-                            const res = await requestOne(singleEndpoint, runtime.bizCode, {
-                                bizCode: runtime.bizCode,
-                                solutionList: [entry.solution]
-                            }, options.requestOptions || {});
+                            const res = await requestOne(singleEndpoint, runtime.bizCode, buildCreatePayload([entry]), options.requestOptions || {});
                             return { ok: true, res };
                         } catch (err) {
                             return {
@@ -1419,12 +1433,9 @@
                         remainingEntries = parallelResult.failedEntries;
                         break;
                     }
-                    const solutionList = remainingEntries.map(entry => entry.solution);
+                    const createPayload = buildCreatePayload(remainingEntries);
                     try {
-                        const res = await requestOne(batchEndpoint, runtime.bizCode, {
-                            bizCode: runtime.bizCode,
-                            solutionList
-                        }, options.requestOptions || {});
+                        const res = await requestOne(batchEndpoint, runtime.bizCode, createPayload, options.requestOptions || {});
                         rawResponses.push(res);
                         const outcome = parseAddListOutcome(res, remainingEntries);
                         if (outcome.successes.length) {
@@ -1498,10 +1509,7 @@
                     const entryItemId = toPositiveIdText(entry?.meta?.item?.materialId || entry?.meta?.item?.itemId || '');
                     const submitSingleEntry = async () => {
                         const singleEndpoint = resolveEntrySubmitEndpoint(entry);
-                        const res = await requestOne(singleEndpoint, runtime.bizCode, {
-                            bizCode: runtime.bizCode,
-                            solutionList: [entry.solution]
-                        }, options.requestOptions || {});
+                        const res = await requestOne(singleEndpoint, runtime.bizCode, buildCreatePayload([entry]), options.requestOptions || {});
                         rawResponses.push(res);
                         return parseAddListOutcome(res, [entry]);
                     };

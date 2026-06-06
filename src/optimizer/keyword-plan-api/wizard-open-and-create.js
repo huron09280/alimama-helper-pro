@@ -698,7 +698,7 @@
             const newPlanNames = buildCurrentPlanCopiedPlanNames(sourcePlanName, targetScene, copyCount, source, options);
             const newPlanName = newPlanNames[0] || buildCurrentPlanCopyName(sourcePlanName || targetScene || '计划');
             const targetOnlineStatus = resolveCurrentPlanCopyStatus(source, options);
-            const bizCode = normalizeSceneBizCode(campaign.bizCode || source?.bizCode || resolveSceneBizCodeHint(targetScene) || '');
+            const bizCode = normalizeSceneBizCode(options.bizCode || campaign.bizCode || source?.bizCode || resolveSceneBizCodeHint(targetScene) || '');
             const baseMeta = {
                 sourceCampaignId: String(source?.campaignId || source?.campaign?.campaignId || campaign?.campaignId || '').trim(),
                 sourceCampaignName: String(source?.campaignName || source?.campaign?.campaignName || campaign?.campaignName || '').trim(),
@@ -892,7 +892,9 @@
             return uniqueBy(out, id => id);
         };
         const pauseCopiedCampaignsAfterCreate = async (sceneName = '', result = {}, meta = {}, options = {}) => {
-            const shouldPause = toNumber(meta?.targetOnlineStatus, 1) === 0 || options.pauseIfStartedAfterCreate === true;
+            const targetOnlineStatus = toNumber(meta?.targetOnlineStatus, NaN);
+            const shouldPause = targetOnlineStatus === 0
+                || (!Number.isFinite(targetOnlineStatus) && options.pauseIfStartedAfterCreate === true);
             if (!shouldPause) {
                 return {
                     skipped: true,

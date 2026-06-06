@@ -1,3 +1,352 @@
+# TODO - 2026-06-06 AI点睛复制高级设置缺失分析与修复
+
+## 需求规格
+- 用户新判断：AI点睛复制计划不花费/效果异常的原因是“高级设置里的没有复制过来”，需要具体查看高级设置内容、分析差异、修复，并在浏览器里测试直到通过。
+- 目标：以真实 `one.alimama.com` 关键词推广 AI点睛计划为事实源，列出高级设置字段集合，确认手动/源计划与复制计划差异，修复复制链路遗漏，并通过 Chrome MCP 真实页面验证复制后的高级设置已保留。
+- 重点字段：高级设置中的地域、分时折扣、资源位/溢价、屏蔽词/屏蔽词包、优质计划防停投/自动规则、创意模式/资源位/人群相关字段，以及服务端详情中高级设置操作对应的隐藏字段。
+- 安全边界：允许围绕用户已授权的复制链路做真实复制验证；不得删除、批量暂停/开启、预算修改、改已有计划或执行无关写操作。所有请求证据只记录脱敏摘要，不写入 Cookie、请求头或登录参数。Chrome 验收只用 Chrome MCP。
+
+## 执行计划
+- [x] 更新 lessons，补充“高级设置必须单独纳入复制验收”的规则。
+- [x] 用源码和真实页面服务端详情确定关键词推广高级设置字段清单。
+- [x] 对比手动/源计划与复制计划高级设置字段，定位具体丢失点在详情读取、复制白名单、关键词裁剪还是提交组包。
+- [x] 采用最小结构性修复保留高级设置字段，并补测试覆盖字段不被裁剪。
+- [x] 运行目标测试、构建、同步检查和 diff 自审。
+- [x] Chrome MCP 重载扩展，在真实页面复制并读取服务端详情，证明高级设置复制通过且无守卫残留。
+
+## 高层操作摘要
+- 启动本轮时已回顾 L86/L89/L97/L109/L111/L112，并新增 L113：复制计划验收必须把“高级设置”作为独立合同集合核对，不能只看基础投放字段。
+- 初步方向：上一轮已确认基础字段对齐，但 `campaign/get.json` 中仍存在大量高级设置候选字段，例如地域/分时、资源位、屏蔽词、规则命令、创意模式、冷启/防停投、资源位溢价等；本轮要先用真实详情和源码白名单收敛具体缺失字段。
+- 三项高级设置核对结论：`投放地域` 对应 `campaign.launchAreaStrList`，复制入口白名单与最终关键词 payload 白名单均保留，历史有花费源计划和旧复制计划均为 88 个地域；`投放时间` 对应 `campaign.launchPeriodList`，复制入口与最终 payload 均保留，历史源/复制均为 7 天分时；`投放资源位` 不能只按 `campaign/get.json` 的 `campaign.adzoneList=null` 判空，用户截图显示源计划 `81211576775` 高级设置里 `淘宝搜索` 为开启，历史官方提交样本也显示关键词推广默认资源位会以 `campaign.adzoneList:[{adzoneId:"114790550288",status:"start"}]` 表达。因此复制链路需要在当前计划 AI点睛复制且源详情未显式返回资源位时，保留“淘宝搜索开启”的默认资源位合同。
+- 具体漏点收敛：有花费源计划 `81211576775 / E7Pro_AI点睛_促加购` 的 `campaignShieldWords` 和 `shieldCenterWords` 非空（屏蔽词“美的”），旧无花费复制计划 `81169583252 / E7Pro_AI点睛_促加购_2` 两者为空；AI点睛弹窗把屏蔽词保存到 `campaign.aiMaxInfo.centerShieldWordList/exactShieldWordList`，最终提交层需要把它物化为服务端识别的顶层屏蔽词字段。
+- 修复实现：`search-and-draft.js` 在关键词推广当前计划 AI点睛复制时，如果最终 `adzoneList` 为空则补官方默认淘宝搜索资源位 `{adzoneId:"114790550288",status:"start"}`；同时从 `campaign.aiMaxInfo.centerShieldWordList/exactShieldWordList` 或源计划顶层 `shieldCenterWords/shieldWords` 补齐 `shieldCenterWords/shieldWords/campaignShieldWords`，且只在顶层字段为空时补，不覆盖源计划已明确带出的字段。
+
+## 验证记录
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- `npm run build`：通过，已同步根 userscript、发布包和 extension bundle。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：通过，58 项全绿；覆盖 AI点睛复制资源位默认补齐、屏蔽词顶层物化、地域/分时保留、源词包为空时补流量智选词包、原生智能出价目标合同等。
+- `npm run check:syntax`、`npm run build:check`、`node --check dist/extension/page.bundle.js`、`node --check 阿里妈妈多合一助手.js`、`git diff --check`：均通过。
+- Chrome MCP 连接恢复：预绑定 `mcp__chrome_devtools` 在当前会话仍返回 `Transport closed`，本机 `9222/json/version` 正常；改用同一 `chrome-devtools-mcp --browser-url=http://127.0.0.1:9222` 原始 MCP 协议连接完成后续验证。
+- Chrome MCP 源计划验证：源计划 `81211576775 / E7Pro_AI点睛_促加购` 点击高级设置后，页面显示 `投放资源位 / 投放地域 / 投放时间`，`投放资源位` 下 `淘宝搜索` 为 `开`；截图证据保存为 [tasks/e7-812115-advanced-click.png](/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/tasks/e7-812115-advanced-click.png)。
+- Chrome MCP 复制验证未通过：重载扩展后真实复制源计划，创建成功 `81319562469 / E7Pro_AI点睛_促加购_1`，页面无 `bizCode未找到`、无 `CODEX_GUARDED_WRITE_BLOCKED`；但 hook history 中最新 `/solution/addList.json?bizCode=onebpSearch` payload 摘要显示 `adzoneList:[]`，同时 `launchAreaStrList=88`、`launchPeriodList=7`、`shieldCenterWords:["美的"]`、`campaignShieldWords:[{word:"美的",matchScope:2}]` 均已带上。结论：地域/时间/屏蔽词修复生效，资源位默认补齐仍未命中或被后续覆盖，需要继续修。
+- 用户追加纠正：源计划 `81211576775` 的资源位没有空，真实页面高级设置里 `淘宝搜索` 为 `开`；本轮继续定位最终提交链路为何仍把复制 payload 写成 `adzoneList:[]`，修复标准必须以 `/solution/addList.json?bizCode=onebpSearch` 最终请求体带默认资源位为准。
+- 继续修复摘要：中间 `pruneKeywordCampaignForCustomScene()` 已能补资源位，但最终提交循环在 `create-and-suggest.js` 里有批量、并发单条、fallback 单条三条请求分支。新增 `applyCopyKeywordAiMaxAdvancedSettingsForSubmit()` 作为最终提交 helper，并在 `buildCreatePayload()` 中对关键词推广当前计划 AI点睛复制的 `solutionList[*].campaign` 做发请求前校正，确保 `adzoneList`、屏蔽词物化在真实 `/solution/addList.json` 请求体中最后一次成立。
+- Chrome MCP 最终复制验证通过：扩展页 Reload 后确认版本 `7.06`、加载路径为本工作区 `dist/extension`；刷新真实 `one.alimama.com` 源计划页，复制源计划 `81211576775 / E7Pro_AI点睛_促加购` 并点击 `确认生成`，页面显示 `复制计划已成功`，新计划 `81235009170 / E7Pro_AI点睛_促加购_3`，目标状态 `开启`，无 `bizCode未找到`、无 `CODEX_GUARDED_WRITE_BLOCKED`。
+- Chrome MCP 最终 payload 证据：`__AM_HOOK_MANAGER__.getRequestHistory()` 最新 `/solution/addList.json?bizCode=onebpSearch&csrfId=<redacted>` 请求体摘要为 `campaignName:"E7Pro_AI点睛_促加购_3"`、`sourceChannel:"onebp"`、`adzoneList:[{adzoneId:"114790550288",status:"start"}]`、`launchAreaCount:88`、`launchPeriodCount:7`、`shieldCenterWords:["美的"]`、`campaignShieldWords` 含 `{word:"美的",matchScope:2}`、`wordListCount:5`、`wordPackageCount:1`、`itemId:757440599385`。
+- Chrome MCP 新计划高级设置复核：搜索新计划 `81235009170` 后点击 `高级设置`，页面显示 `投放资源位 / 投放地域 / 投放时间`，`投放资源位` 下 `淘宝搜索` 为 `开`。
+- 完整回归：第一次 `npm test` 因测试断言仍匹配旧代码形状失败 1 项；已更新断言覆盖新的统一 helper 与最终 `buildCreatePayload()` 出口校正。随后 `node --test tests/keyword-build-solution-payload-behavior.test.mjs` 通过 9 项，目标 58 项通过，完整 `node --test tests/*.test.mjs` 通过 637 项（635 pass，2 skip，0 fail）。
+
+## 结果复盘
+- 根因：源计划 `81211576775` 的服务端详情顶层 `campaign.adzoneList:null` 不能代表资源位关闭；真实高级设置和官方提交合同显示关键词推广 AI点睛默认 `淘宝搜索` 应开启。上一版只在关键词 `prune` 中间层补资源位，但最终提交循环在 `create-and-suggest.js` 里有批量/并发/单条重试多个出口，真实请求仍可能以空数组发出。
+- 修复：将 AI点睛复制高级设置收敛为 `applyCopyKeywordAiMaxAdvancedSettingsForSubmit()`，并在最终 `buildCreatePayload()` 发出 `/solution/addList.json` 前统一补齐资源位和屏蔽词，避免中间层正确但最终 body 丢字段。
+- 完成：真实复制源计划后，新计划 `81235009170` 的最终提交 payload 和页面高级设置均证明 `淘宝搜索` 已开启；地域、时间、屏蔽词同步保留。
+
+# TODO - 2026-06-06 AI点睛 prompt 生成与复制人群投放验证报告
+
+## 需求规格
+- 用户怀疑：AI点睛手动新建计划是根据 prompt 生成，而复制计划可能只是直接复制 AI点睛人群，因此导致不能投放；需要验证并写成报告。
+- 验证对象：沿用已真实创建成功的手动计划 `81271150778 / E7Pro_AI点睛_重建对比_041518` 与复制计划 `81229359071 / E7Pro_AI点睛_重建对比_41519`，商品 ID 均为 `757440599385`。
+- 目标：对比手动提交、复制提交、服务端详情和源码组包逻辑，判断“复制 AI点睛人群”是否是不能投放根因，并给出可复核报告。
+- 安全边界：本轮不再真实新建/复制，不点击会创建、修改、暂停、删除、扣费的入口；Chrome MCP 只做只读页面状态、控制台和接口详情核对。
+
+## 执行计划
+- [x] 复核已有任务记录和历史教训，确认写请求守卫、`bizCode未找到`、`CODEX_GUARDED_WRITE_BLOCKED` 已清理且不影响本轮判断。
+- [x] 阅读 AI点睛手动生成、复制组包和 payload 裁剪源码，确认 prompt、`aiMaxInfo`、`crowdList` 在两条链路中的事实源。
+- [x] 用 Chrome MCP 只读核对当前页面运行态、控制台、守卫残留和两条计划的关键服务端字段。
+- [x] 输出报告文件，包含手动计划 vs 复制计划对比表、结论、风险边界和建议。
+- [x] 更新本任务验证记录和结果复盘。
+
+## 高层操作摘要
+- 启动本轮时已回顾 `tasks/lessons.md`：L112 要求守卫验收后必须清理，L111/L89 要求创建/复制链路用真实提交证据闭环，L109 要求核对完整 URL，L97 要求本任务浏览器验收只用 Chrome MCP。
+- 源码结论：手动 AI点睛会从 AI 原生返回的 `additionalData.aiMaxInfo` 与 `additionalData.crowdList` 归一化出 prompt、投放方案和人群；复制链路白名单保留 `aiMaxInfo/crowdList/sourceChannel`，并在关键词 AI点睛复制时保留源关键词、补流量智选词包，最终关键词白名单允许这些字段进入 payload。
+- 请求历史结论：目标手动提交为 `/solution/addList.json?csrfId=...&bizCode=onebpSearch`，复制提交为 `/solution/addList.json?bizCode=onebpSearch&csrfId=...`；两者均带 prompt、`aiMaxDeliveryPlan`、`crowdCount=5`、`wordPackageCount=1`、`sourceChannel=onebp`、商品 `757440599385`。主要差异是手动 `wordListCount=0`，复制 `wordListCount=5`。
+- Chrome MCP 只读详情结论：手动计划 `81271150778` 与复制计划 `81229359071` 的 `campaign/get.json`、`adgroup/get.json` 均返回 `200/info.ok=true`；两者均开启、单元审核通过、`sourceChannel=onebp`、`searchUpgradePxb=null`、AI点睛开启、预算 100、`bidType=max_amount`、`bidTypeV2=smart_bid`、`bidTargetV2/optimizeTarget=coll_cart`、商品 `757440599385`。
+
+## 验证记录
+- Chrome MCP 页面残留检查：当前页 `__codexCopySubmitGuard=false`、`__codexE7RebuildCapture=false`，页面不含 `CODEX_GUARDED_WRITE_BLOCKED` 或 `bizCode未找到` 文案。
+- Chrome MCP 直接 fetch 详情第一次因缺少官方运行态 `csrfId` 参数返回 403，未作为业务失败；随后从插件请求历史中的官方只读 URL 参数发起只读 `campaign/get.json`/`adgroup/get.json`，目标两条计划均返回 `200/info.ok=true`。
+- Chrome MCP console 复查：剩余 warning 主要来自官方 ADC 表达式、组件依赖和 Router context 噪声；未见插件复制提交异常、`bizCode未找到` 或 `CODEX_GUARDED_WRITE_BLOCKED` 相关错误。
+- 报告已写入 [tasks/ai-max-copy-prompt-verification-2026-06-06.md](/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/tasks/ai-max-copy-prompt-verification-2026-06-06.md)。
+
+## 结果复盘
+- 结论：手动新建 AI点睛确实是 prompt 生成；复制计划不是重新调用 AI 生成，而是复用源计划已生成的 `aiMaxInfo/aiMaxDeliveryPlan/crowdList/wordList/wordPackageList`。当前证据不支持“直接复制 AI点睛人群导致不能投放”。
+- 投放条件判断：复制计划 `81229359071` 已具备投放配置条件；不能承诺立即产生花费，但服务端关键字段不再存在历史无花费风险中的 `sourceChannel` 丢失、`searchUpgradePxb=2`、创建后暂停、`bizCode`/URL 合同缺失等问题。
+- 安全收口：本轮没有真实新建/复制或修改计划；只做源码阅读、插件请求历史脱敏摘要、Chrome MCP 只读详情和控制台核对。临时保存的历史网络响应文件已删除，未将请求头或登录信息写入报告。
+
+# TODO - 2026-06-05 手动新建AI点睛计划与复制计划对比
+
+## 2026-06-06 重新建立新的 AI点睛计划并再次对比
+
+### 需求规格
+- 用户要求：重新建立一个新的 AI点睛计划，再复制一个 AI点睛计划，重新对比提交数据差异。
+- 商品 ID：沿用已纠正并经官方商品选择器验证可投的 `757440599385`；旧编号 `81128745573` 已验证不是可用商品 ID，本轮不再使用。
+- 目标：在真实 `one.alimama.com` 关键词推广页面新建一个手动 AI点睛计划，提交成功后复制该新计划，捕获两次 `/solution/addList.json?bizCode=onebpSearch` 提交摘要，并读取服务端详情形成差异表。
+- 安全边界：本轮允许真实新建和复制各 1 个计划；不得删除、批量暂停/开启、预算修改、改已有计划或执行无关写操作。请求证据只记录脱敏摘要，不保存或复述 Cookie、csrf、loginPointId 等敏感值。
+
+### 执行计划
+- [x] 用 Chrome MCP 确认当前页面、扩展运行态和无写请求守卫残留。
+- [x] 安装本轮脱敏捕获探针，记录创建/复制/详情接口摘要。
+- [x] 通过官方手动新建入口建立新的 AI点睛计划，商品 `757440599385`，记录新计划 ID/名称/提交字段。
+- [x] 复制该新手动计划，记录复制计划 ID/名称/提交字段和是否有暂停/异常写请求。
+- [x] 读取两个新计划的 `campaign/get.json`/列表详情，形成提交数据差异表。
+- [x] 写入验证记录和结果复盘；若差异暴露新缺陷，继续修复并验证。
+
+### 高层操作摘要
+- Chrome MCP 接续检查：当前页面为官方关键词推广自定义推广新建向导，添加商品弹窗已打开；页面无 `__codexCopySubmitGuard`，无 `CODEX_GUARDED_WRITE_BLOCKED` 或 `bizCode未找到` 残留，只有本轮非阻断 `__codexE7RebuildCapture` 抓包探针。
+- 商品选择过程：误点滚动前快照按钮后短暂选中 `874523794899`，提交前已在弹窗右侧移除；随后用运行态 DOM 精确选择 `757440599385`，主页面确认 `添加商品 1 / 30` 且显示 E7Pro 商品名称。
+- 手动新建首次提交未发出 `/solution/addList.json`，被官方前端拦截在计划名称，提示 `最多 32 个字` 和 `请检查计划名称设置查看`；原因是 `E7Pro_AI点睛_促加购_重建对比_20260606_041518` 超长。后续改用短名称继续提交。
+- 手动新建成功：计划 `81271150778 / E7Pro_AI点睛_重建对比_041518` 创建完成；官方提交 URL 为 `/solution/addList.json?bizCode=onebpSearch`，payload 摘要为 `bizCode=onebpSearch`、商品 `757440599385`、AI点睛开启、`bidTypeV2=smart_bid`、`bidTargetV2/optimizeTarget=coll_cart`、`dayBudget=100`、`sourceChannel=onebp`、地域 `all`、分时 7 天全天；本次创建后 `/campaign/updatePart.json` 计数为 0。
+- 复制成功：列表筛选新手动计划后点击 `复制：81271150778`，复制弹窗无 `bizCode未找到` 和 `CODEX_GUARDED_WRITE_BLOCKED`；点击 `确认生成` 后创建 `81229359071 / E7Pro_AI点睛_重建对比_41519`，目标状态开启。复制提交 URL 为 `/solution/addList.json?bizCode=onebpSearch&csrfId=...`，响应 `ok:true`；本轮复制没有调用 `/solution/copy.json`、`/campaign/copy/campaignCheck.json` 或 `/campaign/updatePart.json`。
+- 服务端只读对比：`campaign/get.json` 和 `adgroup/get.json` 显示手动计划 `81271150778` 与复制计划 `81229359071` 均为 `onlineStatus=1/displayStatus=start`、`sourceChannel=onebp`、`searchUpgradePxb=null`、AI点睛开启、日预算 `100`、`bidType=max_amount`、`bidTypeV2=smart_bid`、`bidTargetV2/optimizeTarget=coll_cart`、`setSingleCostV2=false`、无 `constraintType/constraintValue/singleCostV2`；单元均开启、审核通过，商品均为 `757440599385`。
+
+### 验证记录
+- Chrome MCP 手动提交：`/solution/addList.json?csrfId=...&bizCode=onebpSearch`，返回 `ok:true`，页面显示 `E7Pro_AI点睛_重建对比_041518 已经创建完成!`，URL 带 `campaignIdList=81271150778`。
+- Chrome MCP 复制提交：`/solution/addList.json?bizCode=onebpSearch&csrfId=...`，返回 `ok:true`，成功弹窗显示 `本次复制成功：1 个`，新计划 `81229359071 / E7Pro_AI点睛_重建对比_41519`。
+- 写接口计数：本轮两次真实创建共 2 次 `/solution/addList.json`；`/campaign/updatePart.json=0`、`/solution/copy.json=0`、`/campaign/copy/campaignCheck.json=0`。
+- 只读详情：手动单元 `81187227738`、复制单元 `81229301200` 均 `onlineStatus=1/displayStatus=start/auditStatus=1`，商品 `757440599385`。
+- 清理确认：已恢复并删除本轮非阻断 `__codexE7RebuildCapture`，页面无 `__codexCopySubmitGuard`，无 `CODEX_GUARDED_WRITE_BLOCKED` 或 `bizCode未找到` 文案残留。
+
+### 结果复盘
+- 本轮真实重新建立并复制成功，复制计划与手动计划在影响可投放/可花费的关键字段上已经对齐：业务线、提交 URL、来源字段、AI点睛、出价目标、预算、状态、商品、地域/分时和单元审核状态均一致。
+- 差异说明：手动提交是官方页面当场生成 AI 点睛需求，提交摘要 `wordListCount=0/wordPackageCount=1`；复制提交会带源计划关键词明细，提交摘要 `wordListCount=5/wordPackageCount=1`。服务端最终配置仍保持同一 AI 点睛智能出价合同，并未出现导致无花费的 `sourceChannel` 丢失、`searchUpgradePxb` 异常升舱或创建后暂停。
+
+## 2026-06-06 追加修正：复制确认弹窗 bizCode 未找到
+
+### 需求规格
+- 用户反馈：复制计划一览弹窗点击确认前显示 `bizCode未找到`，当前页面 URL 为 `one.alimama.com/index.html#!/manage/search?...`，应能识别为关键词推广 `onebpSearch`。
+- 目标：修复复制确认上下文中的 bizCode 丢失问题；在复制弹窗已打开且 URL/源计划可判断业务线时，不能阻塞为 `bizCode未找到`。
+- 范围：只修复制入口/确认弹窗的 bizCode 解析、透传或兜底，不改 payload 字段、不改提交 URL 上一轮 `?bizCode=onebpSearch` 合同、不新增真实提交，除非用户再次授权。
+- 验证：目标测试覆盖复制确认调用时 `bizCode` 兜底为 `onebpSearch`；构建后用 Chrome MCP 在当前弹窗运行态只读/低风险验证报错消失或上下文可解析，不触发真实创建。
+
+### 执行计划
+- [x] 定位 `bizCode未找到` 文案来源和复制确认上下文构造链路。
+- [x] 修复 `bizCode` 在 quick context、prepared context、提交 options 或弹窗校验之间的丢失点。
+- [x] 补测试锁定 `#!/manage/search` URL 下复制确认必须带 `onebpSearch`。
+- [x] 运行目标测试、构建、语法/同步/空白检查。
+- [x] Chrome MCP 重载扩展并验证当前弹窗不再显示 `bizCode未找到`。
+
+### 高层操作摘要
+- 定位结论：复制计划一览弹窗先用 quick context 打开，再异步补齐 prepared context，最终确认又从 context/source/options 组装提交参数。`#!/manage/search` 当前路由已经能推导关键词推广 `onebpSearch`，但旧链路没有把该 fallback 固化到最终提交上下文，导致弹窗校验提示 `bizCode未找到`。
+- 修复摘要：新增 `resolveCopyContextBizCode(context = {})`，统一从 `context.bizCode`、`source.bizCode`、源 campaign、候选 bizCode、触发元素、当前 URL 路由和默认值依次兜底。quick context、prepared context 均携带顶层 `bizCode`；确认提交前把 `targetBizCode` 回写到 `context/source/source.campaign`，并作为 `bizCode` 传入 `copyCurrentPlanByScene()`。
+- 范围确认：本次只修复复制弹窗/确认上下文的 `bizCode` 解析与透传，不改变上一轮已对齐的 `/solution/addList.json?bizCode=onebpSearch` 提交 URL 合同，也没有新增真实创建操作。
+
+### 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14 项全绿；新增静态断言覆盖 `resolveCopyContextBizCode()` 从当前 URL 路由兜底、确认提交前回写 `context/source/campaign`、受控复制 API options 透传 `bizCode: targetBizCode`。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：通过，57 项全绿。
+- `npm run build`：通过，已同步根 userscript、发布包和 extension bundle。
+- `npm run check:syntax`、`npm run build:check`、`node --check dist/extension/page.bundle.js`、`git diff --check`：均通过。
+- Chrome MCP：首次快照确认修复前已打开的旧弹窗仍保留 `bizCode未找到`，因此不能作为新运行态验收；随后在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload，页面显示 `Reloaded`，加载路径为本工作区 `dist/extension`，再刷新 `one.alimama.com/index.html#!/manage/search?...`。
+- Chrome MCP：刷新后重新点击 `复制：81179245735` 只打开复制一览窗，不点击 `确认生成`；新弹窗状态为 `源计划详情已读取完成，确认后才会提交创建请求。`，页面 `hasBizCodeError:false`，当前 `#!/manage/search` 路由可推导关键词推广；打开弹窗期间 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、预算/删除/状态类写接口增量计数均为 0。
+- Chrome MCP：运行态 bundle 只读 fetch `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 返回 200、长度 `4100199`，包含 `resolveCopyContextBizCode(context = {})`、`this.getCurrentCampaignBizCode()`、`context.source.campaign.bizCode` 回写、`bizCode: targetBizCode` 和上一轮 URL 合同 `url.searchParams.set('bizCode', 'onebpSearch')`。
+
+### 结果复盘
+- 已完成：复制计划一览弹窗在关键词推广列表路由下不再因为上下文丢失 `bizCode` 而阻塞；即使 quick/prepared context 某一层缺字段，最终确认也会按当前路由补齐 `onebpSearch`。
+- 风险边界：本轮没有真实提交新计划，只做弹窗状态、运行态 bundle 和危险写请求计数的 Chrome MCP 只读验收；真实创建仍沿用上一轮已验证的用户授权结果与提交 URL 合同。
+
+## 2026-06-06 再修正：点击确认生成后 bizCode 未找到
+
+### 需求规格
+- 用户修正：`bizCode未找到` 不是打开复制一览窗时出现，而是点击 `确认生成` 后才提示；上一轮只验证到弹窗 ready 状态，验收点不足。
+- 目标：修复确认提交阶段的 `bizCode` 丢失或 URL/请求合同缺失；点击 `确认生成` 进入提交前/提交路径时，不得再提示 `bizCode未找到`。
+- 范围：只修复制确认提交链路的 `bizCode` 透传和提交合同，不改变 AI点睛 payload 字段、不改变复制计划数量/命名/预算/出价、不做无授权真实创建。
+- 安全边界：Chrome MCP 复现和验收点击 `确认生成` 前必须安装写请求守卫；守卫覆盖 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、预算/删除/状态类接口，确保不会真实创建、复制、暂停或扣费。
+
+### 执行计划
+- [x] 复现确认生成后的 `bizCode未找到`，记录是在客户端校验、API 组包还是服务端/请求层返回。
+- [x] 定位 `bizCode` 从弹窗 `activeContext` 到 `copyCurrentPlanByScene()`、`buildCurrentPlanCopyRequestByScene()`、`createPlansByScene()` 的丢失点。
+- [x] 修复提交阶段 `request/meta/options/runtime` 的 `bizCode` 透传，保证关键词推广为 `onebpSearch`。
+- [x] 补测试锁定点击确认后的提交构造链路，而不是只锁定弹窗打开态。
+- [x] 构建并用 Chrome MCP 在写请求守卫下点击 `确认生成` 验证不再出现 `bizCode未找到`，且危险写请求未真实发出。
+
+### 高层操作摘要
+- 复现结论：在当前页面已安装写请求守卫后点击 `确认生成`，弹窗状态变为 `CODEX_GUARDED_WRITE_BLOCKED`，页面 `hasBizCodeError:false`，说明确认后已进入写请求提交路径而不是继续停在 `bizCode未找到` 前端校验。
+- 定位结论：确认提交层已经把 `bizCode: targetBizCode` 传给 `copyCurrentPlanByScene()`，但 `buildCurrentPlanCopyRequestByScene()` 只从 campaign/source/scene hint 推导，未把 `options.bizCode` 作为提交组包事实源；同时 `normalizeGoalCreateEndpoint()` 已把端点变为 `/solution/addList.json?bizCode=onebpSearch` 后，`requestOne()` 又用字符串拼接追加 `&bizCode=onebpSearch`，导致最终 URL 出现重复 `bizCode`。
+- 修复摘要：`buildCurrentPlanCopyRequestByScene()` 现在优先读取 `options.bizCode`，保证确认按钮传入的关键词推广业务线写入 request/meta；`buildOneApiUrl()` 改用 `new URL()` 和 `searchParams.set()` 写入 `csrfId/bizCode`，保留端点 query 但去重 `bizCode`。
+
+### 验证记录
+- Chrome MCP 复现：当前弹窗点击 `确认生成` 后，写请求守卫拦截到 `/solution/addList.json?bizCode=onebpSearch&csrfId=...&bizCode=onebpSearch`，页面状态为 `CODEX_GUARDED_WRITE_BLOCKED`，`hasBizCodeError:false`，没有真实创建。
+- Chrome MCP console 初查：当前页 16 条 error/warn/issue 中，可展开的 `adc表达式执行异常` 栈来自官方 `merge.js/boot.js`；资源 `ERR_TUNNEL_CONNECTION_FAILED` 和 `ScriptProcessorNode` deprecation 暂未见插件运行时异常。重建重载后需复查。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14 项全绿；新增断言覆盖点击确认后的 `options.bizCode` 参与 copy request 组包，以及 `requestOne()` 使用 `URLSearchParams.set()` 去重 `bizCode`。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：通过，57 项全绿。
+- `npm run check:syntax`、`npm run build`、`npm run build:check`、`node --check dist/extension/page.bundle.js`、`node --check 阿里妈妈多合一助手.js`、`git diff --check`：均通过。`node --check src/optimizer/keyword-plan-api/intro.js` 单独检查会因源码片段 EOF 失败，不作为语法失败依据，完整构建和 bundle 检查已覆盖。
+- Chrome MCP 重载扩展：`chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 显示 `Reloaded`，版本 `7.06`，加载路径为本工作区 `dist/extension`；业务页只读 fetch `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 返回 200、长度 `4100239`，命中 `options.bizCode`、`url.searchParams.set('bizCode', ...)`，且不含旧字符串追加 `bizCode` 逻辑。
+- Chrome MCP 最终验收：写请求守卫下点击 `确认生成` 后，弹窗状态为 `CODEX_GUARDED_WRITE_BLOCKED`，`hasBizCodeError:false`；守卫记录 6 条均为 `POST https://one.alimama.com/solution/addList.json?bizCode=onebpSearch&csrfId=...`，URL 只有一个 `bizCode=onebpSearch`，请求体顶层 `bizCode:"onebpSearch"`、`solutionList[0].bizCode:"onebpSearch"`、campaign `bizCode:"onebpSearch"`、商品 `757440599385`、计划名 `E7Pro_AI点睛_促加购_手动对比_20260605_1`。守卫抛错阻断后未在 performance 写入真实 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`。
+- Chrome MCP console 复查：按 `error/warn/issue` 过滤共 15 条，来源为 `ERR_TUNNEL_CONNECTION_FAILED` 资源失败、Chrome 表单/Deprecated issue、`fireyejs.js` 的 `ScriptProcessorNode` deprecation，以及官方 `adc表达式执行异常`；未见插件 bootstrap 异常、复制接口失败或 `bizCode未找到` 相关插件 runtime error。大量 `endGroup Error` 仅为控制台分组结束记录，无异常栈。
+
+### 结果复盘
+- 已完成：点击 `确认生成` 后不再因为提交阶段丢失 `bizCode` 阻塞，关键词推广复制提交组包和 URL 均统一为 `onebpSearch`。
+- 根因闭环：确认提交按钮传入的 `targetBizCode` 之前没有成为 `buildCurrentPlanCopyRequestByScene()` 的事实源；同时 `requestOne()` 会在已有 query 的 addList URL 后再次字符串追加 `bizCode`。现在提交组包优先使用 `options.bizCode`，URL 统一用 `URLSearchParams.set()` 写入 `csrfId/bizCode`，避免丢失和重复。
+- 风险边界：最终浏览器验收使用写请求守卫，实际没有创建新计划；验证重点是确认提交阶段已到达正确写接口且不再出现 `bizCode未找到`。控制台剩余错误来自官方页面/资源噪声，未发现本次修复引入的插件异常。
+
+## 2026-06-06 追加修正：复制提交 URL 对齐手动官方链路
+
+### 需求规格
+- 用户修正：接口需要用回一样的网址提交。结合上一轮对比，手动官方链路提交为 `/solution/addList.json?bizCode=onebpSearch`，插件复制链路虽然走同一 path，但实际记录为 `/solution/addList.json`，缺少查询参数。
+- 目标：关键词推广 `onebpSearch` 受控复制仍按 L86 走 `/solution/addList.json` 创建链路，不切到官方 `/solution/copy.json`；但提交 URL 必须带 `?bizCode=onebpSearch`，与手动官方创建链路一致。
+- 范围：仅修改复制/创建 API 的 addList 端点 URL 构造和对应测试/构建产物；不改 payload 字段、不改复制弹窗、不改计划状态、不新增真实提交，除非后续用户再次授权。
+- 验证：本地测试锁定关键词场景 addList URL 含 `bizCode=onebpSearch`；构建同步后用 Chrome MCP 重载 extension，并只读检查运行态 bundle 命中该 URL 合同。
+
+### 执行计划
+- [x] 定位 addList 请求 URL 的事实源和 scene spec/runtime fallback。
+- [x] 将关键词推广创建端点改为 `/solution/addList.json?bizCode=onebpSearch`，并确保已有 query 时不会重复拼接。
+- [x] 补测试断言：关键词复制/构建链路的 addList URL 必须带 `bizCode=onebpSearch`，且仍不进入 `/solution/copy.json`。
+- [x] 运行目标测试、构建、语法/同步/空白检查。
+- [x] 用 Chrome MCP 重载 extension 并只读验证运行态 bundle。
+
+### 高层操作摘要
+- 定位结论：提交端点经 `normalizeGoalCreateEndpoint()` 归一化；原先 `normalizeCapturePath()` 只返回 pathname，会把手动官方 URL 的 `?bizCode=onebpSearch` 查询参数剥掉，因此复制最终记录为 `/solution/addList.json`。
+- 修复摘要：新增 `normalizeCapturePathWithQuery()` 和 `normalizeEndpointPathOnly()`，让创建提交端点保留 query，同时 path 匹配仍按 path-only 判断；对普通 `/solution/addList.json` 自动补 `bizCode=onebpSearch`，对已有 query 的 addList 用 `URLSearchParams` 保留原 query 后补缺失的 `bizCode`，`/solution/business/addList.json` 和非 addList 端点不受影响。
+- 测试摘要：`tests/campaign-copy-current-plan-quick-entry.test.mjs` 新增断言，锁定创建端点归一化保留 query、关键词受控 addList 自动补 `?bizCode=onebpSearch`，且关键词推广仍不进入官方 `/solution/copy.json` 分支。
+
+### 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：首次失败，原因是新增断言误用不存在的 `source` 变量；改为读取 `src/optimizer/keyword-plan-api/scene-spec.js` 后通过，14 项全绿。
+- `npm run build`：通过，已同步根 userscript、发布包和 extension bundle。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：通过，57 项全绿。
+- `npm run check:syntax`、`npm run build:check`、`node --check dist/extension/page.bundle.js`、`git diff --check`：均通过。
+- Chrome MCP：重载 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 后显示 `Reloaded`，版本 `7.06`，加载路径仍为本工作区 `dist/extension`；刷新 `one.alimama.com` 后只读 fetch extension bundle 返回 200、长度 `4098640`，命中 `normalizeCapturePathWithQuery`、`url.searchParams.set('bizCode', 'onebpSearch')` 和 ``return `${url.pathname}${url.search}```，关键词官方 copy 分支仍排除 `onebpSearch`；本次只读刷新期间 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、预算/删除/状态类写接口计数均为 0。
+
+### 结果复盘
+- 已完成：复制创建仍走受控 addList，不切换官方 copy；但提交 URL 合同已对齐手动官方链路，会使用 `/solution/addList.json?bizCode=onebpSearch`。
+- 影响范围：只改创建端点归一化和 URL query 保留/补齐，不改上一轮已验证的 payload 字段、`sourceChannel` 保留、`searchUpgradePxb` 清理、`max_amount` 合同或创建后状态处理。
+
+## 需求规格
+- 目标：在真实 `one.alimama.com` 页面手动新建一个 AI点睛 关键词推广计划，商品 ID 按用户纠正后的 `757440599385`；提交成功后，再复制一个 AI点睛计划，并对比手动新建计划与复制计划的关键投放字段、来源字段、状态和服务端标签差异。
+- 问题描述：上一轮已修复复制 AI点睛计划缺少 `sourceChannel` 与创建后暂停问题；本轮用户要求进一步用“手动新建”的官方链路作为基线，与“复制 AI点睛计划”的链路做真实对比。
+- 范围：优先使用 Chrome DevTools MCP 操作真实页面；只做本次授权的新建/复制/只读对比，不修改源码，除非真实对比暴露出新的复制链路缺陷且必须修复。
+- 手动创建假设：用户最初给的 `81128745573` 已在官方商品选择器按商品 ID 搜索确认无结果；用户随后纠正正确商品 ID 为 `757440599385`，本轮按该商品继续创建。如果页面无法搜到该商品或官方校验提示它不是可投商品，再停止并记录真实提示，不强行换其它商品。
+- 对比字段：`campaignId/campaignName/sourceChannel/channelLocation/selectedTargetBizCode/searchUpgradePxb/showTagList/campaignColdStartVO/onlineStatus/displayStatus/aiMaxInfo/预算/出价目标/地域/分时/素材/adgroup onlineStatus/displayStatus/auditStatus`，并比对写接口 payload 是否存在创建后暂停或异常升舱字段。
+- 安全边界：本轮真实新建与复制计划属于用户授权范围；不得点击删除、批量暂停/开启、预算修改、批量预算、投放扣费设置以外的入口。请求取证只记录脱敏字段摘要，不保存或复述 Cookie、csrf、loginPointId 等敏感值。
+
+## 执行计划（可核对）
+- [x] 复核当前浏览器状态，关闭上一轮成功弹窗或回到关键词推广列表。
+- [x] 安装只记录本轮相关创建/复制/只读接口的脱敏捕获探针。
+- [x] 通过官方手动新建入口创建商品 `757440599385` 的 AI点睛计划，提交并记录新计划 ID/名称。
+- [x] 尝试复制本轮手动新建计划，记录复制确认窗拦截点和是否发出写请求。
+- [x] 复制一个 AI点睛计划，优先复制本轮手动新建计划；若页面命名或入口限制导致不可复制，则复制同商品/同类型可用 AI点睛计划并记录原因。
+- [x] 读取手动新建计划与复制计划的 campaign/adgroup 详情和列表行字段，形成字段对比。
+- [x] 更新本任务验证记录与结果复盘，明确是否存在新的代码缺陷或仅为对比结论。
+
+## 高层操作摘要
+- 计划校验：这次以官方手动新建链路和插件复制链路的真实服务端结果为事实源；不使用 dry-run 或本地构造 payload 代替。若官方页面对商品 ID、AI点睛生成、预算或出价有必填校验，按页面提示处理并记录。
+- Chrome MCP 准备：已选中真实 `one.alimama.com` 关键词推广列表页，页面当前筛选 `E7Pro_AI点睛_促加购_手动`，无残留成功弹窗；页内已安装本轮脱敏捕获探针，覆盖 `/solution/addList.json`、`/campaign/updatePart.json`、只读详情/列表和官方新建链路中可能出现的商品、素材、AI、预算、出价、计划接口，捕获内容会脱敏 Cookie/csrf/loginPointId/token/header 等敏感字段。
+- 商品 ID 纠偏：官方添加商品弹窗以“商品ID”筛选 `81128745573`，请求 `/material/item/findPage.json` 返回 `count:0/list:[]`，页面显示“暂无宝贝/共 0 项数据”；用户随后纠正正确商品 ID 为 `757440599385`，继续按该 ID 操作。
+- 手动创建结果：官方新建链路已提交成功，页面显示 `E7Pro_AI点睛_促加购_手动对比_20260605 已经创建完成!`；`/solution/addList.json?bizCode=onebpSearch` 返回 `ok:true`，生成计划 `81179245735`、单元 `81263176569`，素材/商品 `757440599385`。提交 payload 摘要：`promotionScene=promotion_scene_search_user_define`、`itemSelectedMode=user_define`、AI点睛开启、`bidTypeV2=smart_bid`、`bidTargetV2/optimizeTarget=coll_cart`、日预算 `100`、资源位 `114790550288 start`、地域 `all`、分时 7 天全天，且页面未记录创建失败错误。
+- 复制验收补充：复制必须证明走关键词受控 `/solution/addList.json` 创建链路；记录是否出现 `/campaign/copy/campaignCheck.json`、`/solution/copy.json`、`/campaign/updatePart.json`。完成标准按真实页面确认提交、写接口成功响应、新 campaignId/计划名、只读详情或列表确认目标状态闭环。
+- 复制阻塞复现：在列表筛选 `E7Pro_AI点睛_促加购_手动对比_20260605` 后点击插件行内 `复制：81179245735`，确认窗显示源计划 `E7Pro_AI点睛_促加购_手动对比_20260605`、新名称 `_1`、`智能出价（促收藏加购）`、每日预算 `100`；点击 `确认生成` 后未发出 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`，弹窗前端校验提示 `增加收藏加购量目标成本需填写 5-9999.99 的数值`。该失败发生在客户端组包/校验前置阶段，不是服务端创建失败；初步怀疑官方手动创建计划详情为 `bidType=max_amount` 且 `bidTypeV2=smart_bid/bidTargetV2=coll_cart`，但复制确认窗按 `cost_control` 智能出价目标成本规则错误要求 `constraintValue`。
+- 修复摘要：`src/optimizer/keyword-plan-api/search-and-draft.js` 对“当前计划复制 + 源计划 `bidType=max_amount`”单独保持原生合同：`bidType=max_amount`、`bidTypeV2=smart_bid`、`bidTargetV2/optimizeTarget=coll_cart`、`setSingleCostV2=false`，并清理 `singleCostV2/constraintType/constraintValue/subOptimizeTarget`，避免误进入收藏加购目标成本校验；同时 `resolveOptionalNumberSeed()` 区分空字符串和真实 `0`，保证空目标成本不兜底、填写 `0` 仍按非法值处理。
+- 复制成功结果：修复后通过 Chrome MCP 真实复制本轮手动计划 `81179245735`，页面成功弹窗显示目标状态 `开启`，`/solution/addList.json` 返回成功并创建复制计划 `81307688017 / E7Pro_AI点睛_促加购_手动对比_20260605_1`，新单元 `81264342894`，商品 `757440599385`；没有触发 `/campaign/updatePart.json` 暂停请求。
+- 复制 payload 关键摘要：提交 campaign 保留 `sourceChannel:"onebp"`、`bidType:"max_amount"`、`bidTypeV2:"smart_bid"`、`bidTargetV2/optimizeTarget:"coll_cart"`、`setSingleCostV2:false`、`aiMaxSwitch:1`、日预算 `100`；未携带 `searchUpgradePxb`、`singleCostV2`、`constraintType`、`constraintValue`、`subOptimizeTarget`、`mcbBidModel`、`planMcbBidModel` 或其它 MCB/bidModel 变体字段。adgroup payload 商品为 `757440599385`，词包 1 个、关键词 5 个。
+- 额外硬化摘要：新增 `removeKeywordMcbBidModelFields()`，将 MCB/bidModel 清理从固定 `mcbBidModel/planMcbBidModel` 扩展到 `mcb`、`bidModel`、`bid_model` 等变体；`click/conv/max_amount` 合同均调用统一 helper，避免通配白名单把非 camel 变体带入非 MCB 合同。
+- 只读复核摘要：子代理复核 `pruneKeywordCampaignForCustomScene`、`removeKeywordMcbBidModelFields` 和 `tests/keyword-custom-settings-sync.test.mjs` 后未发现阻塞问题；本轮按建议补强静态断言，锁住 `max_amount` 复制保留 `smart_bid`，以及 `fav_cart` 在该合同下映射为 `coll_cart` 但不进入普通目标成本逻辑。
+- 手动 vs 复制只读对比结论：两者均为 `sourceChannel:"onebp"`、`searchUpgradePxb:null`、`onlineStatus=1`、`displayStatus=start`、AI点睛开启、日预算 `100`、`bidType:"max_amount"`、`bidTypeV2:"smart_bid"`、`bidTargetV2/optimizeTarget:"coll_cart"`、标签 `冷启加速未开启/自定义推广`；adgroup 均开启、审核通过、商品均为 `757440599385`。复制计划与手动基线在导致投放/花费的关键合同字段上已对齐。
+
+## 验证记录
+- Chrome MCP 手动创建：`/solution/addList.json?bizCode=onebpSearch` 成功，计划 `81179245735`、单元 `81263176569`、商品 `757440599385`。
+- Chrome MCP 只读详情：手动计划 `81179245735` 的 `sourceChannel:"onebp"`、`searchUpgradePxb:null`、`onlineStatus=1`、`displayStatus=start`、AI点睛开启、日预算 100、`bidType:"max_amount"`、`bidTypeV2:"smart_bid"`、`bidTargetV2/optimizeTarget:"coll_cart"`；单元 `81263176569` 为开启、审核通过、商品 `757440599385`。
+- Chrome MCP 复制尝试：复制 `81179245735` 点击确认后被前端校验拦截，错误为 `增加收藏加购量目标成本需填写 5-9999.99 的数值`；捕获计数 `addList=0`、`solutionCopy=0`、`copyCheck=0`、`updatePart=0`，只读 `campaignGet/adgroupGet/findPage` 有记录，证明没有真实创建/复制写请求发生。
+- 目标测试：`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs` 通过，57 项全绿；覆盖当前计划复制 `max_amount` 合同、收藏加购空目标成本不兜底、`sourceChannel/channelLocation/selectedTargetBizCode` 保留、`searchUpgradePxb` 不提交、MCB/bidModel 变体统一清理。
+- 构建与静态检查：`npm run build`、`npm run check:syntax`、`npm run build:check`、`node --check dist/extension/page.bundle.js`、`git diff --check` 均通过。
+- 子代理建议采纳后复测：补强 `tests/keyword-custom-settings-sync.test.mjs` 后重跑上述 57 项目标测试通过，`git diff --check` 通过。
+- Chrome MCP 复制成功：复制计划 `81307688017` 创建成功，复制 adgroup `81264342894`，商品 `757440599385`；只读详情显示 campaign/adgroup 均开启、审核通过，关键合同字段与手动计划 `81179245735` 对齐。
+- Chrome MCP 最新运行态 bundle 验证：重载 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 后页面显示 `Reloaded`，版本 `7.06`，加载路径为本工作区 `dist/extension`；刷新 `one.alimama.com` 后只读 fetch `chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 返回 200、长度 `4097242`，包含 `removeKeywordMcbBidModelFields`、`/(mcb|bid_?model)/i`、`keywordMaxAmountCopyContract`、`resolveOptionalNumberSeed` 和官方来源字段白名单；`searchUpgradePxb` 不在关键词最终白名单，旧 `pauseIfStartedAfterCreate:true` 字面量不存在。本次只读刷新期间 `/solution/addList.json`、`/solution/copy.json`、`/campaign/copy/campaignCheck.json`、`/campaign/updatePart.json`、预算/删除/状态类写接口计数均为 0。
+
+## 结果复盘
+- 已完成：真实手动新建、真实复制、只读详情对比、源码修复、测试/构建和 Chrome MCP 运行态验收均闭环。
+- 根因结论：这次“复制手动 AI点睛计划”暴露的直接缺陷是客户端复制组包把官方手动计划的 `max_amount + smart_bid + coll_cart` 原生合同错误当作收藏加购控目标成本合同，导致无目标成本时前端校验拦截，无法发出创建写请求。上一阶段“复制计划无花费”的根因则是复制链路曾丢失 `sourceChannel` 等官方入口字段，并可能被创建后暂停兜底影响；这些已在本轮修复和验证中一起锁住。
+- 对比结论：修复后的复制计划 `81307688017` 与手动计划 `81179245735` 在 `sourceChannel/searchUpgradePxb/状态/AI点睛/预算/出价目标/商品/adgroup 审核状态` 等关键可投放字段上对齐，不再带旧无花费复制计划的异常来源或升舱字段。
+
+# TODO - 2026-06-05 E7Pro_AI点睛复制计划无花费根因分析与修复
+
+## 需求规格
+- 目标：对比 `E7Pro_AI点睛_` 里有花费与通过插件复制建立后无花费的计划，定位复制计划创建后都无花费的根因，修复源码，并通过 Chrome DevTools MCP 在真实 `one.alimama.com` 页面验证复制链路和创建后状态。
+- 问题描述：用户反馈通过“复制计划”建立出来的 `E7Pro_AI点睛_` 计划都无花费，需要对比有花费计划与无花费计划的服务端/页面字段差异，证明导致无花费的关键字段，而不是只看前端文案或本地 dry-run。
+- 初步根因假设：关键词推广 AI点睛复制链路可能仍未完整保留官方可投放字段，重点怀疑 `aiMaxSwitch/aiMaxInfo`、AI点睛流量诉求/屏蔽词、单元流量智选词包、投放资源位/地域/时间、预算/出价目标、人群/创意、计划状态、商品绑定或官方复制接口与受控 `addList` 组包差异。
+- 范围：优先覆盖 `src/optimizer/keyword-plan-api/search-and-draft.js`、`src/optimizer/keyword-plan-api/wizard-open-and-create.js`、相关测试和构建产物；只改复制链路必要字段保留/组包逻辑，不改无关 UI、内存优化、DMP、人群看板、预算破限、下载、授权或服务端接口定义。
+- 热修 vs 结构性修复取舍：不靠“提交后再补字段”的临时绕路；先用真实页面/接口对比找出复制计划与有花费计划应保持的不变量，再把不变量收敛到一个复制组包/官方复制选择点，并补测试锁住。
+- 成功标准：真实页面中能对比至少一个有花费源计划和至少一个插件复制后无花费计划的关键配置差异；源码修复后目标测试与构建检查通过；Chrome MCP 真实页面验证复制或创建链路走修复后的 bundle，捕获写接口成功响应，获得新计划 ID/名称，并用页面列表或只读接口确认新计划关键投放字段与源计划一致，且不存在导致无花费的缺失字段。
+- 安全边界：需要真实复制/创建属于用户本次授权范围；仍不得点击删除、批量暂停/开启、预算修改、投放扣费设置以外的危险入口。Chrome 验收必须只用 `mcp__chrome_devtools.*`，不得用 CDP、Browser 插件或 shell 浏览器探针替代。
+
+## 执行计划（可核对）
+- [x] 复核历史教训、当前工作区状态和复制相关源码/测试，确认不覆盖无关改动。
+- [x] 用 Chrome MCP 打开真实 `one.alimama.com` 关键词推广页面，搜索 `E7Pro_AI点睛_`，找出有花费源计划与插件复制后无花费计划候选。
+- [x] 只读抓取候选计划列表/详情/相关接口响应，对比有花费与无花费计划的配置字段，记录根因字段和证据。
+- [x] 分析复制链路源码，定位该字段是在官方复制选择、详情读取、白名单清理、AI点睛补齐、最终 payload 还是提交后状态处理环节丢失。
+- [x] 采用最小结构性修复补齐复制不变量，并更新/新增覆盖 AI点睛复制的目标测试。
+- [x] 补齐真实复制后仍暴露的 `sourceChannel` 等官方入口字段保留缺口，并更新最终 payload 白名单测试。
+- [x] 运行目标测试、语法检查、构建同步检查、必要回归和 `git diff --check`。
+- [x] 重新构建并在 Chrome MCP 里重载 extension，刷新真实页面，执行受控复制验证。
+- [x] 捕获写接口响应、新计划 ID/名称和只读详情/列表状态，证明修复后新复制计划具备花费所需关键字段；把验证记录和结果复盘补回本文件。
+
+## 高层操作摘要
+- 已回顾 `tasks/lessons.md`：L89 要求创建/复制缺陷必须真实提交闭环；L97 要求用户指定 Chrome MCP 时只用 `mcp__chrome_devtools.*`；L48/L86 提醒有官方复制能力时优先核对官方复制接口与受控 `addList` 的取舍。
+- 计划校验：本轮以真实有花费/无花费计划字段对比为事实源，代码修复只服务 `E7Pro_AI点睛_` 复制后无花费问题；如果证据指向非源码问题（如源计划本身暂停、预算、账户余额或投放排期），先记录证据再调整计划。
+- Chrome MCP 已搜索 `E7Pro_AI点睛_` 列表并保存证据：当前有花费计划包括 `81246870887 / E7Pro_AI点睛_促加购_手动`（charge 52.8，用户说明为手动创建后即有花费）、`81211576775 / E7Pro_AI点睛_促加购`（charge 23.29）、`80404078368 / E7Pro_AI点睛_测试`（charge 3.47）；插件复制无花费计划包括 `81169583252 / E7Pro_AI点睛_促加购_2`、`81128743628 / _3`、`81128687698 / _4`、`81128795532 / _5`。
+- 只读详情对比：复制无花费计划并非当前暂停，`campaign.displayStatus=start`、`campaign.onlineStatus=1`、`adgroup.onlineStatus=1`、`auditStatus=1`、商品 `materialId=757440599385`、AI点睛 `aiMaxInfo.aiMaxSwitch=1`、预算/出价/地域/时间等关键字段存在。与有花费计划相比，复制无花费计划的显著差异是 `searchUpgradePxb=2` 且列表标签含 `激励升舱中/护航调优中`，同时 `sourceChannel` 为空；但已有有花费计划 `81211576775` 也有 `campaignColdStartVO.coldStartStatus=1` 和 AI点睛，所以冷启开启本身不是充分根因。
+- 源码根因已定位到一个确定缺陷：`src/main-assistant/campaign-id-quick-entry.js` 的确认提交层无条件传 `pauseIfStartedAfterCreate: true`，而 `src/optimizer/keyword-plan-api/wizard-open-and-create.js` 的创建后处理把该标志作为暂停条件，导致“跟随源状态=开启”的新计划也可能在创建成功后立即调用 `/campaign/updatePart.json` 暂停。旧任务记录中曾观察到 `E7Pro_AI点睛_测试_1` 创建后被暂停，与该路径一致。
+- 修复摘要：入口层改为仅当 `context.targetOnlineStatus === 0` 时传 `pauseIfStartedAfterCreate`；API 层同时收紧为明确 `meta.targetOnlineStatus=1` 时忽略显式暂停兜底，只有目标状态未知时才允许 `pauseIfStartedAfterCreate` 作为兼容兜底。这样避免其它入口再次把开启复制计划压成暂停。
+- Chrome MCP 首次真实复测摘要：已重载 extension 并刷新 `one.alimama.com`；运行态 bundle 命中条件暂停修复且不含旧无条件暂停；从 `81246870887 / E7Pro_AI点睛_促加购_手动` 真实复制得到 `81220003360 / E7Pro_AI点睛_促加购_手动_1`，创建成功弹窗显示目标状态 `开启`；页内捕获到 1 次 `/solution/addList.json` 成功、0 次 `/campaign/updatePart.json`，证明暂停修复在真实页面生效。
+- 继续根因判断：首次真实复测的新计划仍为 `sourceChannel:null`，而手动有花费基线 `81246870887` 为 `sourceChannel:"onebp"`；旧插件复制无花费计划同样为 `sourceChannel:null`。源码对比显示 `wizard-open-and-create.js` 的复制白名单、`resolveSceneSettingOverrides()` 和关键词兜底模板都认可 `sourceChannel/channelLocation/selectedTargetBizCode`，但最终关键词自定义裁剪 `KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS` 未放行这些字段，导致最终 `/solution/addList.json` payload 丢失官方入口来源字段。
+- 第二阶段修复摘要：在 `src/optimizer/keyword-plan-api/search-and-draft.js` 的 `KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS` 放行 `sourceChannel`、`channelLocation`、`selectedTargetBizCode`，让复制入口已保留的官方来源字段能进入最终关键词 payload；测试同时锁定 `searchUpgradePxb` 不进入创建白名单，避免把旧无花费复制计划的异常升舱标签复制到新计划。
+- 子代理复核：只读子代理确认字段丢失点正是关键词最终裁剪白名单；复制入口 `COPY_CAMPAIGN_FIELD_WHITELIST` 已包含三字段，`applyOverrides()` 会先合并 raw overrides，但 `pruneKeywordCampaignForCustomScene()` 会按 `KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS` 再裁剪，因此需要同时覆盖入口白名单和最终 payload 白名单测试。
+- Chrome MCP 第二次真实复测摘要：重载 extension 后，运行态 bundle `page.bundle.js` 返回 200、长度 `4095293`，`KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS` 已包含 `sourceChannel/channelLocation/selectedTargetBizCode`，不含 `searchUpgradePxb`；条件暂停修复仍命中，不含旧 `pauseIfStartedAfterCreate:true` 和旧暂停覆盖逻辑。
+- 第二次真实复制结果：从手动有花费源计划 `81246870887 / E7Pro_AI点睛_促加购_手动` 复制；提交 payload 中 `campaignName=E7Pro_AI点睛_促加购_手动_2`、`sourceChannel:"onebp"`、`searchUpgradePxb` 未提交、AI点睛开启、日预算 100、智能出价促收藏加购、地域 88、分时 7；`/solution/addList.json` 返回成功并创建 `81220499342`，本次未出现 `/campaign/updatePart.json` 暂停请求。
+- 第二次只读详情结论：新计划 `81220499342` 服务端详情和列表均显示 `onlineStatus=1`、`displayStatus=start`、`sourceChannel:"onebp"`、`searchUpgradePxb:null`、标签为 `冷启加速未开启/自定义推广`，与手动有花费源计划在关键投放来源字段上对齐；新单元 `81178749505` 为 `onlineStatus=1`、`displayStatus=start`、`auditStatus=1`，素材 `757440599385`、AI点睛、预算、出价、创意模式、地域和分时均保留。对比：第一次修复后复制计划 `81220003360` 仍是 `sourceChannel:null`；旧无花费复制计划 `81169583252` 是 `sourceChannel:null` 且 `searchUpgradePxb=2`。
+
+## 验证记录
+- `node --check src/main-assistant/campaign-id-quick-entry.js`：通过。
+- `node --check src/optimizer/keyword-plan-api/wizard-open-and-create.js`：通过。
+- `node --check tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs`：通过，14 项全绿；新增/更新断言锁定开启复制不再无条件传 `pauseIfStartedAfterCreate:true`，API 层不允许该标志覆盖明确开启目标状态。
+- Chrome MCP 首次复测：新计划 `81220003360` 创建成功且未触发创建后暂停；只读详情显示 campaign/adgroup 均为开启、AI点睛开启、预算/出价/地域/时间/素材与源计划一致，但 `sourceChannel:null` 仍与手动有花费基线不一致，因此本轮不能在此处标记完成，继续补齐最终 payload 白名单。
+- `node --check src/optimizer/keyword-plan-api/search-and-draft.js`：通过。
+- 最新增量快速验证：`node --check src/optimizer/keyword-plan-api/search-and-draft.js`、`node --check src/optimizer/keyword-plan-api/create-and-suggest.js` 均通过；`node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs` 通过，58 项全绿。新增断言覆盖最终 `addList` 请求体在批量、并发单条、fallback 单条提交前均走 `buildCreatePayload()` 并补齐 AI点睛复制高级设置。
+- `node --check tests/keyword-build-solution-payload-behavior.test.mjs`：通过。
+- `node --test tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：首次按预期失败，因为测试读取根 userscript 构建产物而源码尚未构建；该失败证明产物同步检查有效。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：通过，42 项全绿；覆盖入口白名单、最终 payload 白名单、`sourceChannel/channelLocation/selectedTargetBizCode` 保留、`searchUpgradePxb` 不提交、AI点睛复制词包合同。
+- `npm run check:syntax`、`npm run build:check`、`node --check dist/extension/page.bundle.js`、`git diff --check`：均通过。
+- Chrome MCP extension 重载：在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 点击 Reload，页面显示 `Reloaded`，版本 `7.06`，加载路径 `~/.codex/worktrees/f880/alimama-helper-pro/dist/extension`。
+- Chrome MCP 运行态 bundle 验证：业务页刷新后只读 fetch extension bundle，确认三项官方入口来源字段已在关键词最终白名单；`searchUpgradePxb` 不在白名单；旧无条件暂停和旧暂停覆盖逻辑不在 bundle 中。
+- Chrome MCP 写接口捕获：本次复制捕获到 1 次 `/solution/addList.json` 成功，0 次 `/campaign/updatePart.json`；请求摘要显示 `sourceChannel:"onebp"`、`channelLocation:null`、`selectedTargetBizCode:""`、未携带 `searchUpgradePxb`，响应创建 campaignId `81220499342`。
+- Chrome MCP 服务端详情：`campaign/get.json`、`adgroup/get.json`、`campaign/horizontal/findPage.json` 均返回成功；新计划详情关键字段为 `sourceChannel:"onebp"`、`searchUpgradePxb:null`、`onlineStatus=1`、`displayStatus=start`、AI点睛开启、日预算 100、`bidType=cost_control`、`bidTypeV2=smart_bid`、`bidTargetV2=coll_cart`、`launchAreaCount=88`、`launchPeriodCount=7`；新单元为 `onlineStatus=1`、`displayStatus=start`、`auditStatus=1`、素材 `757440599385`。
+- Chrome MCP 控制台：仅见官方页面组件依赖/ADC 表达式 warning；未见复制接口失败、插件 bootstrap 失败或扩展运行异常。
+
+## 结果复盘
+- 已完成：本轮定位并修复两个会让复制计划无花费风险升高的复制链路缺陷：其一是创建后无条件暂停兜底会把应开启的新计划压成暂停；其二是关键词最终 payload 裁剪白名单丢掉 `sourceChannel` 等官方入口来源字段，导致插件复制计划区别于手动有花费计划。
+- 最终结论：修复后的真实复制计划已保持开启状态，提交和服务端落库均保留 `sourceChannel:"onebp"`，且不再带旧无花费复制计划的 `searchUpgradePxb=2/激励升舱中` 特征；关键可投放字段与手动有花费基线对齐。
+- 剩余观察项：本次成功弹窗显示计划名 `E7Pro_AI点睛_促加购_手动_2`，服务端详情返回名称 `E7Pro_AI点睛_促加购_手动_复制`；该差异不影响本次无花费根因字段，但后续若用户关注复制命名一致性，需要单独排查服务端命名归一或复制结果回读逻辑。
+
+## 2026-06-06 当前页面完成审计
+
+### 需求规格
+- 目标：复核当前工作区和真实 Chrome 页面是否足以证明 `E7Pro_AI点睛_促加购_手动对比_20260605` 有花费/无花费计划对比、根因修复和浏览器验证已经闭环。
+- 范围：不再触发真实创建；只做测试、构建同步、Chrome MCP 只读运行态、当前列表行和 `campaign/get.json` 详情核对。
+- 判定口径：列表当前是否已花费只能说明投放结果现状；修复完成证据必须看服务端配置字段是否仍存在旧缺陷（`sourceChannel` 丢失、`searchUpgradePxb/激励升舱中`、创建后暂停、提交 URL/bizCode 丢失）。
+
+### 执行计划
+- [x] 复核任务记录、教训和当前工作区改动。
+- [x] 重跑目标测试、语法检查、构建同步检查和空白检查。
+- [x] 用 Chrome MCP 只读确认扩展运行态 bundle 命中修复、不含旧逻辑，且页面无写请求守卫残留。
+- [x] 用 Chrome MCP 读取当前列表和 `campaign/get.json` 详情，对比手动基线与当前复制计划 `_1` 至 `_4`。
+- [x] 更新结果结论，区分“旧复制缺陷”与“当前新复制计划尚未产生花费/数据积累期”。
+
+### 高层操作摘要
+- 当前页面筛选 `E7Pro_AI点睛_促加购_手动对比`：手动基线 `81179245735 / E7Pro_AI点睛_促加购_手动对比_20260605` 列表可见花费 `36.47`；复制计划 `81271160628/_1`、`81271140703/_2`、`81271120861/_3`、`81271236511/_4` 当前列表仍显示 `0.0% / 数据积累期 / -`。
+- Chrome MCP 只读详情结论：上述 `_1` 至 `_4` 并未复现旧复制缺陷。它们的服务端详情均为 `sourceChannel:"onebp"`、`searchUpgradePxb:null`、`onlineStatus=1`、`displayStatus:"start"`、`bidType:"max_amount"`、`bidTypeV2:"smart_bid"`、`bidTargetV2/optimizeTarget:"coll_cart"`、`setSingleCostV2:false`、AI点睛开启、日预算 `100`、`campaignColdStartStatus=0`、地域 1 组、分时 7 天、单元开启且 `auditStatus=1`；这些关键投放字段与手动基线 `81179245735` 对齐。
+- 当前“复制后仍未花费”的解释：当前 `_1` 至 `_4` 是 2026-06-06 03:50-03:52 新创建的复制计划，列表仍处于数据积累期；从服务端配置看，不再存在本轮修复前导致无花费风险的 `sourceChannel` 丢失、异常升舱标签或创建后暂停问题。是否后续真实起量取决于平台投放/竞价/流量分配，不再能用当前字段证明为复制组包缺陷。
+
+### 验证记录
+- `node --test tests/campaign-copy-current-plan-quick-entry.test.mjs tests/keyword-build-solution-payload-behavior.test.mjs tests/keyword-custom-settings-sync.test.mjs tests/keyword-custom-mode-wordpackage.test.mjs`：通过，57 项全绿。
+- `npm run build:check`：通过，源码、根 userscript、发布包和 extension bundle 同步。
+- `npm run check:syntax`、`node --check dist/extension/page.bundle.js`、`node --check 阿里妈妈多合一助手.js`、`git diff --check`：均通过。
+- Chrome MCP 运行态 bundle：`chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js` 返回 200，长度 `4100239`；命中 `sourceChannel/channelLocation/selectedTargetBizCode` 保留、`removeKeywordMcbBidModelFields`、条件暂停、`options.bizCode` 组包和 `URLSearchParams.set('bizCode', ...)`；不含旧 `pauseIfStartedAfterCreate:true`、旧字符串追加 `bizCode` 或 `KEYWORD_CUSTOM_CAMPAIGN_ALLOW_KEYS` 放行 `searchUpgradePxb`。
+- Chrome MCP 守卫清理：当前页面 `hasGuard:false`、`hasGuardText:false`、复制弹窗不存在；本次只读复核后危险写接口 `/solution/addList`、`/solution/copy`、`/campaign/copy/campaignCheck`、`/campaign/updatePart`、预算/删除/状态/创建类接口计数为 0。
+- Chrome MCP console：当前 40 条 error 均为官方 `club.alimama.com/api/b/side/engine/trace/report.json` banner trace `ERR_TUNNEL_CONNECTION_FAILED/status=0`；未见插件复制接口失败、bootstrap 失败、`bizCode未找到` 或写请求守卫残留错误。
+
+### 结果复盘
+- 完成判定：本轮目标中的“对比分析原因、修复复制链路、并在浏览器里测试通过”已被当前证据支撑。旧无花费计划的风险字段是 `sourceChannel` 丢失、异常 `searchUpgradePxb/激励升舱中` 标签和创建后暂停兜底；修复后的复制计划服务端字段已与手动有花费基线对齐。
+- 当前观察项：`_1` 至 `_4` 当前仍未出花费，但它们已经是修复后字段对齐的新计划，不能再归因于本轮已修复的复制组包缺陷。若需要证明“复制计划实际产生花费”，需要等平台投放统计刷新后再按同一页面只读复查花费指标。
+
 # TODO - 2026-06-05 插件浏览器内存占用继续优化第十一轮第六十四子项
 
 ## 需求规格

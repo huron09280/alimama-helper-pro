@@ -4434,7 +4434,10 @@
             const mode = this.normalizeCopyMode(copyMode);
             const label = this.getCopyModeLabel(mode);
             const bizCandidates = this.getCandidateBizCodes(triggerEl);
-            const primaryBizCode = this.normalizeBizCode(bizCandidates[0] || '') || this.DEFAULT_BIZ_CODE;
+            const primaryBizCode = this.resolveCopyContextBizCode({
+                triggerEl,
+                bizCandidates
+            });
             const sceneName = this.getSceneNameByBizCode(primaryBizCode) || '当前场景';
             const copyCount = this.normalizeCopyBatchCount(options.copyCount || this.readCopyBatchCount(triggerEl));
             const usedPlanNames = Array.from(this.copyPlanNameCache || []);
@@ -4451,6 +4454,7 @@
             };
             const context = {
                 campaignId: id,
+                bizCode: primaryBizCode,
                 mode,
                 label,
                 source,
@@ -4465,6 +4469,22 @@
             };
             context.previewRows = this.buildCopyOverviewRows(context);
             return context;
+        },
+
+        resolveCopyContextBizCode(context = {}) {
+            const source = this.isPlainRecord(context?.source) ? context.source : {};
+            const campaign = this.isPlainRecord(source?.campaign) ? source.campaign : {};
+            const candidates = Array.isArray(context?.bizCandidates) ? context.bizCandidates : [];
+            const triggerEl = context?.triggerEl instanceof Element ? context.triggerEl : null;
+            return this.normalizeBizCode(
+                context?.bizCode
+                || source?.bizCode
+                || campaign?.bizCode
+                || candidates[0]
+                || this.inferBizCodeFromElement(triggerEl)
+                || this.getCurrentCampaignBizCode()
+                || this.DEFAULT_BIZ_CODE
+            ) || this.DEFAULT_BIZ_CODE;
         },
 
         preloadCopyPlanApi(options = {}) {
@@ -4971,6 +4991,7 @@
             });
             return {
                 campaignId: id,
+                bizCode: source.bizCode || bizCandidates[0] || this.getCurrentCampaignBizCode() || this.DEFAULT_BIZ_CODE,
                 mode,
                 label,
                 source,
@@ -5001,17 +5022,26 @@
             if (!id || !api || typeof api.copyCurrentPlanByScene !== 'function') {
                 throw new Error('计划复制 API 未就绪，请刷新页面后重试');
             }
+            const targetBizCode = this.resolveCopyContextBizCode(context);
+            context.bizCode = targetBizCode;
+            if (this.isPlainRecord(context.source)) {
+                context.source.bizCode = this.normalizeBizCode(context.source.bizCode || '') || targetBizCode;
+                if (this.isPlainRecord(context.source.campaign)) {
+                    context.source.campaign.bizCode = this.normalizeBizCode(context.source.campaign.bizCode || '') || targetBizCode;
+                }
+            }
             const copyPlanRows = Array.isArray(editedRows) && editedRows.length ? editedRows : (context.previewRows || []);
             const submitOptions = this.isPlainRecord(context.options) ? { ...context.options } : {};
             delete submitOptions.preloadedApiPromise;
             const result = await api.copyCurrentPlanByScene(context.sceneName, context.source, {
                 ...submitOptions,
+                bizCode: targetBizCode,
                 copyMode: mode,
                 copyCount: copyPlanRows.length || context.copyCount,
                 usedPlanNames: context.usedPlanNames,
                 targetOnlineStatus: context.targetOnlineStatus,
                 copyPlanRows,
-                pauseIfStartedAfterCreate: true,
+                pauseIfStartedAfterCreate: context.targetOnlineStatus === 0,
                 conflictPolicy: 'none'
             });
             const copySource = result?.copySource || {};

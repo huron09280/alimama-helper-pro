@@ -1590,6 +1590,9 @@
             'orderAutoRenewalInfo',
             'orderChargeType',
             'launchTime',
+            'sourceChannel',
+            'channelLocation',
+            'selectedTargetBizCode',
             'aiMaxSwitch',
             'aiMaxInfo',
             'campaignShieldWords',
@@ -1600,7 +1603,13 @@
             'ruleCommand'
         ]);
         // 关键词创建口偶发新增 MCB 相关字段，按关键字兜底透传，避免被白名单裁剪导致服务端参数缺失。
-        const KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE = /(mcb|bidmodel)/i;
+        const KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE = /(mcb|bid_?model)/i;
+        const removeKeywordMcbBidModelFields = (campaign = {}) => {
+            if (!isPlainObject(campaign)) return;
+            Object.keys(campaign).forEach(key => {
+                if (KEYWORD_CUSTOM_CAMPAIGN_EXTRA_KEY_RE.test(key)) delete campaign[key];
+            });
+        };
         const KEYWORD_WORD_PACKAGE_ERROR_RE = /流量智选词包校验失败/;
 
         const normalizeBidMode = (value, fallback = 'smart') => {
@@ -1659,6 +1668,19 @@
         );
 
         const bidModeToBidType = (bidMode = 'smart') => normalizeBidMode(bidMode) === 'manual' ? 'custom_bid' : 'smart_bid';
+        const normalizeOptionalNumber = (value) => {
+            if (value === undefined || value === null || typeof value === 'boolean') return NaN;
+            if (typeof value === 'string' && !value.trim()) return NaN;
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : NaN;
+        };
+        const resolveOptionalNumberSeed = (...values) => {
+            for (let i = 0; i < values.length; i += 1) {
+                const numeric = normalizeOptionalNumber(values[i]);
+                if (Number.isFinite(numeric)) return numeric;
+            }
+            return NaN;
+        };
 
         const isWordPackageValidationError = (errorText = '') => KEYWORD_WORD_PACKAGE_ERROR_RE.test(String(errorText || ''));
 
@@ -1781,6 +1803,12 @@
                 strategyList: DEFAULT_KEYWORD_WORD_PACKAGE_STRATEGY_LIST
             }
         ];
+        const DEFAULT_KEYWORD_SEARCH_ADZONE_LIST = [
+            {
+                adzoneId: '114790550288',
+                status: 'start'
+            }
+        ];
 
         const normalizeKeywordWordPackageStrategyListForSubmit = (strategyList = [], fallbackStrategyList = []) => {
             const sourceList = Array.isArray(strategyList) && strategyList.length
@@ -1851,10 +1879,93 @@
         const buildDefaultKeywordTrafficSmartWordPackageList = () => normalizeKeywordWordPackageListForSubmit(
             deepClone(DEFAULT_KEYWORD_TRAFFIC_SMART_WORD_PACKAGE_LIST)
         );
+        const buildDefaultKeywordSearchAdzoneList = () => deepClone(DEFAULT_KEYWORD_SEARCH_ADZONE_LIST);
+        const parseKeywordAiMaxInfoForSubmit = (value) => {
+            if (isPlainObject(value)) return value;
+            const text = String(value || '').trim();
+            if (!text || !text.startsWith('{')) return {};
+            try {
+                const parsed = JSON.parse(text);
+                return isPlainObject(parsed) ? parsed : {};
+            } catch {
+                return {};
+            }
+        };
+        const normalizeKeywordAiMaxShieldWordTextList = (value, limit = 100) => {
+            if (!Array.isArray(value)) return [];
+            return uniqueBy(
+                value
+                    .map((item) => {
+                        if (isPlainObject(item)) {
+                            return String(item.word || item.keyword || item.name || '').trim();
+                        }
+                        return String(item || '').trim();
+                    })
+                    .filter(Boolean),
+                word => word
+            ).slice(0, Math.max(1, toNumber(limit, 100)));
+        };
+        const buildKeywordCampaignShieldWordsFromCenterList = (wordList = []) => (
+            normalizeKeywordAiMaxShieldWordTextList(wordList, 10).map(word => ({
+                word,
+                matchScope: 2
+            }))
+        );
+        const applyKeywordAiMaxShieldWordsForSubmit = (campaign = {}) => {
+            if (!isPlainObject(campaign)) return;
+            const aiMaxInfo = parseKeywordAiMaxInfoForSubmit(campaign.aiMaxInfo);
+            const centerShieldWordList = normalizeKeywordAiMaxShieldWordTextList(
+                aiMaxInfo.centerShieldWordList
+                || aiMaxInfo.shieldCenterWords
+                || aiMaxInfo.centerWordList
+                || [],
+                10
+            );
+            const exactShieldWordList = normalizeKeywordAiMaxShieldWordTextList(
+                aiMaxInfo.exactShieldWordList
+                || aiMaxInfo.shieldWords
+                || aiMaxInfo.exactWordList
+                || [],
+                100
+            );
+            const sourceCenterShieldWordList = centerShieldWordList.length
+                ? centerShieldWordList
+                : normalizeKeywordAiMaxShieldWordTextList(campaign.shieldCenterWords, 10);
+            const sourceExactShieldWordList = exactShieldWordList.length
+                ? exactShieldWordList
+                : normalizeKeywordAiMaxShieldWordTextList(campaign.shieldWords, 100);
+            if (!Array.isArray(campaign.shieldCenterWords) || !campaign.shieldCenterWords.length) {
+                if (sourceCenterShieldWordList.length) campaign.shieldCenterWords = sourceCenterShieldWordList;
+            }
+            if (!Array.isArray(campaign.shieldWords) || !campaign.shieldWords.length) {
+                if (sourceExactShieldWordList.length) campaign.shieldWords = sourceExactShieldWordList;
+            }
+            if (!Array.isArray(campaign.campaignShieldWords) || !campaign.campaignShieldWords.length) {
+                const campaignShieldWords = buildKeywordCampaignShieldWordsFromCenterList(sourceCenterShieldWordList);
+                if (campaignShieldWords.length) campaign.campaignShieldWords = campaignShieldWords;
+            }
+        };
         const isCopyKeywordAiMaxEnabled = (campaign = {}) => {
             if (!isPlainObject(campaign)) return false;
-            const aiMaxInfo = isPlainObject(campaign.aiMaxInfo) ? campaign.aiMaxInfo : {};
+            const aiMaxInfo = parseKeywordAiMaxInfoForSubmit(campaign.aiMaxInfo);
             return toNumber(campaign.aiMaxSwitch ?? aiMaxInfo.aiMaxSwitch, 0) === 1;
+        };
+        const ensureCopyKeywordAiMaxDefaultAdzoneList = (campaign = {}, options = {}) => {
+            if (!isPlainObject(campaign)) return;
+            const request = options?.request || {};
+            const plan = isPlainObject(options?.plan) ? options.plan : {};
+            const isCopyCurrentPlan = request?.__copyCurrentPlan === true || plan?.__copyCurrentPlan === true;
+            if (!isCopyCurrentPlan || !isCopyKeywordAiMaxEnabled(campaign)) return;
+            if (!Array.isArray(campaign.adzoneList) || !campaign.adzoneList.length) {
+                campaign.adzoneList = buildDefaultKeywordSearchAdzoneList();
+            }
+        };
+        const applyCopyKeywordAiMaxAdvancedSettingsForSubmit = (campaign = {}, options = {}) => {
+            if (!isPlainObject(campaign)) return;
+            if (isCopyKeywordAiMaxEnabled(campaign)) {
+                applyKeywordAiMaxShieldWordsForSubmit(campaign);
+            }
+            ensureCopyKeywordAiMaxDefaultAdzoneList(campaign, options);
         };
 
         const pruneKeywordCampaignForCustomScene = (campaign = {}, options = {}) => {
@@ -2140,10 +2251,27 @@
                 const keywordBidTargetCode = normalizeKeywordBidTargetCode(
                     out.bidTargetV2 || out.optimizeTarget || ''
                 ) || String(out.bidTargetV2 || out.optimizeTarget || '').trim().toLowerCase();
-                const keywordConvContract = keywordBidTargetCode === 'conv';
-                const keywordFavCartContract = keywordBidTargetCode === 'fav_cart';
-                const keywordClickContract = keywordBidTargetCode === 'click';
+                const keywordMaxAmountCopyContract = isCopyCurrentPlan
+                    && String(out.bidType || input?.bidType || '').trim().toLowerCase() === 'max_amount';
+                const keywordConvContract = !keywordMaxAmountCopyContract && keywordBidTargetCode === 'conv';
+                const keywordFavCartContract = !keywordMaxAmountCopyContract && keywordBidTargetCode === 'fav_cart';
+                const keywordClickContract = !keywordMaxAmountCopyContract && keywordBidTargetCode === 'click';
                 const keywordFavCartMinConstraintValue = 5;
+                if (keywordMaxAmountCopyContract) {
+                    const nativeMaxAmountTarget = keywordBidTargetCode === 'fav_cart' ? 'coll_cart' : keywordBidTargetCode;
+                    out.bidType = 'max_amount';
+                    out.bidTypeV2 = out.bidTypeV2 || 'smart_bid';
+                    if (nativeMaxAmountTarget) {
+                        out.bidTargetV2 = nativeMaxAmountTarget;
+                        out.optimizeTarget = nativeMaxAmountTarget;
+                    }
+                    out.setSingleCostV2 = false;
+                    delete out.singleCostV2;
+                    delete out.constraintType;
+                    delete out.constraintValue;
+                    delete out.subOptimizeTarget;
+                    removeKeywordMcbBidModelFields(out);
+                }
                 if (keywordFavCartContract) {
                     // 原生“增加收藏加购量”使用 coll_cart 合同，若提交 fav_cart 会落库成手动出价。
                     out.bidTargetV2 = 'coll_cart';
@@ -2164,9 +2292,8 @@
                     out.planMcbBidModel = 'coll_cart';
                 } else if (keywordClickContract) {
                     // click 合同不走 mcb 字段，避免服务端按非原生契约降级为手动出价。
-                    delete out.mcbBidModel;
-                    delete out.planMcbBidModel;
-                } else if (resolvedMcbBidModel) {
+                    removeKeywordMcbBidModelFields(out);
+                } else if (!keywordMaxAmountCopyContract && resolvedMcbBidModel) {
                     // 关键词创建口要求显式携带 MCB 出价模型，缺失时会报 INVALID_PARAMETER。
                     out.mcbBidModel = resolvedMcbBidModel;
                     out.planMcbBidModel = resolvedMcbBidModel;
@@ -2226,8 +2353,7 @@
                     }
                     delete out.singleCostV2;
                     // 与原生提交流程对齐：conv 合同不走 mcb 字段，避免触发计划MCB模型校验。
-                    delete out.mcbBidModel;
-                    delete out.planMcbBidModel;
+                    removeKeywordMcbBidModelFields(out);
                 } else {
                     delete out.subOptimizeTarget;
                 }
@@ -2240,10 +2366,9 @@
                 } else {
                     if (keywordFavCartContract) {
                         const favCartSingleCostEnabled = parseKeywordSingleCostEnabled(out.setSingleCostV2);
-                        const favCartConstraintSeed = toNumber(
-                            out.singleCostV2
-                            ?? out.constraintValue,
-                            NaN
+                        const favCartConstraintSeed = resolveOptionalNumberSeed(
+                            out.singleCostV2,
+                            out.constraintValue
                         );
                         const hasFavCartConstraintValue = Number.isFinite(favCartConstraintSeed);
                         if (hasFavCartConstraintValue && favCartConstraintSeed < keywordFavCartMinConstraintValue) {
@@ -2364,6 +2489,7 @@
             if (!Array.isArray(out.crowdList)) out.crowdList = [];
             out.adzoneList = resolveNonEmptyArrayField('adzoneList', Array.isArray(out.adzoneList) ? out.adzoneList : []);
             if (!Array.isArray(out.adzoneList)) out.adzoneList = [];
+            ensureCopyKeywordAiMaxDefaultAdzoneList(out, { request, plan });
             const resolvedLaunchAreaList = resolveNonEmptyArrayField(
                 'launchAreaStrList',
                 Array.isArray(out.launchAreaStrList) ? out.launchAreaStrList : []
@@ -2413,6 +2539,7 @@
                 delete out.orderChargeType;
                 delete out.launchTime;
             }
+            applyCopyKeywordAiMaxAdvancedSettingsForSubmit(out, { request, plan });
             return out;
         };
 
