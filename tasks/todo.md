@@ -1,3 +1,47 @@
+# TODO - 2026-06-07 安全审查问题修复
+
+## 需求规格
+- 用户要求：先用中文 commit 记录审查结果，再修复已发现的 bug/漏洞/安全问题。
+- 已完成前置提交：`1fa84ad 记录安全审查结果`，只提交 `tasks/todo.md` 审查记录，未纳入未跟踪截图。
+- 修复目标：处理 P1/P2 高置信问题，包括计划 API 桥接授权门禁、extension/userscript HTTPS 与域名收窄、license server CORS allowlist、license server 依赖漏洞处理。
+- 安全边界：不点击或触发真实投放/创建/提交链路；不提交密钥、Cookie、店铺数据；不回退未跟踪截图 `tasks/e7-custom-copy-button-before.png`。
+- 成功标准：业务代码与测试体现新的安全不变量；相关单测、语法、构建检查和审计命令有明确结果；依赖漏洞如无法完全消除，需给出代码级缓解、CI/任务记录证据和剩余风险。
+
+## 执行计划
+- [x] 先提交中文审查记录，确保修复前基线可追踪。
+- [x] 读取相关测试和构建脚本，确认本项目对桥接、manifest、license server 的既有断言方式。
+- [x] 修复计划 API bridge：调用写能力前强制授权门禁，补充未授权阻断测试。
+- [x] 修复 HTTPS/域名范围：userscript meta、extension manifest、content 注入、background sender 改为 HTTPS-only 且收窄到实际 host，补静态测试。
+- [x] 修复 license server CORS：引入可配置 allowlist，分离默认公共访问与 credentials，补服务端 hardening 测试。
+- [x] 处理 license server 依赖漏洞：验证可升级/override 路径，更新锁文件或记录无法消除的剩余风险和缓解措施。
+- [x] 运行相关测试、`npm run check:syntax`、`npm run build:check`、`npm audit --prefix services/license-server --audit-level=moderate`，必要时运行 `npm run review`。
+- [x] 更新高层操作摘要、验证记录和结果复盘。
+
+## 高层操作摘要
+- 已按用户要求先完成中文提交：`1fa84ad 记录安全审查结果`。
+- 已在 `src/optimizer/bridge.js` 增加 `requireBridgeAuthorized(method)`，完整 page API bridge 在解析并调用 API 前先走 `LicenseGuard.requireAuthorizedSync('keyword_plan_api_bridge:<method>')`；extension 运行态缺失授权守卫时 fail-closed。
+- 已把 userscript `@match`、extension manifest、content 注入判断和 background sender 校验收窄到 HTTPS-only；manifest 不再使用 `*://` 或 `*.alimama.com` 注入匹配，background 不再允许任意 alimama 子域发起授权请求。
+- 已在 license server CORS 中加入 `AM_LICENSE_CORS_ALLOWED_ORIGINS` allowlist，默认只允许授权服务自身 HTTPS origin；非 allowlist Origin 不再返回 `access-control-allow-origin` 和 credentials。
+- 已用 `overrides.protobufjs = 8.6.1` 更新 `services/license-server` 依赖锁，移除旧 `protobufjs 6.11.4` 与 `@protobufjs/utf8` 传递依赖，`npm audit` 已清零。
+- 已同步根 userscript、`dist/packages` 和 `dist/extension` 构建产物，并补充桥接、extension 静态构建、license server hardening、依赖合同和 userscript meta 回归测试。
+
+## 验证记录
+- `node --test tests/keyword-plan-api-bridge-security.test.mjs tests/extension-static-build.test.mjs tests/license-server-hardening.test.mjs tests/license-server-runtime-deps.test.mjs tests/budget-frontend-limit-bypass.test.mjs`：首次因根 userscript 构建产物未同步失败；运行 `npm run build` 后复跑通过，42/42。
+- `npm install --package-lock-only --prefix services/license-server`：沙箱内 DNS 失败；联网放行后通过，并输出 `found 0 vulnerabilities`。
+- `npm audit --prefix services/license-server --audit-level=moderate`：通过，`found 0 vulnerabilities`。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过，构建产物同步。
+- `npm run review`：通过；构建同步、license-server 依赖合同、危险 API 检查、语法、完整回归测试全部通过，644 项中 642 pass、2 skipped、0 fail。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：首次连接 9222 失败；运行 `bash scripts/recover-chrome-devtools-mcp.sh` 后恢复。真实 `https://one.alimama.com/index.html#!/manage/search?...` 只读检查显示 `protocol:"https:"`、`runtimeMode:"extension"`、桥接 host 和主面板存在；控制台有站点资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未做任何创建/投放/提交操作。
+
+## 结果复盘
+- 已修复 P1 桥接授权绕过：同页脚本即使能发送 bridge 请求，也必须先通过 extension 授权守卫，未授权或授权守卫缺失时不会进入完整计划 API 调用。
+- 已修复 P1 依赖漏洞：`services/license-server` audit 从 critical/high/moderate 降为 0 vulnerabilities；后续如 Tablestore SDK 发布官方修复版本，应优先移除 override 并升级 SDK。
+- 已修复 P2 注入面过宽：HTTP 页面和宽泛 `*.alimama.com` 子域不再获得 extension 注入匹配或授权 background sender 许可；userscript `@match` 同步收窄。
+- 已修复 P2 CORS 反射：license server 不再反射任意 Origin，credentials 只对 allowlist Origin 返回。
+- 剩余说明：userscript `@connect *.alimama.com` 暂保留，因为运行时代码仍访问 `bpcommon.alimama.com` 等阿里妈妈 API；这不是注入匹配面，后续可单独梳理所有 GM 请求 host 后进一步收窄。
+
 # TODO - 2026-06-07 Bug/漏洞/安全审查
 
 ## 需求规格

@@ -171,12 +171,17 @@ test('extension manifest 为 MV3 且指向阿里妈妈域名', () => {
   assert.ok(Array.isArray(manifest.host_permissions), '缺少 host_permissions 配置');
   assert.ok(manifest.host_permissions.includes('https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run/*'), '缺少授权服务 host permission');
   assert.deepEqual(manifest.content_scripts[0].js, ['content.js']);
-  assert.ok(manifest.content_scripts[0].matches.includes('*://*.alimama.com/*'), '缺少阿里妈妈子域匹配');
+  assert.ok(manifest.content_scripts[0].matches.includes('https://alimama.com/*'), '缺少 alimama.com HTTPS 匹配');
+  assert.ok(manifest.content_scripts[0].matches.includes('https://one.alimama.com/*'), '缺少 one.alimama.com HTTPS 匹配');
   assert.ok(manifest.content_scripts[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com 匹配');
   assert.ok(manifest.content_scripts[0].matches.includes('https://dmp.taobao.com/*'), '缺少 dmp.taobao.com 匹配');
+  assert.ok(manifest.content_scripts[0].matches.every((item) => String(item).startsWith('https://')), 'content script 匹配必须全部为 HTTPS');
+  assert.ok(!manifest.content_scripts[0].matches.some((item) => String(item).includes('*://') || String(item).includes('*.alimama.com')), 'content script 不应保留协议通配或宽泛 alimama 子域');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('page.bundle.js'), '缺少 page bundle 暴露');
   assert.ok(manifest.web_accessible_resources[0].resources.includes('wizard-style.css'), '缺少组建计划外置样式暴露');
   assert.ok(!manifest.web_accessible_resources[0].resources.includes('keyword-plan-api.bundle.js'), '不应暴露点击时加载的 keyword-plan-api lazy bundle');
+  assert.ok(manifest.web_accessible_resources[0].matches.every((item) => String(item).startsWith('https://')), 'web_accessible 匹配必须全部为 HTTPS');
+  assert.ok(!manifest.web_accessible_resources[0].matches.some((item) => String(item).includes('*://') || String(item).includes('*.alimama.com')), 'web_accessible 不应保留协议通配或宽泛 alimama 子域');
   assert.ok(manifest.web_accessible_resources[0].matches.includes('https://myseller.taobao.com/*'), '缺少 myseller.taobao.com web_accessible 匹配');
   assert.ok(manifest.web_accessible_resources[0].matches.includes('https://dmp.taobao.com/*'), '缺少 dmp.taobao.com web_accessible 匹配');
 });
@@ -192,6 +197,7 @@ test('extension content script 负责注入 page bundle', () => {
   assert.doesNotMatch(contentSource, /keyword-plan-api\.bundle\.js/, 'content script 不应把 keyword-plan-api 大包延后到点击路径');
   assert.match(contentSource, /SCRIPT_ID = 'am-helper-pro-extension-page-bundle'/, '缺少固定注入节点 ID');
   assert.match(contentSource, /const shouldInjectPageBundle = \(\) => \{/, 'content script 缺少 page bundle 注入资格守卫');
+  assert.match(contentSource, /String\(url\.protocol \|\| ''\)\.toLowerCase\(\) !== 'https:'/, 'content script 注入前必须拒绝非 HTTPS 页面');
   assert.match(contentSource, /let pageBundleInjected = false;/, 'content script 缺少已注入状态位，路由变化可能重复注入 page bundle');
   assert.match(contentSource, /if \(hostname === 'one\.alimama\.com'\) return true;/, 'one.alimama.com 必须继续注入完整 page bundle');
   assert.match(contentSource, /const isDmpHost = \(hostname = ''\) => hostname === 'dmp\.taobao\.com';/, 'content script 缺少 DMP host 判断');
@@ -237,6 +243,10 @@ test('extension content script 只在业务页面注入完整 page bundle', () =
   const one = createContentScriptHarness('https://one.alimama.com/index.html#!/manage/display');
   assert.equal(one.appendedScripts.length, 1, 'one.alimama.com 应继续注入完整 page bundle');
   assert.match(one.appendedScripts[0].src, /page\.bundle\.js$/, 'one.alimama.com 注入的脚本应为 page.bundle.js');
+
+  const insecureOne = createContentScriptHarness('http://one.alimama.com/index.html#!/manage/display');
+  assert.equal(insecureOne.appendedScripts.length, 0, 'HTTP one.alimama.com 不应注入完整 page bundle');
+  assert.equal(insecureOne.timers.size, 0, 'HTTP one.alimama.com 不应保留注入 timer');
 
   const dmpItemInsight = createContentScriptHarness('https://dmp.taobao.com/index_new.html#!/items/item-insight?analysisTab=crowd-insight&itemId=757440599385');
   assert.equal(dmpItemInsight.appendedScripts.length, 1, 'DMP 单品洞察页应直接注入完整 page bundle');
@@ -302,11 +312,13 @@ test('extension build output 包含授权 background 桥', () => {
   assert.match(backgroundSource, /const VERIFY_REQUEST_TYPE = 'AM_LICENSE_VERIFY_REQUEST';/, 'background 缺少授权消息类型');
   assert.match(backgroundSource, /if \(message\?\.type !== VERIFY_REQUEST_TYPE\) return false;/, 'background 未限制消息类型');
   assert.match(backgroundSource, /if \(!isAllowedSenderUrl\(sender\?\.url \|\| ''\)\) \{/, 'background 未校验 sender.url');
+  assert.match(backgroundSource, /if \(protocol !== 'https:'\) return false;/, 'background sender 必须拒绝非 HTTPS 来源');
   assert.match(
     backgroundSource,
-    /return hostname === 'alimama\.com'[\s\S]*hostname === 'myseller\.taobao\.com'[\s\S]*hostname === 'dmp\.taobao\.com'[\s\S]*hostname\.endsWith\('\.myseller\.taobao\.com'\)[\s\S]*hostname\.endsWith\('\.alimama\.com'\);/,
-    'background 未限制阿里妈妈来源'
+    /return hostname === 'alimama\.com'[\s\S]*hostname === 'myseller\.taobao\.com'[\s\S]*hostname === 'dmp\.taobao\.com'[\s\S]*hostname\.endsWith\('\.myseller\.taobao\.com'\)[\s\S]*hostname === 'one\.alimama\.com';/,
+    'background 未限制到实际授权来源'
   );
+  assert.doesNotMatch(backgroundSource, /hostname\.endsWith\('\.alimama\.com'\)/, 'background 不应继续允许任意 alimama 子域');
   assert.match(backgroundSource, /response = await fetch\(VERIFY_ENDPOINT, \{/, 'background 未请求固定授权地址');
   assert.doesNotMatch(backgroundSource, /payload\.(?:url|endpoint)/, 'background 不应接受页面传入任意 URL');
 });

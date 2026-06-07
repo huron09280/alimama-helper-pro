@@ -31,6 +31,26 @@
             return false;
         }
     };
+    const resolveBridgeLicenseGuard = () => {
+        try {
+            if (typeof globalThis !== 'undefined' && globalThis.LicenseGuard) return globalThis.LicenseGuard;
+        } catch { }
+        try {
+            return window.LicenseGuard || null;
+        } catch { }
+        return null;
+    };
+    const requireBridgeAuthorized = (method = '') => {
+        const source = `keyword_plan_api_bridge:${String(method || 'unknown').trim() || 'unknown'}`;
+        const guard = resolveBridgeLicenseGuard();
+        if (guard && typeof guard.requireAuthorizedSync === 'function') {
+            guard.requireAuthorizedSync(source);
+            return;
+        }
+        if (isExtensionPageRuntime()) {
+            throw new Error('license_guard_unavailable');
+        }
+    };
     const resolveKeywordPlanApiForBridge = () => {
         try {
             if (typeof KeywordPlanApi !== 'undefined' && KeywordPlanApi && typeof KeywordPlanApi.openWizard === 'function') {
@@ -219,6 +239,7 @@
                 if (!API_BRIDGE_METHOD_SET.has(method)) {
                     throw new Error(`method_not_allowed:${method}`);
                 }
+                requireBridgeAuthorized(method);
                 const api = await ensureKeywordPlanApiForBridge({ needFullApi: true });
                 const fn = api?.[method];
                 if (typeof fn !== 'function') {

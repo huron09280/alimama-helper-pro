@@ -55,6 +55,16 @@ test('完整 page API bridge host 也校验方法白名单', () => {
     );
 });
 
+test('完整 page API bridge 调用前必须经过授权门禁', () => {
+    assert.match(source, /const resolveBridgeLicenseGuard = \(\) => \{[\s\S]*globalThis\.LicenseGuard[\s\S]*window\.LicenseGuard[\s\S]*\};/, 'bridge host 缺少 LicenseGuard 解析');
+    assert.match(source, /const requireBridgeAuthorized = \(method = ''\) => \{[\s\S]*keyword_plan_api_bridge:\$\{String\(method \|\| 'unknown'\)[\s\S]*guard\.requireAuthorizedSync\(source\);[\s\S]*throw new Error\('license_guard_unavailable'\);[\s\S]*\};/, 'bridge host 缺少 fail-closed 授权门禁');
+    assert.match(
+        source,
+        /if \(!API_BRIDGE_METHOD_SET\.has\(method\)\) \{[\s\S]*throw new Error\(`method_not_allowed:\$\{method\}`\);[\s\S]*\}[\s\S]*requireBridgeAuthorized\(method\);[\s\S]*const api = await ensureKeywordPlanApiForBridge\(\{ needFullApi: true \}\);/,
+        'bridge host 必须在解析并调用完整 API 前先执行授权门禁'
+    );
+});
+
 test('完整 page API bridge result cache 会主动按 TTL 释放', () => {
     const start = source.indexOf('const installPageApiBridgeHost = () => {');
     const end = source.indexOf('const injectPageApiBridgeClient = () => {', start);
