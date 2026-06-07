@@ -1,3 +1,115 @@
+# TODO - 2026-06-07 Bug/漏洞/安全审查
+
+## 需求规格
+- 用户要求：检查当前项目有哪些 bug、漏洞和安全问题。
+- 目标：以代码审查方式输出有源码位置依据的风险清单，优先覆盖授权、注入桥接、跨页面通信、请求拦截、持久化、本地/远端配置、构建产物同步和依赖安全。
+- 本轮边界：默认只做只读审查和必要验证命令，不修复业务代码；如发现会导致真实投放、授权绕过、敏感信息泄露或构建不可用的高危问题，先记录证据和建议修复方案。
+- 成功标准：每个结论都有文件/行号、触发条件、影响说明和建议；验证记录包含实际运行命令、结果和未覆盖风险。
+- 工作区边界：当前已有 `tasks/todo.md` 本地改动和未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本轮不回退、不纳入无关文件。
+
+## 执行计划
+- [x] 回顾 `tasks/lessons.md`、当前 `tasks/todo.md`、项目脚本和 goal-driven 编排要求。
+- [x] 梳理源码目录、入口文件、授权服务、extension/userscript 桥接和高风险模块清单。
+- [x] 静态审查高风险攻击面：授权/签名、policy token、shopId、跨上下文消息、fetch/XHR hook、DOM 注入、存储、下载解析、后台服务接口。
+- [x] 运行依赖/语法/测试/审查辅助命令，记录失败或未覆盖项。
+- [x] 对可疑 findings 做交叉校验，排除仅凭猜测的误报。
+- [x] 更新本任务的高层操作摘要、验证记录和结果复盘，并向用户输出按严重度排序的 findings。
+
+## 高层操作摘要
+- 已确认当前线程已有活动目标：检查 bug、漏洞和安全问题。
+- 已读取历史 lessons，重点关注创建/复制、写请求守卫、Chrome MCP 验证、授权桥接、原生功能副作用等高风险经验。
+- 已运行 `npm run codex:map` 并用 `rg --files src services tests scripts docs` 梳理源码、服务端、测试和脚本范围。
+- 已重点审查 `services/license-server/index.mjs`、`services/license-server/license-admin.html`、`src/entries/extension-content.js`、`src/entries/extension-background.js`、`src/entries/extension-license-guard.js`、`src/optimizer/bridge.js`、`src/optimizer/public-api.js`、`src/optimizer/keyword-plan-api/*`、主助手拦截/报表/下载相关模块和对应测试。
+- 已用 `rg` 搜索 `postMessage`、`chrome.runtime.onMessage`、`CustomEvent`、`innerHTML`、`localStorage`、`token`、`license`、`requireAuthorizedSync` 等关键模式，交叉核对授权门禁、跨上下文桥接、DOM 注入和持久化路径。
+- 确认高置信 findings：extension 计划 API 桥接缺少授权门禁、license server 依赖链存在 npm critical/high 漏洞、HTTP/宽泛域名匹配扩大扩展注入面、license server CORS 反射任意 Origin 且允许 credentials。
+- 抽查 `innerHTML`、下载链接、policy token/cache、shopId guard 等路径时，未形成足够强的新增漏洞结论；相关路径已有转义、`textContent`、URL sanitize、ES256 token/cache 绑定和测试覆盖。
+
+## 验证记录
+- `npm run codex:map`：通过，辅助定位项目源码结构。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --test tests/keyword-plan-api-bridge-security.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/license-server-hardening.test.mjs tests/license-server-new-shop-default-auth.test.mjs tests/extension-static-build.test.mjs tests/download-link-depth-guard.test.mjs`：通过，42/42。
+- `npm run review`：通过；输出包含构建同步、license-server deps contract、危险 API 检查、语法和完整回归测试，641 项中 639 pass、2 skipped、0 fail。
+- `npm audit --prefix services/license-server --audit-level=moderate`：沙箱内因 `getaddrinfo ENOTFOUND registry.npmjs.org` 失败；联网放行后复核仍失败退出并报告漏洞：`@protobufjs/utf8 <=1.1.0` moderate，`protobufjs <=7.5.7` critical/high 多 advisory，依赖路径为 `tablestore * -> protobufjs`，合计 3 vulnerabilities，`protobufjs` 链路 `No fix available`。
+
+## 结果复盘
+- P1：`src/optimizer/bridge.js` 的 extension 计划 API 桥接允许同页脚本通过 `CustomEvent`/`postMessage` 调用 `createPlansBatch`、`copyCurrentPlanByScene`、`runCreateRepairByItem`、`appendKeywords` 等写能力方法，但 `processBridgeRequest` 只做方法白名单和 API 存在性检查，未调用 `LicenseGuard.requireAuthorizedSync`。授权守卫当前主要覆盖插件 UI pointer/key 交互和 `public-api.js` 的 optimizer 入口，不能覆盖程序化桥接调用。
+- P1：`services/license-server` 依赖 `tablestore ^5.6.3`，锁定 `protobufjs 6.11.4`；当前 npm audit 报 critical/high/moderate，包含任意代码执行、代码注入、DoS、prototype injection 等 advisory，且当前依赖路径无直接修复版本。
+- P2：userscript/extension manifest 使用 `*://alimama.com/*`、`*://*.alimama.com/*`，background sender 允许 `http:`，content 注入判断只看 hostname，导致非 HTTPS 和宽泛子域注入面过大。
+- P2：license server CORS 会把任意请求 Origin 反射为 `access-control-allow-origin`，并在有 Origin 时加 `access-control-allow-credentials: true`；虽然管理写接口仍依赖 admin token，但该策略扩大了跨站读取与 token 误用后的影响面。
+- 本轮未修改业务代码；只补充了审查任务记录。建议后续单独开修复任务处理以上 P1/P2，并补充对应回归测试和 CI 审计门禁。
+
+# TODO - 2026-06-07 清理本地分支
+
+## 需求规格
+- 用户要求：清理本地的分支。
+- 目标：删除本地已合并到 `main` 的历史分支，并让本地分支列表只保留 `main`。
+- 安全边界：删除未合并分支前先保留可恢复引用；不删除主分支，不处理未跟踪截图。
+- 当前未跟踪文件：`tasks/e7-custom-copy-button-before.png` 仍保留本地，不纳入任何提交。
+
+## 执行计划
+- [x] 检查本地分支、远端分支、worktree 占用和已合并状态。
+- [x] 清理失效 worktree 元数据，解除已不存在 worktree 对分支删除的占用。
+- [x] 将当前 worktree 从已合并分支切到 detached `main` 提交，保留本地任务记录改动。
+- [x] 删除已合并到 `main` 的本地分支。
+- [x] 为唯一未合并分支创建本地备份 tag 后删除分支引用。
+- [x] 复核本地分支、远端分支、备份 tag 和工作区状态。
+
+## 高层操作摘要
+- 已运行 `git worktree prune --verbose`，清掉失效 worktree 元数据。
+- 已通过 `git switch --detach main` 将当前 worktree 从 `codex/ui-guidelines-agent-rules` 脱离到 `main` 提交。
+- 已删除已合并本地分支：`codex/crowd-matrix-tip-layout`、`codex/escort-fix-20260319`、`codex/license-admin-pages-deploy-20260407`、`codex/merge-extension-20260319`、`codex/on-demand-license-check-20260403`、`codex/openv3-explicit-state-20260414`、`codex/pages-deploy-20260413`、`codex/release-v6.07-20260324`、`codex/ui-guidelines-agent-rules`、`extension`。
+- `codex/fix-review-findings` 是唯一未合并到 `main` 的本地分支；已创建本地 tag `backup/codex-fix-review-findings-20260607` 指向提交 `9137313` 后删除该分支。
+
+## 验证记录
+- `git branch --merged main`：清理前列出 10 个已合并非主分支。
+- `git branch --no-merged main`：清理前仅列出 `codex/fix-review-findings`。
+- `git branch -d ...`：成功删除 10 个已合并本地分支。
+- `git tag backup/codex-fix-review-findings-20260607 codex/fix-review-findings && git branch -D codex/fix-review-findings`：通过。
+- 最终 `git branch --format='%(refname:short) %(upstream:short)'`：只剩 `main origin/main`，当前 worktree 为 detached `main`。
+- 最终 `git branch -r --format='%(refname:short)'`：只剩 `origin` 与 `origin/main`。
+- `git show --oneline --no-patch backup/codex-fix-review-findings-20260607`：`9137313 fix: 修复矩阵计划审查问题`。
+
+## 结果复盘
+- 本地普通分支已清理到只剩 `main`。
+- 未合并分支 `codex/fix-review-findings` 的提交已通过本地 tag 备份，可用 `git switch -c codex/fix-review-findings backup/codex-fix-review-findings-20260607` 恢复。
+- 当前 Codex worktree 处于 detached `main` 提交，并保留本地任务记录改动与未跟踪截图。
+
+# TODO - 2026-06-07 清理线上已合并分支
+
+## 需求规格
+- 用户要求：关闭线上的其它分支。
+- 目标：清理 GitHub 远端 `origin` 上已经合并进 `main` 的非主分支，减少线上分支噪声。
+- 安全边界：只删除已完全并入 `origin/main` 的远端分支；不删除 `origin/main`、远端 HEAD 符号引用，且不删除未并入主线或状态不明的分支。
+- 当前未跟踪文件：`tasks/e7-custom-copy-button-before.png` 仍保留本地，不纳入任何提交。
+
+## 执行计划
+- [x] 读取远端分支、已合并分支和 PR 状态。
+- [x] 删除已并入 `origin/main` 的非主远端分支。
+- [x] 重新 fetch/prune 并复核远端分支列表。
+- [x] 记录保留的未合并分支和最终结果。
+
+## 高层操作摘要
+- 已确认远端分支包含：`codex/escort-fix-20260319`、`codex/fix-review-findings`、`codex/merge-extension-20260319`、`codex/on-demand-license-check-20260403`、`codex/release-v6.07-20260324`、`codex/ui-guidelines-agent-rules`、`extension`、`main`。
+- 已确认已并入 `origin/main` 的可清理远端分支为：`codex/escort-fix-20260319`、`codex/merge-extension-20260319`、`codex/on-demand-license-check-20260403`、`codex/release-v6.07-20260324`、`codex/ui-guidelines-agent-rules`、`extension`。
+- `codex/fix-review-findings` 未出现在 `git branch -r --merged origin/main` 中，按安全边界暂不删除。
+- 已删除 6 个已并入主线的远端分支；随后确认 `codex/fix-review-findings` 虽未并入 `origin/main`，但本地仍有同名分支 `codex/fix-review-findings` 指向提交 `9137313`，线上清理时一并删除远端分支以满足“关闭线上其它分支”。
+
+## 验证记录
+- `git fetch origin --prune && git branch -r --format='%(refname:short)'`：清理前远端含 8 个分支/符号引用。
+- `git branch -r --merged origin/main`：确认 6 个非主远端分支已并入 `origin/main`。
+- `git push origin --delete codex/escort-fix-20260319 codex/merge-extension-20260319 codex/on-demand-license-check-20260403 codex/release-v6.07-20260324 codex/ui-guidelines-agent-rules extension`：通过。
+- `git rev-list --left-right --count origin/main...origin/codex/fix-review-findings`：`131 1`，该远端分支有 1 个未并入主线提交。
+- `git rev-parse --short codex/fix-review-findings` 与 `git rev-parse --short origin/codex/fix-review-findings` 均为 `9137313`，确认删除远端前本地已有备份分支。
+- `git push origin --delete codex/fix-review-findings`：通过。
+- 最终 `git fetch origin --prune && git branch -r --format='%(refname:short)'`：仅剩 `origin` 与 `origin/main`。
+- 最终 `git branch -r --no-merged origin/main`：无输出，线上没有未并入 `main` 的远端分支。
+
+## 结果复盘
+- 已关闭所有线上非主分支；GitHub 远端现在只剩 `origin/main`。
+- 未并入主线的 `codex/fix-review-findings` 已从线上删除，但本地仍保留同名分支和提交 `9137313`。
+- 由于当前远端 PR 分支已被删除，本任务记录只保留在当前本地工作区，未推送以避免重新创建已关闭分支。
+
 # TODO - 2026-06-07 合并本地主分支并提交 PR
 
 ## 需求规格
