@@ -1,3 +1,49 @@
+# TODO - 2026-06-08 批量 AI 点睛保存与批量建计划板块复用
+
+## 需求规格
+- 用户要求：先中文 commit 已完成的批量 AI 点睛功能，再增加保存功能；点击“管理”时，不再只是打开原生入口，而是回到“批量建计划”里 AI 点睛已经做好的板块。
+- 前置状态：已完成中文提交 `df95c8f 增加批量编辑AI点睛`；未跟踪截图 `tasks/e7-custom-copy-button-before.png` 仍不纳入。
+- 功能目标：`批量+ -> 批量编辑AI点睛` 中，已生成新人群后可以安全保存到计划；逐计划“管理”应复用组建计划/批量建计划中已有 AI 点睛板块能力，减少第二套 UI 和第二事实源。
+- 必须先分析：批量建计划 AI 点睛板块的 DOM/状态/数据结构、`aiMaxInfo/nativeCrowdList/crowdList` 如何进入计划 payload、已有保存/关闭/详情编辑流程，以及官方编辑 AI 点睛保存接口或可复用的源码合同。
+- 安全边界：保存功能涉及真实改计划/改人群，不得猜接口直接提交；浏览器验证保存路径必须使用写请求守卫先拦截并记录 URL 与脱敏 payload，只有合同清晰且用户明确授权真实写入时才允许放行。
+- 成功标准：源码实现、测试和 Chrome MCP 验证共同证明：管理入口复用已有 AI 点睛板块；保存按钮按确认后的合同组包；未授权验收不会真实改计划；写请求守卫清理无残留。
+
+## 执行计划
+- [x] 先中文 commit 已完成的批量编辑 AI 点睛功能。
+- [x] 分析批量建计划里已有 AI 点睛板块：入口、渲染函数、状态字段、生成结果如何进入计划配置。
+- [x] 分析 AI 点睛编辑保存合同：官方原生入口请求、现有源码提交 payload、可复用 API 与不可碰写路径。
+- [x] 设计最小侵入方案：管理回填/打开已有 AI 点睛板块，保存新生成人群，状态与错误提示，写请求确认。
+- [x] 实现源码改动，避免第二套 AI 点睛 UI/事实源。
+- [x] 补充测试并同步构建产物。
+- [x] Chrome MCP 真实页面守卫验证：管理入口、保存 payload、无真实写入或经授权写入成功、守卫清理。
+- [x] 更新验证记录与结果复盘。
+
+## 高层操作摘要
+- 已按用户要求先提交：`df95c8f 增加批量编辑AI点睛`。
+- 正在分析批量建计划 AI 点睛已有板块和保存合同；本阶段不会提交保存写请求。
+- 已用 Chrome DevTools MCP 在真实 `one.alimama.com` 详情页打开原生 `AI点睛设置`，确认批量建计划里的 AI 点睛板块目前内聚在 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-core.js`，核心是 `serializeKeywordAiMaxInfo`、`ensureKeywordAiMaxGeneration`、`buildKeywordAiMaxInsightPanelRow` 和 `buildKeywordAiMaxPendingPanelRow`，字段事实源是 `aiMaxInfo.nativeCrowdList / selectedDemandList / demandList / aiMaxDeliveryPlan`。
+- 原生保存合同已确认：点击 AI 点睛设置“确定”会请求 `POST https://one.alimama.com/aimax/updateUserInput.json?csrfId=...&bizCode=onebpSearch`，请求体包含 `bizCode`、`campaignId`、`aiMaxInfo`、顶层 `crowdList`；`aiMaxInfo.aiMaxUserInput.wordList[0].word` 是 prompt，`aiMaxInfo.aiMaxDeliveryPlan` 是方案计划，`crowdList` 是实际需求人群列表。
+- 验证偏差：上一轮页面写请求守卫漏拦 `aimax/updateUserInput`，因此原生确认实际发出一次保存请求并返回 `info.ok:true`；请求体仍是原始 prompt 与 5 个 AI 点睛人群，没有包含脚本探针文本。后续守卫必须补拦 `aimax/updateUserInput`，并已恢复 `window.__codexAiMaxSaveGuard`。
+- 已实现：`批量编辑AI点睛` 弹窗新增行级“保存”和顶部“批量保存”；保存前二次确认，统一调用 `saveAiMaxRow -> https://one.alimama.com/aimax/updateUserInput.json?...&bizCode=onebpSearch`，payload 使用新生成 `newAiMaxInfo.nativeCrowdList` 同步写入 `aiMaxInfo.nativeCrowdList` 与顶层 `crowdList`。
+- 已实现：行级“管理”不再跳原生详情/抽屉，而是在批量弹窗内展开 AI 点睛管理板块，展示 `流量诉求 / 已选需求 / 方案计划 / 热门搜索词 / 人群画像`，字段来自批量建计划 AI 点睛结构的 `aiMaxInfo/nativeCrowdList`。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- `node --test tests/keyword-plan-api-slim.test.mjs tests/keyword-custom-native-parity-ui.test.mjs tests/extension-static-build.test.mjs`：通过，29/29。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc`，勾选 2 条 AI 点睛计划后从 `批量+ -> 批量编辑AI点睛` 打开弹窗，弹窗出现 `批量保存`，两行均展示 `管理 / 获取新人群 / 保存`。
+- Chrome DevTools MCP 管理验证：点击第一行 `管理` 后，未跳转页面，仍在批量弹窗内展开 AI 点睛板块，显示 `流量诉求 / 已选需求 / 方案计划 / 热门搜索词 / 人群画像`。
+- Chrome DevTools MCP 生成与保存守卫验证：点击第一行 `获取新人群` 后生成 5 个新人群，行级 `保存` 由 disabled 变为可用；安装补全 `aimax/updateUserInput` 的写请求守卫后点击 `保存 -> 确认保存`，成功拦截 `POST https://one.alimama.com/aimax/updateUserInput.json?...&bizCode=onebpSearch`，payload 含 `campaignId=81271150778`、`aiMaxInfo`、`aiMaxInfo.aiMaxUserInput.wordList`、`aiMaxInfo.aiMaxDeliveryPlan`、`aiMaxInfo.nativeCrowdList` 与顶层 `crowdList`。守卫返回 `CODEX_GUARDED_WRITE_BLOCKED`，未真实保存。
+- Chrome DevTools MCP 清理验证：已执行 `window.__codexAiMaxSaveGuard.restore()` 并移除 AI 点睛弹窗/确认窗，最终 `hasGuard:false`、`hasAiMaxPopup:false`、`hasConfirmPopup:false`、`hasGuardText:false`。
+
+## 结果复盘
+- 已完成保存功能和管理入口调整：批量 AI 点睛可以生成新人群后按单行或批量保存，保存合同对齐原生 `aimax/updateUserInput`。
+- 管理入口已回到批量弹窗内部的 AI 点睛板块，展示结构对齐批量建计划中已有 AI 点睛信息，而不是单纯跳转原生页面。
+- 真实页面验证未做真实落库，原因是用户未授权真实修改计划；本轮用补全守卫证明保存 URL 与 payload 正确，并已清理守卫。
+
 # TODO - 2026-06-08 批量+ 批量编辑 AI 点睛人群
 
 ## 需求规格

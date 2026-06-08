@@ -2140,6 +2140,100 @@
                     display: flex;
                     align-items: center;
                     gap: 6px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-panel {
+                    display: grid;
+                    gap: 8px;
+                    margin-top: 2px;
+                    padding: 10px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(69, 84, 229, 0.14);
+                    background: rgba(255, 255, 255, 0.5);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-row {
+                    display: grid;
+                    grid-template-columns: 64px minmax(0, 1fr);
+                    gap: 8px;
+                    align-items: start;
+                    min-width: 0;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-row p {
+                    margin: 0;
+                    min-width: 0;
+                    color: var(--am26-text, #1b2438);
+                    font-size: 12px;
+                    line-height: 18px;
+                    word-break: break-word;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-grid {
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 6px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card {
+                    min-width: 0;
+                    display: grid;
+                    gap: 2px;
+                    border-radius: 8px;
+                    padding: 7px 8px;
+                    background: rgba(69, 84, 229, 0.08);
+                    color: var(--am26-text, #1b2438);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card b,
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona b {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 12px;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card em {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-style: normal;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 15px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-split {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                    gap: 10px;
+                    min-width: 0;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-split > div {
+                    min-width: 0;
+                    display: grid;
+                    gap: 6px;
+                    align-content: start;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona-list {
+                    min-width: 0;
+                    display: grid;
+                    gap: 5px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona {
+                    min-width: 0;
+                    display: grid;
+                    gap: 2px;
+                    border-radius: 8px;
+                    padding: 6px 8px;
+                    background: rgba(255, 255, 255, 0.58);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona span {
+                    min-width: 0;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 15px;
+                    word-break: break-word;
                 }
                 @media (prefers-reduced-motion: reduce) {
                     #am-campaign-batch-plus-menu .am-campaign-batch-plus-item,

@@ -345,7 +345,7 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     assert.match(quickEntryStyle, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item/, '批量+自有控件应适配减少动画');
 });
 
-test('批量+ AI点睛复用原生生成链路并只做预览/单计划管理', () => {
+test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', () => {
     assert.match(
         quickEntry,
         /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'aiMax'\)[\s\S]*?runBatchAiMaxCampaigns\(contexts,\s*normalizedBizCode,\s*triggerEl\)/,
@@ -368,19 +368,53 @@ test('批量+ AI点睛复用原生生成链路并只做预览/单计划管理', 
     );
     assert.match(
         quickEntry,
-        /openAiMaxNativeManager\(row = \{\}\)[\s\S]*?findNativeActionButtonForContext\(context,\s*'aiMax'\)[\s\S]*?buildCampaignDetailUrl\(context,\s*'aiMax'\)/,
-        '单计划管理应优先打开原生 AI 点睛入口，兜底详情页'
+        /resolveBatchAiMaxRow\(context = \{\},[\s\S]*?currentAiMaxInfo = \{[\s\S]*?campaign\.aiMaxInfo[\s\S]*?nativeCrowdList:\s*row\.currentCrowdList/,
+        '读取当前计划后应把 campaign.aiMaxInfo 与当前人群合成可管理的 AI 点睛信息'
     );
+    assert.match(
+        quickEntry,
+        /renderAiMaxManagePanel\(row = \{\}\)[\s\S]*?流量诉求[\s\S]*?已选需求[\s\S]*?方案计划[\s\S]*?热门搜索词[\s\S]*?人群画像/,
+        '点击管理应在批量弹窗内展开批量建计划同结构 AI 点睛板块'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'manage'\) \{[\s\S]*?toggleAiMaxBatchManagePanel\(row\.campaignId\)/,
+        '管理入口应回到批量弹窗内的 AI 点睛板块，而不是只打开原生页面'
+    );
+    assert.match(
+        quickEntry,
+        /buildAiMaxSavePayload\(row = \{\}\)[\s\S]*?aiMaxUserInput[\s\S]*?wordList[\s\S]*?aiMaxDeliveryPlan[\s\S]*?nativeCrowdList[\s\S]*?crowdList/,
+        '保存 payload 应包含原生合同的 aiMaxInfo、prompt、方案计划和顶层 crowdList'
+    );
+    assert.match(
+        quickEntry,
+        /saveAiMaxRow\(row = \{\},\s*authContext = \{\}\)[\s\S]*?aimax\/updateUserInput\.json\?\$\{query\.toString\(\)\}[\s\S]*?OneApiTransport\.postJson\(url,\s*payload/,
+        '保存应调用原生 aimax/updateUserInput.json 合同'
+    );
+    assert.match(
+        quickEntry,
+        /saveAiMaxBatchRow\(campaignId = '',\s*triggerEl = null\)[\s\S]*?openBatchPlusConfirmDialog\(\{[\s\S]*?确认保存AI点睛[\s\S]*?saveAiMaxRow\(row,\s*authContext\)/,
+        '单行保存前必须二次确认并调用统一保存 helper'
+    );
+    assert.match(
+        quickEntry,
+        /saveAiMaxCrowdsForAllRows\(triggerEl = null\)[\s\S]*?确认批量保存AI点睛[\s\S]*?saveAiMaxRow\(row,\s*authContext\)/,
+        '批量保存前必须二次确认并逐行调用统一保存 helper'
+    );
+    assert.match(quickEntry, /data-am-ai-max-action="saveAll"[\s\S]*?批量保存/, 'AI 点睛工作台应提供批量保存入口');
+    assert.match(quickEntry, /data-am-ai-max-action="save"[\s\S]*?>保存<\/button>/, 'AI 点睛工作台应提供行级保存入口');
     assert.doesNotMatch(
         quickEntry.slice(
             quickEntry.indexOf('async generateAiMaxCrowdsForRow'),
             quickEntry.indexOf('async generateAiMaxCrowdsForAllRows')
         ),
-        /updatePart|solution\/addList|campaign\/create|campaign\/delete|rightList\s*=|crowdList\s*=/,
+        /updatePart|solution\/addList|campaign\/create|campaign\/delete|rightList\s*=|saveAiMaxRow|aimax\/updateUserInput/,
         'AI 点睛批量获取新人群不得在生成阶段直接提交或改写人群'
     );
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.76\),\s*rgba\(255,\s*255,\s*255,\s*0\.46\)\)/, 'AI 点睛工作台应使用统一浅玻璃遮罩');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px/, 'AI 点睛计划行应有稳定网格列宽');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-manage-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?border-radius:\s*10px/, '管理展开板块应有稳定容器样式');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'AI 点睛需求卡片应按稳定网格展示');
 });
 
 test('批量+ 读取表格勾选计划并按业务线分组', () => {
