@@ -1,3 +1,55 @@
+# TODO - 2026-06-08 AI 点睛诉求卡补回模板与屏蔽词
+
+## 需求规格
+- 用户要求：参考截图样式，把 `批量+ -> 批量编辑AI点睛` 中“获取新人群诉求”的模板与屏蔽词补充回来。
+- 功能目标：将当前分散的 textarea 输入区改成更接近官方 `AI点睛设置` 的诉求卡片：上方展示/编辑诉求文案，下方提供 `模板`、`屏蔽词 N`、星标和 `方案解析` 控件。
+- 数据边界：模板和屏蔽词只服务本次插件 `获取新人群/批量获取新人群` 的生成 prompt；`管理` 入口仍打开官方 `AI点睛设置`，不复制官方设置表单、不直接保存计划。
+- 屏蔽词规则：从当前计划已有 AI 点睛信息初始化屏蔽词数量和内容；用户可在批量弹窗里维护本次生成用的屏蔽词，生成请求应把屏蔽词合并到 `businessTalk` prompt 文案中，并同步到保存 payload 可识别字段。
+- UI 规范：复用 `am-` 前缀、`renderAmIcon()` 和浅玻璃风格；诉求卡参考截图使用整块圆角描边、底部胶囊按钮，避免文字挤压和遮挡行级操作。
+- 安全边界：真实页验证只能触发 AI 生成请求，不点击保存/批量保存；验收后清理守卫、弹窗和勾选状态。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页验证证明：模板与屏蔽词控件可见；屏蔽词数量正确显示；编辑屏蔽词后生成请求 prompt 携带屏蔽词约束；生成阶段无保存类写请求。
+
+## 执行计划
+- [x] 回顾 UI 规范、图标规范和最近 AI 点睛教训。
+- [x] 定位当前诉求输入、AI 点睛 prompt、屏蔽词字段和保存 payload 合同。
+- [x] 设计并实现官方风格诉求卡、模板入口和屏蔽词编辑入口。
+- [x] 将屏蔽词合并进生成 prompt，并同步回生成结果/保存 payload。
+- [x] 更新回归测试，覆盖模板/屏蔽词 UI、prompt 合并和保存 payload 字段。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证展示、编辑屏蔽词、生成请求和安全清理。
+- [x] 更新任务记录与结果复盘。
+
+## 高层操作摘要
+- 已确认当前工作区只有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不纳入。
+- 已回顾 `tasks/lessons.md` 中 L121-L127：本轮必须保留官方 `管理` 入口边界，插件只补自己的生成诉求卡，不复制官方保存表单。
+- 已读取 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md`：本轮控件继续使用浅玻璃、高密度、`am-` 类名前缀和共享线性图标。
+- 已将旧 `.am-ai-max-prompt-bar` 替换为 `.am-ai-max-prompt-card`：卡片上方保留可编辑诉求 textarea，下方补回 `模板`、`屏蔽词 N`、星标恢复默认和紫色 `方案解析`。
+- 已补回 6 个诉求模板，并新增模板弹层；点击模板后会把文案写回本次获取新人群诉求，并关闭弹层。
+- 已补回屏蔽词编辑弹层，区分中心词屏蔽和精确词屏蔽，支持输入添加、回车添加、标签删除、计数更新。
+- 已把屏蔽词合并到本次 `businessTalk.json` 的 `prompt.wordList[0].word`，格式为 `屏蔽词要求：中心词屏蔽...；精确词屏蔽...`；生成结果和保存 payload 同步保留结构化 `centerShieldWordList/exactShieldWordList/blockWordConfig` 字段。
+- 已补共享图标 `document` 和 `minus-circle`，避免诉求卡按钮使用临时 SVG 或文字占位。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- Chrome DevTools MCP 真实页验证：已在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 重载 unpacked extension，刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`。
+- Chrome DevTools MCP 打开验证：勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，打开 `批量+ -> 批量编辑AI点睛`；弹窗显示新 `.am-ai-max-prompt-card`，旧 `.am-ai-max-prompt-bar` 不存在，卡片包含 `模板 / 屏蔽词 0 / 星标 / 方案解析`。
+- Chrome DevTools MCP 样式验证：诉求卡 computed `border: 2px solid rgba(112,130,255,0.82)`、`border-radius:18px`、`background:rgba(255,255,255,0.9)`；`方案解析` 为右侧紫色渐变主按钮。
+- Chrome DevTools MCP 模板验证：点击 `模板` 后显示 6 个模板；点击 `核心流量竞争` 后 textarea 改为对应模板文案，模板弹层关闭。
+- Chrome DevTools MCP 屏蔽词验证：点击 `屏蔽词` 后显示中心词/精确词两列；添加 `CODEX中心屏蔽` 与 `CODEX精确屏蔽` 后计数为 `屏蔽词 2`，删除中心词后计数变 `屏蔽词 1`，再次添加后恢复 `屏蔽词 2`。
+- Chrome DevTools MCP 生成请求验证：输入 `CODEX_PROMPT_20260608_2004 只获取高意向洗碗机人群，关注除菌烘干、嵌入安装和成交流量。` 后点击卡片 `方案解析`；捕获 `https://ai.alimama.com/ai/chat/businessTalk.json`，请求体 `prompt.wordList[0].word` 同时包含自定义诉求、`屏蔽词要求`、`CODEX中心屏蔽` 和 `CODEX精确屏蔽`。
+- Chrome DevTools MCP 生成结果验证：生成完成后状态为 `已生成新人群 5 个，可保存`，摘要为 `已选 1 个计划 / 已读取 1 个 / 已生成 1 个`，行内显示 `需求 5 / 人群 5 / 屏蔽词 2`。
+- Chrome DevTools MCP 安全与清理验证：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete|create`、`crowd/save|update`，只允许 `businessTalk.json`；本轮未点击保存/批量保存，`guardHits:[]`。验证后已恢复守卫、移除 `#am-campaign-ai-max-batch-popup` 和 `#am-campaign-batch-plus-menu` 并取消勾选，最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`checkedCount:0`。
+
+## 结果复盘
+- 已按截图样式把模板和屏蔽词补回到顶部诉求卡，用户可以在同一块卡片里编辑诉求、套模板、维护屏蔽词并发起方案解析。
+- 本轮没有改变 `管理` 的官方入口边界，也没有新增自建官方 AI 点睛保存表单；模板和屏蔽词只影响插件获取新人群链路。
+- 屏蔽词既进入生成 prompt，也保留结构化字段供后续保存 payload 使用，避免只靠拼接文案导致保存时丢字段。
+- 真实页只触发 AI 生成人群请求，保存类写请求被守卫监控且没有发生。
+
 # TODO - 2026-06-08 AI 点睛获取新人群 prompt 设置
 
 ## 需求规格

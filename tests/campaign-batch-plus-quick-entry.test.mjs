@@ -8,6 +8,7 @@ const read = (relativePath) => readFileSync(new URL(`../${relativePath}`, import
 const quickEntry = read('src/main-assistant/campaign-id-quick-entry.js');
 const quickEntryStyle = read('src/main-assistant/ui.js');
 const keywordPlanApi = read('src/optimizer/keyword-plan-api/search-and-draft.js');
+const sharedPreamble = read('src/shared/script-preamble.js');
 
 function getQuickEntryMethodSlice(methodName, nextMethodName) {
     const start = quickEntry.search(new RegExp(`\\n\\s*${methodName}\\(`));
@@ -364,8 +365,8 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /generateAiMaxCrowdsForRow\(row = \{\}\)[\s\S]*?const prompt = this\.getAiMaxBatchPromptText\(targetRow\)[\s\S]*?api\.fetchKeywordAiMaxInfo\(\{[\s\S]*?bizCode:\s*'onebpSearch'[\s\S]*?item,[\s\S]*?prompt[\s\S]*?\}\)[\s\S]*?withAiMaxPrompt\(info,\s*prompt\)[\s\S]*?nativeCrowdList/,
-        '批量获取新人群必须复用 fetchKeywordAiMaxInfo 的原生 AI 点睛生成链路并传入本次诉求'
+        /generateAiMaxCrowdsForRow\(row = \{\}\)[\s\S]*?const prompt = this\.getAiMaxBatchPromptText\(targetRow\)[\s\S]*?const shieldWords = this\.getAiMaxBatchShieldWords\(targetRow\)[\s\S]*?const requestPrompt = this\.buildAiMaxPromptWithShieldWords\(prompt,\s*shieldWords\)[\s\S]*?api\.fetchKeywordAiMaxInfo\(\{[\s\S]*?bizCode:\s*'onebpSearch'[\s\S]*?item,[\s\S]*?prompt:\s*requestPrompt[\s\S]*?\}\)[\s\S]*?withAiMaxPrompt\(info,\s*prompt,\s*shieldWords\)[\s\S]*?nativeCrowdList/,
+        '批量获取新人群必须复用 fetchKeywordAiMaxInfo 的原生 AI 点睛生成链路，并把屏蔽词约束合并进本次请求 prompt'
     );
     assert.match(
         quickEntry,
@@ -468,8 +469,38 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /openAiMaxBatchPopup\(rows = \[\],\s*options = \{\}\)[\s\S]*?am-ai-max-prompt-bar[\s\S]*?获取新人群诉求[\s\S]*?data-am-ai-max-prompt[\s\S]*?data-am-ai-max-action="resetPrompt"/,
-        '批量弹窗应提供获取新人群诉求输入与恢复默认入口'
+        /openAiMaxBatchPopup\(rows = \[\],\s*options = \{\}\)[\s\S]*?\$\{this\.renderAiMaxPromptCard\(\)\}[\s\S]*?data-am-ai-max-batch-body/,
+        '批量弹窗顶部应挂载诉求卡到计划列表上方'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxPromptCard\(\)[\s\S]*?data-am-ai-max-action="toggleTemplate"[\s\S]*?data-am-ai-max-action="toggleShield"[\s\S]*?data-am-ai-max-action="resetPrompt"[\s\S]*?data-am-ai-max-action="generateAll"/,
+        '诉求卡应提供模板、屏蔽词、恢复默认和方案解析入口'
+    );
+    assert.match(
+        quickEntry,
+        /getAiMaxPromptTemplates\(\)[\s\S]*?提升商品质量分[\s\S]*?核心流量竞争[\s\S]*?热门流量追踪[\s\S]*?低成本稳增长[\s\S]*?爆品拉新破圈[\s\S]*?新品快速测款/,
+        '模板入口应补回 6 个推荐诉求模板'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxPromptCard\(\)[\s\S]*?class="am-ai-max-prompt-card"[\s\S]*?data-am-ai-max-prompt[\s\S]*?document[\s\S]*?<span>模板<\/span>[\s\S]*?minus-circle[\s\S]*?<span>屏蔽词 <em data-am-ai-max-shield-count>[\s\S]*?star[\s\S]*?方案解析/,
+        '诉求卡样式结构应对齐官方：上方诉求文案，下方模板、屏蔽词、星标和方案解析'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxShieldPanel\(\)[\s\S]*?屏蔽词设置[\s\S]*?renderBox\('center',\s*'中心词屏蔽',\s*10,\s*state\.center\)[\s\S]*?renderBox\('exact',\s*'精确词屏蔽',\s*100,\s*state\.exact\)/,
+        '屏蔽词入口应补回中心词和精确词编辑面板'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxShieldPanel\(\)[\s\S]*?data-am-ai-max-shield-input="\$\{this\.escapeHtml\(type\)\}"[\s\S]*?data-am-ai-max-action="addShieldWord"[\s\S]*?data-am-ai-max-shield-list="\$\{this\.escapeHtml\(type\)\}"/,
+        '屏蔽词面板应提供输入、添加和标签列表'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'toggleTemplate'\)[\s\S]*?toggleAiMaxPromptPanel\(popup,\s*'template'[\s\S]*?if \(action === 'toggleShield'\)[\s\S]*?toggleAiMaxPromptPanel\(popup,\s*'shield'[\s\S]*?if \(action === 'applyTemplate'\)[\s\S]*?setAiMaxBatchPrompt\(template\.text\)[\s\S]*?if \(action === 'addShieldWord'\)[\s\S]*?addAiMaxBatchShieldWord\(type,\s*input\.value\)[\s\S]*?if \(action === 'removeShieldWord'\)[\s\S]*?removeAiMaxBatchShieldWord/,
+        '诉求卡的模板应用和屏蔽词增删必须接入弹窗事件'
     );
     assert.match(
         quickEntry,
@@ -478,8 +509,18 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /withAiMaxPrompt\(info = \{\},\s*prompt = ''\)[\s\S]*?next\.trafficAppeal = promptText[\s\S]*?next\.aiMaxPureUserInput = promptText[\s\S]*?aiMaxUserInput[\s\S]*?word:\s*promptText/,
-        '生成结果应写回同一诉求，保证后续保存 payload 不丢失 prompt'
+        /getInitialAiMaxBatchShieldWords\(rows = \[\]\)[\s\S]*?getAiMaxInfoShieldWordState\(info\)[\s\S]*?centerWords\.push\(\.\.\.state\.center\)[\s\S]*?exactWords\.push\(\.\.\.state\.exact\)/,
+        '屏蔽词应能从已读取 AI 点睛信息初始化'
+    );
+    assert.match(
+        quickEntry,
+        /buildAiMaxPromptWithShieldWords\(prompt = '',\s*shieldWords = \{\}\)[\s\S]*?中心词屏蔽：\$\{center\.join\('、'\)\}[\s\S]*?精确词屏蔽：\$\{exact\.join\('、'\)\}[\s\S]*?屏蔽词要求：/,
+        '生成请求 prompt 应追加屏蔽词要求'
+    );
+    assert.match(
+        quickEntry,
+        /withAiMaxPrompt\(info = \{\},\s*prompt = '',\s*shieldWords = \{\}\)[\s\S]*?next\.trafficAppeal = promptText[\s\S]*?next\.aiMaxPureUserInput = promptText[\s\S]*?aiMaxUserInput[\s\S]*?word:\s*promptText[\s\S]*?next\.centerShieldWordList = centerShieldWordList[\s\S]*?next\.exactShieldWordList = exactShieldWordList[\s\S]*?blockWordConfig[\s\S]*?centerWordList:\s*centerShieldWordList[\s\S]*?exactWordList:\s*exactShieldWordList/,
+        '生成结果应写回纯诉求和结构化屏蔽词，保证后续保存 payload 不丢失字段'
     );
     assert.doesNotMatch(
         quickEntry,
@@ -493,8 +534,8 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /buildAiMaxSavePayload\(row = \{\}\)[\s\S]*?aiMaxUserInput[\s\S]*?wordList[\s\S]*?aiMaxDeliveryPlan[\s\S]*?nativeCrowdList[\s\S]*?crowdList/,
-        '保存 payload 应包含原生合同的 aiMaxInfo、prompt、方案计划和顶层 crowdList'
+        /buildAiMaxSavePayload\(row = \{\}\)[\s\S]*?const shieldWords = this\.getAiMaxInfoShieldWordState\(info\)[\s\S]*?aiMaxUserInput[\s\S]*?wordList[\s\S]*?centerShieldWordList:\s*shieldWords\.center[\s\S]*?exactShieldWordList:\s*shieldWords\.exact[\s\S]*?blockWordConfig[\s\S]*?centerWordList:\s*shieldWords\.center[\s\S]*?exactWordList:\s*shieldWords\.exact[\s\S]*?aiMaxDeliveryPlan[\s\S]*?nativeCrowdList[\s\S]*?crowdList/,
+        '保存 payload 应包含原生合同的 aiMaxInfo、prompt、方案计划、顶层 crowdList 和结构化屏蔽词'
     );
     assert.match(
         quickEntry,
@@ -566,8 +607,12 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.76\),\s*rgba\(255,\s*255,\s*255,\s*0\.46\)\)/, 'AI 点睛工作台应使用统一浅玻璃遮罩');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-card\s*\{[\s\S]*?overflow:\s*visible/, 'AI 点睛工作台卡片应允许需求详情浮层越过弹窗边界显示');
-    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-bar\s*\{[\s\S]*?grid-template-columns:\s*104px minmax\(0,\s*1fr\) auto[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.22\)/, '获取新人群诉求输入区应紧凑且使用统一浅玻璃样式');
-    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-input\s*\{[\s\S]*?min-height:\s*44px[\s\S]*?resize:\s*vertical[\s\S]*?border-radius:\s*9px/, '获取新人群诉求输入应可换行编辑且不挤压计划行');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-card\s*\{[\s\S]*?border:\s*2px solid rgba\(112,\s*130,\s*255,\s*0\.82\)[\s\S]*?border-radius:\s*18px[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.9\)/, '获取新人群诉求区应渲染成参考截图的整块描边诉求卡');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-input\s*\{[\s\S]*?min-height:\s*42px[\s\S]*?resize:\s*vertical[\s\S]*?background:\s*transparent/, '获取新人群诉求文案应在卡片上方可换行编辑');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-chip,[\s\S]*?#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-submit\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?white-space:\s*nowrap/, '模板、屏蔽词、恢复默认和方案解析应使用胶囊按钮并避免文字换行挤压');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-submit\s*\{[\s\S]*?margin-left:\s*auto[\s\S]*?background:\s*linear-gradient\(135deg,\s*#6b5cff,\s*#8c3dff\)/, '方案解析按钮应靠右并使用紫色主按钮样式');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-template-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/, '模板弹层应以三列展示 6 个推荐模板');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-shield-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, '屏蔽词弹层应区分中心词与精确词两列编辑');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-body\s*\{[\s\S]*?overflow:\s*visible/, '需求详情浮层不应被 body 滚动容器裁剪');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\)/, 'AI 点睛计划行应释放右侧操作列宽');
     assert.doesNotMatch(quickEntryStyle, /grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px|\.am-ai-max-row-side/, 'AI 点睛计划行不应保留旧右侧操作列样式');
@@ -586,6 +631,8 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-popover:hover \.am-ai-max-demand-detail,[\s\S]*?\.am-ai-max-demand-popover:focus-within \.am-ai-max-demand-detail\s*\{[\s\S]*?display:\s*grid/, '需求详情应在鼠标移入或键盘聚焦 wrapper 时显示，移出后由 CSS 自动关闭');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-inline-keyword\s*\{[\s\S]*?white-space:\s*normal;[\s\S]*?overflow-wrap:\s*anywhere/, '需求详情关键词应允许换行完整显示');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-personas\s*\{[\s\S]*?grid-template-columns:\s*56px minmax\(0,\s*1fr\)/, '需求详情人群解析应紧凑展示');
+    assert.match(sharedPreamble, /document:\s*\{[\s\S]*?body:\s*'<rect[\s\S]*?M9 8h6/, '共享图标应补充模板 document 图标');
+    assert.match(sharedPreamble, /['"]minus-circle['"]:\s*\{[\s\S]*?body:\s*'<circle[\s\S]*?M8 12h8/, '共享图标应补充屏蔽词 minus-circle 图标');
 });
 
 test('批量+ 读取表格勾选计划并按业务线分组', () => {

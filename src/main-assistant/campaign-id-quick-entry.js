@@ -14,6 +14,9 @@
         batchAiMaxRunning: false,
         batchAiMaxPrompt: '',
         batchAiMaxPromptEdited: false,
+        batchAiMaxCenterShieldWords: [],
+        batchAiMaxExactShieldWords: [],
+        batchAiMaxShieldEdited: false,
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -1052,6 +1055,35 @@
             return '快速积累精准成交流量。如投放叶子类目成交词，与商品卖点精准匹配的搜索词，与商品历史成交人群相似的人群，不包含品牌词';
         },
 
+        getAiMaxPromptTemplates() {
+            return [
+                {
+                    title: '提升商品质量分',
+                    text: '快速积累精准成交流量。如投放叶子类目成交词，与商品卖点精准匹配的搜索词，与商品历史成交人群相似的人群'
+                },
+                {
+                    title: '核心流量竞争',
+                    text: '渗透核心竞品流量，放大流量规模。如投放同叶子类目排名相近商品的搜索词，商品叶子类目感兴趣人群'
+                },
+                {
+                    title: '热门流量追踪',
+                    text: '实时投放商品相关的热门流量，如商品属性相关的行业热搜词；并提前投放趋势流量'
+                },
+                {
+                    title: '低成本稳增长',
+                    text: '触达高点击率、低点击成本的流量。如商品历史成交词，同叶子类目高点击率词或搜索量和竞争力适中的长尾词'
+                },
+                {
+                    title: '爆品拉新破圈',
+                    text: '触达经常同展现商品的点击词和竞店兴趣潜客；触达关联品类人群和叶子类目的新客'
+                },
+                {
+                    title: '新品快速测款',
+                    text: '快速积累精准的点击流量。如与商品卖点相关性好的高搜索量词、浏览或点击过相似商品的消费者、店铺专有词'
+                }
+            ];
+        },
+
         extractAiMaxCrowdProperties(crowdItem = {}) {
             const crowd = this.isPlainRecord(crowdItem?.crowd) ? crowdItem.crowd : crowdItem;
             return this.isPlainRecord(crowd?.properties) ? crowd.properties : {};
@@ -1259,6 +1291,55 @@
             return this.extractAiMaxInfoPrompt(info) || this.getDefaultAiMaxPrompt();
         },
 
+        normalizeAiMaxShieldWordList(value = [], limit = 100) {
+            const source = Array.isArray(value) ? value : String(value || '').split(/[,，、\n]/);
+            const seen = new Set();
+            return source
+                .map((item) => {
+                    if (this.isPlainRecord(item)) {
+                        return String(item.word || item.keyword || item.name || item.title || '').trim();
+                    }
+                    return String(item || '').trim();
+                })
+                .filter(Boolean)
+                .filter((word) => {
+                    const key = word.toLowerCase();
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .slice(0, Math.max(1, Number(limit) || 100));
+        },
+
+        getAiMaxInfoShieldWords(info = {}, type = 'center') {
+            const blockWordConfig = this.isPlainRecord(info?.blockWordConfig) ? info.blockWordConfig : {};
+            const center = type === 'center';
+            const candidates = center
+                ? [
+                    info?.centerShieldWordList,
+                    info?.shieldCenterWords,
+                    info?.centerWordList,
+                    blockWordConfig.centerShieldWordList,
+                    blockWordConfig.centerWordList
+                ]
+                : [
+                    info?.exactShieldWordList,
+                    info?.shieldWords,
+                    info?.exactWordList,
+                    blockWordConfig.exactShieldWordList,
+                    blockWordConfig.exactWordList
+                ];
+            const hit = candidates.find(item => Array.isArray(item) && item.length);
+            return this.normalizeAiMaxShieldWordList(hit || [], center ? 10 : 100);
+        },
+
+        getAiMaxInfoShieldWordState(info = {}) {
+            return {
+                center: this.getAiMaxInfoShieldWords(info, 'center'),
+                exact: this.getAiMaxInfoShieldWords(info, 'exact')
+            };
+        },
+
         getInitialAiMaxBatchPrompt(rows = []) {
             const rowList = Array.isArray(rows) ? rows : [];
             const fromRows = rowList
@@ -1267,12 +1348,34 @@
             return fromRows || this.getDefaultAiMaxPrompt();
         },
 
+        getInitialAiMaxBatchShieldWords(rows = []) {
+            const centerWords = [];
+            const exactWords = [];
+            (Array.isArray(rows) ? rows : []).forEach((row) => {
+                const infoList = [row?.newAiMaxInfo, row?.currentAiMaxInfo].filter(item => this.isPlainRecord(item));
+                infoList.forEach((info) => {
+                    const state = this.getAiMaxInfoShieldWordState(info);
+                    centerWords.push(...state.center);
+                    exactWords.push(...state.exact);
+                });
+            });
+            return {
+                center: this.normalizeAiMaxShieldWordList(centerWords, 10),
+                exact: this.normalizeAiMaxShieldWordList(exactWords, 100)
+            };
+        },
+
         syncAiMaxBatchPromptFromRows(rows = this.batchAiMaxRows) {
-            if (this.batchAiMaxPromptEdited) return this.getAiMaxBatchPromptText();
-            const prompt = this.getInitialAiMaxBatchPrompt(rows);
-            this.batchAiMaxPrompt = prompt;
+            if (!this.batchAiMaxPromptEdited) {
+                this.batchAiMaxPrompt = this.getInitialAiMaxBatchPrompt(rows);
+            }
+            if (!this.batchAiMaxShieldEdited) {
+                const shieldWords = this.getInitialAiMaxBatchShieldWords(rows);
+                this.batchAiMaxCenterShieldWords = shieldWords.center;
+                this.batchAiMaxExactShieldWords = shieldWords.exact;
+            }
             this.renderAiMaxBatchPromptInput();
-            return prompt;
+            return this.getAiMaxBatchPromptText();
         },
 
         getAiMaxBatchPromptText(row = {}) {
@@ -1283,11 +1386,45 @@
             return rowPrompt || this.getDefaultAiMaxPrompt();
         },
 
+        getAiMaxBatchShieldWords(row = {}) {
+            const state = {
+                center: this.normalizeAiMaxShieldWordList(this.batchAiMaxCenterShieldWords, 10),
+                exact: this.normalizeAiMaxShieldWordList(this.batchAiMaxExactShieldWords, 100)
+            };
+            if (this.batchAiMaxShieldEdited || state.center.length || state.exact.length) return state;
+            const rowInfo = this.isPlainRecord(row?.newAiMaxInfo) ? row.newAiMaxInfo : row?.currentAiMaxInfo;
+            return this.getAiMaxInfoShieldWordState(rowInfo || {});
+        },
+
+        getAiMaxBatchShieldCount(row = {}) {
+            const state = this.getAiMaxBatchShieldWords(row);
+            return state.center.length + state.exact.length;
+        },
+
+        buildAiMaxPromptWithShieldWords(prompt = '', shieldWords = {}) {
+            const promptText = String(prompt || this.getDefaultAiMaxPrompt()).trim() || this.getDefaultAiMaxPrompt();
+            const center = this.normalizeAiMaxShieldWordList(shieldWords.center, 10);
+            const exact = this.normalizeAiMaxShieldWordList(shieldWords.exact, 100);
+            const clauses = [];
+            if (center.length) clauses.push(`中心词屏蔽：${center.join('、')}`);
+            if (exact.length) clauses.push(`精确词屏蔽：${exact.join('、')}`);
+            if (!clauses.length) return promptText;
+            return `${promptText}\n屏蔽词要求：${clauses.join('；')}。`;
+        },
+
         setAiMaxBatchPrompt(value = '', options = {}) {
             this.batchAiMaxPrompt = String(value || '');
             this.batchAiMaxPromptEdited = options.edited !== false;
             this.renderAiMaxBatchPromptInput();
             return this.getAiMaxBatchPromptText();
+        },
+
+        setAiMaxBatchShieldWords(centerWords = [], exactWords = [], options = {}) {
+            this.batchAiMaxCenterShieldWords = this.normalizeAiMaxShieldWordList(centerWords, 10);
+            this.batchAiMaxExactShieldWords = this.normalizeAiMaxShieldWordList(exactWords, 100);
+            this.batchAiMaxShieldEdited = options.edited !== false;
+            this.renderAiMaxBatchPromptInput();
+            return this.getAiMaxBatchShieldWords();
         },
 
         resetAiMaxBatchPrompt() {
@@ -1305,11 +1442,159 @@
             if (input instanceof HTMLTextAreaElement && input.value !== value) {
                 input.value = value;
             }
+            const countEl = popup.querySelector('[data-am-ai-max-shield-count]');
+            if (countEl instanceof HTMLElement) countEl.textContent = String(this.getAiMaxBatchShieldCount());
+            this.renderAiMaxShieldWordPanel(popup);
         },
 
-        withAiMaxPrompt(info = {}, prompt = '') {
+        closeAiMaxPromptPanels(popup = null, exceptName = '') {
+            const root = popup instanceof HTMLElement ? popup : document.getElementById('am-campaign-ai-max-batch-popup');
+            if (!(root instanceof HTMLElement)) return;
+            root.querySelectorAll('[data-am-ai-max-panel]').forEach((panel) => {
+                if (!(panel instanceof HTMLElement)) return;
+                const panelName = String(panel.getAttribute('data-am-ai-max-panel') || '');
+                if (exceptName && panelName === exceptName) return;
+                panel.hidden = true;
+            });
+            root.querySelectorAll('[data-am-ai-max-action="toggleTemplate"], [data-am-ai-max-action="toggleShield"]').forEach((button) => {
+                if (button instanceof HTMLElement) button.setAttribute('aria-expanded', 'false');
+            });
+        },
+
+        toggleAiMaxPromptPanel(popup = null, panelName = '', triggerEl = null) {
+            const root = popup instanceof HTMLElement ? popup : document.getElementById('am-campaign-ai-max-batch-popup');
+            if (!(root instanceof HTMLElement)) return;
+            const panel = root.querySelector(`[data-am-ai-max-panel="${panelName}"]`);
+            if (!(panel instanceof HTMLElement)) return;
+            const shouldOpen = panel.hidden;
+            this.closeAiMaxPromptPanels(root, shouldOpen ? panelName : '');
+            panel.hidden = !shouldOpen;
+            if (triggerEl instanceof HTMLElement) triggerEl.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        },
+
+        addAiMaxBatchShieldWord(type = '', word = '') {
+            const shieldType = type === 'exact' ? 'exact' : 'center';
+            const state = this.getAiMaxBatchShieldWords();
+            const nextWord = String(word || '').trim();
+            if (!nextWord) return state;
+            const center = shieldType === 'center'
+                ? this.normalizeAiMaxShieldWordList(state.center.concat(nextWord), 10)
+                : state.center;
+            const exact = shieldType === 'exact'
+                ? this.normalizeAiMaxShieldWordList(state.exact.concat(nextWord), 100)
+                : state.exact;
+            return this.setAiMaxBatchShieldWords(center, exact);
+        },
+
+        removeAiMaxBatchShieldWord(type = '', word = '') {
+            const shieldType = type === 'exact' ? 'exact' : 'center';
+            const state = this.getAiMaxBatchShieldWords();
+            const wordText = String(word || '').trim();
+            if (!wordText) return state;
+            const center = shieldType === 'center' ? state.center.filter(item => item !== wordText) : state.center;
+            const exact = shieldType === 'exact' ? state.exact.filter(item => item !== wordText) : state.exact;
+            return this.setAiMaxBatchShieldWords(center, exact);
+        },
+
+        renderAiMaxTemplatePanel() {
+            return `
+                <div class="am-ai-max-prompt-popover" data-am-ai-max-panel="template" hidden>
+                    <div class="am-ai-max-prompt-panel-title">模板推荐（6）</div>
+                    <div class="am-ai-max-template-list">
+                        ${this.getAiMaxPromptTemplates().map((item, index) => `
+                            <button type="button" class="am-ai-max-template-item" data-am-ai-max-action="applyTemplate" data-template-index="${index}">
+                                <b>${this.escapeHtml(item.title)}</b>
+                                <span>${this.escapeHtml(item.text)}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        },
+
+        renderAiMaxShieldTags(type = '', words = []) {
+            const list = this.normalizeAiMaxShieldWordList(words, type === 'center' ? 10 : 100);
+            if (!list.length) return '<span class="am-ai-max-shield-empty">暂无屏蔽词</span>';
+            return list.map(word => `
+                <span class="am-ai-max-shield-tag">
+                    ${this.escapeHtml(word)}
+                    <button type="button" data-am-ai-max-action="removeShieldWord" data-shield-type="${this.escapeHtml(type)}" data-shield-word="${this.escapeHtml(word)}" aria-label="删除屏蔽词：${this.escapeHtml(word)}" title="删除屏蔽词">
+                        ${renderAmIcon('close', { size: 11, strokeWidth: 2.2 })}
+                    </button>
+                </span>
+            `).join('');
+        },
+
+        renderAiMaxShieldWordPanel(popup = null) {
+            const root = popup instanceof HTMLElement ? popup : document.getElementById('am-campaign-ai-max-batch-popup');
+            if (!(root instanceof HTMLElement)) return;
+            const state = this.getAiMaxBatchShieldWords();
+            const renderBox = (type, title, limit, words) => {
+                const listEl = root.querySelector(`[data-am-ai-max-shield-list="${type}"]`);
+                const countEl = root.querySelector(`[data-am-ai-max-shield-type-count="${type}"]`);
+                if (listEl instanceof HTMLElement) listEl.innerHTML = this.renderAiMaxShieldTags(type, words);
+                if (countEl instanceof HTMLElement) countEl.textContent = `${words.length}/${limit}`;
+            };
+            renderBox('center', '中心词屏蔽', 10, state.center);
+            renderBox('exact', '精确词屏蔽', 100, state.exact);
+        },
+
+        renderAiMaxShieldPanel() {
+            const state = this.getAiMaxBatchShieldWords();
+            const renderBox = (type, title, limit, words) => `
+                <section class="am-ai-max-shield-box">
+                    <div class="am-ai-max-shield-head">
+                        <b>${this.escapeHtml(title)}</b>
+                        <span data-am-ai-max-shield-type-count="${this.escapeHtml(type)}">${words.length}/${limit}</span>
+                    </div>
+                    <div class="am-ai-max-shield-add">
+                        <input type="text" data-am-ai-max-shield-input="${this.escapeHtml(type)}" placeholder="输入屏蔽词后添加" />
+                        <button type="button" class="am-ai-max-toolbar-btn" data-am-ai-max-action="addShieldWord" data-shield-type="${this.escapeHtml(type)}">添加</button>
+                    </div>
+                    <div class="am-ai-max-shield-list" data-am-ai-max-shield-list="${this.escapeHtml(type)}">${this.renderAiMaxShieldTags(type, words)}</div>
+                </section>
+            `;
+            return `
+                <div class="am-ai-max-prompt-popover" data-am-ai-max-panel="shield" hidden>
+                    <div class="am-ai-max-prompt-panel-title">屏蔽词设置</div>
+                    <p class="am-ai-max-prompt-panel-help">中心词屏蔽为包含该词则屏蔽，精确词屏蔽为完全一致才过滤。</p>
+                    <div class="am-ai-max-shield-grid">
+                        ${renderBox('center', '中心词屏蔽', 10, state.center)}
+                        ${renderBox('exact', '精确词屏蔽', 100, state.exact)}
+                    </div>
+                </div>
+            `;
+        },
+
+        renderAiMaxPromptCard() {
+            return `
+                <div class="am-ai-max-prompt-card">
+                    <textarea id="am-ai-max-batch-prompt" class="am-ai-max-prompt-input" data-am-ai-max-prompt rows="2" aria-label="获取新人群诉求">${this.escapeHtml(this.getAiMaxBatchPromptText())}</textarea>
+                    <div class="am-ai-max-prompt-actions">
+                        <button type="button" class="am-ai-max-prompt-chip" data-am-ai-max-action="toggleTemplate" aria-expanded="false">
+                            ${renderAmIcon('document', { size: 13, strokeWidth: 2.1 })}<span>模板</span>
+                        </button>
+                        <button type="button" class="am-ai-max-prompt-chip" data-am-ai-max-action="toggleShield" aria-expanded="false">
+                            ${renderAmIcon('minus-circle', { size: 14, strokeWidth: 2.1 })}<span>屏蔽词 <em data-am-ai-max-shield-count>${this.getAiMaxBatchShieldCount()}</em></span>
+                        </button>
+                        <button type="button" class="am-ai-max-prompt-chip icon-only" data-am-ai-max-action="resetPrompt" title="恢复默认诉求" aria-label="恢复默认诉求">
+                            ${renderAmIcon('star', { size: 14, strokeWidth: 2.1 })}
+                        </button>
+                        <button type="button" class="am-ai-max-prompt-submit" data-am-ai-max-action="generateAll">
+                            <span>方案解析</span>
+                        </button>
+                    </div>
+                    ${this.renderAiMaxTemplatePanel()}
+                    ${this.renderAiMaxShieldPanel()}
+                </div>
+            `;
+        },
+
+        withAiMaxPrompt(info = {}, prompt = '', shieldWords = {}) {
             if (!this.isPlainRecord(info)) return info;
             const promptText = String(prompt || this.getDefaultAiMaxPrompt()).trim() || this.getDefaultAiMaxPrompt();
+            const centerShieldWordList = this.normalizeAiMaxShieldWordList(shieldWords.center, 10);
+            const exactShieldWordList = this.normalizeAiMaxShieldWordList(shieldWords.exact, 100);
             const next = this.cloneCopyData(info);
             const userInput = this.isPlainRecord(next.aiMaxUserInput) ? next.aiMaxUserInput : {};
             const firstWord = Array.isArray(userInput.wordList) && this.isPlainRecord(userInput.wordList[0])
@@ -1327,6 +1612,15 @@
                 }],
                 bizCode: userInput.bizCode ?? null
             };
+            next.centerShieldWordList = centerShieldWordList;
+            next.exactShieldWordList = exactShieldWordList;
+            next.blockWordConfig = {
+                ...(this.isPlainRecord(next.blockWordConfig) ? next.blockWordConfig : {}),
+                centerShieldWordList,
+                exactShieldWordList,
+                centerWordList: centerShieldWordList,
+                exactWordList: exactShieldWordList
+            };
             return next;
         },
 
@@ -1340,6 +1634,7 @@
             const crowdList = this.getAiMaxEditableCrowdListForRow(row).map(item => this.cloneCopyData(item));
             if (!crowdList.length) throw new Error('缺少可保存的 AI 点睛人群');
             const prompt = this.getAiMaxInfoPrompt(info);
+            const shieldWords = this.getAiMaxInfoShieldWordState(info);
             const aiMaxInfo = {
                 ...this.cloneCopyData(info),
                 aiMaxSwitch: '1',
@@ -1359,6 +1654,15 @@
                         subjectId: null
                     }],
                     bizCode: null
+                },
+                centerShieldWordList: shieldWords.center,
+                exactShieldWordList: shieldWords.exact,
+                blockWordConfig: {
+                    ...(this.isPlainRecord(info.blockWordConfig) ? this.cloneCopyData(info.blockWordConfig) : {}),
+                    centerShieldWordList: shieldWords.center,
+                    exactShieldWordList: shieldWords.exact,
+                    centerWordList: shieldWords.center,
+                    exactWordList: shieldWords.exact
                 },
                 aiMaxDeliveryPlan: String(info.aiMaxDeliveryPlan || info.aiMaxReason || info.analysis || '').trim()
             };
@@ -1689,12 +1993,14 @@
                 const item = this.buildAiMaxItemFromRow(targetRow);
                 if (!item) throw new Error('缺少商品ID，无法生成 AI 点睛人群');
                 const prompt = this.getAiMaxBatchPromptText(targetRow);
+                const shieldWords = this.getAiMaxBatchShieldWords(targetRow);
+                const requestPrompt = this.buildAiMaxPromptWithShieldWords(prompt, shieldWords);
                 const info = await api.fetchKeywordAiMaxInfo({
                     bizCode: 'onebpSearch',
                     item,
-                    prompt
+                    prompt: requestPrompt
                 });
-                const infoWithPrompt = this.withAiMaxPrompt(info, prompt);
+                const infoWithPrompt = this.withAiMaxPrompt(info, prompt, shieldWords);
                 const newCrowdList = Array.isArray(infoWithPrompt?.nativeCrowdList) ? infoWithPrompt.nativeCrowdList : [];
                 if (!infoWithPrompt || !newCrowdList.length) {
                     throw new Error('AI点睛已返回，但未生成需求人群');
@@ -1844,6 +2150,10 @@
             this.batchAiMaxRows = Array.isArray(rows) ? rows : [];
             this.batchAiMaxPrompt = this.getInitialAiMaxBatchPrompt(this.batchAiMaxRows);
             this.batchAiMaxPromptEdited = false;
+            const initialShieldWords = this.getInitialAiMaxBatchShieldWords(this.batchAiMaxRows);
+            this.batchAiMaxCenterShieldWords = initialShieldWords.center;
+            this.batchAiMaxExactShieldWords = initialShieldWords.exact;
+            this.batchAiMaxShieldEdited = false;
             const popup = document.createElement('div');
             popup.id = 'am-campaign-ai-max-batch-popup';
             popup.setAttribute('role', 'dialog');
@@ -1866,11 +2176,7 @@
                         <button type="button" class="am-ai-max-toolbar-btn primary" data-am-ai-max-action="saveAll">${renderAmIcon('check-circle', { size: 13, strokeWidth: 2.2 })}<span>批量保存</span></button>
                         <span class="am-ai-max-note">新人群来自原生 AI 点睛生成链路；保存走官方 aimax/updateUserInput 合同。</span>
                     </div>
-                    <div class="am-ai-max-prompt-bar">
-                        <label class="am-ai-max-prompt-label" for="am-ai-max-batch-prompt">获取新人群诉求</label>
-                        <textarea id="am-ai-max-batch-prompt" class="am-ai-max-prompt-input" data-am-ai-max-prompt rows="2">${this.escapeHtml(this.getAiMaxBatchPromptText())}</textarea>
-                        <button type="button" class="am-ai-max-toolbar-btn" data-am-ai-max-action="resetPrompt">恢复默认</button>
-                    </div>
+                    ${this.renderAiMaxPromptCard()}
                     <div class="am-ai-max-body" data-am-ai-max-batch-body></div>
                 </section>
             `;
@@ -1884,6 +2190,9 @@
                 const target = event.target instanceof Element ? event.target.closest('[data-am-ai-max-action]') : null;
                 if (!(target instanceof HTMLElement)) {
                     if (event.target === popup) this.closeAiMaxBatchPopup();
+                    if (event.target instanceof Element && !event.target.closest('.am-ai-max-prompt-card')) {
+                        this.closeAiMaxPromptPanels(popup);
+                    }
                     return;
                 }
                 const action = String(target.getAttribute('data-am-ai-max-action') || '').trim();
@@ -1894,6 +2203,42 @@
                 }
                 if (action === 'generateAll') {
                     this.generateAiMaxCrowdsForAllRows();
+                    return;
+                }
+                if (action === 'toggleTemplate') {
+                    this.toggleAiMaxPromptPanel(popup, 'template', target);
+                    return;
+                }
+                if (action === 'toggleShield') {
+                    this.toggleAiMaxPromptPanel(popup, 'shield', target);
+                    return;
+                }
+                if (action === 'applyTemplate') {
+                    const index = Number(target.getAttribute('data-template-index') || '-1');
+                    const template = this.getAiMaxPromptTemplates()[index];
+                    if (template) {
+                        this.setAiMaxBatchPrompt(template.text);
+                        this.closeAiMaxPromptPanels(popup);
+                        const input = popup.querySelector('[data-am-ai-max-prompt]');
+                        if (input instanceof HTMLTextAreaElement) input.focus({ preventScroll: true });
+                    }
+                    return;
+                }
+                if (action === 'addShieldWord') {
+                    const type = String(target.getAttribute('data-shield-type') || 'center');
+                    const input = popup.querySelector(`[data-am-ai-max-shield-input="${type}"]`);
+                    if (input instanceof HTMLInputElement) {
+                        this.addAiMaxBatchShieldWord(type, input.value);
+                        input.value = '';
+                        input.focus({ preventScroll: true });
+                    }
+                    return;
+                }
+                if (action === 'removeShieldWord') {
+                    this.removeAiMaxBatchShieldWord(
+                        target.getAttribute('data-shield-type') || 'center',
+                        target.getAttribute('data-shield-word') || ''
+                    );
                     return;
                 }
                 if (action === 'saveAll') {
@@ -1925,8 +2270,26 @@
                 }
             });
             popup.addEventListener('keydown', (event) => {
+                const keyTarget = event.target;
+                if (
+                    event.key === 'Enter'
+                    && keyTarget instanceof HTMLInputElement
+                    && keyTarget.matches('[data-am-ai-max-shield-input]')
+                ) {
+                    event.preventDefault();
+                    const type = keyTarget.getAttribute('data-am-ai-max-shield-input') || 'center';
+                    this.addAiMaxBatchShieldWord(type, keyTarget.value);
+                    keyTarget.value = '';
+                    keyTarget.focus({ preventScroll: true });
+                    return;
+                }
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
+                const openPanel = popup.querySelector('[data-am-ai-max-panel]:not([hidden])');
+                if (openPanel instanceof HTMLElement) {
+                    this.closeAiMaxPromptPanels(popup);
+                    return;
+                }
                 this.closeAiMaxBatchPopup();
             });
             document.body.appendChild(popup);

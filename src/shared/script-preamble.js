@@ -279,6 +279,12 @@ const AM_ICON_DEFS = {
     list: {
         body: '<path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6h1M4 12h1M4 18h1"></path>'
     },
+    document: {
+        body: '<rect x="5" y="4" width="14" height="16" rx="2"></rect><path d="M9 8h6M9 12h6M9 16h4"></path>'
+    },
+    'minus-circle': {
+        body: '<circle cx="12" cy="12" r="8"></circle><path d="M8 12h8"></path>'
+    },
     search: {
         body: '<circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path>'
     },
