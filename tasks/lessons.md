@@ -1,5 +1,10 @@
 # Lessons - 2026-05-30
 
+## L131 AI 点睛星标恢复默认必须保持用户显式诉求态
+- 触发：用户截图反馈批量 AI 点睛诉求卡里的星标按钮点击无效。
+- 原因：`resetAiMaxBatchPrompt()` 把 `batchAiMaxPromptEdited` 置回 `false`，后续 `renderAiMaxBatchRows() -> syncAiMaxBatchPromptFromRows()` 会再次从当前计划已有 AI 点睛诉求同步，覆盖刚恢复的默认值。
+- 规则：批量 AI 点睛里模板、手输、星标恢复默认都属于用户显式诉求设置，必须通过同一个 `setAiMaxBatchPrompt()` 入口保持编辑态；恢复默认后要验收输入框值、焦点/反馈和后续 `businessTalk.json` 请求 prompt，确保不会再被计划旧诉求覆盖。
+
 ## L130 AI 点睛获取新人群必须追加旧需求
 - 触发：用户反馈 `获取新人群` 时需求应新增到旧需求里，不能只保留新需求；同时要求批量 AI 点睛一行显示 5 个需求人群，需求人群框不需要前置序号。
 - 原因：把本次 `businessTalk` 返回的 `nativeCrowdList` 直接写成 `newAiMaxInfo.nativeCrowdList`，会让保存事实源丢掉当前计划已有需求；如果 UI 只改展示数量但仍保留序号圆点，横向密度会被无效信息占用。

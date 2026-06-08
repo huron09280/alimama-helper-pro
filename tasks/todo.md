@@ -1,3 +1,44 @@
+# TODO - 2026-06-09 AI 点睛诉求星标恢复默认失效
+
+## 需求规格
+- 用户反馈：批量 AI 点睛诉求卡里 `星标` 按钮点击无效，需要修复。
+- 功能目标：点击星标应明确恢复为插件默认“获取新人群诉求”，并且后续行级 `获取新人群`、顶部 `批量获取新人群` 和行状态重渲染都继续使用该默认诉求。
+- 根因判断：当前 `resetAiMaxBatchPrompt()` 将 `batchAiMaxPromptEdited` 置为 `false`，后续 `renderAiMaxBatchRows()` 调用 `syncAiMaxBatchPromptFromRows()` 时会重新从当前计划已有 AI 点睛诉求覆盖掉用户刚恢复的默认值。
+- UI 目标：点击星标后输入框立即更新并聚焦，按钮保留官方风格；不额外增加复杂控件。
+- 安全边界：真实页验证只检查输入框变化和生成请求 prompt，不点击真实保存。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页证明：改写诉求后点击星标可恢复默认；刷新行状态后不会被计划诉求覆盖；点击方案解析/获取新人群时请求 prompt 使用默认诉求。
+
+## 执行计划
+- [x] 定位星标按钮事件链路和 prompt 同步逻辑。
+- [x] 修复恢复默认诉求，使用户显式恢复默认后不会被行数据同步覆盖。
+- [x] 更新回归测试覆盖 `resetAiMaxBatchPrompt` 的持久默认语义。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证星标点击、请求 prompt 和安全清理。
+- [x] 更新验证记录、结果复盘与教训。
+
+## 高层操作摘要
+- 已确认当前工作区仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本轮不纳入。
+- 已回顾 `tasks/lessons.md` L128：诉求卡必须保留模板、屏蔽词、星标和方案解析；本轮只修复星标恢复默认行为，不改变模板/屏蔽词和保存链路。
+- 已定位当前实现：`resetPrompt` 点击事件会调用 `resetAiMaxBatchPrompt()`，但该函数把编辑态置为 `false`，使后续行重渲染又从当前计划 AI 点睛信息同步诉求，看起来点击无效。
+- 已将 `resetAiMaxBatchPrompt()` 改为调用 `setAiMaxBatchPrompt(getDefaultAiMaxPrompt())`，即用户显式编辑态；点击星标后输入框聚焦、按钮短暂高亮，并记录 `已恢复默认 AI 点睛诉求`。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 运行态确认：硬刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40` 后，页面可读取扩展 `page.bundle.js`，包含 `return this.setAiMaxBatchPrompt(this.getDefaultAiMaxPrompt())`、`is-applied` 和 `已恢复默认 AI 点睛诉求`。
+- Chrome DevTools MCP 打开验证：按计划名勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，通过真实 `批量+ -> 批量编辑AI点睛` 菜单打开弹窗；顶部诉求初始为计划原有文案 `...剔除L1L2与18-24岁的人群`。
+- Chrome DevTools MCP 星标验证：将 `[data-am-ai-max-prompt]` 改为 `CODEX_STAR_RESET_SHOULD_DISAPPEAR 星标恢复默认测试` 后点击 `恢复默认诉求` 星标按钮，输入框恢复为默认诉求 `快速积累精准成交流量...不包含品牌词`，测试文本消失，输入框重新获得焦点；页面内同步点击断言按钮立即带有 `.is-applied`。
+- Chrome DevTools MCP 请求验证：安装临时写请求守卫后点击 `方案解析`，捕获 `https://ai.alimama.com/ai/chat/businessTalk.json`；请求体 `prompt.wordList[0].word` 使用默认诉求，包含 `不包含品牌词`，不包含计划旧诉求 `剔除L1L2与18-24岁的人群`，也不包含 `CODEX_STAR_RESET_*` 测试文本；守卫 `guardHits:[]`。
+- Chrome DevTools MCP 清理验证：恢复临时守卫，移除 `#am-campaign-ai-max-batch-popup`、`#am-campaign-batch-plus-menu`、`#am-campaign-batch-confirm-popup` 并取消勾选；最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`hasConfirm:false`、`checkedCount:0`。控制台仍有页面资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未见保存/改计划写请求。
+
+## 结果复盘
+- 已修复星标恢复默认看起来无效的问题：恢复默认现在复用 `setAiMaxBatchPrompt(default)`，保持用户显式编辑态，后续行重渲染或方案解析不会再用计划原有诉求覆盖默认值。
+- 点击星标后输入框会立即更新、聚焦，并通过 `.is-applied` 给出短暂反馈；真实页请求验证证明 `businessTalk.json` 使用默认诉求，旧诉求和测试文本均未进入生成请求。
+- 本轮没有点击保存或批量保存；写请求守卫全程未命中，并已在验收结束后恢复和清理页面状态。
+
 # TODO - 2026-06-09 AI 点睛新人群追加与需求卡密度
 
 ## 需求规格

@@ -1602,10 +1602,7 @@
         },
 
         resetAiMaxBatchPrompt() {
-            this.batchAiMaxPrompt = this.getDefaultAiMaxPrompt();
-            this.batchAiMaxPromptEdited = false;
-            this.renderAiMaxBatchPromptInput();
-            return this.batchAiMaxPrompt;
+            return this.setAiMaxBatchPrompt(this.getDefaultAiMaxPrompt());
         },
 
         renderAiMaxBatchPromptInput() {
@@ -2547,8 +2544,11 @@
                 }
                 if (action === 'resetPrompt') {
                     this.resetAiMaxBatchPrompt();
+                    target.classList.add('is-applied');
+                    setTimeout(() => target.classList.remove('is-applied'), 900);
                     const input = popup.querySelector('[data-am-ai-max-prompt]');
                     if (input instanceof HTMLTextAreaElement) input.focus({ preventScroll: true });
+                    Logger.log('✅ 已恢复默认 AI 点睛诉求');
                     return;
                 }
                 const row = this.getAiMaxRowByCampaignId(campaignId);

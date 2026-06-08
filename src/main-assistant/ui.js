@@ -2044,6 +2044,12 @@
                     width: 32px;
                     padding: 0;
                 }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip.is-applied {
+                    border-color: rgba(69, 84, 229, 0.36);
+                    background: rgba(69, 84, 229, 0.14);
+                    color: var(--am26-primary, #4554e5);
+                    box-shadow: inset 0 0 0 1px rgba(69, 84, 229, 0.12);
+                }
                 #am-campaign-ai-max-batch-popup .am-ai-max-prompt-submit {
                     margin-left: auto;
                     min-width: 96px;

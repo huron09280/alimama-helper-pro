@@ -514,6 +514,16 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
+        /resetAiMaxBatchPrompt\(\) \{[\s\S]*?return this\.setAiMaxBatchPrompt\(this\.getDefaultAiMaxPrompt\(\)\)/,
+        '星标恢复默认应标记为用户显式诉求，避免后续行重渲染再次用计划原诉求覆盖'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'resetPrompt'\) \{[\s\S]*?resetAiMaxBatchPrompt\(\)[\s\S]*?classList\.add\('is-applied'\)[\s\S]*?Logger\.log\('✅ 已恢复默认 AI 点睛诉求'\)/,
+        '点击星标应恢复默认诉求并给出可见/日志反馈'
+    );
+    assert.match(
+        quickEntry,
         /getInitialAiMaxBatchPrompt\(rows = \[\]\)[\s\S]*?extractAiMaxInfoPrompt\(row\?\.newAiMaxInfo\)[\s\S]*?extractAiMaxInfoPrompt\(row\?\.currentAiMaxInfo\)[\s\S]*?getDefaultAiMaxPrompt/,
         '获取新人群诉求应优先从已读取 AI 点睛信息初始化，缺省时再使用默认诉求'
     );
@@ -666,6 +676,7 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-card\s*\{[\s\S]*?border:\s*2px solid rgba\(112,\s*130,\s*255,\s*0\.82\)[\s\S]*?border-radius:\s*18px[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.9\)/, '获取新人群诉求区应渲染成参考截图的整块描边诉求卡');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-input\s*\{[\s\S]*?min-height:\s*42px[\s\S]*?resize:\s*vertical[\s\S]*?background:\s*transparent/, '获取新人群诉求文案应在卡片上方可换行编辑');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-chip,[\s\S]*?#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-submit\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?white-space:\s*nowrap/, '模板、屏蔽词、恢复默认和方案解析应使用胶囊按钮并避免文字换行挤压');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-chip\.is-applied\s*\{[\s\S]*?background:\s*rgba\(69,\s*84,\s*229,\s*0\.14\)[\s\S]*?color:\s*var\(--am26-primary/, '星标恢复默认后应有短暂高亮反馈');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-submit\s*\{[\s\S]*?margin-left:\s*auto[\s\S]*?background:\s*linear-gradient\(135deg,\s*#6b5cff,\s*#8c3dff\)/, '方案解析按钮应靠右并使用紫色主按钮样式');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-template-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/, '模板弹层应以三列展示 6 个推荐模板');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-shield-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, '屏蔽词弹层应区分中心词与精确词两列编辑');
