@@ -499,6 +499,24 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     assert.match(quickEntry, /data-am-ai-max-action="save"[\s\S]*?>保存<\/button>/, 'AI 点睛工作台应提供行级保存入口');
     assert.match(
         quickEntry,
+        /formatAiMaxCrowdTags\(row\.currentCrowdList,\s*4,[\s\S]*?formatAiMaxCrowdTags\(row\.newCrowdList,\s*4/,
+        '当前/新生成需求人群默认应横向展示更多卡片'
+    );
+    assert.match(
+        quickEntry,
+        /am-ai-max-row-footer[\s\S]*?am-ai-max-row-status[\s\S]*?am-ai-max-row-actions[\s\S]*?data-am-ai-max-action="manage"[\s\S]*?data-am-ai-max-action="generate"[\s\S]*?data-am-ai-max-action="save"/,
+        '状态提示和行级操作应放在对应计划内容下方'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('renderAiMaxBatchRows()'),
+            quickEntry.indexOf('closeAiMaxBatchPopup()')
+        ),
+        /am-ai-max-row-side/,
+        'AI 点睛计划行不应再使用右侧操作列挤占需求人群空间'
+    );
+    assert.match(
+        quickEntry,
         /if \(action === 'toggleCrowds'\) \{[\s\S]*?toggleAiMaxBatchCrowds\(row\.campaignId,\s*target\.getAttribute\('data-crowd-scope'\) \|\| ''\)/,
         '+N 按钮点击应展开当前行对应分组的全部需求人群'
     );
@@ -513,7 +531,11 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.76\),\s*rgba\(255,\s*255,\s*255,\s*0\.46\)\)/, 'AI 点睛工作台应使用统一浅玻璃遮罩');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-card\s*\{[\s\S]*?overflow:\s*visible/, 'AI 点睛工作台卡片应允许需求详情浮层越过弹窗边界显示');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-body\s*\{[\s\S]*?overflow:\s*visible/, '需求详情浮层不应被 body 滚动容器裁剪');
-    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px/, 'AI 点睛计划行应有稳定网格列宽');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\)/, 'AI 点睛计划行应释放右侧操作列宽');
+    assert.doesNotMatch(quickEntryStyle, /grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px|\.am-ai-max-row-side/, 'AI 点睛计划行不应保留旧右侧操作列样式');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row-footer\s*\{[\s\S]*?justify-content:\s*space-between;[\s\S]*?flex-wrap:\s*wrap/, '状态和操作按钮应在计划内容底部横排并可换行');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row-crowds \.am-ai-max-demand-popover\s*\{[\s\S]*?flex:\s*0 1 188px;[\s\S]*?max-width:\s*188px/, '需求人群卡片应收紧宽度以横向展示更多');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card\.am-ai-max-crowd-tag\s*\{[\s\S]*?max-width:\s*188px/, '批量行需求人群卡片最大宽度应更紧凑');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-manage-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?border-radius:\s*10px/, '管理展开板块应有稳定容器样式');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'AI 点睛需求卡片应按稳定网格展示');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\.is-native-open\s*\{[\s\S]*?z-index:\s*2147482000;[\s\S]*?pointer-events:\s*none/, '官方 AI 点睛弹窗打开时批量弹窗应保留在下层且不拦截操作');

@@ -2030,7 +2030,7 @@
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-row {
                     display: grid;
-                    grid-template-columns: 32px minmax(0, 1fr) 220px;
+                    grid-template-columns: 32px minmax(0, 1fr);
                     gap: 10px;
                     align-items: stretch;
                     min-height: 112px;
@@ -2067,7 +2067,7 @@
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-plan-name {
                     min-width: 0;
-                    max-width: 360px;
+                    max-width: 520px;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
@@ -2090,6 +2090,10 @@
                     gap: 6px;
                     flex-wrap: wrap;
                     min-height: 26px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-crowds .am-ai-max-demand-popover {
+                    flex: 0 1 188px;
+                    max-width: 188px;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-crowd-tag,
                 #am-campaign-ai-max-batch-popup .am-ai-max-crowd-more,
@@ -2123,7 +2127,7 @@
                     outline-offset: 2px;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-demand-card.am-ai-max-crowd-tag {
-                    max-width: 230px;
+                    max-width: 188px;
                     height: auto;
                     min-height: 38px;
                     padding: 6px 8px;
@@ -2135,16 +2139,25 @@
                 #am-campaign-ai-max-batch-popup .am-ai-max-crowd-empty {
                     color: #95a0b9;
                 }
-                #am-campaign-ai-max-batch-popup .am-ai-max-row-side {
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-footer {
                     min-width: 0;
                     display: flex;
-                    flex-direction: column;
-                    align-items: flex-start;
+                    align-items: center;
                     justify-content: space-between;
                     gap: 8px;
+                    flex-wrap: wrap;
+                    padding-top: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-footer-info {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-row-status {
-                    width: 100%;
+                    width: auto;
+                    max-width: min(420px, 100%);
                     min-height: 28px;
                     display: flex;
                     align-items: center;
@@ -2172,6 +2185,7 @@
                 #am-campaign-ai-max-batch-popup .am-ai-max-row-actions {
                     display: flex;
                     align-items: center;
+                    justify-content: flex-end;
                     gap: 6px;
                     flex-wrap: wrap;
                 }

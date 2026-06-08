@@ -1445,7 +1445,7 @@
                             </div>
                             <div class="am-ai-max-row-crowds">
                                 <span class="am-ai-max-crowd-label">当前</span>
-                                ${this.formatAiMaxCrowdTags(row.currentCrowdList, 3, `${row.campaignId}-current`, {
+                                ${this.formatAiMaxCrowdTags(row.currentCrowdList, 4, `${row.campaignId}-current`, {
                                     expanded: row.showAllCurrentCrowds,
                                     campaignId: row.campaignId,
                                     scope: 'current'
@@ -1453,22 +1453,24 @@
                             </div>
                             <div class="am-ai-max-row-crowds">
                                 <span class="am-ai-max-crowd-label">新生成</span>
-                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 3, `${row.campaignId}-new`, {
+                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 4, `${row.campaignId}-new`, {
                                     expanded: row.showAllNewCrowds,
                                     campaignId: row.campaignId,
                                     scope: 'new'
                                 })}
                             </div>
-                            ${this.renderAiMaxManagePanel(row)}
-                        </div>
-                        <div class="am-ai-max-row-side">
-                            <span class="am-ai-max-row-status is-${this.escapeHtml(row.statusLevel || 'info')}">${this.escapeHtml(row.status || '待处理')}</span>
-                            ${row.newAiMaxInfo ? `<span class="am-ai-max-row-meta">${this.escapeHtml(this.describeAiMaxInfo(row.newAiMaxInfo))}</span>` : ''}
-                            <div class="am-ai-max-row-actions">
-                                <button type="button" class="am-ai-max-row-btn" data-am-ai-max-action="manage" data-campaign-id="${this.escapeHtml(row.campaignId)}">${row.manageExpanded ? '收起' : '管理'}</button>
-                                <button type="button" class="am-ai-max-row-btn primary" data-am-ai-max-action="generate" data-campaign-id="${this.escapeHtml(row.campaignId)}" ${canGenerate ? '' : 'disabled'}>获取新人群</button>
-                                <button type="button" class="am-ai-max-row-btn primary" data-am-ai-max-action="save" data-campaign-id="${this.escapeHtml(row.campaignId)}" ${canSave ? '' : 'disabled'}>保存</button>
+                            <div class="am-ai-max-row-footer">
+                                <div class="am-ai-max-row-footer-info">
+                                    <span class="am-ai-max-row-status is-${this.escapeHtml(row.statusLevel || 'info')}">${this.escapeHtml(row.status || '待处理')}</span>
+                                    ${row.newAiMaxInfo ? `<span class="am-ai-max-row-meta">${this.escapeHtml(this.describeAiMaxInfo(row.newAiMaxInfo))}</span>` : ''}
+                                </div>
+                                <div class="am-ai-max-row-actions">
+                                    <button type="button" class="am-ai-max-row-btn" data-am-ai-max-action="manage" data-campaign-id="${this.escapeHtml(row.campaignId)}">${row.manageExpanded ? '收起' : '管理'}</button>
+                                    <button type="button" class="am-ai-max-row-btn primary" data-am-ai-max-action="generate" data-campaign-id="${this.escapeHtml(row.campaignId)}" ${canGenerate ? '' : 'disabled'}>获取新人群</button>
+                                    <button type="button" class="am-ai-max-row-btn primary" data-am-ai-max-action="save" data-campaign-id="${this.escapeHtml(row.campaignId)}" ${canSave ? '' : 'disabled'}>保存</button>
+                                </div>
                             </div>
+                            ${this.renderAiMaxManagePanel(row)}
                         </div>
                     </article>
                 `;

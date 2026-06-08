@@ -9,6 +9,7 @@
 - 用户继续反馈：鼠标移动到需求人群后应显示“弹窗”，不是像当前截图一样在卡片下方展开；需求人群卡片背景改为纯色背景。
 - 用户继续反馈：详情浮层显示不全，允许越过批量弹窗边界显示；点击 `+2` 时应显示出全部需求人群。
 - 用户继续修正：详情浮层应在对应需求人群按钮的下面显示，不要左右侧弹出。
+- 用户继续反馈：状态提示和 `管理 / 获取新人群 / 保存` 操作按钮可以放到对应计划下面，需求人群需要横向显示更多。
 - 功能目标：`批量+ -> 批量编辑AI点睛` 中，行级 `管理` 打开当前计划对应的原生 `AI点睛设置`，让用户在官方界面写 prompt 并获取新的人群。
 - 交互边界：插件批量弹窗不新增 prompt 输入框、不复制官方 AI 点睛设置表单；行级 `获取新人群` 仍保留为插件批量预览能力，`管理` 只负责回到官方设置入口，且不得关闭原批量弹窗。
 - 数据事实源：继续复用真实页面行内 `AI点睛设置` 按钮和现有 `openAiMaxNativeManager(row)` 定位逻辑；不新增第二套 prompt/人群事实源，不使用详情页 pending 跟随作为成功路径。
@@ -17,6 +18,7 @@
 - UI 修正标准：需求人群卡片 hover/focus 时详情必须作为卡片外侧浮层弹出，不占用需求网格布局空间；需求卡片背景使用纯色，不再使用渐变背景。
 - UI 补充标准：详情浮层不得被批量弹窗内部容器裁剪；当前/新生成人群的 `+N` 是可点击展开入口，点击后只展开当前计划当前分组的全部需求人群，不触发保存或生成。
 - UI 位置标准：需求详情浮层必须以对应需求按钮为锚点显示在按钮下方，同时仍允许越过批量弹窗边界完整显示。
+- UI 布局标准：计划行状态和操作按钮归属对应计划，不再占用独立右侧列；需求人群列表应释放横向空间，默认展示更多需求卡片。
 
 ## 执行计划
 - [x] 校验现有 prompt 读取、管理面板渲染、获取新人群调用链路。
@@ -32,6 +34,7 @@
 - [x] 按截图反馈把需求人群 hover 详情改为外侧弹窗，卡片背景改为纯色，并验证不再像展开块。
 - [x] 修复详情浮层显示不全，允许浮层越过弹窗边界，并让 `+N` 展开当前分组全部需求人群。
 - [x] 按用户修正把需求详情浮层定位到对应需求按钮下方，并验证不再左右侧弹出。
+- [x] 将状态提示和操作按钮移动到对应计划下方，释放横向空间并让需求人群默认横向显示更多。
 
 ## 高层操作摘要
 - 已确认前置中文提交完成：`86e211f 优化AI点睛需求就近详情`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不触碰。
@@ -47,6 +50,7 @@
 - 针对截图反馈，已将需求详情从按钮内部下沿浮层调整为按钮外 sibling popover，并把需求卡片背景由蓝绿渐变改为纯色浅底。
 - 针对继续反馈，准备放开批量弹窗内部裁剪并把详情浮层层级抬高；同时把 `+N` 改成行级展开/收起按钮，点击后展示当前或新生成分组的全部需求人群。
 - 针对最新位置修正，准备移除左右侧弹出规则，把详情浮层锚定到对应需求按钮下方；显示完整问题继续通过放开 overflow 与高层级解决。
+- 针对最新布局反馈，已移除 AI 点睛计划行右侧 220px 操作列，将状态提示和 `管理 / 获取新人群 / 保存` 归入计划内容区底部；当前/新生成人群默认可见数量从 3 提升到 4，并收紧需求卡片宽度以提升横向展示密度。
 
 ## 验证记录
 - `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
@@ -86,6 +90,15 @@
 - 最新位置修正回归 `git diff --check`：通过。
 - Chrome DevTools MCP 位置复验：重载 unpacked extension 并刷新列表页后，打开 `批量+ -> 批量编辑AI点睛`；真实 hover 第一行第二张需求卡片 `智能家庭整体升级的洗烘套装` 后，详情 computed `display:grid`、`left:0px`、`top:55px`、`right:-317px`、`transform:none`、`z-index:2147483647`，几何为按钮 `left=732/right=935/top=410/bottom=457`、详情 `left=732/right=1252/top=466/bottom=669/width=520/height=203`，`belowButton:true`、`gap:9`、`horizontalAnchorAligned:true`、`withinViewport:true`，证明详情显示在对应需求按钮下方且完整可见。
 - Chrome DevTools MCP 位置复验清理：验证后移除 `#am-campaign-ai-max-batch-popup` 并取消所有勾选，最终 `hasPopup:false`、`checkedCount:0`。
+- 最新布局回归 `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- 最新布局回归 `npm run check:syntax`：通过。
+- 最新布局回归 `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 最新布局回归 `npm run build:check`：通过，构建产物同步。
+- 最新布局回归 `git diff --check`：通过。
+- Chrome DevTools MCP 最新布局复验：重载 unpacked extension 并刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`；只勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778`，从 `批量+ -> 批量编辑AI点睛` 打开弹窗，弹窗显示 `已选 1 个计划 / 已读取 1 个 / 已生成 0 个`。
+- Chrome DevTools MCP 计划行布局复验：第一条计划行 computed `gridTemplateColumns:"32px 894px"`，不再包含旧 `220px` 右侧列，`hasRowSide:false`；`.am-ai-max-row-footer` 位于 `.am-ai-max-row-main` 内，`footerBelowCrowds:true`、`footerWithinRowMain:true`，状态文本为 `已读取 AI 点睛人群 10 个`，行级操作为 `管理 / 获取新人群 / 保存`。
+- Chrome DevTools MCP 横向展示复验：当前人群分组默认显示 4 张需求卡片和 `+6`，卡片宽度与 popover 宽度均为 `188px`，比旧版 3 张可见卡片横向展示更多；新生成分组仍显示 `暂无人群`，未触发生成或保存。
+- Chrome DevTools MCP 最新布局清理：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`；验证后移除 `#am-campaign-ai-max-batch-popup`、恢复守卫并取消勾选，最终 `hasGuard:false`、`hasPopup:false`、`checkedCount:0`。
 
 ## 结果复盘
 - 已按用户修正改为调用原生官方 AI 点睛设置入口，不在插件内自建 prompt 编辑器，也不再用跳详情页或详情页 pending 跟随作为替代结果。
@@ -95,6 +108,7 @@
 - 需求人群详情从点击展开改为 hover/focus 临时浮层，卡片更接近官方弹窗的紧凑需求形态，并保留关键词完整显示和人群解析。
 - 最新修正已解决截图中的显示不全：详情浮层可越过批量弹窗边界显示，右列卡片向左弹出避免右侧裁剪；`+N` 改为当前行当前分组的展开/收起入口，可展示全部需求人群。
 - 最新位置修正按用户要求改为“按钮下面显示”：移除左右侧弹出规则，详情浮层锚定对应需求按钮下方，继续保持高层级和可越界显示，真实页面验证位置和完整性均通过。
+- 最新布局修正已把状态提示和 `管理 / 获取新人群 / 保存` 放回对应计划内容区底部，移除独立右侧列；需求人群默认从 3 张提升到 4 张，并用 188px 紧凑卡片释放横向空间。
 - 保存能力仍保留既有官方 `aimax/updateUserInput` 合同，但本轮管理入口不做任何自动保存；真实页写请求守卫证明点击管理无写入。
 - 已完成中文提交：`c48ff8c 调用原生AI点睛设置管理`。
 
