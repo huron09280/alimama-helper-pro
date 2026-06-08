@@ -12,6 +12,8 @@
         batchAiMaxPopup: null,
         batchAiMaxRows: [],
         batchAiMaxRunning: false,
+        pendingAiMaxNativeManager: null,
+        pendingAiMaxNativeTimer: null,
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -35,6 +37,9 @@
         init() {
             if (window.top !== window.self) return;
             if (this.initialized) return;
+            window.addEventListener('hashchange', () => {
+                this.schedulePendingAiMaxNativeManagerCheck();
+            });
             document.addEventListener('click', (e) => {
                 const target = e.target;
                 if (!(target instanceof Element)) return;
@@ -1453,24 +1458,101 @@
         },
 
         openAiMaxNativeManager(row = {}) {
+            const campaignId = this.normalizeCampaignId(row?.campaignId || '');
+            if (!campaignId) {
+                Logger.log(`⚠️ AI点睛管理：未能识别当前计划ID，请刷新列表后重试`, true);
+                return;
+            }
             const context = {
-                campaignId: row.campaignId,
+                campaignId,
                 bizCode: row.bizCode,
                 rowEl: row.rowEl
             };
             const button = this.findNativeActionButtonForContext(context, 'aiMax');
-            if (button) {
+            if (!(button instanceof HTMLElement)) {
+                Logger.log(`⚠️ AI点睛管理：未在当前计划行找到官方 AI点睛设置入口，请刷新列表后重试`, true);
+                return;
+            }
+            const openNativeEntry = () => {
+                this.pendingAiMaxNativeManager = {
+                    campaignId,
+                    createdAt: Date.now(),
+                    attempts: 0
+                };
                 button.click();
-                Logger.log(`✅ AI点睛管理：已打开计划 ${row.campaignId} 的原生 AI 点睛入口`);
+                this.schedulePendingAiMaxNativeManagerCheck(160);
+                Logger.log(`✅ AI点睛管理：已调用计划 ${campaignId} 的原生 AI 点睛入口`);
+            };
+            this.closeAiMaxBatchPopup();
+            requestAnimationFrame(() => {
+                setTimeout(openNativeEntry, 0);
+            });
+        },
+
+        schedulePendingAiMaxNativeManagerCheck(delay = 260) {
+            if (!this.pendingAiMaxNativeManager) return;
+            if (this.pendingAiMaxNativeTimer) {
+                clearTimeout(this.pendingAiMaxNativeTimer);
+            }
+            this.pendingAiMaxNativeTimer = setTimeout(() => {
+                this.pendingAiMaxNativeTimer = null;
+                this.openPendingAiMaxNativeDetailManager();
+            }, delay);
+        },
+
+        openPendingAiMaxNativeDetailManager() {
+            const pending = this.pendingAiMaxNativeManager;
+            if (!pending) return;
+            const campaignId = this.normalizeCampaignId(pending.campaignId || '');
+            if (!campaignId) {
+                this.pendingAiMaxNativeManager = null;
                 return;
             }
-            const url = this.buildCampaignDetailUrl(context, 'aiMax');
-            if (url) {
-                window.open(url, '_blank', 'noopener');
-                Logger.log(`✅ AI点睛管理：已打开计划 ${row.campaignId} 的详情页`);
+            const hash = String(window.location.hash || '');
+            const isTargetDetail = hash.includes('/manage/search-detail') && hash.includes(`campaignId=${campaignId}`);
+            const drawer = this.findNativeAiMaxSettingDrawer();
+            if (drawer) {
+                this.pendingAiMaxNativeManager = null;
+                Logger.log(`✅ AI点睛管理：已打开计划 ${campaignId} 的官方 AI点睛设置`);
                 return;
             }
-            Logger.log(`⚠️ AI点睛管理：未能定位计划 ${row.campaignId} 的原生入口`, true);
+            pending.attempts = Number(pending.attempts || 0) + 1;
+            if (isTargetDetail) {
+                const detailButton = this.findNativeAiMaxDetailSettingButton(campaignId);
+                if (detailButton instanceof HTMLElement) {
+                    detailButton.click();
+                    this.schedulePendingAiMaxNativeManagerCheck(360);
+                    return;
+                }
+            }
+            if (Date.now() - Number(pending.createdAt || 0) > 12000 || pending.attempts > 36) {
+                this.pendingAiMaxNativeManager = null;
+                Logger.log(`⚠️ AI点睛管理：已调用原生入口，但未检测到官方 AI点睛设置弹窗，请在详情页手动点击 AI点睛设置`, true);
+                return;
+            }
+            this.schedulePendingAiMaxNativeManagerCheck(isTargetDetail ? 360 : 520);
+        },
+
+        findNativeAiMaxSettingDrawer() {
+            const candidates = Array.from(document.querySelectorAll('[role="dialog"], [id^="dlg_"], [id^="wrapper_dlg_"]'));
+            return candidates.find((el) => {
+                if (!(el instanceof HTMLElement)) return false;
+                if (!this.isElementVisible(el)) return false;
+                const text = String(el.innerText || el.textContent || '').replace(/\s+/g, '');
+                return text.includes('AI点睛设置') && (text.includes('方案解析') || text.includes('已投放方案') || text.includes('搜索需求'));
+            }) || null;
+        },
+
+        findNativeAiMaxDetailSettingButton(campaignId = '') {
+            const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+            return buttons.find((btn) => {
+                if (!(btn instanceof HTMLElement)) return false;
+                if (!this.isElementVisible(btn)) return false;
+                const text = String(btn.innerText || btn.textContent || btn.getAttribute('aria-label') || btn.title || '').replace(/\s+/g, '');
+                if (!/AI点睛设置/.test(text)) return false;
+                const rect = btn.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0 && String(document.body.innerText || '').includes(campaignId);
+            }) || null;
         },
 
         async generateAiMaxCrowdsForRow(row = {}) {
@@ -1690,7 +1772,7 @@
                 const row = this.getAiMaxRowByCampaignId(campaignId);
                 if (!row) return;
                 if (action === 'manage') {
-                    this.toggleAiMaxBatchManagePanel(row.campaignId);
+                    this.openAiMaxNativeManager(row);
                     return;
                 }
                 if (action === 'selectDemand') {
@@ -2836,9 +2918,11 @@
         },
 
         findNativeActionButtonForContext(context = {}, action = '') {
-            const rowEl = context?.rowEl instanceof Element ? context.rowEl : null;
             const patterns = this.getNativeBatchActionPatterns(action, context?.bizCode || '');
-            if (!rowEl || !patterns.length) return null;
+            if (!patterns.length) return null;
+            const rowEl = this.resolveNativeActionRowElement(context);
+            if (!rowEl) return null;
+            this.activateNativeActionRow(rowEl);
             const scopes = [rowEl];
             let pointer = rowEl.nextElementSibling;
             for (let i = 0; i < 3 && pointer; i++, pointer = pointer.nextElementSibling) {
@@ -2855,6 +2939,41 @@
                 if (matched instanceof HTMLElement) return matched;
             }
             return null;
+        },
+
+        resolveNativeActionRowElement(context = {}) {
+            if (context?.rowEl instanceof Element && context.rowEl.isConnected) return context.rowEl;
+            const campaignId = this.normalizeCampaignId(context?.campaignId || '');
+            if (!campaignId) return null;
+            const link = Array.from(document.querySelectorAll(`a[href*="campaignId=${campaignId}"]`))
+                .find(el => el instanceof HTMLElement);
+            if (!(link instanceof HTMLElement)) return null;
+            const row = link.closest('tr');
+            if (row instanceof HTMLElement) return row;
+            let pointer = link;
+            for (let i = 0; i < 10 && pointer && pointer !== document.body; i++, pointer = pointer.parentElement) {
+                const rect = pointer.getBoundingClientRect();
+                if (rect.height > 0 && rect.height <= 360 && String(pointer.innerText || '').includes(link.innerText || '')) {
+                    return pointer;
+                }
+            }
+            return null;
+        },
+
+        activateNativeActionRow(rowEl) {
+            if (!(rowEl instanceof HTMLElement)) return;
+            try {
+                rowEl.scrollIntoView({ block: 'center', inline: 'nearest' });
+            } catch (err) {
+                rowEl.scrollIntoView();
+            }
+            ['mouseenter', 'mouseover', 'mousemove'].forEach((type) => {
+                rowEl.dispatchEvent(new MouseEvent(type, {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window
+                }));
+            });
         },
 
         buildCampaignDetailUrl(context = {}, action = '') {

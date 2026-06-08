@@ -401,8 +401,41 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /if \(action === 'manage'\) \{[\s\S]*?toggleAiMaxBatchManagePanel\(row\.campaignId\)/,
-        '管理入口应回到批量弹窗内的 AI 点睛板块，而不是只打开原生页面'
+        /if \(action === 'manage'\) \{[\s\S]*?openAiMaxNativeManager\(row\)/,
+        '管理入口应调用原生页面 AI 点睛设置入口'
+    );
+    assert.match(
+        quickEntry,
+        /openAiMaxNativeManager\(row = \{\}\) \{[\s\S]*?findNativeActionButtonForContext\(context,\s*'aiMax'\)[\s\S]*?pendingAiMaxNativeManager[\s\S]*?button\.click\(\)[\s\S]*?schedulePendingAiMaxNativeManagerCheck/,
+        '管理入口应先锁定当前行官方 AI 点睛设置按钮，再调用原生入口并挂起详情页设置检测'
+    );
+    assert.match(
+        quickEntry,
+        /openPendingAiMaxNativeDetailManager\(\) \{[\s\S]*?\/manage\/search-detail[\s\S]*?findNativeAiMaxDetailSettingButton\(campaignId\)[\s\S]*?detailButton\.click\(\)/,
+        '列表官方入口进入详情页后，应继续点击详情页官方 AI 点睛设置按钮'
+    );
+    assert.match(
+        quickEntry,
+        /findNativeAiMaxSettingDrawer\(\) \{[\s\S]*?AI点睛设置[\s\S]*?方案解析[\s\S]*?已投放方案[\s\S]*?搜索需求/,
+        '管理入口应以官方 AI 点睛设置抽屉作为完成条件'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('openAiMaxNativeManager(row = {})'),
+            quickEntry.indexOf('async generateAiMaxCrowdsForRow')
+        ),
+        /buildCampaignDetailUrl|window\.open/,
+        '管理入口找不到当前行官方按钮时不应自动跳详情页'
+    );
+    assert.match(
+        quickEntry,
+        /resolveNativeActionRowElement\(context = \{\}\)[\s\S]*?a\[href\*="campaignId=\$\{campaignId\}"\][\s\S]*?closest\('tr'\)/,
+        '官方按钮定位应能在 rowEl 失效时按 campaignId 重新找到列表行'
+    );
+    assert.doesNotMatch(
+        quickEntry,
+        /promptInput|am-ai-max-prompt-editor|customPrompt|fetchKeywordAiMaxInfo\(\{[\s\S]*?prompt:/,
+        '批量弹窗不应自建 prompt 编辑器或绕过原生 AI 点睛设置'
     );
     assert.match(
         quickEntry,
