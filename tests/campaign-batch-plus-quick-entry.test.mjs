@@ -419,8 +419,13 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /openAiMaxNativeManager\(row = \{\}\) \{[\s\S]*?findNativeActionButtonForContext\(context,\s*'aiMax'\)[\s\S]*?popup\.classList\.add\('is-native-open'\)[\s\S]*?beforeUrl = window\.location\.href[\s\S]*?button\.click\(\)[\s\S]*?navigatedToDetail[\s\S]*?window\.location\.href = beforeUrl[\s\S]*?findNativeAiMaxSettingDrawer[\s\S]*?watchAiMaxNativeDrawerClose/,
-        '管理入口应保留批量弹窗并在当前列表页调用官方 AI 点睛设置按钮'
+        /openAiMaxNativeManager\(row = \{\}\) \{[\s\S]*?findNativeActionButtonForContext\(context,\s*'aiMax'\)[\s\S]*?popup\.classList\.add\('is-native-open'\)[\s\S]*?beforeUrl = window\.location\.href[\s\S]*?button\.click\(\)[\s\S]*?navigatedToDetail[\s\S]*?window\.location\.href = beforeUrl[\s\S]*?findNativeAiMaxSettingDrawer[\s\S]*?raiseAiMaxNativeDrawer\(drawer\)[\s\S]*?watchAiMaxNativeDrawerClose/,
+        '管理入口应保留批量弹窗并把官方 AI 点睛设置弹窗置顶'
+    );
+    assert.match(
+        quickEntry,
+        /raiseAiMaxNativeDrawer\(drawer = null\)[\s\S]*?style\.zIndex = '2147483600'[\s\S]*?restoreAiMaxNativeDrawerZIndex\(drawer = null\)[\s\S]*?removeProperty\('z-index'\)/,
+        '官方 AI 点睛弹窗置顶应在关闭后恢复原 z-index'
     );
     assert.doesNotMatch(
         quickEntry,
@@ -494,7 +499,7 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px/, 'AI 点睛计划行应有稳定网格列宽');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-manage-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?border-radius:\s*10px/, '管理展开板块应有稳定容器样式');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'AI 点睛需求卡片应按稳定网格展示');
-    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\.is-native-open\s*\{[\s\S]*?pointer-events:\s*none/, '官方 AI 点睛弹窗打开时批量弹窗应保留但不拦截操作');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\.is-native-open\s*\{[\s\S]*?z-index:\s*2147482000;[\s\S]*?pointer-events:\s*none/, '官方 AI 点睛弹窗打开时批量弹窗应保留在下层且不拦截操作');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card\s*\{[\s\S]*?grid-template-columns:\s*22px minmax\(0,\s*1fr\)[\s\S]*?linear-gradient/, '需求人群应按官方感紧凑卡片展示');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-detail\s*\{[\s\S]*?position:\s*absolute[\s\S]*?display:\s*none/, '需求详情默认应作为浮层隐藏');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card:hover \.am-ai-max-demand-detail,[\s\S]*?:focus-visible \.am-ai-max-demand-detail,[\s\S]*?:focus-within \.am-ai-max-demand-detail\s*\{[\s\S]*?display:\s*grid/, '需求详情应在鼠标移入或键盘聚焦时显示，移出后由 CSS 自动关闭');

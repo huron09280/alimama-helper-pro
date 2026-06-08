@@ -1487,6 +1487,7 @@
                     }
                     const drawer = this.findNativeAiMaxSettingDrawer();
                     if (drawer) {
+                        this.raiseAiMaxNativeDrawer(drawer);
                         this.watchAiMaxNativeDrawerClose(drawer, popup);
                         Logger.log(`✅ AI点睛管理：已在当前列表页打开计划 ${campaignId} 的官方 AI点睛设置弹窗`);
                         return;
@@ -1500,6 +1501,37 @@
             });
         },
 
+        raiseAiMaxNativeDrawer(drawer = null) {
+            if (!(drawer instanceof HTMLElement)) return;
+            if (!drawer.dataset.amAiMaxOriginalZIndex) {
+                drawer.dataset.amAiMaxOriginalZIndex = drawer.style.zIndex || '__empty__';
+            }
+            drawer.style.zIndex = '2147483600';
+            const parent = drawer.parentElement;
+            if (parent instanceof HTMLElement && /^wrapper_dlg_/.test(parent.id || '')) {
+                if (!parent.dataset.amAiMaxOriginalZIndex) {
+                    parent.dataset.amAiMaxOriginalZIndex = parent.style.zIndex || '__empty__';
+                }
+                parent.style.zIndex = '2147483600';
+            }
+        },
+
+        restoreAiMaxNativeDrawerZIndex(drawer = null) {
+            if (!(drawer instanceof HTMLElement)) return;
+            const restore = (el) => {
+                if (!(el instanceof HTMLElement) || !el.dataset.amAiMaxOriginalZIndex) return;
+                const original = el.dataset.amAiMaxOriginalZIndex;
+                if (original === '__empty__') {
+                    el.style.removeProperty('z-index');
+                } else {
+                    el.style.zIndex = original;
+                }
+                delete el.dataset.amAiMaxOriginalZIndex;
+            };
+            restore(drawer);
+            restore(drawer.parentElement);
+        },
+
         watchAiMaxNativeDrawerClose(drawer = null, popup = null) {
             if (!(popup instanceof HTMLElement)) return;
             let ticks = 0;
@@ -1508,6 +1540,7 @@
                 const drawerVisible = drawer instanceof HTMLElement && drawer.isConnected && this.isElementVisible(drawer);
                 if (!drawerVisible || ticks > 240) {
                     popup.classList.remove('is-native-open');
+                    this.restoreAiMaxNativeDrawerZIndex(drawer);
                     clearInterval(timer);
                 }
             }, 500);

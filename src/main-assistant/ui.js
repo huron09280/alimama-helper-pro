@@ -1904,7 +1904,7 @@
                     -webkit-backdrop-filter: blur(18px) saturate(160%);
                 }
                 #am-campaign-ai-max-batch-popup.is-native-open {
-                    z-index: 2147483000;
+                    z-index: 2147482000;
                     background: rgba(255, 255, 255, 0.08);
                     pointer-events: none;
                 }
