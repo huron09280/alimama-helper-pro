@@ -1,3 +1,56 @@
+# TODO - 2026-06-08 批量+ 批量编辑 AI 点睛人群
+
+## 需求规格
+- 用户要求：在计划列表 `批量+` 中增加“批量编辑 AI 点睛”能力；做功能前必须先分析单个计划 AI 点睛获取人群的现有逻辑，再设计批量 AI 点睛。
+- 功能目标：支持从 `批量+` 对勾选计划批量打开 AI 点睛人群管理；既能按单个计划查看/管理 AI 点睛人群，也能批量为多个计划获取新的 AI 点睛/推荐人群。
+- 初始假设：本轮优先面向关键词推广 `onebpSearch` 的 AI 点睛计划；其它业务线若没有相同 AI 点睛合同，应在 UI 中禁用或提示不支持，避免把通用人群设置误当 AI 点睛。
+- 单计划分析必须覆盖：AI 点睛生成接口、推荐/系统人群接口、`campaign.crowdList` / `adgroup.crowdList` / `rightList` / `aiMaxInfo` 字段流转、最终提交合同和当前已有 UI 管理入口。
+- 安全边界：不真实提交创建、投放、删除或改人群请求；浏览器验收如触达写入口必须先安装写请求守卫，记录 URL 和脱敏 payload 摘要，结束后恢复守卫并确认无残留。
+- UI 规范：已读取 `docs/插件UI统一设计规范.md` 和 `docs/图标设计规范.md`；新增弹窗/菜单复用 `--am26-*` token、`renderAmIcon()`、`am-` 前缀类名，保持后台工具高密度、浅玻璃、低噪声。
+- 工作区边界：当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，不触碰、不纳入本任务。
+- 成功标准：源码实现、测试、构建同步和任务记录共同证明：`批量+` 出现 AI 点睛入口；入口能识别勾选计划并展示逐计划管理状态；批量获取新人群走已分析过的单计划事实源；关键合同有回归测试；无法真实写入的部分有守卫验证或明确未验证风险。
+
+## 执行计划
+- [x] 回顾项目规则、历史教训、UI/图标规范和相关源码地图。
+- [x] 分析单计划 AI 点睛获取人群逻辑，记录函数链路、接口、字段落点和可复用能力。
+- [x] 校验计划范围：批量能力只补插件增强，不重复原生 `批量计划设置` 已有入口。
+- [x] 设计 `批量+` AI 点睛弹窗/动作模型：逐计划管理、批量获取新人群、状态/错误/空态和安全守卫。
+- [x] 实现最小侵入源码改动，并避免新增第二套 AI 点睛事实源。
+- [x] 补充/更新回归测试，覆盖菜单入口、单计划链路复用、批量获取状态和字段合同。
+- [x] 运行相关单测、语法检查、构建/构建同步检查、`git diff --check`，必要时运行 `npm run review`。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只读验证入口和弹窗；如验证批量获取写路径，必须使用写请求守卫并清理。
+- [x] 更新高层操作摘要、验证记录和结果复盘。
+
+## 高层操作摘要
+- 已使用 `planning-with-files` 与 `goal-driven`：本任务是多步长期目标，先写入可核对计划并把“先分析单计划 AI 点睛取人群，再做批量”固定为执行顺序。
+- 已读取 `AGENTS.md`、`tasks/lessons.md`、`docs/源码结构速查.md`、`docs/插件UI统一设计规范.md`、`docs/图标设计规范.md`；相关教训包括 L119/L120（`批量+` 不重复原生入口）、L117/L118（AI 点睛/关键词人群字段一致性）和 L112（写请求守卫必须清理）。
+- 已启动只读子代理 Cicero 并行分析单计划 AI 点睛人群链路；主线程同步定位 `批量+` 菜单和动作分发。
+- 单计划 AI 点睛新人群事实源已确认：`fetchKeywordAiMaxInfo()` -> `requestAiMaxBusinessTalk()` -> `https://ai.alimama.com/ai/chat/businessTalk.json`，解析 SSE 中的 `additionalData.aiMaxInfo` 与 `additionalData.crowdList`，并归一为 `nativeCrowdList`；不是通用 `suggestCrowds`。
+- 字段合同已确认：`campaign.aiMaxInfo.nativeCrowdList` 用于 AI 点睛展示/配置，`campaign.crowdList` 是复制 AI 点睛源计划时的需求人群，关键词自定义侧仍要保持 `adgroup.crowdList` 与 `adgroup.rightList` 一致，批量 AI 点睛不能新增第二事实源。
+- 已在 `src/optimizer/keyword-plan-api/exports.js`、`wizard-open-and-create.js`、`src/optimizer/bridge.js`、`src/main-assistant/bootstrap.js` 导出并桥接 `fetchKeywordAiMaxInfo`，让扩展运行态可以复用单计划 AI 点睛生成链路。
+- 已在 `src/main-assistant/campaign-id-quick-entry.js` 的 `批量+` 中新增“批量编辑AI点睛”入口和弹窗：可读取选中关键词计划当前 AI 点睛人群，可逐计划点“管理”进入原生 AI 点睛入口/详情页，可逐计划或批量调用原生 AI 点睛链路生成新人群预览；本轮不保存/提交人群。
+- 已在 `src/main-assistant/ui.js` 增加 `#am-campaign-ai-max-batch-popup` 样式和滚动链路保护，复用 `am-` 前缀与现有 token；已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js` 构建产物。
+- 已更新 `tests/campaign-batch-plus-quick-entry.test.mjs` 和 `tests/keyword-plan-api-slim.test.mjs`，覆盖 `批量+` 新入口、AI 点睛桥接暴露和 `nativeCrowdList` 合同。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `node --test tests/keyword-plan-api-slim.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/extension-static-build.test.mjs tests/keyword-custom-native-parity-ui.test.mjs`：通过，38/38。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步 userscript、dist packages 和 extension bundle。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面为 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`；运行态 `window.__AM_WXT_PLAN_API__` 已暴露 `fetchKeywordAiMaxInfo`，`批量+` 菜单可见“批量编辑AI点睛”。
+- Chrome DevTools MCP 真实页操作：用真实点击勾选 2 条 AI 点睛计划 `81246870887 / E7Pro_AI点睛_促加购_手动`、`81179245735 / E7Pro_AI点睛_促加购_手动对比_20260605`，打开批量 AI 点睛弹窗后，弹窗读取 2/2 个计划当前 AI 点睛人群，每个计划当前人群 5 个，行内“管理”和“获取新人群”按钮可见。
+- Chrome DevTools MCP 批量获取新人群：点击“批量获取新人群”后，2 条计划均生成新人群预览，每条 5 个，弹窗汇总为 `已选 2 个计划 / 已读取 2 个 / 已生成 2 个`；网络请求出现 2 次 `https://ai.alimama.com/ai/chat/businessTalk.json`，符合单计划 AI 点睛事实源。
+- 写请求自查：`performance.getEntriesByType('resource')` 中没有 `solution/addList`、`solution/copy`、`campaign/updatePart`、`campaign/delete`、`campaign/budget/batchUpdate`、`crowd/save`、`crowd/update` 等写入 URL；只出现 `campaign/get.json`、`adgroup/get.json`、`crowd/findList.json` 和 `businessTalk.json`。本轮没有安装写请求守卫，因功能只读生成预览且未触达保存/提交。
+- UI 布局验证：弹窗在 1695x977 视口内可见，2 个行卡片 `overlapCount:0`，无横向溢出，弹窗关闭后 `#am-campaign-ai-max-batch-popup` 不残留。控制台存在站点资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未发现本功能运行错误。
+
+## 结果复盘
+- 已完成 `批量+` 批量编辑 AI 点睛能力：入口识别选中计划，读取当前 AI 点睛人群，支持逐计划管理和批量获取新人群预览。
+- 方案保持最小侵入：批量获取新人群复用单计划 `fetchKeywordAiMaxInfo` / `businessTalk.json` 链路，没有把通用人群推荐 `suggestCrowds` 当作 AI 点睛来源，也没有新增第二套人群事实源。
+- 安全边界已落实：本轮只读详情和 AI 生成预览，不保存、不提交、不删除、不创建；真实页面自查没有写入 URL。
+- 剩余风险：官方 AI 点睛保存/提交合同本轮未验证，因此弹窗刻意只做新人群预览，并提示“保存请进入单计划管理确认”。后续若要批量保存，需要先抓取并确认官方保存合同，再用写请求守卫或用户授权的真实写入流程单独验收。
+
 # TODO - 2026-06-07 安全审查问题修复
 
 ## 需求规格

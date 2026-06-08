@@ -5,6 +5,7 @@
         'openWizard',
         'getRuntimeDefaults',
         'searchItems',
+        'fetchKeywordAiMaxInfo',
         'createPlansBatch',
         'createPlansByScene',
         'copyCurrentPlanByScene',

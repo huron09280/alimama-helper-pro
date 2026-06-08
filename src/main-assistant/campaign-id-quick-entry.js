@@ -9,6 +9,9 @@
         batchPlusMenuCloseVisibilityHandler: null,
         campaignListRefreshTimer: null,
         copyFocusRestoreTimer: null,
+        batchAiMaxPopup: null,
+        batchAiMaxRows: [],
+        batchAiMaxRunning: false,
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -17,7 +20,7 @@
         concurrentLogKeydownHandler: null,
         campaignItemIdCache: new Map(),
         campaignItemCacheLimit: 240,
-        IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup',
+        IGNORE_SELECTOR: '#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-report-capture-panel, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup, #am-campaign-ai-max-batch-popup',
         TEXT_PATTERN: /计划\s*(?:ID|id)?\s*[：:]\s*(\d{6,})/g,
         DEFAULT_BIZ_CODE: 'onebpSearch',
         BIZ_CODE_LIST: ['onebpSearch', 'onebpSite', 'onebpAdStrategyLiuZi', 'onebpDisplay'],
@@ -306,6 +309,14 @@
                     icon: 'edit',
                     label: '批量修改计划名称',
                     title: `批量修改选中的${sceneName}计划名称`
+                },
+                {
+                    action: 'aiMax',
+                    icon: 'sparkles',
+                    label: '批量编辑AI点睛',
+                    title: normalizedBizCode === 'onebpSearch'
+                        ? '逐计划管理 AI 点睛人群，并批量获取新的 AI 点睛人群'
+                        : 'AI 点睛当前仅支持关键词推广计划'
                 },
                 {
                     action: 'shieldCrowd',
@@ -995,6 +1006,397 @@
                     return;
                 }
                 Logger.log(`⚠️ 批量修改计划名称失败：${err?.message || '未知错误'} `, true);
+            }
+        },
+
+        formatAiMaxCrowdName(item = {}) {
+            const crowd = this.isPlainRecord(item?.crowd) ? item.crowd : item;
+            const label = this.isPlainRecord(crowd?.label) ? crowd.label : {};
+            const optionList = Array.isArray(label.optionList) ? label.optionList : [];
+            const optionNames = optionList
+                .map(option => String(option?.optionName || option?.name || '').trim())
+                .filter(Boolean);
+            const candidates = [
+                crowd?.crowdName,
+                item?.crowdName,
+                label?.labelName,
+                optionNames.join('、'),
+                item?.name,
+                item?.mx_crowdId,
+                crowd?.mx_crowdId,
+                item?.crowdId,
+                crowd?.crowdId
+            ];
+            return candidates
+                .map(value => String(value || '').replace(/\s+/g, ' ').trim())
+                .find(Boolean) || '未命名人群';
+        },
+
+        formatAiMaxCrowdTags(crowdList = [], limit = 4) {
+            const list = Array.isArray(crowdList) ? crowdList : [];
+            if (!list.length) return '<span class="am-ai-max-crowd-empty">暂无人群</span>';
+            const visible = list.slice(0, Math.max(1, Number(limit) || 4));
+            const tags = visible
+                .map(item => `<span class="am-ai-max-crowd-tag">${this.escapeHtml(this.formatAiMaxCrowdName(item))}</span>`)
+                .join('');
+            const rest = list.length > visible.length
+                ? `<span class="am-ai-max-crowd-more">+${list.length - visible.length}</span>`
+                : '';
+            return tags + rest;
+        },
+
+        describeAiMaxInfo(info = {}) {
+            if (!this.isPlainRecord(info)) return '未生成';
+            const demandCount = Array.isArray(info.selectedDemandList)
+                ? info.selectedDemandList.length
+                : (Array.isArray(info.demandList) ? info.demandList.length : 0);
+            const nativeCrowdCount = Array.isArray(info.nativeCrowdList) ? info.nativeCrowdList.length : 0;
+            const shieldCount = (Array.isArray(info.centerShieldWordList) ? info.centerShieldWordList.length : 0)
+                + (Array.isArray(info.exactShieldWordList) ? info.exactShieldWordList.length : 0);
+            const parts = [];
+            parts.push(`需求 ${demandCount || nativeCrowdCount || 0}`);
+            parts.push(`人群 ${nativeCrowdCount}`);
+            if (shieldCount) parts.push(`屏蔽词 ${shieldCount}`);
+            return parts.join(' / ');
+        },
+
+        getAiMaxRowByCampaignId(campaignId = '') {
+            const id = this.normalizeCampaignId(campaignId);
+            if (!id) return null;
+            return (Array.isArray(this.batchAiMaxRows) ? this.batchAiMaxRows : [])
+                .find(row => this.normalizeCampaignId(row?.campaignId || '') === id) || null;
+        },
+
+        updateAiMaxBatchRow(campaignId = '', patch = {}) {
+            const row = this.getAiMaxRowByCampaignId(campaignId);
+            if (!row) return null;
+            Object.assign(row, patch);
+            this.renderAiMaxBatchRows();
+            return row;
+        },
+
+        buildAiMaxItemFromRow(row = {}) {
+            const itemId = this.normalizeItemId(row.itemId || row.materialId || '');
+            if (!itemId) return null;
+            return {
+                itemId,
+                materialId: itemId,
+                materialName: String(row.itemTitle || row.materialName || row.planName || `商品${itemId}`).trim(),
+                itemTitle: String(row.itemTitle || row.materialName || row.planName || `商品${itemId}`).trim(),
+                linkUrl: row.linkUrl || `http://detail.tmall.com/item.htm?id=${itemId}`,
+                promotionType: 'item',
+                subPromotionType: 'item'
+            };
+        },
+
+        async resolveBatchAiMaxRow(context = {}, fallbackBizCode = '', authContext = {}) {
+            const campaignId = this.normalizeCampaignId(context?.campaignId || '');
+            const bizCode = this.normalizeBizCode(context?.bizCode || fallbackBizCode || '') || this.DEFAULT_BIZ_CODE;
+            const row = {
+                campaignId,
+                bizCode,
+                planName: this.guessCampaignNameFromContext(context),
+                itemId: this.normalizeItemId(context?.itemId || this.getCampaignItemId(campaignId) || ''),
+                itemTitle: '',
+                aiMaxEnabled: false,
+                currentCrowdList: [],
+                newCrowdList: [],
+                newAiMaxInfo: null,
+                status: '读取中',
+                statusLevel: 'running',
+                rowEl: context?.rowEl instanceof Element ? context.rowEl : null
+            };
+            if (!campaignId) {
+                row.status = '计划ID无效';
+                row.statusLevel = 'error';
+                return row;
+            }
+            if (bizCode !== 'onebpSearch') {
+                row.status = '仅支持关键词推广';
+                row.statusLevel = 'error';
+                return row;
+            }
+            try {
+                const detail = await this.queryCampaignDetail(campaignId, bizCode, authContext);
+                const campaign = this.extractCopyCampaignFromPayload(detail?.response || {}, campaignId);
+                const adgroupIds = Array.isArray(detail?.adgroupIds) ? detail.adgroupIds : [];
+                const adgroupId = this.normalizeAdgroupId(adgroupIds[0] || '');
+                row.planName = row.planName || this.normalizeBatchRenamePlanName(campaign?.campaignName || campaign?.name || '');
+                row.aiMaxEnabled = this.isKeywordAiMaxCampaignEnabled(campaign);
+                row.itemId = this.normalizeItemId(detail?.itemId || row.itemId || '');
+                if (adgroupId) {
+                    try {
+                        const adgroupDetail = await this.queryAdgroupDetail(campaignId, adgroupId, bizCode, authContext);
+                        const adgroup = this.extractCopyAdgroupFromPayload(adgroupDetail?.response || {}, campaignId, adgroupId);
+                        row.itemId = this.normalizeItemId(adgroupDetail?.itemId || row.itemId || '');
+                        const material = this.extractCopyMaterial(campaign, adgroup);
+                        row.itemTitle = String(material?.materialName || campaign?.materialName || row.itemTitle || '').trim();
+                        row.linkUrl = material?.linkUrl || row.linkUrl || '';
+                    } catch (err) {
+                        Logger.log(`⚠️ AI点睛读取计划${campaignId}单元详情失败：${err?.message || '未知错误'} `, true);
+                    }
+                }
+                const crowdDetail = await this.queryCampaignCrowdList(campaignId, bizCode, authContext, row.aiMaxEnabled ? '' : adgroupId);
+                row.currentCrowdList = Array.isArray(crowdDetail?.crowdList) ? crowdDetail.crowdList : [];
+                row.status = row.aiMaxEnabled
+                    ? `已读取 AI 点睛人群 ${row.currentCrowdList.length} 个`
+                    : '当前计划未开启 AI 点睛';
+                row.statusLevel = row.aiMaxEnabled ? 'success' : 'warn';
+            } catch (err) {
+                row.status = err?.message || '读取失败';
+                row.statusLevel = 'error';
+            }
+            return row;
+        },
+
+        renderAiMaxBatchRows() {
+            const popup = this.batchAiMaxPopup instanceof HTMLElement ? this.batchAiMaxPopup : document.getElementById('am-campaign-ai-max-batch-popup');
+            if (!(popup instanceof HTMLElement)) return;
+            const body = popup.querySelector('[data-am-ai-max-batch-body]');
+            const summary = popup.querySelector('[data-am-ai-max-batch-summary]');
+            if (summary instanceof HTMLElement) {
+                const rows = Array.isArray(this.batchAiMaxRows) ? this.batchAiMaxRows : [];
+                const readyCount = rows.filter(row => row.statusLevel === 'success').length;
+                const generatedCount = rows.filter(row => Array.isArray(row.newCrowdList) && row.newCrowdList.length).length;
+                summary.textContent = `已选 ${rows.length} 个计划 / 已读取 ${readyCount} 个 / 已生成 ${generatedCount} 个`;
+            }
+            if (!(body instanceof HTMLElement)) return;
+            const rows = Array.isArray(this.batchAiMaxRows) ? this.batchAiMaxRows : [];
+            body.innerHTML = rows.map((row, index) => {
+                const canGenerate = row.bizCode === 'onebpSearch' && !!row.itemId;
+                return `
+                    <article class="am-ai-max-row" data-am-ai-max-row="${this.escapeHtml(row.campaignId)}">
+                        <div class="am-ai-max-row-index">${index + 1}</div>
+                        <div class="am-ai-max-row-main">
+                            <div class="am-ai-max-row-title">
+                                <span class="am-ai-max-plan-name">${this.escapeHtml(row.planName || `计划${row.campaignId}`)}</span>
+                                <span class="am-ai-max-plan-id">ID ${this.escapeHtml(row.campaignId)}</span>
+                                ${row.itemId ? `<span class="am-ai-max-plan-id">商品 ${this.escapeHtml(row.itemId)}</span>` : ''}
+                            </div>
+                            <div class="am-ai-max-row-crowds">
+                                <span class="am-ai-max-crowd-label">当前</span>
+                                ${this.formatAiMaxCrowdTags(row.currentCrowdList, 3)}
+                            </div>
+                            <div class="am-ai-max-row-crowds">
+                                <span class="am-ai-max-crowd-label">新生成</span>
+                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 3)}
+                            </div>
+                        </div>
+                        <div class="am-ai-max-row-side">
+                            <span class="am-ai-max-row-status is-${this.escapeHtml(row.statusLevel || 'info')}">${this.escapeHtml(row.status || '待处理')}</span>
+                            ${row.newAiMaxInfo ? `<span class="am-ai-max-row-meta">${this.escapeHtml(this.describeAiMaxInfo(row.newAiMaxInfo))}</span>` : ''}
+                            <div class="am-ai-max-row-actions">
+                                <button type="button" class="am-ai-max-row-btn" data-am-ai-max-action="manage" data-campaign-id="${this.escapeHtml(row.campaignId)}">管理</button>
+                                <button type="button" class="am-ai-max-row-btn primary" data-am-ai-max-action="generate" data-campaign-id="${this.escapeHtml(row.campaignId)}" ${canGenerate ? '' : 'disabled'}>获取新人群</button>
+                            </div>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        },
+
+        closeAiMaxBatchPopup() {
+            const popup = this.batchAiMaxPopup instanceof HTMLElement ? this.batchAiMaxPopup : document.getElementById('am-campaign-ai-max-batch-popup');
+            if (popup instanceof HTMLElement) popup.remove();
+            this.batchAiMaxPopup = null;
+            this.batchAiMaxRunning = false;
+        },
+
+        openAiMaxNativeManager(row = {}) {
+            const context = {
+                campaignId: row.campaignId,
+                bizCode: row.bizCode,
+                rowEl: row.rowEl
+            };
+            const button = this.findNativeActionButtonForContext(context, 'aiMax');
+            if (button) {
+                button.click();
+                Logger.log(`✅ AI点睛管理：已打开计划 ${row.campaignId} 的原生 AI 点睛入口`);
+                return;
+            }
+            const url = this.buildCampaignDetailUrl(context, 'aiMax');
+            if (url) {
+                window.open(url, '_blank', 'noopener');
+                Logger.log(`✅ AI点睛管理：已打开计划 ${row.campaignId} 的详情页`);
+                return;
+            }
+            Logger.log(`⚠️ AI点睛管理：未能定位计划 ${row.campaignId} 的原生入口`, true);
+        },
+
+        async generateAiMaxCrowdsForRow(row = {}) {
+            const campaignId = this.normalizeCampaignId(row?.campaignId || '');
+            if (!campaignId) return;
+            const targetRow = this.updateAiMaxBatchRow(campaignId, {
+                status: '正在调用原生 AI 点睛生成',
+                statusLevel: 'running'
+            }) || row;
+            try {
+                const api = await waitForKeywordPlanApiAccessor({
+                    requiredMethod: 'fetchKeywordAiMaxInfo',
+                    timeoutMs: 8000,
+                    intervalMs: 120
+                });
+                if (!api || typeof api.fetchKeywordAiMaxInfo !== 'function') {
+                    throw new Error('AI点睛 API 未就绪，请刷新页面后重试');
+                }
+                const item = this.buildAiMaxItemFromRow(targetRow);
+                if (!item) throw new Error('缺少商品ID，无法生成 AI 点睛人群');
+                const info = await api.fetchKeywordAiMaxInfo({
+                    bizCode: 'onebpSearch',
+                    item
+                });
+                const newCrowdList = Array.isArray(info?.nativeCrowdList) ? info.nativeCrowdList : [];
+                if (!info || !newCrowdList.length) {
+                    throw new Error('AI点睛已返回，但未生成需求人群');
+                }
+                this.updateAiMaxBatchRow(campaignId, {
+                    newAiMaxInfo: info,
+                    newCrowdList,
+                    status: `已生成新人群 ${newCrowdList.length} 个，保存请进入单计划管理确认`,
+                    statusLevel: 'success'
+                });
+                Logger.log(`✅ AI点睛新人群已生成：计划 ${campaignId}，人群 ${newCrowdList.length} 个`);
+            } catch (err) {
+                this.updateAiMaxBatchRow(campaignId, {
+                    status: err?.message || 'AI点睛生成失败',
+                    statusLevel: 'error'
+                });
+                Logger.log(`⚠️ AI点睛生成失败：计划 ${campaignId}，原因：${err?.message || '未知错误'} `, true);
+            }
+        },
+
+        async generateAiMaxCrowdsForAllRows() {
+            if (this.batchAiMaxRunning) return;
+            const rows = (Array.isArray(this.batchAiMaxRows) ? this.batchAiMaxRows : [])
+                .filter(row => row.bizCode === 'onebpSearch' && row.itemId);
+            if (!rows.length) {
+                Logger.log('⚠️ 没有可获取 AI 点睛新人群的计划', true);
+                return;
+            }
+            this.batchAiMaxRunning = true;
+            try {
+                for (let i = 0; i < rows.length; i++) {
+                    await this.generateAiMaxCrowdsForRow(rows[i]);
+                    if (i < rows.length - 1) await this.sleep(350);
+                }
+            } finally {
+                this.batchAiMaxRunning = false;
+            }
+        },
+
+        openAiMaxBatchPopup(rows = [], options = {}) {
+            this.closeAiMaxBatchPopup();
+            this.batchAiMaxRows = Array.isArray(rows) ? rows : [];
+            const popup = document.createElement('div');
+            popup.id = 'am-campaign-ai-max-batch-popup';
+            popup.setAttribute('role', 'dialog');
+            popup.setAttribute('aria-modal', 'true');
+            popup.setAttribute('aria-labelledby', 'am-ai-max-batch-title');
+            popup.innerHTML = `
+                <section class="am-ai-max-card">
+                    <header class="am-ai-max-head">
+                        <div class="am-ai-max-title-wrap">
+                            <span class="am-ai-max-icon" aria-hidden="true">${renderAmIcon('sparkles', { size: 18, strokeWidth: 2.1 })}</span>
+                            <div>
+                                <h3 id="am-ai-max-batch-title" class="am-ai-max-title">批量编辑AI点睛</h3>
+                                <p class="am-ai-max-subtitle" data-am-ai-max-batch-summary>已选 ${this.batchAiMaxRows.length} 个计划</p>
+                            </div>
+                        </div>
+                        <button type="button" class="am-ai-max-close" data-am-ai-max-action="close" aria-label="关闭">${renderAmIcon('close', { size: 14, strokeWidth: 2.4 })}</button>
+                    </header>
+                    <div class="am-ai-max-toolbar">
+                        <button type="button" class="am-ai-max-toolbar-btn primary" data-am-ai-max-action="generateAll">${renderAmIcon('sparkles', { size: 13, strokeWidth: 2.2 })}<span>批量获取新人群</span></button>
+                        <span class="am-ai-max-note">新人群来自原生 AI 点睛生成链路；保存修改请进入单计划管理确认。</span>
+                    </div>
+                    <div class="am-ai-max-body" data-am-ai-max-batch-body></div>
+                </section>
+            `;
+            popup.addEventListener('click', (event) => {
+                const target = event.target instanceof Element ? event.target.closest('[data-am-ai-max-action]') : null;
+                if (!(target instanceof HTMLElement)) {
+                    if (event.target === popup) this.closeAiMaxBatchPopup();
+                    return;
+                }
+                const action = String(target.getAttribute('data-am-ai-max-action') || '').trim();
+                const campaignId = this.normalizeCampaignId(target.getAttribute('data-campaign-id') || '');
+                if (action === 'close') {
+                    this.closeAiMaxBatchPopup();
+                    return;
+                }
+                if (action === 'generateAll') {
+                    this.generateAiMaxCrowdsForAllRows();
+                    return;
+                }
+                const row = this.getAiMaxRowByCampaignId(campaignId);
+                if (!row) return;
+                if (action === 'manage') {
+                    this.openAiMaxNativeManager(row);
+                    return;
+                }
+                if (action === 'generate') {
+                    this.generateAiMaxCrowdsForRow(row);
+                }
+            });
+            popup.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                this.closeAiMaxBatchPopup();
+            });
+            document.body.appendChild(popup);
+            this.batchAiMaxPopup = popup;
+            this.renderAiMaxBatchRows();
+            requestAnimationFrame(() => {
+                const firstBtn = popup.querySelector('[data-am-ai-max-action="generateAll"]');
+                if (firstBtn instanceof HTMLElement) firstBtn.focus({ preventScroll: true });
+            });
+            if (options.focusBackTarget instanceof HTMLElement) {
+                popup.dataset.focusBack = '1';
+            }
+        },
+
+        async runBatchAiMaxCampaigns(contexts = [], fallbackBizCode = '', triggerEl = null) {
+            const selected = Array.isArray(contexts) ? contexts : [];
+            if (!selected.length) {
+                Logger.log('⚠️ 请先勾选需要批量编辑AI点睛的关键词推广计划', true);
+                return;
+            }
+            const targetBizCode = this.normalizeBizCode(fallbackBizCode || selected[0]?.bizCode || '') || this.DEFAULT_BIZ_CODE;
+            if (targetBizCode !== 'onebpSearch') {
+                Logger.log('⚠️ 批量编辑AI点睛当前仅支持关键词推广计划', true);
+                return;
+            }
+            const authContext = this.resolveAuthContext(targetBizCode);
+            const quickRows = selected
+                .map((context) => ({
+                    campaignId: this.normalizeCampaignId(context?.campaignId || ''),
+                    bizCode: this.normalizeBizCode(context?.bizCode || targetBizCode || '') || targetBizCode,
+                    planName: this.guessCampaignNameFromContext(context),
+                    itemId: this.normalizeItemId(context?.itemId || this.getCampaignItemId(context?.campaignId || '') || ''),
+                    currentCrowdList: [],
+                    newCrowdList: [],
+                    status: '读取中',
+                    statusLevel: 'running',
+                    rowEl: context?.rowEl instanceof Element ? context.rowEl : null
+                }))
+                .filter(row => row.campaignId);
+            if (!quickRows.length) {
+                Logger.log('⚠️ 未能识别需要批量编辑AI点睛的计划ID', true);
+                return;
+            }
+            this.openAiMaxBatchPopup(quickRows, { focusBackTarget: triggerEl });
+            try {
+                const rows = [];
+                for (let i = 0; i < selected.length; i++) {
+                    const row = await this.resolveBatchAiMaxRow(selected[i], targetBizCode, authContext);
+                    rows.push(row);
+                    this.batchAiMaxRows = rows.concat(quickRows.slice(rows.length));
+                    this.renderAiMaxBatchRows();
+                }
+                this.batchAiMaxRows = rows;
+                this.renderAiMaxBatchRows();
+                Logger.log(`✅ 批量编辑AI点睛：已读取 ${rows.length} 个关键词推广计划`);
+            } catch (err) {
+                Logger.log(`⚠️ 批量编辑AI点睛读取失败：${err?.message || '未知错误'} `, true);
             }
         },
 
@@ -2059,6 +2461,9 @@
                 }
                 return [/屏蔽人群/, /屏蔽/, /AI点睛/, /高级设置/];
             }
+            if (normalizedAction === 'aiMax') {
+                return [/AI点睛/, /需求人群/, /人群设置/, /高级设置/, /更多/];
+            }
             return [];
         },
 
@@ -2096,7 +2501,7 @@
                 bizCode,
                 campaignId
             });
-            if (action === 'crowdSetting' || action === 'shieldCrowd') {
+            if (action === 'crowdSetting' || action === 'shieldCrowd' || action === 'aiMax') {
                 params.set('tab', 'crowd');
             }
             return `${window.location.origin}${window.location.pathname}#!/manage/${detailPath}?${params.toString()}`;
@@ -2138,6 +2543,10 @@
             }
             if (action === 'rename') {
                 await this.runBatchRenameCampaigns(contexts, normalizedBizCode, triggerEl);
+                return;
+            }
+            if (action === 'aiMax') {
+                await this.runBatchAiMaxCampaigns(contexts, normalizedBizCode, triggerEl);
                 return;
             }
             if (action === 'shieldCrowd' || action === 'crowdSetting') {
