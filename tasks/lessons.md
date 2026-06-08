@@ -1,5 +1,10 @@
 # Lessons - 2026-05-30
 
+## L130 AI 点睛获取新人群必须追加旧需求
+- 触发：用户反馈 `获取新人群` 时需求应新增到旧需求里，不能只保留新需求；同时要求批量 AI 点睛一行显示 5 个需求人群，需求人群框不需要前置序号。
+- 原因：把本次 `businessTalk` 返回的 `nativeCrowdList` 直接写成 `newAiMaxInfo.nativeCrowdList`，会让保存事实源丢掉当前计划已有需求；如果 UI 只改展示数量但仍保留序号圆点，横向密度会被无效信息占用。
+- 规则：批量 AI 点睛生成新人群后，保存事实源必须以旧 `currentCrowdList` + 新 `rawNewCrowdList` 合并去重后写入 `newAiMaxInfo.nativeCrowdList/demandList/selectedDemandList`，默认全选；`row.newCrowdList` 仅用于展示本次新生成。需求人群卡片以名称和卖点为主，不显示序列号；密集横排需求要用弹窗宽度、卡宽和默认展示数共同验证。
+
 ## L129 AI 点睛需求下拉必须绑定保存删除语义
 - 触发：用户要求补齐原生 `AI点睛设置` 中的 `需求` 下拉，方案解析后新旧需求默认全选，未选择即删除。
 - 原因：只展示需求数量或只在 UI 里折叠/展开人群，不能表达官方 `selectedDemandList` 的保存合同；如果保存时仍提交全量 `nativeCrowdList/crowdList`，用户取消勾选不会真正删除需求。

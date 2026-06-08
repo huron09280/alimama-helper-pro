@@ -1891,7 +1891,7 @@
                     -webkit-backdrop-filter: blur(8px) saturate(1.15);
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-card {
-                    width: min(980px, calc(100vw - 56px));
+                    width: min(1240px, calc(100vw - 40px));
                     max-height: min(720px, calc(100vh - 56px));
                     display: flex;
                     flex-direction: column;
@@ -2332,8 +2332,8 @@
                     min-height: 26px;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-row-crowds .am-ai-max-demand-popover {
-                    flex: 0 1 188px;
-                    max-width: 188px;
+                    flex: 0 1 180px;
+                    max-width: 180px;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-crowd-tag,
                 #am-campaign-ai-max-batch-popup .am-ai-max-crowd-more,
@@ -2367,7 +2367,7 @@
                     outline-offset: 2px;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-demand-card.am-ai-max-crowd-tag {
-                    max-width: 188px;
+                    max-width: 180px;
                     height: auto;
                     min-height: 38px;
                     padding: 6px 8px;
@@ -2608,7 +2608,7 @@
                     min-width: 0;
                     width: 100%;
                     display: grid;
-                    grid-template-columns: 22px minmax(0, 1fr);
+                    grid-template-columns: minmax(0, 1fr);
                     gap: 7px;
                     align-items: center;
                     min-height: 50px;
@@ -2634,20 +2634,6 @@
                 #am-campaign-ai-max-batch-popup .am-ai-max-demand-card:focus-visible {
                     outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
                     outline-offset: 2px;
-                }
-                #am-campaign-ai-max-batch-popup .am-ai-max-demand-mark {
-                    width: 22px;
-                    height: 22px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 999px;
-                    background: rgba(255, 255, 255, 0.82);
-                    color: var(--am26-primary, #4554e5);
-                    font-size: 11px;
-                    font-weight: 800;
-                    font-variant-numeric: tabular-nums;
-                    box-shadow: inset 0 0 0 1px rgba(69, 84, 229, 0.12);
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-demand-copy {
                     min-width: 0;

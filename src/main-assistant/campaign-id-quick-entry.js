@@ -1144,10 +1144,10 @@
             `;
         },
 
-        formatAiMaxCrowdTags(crowdList = [], limit = 4, idPrefix = 'crowd', options = {}) {
+        formatAiMaxCrowdTags(crowdList = [], limit = 5, idPrefix = 'crowd', options = {}) {
             const list = Array.isArray(crowdList) ? crowdList : [];
             if (!list.length) return '<span class="am-ai-max-crowd-empty">暂无人群</span>';
-            const safeLimit = Math.max(1, Number(limit) || 4);
+            const safeLimit = Math.max(1, Number(limit) || 5);
             const expanded = !!options.expanded;
             const visible = expanded ? list : list.slice(0, safeLimit);
             const safePrefix = String(idPrefix || 'crowd').replace(/[^\w-]/g, '-');
@@ -1160,7 +1160,6 @@
                     return `
                         <span class="am-ai-max-demand-popover">
                             <button type="button" class="am-ai-max-demand-card am-ai-max-crowd-tag" aria-describedby="${this.escapeHtml(tooltipId)}">
-                                <span class="am-ai-max-demand-mark" aria-hidden="true">${index + 1}</span>
                                 <span class="am-ai-max-demand-copy">
                                     <b>${this.escapeHtml(name)}</b>
                                     ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
@@ -1261,6 +1260,35 @@
             return Array.isArray(row.currentCrowdList) ? row.currentCrowdList : [];
         },
 
+        getAiMaxCrowdMergeKey(item = {}) {
+            const name = this.normalizeAiMaxDemandKey(this.formatAiMaxCrowdName(item));
+            if (name && name !== this.normalizeAiMaxDemandKey('未命名人群')) return `name:${name}`;
+            const crowd = this.isPlainRecord(item?.crowd) ? item.crowd : item;
+            const id = [
+                item?.mx_crowdId,
+                crowd?.mx_crowdId,
+                item?.crowdId,
+                crowd?.crowdId,
+                item?.id,
+                crowd?.id
+            ].map(value => String(value || '').trim()).find(Boolean);
+            return id ? `id:${id}` : `name:${name || 'unknown'}`;
+        },
+
+        mergeAiMaxCrowdLists(...crowdLists) {
+            const seen = new Set();
+            const merged = [];
+            crowdLists.forEach((crowdList) => {
+                (Array.isArray(crowdList) ? crowdList : []).forEach((item) => {
+                    const key = this.getAiMaxCrowdMergeKey(item);
+                    if (!key || seen.has(key)) return;
+                    seen.add(key);
+                    merged.push(this.cloneCopyData(item));
+                });
+            });
+            return merged;
+        },
+
         normalizeAiMaxDemandKey(value = '') {
             return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
         },
@@ -1333,7 +1361,9 @@
             const next = this.cloneCopyData(info);
             next.demandList = allDemandList;
             next.selectedDemandList = selectedList;
-            if (!Array.isArray(next.nativeCrowdList) && baseCrowdList.length) {
+            if (Array.isArray(crowdList) && crowdList.length) {
+                next.nativeCrowdList = baseCrowdList.map(item => this.cloneCopyData(item));
+            } else if (!Array.isArray(next.nativeCrowdList) && baseCrowdList.length) {
                 next.nativeCrowdList = baseCrowdList.map(item => this.cloneCopyData(item));
             }
             return next;
@@ -1905,7 +1935,6 @@
                     return `
                         <span class="am-ai-max-demand-popover">
                             <button type="button" class="am-ai-max-demand-card" data-demand-index="${index}" aria-describedby="${this.escapeHtml(tooltipId)}">
-                                <span class="am-ai-max-demand-mark" aria-hidden="true">${index + 1}</span>
                                 <span class="am-ai-max-demand-copy">
                                     <b>${this.escapeHtml(item)}</b>
                                     ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
@@ -2032,6 +2061,7 @@
             const rows = Array.isArray(this.batchAiMaxRows) ? this.batchAiMaxRows : [];
             body.innerHTML = rows.map((row, index) => {
                 const canGenerate = row.bizCode === 'onebpSearch' && !!row.itemId;
+                const editableCrowdList = this.getAiMaxEditableCrowdListForRow(row);
                 const selectedCrowdCount = this.getAiMaxSelectedCrowdListForRow(row).length;
                 const canSave = row.bizCode === 'onebpSearch' && this.isPlainRecord(row.newAiMaxInfo)
                     && selectedCrowdCount > 0;
@@ -2046,7 +2076,7 @@
                             </div>
                             <div class="am-ai-max-row-crowds">
                                 <span class="am-ai-max-crowd-label">当前</span>
-                                ${this.formatAiMaxCrowdTags(row.currentCrowdList, 4, `${row.campaignId}-current`, {
+                                ${this.formatAiMaxCrowdTags(row.currentCrowdList, 5, `${row.campaignId}-current`, {
                                     expanded: row.showAllCurrentCrowds,
                                     campaignId: row.campaignId,
                                     scope: 'current'
@@ -2054,7 +2084,7 @@
                             </div>
                             <div class="am-ai-max-row-crowds">
                                 <span class="am-ai-max-crowd-label">新生成</span>
-                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 4, `${row.campaignId}-new`, {
+                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 5, `${row.campaignId}-new`, {
                                     expanded: row.showAllNewCrowds,
                                     campaignId: row.campaignId,
                                     scope: 'new'
@@ -2063,7 +2093,7 @@
                             <div class="am-ai-max-row-footer">
                                 <div class="am-ai-max-row-footer-info">
                                     <span class="am-ai-max-row-status is-${this.escapeHtml(row.statusLevel || 'info')}">${this.escapeHtml(row.status || '待处理')}</span>
-                                    ${row.newAiMaxInfo ? `<span class="am-ai-max-row-meta">${this.escapeHtml(this.describeAiMaxInfo(row.newAiMaxInfo, row.newCrowdList))}</span>` : ''}
+                                    ${row.newAiMaxInfo ? `<span class="am-ai-max-row-meta">${this.escapeHtml(this.describeAiMaxInfo(row.newAiMaxInfo, editableCrowdList))}</span>` : ''}
                                 </div>
                                 <div class="am-ai-max-row-actions">
                                     ${this.renderAiMaxDemandSelect(row)}
@@ -2219,8 +2249,19 @@
                 });
                 const infoWithPrompt = this.withAiMaxPrompt(info, prompt, shieldWords);
                 const rawNewCrowdList = Array.isArray(infoWithPrompt?.nativeCrowdList) ? infoWithPrompt.nativeCrowdList : [];
-                const nextInfo = this.withAiMaxSelectedDemands(infoWithPrompt, null, rawNewCrowdList);
-                const newCrowdList = Array.isArray(nextInfo?.nativeCrowdList) ? nextInfo.nativeCrowdList : rawNewCrowdList;
+                const mergedCrowdList = this.mergeAiMaxCrowdLists(targetRow.currentCrowdList, rawNewCrowdList);
+                const mergedDemandSource = this.normalizeAiMaxWordList([
+                    ...mergedCrowdList.map(item => this.formatAiMaxCrowdName(item)),
+                    ...(Array.isArray(infoWithPrompt?.demandList) ? infoWithPrompt.demandList : [])
+                ], 20);
+                const infoWithMergedCrowds = {
+                    ...infoWithPrompt,
+                    demandList: mergedDemandSource,
+                    nativeCrowdList: mergedCrowdList.map(item => this.cloneCopyData(item))
+                };
+                const mergedDemandList = this.getAiMaxAllDemandList(infoWithMergedCrowds, mergedCrowdList);
+                const nextInfo = this.withAiMaxSelectedDemands(infoWithMergedCrowds, mergedDemandList, mergedCrowdList);
+                const newCrowdList = rawNewCrowdList.map(item => this.cloneCopyData(item));
                 if (!nextInfo || !newCrowdList.length) {
                     throw new Error('AI点睛已返回，但未生成需求人群');
                 }
@@ -2228,10 +2269,10 @@
                     newAiMaxInfo: nextInfo,
                     newCrowdList,
                     manageExpanded: true,
-                    status: `已生成新人群 ${newCrowdList.length} 个，可保存`,
+                    status: `已生成新人群 ${newCrowdList.length} 个，已合并需求 ${mergedDemandList.length} 个，可保存`,
                     statusLevel: 'success'
                 });
-                Logger.log(`✅ AI点睛新人群已生成：计划 ${campaignId}，人群 ${newCrowdList.length} 个`);
+                Logger.log(`✅ AI点睛新人群已生成：计划 ${campaignId}，新增 ${newCrowdList.length} 个，合并后 ${mergedDemandList.length} 个`);
             } catch (err) {
                 this.updateAiMaxBatchRow(campaignId, {
                     status: err?.message || 'AI点睛生成失败',

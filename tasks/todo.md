@@ -1,3 +1,51 @@
+# TODO - 2026-06-09 AI 点睛新人群追加与需求卡密度
+
+## 需求规格
+- 用户要求：`获取新人群` 时，需求应追加到旧需求里，不能只保留新的而删掉旧的。
+- 用户要求：`批量AI点睛` 弹窗宽度更宽，一行可显示 5 个需求人群。
+- 用户追加：需求人群的框不需要前面的序列号。
+- 功能目标：行级和批量 `获取新人群` 成功后，保存事实源中的 `nativeCrowdList/demandList/selectedDemandList` 应包含旧需求 + 新生成需求，并默认全选；展示层的“新生成”仍只表达本次新生成的人群，避免把旧需求误标成新生成。
+- UI 目标：批量 AI 点睛弹窗加宽，当前/新生成需求卡横向展示更密，默认每组最多显示 5 个；需求卡去掉序号圆点，保留名称、卖点和 hover 详情浮层。
+- 数据边界：继续使用 `currentAiMaxInfo/newAiMaxInfo/nativeCrowdList/demandList/selectedDemandList` 作为保存事实源，不新增第二套需求选择状态。
+- 安全边界：真实页验证允许触发 `businessTalk.json` 方案解析，不真实点击保存；保存候选只通过二次确认文案或本地 payload 验证，确认后取消。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页证明：生成后已选需求数为旧+新；旧需求未丢失；保存候选数量等于已选旧+新；弹窗更宽且一行显示 5 个需求卡；需求卡无序号。
+
+## 执行计划
+- [x] 回顾现有 AI 点睛生成、需求选择和保存 payload 链路。
+- [x] 写入新人群追加合并逻辑，保持新生成展示与保存事实源分离。
+- [x] 调整批量 AI 点睛弹窗宽度、需求卡密度和去序号 UI。
+- [x] 更新回归测试覆盖合并合同、5 个横排和无序号。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证生成追加、布局密度、无序号和安全清理。
+- [x] 更新验证记录、结果复盘与教训。
+
+## 高层操作摘要
+- 已确认当前工作区只有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本轮不纳入提交。
+- 已回顾 `docs/插件UI统一设计规范.md`、`docs/图标设计规范.md` 和 `tasks/lessons.md` L121-L129；本轮仍复用 `am-` 前缀、浅玻璃紧凑工作台、hover 详情、人群解析、需求下拉删除语义和官方管理边界。
+- 初步定位：`generateAiMaxCrowdsForRow()` 当前用本次生成的 `rawNewCrowdList` 初始化 `newAiMaxInfo.nativeCrowdList`，导致保存事实源只剩新需求；`renderAiMaxBatchRows()` 当前每组显示 4 个需求卡，需求卡由 `.am-ai-max-demand-mark` 渲染序号。
+- 已新增 `mergeAiMaxCrowdLists()`，按需求名称/人群 ID 去重，生成后把 `newAiMaxInfo.nativeCrowdList/demandList/selectedDemandList` 写成旧+新合并列表，`row.newCrowdList` 仍只保留本次新生成用于“新生成”分组展示。
+- 已将当前/新生成默认展示数从 4 改为 5，弹窗宽度从 980px 加宽到 1240px，需求卡宽度收紧到 180px，并移除需求卡里的序号圆点。
+- 已更新回归测试，增加合并旧+新保存事实源、行摘要使用合并列表、5 个横排、无 `.am-ai-max-demand-mark` 的断言。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过；构建前后各执行 1 次，根 userscript 语法均通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页准备：在 `chrome://extensions/` 重载 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk`，硬刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`，清理旧弹窗和勾选后重新验证。
+- Chrome DevTools MCP 打开验证：勾选计划 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，通过真实 `批量+ -> 批量编辑AI点睛` 菜单打开弹窗；读取完成后显示 `已读取 AI 点睛人群 5 个` 和 `需求 已选 5/5`。
+- Chrome DevTools MCP 布局验证：批量 AI 点睛弹窗 `.am-ai-max-card` 实测宽度 `1240px`；当前需求卡数量 5，均在同一行，单卡宽 `180px`；`.am-ai-max-demand-mark` 不存在，需求卡无前置序号。
+- Chrome DevTools MCP 生成验证：安装写请求守卫后点击行级 `获取新人群`，约 28 秒后状态为 `已生成新人群 5 个，已合并需求 8 个，可保存`；当前分组 5 个一行，新生成分组 5 个一行，均无序号；摘要为 `需求 8 / 人群 8`，触发按钮为 `需求 已选 8/8`。
+- Chrome DevTools MCP 需求下拉验证：打开 `需求 已选 8/8` 下拉，8 项全部勾选；列表同时包含旧需求 `厨房嵌入式安装的精准选购`、`洗烘消三合一的厨房卫生升级` 和新需求 `新房装修嵌入式洗碗机首选`、`男性为家人挑选的实用厨房礼物`。旧 5 + 新 5 中有 2 个同名需求按名称去重，因此合并后为 8 个。
+- Chrome DevTools MCP 保存合同验证：保存确认链路在写请求守卫下拦截到 `aimax/updateUserInput.json`，未真实写入；确认文案为 `确认把已选的 8 个 AI 点睛需求人群保存到计划 81271150778？`，拦截 payload 中 `demandList` 与 `selectedDemandList` 均为 8 个旧+新合并需求。
+- Chrome DevTools MCP 清理验证：恢复写请求守卫，移除 `#am-campaign-ai-max-batch-popup`、`#am-campaign-batch-plus-menu`、`#am-campaign-batch-confirm-popup` 并取消勾选；最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`hasConfirm:false`、`checkedCount:0`。控制台仍有页面资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未见功能弹窗残留。
+
+## 结果复盘
+- 已修复 `获取新人群` 覆盖旧需求的问题：生成结果现在追加到旧需求后形成保存事实源，旧需求不会因为生成新人群被删掉；同名需求按名称去重，默认全部选中。
+- “新生成”分组仍只展示本次返回的新需求，避免把旧需求误标成新生成；需求下拉、行摘要和保存 payload 使用旧+新合并后的可编辑列表。
+- 批量 AI 点睛弹窗已加宽，当前/新生成需求人群默认各显示 5 个，需求卡去掉序号圆点并保持 hover 详情。
+
 # TODO - 2026-06-08 AI 点睛需求下拉选择与删除
 
 ## 需求规格
