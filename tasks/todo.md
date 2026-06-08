@@ -4,11 +4,12 @@
 - 用户要求：先中文 commit 上一轮改动，再继续增加“回原生网页中写 prompt 去获取人群”的功能；上一轮已完成提交 `86e211f 优化AI点睛需求就近详情`。
 - 用户修正：点击“管理”时，应调用原生网页中点击 `AI点睛设置` 的官方入口/接口，不要在插件弹窗里单独设置 prompt。
 - 用户继续修正：不要跳转到详情页，点击 `管理` 后必须在当前列表页直接打开官方 `AI点睛设置` 弹窗。
+- 用户最新修正：点击 `管理` 后原来的 `批量编辑AI点睛` 弹窗不要关闭；需求人群优化成类似官方弹窗的紧凑卡片样式，鼠标移动到对应需求人群时显示该人群详情，鼠标移走后关闭详情。
 - 功能目标：`批量+ -> 批量编辑AI点睛` 中，行级 `管理` 打开当前计划对应的原生 `AI点睛设置`，让用户在官方界面写 prompt 并获取新的人群。
-- 交互边界：插件批量弹窗不新增 prompt 输入框、不复制官方 AI 点睛设置表单；行级 `获取新人群` 仍保留为插件批量预览能力，`管理` 只负责回到官方设置入口。
+- 交互边界：插件批量弹窗不新增 prompt 输入框、不复制官方 AI 点睛设置表单；行级 `获取新人群` 仍保留为插件批量预览能力，`管理` 只负责回到官方设置入口，且不得关闭原批量弹窗。
 - 数据事实源：继续复用真实页面行内 `AI点睛设置` 按钮和现有 `openAiMaxNativeManager(row)` 定位逻辑；不新增第二套 prompt/人群事实源，不使用详情页 pending 跟随作为成功路径。
 - 安全边界：真实页面验证只点击管理打开官方设置入口，不点击官方保存/确定等会真实写入的动作；若触达写入口必须先守卫。
-- 成功标准：源码、回归测试、构建和 Chrome MCP 真实页验证证明：点击 `管理` 会在当前列表页触发当前行原生 `AI点睛设置` 弹窗，URL 不进入 `search-detail`，批量弹窗不出现自建 prompt 编辑器，且未触发保存/改计划写请求。
+- 成功标准：源码、回归测试、构建和 Chrome MCP 真实页验证证明：点击 `管理` 会在当前列表页触发当前行原生 `AI点睛设置` 弹窗，URL 不进入 `search-detail`，原 `批量编辑AI点睛` 弹窗仍保留；需求人群详情仅在 hover/focus 时显示，移出后关闭，批量弹窗不出现自建 prompt 编辑器，且未触发保存/改计划写请求。
 
 ## 执行计划
 - [x] 校验现有 prompt 读取、管理面板渲染、获取新人群调用链路。
@@ -19,6 +20,7 @@
 - [x] Chrome MCP 真实页验证点击管理打开官方 `AI点睛设置`，无保存写请求并清理页面状态。
 - [x] 更新验证记录与结果复盘，中文提交。
 - [x] 按最新修正移除详情页 pending 跟随，收紧按钮匹配并验证不跳转。
+- [x] 按最新修正保留批量编辑 AI 点睛弹窗，需求人群改为 hover/focus 详情浮层并验证移出关闭。
 
 ## 高层操作摘要
 - 已确认前置中文提交完成：`86e211f 优化AI点睛需求就近详情`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不触碰。
@@ -27,6 +29,9 @@
 - 真实页面首轮复测发现 `openAiMaxNativeManager(row)` 虽已绑定，但插件批量弹窗 modal 遮罩会拦截原生页面按钮点击；已改为点击 `管理` 时先关闭批量弹窗，再异步点击原生 `AI点睛设置`。
 - 真实页面复测继续发现列表行官方 `AI点睛设置` 本身会先导航到计划详情页，而不是直接弹出设置抽屉；已补 `pendingAiMaxNativeManager`，点击列表原生入口后在目标详情页自动继续点击官方 `AI点睛设置：已开启`，最终打开官方 AI 点睛设置抽屉。
 - 最新修正重新验证发现：列表页精确点击当前行官方 `AI点睛设置` 按钮可以直接打开官方弹窗且 URL 不变；之前跳详情页是实现接受了 pending 跟随路径且按钮匹配过宽。已改为移除 pending 跟随、精确匹配 `AI点睛设置` 按钮，并在点击后检测到 `search-detail` 时恢复列表 URL。
+- 最新交互修正要求 `管理` 同时保留插件批量弹窗，需求人群不再点击后占位展开详情，改为 hover/focus 时在就近浮层展示详情、移出关闭。
+- 已按最新修正改为：`openAiMaxNativeManager(row)` 不再关闭 `#am-campaign-ai-max-batch-popup`，而是在官方弹窗打开期间给批量弹窗加 `is-native-open`，降低层级感并设置 `pointer-events:none`，官方弹窗关闭后自动恢复。
+- 已将当前/新生成人群与备用管理板块中的需求人群统一渲染为紧凑卡片 `.am-ai-max-demand-card`，详情复用 `buildAiMaxDemandDetailHtml()`，默认隐藏，hover/focus 时就近浮层显示；详情保留人群名、卖点、描述、热门关键词和 `人群解析`。
 
 ## 验证记录
 - `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
@@ -38,10 +43,21 @@
 - Chrome DevTools MCP 不跳转验证：勾选第一行计划 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778`，打开 `批量+ -> 批量编辑AI点睛`，点击行级 `管理` 后，`#am-campaign-ai-max-batch-popup` 关闭，URL 从点击前到点击后均保持 `#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`，未进入 `/manage/search-detail`。
 - Chrome DevTools MCP 官方弹窗验证：当前列表页直接出现官方 `AI点睛设置` 弹窗，内容包含 `AI点睛设置 / 开启AI点睛 / 已选：5个需求 / AI解析 / 确定 / 取消`，证明 `管理` 调用的是列表行原生 `AI点睛设置` 弹窗而不是详情页 pending 跟随。
 - Chrome DevTools MCP 安全与清理验证：本轮未点击官方 `确定`、保存或批量保存；写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`，未触发保存类写请求；验证后已关闭官方弹窗、移除插件批量弹窗并恢复、删除守卫，最终 `hasPopup:false`。
+- 最新回归 `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- 最新回归 `npm run check:syntax`：通过。
+- 最新回归 `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 最新回归 `npm run build:check`：通过，构建产物同步。
+- 最新回归 `git diff --check`：通过。
+- Chrome DevTools MCP 最新真实页验证：重载 unpacked extension 并刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`；勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778` 后，通过当前运行态批量 AI 点睛动作入口打开 `批量编辑AI点睛` 弹窗，弹窗显示 1 个计划、3 张可见当前人群卡片和 `+2`。
+- Chrome DevTools MCP hover 详情验证：真实 hover 第一张需求卡片 `有娃家庭餐具消毒的安心选择` 后，`.am-ai-max-demand-detail` 的 computed `display` 从 `none` 变为 `grid`；详情包含 `洗碗机消毒柜一体家用嵌入式` 等完整换行关键词和 `人群解析 / 细心宝妈 / 注重健康的家长`；移到工具栏按钮后 `display` 恢复 `none`。
+- Chrome DevTools MCP 管理保留弹窗验证：在批量弹窗内真实点击行级 `管理` 后，URL 仍保持列表页 `#!/manage/search?...pageSize=40`，官方弹窗文本包含 `AI点睛设置 / 开启AI点睛 / 已选：5个需求 / AI解析`；`#am-campaign-ai-max-batch-popup` 仍存在且 class 为 `is-native-open`，computed `pointer-events:none`、卡片 `opacity:0.58`，未遮挡官方弹窗。
+- Chrome DevTools MCP 最新安全与清理验证：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`；未点击官方确定、保存或批量保存；验证后已移除插件批量弹窗、恢复守卫并取消勾选，最终 `hasGuard:false`、`hasBatchPopup:false`、`checkedCount:0`。页面剩余 `wrapper_dlg_747/dlg_747` 为站点 618 推广浮层，非本功能残留。
 
 ## 结果复盘
 - 已按用户修正改为调用原生官方 AI 点睛设置入口，不在插件内自建 prompt 编辑器，也不再用跳详情页或详情页 pending 跟随作为替代结果。
 - 列表行官方入口必须精确匹配当前行 `AI点睛设置`，点击后若检测到进入 `search-detail` 会恢复列表 URL 并提示重试；真实页复验证明当前运行态可在列表页直接打开官方 AI 点睛设置弹窗。
+- 最新交互已调整为保留批量弹窗：官方 AI 点睛弹窗打开时，批量弹窗转为不可拦截的弱化背景态，用户关闭官方弹窗后批量上下文恢复。
+- 需求人群详情从点击展开改为 hover/focus 临时浮层，卡片更接近官方弹窗的紧凑需求形态，并保留关键词完整显示和人群解析。
 - 保存能力仍保留既有官方 `aimax/updateUserInput` 合同，但本轮管理入口不做任何自动保存；真实页写请求守卫证明点击管理无写入。
 - 已完成中文提交：`c48ff8c 调用原生AI点睛设置管理`。
 

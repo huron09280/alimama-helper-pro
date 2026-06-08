@@ -1032,12 +1032,102 @@
                 .find(Boolean) || '未命名人群';
         },
 
-        formatAiMaxCrowdTags(crowdList = [], limit = 4) {
+        normalizeAiMaxWordList(list = [], limit = 20) {
+            const seen = new Set();
+            return (Array.isArray(list) ? list : [])
+                .map(item => String(item?.word || item?.name || item?.title || item || '').trim())
+                .filter(Boolean)
+                .filter(item => {
+                    const key = item.toLowerCase();
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .slice(0, Math.max(1, Number(limit) || 20));
+        },
+
+        extractAiMaxCrowdProperties(crowdItem = {}) {
+            const crowd = this.isPlainRecord(crowdItem?.crowd) ? crowdItem.crowd : crowdItem;
+            return this.isPlainRecord(crowd?.properties) ? crowd.properties : {};
+        },
+
+        parseAiMaxJsonList(rawValue) {
+            if (Array.isArray(rawValue)) return rawValue;
+            if (!rawValue || typeof rawValue !== 'string') return [];
+            try {
+                const parsed = JSON.parse(rawValue);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        },
+
+        buildAiMaxDemandDetailHtml(crowdItem = {}, demandName = '', tooltipId = '') {
+            const properties = this.extractAiMaxCrowdProperties(crowdItem);
+            const sellPoint = String(properties.sellPoint || '').trim();
+            const description = String(properties.description || properties.desc || '').trim();
+            const searchWords = this.normalizeAiMaxWordList(
+                this.parseAiMaxJsonList(properties.searchWordList)
+                    .map(item => item?.name || item?.word || item),
+                12
+            );
+            const personaList = this.parseAiMaxJsonList(properties.crowdProfileList)
+                .map(item => ({
+                    name: String(item?.name || item?.title || '').trim(),
+                    desc: String(item?.desc || item?.description || '').trim()
+                }))
+                .filter(item => item.name || item.desc)
+                .slice(0, 3);
+            const searchTags = searchWords.length
+                ? searchWords.map(item => `<span class="am-ai-max-inline-keyword">${this.escapeHtml(item)}</span>`).join('')
+                : '<span class="am-ai-max-crowd-empty">暂无关键词</span>';
+            const personaHtml = personaList.length
+                ? `
+                    <div class="am-ai-max-demand-personas" aria-label="人群解析">
+                        <span>人群解析</span>
+                        <div>
+                            ${personaList.map(item => `
+                                <em>${this.escapeHtml(item.name || '画像')}${item.desc ? `：${this.escapeHtml(item.desc)}` : ''}</em>
+                            `).join('')}
+                        </div>
+                    </div>
+                `
+                : '';
+            return `
+                <div class="am-ai-max-demand-detail" id="${this.escapeHtml(tooltipId)}" role="tooltip">
+                    <div class="am-ai-max-demand-detail-head">
+                        <b>${this.escapeHtml(demandName || '未命名需求')}</b>
+                        ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
+                    </div>
+                    <p>${this.escapeHtml(description || '暂无详情描述')}</p>
+                    <div class="am-ai-max-demand-keywords" aria-label="热门关键词">${searchTags}</div>
+                    ${personaHtml}
+                </div>
+            `;
+        },
+
+        formatAiMaxCrowdTags(crowdList = [], limit = 4, idPrefix = 'crowd') {
             const list = Array.isArray(crowdList) ? crowdList : [];
             if (!list.length) return '<span class="am-ai-max-crowd-empty">暂无人群</span>';
             const visible = list.slice(0, Math.max(1, Number(limit) || 4));
+            const safePrefix = String(idPrefix || 'crowd').replace(/[^\w-]/g, '-');
             const tags = visible
-                .map(item => `<span class="am-ai-max-crowd-tag">${this.escapeHtml(this.formatAiMaxCrowdName(item))}</span>`)
+                .map((item, index) => {
+                    const name = this.formatAiMaxCrowdName(item);
+                    const properties = this.extractAiMaxCrowdProperties(item);
+                    const sellPoint = String(properties.sellPoint || '').trim();
+                    const tooltipId = `am-ai-max-crowd-tip-${safePrefix}-${index}`;
+                    return `
+                        <button type="button" class="am-ai-max-demand-card am-ai-max-crowd-tag" aria-describedby="${this.escapeHtml(tooltipId)}">
+                            <span class="am-ai-max-demand-mark" aria-hidden="true">${index + 1}</span>
+                            <span class="am-ai-max-demand-copy">
+                                <b>${this.escapeHtml(name)}</b>
+                                ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
+                            </span>
+                            ${this.buildAiMaxDemandDetailHtml(item, name, tooltipId)}
+                        </button>
+                    `;
+                })
                 .join('');
             const rest = list.length > visible.length
                 ? `<span class="am-ai-max-crowd-more">+${list.length - visible.length}</span>`
@@ -1079,20 +1169,6 @@
             const row = this.getAiMaxRowByCampaignId(campaignId);
             if (!row) return null;
             row.manageExpanded = !row.manageExpanded;
-            if (row.manageExpanded && !Number.isInteger(row.activeDemandIndex)) row.activeDemandIndex = 0;
-            this.renderAiMaxBatchRows();
-            return row;
-        },
-
-        selectAiMaxBatchDemand(campaignId = '', demandIndex = 0) {
-            const row = this.getAiMaxRowByCampaignId(campaignId);
-            if (!row) return null;
-            const crowdList = this.getAiMaxEditableCrowdListForRow(row);
-            const demandList = this.getAiMaxInfoDemandList(this.getAiMaxEditableInfoForRow(row) || {}, crowdList);
-            const maxIndex = Math.max(0, Math.min(demandList.length || crowdList.length || 1, 20) - 1);
-            const index = Number.isFinite(Number(demandIndex)) ? Number(demandIndex) : 0;
-            row.activeDemandIndex = Math.max(0, Math.min(maxIndex, Math.trunc(index)));
-            row.manageExpanded = true;
             this.renderAiMaxBatchRows();
             return row;
         },
@@ -1123,36 +1199,6 @@
             if (infoCrowds.length) return infoCrowds;
             if (Array.isArray(row.newCrowdList) && row.newCrowdList.length) return row.newCrowdList;
             return Array.isArray(row.currentCrowdList) ? row.currentCrowdList : [];
-        },
-
-        normalizeAiMaxWordList(list = [], limit = 20) {
-            const seen = new Set();
-            return (Array.isArray(list) ? list : [])
-                .map(item => String(item?.word || item?.name || item?.title || item || '').trim())
-                .filter(Boolean)
-                .filter(item => {
-                    const key = item.toLowerCase();
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                })
-                .slice(0, Math.max(1, Number(limit) || 20));
-        },
-
-        extractAiMaxCrowdProperties(crowdItem = {}) {
-            const crowd = this.isPlainRecord(crowdItem?.crowd) ? crowdItem.crowd : crowdItem;
-            return this.isPlainRecord(crowd?.properties) ? crowd.properties : {};
-        },
-
-        parseAiMaxJsonList(rawValue) {
-            if (Array.isArray(rawValue)) return rawValue;
-            if (!rawValue || typeof rawValue !== 'string') return [];
-            try {
-                const parsed = JSON.parse(rawValue);
-                return Array.isArray(parsed) ? parsed : [];
-            } catch {
-                return [];
-            }
         },
 
         getAiMaxInfoDemandList(info = {}, crowdList = []) {
@@ -1230,69 +1276,23 @@
             const crowdList = this.getAiMaxEditableCrowdListForRow(row);
             const demandList = this.getAiMaxInfoDemandList(info, crowdList);
             const prompt = this.getAiMaxInfoPrompt(info);
-            const demandCount = Math.max(demandList.length, crowdList.length, 1);
-            const activeDemandIndex = Math.max(0, Math.min(
-                Number.isInteger(row.activeDemandIndex) ? row.activeDemandIndex : 0,
-                demandCount - 1
-            ));
-            const activeCrowd = crowdList[activeDemandIndex] || {};
-            const activeProperties = this.extractAiMaxCrowdProperties(activeCrowd);
-            const activeDemandName = demandList[activeDemandIndex] || this.formatAiMaxCrowdName(activeCrowd) || '未命名需求';
-            const activeSellPoint = String(activeProperties.sellPoint || '').trim();
-            const activeDescription = String(activeProperties.description || activeProperties.desc || '').trim();
-            const renderInlineDemandDetail = () => {
-                const searchWords = this.normalizeAiMaxWordList(
-                    this.parseAiMaxJsonList(activeProperties.searchWordList)
-                        .map(item => item?.name || item?.word || item),
-                    12
-                );
-                const personaList = this.parseAiMaxJsonList(activeProperties.crowdProfileList)
-                    .map(item => ({
-                        name: String(item?.name || item?.title || '').trim(),
-                        desc: String(item?.desc || item?.description || '').trim()
-                    }))
-                    .filter(item => item.name || item.desc)
-                    .slice(0, 3);
-                const searchTags = searchWords.length
-                    ? searchWords.map(item => `<span class="am-ai-max-inline-keyword">${this.escapeHtml(item)}</span>`).join('')
-                    : '<span class="am-ai-max-crowd-empty">暂无关键词</span>';
-                const personaHtml = personaList.length
-                    ? `
-                        <div class="am-ai-max-demand-personas" aria-label="人群解析">
-                            <span>人群解析</span>
-                            <div>
-                                ${personaList.map(item => `
-                                    <em>${this.escapeHtml(item.name || '画像')}${item.desc ? `：${this.escapeHtml(item.desc)}` : ''}</em>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `
-                    : '';
-                return `
-                    <div class="am-ai-max-demand-detail" data-am-ai-max-active-detail="${activeDemandIndex}">
-                        <div class="am-ai-max-demand-detail-head">
-                            <b>${this.escapeHtml(activeDemandName)}</b>
-                            ${activeSellPoint ? `<em>${this.escapeHtml(activeSellPoint)}</em>` : ''}
-                        </div>
-                        <p>${this.escapeHtml(activeDescription || '暂无详情描述')}</p>
-                        <div class="am-ai-max-demand-keywords" aria-label="热门关键词">${searchTags}</div>
-                        ${personaHtml}
-                    </div>
-                `;
-            };
             const demandCards = demandList.length
                 ? demandList.slice(0, 6).map((item, index) => {
                     const crowd = crowdList[index] || {};
                     const properties = this.extractAiMaxCrowdProperties(crowd);
                     const sellPoint = String(properties.sellPoint || '').trim();
-                    const isActive = index === activeDemandIndex;
-                    const cardHtml = `
-                        <button type="button" class="am-ai-max-demand-card${isActive ? ' is-active' : ''}" data-am-ai-max-action="selectDemand" data-campaign-id="${this.escapeHtml(row.campaignId)}" data-demand-index="${index}" aria-pressed="${isActive ? 'true' : 'false'}">
-                            <b>${this.escapeHtml(item)}</b>
-                            ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
+                    const tooltipId = `am-ai-max-demand-tip-${this.normalizeCampaignId(row.campaignId || '')}-${index}`;
+                    const detailHtml = this.buildAiMaxDemandDetailHtml(crowd, item, tooltipId);
+                    return `
+                        <button type="button" class="am-ai-max-demand-card" data-demand-index="${index}" aria-describedby="${this.escapeHtml(tooltipId)}">
+                            <span class="am-ai-max-demand-mark" aria-hidden="true">${index + 1}</span>
+                            <span class="am-ai-max-demand-copy">
+                                <b>${this.escapeHtml(item)}</b>
+                                ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
+                            </span>
+                            ${detailHtml}
                         </button>
                     `;
-                    return isActive ? `${cardHtml}${renderInlineDemandDetail()}` : cardHtml;
                 }).join('')
                 : '<span class="am-ai-max-crowd-empty">暂无需求</span>';
             return `
@@ -1423,11 +1423,11 @@
                             </div>
                             <div class="am-ai-max-row-crowds">
                                 <span class="am-ai-max-crowd-label">当前</span>
-                                ${this.formatAiMaxCrowdTags(row.currentCrowdList, 3)}
+                                ${this.formatAiMaxCrowdTags(row.currentCrowdList, 3, `${row.campaignId}-current`)}
                             </div>
                             <div class="am-ai-max-row-crowds">
                                 <span class="am-ai-max-crowd-label">新生成</span>
-                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 3)}
+                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 3, `${row.campaignId}-new`)}
                             </div>
                             ${this.renderAiMaxManagePanel(row)}
                         </div>
@@ -1468,6 +1468,10 @@
                 Logger.log(`⚠️ AI点睛管理：未在当前计划行找到官方 AI点睛设置入口，请刷新列表后重试`, true);
                 return;
             }
+            const popup = this.batchAiMaxPopup instanceof HTMLElement
+                ? this.batchAiMaxPopup
+                : document.getElementById('am-campaign-ai-max-batch-popup');
+            if (popup instanceof HTMLElement) popup.classList.add('is-native-open');
             const openNativeEntry = () => {
                 const beforeUrl = window.location.href;
                 button.click();
@@ -1477,21 +1481,36 @@
                         && String(window.location.hash || '').includes(`campaignId=${campaignId}`);
                     if (navigatedToDetail) {
                         window.location.href = beforeUrl;
+                        if (popup instanceof HTMLElement) popup.classList.remove('is-native-open');
                         Logger.log(`⚠️ AI点睛管理：官方入口触发了详情页跳转，已恢复列表页，请刷新后重试`, true);
                         return;
                     }
                     const drawer = this.findNativeAiMaxSettingDrawer();
                     if (drawer) {
+                        this.watchAiMaxNativeDrawerClose(drawer, popup);
                         Logger.log(`✅ AI点睛管理：已在当前列表页打开计划 ${campaignId} 的官方 AI点睛设置弹窗`);
                         return;
                     }
+                    if (popup instanceof HTMLElement) popup.classList.remove('is-native-open');
                     Logger.log(`⚠️ AI点睛管理：已调用官方 AI点睛设置入口，但未检测到弹窗，请刷新列表后重试`, true);
                 }, 420);
             };
-            this.closeAiMaxBatchPopup();
             requestAnimationFrame(() => {
                 setTimeout(openNativeEntry, 0);
             });
+        },
+
+        watchAiMaxNativeDrawerClose(drawer = null, popup = null) {
+            if (!(popup instanceof HTMLElement)) return;
+            let ticks = 0;
+            const timer = setInterval(() => {
+                ticks += 1;
+                const drawerVisible = drawer instanceof HTMLElement && drawer.isConnected && this.isElementVisible(drawer);
+                if (!drawerVisible || ticks > 240) {
+                    popup.classList.remove('is-native-open');
+                    clearInterval(timer);
+                }
+            }, 500);
         },
 
         findNativeAiMaxSettingDrawer() {
@@ -1722,10 +1741,6 @@
                 if (!row) return;
                 if (action === 'manage') {
                     this.openAiMaxNativeManager(row);
-                    return;
-                }
-                if (action === 'selectDemand') {
-                    this.selectAiMaxBatchDemand(row.campaignId, target.getAttribute('data-demand-index') || '0');
                     return;
                 }
                 if (action === 'generate') {
