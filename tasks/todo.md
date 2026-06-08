@@ -16,7 +16,7 @@
 - [x] 更新测试，覆盖管理调用官方入口、不出现自建 prompt 编辑器、批量生成链路不被破坏。
 - [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
 - [x] Chrome MCP 真实页验证点击管理打开官方 `AI点睛设置`，无保存写请求并清理页面状态。
-- [ ] 更新验证记录与结果复盘，中文提交。
+- [x] 更新验证记录与结果复盘，中文提交。
 
 ## 高层操作摘要
 - 已确认前置中文提交完成：`86e211f 优化AI点睛需求就近详情`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不触碰。
@@ -29,6 +29,8 @@
 - `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
 - `npm run check:syntax`：通过。
 - `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：提交后复验通过，构建产物同步。
+- `git diff --check`：提交后复验通过。
 - Chrome DevTools MCP 真实页验证：已在 `chrome://extensions/` 重载 unpacked extension，并刷新页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`。
 - Chrome DevTools MCP 操作验证：勾选第一行计划 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778`，打开 `批量+ -> 批量编辑AI点睛`，点击行级 `管理` 后，`#am-campaign-ai-max-batch-popup` 关闭，先调用列表原生 `AI点睛设置` 入口进入 `search-detail`，随后自动点击详情页官方 `AI点睛设置：已开启`，页面出现官方 AI 点睛设置抽屉，内容包含 `AI点睛设置 / 方案解析 / 已投放方案 / 搜索需求`。
 - Chrome DevTools MCP 安全验证：本轮未点击官方 `确定`、保存或批量保存；写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`，未触发保存类写请求；验证后已移除插件批量弹窗并恢复、删除守卫。
@@ -37,6 +39,7 @@
 - 已按用户修正改为调用原生官方 AI 点睛设置入口，不在插件内自建 prompt 编辑器，也不再用跳详情页作为最终替代结果。
 - 列表官方入口存在真实导航行为，因此采用最小 pending 跟随：先点列表官方入口，详情页加载后继续点官方 `AI点睛设置：已开启`，最终落到官方设置抽屉。
 - 保存能力仍保留既有官方 `aimax/updateUserInput` 合同，但本轮管理入口不做任何自动保存；真实页写请求守卫证明点击管理无写入。
+- 已完成中文提交：`c48ff8c 调用原生AI点睛设置管理`。
 
 # TODO - 2026-06-08 AI 点睛需求就近展开与关键词完整显示
 
