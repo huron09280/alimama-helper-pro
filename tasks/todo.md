@@ -1,3 +1,55 @@
+# TODO - 2026-06-08 AI 点睛需求下拉选择与删除
+
+## 需求规格
+- 用户要求：原生 `AI点睛设置` 里有 `需求` 下拉；默认方案解析后，新生成与原来的人群需求都应全部选择；如果不选择就是删除。需要在 `批量+ -> 批量编辑AI点睛` 中补充这个完整功能。
+- 功能目标：批量 AI 点睛弹窗提供 `需求` 下拉选择器，展示当前计划可保存的全部需求；默认全选，用户取消某项后，保存 payload 只保留选中的需求和对应人群。
+- 数据事实源：继续使用 AI 点睛原生字段 `demandList`、`selectedDemandList`、`nativeCrowdList` 和顶层 `crowdList`；不得新增与保存 payload 脱节的第二套需求状态。
+- 默认选择规则：读取已有 AI 点睛或生成新人群后，如果没有明确选择状态，则把当前可用需求全部加入 `selectedDemandList`；生成后的新需求也默认全选。
+- 删除语义：未勾选的需求在保存时从 `selectedDemandList`、`aiMaxInfo.nativeCrowdList` 和顶层 `crowdList` 中移除；全部取消时禁止保存并提示缺少可保存需求。
+- UI 规范：需求下拉应是紧凑后台控件，支持全选/半选、选中数量摘要、取消/确定、Esc/外部关闭；需求文本不能溢出，控件不遮挡需求详情浮层。
+- 安全边界：真实页验证只触发 AI 生成请求和 UI 选择，不点击保存/批量保存确认；若需要检查保存 payload，只通过本地函数/守卫或取消确认验证，不真实提交。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页验证证明：需求下拉可打开并默认全选；取消选择后摘要和保存候选数量变化；保存 payload 过滤未选需求；生成阶段无保存类写请求。
+
+## 执行计划
+- [x] 回顾 UI 规范、图标规范、AI 点睛相关教训和原生需求下拉源码。
+- [x] 定位批量 AI 点睛生成、渲染、保存 payload 的当前事实源。
+- [x] 实现需求选择状态初始化、全选/单选切换和下拉 UI。
+- [x] 将需求选择接入保存过滤，确保未选需求从 payload 删除。
+- [x] 更新回归测试覆盖默认全选、取消选择、payload 过滤和 UI 样式。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证需求下拉、默认全选、取消选择和安全清理。
+- [x] 更新验证记录、结果复盘与必要教训，中文提交。
+
+## 高层操作摘要
+- 已确认上一轮提交为 `6bac0bd 补回AI点睛模板与屏蔽词`；当前工作区仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不纳入。
+- 已读取 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md`；本轮仍复用 `am-` 前缀、共享 `renderAmIcon()`、浅玻璃与紧凑后台控件。
+- 已回顾 `tasks/lessons.md` L121-L128：需求详情、人群解析、官方管理入口、诉求卡和屏蔽词都必须保留，不得为需求下拉牺牲既有功能。
+- 已对照原生建计划链路：`normalizeKeywordAiMaxInfo()` 默认把 `selectedDemandList` 设为 `demandList`，需求下拉通过复选框维护 `selectedDemandList`；保存时未选需求应视为删除。
+- 当前批量 AI 点睛保存链路 `buildAiMaxSavePayload()` 仍按 `getAiMaxEditableCrowdListForRow()` 全量提交 `nativeCrowdList/crowdList`，尚未支持需求下拉过滤，这是本轮根因。
+- 已补齐需求下拉状态 helper：没有显式 `selectedDemandList` 时默认全选全部需求；用户确定下拉后只写回当前行 `selectedDemandList`，不新增第二套需求事实源。
+- 已把需求下拉接入批量弹窗事件：支持打开/关闭、全选/单选、半选计数、确定/取消、Esc 优先关闭和外部点击关闭；打开 prompt 模板/屏蔽词时会关闭需求下拉。
+- 已把保存 payload 改为按已选需求过滤 `aiMaxInfo.nativeCrowdList` 和顶层 `crowdList`，并保留完整 `demandList/selectedDemandList`；全部取消时禁止保存并提示至少选择 1 个需求。
+- 已补充紧凑多选下拉样式，列表内部滚动，触发按钮显示 `需求 已选 x/y`，全选项支持半选态；需求详情 hover 浮层保持更高层级，不被下拉样式覆盖。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 准备验证：`mcp__chrome_devtools__list_pages` 可用；在 `chrome://extensions/` 重载 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk`，扩展 path 为当前 worktree `/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/dist/extension`；硬刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`。
+- Chrome DevTools MCP 新运行态确认：页面上下文 `fetch('chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js', {cache:'no-store'})` 返回资源包含 `toggleDemandSelect` 和 `.am-ai-max-demand-select-popover`；重新打开批量弹窗后显示 `需求 已选 5/5`。
+- Chrome DevTools MCP 当前需求下拉验证：勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，打开 `批量+ -> 批量编辑AI点睛`；下拉打开时 `total=5/checked=5/allChecked=true/allIndeterminate=false/countText=5`，面板文本包含 5 个当前需求；取消第一项后 `checked=4/allIndeterminate=true/countText=4`，点击确定后触发按钮显示 `需求 已选 4/5`。
+- Chrome DevTools MCP 方案解析后默认全选验证：安装写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete|create`、`crowd/save|update`；点击行级 `获取新人群`，约 39 秒后状态为 `已生成新人群 5 个，可保存`，摘要为 `已选 1 个计划 / 已读取 1 个 / 已生成 1 个`，需求下拉默认 `需求 已选 5/5`，守卫 `guardHits:[]`。
+- Chrome DevTools MCP 删除语义验证：在生成后的需求下拉取消 1 个需求并确定，按钮变为 `需求 已选 4/5`，行摘要为 `需求 4 / 人群 4`，保存按钮可用；点击保存只打开二次确认并立即取消，确认文案为 `确认把已选的 4 个 AI 点睛需求人群保存到计划 81271150778？未勾选的需求会从本次保存结果中删除...`，守卫仍 `guardHits:[]`，未真实保存。
+- Chrome DevTools MCP 清理验证：恢复写请求守卫、移除 `#am-campaign-ai-max-batch-popup`、`#am-campaign-batch-plus-menu`、`#am-campaign-batch-confirm-popup` 并取消勾选；最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`hasConfirm:false`、`checkedCount:0`。控制台仅见页面资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未见本功能守卫命中或残留。
+
+## 结果复盘
+- 已在批量 AI 点睛工作台补齐原生同义的 `需求` 多选下拉：默认全选，支持全选/半选/单选、确定/取消、Esc 和外部关闭。
+- 保存链路现在以 `selectedDemandList` 作为唯一需求选择状态，保存 payload 只提交已选需求对应的人群；未勾选需求按删除处理，全部取消会阻止保存。
+- 生成新人群后会把方案解析得到的需求写成全选状态；真实页验证证明新生成 5 个需求后下拉默认 `5/5`，取消 1 个后保存候选和确认文案都变为 4。
+- 本轮没有改变 `管理` 官方入口、需求 hover 详情、人群解析、模板、屏蔽词或 prompt 生成链路；真实页验证只触发 AI 生成和取消保存确认，没有真实写计划。
+
 # TODO - 2026-06-08 AI 点睛诉求卡补回模板与屏蔽词
 
 ## 需求规格
