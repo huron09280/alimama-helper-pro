@@ -12,8 +12,6 @@
         batchAiMaxPopup: null,
         batchAiMaxRows: [],
         batchAiMaxRunning: false,
-        pendingAiMaxNativeManager: null,
-        pendingAiMaxNativeTimer: null,
         concurrentLogPopup: null,
         concurrentLogTitleEl: null,
         concurrentLogStatusEl: null,
@@ -37,9 +35,6 @@
         init() {
             if (window.top !== window.self) return;
             if (this.initialized) return;
-            window.addEventListener('hashchange', () => {
-                this.schedulePendingAiMaxNativeManagerCheck();
-            });
             document.addEventListener('click', (e) => {
                 const target = e.target;
                 if (!(target instanceof Element)) return;
@@ -1474,63 +1469,29 @@
                 return;
             }
             const openNativeEntry = () => {
-                this.pendingAiMaxNativeManager = {
-                    campaignId,
-                    createdAt: Date.now(),
-                    attempts: 0
-                };
+                const beforeUrl = window.location.href;
                 button.click();
-                this.schedulePendingAiMaxNativeManagerCheck(160);
-                Logger.log(`✅ AI点睛管理：已调用计划 ${campaignId} 的原生 AI 点睛入口`);
+                setTimeout(() => {
+                    const navigatedToDetail = window.location.href !== beforeUrl
+                        && String(window.location.hash || '').includes('/manage/search-detail')
+                        && String(window.location.hash || '').includes(`campaignId=${campaignId}`);
+                    if (navigatedToDetail) {
+                        window.location.href = beforeUrl;
+                        Logger.log(`⚠️ AI点睛管理：官方入口触发了详情页跳转，已恢复列表页，请刷新后重试`, true);
+                        return;
+                    }
+                    const drawer = this.findNativeAiMaxSettingDrawer();
+                    if (drawer) {
+                        Logger.log(`✅ AI点睛管理：已在当前列表页打开计划 ${campaignId} 的官方 AI点睛设置弹窗`);
+                        return;
+                    }
+                    Logger.log(`⚠️ AI点睛管理：已调用官方 AI点睛设置入口，但未检测到弹窗，请刷新列表后重试`, true);
+                }, 420);
             };
             this.closeAiMaxBatchPopup();
             requestAnimationFrame(() => {
                 setTimeout(openNativeEntry, 0);
             });
-        },
-
-        schedulePendingAiMaxNativeManagerCheck(delay = 260) {
-            if (!this.pendingAiMaxNativeManager) return;
-            if (this.pendingAiMaxNativeTimer) {
-                clearTimeout(this.pendingAiMaxNativeTimer);
-            }
-            this.pendingAiMaxNativeTimer = setTimeout(() => {
-                this.pendingAiMaxNativeTimer = null;
-                this.openPendingAiMaxNativeDetailManager();
-            }, delay);
-        },
-
-        openPendingAiMaxNativeDetailManager() {
-            const pending = this.pendingAiMaxNativeManager;
-            if (!pending) return;
-            const campaignId = this.normalizeCampaignId(pending.campaignId || '');
-            if (!campaignId) {
-                this.pendingAiMaxNativeManager = null;
-                return;
-            }
-            const hash = String(window.location.hash || '');
-            const isTargetDetail = hash.includes('/manage/search-detail') && hash.includes(`campaignId=${campaignId}`);
-            const drawer = this.findNativeAiMaxSettingDrawer();
-            if (drawer) {
-                this.pendingAiMaxNativeManager = null;
-                Logger.log(`✅ AI点睛管理：已打开计划 ${campaignId} 的官方 AI点睛设置`);
-                return;
-            }
-            pending.attempts = Number(pending.attempts || 0) + 1;
-            if (isTargetDetail) {
-                const detailButton = this.findNativeAiMaxDetailSettingButton(campaignId);
-                if (detailButton instanceof HTMLElement) {
-                    detailButton.click();
-                    this.schedulePendingAiMaxNativeManagerCheck(360);
-                    return;
-                }
-            }
-            if (Date.now() - Number(pending.createdAt || 0) > 12000 || pending.attempts > 36) {
-                this.pendingAiMaxNativeManager = null;
-                Logger.log(`⚠️ AI点睛管理：已调用原生入口，但未检测到官方 AI点睛设置弹窗，请在详情页手动点击 AI点睛设置`, true);
-                return;
-            }
-            this.schedulePendingAiMaxNativeManagerCheck(isTargetDetail ? 360 : 520);
         },
 
         findNativeAiMaxSettingDrawer() {
@@ -1539,19 +1500,7 @@
                 if (!(el instanceof HTMLElement)) return false;
                 if (!this.isElementVisible(el)) return false;
                 const text = String(el.innerText || el.textContent || '').replace(/\s+/g, '');
-                return text.includes('AI点睛设置') && (text.includes('方案解析') || text.includes('已投放方案') || text.includes('搜索需求'));
-            }) || null;
-        },
-
-        findNativeAiMaxDetailSettingButton(campaignId = '') {
-            const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-            return buttons.find((btn) => {
-                if (!(btn instanceof HTMLElement)) return false;
-                if (!this.isElementVisible(btn)) return false;
-                const text = String(btn.innerText || btn.textContent || btn.getAttribute('aria-label') || btn.title || '').replace(/\s+/g, '');
-                if (!/AI点睛设置/.test(text)) return false;
-                const rect = btn.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0 && String(document.body.innerText || '').includes(campaignId);
+                return text.includes('AI点睛设置') && (text.includes('方案解析') || text.includes('已投放方案') || text.includes('搜索需求') || text.includes('开启AI点睛'));
             }) || null;
         },
 
@@ -2912,7 +2861,7 @@
                 return [/屏蔽人群/, /屏蔽/, /AI点睛/, /高级设置/];
             }
             if (normalizedAction === 'aiMax') {
-                return [/AI点睛/, /需求人群/, /人群设置/, /高级设置/, /更多/];
+                return [/^AI点睛设置(?:NEW)?$/];
             }
             return [];
         },

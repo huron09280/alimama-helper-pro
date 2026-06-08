@@ -406,17 +406,22 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /openAiMaxNativeManager\(row = \{\}\) \{[\s\S]*?findNativeActionButtonForContext\(context,\s*'aiMax'\)[\s\S]*?pendingAiMaxNativeManager[\s\S]*?button\.click\(\)[\s\S]*?schedulePendingAiMaxNativeManagerCheck/,
-        '管理入口应先锁定当前行官方 AI 点睛设置按钮，再调用原生入口并挂起详情页设置检测'
+        /openAiMaxNativeManager\(row = \{\}\) \{[\s\S]*?findNativeActionButtonForContext\(context,\s*'aiMax'\)[\s\S]*?beforeUrl = window\.location\.href[\s\S]*?button\.click\(\)[\s\S]*?navigatedToDetail[\s\S]*?window\.location\.href = beforeUrl[\s\S]*?findNativeAiMaxSettingDrawer/,
+        '管理入口应在当前列表页调用官方 AI 点睛设置按钮，并阻止进入详情页作为结果'
+    );
+    assert.doesNotMatch(
+        quickEntry,
+        /pendingAiMaxNativeManager|openPendingAiMaxNativeDetailManager|findNativeAiMaxDetailSettingButton|schedulePendingAiMaxNativeManagerCheck/,
+        '管理入口不应再通过详情页 pending 跟随打开 AI 点睛设置'
     );
     assert.match(
         quickEntry,
-        /openPendingAiMaxNativeDetailManager\(\) \{[\s\S]*?\/manage\/search-detail[\s\S]*?findNativeAiMaxDetailSettingButton\(campaignId\)[\s\S]*?detailButton\.click\(\)/,
-        '列表官方入口进入详情页后，应继续点击详情页官方 AI 点睛设置按钮'
+        /if \(normalizedAction === 'aiMax'\) \{[\s\S]*?return \[\/\^AI点睛设置\(\?:NEW\)\?\$\/\]/,
+        'AI 点睛管理只能匹配当前行官方 AI点睛设置按钮，不能退化到高级设置或更多'
     );
     assert.match(
         quickEntry,
-        /findNativeAiMaxSettingDrawer\(\) \{[\s\S]*?AI点睛设置[\s\S]*?方案解析[\s\S]*?已投放方案[\s\S]*?搜索需求/,
+        /findNativeAiMaxSettingDrawer\(\) \{[\s\S]*?AI点睛设置[\s\S]*?方案解析[\s\S]*?已投放方案[\s\S]*?搜索需求[\s\S]*?开启AI点睛/,
         '管理入口应以官方 AI 点睛设置抽屉作为完成条件'
     );
     assert.doesNotMatch(
