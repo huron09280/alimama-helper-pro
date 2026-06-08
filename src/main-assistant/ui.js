@@ -2172,6 +2172,7 @@
                     display: grid;
                     grid-template-columns: repeat(2, minmax(0, 1fr));
                     gap: 6px;
+                    align-items: start;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-demand-card {
                     min-width: 0;
@@ -2221,47 +2222,102 @@
                     font-size: 11px;
                     line-height: 15px;
                 }
-                #am-campaign-ai-max-batch-popup .am-ai-max-selected-detail {
-                    display: grid;
-                    grid-template-columns: 64px minmax(0, 1fr);
-                    gap: 8px;
-                    align-items: start;
-                    min-width: 0;
-                }
-                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card {
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail {
+                    grid-column: 1 / -1;
                     min-width: 0;
                     display: grid;
-                    gap: 4px;
-                    padding: 9px 10px;
+                    gap: 6px;
+                    margin: 0 0 2px;
+                    padding: 8px 10px;
                     border-radius: 8px;
                     border: 1px solid rgba(69, 84, 229, 0.14);
-                    background: rgba(255, 255, 255, 0.64);
+                    background: rgba(255, 255, 255, 0.72);
                     box-sizing: border-box;
                 }
-                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card b,
-                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card em {
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head {
                     min-width: 0;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head b,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head em {
+                    min-width: 0;
                     font-style: normal;
                     line-height: 16px;
                 }
-                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card b {
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head b {
                     color: var(--am26-text, #1b2438);
                     font-size: 12px;
                 }
-                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card em {
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head em {
                     color: var(--am26-primary, #4554e5);
                     font-size: 11px;
                 }
-                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card p {
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail p {
                     margin: 0;
                     min-width: 0;
                     color: var(--am26-text-soft, #505a74);
                     font-size: 12px;
-                    line-height: 18px;
+                    line-height: 17px;
                     word-break: break-word;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-keywords {
+                    min-width: 0;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 5px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-inline-keyword {
+                    max-width: 100%;
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 20px;
+                    padding: 2px 7px;
+                    border-radius: 999px;
+                    background: rgba(69, 84, 229, 0.08);
+                    color: var(--am26-text, #1b2438);
+                    font-size: 11px;
+                    line-height: 16px;
+                    white-space: normal;
+                    overflow-wrap: anywhere;
+                    word-break: break-word;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas {
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: 56px minmax(0, 1fr);
+                    gap: 6px;
+                    align-items: start;
+                    padding-top: 2px;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas > span {
+                    color: var(--am26-text-muted, #778097);
+                    white-space: nowrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas > div {
+                    min-width: 0;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 5px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas em {
+                    min-width: 0;
+                    max-width: 100%;
+                    padding: 2px 6px;
+                    border-radius: 6px;
+                    background: rgba(27, 36, 56, 0.04);
+                    color: var(--am26-text-soft, #505a74);
+                    font-style: normal;
+                    overflow-wrap: anywhere;
+                    word-break: break-word;
+                    box-sizing: border-box;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-manage-split {
                     display: grid;

@@ -1,3 +1,47 @@
+# TODO - 2026-06-08 AI 点睛需求就近展开与关键词完整显示
+
+## 需求规格
+- 用户要求：先中文 commit 上一轮改动，再继续调整“已选需求”详情展开；已完成提交 `21b3e06 增加AI点睛需求详情切换`。
+- 问题反馈：当前点击人群后详情展示太多，且关键词显示不全；用户希望点击某个人群后，在该人群对应最近的位置展开详情。
+- 功能目标：`批量+ -> 批量编辑AI点睛 -> 管理` 中，点击某个已选需求卡片后，在该卡片附近插入紧凑详情，不再把完整大块详情固定放到需求列表下方。
+- 内容边界：就近详情展示该人群名称、卖点、简短描述、关键词和当前人群具体解析；避免把方案计划等远离卡片的大块内容堆在点击详情里。关键词必须允许换行完整显示，不用省略号截断。
+- 数据事实源：继续使用 `crowdList[index].properties` 中的 `sellPoint/description/searchWordList/crowdProfileList`，不新增第二事实源，不触发保存接口。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页面验证证明：点击不同需求时详情出现在相邻位置，内容更收敛，关键词能换行显示完整，且无写请求和残留弹窗。
+
+## 执行计划
+- [x] 重新设计 `renderAiMaxManagePanel()` 的需求卡片结构，把详情插入 active 卡片后方。
+- [x] 精简详情内容，移除固定下方大详情和长方案堆叠，关键词改为完整换行显示，并保留当前人群解析。
+- [x] 调整样式，保证详情就近展开、网格不跳成混乱布局、关键词不截断。
+- [x] 更新回归测试，覆盖 inline 详情、关键词完整显示样式和不保留大块详情。
+- [x] 运行单测、语法检查、构建、构建同步检查、diff 检查。
+- [x] Chrome MCP 真实页验证点击不同需求后的就近展开、关键词显示和无写请求。
+- [x] 更新验证记录与结果复盘。
+
+## 高层操作摘要
+- 已按用户要求先提交上一轮改动：`21b3e06 增加AI点睛需求详情切换`。
+- 已确认当前实现的问题根因：`renderAiMaxManagePanel()` 在需求网格后固定渲染 `.am-ai-max-selected-detail`，并且继续保留 `方案计划 / 热门搜索词 / 人群画像` 长区块；关键词使用通用 tag 样式，容易单行截断。
+- 已改为 inline 就近详情：active 需求卡片后直接插入 `.am-ai-max-demand-detail`，内容收敛为人群名、卖点、简短描述、关键词和当前人群解析，不再固定渲染底部大详情或长方案区。
+- 已新增 `.am-ai-max-inline-keyword`，关键词允许换行和 `overflow-wrap:anywhere`，避免长关键词被省略号截断。
+- 按用户修正恢复当前人群具体解析：解析 `crowdProfileList` 后在就近详情内以紧凑 `人群解析` 展示，不恢复远离卡片的旧大块布局。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：首次因测试断言仍依赖旧源码顺序失败；已调整断言为 inline 详情和关键词完整显示不变量后复跑通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`，选中 2 条 AI 点睛计划后打开 `批量+ -> 批量编辑AI点睛`，点击第一行 `管理` 后进入批量弹窗内管理板块。
+- Chrome DevTools MCP 就近展开验证：点击第二个已选需求 `小户型厨房也能放下的洗碗机` 后，`.am-ai-max-demand-detail` 紧跟 active 卡片后方，`detailNextToActive:true`，距离约 `6px`，内容切换为对应人群的 `嵌入式省空间` 描述和关键词。
+- Chrome DevTools MCP 再次切换验证：点击第三个已选需求 `新婚搬家送伴侣的贴心实用好礼` 后，详情仍紧跟 active 卡片后方，`detailNextToActive:true`，距离约 `6px`，且当前详情数量保持为每个展开行一个，不再出现旧的 `.am-ai-max-selected-detail/.am-ai-max-selected-card`。
+- Chrome DevTools MCP 人群解析复验：按用户修正恢复 `crowdProfileList` 后，第二个需求详情显示 `人群解析 / 小户型租房族 / 新婚小家庭 / 精打细算主妇`，第三个需求详情显示 `人群解析 / 暖心男友 / 乔迁新居女性 / 孝顺子女`；`.am-ai-max-demand-personas` 与详情同处就近展开区，`personaGrid:"56px 480px"`，不恢复旧底部大块。
+- Chrome DevTools MCP 关键词验证：`.am-ai-max-inline-keyword` 的计算样式为 `white-space: normal`、`overflow-wrap: anywhere`、`word-break: break-word`、`text-overflow: clip`，关键词如 `洗碗机消毒柜一体家用嵌入式` 可完整换行显示。
+- Chrome DevTools MCP 安全与清理验证：本轮未点击保存/批量保存，`performance` 未出现 `aimax/updateUserInput`、`campaign/updatePart`、`solution/addList`、`solution/copy`、`campaign/delete`、`crowd/save|update` 写请求；弹窗已关闭，最终 `hasPopup:false`，勾选项已取消为 `checkedRowCount:0`。
+
+## 结果复盘
+- 已完成“点击该人群后在对应最近的位置展开详情”：详情从底部固定大块改为跟随 active 需求卡片就近展开，减少用户视线跳转。
+- 已按用户反馈收敛详情内容，保留人群名、卖点、简短描述、关键词和当前人群解析，移除管理板块内的长方案计划堆叠。
+- 关键词显示不再依赖旧 tag 单行截断样式，改为 inline keyword 自动换行，真实页和测试均证明不会省略。
+
 # TODO - 2026-06-08 AI 点睛已选需求点击展开详情
 
 ## 需求规格

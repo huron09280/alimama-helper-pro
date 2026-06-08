@@ -373,18 +373,31 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /renderAiMaxManagePanel\(row = \{\}\)[\s\S]*?流量诉求[\s\S]*?已选需求[\s\S]*?方案计划[\s\S]*?热门搜索词[\s\S]*?人群画像/,
-        '点击管理应在批量弹窗内展开批量建计划同结构 AI 点睛板块'
+        /renderAiMaxManagePanel\(row = \{\}\)[\s\S]*?renderInlineDemandDetail[\s\S]*?am-ai-max-demand-detail[\s\S]*?am-ai-max-demand-keywords[\s\S]*?流量诉求[\s\S]*?已选需求/,
+        '点击管理应在批量弹窗内展开 AI 点睛已选需求和就近详情'
     );
     assert.match(
         quickEntry,
-        /renderAiMaxManagePanel\(row = \{\}\)[\s\S]*?activeDemandIndex[\s\S]*?activeCrowd = crowdList\[activeDemandIndex\][\s\S]*?activeProperties[\s\S]*?searchWordList[\s\S]*?crowdProfileList/,
-        'AI 点睛管理详情应按当前点击的需求人群读取搜索词和画像'
+        /renderAiMaxManagePanel\(row = \{\}\)[\s\S]*?activeDemandIndex[\s\S]*?activeCrowd = crowdList\[activeDemandIndex\][\s\S]*?activeProperties[\s\S]*?description[\s\S]*?searchWordList[\s\S]*?crowdProfileList/,
+        'AI 点睛管理详情应按当前点击的需求人群读取描述、关键词和人群解析'
     );
     assert.match(
         quickEntry,
-        /data-am-ai-max-action="selectDemand"[\s\S]*?data-demand-index="\$\{index\}"[\s\S]*?aria-pressed/,
+        /am-ai-max-demand-personas[\s\S]*?aria-label="人群解析"[\s\S]*?personaList\.map/,
+        '就近详情应保留当前人群的具体解析'
+    );
+    assert.match(
+        quickEntry,
+        /data-am-ai-max-action="selectDemand"[\s\S]*?data-demand-index="\$\{index\}"[\s\S]*?aria-pressed[\s\S]*?return isActive \? `\$\{cardHtml\}\$\{renderInlineDemandDetail\(\)\}` : cardHtml/,
         '已选需求卡片应是可点击切换的人群按钮'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('renderAiMaxManagePanel(row = {})'),
+            quickEntry.indexOf('async saveAiMaxRow')
+        ),
+        /am-ai-max-selected-detail|am-ai-max-selected-card|方案计划/,
+        '需求详情不应再固定渲染成远离卡片的大块信息'
     );
     assert.match(
         quickEntry,
@@ -436,7 +449,9 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-manage-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?border-radius:\s*10px/, '管理展开板块应有稳定容器样式');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'AI 点睛需求卡片应按稳定网格展示');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card\.is-active\s*\{[\s\S]*?box-shadow:\s*inset 3px 0 0/, '当前选中需求应有稳定 active 态');
-    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-selected-detail\s*\{[\s\S]*?grid-template-columns:\s*64px minmax\(0,\s*1fr\)/, '需求详情应有稳定两列布局');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-detail\s*\{[\s\S]*?grid-column:\s*1 \/ -1/, '需求详情应在需求卡片附近就近全宽展开');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-inline-keyword\s*\{[\s\S]*?white-space:\s*normal;[\s\S]*?overflow-wrap:\s*anywhere/, '需求详情关键词应允许换行完整显示');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-personas\s*\{[\s\S]*?grid-template-columns:\s*56px minmax\(0,\s*1fr\)/, '需求详情人群解析应紧凑展示');
 });
 
 test('批量+ 读取表格勾选计划并按业务线分组', () => {

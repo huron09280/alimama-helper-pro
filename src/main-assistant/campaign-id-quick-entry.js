@@ -1230,7 +1230,6 @@
             const crowdList = this.getAiMaxEditableCrowdListForRow(row);
             const demandList = this.getAiMaxInfoDemandList(info, crowdList);
             const prompt = this.getAiMaxInfoPrompt(info);
-            const deliveryPlan = String(info.aiMaxDeliveryPlan || info.aiMaxReason || info.analysis || '').trim();
             const demandCount = Math.max(demandList.length, crowdList.length, 1);
             const activeDemandIndex = Math.max(0, Math.min(
                 Number.isInteger(row.activeDemandIndex) ? row.activeDemandIndex : 0,
@@ -1241,43 +1240,61 @@
             const activeDemandName = demandList[activeDemandIndex] || this.formatAiMaxCrowdName(activeCrowd) || '未命名需求';
             const activeSellPoint = String(activeProperties.sellPoint || '').trim();
             const activeDescription = String(activeProperties.description || activeProperties.desc || '').trim();
-            const searchWords = this.normalizeAiMaxWordList(
-                this.parseAiMaxJsonList(activeProperties.searchWordList)
-                    .map(item => item?.name || item?.word || item),
-                10
-            );
-            const personaList = this.parseAiMaxJsonList(activeProperties.crowdProfileList)
-                .map(item => ({
-                    name: String(item?.name || item?.title || '').trim(),
-                    desc: String(item?.desc || item?.description || '').trim()
-                }))
-                .filter(item => item.name || item.desc)
-                .slice(0, 3);
+            const renderInlineDemandDetail = () => {
+                const searchWords = this.normalizeAiMaxWordList(
+                    this.parseAiMaxJsonList(activeProperties.searchWordList)
+                        .map(item => item?.name || item?.word || item),
+                    12
+                );
+                const personaList = this.parseAiMaxJsonList(activeProperties.crowdProfileList)
+                    .map(item => ({
+                        name: String(item?.name || item?.title || '').trim(),
+                        desc: String(item?.desc || item?.description || '').trim()
+                    }))
+                    .filter(item => item.name || item.desc)
+                    .slice(0, 3);
+                const searchTags = searchWords.length
+                    ? searchWords.map(item => `<span class="am-ai-max-inline-keyword">${this.escapeHtml(item)}</span>`).join('')
+                    : '<span class="am-ai-max-crowd-empty">暂无关键词</span>';
+                const personaHtml = personaList.length
+                    ? `
+                        <div class="am-ai-max-demand-personas" aria-label="人群解析">
+                            <span>人群解析</span>
+                            <div>
+                                ${personaList.map(item => `
+                                    <em>${this.escapeHtml(item.name || '画像')}${item.desc ? `：${this.escapeHtml(item.desc)}` : ''}</em>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `
+                    : '';
+                return `
+                    <div class="am-ai-max-demand-detail" data-am-ai-max-active-detail="${activeDemandIndex}">
+                        <div class="am-ai-max-demand-detail-head">
+                            <b>${this.escapeHtml(activeDemandName)}</b>
+                            ${activeSellPoint ? `<em>${this.escapeHtml(activeSellPoint)}</em>` : ''}
+                        </div>
+                        <p>${this.escapeHtml(activeDescription || '暂无详情描述')}</p>
+                        <div class="am-ai-max-demand-keywords" aria-label="热门关键词">${searchTags}</div>
+                        ${personaHtml}
+                    </div>
+                `;
+            };
             const demandCards = demandList.length
                 ? demandList.slice(0, 6).map((item, index) => {
                     const crowd = crowdList[index] || {};
                     const properties = this.extractAiMaxCrowdProperties(crowd);
                     const sellPoint = String(properties.sellPoint || '').trim();
                     const isActive = index === activeDemandIndex;
-                    return `
+                    const cardHtml = `
                         <button type="button" class="am-ai-max-demand-card${isActive ? ' is-active' : ''}" data-am-ai-max-action="selectDemand" data-campaign-id="${this.escapeHtml(row.campaignId)}" data-demand-index="${index}" aria-pressed="${isActive ? 'true' : 'false'}">
                             <b>${this.escapeHtml(item)}</b>
                             ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
                         </button>
                     `;
+                    return isActive ? `${cardHtml}${renderInlineDemandDetail()}` : cardHtml;
                 }).join('')
                 : '<span class="am-ai-max-crowd-empty">暂无需求</span>';
-            const searchTags = searchWords.length
-                ? searchWords.map(item => `<span class="am-ai-max-crowd-tag">${this.escapeHtml(item)}</span>`).join('')
-                : '<span class="am-ai-max-crowd-empty">暂无搜索词</span>';
-            const personaHtml = personaList.length
-                ? personaList.map(item => `
-                    <div class="am-ai-max-persona">
-                        <b>${this.escapeHtml(item.name || '画像')}</b>
-                        <span>${this.escapeHtml(item.desc || '暂无描述')}</span>
-                    </div>
-                `).join('')
-                : '<span class="am-ai-max-crowd-empty">暂无画像</span>';
             return `
                 <div class="am-ai-max-manage-panel">
                     <div class="am-ai-max-manage-row">
@@ -1287,30 +1304,6 @@
                     <div class="am-ai-max-manage-row">
                         <span class="am-ai-max-crowd-label">已选需求</span>
                         <div class="am-ai-max-demand-grid">${demandCards}</div>
-                    </div>
-                    <div class="am-ai-max-selected-detail">
-                        <span class="am-ai-max-crowd-label">需求详情</span>
-                        <div class="am-ai-max-selected-card">
-                            <b>${this.escapeHtml(activeDemandName)}</b>
-                            ${activeSellPoint ? `<em>${this.escapeHtml(activeSellPoint)}</em>` : ''}
-                            <p>${this.escapeHtml(activeDescription || '暂无详情描述')}</p>
-                        </div>
-                    </div>
-                    ${deliveryPlan ? `
-                        <div class="am-ai-max-manage-row">
-                            <span class="am-ai-max-crowd-label">方案计划</span>
-                            <p>${this.escapeHtml(deliveryPlan)}</p>
-                        </div>
-                    ` : ''}
-                    <div class="am-ai-max-manage-split">
-                        <div>
-                            <span class="am-ai-max-crowd-label">热门搜索词</span>
-                            <div class="am-ai-max-row-crowds">${searchTags}</div>
-                        </div>
-                        <div>
-                            <span class="am-ai-max-crowd-label">人群画像</span>
-                            <div class="am-ai-max-persona-list">${personaHtml}</div>
-                        </div>
                     </div>
                 </div>
             `;
