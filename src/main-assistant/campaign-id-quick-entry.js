@@ -1120,7 +1120,7 @@
                     const sellPoint = String(properties.sellPoint || '').trim();
                     const tooltipId = `am-ai-max-crowd-tip-${safePrefix}-${index}`;
                     return `
-                        <span class="am-ai-max-demand-popover${index % 2 === 1 ? ' is-popover-left' : ''}">
+                        <span class="am-ai-max-demand-popover">
                             <button type="button" class="am-ai-max-demand-card am-ai-max-crowd-tag" aria-describedby="${this.escapeHtml(tooltipId)}">
                                 <span class="am-ai-max-demand-mark" aria-hidden="true">${index + 1}</span>
                                 <span class="am-ai-max-demand-copy">
@@ -1304,7 +1304,7 @@
                     const tooltipId = `am-ai-max-demand-tip-${this.normalizeCampaignId(row.campaignId || '')}-${index}`;
                     const detailHtml = this.buildAiMaxDemandDetailHtml(crowd, item, tooltipId);
                     return `
-                        <span class="am-ai-max-demand-popover${index % 2 === 1 ? ' is-popover-left' : ''}">
+                        <span class="am-ai-max-demand-popover">
                             <button type="button" class="am-ai-max-demand-card" data-demand-index="${index}" aria-describedby="${this.escapeHtml(tooltipId)}">
                                 <span class="am-ai-max-demand-mark" aria-hidden="true">${index + 1}</span>
                                 <span class="am-ai-max-demand-copy">
