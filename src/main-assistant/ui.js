@@ -2177,11 +2177,30 @@
                     min-width: 0;
                     display: grid;
                     gap: 2px;
+                    border: 1px solid rgba(69, 84, 229, 0.12);
                     border-radius: 8px;
                     padding: 7px 8px;
                     background: rgba(69, 84, 229, 0.08);
                     color: var(--am26-text, #1b2438);
+                    text-align: left;
                     box-sizing: border-box;
+                    cursor: pointer;
+                    appearance: none;
+                    font: inherit;
+                    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card:focus-visible,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card.is-active {
+                    background: rgba(69, 84, 229, 0.14);
+                    border-color: rgba(69, 84, 229, 0.34);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card:focus-visible {
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card.is-active {
+                    box-shadow: inset 3px 0 0 rgba(69, 84, 229, 0.74);
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-demand-card b,
                 #am-campaign-ai-max-batch-popup .am-ai-max-persona b {
@@ -2201,6 +2220,48 @@
                     color: var(--am26-text-soft, #505a74);
                     font-size: 11px;
                     line-height: 15px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-selected-detail {
+                    display: grid;
+                    grid-template-columns: 64px minmax(0, 1fr);
+                    gap: 8px;
+                    align-items: start;
+                    min-width: 0;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card {
+                    min-width: 0;
+                    display: grid;
+                    gap: 4px;
+                    padding: 9px 10px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(69, 84, 229, 0.14);
+                    background: rgba(255, 255, 255, 0.64);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card b,
+                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card em {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-style: normal;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card b {
+                    color: var(--am26-text, #1b2438);
+                    font-size: 12px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card em {
+                    color: var(--am26-primary, #4554e5);
+                    font-size: 11px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-selected-card p {
+                    margin: 0;
+                    min-width: 0;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 12px;
+                    line-height: 18px;
+                    word-break: break-word;
                 }
                 #am-campaign-ai-max-batch-popup .am-ai-max-manage-split {
                     display: grid;

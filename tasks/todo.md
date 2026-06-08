@@ -1,3 +1,46 @@
+# TODO - 2026-06-08 AI 点睛已选需求点击展开详情
+
+## 需求规格
+- 用户要求：先中文 commit 已完成的批量 AI 点睛保存工作，再继续增加“已选需求”详情展开能力；当前已完成提交 `f23c61c 增加批量AI点睛保存`。
+- 功能目标：在 `批量+ -> 批量编辑AI点睛 -> 管理` 展开的 AI 点睛板块中，已选需求不能只是静态列表；点击某个人群/需求后，应展开并切换展示该人群对应的卖点、描述、热门搜索词和人群画像。
+- 数据事实源：继续使用现有 `getAiMaxEditableInfoForRow(row)`、`getAiMaxEditableCrowdListForRow(row)`、`aiMaxInfo.nativeCrowdList/currentCrowdList/newCrowdList`；不新增第二套 AI 点睛数据结构。
+- 交互边界：点击已选需求只更新批量弹窗内的展开详情，不跳转页面、不保存、不触发 `aimax/updateUserInput` 等写请求。
+- UI 规范：复用 `am-` 前缀与现有 AI 点睛弹窗样式，需求卡片要有 active/focus 状态，按钮文本和详情内容不能溢出或造成布局跳动。
+- 成功标准：源码、回归测试、构建检查和 Chrome MCP 真实页面验证共同证明：点击不同已选需求会切换到对应人群详情，且无写请求、无弹窗残留。
+
+## 执行计划
+- [x] 校验当前批量 AI 点睛管理面板渲染逻辑，确认需求列表与 `crowdList[index]` 的对应关系。
+- [x] 增加行级选中需求状态与点击动作，渲染可点击需求卡片和选中人群详情。
+- [x] 调整样式，补齐 active/focus/详情区稳定布局。
+- [x] 更新回归测试，覆盖点击动作、active index、详情取选中人群属性和不触发保存链路。
+- [x] 运行相关单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] 用 Chrome DevTools MCP 在真实页面验证管理展开、点击需求切换详情、无写请求，并记录结果。
+- [x] 更新验证记录与结果复盘。
+
+## 高层操作摘要
+- 已确认前置中文提交完成：`f23c61c 增加批量AI点睛保存`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不触碰。
+- 已回看现有实现：`renderAiMaxManagePanel()` 当前总是取 `crowdList[0]` 展示热门搜索词和人群画像，`已选需求` 只是静态卡片，无法像原生页面一样切换到具体人群。
+- 已实现 `selectAiMaxBatchDemand()` 与行级 `activeDemandIndex`，把已选需求卡片改成可点击按钮；点击后只重渲染批量弹窗内部管理板块，并按选中 `crowdList[index]` 展示需求详情、热门搜索词和人群画像。
+- 已补充 active/focus 样式和稳定两列详情区；回归测试已覆盖需求卡片 action、active index、选中人群属性读取和样式约束。
+- 已运行 `npm run build` 同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 已用 Chrome MCP 重载 unpacked extension、刷新真实关键词推广列表页，并在 AI 筛选页打开批量 AI 点睛弹窗验证最新运行态。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步生成产物。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`，选中 2 条 AI 点睛计划后从 `批量+ -> 批量编辑AI点睛` 打开弹窗，点击第一行 `管理` 后出现 `已选需求 / 需求详情 / 热门搜索词 / 人群画像`。
+- Chrome DevTools MCP 点击切换验证：第一行已选需求卡片均为按钮；点击第二个 `小户型厨房也能放下的洗碗机` 后 `aria-pressed=true`，详情切换为“小户型厨房也能放下的洗碗机 / 嵌入式省空间”，热门搜索词切换为 `洗碗机嵌入式、极薄洗碗机、水槽洗碗机小尺寸...`，画像切换为 `小户型租房族、新婚小家庭、精打细算主妇`。
+- Chrome DevTools MCP 再次切换验证：点击第三个 `新婚搬家送伴侣的贴心实用好礼` 后 `aria-pressed=true` 且 `.is-active=true`，详情切换为“新婚搬家送伴侣的贴心实用好礼 / 实用家电送礼”，热门搜索词切换为 `洗碗机、家电、家用电器...`。
+- Chrome DevTools MCP 安全与清理验证：本轮未点击保存/批量保存，`performance` 未出现 `aimax/updateUserInput`、`campaign/updatePart`、`solution/addList`、`solution/copy`、`campaign/delete`、`crowd/save|update` 写请求；弹窗已关闭，最终 `hasPopup:false`，勾选项已取消为 `checkedCount:0`。
+
+## 结果复盘
+- 已完成“已选需求点击展开详情”：批量 AI 点睛管理面板不再固定展示第一个人群，点击任一需求会在弹窗内切换对应人群详情、搜索词和画像。
+- 交互保持只读，不跳转页面、不保存、不触发写请求；状态只保存在行级 `activeDemandIndex`，继续复用现有 `aiMaxInfo/nativeCrowdList/currentCrowdList/newCrowdList` 事实源。
+- 未跟踪截图 `tasks/e7-custom-copy-button-before.png` 未触碰、未纳入。
+
 # TODO - 2026-06-08 批量 AI 点睛保存与批量建计划板块复用
 
 ## 需求规格

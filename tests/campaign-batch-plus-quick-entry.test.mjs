@@ -378,8 +378,28 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
+        /renderAiMaxManagePanel\(row = \{\}\)[\s\S]*?activeDemandIndex[\s\S]*?activeCrowd = crowdList\[activeDemandIndex\][\s\S]*?activeProperties[\s\S]*?searchWordList[\s\S]*?crowdProfileList/,
+        'AI 点睛管理详情应按当前点击的需求人群读取搜索词和画像'
+    );
+    assert.match(
+        quickEntry,
+        /data-am-ai-max-action="selectDemand"[\s\S]*?data-demand-index="\$\{index\}"[\s\S]*?aria-pressed/,
+        '已选需求卡片应是可点击切换的人群按钮'
+    );
+    assert.match(
+        quickEntry,
         /if \(action === 'manage'\) \{[\s\S]*?toggleAiMaxBatchManagePanel\(row\.campaignId\)/,
         '管理入口应回到批量弹窗内的 AI 点睛板块，而不是只打开原生页面'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'selectDemand'\) \{[\s\S]*?selectAiMaxBatchDemand\(row\.campaignId,\s*target\.getAttribute\('data-demand-index'\)/,
+        '点击已选需求应只切换批量弹窗内的当前需求详情'
+    );
+    assert.match(
+        quickEntry,
+        /selectAiMaxBatchDemand\(campaignId = '',\s*demandIndex = 0\)[\s\S]*?row\.activeDemandIndex[\s\S]*?row\.manageExpanded = true[\s\S]*?renderAiMaxBatchRows\(\)/,
+        '需求切换应落到行级 activeDemandIndex 并重渲染管理面板'
     );
     assert.match(
         quickEntry,
@@ -415,6 +435,8 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px/, 'AI 点睛计划行应有稳定网格列宽');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-manage-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?border-radius:\s*10px/, '管理展开板块应有稳定容器样式');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'AI 点睛需求卡片应按稳定网格展示');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card\.is-active\s*\{[\s\S]*?box-shadow:\s*inset 3px 0 0/, '当前选中需求应有稳定 active 态');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-selected-detail\s*\{[\s\S]*?grid-template-columns:\s*64px minmax\(0,\s*1fr\)/, '需求详情应有稳定两列布局');
 });
 
 test('批量+ 读取表格勾选计划并按业务线分组', () => {

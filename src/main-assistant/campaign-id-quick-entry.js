@@ -1079,6 +1079,20 @@
             const row = this.getAiMaxRowByCampaignId(campaignId);
             if (!row) return null;
             row.manageExpanded = !row.manageExpanded;
+            if (row.manageExpanded && !Number.isInteger(row.activeDemandIndex)) row.activeDemandIndex = 0;
+            this.renderAiMaxBatchRows();
+            return row;
+        },
+
+        selectAiMaxBatchDemand(campaignId = '', demandIndex = 0) {
+            const row = this.getAiMaxRowByCampaignId(campaignId);
+            if (!row) return null;
+            const crowdList = this.getAiMaxEditableCrowdListForRow(row);
+            const demandList = this.getAiMaxInfoDemandList(this.getAiMaxEditableInfoForRow(row) || {}, crowdList);
+            const maxIndex = Math.max(0, Math.min(demandList.length || crowdList.length || 1, 20) - 1);
+            const index = Number.isFinite(Number(demandIndex)) ? Number(demandIndex) : 0;
+            row.activeDemandIndex = Math.max(0, Math.min(maxIndex, Math.trunc(index)));
+            row.manageExpanded = true;
             this.renderAiMaxBatchRows();
             return row;
         },
@@ -1217,14 +1231,22 @@
             const demandList = this.getAiMaxInfoDemandList(info, crowdList);
             const prompt = this.getAiMaxInfoPrompt(info);
             const deliveryPlan = String(info.aiMaxDeliveryPlan || info.aiMaxReason || info.analysis || '').trim();
-            const firstCrowd = crowdList[0] || {};
-            const firstProperties = this.extractAiMaxCrowdProperties(firstCrowd);
+            const demandCount = Math.max(demandList.length, crowdList.length, 1);
+            const activeDemandIndex = Math.max(0, Math.min(
+                Number.isInteger(row.activeDemandIndex) ? row.activeDemandIndex : 0,
+                demandCount - 1
+            ));
+            const activeCrowd = crowdList[activeDemandIndex] || {};
+            const activeProperties = this.extractAiMaxCrowdProperties(activeCrowd);
+            const activeDemandName = demandList[activeDemandIndex] || this.formatAiMaxCrowdName(activeCrowd) || '未命名需求';
+            const activeSellPoint = String(activeProperties.sellPoint || '').trim();
+            const activeDescription = String(activeProperties.description || activeProperties.desc || '').trim();
             const searchWords = this.normalizeAiMaxWordList(
-                this.parseAiMaxJsonList(firstProperties.searchWordList)
+                this.parseAiMaxJsonList(activeProperties.searchWordList)
                     .map(item => item?.name || item?.word || item),
                 10
             );
-            const personaList = this.parseAiMaxJsonList(firstProperties.crowdProfileList)
+            const personaList = this.parseAiMaxJsonList(activeProperties.crowdProfileList)
                 .map(item => ({
                     name: String(item?.name || item?.title || '').trim(),
                     desc: String(item?.desc || item?.description || '').trim()
@@ -1236,11 +1258,12 @@
                     const crowd = crowdList[index] || {};
                     const properties = this.extractAiMaxCrowdProperties(crowd);
                     const sellPoint = String(properties.sellPoint || '').trim();
+                    const isActive = index === activeDemandIndex;
                     return `
-                        <span class="am-ai-max-demand-card">
+                        <button type="button" class="am-ai-max-demand-card${isActive ? ' is-active' : ''}" data-am-ai-max-action="selectDemand" data-campaign-id="${this.escapeHtml(row.campaignId)}" data-demand-index="${index}" aria-pressed="${isActive ? 'true' : 'false'}">
                             <b>${this.escapeHtml(item)}</b>
                             ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
-                        </span>
+                        </button>
                     `;
                 }).join('')
                 : '<span class="am-ai-max-crowd-empty">暂无需求</span>';
@@ -1264,6 +1287,14 @@
                     <div class="am-ai-max-manage-row">
                         <span class="am-ai-max-crowd-label">已选需求</span>
                         <div class="am-ai-max-demand-grid">${demandCards}</div>
+                    </div>
+                    <div class="am-ai-max-selected-detail">
+                        <span class="am-ai-max-crowd-label">需求详情</span>
+                        <div class="am-ai-max-selected-card">
+                            <b>${this.escapeHtml(activeDemandName)}</b>
+                            ${activeSellPoint ? `<em>${this.escapeHtml(activeSellPoint)}</em>` : ''}
+                            <p>${this.escapeHtml(activeDescription || '暂无详情描述')}</p>
+                        </div>
                     </div>
                     ${deliveryPlan ? `
                         <div class="am-ai-max-manage-row">
@@ -1667,6 +1698,10 @@
                 if (!row) return;
                 if (action === 'manage') {
                     this.toggleAiMaxBatchManagePanel(row.campaignId);
+                    return;
+                }
+                if (action === 'selectDemand') {
+                    this.selectAiMaxBatchDemand(row.campaignId, target.getAttribute('data-demand-index') || '0');
                     return;
                 }
                 if (action === 'generate') {
