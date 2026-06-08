@@ -7,6 +7,7 @@ const read = (relativePath) => readFileSync(new URL(`../${relativePath}`, import
 
 const quickEntry = read('src/main-assistant/campaign-id-quick-entry.js');
 const quickEntryStyle = read('src/main-assistant/ui.js');
+const keywordPlanApi = read('src/optimizer/keyword-plan-api/search-and-draft.js');
 
 function getQuickEntryMethodSlice(methodName, nextMethodName) {
     const start = quickEntry.search(new RegExp(`\\n\\s*${methodName}\\(`));
@@ -363,8 +364,8 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
     );
     assert.match(
         quickEntry,
-        /generateAiMaxCrowdsForRow\(row = \{\}\)[\s\S]*?requiredMethod:\s*'fetchKeywordAiMaxInfo'[\s\S]*?api\.fetchKeywordAiMaxInfo\(\{[\s\S]*?bizCode:\s*'onebpSearch'[\s\S]*?item[\s\S]*?\}\)[\s\S]*?nativeCrowdList/,
-        '批量获取新人群必须复用 fetchKeywordAiMaxInfo 的原生 AI 点睛生成链路'
+        /generateAiMaxCrowdsForRow\(row = \{\}\)[\s\S]*?const prompt = this\.getAiMaxBatchPromptText\(targetRow\)[\s\S]*?api\.fetchKeywordAiMaxInfo\(\{[\s\S]*?bizCode:\s*'onebpSearch'[\s\S]*?item,[\s\S]*?prompt[\s\S]*?\}\)[\s\S]*?withAiMaxPrompt\(info,\s*prompt\)[\s\S]*?nativeCrowdList/,
+        '批量获取新人群必须复用 fetchKeywordAiMaxInfo 的原生 AI 点睛生成链路并传入本次诉求'
     );
     assert.match(
         quickEntry,
@@ -465,10 +466,25 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
         /resolveNativeActionRowElement\(context = \{\}\)[\s\S]*?a\[href\*="campaignId=\$\{campaignId\}"\][\s\S]*?closest\('tr'\)/,
         '官方按钮定位应能在 rowEl 失效时按 campaignId 重新找到列表行'
     );
+    assert.match(
+        quickEntry,
+        /openAiMaxBatchPopup\(rows = \[\],\s*options = \{\}\)[\s\S]*?am-ai-max-prompt-bar[\s\S]*?获取新人群诉求[\s\S]*?data-am-ai-max-prompt[\s\S]*?data-am-ai-max-action="resetPrompt"/,
+        '批量弹窗应提供获取新人群诉求输入与恢复默认入口'
+    );
+    assert.match(
+        quickEntry,
+        /getInitialAiMaxBatchPrompt\(rows = \[\]\)[\s\S]*?extractAiMaxInfoPrompt\(row\?\.newAiMaxInfo\)[\s\S]*?extractAiMaxInfoPrompt\(row\?\.currentAiMaxInfo\)[\s\S]*?getDefaultAiMaxPrompt/,
+        '获取新人群诉求应优先从已读取 AI 点睛信息初始化，缺省时再使用默认诉求'
+    );
+    assert.match(
+        quickEntry,
+        /withAiMaxPrompt\(info = \{\},\s*prompt = ''\)[\s\S]*?next\.trafficAppeal = promptText[\s\S]*?next\.aiMaxPureUserInput = promptText[\s\S]*?aiMaxUserInput[\s\S]*?word:\s*promptText/,
+        '生成结果应写回同一诉求，保证后续保存 payload 不丢失 prompt'
+    );
     assert.doesNotMatch(
         quickEntry,
-        /promptInput|am-ai-max-prompt-editor|customPrompt|fetchKeywordAiMaxInfo\(\{[\s\S]*?prompt:/,
-        '批量弹窗不应自建 prompt 编辑器或绕过原生 AI 点睛设置'
+        /promptInput|am-ai-max-prompt-editor|customPrompt|data-am-ai-max-action="savePrompt"|data-am-ai-max-action="applyPrompt"/,
+        '批量弹窗不应自建官方 prompt 设置表单或绕过原生 AI 点睛设置'
     );
     assert.doesNotMatch(
         quickEntry,
@@ -528,8 +544,30 @@ test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', (
         /updatePart|solution\/addList|campaign\/create|campaign\/delete|rightList\s*=|saveAiMaxRow|aimax\/updateUserInput/,
         'AI 点睛批量获取新人群不得在生成阶段直接提交或改写人群'
     );
+    assert.match(
+        keywordPlanApi,
+        /const normalizeAiMaxPrompt = \(prompt = ''\) => \{[\s\S]*?return text \|\| KEYWORD_AI_MAX_NATIVE_PROMPT/,
+        '底层 AI 点睛生成接口应规范化自定义 prompt 并保留默认兜底'
+    );
+    assert.match(
+        keywordPlanApi,
+        /requestAiMaxBusinessTalk = async \(\{ bizCode,\s*item,\s*prompt,\s*requestOptions \} = \{\}\) => \{[\s\S]*?const promptText = normalizeAiMaxPrompt\(prompt\)[\s\S]*?prompt:\s*\{[\s\S]*?wordList:\s*\[\{ word:\s*promptText \}\]/,
+        '底层 businessTalk 请求必须把自定义 prompt 写入 prompt.wordList'
+    );
+    assert.match(
+        keywordPlanApi,
+        /fetchKeywordAiMaxInfo = async \(\{ bizCode,\s*item,\s*prompt,\s*requestOptions \} = \{\}\) => \{[\s\S]*?const promptText = normalizeAiMaxPrompt\(prompt\)[\s\S]*?requestAiMaxBusinessTalk\(\{ bizCode:\s*targetBizCode,\s*item,\s*prompt:\s*promptText,\s*requestOptions \}\)[\s\S]*?normalizeNativeAiMaxInfo\(\{ item,\s*aiData,\s*budgetData,\s*effectData,\s*prompt \}\)/,
+        'fetchKeywordAiMaxInfo 应把 prompt 传入原生生成请求和结果归一化'
+    );
+    assert.match(
+        keywordPlanApi,
+        /const rawPrompt = String\(prompt \|\| ''\)\.trim\(\)[\s\S]*?const trafficAppeal = String\(rawPrompt \|\| nativeInfo\.aiMaxPureUserInput \|\| promptText\)\.trim\(\)[\s\S]*?aiMaxUserInput:[\s\S]*?word:\s*trafficAppeal/,
+        '归一化结果应优先使用显式本次 prompt，并在未自定义时保留原生诉求'
+    );
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.76\),\s*rgba\(255,\s*255,\s*255,\s*0\.46\)\)/, 'AI 点睛工作台应使用统一浅玻璃遮罩');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-card\s*\{[\s\S]*?overflow:\s*visible/, 'AI 点睛工作台卡片应允许需求详情浮层越过弹窗边界显示');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-bar\s*\{[\s\S]*?grid-template-columns:\s*104px minmax\(0,\s*1fr\) auto[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.22\)/, '获取新人群诉求输入区应紧凑且使用统一浅玻璃样式');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-input\s*\{[\s\S]*?min-height:\s*44px[\s\S]*?resize:\s*vertical[\s\S]*?border-radius:\s*9px/, '获取新人群诉求输入应可换行编辑且不挤压计划行');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-body\s*\{[\s\S]*?overflow:\s*visible/, '需求详情浮层不应被 body 滚动容器裁剪');
     assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\)/, 'AI 点睛计划行应释放右侧操作列宽');
     assert.doesNotMatch(quickEntryStyle, /grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px|\.am-ai-max-row-side/, 'AI 点睛计划行不应保留旧右侧操作列样式');

@@ -1977,6 +1977,42 @@
                     border-bottom: 1px solid rgba(255, 255, 255, 0.36);
                     background: var(--am26-surface, rgba(255, 255, 255, 0.25));
                 }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-bar {
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: 104px minmax(0, 1fr) auto;
+                    gap: 8px;
+                    align-items: center;
+                    padding: 10px 18px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.36);
+                    background: rgba(255, 255, 255, 0.22);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-label {
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 16px;
+                    white-space: nowrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-input {
+                    min-width: 0;
+                    width: 100%;
+                    min-height: 44px;
+                    max-height: 80px;
+                    resize: vertical;
+                    border: 1px solid rgba(69, 84, 229, 0.16);
+                    border-radius: 9px;
+                    padding: 7px 9px;
+                    background: rgba(255, 255, 255, 0.72);
+                    color: var(--am26-text, #1b2438);
+                    font: 600 12px/18px var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    outline: none;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-input:focus {
+                    border-color: rgba(69, 84, 229, 0.42);
+                    box-shadow: 0 0 0 2px var(--am26-focus, rgba(69, 84, 229, 0.32));
+                }
                 #am-campaign-ai-max-batch-popup .am-ai-max-toolbar-btn,
                 #am-campaign-ai-max-batch-popup .am-ai-max-row-btn {
                     height: 30px;

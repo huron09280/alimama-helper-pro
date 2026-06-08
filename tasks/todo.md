@@ -1,3 +1,48 @@
+# TODO - 2026-06-08 AI 点睛获取新人群 prompt 设置
+
+## 需求规格
+- 用户要求：先中文 commit 上一轮改动，再继续处理“获取新人群的 prompt 的词现在没有可以设置”的问题；上一轮已完成提交 `0df0582 优化AI点睛计划行布局`。
+- 功能目标：`批量+ -> 批量编辑AI点睛` 中，用户可以设置本次“获取新人群”的 AI 点睛流量诉求/prompt，行级 `获取新人群` 和顶部 `批量获取新人群` 都使用该诉求生成新人群。
+- 边界说明：`管理` 仍调用原生页面 `AI点睛设置` 官方弹窗，不改成插件自建官方设置表单；本次输入只影响插件“获取新人群”的预览生成请求，生成阶段仍不保存、不写计划，保存仍走已有二次确认和官方 `aimax/updateUserInput` 合同。
+- 数据事实源：底层继续复用 `fetchKeywordAiMaxInfo`/`businessTalk` 原生 AI 点睛生成链路，只把用户设置的 prompt 写入该链路的 `prompt.wordList[0].word`，并同步进返回的 `trafficAppeal/aiMaxUserInput` 以便保存时使用同一诉求。
+- UI 规范：使用 `am-` 前缀和现有浅玻璃工作台样式；输入区应紧凑、可换行、有默认文案和一键恢复默认，不挤占计划行；生成按钮状态不被输入区遮挡。
+- 安全边界：Chrome MCP 真实页验证必须安装写请求守卫，允许 AI 生成请求，禁止保存/改计划接口；验收后恢复守卫并清理弹窗和勾选状态。
+- 成功标准：源码、测试、构建和真实页验证证明：自定义 prompt 会传给 `fetchKeywordAiMaxInfo` 和底层 `businessTalk` 请求；获取新人群成功后保存 payload 使用同一 prompt；未点击保存时无写请求。
+
+## 执行计划
+- [x] 确认上一轮中文提交和当前工作区状态。
+- [x] 分析 `获取新人群` 当前 prompt 来源和底层 API 入参。
+- [x] 增加批量弹窗 prompt 输入、默认值、重置和状态持久。
+- [x] 将 prompt 传入 `generateAiMaxCrowdsForRow`、`generateAiMaxCrowdsForAllRows` 和 `fetchKeywordAiMaxInfo` 底层请求。
+- [x] 更新回归测试，覆盖 prompt 输入、传参、保存 payload 和生成阶段不写计划。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证自定义 prompt 可见、生成请求携带 prompt、无保存写请求，并清理页面状态。
+- [x] 更新任务记录与教训，中文提交。
+
+## 高层操作摘要
+- 已确认上一轮提交为 `0df0582 优化AI点睛计划行布局`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不纳入。
+- 初步定位：当前 `generateAiMaxCrowdsForRow()` 调用 `api.fetchKeywordAiMaxInfo({ bizCode:'onebpSearch', item })`，没有传 prompt；底层 `requestAiMaxBusinessTalk()` 固定使用 `KEYWORD_AI_MAX_NATIVE_PROMPT` 作为 `prompt.wordList[0].word`。
+- 方案校验：本轮不改变 `管理 -> 官方 AI点睛设置` 的原生弹窗行为；只在批量工作台增加“获取新人群诉求”输入，把它作为 `获取新人群/批量获取新人群` 的生成参数，并让保存 payload 复用生成结果里的同一诉求。
+- 已在批量弹窗顶部增加 `获取新人群诉求` textarea 和 `恢复默认`；默认优先读取已加载计划的现有 AI 点睛诉求，用户编辑后异步读取计划不会覆盖输入。
+- 已将诉求传入 `generateAiMaxCrowdsForRow()` 调用的 `fetchKeywordAiMaxInfo({ prompt })`，底层 `businessTalk` 请求使用 `prompt.wordList[0].word`；归一化结果同步写入 `trafficAppeal/aiMaxPureUserInput/aiMaxUserInput.wordList[0].word`，保存时继续走既有 payload。
+- 已更新 `tests/campaign-batch-plus-quick-entry.test.mjs`，新增 prompt 输入、传参、底层请求体和保存 payload 同诉求断言，同时保留“管理入口调用官方弹窗、不自建官方设置表单”的断言。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`，勾选计划 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385` 后打开 `批量+ -> 批量编辑AI点睛`。
+- Chrome DevTools MCP prompt 输入验证：弹窗显示新增 `获取新人群诉求` 输入区，默认值来自当前计划已有诉求；输入测试诉求 `CODEX_PROMPT_20260608_1520 只获取高意向、近期有洗碗机购买需求、关注除菌烘干和嵌入安装的人群，排除低龄和低消费意向人群。` 后，点击行级 `获取新人群`。
+- Chrome DevTools MCP 请求验证：捕获到 `businessTalk.json` 请求，请求体 `prompt.wordList[0].word` 等于上述测试诉求；生成成功后状态为 `已生成新人群 5 个，可保存`，summary 为 `已选 1 个计划 / 已读取 1 个 / 已生成 1 个`，新需求包含 `新房装修灶下嵌入式洗碗机`、`有孩子家庭的高温消毒安心选择` 等。
+- Chrome DevTools MCP 安全与清理验证：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`；未点击保存或批量保存。验证后已恢复守卫、移除 `#am-campaign-ai-max-batch-popup` 并取消勾选，最终 `hasGuard:false`、`hasPopup:false`、`checkedCount:0`。
+
+## 结果复盘
+- 已补齐“获取新人群诉求”设置：顶部输入只作用于插件的行级/批量新人群生成，不替代 `管理` 入口的官方 `AI点睛设置` 弹窗。
+- 底层继续复用原生 `businessTalk` 生成链路，自定义诉求进入 `prompt.wordList[0].word`；生成结果同步写入 `trafficAppeal/aiMaxPureUserInput/aiMaxUserInput.wordList[0].word`，后续保存 payload 使用同一诉求。
+- 生成阶段仍不写计划；保存能力保持现有二次确认和官方 `aimax/updateUserInput` 合同，真实页守卫验证未出现保存类写请求。
+
 # TODO - 2026-06-08 AI 点睛管理调用原生 prompt 设置
 
 ## 需求规格
