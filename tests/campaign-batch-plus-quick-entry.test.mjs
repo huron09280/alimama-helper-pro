@@ -7,6 +7,8 @@ const read = (relativePath) => readFileSync(new URL(`../${relativePath}`, import
 
 const quickEntry = read('src/main-assistant/campaign-id-quick-entry.js');
 const quickEntryStyle = read('src/main-assistant/ui.js');
+const keywordPlanApi = read('src/optimizer/keyword-plan-api/search-and-draft.js');
+const sharedPreamble = read('src/shared/script-preamble.js');
 
 function getQuickEntryMethodSlice(methodName, nextMethodName) {
     const start = quickEntry.search(new RegExp(`\\n\\s*${methodName}\\(`));
@@ -190,6 +192,7 @@ test('批量+ 菜单只保留插件增强能力且不重复原生已有入口', 
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量暂停'/, '菜单缺少批量暂停');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量删除'/, '菜单缺少批量删除');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量修改计划名称'/, '菜单缺少批量修改计划名称');
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'aiMax'[\s\S]*?label:\s*'批量编辑AI点睛'/, '菜单缺少批量编辑AI点睛');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量修改屏蔽人群'/, '菜单缺少批量修改屏蔽人群');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?label:\s*'批量人群设置'/, '菜单缺少批量人群设置');
     assert.doesNotMatch(quickEntry, /nativeBatchPlanItems|getNativeBatchPlanSettingActionMetas|getNativeBatchPlanSettingActionMeta|runNativeBatchPlanSettingAction/, '批量+ 不应再接入原生已有的批量计划设置入口');
@@ -299,6 +302,7 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'start'[\s\S]*?icon:\s*'layers-play'/, '批量开启菜单项应使用共享图标');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'delete'[\s\S]*?icon:\s*'x-circle'/, '批量删除菜单项应使用危险动作共享图标');
     assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'rename'[\s\S]*?icon:\s*'edit'[\s\S]*?label:\s*'批量修改计划名称'/, '批量修改计划名称菜单项应使用共享编辑图标');
+    assert.match(quickEntry, /getBatchPlusMenuItems\(bizCode = ''\)[\s\S]*?action:\s*'aiMax'[\s\S]*?icon:\s*'sparkles'[\s\S]*?label:\s*'批量编辑AI点睛'/, '批量编辑AI点睛菜单项应使用共享 sparkles 图标');
     assert.doesNotMatch(quickEntry, /action:\s*'nativeDailyBudget'|action:\s*'nativeLaunchArea'|action:\s*'nativeCampaignGroup'/, '批量+ 不应重复原生预算、地域、计划组等入口');
     assert.match(quickEntry, /showBatchPlusMenu\(triggerEl\)[\s\S]*?am-campaign-batch-plus-item-icon[\s\S]*?renderAmIcon\(item\.icon \|\| 'logo'/, '批量+菜单项应渲染共享 SVG 图标');
     assert.match(menuBlock, /triggerEl\.setAttribute\('aria-controls',\s*'am-campaign-batch-plus-menu'\)/, '批量+菜单打开时触发器应指向菜单 id');
@@ -341,6 +345,372 @@ test('批量+ 自有菜单和确认弹窗符合统一 UI 规范', () => {
     assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-submit,[\s\S]*?border-radius:\s*10px/, '批量确认按钮圆角应符合统一按钮口径');
     assert.match(quickEntryStyle, /#am-campaign-batch-confirm-popup \.am-batch-confirm-submit\.is-danger:hover,[\s\S]*?background:\s*var\(--am26-danger[\s\S]*?outline:\s*2px solid var\(--am26-danger-soft/, '批量确认危险按钮 hover/focus 不应回退硬编码红色');
     assert.match(quickEntryStyle, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#am-campaign-batch-plus-menu \.am-campaign-batch-plus-item/, '批量+自有控件应适配减少动画');
+});
+
+test('批量+ AI点睛复用原生生成链路并支持管理展开与保存', () => {
+    assert.match(
+        quickEntry,
+        /runBatchPlusAction\(action = '',\s*bizCode = '',\s*triggerEl = null\)[\s\S]*?if \(action === 'aiMax'\)[\s\S]*?runBatchAiMaxCampaigns\(contexts,\s*normalizedBizCode,\s*triggerEl\)/,
+        '批量+ aiMax 动作应分发到 AI 点睛工作台'
+    );
+    assert.match(
+        quickEntry,
+        /runBatchAiMaxCampaigns\(contexts = \[\],\s*fallbackBizCode = '',\s*triggerEl = null\)[\s\S]*?targetBizCode !== 'onebpSearch'[\s\S]*?当前仅支持关键词推广计划/,
+        '批量 AI 点睛应先限制关键词推广业务线'
+    );
+    assert.match(
+        quickEntry,
+        /resolveBatchAiMaxRow\(context = \{\},\s*fallbackBizCode = '',\s*authContext = \{\}\)[\s\S]*?queryCampaignDetail\(campaignId,\s*bizCode,\s*authContext\)[\s\S]*?isKeywordAiMaxCampaignEnabled\(campaign\)[\s\S]*?queryCampaignCrowdList\(campaignId,\s*bizCode,\s*authContext,\s*row\.aiMaxEnabled \? '' : adgroupId\)/,
+        'AI 点睛工作台应读取计划详情、AI 开关和当前人群'
+    );
+    assert.match(
+        quickEntry,
+        /generateAiMaxCrowdsForRow\(row = \{\}\)[\s\S]*?const prompt = this\.getAiMaxBatchPromptText\(targetRow\)[\s\S]*?const shieldWords = this\.getAiMaxBatchShieldWords\(targetRow\)[\s\S]*?const requestPrompt = this\.buildAiMaxPromptWithShieldWords\(prompt,\s*shieldWords\)[\s\S]*?api\.fetchKeywordAiMaxInfo\(\{[\s\S]*?bizCode:\s*'onebpSearch'[\s\S]*?item,[\s\S]*?prompt:\s*requestPrompt[\s\S]*?\}\)[\s\S]*?withAiMaxPrompt\(info,\s*prompt,\s*shieldWords\)[\s\S]*?nativeCrowdList/,
+        '批量获取新人群必须复用 fetchKeywordAiMaxInfo 的原生 AI 点睛生成链路，并把屏蔽词约束合并进本次请求 prompt'
+    );
+    assert.match(
+        quickEntry,
+        /resolveBatchAiMaxRow\(context = \{\},[\s\S]*?currentAiMaxInfo = \{[\s\S]*?campaign\.aiMaxInfo[\s\S]*?nativeCrowdList:\s*row\.currentCrowdList/,
+        '读取当前计划后应把 campaign.aiMaxInfo 与当前人群合成可管理的 AI 点睛信息'
+    );
+    assert.match(
+        quickEntry,
+        /buildAiMaxDemandDetailHtml\(crowdItem = \{\},\s*demandName = '',\s*tooltipId = ''\)[\s\S]*?am-ai-max-demand-detail[\s\S]*?role="tooltip"[\s\S]*?am-ai-max-demand-keywords/,
+        'AI 点睛需求人群详情应由共享 tooltip 渲染，包含关键词和人群解析'
+    );
+    assert.match(
+        quickEntry,
+        /buildAiMaxDemandDetailHtml\(crowdItem = \{\},[\s\S]*?crowdProfileList[\s\S]*?am-ai-max-demand-personas[\s\S]*?aria-label="人群解析"/,
+        'AI 点睛需求人群 tooltip 应保留人群解析'
+    );
+    assert.match(
+        quickEntry,
+        /formatAiMaxCrowdTags\(crowdList = \[\],\s*limit = 5,\s*idPrefix = 'crowd',\s*options = \{\}\)[\s\S]*?expanded \? list : list\.slice\(0,\s*safeLimit\)[\s\S]*?am-ai-max-demand-popover[\s\S]*?am-ai-max-demand-card am-ai-max-crowd-tag[\s\S]*?am-ai-max-demand-copy[\s\S]*?<\/button>[\s\S]*?buildAiMaxDemandDetailHtml\(item,\s*name,\s*tooltipId\)[\s\S]*?<\/span>/,
+        '批量弹窗当前/新生成人群详情应作为按钮外侧 sibling 弹窗渲染'
+    );
+    assert.doesNotMatch(
+        getQuickEntryMethodSlice('formatAiMaxCrowdTags', 'describeAiMaxInfo'),
+        /am-ai-max-demand-mark/,
+        '当前/新生成需求人群卡片不应显示序列号'
+    );
+    assert.match(
+        quickEntry,
+        /data-am-ai-max-action="toggleCrowds"[\s\S]*?data-crowd-scope="\$\{this\.escapeHtml\(options\.scope \|\| ''\)\}"[\s\S]*?\$\{expanded \? '收起' : `\+\$\{list\.length - safeLimit\}`\}/,
+        '+N 应是可点击的当前行需求展开入口'
+    );
+    assert.match(
+        quickEntry,
+        /toggleAiMaxBatchCrowds\(campaignId = '',\s*scope = ''\)[\s\S]*?showAllNewCrowds[\s\S]*?showAllCurrentCrowds[\s\S]*?renderAiMaxBatchRows\(\)/,
+        '+N 展开状态应只记录在当前 AI 点睛行上'
+    );
+    assert.match(
+        quickEntry,
+        /am-ai-max-demand-personas[\s\S]*?aria-label="人群解析"[\s\S]*?personaList\.map/,
+        '就近详情应保留当前人群的具体解析'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxManagePanel\(row = \{\}\)[\s\S]*?this\.buildAiMaxDemandDetailHtml\(crowd,\s*item,\s*tooltipId\)[\s\S]*?am-ai-max-demand-card[\s\S]*?am-ai-max-demand-copy[\s\S]*?detailHtml/,
+        '备用管理面板中的需求卡片也应复用 hover/focus 详情浮层'
+    );
+    assert.doesNotMatch(
+        getQuickEntryMethodSlice('renderAiMaxManagePanel', 'async saveAiMaxRow'),
+        /am-ai-max-demand-mark/,
+        '备用管理面板需求卡片不应显示序列号'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('renderAiMaxManagePanel(row = {})'),
+            quickEntry.indexOf('async saveAiMaxRow')
+        ),
+        /am-ai-max-selected-detail|am-ai-max-selected-card|方案计划/,
+        '需求详情不应再固定渲染成远离卡片的大块信息'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'manage'\) \{[\s\S]*?openAiMaxNativeManager\(row\)/,
+        '管理入口应调用原生页面 AI 点睛设置入口'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('openAiMaxNativeManager(row = {})'),
+            quickEntry.indexOf('findNativeAiMaxSettingDrawer()')
+        ),
+        /closeAiMaxBatchPopup\(\)/,
+        '点击管理打开官方 AI 点睛设置时不应关闭原批量编辑 AI 点睛弹窗'
+    );
+    assert.match(
+        quickEntry,
+        /openAiMaxNativeManager\(row = \{\}\) \{[\s\S]*?findNativeActionButtonForContext\(context,\s*'aiMax'\)[\s\S]*?popup\.classList\.add\('is-native-open'\)[\s\S]*?beforeUrl = window\.location\.href[\s\S]*?button\.click\(\)[\s\S]*?navigatedToDetail[\s\S]*?window\.location\.href = beforeUrl[\s\S]*?findNativeAiMaxSettingDrawer[\s\S]*?raiseAiMaxNativeDrawer\(drawer\)[\s\S]*?watchAiMaxNativeDrawerClose/,
+        '管理入口应保留批量弹窗并把官方 AI 点睛设置弹窗置顶'
+    );
+    assert.match(
+        quickEntry,
+        /raiseAiMaxNativeDrawer\(drawer = null\)[\s\S]*?style\.zIndex = '2147483600'[\s\S]*?restoreAiMaxNativeDrawerZIndex\(drawer = null\)[\s\S]*?removeProperty\('z-index'\)/,
+        '官方 AI 点睛弹窗置顶应在关闭后恢复原 z-index'
+    );
+    assert.doesNotMatch(
+        quickEntry,
+        /pendingAiMaxNativeManager|openPendingAiMaxNativeDetailManager|findNativeAiMaxDetailSettingButton|schedulePendingAiMaxNativeManagerCheck/,
+        '管理入口不应再通过详情页 pending 跟随打开 AI 点睛设置'
+    );
+    assert.match(
+        quickEntry,
+        /if \(normalizedAction === 'aiMax'\) \{[\s\S]*?return \[\/\^AI点睛设置\(\?:NEW\)\?\$\/\]/,
+        'AI 点睛管理只能匹配当前行官方 AI点睛设置按钮，不能退化到高级设置或更多'
+    );
+    assert.match(
+        quickEntry,
+        /findNativeAiMaxSettingDrawer\(\) \{[\s\S]*?AI点睛设置[\s\S]*?方案解析[\s\S]*?已投放方案[\s\S]*?搜索需求[\s\S]*?开启AI点睛/,
+        '管理入口应以官方 AI 点睛设置抽屉作为完成条件'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('openAiMaxNativeManager(row = {})'),
+            quickEntry.indexOf('async generateAiMaxCrowdsForRow')
+        ),
+        /buildCampaignDetailUrl|window\.open/,
+        '管理入口找不到当前行官方按钮时不应自动跳详情页'
+    );
+    assert.match(
+        quickEntry,
+        /resolveNativeActionRowElement\(context = \{\}\)[\s\S]*?a\[href\*="campaignId=\$\{campaignId\}"\][\s\S]*?closest\('tr'\)/,
+        '官方按钮定位应能在 rowEl 失效时按 campaignId 重新找到列表行'
+    );
+    assert.match(
+        quickEntry,
+        /openAiMaxBatchPopup\(rows = \[\],\s*options = \{\}\)[\s\S]*?\$\{this\.renderAiMaxPromptCard\(\)\}[\s\S]*?data-am-ai-max-batch-body/,
+        '批量弹窗顶部应挂载诉求卡到计划列表上方'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxPromptCard\(\)[\s\S]*?data-am-ai-max-action="toggleTemplate"[\s\S]*?data-am-ai-max-action="toggleShield"[\s\S]*?data-am-ai-max-action="resetPrompt"[\s\S]*?data-am-ai-max-action="generateAll"/,
+        '诉求卡应提供模板、屏蔽词、恢复默认和方案解析入口'
+    );
+    assert.match(
+        quickEntry,
+        /getAiMaxPromptTemplates\(\)[\s\S]*?提升商品质量分[\s\S]*?核心流量竞争[\s\S]*?热门流量追踪[\s\S]*?低成本稳增长[\s\S]*?爆品拉新破圈[\s\S]*?新品快速测款/,
+        '模板入口应补回 6 个推荐诉求模板'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxPromptCard\(\)[\s\S]*?class="am-ai-max-prompt-card"[\s\S]*?data-am-ai-max-prompt[\s\S]*?document[\s\S]*?<span>模板<\/span>[\s\S]*?minus-circle[\s\S]*?<span>屏蔽词 <em data-am-ai-max-shield-count>[\s\S]*?star[\s\S]*?方案解析/,
+        '诉求卡样式结构应对齐官方：上方诉求文案，下方模板、屏蔽词、星标和方案解析'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxShieldPanel\(\)[\s\S]*?屏蔽词设置[\s\S]*?renderBox\('center',\s*'中心词屏蔽',\s*10,\s*state\.center\)[\s\S]*?renderBox\('exact',\s*'精确词屏蔽',\s*100,\s*state\.exact\)/,
+        '屏蔽词入口应补回中心词和精确词编辑面板'
+    );
+    assert.match(
+        quickEntry,
+        /renderAiMaxShieldPanel\(\)[\s\S]*?data-am-ai-max-shield-input="\$\{this\.escapeHtml\(type\)\}"[\s\S]*?data-am-ai-max-action="addShieldWord"[\s\S]*?data-am-ai-max-shield-list="\$\{this\.escapeHtml\(type\)\}"/,
+        '屏蔽词面板应提供输入、添加和标签列表'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'toggleTemplate'\)[\s\S]*?toggleAiMaxPromptPanel\(popup,\s*'template'[\s\S]*?if \(action === 'toggleShield'\)[\s\S]*?toggleAiMaxPromptPanel\(popup,\s*'shield'[\s\S]*?if \(action === 'applyTemplate'\)[\s\S]*?setAiMaxBatchPrompt\(template\.text\)[\s\S]*?if \(action === 'addShieldWord'\)[\s\S]*?addAiMaxBatchShieldWord\(type,\s*input\.value\)[\s\S]*?if \(action === 'removeShieldWord'\)[\s\S]*?removeAiMaxBatchShieldWord/,
+        '诉求卡的模板应用和屏蔽词增删必须接入弹窗事件'
+    );
+    assert.match(
+        quickEntry,
+        /resetAiMaxBatchPrompt\(\) \{[\s\S]*?return this\.setAiMaxBatchPrompt\(this\.getDefaultAiMaxPrompt\(\)\)/,
+        '星标恢复默认应标记为用户显式诉求，避免后续行重渲染再次用计划原诉求覆盖'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'resetPrompt'\) \{[\s\S]*?resetAiMaxBatchPrompt\(\)[\s\S]*?classList\.add\('is-applied'\)[\s\S]*?Logger\.log\('✅ 已恢复默认 AI 点睛诉求'\)/,
+        '点击星标应恢复默认诉求并给出可见/日志反馈'
+    );
+    assert.match(
+        quickEntry,
+        /getInitialAiMaxBatchPrompt\(rows = \[\]\)[\s\S]*?extractAiMaxInfoPrompt\(row\?\.newAiMaxInfo\)[\s\S]*?extractAiMaxInfoPrompt\(row\?\.currentAiMaxInfo\)[\s\S]*?getDefaultAiMaxPrompt/,
+        '获取新人群诉求应优先从已读取 AI 点睛信息初始化，缺省时再使用默认诉求'
+    );
+    assert.match(
+        quickEntry,
+        /getInitialAiMaxBatchShieldWords\(rows = \[\]\)[\s\S]*?getAiMaxInfoShieldWordState\(info\)[\s\S]*?centerWords\.push\(\.\.\.state\.center\)[\s\S]*?exactWords\.push\(\.\.\.state\.exact\)/,
+        '屏蔽词应能从已读取 AI 点睛信息初始化'
+    );
+    assert.match(
+        quickEntry,
+        /buildAiMaxPromptWithShieldWords\(prompt = '',\s*shieldWords = \{\}\)[\s\S]*?中心词屏蔽：\$\{center\.join\('、'\)\}[\s\S]*?精确词屏蔽：\$\{exact\.join\('、'\)\}[\s\S]*?屏蔽词要求：/,
+        '生成请求 prompt 应追加屏蔽词要求'
+    );
+    assert.match(
+        quickEntry,
+        /withAiMaxPrompt\(info = \{\},\s*prompt = '',\s*shieldWords = \{\}\)[\s\S]*?next\.trafficAppeal = promptText[\s\S]*?next\.aiMaxPureUserInput = promptText[\s\S]*?aiMaxUserInput[\s\S]*?word:\s*promptText[\s\S]*?next\.centerShieldWordList = centerShieldWordList[\s\S]*?next\.exactShieldWordList = exactShieldWordList[\s\S]*?blockWordConfig[\s\S]*?centerWordList:\s*centerShieldWordList[\s\S]*?exactWordList:\s*exactShieldWordList/,
+        '生成结果应写回纯诉求和结构化屏蔽词，保证后续保存 payload 不丢失字段'
+    );
+    assert.doesNotMatch(
+        quickEntry,
+        /promptInput|am-ai-max-prompt-editor|customPrompt|data-am-ai-max-action="savePrompt"|data-am-ai-max-action="applyPrompt"/,
+        '批量弹窗不应自建官方 prompt 设置表单或绕过原生 AI 点睛设置'
+    );
+    assert.doesNotMatch(
+        quickEntry,
+        /selectAiMaxBatchDemand|data-am-ai-max-action="selectDemand"|activeDemandIndex|aria-pressed/,
+        '需求人群详情不应再依赖点击切换状态，应由 hover/focus 临时显示'
+    );
+    assert.match(
+        quickEntry,
+        /getAiMaxSelectedDemandList\(info = \{\},\s*crowdList = \[\]\)[\s\S]*?if \(this\.hasAiMaxSelectedDemandList\(info\)\)[\s\S]*?return allDemandList/,
+        'AI 点睛需求没有显式选择状态时应默认全选全部需求'
+    );
+    const demandSelectBlock = getQuickEntryMethodSlice('renderAiMaxDemandSelect', 'withAiMaxPrompt');
+    assert.match(demandSelectBlock, /需求 已选 \$\{checkedCount\}\/\$\{demandList\.length\}/, '需求下拉触发按钮应显示已选数量');
+    assert.match(demandSelectBlock, /data-am-ai-max-demand-check-all/, '需求下拉应提供全选项');
+    assert.match(demandSelectBlock, /data-am-ai-max-demand-check="1"/, '需求下拉应提供单项复选框');
+    assert.match(demandSelectBlock, /data-am-ai-max-action="applyDemandSelect"[\s\S]*?确定/, '需求下拉应提供确定按钮');
+    assert.match(demandSelectBlock, /data-am-ai-max-action="cancelDemandSelect"[\s\S]*?取消/, '需求下拉应提供取消按钮');
+    assert.match(
+        quickEntry,
+        /if \(action === 'toggleDemandSelect'\) \{[\s\S]*?closeAiMaxPromptPanels\(popup\)[\s\S]*?toggleAiMaxDemandSelect\(campaignId\)[\s\S]*?if \(action === 'applyDemandSelect'\) \{[\s\S]*?applyAiMaxDemandSelect\(campaignId,[\s\S]*?if \(action === 'cancelDemandSelect'\) \{[\s\S]*?closeAiMaxDemandSelectPanels\(\)/,
+        '需求下拉的打开、确定和取消必须接入批量弹窗点击事件'
+    );
+    assert.match(
+        quickEntry,
+        /popup\.addEventListener\('change',\s*\(event\) => \{[\s\S]*?data-am-ai-max-demand-select-panel[\s\S]*?data-am-ai-max-demand-check-all[\s\S]*?data-am-ai-max-demand-check[\s\S]*?syncAiMaxDemandSelectPanelState\(panel\)/,
+        '需求下拉 checkbox 变更应同步全选、半选和已选数量'
+    );
+    assert.match(
+        quickEntry,
+        /if \(event\.key !== 'Escape'\) return;[\s\S]*?openDemandPanel[\s\S]*?closeAiMaxDemandSelectPanels\(\)[\s\S]*?openPanel[\s\S]*?closeAiMaxPromptPanels\(popup\)/,
+        'Esc 应优先关闭需求下拉，再关闭 prompt 弹层，最后关闭批量弹窗'
+    );
+    assert.match(
+        quickEntry,
+        /buildAiMaxSavePayload\(row = \{\}\)[\s\S]*?const allDemandList = this\.getAiMaxAllDemandList\(info,\s*editableCrowdList\)[\s\S]*?const selectedDemandList = this\.getAiMaxSelectedDemandList\(info,\s*editableCrowdList\)[\s\S]*?getAiMaxCrowdListByDemand\(editableCrowdList,\s*selectedDemandList\)[\s\S]*?aiMaxInfo\.demandList = allDemandList[\s\S]*?aiMaxInfo\.selectedDemandList = selectedDemandList[\s\S]*?nativeCrowdList[\s\S]*?crowdList/,
+        '保存 payload 应按已选需求过滤 nativeCrowdList 与顶层 crowdList，未选需求等同删除'
+    );
+    assert.match(
+        quickEntry,
+        /buildAiMaxSavePayload\(row = \{\}\)[\s\S]*?const shieldWords = this\.getAiMaxInfoShieldWordState\(info\)[\s\S]*?aiMaxUserInput[\s\S]*?wordList[\s\S]*?centerShieldWordList:\s*shieldWords\.center[\s\S]*?exactShieldWordList:\s*shieldWords\.exact[\s\S]*?blockWordConfig[\s\S]*?centerWordList:\s*shieldWords\.center[\s\S]*?exactWordList:\s*shieldWords\.exact[\s\S]*?aiMaxDeliveryPlan[\s\S]*?nativeCrowdList[\s\S]*?crowdList/,
+        '保存 payload 应包含原生合同的 aiMaxInfo、prompt、方案计划、顶层 crowdList 和结构化屏蔽词'
+    );
+    assert.match(
+        quickEntry,
+        /saveAiMaxRow\(row = \{\},\s*authContext = \{\}\)[\s\S]*?aimax\/updateUserInput\.json\?\$\{query\.toString\(\)\}[\s\S]*?OneApiTransport\.postJson\(url,\s*payload/,
+        '保存应调用原生 aimax/updateUserInput.json 合同'
+    );
+    assert.match(
+        quickEntry,
+        /saveAiMaxBatchRow\(campaignId = '',\s*triggerEl = null\)[\s\S]*?openBatchPlusConfirmDialog\(\{[\s\S]*?确认保存AI点睛[\s\S]*?saveAiMaxRow\(row,\s*authContext\)/,
+        '单行保存前必须二次确认并调用统一保存 helper'
+    );
+    assert.match(
+        quickEntry,
+        /saveAiMaxCrowdsForAllRows\(triggerEl = null\)[\s\S]*?确认批量保存AI点睛[\s\S]*?saveAiMaxRow\(row,\s*authContext\)/,
+        '批量保存前必须二次确认并逐行调用统一保存 helper'
+    );
+    assert.match(quickEntry, /data-am-ai-max-action="saveAll"[\s\S]*?批量保存/, 'AI 点睛工作台应提供批量保存入口');
+    assert.match(quickEntry, /data-am-ai-max-action="save"[\s\S]*?>保存<\/button>/, 'AI 点睛工作台应提供行级保存入口');
+    assert.match(
+        quickEntry,
+        /formatAiMaxCrowdTags\(row\.currentCrowdList,\s*5,[\s\S]*?formatAiMaxCrowdTags\(row\.newCrowdList,\s*5/,
+        '当前/新生成需求人群默认应横向展示 5 个卡片'
+    );
+    assert.match(
+        quickEntry,
+        /mergeAiMaxCrowdLists\(\.\.\.crowdLists\)[\s\S]*?getAiMaxCrowdMergeKey\(item\)[\s\S]*?seen\.has\(key\)[\s\S]*?merged\.push\(this\.cloneCopyData\(item\)\)/,
+        'AI 点睛新人群合并应按需求键去重并保留旧人群'
+    );
+    assert.match(
+        quickEntry,
+        /generateAiMaxCrowdsForRow\(row = \{\}\)[\s\S]*?rawNewCrowdList[\s\S]*?mergeAiMaxCrowdLists\(targetRow\.currentCrowdList,\s*rawNewCrowdList\)[\s\S]*?mergedDemandSource[\s\S]*?demandList:\s*mergedDemandSource[\s\S]*?nativeCrowdList:\s*mergedCrowdList\.map[\s\S]*?withAiMaxSelectedDemands\(infoWithMergedCrowds,\s*mergedDemandList,\s*mergedCrowdList\)[\s\S]*?newCrowdList = rawNewCrowdList\.map/,
+        '获取新人群后保存事实源应追加旧需求和新需求，而展示用 newCrowdList 只保留本次新生成'
+    );
+    assert.match(
+        quickEntry,
+        /describeAiMaxInfo\(row\.newAiMaxInfo,\s*editableCrowdList\)/,
+        '生成后的行摘要应基于合并后的可编辑人群列表，而不是只统计新生成人群'
+    );
+    assert.match(
+        quickEntry,
+        /am-ai-max-row-footer[\s\S]*?am-ai-max-row-status[\s\S]*?am-ai-max-row-actions[\s\S]*?data-am-ai-max-action="manage"[\s\S]*?data-am-ai-max-action="generate"[\s\S]*?data-am-ai-max-action="save"/,
+        '状态提示和行级操作应放在对应计划内容下方'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('renderAiMaxBatchRows()'),
+            quickEntry.indexOf('closeAiMaxBatchPopup()')
+        ),
+        /am-ai-max-row-side/,
+        'AI 点睛计划行不应再使用右侧操作列挤占需求人群空间'
+    );
+    assert.match(
+        quickEntry,
+        /if \(action === 'toggleCrowds'\) \{[\s\S]*?toggleAiMaxBatchCrowds\(row\.campaignId,\s*target\.getAttribute\('data-crowd-scope'\) \|\| ''\)/,
+        '+N 按钮点击应展开当前行对应分组的全部需求人群'
+    );
+    assert.doesNotMatch(
+        quickEntry.slice(
+            quickEntry.indexOf('async generateAiMaxCrowdsForRow'),
+            quickEntry.indexOf('async generateAiMaxCrowdsForAllRows')
+        ),
+        /updatePart|solution\/addList|campaign\/create|campaign\/delete|rightList\s*=|saveAiMaxRow|aimax\/updateUserInput/,
+        'AI 点睛批量获取新人群不得在生成阶段直接提交或改写人群'
+    );
+    assert.match(
+        keywordPlanApi,
+        /const normalizeAiMaxPrompt = \(prompt = ''\) => \{[\s\S]*?return text \|\| KEYWORD_AI_MAX_NATIVE_PROMPT/,
+        '底层 AI 点睛生成接口应规范化自定义 prompt 并保留默认兜底'
+    );
+    assert.match(
+        keywordPlanApi,
+        /requestAiMaxBusinessTalk = async \(\{ bizCode,\s*item,\s*prompt,\s*requestOptions \} = \{\}\) => \{[\s\S]*?const promptText = normalizeAiMaxPrompt\(prompt\)[\s\S]*?prompt:\s*\{[\s\S]*?wordList:\s*\[\{ word:\s*promptText \}\]/,
+        '底层 businessTalk 请求必须把自定义 prompt 写入 prompt.wordList'
+    );
+    assert.match(
+        keywordPlanApi,
+        /fetchKeywordAiMaxInfo = async \(\{ bizCode,\s*item,\s*prompt,\s*requestOptions \} = \{\}\) => \{[\s\S]*?const promptText = normalizeAiMaxPrompt\(prompt\)[\s\S]*?requestAiMaxBusinessTalk\(\{ bizCode:\s*targetBizCode,\s*item,\s*prompt:\s*promptText,\s*requestOptions \}\)[\s\S]*?normalizeNativeAiMaxInfo\(\{ item,\s*aiData,\s*budgetData,\s*effectData,\s*prompt \}\)/,
+        'fetchKeywordAiMaxInfo 应把 prompt 传入原生生成请求和结果归一化'
+    );
+    assert.match(
+        keywordPlanApi,
+        /const rawPrompt = String\(prompt \|\| ''\)\.trim\(\)[\s\S]*?const trafficAppeal = String\(rawPrompt \|\| nativeInfo\.aiMaxPureUserInput \|\| promptText\)\.trim\(\)[\s\S]*?aiMaxUserInput:[\s\S]*?word:\s*trafficAppeal/,
+        '归一化结果应优先使用显式本次 prompt，并在未自定义时保留原生诉求'
+    );
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.76\),\s*rgba\(255,\s*255,\s*255,\s*0\.46\)\)/, 'AI 点睛工作台应使用统一浅玻璃遮罩');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-card\s*\{[\s\S]*?width:\s*min\(1240px,\s*calc\(100vw - 40px\)\)[\s\S]*?overflow:\s*visible/, 'AI 点睛工作台卡片应加宽并允许需求详情浮层越过弹窗边界显示');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-card\s*\{[\s\S]*?border:\s*2px solid rgba\(112,\s*130,\s*255,\s*0\.82\)[\s\S]*?border-radius:\s*18px[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.9\)/, '获取新人群诉求区应渲染成参考截图的整块描边诉求卡');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-input\s*\{[\s\S]*?min-height:\s*42px[\s\S]*?resize:\s*vertical[\s\S]*?background:\s*transparent/, '获取新人群诉求文案应在卡片上方可换行编辑');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-chip,[\s\S]*?#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-submit\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?white-space:\s*nowrap/, '模板、屏蔽词、恢复默认和方案解析应使用胶囊按钮并避免文字换行挤压');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-chip\.is-applied\s*\{[\s\S]*?background:\s*rgba\(69,\s*84,\s*229,\s*0\.14\)[\s\S]*?color:\s*var\(--am26-primary/, '星标恢复默认后应有短暂高亮反馈');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-prompt-submit\s*\{[\s\S]*?margin-left:\s*auto[\s\S]*?background:\s*linear-gradient\(135deg,\s*#6b5cff,\s*#8c3dff\)/, '方案解析按钮应靠右并使用紫色主按钮样式');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-template-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/, '模板弹层应以三列展示 6 个推荐模板');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-shield-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, '屏蔽词弹层应区分中心词与精确词两列编辑');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-body\s*\{[\s\S]*?overflow:\s*visible/, '需求详情浮层不应被 body 滚动容器裁剪');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row\s*\{[\s\S]*?grid-template-columns:\s*32px minmax\(0,\s*1fr\)/, 'AI 点睛计划行应释放右侧操作列宽');
+    assert.doesNotMatch(quickEntryStyle, /grid-template-columns:\s*32px minmax\(0,\s*1fr\) 220px|\.am-ai-max-row-side/, 'AI 点睛计划行不应保留旧右侧操作列样式');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row-footer\s*\{[\s\S]*?justify-content:\s*space-between;[\s\S]*?flex-wrap:\s*wrap/, '状态和操作按钮应在计划内容底部横排并可换行');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-row-crowds \.am-ai-max-demand-popover\s*\{[\s\S]*?flex:\s*0 1 180px;[\s\S]*?max-width:\s*180px/, '需求人群卡片应收紧宽度以横向展示 5 个');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card\.am-ai-max-crowd-tag\s*\{[\s\S]*?max-width:\s*180px/, '批量行需求人群卡片最大宽度应更紧凑');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-manage-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?border-radius:\s*10px/, '管理展开板块应有稳定容器样式');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'AI 点睛需求卡片应按稳定网格展示');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup\.is-native-open\s*\{[\s\S]*?z-index:\s*2147482000;[\s\S]*?pointer-events:\s*none/, '官方 AI 点睛弹窗打开时批量弹窗应保留在下层且不拦截操作');
+    const demandSelectStyle = quickEntryStyle.slice(
+        quickEntryStyle.indexOf('#am-campaign-ai-max-batch-popup .am-ai-max-demand-select {'),
+        quickEntryStyle.indexOf('#am-campaign-ai-max-batch-popup .am-ai-max-manage-panel')
+    );
+    assert.match(demandSelectStyle, /\.am-ai-max-demand-select\s*\{[\s\S]*?position:\s*relative;[\s\S]*?overflow:\s*visible/, '需求下拉容器应允许 popover 越过行内按钮区域显示');
+    assert.match(demandSelectStyle, /\.am-ai-max-demand-select-popover\s*\{[\s\S]*?position:\s*absolute[\s\S]*?right:\s*0;[\s\S]*?top:\s*calc\(100% \+ 6px\);[\s\S]*?z-index:\s*2147483645[\s\S]*?width:\s*min\(360px,\s*calc\(100vw - 72px\)\)/, '需求下拉应是锚定触发按钮的紧凑多选弹层');
+    assert.match(demandSelectStyle, /\.am-ai-max-demand-select-popover\[hidden\]\s*\{[\s\S]*?display:\s*none/, '需求下拉关闭态应从布局中隐藏');
+    assert.match(demandSelectStyle, /\.am-ai-max-demand-select-list\s*\{[\s\S]*?max-height:\s*220px;[\s\S]*?overflow:\s*auto/, '需求下拉长列表应内部滚动，避免撑破批量弹窗');
+    assert.match(demandSelectStyle, /\.am-ai-max-demand-select-item input:checked \+ \.am-ai-max-demand-select-check\s*\{[\s\S]*?background:\s*var\(--am26-primary/, '需求下拉应有清晰的勾选状态');
+    assert.match(demandSelectStyle, /\.am-ai-max-demand-select-item input:indeterminate \+ \.am-ai-max-demand-select-check/, '需求下拉全选项应支持半选态');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-popover\s*\{[\s\S]*?position:\s*relative;[\s\S]*?display:\s*block/, '需求人群详情弹窗应由卡片外层 wrapper 定位');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*?background:\s*#f7f9ff;/, '需求人群卡片应使用无序号的纯色背景');
+    const demandCardStyle = quickEntryStyle.match(/#am-campaign-ai-max-batch-popup \.am-ai-max-demand-card\s*\{[\s\S]*?\n\s*\}/)?.[0] || '';
+    assert.doesNotMatch(demandCardStyle, /linear-gradient/, '需求人群卡片默认态不应再使用渐变背景');
+    assert.doesNotMatch(quickEntryStyle, /\.am-ai-max-demand-mark/, '需求人群卡片样式不应保留序列号圆点');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-detail\s*\{[\s\S]*?position:\s*absolute[\s\S]*?left:\s*0;[\s\S]*?top:\s*calc\(100% \+ 8px\);[\s\S]*?z-index:\s*2147483647;[\s\S]*?pointer-events:\s*none/, '需求详情应作为对应按钮下方弹窗显示，不占用卡片布局');
+    assert.doesNotMatch(quickEntryStyle, /is-popover-left|right:\s*calc\(100% \+ 10px\)|translateY\(-50%\)/, '需求详情不应再左右侧弹出');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-popover:hover \.am-ai-max-demand-detail,[\s\S]*?\.am-ai-max-demand-popover:focus-within \.am-ai-max-demand-detail\s*\{[\s\S]*?display:\s*grid/, '需求详情应在鼠标移入或键盘聚焦 wrapper 时显示，移出后由 CSS 自动关闭');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-inline-keyword\s*\{[\s\S]*?white-space:\s*normal;[\s\S]*?overflow-wrap:\s*anywhere/, '需求详情关键词应允许换行完整显示');
+    assert.match(quickEntryStyle, /#am-campaign-ai-max-batch-popup \.am-ai-max-demand-personas\s*\{[\s\S]*?grid-template-columns:\s*56px minmax\(0,\s*1fr\)/, '需求详情人群解析应紧凑展示');
+    assert.match(sharedPreamble, /document:\s*\{[\s\S]*?body:\s*'<rect[\s\S]*?M9 8h6/, '共享图标应补充模板 document 图标');
+    assert.match(sharedPreamble, /['"]minus-circle['"]:\s*\{[\s\S]*?body:\s*'<circle[\s\S]*?M8 12h8/, '共享图标应补充屏蔽词 minus-circle 图标');
 });
 
 test('批量+ 读取表格勾选计划并按业务线分组', () => {

@@ -27,8 +27,7 @@
     "content_scripts": [
         {
             "matches": [
-                "*://alimama.com/*",
-                "*://*.alimama.com/*",
+                "https://alimama.com/*",
                 "https://one.alimama.com/*",
                 "https://myseller.taobao.com/*",
                 "https://dmp.taobao.com/*"
@@ -46,8 +45,7 @@
                 "wizard-style.css"
             ],
             "matches": [
-                "*://alimama.com/*",
-                "*://*.alimama.com/*",
+                "https://alimama.com/*",
                 "https://one.alimama.com/*",
                 "https://myseller.taobao.com/*",
                 "https://dmp.taobao.com/*"

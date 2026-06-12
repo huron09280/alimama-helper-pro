@@ -313,7 +313,7 @@ ${mockupIconRuntime}
                                     <div class="tm-meta-val">交互优化版：增加加购成本计算、花费占比、预算分类占比、性能优化。包含状态记忆、胶囊按钮UI、日志折叠、报表直连下载拦截。集成算法护航功能。</div>
                                 </div>
                                 <div class="tm-hr"></div>
-                                <div class="tm-meta-row"><div class="tm-meta-key">@match</div><div class="tm-meta-val"><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">*://alimama.com/*</code><br><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">*://*.alimama.com/*</code><br><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">https://one.alimama.com/*</code></div></div>
+                                <div class="tm-meta-row"><div class="tm-meta-key">@match</div><div class="tm-meta-val"><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">https://alimama.com/*</code><br><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">https://one.alimama.com/*</code><br><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">https://myseller.taobao.com/*</code><br><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">https://dmp.taobao.com/*</code></div></div>
                                 <div class="tm-meta-row"><div class="tm-meta-key">@grant</div><div class="tm-meta-val"><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">GM_setClipboard</code><br><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">GM_setValue</code><br><code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;">GM_getValue</code></div></div>
                             </div>
                             <div>

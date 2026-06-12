@@ -300,7 +300,7 @@
                 if (event.defaultPrevented || event.ctrlKey) return;
                 const target = event.target;
                 if (!(target instanceof Element)) return;
-                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup, #am-report-capture-panel');
+                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup, #am-campaign-ai-max-batch-popup, #am-report-capture-panel');
                 if (!(pluginRoot instanceof HTMLElement)) return;
                 if (!this.shouldBlockPluginWheel(pluginRoot, target, event.deltaY)) return;
                 event.preventDefault();
@@ -1875,10 +1875,942 @@
                     outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
                     outline-offset: 2px;
                 }
+                #am-campaign-ai-max-batch-popup {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 2147483646;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 28px;
+                    box-sizing: border-box;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.46));
+                    color: var(--am26-text, #1b2438);
+                    font-family: var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    backdrop-filter: blur(8px) saturate(1.15);
+                    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-card {
+                    width: min(1240px, calc(100vw - 40px));
+                    max-height: min(720px, calc(100vh - 56px));
+                    display: flex;
+                    flex-direction: column;
+                    border: 1px solid var(--am26-border, rgba(255, 255, 255, 0.4));
+                    border-radius: 18px;
+                    background: var(--am26-panel-strong, rgba(255, 255, 255, 0.92));
+                    box-shadow: var(--am26-shadow, 0 8px 32px 0 rgba(31, 38, 135, 0.15));
+                    overflow: visible;
+                    backdrop-filter: blur(18px) saturate(160%);
+                    -webkit-backdrop-filter: blur(18px) saturate(160%);
+                }
+                #am-campaign-ai-max-batch-popup.is-native-open {
+                    z-index: 2147482000;
+                    background: rgba(255, 255, 255, 0.08);
+                    pointer-events: none;
+                }
+                #am-campaign-ai-max-batch-popup.is-native-open .am-ai-max-card {
+                    opacity: 0.58;
+                    transform: translateX(-18px) scale(0.985);
+                    box-shadow: 0 16px 44px rgba(39, 48, 83, 0.14);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 16px;
+                    padding: 14px 18px 12px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-title-wrap {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-icon {
+                    width: 32px;
+                    height: 32px;
+                    flex: 0 0 32px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 10px;
+                    background: var(--am26-primary-soft, rgba(42, 91, 255, 0.15));
+                    color: var(--am26-primary, #4554e5);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-title {
+                    margin: 0;
+                    font-size: 15px;
+                    line-height: 20px;
+                    font-weight: 700;
+                    color: var(--am26-text, #1b2438);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-subtitle {
+                    margin: 2px 0 0;
+                    font-size: 12px;
+                    line-height: 16px;
+                    color: var(--am26-text-soft, #505a74);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-close {
+                    width: 32px;
+                    height: 32px;
+                    border: 0;
+                    border-radius: 8px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: transparent;
+                    color: var(--am26-text-soft, #505a74);
+                    cursor: pointer;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-close:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-close:focus-visible {
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.52));
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-toolbar {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px 18px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.36);
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-card {
+                    position: relative;
+                    min-width: 0;
+                    display: grid;
+                    gap: 10px;
+                    margin: 10px 18px;
+                    padding: 14px 16px 14px;
+                    border: 2px solid rgba(112, 130, 255, 0.82);
+                    border-radius: 18px;
+                    background: rgba(255, 255, 255, 0.9);
+                    box-shadow: inset 0 0 0 1px rgba(52, 199, 255, 0.32), 0 10px 24px rgba(47, 84, 235, 0.08);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-input {
+                    min-width: 0;
+                    width: 100%;
+                    min-height: 42px;
+                    max-height: 92px;
+                    resize: vertical;
+                    border: 0;
+                    border-radius: 10px;
+                    padding: 0;
+                    background: transparent;
+                    color: var(--am26-text, #1b2438);
+                    font: 700 14px/22px var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    outline: none;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-input:focus {
+                    box-shadow: 0 0 0 2px var(--am26-focus, rgba(69, 84, 229, 0.32));
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-actions {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip,
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-submit {
+                    height: 30px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 5px;
+                    border: 1px solid rgba(120, 173, 255, 0.42);
+                    border-radius: 999px;
+                    padding: 0 11px;
+                    background: rgba(255, 255, 255, 0.72);
+                    color: var(--am26-text-soft, #505a74);
+                    font: 700 12px/18px var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    white-space: nowrap;
+                    cursor: pointer;
+                    appearance: none;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip svg {
+                    flex: 0 0 auto;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip em {
+                    font-style: normal;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip.icon-only {
+                    width: 32px;
+                    padding: 0;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip.is-applied {
+                    border-color: rgba(69, 84, 229, 0.36);
+                    background: rgba(69, 84, 229, 0.14);
+                    color: var(--am26-primary, #4554e5);
+                    box-shadow: inset 0 0 0 1px rgba(69, 84, 229, 0.12);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-submit {
+                    margin-left: auto;
+                    min-width: 96px;
+                    border-color: rgba(126, 87, 255, 0.42);
+                    background: linear-gradient(135deg, #6b5cff, #8c3dff);
+                    color: #ffffff;
+                    box-shadow: 0 8px 18px rgba(96, 64, 255, 0.28);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-chip:focus-visible,
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-submit:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-submit:focus-visible {
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-popover {
+                    position: absolute;
+                    left: 16px;
+                    right: 16px;
+                    top: calc(100% - 8px);
+                    z-index: 2147483646;
+                    display: grid;
+                    gap: 8px;
+                    padding: 10px;
+                    border: 1px solid rgba(69, 84, 229, 0.16);
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.98);
+                    box-shadow: 0 18px 40px rgba(39, 48, 83, 0.16);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-popover[hidden] {
+                    display: none;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-panel-title {
+                    color: var(--am26-text, #1b2438);
+                    font-size: 12px;
+                    font-weight: 800;
+                    line-height: 18px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-prompt-panel-help {
+                    margin: 0;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 17px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-list {
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 8px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-item {
+                    min-width: 0;
+                    display: grid;
+                    gap: 4px;
+                    min-height: 74px;
+                    border: 1px solid rgba(69, 84, 229, 0.14);
+                    border-radius: 10px;
+                    padding: 8px;
+                    background: #f7f9ff;
+                    color: var(--am26-text, #1b2438);
+                    text-align: left;
+                    cursor: pointer;
+                    appearance: none;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-item b,
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-item span {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-item b {
+                    white-space: nowrap;
+                    font-size: 12px;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-item span {
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-item:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-template-item:focus-visible {
+                    border-color: rgba(69, 84, 229, 0.32);
+                    background: #eef3ff;
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-grid {
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 8px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-box {
+                    min-width: 0;
+                    display: grid;
+                    gap: 7px;
+                    border: 1px solid rgba(69, 84, 229, 0.12);
+                    border-radius: 10px;
+                    padding: 8px;
+                    background: #f7f9ff;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-head,
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-add {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 6px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-head b,
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-head span {
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    font-weight: 700;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-add input {
+                    min-width: 0;
+                    flex: 1 1 auto;
+                    height: 28px;
+                    border: 1px solid rgba(69, 84, 229, 0.16);
+                    border-radius: 8px;
+                    padding: 0 8px;
+                    background: rgba(255, 255, 255, 0.86);
+                    color: var(--am26-text, #1b2438);
+                    font: 600 12px/18px var(--am26-font, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif);
+                    outline: none;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-list {
+                    min-width: 0;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 5px;
+                    flex-wrap: wrap;
+                    min-height: 24px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-empty,
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-tag {
+                    min-height: 22px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    border-radius: 999px;
+                    padding: 2px 7px;
+                    background: rgba(255, 255, 255, 0.78);
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    font-weight: 700;
+                    line-height: 16px;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-shield-tag button {
+                    width: 16px;
+                    height: 16px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 0;
+                    border-radius: 999px;
+                    padding: 0;
+                    background: rgba(27, 36, 56, 0.06);
+                    color: var(--am26-text-soft, #505a74);
+                    cursor: pointer;
+                    appearance: none;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-toolbar-btn,
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-btn {
+                    height: 30px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 5px;
+                    border: 0;
+                    border-radius: 9px;
+                    padding: 0 10px;
+                    background: var(--am26-primary-soft, rgba(42, 91, 255, 0.15));
+                    color: var(--am26-primary, #4554e5);
+                    font-size: 12px;
+                    font-weight: 600;
+                    white-space: nowrap;
+                    cursor: pointer;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-toolbar-btn.primary,
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-btn.primary {
+                    background: var(--am26-primary, #4554e5);
+                    color: #ffffff;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-toolbar-btn:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-toolbar-btn:focus-visible,
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-btn:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-btn:focus-visible {
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-btn:disabled {
+                    opacity: 0.45;
+                    cursor: not-allowed;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-note {
+                    min-width: 0;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 12px;
+                    line-height: 18px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-body {
+                    min-height: 220px;
+                    max-height: 560px;
+                    overflow: visible;
+                    padding: 10px;
+                    display: grid;
+                    gap: 8px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row {
+                    display: grid;
+                    grid-template-columns: 32px minmax(0, 1fr);
+                    gap: 10px;
+                    align-items: stretch;
+                    min-height: 112px;
+                    padding: 10px;
+                    border: 1px solid rgba(255, 255, 255, 0.42);
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.42);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-index {
+                    width: 24px;
+                    height: 24px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 999px;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.52));
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 12px;
+                    font-weight: 700;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-main {
+                    min-width: 0;
+                    display: grid;
+                    gap: 8px;
+                    align-content: start;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-title {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-plan-name {
+                    min-width: 0;
+                    max-width: 520px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    color: var(--am26-text, #1b2438);
+                    font-size: 13px;
+                    font-weight: 700;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-plan-id,
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-label,
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-meta {
+                    flex: 0 0 auto;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-crowds {
+                    min-width: 0;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                    min-height: 26px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-crowds .am-ai-max-demand-popover {
+                    flex: 0 1 180px;
+                    max-width: 180px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-tag,
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-more,
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-empty {
+                    max-width: 180px;
+                    display: inline-flex;
+                    align-items: center;
+                    height: 22px;
+                    border-radius: 999px;
+                    padding: 0 8px;
+                    background: var(--am26-surface-strong, rgba(255, 255, 255, 0.52));
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 22px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-more {
+                    border: 1px solid rgba(69, 84, 229, 0.16);
+                    appearance: none;
+                    cursor: pointer;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-more:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-more:focus-visible {
+                    background: rgba(69, 84, 229, 0.12);
+                    color: var(--am26-primary, #4554e5);
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card.am-ai-max-crowd-tag {
+                    max-width: 180px;
+                    height: auto;
+                    min-height: 38px;
+                    padding: 6px 8px;
+                    border-radius: 9px;
+                    line-height: normal;
+                    overflow: visible;
+                    white-space: normal;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-crowd-empty {
+                    color: #95a0b9;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-footer {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    padding-top: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-footer-info {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-status {
+                    width: auto;
+                    max-width: min(420px, 100%);
+                    min-height: 28px;
+                    display: flex;
+                    align-items: center;
+                    border-radius: 8px;
+                    padding: 5px 8px;
+                    box-sizing: border-box;
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 16px;
+                    color: var(--am26-text-soft, #505a74);
+                    background: var(--am26-surface, rgba(255, 255, 255, 0.25));
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-status.is-success {
+                    color: var(--am26-success, #0ea86f);
+                    background: rgba(14, 168, 111, 0.1);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-status.is-warn {
+                    color: var(--am26-warning, #e8a325);
+                    background: var(--am26-warning-soft, rgba(232, 163, 37, 0.14));
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-status.is-error {
+                    color: var(--am26-danger, #ea4f4f);
+                    background: var(--am26-danger-soft, rgba(234, 79, 79, 0.12));
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-row-actions {
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                    min-width: 0;
+                    overflow: visible;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-trigger {
+                    max-width: 142px;
+                    background: rgba(69, 84, 229, 0.1);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-trigger span {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-popover {
+                    position: absolute;
+                    right: 0;
+                    top: calc(100% + 6px);
+                    z-index: 2147483645;
+                    width: min(360px, calc(100vw - 72px));
+                    display: grid;
+                    gap: 8px;
+                    padding: 10px;
+                    border: 1px solid rgba(69, 84, 229, 0.18);
+                    border-radius: 10px;
+                    background: rgba(255, 255, 255, 0.98);
+                    box-shadow: 0 16px 36px rgba(39, 48, 83, 0.18);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-popover[hidden] {
+                    display: none;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-head,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-foot {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-head > span {
+                    flex: 0 0 auto;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    font-weight: 700;
+                    line-height: 16px;
+                    font-variant-numeric: tabular-nums;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-list {
+                    min-width: 0;
+                    max-height: 220px;
+                    display: grid;
+                    gap: 6px;
+                    overflow: auto;
+                    overscroll-behavior: contain;
+                    padding-right: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item {
+                    position: relative;
+                    min-width: 0;
+                    min-height: 30px;
+                    display: grid;
+                    grid-template-columns: 18px minmax(0, 1fr);
+                    gap: 7px;
+                    align-items: center;
+                    border: 1px solid rgba(69, 84, 229, 0.12);
+                    border-radius: 8px;
+                    padding: 5px 7px;
+                    background: #f7f9ff;
+                    color: var(--am26-text, #1b2438);
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 17px;
+                    cursor: pointer;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item.all {
+                    flex: 1 1 auto;
+                    min-height: 28px;
+                    border-color: transparent;
+                    background: transparent;
+                    padding-left: 0;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item:has(input:focus-visible) {
+                    border-color: rgba(69, 84, 229, 0.34);
+                    background: #eef3ff;
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 1px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item input {
+                    position: absolute;
+                    width: 1px;
+                    height: 1px;
+                    opacity: 0;
+                    pointer-events: none;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-check {
+                    width: 16px;
+                    height: 16px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid rgba(69, 84, 229, 0.28);
+                    border-radius: 5px;
+                    background: rgba(255, 255, 255, 0.86);
+                    color: transparent;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item input:checked + .am-ai-max-demand-select-check {
+                    border-color: var(--am26-primary, #4554e5);
+                    background: var(--am26-primary, #4554e5);
+                    color: #ffffff;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item input:indeterminate + .am-ai-max-demand-select-check {
+                    border-color: var(--am26-primary, #4554e5);
+                    background: linear-gradient(180deg, #6b76ff, #4554e5);
+                    color: transparent;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-item input:indeterminate + .am-ai-max-demand-select-check::after {
+                    content: "";
+                    width: 8px;
+                    height: 2px;
+                    border-radius: 999px;
+                    background: #ffffff;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-text {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-select-foot {
+                    justify-content: flex-end;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-panel {
+                    display: grid;
+                    gap: 8px;
+                    margin-top: 2px;
+                    padding: 10px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(69, 84, 229, 0.14);
+                    background: rgba(255, 255, 255, 0.5);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-row {
+                    display: grid;
+                    grid-template-columns: 64px minmax(0, 1fr);
+                    gap: 8px;
+                    align-items: start;
+                    min-width: 0;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-row p {
+                    margin: 0;
+                    min-width: 0;
+                    color: var(--am26-text, #1b2438);
+                    font-size: 12px;
+                    line-height: 18px;
+                    word-break: break-word;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-grid {
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 6px;
+                    align-items: start;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-popover {
+                    position: relative;
+                    min-width: 0;
+                    display: block;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card {
+                    min-width: 0;
+                    width: 100%;
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr);
+                    gap: 7px;
+                    align-items: center;
+                    min-height: 50px;
+                    border: 1px solid rgba(69, 84, 229, 0.16);
+                    border-radius: 10px;
+                    padding: 8px 9px;
+                    background: #f7f9ff;
+                    color: var(--am26-text, #1b2438);
+                    text-align: left;
+                    box-sizing: border-box;
+                    cursor: default;
+                    appearance: none;
+                    font: inherit;
+                    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card:hover,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card:focus-visible {
+                    background: #eef3ff;
+                    border-color: rgba(69, 84, 229, 0.34);
+                    box-shadow: 0 8px 22px rgba(39, 48, 83, 0.12);
+                    transform: translateY(-1px);
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card:focus-visible {
+                    outline: 2px solid var(--am26-focus, rgba(69, 84, 229, 0.32));
+                    outline-offset: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-copy {
+                    min-width: 0;
+                    display: grid;
+                    gap: 2px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card b,
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona b {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-size: 12px;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-card em {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-style: normal;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 15px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail {
+                    position: absolute;
+                    left: 0;
+                    top: calc(100% + 8px);
+                    z-index: 2147483647;
+                    width: min(520px, calc(100vw - 72px));
+                    min-width: 0;
+                    display: none;
+                    gap: 6px;
+                    margin: 0 0 2px;
+                    padding: 8px 10px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(69, 84, 229, 0.14);
+                    background: rgba(255, 255, 255, 0.96);
+                    box-shadow: 0 14px 34px rgba(39, 48, 83, 0.18);
+                    box-sizing: border-box;
+                    pointer-events: none;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-popover:hover .am-ai-max-demand-detail,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-popover:focus-within .am-ai-max-demand-detail {
+                    display: grid;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head b,
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head em {
+                    min-width: 0;
+                    font-style: normal;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head b {
+                    color: var(--am26-text, #1b2438);
+                    font-size: 12px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail-head em {
+                    color: var(--am26-primary, #4554e5);
+                    font-size: 11px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-detail p {
+                    margin: 0;
+                    min-width: 0;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 12px;
+                    line-height: 17px;
+                    word-break: break-word;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-keywords {
+                    min-width: 0;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 5px;
+                    flex-wrap: wrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-inline-keyword {
+                    max-width: 100%;
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 20px;
+                    padding: 2px 7px;
+                    border-radius: 999px;
+                    background: rgba(69, 84, 229, 0.08);
+                    color: var(--am26-text, #1b2438);
+                    font-size: 11px;
+                    line-height: 16px;
+                    white-space: normal;
+                    overflow-wrap: anywhere;
+                    word-break: break-word;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas {
+                    min-width: 0;
+                    display: grid;
+                    grid-template-columns: 56px minmax(0, 1fr);
+                    gap: 6px;
+                    align-items: start;
+                    padding-top: 2px;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 16px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas > span {
+                    color: var(--am26-text-muted, #778097);
+                    white-space: nowrap;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas > div {
+                    min-width: 0;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 5px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-demand-personas em {
+                    min-width: 0;
+                    max-width: 100%;
+                    padding: 2px 6px;
+                    border-radius: 6px;
+                    background: rgba(27, 36, 56, 0.04);
+                    color: var(--am26-text-soft, #505a74);
+                    font-style: normal;
+                    overflow-wrap: anywhere;
+                    word-break: break-word;
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-split {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                    gap: 10px;
+                    min-width: 0;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-manage-split > div {
+                    min-width: 0;
+                    display: grid;
+                    gap: 6px;
+                    align-content: start;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona-list {
+                    min-width: 0;
+                    display: grid;
+                    gap: 5px;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona {
+                    min-width: 0;
+                    display: grid;
+                    gap: 2px;
+                    border-radius: 8px;
+                    padding: 6px 8px;
+                    background: rgba(255, 255, 255, 0.58);
+                    box-sizing: border-box;
+                }
+                #am-campaign-ai-max-batch-popup .am-ai-max-persona span {
+                    min-width: 0;
+                    color: var(--am26-text-soft, #505a74);
+                    font-size: 11px;
+                    line-height: 15px;
+                    word-break: break-word;
+                }
                 @media (prefers-reduced-motion: reduce) {
                     #am-campaign-batch-plus-menu .am-campaign-batch-plus-item,
                     #am-campaign-batch-confirm-popup .am-batch-confirm-submit,
-                    #am-campaign-batch-confirm-popup .am-batch-confirm-cancel {
+                    #am-campaign-batch-confirm-popup .am-batch-confirm-cancel,
+                    #am-campaign-ai-max-batch-popup .am-ai-max-toolbar-btn,
+                    #am-campaign-ai-max-batch-popup .am-ai-max-row-btn {
                         transition: none;
                     }
                 }

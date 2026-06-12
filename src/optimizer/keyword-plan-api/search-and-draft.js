@@ -50,6 +50,10 @@
         };
 
         const KEYWORD_AI_MAX_NATIVE_PROMPT = '快速积累精准成交流量。如投放叶子类目成交词，与商品卖点精准匹配的搜索词，与商品历史成交人群相似的人群';
+        const normalizeAiMaxPrompt = (prompt = '') => {
+            const text = String(prompt || '').trim();
+            return text || KEYWORD_AI_MAX_NATIVE_PROMPT;
+        };
         const parseAiMaxJsonList = (value) => {
             if (Array.isArray(value)) return value;
             const text = String(value || '').trim();
@@ -88,8 +92,11 @@
             item = {},
             aiData = {},
             budgetData = {},
-            effectData = {}
+            effectData = {},
+            prompt = ''
         } = {}) => {
+            const rawPrompt = String(prompt || '').trim();
+            const promptText = normalizeAiMaxPrompt(prompt);
             const itemId = String(toIdValue(item?.materialId || item?.itemId || item?.id || '') || '').trim();
             const itemTitle = String(item?.materialName || item?.itemTitle || item?.title || item?.name || item?.itemName || '').trim();
             const additionalData = isPlainObject(aiData?.additionalData) ? aiData.additionalData : {};
@@ -126,6 +133,11 @@
                 || ''
             ).trim();
             const clickEstimate = String(effectData?.click || '').trim();
+            const trafficAppeal = String(rawPrompt || nativeInfo.aiMaxPureUserInput || promptText).trim();
+            const nativeUserInput = isPlainObject(nativeInfo.aiMaxUserInput) ? nativeInfo.aiMaxUserInput : {};
+            const nativeWord = Array.isArray(nativeUserInput.wordList) && isPlainObject(nativeUserInput.wordList[0])
+                ? nativeUserInput.wordList[0]
+                : {};
             return {
                 itemId,
                 itemTitle,
@@ -133,7 +145,18 @@
                 nativeGenerated: true,
                 nativeSource: 'businessTalk',
                 nativeTraceId: String(aiData?.traceId || budgetData?.traceId || effectData?.traceId || '').trim(),
-                trafficAppeal: String(nativeInfo.aiMaxPureUserInput || KEYWORD_AI_MAX_NATIVE_PROMPT).trim(),
+                trafficAppeal,
+                aiMaxPureUserInput: trafficAppeal,
+                aiMaxUserInput: {
+                    ...nativeUserInput,
+                    promptType: nativeUserInput.promptType || 'text',
+                    autoAsk: nativeUserInput.autoAsk ?? true,
+                    wordList: [{
+                        ...nativeWord,
+                        word: trafficAppeal
+                    }],
+                    bizCode: nativeUserInput.bizCode ?? null
+                },
                 aiMaxReason: String(nativeInfo.aiMaxReason || '').trim(),
                 aiMaxDeliveryPlan: String(nativeInfo.aiMaxDeliveryPlan || '').trim(),
                 selectedDemandList: demandList,
@@ -152,11 +175,12 @@
                 nativeCrowdList: crowdList
             };
         };
-        const requestAiMaxBusinessTalk = async ({ bizCode, item, requestOptions } = {}) => {
+        const requestAiMaxBusinessTalk = async ({ bizCode, item, prompt, requestOptions } = {}) => {
             const token = ensureTokens();
             const itemId = toIdValue(item?.materialId || item?.itemId || item?.id || '');
             const itemTitle = String(item?.materialName || item?.itemTitle || item?.title || item?.name || '').trim();
             const sessionId = Utils.uuid();
+            const promptText = normalizeAiMaxPrompt(prompt);
             const body = {
                 fromPage: '/main/index',
                 entrance: 'talk_aimaxOnebpSearch@main@promotion_scene_search_user_define@smart_bid',
@@ -195,7 +219,7 @@
                 prompt: {
                     promptType: 'text',
                     autoAsk: true,
-                    wordList: [{ word: KEYWORD_AI_MAX_NATIVE_PROMPT }]
+                    wordList: [{ word: promptText }]
                 },
                 promptType: 'text',
                 triggerMode: 'autoAsk',
@@ -227,9 +251,10 @@
             }
             return finalData;
         };
-        const fetchKeywordAiMaxInfo = async ({ bizCode, item, requestOptions } = {}) => {
+        const fetchKeywordAiMaxInfo = async ({ bizCode, item, prompt, requestOptions } = {}) => {
             const runtime = await getRuntimeDefaults(false);
             const targetBizCode = bizCode || runtime.bizCode || DEFAULTS.bizCode;
+            const promptText = normalizeAiMaxPrompt(prompt);
             const idValue = toIdValue(item?.materialId || item?.itemId || item?.id || '');
             if (!idValue) throw new Error('AI点睛生成失败：缺少商品ID');
             const defaults = {
@@ -246,7 +271,7 @@
                 promotionType: 'item',
                 subPromotionType: 'item'
             };
-            const aiData = await requestAiMaxBusinessTalk({ bizCode: targetBizCode, item, requestOptions });
+            const aiData = await requestAiMaxBusinessTalk({ bizCode: targetBizCode, item, prompt: promptText, requestOptions });
             let budgetData = {};
             let effectData = {};
             try {
@@ -295,7 +320,7 @@
             } catch (err) {
                 log.warn('AI点睛效果预估接口失败:', err?.message || err);
             }
-            return normalizeNativeAiMaxInfo({ item, aiData, budgetData, effectData });
+            return normalizeNativeAiMaxInfo({ item, aiData, budgetData, effectData, prompt });
         };
 
         const parseMatchScope = (value, fallback = DEFAULTS.matchScope) => {

@@ -40,6 +40,11 @@ const resolveBooleanEnv = (value, fallback = false) => {
     return fallback;
 };
 
+const parseCsvEnv = (value = '') => String(value || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+
 const normalizePemMultilineEnv = (value = '') => {
     let normalized = String(value || '').trim();
     if (!normalized) return '';
@@ -96,6 +101,13 @@ const TABLESTORE_STATE_PK = String(process.env.AM_LICENSE_TABLESTORE_STATE_PK ||
 const TABLESTORE_AK = String(process.env.AM_LICENSE_TABLESTORE_AK || process.env.ALIBABA_CLOUD_ACCESS_KEY_ID || '').trim();
 const TABLESTORE_SK = String(process.env.AM_LICENSE_TABLESTORE_SK || process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '').trim();
 const TABLESTORE_STS_TOKEN = String(process.env.AM_LICENSE_TABLESTORE_STS_TOKEN || process.env.ALIBABA_CLOUD_SECURITY_TOKEN || '').trim();
+const DEFAULT_CORS_ORIGINS = [
+    'https://am-licee-server-mpbzozflkj.cn-hangzhou.fcapp.run'
+];
+const CORS_ALLOWED_ORIGINS = new Set([
+    ...DEFAULT_CORS_ORIGINS,
+    ...parseCsvEnv(process.env.AM_LICENSE_CORS_ALLOWED_ORIGINS)
+]);
 const POLICY_SIGN_KEY = createPolicySignKey({
     rawPem: process.env.AM_LICENSE_POLICY_PRIVATE_KEY_PEM || '',
     rawPemBase64: process.env.AM_LICENSE_POLICY_PRIVATE_KEY_BASE64 || ''
@@ -320,22 +332,34 @@ const parseJsonBody = async (req = {}) => {
 const DEFAULT_ALLOW_HEADERS = 'content-type,accept,x-am-admin-token,x-admin-token';
 const DEFAULT_ALLOW_METHODS = 'GET,POST,OPTIONS';
 
+const normalizeCorsOrigin = (value = '') => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+        const url = new URL(raw);
+        if (url.protocol !== 'https:') return '';
+        return url.origin;
+    } catch {
+        return '';
+    }
+};
+
 const resolveCorsHeaders = (req = {}) => {
     const event = toEventObject(req);
     const headers = event?.headers || {};
-    const requestOrigin = getHeaderValue(headers, 'origin');
+    const requestOrigin = normalizeCorsOrigin(getHeaderValue(headers, 'origin'));
     const requestAllowHeaders = getHeaderValue(headers, 'access-control-request-headers');
-    const hasOrigin = !!requestOrigin;
+    const allowRequestOrigin = !!requestOrigin && CORS_ALLOWED_ORIGINS.has(requestOrigin);
 
     return {
-        'access-control-allow-origin': hasOrigin ? requestOrigin : '*',
+        ...(allowRequestOrigin ? { 'access-control-allow-origin': requestOrigin } : {}),
         'access-control-allow-methods': DEFAULT_ALLOW_METHODS,
         'access-control-allow-headers': requestAllowHeaders || DEFAULT_ALLOW_HEADERS,
         'access-control-max-age': '86400',
         'access-control-expose-headers': 'Date,x-fc-request-id',
         'cache-control': 'no-store',
         'content-disposition': 'inline',
-        ...(hasOrigin ? { 'access-control-allow-credentials': 'true' } : {}),
+        ...(allowRequestOrigin ? { 'access-control-allow-credentials': 'true' } : {}),
         'vary': 'Origin,Access-Control-Request-Headers'
     };
 };

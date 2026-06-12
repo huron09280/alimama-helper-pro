@@ -1867,6 +1867,7 @@
     const PLAN_API_BRIDGE_TIMEOUT_MS = 180000;
     const PLAN_API_BRIDGE_METHODS = [
         'openWizard',
+        'fetchKeywordAiMaxInfo',
         'copyCurrentPlanByScene'
     ];
 

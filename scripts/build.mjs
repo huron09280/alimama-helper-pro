@@ -378,8 +378,7 @@ export const renderExtensionManifest = (version) => {
         content_scripts: [
             {
                 matches: [
-                    '*://alimama.com/*',
-                    '*://*.alimama.com/*',
+                    'https://alimama.com/*',
                     'https://one.alimama.com/*',
                     'https://myseller.taobao.com/*',
                     'https://dmp.taobao.com/*'
@@ -392,8 +391,7 @@ export const renderExtensionManifest = (version) => {
             {
                 resources: ['page.bundle.js', EXTENSION_WIZARD_STYLE_FILE],
                 matches: [
-                    '*://alimama.com/*',
-                    '*://*.alimama.com/*',
+                    'https://alimama.com/*',
                     'https://one.alimama.com/*',
                     'https://myseller.taobao.com/*',
                     'https://dmp.taobao.com/*'

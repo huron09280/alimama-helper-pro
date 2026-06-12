@@ -227,5 +227,6 @@ test('userscript myseller 入口 guard 位于主助手与 optimizer IIFE 顶部'
 test('userscript 匹配与授权网关包含 myseller.taobao.com', () => {
     const metaBlock = getUserscriptMetaBlock();
     assert.match(metaBlock, /@match\s+https:\/\/myseller\.taobao\.com\//, 'userscript 头部未包含 myseller.taobao.com 匹配');
+    assert.doesNotMatch(metaBlock, /@match\s+\*:\/\/|@match\s+https:\/\/\*\.alimama\.com\//, 'userscript 头部不应保留协议通配或宽泛 alimama 子域匹配');
     assert.match(metaBlock, /@connect\s+myseller\.taobao\.com/, 'userscript 头部未包含 myseller.taobao.com connect');
 });

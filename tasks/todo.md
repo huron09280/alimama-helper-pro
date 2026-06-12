@@ -1,3 +1,697 @@
+# TODO - 2026-06-09 AI 点睛诉求星标恢复默认失效
+
+## 需求规格
+- 用户反馈：批量 AI 点睛诉求卡里 `星标` 按钮点击无效，需要修复。
+- 功能目标：点击星标应明确恢复为插件默认“获取新人群诉求”，并且后续行级 `获取新人群`、顶部 `批量获取新人群` 和行状态重渲染都继续使用该默认诉求。
+- 根因判断：当前 `resetAiMaxBatchPrompt()` 将 `batchAiMaxPromptEdited` 置为 `false`，后续 `renderAiMaxBatchRows()` 调用 `syncAiMaxBatchPromptFromRows()` 时会重新从当前计划已有 AI 点睛诉求覆盖掉用户刚恢复的默认值。
+- UI 目标：点击星标后输入框立即更新并聚焦，按钮保留官方风格；不额外增加复杂控件。
+- 安全边界：真实页验证只检查输入框变化和生成请求 prompt，不点击真实保存。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页证明：改写诉求后点击星标可恢复默认；刷新行状态后不会被计划诉求覆盖；点击方案解析/获取新人群时请求 prompt 使用默认诉求。
+
+## 执行计划
+- [x] 定位星标按钮事件链路和 prompt 同步逻辑。
+- [x] 修复恢复默认诉求，使用户显式恢复默认后不会被行数据同步覆盖。
+- [x] 更新回归测试覆盖 `resetAiMaxBatchPrompt` 的持久默认语义。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证星标点击、请求 prompt 和安全清理。
+- [x] 更新验证记录、结果复盘与教训。
+
+## 高层操作摘要
+- 已确认当前工作区仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本轮不纳入。
+- 已回顾 `tasks/lessons.md` L128：诉求卡必须保留模板、屏蔽词、星标和方案解析；本轮只修复星标恢复默认行为，不改变模板/屏蔽词和保存链路。
+- 已定位当前实现：`resetPrompt` 点击事件会调用 `resetAiMaxBatchPrompt()`，但该函数把编辑态置为 `false`，使后续行重渲染又从当前计划 AI 点睛信息同步诉求，看起来点击无效。
+- 已将 `resetAiMaxBatchPrompt()` 改为调用 `setAiMaxBatchPrompt(getDefaultAiMaxPrompt())`，即用户显式编辑态；点击星标后输入框聚焦、按钮短暂高亮，并记录 `已恢复默认 AI 点睛诉求`。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 运行态确认：硬刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40` 后，页面可读取扩展 `page.bundle.js`，包含 `return this.setAiMaxBatchPrompt(this.getDefaultAiMaxPrompt())`、`is-applied` 和 `已恢复默认 AI 点睛诉求`。
+- Chrome DevTools MCP 打开验证：按计划名勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，通过真实 `批量+ -> 批量编辑AI点睛` 菜单打开弹窗；顶部诉求初始为计划原有文案 `...剔除L1L2与18-24岁的人群`。
+- Chrome DevTools MCP 星标验证：将 `[data-am-ai-max-prompt]` 改为 `CODEX_STAR_RESET_SHOULD_DISAPPEAR 星标恢复默认测试` 后点击 `恢复默认诉求` 星标按钮，输入框恢复为默认诉求 `快速积累精准成交流量...不包含品牌词`，测试文本消失，输入框重新获得焦点；页面内同步点击断言按钮立即带有 `.is-applied`。
+- Chrome DevTools MCP 请求验证：安装临时写请求守卫后点击 `方案解析`，捕获 `https://ai.alimama.com/ai/chat/businessTalk.json`；请求体 `prompt.wordList[0].word` 使用默认诉求，包含 `不包含品牌词`，不包含计划旧诉求 `剔除L1L2与18-24岁的人群`，也不包含 `CODEX_STAR_RESET_*` 测试文本；守卫 `guardHits:[]`。
+- Chrome DevTools MCP 清理验证：恢复临时守卫，移除 `#am-campaign-ai-max-batch-popup`、`#am-campaign-batch-plus-menu`、`#am-campaign-batch-confirm-popup` 并取消勾选；最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`hasConfirm:false`、`checkedCount:0`。控制台仍有页面资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未见保存/改计划写请求。
+
+## 结果复盘
+- 已修复星标恢复默认看起来无效的问题：恢复默认现在复用 `setAiMaxBatchPrompt(default)`，保持用户显式编辑态，后续行重渲染或方案解析不会再用计划原有诉求覆盖默认值。
+- 点击星标后输入框会立即更新、聚焦，并通过 `.is-applied` 给出短暂反馈；真实页请求验证证明 `businessTalk.json` 使用默认诉求，旧诉求和测试文本均未进入生成请求。
+- 本轮没有点击保存或批量保存；写请求守卫全程未命中，并已在验收结束后恢复和清理页面状态。
+
+# TODO - 2026-06-09 AI 点睛新人群追加与需求卡密度
+
+## 需求规格
+- 用户要求：`获取新人群` 时，需求应追加到旧需求里，不能只保留新的而删掉旧的。
+- 用户要求：`批量AI点睛` 弹窗宽度更宽，一行可显示 5 个需求人群。
+- 用户追加：需求人群的框不需要前面的序列号。
+- 功能目标：行级和批量 `获取新人群` 成功后，保存事实源中的 `nativeCrowdList/demandList/selectedDemandList` 应包含旧需求 + 新生成需求，并默认全选；展示层的“新生成”仍只表达本次新生成的人群，避免把旧需求误标成新生成。
+- UI 目标：批量 AI 点睛弹窗加宽，当前/新生成需求卡横向展示更密，默认每组最多显示 5 个；需求卡去掉序号圆点，保留名称、卖点和 hover 详情浮层。
+- 数据边界：继续使用 `currentAiMaxInfo/newAiMaxInfo/nativeCrowdList/demandList/selectedDemandList` 作为保存事实源，不新增第二套需求选择状态。
+- 安全边界：真实页验证允许触发 `businessTalk.json` 方案解析，不真实点击保存；保存候选只通过二次确认文案或本地 payload 验证，确认后取消。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页证明：生成后已选需求数为旧+新；旧需求未丢失；保存候选数量等于已选旧+新；弹窗更宽且一行显示 5 个需求卡；需求卡无序号。
+
+## 执行计划
+- [x] 回顾现有 AI 点睛生成、需求选择和保存 payload 链路。
+- [x] 写入新人群追加合并逻辑，保持新生成展示与保存事实源分离。
+- [x] 调整批量 AI 点睛弹窗宽度、需求卡密度和去序号 UI。
+- [x] 更新回归测试覆盖合并合同、5 个横排和无序号。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证生成追加、布局密度、无序号和安全清理。
+- [x] 更新验证记录、结果复盘与教训。
+
+## 高层操作摘要
+- 已确认当前工作区只有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本轮不纳入提交。
+- 已回顾 `docs/插件UI统一设计规范.md`、`docs/图标设计规范.md` 和 `tasks/lessons.md` L121-L129；本轮仍复用 `am-` 前缀、浅玻璃紧凑工作台、hover 详情、人群解析、需求下拉删除语义和官方管理边界。
+- 初步定位：`generateAiMaxCrowdsForRow()` 当前用本次生成的 `rawNewCrowdList` 初始化 `newAiMaxInfo.nativeCrowdList`，导致保存事实源只剩新需求；`renderAiMaxBatchRows()` 当前每组显示 4 个需求卡，需求卡由 `.am-ai-max-demand-mark` 渲染序号。
+- 已新增 `mergeAiMaxCrowdLists()`，按需求名称/人群 ID 去重，生成后把 `newAiMaxInfo.nativeCrowdList/demandList/selectedDemandList` 写成旧+新合并列表，`row.newCrowdList` 仍只保留本次新生成用于“新生成”分组展示。
+- 已将当前/新生成默认展示数从 4 改为 5，弹窗宽度从 980px 加宽到 1240px，需求卡宽度收紧到 180px，并移除需求卡里的序号圆点。
+- 已更新回归测试，增加合并旧+新保存事实源、行摘要使用合并列表、5 个横排、无 `.am-ai-max-demand-mark` 的断言。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过；构建前后各执行 1 次，根 userscript 语法均通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页准备：在 `chrome://extensions/` 重载 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk`，硬刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`，清理旧弹窗和勾选后重新验证。
+- Chrome DevTools MCP 打开验证：勾选计划 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，通过真实 `批量+ -> 批量编辑AI点睛` 菜单打开弹窗；读取完成后显示 `已读取 AI 点睛人群 5 个` 和 `需求 已选 5/5`。
+- Chrome DevTools MCP 布局验证：批量 AI 点睛弹窗 `.am-ai-max-card` 实测宽度 `1240px`；当前需求卡数量 5，均在同一行，单卡宽 `180px`；`.am-ai-max-demand-mark` 不存在，需求卡无前置序号。
+- Chrome DevTools MCP 生成验证：安装写请求守卫后点击行级 `获取新人群`，约 28 秒后状态为 `已生成新人群 5 个，已合并需求 8 个，可保存`；当前分组 5 个一行，新生成分组 5 个一行，均无序号；摘要为 `需求 8 / 人群 8`，触发按钮为 `需求 已选 8/8`。
+- Chrome DevTools MCP 需求下拉验证：打开 `需求 已选 8/8` 下拉，8 项全部勾选；列表同时包含旧需求 `厨房嵌入式安装的精准选购`、`洗烘消三合一的厨房卫生升级` 和新需求 `新房装修嵌入式洗碗机首选`、`男性为家人挑选的实用厨房礼物`。旧 5 + 新 5 中有 2 个同名需求按名称去重，因此合并后为 8 个。
+- Chrome DevTools MCP 保存合同验证：保存确认链路在写请求守卫下拦截到 `aimax/updateUserInput.json`，未真实写入；确认文案为 `确认把已选的 8 个 AI 点睛需求人群保存到计划 81271150778？`，拦截 payload 中 `demandList` 与 `selectedDemandList` 均为 8 个旧+新合并需求。
+- Chrome DevTools MCP 清理验证：恢复写请求守卫，移除 `#am-campaign-ai-max-batch-popup`、`#am-campaign-batch-plus-menu`、`#am-campaign-batch-confirm-popup` 并取消勾选；最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`hasConfirm:false`、`checkedCount:0`。控制台仍有页面资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未见功能弹窗残留。
+
+## 结果复盘
+- 已修复 `获取新人群` 覆盖旧需求的问题：生成结果现在追加到旧需求后形成保存事实源，旧需求不会因为生成新人群被删掉；同名需求按名称去重，默认全部选中。
+- “新生成”分组仍只展示本次返回的新需求，避免把旧需求误标成新生成；需求下拉、行摘要和保存 payload 使用旧+新合并后的可编辑列表。
+- 批量 AI 点睛弹窗已加宽，当前/新生成需求人群默认各显示 5 个，需求卡去掉序号圆点并保持 hover 详情。
+
+# TODO - 2026-06-08 AI 点睛需求下拉选择与删除
+
+## 需求规格
+- 用户要求：原生 `AI点睛设置` 里有 `需求` 下拉；默认方案解析后，新生成与原来的人群需求都应全部选择；如果不选择就是删除。需要在 `批量+ -> 批量编辑AI点睛` 中补充这个完整功能。
+- 功能目标：批量 AI 点睛弹窗提供 `需求` 下拉选择器，展示当前计划可保存的全部需求；默认全选，用户取消某项后，保存 payload 只保留选中的需求和对应人群。
+- 数据事实源：继续使用 AI 点睛原生字段 `demandList`、`selectedDemandList`、`nativeCrowdList` 和顶层 `crowdList`；不得新增与保存 payload 脱节的第二套需求状态。
+- 默认选择规则：读取已有 AI 点睛或生成新人群后，如果没有明确选择状态，则把当前可用需求全部加入 `selectedDemandList`；生成后的新需求也默认全选。
+- 删除语义：未勾选的需求在保存时从 `selectedDemandList`、`aiMaxInfo.nativeCrowdList` 和顶层 `crowdList` 中移除；全部取消时禁止保存并提示缺少可保存需求。
+- UI 规范：需求下拉应是紧凑后台控件，支持全选/半选、选中数量摘要、取消/确定、Esc/外部关闭；需求文本不能溢出，控件不遮挡需求详情浮层。
+- 安全边界：真实页验证只触发 AI 生成请求和 UI 选择，不点击保存/批量保存确认；若需要检查保存 payload，只通过本地函数/守卫或取消确认验证，不真实提交。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页验证证明：需求下拉可打开并默认全选；取消选择后摘要和保存候选数量变化；保存 payload 过滤未选需求；生成阶段无保存类写请求。
+
+## 执行计划
+- [x] 回顾 UI 规范、图标规范、AI 点睛相关教训和原生需求下拉源码。
+- [x] 定位批量 AI 点睛生成、渲染、保存 payload 的当前事实源。
+- [x] 实现需求选择状态初始化、全选/单选切换和下拉 UI。
+- [x] 将需求选择接入保存过滤，确保未选需求从 payload 删除。
+- [x] 更新回归测试覆盖默认全选、取消选择、payload 过滤和 UI 样式。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证需求下拉、默认全选、取消选择和安全清理。
+- [x] 更新验证记录、结果复盘与必要教训，中文提交。
+
+## 高层操作摘要
+- 已确认上一轮提交为 `6bac0bd 补回AI点睛模板与屏蔽词`；当前工作区仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不纳入。
+- 已读取 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md`；本轮仍复用 `am-` 前缀、共享 `renderAmIcon()`、浅玻璃与紧凑后台控件。
+- 已回顾 `tasks/lessons.md` L121-L128：需求详情、人群解析、官方管理入口、诉求卡和屏蔽词都必须保留，不得为需求下拉牺牲既有功能。
+- 已对照原生建计划链路：`normalizeKeywordAiMaxInfo()` 默认把 `selectedDemandList` 设为 `demandList`，需求下拉通过复选框维护 `selectedDemandList`；保存时未选需求应视为删除。
+- 当前批量 AI 点睛保存链路 `buildAiMaxSavePayload()` 仍按 `getAiMaxEditableCrowdListForRow()` 全量提交 `nativeCrowdList/crowdList`，尚未支持需求下拉过滤，这是本轮根因。
+- 已补齐需求下拉状态 helper：没有显式 `selectedDemandList` 时默认全选全部需求；用户确定下拉后只写回当前行 `selectedDemandList`，不新增第二套需求事实源。
+- 已把需求下拉接入批量弹窗事件：支持打开/关闭、全选/单选、半选计数、确定/取消、Esc 优先关闭和外部点击关闭；打开 prompt 模板/屏蔽词时会关闭需求下拉。
+- 已把保存 payload 改为按已选需求过滤 `aiMaxInfo.nativeCrowdList` 和顶层 `crowdList`，并保留完整 `demandList/selectedDemandList`；全部取消时禁止保存并提示至少选择 1 个需求。
+- 已补充紧凑多选下拉样式，列表内部滚动，触发按钮显示 `需求 已选 x/y`，全选项支持半选态；需求详情 hover 浮层保持更高层级，不被下拉样式覆盖。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 准备验证：`mcp__chrome_devtools__list_pages` 可用；在 `chrome://extensions/` 重载 unpacked extension `egaeghgcogbdikndhlmmmolelbfffnjk`，扩展 path 为当前 worktree `/Users/liangchao/.codex/worktrees/f880/alimama-helper-pro/dist/extension`；硬刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`。
+- Chrome DevTools MCP 新运行态确认：页面上下文 `fetch('chrome-extension://egaeghgcogbdikndhlmmmolelbfffnjk/page.bundle.js', {cache:'no-store'})` 返回资源包含 `toggleDemandSelect` 和 `.am-ai-max-demand-select-popover`；重新打开批量弹窗后显示 `需求 已选 5/5`。
+- Chrome DevTools MCP 当前需求下拉验证：勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，打开 `批量+ -> 批量编辑AI点睛`；下拉打开时 `total=5/checked=5/allChecked=true/allIndeterminate=false/countText=5`，面板文本包含 5 个当前需求；取消第一项后 `checked=4/allIndeterminate=true/countText=4`，点击确定后触发按钮显示 `需求 已选 4/5`。
+- Chrome DevTools MCP 方案解析后默认全选验证：安装写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete|create`、`crowd/save|update`；点击行级 `获取新人群`，约 39 秒后状态为 `已生成新人群 5 个，可保存`，摘要为 `已选 1 个计划 / 已读取 1 个 / 已生成 1 个`，需求下拉默认 `需求 已选 5/5`，守卫 `guardHits:[]`。
+- Chrome DevTools MCP 删除语义验证：在生成后的需求下拉取消 1 个需求并确定，按钮变为 `需求 已选 4/5`，行摘要为 `需求 4 / 人群 4`，保存按钮可用；点击保存只打开二次确认并立即取消，确认文案为 `确认把已选的 4 个 AI 点睛需求人群保存到计划 81271150778？未勾选的需求会从本次保存结果中删除...`，守卫仍 `guardHits:[]`，未真实保存。
+- Chrome DevTools MCP 清理验证：恢复写请求守卫、移除 `#am-campaign-ai-max-batch-popup`、`#am-campaign-batch-plus-menu`、`#am-campaign-batch-confirm-popup` 并取消勾选；最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`hasConfirm:false`、`checkedCount:0`。控制台仅见页面资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未见本功能守卫命中或残留。
+
+## 结果复盘
+- 已在批量 AI 点睛工作台补齐原生同义的 `需求` 多选下拉：默认全选，支持全选/半选/单选、确定/取消、Esc 和外部关闭。
+- 保存链路现在以 `selectedDemandList` 作为唯一需求选择状态，保存 payload 只提交已选需求对应的人群；未勾选需求按删除处理，全部取消会阻止保存。
+- 生成新人群后会把方案解析得到的需求写成全选状态；真实页验证证明新生成 5 个需求后下拉默认 `5/5`，取消 1 个后保存候选和确认文案都变为 4。
+- 本轮没有改变 `管理` 官方入口、需求 hover 详情、人群解析、模板、屏蔽词或 prompt 生成链路；真实页验证只触发 AI 生成和取消保存确认，没有真实写计划。
+
+# TODO - 2026-06-08 AI 点睛诉求卡补回模板与屏蔽词
+
+## 需求规格
+- 用户要求：参考截图样式，把 `批量+ -> 批量编辑AI点睛` 中“获取新人群诉求”的模板与屏蔽词补充回来。
+- 功能目标：将当前分散的 textarea 输入区改成更接近官方 `AI点睛设置` 的诉求卡片：上方展示/编辑诉求文案，下方提供 `模板`、`屏蔽词 N`、星标和 `方案解析` 控件。
+- 数据边界：模板和屏蔽词只服务本次插件 `获取新人群/批量获取新人群` 的生成 prompt；`管理` 入口仍打开官方 `AI点睛设置`，不复制官方设置表单、不直接保存计划。
+- 屏蔽词规则：从当前计划已有 AI 点睛信息初始化屏蔽词数量和内容；用户可在批量弹窗里维护本次生成用的屏蔽词，生成请求应把屏蔽词合并到 `businessTalk` prompt 文案中，并同步到保存 payload 可识别字段。
+- UI 规范：复用 `am-` 前缀、`renderAmIcon()` 和浅玻璃风格；诉求卡参考截图使用整块圆角描边、底部胶囊按钮，避免文字挤压和遮挡行级操作。
+- 安全边界：真实页验证只能触发 AI 生成请求，不点击保存/批量保存；验收后清理守卫、弹窗和勾选状态。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页验证证明：模板与屏蔽词控件可见；屏蔽词数量正确显示；编辑屏蔽词后生成请求 prompt 携带屏蔽词约束；生成阶段无保存类写请求。
+
+## 执行计划
+- [x] 回顾 UI 规范、图标规范和最近 AI 点睛教训。
+- [x] 定位当前诉求输入、AI 点睛 prompt、屏蔽词字段和保存 payload 合同。
+- [x] 设计并实现官方风格诉求卡、模板入口和屏蔽词编辑入口。
+- [x] 将屏蔽词合并进生成 prompt，并同步回生成结果/保存 payload。
+- [x] 更新回归测试，覆盖模板/屏蔽词 UI、prompt 合并和保存 payload 字段。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证展示、编辑屏蔽词、生成请求和安全清理。
+- [x] 更新任务记录与结果复盘。
+
+## 高层操作摘要
+- 已确认当前工作区只有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不纳入。
+- 已回顾 `tasks/lessons.md` 中 L121-L127：本轮必须保留官方 `管理` 入口边界，插件只补自己的生成诉求卡，不复制官方保存表单。
+- 已读取 `docs/插件UI统一设计规范.md` 与 `docs/图标设计规范.md`：本轮控件继续使用浅玻璃、高密度、`am-` 类名前缀和共享线性图标。
+- 已将旧 `.am-ai-max-prompt-bar` 替换为 `.am-ai-max-prompt-card`：卡片上方保留可编辑诉求 textarea，下方补回 `模板`、`屏蔽词 N`、星标恢复默认和紫色 `方案解析`。
+- 已补回 6 个诉求模板，并新增模板弹层；点击模板后会把文案写回本次获取新人群诉求，并关闭弹层。
+- 已补回屏蔽词编辑弹层，区分中心词屏蔽和精确词屏蔽，支持输入添加、回车添加、标签删除、计数更新。
+- 已把屏蔽词合并到本次 `businessTalk.json` 的 `prompt.wordList[0].word`，格式为 `屏蔽词要求：中心词屏蔽...；精确词屏蔽...`；生成结果和保存 payload 同步保留结构化 `centerShieldWordList/exactShieldWordList/blockWordConfig` 字段。
+- 已补共享图标 `document` 和 `minus-circle`，避免诉求卡按钮使用临时 SVG 或文字占位。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `git diff --check`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- Chrome DevTools MCP 真实页验证：已在 `chrome://extensions/?id=egaeghgcogbdikndhlmmmolelbfffnjk` 重载 unpacked extension，刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`。
+- Chrome DevTools MCP 打开验证：勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385`，打开 `批量+ -> 批量编辑AI点睛`；弹窗显示新 `.am-ai-max-prompt-card`，旧 `.am-ai-max-prompt-bar` 不存在，卡片包含 `模板 / 屏蔽词 0 / 星标 / 方案解析`。
+- Chrome DevTools MCP 样式验证：诉求卡 computed `border: 2px solid rgba(112,130,255,0.82)`、`border-radius:18px`、`background:rgba(255,255,255,0.9)`；`方案解析` 为右侧紫色渐变主按钮。
+- Chrome DevTools MCP 模板验证：点击 `模板` 后显示 6 个模板；点击 `核心流量竞争` 后 textarea 改为对应模板文案，模板弹层关闭。
+- Chrome DevTools MCP 屏蔽词验证：点击 `屏蔽词` 后显示中心词/精确词两列；添加 `CODEX中心屏蔽` 与 `CODEX精确屏蔽` 后计数为 `屏蔽词 2`，删除中心词后计数变 `屏蔽词 1`，再次添加后恢复 `屏蔽词 2`。
+- Chrome DevTools MCP 生成请求验证：输入 `CODEX_PROMPT_20260608_2004 只获取高意向洗碗机人群，关注除菌烘干、嵌入安装和成交流量。` 后点击卡片 `方案解析`；捕获 `https://ai.alimama.com/ai/chat/businessTalk.json`，请求体 `prompt.wordList[0].word` 同时包含自定义诉求、`屏蔽词要求`、`CODEX中心屏蔽` 和 `CODEX精确屏蔽`。
+- Chrome DevTools MCP 生成结果验证：生成完成后状态为 `已生成新人群 5 个，可保存`，摘要为 `已选 1 个计划 / 已读取 1 个 / 已生成 1 个`，行内显示 `需求 5 / 人群 5 / 屏蔽词 2`。
+- Chrome DevTools MCP 安全与清理验证：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete|create`、`crowd/save|update`，只允许 `businessTalk.json`；本轮未点击保存/批量保存，`guardHits:[]`。验证后已恢复守卫、移除 `#am-campaign-ai-max-batch-popup` 和 `#am-campaign-batch-plus-menu` 并取消勾选，最终 `hasGuard:false`、`hasPopup:false`、`hasMenu:false`、`checkedCount:0`。
+
+## 结果复盘
+- 已按截图样式把模板和屏蔽词补回到顶部诉求卡，用户可以在同一块卡片里编辑诉求、套模板、维护屏蔽词并发起方案解析。
+- 本轮没有改变 `管理` 的官方入口边界，也没有新增自建官方 AI 点睛保存表单；模板和屏蔽词只影响插件获取新人群链路。
+- 屏蔽词既进入生成 prompt，也保留结构化字段供后续保存 payload 使用，避免只靠拼接文案导致保存时丢字段。
+- 真实页只触发 AI 生成人群请求，保存类写请求被守卫监控且没有发生。
+
+# TODO - 2026-06-08 AI 点睛获取新人群 prompt 设置
+
+## 需求规格
+- 用户要求：先中文 commit 上一轮改动，再继续处理“获取新人群的 prompt 的词现在没有可以设置”的问题；上一轮已完成提交 `0df0582 优化AI点睛计划行布局`。
+- 功能目标：`批量+ -> 批量编辑AI点睛` 中，用户可以设置本次“获取新人群”的 AI 点睛流量诉求/prompt，行级 `获取新人群` 和顶部 `批量获取新人群` 都使用该诉求生成新人群。
+- 边界说明：`管理` 仍调用原生页面 `AI点睛设置` 官方弹窗，不改成插件自建官方设置表单；本次输入只影响插件“获取新人群”的预览生成请求，生成阶段仍不保存、不写计划，保存仍走已有二次确认和官方 `aimax/updateUserInput` 合同。
+- 数据事实源：底层继续复用 `fetchKeywordAiMaxInfo`/`businessTalk` 原生 AI 点睛生成链路，只把用户设置的 prompt 写入该链路的 `prompt.wordList[0].word`，并同步进返回的 `trafficAppeal/aiMaxUserInput` 以便保存时使用同一诉求。
+- UI 规范：使用 `am-` 前缀和现有浅玻璃工作台样式；输入区应紧凑、可换行、有默认文案和一键恢复默认，不挤占计划行；生成按钮状态不被输入区遮挡。
+- 安全边界：Chrome MCP 真实页验证必须安装写请求守卫，允许 AI 生成请求，禁止保存/改计划接口；验收后恢复守卫并清理弹窗和勾选状态。
+- 成功标准：源码、测试、构建和真实页验证证明：自定义 prompt 会传给 `fetchKeywordAiMaxInfo` 和底层 `businessTalk` 请求；获取新人群成功后保存 payload 使用同一 prompt；未点击保存时无写请求。
+
+## 执行计划
+- [x] 确认上一轮中文提交和当前工作区状态。
+- [x] 分析 `获取新人群` 当前 prompt 来源和底层 API 入参。
+- [x] 增加批量弹窗 prompt 输入、默认值、重置和状态持久。
+- [x] 将 prompt 传入 `generateAiMaxCrowdsForRow`、`generateAiMaxCrowdsForAllRows` 和 `fetchKeywordAiMaxInfo` 底层请求。
+- [x] 更新回归测试，覆盖 prompt 输入、传参、保存 payload 和生成阶段不写计划。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证自定义 prompt 可见、生成请求携带 prompt、无保存写请求，并清理页面状态。
+- [x] 更新任务记录与教训，中文提交。
+
+## 高层操作摘要
+- 已确认上一轮提交为 `0df0582 优化AI点睛计划行布局`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不纳入。
+- 初步定位：当前 `generateAiMaxCrowdsForRow()` 调用 `api.fetchKeywordAiMaxInfo({ bizCode:'onebpSearch', item })`，没有传 prompt；底层 `requestAiMaxBusinessTalk()` 固定使用 `KEYWORD_AI_MAX_NATIVE_PROMPT` 作为 `prompt.wordList[0].word`。
+- 方案校验：本轮不改变 `管理 -> 官方 AI点睛设置` 的原生弹窗行为；只在批量工作台增加“获取新人群诉求”输入，把它作为 `获取新人群/批量获取新人群` 的生成参数，并让保存 payload 复用生成结果里的同一诉求。
+- 已在批量弹窗顶部增加 `获取新人群诉求` textarea 和 `恢复默认`；默认优先读取已加载计划的现有 AI 点睛诉求，用户编辑后异步读取计划不会覆盖输入。
+- 已将诉求传入 `generateAiMaxCrowdsForRow()` 调用的 `fetchKeywordAiMaxInfo({ prompt })`，底层 `businessTalk` 请求使用 `prompt.wordList[0].word`；归一化结果同步写入 `trafficAppeal/aiMaxPureUserInput/aiMaxUserInput.wordList[0].word`，保存时继续走既有 payload。
+- 已更新 `tests/campaign-batch-plus-quick-entry.test.mjs`，新增 prompt 输入、传参、底层请求体和保存 payload 同诉求断言，同时保留“管理入口调用官方弹窗、不自建官方设置表单”的断言。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`，勾选计划 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778 / itemId=757440599385` 后打开 `批量+ -> 批量编辑AI点睛`。
+- Chrome DevTools MCP prompt 输入验证：弹窗显示新增 `获取新人群诉求` 输入区，默认值来自当前计划已有诉求；输入测试诉求 `CODEX_PROMPT_20260608_1520 只获取高意向、近期有洗碗机购买需求、关注除菌烘干和嵌入安装的人群，排除低龄和低消费意向人群。` 后，点击行级 `获取新人群`。
+- Chrome DevTools MCP 请求验证：捕获到 `businessTalk.json` 请求，请求体 `prompt.wordList[0].word` 等于上述测试诉求；生成成功后状态为 `已生成新人群 5 个，可保存`，summary 为 `已选 1 个计划 / 已读取 1 个 / 已生成 1 个`，新需求包含 `新房装修灶下嵌入式洗碗机`、`有孩子家庭的高温消毒安心选择` 等。
+- Chrome DevTools MCP 安全与清理验证：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`；未点击保存或批量保存。验证后已恢复守卫、移除 `#am-campaign-ai-max-batch-popup` 并取消勾选，最终 `hasGuard:false`、`hasPopup:false`、`checkedCount:0`。
+
+## 结果复盘
+- 已补齐“获取新人群诉求”设置：顶部输入只作用于插件的行级/批量新人群生成，不替代 `管理` 入口的官方 `AI点睛设置` 弹窗。
+- 底层继续复用原生 `businessTalk` 生成链路，自定义诉求进入 `prompt.wordList[0].word`；生成结果同步写入 `trafficAppeal/aiMaxPureUserInput/aiMaxUserInput.wordList[0].word`，后续保存 payload 使用同一诉求。
+- 生成阶段仍不写计划；保存能力保持现有二次确认和官方 `aimax/updateUserInput` 合同，真实页守卫验证未出现保存类写请求。
+
+# TODO - 2026-06-08 AI 点睛管理调用原生 prompt 设置
+
+## 需求规格
+- 用户要求：先中文 commit 上一轮改动，再继续增加“回原生网页中写 prompt 去获取人群”的功能；上一轮已完成提交 `86e211f 优化AI点睛需求就近详情`。
+- 用户修正：点击“管理”时，应调用原生网页中点击 `AI点睛设置` 的官方入口/接口，不要在插件弹窗里单独设置 prompt。
+- 用户继续修正：不要跳转到详情页，点击 `管理` 后必须在当前列表页直接打开官方 `AI点睛设置` 弹窗。
+- 用户最新修正：点击 `管理` 后原来的 `批量编辑AI点睛` 弹窗不要关闭；需求人群优化成类似官方弹窗的紧凑卡片样式，鼠标移动到对应需求人群时显示该人群详情，鼠标移走后关闭详情。
+- 用户继续反馈：官方 `AI点睛设置` 弹窗没有在最上面，无法点击。
+- 用户继续反馈：鼠标移动到需求人群后应显示“弹窗”，不是像当前截图一样在卡片下方展开；需求人群卡片背景改为纯色背景。
+- 用户继续反馈：详情浮层显示不全，允许越过批量弹窗边界显示；点击 `+2` 时应显示出全部需求人群。
+- 用户继续修正：详情浮层应在对应需求人群按钮的下面显示，不要左右侧弹出。
+- 用户继续反馈：状态提示和 `管理 / 获取新人群 / 保存` 操作按钮可以放到对应计划下面，需求人群需要横向显示更多。
+- 功能目标：`批量+ -> 批量编辑AI点睛` 中，行级 `管理` 打开当前计划对应的原生 `AI点睛设置`，让用户在官方界面写 prompt 并获取新的人群。
+- 交互边界：插件批量弹窗不新增 prompt 输入框、不复制官方 AI 点睛设置表单；行级 `获取新人群` 仍保留为插件批量预览能力，`管理` 只负责回到官方设置入口，且不得关闭原批量弹窗。
+- 数据事实源：继续复用真实页面行内 `AI点睛设置` 按钮和现有 `openAiMaxNativeManager(row)` 定位逻辑；不新增第二套 prompt/人群事实源，不使用详情页 pending 跟随作为成功路径。
+- 安全边界：真实页面验证只点击管理打开官方设置入口，不点击官方保存/确定等会真实写入的动作；若触达写入口必须先守卫。
+- 成功标准：源码、回归测试、构建和 Chrome MCP 真实页验证证明：点击 `管理` 会在当前列表页触发当前行原生 `AI点睛设置` 弹窗，URL 不进入 `search-detail`，原 `批量编辑AI点睛` 弹窗仍保留但位于官方弹窗下层，官方弹窗在最上面且可点击；需求人群详情仅在 hover/focus 时显示，移出后关闭，批量弹窗不出现自建 prompt 编辑器，且未触发保存/改计划写请求。
+- UI 修正标准：需求人群卡片 hover/focus 时详情必须作为卡片外侧浮层弹出，不占用需求网格布局空间；需求卡片背景使用纯色，不再使用渐变背景。
+- UI 补充标准：详情浮层不得被批量弹窗内部容器裁剪；当前/新生成人群的 `+N` 是可点击展开入口，点击后只展开当前计划当前分组的全部需求人群，不触发保存或生成。
+- UI 位置标准：需求详情浮层必须以对应需求按钮为锚点显示在按钮下方，同时仍允许越过批量弹窗边界完整显示。
+- UI 布局标准：计划行状态和操作按钮归属对应计划，不再占用独立右侧列；需求人群列表应释放横向空间，默认展示更多需求卡片。
+
+## 执行计划
+- [x] 校验现有 prompt 读取、管理面板渲染、获取新人群调用链路。
+- [x] 按用户修正撤销自建 prompt 输入区和 `fetchKeywordAiMaxInfo(prompt)` 改动。
+- [x] 将行级 `管理` 改为调用 `openAiMaxNativeManager(row)`，复用原生 `AI点睛设置` 入口。
+- [x] 更新测试，覆盖管理调用官方入口、不出现自建 prompt 编辑器、批量生成链路不被破坏。
+- [x] 运行单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] Chrome MCP 真实页验证点击管理打开官方 `AI点睛设置`，无保存写请求并清理页面状态。
+- [x] 更新验证记录与结果复盘，中文提交。
+- [x] 按最新修正移除详情页 pending 跟随，收紧按钮匹配并验证不跳转。
+- [x] 按最新修正保留批量编辑 AI 点睛弹窗，需求人群改为 hover/focus 详情浮层并验证移出关闭。
+- [x] 修复官方 AI 点睛弹窗被批量弹窗视觉压住的问题，验证官方弹窗置顶且可点击。
+- [x] 按截图反馈把需求人群 hover 详情改为外侧弹窗，卡片背景改为纯色，并验证不再像展开块。
+- [x] 修复详情浮层显示不全，允许浮层越过弹窗边界，并让 `+N` 展开当前分组全部需求人群。
+- [x] 按用户修正把需求详情浮层定位到对应需求按钮下方，并验证不再左右侧弹出。
+- [x] 将状态提示和操作按钮移动到对应计划下方，释放横向空间并让需求人群默认横向显示更多。
+
+## 高层操作摘要
+- 已确认前置中文提交完成：`86e211f 优化AI点睛需求就近详情`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不触碰。
+- 已先分析现有 AI 点睛 prompt 与生成链路：`getAiMaxInfoPrompt()` 读取 `aiMaxUserInput.wordList[0].word`，插件批量生成调用 `fetchKeywordAiMaxInfo`；但用户明确要求 prompt 编辑应回到原生 `AI点睛设置`，因此不在插件里新增 prompt 表单。
+- 已撤销自建 prompt 输入区、行级 `customPrompt` 和 `fetchKeywordAiMaxInfo(prompt)` 改动；行级 `管理` 改为调用 `openAiMaxNativeManager(row)`，定位并点击真实页面当前计划的 `AI点睛设置` 按钮。
+- 真实页面首轮复测发现 `openAiMaxNativeManager(row)` 虽已绑定，但插件批量弹窗 modal 遮罩会拦截原生页面按钮点击；已改为点击 `管理` 时先关闭批量弹窗，再异步点击原生 `AI点睛设置`。
+- 真实页面复测继续发现列表行官方 `AI点睛设置` 本身会先导航到计划详情页，而不是直接弹出设置抽屉；已补 `pendingAiMaxNativeManager`，点击列表原生入口后在目标详情页自动继续点击官方 `AI点睛设置：已开启`，最终打开官方 AI 点睛设置抽屉。
+- 最新修正重新验证发现：列表页精确点击当前行官方 `AI点睛设置` 按钮可以直接打开官方弹窗且 URL 不变；之前跳详情页是实现接受了 pending 跟随路径且按钮匹配过宽。已改为移除 pending 跟随、精确匹配 `AI点睛设置` 按钮，并在点击后检测到 `search-detail` 时恢复列表 URL。
+- 最新交互修正要求 `管理` 同时保留插件批量弹窗，需求人群不再点击后占位展开详情，改为 hover/focus 时在就近浮层展示详情、移出关闭。
+- 已按最新修正改为：`openAiMaxNativeManager(row)` 不再关闭 `#am-campaign-ai-max-batch-popup`，而是在官方弹窗打开期间给批量弹窗加 `is-native-open`，降低层级感并设置 `pointer-events:none`，官方弹窗关闭后自动恢复。
+- 已将当前/新生成人群与备用管理板块中的需求人群统一渲染为紧凑卡片 `.am-ai-max-demand-card`，详情复用 `buildAiMaxDemandDetailHtml()`，默认隐藏，hover/focus 时就近浮层显示；详情保留人群名、卖点、描述、热门关键词和 `人群解析`。
+- 针对官方弹窗未置顶反馈，已将批量弹窗 `is-native-open` 层级从 `2147483000` 下调到 `2147482000`，并在检测到官方 AI 点睛弹窗时临时把官方弹窗及其 wrapper 提升到 `2147483600`，关闭后恢复原始 z-index。
+- 针对截图反馈，已将需求详情从按钮内部下沿浮层调整为按钮外 sibling popover，并把需求卡片背景由蓝绿渐变改为纯色浅底。
+- 针对继续反馈，准备放开批量弹窗内部裁剪并把详情浮层层级抬高；同时把 `+N` 改成行级展开/收起按钮，点击后展示当前或新生成分组的全部需求人群。
+- 针对最新位置修正，准备移除左右侧弹出规则，把详情浮层锚定到对应需求按钮下方；显示完整问题继续通过放开 overflow 与高层级解决。
+- 针对最新布局反馈，已移除 AI 点睛计划行右侧 220px 操作列，将状态提示和 `管理 / 获取新人群 / 保存` 归入计划内容区底部；当前/新生成人群默认可见数量从 3 提升到 4，并收紧需求卡片宽度以提升横向展示密度。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：提交后复验通过，构建产物同步。
+- `git diff --check`：提交后复验通过。
+- Chrome DevTools MCP 真实页复验：已在 `chrome://extensions/` 重载 unpacked extension，并刷新页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`。
+- Chrome DevTools MCP 不跳转验证：勾选第一行计划 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778`，打开 `批量+ -> 批量编辑AI点睛`，点击行级 `管理` 后，`#am-campaign-ai-max-batch-popup` 关闭，URL 从点击前到点击后均保持 `#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`，未进入 `/manage/search-detail`。
+- Chrome DevTools MCP 官方弹窗验证：当前列表页直接出现官方 `AI点睛设置` 弹窗，内容包含 `AI点睛设置 / 开启AI点睛 / 已选：5个需求 / AI解析 / 确定 / 取消`，证明 `管理` 调用的是列表行原生 `AI点睛设置` 弹窗而不是详情页 pending 跟随。
+- Chrome DevTools MCP 安全与清理验证：本轮未点击官方 `确定`、保存或批量保存；写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`，未触发保存类写请求；验证后已关闭官方弹窗、移除插件批量弹窗并恢复、删除守卫，最终 `hasPopup:false`。
+- 最新回归 `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- 最新回归 `npm run check:syntax`：通过。
+- 最新回归 `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 最新回归 `npm run build:check`：通过，构建产物同步。
+- 最新回归 `git diff --check`：通过。
+- Chrome DevTools MCP 最新真实页验证：重载 unpacked extension 并刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`；勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778` 后，通过当前运行态批量 AI 点睛动作入口打开 `批量编辑AI点睛` 弹窗，弹窗显示 1 个计划、3 张可见当前人群卡片和 `+2`。
+- Chrome DevTools MCP hover 详情验证：真实 hover 第一张需求卡片 `有娃家庭餐具消毒的安心选择` 后，`.am-ai-max-demand-detail` 的 computed `display` 从 `none` 变为 `grid`；详情包含 `洗碗机消毒柜一体家用嵌入式` 等完整换行关键词和 `人群解析 / 细心宝妈 / 注重健康的家长`；移到工具栏按钮后 `display` 恢复 `none`。
+- Chrome DevTools MCP 管理保留弹窗验证：在批量弹窗内真实点击行级 `管理` 后，URL 仍保持列表页 `#!/manage/search?...pageSize=40`，官方弹窗文本包含 `AI点睛设置 / 开启AI点睛 / 已选：5个需求 / AI解析`；`#am-campaign-ai-max-batch-popup` 仍存在且 class 为 `is-native-open`，computed `pointer-events:none`、卡片 `opacity:0.58`，未遮挡官方弹窗。
+- Chrome DevTools MCP 最新安全与清理验证：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`；未点击官方确定、保存或批量保存；验证后已移除插件批量弹窗、恢复守卫并取消勾选，最终 `hasGuard:false`、`hasBatchPopup:false`、`checkedCount:0`。页面剩余 `wrapper_dlg_747/dlg_747` 为站点 618 推广浮层，非本功能残留。
+- Chrome DevTools MCP 置顶复验：重载 extension 并刷新列表页后，勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778`，从 `批量+ -> 批量编辑AI点睛 -> 管理` 打开官方弹窗；URL 始终保持 `#!/manage/search?...pageSize=40`，未进入详情页。
+- Chrome DevTools MCP 层级复验：官方 `AI点睛设置` wrapper `#wrapper_dlg_4532` computed/inline `z-index=2147483600`，批量弹窗 `#am-campaign-ai-max-batch-popup.is-native-open` computed `z-index=2147482000`、`pointer-events:none`；`elementFromPoint(990,490)` 命中官方弹窗内部 `热门搜索词` 区域，`insideNative:true`、`insideBatch:false`，证明官方弹窗在最上层且可点击。
+- Chrome DevTools MCP 置顶安全与清理验证：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`；只点击官方 `取消`，未点击 `确定` 或保存；清理后 `hasGuard:false`、`hasBatchPopup:false`、`hasNativeAiMaxDrawer:false`、`checkedCount:0`。
+- 最新回归 `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- 最新回归 `npm run check:syntax`：通过。
+- 最新回归 `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 最新回归 `npm run build:check`：通过，构建产物同步。
+- 最新回归 `git diff --check`：通过。
+- Chrome DevTools MCP 最新真实页验证：已在 `chrome://extensions/` 重载 unpacked extension，并刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`；只勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778` 后打开 `批量+ -> 批量编辑AI点睛`，弹窗显示 `已选 1 个计划 / 已读取 1 个 / 已生成 0 个`。
+- Chrome DevTools MCP `+N` 展开验证：当前人群分组初始显示 3 张需求卡片和 `+2` 按钮；点击 `+2` 后同一分组显示 5 张需求卡片，按钮变为 `收起`，未触发生成、保存或官方确定。
+- Chrome DevTools MCP 详情完整显示验证：真实 hover 第二张需求卡片 `小户型厨房也能放下的洗碗机` 后，`.am-ai-max-demand-detail` computed `display:grid`、`z-index:2147483647`，详情向左弹出，几何为 `left=178/right=698/top=392/bottom=627/width=520/height=235`，完全处于 `1800x979` 视口内；同时 `crossesCardBoundary:true`，证明允许越过批量弹窗卡片边界显示且未被裁剪。
+- Chrome DevTools MCP 最新清理验证：验证后移除 `#am-campaign-ai-max-batch-popup` 并取消勾选，最终 `hasPopup:false`、`checkedCount:0`。
+- 最新位置修正回归 `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- 最新位置修正回归 `npm run check:syntax`：通过。
+- 最新位置修正回归 `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 最新位置修正回归 `npm run build:check`：通过，构建产物同步。
+- 最新位置修正回归 `git diff --check`：通过。
+- Chrome DevTools MCP 位置复验：重载 unpacked extension 并刷新列表页后，打开 `批量+ -> 批量编辑AI点睛`；真实 hover 第一行第二张需求卡片 `智能家庭整体升级的洗烘套装` 后，详情 computed `display:grid`、`left:0px`、`top:55px`、`right:-317px`、`transform:none`、`z-index:2147483647`，几何为按钮 `left=732/right=935/top=410/bottom=457`、详情 `left=732/right=1252/top=466/bottom=669/width=520/height=203`，`belowButton:true`、`gap:9`、`horizontalAnchorAligned:true`、`withinViewport:true`，证明详情显示在对应需求按钮下方且完整可见。
+- Chrome DevTools MCP 位置复验清理：验证后移除 `#am-campaign-ai-max-batch-popup` 并取消所有勾选，最终 `hasPopup:false`、`checkedCount:0`。
+- 最新布局回归 `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- 最新布局回归 `npm run check:syntax`：通过。
+- 最新布局回归 `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 最新布局回归 `npm run build:check`：通过，构建产物同步。
+- 最新布局回归 `git diff --check`：通过。
+- Chrome DevTools MCP 最新布局复验：重载 unpacked extension 并刷新 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc&pageSize=40`；只勾选 `E7Pro_AI点睛_重建对比_041518 / campaignId=81271150778`，从 `批量+ -> 批量编辑AI点睛` 打开弹窗，弹窗显示 `已选 1 个计划 / 已读取 1 个 / 已生成 0 个`。
+- Chrome DevTools MCP 计划行布局复验：第一条计划行 computed `gridTemplateColumns:"32px 894px"`，不再包含旧 `220px` 右侧列，`hasRowSide:false`；`.am-ai-max-row-footer` 位于 `.am-ai-max-row-main` 内，`footerBelowCrowds:true`、`footerWithinRowMain:true`，状态文本为 `已读取 AI 点睛人群 10 个`，行级操作为 `管理 / 获取新人群 / 保存`。
+- Chrome DevTools MCP 横向展示复验：当前人群分组默认显示 4 张需求卡片和 `+6`，卡片宽度与 popover 宽度均为 `188px`，比旧版 3 张可见卡片横向展示更多；新生成分组仍显示 `暂无人群`，未触发生成或保存。
+- Chrome DevTools MCP 最新布局清理：写请求守卫覆盖 `aimax/updateUserInput`、`campaign/updatePart`、`campaign/budget/batchUpdate`、`solution/addList|copy`、`campaign/delete`、`crowd/save|update`，`guardHits:[]`；验证后移除 `#am-campaign-ai-max-batch-popup`、恢复守卫并取消勾选，最终 `hasGuard:false`、`hasPopup:false`、`checkedCount:0`。
+
+## 结果复盘
+- 已按用户修正改为调用原生官方 AI 点睛设置入口，不在插件内自建 prompt 编辑器，也不再用跳详情页或详情页 pending 跟随作为替代结果。
+- 列表行官方入口必须精确匹配当前行 `AI点睛设置`，点击后若检测到进入 `search-detail` 会恢复列表 URL 并提示重试；真实页复验证明当前运行态可在列表页直接打开官方 AI 点睛设置弹窗。
+- 最新交互已调整为保留批量弹窗：官方 AI 点睛弹窗打开时，批量弹窗转为不可拦截的弱化背景态，用户关闭官方弹窗后批量上下文恢复。
+- 置顶问题已修复：保留批量弹窗时插件弹窗退到官方弹窗下方，官方 AI 点睛弹窗临时提升层级，关闭后恢复原始 z-index。
+- 需求人群详情从点击展开改为 hover/focus 临时浮层，卡片更接近官方弹窗的紧凑需求形态，并保留关键词完整显示和人群解析。
+- 最新修正已解决截图中的显示不全：详情浮层可越过批量弹窗边界显示，右列卡片向左弹出避免右侧裁剪；`+N` 改为当前行当前分组的展开/收起入口，可展示全部需求人群。
+- 最新位置修正按用户要求改为“按钮下面显示”：移除左右侧弹出规则，详情浮层锚定对应需求按钮下方，继续保持高层级和可越界显示，真实页面验证位置和完整性均通过。
+- 最新布局修正已把状态提示和 `管理 / 获取新人群 / 保存` 放回对应计划内容区底部，移除独立右侧列；需求人群默认从 3 张提升到 4 张，并用 188px 紧凑卡片释放横向空间。
+- 保存能力仍保留既有官方 `aimax/updateUserInput` 合同，但本轮管理入口不做任何自动保存；真实页写请求守卫证明点击管理无写入。
+- 已完成中文提交：`c48ff8c 调用原生AI点睛设置管理`。
+
+# TODO - 2026-06-08 AI 点睛需求就近展开与关键词完整显示
+
+## 需求规格
+- 用户要求：先中文 commit 上一轮改动，再继续调整“已选需求”详情展开；已完成提交 `21b3e06 增加AI点睛需求详情切换`。
+- 问题反馈：当前点击人群后详情展示太多，且关键词显示不全；用户希望点击某个人群后，在该人群对应最近的位置展开详情。
+- 功能目标：`批量+ -> 批量编辑AI点睛 -> 管理` 中，点击某个已选需求卡片后，在该卡片附近插入紧凑详情，不再把完整大块详情固定放到需求列表下方。
+- 内容边界：就近详情展示该人群名称、卖点、简短描述、关键词和当前人群具体解析；避免把方案计划等远离卡片的大块内容堆在点击详情里。关键词必须允许换行完整显示，不用省略号截断。
+- 数据事实源：继续使用 `crowdList[index].properties` 中的 `sellPoint/description/searchWordList/crowdProfileList`，不新增第二事实源，不触发保存接口。
+- 成功标准：源码、测试、构建和 Chrome MCP 真实页面验证证明：点击不同需求时详情出现在相邻位置，内容更收敛，关键词能换行显示完整，且无写请求和残留弹窗。
+
+## 执行计划
+- [x] 重新设计 `renderAiMaxManagePanel()` 的需求卡片结构，把详情插入 active 卡片后方。
+- [x] 精简详情内容，移除固定下方大详情和长方案堆叠，关键词改为完整换行显示，并保留当前人群解析。
+- [x] 调整样式，保证详情就近展开、网格不跳成混乱布局、关键词不截断。
+- [x] 更新回归测试，覆盖 inline 详情、关键词完整显示样式和不保留大块详情。
+- [x] 运行单测、语法检查、构建、构建同步检查、diff 检查。
+- [x] Chrome MCP 真实页验证点击不同需求后的就近展开、关键词显示和无写请求。
+- [x] 更新验证记录与结果复盘。
+
+## 高层操作摘要
+- 已按用户要求先提交上一轮改动：`21b3e06 增加AI点睛需求详情切换`。
+- 已确认当前实现的问题根因：`renderAiMaxManagePanel()` 在需求网格后固定渲染 `.am-ai-max-selected-detail`，并且继续保留 `方案计划 / 热门搜索词 / 人群画像` 长区块；关键词使用通用 tag 样式，容易单行截断。
+- 已改为 inline 就近详情：active 需求卡片后直接插入 `.am-ai-max-demand-detail`，内容收敛为人群名、卖点、简短描述、关键词和当前人群解析，不再固定渲染底部大详情或长方案区。
+- 已新增 `.am-ai-max-inline-keyword`，关键词允许换行和 `overflow-wrap:anywhere`，避免长关键词被省略号截断。
+- 按用户修正恢复当前人群具体解析：解析 `crowdProfileList` 后在就近详情内以紧凑 `人群解析` 展示，不恢复远离卡片的旧大块布局。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：首次因测试断言仍依赖旧源码顺序失败；已调整断言为 inline 详情和关键词完整显示不变量后复跑通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`，选中 2 条 AI 点睛计划后打开 `批量+ -> 批量编辑AI点睛`，点击第一行 `管理` 后进入批量弹窗内管理板块。
+- Chrome DevTools MCP 就近展开验证：点击第二个已选需求 `小户型厨房也能放下的洗碗机` 后，`.am-ai-max-demand-detail` 紧跟 active 卡片后方，`detailNextToActive:true`，距离约 `6px`，内容切换为对应人群的 `嵌入式省空间` 描述和关键词。
+- Chrome DevTools MCP 再次切换验证：点击第三个已选需求 `新婚搬家送伴侣的贴心实用好礼` 后，详情仍紧跟 active 卡片后方，`detailNextToActive:true`，距离约 `6px`，且当前详情数量保持为每个展开行一个，不再出现旧的 `.am-ai-max-selected-detail/.am-ai-max-selected-card`。
+- Chrome DevTools MCP 人群解析复验：按用户修正恢复 `crowdProfileList` 后，第二个需求详情显示 `人群解析 / 小户型租房族 / 新婚小家庭 / 精打细算主妇`，第三个需求详情显示 `人群解析 / 暖心男友 / 乔迁新居女性 / 孝顺子女`；`.am-ai-max-demand-personas` 与详情同处就近展开区，`personaGrid:"56px 480px"`，不恢复旧底部大块。
+- Chrome DevTools MCP 关键词验证：`.am-ai-max-inline-keyword` 的计算样式为 `white-space: normal`、`overflow-wrap: anywhere`、`word-break: break-word`、`text-overflow: clip`，关键词如 `洗碗机消毒柜一体家用嵌入式` 可完整换行显示。
+- Chrome DevTools MCP 安全与清理验证：本轮未点击保存/批量保存，`performance` 未出现 `aimax/updateUserInput`、`campaign/updatePart`、`solution/addList`、`solution/copy`、`campaign/delete`、`crowd/save|update` 写请求；弹窗已关闭，最终 `hasPopup:false`，勾选项已取消为 `checkedRowCount:0`。
+
+## 结果复盘
+- 已完成“点击该人群后在对应最近的位置展开详情”：详情从底部固定大块改为跟随 active 需求卡片就近展开，减少用户视线跳转。
+- 已按用户反馈收敛详情内容，保留人群名、卖点、简短描述、关键词和当前人群解析，移除管理板块内的长方案计划堆叠。
+- 关键词显示不再依赖旧 tag 单行截断样式，改为 inline keyword 自动换行，真实页和测试均证明不会省略。
+
+# TODO - 2026-06-08 AI 点睛已选需求点击展开详情
+
+## 需求规格
+- 用户要求：先中文 commit 已完成的批量 AI 点睛保存工作，再继续增加“已选需求”详情展开能力；当前已完成提交 `f23c61c 增加批量AI点睛保存`。
+- 功能目标：在 `批量+ -> 批量编辑AI点睛 -> 管理` 展开的 AI 点睛板块中，已选需求不能只是静态列表；点击某个人群/需求后，应展开并切换展示该人群对应的卖点、描述、热门搜索词和人群画像。
+- 数据事实源：继续使用现有 `getAiMaxEditableInfoForRow(row)`、`getAiMaxEditableCrowdListForRow(row)`、`aiMaxInfo.nativeCrowdList/currentCrowdList/newCrowdList`；不新增第二套 AI 点睛数据结构。
+- 交互边界：点击已选需求只更新批量弹窗内的展开详情，不跳转页面、不保存、不触发 `aimax/updateUserInput` 等写请求。
+- UI 规范：复用 `am-` 前缀与现有 AI 点睛弹窗样式，需求卡片要有 active/focus 状态，按钮文本和详情内容不能溢出或造成布局跳动。
+- 成功标准：源码、回归测试、构建检查和 Chrome MCP 真实页面验证共同证明：点击不同已选需求会切换到对应人群详情，且无写请求、无弹窗残留。
+
+## 执行计划
+- [x] 校验当前批量 AI 点睛管理面板渲染逻辑，确认需求列表与 `crowdList[index]` 的对应关系。
+- [x] 增加行级选中需求状态与点击动作，渲染可点击需求卡片和选中人群详情。
+- [x] 调整样式，补齐 active/focus/详情区稳定布局。
+- [x] 更新回归测试，覆盖点击动作、active index、详情取选中人群属性和不触发保存链路。
+- [x] 运行相关单测、语法检查、构建、构建同步检查和 diff 检查。
+- [x] 用 Chrome DevTools MCP 在真实页面验证管理展开、点击需求切换详情、无写请求，并记录结果。
+- [x] 更新验证记录与结果复盘。
+
+## 高层操作摘要
+- 已确认前置中文提交完成：`f23c61c 增加批量AI点睛保存`；当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本任务不触碰。
+- 已回看现有实现：`renderAiMaxManagePanel()` 当前总是取 `crowdList[0]` 展示热门搜索词和人群画像，`已选需求` 只是静态卡片，无法像原生页面一样切换到具体人群。
+- 已实现 `selectAiMaxBatchDemand()` 与行级 `activeDemandIndex`，把已选需求卡片改成可点击按钮；点击后只重渲染批量弹窗内部管理板块，并按选中 `crowdList[index]` 展示需求详情、热门搜索词和人群画像。
+- 已补充 active/focus 样式和稳定两列详情区；回归测试已覆盖需求卡片 action、active index、选中人群属性读取和样式约束。
+- 已运行 `npm run build` 同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js`。
+- 已用 Chrome MCP 重载 unpacked extension、刷新真实关键词推广列表页，并在 AI 筛选页打开批量 AI 点睛弹窗验证最新运行态。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步生成产物。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`，选中 2 条 AI 点睛计划后从 `批量+ -> 批量编辑AI点睛` 打开弹窗，点击第一行 `管理` 后出现 `已选需求 / 需求详情 / 热门搜索词 / 人群画像`。
+- Chrome DevTools MCP 点击切换验证：第一行已选需求卡片均为按钮；点击第二个 `小户型厨房也能放下的洗碗机` 后 `aria-pressed=true`，详情切换为“小户型厨房也能放下的洗碗机 / 嵌入式省空间”，热门搜索词切换为 `洗碗机嵌入式、极薄洗碗机、水槽洗碗机小尺寸...`，画像切换为 `小户型租房族、新婚小家庭、精打细算主妇`。
+- Chrome DevTools MCP 再次切换验证：点击第三个 `新婚搬家送伴侣的贴心实用好礼` 后 `aria-pressed=true` 且 `.is-active=true`，详情切换为“新婚搬家送伴侣的贴心实用好礼 / 实用家电送礼”，热门搜索词切换为 `洗碗机、家电、家用电器...`。
+- Chrome DevTools MCP 安全与清理验证：本轮未点击保存/批量保存，`performance` 未出现 `aimax/updateUserInput`、`campaign/updatePart`、`solution/addList`、`solution/copy`、`campaign/delete`、`crowd/save|update` 写请求；弹窗已关闭，最终 `hasPopup:false`，勾选项已取消为 `checkedCount:0`。
+
+## 结果复盘
+- 已完成“已选需求点击展开详情”：批量 AI 点睛管理面板不再固定展示第一个人群，点击任一需求会在弹窗内切换对应人群详情、搜索词和画像。
+- 交互保持只读，不跳转页面、不保存、不触发写请求；状态只保存在行级 `activeDemandIndex`，继续复用现有 `aiMaxInfo/nativeCrowdList/currentCrowdList/newCrowdList` 事实源。
+- 未跟踪截图 `tasks/e7-custom-copy-button-before.png` 未触碰、未纳入。
+
+# TODO - 2026-06-08 批量 AI 点睛保存与批量建计划板块复用
+
+## 需求规格
+- 用户要求：先中文 commit 已完成的批量 AI 点睛功能，再增加保存功能；点击“管理”时，不再只是打开原生入口，而是回到“批量建计划”里 AI 点睛已经做好的板块。
+- 前置状态：已完成中文提交 `df95c8f 增加批量编辑AI点睛`；未跟踪截图 `tasks/e7-custom-copy-button-before.png` 仍不纳入。
+- 功能目标：`批量+ -> 批量编辑AI点睛` 中，已生成新人群后可以安全保存到计划；逐计划“管理”应复用组建计划/批量建计划中已有 AI 点睛板块能力，减少第二套 UI 和第二事实源。
+- 必须先分析：批量建计划 AI 点睛板块的 DOM/状态/数据结构、`aiMaxInfo/nativeCrowdList/crowdList` 如何进入计划 payload、已有保存/关闭/详情编辑流程，以及官方编辑 AI 点睛保存接口或可复用的源码合同。
+- 安全边界：保存功能涉及真实改计划/改人群，不得猜接口直接提交；浏览器验证保存路径必须使用写请求守卫先拦截并记录 URL 与脱敏 payload，只有合同清晰且用户明确授权真实写入时才允许放行。
+- 成功标准：源码实现、测试和 Chrome MCP 验证共同证明：管理入口复用已有 AI 点睛板块；保存按钮按确认后的合同组包；未授权验收不会真实改计划；写请求守卫清理无残留。
+
+## 执行计划
+- [x] 先中文 commit 已完成的批量编辑 AI 点睛功能。
+- [x] 分析批量建计划里已有 AI 点睛板块：入口、渲染函数、状态字段、生成结果如何进入计划配置。
+- [x] 分析 AI 点睛编辑保存合同：官方原生入口请求、现有源码提交 payload、可复用 API 与不可碰写路径。
+- [x] 设计最小侵入方案：管理回填/打开已有 AI 点睛板块，保存新生成人群，状态与错误提示，写请求确认。
+- [x] 实现源码改动，避免第二套 AI 点睛 UI/事实源。
+- [x] 补充测试并同步构建产物。
+- [x] Chrome MCP 真实页面守卫验证：管理入口、保存 payload、无真实写入或经授权写入成功、守卫清理。
+- [x] 更新验证记录与结果复盘。
+
+## 高层操作摘要
+- 已按用户要求先提交：`df95c8f 增加批量编辑AI点睛`。
+- 正在分析批量建计划 AI 点睛已有板块和保存合同；本阶段不会提交保存写请求。
+- 已用 Chrome DevTools MCP 在真实 `one.alimama.com` 详情页打开原生 `AI点睛设置`，确认批量建计划里的 AI 点睛板块目前内聚在 `src/optimizer/keyword-plan-api/wizard-scene-config/render-scene-dynamic-core.js`，核心是 `serializeKeywordAiMaxInfo`、`ensureKeywordAiMaxGeneration`、`buildKeywordAiMaxInsightPanelRow` 和 `buildKeywordAiMaxPendingPanelRow`，字段事实源是 `aiMaxInfo.nativeCrowdList / selectedDemandList / demandList / aiMaxDeliveryPlan`。
+- 原生保存合同已确认：点击 AI 点睛设置“确定”会请求 `POST https://one.alimama.com/aimax/updateUserInput.json?csrfId=...&bizCode=onebpSearch`，请求体包含 `bizCode`、`campaignId`、`aiMaxInfo`、顶层 `crowdList`；`aiMaxInfo.aiMaxUserInput.wordList[0].word` 是 prompt，`aiMaxInfo.aiMaxDeliveryPlan` 是方案计划，`crowdList` 是实际需求人群列表。
+- 验证偏差：上一轮页面写请求守卫漏拦 `aimax/updateUserInput`，因此原生确认实际发出一次保存请求并返回 `info.ok:true`；请求体仍是原始 prompt 与 5 个 AI 点睛人群，没有包含脚本探针文本。后续守卫必须补拦 `aimax/updateUserInput`，并已恢复 `window.__codexAiMaxSaveGuard`。
+- 已实现：`批量编辑AI点睛` 弹窗新增行级“保存”和顶部“批量保存”；保存前二次确认，统一调用 `saveAiMaxRow -> https://one.alimama.com/aimax/updateUserInput.json?...&bizCode=onebpSearch`，payload 使用新生成 `newAiMaxInfo.nativeCrowdList` 同步写入 `aiMaxInfo.nativeCrowdList` 与顶层 `crowdList`。
+- 已实现：行级“管理”不再跳原生详情/抽屉，而是在批量弹窗内展开 AI 点睛管理板块，展示 `流量诉求 / 已选需求 / 方案计划 / 热门搜索词 / 人群画像`，字段来自批量建计划 AI 点睛结构的 `aiMaxInfo/nativeCrowdList`。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步根 userscript、`dist/packages` 和 `dist/extension/page.bundle.js`。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- `node --test tests/keyword-plan-api-slim.test.mjs tests/keyword-custom-native-parity-ui.test.mjs tests/extension-static-build.test.mjs`：通过，29/29。
+- Chrome DevTools MCP 真实页验证：页面 `https://one.alimama.com/index.html#!/manage/search?bizCode=onebpSearch&orderField=charge&orderBy=desc`，勾选 2 条 AI 点睛计划后从 `批量+ -> 批量编辑AI点睛` 打开弹窗，弹窗出现 `批量保存`，两行均展示 `管理 / 获取新人群 / 保存`。
+- Chrome DevTools MCP 管理验证：点击第一行 `管理` 后，未跳转页面，仍在批量弹窗内展开 AI 点睛板块，显示 `流量诉求 / 已选需求 / 方案计划 / 热门搜索词 / 人群画像`。
+- Chrome DevTools MCP 生成与保存守卫验证：点击第一行 `获取新人群` 后生成 5 个新人群，行级 `保存` 由 disabled 变为可用；安装补全 `aimax/updateUserInput` 的写请求守卫后点击 `保存 -> 确认保存`，成功拦截 `POST https://one.alimama.com/aimax/updateUserInput.json?...&bizCode=onebpSearch`，payload 含 `campaignId=81271150778`、`aiMaxInfo`、`aiMaxInfo.aiMaxUserInput.wordList`、`aiMaxInfo.aiMaxDeliveryPlan`、`aiMaxInfo.nativeCrowdList` 与顶层 `crowdList`。守卫返回 `CODEX_GUARDED_WRITE_BLOCKED`，未真实保存。
+- Chrome DevTools MCP 清理验证：已执行 `window.__codexAiMaxSaveGuard.restore()` 并移除 AI 点睛弹窗/确认窗，最终 `hasGuard:false`、`hasAiMaxPopup:false`、`hasConfirmPopup:false`、`hasGuardText:false`。
+
+## 结果复盘
+- 已完成保存功能和管理入口调整：批量 AI 点睛可以生成新人群后按单行或批量保存，保存合同对齐原生 `aimax/updateUserInput`。
+- 管理入口已回到批量弹窗内部的 AI 点睛板块，展示结构对齐批量建计划中已有 AI 点睛信息，而不是单纯跳转原生页面。
+- 真实页面验证未做真实落库，原因是用户未授权真实修改计划；本轮用补全守卫证明保存 URL 与 payload 正确，并已清理守卫。
+
+# TODO - 2026-06-08 批量+ 批量编辑 AI 点睛人群
+
+## 需求规格
+- 用户要求：在计划列表 `批量+` 中增加“批量编辑 AI 点睛”能力；做功能前必须先分析单个计划 AI 点睛获取人群的现有逻辑，再设计批量 AI 点睛。
+- 功能目标：支持从 `批量+` 对勾选计划批量打开 AI 点睛人群管理；既能按单个计划查看/管理 AI 点睛人群，也能批量为多个计划获取新的 AI 点睛/推荐人群。
+- 初始假设：本轮优先面向关键词推广 `onebpSearch` 的 AI 点睛计划；其它业务线若没有相同 AI 点睛合同，应在 UI 中禁用或提示不支持，避免把通用人群设置误当 AI 点睛。
+- 单计划分析必须覆盖：AI 点睛生成接口、推荐/系统人群接口、`campaign.crowdList` / `adgroup.crowdList` / `rightList` / `aiMaxInfo` 字段流转、最终提交合同和当前已有 UI 管理入口。
+- 安全边界：不真实提交创建、投放、删除或改人群请求；浏览器验收如触达写入口必须先安装写请求守卫，记录 URL 和脱敏 payload 摘要，结束后恢复守卫并确认无残留。
+- UI 规范：已读取 `docs/插件UI统一设计规范.md` 和 `docs/图标设计规范.md`；新增弹窗/菜单复用 `--am26-*` token、`renderAmIcon()`、`am-` 前缀类名，保持后台工具高密度、浅玻璃、低噪声。
+- 工作区边界：当前仅有未跟踪截图 `tasks/e7-custom-copy-button-before.png`，不触碰、不纳入本任务。
+- 成功标准：源码实现、测试、构建同步和任务记录共同证明：`批量+` 出现 AI 点睛入口；入口能识别勾选计划并展示逐计划管理状态；批量获取新人群走已分析过的单计划事实源；关键合同有回归测试；无法真实写入的部分有守卫验证或明确未验证风险。
+
+## 执行计划
+- [x] 回顾项目规则、历史教训、UI/图标规范和相关源码地图。
+- [x] 分析单计划 AI 点睛获取人群逻辑，记录函数链路、接口、字段落点和可复用能力。
+- [x] 校验计划范围：批量能力只补插件增强，不重复原生 `批量计划设置` 已有入口。
+- [x] 设计 `批量+` AI 点睛弹窗/动作模型：逐计划管理、批量获取新人群、状态/错误/空态和安全守卫。
+- [x] 实现最小侵入源码改动，并避免新增第二套 AI 点睛事实源。
+- [x] 补充/更新回归测试，覆盖菜单入口、单计划链路复用、批量获取状态和字段合同。
+- [x] 运行相关单测、语法检查、构建/构建同步检查、`git diff --check`，必要时运行 `npm run review`。
+- [x] 用 Chrome DevTools MCP 在真实 `one.alimama.com` 页面只读验证入口和弹窗；如验证批量获取写路径，必须使用写请求守卫并清理。
+- [x] 更新高层操作摘要、验证记录和结果复盘。
+
+## 高层操作摘要
+- 已使用 `planning-with-files` 与 `goal-driven`：本任务是多步长期目标，先写入可核对计划并把“先分析单计划 AI 点睛取人群，再做批量”固定为执行顺序。
+- 已读取 `AGENTS.md`、`tasks/lessons.md`、`docs/源码结构速查.md`、`docs/插件UI统一设计规范.md`、`docs/图标设计规范.md`；相关教训包括 L119/L120（`批量+` 不重复原生入口）、L117/L118（AI 点睛/关键词人群字段一致性）和 L112（写请求守卫必须清理）。
+- 已启动只读子代理 Cicero 并行分析单计划 AI 点睛人群链路；主线程同步定位 `批量+` 菜单和动作分发。
+- 单计划 AI 点睛新人群事实源已确认：`fetchKeywordAiMaxInfo()` -> `requestAiMaxBusinessTalk()` -> `https://ai.alimama.com/ai/chat/businessTalk.json`，解析 SSE 中的 `additionalData.aiMaxInfo` 与 `additionalData.crowdList`，并归一为 `nativeCrowdList`；不是通用 `suggestCrowds`。
+- 字段合同已确认：`campaign.aiMaxInfo.nativeCrowdList` 用于 AI 点睛展示/配置，`campaign.crowdList` 是复制 AI 点睛源计划时的需求人群，关键词自定义侧仍要保持 `adgroup.crowdList` 与 `adgroup.rightList` 一致，批量 AI 点睛不能新增第二事实源。
+- 已在 `src/optimizer/keyword-plan-api/exports.js`、`wizard-open-and-create.js`、`src/optimizer/bridge.js`、`src/main-assistant/bootstrap.js` 导出并桥接 `fetchKeywordAiMaxInfo`，让扩展运行态可以复用单计划 AI 点睛生成链路。
+- 已在 `src/main-assistant/campaign-id-quick-entry.js` 的 `批量+` 中新增“批量编辑AI点睛”入口和弹窗：可读取选中关键词计划当前 AI 点睛人群，可逐计划点“管理”进入原生 AI 点睛入口/详情页，可逐计划或批量调用原生 AI 点睛链路生成新人群预览；本轮不保存/提交人群。
+- 已在 `src/main-assistant/ui.js` 增加 `#am-campaign-ai-max-batch-popup` 样式和滚动链路保护，复用 `am-` 前缀与现有 token；已同步根 userscript、`dist/packages/alimama-helper-pro.user.js` 和 `dist/extension/page.bundle.js` 构建产物。
+- 已更新 `tests/campaign-batch-plus-quick-entry.test.mjs` 和 `tests/keyword-plan-api-slim.test.mjs`，覆盖 `批量+` 新入口、AI 点睛桥接暴露和 `nativeCrowdList` 合同。
+
+## 验证记录
+- `node --test tests/campaign-batch-plus-quick-entry.test.mjs`：通过，13/13。
+- `node --test tests/keyword-plan-api-slim.test.mjs tests/keyword-plan-api-bridge-security.test.mjs tests/extension-static-build.test.mjs tests/keyword-custom-native-parity-ui.test.mjs`：通过，38/38。
+- `npm run check:syntax`：通过。
+- `npm run build`：通过，已同步 userscript、dist packages 和 extension bundle。
+- `npm run build:check`：通过，构建产物同步。
+- `git diff --check`：通过。
+- Chrome DevTools MCP 真实页验证：页面为 `https://one.alimama.com/index.html#!/manage/search?offset=0&searchKey=campaignNameLike&searchValue=AI&orderField=charge&orderBy=desc`；运行态 `window.__AM_WXT_PLAN_API__` 已暴露 `fetchKeywordAiMaxInfo`，`批量+` 菜单可见“批量编辑AI点睛”。
+- Chrome DevTools MCP 真实页操作：用真实点击勾选 2 条 AI 点睛计划 `81246870887 / E7Pro_AI点睛_促加购_手动`、`81179245735 / E7Pro_AI点睛_促加购_手动对比_20260605`，打开批量 AI 点睛弹窗后，弹窗读取 2/2 个计划当前 AI 点睛人群，每个计划当前人群 5 个，行内“管理”和“获取新人群”按钮可见。
+- Chrome DevTools MCP 批量获取新人群：点击“批量获取新人群”后，2 条计划均生成新人群预览，每条 5 个，弹窗汇总为 `已选 2 个计划 / 已读取 2 个 / 已生成 2 个`；网络请求出现 2 次 `https://ai.alimama.com/ai/chat/businessTalk.json`，符合单计划 AI 点睛事实源。
+- 写请求自查：`performance.getEntriesByType('resource')` 中没有 `solution/addList`、`solution/copy`、`campaign/updatePart`、`campaign/delete`、`campaign/budget/batchUpdate`、`crowd/save`、`crowd/update` 等写入 URL；只出现 `campaign/get.json`、`adgroup/get.json`、`crowd/findList.json` 和 `businessTalk.json`。本轮没有安装写请求守卫，因功能只读生成预览且未触达保存/提交。
+- UI 布局验证：弹窗在 1695x977 视口内可见，2 个行卡片 `overlapCount:0`，无横向溢出，弹窗关闭后 `#am-campaign-ai-max-batch-popup` 不残留。控制台存在站点资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未发现本功能运行错误。
+
+## 结果复盘
+- 已完成 `批量+` 批量编辑 AI 点睛能力：入口识别选中计划，读取当前 AI 点睛人群，支持逐计划管理和批量获取新人群预览。
+- 方案保持最小侵入：批量获取新人群复用单计划 `fetchKeywordAiMaxInfo` / `businessTalk.json` 链路，没有把通用人群推荐 `suggestCrowds` 当作 AI 点睛来源，也没有新增第二套人群事实源。
+- 安全边界已落实：本轮只读详情和 AI 生成预览，不保存、不提交、不删除、不创建；真实页面自查没有写入 URL。
+- 剩余风险：官方 AI 点睛保存/提交合同本轮未验证，因此弹窗刻意只做新人群预览，并提示“保存请进入单计划管理确认”。后续若要批量保存，需要先抓取并确认官方保存合同，再用写请求守卫或用户授权的真实写入流程单独验收。
+
+# TODO - 2026-06-07 安全审查问题修复
+
+## 需求规格
+- 用户要求：先用中文 commit 记录审查结果，再修复已发现的 bug/漏洞/安全问题。
+- 已完成前置提交：`1fa84ad 记录安全审查结果`，只提交 `tasks/todo.md` 审查记录，未纳入未跟踪截图。
+- 修复目标：处理 P1/P2 高置信问题，包括计划 API 桥接授权门禁、extension/userscript HTTPS 与域名收窄、license server CORS allowlist、license server 依赖漏洞处理。
+- 安全边界：不点击或触发真实投放/创建/提交链路；不提交密钥、Cookie、店铺数据；不回退未跟踪截图 `tasks/e7-custom-copy-button-before.png`。
+- 成功标准：业务代码与测试体现新的安全不变量；相关单测、语法、构建检查和审计命令有明确结果；依赖漏洞如无法完全消除，需给出代码级缓解、CI/任务记录证据和剩余风险。
+
+## 执行计划
+- [x] 先提交中文审查记录，确保修复前基线可追踪。
+- [x] 读取相关测试和构建脚本，确认本项目对桥接、manifest、license server 的既有断言方式。
+- [x] 修复计划 API bridge：调用写能力前强制授权门禁，补充未授权阻断测试。
+- [x] 修复 HTTPS/域名范围：userscript meta、extension manifest、content 注入、background sender 改为 HTTPS-only 且收窄到实际 host，补静态测试。
+- [x] 修复 license server CORS：引入可配置 allowlist，分离默认公共访问与 credentials，补服务端 hardening 测试。
+- [x] 处理 license server 依赖漏洞：验证可升级/override 路径，更新锁文件或记录无法消除的剩余风险和缓解措施。
+- [x] 运行相关测试、`npm run check:syntax`、`npm run build:check`、`npm audit --prefix services/license-server --audit-level=moderate`，必要时运行 `npm run review`。
+- [x] 更新高层操作摘要、验证记录和结果复盘。
+
+## 高层操作摘要
+- 已按用户要求先完成中文提交：`1fa84ad 记录安全审查结果`。
+- 已在 `src/optimizer/bridge.js` 增加 `requireBridgeAuthorized(method)`，完整 page API bridge 在解析并调用 API 前先走 `LicenseGuard.requireAuthorizedSync('keyword_plan_api_bridge:<method>')`；extension 运行态缺失授权守卫时 fail-closed。
+- 已把 userscript `@match`、extension manifest、content 注入判断和 background sender 校验收窄到 HTTPS-only；manifest 不再使用 `*://` 或 `*.alimama.com` 注入匹配，background 不再允许任意 alimama 子域发起授权请求。
+- 已在 license server CORS 中加入 `AM_LICENSE_CORS_ALLOWED_ORIGINS` allowlist，默认只允许授权服务自身 HTTPS origin；非 allowlist Origin 不再返回 `access-control-allow-origin` 和 credentials。
+- 已用 `overrides.protobufjs = 8.6.1` 更新 `services/license-server` 依赖锁，移除旧 `protobufjs 6.11.4` 与 `@protobufjs/utf8` 传递依赖，`npm audit` 已清零。
+- 已同步根 userscript、`dist/packages` 和 `dist/extension` 构建产物，并补充桥接、extension 静态构建、license server hardening、依赖合同和 userscript meta 回归测试。
+
+## 验证记录
+- `node --test tests/keyword-plan-api-bridge-security.test.mjs tests/extension-static-build.test.mjs tests/license-server-hardening.test.mjs tests/license-server-runtime-deps.test.mjs tests/budget-frontend-limit-bypass.test.mjs`：首次因根 userscript 构建产物未同步失败；运行 `npm run build` 后复跑通过，42/42。
+- `npm install --package-lock-only --prefix services/license-server`：沙箱内 DNS 失败；联网放行后通过，并输出 `found 0 vulnerabilities`。
+- `npm audit --prefix services/license-server --audit-level=moderate`：通过，`found 0 vulnerabilities`。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过，构建产物同步。
+- `npm run review`：通过；构建同步、license-server 依赖合同、危险 API 检查、语法、完整回归测试全部通过，644 项中 642 pass、2 skipped、0 fail。
+- `git diff --check`：通过。
+- Chrome DevTools MCP：首次连接 9222 失败；运行 `bash scripts/recover-chrome-devtools-mcp.sh` 后恢复。真实 `https://one.alimama.com/index.html#!/manage/search?...` 只读检查显示 `protocol:"https:"`、`runtimeMode:"extension"`、桥接 host 和主面板存在；控制台有站点资源 `ERR_TUNNEL_CONNECTION_FAILED` 噪声，未做任何创建/投放/提交操作。
+
+## 结果复盘
+- 已修复 P1 桥接授权绕过：同页脚本即使能发送 bridge 请求，也必须先通过 extension 授权守卫，未授权或授权守卫缺失时不会进入完整计划 API 调用。
+- 已修复 P1 依赖漏洞：`services/license-server` audit 从 critical/high/moderate 降为 0 vulnerabilities；后续如 Tablestore SDK 发布官方修复版本，应优先移除 override 并升级 SDK。
+- 已修复 P2 注入面过宽：HTTP 页面和宽泛 `*.alimama.com` 子域不再获得 extension 注入匹配或授权 background sender 许可；userscript `@match` 同步收窄。
+- 已修复 P2 CORS 反射：license server 不再反射任意 Origin，credentials 只对 allowlist Origin 返回。
+- 剩余说明：userscript `@connect *.alimama.com` 暂保留，因为运行时代码仍访问 `bpcommon.alimama.com` 等阿里妈妈 API；这不是注入匹配面，后续可单独梳理所有 GM 请求 host 后进一步收窄。
+
+# TODO - 2026-06-07 Bug/漏洞/安全审查
+
+## 需求规格
+- 用户要求：检查当前项目有哪些 bug、漏洞和安全问题。
+- 目标：以代码审查方式输出有源码位置依据的风险清单，优先覆盖授权、注入桥接、跨页面通信、请求拦截、持久化、本地/远端配置、构建产物同步和依赖安全。
+- 本轮边界：默认只做只读审查和必要验证命令，不修复业务代码；如发现会导致真实投放、授权绕过、敏感信息泄露或构建不可用的高危问题，先记录证据和建议修复方案。
+- 成功标准：每个结论都有文件/行号、触发条件、影响说明和建议；验证记录包含实际运行命令、结果和未覆盖风险。
+- 工作区边界：当前已有 `tasks/todo.md` 本地改动和未跟踪截图 `tasks/e7-custom-copy-button-before.png`，本轮不回退、不纳入无关文件。
+
+## 执行计划
+- [x] 回顾 `tasks/lessons.md`、当前 `tasks/todo.md`、项目脚本和 goal-driven 编排要求。
+- [x] 梳理源码目录、入口文件、授权服务、extension/userscript 桥接和高风险模块清单。
+- [x] 静态审查高风险攻击面：授权/签名、policy token、shopId、跨上下文消息、fetch/XHR hook、DOM 注入、存储、下载解析、后台服务接口。
+- [x] 运行依赖/语法/测试/审查辅助命令，记录失败或未覆盖项。
+- [x] 对可疑 findings 做交叉校验，排除仅凭猜测的误报。
+- [x] 更新本任务的高层操作摘要、验证记录和结果复盘，并向用户输出按严重度排序的 findings。
+
+## 高层操作摘要
+- 已确认当前线程已有活动目标：检查 bug、漏洞和安全问题。
+- 已读取历史 lessons，重点关注创建/复制、写请求守卫、Chrome MCP 验证、授权桥接、原生功能副作用等高风险经验。
+- 已运行 `npm run codex:map` 并用 `rg --files src services tests scripts docs` 梳理源码、服务端、测试和脚本范围。
+- 已重点审查 `services/license-server/index.mjs`、`services/license-server/license-admin.html`、`src/entries/extension-content.js`、`src/entries/extension-background.js`、`src/entries/extension-license-guard.js`、`src/optimizer/bridge.js`、`src/optimizer/public-api.js`、`src/optimizer/keyword-plan-api/*`、主助手拦截/报表/下载相关模块和对应测试。
+- 已用 `rg` 搜索 `postMessage`、`chrome.runtime.onMessage`、`CustomEvent`、`innerHTML`、`localStorage`、`token`、`license`、`requireAuthorizedSync` 等关键模式，交叉核对授权门禁、跨上下文桥接、DOM 注入和持久化路径。
+- 确认高置信 findings：extension 计划 API 桥接缺少授权门禁、license server 依赖链存在 npm critical/high 漏洞、HTTP/宽泛域名匹配扩大扩展注入面、license server CORS 反射任意 Origin 且允许 credentials。
+- 抽查 `innerHTML`、下载链接、policy token/cache、shopId guard 等路径时，未形成足够强的新增漏洞结论；相关路径已有转义、`textContent`、URL sanitize、ES256 token/cache 绑定和测试覆盖。
+
+## 验证记录
+- `npm run codex:map`：通过，辅助定位项目源码结构。
+- `npm run check:syntax`：通过。
+- `npm run build:check`：通过。
+- `node --test tests/keyword-plan-api-bridge-security.test.mjs tests/extension-license-cache-policy-token.test.mjs tests/extension-license-shopid-guard.test.mjs tests/license-server-hardening.test.mjs tests/license-server-new-shop-default-auth.test.mjs tests/extension-static-build.test.mjs tests/download-link-depth-guard.test.mjs`：通过，42/42。
+- `npm run review`：通过；输出包含构建同步、license-server deps contract、危险 API 检查、语法和完整回归测试，641 项中 639 pass、2 skipped、0 fail。
+- `npm audit --prefix services/license-server --audit-level=moderate`：沙箱内因 `getaddrinfo ENOTFOUND registry.npmjs.org` 失败；联网放行后复核仍失败退出并报告漏洞：`@protobufjs/utf8 <=1.1.0` moderate，`protobufjs <=7.5.7` critical/high 多 advisory，依赖路径为 `tablestore * -> protobufjs`，合计 3 vulnerabilities，`protobufjs` 链路 `No fix available`。
+
+## 结果复盘
+- P1：`src/optimizer/bridge.js` 的 extension 计划 API 桥接允许同页脚本通过 `CustomEvent`/`postMessage` 调用 `createPlansBatch`、`copyCurrentPlanByScene`、`runCreateRepairByItem`、`appendKeywords` 等写能力方法，但 `processBridgeRequest` 只做方法白名单和 API 存在性检查，未调用 `LicenseGuard.requireAuthorizedSync`。授权守卫当前主要覆盖插件 UI pointer/key 交互和 `public-api.js` 的 optimizer 入口，不能覆盖程序化桥接调用。
+- P1：`services/license-server` 依赖 `tablestore ^5.6.3`，锁定 `protobufjs 6.11.4`；当前 npm audit 报 critical/high/moderate，包含任意代码执行、代码注入、DoS、prototype injection 等 advisory，且当前依赖路径无直接修复版本。
+- P2：userscript/extension manifest 使用 `*://alimama.com/*`、`*://*.alimama.com/*`，background sender 允许 `http:`，content 注入判断只看 hostname，导致非 HTTPS 和宽泛子域注入面过大。
+- P2：license server CORS 会把任意请求 Origin 反射为 `access-control-allow-origin`，并在有 Origin 时加 `access-control-allow-credentials: true`；虽然管理写接口仍依赖 admin token，但该策略扩大了跨站读取与 token 误用后的影响面。
+- 本轮未修改业务代码；只补充了审查任务记录。建议后续单独开修复任务处理以上 P1/P2，并补充对应回归测试和 CI 审计门禁。
+
+# TODO - 2026-06-07 清理本地分支
+
+## 需求规格
+- 用户要求：清理本地的分支。
+- 目标：删除本地已合并到 `main` 的历史分支，并让本地分支列表只保留 `main`。
+- 安全边界：删除未合并分支前先保留可恢复引用；不删除主分支，不处理未跟踪截图。
+- 当前未跟踪文件：`tasks/e7-custom-copy-button-before.png` 仍保留本地，不纳入任何提交。
+
+## 执行计划
+- [x] 检查本地分支、远端分支、worktree 占用和已合并状态。
+- [x] 清理失效 worktree 元数据，解除已不存在 worktree 对分支删除的占用。
+- [x] 将当前 worktree 从已合并分支切到 detached `main` 提交，保留本地任务记录改动。
+- [x] 删除已合并到 `main` 的本地分支。
+- [x] 为唯一未合并分支创建本地备份 tag 后删除分支引用。
+- [x] 复核本地分支、远端分支、备份 tag 和工作区状态。
+
+## 高层操作摘要
+- 已运行 `git worktree prune --verbose`，清掉失效 worktree 元数据。
+- 已通过 `git switch --detach main` 将当前 worktree 从 `codex/ui-guidelines-agent-rules` 脱离到 `main` 提交。
+- 已删除已合并本地分支：`codex/crowd-matrix-tip-layout`、`codex/escort-fix-20260319`、`codex/license-admin-pages-deploy-20260407`、`codex/merge-extension-20260319`、`codex/on-demand-license-check-20260403`、`codex/openv3-explicit-state-20260414`、`codex/pages-deploy-20260413`、`codex/release-v6.07-20260324`、`codex/ui-guidelines-agent-rules`、`extension`。
+- `codex/fix-review-findings` 是唯一未合并到 `main` 的本地分支；已创建本地 tag `backup/codex-fix-review-findings-20260607` 指向提交 `9137313` 后删除该分支。
+
+## 验证记录
+- `git branch --merged main`：清理前列出 10 个已合并非主分支。
+- `git branch --no-merged main`：清理前仅列出 `codex/fix-review-findings`。
+- `git branch -d ...`：成功删除 10 个已合并本地分支。
+- `git tag backup/codex-fix-review-findings-20260607 codex/fix-review-findings && git branch -D codex/fix-review-findings`：通过。
+- 最终 `git branch --format='%(refname:short) %(upstream:short)'`：只剩 `main origin/main`，当前 worktree 为 detached `main`。
+- 最终 `git branch -r --format='%(refname:short)'`：只剩 `origin` 与 `origin/main`。
+- `git show --oneline --no-patch backup/codex-fix-review-findings-20260607`：`9137313 fix: 修复矩阵计划审查问题`。
+
+## 结果复盘
+- 本地普通分支已清理到只剩 `main`。
+- 未合并分支 `codex/fix-review-findings` 的提交已通过本地 tag 备份，可用 `git switch -c codex/fix-review-findings backup/codex-fix-review-findings-20260607` 恢复。
+- 当前 Codex worktree 处于 detached `main` 提交，并保留本地任务记录改动与未跟踪截图。
+
+# TODO - 2026-06-07 清理线上已合并分支
+
+## 需求规格
+- 用户要求：关闭线上的其它分支。
+- 目标：清理 GitHub 远端 `origin` 上已经合并进 `main` 的非主分支，减少线上分支噪声。
+- 安全边界：只删除已完全并入 `origin/main` 的远端分支；不删除 `origin/main`、远端 HEAD 符号引用，且不删除未并入主线或状态不明的分支。
+- 当前未跟踪文件：`tasks/e7-custom-copy-button-before.png` 仍保留本地，不纳入任何提交。
+
+## 执行计划
+- [x] 读取远端分支、已合并分支和 PR 状态。
+- [x] 删除已并入 `origin/main` 的非主远端分支。
+- [x] 重新 fetch/prune 并复核远端分支列表。
+- [x] 记录保留的未合并分支和最终结果。
+
+## 高层操作摘要
+- 已确认远端分支包含：`codex/escort-fix-20260319`、`codex/fix-review-findings`、`codex/merge-extension-20260319`、`codex/on-demand-license-check-20260403`、`codex/release-v6.07-20260324`、`codex/ui-guidelines-agent-rules`、`extension`、`main`。
+- 已确认已并入 `origin/main` 的可清理远端分支为：`codex/escort-fix-20260319`、`codex/merge-extension-20260319`、`codex/on-demand-license-check-20260403`、`codex/release-v6.07-20260324`、`codex/ui-guidelines-agent-rules`、`extension`。
+- `codex/fix-review-findings` 未出现在 `git branch -r --merged origin/main` 中，按安全边界暂不删除。
+- 已删除 6 个已并入主线的远端分支；随后确认 `codex/fix-review-findings` 虽未并入 `origin/main`，但本地仍有同名分支 `codex/fix-review-findings` 指向提交 `9137313`，线上清理时一并删除远端分支以满足“关闭线上其它分支”。
+
+## 验证记录
+- `git fetch origin --prune && git branch -r --format='%(refname:short)'`：清理前远端含 8 个分支/符号引用。
+- `git branch -r --merged origin/main`：确认 6 个非主远端分支已并入 `origin/main`。
+- `git push origin --delete codex/escort-fix-20260319 codex/merge-extension-20260319 codex/on-demand-license-check-20260403 codex/release-v6.07-20260324 codex/ui-guidelines-agent-rules extension`：通过。
+- `git rev-list --left-right --count origin/main...origin/codex/fix-review-findings`：`131 1`，该远端分支有 1 个未并入主线提交。
+- `git rev-parse --short codex/fix-review-findings` 与 `git rev-parse --short origin/codex/fix-review-findings` 均为 `9137313`，确认删除远端前本地已有备份分支。
+- `git push origin --delete codex/fix-review-findings`：通过。
+- 最终 `git fetch origin --prune && git branch -r --format='%(refname:short)'`：仅剩 `origin` 与 `origin/main`。
+- 最终 `git branch -r --no-merged origin/main`：无输出，线上没有未并入 `main` 的远端分支。
+
+## 结果复盘
+- 已关闭所有线上非主分支；GitHub 远端现在只剩 `origin/main`。
+- 未并入主线的 `codex/fix-review-findings` 已从线上删除，但本地仍保留同名分支和提交 `9137313`。
+- 由于当前远端 PR 分支已被删除，本任务记录只保留在当前本地工作区，未推送以避免重新创建已关闭分支。
+
 # TODO - 2026-06-07 合并本地主分支并提交 PR
 
 ## 需求规格

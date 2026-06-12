@@ -35,6 +35,7 @@
     const shouldInjectPageBundle = () => {
         const url = resolveCurrentUrl();
         if (!url) return false;
+        if (String(url.protocol || '').toLowerCase() !== 'https:') return false;
         const hostname = normalizeHostname(url.hostname);
         if (hostname === 'one.alimama.com') return true;
         if (isDmpHost(hostname)) return true;
@@ -44,6 +45,7 @@
     const shouldWatchForDeferredInjection = () => {
         const url = resolveCurrentUrl();
         if (!url) return false;
+        if (String(url.protocol || '').toLowerCase() !== 'https:') return false;
         return isMysellerHost(normalizeHostname(url.hostname));
     };
 

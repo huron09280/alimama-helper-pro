@@ -25,6 +25,7 @@ const keptMethods = [
   'openWizard',
   'getRuntimeDefaults',
   'searchItems',
+  'fetchKeywordAiMaxInfo',
   'createPlansBatch',
   'createPlansByScene',
   'copyCurrentPlanByScene',

@@ -42,3 +42,15 @@ test('verify 返回服务端签发 policy token', () => {
     assert.match(source, /token:\s*policyToken/, 'verify 响应 policy 缺少 token 字段');
     assert.match(source, /dsaEncoding:\s*'ieee-p1363'/, 'policy token 签名未使用 P-256 原始签名编码');
 });
+
+test('CORS 只允许显式 allowlist 且不再反射任意 Origin', () => {
+    assert.match(source, /const DEFAULT_CORS_ORIGINS = \[[\s\S]*'https:\/\/am-licee-server-mpbzozflkj\.cn-hangzhou\.fcapp\.run'[\s\S]*\];/, '缺少默认 CORS allowlist');
+    assert.match(source, /AM_LICENSE_CORS_ALLOWED_ORIGINS/, '缺少 CORS allowlist 环境变量');
+    assert.match(source, /const normalizeCorsOrigin = \(value = ''\) => \{[\s\S]*if \(url\.protocol !== 'https:'\) return '';[\s\S]*return url\.origin;[\s\S]*\};/, 'CORS Origin 未标准化并拒绝非 HTTPS');
+    assert.match(
+        source,
+        /const allowRequestOrigin = !!requestOrigin && CORS_ALLOWED_ORIGINS\.has\(requestOrigin\);[\s\S]*\.\.\.\(allowRequestOrigin \? \{ 'access-control-allow-origin': requestOrigin \} : \{\}\),[\s\S]*\.\.\.\(allowRequestOrigin \? \{ 'access-control-allow-credentials': 'true' \} : \{\}\)/,
+        'CORS 响应不应反射任意 Origin 或无条件允许 credentials'
+    );
+    assert.doesNotMatch(source, /'access-control-allow-origin': hasOrigin \? requestOrigin : '\*'/, 'CORS 不应继续反射 Origin 或 fallback 到 *');
+});
