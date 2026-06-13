@@ -14,6 +14,7 @@
         batchAiMaxRunning: false,
         batchAiMaxPrompt: '',
         batchAiMaxPromptEdited: false,
+        batchAiMaxPromptExpanded: false,
         batchAiMaxCenterShieldWords: [],
         batchAiMaxExactShieldWords: [],
         batchAiMaxShieldEdited: false,
@@ -1157,13 +1158,18 @@
                     const properties = this.extractAiMaxCrowdProperties(item);
                     const sellPoint = String(properties.sellPoint || '').trim();
                     const tooltipId = `am-ai-max-crowd-tip-${safePrefix}-${index}`;
+                    const crowdId = item?.crowdId || item?.id || '';
+                    const demandName = item?.demand || item?.demandName || name;
                     return `
                         <span class="am-ai-max-demand-popover">
-                            <button type="button" class="am-ai-max-demand-card am-ai-max-crowd-tag" aria-describedby="${this.escapeHtml(tooltipId)}">
+                            <button type="button" class="am-ai-max-demand-card am-ai-max-crowd-tag" aria-describedby="${this.escapeHtml(tooltipId)}" data-crowd-id="${this.escapeHtml(crowdId)}" data-crowd-name="${this.escapeHtml(name)}" data-demand-name="${this.escapeHtml(demandName)}">
                                 <span class="am-ai-max-demand-copy">
                                     <b>${this.escapeHtml(name)}</b>
                                     ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
                                 </span>
+                            </button>
+                            <button type="button" class="am-ai-max-crowd-remove" data-am-ai-max-action="removeCrowd" data-campaign-id="${this.escapeHtml(options.campaignId || '')}" data-crowd-scope="${this.escapeHtml(options.scope || '')}" data-crowd-id="${this.escapeHtml(crowdId)}" data-crowd-name="${this.escapeHtml(name)}" aria-label="删除人群 ${this.escapeHtml(name)}" title="删除">
+                                ${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}
                             </button>
                             ${this.buildAiMaxDemandDetailHtml(item, name, tooltipId)}
                         </span>
@@ -1230,6 +1236,95 @@
             }
             this.renderAiMaxBatchRows();
             return row;
+        },
+
+        removeAiMaxCrowd(campaignId = '', scope = '', crowdId = '', crowdName = '') {
+            const row = this.getAiMaxRowByCampaignId(campaignId);
+            if (!row) return null;
+            const normalizedCrowdId = String(crowdId || '').trim();
+            const normalizedCrowdName = String(crowdName || '').trim();
+            if (!normalizedCrowdId && !normalizedCrowdName) {
+                Logger.log('⚠️ 删除人群失败：未能识别人群标识', true);
+                return null;
+            }
+            const matchCrowd = (item) => {
+                if (normalizedCrowdId && (item?.crowdId === normalizedCrowdId || item?.id === normalizedCrowdId)) return true;
+                if (normalizedCrowdName) {
+                    const itemName = this.formatAiMaxCrowdName(item);
+                    if (itemName === normalizedCrowdName) return true;
+                }
+                return false;
+            };
+            const removeFromList = (list = []) => (Array.isArray(list) ? list : []).filter(item => !matchCrowd(item));
+            if (scope === 'editable') {
+                const editableInfo = this.getAiMaxEditableInfoForRow(row);
+                const beforeCount = Array.isArray(editableInfo?.nativeCrowdList) ? editableInfo.nativeCrowdList.length : 0;
+                row.currentCrowdList = removeFromList(row.currentCrowdList);
+                row.newCrowdList = removeFromList(row.newCrowdList);
+                if (this.isPlainRecord(row.currentAiMaxInfo)) {
+                    row.currentAiMaxInfo.nativeCrowdList = removeFromList(row.currentAiMaxInfo.nativeCrowdList);
+                    this.syncAiMaxDemandListsAfterCrowdChange(row.currentAiMaxInfo);
+                }
+                if (this.isPlainRecord(row.newAiMaxInfo)) {
+                    row.newAiMaxInfo.nativeCrowdList = removeFromList(row.newAiMaxInfo.nativeCrowdList);
+                    this.syncAiMaxDemandListsAfterCrowdChange(row.newAiMaxInfo);
+                }
+                const afterInfo = this.getAiMaxEditableInfoForRow(row);
+                const afterCount = Array.isArray(afterInfo?.nativeCrowdList) ? afterInfo.nativeCrowdList.length : 0;
+                if (beforeCount > afterCount) {
+                    Logger.log(`✅ 已删除已选需求：${normalizedCrowdName || normalizedCrowdId}`);
+                } else {
+                    Logger.log(`⚠️ 未找到要删除的已选需求`, true);
+                }
+            } else if (scope === 'new') {
+                const beforeCount = Array.isArray(row.newCrowdList) ? row.newCrowdList.length : 0;
+                row.newCrowdList = removeFromList(row.newCrowdList);
+                const afterCount = row.newCrowdList.length;
+                if (this.isPlainRecord(row.newAiMaxInfo)) {
+                    row.newAiMaxInfo.nativeCrowdList = removeFromList(row.newAiMaxInfo.nativeCrowdList);
+                    this.syncAiMaxDemandListsAfterCrowdChange(row.newAiMaxInfo);
+                }
+                if (beforeCount > afterCount) {
+                    Logger.log(`✅ 已删除新生成人群：${normalizedCrowdName || normalizedCrowdId}`);
+                } else {
+                    Logger.log(`⚠️ 未找到要删除的新生成人群`, true);
+                }
+            } else {
+                const beforeCount = Array.isArray(row.currentCrowdList) ? row.currentCrowdList.length : 0;
+                row.currentCrowdList = removeFromList(row.currentCrowdList);
+                const afterCount = row.currentCrowdList.length;
+                if (this.isPlainRecord(row.currentAiMaxInfo)) {
+                    row.currentAiMaxInfo.nativeCrowdList = removeFromList(row.currentAiMaxInfo.nativeCrowdList);
+                    this.syncAiMaxDemandListsAfterCrowdChange(row.currentAiMaxInfo);
+                }
+                if (this.isPlainRecord(row.newAiMaxInfo)) {
+                    row.newAiMaxInfo.nativeCrowdList = removeFromList(row.newAiMaxInfo.nativeCrowdList);
+                    this.syncAiMaxDemandListsAfterCrowdChange(row.newAiMaxInfo);
+                }
+                if (beforeCount > afterCount) {
+                    Logger.log(`✅ 已删除当前人群：${normalizedCrowdName || normalizedCrowdId}`);
+                } else {
+                    Logger.log(`⚠️ 未找到要删除的当前人群`, true);
+                }
+            }
+            this.renderAiMaxBatchRows();
+            return row;
+        },
+
+        syncAiMaxDemandListsAfterCrowdChange(aiMaxInfo = {}) {
+            if (!this.isPlainRecord(aiMaxInfo)) return;
+            const nativeCrowdList = Array.isArray(aiMaxInfo.nativeCrowdList) ? aiMaxInfo.nativeCrowdList : [];
+            const currentDemands = new Set();
+            nativeCrowdList.forEach(crowd => {
+                const demandName = crowd?.demand || crowd?.demandName || '';
+                if (demandName) currentDemands.add(demandName);
+            });
+            aiMaxInfo.demandList = Array.from(currentDemands);
+            if (Array.isArray(aiMaxInfo.selectedDemandList)) {
+                aiMaxInfo.selectedDemandList = aiMaxInfo.selectedDemandList.filter(demand => currentDemands.has(demand));
+            } else {
+                aiMaxInfo.selectedDemandList = aiMaxInfo.demandList.slice();
+            }
         },
 
         buildAiMaxItemFromRow(row = {}) {
@@ -1435,6 +1530,35 @@
             container.querySelectorAll('[data-am-ai-max-demand-select-panel]').forEach(panel => {
                 this.syncAiMaxDemandSelectPanelState(panel instanceof HTMLElement ? panel : null);
             });
+        },
+
+        positionAiMaxDemandDetail(popover = null) {
+            if (!(popover instanceof HTMLElement)) return;
+            const detail = popover.querySelector(':scope > .am-ai-max-demand-detail')
+                || popover.querySelector('.am-ai-max-demand-detail');
+            if (!(detail instanceof HTMLElement)) return;
+            const popup = popover.closest('#am-campaign-ai-max-batch-popup');
+            const boundary = popup?.querySelector('.am-ai-max-body')
+                || popup?.querySelector('.am-ai-max-card')
+                || document.documentElement;
+            if (!(boundary instanceof Element)) return;
+            const boundaryRect = boundary.getBoundingClientRect();
+            const margin = 12;
+            const safeWidth = Math.max(220, Math.min(520, boundaryRect.width - margin * 2));
+            detail.style.setProperty('--am-ai-max-demand-detail-width', `${Math.round(safeWidth)}px`);
+            detail.style.setProperty('--am-ai-max-demand-detail-shift', '0px');
+            const detailRect = detail.getBoundingClientRect();
+            if (!detailRect.width || !detailRect.height) return;
+            const minLeft = boundaryRect.left + margin;
+            const maxRight = boundaryRect.right - margin;
+            let shift = 0;
+            if (detailRect.right > maxRight) {
+                shift -= detailRect.right - maxRight;
+            }
+            if (detailRect.left + shift < minLeft) {
+                shift += minLeft - (detailRect.left + shift);
+            }
+            detail.style.setProperty('--am-ai-max-demand-detail-shift', `${Math.round(shift)}px`);
         },
 
         applyAiMaxDemandSelect(campaignId = '', panel = null) {
@@ -1740,7 +1864,7 @@
 
         renderAiMaxPromptCard() {
             return `
-                <div class="am-ai-max-prompt-card">
+                <div id="am-ai-max-batch-prompt-card" class="am-ai-max-prompt-card">
                     <textarea id="am-ai-max-batch-prompt" class="am-ai-max-prompt-input" data-am-ai-max-prompt rows="2" aria-label="获取新人群诉求">${this.escapeHtml(this.getAiMaxBatchPromptText())}</textarea>
                     <div class="am-ai-max-prompt-actions">
                         <button type="button" class="am-ai-max-prompt-chip" data-am-ai-max-action="toggleTemplate" aria-expanded="false">
@@ -1760,6 +1884,45 @@
                     ${this.renderAiMaxShieldPanel()}
                 </div>
             `;
+        },
+
+        renderAiMaxPromptSlot() {
+            return `<div class="am-ai-max-prompt-slot" data-am-ai-max-prompt-slot>${this.batchAiMaxPromptExpanded ? this.renderAiMaxPromptCard() : ''}</div>`;
+        },
+
+        renderAiMaxPromptToggleButton() {
+            const expanded = !!this.batchAiMaxPromptExpanded;
+            const label = expanded ? '收起方案解析设置' : '展开方案解析设置';
+            return `
+                <button type="button" class="am-ai-max-toolbar-icon am-ai-max-prompt-toggle" data-am-ai-max-action="togglePromptCard" aria-label="${label}" title="${label}" aria-expanded="${expanded ? 'true' : 'false'}" aria-controls="am-ai-max-batch-prompt-card">
+                    ${renderAmIcon(expanded ? 'chevron-up' : 'chevron-down', { size: 14, strokeWidth: 2.4 })}
+                </button>
+            `;
+        },
+
+        toggleAiMaxPromptCard(popup = null, triggerEl = null) {
+            const root = popup instanceof HTMLElement ? popup : document.getElementById('am-campaign-ai-max-batch-popup');
+            if (!(root instanceof HTMLElement)) return false;
+            const expanded = !this.batchAiMaxPromptExpanded;
+            if (!expanded) {
+                this.closeAiMaxPromptPanels(root);
+            }
+            this.batchAiMaxPromptExpanded = expanded;
+            const slot = root.querySelector('[data-am-ai-max-prompt-slot]');
+            if (slot instanceof HTMLElement) {
+                slot.innerHTML = expanded ? this.renderAiMaxPromptCard() : '';
+            }
+            const button = triggerEl instanceof HTMLElement
+                ? triggerEl
+                : root.querySelector('[data-am-ai-max-action="togglePromptCard"]');
+            if (button instanceof HTMLElement) {
+                const label = expanded ? '收起方案解析设置' : '展开方案解析设置';
+                button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                button.setAttribute('aria-label', label);
+                button.setAttribute('title', label);
+                button.innerHTML = renderAmIcon(expanded ? 'chevron-up' : 'chevron-down', { size: 14, strokeWidth: 2.4 });
+            }
+            return expanded;
         },
 
         renderAiMaxDemandSelect(row = {}) {
@@ -1921,13 +2084,15 @@
             const selectedCrowdList = this.getAiMaxCrowdListByDemand(crowdList, demandList);
             const prompt = this.getAiMaxInfoPrompt(info);
             const demandCards = demandList.length
-                ? demandList.slice(0, 6).map((item, index) => {
+                ? demandList.map((item, index) => {
                     const crowd = selectedCrowdList.find(candidate => (
                         this.normalizeAiMaxDemandKey(this.formatAiMaxCrowdName(candidate)) === this.normalizeAiMaxDemandKey(item)
                     )) || {};
                     const properties = this.extractAiMaxCrowdProperties(crowd);
                     const sellPoint = String(properties.sellPoint || '').trim();
                     const tooltipId = `am-ai-max-demand-tip-${this.normalizeCampaignId(row.campaignId || '')}-${index}`;
+                    const crowdId = crowd?.crowdId || crowd?.id || '';
+                    const crowdName = Object.keys(crowd || {}).length ? this.formatAiMaxCrowdName(crowd) : item;
                     const detailHtml = this.buildAiMaxDemandDetailHtml(crowd, item, tooltipId);
                     return `
                         <span class="am-ai-max-demand-popover">
@@ -1936,6 +2101,9 @@
                                     <b>${this.escapeHtml(item)}</b>
                                     ${sellPoint ? `<em>${this.escapeHtml(sellPoint)}</em>` : ''}
                                 </span>
+                            </button>
+                            <button type="button" class="am-ai-max-crowd-remove" data-am-ai-max-action="removeCrowd" data-campaign-id="${this.escapeHtml(row.campaignId || '')}" data-crowd-scope="editable" data-crowd-id="${this.escapeHtml(crowdId)}" data-crowd-name="${this.escapeHtml(crowdName)}" aria-label="删除需求 ${this.escapeHtml(crowdName)}" title="删除">
+                                ${renderAmIcon('close', { size: 12, strokeWidth: 2.4 })}
                             </button>
                             ${detailHtml}
                         </span>
@@ -2063,7 +2231,7 @@
                 const canSave = row.bizCode === 'onebpSearch' && this.isPlainRecord(row.newAiMaxInfo)
                     && selectedCrowdCount > 0;
                 return `
-                    <article class="am-ai-max-row" data-am-ai-max-row="${this.escapeHtml(row.campaignId)}">
+                    <article class="am-ai-max-row${row.demandSelectOpen ? ' is-demand-select-open' : ''}" data-am-ai-max-row="${this.escapeHtml(row.campaignId)}">
                         <div class="am-ai-max-row-index">${index + 1}</div>
                         <div class="am-ai-max-row-main">
                             <div class="am-ai-max-row-title">
@@ -2072,19 +2240,10 @@
                                 ${row.itemId ? `<span class="am-ai-max-plan-id">商品 ${this.escapeHtml(row.itemId)}</span>` : ''}
                             </div>
                             <div class="am-ai-max-row-crowds">
-                                <span class="am-ai-max-crowd-label">当前</span>
                                 ${this.formatAiMaxCrowdTags(row.currentCrowdList, 5, `${row.campaignId}-current`, {
                                     expanded: row.showAllCurrentCrowds,
                                     campaignId: row.campaignId,
                                     scope: 'current'
-                                })}
-                            </div>
-                            <div class="am-ai-max-row-crowds">
-                                <span class="am-ai-max-crowd-label">新生成</span>
-                                ${this.formatAiMaxCrowdTags(row.newCrowdList, 5, `${row.campaignId}-new`, {
-                                    expanded: row.showAllNewCrowds,
-                                    campaignId: row.campaignId,
-                                    scope: 'new'
                                 })}
                             </div>
                             <div class="am-ai-max-row-footer">
@@ -2094,13 +2253,13 @@
                                 </div>
                                 <div class="am-ai-max-row-actions">
                                     ${this.renderAiMaxDemandSelect(row)}
-                                    <button type="button" class="am-ai-max-row-btn" data-am-ai-max-action="manage" data-campaign-id="${this.escapeHtml(row.campaignId)}">${row.manageExpanded ? '收起' : '管理'}</button>
+                                    <button type="button" class="am-ai-max-row-btn" data-am-ai-max-action="${row.manageExpanded ? 'toggleManage' : 'manage'}" data-campaign-id="${this.escapeHtml(row.campaignId)}">${row.manageExpanded ? '收起' : '管理'}</button>
                                     <button type="button" class="am-ai-max-row-btn primary" data-am-ai-max-action="generate" data-campaign-id="${this.escapeHtml(row.campaignId)}" ${canGenerate ? '' : 'disabled'}>获取新人群</button>
                                     <button type="button" class="am-ai-max-row-btn primary" data-am-ai-max-action="save" data-campaign-id="${this.escapeHtml(row.campaignId)}" ${canSave ? '' : 'disabled'}>保存</button>
                                 </div>
                             </div>
-                            ${this.renderAiMaxManagePanel(row)}
                         </div>
+                        ${this.renderAiMaxManagePanel(row)}
                     </article>
                 `;
             }).join('');
@@ -2430,6 +2589,7 @@
             this.batchAiMaxRows = Array.isArray(rows) ? rows : [];
             this.batchAiMaxPrompt = this.getInitialAiMaxBatchPrompt(this.batchAiMaxRows);
             this.batchAiMaxPromptEdited = false;
+            this.batchAiMaxPromptExpanded = false;
             const initialShieldWords = this.getInitialAiMaxBatchShieldWords(this.batchAiMaxRows);
             this.batchAiMaxCenterShieldWords = initialShieldWords.center;
             this.batchAiMaxExactShieldWords = initialShieldWords.exact;
@@ -2452,11 +2612,14 @@
                         <button type="button" class="am-ai-max-close" data-am-ai-max-action="close" aria-label="关闭">${renderAmIcon('close', { size: 14, strokeWidth: 2.4 })}</button>
                     </header>
                     <div class="am-ai-max-toolbar">
-                        <button type="button" class="am-ai-max-toolbar-btn primary" data-am-ai-max-action="generateAll">${renderAmIcon('sparkles', { size: 13, strokeWidth: 2.2 })}<span>批量获取新人群</span></button>
+                        <div class="am-ai-max-generate-control">
+                            <button type="button" class="am-ai-max-toolbar-btn primary am-ai-max-generate-btn" data-am-ai-max-action="generateAll">${renderAmIcon('sparkles', { size: 13, strokeWidth: 2.2 })}<span>批量获取新人群</span></button>
+                            ${this.renderAiMaxPromptToggleButton()}
+                        </div>
                         <button type="button" class="am-ai-max-toolbar-btn primary" data-am-ai-max-action="saveAll">${renderAmIcon('check-circle', { size: 13, strokeWidth: 2.2 })}<span>批量保存</span></button>
                         <span class="am-ai-max-note">新人群来自原生 AI 点睛生成链路；保存走官方 aimax/updateUserInput 合同。</span>
                     </div>
-                    ${this.renderAiMaxPromptCard()}
+                    ${this.renderAiMaxPromptSlot()}
                     <div class="am-ai-max-body" data-am-ai-max-batch-body></div>
                 </section>
             `;
@@ -2486,6 +2649,10 @@
                 }
                 if (action === 'generateAll') {
                     this.generateAiMaxCrowdsForAllRows();
+                    return;
+                }
+                if (action === 'togglePromptCard') {
+                    this.toggleAiMaxPromptCard(popup, target);
                     return;
                 }
                 if (action === 'toggleTemplate') {
@@ -2557,6 +2724,17 @@
                     this.toggleAiMaxBatchCrowds(row.campaignId, target.getAttribute('data-crowd-scope') || '');
                     return;
                 }
+                if (action === 'removeCrowd') {
+                    const crowdScope = target.getAttribute('data-crowd-scope') || '';
+                    const crowdId = target.getAttribute('data-crowd-id') || '';
+                    const crowdName = target.getAttribute('data-crowd-name') || '';
+                    this.removeAiMaxCrowd(row.campaignId, crowdScope, crowdId, crowdName);
+                    return;
+                }
+                if (action === 'toggleManage') {
+                    this.toggleAiMaxBatchManagePanel(row.campaignId);
+                    return;
+                }
                 if (action === 'manage') {
                     this.openAiMaxNativeManager(row);
                     return;
@@ -2581,6 +2759,15 @@
                 }
                 this.syncAiMaxDemandSelectPanelState(panel);
             });
+            const positionDemandDetail = (event) => {
+                const popover = event.target instanceof Element
+                    ? event.target.closest('.am-ai-max-demand-popover')
+                    : null;
+                if (!(popover instanceof HTMLElement) || !popup.contains(popover)) return;
+                requestAnimationFrame(() => this.positionAiMaxDemandDetail(popover));
+            };
+            popup.addEventListener('mouseover', positionDemandDetail);
+            popup.addEventListener('focusin', positionDemandDetail);
             popup.addEventListener('keydown', (event) => {
                 const keyTarget = event.target;
                 if (
