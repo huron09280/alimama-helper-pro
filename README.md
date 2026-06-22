@@ -38,7 +38,7 @@ npm run pack:extension
 
 - 实时指标增强：询单成本、加购成本、潜客占比、花费占比、预算进度
 - 智能识别：自动扫描计划 ID，注入「万能查数」快捷图标
-- 主面板三入口：算法护航、万能查数、辅助显示
+- 主面板四入口：算法护航、组建计划、万能查数、辅助显示
 - 交互增强：自动按花费排序、Tab 切换重排、弹窗速闭
 - 下载增强：报表直连捕获、复制与一键下载
 - 日志系统：按日期分组、可折叠、可清空、自动高度适配
@@ -264,7 +264,7 @@ python3 -m http.server 8173
 
 说明：
 - 该页面只负责“授权管理前端”，真实数据仍由你的授权服务端提供。
-- 页面默认调用 `GET /v1/license/admin/state`、`POST /v1/license/admin/allow`、`POST /v1/license/admin/revoke`。
+- 页面默认调用 `GET /v1/license/admin/state`、`POST /v1/license/admin/allow`、`POST /v1/license/admin/revoke`、`POST /v1/license/admin/delete`。
 - 管理鉴权头使用 `x-am-admin-token`（兼容 `x-admin-token`）。
 
 ### 授权管理页云端托管（默认域名）
@@ -299,7 +299,7 @@ bash scripts/review-team.sh
 
 说明：
 - 脚本会先执行 `node scripts/build.mjs --check`，确保 `src/` 与根文件同步。
-- 若仓库存在 `CLAUDE.md`，会额外校验版本；缺失时会跳过，不阻塞 CI/Release。
+- 版本一致性以 `src/entries/userscript-meta.js`、根 userscript 和 README 更新日志为准；若仓库存在 `CLAUDE.md`，只校验其指向版本事实源。
 - 脚本会统一执行 `node --check "阿里妈妈多合一助手.js"` 与 `node --test tests/*.test.mjs`，作为发布门禁入口。
 
 ## 发布流程（维护者）
@@ -343,4 +343,4 @@ git push origin vX.YY
 - 若页面版本号显示不一致，优先检查 userscript 头 `@version`、脚本内更新日志、README 最近更新三处是否同步。
 - 若 Tampermonkey 未提示更新，手动打开 `.meta.js` 地址触发更新检查。
 - 若 extension 未生效，优先检查 `dist/extension/manifest.json` 与 `page.bundle.js` 是否为最新构建结果，并确认浏览器扩展页已重新加载。
-- 若需要贡献约定与开发入口，优先查看根目录 `AGENTS.md`、`README.md` 与 `KNOWLEDGE.md`；发布相关说明在 `other/RELEASE.md`。
+- 若需要贡献约定与开发入口，优先查看根目录 `AGENTS.md`、`README.md` 与 `docs/CODEX_WORKFLOW.md`；发布相关说明在 `other/RELEASE.md`。
