@@ -4,7 +4,7 @@
 
 参考依据：
 
-- 运行态截图：`tasks/plugin-page-screenshots-2026-05-29/07-plugin-magic-report.png`、`10-plugin-magic-report-query-tab.png`、主面板、算法护航、组建计划向导截图。
+- 运行态截图与静态导出：`docs/images/main-panel.png`、`docs/images/floating-ball.png`、`docs/images/download-capture.png`、`docs/images/campaign-quick-entry.png`；真实页面验收截图和记录放在 `tasks/`。
 - 样式实现：`src/main-assistant/magic-report.js`、`src/main-assistant/ui.js`。
 - 图标规则：`docs/图标设计规范.md`。
 
@@ -251,5 +251,5 @@
 - 数据密集页面是否可横向/纵向扫描，不因窄容器产生重叠？
 - hover、focus、active、disabled、loading、empty、error 是否都有明确视觉状态？
 - 图标是否符合 `docs/图标设计规范.md`，没有 emoji 或私有字体残留？
-- 真实运行截图是否与 `tasks/plugin-page-screenshots-2026-05-29/` 中的主视觉保持一致？
+- 真实运行截图是否与 `docs/images/` 中的主视觉和本规范保持一致？
 - 若涉及 UI 或真实页面运行态，是否用 Chrome DevTools MCP 在 `one.alimama.com` 做过验证并记录？

@@ -11,11 +11,15 @@ test('review-team 使用全量回归测试而非单文件 logger 测试', () => 
     assert.match(source, /node --test "\$\{TEST_FILES\[@\]\}"/, '未执行全量回归测试集合');
 });
 
-test('review-team 将 CLAUDE 版本校验降级为可选检查', () => {
+test('review-team 从 userscript meta 校验版本，CLAUDE 只保留事实源指针', () => {
     assert.doesNotMatch(source, /require_file "\$CLAUDE_FILE"/, '仍然把 CLAUDE.md 当成硬依赖');
+    assert.match(source, /USERSCRIPT_META_FILE="src\/entries\/userscript-meta\.js"/, '缺少 userscript meta 版本事实源');
+    assert.match(source, /extract_meta_version\(\)/, '缺少 userscript meta 版本解析函数');
+    assert.match(source, /Version aligned with userscript meta: \$script_version/, '缺少 userscript meta 版本比对');
     assert.match(source, /if \[\[ -f "\$CLAUDE_FILE" \]\]; then/, '缺少 CLAUDE.md 可选分支');
-    assert.match(source, /Optional version file missing: CLAUDE\.md \(skipped\)/, '缺少跳过 CLAUDE.md 时的通过提示');
-    assert.match(source, /Version aligned with CLAUDE\.md: \$script_version/, '缺少 CLAUDE.md 存在时的版本比对');
+    assert.match(source, /CLAUDE\.md points to userscript meta version source/, 'CLAUDE.md 存在时应只校验版本事实源指针');
+    assert.match(source, /Optional guidance file missing: CLAUDE\.md \(skipped\)/, '缺少跳过 CLAUDE.md 时的通过提示');
+    assert.doesNotMatch(source, /extract_claude_version/, '不应再从 CLAUDE.md 解析具体版本号');
 });
 
 test('review-team 不允许跟踪 .DS_Store', () => {

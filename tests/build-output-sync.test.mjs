@@ -41,7 +41,6 @@ test('userscript meta 产物包含自动更新地址', () => {
 test('当前展示版本示例与 userscript 版本保持同步', () => {
   const expectations = [
     ['README.md', new RegExp(`^### v${currentVersionPattern} \\(`, 'm')],
-    ['CLAUDE.md', new RegExp(`^- \\*\\*当前版本\\*\\*: \`v${currentVersionPattern}\``, 'm')],
     ['docs/授权管理页.md', new RegExp(`"scriptVersion":"${currentVersionPattern}"`)],
     ['docs/新人使用教程.md', new RegExp(`阿里助手 Pro\\s+v${currentVersionPattern}`)]
   ];

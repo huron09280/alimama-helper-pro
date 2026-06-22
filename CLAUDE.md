@@ -1,110 +1,19 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Claude Code 入口说明。项目级硬规则以 `AGENTS.md` 为准；开始任何任务前先读 `AGENTS.md`、`tasks/lessons.md` 和当前任务相关源码/测试。
 
-## 项目概述
+## 快速定位
 
-这是一个运行在 Tampermonkey/Greasemonkey 的阿里妈妈增强脚本。
+- 源码事实源：`src/`
+- 构建产物：`阿里妈妈多合一助手.js`、`dist/packages/`、`dist/extension/`
+- 版本事实源：`src/entries/userscript-meta.js`
+- UI 规范：`docs/插件UI统一设计规范.md`、`docs/图标设计规范.md`
+- 源码地图：`docs/源码结构速查.md`
 
-- **当前版本**: `v7.06`
-- **主文件**: `阿里妈妈多合一助手.js`
-- **架构**: 双 IIFE（主助手 + 算法护航）
+## Claude 注意事项
 
-## 核心功能
-
-1. 表格增强计算
-
-- 询单成本、加购成本、潜客占比、花费占比
-- 预算进度（支持基础预算与多目标预算分类显示）
-- 计划 ID 智能识别（自动注入快捷查数入口）
-- UI 极致精装修（18px 圆角、磨砂玻璃、SVG 图标标准化）
-
-1. 交互与自动化
-
-- 主助手面板开关与状态持久化
-- 自动花费降序排序（Tab/页面切换后自动重置状态）
-- 多表格上下文识别（优先可见且列结构匹配的目标表）
-- 弹窗自动关闭
-- 报表下载直连捕获与复制
-- 算法护航入口（调用 `window.__ALIMAMA_OPTIMIZER_TOGGLE__`）
-
-1. 算法护航（API）
-
-- 扫描页面计划
-- 获取 token（dynamicToken/loginPointId/csrfID）
-- 调用 `chat/talk.json` 获取建议
-- 调用 `escort/open.json` 执行护航方案
-
-## 关键技术点
-
-### 1) 配置存储
-
-- 主助手配置 key：`AM_HELPER_CONFIG`
-- 启动时兼容迁移旧 key：
-  - `AM_HELPER_CONFIG_V5_15`
-  - `AM_HELPER_CONFIG_V5_14`
-  - `AM_HELPER_CONFIG_V5_13`
-
-### 2) 统一网络 Hook
-
-脚本通过全局 Hook 管理器只注入一次网络 patch：
-
-- `window.__AM_HOOK_MANAGER__`
-- `window.__AM_HOOKS_INSTALLED__`
-
-统一接管：
-
-- `window.fetch`
-- `XMLHttpRequest.prototype.open/send`
-
-并向不同模块派发事件（下载拦截、Token 捕获）。
-
-### 3) 安全策略
-
-- 日志与下载弹窗动态内容优先使用 `textContent` + DOM API
-- 下载 URL 通过 `sanitizeUrl` 限制为 `http/https`
-- 下载外链使用 `rel="noopener noreferrer"`
-
-### 4) 性能策略
-
-- `MutationObserver` + 延迟触发计算
-- 列索引缓存
-- 响应解析门槛（按 content-type / content-length / responseType）
-- 护航并发限制执行器 `Utils.concurrentLimit`
-
-## 调试建议
-
-1. 打开控制台查看日志：
-
-- 主助手日志前缀：`[AM]`
-- 护航日志前缀：`[EscortAPI]`
-
-1. 重置主助手配置：
-
-```js
-localStorage.removeItem('AM_HELPER_CONFIG')
-```
-
-1. 检查护航配置：
-
-```js
-GM_getValue('config')
-```
-
-## 修改注意事项
-
-1. **版本显示不要硬编码**
-
-- 所有 UI 版本号使用 `GM_info.script.version`（保留 fallback）
-
-1. **保持双 IIFE 架构**
-
-- 不要破坏 `window.__ALIMAMA_OPTIMIZER_TOGGLE__` 的对外行为
-
-1. **网络 Hook 必须幂等**
-
-- 通过统一 Hook 管理器注册监听，不要重复 patch 原型链
-
-1. **变更 UI 时保持项目规则**
-
-- 参考 `PROJECT_RULES.md` 的 z-index、自动最小化、日志分组等约束
+- 不要手改构建产物；修改 `src/` 后运行构建或 `npm run build:check`。
+- 版本展示不要在业务 UI 中硬编码，运行态优先从 `GM_info` / `GM.info` 获取。
+- 保持 userscript 双 IIFE 和桥接协议，不破坏 `window.__ALIMAMA_OPTIMIZER_TOGGLE__`、`window.__AM_HOOK_MANAGER__`、`__AM_WXT_*` 等全局约定。
+- UI、注入、extension 或真实阿里妈妈页面行为改动，按 `AGENTS.md` 要求做真实页面验证并写入 `tasks/todo.md`。
+- 交付前至少运行与改动相关的测试；版本和产物同步问题优先跑 `npm run build:check` 与 `node --test tests/build-output-sync.test.mjs`。

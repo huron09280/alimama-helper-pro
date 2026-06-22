@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 SCRIPT_FILE="阿里妈妈多合一助手.js"
 README_FILE="README.md"
 CLAUDE_FILE="CLAUDE.md"
+USERSCRIPT_META_FILE="src/entries/userscript-meta.js"
 BUILD_SCRIPT="scripts/build.mjs"
 LICENSE_SERVER_DEPS_CHECK_SCRIPT="scripts/check-license-server-deps.mjs"
 TEST_FILES=()
@@ -62,12 +63,12 @@ extract_script_version() {
   sed -nE 's#^// @version[[:space:]]+([0-9]+(\.[0-9]+)*)#\1#p' "$SCRIPT_FILE" | head -n1
 }
 
-extract_readme_version() {
-  sed -nE 's/^### v([0-9]+(\.[0-9]+)*) .*/\1/p' "$README_FILE" | head -n1
+extract_meta_version() {
+  sed -nE 's#^// @version[[:space:]]+([0-9]+(\.[0-9]+)*)#\1#p' "$USERSCRIPT_META_FILE" | head -n1
 }
 
-extract_claude_version() {
-  sed -nE 's/^- \*\*当前版本\*\*: `v([0-9]+(\.[0-9]+)*)`/\1/p' "$CLAUDE_FILE" | head -n1
+extract_readme_version() {
+  sed -nE 's/^### v([0-9]+(\.[0-9]+)*) .*/\1/p' "$README_FILE" | head -n1
 }
 
 assert_no_pattern() {
@@ -96,6 +97,7 @@ main() {
   require_cmd node
   require_file "$SCRIPT_FILE"
   require_file "$README_FILE"
+  require_file "$USERSCRIPT_META_FILE"
   require_file "$BUILD_SCRIPT"
   require_file "$LICENSE_SERVER_DEPS_CHECK_SCRIPT"
   collect_test_files
@@ -128,24 +130,27 @@ main() {
 
   printf '\n[Release] Version consistency checks\n'
   local script_version
+  local meta_version
   local readme_version
   script_version="$(extract_script_version)"
+  meta_version="$(extract_meta_version)"
   readme_version="$(extract_readme_version)"
 
   [[ -n "$script_version" ]] || fail 'Cannot parse @version from userscript header'
+  [[ -n "$meta_version" ]] || fail 'Cannot parse @version from src/entries/userscript-meta.js'
   [[ -n "$readme_version" ]] || fail 'Cannot parse latest version from README.md'
+
+  [[ "$script_version" == "$meta_version" ]] || fail "Version mismatch: script=$script_version meta=$meta_version"
+  pass "Version aligned with userscript meta: $script_version"
 
   [[ "$script_version" == "$readme_version" ]] || fail "Version mismatch: script=$script_version README=$readme_version"
   pass "Version aligned with README.md: $script_version"
 
   if [[ -f "$CLAUDE_FILE" ]]; then
-    local claude_version
-    claude_version="$(extract_claude_version)"
-    [[ -n "$claude_version" ]] || fail 'Cannot parse current version from CLAUDE.md'
-    [[ "$script_version" == "$claude_version" ]] || fail "Version mismatch: script=$script_version CLAUDE=$claude_version"
-    pass "Version aligned with CLAUDE.md: $script_version"
+    has_match '版本事实源：`src/entries/userscript-meta.js`' "$CLAUDE_FILE" || fail 'CLAUDE.md must point to userscript meta as version source'
+    pass 'CLAUDE.md points to userscript meta version source'
   else
-    pass 'Optional version file missing: CLAUDE.md (skipped)'
+    pass 'Optional guidance file missing: CLAUDE.md (skipped)'
   fi
 
   printf '\nAll automated review checks passed.\n'
