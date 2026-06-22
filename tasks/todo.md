@@ -10,22 +10,29 @@
 - [x] 检查当前分支、`main` worktree、提交差异和脏改范围。
 - [x] 运行提交前最小验证，确保当前分支改动可合入。
 - [x] 提交当前分支未提交改动。
-- [ ] 到本地 `main` worktree 合并 `codex/fix-ai-max-popovers`，处理可能的冲突。
-- [ ] 运行合并后验证并记录结果复盘。
+- [x] 到本地 `main` worktree 合并 `codex/fix-ai-max-popovers`，处理可能的冲突。
+- [x] 运行合并后验证并记录结果复盘。
 
 ## 高层操作摘要
 - 已确认 `main` 位于 `/Users/liangchao/Downloads/合美/资料/产品/洗碗机资料/08_工具脚本/小工具/阿里妈妈多合一助手 (Pro版 )/alimama-helper-pro`，当前 worktree 无法直接切换到 `main`。
 - 已确认当前分支相对 `main` 为 `main` 多 1 个提交、当前分支多 2 个提交；当前分支还有文档、任务记录、脚本和测试的未提交改动。
 - 已确认未跟踪内容仅为 `tasks/archive/` 下任务归档文件，本轮不涉及 `.keys`、构建产物或业务源码脏改。
 - 已将当前分支未提交改动提交为“整理代理规则与任务归档”。
+- 已在本地 `main` worktree 发现既有未提交仓库探索记录；合并前已用 stash 临时保存，合并后已恢复 `tasks/repo-exploration-2026-06-14.md` 并把对应 todo 段追加进 `tasks/archive/todo-history-2026-04-15-to-2026-06-14.md`。
+- 已成功将 `codex/fix-ai-max-popovers` 合并到本地 `main`，无冲突。
 
 ## 验证记录
 - 提交前 `node --test tests/agents-rules-contract.test.mjs tests/build-output-sync.test.mjs tests/review-team-script.test.mjs`：通过，12/12。
 - 提交前 `bash scripts/review-team.sh`：通过；全量回归 647 项中 645 通过、2 个既有 AgentCluster 条件跳过、0 失败；版本检查通过。
 - 提交前 `git diff --check`：通过。
+- 合并后 `node --test tests/agents-rules-contract.test.mjs tests/build-output-sync.test.mjs tests/review-team-script.test.mjs`：通过，12/12。
+- 合并后 `bash scripts/review-team.sh`：通过；全量回归 647 项中 645 通过、2 个既有 AgentCluster 条件跳过、0 失败；版本检查通过。
+- 合并后 `git diff --check`：通过。
 
 ## 结果复盘
-- 待记录。
+- 已将 `codex/fix-ai-max-popovers` 合并回本地 `main`，未推送远端。
+- 合并前 main worktree 的未提交仓库探索记录已保留：详细笔记恢复为 `tasks/repo-exploration-2026-06-14.md`，对应 todo 段已并入 `tasks/archive/todo-history-2026-04-15-to-2026-06-14.md`。
+- 本轮未改业务逻辑；最终额外收尾仅为任务记录归档与合并验收记录。
 
 # TODO - 2026-06-15 未处理风险收敛
 
