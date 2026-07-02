@@ -1257,14 +1257,19 @@
                     solutionList
                 };
             };
+            const resolveParallelCreateRequestOptions = () => ({
+                ...(isPlainObject(options.requestOptions) ? options.requestOptions : {}),
+                skipRateLimit: true
+            });
             const submitSinglePlanInParallel = async (entry = null, endpoint = '', submitTimes = 1) => {
                 if (!entry || submitTimes <= 1) return null;
                 const singleEndpoint = normalizeGoalCreateEndpoint(endpoint || resolveEntrySubmitEndpoint(entry));
+                const requestOptions = resolveParallelCreateRequestOptions();
                 const tasks = [];
                 for (let i = 0; i < submitTimes; i++) {
                     tasks.push((async () => {
                         try {
-                            const res = await requestOne(singleEndpoint, runtime.bizCode, buildCreatePayload([entry]), options.requestOptions || {});
+                            const res = await requestOne(singleEndpoint, runtime.bizCode, buildCreatePayload([entry]), requestOptions);
                             return { ok: true, res };
                         } catch (err) {
                             return {

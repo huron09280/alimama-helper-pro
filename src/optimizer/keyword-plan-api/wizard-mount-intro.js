@@ -711,6 +711,9 @@
                 const draft = ensureWizardDraft();
                 const prevMode = normalizeSubmitMode(draft.submitMode || 'serial');
                 draft.submitMode = nextMode;
+                if (nextMode === 'parallel' && normalizeParallelSubmitTimes(draft.parallelSubmitTimes, 1) <= 1) {
+                    draft.parallelSubmitTimes = Math.max(2, normalizeParallelSubmitTimes(DEFAULT_SCENE_PARALLEL_SUBMIT_TIMES, 2));
+                }
                 renderRunModeMenu();
                 commitDraftState(options.syncDraft !== false ? null : draft);
                 if (options.silent !== true && prevMode !== nextMode) {

@@ -196,7 +196,7 @@
 
         // 带重试的请求
         request: async (url, data, options = {}) => {
-            const { maxRetries = 3, timeout = 30000, retryDelay = 2000, signal } = options;
+            const { maxRetries = 3, timeout = 30000, retryDelay = 2000, signal, skipRateLimit = false } = options;
             const parsedMaxRetries = Number(maxRetries);
             const totalAttempts = Number.isFinite(parsedMaxRetries)
                 ? Math.max(1, Math.floor(parsedMaxRetries))
@@ -207,7 +207,9 @@
 
             for (let attempt = 1; attempt <= totalAttempts; attempt++) {
                 try {
-                    await API.waitForRateLimitSlot(signal);
+                    if (skipRateLimit !== true) {
+                        await API.waitForRateLimitSlot(signal);
+                    }
                     const result = await API._singleRequest(url, data, timeout, signal);
                     Logger.info(`✓ 请求成功 (第${attempt}次)`);
                     return result;

@@ -14,6 +14,25 @@
         return isAmSmartAssistantBudgetPage();
     };
 
+    const isDmpHostPage = () => {
+        try {
+            const url = new URL(window.location.href);
+            return String(url.hostname || '').toLowerCase() === 'dmp.taobao.com';
+        } catch {
+            return false;
+        }
+    };
+
+    const normalizeDmpRouteToken = (value = '') => String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[_\s]+/g, '-');
+
+    const isDmpCrowdInsightRouteToken = (value = '') => {
+        const normalized = normalizeDmpRouteToken(value);
+        return normalized === 'crowd-insight' || normalized.replace(/-/g, '') === 'crowdinsight';
+    };
+
     const isDmpItemInsightCrowdPage = () => {
         try {
             const url = new URL(window.location.href);
@@ -22,11 +41,62 @@
             if (!/\/items\/item-insight/i.test(hash)) return false;
             const queryText = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
             const params = new URLSearchParams(queryText);
-            const analysisTab = String(params.get('analysisTab') || '').trim();
-            return analysisTab === 'crowd-insight';
+            const tabParamNames = ['analysisTab', 'tab', 'activeTab', 'currentTab', 'selectedTab'];
+            const tabValues = tabParamNames
+                .filter(name => params.has(name))
+                .map(name => params.get(name));
+            if (tabValues.length) {
+                return tabValues.some(isDmpCrowdInsightRouteToken);
+            }
+            return true;
         } catch {
             return false;
         }
+    };
+
+    const installDmpCrowdMatrixRouteWatcher = () => {
+        let lastDmpUrl = window.location.href;
+        const ensureDmpEntryForCurrentRoute = () => {
+            if (isDmpItemInsightCrowdPage()) {
+                MagicReport.initDmpCrowdMatrixEntry();
+                return true;
+            }
+            document.getElementById('am-dmp-crowd-matrix-entry')?.remove();
+            MagicReport.clearDmpCrowdMatrixButtonTimer?.();
+            MagicReport.disconnectDmpCrowdMatrixButtonObserver?.();
+            MagicReport.clearDmpCrowdMatrixButtonVisibilityHandler?.();
+            return false;
+        };
+        const checkDmpUrlChange = () => {
+            if (window.location.href === lastDmpUrl) return;
+            lastDmpUrl = window.location.href;
+            ensureDmpEntryForCurrentRoute();
+        };
+        const hookHistoryMethod = (methodName = '') => {
+            try {
+                const historyRef = window.history;
+                const original = historyRef?.[methodName];
+                if (typeof original !== 'function') return;
+                if (original.__amDmpRouteHooked === true) return;
+                const wrapped = function (...args) {
+                    const ret = original.apply(this, args);
+                    checkDmpUrlChange();
+                    return ret;
+                };
+                Object.defineProperty(wrapped, '__amDmpRouteHooked', {
+                    value: true,
+                    configurable: false,
+                    enumerable: false,
+                    writable: false
+                });
+                historyRef[methodName] = wrapped;
+            } catch { }
+        };
+        ensureDmpEntryForCurrentRoute();
+        hookHistoryMethod('pushState');
+        hookHistoryMethod('replaceState');
+        window.addEventListener('hashchange', checkDmpUrlChange);
+        window.addEventListener('popstate', checkDmpUrlChange);
     };
 
     const AM_PLUGIN_MUTATION_SELECTOR = [
@@ -125,9 +195,10 @@
 
     function main() {
         installAssistDisplayDiagnostics();
-        if (isDmpItemInsightCrowdPage()) {
-            MagicReport.initDmpCrowdMatrixEntry();
-            Logger.log(`🚀 阿里助手 Pro v${CURRENT_VERSION} 已启动：DMP 单品人群看板入口`);
+        UI.bindPluginScrollChainGuard();
+        if (isDmpHostPage()) {
+            installDmpCrowdMatrixRouteWatcher();
+            Logger.log(`🚀 阿里助手 Pro v${CURRENT_VERSION} 已启动：DMP 单品人群看板入口监听`);
             return;
         }
         UI.init();

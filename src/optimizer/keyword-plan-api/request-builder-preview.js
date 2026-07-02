@@ -1929,6 +1929,10 @@
                             syncDraft: true,
                             silent: false
                         });
+                        setSubmitModeFromUI('parallel', {
+                            syncDraft: true,
+                            silent: false
+                        });
                         positionRunModeMenu();
                     };
                     runModeCountBadge.addEventListener('click', (event) => {

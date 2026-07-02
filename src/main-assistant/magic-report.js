@@ -1417,6 +1417,18 @@
                 : '万能查数输入您想要了解的数据，小万帮您收集';
         },
 
+        normalizeDmpRouteToken(value = '') {
+            return String(value || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[_\s]+/g, '-');
+        },
+
+        isDmpCrowdInsightRouteToken(value = '') {
+            const normalized = this.normalizeDmpRouteToken(value);
+            return normalized === 'crowd-insight' || normalized.replace(/-/g, '') === 'crowdinsight';
+        },
+
         isDmpItemInsightCrowdPage() {
             try {
                 const url = new URL(window.location.href);
@@ -1425,7 +1437,14 @@
                 if (!/\/items\/item-insight/i.test(hash)) return false;
                 const queryText = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
                 const params = new URLSearchParams(queryText);
-                return String(params.get('analysisTab') || '').trim() === 'crowd-insight';
+                const tabParamNames = ['analysisTab', 'tab', 'activeTab', 'currentTab', 'selectedTab'];
+                const tabValues = tabParamNames
+                    .filter(name => params.has(name))
+                    .map(name => params.get(name));
+                if (tabValues.length) {
+                    return tabValues.some(value => this.isDmpCrowdInsightRouteToken(value));
+                }
+                return true;
             } catch {
                 return false;
             }
@@ -1476,17 +1495,26 @@
 
         findDmpSwitchItemButton() {
             const normalizeText = (value = '') => String(value || '').replace(/\s+/g, '').trim();
+            const getAnchorPriority = (node) => {
+                const text = normalizeText(node?.textContent);
+                if (text === '切换分析单品') return 0;
+                if (/^切换.*(分析)?(单品|商品)$/.test(text)) return 1;
+                if (text === '标杆商品池管理') return 2;
+                return Number.POSITIVE_INFINITY;
+            };
             const isVisible = (el) => {
                 if (!(el instanceof HTMLElement)) return false;
                 const rect = el.getBoundingClientRect();
                 return rect.width > 0 && rect.height > 0;
             };
-            const nodes = Array.from(document.querySelectorAll('button, [role="button"], span, a'))
+            const candidates = Array.from(document.querySelectorAll('button, [role="button"], span, a'))
                 .filter(node => node instanceof HTMLElement)
-                .filter(node => normalizeText(node.textContent) === '切换分析单品')
-                .filter(isVisible);
-            const directButton = nodes.find(node => node.matches('button, [role="button"]'));
-            const source = directButton || nodes[0] || null;
+                .filter(isVisible)
+                .map(node => ({ node, priority: getAnchorPriority(node) }))
+                .filter(item => Number.isFinite(item.priority))
+                .sort((a, b) => a.priority - b.priority);
+            const directButton = candidates.find(item => item.priority === 0 && item.node.matches('button, [role="button"]'))?.node;
+            const source = directButton || candidates[0]?.node || null;
             if (!(source instanceof HTMLElement)) return null;
             const wrapper = source.closest('.mr10');
             return wrapper instanceof HTMLElement ? wrapper : source;

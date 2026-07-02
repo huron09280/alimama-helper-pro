@@ -293,19 +293,133 @@
             this.runtime.panelOutsideClickHandlerBound = false;
         },
 
+        getPluginScrollSurfaceSelector() {
+            return [
+                '#am-helper-panel',
+                '#am-magic-report-popup',
+                '#alimama-escort-helper-ui',
+                '#alimama-escort-helper-ui-result-overlay',
+                '#am-campaign-concurrent-log-popup',
+                '#am-campaign-copy-overview-popup',
+                '#am-campaign-copy-success-popup',
+                '#am-campaign-batch-plus-menu',
+                '#am-campaign-batch-confirm-popup',
+                '#am-campaign-ai-max-batch-popup',
+                '#am-report-capture-panel',
+                '#am-wxt-keyword-modal',
+                '#am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog',
+                '#am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-dialog',
+                '#am-wxt-keyword-run-mode-menu:not(.hidden)',
+                '.am-crowd-matrix-item-dropdown.is-open'
+            ].join(', ');
+        },
+
+        getPluginModalRootSelector() {
+            return [
+                '#am-magic-report-popup',
+                '#am-report-capture-panel',
+                '#alimama-escort-helper-ui-result-overlay',
+                '#am-campaign-concurrent-log-popup:not([aria-hidden="true"])',
+                '#am-campaign-copy-overview-popup',
+                '#am-campaign-copy-success-popup',
+                '#am-campaign-batch-confirm-popup',
+                '#am-campaign-ai-max-batch-popup',
+                '#am-wxt-keyword-overlay.open',
+                '#am-wxt-scene-popup-mask',
+                '#am-wxt-keyword-item-picker-mask'
+            ].join(', ');
+        },
+
+        getPluginModalInteractiveSurfaceSelector() {
+            return [
+                '#am-magic-report-popup',
+                '#am-report-capture-panel',
+                '#alimama-escort-helper-ui-result-overlay',
+                '#am-campaign-concurrent-log-popup .am-concurrent-log-card',
+                '#am-campaign-copy-overview-popup .am-copy-overview-card',
+                '#am-campaign-copy-success-popup .am-copy-success-card',
+                '#am-campaign-batch-confirm-popup .am-batch-confirm-card',
+                '#am-campaign-ai-max-batch-popup .am-ai-max-card',
+                '#am-wxt-keyword-modal',
+                '#am-wxt-scene-popup-mask .am-wxt-scene-popup-dialog',
+                '#am-wxt-keyword-item-picker-mask .am-wxt-keyword-item-picker-dialog',
+                '#am-wxt-keyword-run-mode-menu:not(.hidden)',
+                '#am-campaign-batch-plus-menu',
+                '.am-crowd-matrix-item-dropdown.is-open'
+            ].join(', ');
+        },
+
+        getPluginWheelControlSelector() {
+            return [
+                '[data-action="run-mode-count-badge"]',
+                '[data-action="copy-count-badge"]',
+                '[data-am-campaign-copy-count-badge]'
+            ].join(', ');
+        },
+
+        resolveEventElement(target) {
+            if (target instanceof Element) return target;
+            if (target instanceof Node && target.parentElement instanceof Element) return target.parentElement;
+            return null;
+        },
+
+        isVisiblePluginModalElement(el) {
+            if (!(el instanceof HTMLElement) || !el.isConnected) return false;
+            const style = window.getComputedStyle(el);
+            if (!style) return false;
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            if (Number.parseFloat(style.opacity || '1') <= 0.01) return false;
+            if (style.pointerEvents === 'none') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        },
+
+        getActivePluginModalRoot() {
+            const roots = Array.from(document.querySelectorAll(this.getPluginModalRootSelector()));
+            return roots.find(el => this.isVisiblePluginModalElement(el)) || null;
+        },
+
+        shouldBlockPluginModalBackgroundEvent(event, targetEl = null) {
+            if (event?.defaultPrevented) return false;
+            const target = targetEl || this.resolveEventElement(event?.target);
+            const activeModal = this.getActivePluginModalRoot();
+            if (!(activeModal instanceof HTMLElement)) return false;
+            if (target instanceof Element && target.closest(this.getPluginModalInteractiveSurfaceSelector())) {
+                return false;
+            }
+            return true;
+        },
+
+        blockPluginModalBackgroundEvent(event, targetEl = null) {
+            if (!this.shouldBlockPluginModalBackgroundEvent(event, targetEl)) return false;
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+        },
+
         bindPluginScrollChainGuard() {
             if (this.runtime.scrollChainGuardBound) return;
             this.runtime.scrollChainGuardBound = true;
             document.addEventListener('wheel', (event) => {
                 if (event.defaultPrevented || event.ctrlKey) return;
-                const target = event.target;
+                const target = this.resolveEventElement(event.target);
+                if (this.blockPluginModalBackgroundEvent(event, target)) return;
                 if (!(target instanceof Element)) return;
-                const pluginRoot = target.closest('#am-helper-panel, #am-magic-report-popup, #alimama-escort-helper-ui, #am-campaign-concurrent-log-popup, #am-campaign-copy-overview-popup, #am-campaign-copy-success-popup, #am-campaign-batch-plus-menu, #am-campaign-batch-confirm-popup, #am-campaign-ai-max-batch-popup, #am-report-capture-panel');
+                if (target.closest(this.getPluginWheelControlSelector())) return;
+                const pluginRoot = target.closest(this.getPluginScrollSurfaceSelector());
                 if (!(pluginRoot instanceof HTMLElement)) return;
                 if (!this.shouldBlockPluginWheel(pluginRoot, target, event.deltaY)) return;
                 event.preventDefault();
                 event.stopPropagation();
             }, { capture: true, passive: false });
+            document.addEventListener('mousedown', (event) => {
+                if (event.defaultPrevented || event.button !== 1) return;
+                this.blockPluginModalBackgroundEvent(event, this.resolveEventElement(event.target));
+            }, true);
+            document.addEventListener('auxclick', (event) => {
+                if (event.defaultPrevented || event.button !== 1) return;
+                this.blockPluginModalBackgroundEvent(event, this.resolveEventElement(event.target));
+            }, true);
         },
 
         shouldBlockPluginWheel(pluginRoot, startNode, deltaY) {
