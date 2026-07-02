@@ -13,8 +13,8 @@
 - [x] 运行构建生成根 userscript、`dist/packages/` 和 `dist/extension/` 产物。
 - [x] 运行版本/构建/语法/测试门禁，并记录失败与修复。
 - [x] 做 diff 自审，确认没有症状补丁、版本遗漏、生成产物不同步或无关回退。
-- [ ] 使用中文提交信息提交本次发布变更。
-- [ ] 创建并推送 `v7.07` tag，触发 GitHub Actions 发布。
+- [x] 使用中文提交信息提交本次发布变更。
+- [x] 创建并推送 `v7.07` tag，触发 GitHub Actions 发布。
 
 ## 高层操作摘要
 - 已读取项目规则、`tasks/lessons.md` 顶部教训、发布说明和版本事实源；命中 L107：版本更新必须同步示例文档并跑版本同步测试。
@@ -35,10 +35,14 @@
 - Chrome 只读验证：现有达摩盘页 `https://dmp.taobao.com/...analysisTab=crowd-insight...` 中 `#am-dmp-crowd-matrix-entry` 可见，文案为“人群对比看板”，按钮尺寸约 `111x32`；本轮未点击任何创建、提交、删除或投放入口。
 - Chrome 控制台检查：存在既有阿里风控脚本 `Error` 与 DMP 自定义画像标签读取失败日志，来源含 `chrome-extension://fejbonphnhfgfomjjchjijfeippmhnfd/page.bundle.js`；未发现本轮操作触发写请求迹象。
 - 发现 `src/main-assistant/magic-report.js` 的 DMP 入口复查修复后追加复核：`npm run build:check` 通过；`node --test tests/build-output-sync.test.mjs tests/magic-report-crowd-matrix.test.mjs tests/site-scene-submit-mode.test.mjs tests/plugin-modal-scroll-guard.test.mjs` 通过，96/96。
+- 中文提交 `d59bdb0`：`发布 v7.07 并修复并发与 DMP 入口`，已推送到 `origin/main`。
+- Tag `v7.07` 已推送到 GitHub，Release workflow `28560499002` 通过并生成 `alimama-helper-pro.user.js`、`alimama-helper-pro.meta.js`、`alimama-helper-pro-extension.zip` 三个资产。
+- `main` CI `28560497989` 通过；发布后补充教训提交 `082cca3` 的 CI `28560568984` 也已通过。
 
 ## 结果复盘
 - 版本、更新日志、文档示例、mockup 与构建产物已统一到 `7.07`。
-- 发布前自动化门禁和只读页面验收已完成；剩余步骤是中文提交、创建并推送 `v7.07` tag。
+- 发布已完成：`v7.07` 为正式 GitHub Release，非 draft、非 prerelease。
+- 本轮另有中文记录提交 `082cca3`：`补充 DMP 入口复查教训`，用于收口发布后出现的 lesson 记录。
 
 # TODO - 2026-07-02 达摩盘人群对比看板入口部分电脑不可见复查
 
@@ -64,19 +68,32 @@
 - 源码链路：extension content 在 `dmp.taobao.com` 会直接注入 `page.bundle.js`；DMP host 分支只启动入口监听，不启动普通 one.alimama 主助手。
 - 复发可疑根因：当前 DMP 页面判断要求 hash 精确包含 `/items/item-insight` 且 `analysisTab === crowd-insight`，入口锚点又要求页面上存在可见且文案精确为“切换分析单品”的控件。若部分电脑/账号/页面版本的 hash 参数缺省、大小写/分隔符不同，或原生按钮在窄屏/缩放下被折叠、隐藏、文案变体化，observer/timer 会持续重试但无法补挂入口。
 - 取舍结论：不做单机或浏览器特判；在入口识别单点做宽容但有边界的结构修复：DMP 商品洞察页路由判断支持常见 hash 变体，按钮锚点首选“切换分析单品”，缺失时退到同一动作区其它稳定控件，仍复用唯一的 `ensureDmpCrowdMatrixButton()`。
-- 已在 `src/main-assistant/magic-report.js` 增加 DMP route token 归一化：兼容大小写、下划线/空白分隔、`crowdinsight` 写法，并接受 `analysisTab/tab/activeTab/currentTab/selectedTab` 常见参数；商品洞察页缺省 tab 时按人群洞察入口可补挂处理。
+- 已在 `src/main-assistant/main.js` 和 `src/main-assistant/magic-report.js` 增加 DMP route token 归一化：兼容大小写、下划线/空白分隔、`crowdinsight` 写法，并接受 `analysisTab/tab/activeTab/currentTab/selectedTab` 常见参数；商品洞察页缺省 tab 时按人群洞察入口可补挂处理。
 - 已放宽 DMP 入口锚点：继续优先定位“切换分析单品”，同时支持“切换...单品/商品”文案变体，并用“标杆商品池管理”作为同一头部动作区 fallback。
 - 已更新 `tests/magic-report-crowd-matrix.test.mjs`，锁定 route token 兼容、缺省 tab 兜底、锚点优先级和 SPA 路由监听。
+- 已运行 `npm run build`，同步根 userscript、`dist/packages/` 与 `dist/extension/page.bundle.js`；工作区在本轮前已有多处未提交改动，构建产物按当前源码整体同步。
+- 已更新 `tasks/lessons.md` L180，记录 DMP 入口不能依赖单一精确 URL 参数和唯一按钮文案。
 
 ## 验证记录
+- `node --check src/main-assistant/magic-report.js`：通过。
+- `node --check tests/magic-report-crowd-matrix.test.mjs`：通过。
+- `node --check src/main-assistant/main.js`：不适用，单文件作为构建片段检查会因外层片段结构报 `Unexpected token '}'`；整体产物语法由 `npm run check:syntax` 验证通过。
+- `npm run build`：通过，版本 `7.07`，已同步 extension 与 userscript 产物。
+- `node --test tests/magic-report-crowd-matrix.test.mjs`：通过，74/74。
+- `npm run check:syntax`：通过。
 - `npm run build:check`：通过，构建输出版本 `7.07`。
+- `node --test tests/extension-static-build.test.mjs`：通过，11/11。
+- `git diff --check`：通过，无输出。
 - `node --test tests/build-output-sync.test.mjs tests/magic-report-crowd-matrix.test.mjs tests/site-scene-submit-mode.test.mjs tests/plugin-modal-scroll-guard.test.mjs`：通过，96/96。
-- Chrome 只读验证：现有达摩盘人群洞察页中 `#am-dmp-crowd-matrix-entry` 可见，文案“人群对比看板”，按钮尺寸约 `111x32`；没有点击业务写操作入口。
-- 控制台检查：仅见既有 DMP 标签读取失败与阿里风控脚本 `Error` 噪声，本轮未触发创建、提交、删除或投放请求。
+- Chrome DevTools MCP 真实 DMP 页：刷新 `https://dmp.taobao.com/index_new.html?...#!/items/item-insight?...analysisTab=crowd-insight&itemId=757440599385&cycle=30` 后，运行态 `version=7.07`、`mode=extension`；`#am-dmp-crowd-matrix-entry` 存在且可见，文案“人群对比看板”，位于“切换分析单品”后；未打开插件弹窗、DMP 下拉、关键词向导或批量弹窗。
+- Chrome DevTools MCP bundle 核对：页面 fetch `chrome-extension://fejbonphnhfgfomjjchjijfeippmhnfd/page.bundle.js` 成功，SHA-256 为 `c9fe797ee7fbbbed76a50b59342bc63d667ef129a5a07d44d1d5ab0b2c517912`，与本地 `dist/extension/page.bundle.js` 一致；bundle 含 `isDmpCrowdInsightRouteToken`、`getAnchorPriority`、`标杆商品池管理` 和 `DMP 单品人群看板入口监听`。
+- Chrome DevTools MCP fallback 探针：临时隐藏“切换分析单品”、移除入口并用 `history.pushState` 触发 route watcher 后，入口可见且 `previousText=标杆商品池管理`；恢复 URL 与原按钮后，入口重新回到 `previousText=切换分析单品`，最终 URL 和按钮显示已恢复。
+- Chrome DevTools MCP 网络/控制台：本轮未点击“人群对比看板”或任何创建/投放/提交/删除入口；危险写请求过滤结果为空。控制台有 DMP 页面既有 `ERR_TUNNEL_CONNECTION_FAILED` 与 WebSocket 失败噪声，插件日志显示 `阿里助手 Pro v7.07 已启动：DMP 单品人群看板入口监听`，未见本次入口脚本报错。
 
 ## 结果复盘
 - 已完成结构性收口：入口是否出现不再只依赖单一 `analysisTab=crowd-insight` 与精确“切换分析单品”文案，降低不同账号/页面版本/缩放布局导致的按钮缺失概率。
 - 本轮仍保持单一入口挂载函数，不新增第二套 DMP 看板或按钮实现。
+- 记录说明：该 DMP 验收记录产生时工作区仍包含其它未提交改动；后续已通过 v7.07 发布提交和教训记录提交完成收口。
 
 # TODO - 2026-07-01 Chrome 复测并发提交仍未生效
 
